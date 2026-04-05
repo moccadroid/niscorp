@@ -1,72 +1,44 @@
-# Design Document: `@niscorp/nova` — Declarative UI Framework
+# `@niscorp/nova` — Declarative UI Framework
 
-## Purpose
-
-A React framework for building declarative, data-driven interfaces from JSON definitions. Agents generate layouts, the shell orchestrates them, the server controls the UX. The client is a thin renderer.
-
-**One sentence:** JSON layouts, action lifecycles, shell orchestration, server-authoritative UX - built on React, designed for AI agents.
-
----
-
-## What We Learned
-
-The original UI framework (*neon-ui*) proved the entire concept: JSON layouts rendered by a component registry, actions with lifecycles on canvas stacks, shells that orchestrate multi-panel experiences, and LLM agents that generate all of it. The Cassandra demo was the proof: 10 coordinated actions, real-time inter-action communication, agent-driven layout generation.
-
-### What translates directly to React
-- **Layout system concept:** JSON → component tree with bindings, conditionals, loops, refs. The rendering engine is framework-specific but the JSON format is universal.
-- **Component registry:** String name → component lookup with metadata. Works identically in React.
-- **Action/shell state machine:** Actions have lifecycles (mount → active → suspend → unmount). Canvases are stacks. This is pure state management - framework-agnostic.
-- **Message bus:** Inter-action pub/sub communication. Pure TypeScript, no framework dependency.
-- **Event bus:** UI event routing (click, input, submit) with ref-based targeting. Same pattern, React events instead of Vue events.
-- **Wire protocol:** `UICommandBatch` / `ClientEventEnvelope`. Completely framework-agnostic by design.
-
-### What needs fundamental rethinking for React
-- **VNode rendering → React.createElement.** Vue's `h()` function maps to `React.createElement()` but the surrounding patterns differ significantly.
-- **Reactive refs → React state.** Vue's `ref()` and `reactive()` have no equivalent. Use React hooks (`useState`, `useReducer`) and context.
-- **Composables → Hooks.** Vue composables become React hooks, but lifecycle differences matter (Vue `onMounted` vs React `useEffect`).
-- **Directives → nothing.** Vue directives (`v-neon`) don't exist in React. Use wrapper components or hooks instead.
-- **Scoped slots → render props / children functions.** Different composition model.
-- **Two-way binding → controlled components.** Vue's `v-model` becomes `value` + `onChange` in React.
-
-### New opportunities in React
-- **React Server Components (RSC).** Server-side layout rendering for initial paint, then hydrate. This gives us a performance story the original never had.
-- **Suspense.** Async data loading during layout rendering can use Suspense boundaries naturally.
-- **React Compiler.** Automatic memoization means we don't need to manually optimize re-renders.
-- **Concurrent features.** `useTransition`, `useDeferredValue` for non-blocking shell operations.
+JSON layouts, action lifecycles, shell orchestration. Framework-agnostic core, React adapter. Designed for AI agents.
 
 ---
 
 ## Architecture
 
+Three systems, one package. The core is pure TypeScript with zero framework dependencies. React (or any framework) plugs in as a thin rendering adapter.
+
 ```
-┌──────────────────────────────────────────────────────┐
-│                    Shell                              │
-│  State machine: canvases, action stacks, lifecycle    │
-│  Pure TypeScript (no React dependency)                │
-├──────────────────────────────────────────────────────┤
-│                    React Integration                  │
-│  ShellProvider, CanvasSlot, useShell, useAction, etc. │
-├───────────────┬──────────────────────────────────────┤
-│  Layout Engine │          Action Runtime              │
-│  JSON → React  │  Data, triggers, skills, endpoints   │
-│  elements      │  State management + lifecycle        │
-├───────────────┴──────────────────────────────────────┤
-│                Component Registry                     │
-│  String name → React component + metadata             │
-│  Built-in headless primitives + custom adapters       │
-├──────────────────────────────────────────────────────┤
-│                   Event System                        │
-│  Event bus (UI events) + Message bus (inter-action)   │
-└──────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────┐
+│                        Shell                                 │
+│  Canvas stacks, message bus, inter-action routing            │
+│  Pure TypeScript state machine                               │
+├─────────────────────────────────────────────────────────────┤
+│                       Actions                                │
+│  Definitions, runtime, lifecycle, triggers, mutations         │
+│  Pure TypeScript logic                                       │
+├─────────────────────────────────────────────────────────────┤
+│                       Layout                                 │
+│  JSON → RenderNode tree, bindings, scope chain, store        │
+│  Pure TypeScript core                                        │
+├─────────────────────────────────────────────────────────────┤
+│                    Component Registry                        │
+│  String name → component + metadata                          │
+│  Framework-agnostic metadata, framework-specific components  │
+├─────────────────────────────────────────────────────────────┤
+│                  Framework Adapter (React)                    │
+│  RenderNode[] → React elements, hooks, providers             │
+│  ~200 lines, the only React-dependent code                   │
+└─────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## System 1: Layout Engine
+## System 1: Layout
+
+Converts JSON layout definitions into a framework-agnostic render tree.
 
 ### Layout Nodes
-
-The JSON format stays the same as the original. This is the contract between agents and the renderer.
 
 ```typescript
 type LayoutNode =
@@ -75,575 +47,72 @@ type LayoutNode =
   | LoopNode
   | LayoutRefNode
   | LayoutNode[]
-  | LayoutPrimitive;
+  | LayoutPrimitive;       // string, number, boolean, null → text
 
-type LayoutPrimitive = string | number | boolean | null;
-```
-
-#### Component Node
-
-```typescript
 type ComponentNode = {
-  component: string;                   // Registry name (e.g., 'Stack', 'Text', 'Button')
-  props?: Record<string, Binding | unknown>;
+  component: string;       // Registry name
+  props?: Record<string, unknown>;
   children?: LayoutContent | LayoutContent[];
-  ref?: string;                        // Event targeting ID
-  model?: string;                      // Two-way binding path (e.g., '$.name')
+  ref?: string;            // Event targeting ID
+  model?: string;          // Two-way binding path: '$.name'
   events?: Record<string, EventConfig>;
 };
-```
 
-#### Conditional Node
-
-```typescript
-type ConditionalNode = {
-  if: Binding;
-  then: LayoutNode;
-  else?: LayoutNode;
-};
-```
-
-#### Loop Node
-
-```typescript
-type LoopNode = {
-  for: Binding;                        // Array to iterate
-  as: string;                          // Variable name for each item
-  do: LayoutNode;                      // Template for each item
-  key?: string;                        // Key expression for React list rendering
-};
-```
-
-#### Layout Reference
-
-```typescript
-type LayoutRefNode = {
-  ref: string;                         // Layout ID or data path ($.contentLayout)
-};
+type ConditionalNode = { if: Binding; then: LayoutNode; else?: LayoutNode };
+type LoopNode = { for: Binding; as: string; key?: string; do: LayoutNode };
+type LayoutRefNode = { ref: string };   // Layout ID or data path
 ```
 
 ### Bindings
 
-Three types, same as the original:
-
 ```typescript
-// Path binding - resolves against data context
-'$.user.name'                          // Data path
-'$item.label'                          // Loop variable
+type Binding = string | TemplateBinding | ConditionalBinding;
 
-// Template binding - string interpolation
-{ template: 'Hello {{$.user.name}}, you have {{$.count}} items' }
-
-// Conditional binding - ternary
-{ if: '$.isPremium', then: 'Premium', else: 'Free' }
-```
-
-### Rendering Engine
-
-The renderer converts layout JSON to React elements:
-
-```typescript
-export const createLayoutRenderer = (config: RendererConfig): LayoutRenderer;
-
-type RendererConfig = {
-  registry: ComponentRegistry;
-  eventBus?: EventBus;
-  layoutStore?: LayoutStore;
-};
-
-type LayoutRenderer = {
-  render: (layout: LayoutNode, data: Record<string, unknown>) => React.ReactNode;
-};
-```
-
-#### Rendering Algorithm
-
-```typescript
-const renderNode = (node: LayoutNode, scopeChain: ScopeChain): React.ReactNode => {
-  // Primitives → text
-  if (node === null || typeof node !== 'object') return String(node ?? '');
-
-  // Arrays → fragment of rendered children
-  if (Array.isArray(node)) return node.map((child, i) => renderNode(child, scopeChain));
-
-  // Conditional → evaluate condition, render then/else
-  if (isConditionalNode(node)) {
-    const condition = resolveBinding(node.if, scopeChain);
-    return condition ? renderNode(node.then, scopeChain) : node.else ? renderNode(node.else, scopeChain) : null;
-  }
-
-  // Loop → iterate, push scope for each item, render template
-  if (isLoopNode(node)) {
-    const items = resolveBinding(node.for, scopeChain);
-    if (!Array.isArray(items)) return null;
-    return items.map((item, index) => {
-      const loopScope = pushScope(scopeChain, { [node.as]: item, $index: index });
-      const key = node.key ? String(resolveBinding(node.key, loopScope)) : String(index);
-      return <React.Fragment key={key}>{renderNode(node.do, loopScope)}</React.Fragment>;
-    });
-  }
-
-  // Layout ref → resolve ID, look up in store, render
-  if (isLayoutRefNode(node)) {
-    return <LayoutRef refValue={node.ref} scopeChain={scopeChain} />;
-  }
-
-  // Component → resolve props, create element
-  if (isComponentNode(node)) {
-    return <ComponentRenderer node={node} scopeChain={scopeChain} />;
-  }
-
-  return null;
-};
-```
-
-#### Component Resolution
-
-```typescript
-const ComponentRenderer = ({ node, scopeChain }: Props) => {
-  const registry = useComponentRegistry();
-  const entry = registry.get(node.component);
-  if (!entry) return <UnknownComponent name={node.component} />;
-
-  // Resolve props (evaluate bindings)
-  const resolvedProps = resolveProps(node.props, scopeChain);
-
-  // Handle model binding (two-way)
-  if (node.model) {
-    const modelPath = node.model;
-    const currentValue = resolveBinding(modelPath, scopeChain);
-    resolvedProps.value = currentValue;
-    resolvedProps.onChange = (newValue: unknown) => {
-      eventBus.emit({ type: 'ui:model', ref: node.ref, path: modelPath, value: newValue });
-    };
-  }
-
-  // Handle events
-  if (node.events) {
-    for (const [eventName, config] of Object.entries(node.events)) {
-      resolvedProps[eventName] = (eventData: unknown) => {
-        eventBus.emit({ type: `ui:${eventName}`, ref: node.ref, data: eventData });
-      };
-    }
-  }
-
-  // Render children
-  const children = node.children
-    ? renderChildren(node.children, scopeChain)
-    : undefined;
-
-  return React.createElement(entry.component, resolvedProps, children);
-};
+// Path: "$.user.name" (data), "$item.price" (loop variable)
+// Template: { template: "Hello {{$.name}}" }
+// Conditional: { if: "$.active", then: "Yes", else: "No" }
 ```
 
 ### Scope Chain
 
-Data context uses a scope chain for nested bindings (loop variables, etc.):
+Bindings resolve against a scope chain (array of scopes, innermost first):
 
 ```typescript
 type ScopeChain = Record<string, unknown>[];
 
-// Push scope for loop iteration
-const pushScope = (chain: ScopeChain, scope: Record<string, unknown>): ScopeChain =>
-  [scope, ...chain];
-
-// Resolve binding: walk chain from innermost to outermost
-const resolveBinding = (binding: Binding, chain: ScopeChain): unknown => {
-  if (isPathString(binding)) return resolvePath(binding, chain);
-  if (isTemplateBinding(binding)) return resolveTemplate(binding, chain);
-  if (isConditionalBinding(binding)) return resolveConditional(binding, chain);
-  return binding;
-};
+createScopeChain(data)       → [data]
+pushScope(chain, { item })   → [{ item }, data]
 ```
 
----
+- `$.user.name` → dot after `$`, resolves against data scopes
+- `$item.name` → no dot, resolves as variable name
 
-## System 2: Component Registry
+### Render Node (Framework-Agnostic Output)
 
-### Registry Interface
+The core renderer produces `RenderNode[]`, not framework-specific elements:
 
 ```typescript
-type ComponentRegistry = {
-  register: (name: string, entry: ComponentEntry) => void;
-  get: (name: string) => ComponentEntry | undefined;
-  list: () => string[];
-  has: (name: string) => boolean;
-  getCatalog: () => ComponentCatalog;         // For LLM consumption
-  getJsonSchema: () => object;                // JSON Schema of all components
-};
-
-type ComponentEntry = {
-  component: React.ComponentType<any>;        // The React component
-  meta: ComponentMeta;                        // Metadata for the registry
-};
-
-type ComponentMeta = {
-  name: string;
-  description: string;
-  category: string;
-  props: Record<string, PropMeta>;
-  events?: Record<string, EventMeta>;
-  slots?: Record<string, SlotMeta>;
-};
-
-type PropMeta = {
-  type: string;                               // 'string', 'number', 'boolean', etc.
-  description: string;
-  required?: boolean;
-  default?: unknown;
-  enum?: unknown[];                           // Allowed values
-};
+type RenderNode =
+  | { type: 'component'; name: string; props: Record<string, unknown>; children: RenderNode[]; ref?: string }
+  | { type: 'text'; value: string }
+  | { type: 'fragment'; children: RenderNode[] };
 ```
 
-### Adapter Pattern
-
-Custom component libraries register through adapters:
+The framework adapter turns this into actual elements:
 
 ```typescript
-// Create adapter for a component library
-export const createAdapter = (components: AdapterComponent[]): ComponentAdapter;
-
-type AdapterComponent = {
-  name: string;
-  component: React.ComponentType;
-  meta: ComponentMeta;
-};
-
-type ComponentAdapter = {
-  register: (registry: ComponentRegistry) => void;
+// React adapter (~30 lines)
+const toReact = (node: RenderNode, registry: ReactRegistry): React.ReactNode => {
+  if (node.type === 'text') return node.value;
+  if (node.type === 'fragment') return node.children.map(n => toReact(n, registry));
+  const Component = registry.get(node.name);
+  return React.createElement(Component, node.props, ...node.children.map(n => toReact(n, registry)));
 };
 ```
 
-### Built-in Headless Primitives
+### Layout Store
 
-Ship a set of **headless** (unstyled) primitives that work with any design system:
-
-| Component | Purpose | Key Props |
-|-----------|---------|-----------|
-| `Stack` | Flex layout | `direction`, `gap`, `align`, `justify`, `wrap` |
-| `Text` | Text rendering | `variant` (display/heading/body/caption/label), `weight`, `align` |
-| `Button` | Interactive button | `text`, `variant`, `disabled`, `loading` |
-| `Input` | Text input | `value`, `placeholder`, `type`, `disabled` |
-| `Select` | Dropdown select | `value`, `options`, `placeholder` |
-| `Textarea` | Multi-line input | `value`, `placeholder`, `rows` |
-| `Image` | Image display | `src`, `alt`, `fit`, `fallback` |
-| `Surface` | Container/card | `padding`, `elevation`, `rounded` |
-| `Scroll` | Scrollable area | `direction`, `maxHeight` |
-| `Collapsible` | Expand/collapse | `open`, `title` |
-| `Spinner` | Loading indicator | `size` |
-| `Divider` | Visual separator | `orientation` |
-| `Badge` | Status badge | `text`, `variant` |
-
-These are headless by default - they render semantic HTML with data attributes for styling. Users style them with CSS, Tailwind, or any approach.
-
-Optional: ship a Tailwind preset that styles all headless primitives with a clean default look.
-
----
-
-## System 3: Action System
-
-### Action Definition (JSON)
-
-```typescript
-type ActionDefinition = {
-  id: string;
-  name?: string;
-  description?: string;
-
-  // Layout
-  layout: string | LayoutNode;         // Layout ID or inline layout
-
-  // Data
-  inputSchema?: z.ZodType;             // Expected input shape
-  outputSchema?: z.ZodType;            // Expected output shape
-  initialData?: InitialDataConfig;     // How to initialize action data
-
-  // Behavior
-  triggers?: TriggerConfig[];          // Event handlers
-  endpoints?: Record<string, EndpointConfig>;
-  lifecycle?: LifecycleConfig;         // onMount, onResume hooks
-
-  // Completion
-  onComplete?: CompletionBehavior;     // What happens when action completes
-  onCancel?: CancellationBehavior;
-};
-```
-
-### Action Instance (Runtime)
-
-```typescript
-type ActionInstance = {
-  id: string;                          // Unique instance ID
-  definitionId: string;                // Reference to definition
-  canvasId: string;                    // Where it's rendered
-  status: ActionStatus;                // Lifecycle state
-  input: unknown;                      // Input data
-  data: Record<string, unknown>;       // Reactive state
-};
-
-type ActionStatus = 'initializing' | 'active' | 'suspended' | 'completing' | 'unmounted';
-```
-
-### Triggers
-
-Triggers bind UI events or messages to effects:
-
-```typescript
-type TriggerConfig = EventTrigger | MessageTrigger;
-
-type EventTrigger = {
-  event: string;                       // 'ui:click', 'ui:submit', 'ui:input', etc.
-  ref?: string;                        // Component ref (if omitted, matches any)
-  skills?: SkillConfig[];              // State mutations
-  call?: string;                       // Endpoint to call
-  push?: { action: string; input?: Record<string, Binding> };
-  pop?: boolean;
-  replace?: { action: string; input?: Record<string, Binding> };
-  emit?: { channel: string; payload?: Record<string, Binding> };
-};
-
-type MessageTrigger = {
-  message: string;                     // Channel name
-  skills?: SkillConfig[];
-  call?: string;
-};
-```
-
-### Skills (State Operations)
-
-Atomic, declarative state mutations:
-
-```typescript
-type SkillConfig =
-  | { set: string; value: unknown }              // Set field to literal
-  | { set: string; from: string }                // Set field from another path
-  | { toggle: string }                           // Toggle boolean
-  | { increment: string; by?: number; max?: number }
-  | { decrement: string; by?: number; min?: number }
-  | { push: string; value?: unknown; from?: string }  // Push to array
-  | { pop: string }                              // Pop from array
-  | { removeAt: string; index: number }          // Remove at index
-  | { clear: string }                            // Clear array/object
-  | { reset: string }                            // Reset to initial value
-  | { merge: string; value: Record<string, unknown> }; // Shallow merge
-```
-
-Skills are applied in order. Each produces a new state (immutable updates).
-
-### Endpoints
-
-Named HTTP calls defined in action definitions:
-
-```typescript
-type EndpointConfig = {
-  url: string;                         // Template URL: '/api/users/{{$.userId}}'
-  method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
-  headers?: Record<string, string>;
-  body?: string | Record<string, Binding>;  // Path or mapped object
-  target?: string;                     // Store response at this data path
-  errorTarget?: string;                // Store error at this path
-};
-```
-
----
-
-## System 4: Shell
-
-The shell is a state machine that manages canvases and action lifecycles. It is **pure TypeScript** - no React dependency. React integration is via hooks and providers.
-
-### Shell (Pure TypeScript)
-
-```typescript
-type Shell = {
-  readonly id: string;
-
-  // Canvas operations
-  push: (canvasId: string, actionId: string, input?: unknown) => string;    // Returns instance ID
-  pop: (canvasId: string) => void;
-  replace: (canvasId: string, actionId: string, input?: unknown) => string;
-  clear: (canvasId: string) => void;
-
-  // State access
-  getCanvas: (canvasId: string) => CanvasState;
-  getAction: (instanceId: string) => ActionInstance | undefined;
-  getActionData: (instanceId: string) => Record<string, unknown>;
-  updateActionData: (instanceId: string, updates: Record<string, unknown>) => void;
-
-  // Events
-  onStateChange: (handler: StateChangeHandler) => Unsubscribe;
-  onActionDataChange: (handler: DataChangeHandler) => Unsubscribe;
-
-  // Lifecycle
-  dispose: () => void;
-};
-
-type CanvasState = {
-  id: string;
-  stack: ActionInstance[];              // Bottom to top
-  activeInstance: ActionInstance | undefined;  // Top of stack
-};
-```
-
-### React Integration (Hooks)
-
-```typescript
-// Provide shell context to React tree
-export const ShellProvider: React.FC<{ shell: Shell; children: React.ReactNode }>;
-
-// Access shell from any component
-export const useShell: () => Shell;
-
-// Render a canvas
-export const CanvasSlot: React.FC<{ canvasId: string }>;
-
-// Access current action's data
-export const useActionData: () => Record<string, unknown>;
-
-// Access action runtime (data + operations)
-export const useActionRuntime: () => ActionRuntime;
-
-type ActionRuntime = {
-  data: Record<string, unknown>;
-  updateData: (updates: Record<string, unknown>) => void;
-  callEndpoint: (name: string) => Promise<unknown>;
-  complete: (output?: unknown) => void;
-  cancel: () => void;
-};
-```
-
-### Canvas Rendering
-
-```typescript
-const CanvasSlot: React.FC<{ canvasId: string }> = ({ canvasId }) => {
-  const shell = useShell();
-  const canvas = useCanvasState(canvasId);
-
-  if (!canvas?.activeInstance) return null;
-
-  const instance = canvas.activeInstance;
-  const definition = shell.getDefinition(instance.definitionId);
-  const layout = resolveLayout(definition.layout);
-
-  return (
-    <ActionProvider instance={instance} definition={definition}>
-      <LayoutRenderer layout={layout} data={instance.data} />
-    </ActionProvider>
-  );
-};
-```
-
----
-
-## System 5: Wire Protocol (Server-Authoritative)
-
-The protocol for server → client UI commands and client → server events. Framework-agnostic by design.
-
-### Server → Client: `UICommandBatch`
-
-```typescript
-type UICommandBatch = {
-  batchId: string;
-  sessionId: string;
-  serverSeq: number;                   // Monotonic sequence for ordering
-  commands: UICommand[];
-};
-
-type UICommand =
-  | { type: 'push'; canvasId: string; actionId: string; layout: LayoutNode; data: Record<string, unknown> }
-  | { type: 'replace'; canvasId: string; actionId: string; layout: LayoutNode; data: Record<string, unknown> }
-  | { type: 'pop'; canvasId: string }
-  | { type: 'mergeData'; instanceId: string; updates: Record<string, unknown> }
-  | { type: 'replaceData'; instanceId: string; data: Record<string, unknown> }
-  | { type: 'clearCanvas'; canvasId: string };
-```
-
-### Client → Server: `ClientEventEnvelope`
-
-```typescript
-type ClientEventEnvelope = {
-  sessionId: string;
-  shellId: string;
-  clientSeq: number;
-  events: ClientEvent[];
-};
-
-type ClientEvent = {
-  type: string;                        // 'click', 'submit', 'change', 'custom', etc.
-  ref?: string;                        // Component ref
-  canvasId: string;
-  instanceId: string;
-  payload?: unknown;
-  timestamp: number;
-};
-```
-
-### Applying Commands
-
-```typescript
-export const applyCommandBatch = (shell: Shell, batch: UICommandBatch): void => {
-  for (const command of batch.commands) {
-    switch (command.type) {
-      case 'push':
-        shell.push(command.canvasId, command.actionId, command.data);
-        break;
-      case 'pop':
-        shell.pop(command.canvasId);
-        break;
-      case 'mergeData':
-        shell.updateActionData(command.instanceId, command.updates);
-        break;
-      // ... etc
-    }
-  }
-};
-```
-
----
-
-## Event System
-
-### Event Bus (UI Events)
-
-Handles events within a single action: click, input, submit, focus, blur, model changes.
-
-```typescript
-type EventBus = {
-  emit: (event: UIEvent) => void;
-  on: (type: string, handler: UIEventHandler) => Unsubscribe;
-  onRef: (ref: string, type: string, handler: UIEventHandler) => Unsubscribe;
-};
-
-type UIEvent = {
-  type: string;                        // 'ui:click', 'ui:input', 'ui:submit', 'ui:model'
-  ref?: string;                        // Component ref
-  value?: unknown;                     // Event value (input value, etc.)
-  data?: Record<string, unknown>;      // Additional event data
-};
-```
-
-### Message Bus (Inter-Action)
-
-Handles communication between actions across canvases:
-
-```typescript
-type MessageBus = {
-  send: (from: Address, to: Address, payload: unknown) => void;
-  subscribe: (channel: string, handler: ChannelHandler) => Unsubscribe;
-  publish: (channel: string, payload: unknown) => void;
-};
-
-type Address = {
-  shell: string;
-  canvas?: string;
-  action?: string;
-};
-```
-
----
-
-## Layout Store
-
-Versioned layout storage with reference resolution:
+In-memory storage with versioning and reference resolution:
 
 ```typescript
 type LayoutStore = {
@@ -655,126 +124,482 @@ type LayoutStore = {
 };
 ```
 
-Layout references (`{ ref: 'layout-id' }`) are resolved by looking up the ID in the store. Dynamic refs (`{ ref: '$.contentLayout' }`) are resolved at render time against the data context.
+### Component Registry
+
+Maps string names to components with LLM-consumable metadata:
+
+```typescript
+type ComponentRegistry = {
+  register: (name: string, entry: ComponentEntry) => void;
+  get: (name: string) => ComponentEntry | undefined;
+  list: () => string[];
+  has: (name: string) => boolean;
+  getCatalog: () => ComponentCatalog;
+  getJsonSchema: () => object;
+};
+
+type ComponentEntry = {
+  component: unknown;      // Framework-specific (React.ComponentType, Vue component, etc.)
+  meta: ComponentMeta;     // Framework-agnostic metadata
+};
+
+type ComponentMeta = {
+  name: string;
+  description: string;
+  category: string;
+  props: Record<string, PropMeta>;
+  events?: Record<string, EventMeta>;
+};
+```
+
+### Event Bus
+
+UI events flow through a typed pub/sub:
+
+```typescript
+type EventBus = {
+  emit: (type: string, payload?: unknown) => void;
+  on: (type: string | RegExp, handler: EventHandler) => Unsubscribe;
+  once: (type: string, handler: EventHandler) => Unsubscribe;
+  scoped: (source: string) => EventBus;
+};
+```
+
+Event types: `ui:click`, `ui:input`, `ui:submit`, `ui:focus`, `ui:blur`, `ui:model`.
+
+### Agent Integration
+
+```typescript
+// Generate LLM prompt with component catalog
+generateLayoutPrompt(registry) → string
+
+// Validate a layout generated by an LLM
+validateLayout(layout) → ValidationResult
+
+// JSON Schema for LLM consumption
+registry.getJsonSchema() → object
+```
 
 ---
 
-## Agent Integration
+## Schema-First Design
 
-### Layout Generation Prompt
+**Important:** All type definitions in this document describe shapes. In the implementation, every definition that crosses a boundary is a **Zod schema** with `.describe()` on every field. Types are inferred via `z.infer<typeof Schema>`. No hand-written types for anything that's validated, serialized, or consumed by LLMs.
+
+---
+
+## System 2: Actions
+
+An action is a self-contained unit of work with layout, data, and behavior.
+
+### Action Definition
+
+```
+ActionDefinition:
+  id: string
+  name?: string
+  description?: string
+  layout?: string | LayoutNode           — layout ID or inline
+  data?: Record<string, unknown>         — static defaults, merged with input on mount
+  triggers?: TriggerConfig[]             — event/message → do steps
+  endpoints?: Record<string, Endpoint>   — named HTTP calls
+  lifecycle?: LifecycleConfig            — mount/unmount/suspend/resume hooks
+```
+
+Clean compared to the original neon-ui: no `initialData` (3 variants), no `onComplete`/`onCancel`, no `skills`, no 11 trigger schemas.
+
+### Data Model
+
+Two sources merge on mount:
+
+```
+definition.data    +    input (from shell.push)    =    action.data
+{ counter: 0 }          { userId: 'u1' }               { counter: 0, userId: 'u1' }
+```
+
+Input overrides defaults. The merged result is the action's mutable state. Triggers mutate it. Endpoints write to it. The renderer reads it.
+
+### Steps: Mutations + Effects
+
+All behavior in Nova is expressed as ordered sequences of **steps**. A step is either a **mutation** (data layer) or an **effect** (outside world).
+
+**Mutations** — change the action's data:
+
+```
+Mutation:
+  { set: path, value: unknown }         — set field to value
+  { set: path, from: path }             — copy from another field
+  { toggle: path }                      — flip boolean
+  { increment: path, by?: number }      — +1 or +N
+  { decrement: path, by?: number }      — -1 or -N
+  { push: path, value?: unknown }       — append to array
+  { pop: path }                         — remove last from array
+  { removeAt: path, index: number }     — remove at index
+  { clear: path }                       — clear array/object
+  { reset: path }                       — reset to initial value
+```
+
+**Effects** — interact with the outside world:
+
+```
+Effect:
+  { call: endpoint }                                            — call named endpoint
+  { call: endpoint, onSuccess?: Step[], onError?: Step[] }     — with branching
+  { emit: { channel, payload? } }                              — publish to message bus
+  { push: { action, canvas?, input? } }                        — push action onto canvas
+  { pop: true }                                                — pop current action
+  { replace: { action, input? } }                              — replace current action
+```
+
+**Step** is the union of Mutation and Effect.
+
+Steps execute in order. Mutations are synchronous. Effects may be async (`call`). The `call` effect supports branching — `onSuccess` and `onError` are nested step arrays for handling API responses.
+
+### The `do` Field
+
+Triggers and lifecycle hooks share the same execution model: an ordered array of steps in a `do` field.
+
+```json
+{
+  "event": "ui:click",
+  "ref": "add-to-cart-btn",
+  "do": [
+    { "set": "loading", "value": true },
+    { 
+      "call": "addToCart",
+      "onSuccess": [
+        { "set": "loading", "value": false },
+        { "emit": { "channel": "cart-updated" } }
+      ],
+      "onError": [
+        { "set": "loading", "value": false },
+        { "set": "error", "from": "@error.message" }
+      ]
+    }
+  ]
+}
+```
+
+Read aloud: "On click of add-to-cart button, do: set loading true, call addToCart — on success set loading false and emit cart-updated, on error set loading false and set error from the error message."
+
+### Triggers
+
+A trigger binds an event source to steps:
+
+```
+TriggerConfig:
+  event?: string           — UI event: 'ui:click', 'ui:submit', 'ui:input'
+  message?: string         — message bus channel
+  ref?: string             — component ref to match
+  do: Step[]               — ordered steps to execute
+```
+
+A trigger must have a source (`event` or `message`) and at least one step in `do`.
+
+Simple example — toggle a boolean on click:
+```json
+{ "event": "ui:click", "ref": "toggle-btn", "do": [{ "toggle": "isOpen" }] }
+```
+
+Navigation example — go to next screen on submit:
+```json
+{ "event": "ui:submit", "ref": "form", "do": [{ "call": "saveForm" }, { "push": { "action": "confirmation" } }] }
+```
+
+Message example — update data when another action emits:
+```json
+{ "message": "cart-updated", "do": [{ "call": "refreshCart" }] }
+```
+
+### Endpoints
+
+Named HTTP calls with template URLs and response targeting:
+
+```
+EndpointConfig:
+  url: string                            — template: '/api/users/{{$.userId}}'
+  method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
+  headers?: Record<string, string>
+  body?: string | Record<string, unknown>
+  target?: string                        — store response at this data path
+  errorTarget?: string                   — store error at this data path
+  transform?: unknown                    — Prism config for response transformation
+```
+
+`target` is where the response goes in action data. `transform` uses the injected transform function (Prism) to reshape the response before storing.
+
+### Lifecycle
+
+Four lifecycle events, each with an optional `do` array:
+
+```
+LifecycleConfig:
+  mount?: Step[]             — runs when action mounts (load data, initialize)
+  unmount?: Step[]           — runs when action unmounts (cleanup, emit)
+  suspend?: Step[]           — runs when action is suspended (going to background)
+  resume?: Step[]            — runs when action resumes (refresh data)
+```
+
+Same `Step[]` as triggers. Navigation effects (push/pop/replace) work in lifecycle too — `unmount` with a `{ push: { action: 'next' } }` replaces the old `onComplete`.
+
+Typical patterns:
+
+```json
+{
+  "lifecycle": {
+    "mount": [{ "call": "loadUserData" }],
+    "resume": [{ "call": "refreshUserData" }]
+  }
+}
+```
+
+The old `onComplete` / `onCancel` distinction is gone. If an action needs different unmount behavior depending on why, the **trigger** that causes unmount carries the navigation:
+
+- "Submit" button trigger: `{ "do": [{ "call": "save" }, { "push": { "action": "confirmation" } }] }`
+- "Back" button trigger: `{ "do": [{ "pop": true }] }`
+- "Cancel" button trigger: `{ "do": [{ "pop": true }] }`
+
+The action doesn't need to know why it's unmounting. The trigger that caused it already specified the navigation.
+
+### Action Instance
+
+```
+ActionInstance:
+  id: string                 — unique instance ID
+  definitionId: string
+  canvasId: string
+  status: ActionStatus       — 'initializing' | 'active' | 'suspended' | 'unmounted'
+  data: Record<string, unknown>
+```
+
+Four statuses. No 'completing' — unmount is immediate.
+
+### Action Runtime
+
+Pure TypeScript state machine. Does NOT import any framework. Split across files:
+
+```
+runtime/
+├── runtime.ts          — createActionRuntime factory, public interface
+├── lifecycle.ts        — mount, unmount, suspend, resume
+├── data.ts             — data management, mutation execution
+├── triggers.ts         — trigger matching + step execution
+└── endpoints.ts        — HTTP calls with template resolution
+```
+
+```
+ActionRuntime:
+  instance: ActionInstance (readonly)
+  definition: ActionDefinition (readonly)
+
+  getData() → Record<string, unknown>
+  updateData(updates) → void
+  applyMutations(mutations: Mutation[]) → void
+  executeSteps(steps: Step[]) → Promise<void>
+
+  mount(input?) → Promise<void>
+  unmount() → void
+  suspend() → void
+  resume() → void
+
+  render() → RenderNode[]
+
+  onDataChange(handler) → Unsubscribe
+  onStatusChange(handler) → Unsubscribe
+
+  dispose() → void
+```
+
+The framework adapter (React hooks) observes `onDataChange` and `onStatusChange` to trigger re-renders. The runtime itself has no rendering opinion.
+
+---
+
+## System 3: Shell
+
+Orchestrates multiple actions across canvas stacks.
+
+### Shell
 
 ```typescript
-export const generateLayoutPrompt = (registry: ComponentRegistry): string => {
-  const catalog = registry.getCatalog();
-  return `You generate JSON layouts using these components:\n${JSON.stringify(catalog, null, 2)}\n\nRules:\n- Use component names exactly as listed\n- Props must match the documented types\n- Use bindings ($.path) for dynamic data\n...`;
+type Shell = {
+  readonly id: string;
+
+  // Canvas operations
+  push: (canvasId: string, actionId: string, input?: Record<string, unknown>) => string;
+  pop: (canvasId: string) => void;
+  replace: (canvasId: string, actionId: string, input?: Record<string, unknown>) => string;
+  clear: (canvasId: string) => void;
+
+  // State
+  getCanvas: (canvasId: string) => CanvasState;
+  getRuntime: (instanceId: string) => ActionRuntime | undefined;
+
+  // Observation
+  onStateChange: (handler: StateChangeHandler) => Unsubscribe;
+  onDataChange: (handler: DataChangeHandler) => Unsubscribe;
+
+  dispose: () => void;
 };
 ```
 
-### Action Generation Prompt
+### Canvas
 
 ```typescript
-export const generateActionPrompt = (options: { components: ComponentCatalog; skills: SkillInfo[] }): string => {
-  // Produces a prompt that teaches the LLM how to generate action definitions
+type CanvasState = {
+  id: string;
+  stack: ActionInstance[];
+  active: ActionInstance | undefined;
 };
 ```
 
-### Validation
+- **push**: mount new action, suspend current top
+- **pop**: unmount top, resume previous
+- **replace**: unmount top, mount new
+- **clear**: unmount all
+
+### Message Bus
+
+Inter-action communication:
 
 ```typescript
-export const validateLayout = (layout: unknown): ValidationResult => {
-  return LayoutNodeSchema.safeParse(layout);
+type MessageBus = {
+  send: (from: string, to: string, payload: unknown) => void;
+  subscribe: (channel: string, handler: ChannelHandler) => Unsubscribe;
+  publish: (channel: string, payload: unknown) => void;
+};
+```
+
+Triggers with `emit` publish to channels. Triggers with `message` subscribe to channels.
+
+### Telemetry
+
+Shell observation via hooks on config:
+
+```typescript
+const shell = createShell({
+  canvases: ['main', 'sidebar'],
+  telemetry: {
+    onStateChange: (snapshot) => { ... },
+    onDataChange: (change) => { ... },
+  },
+});
+```
+
+### Wire Protocol
+
+For server-authoritative UX:
+
+```typescript
+type UICommandBatch = {
+  batchId: string;
+  serverSeq: number;
+  commands: UICommand[];
 };
 
-export const validateAction = (definition: unknown): ValidationResult => {
-  return ActionDefinitionSchema.safeParse(definition);
+type UICommand =
+  | { type: 'push'; canvasId: string; actionId: string; data?: Record<string, unknown> }
+  | { type: 'pop'; canvasId: string }
+  | { type: 'replace'; canvasId: string; actionId: string; data?: Record<string, unknown> }
+  | { type: 'mergeData'; instanceId: string; updates: Record<string, unknown> }
+  | { type: 'replaceData'; instanceId: string; data: Record<string, unknown> }
+  | { type: 'clearCanvas'; canvasId: string };
+
+type ClientEventEnvelope = {
+  sessionId: string;
+  shellId: string;
+  clientSeq: number;
+  events: ClientEvent[];
 };
 ```
 
 ---
 
-## File Structure
+## Transform Injection (Prism Integration)
 
-```
-src/
-├── index.ts                           # Public API barrel
-│
-├── layout/                            # System 1: Layout Engine
-│   ├── index.ts
-│   ├── types.ts                       # LayoutNode, Binding, etc.
-│   ├── schemas.ts                     # Zod schemas for all layout types
-│   ├── renderer.ts                    # createLayoutRenderer
-│   ├── binding-resolver.ts            # Binding resolution logic
-│   ├── scope.ts                       # ScopeChain utilities
-│   ├── store.ts                       # Layout store with versioning
-│   └── agent.ts                       # LLM prompt generation + validation
-│
-├── registry/                          # System 2: Component Registry
-│   ├── index.ts
-│   ├── types.ts                       # ComponentEntry, ComponentMeta, etc.
-│   ├── registry.ts                    # createComponentRegistry
-│   ├── adapter.ts                     # createAdapter factory
-│   └── catalog.ts                     # Catalog + JSON Schema generation
-│
-├── components/                        # Built-in headless primitives
-│   ├── index.ts
-│   ├── stack.tsx
-│   ├── text.tsx
-│   ├── button.tsx
-│   ├── input.tsx
-│   ├── select.tsx
-│   ├── textarea.tsx
-│   ├── image.tsx
-│   ├── surface.tsx
-│   ├── scroll.tsx
-│   ├── collapsible.tsx
-│   ├── spinner.tsx
-│   ├── divider.tsx
-│   ├── badge.tsx
-│   └── adapter.ts                     # Built-in adapter registration
-│
-├── action/                            # System 3: Actions
-│   ├── index.ts
-│   ├── types.ts                       # ActionDefinition, ActionInstance, etc.
-│   ├── schemas.ts                     # Zod schemas for actions
-│   ├── runtime.ts                     # Action runtime (data, triggers, endpoints)
-│   ├── skills.ts                      # Skill execution engine
-│   ├── triggers.ts                    # Trigger matching and execution
-│   └── endpoints.ts                   # HTTP endpoint calling
-│
-├── shell/                             # System 4: Shell (pure TS)
-│   ├── index.ts
-│   ├── types.ts                       # Shell, CanvasState, etc.
-│   ├── shell.ts                       # createShell factory
-│   ├── canvas.ts                      # Canvas stack operations
-│   └── lifecycle.ts                   # Action lifecycle management
-│
-├── react/                             # React Integration
-│   ├── index.ts
-│   ├── shell-provider.tsx             # ShellProvider context
-│   ├── canvas-slot.tsx                # CanvasSlot renderer
-│   ├── action-provider.tsx            # ActionProvider context
-│   ├── hooks.ts                       # useShell, useActionData, useActionRuntime
-│   ├── layout-renderer.tsx            # React layout rendering component
-│   └── error-boundary.tsx             # Layout error boundary
-│
-├── events/                            # System 5: Events
-│   ├── index.ts
-│   ├── event-bus.ts                   # UI event bus
-│   └── message-bus.ts                 # Inter-action message bus
-│
-├── protocol/                          # Wire Protocol
-│   ├── index.ts
-│   ├── types.ts                       # UICommandBatch, ClientEventEnvelope
-│   ├── apply.ts                       # Apply command batch to shell
-│   └── schemas.ts                     # Zod schemas for protocol types
-│
-└── utils/
-    ├── path.ts                        # Path parsing, binding utilities
-    ├── type-guards.ts                 # isComponentNode, isBinding, etc.
-    └── id.ts                          # ID generation
+Nova accepts an optional `transform` function for data transformation:
+
+```typescript
+const shell = createShell({
+  canvases: ['main'],
+  transform: evaluate,  // from @niscorp/prism
+}, { registry, actions });
 ```
 
-### Package Exports
+Type:
+```typescript
+type TransformFn = (config: unknown, source: Record<string, unknown>) => unknown;
+```
+
+Used in:
+- **Action data initialization** — transform input before merging with defaults
+- **Endpoint response mapping** — transform API responses before storing
+- **Trigger effects** — transform values before applying ops
+
+If not provided, these features are unavailable (plain data pass-through). Zero coupling with Prism — any function matching the signature works.
+
+---
+
+## React Adapter
+
+The only React-dependent code. ~200 lines total.
+
+### Hooks
+
+```typescript
+useShell()             → Shell from context
+useCanvas(id)          → CanvasState (re-renders on change)
+useActionData()        → current action's data (re-renders on change)
+useActionRuntime()     → { data, updateData, applyMutations, executeSteps, unmount }
+```
+
+### Providers
+
+```typescript
+<ShellProvider shell={shell} registry={reactRegistry}>
+  <CanvasSlot canvasId="main" />
+  <CanvasSlot canvasId="sidebar" />
+</ShellProvider>
+```
+
+`CanvasSlot` subscribes to the canvas state, gets the active action's runtime, calls `runtime.render()` to get `RenderNode[]`, converts to React elements via the adapter.
+
+### React Component Registry
+
+The core `ComponentRegistry` stores `ComponentEntry` with framework-agnostic `meta`. The React adapter maintains a parallel map of `name → React.ComponentType` for the `toReact` conversion.
+
+```typescript
+const reactRegistry = createReactRegistry(coreRegistry);
+reactRegistry.register('Stack', StackComponent);
+reactRegistry.register('Text', TextComponent);
+// or use the built-in adapter
+builtinReactAdapter.register(reactRegistry);
+```
+
+---
+
+## Headless Primitives
+
+Built-in React components. Render semantic HTML with data attributes. Unstyled.
+
+| Component | Props | Purpose |
+|-----------|-------|---------|
+| `Stack` | `direction`, `gap`, `align`, `justify`, `wrap` | Flex layout |
+| `Text` | `variant`, `weight`, `align` | Text display |
+| `Button` | `text`, `variant`, `disabled`, `loading` | Interactive button |
+| `Input` | `value`, `placeholder`, `type`, `disabled` | Text input |
+| `Select` | `value`, `options`, `placeholder` | Dropdown |
+| `Textarea` | `value`, `placeholder`, `rows` | Multi-line input |
+| `Image` | `src`, `alt`, `fit`, `fallback` | Image display |
+| `Surface` | `padding`, `elevation`, `rounded` | Container/card |
+| `Scroll` | `direction`, `maxHeight` | Scrollable area |
+| `Collapsible` | `open`, `title` | Expand/collapse |
+| `Spinner` | `size` | Loading indicator |
+| `Divider` | `orientation` | Separator |
+| `Badge` | `text`, `variant` | Status badge |
+
+---
+
+## Package Entry Points
 
 ```json
 {
@@ -787,37 +612,113 @@ src/
 }
 ```
 
-Separate entry points so:
-- `@niscorp/nova` - Core (layout, registry, action, shell, events) - no React dependency
-- `@niscorp/nova/react` - React integration (hooks, providers, renderer)
-- `@niscorp/nova/components` - Built-in headless primitives
-- `@niscorp/nova/protocol` - Wire protocol types and utilities
+- `@niscorp/nova` — Pure TypeScript core (layout, action, shell). Zero React dep.
+- `@niscorp/nova/react` — React adapter (hooks, providers, renderer)
+- `@niscorp/nova/components` — Headless React primitives
+- `@niscorp/nova/protocol` — Wire protocol types and apply function
+
+---
+
+## File Structure
+
+```
+src/
+├── index.ts                           # Core barrel
+│
+├── layout/
+│   ├── index.ts
+│   ├── types.ts                       # LayoutNode, Binding, RenderNode, ComponentMeta
+│   ├── schemas.ts                     # Zod schemas
+│   ├── guards.ts                      # Type guards
+│   ├── renderer.ts                    # JSON → RenderNode[] (framework-agnostic)
+│   ├── binding-resolver.ts            # Binding evaluation
+│   ├── scope.ts                       # Scope chain
+│   ├── store.ts                       # Layout store
+│   ├── registry.ts                    # Component registry
+│   ├── event-bus.ts                   # UI event pub/sub
+│   └── agent.ts                       # LLM prompt + validation helpers
+│
+├── action/
+│   ├── index.ts
+│   ├── types.ts                       # ActionDefinition, Mutation, Step, TriggerConfig, etc.
+│   ├── schemas.ts                     # Zod schemas
+│   ├── runtime/
+│   │   ├── runtime.ts                 # createActionRuntime factory
+│   │   ├── lifecycle.ts               # mount, suspend, resume, complete, cancel
+│   │   ├── data.ts                    # data management, ops execution
+│   │   ├── triggers.ts               # trigger matching + effect execution
+│   │   └── endpoints.ts              # HTTP calls with template resolution
+│   └── mutations.ts                   # Mutation registry (set, toggle, push, etc.)
+│
+├── shell/
+│   ├── index.ts
+│   ├── types.ts                       # Shell, CanvasState
+│   ├── shell.ts                       # createShell factory
+│   ├── canvas.ts                      # Canvas stack operations
+│   └── message-bus.ts                 # Inter-action messaging
+│
+├── react/
+│   ├── index.ts
+│   ├── adapter.tsx                    # RenderNode[] → React.ReactNode
+│   ├── shell-provider.tsx             # ShellProvider context
+│   ├── canvas-slot.tsx                # CanvasSlot component
+│   ├── hooks.ts                       # useShell, useCanvas, useActionData, useActionRuntime
+│   ├── registry.ts                    # React component registry
+│   └── error-boundary.tsx
+│
+├── components/
+│   ├── index.ts
+│   ├── primitives/                    # Stack, Text, Button, Input, etc.
+│   └── adapter.ts                     # Built-in adapter registration
+│
+└── protocol/
+    ├── index.ts
+    ├── types.ts                       # UICommandBatch, ClientEventEnvelope
+    ├── apply.ts                       # Apply command batch to shell
+    └── schemas.ts                     # Zod schemas
+```
 
 ---
 
 ## Dependencies
 
-- `react` (peer, ^19.0.0) - For React integration entry point
-- `zod` (peer, ^4.0.0) - Schema validation
+- `zod` (peer, ^4.0.0) — Schema validation
+- `react` (peer, ^19.0.0) — Only for `/react` and `/components` entry points
 
-The core (`layout`, `registry`, `action`, `shell`, `events`) has ZERO dependencies. Pure TypeScript. This means the shell state machine can run on the server without React.
+Core entry point has zero framework dependencies.
 
 ---
 
-## Key Design Decisions
+## Design Decisions
 
-1. **Why separate core from React integration?** The shell, action state machine, and event system are framework-agnostic. They should run on the server (for server-authoritative UX) without React. Only the rendering layer needs React.
+1. **Schema-first.** Every definition is a Zod schema with `.describe()`. Types are inferred. No hand-written types for anything that crosses a boundary.
 
-2. **Why headless primitives instead of styled components?** Adoption. Styled components force a design system. Headless components work with any design system - Tailwind, CSS modules, styled-components, whatever. Ship the structure, let users own the style.
+2. **RenderNode intermediate representation.** Core renderer outputs framework-agnostic nodes. React adapter is ~200 lines. Enables testing without React, and potential Vue/Svelte adapters later.
 
-3. **Why keep the JSON layout format from the original?** It works. Agents already know how to generate it (proven in Cassandra demo). It's simple, composable, and covers all UI patterns. Changing it would lose proven ground for no gain.
+3. **Three systems, one package.** Layout, action, shell are cohesive. Entry points provide separation without version coordination overhead.
 
-4. **Why scope chains instead of a flat data context?** Loop variables. When you have `{ for: '$.items', as: 'item', do: { component: 'Text', children: ['$item.name'] } }`, the inner template needs access to both `$item` (loop variable) and `$.user` (parent data). Scope chains handle this naturally by pushing a new scope for each loop and resolving from innermost to outermost.
+4. **`data` not `initialData`.** Simple merge: `{ ...definition.data, ...input }`. No discriminated `type: 'static' | 'input' | 'mapped'` variants.
 
-5. **Why skills instead of arbitrary state mutation?** Predictability. Skills are a closed set of operations (set, toggle, increment, push, etc.). They can be validated, serialized, replayed, and generated by AI. Arbitrary mutation functions (like Redux reducers) can't be serialized or generated from JSON.
+5. **Steps = Mutations + Effects.** One ordered array in `do`. Mutations change data, effects touch the outside world. They interleave because real workflows need "set loading, call API, set result."
 
-6. **Why a wire protocol instead of just WebSocket messages?** Contract. The protocol defines exactly what the server can tell the client to do (push, pop, mergeData, etc.) and exactly what the client can report back (click, submit, change, etc.). Both sides can be implemented independently. The protocol is versionable. New command types can be added without breaking existing clients.
+6. **`do` field everywhere.** Triggers have `do`. Lifecycle hooks have `do`. Same execution model, same step types. One concept to learn.
 
-7. **Why `React.createElement` instead of JSX in the renderer?** The renderer is dynamic - it creates elements from JSON at runtime. JSX is compile-time sugar. `React.createElement(registry.get(name).component, resolvedProps, children)` is the natural way to create elements from runtime data.
+7. **`call` branches with `onSuccess`/`onError`.** The only branching point. Everything else is sequential. Keeps the model flat for 90% of cases, handles API error flows for the 10%.
 
-8. **Why React 19 as minimum?** RSC support, `use()` hook, improved Suspense, Actions for form handling. These are too valuable to leave on the table. React 18 compatibility would constrain the design unnecessarily.
+8. **No `onComplete`/`onCancel`.** Navigation lives in triggers, not lifecycle. The trigger that causes unmount carries the navigation intent. The action doesn't need to know why it's unmounting.
+
+9. **Four lifecycle events: mount, unmount, suspend, resume.** Real state machine transitions. No invented concepts like "complete" or "cancel."
+
+10. **One trigger schema.** Source + match + do. Not 11 discriminated types.
+
+11. **Transform injection.** Optional `TransformFn` for Prism integration. Zero coupling.
+
+12. **Event bus, not DOM events.** Components emit to the bus. Triggers listen. Decouples component from behavior.
+
+13. **Canvas stacks, not routes.** Push/pop/replace. No router dependency.
+
+14. **Wire protocol for server authority.** Server pushes UI commands, client applies them.
+
+15. **Headless primitives.** Semantic HTML, no styles.
+
+16. **Action runtime is a pure TypeScript state machine.** Framework adapters observe it. The runtime doesn't know about React.
