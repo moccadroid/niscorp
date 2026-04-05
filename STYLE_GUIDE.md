@@ -9,6 +9,7 @@ Rules for writing code in this codebase. Short, focused on what matters.
 - `strict: true` in tsconfig. Always.
 - No `any`. Use `unknown` when the type is genuinely unknown, then narrow it.
 - No type assertions (`as`, `as unknown as`). If you need to cast, the types are wrong. Fix them.
+- No non-null assertions (`!`). Never. There is always a way to restructure the code so TypeScript can narrow without `!`. If you think you need it, you're wrong.
 - No `enum`. Use `z.enum()` or `as const` objects.
 - No classes unless you genuinely need identity + mutable state (almost never in these projects).
 - No decorators, no `reflect-metadata`.

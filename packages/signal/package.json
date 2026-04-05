@@ -1,32 +1,74 @@
 {
   "name": "@niscorp/signal",
   "version": "0.1.0",
-  "description": "Universal LLM abstraction with providers, middleware, and structured output",
+  "description": "Universal LLM abstraction — stateless, immutable, provider-agnostic",
   "license": "MIT",
   "type": "module",
   "sideEffects": false,
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "exports": {
     ".": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.js",
-      "require": "./dist/index.cjs"
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
     }
   },
+  "publishConfig": {
+    "access": "public"
+  },
   "files": [
-    "dist"
+    "dist",
+    "README.md",
+    "LICENSE"
   ],
   "scripts": {
     "build": "tsup",
     "dev": "tsup --watch",
     "test": "vitest run",
+    "test:watch": "vitest",
     "typecheck": "tsc --noEmit"
   },
-  "devDependencies": {
-    "tsup": "^8.5.1",
-    "vitest": "^4.1.2",
-    "zod": "^4.3.6"
+  "keywords": [
+    "llm",
+    "ai",
+    "openai",
+    "groq",
+    "anthropic",
+    "provider",
+    "structured-output",
+    "zod",
+    "typescript",
+    "tools"
+  ],
+  "author": "niscorp",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/moccadroid/niscorp.git",
+    "directory": "packages/signal"
+  },
+  "homepage": "https://github.com/moccadroid/niscorp/tree/main/packages/signal",
+  "bugs": {
+    "url": "https://github.com/moccadroid/niscorp/issues"
+  },
+  "engines": {
+    "node": ">=18.18.0"
   },
   "peerDependencies": {
+    "zod": "^4.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^25.5.2",
+    "dotenv": "^17.4.0",
+    "openai": "^6.33.0",
+    "tsup": "^8.5.1",
+    "vitest": "^4.1.2",
     "zod": "^4.3.6"
   }
 }
