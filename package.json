@@ -1,0 +1,23 @@
+{
+  "name": "niscorp",
+  "private": true,
+  "description": "AI-native application platform",
+  "license": "MIT",
+  "packageManager": "pnpm@9.15.0",
+  "engines": {
+    "node": ">=18.18.0"
+  },
+  "scripts": {
+    "build": "turbo build",
+    "dev": "turbo dev",
+    "test": "turbo test",
+    "typecheck": "turbo typecheck",
+    "lint": "turbo lint",
+    "format": "prettier --write \"**/*.{ts,tsx,json,md}\""
+  },
+  "devDependencies": {
+    "prettier": "^3.8.1",
+    "turbo": "^2.9.3",
+    "typescript": "^6.0.2"
+  }
+}
