@@ -30,6 +30,7 @@ export type {
   Result,
   CompileOptions,
   CompiledIr,
+  OptimizationStats,
   ValidationResult,
   ValidationIssue,
 } from './types';

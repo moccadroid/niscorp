@@ -1,11 +1,19 @@
 import type { JsonValue, EvalContext, EvaluateFn } from '../types';
 import type { RefNode, ConstNode, VarNode, GetNode, WithNode } from '../schemas';
 import { PrismError, ErrorCode } from '../errors';
-import { parseJsonPathCached, getByPath } from '../utils/jsonpath';
+import { parseJsonPathCached, getByPath, type JsonPathSegment } from '../utils/jsonpath';
 import { isJsonObject, isJsonArray } from '../schemas/guards';
 
+// The optimizer attaches pre-parsed segments here at compile time so the
+// runtime can skip the JSONPath parser entirely.
+const SEGMENTS_KEY = '__segments';
+
+const isSegmentsArray = (value: unknown): value is JsonPathSegment[] => Array.isArray(value);
+
 export const opRef = (node: RefNode, context: EvalContext, _evaluate: EvaluateFn): JsonValue => {
-  const segments = parseJsonPathCached(node.$ref);
+  // Fast path: pre-parsed segments attached by the optimizer.
+  const attached = Reflect.get(node, SEGMENTS_KEY);
+  const segments = isSegmentsArray(attached) ? attached : parseJsonPathCached(node.$ref);
   const resolved = getByPath(context.source, segments);
   if (resolved === undefined)
     throw new PrismError('Path not found', ErrorCode.MISSING_PATH, { op: '$ref', path: node.$ref });

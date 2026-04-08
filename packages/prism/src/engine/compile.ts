@@ -3,6 +3,8 @@ import { PrismError, ErrorCode } from '../errors';
 import { desugar } from '../sugar/desugar';
 import type { CompileOptions, CompiledIr, JsonValue } from '../types';
 import { isJsonObject } from '../schemas/guards';
+import { evaluateNode } from './evaluate';
+import { optimize } from './optimize';
 
 // ═══════════════════════════════════════════════════════════
 // Tree Walker — collects stats in a single pass
@@ -67,6 +69,18 @@ const hashSha256 = async (data: string): Promise<string> => {
 
 // ═══════════════════════════════════════════════════════════
 // Compile
+//
+// Pipeline:
+//   1. Validate via ConfigSchema (Zod)
+//   2. Desugar — rewrite sugar ops ($sum, $pluck, ...) to canonical
+//   3. Optimize — three passes that mutate the tree in place via
+//      non-enumerable properties so the JSON shape stays stable:
+//        - inline parsed JSONPath segments on $ref nodes
+//        - attach op handlers to every recognized op node
+//        - constant-fold subtrees that have no source/var dependencies
+//   4. Walk for stats (post-optimization, so node counts reflect what
+//      the runtime actually evaluates)
+//   5. Fingerprint via SHA256 of the JSON-serialized core
 // ═══════════════════════════════════════════════════════════
 
 export const compile = async (
@@ -81,9 +95,12 @@ export const compile = async (
   }
 
   // Desugar
-  const core = desugar(parsed.data);
+  const desugared = desugar(parsed.data);
 
-  // Walk for stats
+  // Optimize: inline ref segments, attach op handlers, constant-fold
+  const { node: core, stats: optimizations } = optimize(desugared, evaluateNode);
+
+  // Walk for stats (post-optimization — counts reflect the executed tree)
   const stats: WalkStats = {
     nodeCount: 0,
     maxDepth: 0,
@@ -93,7 +110,10 @@ export const compile = async (
   };
   walk(core, stats, 0);
 
-  // Fingerprint
+  // Fingerprint of the (post-optimization) core. Non-enumerable
+  // optimization metadata does not affect JSON serialization, so the
+  // fingerprint is stable for any input that produces the same canonical
+  // JSON tree.
   const fingerprint = await hashSha256(JSON.stringify(core));
 
   return {
@@ -110,6 +130,7 @@ export const compile = async (
         nodeCount: stats.nodeCount,
         opCount: stats.opCount,
         maxDepth: stats.maxDepth,
+        optimizations,
       },
     },
     tables: {

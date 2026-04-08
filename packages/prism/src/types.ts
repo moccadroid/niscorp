@@ -36,6 +36,12 @@ export type CompileOptions = {
   version?: string;
 };
 
+export type OptimizationStats = {
+  refsInlined: number;
+  handlersAttached: number;
+  constantsFolded: number;
+};
+
 export type CompiledIr = {
   irVersion: 1;
   compiler: { name: string; version: string };
@@ -47,6 +53,7 @@ export type CompiledIr = {
       nodeCount: number;
       opCount: Record<string, number>;
       maxDepth: number;
+      optimizations: OptimizationStats;
     };
   };
   tables: {

@@ -40,6 +40,22 @@ import { opDate, opDateAdd, opDateDiff } from '../ops/time.ops';
 // Node Evaluator (recursive dispatcher)
 // ═══════════════════════════════════════════════════════════
 
+// Internal property attached by the optimizer at compile time. When present,
+// the evaluator dispatches via this handler directly and skips the entire
+// discriminant chain below. Optimized configs go this fast path; raw configs
+// (calling evaluate() directly) fall through to the existing chain.
+const HANDLER_KEY = '__op';
+
+// The attached value is always a function with this shape — written by the
+// optimizer in src/engine/optimize.ts. We narrow via typeof and then forward
+// the call without a cast: TypeScript infers `unknown` for the result of
+// calling an arbitrary function, which we can return as JsonValue only via
+// a guard. Instead, we wrap the call in a typed adapter that takes the
+// already-narrowed `Function` and forwards the args.
+type AttachedFn = (node: Record<string, unknown>, context: EvalContext, evaluate: EvaluateFn) => JsonValue;
+
+const isAttachedFn = (value: unknown): value is AttachedFn => typeof value === 'function';
+
 export const evaluateNode: EvaluateFn = (node: unknown, context: EvalContext): JsonValue => {
   // Primitives
   if (node === null || node === undefined) return null;
@@ -52,6 +68,12 @@ export const evaluateNode: EvaluateFn = (node: unknown, context: EvalContext): J
   if (typeof node !== 'object') return null;
 
   const obj = node as Record<string, unknown>;
+
+  // ───────────────────────────────────────────────────────
+  // Fast path — compile-time attached handler
+  // ───────────────────────────────────────────────────────
+  const attached = obj[HANDLER_KEY];
+  if (isAttachedFn(attached)) return attached(obj, context, evaluateNode);
 
   // ───────────────────────────────────────────────────────
   // Core ops
