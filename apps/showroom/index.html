@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Nova Showroom</title>
+    <style>
+      html, body, #root { margin: 0; padding: 0; height: 100%; font-family: -apple-system, system-ui, sans-serif; }
+      * { box-sizing: border-box; }
+
+      /* Style nova's error markers (lax-mode RenderNode of type 'error').
+         The library ships them as bare <span data-nova-error="CODE">; the
+         showroom turns them into a visible inline-block with a red border. */
+      [data-nova-error] {
+        display: inline-block;
+        padding: 8px 12px;
+        margin: 4px 0;
+        background: #fef2f2;
+        color: #991b1b;
+        border: 1px solid #fecaca;
+        border-left: 3px solid #dc2626;
+        border-radius: 6px;
+        font-family: ui-monospace, Menlo, monospace;
+        font-size: 12px;
+        line-height: 1.4;
+      }
+
+      /* Prism syntax highlighting — VS Code Dark+ inspired.
+         Used by the Code tab in the inspector. Token classes come from prismjs. */
+      code[class*="language-"],
+      pre[class*="language-"] {
+        color: #d4d4d4;
+        background: none;
+        text-shadow: none;
+      }
+      .token.comment,
+      .token.prolog,
+      .token.doctype,
+      .token.cdata { color: #6a9955; font-style: italic; }
+      .token.punctuation { color: #d4d4d4; }
+      .token.namespace { opacity: 0.7; }
+      .token.property,
+      .token.tag,
+      .token.boolean,
+      .token.number,
+      .token.constant,
+      .token.symbol,
+      .token.deleted { color: #b5cea8; }
+      .token.selector,
+      .token.attr-name,
+      .token.string,
+      .token.char,
+      .token.builtin,
+      .token.inserted { color: #ce9178; }
+      .token.operator,
+      .token.entity,
+      .token.url,
+      .language-css .token.string,
+      .style .token.string { color: #d4d4d4; }
+      .token.atrule,
+      .token.attr-value,
+      .token.keyword { color: #569cd6; }
+      .token.function,
+      .token.class-name { color: #dcdcaa; }
+      .token.regex,
+      .token.important,
+      .token.variable { color: #9cdcfe; }
+      .token.important,
+      .token.bold { font-weight: bold; }
+      .token.italic { font-style: italic; }
+      .token.entity { cursor: help; }
+      /* TypeScript-specific tweaks */
+      .token.keyword.module,
+      .token.keyword.control-flow { color: #c586c0; }
+      .token.literal-property.property { color: #9cdcfe; }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

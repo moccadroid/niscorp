@@ -1,0 +1,142 @@
+import { useEffect, useMemo, useState, type FC } from 'react';
+import { Sidebar as ChromeSidebar, type SidebarDoc } from './chrome/sidebar';
+import { CanvasPane as ChromeCanvasPane } from './chrome/canvas-pane';
+import { ChromeInspector, type InspectorTabDef } from './chrome/inspector';
+import { LibrarySwitcher, type Library } from './chrome/library-switcher';
+import { MarkdownPane } from './chrome/markdown-pane';
+import type { DocPage, LibraryModule, SidebarStoryEntry, StatusMap } from './modules/types';
+
+type LibraryDef = {
+  id: string;
+  name: string;
+  load: () => Promise<LibraryModule>;
+};
+
+const LIBRARIES: LibraryDef[] = [
+  { id: 'nova', name: 'Nova', load: async () => (await import('./modules/nova')).novaModule },
+  { id: 'prism', name: 'Prism', load: async () => (await import('./modules/prism')).prismModule },
+];
+
+const LIBRARY_TABS: Library[] = LIBRARIES.map((l) => ({ id: l.id, name: l.name }));
+
+// A doc selection has its own id space; we prefix story-level routes with
+// 'doc:' so the same activeStoryId state can hold either a story id or a
+// doc id without collision.
+const DOC_PREFIX = 'doc:';
+const docId = (id: string): string => `${DOC_PREFIX}${id}`;
+const isDocSelection = (id: string): boolean => id.startsWith(DOC_PREFIX);
+const stripDocPrefix = (id: string): string => id.slice(DOC_PREFIX.length);
+
+export const App: FC = () => {
+  const [activeLibraryId, setActiveLibraryId] = useState<string>('nova');
+  const [active, setActive] = useState<LibraryModule | undefined>(undefined);
+  const [activeStoryId, setActiveStoryId] = useState<string>('');
+  const [statusMap, setStatusMap] = useState<StatusMap>({});
+
+  useEffect(() => {
+    let cancelled = false;
+    const lib = LIBRARIES.find((l) => l.id === activeLibraryId);
+    if (lib === undefined) return;
+    void lib.load().then((mod) => {
+      if (cancelled) return;
+      setActive(mod);
+      setStatusMap({});
+      // Default selection: first doc if any, else first story.
+      const firstDoc = mod.docs?.[0];
+      if (firstDoc !== undefined) {
+        setActiveStoryId(docId(firstDoc.id));
+        return;
+      }
+      const firstStory = mod.stories[0];
+      if (firstStory !== undefined) {
+        setActiveStoryId(mod.toSidebarEntry(firstStory).id);
+      } else {
+        setActiveStoryId('');
+      }
+    });
+    return (): void => {
+      cancelled = true;
+    };
+  }, [activeLibraryId]);
+
+  useEffect(() => {
+    if (active === undefined) return;
+    let cancelled = false;
+    void active.evaluateAll(active.stories).then((map) => {
+      if (cancelled) return;
+      setStatusMap(map);
+    });
+    return (): void => {
+      cancelled = true;
+    };
+  }, [active]);
+
+  const sidebarEntries = useMemo<SidebarStoryEntry[]>(() => {
+    if (active === undefined) return [];
+    return active.stories.map((s) => active.toSidebarEntry(s));
+  }, [active]);
+
+  const sidebarDocs = useMemo<SidebarDoc[]>(() => {
+    if (active?.docs === undefined) return [];
+    return active.docs.map((d) => ({ id: docId(d.id), title: d.title }));
+  }, [active]);
+
+  if (active === undefined) {
+    return <div style={{ padding: 24 }}>Loading…</div>;
+  }
+
+  // Resolve the active selection: a doc page or a story.
+  const activeDocPage: DocPage | undefined = isDocSelection(activeStoryId)
+    ? active.docs?.find((d) => d.id === stripDocPrefix(activeStoryId))
+    : undefined;
+
+  const activeIndex = activeDocPage === undefined
+    ? sidebarEntries.findIndex((e) => e.id === activeStoryId)
+    : -1;
+  const activeEntry = activeIndex >= 0 ? sidebarEntries[activeIndex] : undefined;
+  const activeStory = activeIndex >= 0 ? active.stories[activeIndex] : undefined;
+
+  const inspectorTabs: InspectorTabDef[] =
+    activeStory === undefined ? [] : active.buildInspectorTabs(activeStory);
+
+  const RuntimeProvider = active.RuntimeProvider;
+  const Runner = active.Runner;
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', width: '100vw' }}>
+      <LibrarySwitcher
+        libraries={LIBRARY_TABS}
+        activeId={activeLibraryId}
+        onSelect={setActiveLibraryId}
+      />
+      <div style={{ display: 'flex', flex: 1, minHeight: 0 }}>
+        <ChromeSidebar
+          title={`${active.name} Showroom`}
+          stories={sidebarEntries}
+          activeStoryId={activeStoryId}
+          onSelect={setActiveStoryId}
+          statusMap={statusMap}
+          kindOrder={[...active.kindOrder]}
+          kindLabels={active.kindLabels}
+          docs={sidebarDocs}
+        />
+        {activeDocPage !== undefined ? (
+          // Doc mode: full-width canvas with rendered markdown, no inspector.
+          <div style={{ flex: 1, overflow: 'auto', background: '#ffffff' }}>
+            <MarkdownPane title={activeDocPage.title} content={activeDocPage.content} />
+          </div>
+        ) : (
+          <RuntimeProvider>
+            <ChromeCanvasPane
+              name={activeEntry?.name ?? ''}
+              description={activeEntry?.description ?? ''}
+            >
+              {activeStory !== undefined && <Runner story={activeStory} />}
+            </ChromeCanvasPane>
+            <ChromeInspector tabs={inspectorTabs} />
+          </RuntimeProvider>
+        )}
+      </div>
+    </div>
+  );
+};
