@@ -1,724 +1,484 @@
-# `@niscorp/nova` — Declarative UI Framework
+# `@niscorp/nova` — Design
 
-JSON layouts, action lifecycles, shell orchestration. Framework-agnostic core, React adapter. Designed for AI agents.
+Declarative, framework-agnostic UI runtime. JSON layouts, action lifecycles,
+shell orchestration. The core is pure TypeScript with zero framework
+dependencies. A future framework adapter (React, Vue, etc.) consumes the
+`RenderNode[]` output.
+
+This document describes the package as it actually exists today. Anything
+not implemented is called out as **Future work**.
 
 ---
 
 ## Architecture
 
-Three systems, one package. The core is pure TypeScript with zero framework dependencies. React (or any framework) plugs in as a thin rendering adapter.
+Four areas, one package. Each area imports across boundaries via the path
+aliases `@shared`, `@layout`, `@action`, `@shell`. Local imports stay
+relative.
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                        Shell                                 │
-│  Canvas stacks, message bus, inter-action routing            │
-│  Pure TypeScript state machine                               │
+│  shell/        Public factory, canvas stacks, navigation,   │
+│                lifecycle bookkeeping, telemetry.            │
 ├─────────────────────────────────────────────────────────────┤
-│                       Actions                                │
-│  Definitions, runtime, lifecycle, triggers, mutations         │
-│  Pure TypeScript logic                                       │
+│  action/       Definitions (Zod schemas), runtime, mutation │
+│                ops, step executor, triggers, endpoints,     │
+│                lifecycle hooks, model bindings.             │
 ├─────────────────────────────────────────────────────────────┤
-│                       Layout                                 │
-│  JSON → RenderNode tree, bindings, scope chain, store        │
-│  Pure TypeScript core                                        │
+│  layout/       Layout schemas, renderer, layout store,      │
+│                component registry, RenderNode output.       │
 ├─────────────────────────────────────────────────────────────┤
-│                    Component Registry                        │
-│  String name → component + metadata                          │
-│  Framework-agnostic metadata, framework-specific components  │
-├─────────────────────────────────────────────────────────────┤
-│                  Framework Adapter (React)                    │
-│  RenderNode[] → React elements, hooks, providers             │
-│  ~200 lines, the only React-dependent code                   │
+│  shared/       Errors, ids, common utilities, bindings      │
+│                (paths, scope chain, unified resolver),      │
+│                data store, event bus, message bus.          │
 └─────────────────────────────────────────────────────────────┘
 ```
 
----
-
-## System 1: Layout
-
-Converts JSON layout definitions into a framework-agnostic render tree.
-
-### Layout Nodes
-
-```typescript
-type LayoutNode =
-  | ComponentNode
-  | ConditionalNode
-  | LoopNode
-  | LayoutRefNode
-  | LayoutNode[]
-  | LayoutPrimitive;       // string, number, boolean, null → text
-
-type ComponentNode = {
-  component: string;       // Registry name
-  props?: Record<string, unknown>;
-  children?: LayoutContent | LayoutContent[];
-  ref?: string;            // Event targeting ID
-  model?: string;          // Two-way binding path: '$.name'
-  events?: Record<string, EventConfig>;
-};
-
-type ConditionalNode = { if: Binding; then: LayoutNode; else?: LayoutNode };
-type LoopNode = { for: Binding; as: string; key?: string; do: LayoutNode };
-type LayoutRefNode = { ref: string };   // Layout ID or data path
-```
-
-### Bindings
-
-```typescript
-type Binding = string | TemplateBinding | ConditionalBinding;
-
-// Path: "$.user.name" (data), "$item.price" (loop variable)
-// Template: { template: "Hello {{$.name}}" }
-// Conditional: { if: "$.active", then: "Yes", else: "No" }
-```
-
-### Scope Chain
-
-Bindings resolve against a scope chain (array of scopes, innermost first):
-
-```typescript
-type ScopeChain = Record<string, unknown>[];
-
-createScopeChain(data)       → [data]
-pushScope(chain, { item })   → [{ item }, data]
-```
-
-- `$.user.name` → dot after `$`, resolves against data scopes
-- `$item.name` → no dot, resolves as variable name
-
-### Render Node (Framework-Agnostic Output)
-
-The core renderer produces `RenderNode[]`, not framework-specific elements:
-
-```typescript
-type RenderNode =
-  | { type: 'component'; name: string; props: Record<string, unknown>; children: RenderNode[]; ref?: string }
-  | { type: 'text'; value: string }
-  | { type: 'fragment'; children: RenderNode[] };
-```
-
-The framework adapter turns this into actual elements:
-
-```typescript
-// React adapter (~30 lines)
-const toReact = (node: RenderNode, registry: ReactRegistry): React.ReactNode => {
-  if (node.type === 'text') return node.value;
-  if (node.type === 'fragment') return node.children.map(n => toReact(n, registry));
-  const Component = registry.get(node.name);
-  return React.createElement(Component, node.props, ...node.children.map(n => toReact(n, registry)));
-};
-```
-
-### Layout Store
-
-In-memory storage with versioning and reference resolution:
-
-```typescript
-type LayoutStore = {
-  get: (id: string) => LayoutNode | undefined;
-  set: (id: string, layout: LayoutNode) => void;
-  delete: (id: string) => void;
-  list: () => string[];
-  resolveReferences: (layout: LayoutNode) => LayoutNode;
-};
-```
-
-### Component Registry
-
-Maps string names to components with LLM-consumable metadata:
-
-```typescript
-type ComponentRegistry = {
-  register: (name: string, entry: ComponentEntry) => void;
-  get: (name: string) => ComponentEntry | undefined;
-  list: () => string[];
-  has: (name: string) => boolean;
-  getCatalog: () => ComponentCatalog;
-  getJsonSchema: () => object;
-};
-
-type ComponentEntry = {
-  component: unknown;      // Framework-specific (React.ComponentType, Vue component, etc.)
-  meta: ComponentMeta;     // Framework-agnostic metadata
-};
-
-type ComponentMeta = {
-  name: string;
-  description: string;
-  category: string;
-  props: Record<string, PropMeta>;
-  events?: Record<string, EventMeta>;
-};
-```
-
-### Event Bus
-
-UI events flow through a typed pub/sub:
-
-```typescript
-type EventBus = {
-  emit: (type: string, payload?: unknown) => void;
-  on: (type: string | RegExp, handler: EventHandler) => Unsubscribe;
-  once: (type: string, handler: EventHandler) => Unsubscribe;
-  scoped: (source: string) => EventBus;
-};
-```
-
-Event types: `ui:click`, `ui:input`, `ui:submit`, `ui:focus`, `ui:blur`, `ui:model`.
-
-### Agent Integration
-
-```typescript
-// Generate LLM prompt with component catalog
-generateLayoutPrompt(registry) → string
-
-// Validate a layout generated by an LLM
-validateLayout(layout) → ValidationResult
-
-// JSON Schema for LLM consumption
-registry.getJsonSchema() → object
-```
+The `shared/` module is the only one any other area imports from. Layout,
+action, and shell never import from each other transitively except via
+`@layout` / `@action` / `@shell` aliases at well-defined seams (the shell
+wires everything together at construction time).
 
 ---
 
-## Schema-First Design
+## `shared/`
 
-**Important:** All type definitions in this document describe shapes. In the implementation, every definition that crosses a boundary is a **Zod schema** with `.describe()` on every field. Types are inferred via `z.infer<typeof Schema>`. No hand-written types for anything that's validated, serialized, or consumed by LLMs.
+The substrate. Everything else builds on this.
+
+### `shared/errors.ts`
+
+Domain error hierarchy. Classes are permitted **only here** because
+identity (`instanceof`) is required for typed catch sites.
+
+```
+NovaError                         (base; carries code + context + cause)
+├── RenderError                   (renderer subtree failure)
+├── ComponentNotFoundError        (registry miss)
+├── LayoutRefNotFoundError        (layout store miss)
+├── DefinitionValidationError     (Zod failure at boundary)
+├── UnknownActionError            (shell.push of unregistered id)
+├── ShellDisposedError            (post-dispose call)
+└── LifecycleError                (hook failure; carries hook + cause)
+```
+
+Subclasses are added only when there is a real throw site. No dead exports.
+
+### `shared/bindings/`
+
+Unified resolver. The core function is
+
+```ts
+resolve(value: unknown, chain: ScopeChain, extras?: ExtraScopes): unknown
+```
+
+It is the **only** binding-resolution entry point. Every binding site —
+component props, conditional `if`, loop `for`, endpoint url/body, trigger
+emit channel, mutation operands — calls it.
+
+Resolution rules:
+
+- **String, sole `{{ expr }}`** → returns the raw resolved value (preserves
+  type — number stays number, object stays object).
+- **String, `"text {{expr}} text"`** → string interpolation.
+- **String, bare `"$.path"` or `"$item.field"`** → raw resolved value.
+- **String, anything else** → returned literally.
+- **Object `{ $if, $then, $else }`** → conditional. The only directive form.
+  `$else` is optional.
+- **Array** → walked recursively.
+- **Plain object** → walked recursively.
+
+The previous `BindingSchema` value-form objects (`{ template: ... }`,
+`{ if, then, else }`) **no longer exist**. The unified resolver replaced
+them.
+
+Scope chains are arrays of records, innermost first. `createScopeChain(data)`
+returns `[data]`. Loops push a new scope on the front (`{ [as]: item }`).
+`extras` is a separate flat record for non-scoped names like `@error`.
+
+### `shared/data-store/`
+
+A small reactive `Record<string, unknown>` store with `get`, `update`, and
+`subscribe`. Used as the single source of truth per action runtime: the
+runtime writes to it, the layout renderer reads from it via a narrow
+`DataStoreView` (`{ get }`-only) interface.
+
+### `shared/event-bus/`
+
+Topic-based pub/sub. Validates events against `NovaEventSchema` before
+dispatch. Used for ambient UI events such as `ui:model`. Handlers receive
+typed `NovaEvent` payloads. Subscriptions return cleanup functions.
+
+### `shared/message-bus/`
+
+Channel-based pub/sub, distinct from the event bus. Carries
+`MessageEnvelope` structures with a `channel` and arbitrary `payload`.
+Trigger configs with a `message` field bind to this bus.
+
+The two buses are **independent**. The previous `msg:<channel>` prefix
+bridge through the event bus is gone.
+
+### `shared/ids.ts`, `shared/common.ts`
+
+`createIdFactory(prefix)` for instance/shell ids; small type guards
+(`isObject`, `isString`, etc.); shared `Unsubscribe` type.
 
 ---
 
-## System 2: Actions
+## `layout/`
 
-An action is a self-contained unit of work with layout, data, and behavior.
+### Schemas (`layout/schemas.ts`)
 
-### Action Definition
+Zod schemas for the layout DSL:
 
-```
-ActionDefinition:
-  id: string
-  name?: string
-  description?: string
-  layout?: string | LayoutNode           — layout ID or inline
-  data?: Record<string, unknown>         — static defaults, merged with input on mount
-  triggers?: TriggerConfig[]             — event/message → do steps
-  endpoints?: Record<string, Endpoint>   — named HTTP calls
-  lifecycle?: LifecycleConfig            — mount/unmount/suspend/resume hooks
-```
+- `LayoutPrimitiveSchema` — string, number, boolean, null.
+- `ComponentNodeSchema` — `{ component, props?, children?, ref?, model?,
+  events? }`.
+- `ConditionalNodeSchema` — `{ if, then, else? }`.
+- `LoopNodeSchema` — `{ for, as, key?, do }`.
+- `LayoutRefNodeSchema` — `{ ref }`. Resolves against the layout store.
+- `LayoutNodeSchema` — discriminated union of all of the above plus arrays.
 
-Clean compared to the original neon-ui: no `initialData` (3 variants), no `onComplete`/`onCancel`, no `skills`, no 11 trigger schemas.
+### Renderer (`layout/renderer.ts`)
 
-### Data Model
-
-Two sources merge on mount:
+Walks a `LayoutNode` and emits a `RenderNode[]` tree:
 
 ```
-definition.data    +    input (from shell.push)    =    action.data
-{ counter: 0 }          { userId: 'u1' }               { counter: 0, userId: 'u1' }
+RenderComponentNode  { type: 'component'; name; props; children;
+                       ref?; model?: { ref, path } }
+RenderTextNode       { type: 'text'; value }
+RenderFragmentNode   { type: 'fragment'; children }
+RenderErrorNode      { type: 'error'; message }
 ```
 
-Input overrides defaults. The merged result is the action's mutable state. Triggers mutate it. Endpoints write to it. The renderer reads it.
+The renderer:
 
-### Steps: Mutations + Effects
+1. Resolves every binding via `@shared/bindings.resolve`.
+2. Wraps every child render in a try/catch boundary. In **lax mode**,
+   subtree failures become `RenderErrorNode`s; siblings continue. In
+   **strict mode**, the throw escapes.
+3. Looks up component metadata in the `ComponentRegistry`. Missing
+   components throw `ComponentNotFoundError`.
+4. Resolves `LayoutRefNode` against the `LayoutStore`. Missing refs throw
+   `LayoutRefNotFoundError`.
+5. Tracks absolute scope paths. When a `model: "$item.field"` appears
+   inside a loop, the renderer materializes the absolute path
+   (`items.0.field`) on the emitted `RenderComponentNode.model.path`.
+   This is what makes two-way binding work for loop items.
 
-All behavior in Nova is expressed as ordered sequences of **steps**. A step is either a **mutation** (data layer) or an **effect** (outside world).
+### Layout store and registry
 
-**Mutations** — change the action's data:
+`LayoutStore.set` validates every layout against `LayoutNodeSchema` and
+throws `DefinitionValidationError` on failure — boundary validation.
+
+`ComponentRegistry` is a name → metadata map. Adapters fill it with their
+own component implementations later.
+
+---
+
+## `action/`
+
+### Schemas (`action/schemas/`)
+
+Split into focused files:
+
+- `effects.ts` — `CallEffect`, `EmitEffect`, navigation effects (`Push`,
+  `Pop`, `Replace`).
+- `triggers.ts` — `TriggerConfigSchema { event?, message?, ref?, do }`.
+- `endpoints.ts` — `EndpointConfigSchema { method, url, body?, headers?,
+  target?, errorTarget? }`.
+- `lifecycle.ts` — `LifecycleConfigSchema { mount?, unmount?, suspend?,
+  resume? }`. Each is `Step[]`.
+- `index.ts` — `StepSchema = Mutation | Effect`, `ActionDefinitionSchema`,
+  exports.
+
+### Mutations (`action/mutations/`)
+
+**Op-per-file.** Each operator lives in `action/mutations/ops/{name}.ts`
+and exports a `match` predicate plus an `apply` function. A registry
+(`action/mutations/registry.ts`) dispatches by walking the ops and using
+the first match. Adding a mutation is a new file, not an edit to a
+giant switch.
+
+Current ops: `set`, `toggle`, `increment`, `decrement`, `push`, `pop`,
+`removeAt`, `clear`, `reset`.
+
+Each op has its own Zod schema. The combined `MutationSchema` is the
+union.
+
+### Runtime (`action/runtime/`)
+
+`createActionRuntime(config)` produces an `ActionRuntime`:
+
+- **`runtime.ts`** — assembles the data store, abort controller,
+  trigger handle, model listeners, status subscribers. Owns the
+  lifecycle methods (`mount`, `unmount`, `suspend`, `resume`).
+- **`lifecycle.ts`** — `buildInitialData` merges `definition.data` with
+  input (optionally via the injected `transform`); `runLifecycleHook`
+  invokes the hook's steps with `lifecycleHook` set on the step
+  context. In strict mode it rethrows hook failures as `LifecycleError`;
+  in lax mode it routes them through `ctx.onError`.
+- **`steps.ts`** — `executeSteps` walks a `Step[]`. Mutations are
+  buffered and flushed in batches; effects (`call`, `emit`, navigation)
+  flush first, then run. `runCall` invokes endpoints via `callEndpoint`
+  and routes success/failure through `onSuccess` / `onError` step
+  branches. When a step is running inside a lifecycle hook
+  (`ctx.lifecycleHook` set) and an unknown endpoint or unhandled
+  endpoint failure occurs, `runCall` throws `LifecycleError` so the
+  lifecycle wrapper can route it.
+- **`endpoints.ts`** — pure `callEndpoint(...)` returning a `Result`.
+  Honors `AbortSignal` from `ctx.signal`.
+- **`triggers.ts`** — wires trigger configs to the event bus or
+  message bus and runs their `do` steps when fired.
+- **`render.ts`** — calls `renderLayoutFromStore` (or inline layout)
+  with the action's data, returning `RenderNode[]`.
+- **`model-bindings.ts`** — walks a `RenderNode[]` collecting
+  `(ref, path)` pairs from `model` fields.
+
+### Two-way binding
+
+When the layout author writes `model: "$.user.name"` on a component, the
+renderer emits `model: { ref, path: 'user.name' }` on the
+`RenderComponentNode`. After every render, the runtime reconciles its
+`ui:model` event-bus listeners against the live set of model refs:
+
+- New ref → install a listener that, on `ui:model` events for that ref,
+  applies a `set` mutation to `path`.
+- Removed ref or changed path → tear down the old listener.
+
+The framework adapter is responsible for emitting `ui:model` events on
+the event bus when its inputs change.
+
+### AbortSignal threading
+
+Each runtime owns an `AbortController`. Its signal is threaded into every
+`StepContext` and forwarded to `fetch` calls inside `callEndpoint`. On
+`unmount`, the controller is aborted before any unmount hooks run, so
+in-flight endpoint calls bail out. Unmount hooks themselves run on a
+fresh (non-aborted) controller so they can perform their own final
+async work.
+
+### Public vs internal runtime types
+
+The shell exposes runtimes via `shell.getRuntime(id)` typed as
+`PublicActionRuntime`:
 
 ```
-Mutation:
-  { set: path, value: unknown }         — set field to value
-  { set: path, from: path }             — copy from another field
-  { toggle: path }                      — flip boolean
-  { increment: path, by?: number }      — +1 or +N
-  { decrement: path, by?: number }      — -1 or -N
-  { push: path, value?: unknown }       — append to array
-  { pop: path }                         — remove last from array
-  { removeAt: path, index: number }     — remove at index
-  { clear: path }                       — clear array/object
-  { reset: path }                       — reset to initial value
-```
-
-**Effects** — interact with the outside world:
-
-```
-Effect:
-  { call: endpoint }                                            — call named endpoint
-  { call: endpoint, onSuccess?: Step[], onError?: Step[] }     — with branching
-  { emit: { channel, payload? } }                              — publish to message bus
-  { push: { action, canvas?, input? } }                        — push action onto canvas
-  { pop: true }                                                — pop current action
-  { replace: { action, input? } }                              — replace current action
-```
-
-**Step** is the union of Mutation and Effect.
-
-Steps execute in order. Mutations are synchronous. Effects may be async (`call`). The `call` effect supports branching — `onSuccess` and `onError` are nested step arrays for handling API responses.
-
-### The `do` Field
-
-Triggers and lifecycle hooks share the same execution model: an ordered array of steps in a `do` field.
-
-```json
-{
-  "event": "ui:click",
-  "ref": "add-to-cart-btn",
-  "do": [
-    { "set": "loading", "value": true },
-    { 
-      "call": "addToCart",
-      "onSuccess": [
-        { "set": "loading", "value": false },
-        { "emit": { "channel": "cart-updated" } }
-      ],
-      "onError": [
-        { "set": "loading", "value": false },
-        { "set": "error", "from": "@error.message" }
-      ]
-    }
-  ]
+PublicActionRuntime = {
+  readonly instance, definition;
+  getData(); render();
+  onDataChange(handler); onStatusChange(handler);
 }
 ```
 
-Read aloud: "On click of add-to-cart button, do: set loading true, call addToCart — on success set loading false and emit cart-updated, on error set loading false and set error from the error message."
-
-### Triggers
-
-A trigger binds an event source to steps:
-
-```
-TriggerConfig:
-  event?: string           — UI event: 'ui:click', 'ui:submit', 'ui:input'
-  message?: string         — message bus channel
-  ref?: string             — component ref to match
-  do: Step[]               — ordered steps to execute
-```
-
-A trigger must have a source (`event` or `message`) and at least one step in `do`.
-
-Simple example — toggle a boolean on click:
-```json
-{ "event": "ui:click", "ref": "toggle-btn", "do": [{ "toggle": "isOpen" }] }
-```
-
-Navigation example — go to next screen on submit:
-```json
-{ "event": "ui:submit", "ref": "form", "do": [{ "call": "saveForm" }, { "push": { "action": "confirmation" } }] }
-```
-
-Message example — update data when another action emits:
-```json
-{ "message": "cart-updated", "do": [{ "call": "refreshCart" }] }
-```
-
-### Endpoints
-
-Named HTTP calls with template URLs and response targeting:
-
-```
-EndpointConfig:
-  url: string                            — template: '/api/users/{{$.userId}}'
-  method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
-  headers?: Record<string, string>
-  body?: string | Record<string, unknown>
-  target?: string                        — store response at this data path
-  errorTarget?: string                   — store error at this data path
-  transform?: unknown                    — Prism config for response transformation
-```
-
-`target` is where the response goes in action data. `transform` uses the injected transform function (Prism) to reshape the response before storing.
-
-### Lifecycle
-
-Four lifecycle events, each with an optional `do` array:
-
-```
-LifecycleConfig:
-  mount?: Step[]             — runs when action mounts (load data, initialize)
-  unmount?: Step[]           — runs when action unmounts (cleanup, emit)
-  suspend?: Step[]           — runs when action is suspended (going to background)
-  resume?: Step[]            — runs when action resumes (refresh data)
-```
-
-Same `Step[]` as triggers. Navigation effects (push/pop/replace) work in lifecycle too — `unmount` with a `{ push: { action: 'next' } }` replaces the old `onComplete`.
-
-Typical patterns:
-
-```json
-{
-  "lifecycle": {
-    "mount": [{ "call": "loadUserData" }],
-    "resume": [{ "call": "refreshUserData" }]
-  }
-}
-```
-
-The old `onComplete` / `onCancel` distinction is gone. If an action needs different unmount behavior depending on why, the **trigger** that causes unmount carries the navigation:
-
-- "Submit" button trigger: `{ "do": [{ "call": "save" }, { "push": { "action": "confirmation" } }] }`
-- "Back" button trigger: `{ "do": [{ "pop": true }] }`
-- "Cancel" button trigger: `{ "do": [{ "pop": true }] }`
-
-The action doesn't need to know why it's unmounting. The trigger that caused it already specified the navigation.
-
-### Action Instance
-
-```
-ActionInstance:
-  id: string                 — unique instance ID
-  definitionId: string
-  canvasId: string
-  status: ActionStatus       — 'initializing' | 'active' | 'suspended' | 'unmounted'
-  data: Record<string, unknown>
-```
-
-Four statuses. No 'completing' — unmount is immediate.
-
-### Action Runtime
-
-Pure TypeScript state machine. Does NOT import any framework. Split across files:
-
-```
-runtime/
-├── runtime.ts          — createActionRuntime factory, public interface
-├── lifecycle.ts        — mount, unmount, suspend, resume
-├── data.ts             — data management, mutation execution
-├── triggers.ts         — trigger matching + step execution
-└── endpoints.ts        — HTTP calls with template resolution
-```
-
-```
-ActionRuntime:
-  instance: ActionInstance (readonly)
-  definition: ActionDefinition (readonly)
-
-  getData() → Record<string, unknown>
-  updateData(updates) → void
-  applyMutations(mutations: Mutation[]) → void
-  executeSteps(steps: Step[]) → Promise<void>
-
-  mount(input?) → Promise<void>
-  unmount() → void
-  suspend() → void
-  resume() → void
-
-  render() → RenderNode[]
-
-  onDataChange(handler) → Unsubscribe
-  onStatusChange(handler) → Unsubscribe
-
-  dispose() → void
-```
-
-The framework adapter (React hooks) observes `onDataChange` and `onStatusChange` to trigger re-renders. The runtime itself has no rendering opinion.
+The wider internal `ActionRuntime` adds `mount`, `unmount`, `suspend`,
+`resume`, `applyMutations`, `executeSteps`, `updateData`, `dispose`, and
+the underlying `dataStore`. **It is not re-exported from the package
+root.** Tests that exercise internals reach it via
+`@shell/shell-internals.getInternalRuntime`.
 
 ---
 
-## System 3: Shell
+## `shell/`
 
-Orchestrates multiple actions across canvas stacks.
+The user's entry point. Splits responsibilities across small files:
 
-### Shell
+- **`shell.ts`** — public `createShell` factory. Composes everything,
+  defines the public methods, holds the `pendingStrictError` slot, and
+  owns the canvas map.
+- **`runtime-registry.ts`** — instance-id → runtime map with subscribe
+  hooks for telemetry.
+- **`telemetry.ts`** — state-change and data-change subscriber lists.
+- **`navigation.ts`** — converts `NavigationEffect` (from inside an
+  action's steps) into `push`/`pop`/`replace` calls on the shell.
+- **`lifecycle-ops.ts`** — `unmountInstance`, `suspendTop`, `resumeTop`
+  bookkeeping. Idempotent unmount via an internal `Set`.
+- **`canvas.ts`** — pure stack: `pushInstance`, `popInstance`,
+  `clearStack`, `peek`. No I/O.
+- **`shell-internals.ts`** — `validateActions` (boundary Zod validation
+  on the action map at construction), `snapshotCanvas`,
+  `createRuntimeFactory`, and the test escape hatch
+  `getInternalRuntime`.
 
-```typescript
-type Shell = {
-  readonly id: string;
+### Public API
 
-  // Canvas operations
-  push: (canvasId: string, actionId: string, input?: Record<string, unknown>) => string;
-  pop: (canvasId: string) => void;
-  replace: (canvasId: string, actionId: string, input?: Record<string, unknown>) => string;
-  clear: (canvasId: string) => void;
-
-  // State
-  getCanvas: (canvasId: string) => CanvasState;
-  getRuntime: (instanceId: string) => ActionRuntime | undefined;
-
-  // Observation
-  onStateChange: (handler: StateChangeHandler) => Unsubscribe;
-  onDataChange: (handler: DataChangeHandler) => Unsubscribe;
-
-  dispose: () => void;
-};
+```
+createShell(config: ShellConfig): Shell
 ```
 
-### Canvas
+`Shell` exposes:
 
-```typescript
-type CanvasState = {
-  id: string;
-  stack: ActionInstance[];
-  active: ActionInstance | undefined;
-};
+```
+push(canvasId, actionId, input?): string
+pop(canvasId): void
+replace(canvasId, actionId, input?): string
+clear(canvasId): void
+getCanvasState(canvasId): CanvasState
+getRuntime(instanceId): PublicActionRuntime | undefined
+onStateChange(handler): Unsubscribe
+onDataChange(handler): Unsubscribe
+dispose(): void
 ```
 
-- **push**: mount new action, suspend current top
-- **pop**: unmount top, resume previous
-- **replace**: unmount top, mount new
-- **clear**: unmount all
+`push`, `pop`, `replace`, `clear`, `getCanvasState` are **synchronous**
+in both lax and strict mode. The runtime's lifecycle methods are async
+underneath, fired with `.catch(handleLifecycleRejection)`.
 
-### Message Bus
+### Strict mode and error surfacing
 
-Inter-action communication:
+`ShellConfig.strict: boolean` and `ShellConfig.onError?: (err) => void`
+are plumbed through `ActionRuntimeConfig` into every `StepContext`.
 
-```typescript
-type MessageBus = {
-  send: (from: string, to: string, payload: unknown) => void;
-  subscribe: (channel: string, handler: ChannelHandler) => Unsubscribe;
-  publish: (channel: string, payload: unknown) => void;
-};
-```
+- **Lax mode (default).** Lifecycle hook failures are caught inside
+  `runLifecycleHook` and routed through `onError`. Renderer subtree
+  failures become `RenderErrorNode`s. The shell never throws from a
+  lifecycle hook.
 
-Triggers with `emit` publish to channels. Triggers with `message` subscribe to channels.
+- **Strict mode.** `runLifecycleHook` rethrows failures as
+  `LifecycleError`. The shell catches the rejection in
+  `handleLifecycleRejection` and stores it in a single
+  `pendingStrictError` slot. The **next** public shell call
+  (`push`/`pop`/`replace`/`clear`/`getCanvasState`) consumes the slot
+  and throws the stored error before doing any work. Renderer failures
+  in strict mode throw out of `render()`.
 
-### Telemetry
+This is the documented contract: shell method signatures stay
+synchronous; strict-mode lifecycle errors surface deterministically at
+the next operation boundary. It is the only honest way to expose async
+fire-and-forget failures via a synchronous API without making
+`push`/`pop` return promises.
 
-Shell observation via hooks on config:
+### Definition validation at boundaries
 
-```typescript
-const shell = createShell({
-  canvases: ['main', 'sidebar'],
-  telemetry: {
-    onStateChange: (snapshot) => { ... },
-    onDataChange: (change) => { ... },
-  },
-});
-```
-
-### Wire Protocol
-
-For server-authoritative UX:
-
-```typescript
-type UICommandBatch = {
-  batchId: string;
-  serverSeq: number;
-  commands: UICommand[];
-};
-
-type UICommand =
-  | { type: 'push'; canvasId: string; actionId: string; data?: Record<string, unknown> }
-  | { type: 'pop'; canvasId: string }
-  | { type: 'replace'; canvasId: string; actionId: string; data?: Record<string, unknown> }
-  | { type: 'mergeData'; instanceId: string; updates: Record<string, unknown> }
-  | { type: 'replaceData'; instanceId: string; data: Record<string, unknown> }
-  | { type: 'clearCanvas'; canvasId: string };
-
-type ClientEventEnvelope = {
-  sessionId: string;
-  shellId: string;
-  clientSeq: number;
-  events: ClientEvent[];
-};
-```
+- `createShell` validates every entry in `config.actions` via
+  `ActionDefinitionSchema.safeParse`, aggregating failures into a
+  single `DefinitionValidationError`.
+- `LayoutStore.set` validates every layout the same way.
+- `runtime.executeSteps` validates `Step[]` input via
+  `StepSchema.safeParse` before running.
 
 ---
 
-## Transform Injection (Prism Integration)
+## Data flow (push to render)
 
-Nova accepts an optional `transform` function for data transformation:
-
-```typescript
-const shell = createShell({
-  canvases: ['main'],
-  transform: evaluate,  // from @niscorp/prism
-}, { registry, actions });
-```
-
-Type:
-```typescript
-type TransformFn = (config: unknown, source: Record<string, unknown>) => unknown;
-```
-
-Used in:
-- **Action data initialization** — transform input before merging with defaults
-- **Endpoint response mapping** — transform API responses before storing
-- **Trigger effects** — transform values before applying ops
-
-If not provided, these features are unavailable (plain data pass-through). Zero coupling with Prism — any function matching the signature works.
+1. User calls `shell.push('main', 'A', input)`.
+2. `validateActions` already passed at construction. `getDefinition('A')`
+   returns the validated `ActionDefinition`.
+3. `ops.suspendTop(canvas)` runs the previous top's `suspend` hook
+   (fire-and-forget; strict mode wires errors back).
+4. `spawn` calls `buildRuntime` → `createActionRuntime`. The runtime
+   builds its data store from `definition.data` merged with `input`,
+   creates an `AbortController`, registers triggers.
+5. `runtime.mount(input)` is fired and not awaited. It runs the
+   `mount` lifecycle hook via `runLifecycleHook`, then transitions to
+   `active`. Failures route through the strict/lax pipeline.
+6. The new instance is pushed onto the canvas; `fireState()` notifies
+   state subscribers.
+7. The adapter (when one exists) calls `runtime.render()` which returns
+   `RenderNode[]`. The runtime reconciles model bindings against the
+   produced tree.
 
 ---
 
-## React Adapter
+## Future work
 
-The only React-dependent code. ~200 lines total.
+The following are explicitly **not implemented** and have no design
+yet beyond a placeholder:
 
-### Hooks
-
-```typescript
-useShell()             → Shell from context
-useCanvas(id)          → CanvasState (re-renders on change)
-useActionData()        → current action's data (re-renders on change)
-useActionRuntime()     → { data, updateData, applyMutations, executeSteps, unmount }
-```
-
-### Providers
-
-```typescript
-<ShellProvider shell={shell} registry={reactRegistry}>
-  <CanvasSlot canvasId="main" />
-  <CanvasSlot canvasId="sidebar" />
-</ShellProvider>
-```
-
-`CanvasSlot` subscribes to the canvas state, gets the active action's runtime, calls `runtime.render()` to get `RenderNode[]`, converts to React elements via the adapter.
-
-### React Component Registry
-
-The core `ComponentRegistry` stores `ComponentEntry` with framework-agnostic `meta`. The React adapter maintains a parallel map of `name → React.ComponentType` for the `toReact` conversion.
-
-```typescript
-const reactRegistry = createReactRegistry(coreRegistry);
-reactRegistry.register('Stack', StackComponent);
-reactRegistry.register('Text', TextComponent);
-// or use the built-in adapter
-builtinReactAdapter.register(reactRegistry);
-```
+- ~~**React adapter.**~~ **Implemented.** See "React adapter" below.
+- **Headless component primitives.** No built-in components.
+- **Wire protocol.** No serialization format for shipping definitions
+  across processes.
+- **Schema versioning.** Breaking changes in 0.x are unversioned.
+- **LLM tooling / JSON Schema generation / catalog.** Excluded by
+  design — nova is a runtime, not a generator.
 
 ---
 
-## Headless Primitives
+## React adapter
 
-Built-in React components. Render semantic HTML with data attributes. Unstyled.
+The React adapter lives under `src/react/` and ships at the
+`@niscorp/nova/react` subpath. It is a thin layer over the
+framework-agnostic core — no shell logic lives in React, and React is a
+peer (optional) dependency of the core package.
 
-| Component | Props | Purpose |
-|-----------|-------|---------|
-| `Stack` | `direction`, `gap`, `align`, `justify`, `wrap` | Flex layout |
-| `Text` | `variant`, `weight`, `align` | Text display |
-| `Button` | `text`, `variant`, `disabled`, `loading` | Interactive button |
-| `Input` | `value`, `placeholder`, `type`, `disabled` | Text input |
-| `Select` | `value`, `options`, `placeholder` | Dropdown |
-| `Textarea` | `value`, `placeholder`, `rows` | Multi-line input |
-| `Image` | `src`, `alt`, `fit`, `fallback` | Image display |
-| `Surface` | `padding`, `elevation`, `rounded` | Container/card |
-| `Scroll` | `direction`, `maxHeight` | Scrollable area |
-| `Collapsible` | `open`, `title` | Expand/collapse |
-| `Spinner` | `size` | Loading indicator |
-| `Divider` | `orientation` | Separator |
-| `Badge` | `text`, `variant` | Status badge |
+### Two-provider pattern
 
----
+There are deliberately two providers:
 
-## Package Entry Points
+- **`<NovaRenderProvider>`** — pairs a component registry with a
+  `dispatch` and `publish` function. It does NOT require a shell. This
+  is the minimum needed to render a `RenderNode[]` into React. Use it
+  for static layouts, snapshot tests, or any scenario where you have
+  data but no orchestrator.
+- **`<NovaShellProvider>`** — a thin wrapper around `<NovaRenderProvider>`
+  that ALSO exposes a `Shell` via context. Internally it derives
+  `dispatch`/`publish` from `shell.dispatch` / `shell.publish` and
+  forwards them to the inner render provider. Hooks like `useShellState`,
+  `useCanvas`, `useRenderTree`, `useActionData`, `useActionStatus`
+  require a `<NovaShellProvider>` ancestor; the bare hooks
+  (`useNovaDispatch`, `useNovaPublish`, `useNovaRegistry`) work under
+  either.
 
-```json
-{
-  "exports": {
-    ".": "./dist/index.js",
-    "./react": "./dist/react/index.js",
-    "./components": "./dist/components/index.js",
-    "./protocol": "./dist/protocol/index.js"
-  }
-}
-```
+### The provider does NOT own the shell
 
-- `@niscorp/nova` — Pure TypeScript core (layout, action, shell). Zero React dep.
-- `@niscorp/nova/react` — React adapter (hooks, providers, renderer)
-- `@niscorp/nova/components` — Headless React primitives
-- `@niscorp/nova/protocol` — Wire protocol types and apply function
+This is a deliberate contract. `NovaShellProvider` never calls
+`shell.dispose()` on unmount or on shell-prop change — it merely
+re-points its context. Lifecycle ownership stays with the consumer that
+created the shell. This is verified by `test/react/shell-swap.test.tsx`,
+which spies on `shell.dispose` and asserts it is never invoked. Swapping
+the `shell` prop causes hooks to resubscribe to the new shell on the
+next render via the standard `useSyncExternalStore` plumbing.
 
----
+### Component prop injection is minimal
 
-## File Structure
+A nova component registered with the React adapter receives:
 
-```
-src/
-├── index.ts                           # Core barrel
-│
-├── layout/
-│   ├── index.ts
-│   ├── types.ts                       # LayoutNode, Binding, RenderNode, ComponentMeta
-│   ├── schemas.ts                     # Zod schemas
-│   ├── guards.ts                      # Type guards
-│   ├── renderer.ts                    # JSON → RenderNode[] (framework-agnostic)
-│   ├── binding-resolver.ts            # Binding evaluation
-│   ├── scope.ts                       # Scope chain
-│   ├── store.ts                       # Layout store
-│   ├── registry.ts                    # Component registry
-│   ├── event-bus.ts                   # UI event pub/sub
-│   └── agent.ts                       # LLM prompt + validation helpers
-│
-├── action/
-│   ├── index.ts
-│   ├── types.ts                       # ActionDefinition, Mutation, Step, TriggerConfig, etc.
-│   ├── schemas.ts                     # Zod schemas
-│   ├── runtime/
-│   │   ├── runtime.ts                 # createActionRuntime factory
-│   │   ├── lifecycle.ts               # mount, suspend, resume, complete, cancel
-│   │   ├── data.ts                    # data management, ops execution
-│   │   ├── triggers.ts               # trigger matching + effect execution
-│   │   └── endpoints.ts              # HTTP calls with template resolution
-│   └── mutations.ts                   # Mutation registry (set, toggle, push, etc.)
-│
-├── shell/
-│   ├── index.ts
-│   ├── types.ts                       # Shell, CanvasState
-│   ├── shell.ts                       # createShell factory
-│   ├── canvas.ts                      # Canvas stack operations
-│   └── message-bus.ts                 # Inter-action messaging
-│
-├── react/
-│   ├── index.ts
-│   ├── adapter.tsx                    # RenderNode[] → React.ReactNode
-│   ├── shell-provider.tsx             # ShellProvider context
-│   ├── canvas-slot.tsx                # CanvasSlot component
-│   ├── hooks.ts                       # useShell, useCanvas, useActionData, useActionRuntime
-│   ├── registry.ts                    # React component registry
-│   └── error-boundary.tsx
-│
-├── components/
-│   ├── index.ts
-│   ├── primitives/                    # Stack, Text, Button, Input, etc.
-│   └── adapter.ts                     # Built-in adapter registration
-│
-└── protocol/
-    ├── index.ts
-    ├── types.ts                       # UICommandBatch, ClientEventEnvelope
-    ├── apply.ts                       # Apply command batch to shell
-    └── schemas.ts                     # Zod schemas
-```
+- `children?: ReactNode` — populated when the layout node has children
+- `novaModel?: { ref, path }` — populated when the layout node has a
+  `model:` binding (so the component can dispatch `ui:model` events)
+- ...the layout node's `props` spread on top
 
----
+That's it. Components do not receive a `shell`, an `instanceId`, an
+`onChange`, or any other framework-supplied callback. If a component
+needs to emit, it calls `useNovaDispatch()` or `useNovaPublish()`. If a
+component needs to introspect the registry, it calls
+`useNovaRegistry()`. New props on the `NovaComponentProps` bag require
+explicit justification — see `CONTEXT.md`.
 
-## Dependencies
+### Snapshot caching strategy
 
-- `zod` (peer, ^4.0.0) — Schema validation
-- `react` (peer, ^19.0.0) — Only for `/react` and `/components` entry points
+Both `useRenderTree` and `useCanvas` cache their snapshot via `useRef`
+so `useSyncExternalStore`'s `getSnapshot` returns a stable reference
+when nothing has changed. This is mandatory for tearing-safety in
+React 18 concurrent rendering.
 
-Core entry point has zero framework dependencies.
+- **`useRenderTree`** caches by **data identity**. The runtime exposes
+  the current data object; if the cached data reference is `===` to the
+  current one, the cached `RenderNode[]` is returned unchanged. When
+  the runtime mutates data, the new data object replaces the old, the
+  cache misses, the layout is re-rendered, and the new `RenderNode[]`
+  becomes the cached snapshot. A missing instance returns a singleton
+  `EMPTY` constant so re-renders are also stable in that case.
+- **`useCanvas`** caches via a structural comparison helper
+  (`sameActive`) over the canvas's stack length, active id, and per-
+  frame `(id, status)` tuples. If two consecutive `getCanvasState`
+  results compare equal under that helper, the cached value is reused;
+  otherwise the new state is captured and the React store is notified.
 
----
+Both contracts are verified by `test/react/snapshot-stability.test.tsx`,
+which asserts referential equality across re-renders without state
+changes and reference inequality after a real data or stack change.
 
-## Design Decisions
+### React 18+ compatibility
 
-1. **Schema-first.** Every definition is a Zod schema with `.describe()`. Types are inferred. No hand-written types for anything that crosses a boundary.
-
-2. **RenderNode intermediate representation.** Core renderer outputs framework-agnostic nodes. React adapter is ~200 lines. Enables testing without React, and potential Vue/Svelte adapters later.
-
-3. **Three systems, one package.** Layout, action, shell are cohesive. Entry points provide separation without version coordination overhead.
-
-4. **`data` not `initialData`.** Simple merge: `{ ...definition.data, ...input }`. No discriminated `type: 'static' | 'input' | 'mapped'` variants.
-
-5. **Steps = Mutations + Effects.** One ordered array in `do`. Mutations change data, effects touch the outside world. They interleave because real workflows need "set loading, call API, set result."
-
-6. **`do` field everywhere.** Triggers have `do`. Lifecycle hooks have `do`. Same execution model, same step types. One concept to learn.
-
-7. **`call` branches with `onSuccess`/`onError`.** The only branching point. Everything else is sequential. Keeps the model flat for 90% of cases, handles API error flows for the 10%.
-
-8. **No `onComplete`/`onCancel`.** Navigation lives in triggers, not lifecycle. The trigger that causes unmount carries the navigation intent. The action doesn't need to know why it's unmounting.
-
-9. **Four lifecycle events: mount, unmount, suspend, resume.** Real state machine transitions. No invented concepts like "complete" or "cancel."
-
-10. **One trigger schema.** Source + match + do. Not 11 discriminated types.
-
-11. **Transform injection.** Optional `TransformFn` for Prism integration. Zero coupling.
-
-12. **Event bus, not DOM events.** Components emit to the bus. Triggers listen. Decouples component from behavior.
-
-13. **Canvas stacks, not routes.** Push/pop/replace. No router dependency.
-
-14. **Wire protocol for server authority.** Server pushes UI commands, client applies them.
-
-15. **Headless primitives.** Semantic HTML, no styles.
-
-16. **Action runtime is a pure TypeScript state machine.** Framework adapters observe it. The runtime doesn't know about React.
+- Requires React 18 or later (uses `useSyncExternalStore`).
+- Concurrent rendering: tearing-safe by construction.
+- StrictMode: works correctly; snapshot caches survive effect double-
+  invocation.
+- Suspense: not used as a loading model. Loading state is explicit data
+  on the action. Nova hooks never throw promises.
+- SSR: not enabled — hooks lack a `getServerSnapshot` parameter. Adding
+  SSR is a small per-hook change (each hook's `getSnapshot` already
+  returns a serializable value; only the `subscribe` side needs a
+  no-op for the server path).
+- React Server Components: not tested. Hooks are client-only.

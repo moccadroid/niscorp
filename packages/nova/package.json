@@ -7,9 +7,16 @@
   "sideEffects": false,
   "exports": {
     ".": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.js",
-      "require": "./dist/index.cjs"
+      "import": { "types": "./dist/index.d.ts", "default": "./dist/index.js" },
+      "require": { "types": "./dist/index.d.cts", "default": "./dist/index.cjs" }
+    },
+    "./react": {
+      "import": { "types": "./dist/react/index.d.ts", "default": "./dist/react/index.js" },
+      "require": { "types": "./dist/react/index.d.cts", "default": "./dist/react/index.cjs" }
+    },
+    "./components/react": {
+      "import": { "types": "./dist/components/react.d.ts", "default": "./dist/components/react.js" },
+      "require": { "types": "./dist/components/react.d.cts", "default": "./dist/components/react.cjs" }
     }
   },
   "files": [
@@ -22,8 +29,12 @@
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
+    "@testing-library/react": "^16.1.0",
     "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.0",
+    "jsdom": "^25.0.1",
     "react": "^19.2.4",
+    "react-dom": "^19.2.4",
     "tsup": "^8.5.1",
     "vitest": "^4.1.2",
     "zod": "^4.3.6"
@@ -31,5 +42,10 @@
   "peerDependencies": {
     "react": "^19.2.4",
     "zod": "^4.3.6"
+  },
+  "peerDependenciesMeta": {
+    "react": {
+      "optional": true
+    }
   }
 }

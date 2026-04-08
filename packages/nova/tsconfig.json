@@ -3,7 +3,19 @@
   "compilerOptions": {
     "outDir": "dist",
     "rootDir": "src",
-    "jsx": "react-jsx"
+    "jsx": "react-jsx",
+    "paths": {
+      "@shared": ["./src/shared"],
+      "@shared/*": ["./src/shared/*"],
+      "@action": ["./src/action"],
+      "@action/*": ["./src/action/*"],
+      "@layout": ["./src/layout"],
+      "@layout/*": ["./src/layout/*"],
+      "@shell": ["./src/shell"],
+      "@shell/*": ["./src/shell/*"],
+      "@react": ["./src/react"],
+      "@react/*": ["./src/react/*"]
+    }
   },
   "include": ["src"]
 }

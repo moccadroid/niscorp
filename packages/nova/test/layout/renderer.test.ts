@@ -1,0 +1,190 @@
+import { createPermissiveRegistry } from '../helpers';
+import { describe, expect, it } from 'vitest';
+import {
+  createComponentRegistry,
+  createLayoutStore,
+  renderLayout,
+} from '@layout';
+import type { ComponentNode, LayoutNode, RenderContext } from '@layout';
+
+const makeCtx = (): RenderContext => ({
+  store: createLayoutStore(),
+  registry: createPermissiveRegistry(),
+});
+
+describe('renderLayout — primitives', () => {
+  it('renders a string as text', () => {
+    const out = renderLayout('hello', {}, makeCtx());
+    expect(out).toEqual([{ type: 'text', value: 'hello' }]);
+  });
+
+  it('resolves a $-string against data', () => {
+    const out = renderLayout('$.name', { name: 'Ada' }, makeCtx());
+    expect(out).toEqual([{ type: 'text', value: 'Ada' }]);
+  });
+
+  it('renders numbers and booleans as text', () => {
+    expect(renderLayout(42, {}, makeCtx())).toEqual([{ type: 'text', value: '42' }]);
+    expect(renderLayout(true, {}, makeCtx())).toEqual([{ type: 'text', value: 'true' }]);
+  });
+
+  it('renders null as empty text', () => {
+    expect(renderLayout(null, {}, makeCtx())).toEqual([{ type: 'text', value: '' }]);
+  });
+});
+
+describe('renderLayout — components', () => {
+  it('renders a component node with resolved props', () => {
+    const node: ComponentNode = {
+      component: 'Text',
+      props: { value: '$.msg', static: 'literal' },
+    };
+    const [out] = renderLayout(node, { msg: 'hi' }, makeCtx());
+    expect(out).toEqual({
+      type: 'component',
+      name: 'Text',
+      props: { value: 'hi', static: 'literal' },
+      children: [],
+    });
+  });
+
+  it('renders children', () => {
+    const node: ComponentNode = {
+      component: 'Stack',
+      children: [
+        { component: 'Text', props: { value: 'a' } },
+        { component: 'Text', props: { value: 'b' } },
+      ],
+    };
+    const [out] = renderLayout(node, {}, makeCtx());
+    if (!out || out.type !== 'component') throw new Error('expected component');
+    expect(out.children.length).toBe(2);
+  });
+
+  it('preserves ref', () => {
+    const node: ComponentNode = { component: 'Button', ref: 'submit' };
+    const [out] = renderLayout(node, {}, makeCtx());
+    if (!out || out.type !== 'component') throw new Error('expected component');
+    expect(out.ref).toBe('submit');
+  });
+
+  it('resolves template strings in props', () => {
+    const node: ComponentNode = {
+      component: 'Text',
+      props: { value: 'Hello {{$.name}}' },
+    };
+    const [out] = renderLayout(node, { name: 'World' }, makeCtx());
+    if (!out || out.type !== 'component') throw new Error('expected component');
+    expect(out.props['value']).toBe('Hello World');
+  });
+});
+
+describe('renderLayout — conditionals', () => {
+  it('renders then when truthy', () => {
+    const node: LayoutNode = { if: '$.show', then: 'A', else: 'B' };
+    expect(renderLayout(node, { show: true }, makeCtx())).toEqual([{ type: 'text', value: 'A' }]);
+  });
+
+  it('renders else when falsy', () => {
+    const node: LayoutNode = { if: '$.show', then: 'A', else: 'B' };
+    expect(renderLayout(node, { show: false }, makeCtx())).toEqual([{ type: 'text', value: 'B' }]);
+  });
+
+  it('renders nothing when falsy without else', () => {
+    const node: LayoutNode = { if: '$.show', then: 'A' };
+    expect(renderLayout(node, { show: false }, makeCtx())).toEqual([]);
+  });
+});
+
+describe('renderLayout — loops', () => {
+  it('iterates an array binding', () => {
+    const node: LayoutNode = {
+      for: '$.items',
+      as: 'item',
+      do: { component: 'Text', props: { value: '$item' } },
+    };
+    const [frag] = renderLayout(node, { items: ['a', 'b', 'c'] }, makeCtx());
+    if (!frag || frag.type !== 'fragment') throw new Error('expected fragment');
+    expect(frag.children.length).toBe(3);
+    const first = frag.children[0];
+    if (!first || first.type !== 'component') throw new Error('expected component');
+    expect(first.props['value']).toBe('a');
+  });
+
+  it('exposes $index', () => {
+    const node: LayoutNode = {
+      for: '$.items',
+      as: 'item',
+      do: { component: 'Text', props: { i: '$index', v: '$item' } },
+    };
+    const [frag] = renderLayout(node, { items: ['x', 'y'] }, makeCtx());
+    if (!frag || frag.type !== 'fragment') throw new Error('expected fragment');
+    const second = frag.children[1];
+    if (!second || second.type !== 'component') throw new Error('expected component');
+    expect(second.props['i']).toBe(1);
+    expect(second.props['v']).toBe('y');
+  });
+
+  it('returns empty fragment for non-array', () => {
+    const node: LayoutNode = { for: '$.missing', as: 'x', do: 'A' };
+    expect(renderLayout(node, {}, makeCtx())).toEqual([]);
+  });
+});
+
+describe('renderLayout — refs', () => {
+  it('resolves a layout ref via store', () => {
+    const ctx = makeCtx();
+    ctx.store.set('greeting', { component: 'Text', props: { value: 'hi' } });
+    const out = renderLayout({ ref: 'greeting' }, {}, ctx);
+    expect(out.length).toBe(1);
+    const first = out[0];
+    if (!first || first.type !== 'component') throw new Error('expected component');
+    expect(first.name).toBe('Text');
+  });
+
+  it('emits an error node for missing ref in lax mode', () => {
+    const out = renderLayout({ ref: 'nope' }, {}, makeCtx());
+    expect(out).toEqual([
+      { type: 'error', code: 'LAYOUT_REF_NOT_FOUND', message: 'Layout ref not found: nope' },
+    ]);
+  });
+});
+
+describe('renderLayout — arrays', () => {
+  it('flattens array of nodes into a fragment', () => {
+    const out = renderLayout(['a', 'b'], {}, makeCtx());
+    expect(out.length).toBe(1);
+    const first = out[0];
+    if (!first || first.type !== 'fragment') throw new Error('expected fragment');
+    expect(first.children.length).toBe(2);
+  });
+});
+
+describe('renderLayout — nested', () => {
+  it('handles nested loops + conditionals + components', () => {
+    const node: LayoutNode = {
+      component: 'Stack',
+      children: {
+        for: '$.users',
+        as: 'u',
+        do: {
+          if: '$u.active',
+          then: { component: 'Text', props: { value: '$u.name' } },
+          else: null,
+        },
+      },
+    };
+    const [stack] = renderLayout(
+      node,
+      { users: [{ name: 'Ada', active: true }, { name: 'Bob', active: false }] },
+      makeCtx(),
+    );
+    if (!stack || stack.type !== 'component') throw new Error('expected component');
+    expect(stack.children.length).toBe(1);
+    const frag = stack.children[0];
+    if (!frag || frag.type !== 'fragment') throw new Error('expected fragment');
+    const a = frag.children[0];
+    if (!a || a.type !== 'component') throw new Error('expected component');
+    expect(a.props['value']).toBe('Ada');
+  });
+});

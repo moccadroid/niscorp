@@ -1,0 +1,22 @@
+// ═══════════════════════════════════════════════════════════
+// @niscorp/nova — Shell System
+//
+// The shell is the top-level orchestration boundary. Only the
+// public Shell type, its config, and its state types are exposed.
+// Canvas, runtime registry, telemetry, and lifecycle ops are
+// internal — used by `createShell` and by tests via area-specific
+// imports.
+// ═══════════════════════════════════════════════════════════
+
+export type {
+  CanvasState,
+  Shell,
+  ShellConfig,
+  ShellTelemetry,
+  StateSnapshot,
+  StateChangeHandler as ShellStateChangeHandler,
+  DataChangeEvent as ShellDataChangeEvent,
+  DataChangeHandler as ShellDataChangeHandler,
+} from './types';
+
+export { createShell } from './shell';
