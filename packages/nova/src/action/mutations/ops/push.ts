@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { getPath, setPath } from '@shared/bindings/paths';
 import { isArray, isObject } from '@shared/common';
+import { MutationError } from '@shared/errors';
 import type { MutationOp } from '../types';
 
 export const PushSchema = z
@@ -18,8 +19,24 @@ export const pushOp: MutationOp<PushMutation> = {
   schema: PushSchema,
   // Guard against the PushEffect navigation effect whose `push` is an object.
   match: (mutation) => typeof mutation.push === 'string',
-  apply: (data, mutation) => {
+  apply: (data, mutation, ctx) => {
     const current = getPath(data, mutation.push);
+    // push tolerates missing paths by creating a new array (lax mode only).
+    if (current !== undefined && !isArray(current)) {
+      if (ctx.strict) {
+        throw new MutationError(
+          `push: path "${mutation.push}" is not an array`,
+          { op: 'push', path: mutation.push, reason: 'wrong-type' },
+        );
+      }
+      return data;
+    }
+    if (current === undefined && ctx.strict) {
+      throw new MutationError(
+        `push: path "${mutation.push}" does not exist`,
+        { op: 'push', path: mutation.push, reason: 'missing' },
+      );
+    }
     const arr = isArray(current) ? current.slice() : [];
     arr.push(mutation.value);
     const next = setPath(data, mutation.push, arr);

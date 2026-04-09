@@ -111,7 +111,7 @@ export const App: FC = () => {
       />
       <div style={{ display: 'flex', flex: 1, minHeight: 0 }}>
         <ChromeSidebar
-          title={`${active.name} Showroom`}
+          title="Nisc Showroom"
           stories={sidebarEntries}
           activeStoryId={activeStoryId}
           onSelect={setActiveStoryId}

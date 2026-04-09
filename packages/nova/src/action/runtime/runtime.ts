@@ -28,7 +28,10 @@ const defaultInstanceIdFactory = createIdFactory('act');
 export const createActionRuntime = (config: ActionRuntimeConfig): ActionRuntime => {
   const definition = config.definition;
   const initialData = buildInitialData(definition, config.input, config.transform);
-  const initialSnapshot: Record<string, unknown> = { ...initialData };
+  // Deep-clone so `reset` can restore nested structures without sharing
+  // references with the live data store. Fixes correctness bug where
+  // mutating nested objects would corrupt the snapshot used by reset.
+  const initialSnapshot: Record<string, unknown> = structuredClone(initialData);
   const dataStore: DataStore = createDataStore(initialData);
 
   const abortController = new AbortController();
@@ -103,7 +106,9 @@ export const createActionRuntime = (config: ActionRuntimeConfig): ActionRuntime 
 
   const applyMutationList = (mutations: Mutation[]): void => {
     if (mutations.length === 0) return;
-    dataStore.update((curr) => applyMutations(curr, mutations, initialSnapshot));
+    dataStore.update((curr) =>
+      applyMutations(curr, mutations, { initial: initialSnapshot, strict }),
+    );
   };
 
   const StepArraySchema = z.array(StepSchema);
@@ -160,7 +165,12 @@ export const createActionRuntime = (config: ActionRuntimeConfig): ActionRuntime 
     const off = config.eventBus.on('ui:model', (event) => {
       if (event.type !== 'ui:model') return;
       if (event.ref !== ref) return;
-      dataStore.update((curr) => applyMutations(curr, [{ set: path, value: event.payload }]));
+      dataStore.update((curr) =>
+        applyMutations(curr, [{ set: path, value: event.payload }], {
+          initial: initialSnapshot,
+          strict,
+        }),
+      );
     });
     modelListeners.set(ref, { path, off });
   };

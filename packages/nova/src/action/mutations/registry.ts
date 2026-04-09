@@ -9,7 +9,7 @@ import { popOp } from './ops/pop';
 import { removeAtOp } from './ops/remove-at';
 import { clearOp } from './ops/clear';
 import { resetOp } from './ops/reset';
-import type { MutationData, MutationOp } from './types';
+import type { MutationContext, MutationData, MutationOp } from './types';
 
 // ═══════════════════════════════════════════════════════════
 // Pure dispatch over the op registry. Each op's `apply` is
@@ -21,15 +21,15 @@ import type { MutationData, MutationOp } from './types';
 type ErasedOp = {
   key: string;
   match: (mutation: Record<string, unknown>) => boolean;
-  run: (data: MutationData, mutation: Record<string, unknown>, initial: MutationData) => MutationData;
+  run: (data: MutationData, mutation: Record<string, unknown>, ctx: MutationContext) => MutationData;
 };
 
 const erase = <T>(op: MutationOp<T>): ErasedOp => ({
   key: op.key,
   match: op.match ?? ((mutation) => hasKey(mutation, op.key)),
-  run: (data, mutation, initial) => {
+  run: (data, mutation, ctx) => {
     const parsed = op.schema.parse(mutation);
-    return op.apply(data, parsed, { initial });
+    return op.apply(data, parsed, ctx);
   },
 });
 
@@ -53,25 +53,42 @@ const findOp = (mutation: Record<string, unknown>): ErasedOp | undefined => {
   return undefined;
 };
 
+export type ApplyMutationOptions = {
+  /** Snapshot used by `reset`. Must be deep-cloned by the caller. */
+  initial?: MutationData;
+  /** Strict mode — array ops throw MutationError on missing/wrong-type paths. */
+  strict?: boolean;
+};
+
+const buildCtx = (opts: ApplyMutationOptions): MutationContext => ({
+  initial: opts.initial ?? {},
+  strict: opts.strict ?? false,
+});
+
 export const applyMutation = (
   data: MutationData,
   mutation: Mutation,
-  initial: MutationData = {},
+  opts: ApplyMutationOptions = {},
 ): MutationData => {
   if (!isObject(mutation)) return data;
   const op = findOp(mutation);
   if (op === undefined) return data;
-  return op.run(data, mutation, initial);
+  return op.run(data, mutation, buildCtx(opts));
 };
 
 export const applyMutations = (
   data: MutationData,
   mutations: readonly Mutation[],
-  initial: MutationData = {},
+  opts: ApplyMutationOptions = {},
 ): MutationData => {
+  if (mutations.length === 0) return data;
+  const ctx = buildCtx(opts);
   let current = data;
   for (const mutation of mutations) {
-    current = applyMutation(current, mutation, initial);
+    if (!isObject(mutation)) continue;
+    const op = findOp(mutation);
+    if (op === undefined) continue;
+    current = op.run(current, mutation, ctx);
   }
   return current;
 };

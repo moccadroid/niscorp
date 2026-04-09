@@ -19,7 +19,7 @@ describe('applyMutations — registry dispatcher', () => {
     const next = applyMutations(
       { n: 9 },
       [{ increment: 'n', by: 1 }, { reset: 'n' }],
-      { n: 0 },
+      { initial: { n: 0 } },
     );
     expect(next).toEqual({ n: 0 });
   });

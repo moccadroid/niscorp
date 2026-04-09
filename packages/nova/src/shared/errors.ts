@@ -12,6 +12,7 @@ export const ErrorCodes = {
   unknownAction: 'UNKNOWN_ACTION',
   shellDisposed: 'SHELL_DISPOSED',
   lifecycle: 'LIFECYCLE_ERROR',
+  mutation: 'MUTATION_ERROR',
 } as const;
 
 export type ErrorCode = (typeof ErrorCodes)[keyof typeof ErrorCodes];
@@ -131,5 +132,22 @@ export class LifecycleError extends NovaError {
   ) {
     super(ErrorCodes.lifecycle, message, context, options);
     this.name = 'LifecycleError';
+  }
+}
+
+export type MutationErrorContext = NovaErrorContext & {
+  op: string;
+  path: string;
+  reason: 'missing' | 'wrong-type';
+};
+
+export class MutationError extends NovaError {
+  constructor(
+    message: string,
+    context: MutationErrorContext,
+    options?: { cause?: unknown },
+  ) {
+    super(ErrorCodes.mutation, message, context, options);
+    this.name = 'MutationError';
   }
 }

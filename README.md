@@ -1,0 +1,168 @@
+<div align="center">
+
+# Nisc
+
+### An AI-native application platform.
+
+**Software, if you let machines write it, shouldn't be code.**
+
+[![License: MIT](https://img.shields.io/badge/license-MIT-black.svg?style=flat-square)](LICENSE)
+[![Status](https://img.shields.io/badge/status-pre--1.0-orange.svg?style=flat-square)](#status)
+[![pnpm](https://img.shields.io/badge/pnpm-9.15-f69220.svg?style=flat-square)](https://pnpm.io)
+[![Node](https://img.shields.io/badge/node-%E2%89%A518.18-339933.svg?style=flat-square)](https://nodejs.org)
+[![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178c6.svg?style=flat-square)](https://www.typescriptlang.org)
+
+[Packages](#packages) · [Philosophy](#philosophy) · [Quick start](#quick-start) · [Showroom](#showroom) · [Status](#status)
+
+</div>
+
+---
+
+> Nisc is a monorepo of small, opinionated libraries built around a single thesis:
+> **the next generation of software will be authored by language models, audited by humans, and executed by runtimes that refuse to run anything that isn't a validated tree of data.**
+
+Not "AI tools." Not "copilots." A stack where every layer — UI, data transforms, LLM calls, orchestration, queries — is a declarative JSON artifact a model can emit, a schema can validate, a runtime can walk, a cache can fingerprint, and a human can diff.
+
+No `eval`. No generated TypeScript. No SQL string concatenation. No prompt-injected shell-outs.
+The machines stop typing code and start emitting structure.
+
+If that sounds austere: good.
+
+## Packages
+
+Five libraries. Each one is self-sufficient. They also compose.
+
+| | Package | Description | Status |
+|---|---|---|---|
+| 🎨 | [**`@niscorp/nova`**](packages/nova)     | Declarative UI runtime — JSON layouts, actions, lifecycles, two-way bindings. Framework-agnostic core, React adapter shipped. | ![](https://img.shields.io/badge/-shipping-22c55e?style=flat-square) |
+| 💎 | [**`@niscorp/prism`**](packages/prism)   | JSON data-transformation DSL — ~50 ops, compile-time optimization, fingerprint-keyed cache, zero code execution. | ![](https://img.shields.io/badge/-shipping-22c55e?style=flat-square) |
+| 📡 | [**`@niscorp/signal`**](packages/signal) | Universal LLM client — stateless, immutable, provider-agnostic. Structured output via Zod, tool calling, validation-retry. | ![](https://img.shields.io/badge/-shipping-22c55e?style=flat-square) |
+| 🧠 | [**`@niscorp/cortex`**](packages/cortex) | Agentic orchestration runtime — agents emit ActionPlans, runtime executes them under policy gates and budget caps. | ![](https://img.shields.io/badge/-design-f59e0b?style=flat-square) |
+| 🔍 | [**`@niscorp/vex`**](packages/vex)       | Declarative query synthesis — English → constrained JSON DSL → SQL, with scope policies and shape-based caching. | ![](https://img.shields.io/badge/-design-f59e0b?style=flat-square) |
+
+> Each package ships its own `README.md` and `DESIGN.md`. **Read the design doc before reading the source.**
+
+## Philosophy
+
+Five rules every package obeys, without exception. They're load-bearing.
+
+<table>
+<tr>
+<td width="33%" valign="top">
+
+### 1 · JSON is the shape
+Layouts, transforms, queries, plans — all plain JSON. Serializable, diffable, cacheable, persistable, LLM-emittable. The moment something wants to be a code string, we stop and ask why.
+
+</td>
+<td width="33%" valign="top">
+
+### 2 · Zod is the truth
+Every external input is parsed before it touches a runtime. Provider schemas are compliance hints; Zod is the truth. Errors are structured and, in LLM loops, fed back to the model.
+
+</td>
+<td width="33%" valign="top">
+
+### 3 · Declarative = observable
+If the thing-to-execute is data, the runtime can inspect, log, gate, replay, fuzz, cache, dry-run, and ship it over the wire. Imperative gives you none of that.
+
+</td>
+</tr>
+<tr>
+<td valign="top">
+
+### 4 · Zero-risk execution
+LLM-generated artifacts are untrusted by default. No `eval`, no SQL concat, no tool call without a policy check. If you can inject code into a Nisc runtime, it's a bug — file the report.
+
+</td>
+<td valign="top">
+
+### 5 · No framework lock-in
+Nova has a React adapter; its core doesn't import React. Signal has no vendor SDK as a hard dep. Prism is a pure function. Use any one piece standalone — they don't phone home.
+
+</td>
+<td valign="top">
+
+### Why JSON. Why now.
+LLMs are structurally bad at unbounded code and structurally excellent at constrained grammars. Give them a schema and they behave. SQL solved this in 1974; we're doing it one layer up.
+
+</td>
+</tr>
+</table>
+
+## Quick start
+
+```bash
+git clone https://github.com/moccadroid/niscorp.git
+cd niscorp
+pnpm install
+pnpm build
+```
+
+> **Requires** Node ≥ 18.18 and pnpm. Install pnpm with `brew install pnpm` or `corepack enable`.
+
+## Showroom
+
+A live demo + inspector for the shipping packages. Stories render side-by-side with their JSON definitions, runtime data, and error states.
+
+```bash
+pnpm --filter showroom dev
+```
+
+→ http://localhost:5173
+
+If the showroom complains about missing `dist/`, warm the caches once: `pnpm --filter showroom... build`.
+
+## Development
+
+```bash
+pnpm build         # turbo build
+pnpm test          # turbo test
+pnpm typecheck     # tsc --noEmit across the workspace
+pnpm lint          # turbo lint
+pnpm format        # prettier write
+```
+
+Working on one package? Filter it:
+
+```bash
+pnpm --filter @niscorp/nova test
+pnpm --filter @niscorp/nova dev      # tsup --watch
+```
+
+## Repo layout
+
+```
+niscorp/
+├── packages/
+│   ├── nova/       🎨  declarative UI runtime
+│   ├── prism/      💎  JSON transform DSL
+│   ├── signal/     📡  universal LLM client
+│   ├── cortex/     🧠  agentic orchestration
+│   └── vex/        🔍  query synthesis
+├── apps/
+│   └── showroom/        live demo + inspector
+├── pnpm-workspace.yaml
+└── turbo.json
+```
+
+## Status
+
+Nisc is **pre-1.0** and under active design.
+
+- **Shipping packages** (Nova, Prism, Signal) are tested and usable, but their public APIs are not frozen. Pin exact versions; expect to update.
+- **Design-only packages** (Cortex, Vex) have thorough `DESIGN.md` documents and stub source files. Read the architecture; don't expect runnable code yet.
+- Breaking changes land without ceremony until each package hits 1.0.
+
+## Contributing
+
+Issues and PRs welcome. Read the relevant package's `DESIGN.md` before proposing anything bigger than a bug fix — the architecture has opinions, and the opinions are the product.
+
+> If a change makes the runtime **less observable**, **less validated**, or **less declarative**, it's probably going the wrong way.
+
+## License
+
+[MIT](LICENSE) © Nisc contributors
+
+<div align="center">
+<sub>Built with deliberate constraint. Powered by JSON.</sub>
+</div>
