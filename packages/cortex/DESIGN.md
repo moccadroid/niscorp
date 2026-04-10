@@ -394,10 +394,23 @@ The Cortex pipeline must produce a stable prefix for cache hits. Concretely:
 
 Two modes, configurable per call and globally:
 
-- **`exact`**: delegates to `signal.count(model, content)`. Slower (may hit a tokenizer or even an API). Used when building the final pack before sending to the model.
-- **`fuzzy`**: heuristic (~4 chars/token, customizable per tokenizer family). Used for hot-path estimates inside producers.
+- **`fuzzy`** (default): heuristic (~4 characters per token, plus ~4 tokens per-message overhead). Fast, good enough to answer "am I at 10k or 100k?" for budget decisions. This is what ships today.
+- **`exact`**: intended to delegate to `signal.count(model, content)` for provider-aware token counting. **Currently falls back to fuzzy** — `signal.count()` exists upstream but uses the same heuristic internally. When a real tokenizer integration lands (e.g. tiktoken for OpenAI models), it slots into `signal.count()` and Cortex's exact mode calls it. One place to change, propagates everywhere.
 
-**Upstream Signal change required:** `signal.count(model, content)` does not exist yet. It is the only blocking external dependency for Phase A. We add it when we get there.
+The heuristic is roughly correct for English text and roughly wrong for code, structured JSON, and non-Latin scripts. For budget enforcement this is acceptable — the purpose is "don't blow past the cap," not "count to the exact token." For cost estimation it's less acceptable; dollar-accurate accounting would need the real tokenizer.
+
+### 5.9 Pipeline caching (future work)
+
+The pipeline rebuilds fresh on every iteration. This is simple and correct — no stale-context bugs possible — but redundant for producers whose output doesn't change between iterations.
+
+**Future optimization: producer-level volatility tagging.** Each producer declares whether its output is `stable` (same for the lifetime of the invocation) or `volatile` (may change between iterations):
+
+- **Stable**: `system`, `actionContract`, `tools`, `agents`, `input` — these don't change between tool-loop iterations or tick-loop ticks within one `executeAgent` call.
+- **Volatile**: `observations`, `budget`, `history`, `retryFeedback` — these change between iterations as new observations land and budgets decrease.
+
+The pipeline would cache stable producers on first build and skip `build()` on subsequent iterations. The cache is scoped per-invocation, not persisted.
+
+**Not implementing yet**: all built-in producers currently return static strings (or strings derived from static state). The rebuild cost is negligible. When producers start reading from slower sources (databases, external APIs, LLM-based compression), caching will matter. Profile first, optimize second.
 
 ---
 

@@ -30,6 +30,12 @@ export type AgentConfig<TOutput = unknown> = {
   policy?: PolicyConfig;
   maxToolIterations?: number;
   /**
+   * Plan-mode only: how many outer ticks the tick loop runs before
+   * giving up. Each tick = one agent invocation that produces an
+   * ActionPlan. Default: 20. Has no effect in text/structured mode.
+   */
+  maxTicks?: number;
+  /**
    * For text/structured/plan modes: when output validation fails
    * (bad JSON, schema mismatch, invalid plan), how many times to
    * re-call the agent with the prior attempt + validation issues

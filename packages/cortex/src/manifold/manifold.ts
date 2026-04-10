@@ -2,22 +2,26 @@
 // Manifold — central coordinator
 // ═══════════════════════════════════════════════════════════
 //
-// Per DESIGN.md §10. This is the Phase A skeleton:
-//   - registry, bus, ledger, state store, event log all wired
-//   - lifecycle (start/stop/drain)
-//   - previewContext fully implemented (the killer debugging API)
-//   - addProducer registration
-//   - execute() throws 'unknown' for now — next session lands the
-//     tool loop and agent execution path
+// The bus is the substrate. manifold.execute() dispatches a
+// request event and awaits the completion. The manifold's internal
+// handler picks up the request, runs the agent, and emits
+// completed or failed on the same correlationId. Concurrent
+// executions are routed by correlationId — no cross-talk.
 //
-// Plan executor, interceptors, ask_agent sync sugar all land in
-// later sessions per the phased build plan.
+// previewContext is the only read-only path that stays direct
+// (no bus round-trip, no lifecycle events, no LLM call).
+//
+// External systems can trigger agent execution by emitting
+// CortexTopics.executeRequested on the bus. Interceptors (Phase C)
+// subscribe at higher priority and can modify/abort before the
+// handler runs.
 
 import type { AgentDefinition } from '../agent/define-agent';
 import type { ToolDefinition } from '../tool/define-tool';
 import type { Bus, BudgetState, Result, Unsubscribe } from '../types';
 import type { ContextProducer, ContextSpec, ResolvedContext } from '../context/types';
 import type { SignalClient } from '../llm/signal-client';
+import type { CortexError } from '../errors/cortex.errors';
 import { runPipeline } from '../context/pipeline';
 import { counterFor, type TokenEstimationMode } from '../context/tokens';
 import { executeAgent } from '../agent/execute';
@@ -32,8 +36,9 @@ import { createLedger, DEFAULT_BUDGET, type Ledger, type LedgerBudget } from './
 import type { StateStore, EventLog } from '../store/types';
 import { createMemoryStateStore } from '../store/memory-state.store';
 import { createMemoryEventLog } from '../store/memory-event.log';
-import { newWorkflowId } from '../utils/id';
-import { makeError, throwCortex, err } from '../errors/cortex.errors';
+import { newWorkflowId, newCorrelationId } from '../utils/id';
+import { makeError, throwCortex, ok, err } from '../errors/cortex.errors';
+import { CortexTopics } from '../topics';
 
 // ───────────────────────────────────────────────────────────
 // Public surface
@@ -46,9 +51,6 @@ export type ManifoldHooks = {
 };
 
 export type ManifoldConfig = {
-  // The Signal client. Optional only because previewContext does not
-  // need it. execute() requires it; calling execute without an llm
-  // returns a structured error.
   llm?: SignalClient;
   stateStore?: StateStore;
   eventLog?: EventLog;
@@ -67,28 +69,17 @@ export type ExecuteOptions = {
 };
 
 export type Manifold = {
-  // Registration
   registerAgent: (agent: AgentDefinition) => Unsubscribe;
   registerTool: (tool: ToolDefinition) => Unsubscribe;
   addProducer: (producer: ContextProducer, scope?: { agentId?: string }) => Unsubscribe;
-
-  // Bus (the substrate)
   bus: Bus;
-
-  // State
   getState: (workflowId: string, key: string) => Promise<unknown>;
   setState: (workflowId: string, key: string, value: unknown) => Promise<void>;
-
-  // Execution
   execute: <T>(agentId: string, input: unknown, options?: ExecuteOptions) => Promise<Result<T>>;
   previewContext: (agentId: string, input: unknown, options?: ExecuteOptions) => Promise<ResolvedContext>;
-
-  // Lifecycle
   start: () => Promise<void>;
   stop: () => Promise<void>;
   drain: () => Promise<void>;
-
-  // Internal — exposed for testing and for runAgentStandalone
   readonly _internal: {
     registry: Registry;
     ledger: Ledger;
@@ -99,7 +90,7 @@ export type Manifold = {
 };
 
 // ───────────────────────────────────────────────────────────
-// Default context spec — used when an agent does not bring its own
+// Default context spec
 // ───────────────────────────────────────────────────────────
 
 const defaultContextSpecFor = (mode: 'text' | 'structured' | 'plan', instructions: string): ContextSpec => {
@@ -131,66 +122,78 @@ export const createManifold = (config: ManifoldConfig = {}): Manifold => {
   const packBudget = config.defaultPackBudget ?? DEFAULT_PACK_BUDGET_TOKENS;
   const hooks = config.hooks ?? {};
 
-  // Tee bus → event log so the log captures everything that happens.
+  // Tee bus → event log so the log captures everything.
   const teeUnsub = bus.on('#', async (event) => {
-    try {
-      await eventLog.append(event);
-    } catch (e) {
-      hooks.onError?.(e, {});
-    }
+    try { await eventLog.append(event); } catch (e) { hooks.onError?.(e, {}); }
   });
 
   let started = false;
   let draining = false;
-  // In-flight workflow count (for drain). Phase A: previewContext does
-  // not register a workflow, so this only goes up when execute() lands.
   let inFlight = 0;
 
-  // ─── helpers ─────────────────────────────────────────────
+  // ─── Execution handler ───────────────────────────────────
+  //
+  // The bus-driven execution substrate. This handler is the ONLY
+  // place where executeAgent is called. manifold.execute() is just
+  // dispatch + waitFor. External systems can also emit
+  // executeRequested directly to trigger agent runs.
+  //
+  // The handler is registered eagerly (not in start()) so the
+  // manifold works immediately after creation. start/stop are
+  // lifecycle hooks for draining and cleanup, not for enabling.
 
-  const computeBudgetState = (workflowId: string): BudgetState => {
-    const snap = ledger.snapshot(workflowId);
-    return {
-      tokensUsed: snap.tokensUsed,
-      tokensRemaining: snap.tokensRemaining,
-      ticksUsed: snap.ticksUsed,
-      ticksRemaining: snap.ticksRemaining,
-      toolCallsUsed: snap.toolCallsUsed,
+  bus.on(CortexTopics.executeRequested, async (event) => {
+    const { agentId, input, workflowId, abort } = event.payload as {
+      agentId: string;
+      input: unknown;
+      workflowId: string;
+      abort?: AbortSignal;
     };
-  };
+    const correlationId = event.meta.correlationId;
 
-  // ─── execute ─────────────────────────────────────────────
-
-  const execute = async <T>(
-    agentId: string,
-    input: unknown,
-    options: ExecuteOptions = {},
-  ): Promise<Result<T>> => {
-    const agent = registry.requireAgent(agentId) as AgentDefinition<T>;
-    if (!config.llm) {
-      return err<T>(
-        makeError(
-          'model_call_failed',
-          'Manifold.execute() requires an `llm` SignalClient in ManifoldConfig.',
-          { agentId },
-        ),
-      );
+    // Validate preconditions.
+    let agent: AgentDefinition<unknown>;
+    try {
+      agent = registry.requireAgent(agentId);
+    } catch (e) {
+      bus.emit({
+        topic: CortexTopics.executeFailed,
+        payload: {
+          error: makeError('agent_not_registered', `No agent: ${agentId}`, { agentId }),
+          workflowId,
+        },
+        meta: { timestamp: Date.now(), correlationId, workflowId },
+      });
+      return;
     }
 
-    const workflowId = options.workflowId ?? newWorkflowId();
+    if (!config.llm) {
+      bus.emit({
+        topic: CortexTopics.executeFailed,
+        payload: {
+          error: makeError('model_call_failed', 'Manifold requires an `llm` SignalClient.', { agentId }),
+          workflowId,
+        },
+        meta: { timestamp: Date.now(), correlationId, workflowId },
+      });
+      return;
+    }
+
+    // Lifecycle: open ledger, track in-flight, emit workflow.started.
     const ownLedger = !ledger.isOpen(workflowId);
     if (ownLedger) ledger.open(workflowId);
-
     inFlight += 1;
+
     bus.emit({
-      topic: 'cortex.workflow.started',
+      topic: CortexTopics.workflowStarted,
       payload: { workflowId, agentId, input },
-      meta: { timestamp: Date.now(), correlationId: workflowId, workflowId },
+      meta: { timestamp: Date.now(), correlationId, workflowId },
     });
+    hooks.onWorkflowStart?.(workflowId);
 
     try {
       const stateSnapshot = await stateStore.snapshot(workflowId);
-      const result = await executeAgent<T>(
+      const result = await executeAgent<unknown>(
         {
           registry,
           llm: config.llm,
@@ -206,27 +209,100 @@ export const createManifold = (config: ManifoldConfig = {}): Manifold => {
           agent,
           input,
           workflowId,
-          ...(options.signal && { abort: options.signal }),
+          ...(abort && { abort }),
         },
       );
 
       bus.emit({
-        topic: 'cortex.workflow.ended',
+        topic: CortexTopics.workflowEnded,
         payload: { workflowId, result: result.ok ? result.data : undefined, error: result.ok ? undefined : result.error },
-        meta: { timestamp: Date.now(), correlationId: workflowId, workflowId },
+        meta: { timestamp: Date.now(), correlationId, workflowId },
       });
       hooks.onWorkflowEnd?.(workflowId, result.ok ? result.data : undefined);
-      // executeAgent now returns Result<T> directly — the parser
-      // dispatch in execute.ts handles per-mode narrowing, so no
-      // cast is needed at this boundary.
-      return result;
+
+      // Emit completion. The caller's waitFor resolves on this.
+      bus.emit({
+        topic: CortexTopics.executeCompleted,
+        payload: { result, workflowId },
+        meta: { timestamp: Date.now(), correlationId, workflowId },
+      });
+    } catch (e) {
+      const error: CortexError = makeError(
+        'unknown',
+        e instanceof Error ? e.message : String(e),
+        { agentId, workflowId, cause: e },
+      );
+      hooks.onError?.(e, { workflowId, agentId });
+
+      bus.emit({
+        topic: CortexTopics.workflowEnded,
+        payload: { workflowId, error },
+        meta: { timestamp: Date.now(), correlationId, workflowId },
+      });
+
+      // Emit failure. The caller's waitFor resolves on this.
+      bus.emit({
+        topic: CortexTopics.executeFailed,
+        payload: { error, workflowId },
+        meta: { timestamp: Date.now(), correlationId, workflowId },
+      });
     } finally {
       inFlight -= 1;
       if (ownLedger) ledger.close(workflowId);
     }
+  });
+
+  // ─── execute: dispatch + waitFor ─────────────────────────
+  //
+  // Three lines. The bus is the substrate. Everything else is
+  // handled by the subscription above.
+
+  const execute = async <T>(
+    agentId: string,
+    input: unknown,
+    options: ExecuteOptions = {},
+  ): Promise<Result<T>> => {
+    const correlationId = newCorrelationId();
+    const workflowId = options.workflowId ?? newWorkflowId();
+
+    // IMPORTANT: subscribe BEFORE dispatching. The handler may emit
+    // the completion event synchronously during dispatch (e.g. when
+    // validation fails immediately). If we dispatched first and then
+    // subscribed, the completion event would fire before anyone is
+    // listening and waitFor would time out.
+    // Subscribe BEFORE dispatching. Filter on correlationId AND on
+    // the topic being a completion or failure — NOT the request
+    // event we're about to dispatch (which has the same correlationId).
+    const isCompletionOrFailure = (e: { topic: string; meta: { correlationId: string } }): boolean =>
+      e.meta.correlationId === correlationId &&
+      (e.topic === CortexTopics.executeCompleted || e.topic === CortexTopics.executeFailed);
+
+    const completionPromise = bus.waitFor('cortex.execute.*', {
+      filter: isCompletionOrFailure,
+      timeoutMs: DEFAULT_BUDGET.maxDurationMs,
+      ...(options.signal && { signal: options.signal }),
+    });
+
+    // Dispatch the request. The handler above picks it up.
+    bus.dispatch(
+      CortexTopics.executeRequested,
+      { agentId, input, workflowId, ...(options.signal && { abort: options.signal }) },
+      { correlationId, workflowId },
+    );
+
+    // Await the completion (already subscribed above).
+    const completion = await completionPromise;
+
+    if (completion.topic === CortexTopics.executeFailed) {
+      const payload = completion.payload as { error: CortexError };
+      return err(payload.error);
+    }
+
+    const payload = completion.payload as { result: Result<T> };
+    return payload.result;
   };
 
-  // ─── previewContext — fully wired ─────────────────────────
+  // ─── previewContext — stays direct (no bus) ───────────────
 
   const previewContext = async (
     agentId: string,
@@ -236,10 +312,17 @@ export const createManifold = (config: ManifoldConfig = {}): Manifold => {
     const agent = registry.requireAgent(agentId);
     const workflowId = options.workflowId ?? newWorkflowId();
 
-    // We don't open a real ledger entry for preview — it's read-only.
-    // Use a temporary budget snapshot so producers see something sensible.
     const budget: BudgetState = ledger.isOpen(workflowId)
-      ? computeBudgetState(workflowId)
+      ? (() => {
+          const snap = ledger.snapshot(workflowId);
+          return {
+            tokensUsed: snap.tokensUsed,
+            tokensRemaining: snap.tokensRemaining,
+            ticksUsed: snap.ticksUsed,
+            ticksRemaining: snap.ticksRemaining,
+            toolCallsUsed: snap.toolCallsUsed,
+          };
+        })()
       : {
           tokensUsed: 0,
           tokensRemaining: DEFAULT_BUDGET.maxTokens,
@@ -255,7 +338,6 @@ export const createManifold = (config: ManifoldConfig = {}): Manifold => {
       config.defaultContextSpec ??
       defaultContextSpecFor(agent.config.outputMode, agent.config.instructions);
 
-    // Combine the agent's spec producers with any global / scoped producers.
     const extraProducers = registry.producersFor(agentId);
     const allProducers = [...spec.producers, ...extraProducers];
 
@@ -300,12 +382,16 @@ export const createManifold = (config: ManifoldConfig = {}): Manifold => {
     await stop();
   };
 
-  void hooks.onWorkflowStart;
-  void hooks.onWorkflowEnd;
+  // Soft warning for exact token mode (not yet implemented).
+  if (config.tokenEstimation === 'exact') {
+    bus.emit({
+      topic: CortexTopics.warning,
+      payload: { message: 'tokenEstimation: "exact" not yet implemented. Falling back to fuzzy.' },
+      meta: { timestamp: Date.now(), correlationId: 'init' },
+    });
+  }
 
-  // ─── instance ────────────────────────────────────────────
-
-  const manifold: Manifold = {
+  return {
     registerAgent: (agent) => registry.registerAgent(agent),
     registerTool: (tool) => registry.registerTool(tool),
     addProducer: (producer, scope) => registry.addProducer(producer, scope),
@@ -317,31 +403,8 @@ export const createManifold = (config: ManifoldConfig = {}): Manifold => {
     start,
     stop,
     drain,
-    _internal: {
-      registry,
-      ledger,
-      stateStore,
-      eventLog,
-      config,
-    },
+    _internal: { registry, ledger, stateStore, eventLog, config },
   };
-
-  // Phase A: throw on direct misuse to keep the public surface honest.
-  if (config.tokenEstimation === 'exact') {
-    // Don't crash here — we still allow the mode and fall back to fuzzy
-    // (per src/context/tokens.ts). Just emit a soft warning event.
-    bus.emit({
-      topic: 'cortex.warning',
-      payload: {
-        message: 'tokenEstimation: "exact" requested but signal.count() is not yet wired upstream. Falling back to fuzzy.',
-      },
-      meta: { timestamp: Date.now(), correlationId: 'init' },
-    });
-  }
-
-  return manifold;
 };
 
-// Helper for tests / standalone — re-throws programmer errors as
-// CortexError-tagged Errors.
 export const _runtimeThrow = throwCortex;

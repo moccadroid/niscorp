@@ -32,6 +32,7 @@ import type { Registry } from '../manifold/registry';
 import type { Ledger } from '../manifold/ledger';
 import { checkBudget, checkTool, type GateDecision } from '../runtime/gate';
 import { makeError } from '../errors/cortex.errors';
+import { CortexTopics } from '../topics';
 
 export type ToolLoopInput = {
   agentId: string;
@@ -98,12 +99,12 @@ const recordObservation = (
   observation: Observation,
 ): void => {
   bus.emit({
-    topic: 'cortex.observation.recorded',
+    topic: CortexTopics.observationRecorded,
     payload: observation,
     meta: { timestamp: Date.now(), correlationId: workflowId, workflowId },
   });
   bus.emit({
-    topic: 'cortex.tool.observed',
+    topic: CortexTopics.toolObserved,
     payload: observation,
     meta: { timestamp: Date.now(), correlationId: workflowId, workflowId },
   });

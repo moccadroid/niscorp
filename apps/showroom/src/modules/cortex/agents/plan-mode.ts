@@ -72,7 +72,7 @@ export const analyzerPlanner = defineAgent({
   outputMode: 'plan',
   tools: ['demo.word_count'],
   // Allow up to 4 ticks to give the model some slack.
-  maxToolIterations: 4,
+  maxTicks: 4,
 });
 
 // ───────────────────────────────────────────────────────────
@@ -122,5 +122,5 @@ export const directorPlanner = defineAgent({
     '2. On the next tick, after seeing both observations, return a plan with a single final node whose result is { summary, classification, original }, populated from the observations.\n' +
     'Each plan should be a JSON array. No prose, no markdown fences.',
   outputMode: 'plan',
-  maxToolIterations: 4,
+  maxTicks: 4,
 });

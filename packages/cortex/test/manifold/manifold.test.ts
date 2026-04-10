@@ -105,9 +105,11 @@ describe('Manifold (Phase A)', () => {
     if (!result.ok) expect(result.error.code).toBe('model_call_failed');
   });
 
-  it('execute throws (programmer error) when agent is not registered', async () => {
+  it('execute returns Result.err when agent is not registered', async () => {
     const m = createManifold();
-    await expect(m.execute('does-not-exist', 'hi')).rejects.toThrow(/agent_not_registered/);
+    const result = await m.execute('does-not-exist', 'hi');
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error.code).toBe('agent_not_registered');
   });
 
   it('teesz events into the in-memory event log', async () => {

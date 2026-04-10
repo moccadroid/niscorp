@@ -209,7 +209,7 @@ const run = async (): Promise<void> => {
         'You are a planning agent. Use the word_count tool to count the words in the user input, then return a final node whose result is { "wordCount": <number>, "input": <user input> }. Keep the plan small.',
       outputMode: 'plan',
       tools: ['word_count'],
-      maxToolIterations: 6,
+      maxTicks: 6,
     }),
   );
   const r5 = await m2.execute('analyzer', 'The quick brown fox jumps over the lazy dog.');

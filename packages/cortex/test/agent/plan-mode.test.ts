@@ -93,9 +93,9 @@ describe('Plan-mode agent — basic finalization', () => {
         description: 'p',
         instructions: '',
         outputMode: 'plan',
-        // Phase B uses maxToolIterations as the outer tick cap
-        // (single shared cap per the inline note in execute.ts).
-        maxToolIterations: 3,
+        // maxTicks is the outer tick loop cap (plan mode only).
+        
+        maxTicks: 3,
       }),
     );
     const result = await m.execute('p', 'go');

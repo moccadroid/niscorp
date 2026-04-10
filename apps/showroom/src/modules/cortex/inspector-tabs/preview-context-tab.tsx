@@ -67,37 +67,44 @@ export const PreviewContextTab: FC<Props> = ({ story }) => {
   const [error, setError] = useState<string | undefined>(undefined);
   const [loading, setLoading] = useState(false);
 
-  // Reset whenever the story changes.
+  // Auto-compute on story change. previewContext is free (no LLM,
+  // no API key, sub-10ms) so there's no reason to gate it behind a
+  // button. The user sees the resolved context immediately when they
+  // switch to a story or open this tab.
   const storyId = isCortexStory(story) ? story.id : undefined;
   useEffect(() => {
-    setResolved(undefined);
-    setError(undefined);
-  }, [storyId]);
-
-  const compute = useCallback(async (): Promise<void> => {
-    if (!isCortexStory(story)) return;
+    if (!isCortexStory(story)) {
+      setResolved(undefined);
+      setError(undefined);
+      return;
+    }
     const resolvedStory = resolveStory(story);
     if (!resolvedStory) {
+      setResolved(undefined);
       setError('No agent attached to this story.');
       return;
     }
+    let cancelled = false;
     setLoading(true);
     setError(undefined);
-    try {
-      // Ephemeral manifold — no llm needed for previewContext.
-      const manifold = createManifold({});
-      manifold.registerAgent(resolvedStory.agent);
-      for (const tool of resolvedStory.tools) manifold.registerTool(tool);
-      await manifold.start();
-      const result = await manifold.previewContext(resolvedStory.agent.agentId, resolvedStory.input);
-      await manifold.stop();
-      setResolved(result);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-    } finally {
-      setLoading(false);
-    }
-  }, [story]);
+    const run = async (): Promise<void> => {
+      try {
+        const manifold = createManifold({});
+        manifold.registerAgent(resolvedStory.agent);
+        for (const tool of resolvedStory.tools) manifold.registerTool(tool);
+        await manifold.start();
+        const result = await manifold.previewContext(resolvedStory.agent.agentId, resolvedStory.input);
+        await manifold.stop();
+        if (!cancelled) setResolved(result);
+      } catch (e) {
+        if (!cancelled) setError(e instanceof Error ? e.message : String(e));
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+    void run();
+    return () => { cancelled = true; };
+  }, [storyId, story]);
 
   if (!isCortexStory(story)) {
     return <div style={{ padding: 16, color: '#9ca3af' }}>No story.</div>;
@@ -123,24 +130,9 @@ export const PreviewContextTab: FC<Props> = ({ story }) => {
         no cost, no model.
       </div>
 
-      <button
-        type="button"
-        onClick={() => void compute()}
-        disabled={loading}
-        style={{
-          padding: '8px 14px',
-          background: loading ? '#9ca3af' : '#6366f1',
-          color: 'white',
-          border: 'none',
-          borderRadius: 6,
-          fontSize: 12,
-          fontWeight: 600,
-          cursor: loading ? 'wait' : 'pointer',
-          alignSelf: 'flex-start',
-        }}
-      >
-        {loading ? 'Building context…' : resolved ? 'Rebuild context' : 'Preview context'}
-      </button>
+      {loading && (
+        <div style={{ fontSize: 12, color: '#6b7280', fontStyle: 'italic' }}>Building context…</div>
+      )}
 
       {error !== undefined && (
         <div

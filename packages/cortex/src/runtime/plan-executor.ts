@@ -42,6 +42,7 @@ import type { StateStore } from '../store/types';
 import type { CortexError } from '../errors/cortex.errors';
 import { checkAgent, checkTool, type GateDecision } from './gate';
 import { makeError } from '../errors/cortex.errors';
+import { CortexTopics } from '../topics';
 
 // Forward declaration to avoid circular import. The tick loop in
 // execute.ts passes its own executeAgent function in here so the
@@ -89,7 +90,7 @@ const now = (): number => Date.now();
 
 const recordObservation = (bus: Bus, workflowId: string, observation: Observation): void => {
   bus.emit({
-    topic: 'cortex.observation.recorded',
+    topic: CortexTopics.observationRecorded,
     payload: observation,
     meta: { timestamp: now(), correlationId: workflowId, workflowId },
   });
@@ -220,14 +221,10 @@ const executeAskAgent = async (
       tick: input.tick,
     };
   }
-  // Sync sugar over the bus: emit a request event, then short-circuit
-  // through the registry via deps.delegate. The completion event is
-  // emitted by executeAgent itself (cortex.agent.completed).
-  deps.bus.emit({
-    topic: 'cortex.agent.execute.requested',
-    payload: { agentId: targetId, input: node.input, parentAgent: input.agentId },
-    meta: { timestamp: now(), correlationId: input.workflowId, workflowId: input.workflowId },
-  });
+  // Delegate through the bus. The delegate callback dispatches
+  // CortexTopics.executeRequested with its own correlationId and
+  // awaits the completion — the manifold's execution handler picks
+  // it up. No direct emit here; the delegate owns the dispatch.
   const result = await deps.delegate({
     agentId: targetId,
     input: node.input,

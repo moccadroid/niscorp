@@ -31,6 +31,8 @@ import type { Observation, ActionPlan, ContentChunk } from '../schemas';
 import type { StateStore } from '../store/types';
 import { runToolLoop, type ToolLoopResult } from '../tool-loop/loop';
 import { parseTextOutput, parseStructuredOutput, parsePlanOutput, trustAgentReturn } from './output-parser';
+import { CortexTopics } from '../topics';
+import { newCorrelationId } from '../utils/id';
 import { systemProducer } from '../context/producers/system.producer';
 import { inputProducer } from '../context/producers/input.producer';
 import { toolsProducer } from '../context/producers/tools.producer';
@@ -288,7 +290,7 @@ const runWithRetries = async <T>(
 
     failed.push({ attempt, rawContent: raw.loop.content, error: parsed.error });
     deps.bus.emit({
-      topic: 'cortex.agent.retry',
+      topic: CortexTopics.agentRetry,
       payload: {
         agentId: agent.agentId,
         workflowId,
@@ -321,21 +323,21 @@ export const executeAgent = async <T>(
   const ctx = { agentId: agent.agentId, workflowId };
 
   deps.bus.emit({
-    topic: 'cortex.agent.invoked',
+    topic: CortexTopics.agentInvoked,
     payload: { agentId: agent.agentId, input },
     meta: { timestamp: Date.now(), correlationId: workflowId, workflowId },
   });
 
   const emitFinalError = (error: CortexError): void => {
     deps.bus.emit({
-      topic: 'cortex.error',
+      topic: CortexTopics.error,
       payload: error,
       meta: { timestamp: Date.now(), correlationId: workflowId, workflowId },
     });
   };
   const emitCompleted = (output: unknown): void => {
     deps.bus.emit({
-      topic: 'cortex.agent.completed',
+      topic: CortexTopics.agentCompleted,
       payload: { agentId: agent.agentId, output },
       meta: { timestamp: Date.now(), correlationId: workflowId, workflowId },
     });
@@ -395,22 +397,51 @@ export const executeAgent = async <T>(
   }
 
   // ─── plan mode: tick loop ─────────────────────────────────
-  const maxTicks = agent.config.maxToolIterations ?? DEFAULT_MAX_TICKS;
-  // Note: maxToolIterations is reused as a per-call cap inside the
-  // tool loop AND as the outer tick cap unless agent specifies its own.
-  // (This is a small Phase B simplification — DESIGN.md §6.3 calls for
-  // separate caps; we'll split them in Phase C if it matters.)
+  // maxTicks and maxToolIterations are now separate caps:
+  //   maxTicks (default 20) = outer tick loop (plan mode only)
+  //   maxToolIterations (default 10) = inner tool loop (per agent call)
+  const maxTicks = agent.config.maxTicks ?? DEFAULT_MAX_TICKS;
 
-  // Delegation callback for ask_agent: recursively invoke executeAgent.
-  const delegate: ExecuteAgentForDelegation = async ({ agentId, input: subInput, workflowId: wf }) => {
-    const target = deps.registry.requireAgent(agentId);
-    const subResult = await executeAgent<unknown>(deps, {
-      agent: target,
-      input: subInput,
-      workflowId: wf,
+  // Delegation callback for ask_agent: dispatch through the bus so
+  // the specialist runs through the same event-based substrate as
+  // a top-level manifold.execute(). Interceptors (Phase C) will see
+  // this dispatch and can modify/abort before the handler runs.
+  // Each delegation gets its own correlationId so completions route
+  // back to exactly this waitFor, not to the parent or any sibling.
+  const delegate: ExecuteAgentForDelegation = async ({ agentId: targetId, input: subInput, workflowId: wf }) => {
+    const subCorrelationId = newCorrelationId();
+    // Subscribe BEFORE dispatching — the handler may resolve
+    // synchronously (e.g. an agent that returns immediately).
+    const completionPromise = deps.bus.waitFor('cortex.execute.*', {
+      filter: (e) =>
+        e.meta.correlationId === subCorrelationId &&
+        (e.topic === CortexTopics.executeCompleted || e.topic === CortexTopics.executeFailed),
+      timeoutMs: 60_000,
     });
-    if (!subResult.ok) return { ok: false, error: subResult.error };
-    return { ok: true, data: subResult.data };
+    deps.bus.dispatch(
+      CortexTopics.executeRequested,
+      { agentId: targetId, input: subInput, workflowId: wf },
+      { correlationId: subCorrelationId, workflowId: wf },
+    );
+    try {
+      const completion = await completionPromise;
+      if (completion.topic === CortexTopics.executeFailed) {
+        const payload = completion.payload as { error: CortexError };
+        return { ok: false, error: payload.error };
+      }
+      const payload = completion.payload as { result: Result<unknown> };
+      if (!payload.result.ok) return { ok: false, error: payload.result.error };
+      return { ok: true, data: payload.result.data };
+    } catch (e) {
+      return {
+        ok: false,
+        error: makeError(
+          'timeout',
+          `ask_agent delegation to '${targetId}' timed out or was aborted`,
+          { agentId: targetId, workflowId: wf, cause: e },
+        ),
+      };
+    }
   };
 
   const carriedObservations: Observation[] = [];
@@ -418,7 +449,7 @@ export const executeAgent = async <T>(
   while (currentTick < maxTicks) {
     deps.ledger.addTick(workflowId);
     deps.bus.emit({
-      topic: 'cortex.tick.started',
+      topic: CortexTopics.tickStarted,
       payload: { workflowId, tick: currentTick },
       meta: { timestamp: Date.now(), correlationId: workflowId, workflowId },
     });
@@ -439,7 +470,7 @@ export const executeAgent = async <T>(
     }
     const plan = planResultParsed.data;
     deps.bus.emit({
-      topic: 'cortex.plan.produced',
+      topic: CortexTopics.planProduced,
       payload: { workflowId, agentId: agent.agentId, plan },
       meta: { timestamp: Date.now(), correlationId: workflowId, workflowId },
     });
@@ -465,7 +496,7 @@ export const executeAgent = async <T>(
     );
     if (planResult.error) {
       deps.bus.emit({
-        topic: 'cortex.error',
+        topic: CortexTopics.error,
         payload: planResult.error,
         meta: { timestamp: Date.now(), correlationId: workflowId, workflowId },
       });
@@ -474,14 +505,14 @@ export const executeAgent = async <T>(
     for (const obs of planResult.observations) carriedObservations.push(obs);
 
     deps.bus.emit({
-      topic: 'cortex.tick.ended',
+      topic: CortexTopics.tickEnded,
       payload: { workflowId, tick: currentTick },
       meta: { timestamp: Date.now(), correlationId: workflowId, workflowId },
     });
 
     if (planResult.finalized) {
       deps.bus.emit({
-        topic: 'cortex.agent.completed',
+        topic: CortexTopics.agentCompleted,
         payload: { agentId: agent.agentId, output: planResult.finalResult },
         meta: { timestamp: Date.now(), correlationId: workflowId, workflowId },
       });
@@ -496,7 +527,7 @@ export const executeAgent = async <T>(
     { agentId: agent.agentId, workflowId },
   );
   deps.bus.emit({
-    topic: 'cortex.error',
+    topic: CortexTopics.error,
     payload: error,
     meta: { timestamp: Date.now(), correlationId: workflowId, workflowId },
   });

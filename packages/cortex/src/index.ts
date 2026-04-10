@@ -164,6 +164,9 @@ export type {
   ReadonlyLedger,
 } from './types';
 
+// System event topics
+export { CortexTopics, type CortexTopic } from './topics';
+
 // Utils
 export { matchesTopic, compileTopicPattern } from './utils/wildcard';
 export { newWorkflowId, newCorrelationId, newRunId, newEventId } from './utils/id';
