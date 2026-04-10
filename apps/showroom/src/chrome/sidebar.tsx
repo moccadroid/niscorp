@@ -79,8 +79,11 @@ export const Sidebar: FC<Props> = ({
     <aside
       style={{
         width: 240,
+        flexShrink: 0,
+        alignSelf: 'stretch',
+        minHeight: '100%',
         background: '#f3f4f6',
-        overflow: 'auto',
+        overflowY: 'auto',
         padding: '12px 0',
         fontSize: 13,
       }}

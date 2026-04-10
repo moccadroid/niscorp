@@ -30,12 +30,13 @@ If that sounds austere: good.
 
 ## Packages
 
-Five libraries. Each one is self-sufficient. They also compose.
+Six libraries. Each one is self-sufficient. They also compose.
 
 | | Package | Description | Status |
 |---|---|---|---|
-| 🎨 | [**`@niscorp/nova`**](packages/nova)     | Declarative UI runtime — JSON layouts, actions, lifecycles, two-way bindings. Framework-agnostic core, React adapter shipped. | ![](https://img.shields.io/badge/-shipping-22c55e?style=flat-square) |
 | 💎 | [**`@niscorp/prism`**](packages/prism)   | JSON data-transformation DSL — ~50 ops, compile-time optimization, fingerprint-keyed cache, zero code execution. | ![](https://img.shields.io/badge/-shipping-22c55e?style=flat-square) |
+| 🧊 | [**`@niscorp/solid`**](packages/solid)   | Structured output streaming — incremental JSON parser with structural sharing. Always-valid, schema-backed object stream over partial JSON. | ![](https://img.shields.io/badge/-shipping-22c55e?style=flat-square) |
+| 🎨 | [**`@niscorp/nova`**](packages/nova)     | Declarative UI runtime — JSON layouts, actions, lifecycles, two-way bindings. Framework-agnostic core, React adapter shipped. | ![](https://img.shields.io/badge/-shipping-22c55e?style=flat-square) |
 | 📡 | [**`@niscorp/signal`**](packages/signal) | Universal LLM client — stateless, immutable, provider-agnostic. Structured output via Zod, tool calling, validation-retry. | ![](https://img.shields.io/badge/-shipping-22c55e?style=flat-square) |
 | 🧠 | [**`@niscorp/cortex`**](packages/cortex) | Agentic orchestration runtime — agents emit ActionPlans, runtime executes them under policy gates and budget caps. | ![](https://img.shields.io/badge/-design-f59e0b?style=flat-square) |
 | 🔍 | [**`@niscorp/vex`**](packages/vex)       | Declarative query synthesis — English → constrained JSON DSL → SQL, with scope policies and shape-based caching. | ![](https://img.shields.io/badge/-design-f59e0b?style=flat-square) |
@@ -134,8 +135,9 @@ pnpm --filter @niscorp/nova dev      # tsup --watch
 ```
 niscorp/
 ├── packages/
-│   ├── nova/       🎨  declarative UI runtime
 │   ├── prism/      💎  JSON transform DSL
+│   ├── solid/      🧊  structured output streaming
+│   ├── nova/       🎨  declarative UI runtime
 │   ├── signal/     📡  universal LLM client
 │   ├── cortex/     🧠  agentic orchestration
 │   └── vex/        🔍  query synthesis
@@ -149,7 +151,7 @@ niscorp/
 
 Nisc is **pre-1.0** and under active design.
 
-- **Shipping packages** (Nova, Prism, Signal) are tested and usable, but their public APIs are not frozen. Pin exact versions; expect to update.
+- **Shipping packages** (Prism, Solid, Nova, Signal) are tested and usable, but their public APIs are not frozen. Pin exact versions; expect to update.
 - **Design-only packages** (Cortex, Vex) have thorough `DESIGN.md` documents and stub source files. Read the architecture; don't expect runnable code yet.
 - Breaking changes land without ceremony until each package hits 1.0.
 

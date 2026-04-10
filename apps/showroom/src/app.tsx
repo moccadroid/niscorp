@@ -13,8 +13,9 @@ type LibraryDef = {
 };
 
 const LIBRARIES: LibraryDef[] = [
-  { id: 'nova', name: 'Nova', load: async () => (await import('./modules/nova')).novaModule },
   { id: 'prism', name: 'Prism', load: async () => (await import('./modules/prism')).prismModule },
+  { id: 'solid', name: 'Solid', load: async () => (await import('./modules/solid')).solidModule },
+  { id: 'nova', name: 'Nova', load: async () => (await import('./modules/nova')).novaModule },
   { id: 'signal', name: 'Signal', load: async () => (await import('./modules/signal')).signalModule },
   { id: 'cortex', name: 'Cortex', load: async () => (await import('./modules/cortex')).cortexModule },
 ];
@@ -113,7 +114,7 @@ export const App: FC = () => {
   const Runner = active.Runner;
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', width: '100vw' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh', width: '100vw' }}>
       <LibrarySwitcher
         libraries={LIBRARY_TABS}
         activeId={activeLibraryId}
