@@ -20,7 +20,8 @@ export const ChromeInspector: FC<Props> = ({ tabs }) => {
   return (
     <aside
       style={{
-        width: 360,
+        width: 'max(420px, calc((100vw - 240px) * 0.4))',
+        flexShrink: 0,
         background: '#fafafa',
         overflow: 'auto',
         display: 'flex',

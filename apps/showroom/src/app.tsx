@@ -3,7 +3,7 @@ import { Sidebar as ChromeSidebar, type SidebarDoc } from './chrome/sidebar';
 import { CanvasPane as ChromeCanvasPane } from './chrome/canvas-pane';
 import { ChromeInspector, type InspectorTabDef } from './chrome/inspector';
 import { LibrarySwitcher, type Library } from './chrome/library-switcher';
-import { MarkdownPane } from './chrome/markdown-pane';
+import { DocPane } from './chrome/doc-pane';
 import type { DocPage, LibraryModule, SidebarStoryEntry, StatusMap } from './modules/types';
 
 type LibraryDef = {
@@ -15,6 +15,8 @@ type LibraryDef = {
 const LIBRARIES: LibraryDef[] = [
   { id: 'nova', name: 'Nova', load: async () => (await import('./modules/nova')).novaModule },
   { id: 'prism', name: 'Prism', load: async () => (await import('./modules/prism')).prismModule },
+  { id: 'signal', name: 'Signal', load: async () => (await import('./modules/signal')).signalModule },
+  { id: 'cortex', name: 'Cortex', load: async () => (await import('./modules/cortex')).cortexModule },
 ];
 
 const LIBRARY_TABS: Library[] = LIBRARIES.map((l) => ({ id: l.id, name: l.name }));
@@ -62,12 +64,20 @@ export const App: FC = () => {
   useEffect(() => {
     if (active === undefined) return;
     let cancelled = false;
-    void active.evaluateAll(active.stories).then((map) => {
-      if (cancelled) return;
-      setStatusMap(map);
-    });
+    const refresh = (): void => {
+      void active.evaluateAll(active.stories).then((map) => {
+        if (cancelled) return;
+        setStatusMap(map);
+      });
+    };
+    refresh();
+    // If the library publishes a status-change subscription (e.g.
+    // Cortex's localStorage-backed run history), wire it up so the
+    // sidebar dots update without a manual refresh.
+    const unsubscribe = active.subscribeStatusChange?.(refresh);
     return (): void => {
       cancelled = true;
+      unsubscribe?.();
     };
   }, [active]);
 
@@ -121,10 +131,10 @@ export const App: FC = () => {
           docs={sidebarDocs}
         />
         {activeDocPage !== undefined ? (
-          // Doc mode: full-width canvas with rendered markdown, no inspector.
-          <div style={{ flex: 1, overflow: 'auto', background: '#ffffff' }}>
-            <MarkdownPane title={activeDocPage.title} content={activeDocPage.content} />
-          </div>
+          // Doc mode: full-width canvas with rendered markdown OR an
+          // interactive functional page (playground, settings, etc.).
+          // No inspector either way.
+          <DocPane page={activeDocPage} />
         ) : (
           <RuntimeProvider>
             <ChromeCanvasPane

@@ -3,6 +3,7 @@ import type {
   Message, ContentPart, Tool, SignalOptions, Capabilities,
   SignalResult, SignalMeta, StreamEvent,
   ProviderAdapter, ProviderRequest, ProviderResponse,
+  StepRequest, StepResult, StepToolCall, StepInputMessage, CountInput,
 } from './types';
 import type { SignalConfig, CustomProviderConfig } from './config';
 import { SignalError, ErrorCode } from './errors';
@@ -37,6 +38,16 @@ export type Signal<T = string> = {
   // Execution
   complete: (input: string | ContentPart[]) => Promise<SignalResult<T>>;
   stream: (input: string | ContentPart[]) => AsyncIterable<StreamEvent<T>>;
+
+  // ─── Low-level primitives ─────────────────────────────────
+  // step(): one model call, no auto tool execution. The caller
+  // owns the loop. Used by @niscorp/cortex which runs its own
+  // tool loop with policy gating, ledger attribution, and
+  // observation per call.
+  step: (request: StepRequest) => Promise<StepResult>;
+  // count(): rough token count for an input. Currently a heuristic;
+  // will become provider-aware once tokenizer integration lands.
+  count: (input: CountInput) => Promise<number>;
 };
 
 // ═══════════════════════════════════════════════════════════
@@ -321,6 +332,77 @@ const createSignalFromConfig = <T = string>(config: SignalConfig): Signal<T> => 
 
     stream: (_input) => {
       throw new SignalError('Streaming is not yet implemented', ErrorCode.PROVIDER_ERROR);
+    },
+
+    // ─── Low-level: single adapter call, no tool execution ───
+    step: async (request: StepRequest): Promise<StepResult> => {
+      const adapter = await getAdapter();
+      const resolved = resolveProvider(config);
+      const messages = request.messages.slice() as Message[];
+      const providerTools = request.tools && request.tools.length > 0
+        ? request.tools.map((tool) => ({
+            type: 'function' as const,
+            function: {
+              name: tool.name,
+              description: tool.description,
+              parameters: tool.parameters,
+            },
+          }))
+        : undefined;
+      const providerRequest: ProviderRequest = {
+        model: resolved.model,
+        messages,
+        ...(providerTools && { tools: providerTools }),
+        ...(request.options !== undefined && { options: request.options }),
+      };
+      const response: ProviderResponse = await adapter.chat(providerRequest);
+      const toolCalls: StepToolCall[] = (response.toolCalls ?? []).map((call) => {
+        let parsed: unknown = call.args;
+        if (typeof call.args === 'string') {
+          try {
+            parsed = JSON.parse(call.args);
+          } catch {
+            // Leave args as the raw string if it isn't valid JSON.
+            parsed = call.args;
+          }
+        }
+        return { id: call.id, name: call.name, args: parsed };
+      });
+      return {
+        content: response.content,
+        toolCalls,
+        usage: response.usage,
+        finishReason: response.finishReason,
+        raw: response.raw,
+      };
+    },
+
+    // ─── Low-level: token counting (heuristic) ───────────────
+    count: async (input: CountInput): Promise<number> => {
+      // Heuristic: ~4 characters per token, plus a small per-message
+      // overhead for structured inputs. This will be replaced with a
+      // provider-aware tokenizer in a follow-up.
+      const CHARS_PER_TOKEN = 4;
+      if (typeof input === 'string') {
+        return Math.ceil(input.length / CHARS_PER_TOKEN);
+      }
+      let total = 0;
+      for (const msg of input) {
+        total += 4; // per-message overhead
+        if (typeof msg.content === 'string') {
+          total += Math.ceil(msg.content.length / CHARS_PER_TOKEN);
+          continue;
+        }
+        for (const part of msg.content) {
+          if (part.type === 'text') {
+            total += Math.ceil(part.text.length / CHARS_PER_TOKEN);
+          } else {
+            // Image: rough placeholder.
+            total += 256;
+          }
+        }
+      }
+      return total;
     },
   };
 };

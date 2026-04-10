@@ -15,6 +15,7 @@ export { SignalError, ErrorCode } from './errors';
 // Types
 export type {
   Message,
+  AssistantToolCall,
   ContentPart,
   ImageSource,
   Tool,
@@ -26,6 +27,13 @@ export type {
   SignalMeta,
   StreamEvent,
   ProviderError,
+  // Step API (single model call, no auto tool execution)
+  StepRequest,
+  StepResult,
+  StepToolCall,
+  StepToolDescriptor,
+  StepInputMessage,
+  CountInput,
 } from './types';
 
 export type { SignalConfig, CustomProviderConfig } from './config';

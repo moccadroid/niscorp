@@ -48,7 +48,10 @@ const injectSchemaIntoSystemPrompt = (
   messages: ProviderRequest['messages'],
   jsonSchema: Record<string, unknown>,
 ): ProviderRequest['messages'] => {
-  const schemaInstruction = `\n\nYou MUST respond with valid JSON matching this schema:\n${JSON.stringify(jsonSchema, null, 2)}`;
+  // Minified: this string ships in the system prompt of every call
+  // that uses the unified-schema fallback strategy. Pretty-printing
+  // roughly doubles the token count for zero benefit.
+  const schemaInstruction = `\n\nYou MUST respond with valid JSON matching this schema:\n${JSON.stringify(jsonSchema)}`;
   const [first, ...rest] = messages;
   if (first?.role === 'system') {
     return [{ ...first, content: `${first.content}${schemaInstruction}` }, ...rest];

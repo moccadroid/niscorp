@@ -49,10 +49,13 @@ export const buildUnifiedJsonSchema = (
 // System Prompt Injection
 // ═══════════════════════════════════════════════════════════
 
+// Schemas are minified — they ship in the system prompt of every
+// call that uses the unified-schema fallback strategy. Pretty-printing
+// roughly doubles the token count for zero benefit.
 const buildToolDescriptions = (tools: Tool[]): string =>
   tools.map((t) => {
     const schema = z.toJSONSchema(t.inputSchema, { target: 'draft-7' });
-    return `### ${t.name}\n${t.description}\nParameters: ${JSON.stringify(schema, null, 2)}`;
+    return `### ${t.name}\n${t.description}\nParameters: ${JSON.stringify(schema)}`;
   }).join('\n\n');
 
 export const buildSystemPromptAddition = (
@@ -75,7 +78,7 @@ export const buildSystemPromptAddition = (
 
   if (outputSchema) {
     const schema = z.toJSONSchema(outputSchema, { target: 'draft-7' });
-    addition += `\nYour final response must match this schema:\n${JSON.stringify(schema, null, 2)}\n`;
+    addition += `\nYour final response must match this schema:\n${JSON.stringify(schema)}\n`;
   }
 
   return addition;

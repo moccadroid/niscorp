@@ -18,6 +18,16 @@
         "types": "./dist/index.d.cts",
         "default": "./dist/index.cjs"
       }
+    },
+    "./agent": {
+      "import": {
+        "types": "./dist/agent.d.ts",
+        "default": "./dist/agent.js"
+      },
+      "require": {
+        "types": "./dist/agent.d.cts",
+        "default": "./dist/agent.cjs"
+      }
     }
   },
   "publishConfig": {
@@ -61,12 +71,19 @@
     "node": ">=18.18.0"
   },
   "peerDependencies": {
+    "@niscorp/cortex": "workspace:*",
     "zod": "^4.0.0"
+  },
+  "peerDependenciesMeta": {
+    "@niscorp/cortex": {
+      "optional": true
+    }
   },
   "dependencies": {
     "dayjs": "^1.11.20"
   },
   "devDependencies": {
+    "@niscorp/cortex": "workspace:*",
     "tsup": "^8.5.1",
     "vitest": "^4.1.2",
     "zod": "^4.3.6"

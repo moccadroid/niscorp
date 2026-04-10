@@ -12,10 +12,27 @@ export type ContentPart =
   | { type: 'text'; text: string }
   | { type: 'image'; source: ImageSource };
 
+// A tool call attached to an assistant message. Mirrors the OpenAI
+// chat-completion `tool_calls` shape: each call has an id (used to
+// reference back from a later 'tool' message), the function name,
+// and a JSON-stringified arguments payload.
+export type AssistantToolCall = {
+  id: string;
+  name: string;
+  // OpenAI-format tool calls carry arguments as a JSON string. We
+  // keep that contract so adapters can pass them straight through
+  // without re-stringifying.
+  args: string;
+};
+
 export type Message =
   | { role: 'system'; content: string }
   | { role: 'user'; content: string | ContentPart[] }
-  | { role: 'assistant'; content: string }
+  // Assistant messages may carry tool calls when the model wants to
+  // invoke tools. Both `content` and `toolCalls` are present together
+  // when the model returns text alongside tool calls; tool-call-only
+  // turns have empty content but a non-empty toolCalls array.
+  | { role: 'assistant'; content: string; toolCalls?: AssistantToolCall[] }
   | { role: 'tool'; toolCallId: string; name: string; content: string };
 
 // ═══════════════════════════════════════════════════════════
@@ -99,6 +116,71 @@ export type SignalResult<T> = {
   history: Message[];
   meta: SignalMeta;
 };
+
+// ═══════════════════════════════════════════════════════════
+// Step API — single model call, no auto tool execution
+// ═══════════════════════════════════════════════════════════
+//
+// Used by callers (notably @niscorp/cortex) that want to own the
+// tool loop themselves. signal.step() runs ONE adapter call and
+// returns the model's raw output, including any tool calls the
+// model wants to make. The caller is responsible for executing
+// tool calls and feeding results back via subsequent step() calls.
+
+export type StepToolCall = {
+  id: string;
+  name: string;
+  // Parsed JSON object — Signal converts the provider's stringified
+  // arguments into a typed value before returning. Callers should
+  // still validate against their tool's input schema.
+  args: unknown;
+};
+
+export type StepInputMessage =
+  | Message
+  | {
+      role: 'tool';
+      toolCallId: string;
+      name: string;
+      content: string;
+    };
+
+// A tool descriptor for step(). Note: NO `execute` field — step() never
+// runs tools, it only describes them to the model. The caller owns the
+// loop and is responsible for executing whatever the model asks for.
+export type StepToolDescriptor = {
+  name: string;
+  description: string;
+  // JSON Schema for the tool's input. Use z.toJSONSchema() if you have
+  // a Zod schema; pass any draft-07-compatible object otherwise.
+  parameters: Record<string, unknown>;
+};
+
+export type StepRequest = {
+  messages: ReadonlyArray<StepInputMessage>;
+  tools?: ReadonlyArray<StepToolDescriptor>;
+  // Force tool selection. 'auto' (default), 'none', or a specific tool name.
+  toolChoice?: 'auto' | 'none' | { name: string };
+  options?: SignalOptions;
+};
+
+export type StepResult = {
+  content: string;
+  toolCalls: StepToolCall[];
+  usage: {
+    inputTokens: number;
+    outputTokens: number;
+    totalTokens: number;
+  };
+  finishReason: string;
+  raw: unknown;
+};
+
+// ═══════════════════════════════════════════════════════════
+// Token counting
+// ═══════════════════════════════════════════════════════════
+
+export type CountInput = string | ReadonlyArray<StepInputMessage>;
 
 // ═══════════════════════════════════════════════════════════
 // Stream Events

@@ -65,6 +65,23 @@ export type LayoutRenderer = {
 - `.describe()` on schemas and fields that will be consumed by LLMs or generate JSON Schema. Not on every internal helper schema.
 - `safeParse` at boundaries (user input, API responses, LLM output). `parse` inside trusted code where failure means a bug.
 
+### Never pretty-print JSON inside prompts
+
+When embedding JSON (a schema, an example, a tool descriptor) into an LLM prompt, **always minify**. `JSON.stringify(value)` — no `null, 2`. Pretty-printing roughly doubles the token count for no benefit: the model parses minified JSON exactly as well, and the cost is paid on every call.
+
+Pretty-printing is fine when the destination is a human (debug output, logs, the showroom inspector). For prompts, minify. If you genuinely need both — say, a `debug` flag that pretty-prints — name it explicitly and default to minified.
+
+### Schemas are the single source of truth for LLM agents
+
+When an LLM agent produces or consumes a typed shape, **the Zod schema is the one source of truth**. Do not duplicate schema knowledge into system prompts.
+
+- **Every constraint goes on the Zod field via `.describe()`**: format rules, syntactic gotchas, examples, what each variant means. If a `$ref` field requires JSONPath syntax starting with `$.`, the `.describe()` says so. If a template uses `{{double}}` braces, the `.describe()` says so. The schema teaches the model how to fill it in.
+- **Inject the JSON Schema at runtime**: agent system prompts use `z.toJSONSchema(schema, { target: 'draft-7' })` and embed the result. The system prompt itself stays minimal — agent role, output envelope, a placeholder where the schema lands, and one short worked example at most.
+- **Never write a "here is how the DSL works" prose section in the system prompt.** Never maintain a hand-curated operations list alongside the schema. Both will drift from the schema and silently produce broken output. The author has been burned by this.
+- **Apply this to all packages.** Cortex agents, Signal agents, future Vex agents, anything that talks to a model with a typed contract. The schema is the contract; the prompt is the convener.
+
+The reason for the schemas in the first place is that the system becomes self-explanatory and we have ONE source of truth. Code that violates this is wrong — fix the schema's `.describe()` calls, not the prompt.
+
 ---
 
 ## Unused Parameters

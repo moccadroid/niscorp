@@ -62,8 +62,24 @@ const translateMessage = (msg: Message): OpenAIMessage => {
           ? msg.content
           : translateContentParts(msg.content),
       };
-    case 'assistant':
-      return { role: 'assistant', content: msg.content };
+    case 'assistant': {
+      // Assistant messages may carry tool calls. When they do, the
+      // OpenAI API expects them in the `tool_calls` field of the
+      // message and `content` MAY be empty (some models return both).
+      // Each subsequent `tool` message references one of these calls
+      // by `tool_call_id`. This is the standard OpenAI tool-calling
+      // contract — Cortex's tool loop relies on it for multi-step
+      // tool use to actually work without hallucination.
+      const out: OpenAIMessage = { role: 'assistant', content: msg.content };
+      if (msg.toolCalls && msg.toolCalls.length > 0) {
+        out.tool_calls = msg.toolCalls.map((tc) => ({
+          id: tc.id,
+          type: 'function',
+          function: { name: tc.name, arguments: tc.args },
+        }));
+      }
+      return out;
+    }
     case 'tool':
       return { role: 'tool', content: msg.content, tool_call_id: msg.toolCallId };
     default:
