@@ -1,4 +1,4 @@
-import type { ProviderAdapter, ProviderRequest, ProviderResponse, Message, ContentPart } from '../types';
+import type { ProviderAdapter, ProviderRequest, ProviderResponse, ProviderStreamDelta, Message, ContentPart } from '../types';
 import { SignalError, ErrorCode } from '../errors';
 import { loadSdk } from '../utils/sdk-loader';
 
@@ -34,6 +34,27 @@ type OpenAICompletion = {
 };
 
 type ChatCreateFn = (params: Record<string, unknown>) => Promise<OpenAICompletion>;
+
+type OpenAIStreamChunk = {
+  choices?: Array<{
+    delta?: {
+      content?: string | null;
+      tool_calls?: Array<{
+        index: number;
+        id?: string;
+        function?: { name?: string; arguments?: string };
+      }>;
+    };
+    finish_reason?: string | null;
+  }>;
+  usage?: {
+    prompt_tokens?: number;
+    completion_tokens?: number;
+    total_tokens?: number;
+  };
+};
+
+type OpenAIStream = AsyncIterable<OpenAIStreamChunk>;
 
 // ═══════════════════════════════════════════════════════════
 // Message Translation
@@ -139,26 +160,27 @@ export const createOpenAICompatibleAdapter = async (
 ): Promise<ProviderAdapter> => {
   const chatCreate = await loadChatCreateFn(config);
 
-  const chat = async (request: ProviderRequest): Promise<ProviderResponse> => {
-    const messages = request.messages.map(translateMessage);
-
+  const buildParams = (request: ProviderRequest): Record<string, unknown> => {
     const params: Record<string, unknown> = {
       model: request.model,
-      messages,
+      messages: request.messages.map(translateMessage),
     };
-
     if (request.responseFormat) {
       params['response_format'] = request.responseFormat.type === 'json_schema'
         ? { type: 'json_schema', json_schema: request.responseFormat.jsonSchema }
         : { type: 'json_object' };
     }
-
     if (request.tools?.length) params['tools'] = request.tools;
     if (request.options?.temperature !== undefined) params['temperature'] = request.options.temperature;
     if (request.options?.maxTokens !== undefined) params['max_completion_tokens'] = request.options.maxTokens;
     if (request.options?.topP !== undefined) params['top_p'] = request.options.topP;
     if (request.options?.stopSequences) params['stop'] = request.options.stopSequences;
     if (request.options?.seed !== undefined) params['seed'] = request.options.seed;
+    return params;
+  };
+
+  const chat = async (request: ProviderRequest): Promise<ProviderResponse> => {
+    const params = buildParams(request);
 
     let completion: OpenAICompletion;
     try {
@@ -192,7 +214,53 @@ export const createOpenAICompatibleAdapter = async (
     };
   };
 
-  return { id: 'openai-compatible', chat };
+  async function* chatStream(request: ProviderRequest): AsyncIterable<ProviderStreamDelta> {
+    const params = buildParams(request);
+    params['stream'] = true;
+    params['stream_options'] = { include_usage: true };
+
+    let sseStream: OpenAIStream;
+    try {
+      sseStream = await chatCreate(params) as unknown as OpenAIStream;
+    } catch (error) {
+      throw new SignalError(
+        `Provider stream error: ${error instanceof Error ? error.message : String(error)}`,
+        ErrorCode.PROVIDER_ERROR,
+        { raw: error },
+      );
+    }
+
+    for await (const chunk of sseStream) {
+      const choice = chunk.choices?.[0];
+      if (choice?.delta?.content) {
+        yield { type: 'text', text: choice.delta.content };
+      }
+      if (choice?.delta?.tool_calls) {
+        for (const tc of choice.delta.tool_calls) {
+          yield {
+            type: 'tool_call',
+            index: tc.index,
+            id: tc.id,
+            name: tc.function?.name,
+            argsFragment: tc.function?.arguments,
+          };
+        }
+      }
+      if (chunk.usage) {
+        yield {
+          type: 'usage',
+          inputTokens: chunk.usage.prompt_tokens ?? 0,
+          outputTokens: chunk.usage.completion_tokens ?? 0,
+          totalTokens: chunk.usage.total_tokens ?? 0,
+        };
+      }
+      if (choice?.finish_reason) {
+        yield { type: 'finish', finishReason: choice.finish_reason };
+      }
+    }
+  }
+
+  return { id: 'openai-compatible', chat, chatStream };
 };
 
 // ═══════════════════════════════════════════════════════════

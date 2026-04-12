@@ -1,4 +1,5 @@
 import type { z } from 'zod';
+import type { ValidationMode, ConstraintsMode } from '@niscorp/solid';
 
 // ═══════════════════════════════════════════════════════════
 // Solid story types
@@ -20,6 +21,12 @@ export type StreamDemoStory = {
     delayMs: number;
     tokensPerSecond?: number;
     selectPaths?: string[];
+    // Validation story knobs
+    mode?: ValidationMode;
+    constraints?: ConstraintsMode;
+    // If set, the runner exposes a mode switcher so the user can flip
+    // between trust / recover / strict on the same JSON payload.
+    showModeSwitcher?: boolean;
   };
   code?: string;
   expected?: {

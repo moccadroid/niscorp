@@ -5,6 +5,10 @@ import { selectApiStory } from './stories/select-api';
 import { subtreeFinalizationStory } from './stories/subtree-finalization';
 import { destroyMidstreamStory } from './stories/destroy-midstream';
 import { performanceStory } from './stories/performance';
+import { hallucinatedFieldsStory } from './stories/hallucinated-fields';
+import { strictHaltStory } from './stories/strict-halt';
+import { finalizeConstraintsStory } from './stories/finalize-constraints';
+import { scopedErrorsStory } from './stories/scoped-errors';
 import type { StreamDemoStory } from './story-types';
 
 export const stories: readonly StreamDemoStory[] = [
@@ -15,4 +19,8 @@ export const stories: readonly StreamDemoStory[] = [
   subtreeFinalizationStory,
   destroyMidstreamStory,
   performanceStory,
+  hallucinatedFieldsStory,
+  strictHaltStory,
+  finalizeConstraintsStory,
+  scopedErrorsStory,
 ];

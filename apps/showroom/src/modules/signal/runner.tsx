@@ -1,12 +1,11 @@
 import type { FC } from 'react';
+import { isStreamStory } from './story-types';
 import { RecipeRunner } from './runners/recipe-runner';
-
-// ═══════════════════════════════════════════════════════════
-// Runner — discriminator. Signal currently has one story kind
-// (recipe), so this is a thin passthrough. Kept as a separate
-// file to mirror the nova/prism module shape.
-// ═══════════════════════════════════════════════════════════
+import { StreamRunner } from './runners/stream-runner';
 
 type Props = { story: unknown };
 
-export const Runner: FC<Props> = ({ story }) => <RecipeRunner story={story} />;
+export const Runner: FC<Props> = ({ story }) => {
+  if (isStreamStory(story)) return <StreamRunner story={story} />;
+  return <RecipeRunner story={story} />;
+};

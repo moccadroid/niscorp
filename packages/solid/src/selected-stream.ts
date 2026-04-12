@@ -1,4 +1,4 @@
-import type { Stream, Listener, FinalState, SelectedStreamDeps } from './types';
+import type { Stream, Listener, FinalState, SelectedStreamDeps, StreamError } from './types';
 import { createPendingFinal } from './types';
 import { splitPath, getByPath, resolvePath } from './path';
 
@@ -10,6 +10,7 @@ export const createSelectedStream = <P>(deps: SelectedStreamDeps): Stream<P> => 
   const segments = splitPath(deps.path);
   const listeners = new Set<Listener<P>>();
   const finalListeners = new Set<Listener<P>>();
+  const errorListeners = new Set<(error: StreamError) => void>();
   let finalState: FinalState<P> = createPendingFinal<P>();
   let lastEmitted: { hasValue: false } | { hasValue: true; value: P } = { hasValue: false };
   let isDestroyed = false;
@@ -71,6 +72,12 @@ export const createSelectedStream = <P>(deps: SelectedStreamDeps): Stream<P> => 
     }
   });
 
+  const unsubError = deps.onRootError((err) => {
+    if (isDestroyed) return;
+    if (!coversPath(err.path, deps.path)) return;
+    for (const listener of errorListeners) listener(err);
+  });
+
   // ─── Public interface ───
 
   const current = (): P => project();
@@ -111,6 +118,12 @@ export const createSelectedStream = <P>(deps: SelectedStreamDeps): Stream<P> => 
     return () => { finalListeners.delete(listener); };
   };
 
+  const onError = (listener: (error: StreamError) => void): (() => void) => {
+    if (isDestroyed) return () => {};
+    errorListeners.add(listener);
+    return () => { errorListeners.delete(listener); };
+  };
+
   const select = <Q = unknown>(subPath: string): Stream<Q> =>
     deps.resolveSubSelect(resolvePath(deps.path, subPath)) as Stream<Q>;
 
@@ -119,15 +132,25 @@ export const createSelectedStream = <P>(deps: SelectedStreamDeps): Stream<P> => 
     isDestroyed = true;
     unsubChange();
     unsubFinalize();
+    unsubError();
     listeners.clear();
     finalListeners.clear();
+    errorListeners.clear();
     pendingImmediateFires.length = 0;
     if (!finalState.resolved) {
       finalState.reject(new Error('[solid] stream destroyed'));
     }
   };
 
-  return { write: () => {}, close: () => {}, destroy, current, final, on, onFinal, select };
+  return { write: () => {}, close: () => {}, destroy, current, final, on, onFinal, onError, select };
+};
+
+// An error at `errPath` is observed by a selection at `selPath` if
+// errPath === selPath or errPath is a descendant of selPath.
+const coversPath = (errPath: string, selPath: string): boolean => {
+  if (selPath === '') return true;
+  if (errPath === selPath) return true;
+  return errPath.startsWith(selPath + '.');
 };
 
 // ═══════════════════════════════════════════════════════════
@@ -145,5 +168,6 @@ export const createDeadStream = <P>(): Stream<P> => ({
   final: () => DEAD_REJECTION as Promise<P>,
   on: () => () => {},
   onFinal: () => () => {},
+  onError: () => () => {},
   select: <Q = unknown>() => createDeadStream<Q>(),
 });

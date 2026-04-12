@@ -63,6 +63,41 @@ export type RecipeStory = {
   structuredRender?: StructuredRender;
 };
 
+// ═══════════════════════════════════════════════════════════
+// Stream story shape — live streaming demo with signal.stream()
+// ═══════════════════════════════════════════════════════════
+
+export type StreamStory = {
+  id: string;
+  name: string;
+  description: string;
+  category: string;
+  kind: 'stream';
+  setup: {
+    provider: RecipeProvider;
+    model?: string;
+    systemPrompt?: string;
+    schema?: z.ZodTypeAny;
+    tools?: Tool[];
+    options?: SignalOptions;
+    input: string;
+  };
+  pitch?: RecipePitch;
+  code?: string;
+  // When set, the runner renders a live solid stream alongside
+  // the raw text stream, using this schema + initial for createStream.
+  solid?: {
+    schema: z.ZodTypeAny;
+    initial: unknown;
+    selectPaths?: string[];
+  };
+};
+
+export const isStreamStory = (value: unknown): value is StreamStory => {
+  if (value === null || typeof value !== 'object') return false;
+  return Reflect.get(value, 'kind') === 'stream';
+};
+
 export const isRecipeStory = (value: unknown): value is RecipeStory => {
   if (value === null || typeof value !== 'object') return false;
   if (Reflect.get(value, 'kind') !== 'recipe') return false;

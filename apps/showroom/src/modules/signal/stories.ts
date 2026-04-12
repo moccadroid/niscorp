@@ -1,4 +1,4 @@
-import type { RecipeStory } from './story-types';
+import type { RecipeStory, StreamStory } from './story-types';
 
 import { plainCompletionStory } from './stories/basics/plain-completion';
 import { systemPromptStory } from './stories/basics/system-prompt';
@@ -7,8 +7,11 @@ import { singleToolStory } from './stories/tools/single-tool';
 import { structuredOutputStory } from './stories/shaping/structured-output';
 import { uiCardStory } from './stories/shaping/ui-card';
 import { actionSuggestionsStory } from './stories/shaping/action-suggestions';
+import { textStreamStory } from './stories/streaming/text-stream';
+import { structuredStreamStory } from './stories/streaming/structured-stream';
+import { dashboardStreamStory } from './stories/streaming/dashboard-stream';
 
-export const stories: readonly RecipeStory[] = [
+export const stories: readonly (RecipeStory | StreamStory)[] = [
   plainCompletionStory,
   systemPromptStory,
   multiTurnStory,
@@ -16,4 +19,7 @@ export const stories: readonly RecipeStory[] = [
   structuredOutputStory,
   uiCardStory,
   actionSuggestionsStory,
+  textStreamStory,
+  structuredStreamStory,
+  dashboardStreamStory,
 ];

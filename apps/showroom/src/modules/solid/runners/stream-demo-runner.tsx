@@ -1,5 +1,5 @@
 import { type FC, useState, useRef, useCallback, useEffect } from 'react';
-import { createStream } from '@niscorp/solid';
+import { createStream, type StreamError, type ValidationMode } from '@niscorp/solid';
 import { isStreamDemoStory, type StreamDemoStory } from '../story-types';
 import { getPreview } from './previews';
 
@@ -35,19 +35,37 @@ const StreamDemo: FC<{ story: StreamDemoStory }> = ({ story }) => {
   const { demo, pitch } = story;
   const [state, setState] = useState<StreamState>('idle');
   const [speed, setSpeed] = useState<Speed>('real');
+  const [mode, setMode] = useState<ValidationMode>(demo.mode ?? 'recover');
   const [current, setCurrent] = useState<unknown>(demo.initial);
   const [chunksSent, setChunksSent] = useState(0);
   const [totalChunks, setTotalChunks] = useState(0);
   const [elapsedMs, setElapsedMs] = useState(0);
   const [pathStatuses, setPathStatuses] = useState<PathStatus[]>([]);
   const [rawProgress, setRawProgress] = useState(0);
+  const [errors, setErrors] = useState<StreamError[]>([]);
+  const [isFailed, setIsFailed] = useState(false);
   const cancelRef = useRef<(() => void) | null>(null);
 
   const start = useCallback(() => {
     cancelRef.current?.();
 
-    const stream = createStream({ schema: demo.schema, initial: demo.initial });
+    const stream = createStream({
+      schema: demo.schema,
+      initial: demo.initial,
+      mode,
+      ...(demo.constraints !== undefined && { constraints: demo.constraints }),
+    });
     let cancelled = false;
+    const collectedErrors: StreamError[] = [];
+    setErrors([]);
+    setIsFailed(false);
+    setCurrent(demo.initial);
+
+    stream.onError((err) => {
+      collectedErrors.push(err);
+      setErrors([...collectedErrors]);
+      if (mode === 'strict') setIsFailed(true);
+    });
     let chunks = 0;
     const startTime = performance.now();
 
@@ -123,7 +141,7 @@ const StreamDemo: FC<{ story: StreamDemoStory }> = ({ story }) => {
       setTimeout(tick, delayMs);
     };
     tick();
-  }, [demo, speed]);
+  }, [demo, speed, mode]);
 
   useEffect(() => () => cancelRef.current?.(), []);
 
@@ -152,6 +170,10 @@ const StreamDemo: FC<{ story: StreamDemoStory }> = ({ story }) => {
 
         <SpeedSelector speed={speed} onChange={setSpeed} disabled={state === 'streaming'} />
 
+        {demo.showModeSwitcher && (
+          <ModeSelector mode={mode} onChange={setMode} disabled={state === 'streaming'} />
+        )}
+
         <Stats
           state={state}
           tokens={chunksSent}
@@ -160,6 +182,26 @@ const StreamDemo: FC<{ story: StreamDemoStory }> = ({ story }) => {
           progress={rawProgress}
         />
       </div>
+
+      {/* Failure banner */}
+      {isFailed && (
+        <div style={{
+          padding: '12px 16px',
+          marginBottom: 16,
+          background: '#fef2f2',
+          border: '1px solid #fecaca',
+          borderLeft: '4px solid #dc2626',
+          borderRadius: 6,
+          fontSize: 13,
+          color: '#991b1b',
+          fontWeight: 600,
+        }}>
+          Stream failed (strict mode) — no further updates will be applied.
+        </div>
+      )}
+
+      {/* Error log */}
+      {errors.length > 0 && <ErrorPanel errors={errors} />}
 
       {/* Progress bar */}
       {state !== 'idle' && (
@@ -216,6 +258,66 @@ const Pitch: FC<{ pitch: { headline: string; body: string } }> = ({ pitch }) => 
       {pitch.headline}
     </div>
     <div style={{ fontSize: 13, color: '#374151', lineHeight: 1.6 }}>{pitch.body}</div>
+  </div>
+);
+
+const MODE_CONFIG: Record<ValidationMode, { label: string; tint: string; description: string }> = {
+  trust: { label: 'trust', tint: '#9ca3af', description: 'No validation — LLM is trusted. Debug only.' },
+  recover: { label: 'recover', tint: '#2563eb', description: 'Reject bad values, keep prior, emit errors, keep streaming.' },
+  strict: { label: 'strict', tint: '#dc2626', description: 'Halt the stream on first violation.' },
+};
+
+const ModeSelector: FC<{ mode: ValidationMode; onChange: (m: ValidationMode) => void; disabled: boolean }> = ({ mode, onChange, disabled }) => (
+  <div style={{ display: 'flex', gap: 2, background: '#f3f4f6', borderRadius: 6, padding: 2 }}>
+    {(Object.entries(MODE_CONFIG) as [ValidationMode, typeof MODE_CONFIG[ValidationMode]][]).map(([key, cfg]) => (
+      <button
+        key={key}
+        onClick={() => onChange(key)}
+        disabled={disabled}
+        title={cfg.description}
+        style={{
+          padding: '4px 12px',
+          borderRadius: 4,
+          border: 'none',
+          fontSize: 11,
+          fontWeight: 600,
+          cursor: disabled ? 'default' : 'pointer',
+          background: mode === key ? '#ffffff' : 'transparent',
+          color: mode === key ? cfg.tint : '#6b7280',
+          boxShadow: mode === key ? '0 1px 2px rgba(0,0,0,0.08)' : 'none',
+          fontFamily: 'JetBrains Mono, Menlo, Monaco, monospace',
+        }}
+      >
+        {cfg.label}
+      </button>
+    ))}
+  </div>
+);
+
+const ErrorPanel: FC<{ errors: StreamError[] }> = ({ errors }) => (
+  <div style={{
+    marginBottom: 16,
+    background: '#fffbeb',
+    border: '1px solid #fde68a',
+    borderLeft: '4px solid #f59e0b',
+    borderRadius: 6,
+    padding: '10px 14px',
+    fontSize: 12,
+    fontFamily: 'JetBrains Mono, Menlo, Monaco, monospace',
+    color: '#78350f',
+    maxHeight: 200,
+    overflow: 'auto',
+  }}>
+    <div style={{ fontWeight: 700, marginBottom: 6, fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+      {errors.length} validation error{errors.length === 1 ? '' : 's'}
+    </div>
+    {errors.map((err, i) => (
+      <div key={i} style={{ padding: '3px 0', borderTop: i === 0 ? 'none' : '1px dashed #fde68a' }}>
+        <span style={{ color: '#b45309', fontWeight: 600 }}>[{err.phase}]</span>{' '}
+        <span style={{ color: '#1f2937' }}>{err.path || '<root>'}</span>{' '}
+        <span style={{ color: '#78350f' }}>expected {err.expected}, got {err.received}</span>
+      </div>
+    ))}
   </div>
 );
 

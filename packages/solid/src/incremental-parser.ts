@@ -1,4 +1,5 @@
 import type { ParserEvent } from './types';
+import type { ValueKind } from './schema-walker';
 
 // ═══════════════════════════════════════════════════════════
 // Incremental JSON parser with structural sharing
@@ -13,7 +14,22 @@ import type { ParserEvent } from './types';
 //
 // Together these eliminate both JSON.parse and structuredClone
 // from the hot path.
+//
+// valueOpenHook — fired the moment a value's kind is known
+// (object/array/string/number/boolean/null) at a known path.
+// Returning 'skip' transitions the parser into skip-mode for
+// that subtree: the value is not written, no events are emitted
+// for it, and parsing resumes after the structural close. Used
+// by the validator to enforce the kind-check invariant.
 // ═══════════════════════════════════════════════════════════
+
+export type ValueOpenDecision = 'accept' | 'skip';
+
+export type ValueOpenHook = (path: string, kind: ValueKind) => ValueOpenDecision;
+
+export type IncrementalParserOptions = {
+  valueOpenHook?: ValueOpenHook;
+};
 
 export type IncrementalParser = {
   write: (chunk: string) => ParserEvent[];
@@ -24,7 +40,11 @@ export type SnapshotResult<T> =
   | { changed: true; value: T }
   | { changed: false };
 
-export const createIncrementalParser = (base: unknown): IncrementalParser => {
+export const createIncrementalParser = (
+  base: unknown,
+  opts: IncrementalParserOptions = {},
+): IncrementalParser => {
+  const valueOpenHook = opts.valueOpenHook;
   const root = structuredClone(base);
 
   // ─── Navigation ───
@@ -55,6 +75,17 @@ export const createIncrementalParser = (base: unknown): IncrementalParser => {
   let stringEscapeNext = false;
   let unicodeDigits = '';
   let inUnicodeEscape = false;
+
+  // ─── Skip-mode state ───
+  // Triggered when valueOpenHook returns 'skip' for a value-open. The parser
+  // consumes characters without writing values, emitting events, or marking
+  // anything dirty. The path remains on the stack with hasUnpoppedValue=true,
+  // so the next ',' or '}' / ']' pops it normally.
+  let skipping = false;
+  let skipKind: 'string' | 'object' | 'array' | 'literal' = 'string';
+  let skipDepth = 0;
+  let skipInString = false;
+  let skipStringEscape = false;
 
   // ─── Helpers ───
 
@@ -141,12 +172,109 @@ export const createIncrementalParser = (base: unknown): IncrementalParser => {
     containerTypeStack.push(type);
   };
 
+  // ─── Skip-mode helper ───
+  // Returns true if the hook accepted the value (continue normally),
+  // false if the parser is now in skip-mode (caller should `continue`).
+  const checkValueOpen = (path: string, kind: ValueKind): boolean => {
+    if (!valueOpenHook) return true;
+    const decision = valueOpenHook(path, kind);
+    if (decision === 'accept') return true;
+    return false;
+  };
+
+  const enterSkipString = (): void => {
+    skipping = true;
+    skipKind = 'string';
+    skipStringEscape = false;
+  };
+  const enterSkipObject = (): void => {
+    skipping = true;
+    skipKind = 'object';
+    skipDepth = 1;
+    skipInString = false;
+    skipStringEscape = false;
+  };
+  const enterSkipArray = (): void => {
+    skipping = true;
+    skipKind = 'array';
+    skipDepth = 1;
+    skipInString = false;
+    skipStringEscape = false;
+  };
+  const enterSkipLiteral = (): void => {
+    skipping = true;
+    skipKind = 'literal';
+  };
+
   // ─── Write ───
 
   const write = (chunk: string): ParserEvent[] => {
     const events: ParserEvent[] = [];
 
     for (const ch of chunk) {
+      // ── Skip mode ──
+      if (skipping) {
+        switch (skipKind) {
+          case 'string': {
+            if (skipStringEscape) {
+              skipStringEscape = false;
+              continue;
+            }
+            if (ch === '\\') {
+              skipStringEscape = true;
+              continue;
+            }
+            if (ch === '"') {
+              skipping = false;
+            }
+            continue;
+          }
+          case 'object':
+          case 'array': {
+            if (skipInString) {
+              if (skipStringEscape) {
+                skipStringEscape = false;
+                continue;
+              }
+              if (ch === '\\') {
+                skipStringEscape = true;
+                continue;
+              }
+              if (ch === '"') {
+                skipInString = false;
+              }
+              continue;
+            }
+            if (ch === '"') {
+              skipInString = true;
+              continue;
+            }
+            const opener = skipKind === 'object' ? '{' : '[';
+            const closer = skipKind === 'object' ? '}' : ']';
+            if (ch === opener) {
+              skipDepth++;
+              continue;
+            }
+            if (ch === closer) {
+              skipDepth--;
+              if (skipDepth === 0) {
+                skipping = false;
+              }
+              continue;
+            }
+            continue;
+          }
+          case 'literal': {
+            if (isLiteralChar(ch)) continue;
+            // Delimiter — exit skip and let outer switch process it.
+            skipping = false;
+            // Fall through to normal handling.
+            break;
+          }
+        }
+        if (skipping) continue;
+      }
+
       // ── String accumulation ──
       if (accumulatingString) {
         if (inUnicodeEscape) {
@@ -211,6 +339,7 @@ export const createIncrementalParser = (base: unknown): IncrementalParser => {
       // ── Structural tokens ──
       switch (ch) {
         case '{': {
+          const isRoot = containerStack.length === 0;
           if (topContainerType() === 'array' && expectingValue) {
             const idx = topArrayIndex();
             events.push({ type: 'enterIndex', path: currentPath(), index: idx });
@@ -218,6 +347,12 @@ export const createIncrementalParser = (base: unknown): IncrementalParser => {
             hasUnpoppedValue = true;
           }
           const path = currentPath();
+          if (!isRoot && !checkValueOpen(path, 'object')) {
+            enterSkipObject();
+            afterColon = false;
+            expectingValue = false;
+            break;
+          }
           enterContainer('object');
           events.push({ type: 'enterObject', path });
           afterColon = false;
@@ -244,6 +379,7 @@ export const createIncrementalParser = (base: unknown): IncrementalParser => {
         }
 
         case '[': {
+          const isRootArr = containerStack.length === 0;
           if (topContainerType() === 'array' && expectingValue) {
             const idx = topArrayIndex();
             events.push({ type: 'enterIndex', path: currentPath(), index: idx });
@@ -251,6 +387,12 @@ export const createIncrementalParser = (base: unknown): IncrementalParser => {
             hasUnpoppedValue = true;
           }
           const arrPath = currentPath();
+          if (!isRootArr && !checkValueOpen(arrPath, 'array')) {
+            enterSkipArray();
+            afterColon = false;
+            expectingValue = false;
+            break;
+          }
           enterContainer('array');
           events.push({ type: 'enterArray', path: arrPath });
           arrayIndexStack.push(0);
@@ -279,20 +421,29 @@ export const createIncrementalParser = (base: unknown): IncrementalParser => {
         }
 
         case '"': {
+          if (topContainerType() === 'object' && !afterColon) {
+            // Key, not a value — never validated by hook
+            accumulatingString = true;
+            valueBuffer = '';
+            collectingKey = true;
+            break;
+          }
+          if (topContainerType() === 'array' && expectingValue) {
+            const idx = topArrayIndex();
+            events.push({ type: 'enterIndex', path: currentPath(), index: idx });
+            pathStack.push(String(idx));
+            expectingValue = false;
+            hasUnpoppedValue = true;
+          }
+          if (!checkValueOpen(currentPath(), 'string')) {
+            enterSkipString();
+            // Match accept-side state changes that happen on string close.
+            // hasUnpoppedValue stays true; ',' or '}' will pop.
+            break;
+          }
           accumulatingString = true;
           valueBuffer = '';
-          if (topContainerType() === 'object' && !afterColon) {
-            collectingKey = true;
-          } else {
-            collectingKey = false;
-            if (topContainerType() === 'array' && expectingValue) {
-              const idx = topArrayIndex();
-              events.push({ type: 'enterIndex', path: currentPath(), index: idx });
-              pathStack.push(String(idx));
-              expectingValue = false;
-              hasUnpoppedValue = true;
-            }
-          }
+          collectingKey = false;
           break;
         }
 
@@ -335,6 +486,12 @@ export const createIncrementalParser = (base: unknown): IncrementalParser => {
             events.push({ type: 'enterIndex', path: currentPath(), index: idx });
             pathStack.push(String(idx));
             hasUnpoppedValue = true;
+          }
+          const litKind = literalKindFromChar(ch);
+          if (!checkValueOpen(currentPath(), litKind)) {
+            enterSkipLiteral();
+            expectingValue = false;
+            break;
           }
           accumulatingLiteral = true;
           valueBuffer = ch;
@@ -450,4 +607,11 @@ const parseLiteral = (buf: string): LiteralResult => {
   const num = Number(buf);
   if (!Number.isNaN(num)) return { ok: true, value: num };
   return { ok: false };
+};
+
+// First-char heuristic to determine literal value kind for value-open hook.
+const literalKindFromChar = (ch: string): ValueKind => {
+  if (ch === 't' || ch === 'f') return 'boolean';
+  if (ch === 'n') return 'null';
+  return 'number';
 };

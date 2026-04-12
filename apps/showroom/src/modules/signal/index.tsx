@@ -1,5 +1,5 @@
 import type { DocPage, LibraryModule, SidebarStoryEntry } from '../types';
-import { isRecipeStory } from './story-types';
+import { isRecipeStory, isStreamStory } from './story-types';
 import { stories } from './stories';
 import { Runner } from './runner';
 import { SignalRuntimeProvider } from './runtime-context';
@@ -13,20 +13,20 @@ import readmeContent from '../../../../../packages/signal/README.md?raw';
 import designContent from '../../../../../packages/signal/DESIGN.md?raw';
 import docsContent from '../../../../../packages/signal/DOCS.md?raw';
 
-const KIND_ORDER: readonly string[] = ['recipe'];
-const KIND_LABELS: Record<string, string> = { recipe: 'Recipes' };
+const KIND_ORDER: readonly string[] = ['recipe', 'stream'];
+const KIND_LABELS: Record<string, string> = { recipe: 'Recipes', stream: 'Streaming' };
 
 const toSidebarEntry = (story: unknown): SidebarStoryEntry => {
-  if (!isRecipeStory(story)) {
-    return { id: '?', name: '?', description: '', category: '?', kind: '?' };
+  if (isRecipeStory(story) || isStreamStory(story)) {
+    return {
+      id: story.id,
+      name: story.name,
+      description: story.description,
+      category: story.category,
+      kind: story.kind,
+    };
   }
-  return {
-    id: story.id,
-    name: story.name,
-    description: story.description,
-    category: story.category,
-    kind: story.kind,
-  };
+  return { id: '?', name: '?', description: '', category: '?', kind: '?' };
 };
 
 // The doc list mixes markdown content with interactive functional pages.

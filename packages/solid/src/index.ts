@@ -6,4 +6,11 @@
 export { createStream } from './create-stream';
 
 // Types
-export type { Stream, CreateStreamOptions } from './types';
+export type {
+  Stream,
+  CreateStreamOptions,
+  StreamError,
+  StreamErrorPhase,
+  ValidationMode,
+  ConstraintsMode,
+} from './types';

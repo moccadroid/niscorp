@@ -183,15 +183,34 @@ export type StepResult = {
 export type CountInput = string | ReadonlyArray<StepInputMessage>;
 
 // ═══════════════════════════════════════════════════════════
-// Stream Events
+// Stream Events (emitted by signal.stream())
 // ═══════════════════════════════════════════════════════════
 
 export type StreamEvent<T> =
   | { type: 'text'; text: string }
   | { type: 'tool_start'; name: string; args: unknown }
   | { type: 'tool_end'; name: string; result: unknown }
+  | { type: 'retry'; reason: string; attempt: number }
   | { type: 'error'; error: Error; recovered: boolean }
   | { type: 'done'; response: T; history: Message[]; meta: SignalMeta };
+
+// ═══════════════════════════════════════════════════════════
+// Stream options
+// ═══════════════════════════════════════════════════════════
+
+export type StreamOptions = {
+  signal?: AbortSignal;
+};
+
+// ═══════════════════════════════════════════════════════════
+// Provider Stream Deltas (normalized adapter output)
+// ═══════════════════════════════════════════════════════════
+
+export type ProviderStreamDelta =
+  | { type: 'text'; text: string }
+  | { type: 'tool_call'; index: number; id?: string; name?: string; argsFragment?: string }
+  | { type: 'usage'; inputTokens: number; outputTokens: number; totalTokens: number }
+  | { type: 'finish'; finishReason: string };
 
 // ═══════════════════════════════════════════════════════════
 // Provider Adapter Interface
@@ -232,4 +251,5 @@ export type ProviderResponse = {
 export type ProviderAdapter = {
   id: string;
   chat: (request: ProviderRequest) => Promise<ProviderResponse>;
+  chatStream: (request: ProviderRequest) => AsyncIterable<ProviderStreamDelta>;
 };

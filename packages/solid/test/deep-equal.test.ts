@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { deepEqual } from '../src/deep-equal';
+import { deepEqual } from './helpers/deep-equal';
 
 describe('deepEqual', () => {
   it('primitives', () => {

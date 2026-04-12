@@ -1,9 +1,10 @@
-import type { Stream, CreateStreamOptions, Listener, FinalState } from './types';
+import type { Stream, CreateStreamOptions, Listener, FinalState, StreamError } from './types';
 import { createPendingFinal } from './types';
 import { deriveDefaults } from './derive-defaults';
 import { createIncrementalParser } from './incremental-parser';
 import { createFinalizationTracker } from './finalization-tracker';
 import { createSelectedStream, createDeadStream } from './selected-stream';
+import { createValidator } from './validator';
 
 // ═══════════════════════════════════════════════════════════
 // createStream — root stream factory
@@ -11,25 +12,58 @@ import { createSelectedStream, createDeadStream } from './selected-stream';
 
 export const createStream = <T>(options: CreateStreamOptions<T>): Stream<T> => {
   const base = resolveBase(options);
+  const mode = options.mode ?? 'recover';
+  const constraints = options.constraints ?? 'kind';
 
   // ─── State ───
   let currentValue: T = structuredClone(base);
   let isClosed = false;
   let isDestroyed = false;
-  const parser = createIncrementalParser(base);
-  const tracker = createFinalizationTracker();
+  let isFailed = false;
+  let failureError: Error | null = null;
 
   // ─── Listeners ───
   const listeners = new Set<Listener<T>>();
   const finalListeners = new Set<Listener<T>>();
+  const errorListeners = new Set<(error: StreamError) => void>();
   const changeSubscribers = new Set<() => void>();
   const finalizeSubscribers = new Set<() => void>();
+  const errorSubscribers = new Set<(error: StreamError) => void>();
   let finalState: FinalState<T> = createPendingFinal<T>();
   const selectedStreams = new Map<string, Stream<unknown>>();
 
   // Re-entrancy protection
   let isNotifying = false;
   const pendingImmediateFires: Array<() => void> = [];
+
+  // ─── Validator + parser + tracker ───
+
+  const emitError = (err: StreamError): void => {
+    for (const listener of errorListeners) listener(err);
+    for (const sub of errorSubscribers) sub(err);
+  };
+
+  const enterFailedState = (): void => {
+    if (isFailed) return;
+    isFailed = true;
+    isClosed = true;
+    failureError = new Error('[solid] stream failed validation');
+  };
+
+  const tracker = createFinalizationTracker();
+
+  const validator = createValidator({
+    schema: options.schema,
+    mode,
+    constraints,
+    emitError,
+    onFailed: enterFailedState,
+    getContainerKeys: (path) => tracker.getContainerKeys(path),
+  });
+
+  const parser = createIncrementalParser(base, {
+    valueOpenHook: validator.valueOpen,
+  });
 
   // ─── Notification ───
 
@@ -66,13 +100,16 @@ export const createStream = <T>(options: CreateStreamOptions<T>): Stream<T> => {
   // ─── Write pipeline ───
 
   const write = (chunk: string): void => {
-    if (isClosed || isDestroyed) return;
+    if (isClosed || isDestroyed || isFailed) return;
 
     const events = parser.write(chunk);
+
+    // The valueOpenHook may have tripped strict mode during parse.
+    if (isFailed) return;
+
     tracker.process(events);
 
     // Structural sharing: only objects along dirty paths get new references.
-    // Everything else keeps the same reference from the previous snapshot.
     const snap = parser.snapshot(currentValue);
     if (snap.changed) {
       currentValue = snap.value;
@@ -85,6 +122,12 @@ export const createStream = <T>(options: CreateStreamOptions<T>): Stream<T> => {
       for (const sub of changeSubscribers) {
         sub();
       }
+    }
+
+    // Validator owns finalize orchestration (key tracking + safeParse).
+    if (events.length > 0) {
+      validator.processEvents(events, () => currentValue);
+      if (isFailed) return;
     }
 
     if (tracker.isRootFinal()) {
@@ -107,8 +150,10 @@ export const createStream = <T>(options: CreateStreamOptions<T>): Stream<T> => {
 
     listeners.clear();
     finalListeners.clear();
+    errorListeners.clear();
     changeSubscribers.clear();
     finalizeSubscribers.clear();
+    errorSubscribers.clear();
     pendingImmediateFires.length = 0;
 
     if (!finalState.resolved) {
@@ -126,6 +171,7 @@ export const createStream = <T>(options: CreateStreamOptions<T>): Stream<T> => {
   const current = (): T => currentValue;
 
   const final = (): Promise<T> => {
+    if (isFailed && failureError) return Promise.reject(failureError);
     if (finalState.resolved) return Promise.resolve(finalState.value);
     return finalState.promise;
   };
@@ -153,6 +199,12 @@ export const createStream = <T>(options: CreateStreamOptions<T>): Stream<T> => {
     return () => { finalListeners.delete(listener); };
   };
 
+  const onError = (listener: (error: StreamError) => void): (() => void) => {
+    if (isDestroyed) return () => {};
+    errorListeners.add(listener);
+    return () => { errorListeners.delete(listener); };
+  };
+
   // ─── Selection ───
 
   const select = <P = unknown>(path: string): Stream<P> => {
@@ -174,6 +226,10 @@ export const createStream = <T>(options: CreateStreamOptions<T>): Stream<T> => {
         finalizeSubscribers.add(listener);
         return () => { finalizeSubscribers.delete(listener); };
       },
+      onRootError: (listener) => {
+        errorSubscribers.add(listener);
+        return () => { errorSubscribers.delete(listener); };
+      },
       resolveSubSelect: (fullPath) => select(fullPath),
     });
 
@@ -181,7 +237,7 @@ export const createStream = <T>(options: CreateStreamOptions<T>): Stream<T> => {
     return selected;
   };
 
-  return { write, close, destroy, current, final, on, onFinal, select };
+  return { write, close, destroy, current, final, on, onFinal, onError, select };
 };
 
 // ───────────────────────────────────────────────────────────

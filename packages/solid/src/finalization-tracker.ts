@@ -8,6 +8,7 @@ export type FinalizationTracker = {
   process: (events: ParserEvent[]) => void;
   isFinal: (path: string) => boolean;
   isRootFinal: () => boolean;
+  getContainerKeys: (path: string) => readonly string[] | undefined;
 };
 
 export const createFinalizationTracker = (): FinalizationTracker => {
@@ -103,5 +104,6 @@ export const createFinalizationTracker = (): FinalizationTracker => {
     process,
     isFinal: (path) => finalized.has(path) || isRootFinal,
     isRootFinal: () => isRootFinal,
+    getContainerKeys: (path) => keysPerContainer.get(path),
   };
 };

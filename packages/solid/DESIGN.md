@@ -37,7 +37,9 @@ write(chunk)
 ┌─────────────────────────┐
 │  Incremental parser      │  O(chunk) — processes only new characters
 │  ├─ Scanner state        │  tracks strings, escapes, containers, paths
-│  ├─ Value extraction     │  writes parsed values into a mutable root object
+│  ├─ Value-open hook ──────┼──→ Validator (kind check → accept | skip)
+│  ├─ Skip-mode            │  consumes rejected subtrees without writing
+│  ├─ Value extraction     │  writes accepted values into mutable root
 │  ├─ Dirty tracking       │  records which paths were modified
 │  └─ Event emission       │  structural events for finalization
 └────────────┬────────────┘
@@ -53,13 +55,20 @@ write(chunk)
 │ sharing   │  │ final based on   │
 │ from prev │  │ parser events    │
 │ snapshot  │  │                  │
-└─────┬─────┘  └────────┬────────┘
-      │                 │
-      ▼                 ▼
+└─────┬─────┘  └───────┬─────────┘
+      │                │
+      ▼                ▼
+┌──────────────────────────────┐
+│  Validator (finalize phase)  │  opt-in: safeParse per field at close
+│  └─ reads keys from tracker │
+└──────────────┬───────────────┘
+               │
+               ▼
 ┌──────────────────────────────┐
 │  Stream (root + selections)  │
 │  ├─ on() — reference ===     │
 │  ├─ onFinal()                │
+│  ├─ onError() — path-scoped  │
 │  ├─ select() — cached        │
 │  └─ destroy()                │
 └──────────────────────────────┘
@@ -69,13 +78,14 @@ write(chunk)
 
 | File | Responsibility |
 |------|----------------|
-| `incremental-parser.ts` | Scanner, value extraction, dirty tracking, structural sharing snapshots |
+| `incremental-parser.ts` | Scanner, value extraction, dirty tracking, structural sharing snapshots, value-open hook, skip-mode |
 | `finalization-tracker.ts` | Determines when paths become final based on parser events |
-| `create-stream.ts` | Root stream factory, listener management, write pipeline |
-| `selected-stream.ts` | Projected subtree streams with independent subscriptions |
+| `schema-walker.ts` | Given a Zod schema and path, returns sub-schema + accepted JSON kinds |
+| `validator.ts` | Enforces the invariant: kind checks at value-open, sub-schema safeParse at finalize |
+| `create-stream.ts` | Root stream factory, listener management, write pipeline, error/failed-state plumbing |
+| `selected-stream.ts` | Projected subtree streams with independent subscriptions, path-scoped onError |
 | `types.ts` | Public and internal types, FinalState factory |
 | `path.ts` | Path splitting, traversal, projection |
-| `deep-equal.ts` | Structural equality (used only in tests, not in hot path) |
 | `derive-defaults.ts` | Derives valid base objects from Zod schema defaults |
 
 ---
@@ -88,7 +98,7 @@ write(chunk)
 
 **Why:** The repair+parse approach re-scans the entire accumulated buffer on every `write()`. Over N total characters in ~N/100 chunks, total work is O(N²). For a 20 KB response that's measurably slow (~38ms). The incremental parser maintains scanner state between calls and processes only new characters — O(N) total.
 
-**Trade-off:** We own the parser. If a JSON edge case breaks, it's our bug. We mitigate this with thorough tests (121 unit/integration tests + e2e streaming tests).
+**Trade-off:** We own the parser. If a JSON edge case breaks, it's our bug. We mitigate this with thorough tests (192 unit/integration tests + e2e streaming tests).
 
 **Result:** 44x faster for character-by-character streaming of a 10 KB payload.
 
@@ -198,12 +208,69 @@ Scaling ratio (20KB/1KB ms/KB): **1.4x** — effectively linear.
 
 ---
 
+## The always-valid invariant
+
+Solid's central promise: whatever `current()` returns is structurally valid against the schema. Not "will be valid eventually" — valid right now, and after every write. This holds regardless of what the LLM sends.
+
+### The problem it solves
+
+Without validation during streaming, a hallucinated field quietly corrupts the tree. Schema says `count: number`, LLM emits `"count": "three"`, consumer does `x.count + 1` and gets `"three1"`. Schema says `items: T[]`, LLM emits `"items": "oops"`, consumer does `items.map(...)` and crashes. TypeScript said the type was a number, the object says it's a string, and nobody noticed.
+
+Solid enforces the invariant at two phases:
+
+### Phase 1 — value-open kind check (always on)
+
+The moment the parser sees the first character of a value (`{`, `[`, `"`, digit, `t`/`f`/`n`), it knows the value's JSON kind. It calls a hook into the validator with `(path, kind)`. The validator walks the schema tree from the root to that path via `schema-walker.ts` and returns `accept` or `skip`.
+
+On `skip`, the parser enters **skip-mode**: it consumes characters without writing values, without emitting events, without marking anything dirty. Skip-mode is bounded by matched quotes (strings, with escape awareness), matched braces/brackets (objects/arrays with depth counting), or literal terminators. Once the value closes, normal parsing resumes with the sibling or container close.
+
+This is O(1) per value — one path lookup, one `Set.has`. No `safeParse`, no allocation, no hot-path cost.
+
+### Phase 2 — finalize constraints (opt-in)
+
+Kind checks catch type-shape mismatches. They don't catch `.min(5)` on a string, `.int()` on a number, `.email()`, `.regex(...)`, or `.refine(...)`. Those require the complete value. Running them on a partial string would produce false positives — a 3-character string in flight isn't yet the 20-character string it will be when the closing quote arrives.
+
+With `constraints: 'finalize'`, the validator runs `subSchema.safeParse(currentValue)` exactly once per field, at the moment that field finalizes (the tracker-reported structural close). Partial strings never trip constraints they're about to satisfy, because the check only fires after the final character has been written.
+
+### Modes
+
+Three modes govern what happens on a violation:
+
+- **`trust`** — no validation. Today's pre-invariant behavior. Included as a debug escape hatch; discouraged in production.
+- **`recover`** (default) — the bad value is skipped, the prior valid value stays in place, an error is emitted via `onError`, and the stream continues. One hallucinated field doesn't tank the rest of the response.
+- **`strict`** — the bad value is skipped, an error is emitted once, the stream enters a terminal failed state. `current()` freezes at the last valid snapshot, further writes are no-ops, `final()` rejects. For when rendering wrong is worse than rendering nothing.
+
+### Consequences
+
+- `current()` is always shape-valid (in `recover` and `strict`).
+- `current()` is *not* always constraint-valid mid-stream — that's what `select(path).final()` and `constraints: 'finalize'` are for.
+- No throwing from `write()`. All error surfaces go through `onError` + `final()` rejection. Signal adapters and other producer loops can write without try/catch.
+- Selected streams see only errors at-or-below their path. `select('widget').onError(...)` ignores errors on sibling fields.
+
+### Sub-schema walking
+
+`schema-walker.ts` walks the top-level Zod schema along a path:
+
+- `ZodObject` → `shape[key]`
+- `ZodArray` → `element`
+- `ZodTuple` → `items[idx]` or `rest`
+- `ZodRecord` → `valueType`
+- `ZodUnion` → first variant that accepts the segment
+- `ZodOptional` / `ZodNullable` / `ZodDefault` → unwrap and recurse
+- `ZodLiteral`, `ZodEnum`, `ZodString/Number/Boolean/Null` → leaf kinds
+- Discriminated unions → object kind; full narrowing deferred to finalize
+- `ZodLazy` / `ZodIntersection` / `ZodPipeline` / `ZodAny` / `ZodUnknown` → accept-any (kind check skipped; finalize still runs if enabled)
+
+The walker caches nothing; the lookup is O(depth) per value. For typical schemas (depth 3–5), that's a few property accesses per write.
+
+---
+
 ## What this library is not
 
 - **Not a generic JSON parser.** It's purpose-built for schema-backed LLM streaming.
 - **Not a diff engine.** It doesn't compute patches or deltas. It tracks dirty paths for structural sharing.
-- **Not a validation engine.** Zod validates once at construction. The parser trusts that the LLM produces schema-conforming JSON.
-- **Not a recovery tool.** If the LLM sends malformed JSON, the parser ignores unparseable tokens and keeps the last valid state. It doesn't guess or repair.
+- **Not a recovery tool for malformed JSON.** If the LLM sends syntactically broken JSON (unmatched braces, bad escapes), the parser ignores the unparseable tokens and keeps the last valid state. It doesn't guess or repair JSON — it only rejects schema mismatches at value-open.
+- **Not a coercion engine.** If you want `z.coerce.number().parse("3")` behavior, put it in your schema. Solid doesn't transform values.
 
 ---
 
@@ -218,13 +285,36 @@ type Stream<T> = {
   final: () => Promise<T>;
   on: (listener: (value: T) => void) => () => void;
   onFinal: (listener: (value: T) => void) => () => void;
+  onError: (listener: (error: StreamError) => void) => () => void;
   select: <P = unknown>(path: string) => Stream<P>;
+};
+
+type StreamError = {
+  path: string;
+  expected: string;
+  received: string;
+  phase: 'value-open' | 'finalize';
+  message: string;
 };
 
 const createStream: <T>(options: {
   schema: z.ZodType<T>;
   initial?: T;
+  mode?: 'trust' | 'recover' | 'strict';     // default: 'recover'
+  constraints?: 'kind' | 'finalize';          // default: 'kind'
 }) => Stream<T>;
 ```
 
-Eight methods. That's the whole product.
+Nine methods. That's the whole product.
+
+---
+
+## Known limitations
+
+### Path separator
+
+All path operations use `.` as the separator. Keys containing literal dots (e.g. `"foo.bar"`) will be split and misinterpreted. In practice this never arises — LLM structured output schemas use simple identifier keys — but there is no escaping mechanism if it does.
+
+### `select('')` observes all errors
+
+`select('')` returns a stream that projects the entire root. Its `onError` listener fires for errors at *every* path, since all paths are at-or-below the root. This is consistent with the semantics (root selection = whole tree) but may surprise consumers who expect only root-level errors. Use `select('specific.path')` for scoped error observation.

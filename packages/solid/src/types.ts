@@ -1,4 +1,5 @@
 import type { z } from 'zod';
+import type { StreamError, ValidationMode, ConstraintsMode } from './validator';
 
 // ═══════════════════════════════════════════════════════════
 // Public types
@@ -12,13 +13,25 @@ export type Stream<T> = {
   final: () => Promise<T>;
   on: (listener: (value: T) => void) => () => void;
   onFinal: (listener: (value: T) => void) => () => void;
+  onError: (listener: (error: StreamError) => void) => () => void;
   select: <P = unknown>(path: string) => Stream<P>;
 };
 
 export type CreateStreamOptions<T> = {
   schema: z.ZodType<T>;
   initial?: T;
+  // 'trust'   — no validation (debug only)
+  // 'recover' — kind-check; on violation, fall back to prior value, keep streaming
+  // 'strict'  — kind-check; on violation, halt the stream
+  // Default: 'recover'
+  mode?: ValidationMode;
+  // 'kind'     — only kind-check at value-open (default)
+  // 'finalize' — also run sub-schema safeParse when each path closes
+  // Default: 'kind'
+  constraints?: ConstraintsMode;
 };
+
+export type { StreamError, StreamErrorPhase, ValidationMode, ConstraintsMode } from './validator';
 
 // ═══════════════════════════════════════════════════════════
 // Internal types
@@ -77,5 +90,6 @@ export type SelectedStreamDeps = {
   isPathFinal: () => boolean;
   onRootChange: (listener: () => void) => () => void;
   onRootFinalize: (listener: () => void) => () => void;
+  onRootError: (listener: (error: StreamError) => void) => () => void;
   resolveSubSelect: (fullPath: string) => Stream<unknown>;
 };

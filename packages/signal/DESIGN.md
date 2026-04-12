@@ -14,12 +14,14 @@ createSignal('groq', options?)     → immutable config bag
     .schema(zodSchema)             → new config bag (generic changes)
     .tools([...])                  → new config bag
     ↓
-    .complete('user message')      → execute
+    .complete('user message')      → execute (returns Promise<SignalResult>)
+    .stream('user message')        → stream  (returns AsyncIterable<StreamEvent>)
     ↓
 Strategy Layer (picks approach based on capabilities)
     ↓
 Provider Adapter (translates to provider API)
-    ↓
+    ↓ chat()                       ↓ chatStream()
+    ↓ Promise<ProviderResponse>    ↓ AsyncIterable<ProviderStreamDelta>
 HTTP (via dynamically imported SDK)
 ```
 
@@ -106,8 +108,8 @@ This works because LLMs usually produce almost-correct JSON that fails on one fi
 ```
 src/
 ├── index.ts                           # Public API
-├── signal.ts                          # Factory + immutable builder + complete
-├── types.ts                           # Message, SignalResult, SignalMeta, etc.
+├── signal.ts                          # Factory + immutable builder + complete + stream
+├── types.ts                           # Message, SignalResult, StreamEvent, etc.
 ├── config.ts                          # SignalConfig type
 ├── errors.ts                          # SignalError + error codes
 ├── registry.ts                        # Known provider registry
@@ -115,15 +117,17 @@ src/
 │   ├── structured-output.ts           # Schema strategy selection
 │   ├── tool-calling.ts                # Tool strategy selection
 │   └── unified-schema.ts             # Unified schema builder + loop
+├── stream/
+│   └── execute-stream.ts             # Streaming execution: text, tools, schema retry
 ├── providers/
-│   ├── openai-compatible.adapter.ts   # OpenAI/Groq/OpenRouter adapter
+│   ├── openai-compatible.adapter.ts   # OpenAI/Groq/OpenRouter adapter (chat + chatStream)
 │   ├── anthropic.adapter.ts           # Stub
 │   └── google.adapter.ts             # Stub
 ├── tools/
 │   ├── define-tool.ts                 # defineTool factory
-│   └── tool-loop.ts                   # Native tool execution loop
+│   └── tool-loop.ts                   # Native tool execution loop (non-streaming)
 ├── validation/
-│   └── retry.ts                       # Zod validation + retry with correction
+│   └── retry.ts                       # Zod validation + retry with correction (non-streaming)
 └── utils/
     └── sdk-loader.ts                  # Dynamic SDK import
 ```
@@ -160,3 +164,9 @@ src/
 10. **Hooks, not middleware.** `onRetry` and `onToolCall` cover observability without middleware complexity.
 
 11. **`parseResponse` throws, never swallows.** If the response doesn't match the schema after the tool/unified loop, it's a `SignalError`. The caller always gets either a valid typed result or an explicit error.
+
+12. **`stream()` is an async generator that mirrors `complete()`'s contract.** Same strategy selection, same tool loop shape, same Zod validation at end-of-stream, same retry-with-correction. The only differences: text deltas are yielded as they arrive, tool calls are assembled from chunked deltas, and a `retry` event tells the consumer to reset downstream state (e.g. a `@niscorp/solid` stream) before the next attempt.
+
+13. **Streaming validation is end-of-stream, not mid-stream.** Signal validates the complete response buffer after the SSE closes. Mid-stream structural validation is `@niscorp/solid`'s job — the consumer pipes `text` deltas into solid, which kind-checks at value-open. Signal doesn't know about solid; solid doesn't know about signal. The consumer is the glue.
+
+14. **`AbortSignal` for external cancellation.** `stream(input, { signal })` checks the signal between deltas. `for await + break` also works (iterator `return()` closes the underlying SSE). Both paths are clean and composable.

@@ -26,6 +26,7 @@ export type {
   SignalResult,
   SignalMeta,
   StreamEvent,
+  StreamOptions,
   ProviderError,
   // Step API (single model call, no auto tool execution)
   StepRequest,

@@ -11,8 +11,9 @@ Solid takes a different approach:
 - **Incremental parser** — processes only new characters. No re-scanning.
 - **Structural sharing** — snapshots reuse unchanged subtree references. No deep cloning.
 - **Reference equality** — change detection is `===`, not deep comparison. O(1).
+- **Always-valid invariant** — the parser kind-checks every value against the schema at the moment its type is known. `current()` is guaranteed structurally valid, whatever the LLM sends.
 
-The result: linear scaling, 44x faster than naive repair+parse on a 10 KB payload, and a clean subscription API that tells you exactly when each subtree finalizes.
+The result: linear scaling, 44x faster than naive repair+parse on a 10 KB payload, a clean subscription API that tells you exactly when each subtree finalizes, and a structural contract that holds even when the model hallucinates the wrong type for a field.
 
 ```
 Payload scaling (50-byte chunks):
@@ -64,6 +65,11 @@ stream.select('widget').onFinal((widget) => {
   // fires as soon as the parser moves past "widget" in the JSON
 });
 
+// Observe validation errors — fires when the LLM sends wrong types
+stream.onError((err) => {
+  console.warn(`[${err.phase}] ${err.path}: expected ${err.expected}, got ${err.received}`);
+});
+
 // Feed tokens from your LLM stream
 for await (const chunk of llmStream) {
   stream.write(chunk);
@@ -74,15 +80,54 @@ stream.close();
 const result = await stream.final();
 ```
 
+## Validation modes
+
+Every stream enforces the structural invariant: whatever `current()` returns conforms to the schema shape. When the LLM sends a value whose JSON kind doesn't match (a string where a number was expected, an array where an object lives, a field not in the schema), solid reacts based on `mode`:
+
+```typescript
+createStream({ schema, initial, mode: 'recover' })   // default
+createStream({ schema, initial, mode: 'strict' })
+createStream({ schema, initial, mode: 'trust' })
+```
+
+| Mode | Behavior |
+|---|---|
+| `recover` (default) | Reject the bad value, keep the prior valid one, emit `onError`, continue streaming. One hallucinated field doesn't kill rendering. |
+| `strict` | Enter a terminal failed state on first violation. `current()` freezes, further writes are no-ops, `final()` rejects. |
+| `trust` | No validation. Escape hatch for debugging or for producers you fully control. Discouraged. |
+
+### Constraint validation
+
+Kind checks catch the structural foot-guns (map-over-a-string, add-to-a-string). For constraint checks — `.min`, `.max`, `.regex`, `.email`, `.int`, `.refine` — opt into `constraints: 'finalize'`:
+
+```typescript
+createStream({ schema, initial, constraints: 'finalize' })
+```
+
+This runs the sub-schema `safeParse` at the exact moment each field closes in the stream, so partial strings never trip constraints they'll eventually satisfy. Violations emit `onError` with `phase: 'finalize'`.
+
 ## How it works
 
 1. **Base object** — validated against your Zod schema at construction. This is the starting state. Every field has a value from the start.
 
 2. **Incremental parsing** — each `write(chunk)` feeds characters into a state machine that tracks JSON structure, extracts values, and emits structural events. No `JSON.parse`, no buffer re-scanning.
 
-3. **Structural sharing** — the parser mutates an internal object, then produces an immutable snapshot where only the changed paths get new references. Unchanged subtrees keep the same object reference as the previous snapshot.
+3. **Value-open validation** — the moment the parser detects a value's JSON kind (`{`, `[`, `"`, digit, `t`/`f`/`n`), it checks it against the schema. If the kind doesn't match (string where number expected, array where object lives), the parser enters **skip-mode** — consuming the entire bad subtree without writing, dirtying, or emitting anything. The prior valid value stays in place.
 
-4. **Subtree finalization** — JSON keys are written left-to-right. When the parser sees `"response":` after `"widget":{...}`, it knows widget is done. `select('widget').onFinal(...)` fires immediately, without waiting for the full stream to end.
+4. **Structural sharing** — the parser mutates an internal object, then produces an immutable snapshot where only the changed paths get new references. Unchanged subtrees keep the same object reference as the previous snapshot.
+
+5. **Subtree finalization** — JSON keys are written left-to-right. When the parser sees `"response":` after `"widget":{...}`, it knows widget is done. `select('widget').onFinal(...)` fires immediately, without waiting for the full stream to end.
+
+6. **Finalize-phase constraints** (opt-in) — when each field closes, the sub-schema `safeParse` runs once. Catches `.min`, `.regex`, `.email`, `.refine` — constraints that can't be checked mid-stream without false positives.
+
+## What others do
+
+| Library | Partial validation | Constraint-at-finalize | Skip bad subtrees | Mode switching |
+|---|---|---|---|---|
+| **Solid** | Kind-check at value-open | Sub-schema safeParse at finalize | Skip-mode, keep prior value | trust / recover / strict |
+| Vercel AI SDK (`streamObject`) | `DeepPartial<T>`, no runtime check | None — end-of-stream only | No — bad data lands in tree | No |
+| Instructor | Explicitly unsupported during streaming | None | No | No |
+| LangChain | End-of-stream only | End-of-stream only | No | No |
 
 ## Documentation
 
@@ -93,8 +138,13 @@ const result = await stream.final();
 ```typescript
 import { createStream } from '@niscorp/solid';
 
-// Create a stream with schema + optional initial value
-const stream = createStream({ schema, initial? });
+// Create a stream with schema + optional initial value + validation opts
+const stream = createStream({
+  schema,
+  initial?,
+  mode?: 'trust' | 'recover' | 'strict',  // default: 'recover'
+  constraints?: 'kind' | 'finalize',       // default: 'kind'
+});
 
 // Feed streamed JSON chunks
 stream.write(chunk: string): void
@@ -105,10 +155,11 @@ stream.close(): void
 // Tear down all listeners and reject pending promises
 stream.destroy(): void
 
-// Read current merged state (always valid)
+// Read current merged state (always structurally valid)
 stream.current(): T
 
-// Promise that resolves when root JSON object closes
+// Promise that resolves when root JSON object closes.
+// Rejects if the stream entered strict failure.
 stream.final(): Promise<T>
 
 // Subscribe — fires immediately with current value, then on each change
@@ -117,7 +168,12 @@ stream.on(listener: (value: T) => void): () => void
 // Subscribe to finalization — fires once when stream ends
 stream.onFinal(listener: (value: T) => void): () => void
 
-// Project into a subtree — returns a Stream<P> with its own on/onFinal
+// Subscribe to validation errors — kind-check failures at value-open,
+// constraint failures at finalize (if constraints: 'finalize')
+stream.onError(listener: (err: StreamError) => void): () => void
+
+// Project into a subtree — returns a Stream<P> with its own on/onFinal/onError.
+// Selected streams see only errors at-or-below their path.
 stream.select<P>(path: string): Stream<P>
 ```
 

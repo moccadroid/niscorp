@@ -1,7 +1,7 @@
 import type { ZodType } from 'zod';
 import type {
   Message, ContentPart, Tool, SignalOptions, Capabilities,
-  SignalResult, SignalMeta, StreamEvent,
+  SignalResult, SignalMeta, StreamEvent, StreamOptions,
   ProviderAdapter, ProviderRequest, ProviderResponse,
   StepRequest, StepResult, StepToolCall, StepInputMessage, CountInput,
 } from './types';
@@ -16,6 +16,7 @@ import { selectToolCallingStrategy, toolsToProviderFormat } from './strategy/too
 import { runNativeToolLoop } from './tools/tool-loop';
 import { runUnifiedSchemaLoop } from './strategy/unified-schema';
 import { validateAndRetry } from './validation/retry';
+import { executeStream } from './stream/execute-stream';
 
 // ═══════════════════════════════════════════════════════════
 // Signal Type (public interface)
@@ -37,7 +38,7 @@ export type Signal<T = string> = {
 
   // Execution
   complete: (input: string | ContentPart[]) => Promise<SignalResult<T>>;
-  stream: (input: string | ContentPart[]) => AsyncIterable<StreamEvent<T>>;
+  stream: (input: string | ContentPart[], options?: StreamOptions) => AsyncIterable<StreamEvent<T>>;
 
   // ─── Low-level primitives ─────────────────────────────────
   // step(): one model call, no auto tool execution. The caller
@@ -330,8 +331,29 @@ const createSignalFromConfig = <T = string>(config: SignalConfig): Signal<T> => 
       return executeSimple<T>(adapter, resolved.model, messages, config.options, start);
     },
 
-    stream: (_input) => {
-      throw new SignalError('Streaming is not yet implemented', ErrorCode.PROVIDER_ERROR);
+    stream: (input, streamOptions) => {
+      const run = async function* (): AsyncGenerator<StreamEvent<T>> {
+        const adapter = await getAdapter();
+        const resolved = resolveProvider(config);
+        const messages = buildMessages(config, input);
+        const capabilities = resolveCapabilities(config);
+        const retries = config.retries ?? 2;
+
+        yield* executeStream<T>({
+          adapter,
+          model: resolved.model,
+          messages,
+          schema: config.schema,
+          tools: config.tools,
+          capabilities,
+          retries,
+          options: config.options,
+          streamOptions,
+          onRetry: config.onRetry,
+          onToolCall: config.onToolCall,
+        });
+      };
+      return run();
     },
 
     // ─── Low-level: single adapter call, no tool execution ───
