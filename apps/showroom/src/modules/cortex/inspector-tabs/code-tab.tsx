@@ -5,11 +5,13 @@ import {
   isStructuredExtractStory,
   isToolUseStory,
   isPlanModeStory,
+  isRulesStory,
   type CortexStory,
   type PrismMappingStory,
   type StructuredExtractStory,
   type ToolUseStory,
   type PlanModeStory,
+  type RulesStory,
 } from '../story-types';
 
 // ═══════════════════════════════════════════════════════════
@@ -256,11 +258,91 @@ const generatePlanMode = (story: PlanModeStory): string => {
   return lines.join('\n');
 };
 
+const generateRules = (story: RulesStory): string => {
+  const agentVar = asIdent(story.agent.config.id);
+  const lines: string[] = [];
+  lines.push(`import { createSignal } from '@niscorp/signal';`);
+  lines.push(`import {`);
+  lines.push(`  runAgentStandalone,`);
+  lines.push(`  defineAgent,`);
+  lines.push(`  defineTool,`);
+  lines.push(`  defineRule,`);
+  lines.push(`} from '@niscorp/cortex';`);
+  lines.push(`import { z } from 'zod';`);
+  lines.push('');
+  lines.push(`// ─── The rule (this is the entire steering logic) ──────────`);
+  lines.push('');
+  lines.push(`const rule = ${story.ruleCode};`);
+  lines.push('');
+  if (story.tools && story.tools.length > 0) {
+    const firstTool = story.tools[0];
+    if (firstTool) {
+      lines.push(`// ─── Tool ─────────────────────────────────────────────────`);
+      lines.push('');
+      lines.push(`const ${asIdent(firstTool.toolId)} = defineTool({`);
+      lines.push(`  id: '${firstTool.toolId}',`);
+      lines.push(`  name: '${firstTool.config.name}',`);
+      lines.push(`  description: ${JSON.stringify(firstTool.config.description)},`);
+      lines.push(`  input: z.object({ /* see source */ }),`);
+      lines.push(`  execute: async (args) => { /* ... */ },`);
+      lines.push(`});`);
+      lines.push('');
+    }
+  }
+  lines.push(`// ─── Agent ────────────────────────────────────────────────`);
+  lines.push('');
+  lines.push(`const ${agentVar} = defineAgent({`);
+  lines.push(`  id: '${story.agent.config.id}',`);
+  lines.push(`  name: '${story.agent.config.name}',`);
+  lines.push(`  description: ${JSON.stringify(story.agent.config.description)},`);
+  lines.push(`  instructions: ${JSON.stringify(story.agent.config.instructions.slice(0, 200) + '...')},`);
+  lines.push(`  outputMode: '${story.agent.config.outputMode}',`);
+  if (story.agent.config.tools && story.agent.config.tools.length > 0) {
+    lines.push(`  tools: ${JSON.stringify(story.agent.config.tools)},`);
+  }
+  lines.push(`});`);
+  lines.push('');
+  lines.push(`// ─── Run with rules ────────────────────────────────────────`);
+  lines.push('');
+  lines.push(`const signal = createSignal('groq', {`);
+  lines.push(`  apiKey: process.env.GROQ_API_KEY,`);
+  lines.push(`  model: 'openai/gpt-oss-120b',`);
+  lines.push(`});`);
+  lines.push('');
+  lines.push(`// The rule watches bus events via accumulators and fires`);
+  lines.push(`// effects (inject context, abort) when conditions are met.`);
+  lines.push(`// No code hooks. No interceptors. Just JSON.`);
+  lines.push(`const result = await runAgentStandalone(`);
+  lines.push(`  ${agentVar},`);
+  lines.push(`  ${JSON.stringify(story.prompt)},`);
+  lines.push(`  {`);
+  lines.push(`    llm: signal,`);
+  if (story.tools && story.tools.length > 0) {
+    const toolVars = story.tools.map((t) => asIdent(t.toolId)).join(', ');
+    lines.push(`    tools: [${toolVars}],`);
+  }
+  lines.push(`    rules: [rule],`);
+  lines.push(`    onObservation: (obs) => {`);
+  lines.push(`      console.log(\`[\${obs.stepKind}] \${obs.toolId ?? '?'} → \${obs.error ? 'ERR' : 'ok'}\`);`);
+  lines.push(`    },`);
+  lines.push(`  },`);
+  lines.push(`);`);
+  lines.push('');
+  lines.push(`if (!result.ok) {`);
+  lines.push(`  // A rule abort surfaces as result.error — by design.`);
+  lines.push(`  console.log('Rule effect:', result.error.message);`);
+  lines.push(`} else {`);
+  lines.push(`  console.log('Output:', result.data);`);
+  lines.push(`}`);
+  return lines.join('\n');
+};
+
 const generateSnippet = (story: CortexStory): string => {
   if (isPrismMappingStory(story)) return generatePrismMapping(story);
   if (isStructuredExtractStory(story)) return generateStructuredExtract(story);
   if (isToolUseStory(story)) return generateToolUse(story);
   if (isPlanModeStory(story)) return generatePlanMode(story);
+  if (isRulesStory(story)) return generateRules(story);
   return '';
 };
 

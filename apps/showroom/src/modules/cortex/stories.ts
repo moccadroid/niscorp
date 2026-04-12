@@ -130,6 +130,7 @@ const flattenContact: CortexStory = {
 
 import { weatherStories } from './stories/tool-use.stories';
 import { planModeStories } from './stories/plan-mode.stories';
+import { rulesStories } from './stories/rules.stories';
 
 export const stories: readonly CortexStory[] = [
   // STANDALONE
@@ -142,4 +143,6 @@ export const stories: readonly CortexStory[] = [
   ...weatherStories,
   // PLAN MODE
   ...planModeStories,
+  // RULES ENGINE (Phase C)
+  ...rulesStories,
 ];

@@ -14,13 +14,13 @@
 
 import type { JsonObject, JsonValue, Config } from '@niscorp/prism';
 import type { ZodType } from 'zod';
-import type { PolicyConfig, ToolDefinition, AgentDefinition } from '@niscorp/cortex';
+import type { PolicyConfig, ToolDefinition, AgentDefinition, RegisteredRule, EffectHandler } from '@niscorp/cortex';
 
 // ───────────────────────────────────────────────────────────
 // Cortex feature groups (kinds)
 // ───────────────────────────────────────────────────────────
 
-export type CortexKind = 'standalone' | 'tool-use' | 'plan-mode';
+export type CortexKind = 'standalone' | 'tool-use' | 'plan-mode' | 'rules';
 
 // ───────────────────────────────────────────────────────────
 // Base shape
@@ -107,6 +107,26 @@ export type PlanModeStory = CortexStoryBase & {
 };
 
 // ───────────────────────────────────────────────────────────
+// RULES — Phase C: declarative rules that steer agent behavior
+// ───────────────────────────────────────────────────────────
+
+export type RulesStory = CortexStoryBase & {
+  kind: 'rules';
+  demo: 'rules';
+  // The agent being steered.
+  agent: AgentDefinition<unknown>;
+  tools?: ReadonlyArray<ToolDefinition>;
+  // Declarative rules that fire effects during the run.
+  rules: ReadonlyArray<RegisteredRule>;
+  // Optional named effect handlers for `call` effects.
+  effects?: ReadonlyArray<{ name: string; handler: EffectHandler }>;
+  prompt: string;
+  // The rule source code to display in the code panel (as a string).
+  // This is the actual defineRule() call so users can see how easy it is.
+  ruleCode: string;
+};
+
+// ───────────────────────────────────────────────────────────
 // Discriminated union + guards
 // ───────────────────────────────────────────────────────────
 
@@ -114,7 +134,8 @@ export type CortexStory =
   | PrismMappingStory
   | StructuredExtractStory
   | ToolUseStory
-  | PlanModeStory;
+  | PlanModeStory
+  | RulesStory;
 
 export const isCortexStory = (value: unknown): value is CortexStory => {
   if (value === null || typeof value !== 'object') return false;
@@ -138,6 +159,9 @@ export const isToolUseStory = (value: unknown): value is ToolUseStory =>
 
 export const isPlanModeStory = (value: unknown): value is PlanModeStory =>
   isCortexStory(value) && Reflect.get(value, 'demo') === 'plan-mode';
+
+export const isRulesStory = (value: unknown): value is RulesStory =>
+  isCortexStory(value) && Reflect.get(value, 'demo') === 'rules';
 
 // Re-export types that the runners need.
 export type { Config, JsonValue, JsonObject, ZodType, PolicyConfig };

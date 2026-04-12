@@ -15,6 +15,8 @@ import type { ToolDefinition } from '../tool/define-tool';
 import type { Bus, BusEvent, Result, Unsubscribe } from '../types';
 import type { SignalClient } from '../llm/signal-client';
 import type { Observation } from '../schemas';
+import type { RegisteredRule } from '../rules/engine';
+import type { EffectHandler } from '../rules/effects';
 import { createManifold, type Manifold, type ManifoldConfig } from '../manifold/manifold';
 import { newWorkflowId } from '../utils/id';
 
@@ -53,6 +55,17 @@ export type StandaloneOptions = {
    */
   onObservation?: (observation: Observation) => void;
   /**
+   * Declarative rules (Phase C). Registered on the manifold before
+   * the run starts. Rules watch bus events via accumulators and fire
+   * effects (inject context, abort, deny) when conditions are met.
+   */
+  rules?: ReadonlyArray<RegisteredRule>;
+  /**
+   * Named effect handlers for the `call` rule effect. Registered on
+   * the manifold's effect registry before the run starts.
+   */
+  effects?: ReadonlyArray<{ name: string; handler: EffectHandler }>;
+  /**
    * Escape hatch: subscribe arbitrary bus handlers before the run
    * starts. Return value is ignored — the manifold's lifecycle
    * cleans up subscriptions on stop. Use this for custom telemetry,
@@ -73,6 +86,8 @@ export const runAgentStandalone = async <T>(
   manifold.registerAgent(agent);
   for (const specialist of options.specialists ?? []) manifold.registerAgent(specialist);
   for (const tool of options.tools ?? []) manifold.registerTool(tool);
+  for (const rule of options.rules ?? []) manifold.registerRule(rule);
+  for (const eff of options.effects ?? []) manifold.registerEffect(eff.name, eff.handler);
 
   const subscriptions: Unsubscribe[] = [];
   if (options.onRetry) {

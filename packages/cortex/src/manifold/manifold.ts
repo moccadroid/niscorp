@@ -37,7 +37,17 @@ import type { StateStore, EventLog } from '../store/types';
 import { createMemoryStateStore } from '../store/memory-state.store';
 import { createMemoryEventLog } from '../store/memory-event.log';
 import { newWorkflowId, newCorrelationId } from '../utils/id';
-import { makeError, throwCortex, ok, err } from '../errors/cortex.errors';
+import { makeError, throwCortex, err } from '../errors/cortex.errors';
+import { createProducerState } from '../context/producer-state';
+import {
+  createRulesEngine,
+  createEffectRegistry,
+  type RegisteredRule,
+  type RulesEngine,
+  type EffectHandler,
+  type EffectRegistry,
+  isInjectEffect,
+} from '../rules';
 import { CortexTopics } from '../topics';
 
 // ───────────────────────────────────────────────────────────
@@ -72,6 +82,8 @@ export type Manifold = {
   registerAgent: (agent: AgentDefinition) => Unsubscribe;
   registerTool: (tool: ToolDefinition) => Unsubscribe;
   addProducer: (producer: ContextProducer, scope?: { agentId?: string }) => Unsubscribe;
+  registerRule: (rule: RegisteredRule) => Unsubscribe;
+  registerEffect: (name: string, handler: EffectHandler) => void;
   bus: Bus;
   getState: (workflowId: string, key: string) => Promise<unknown>;
   setState: (workflowId: string, key: string, value: unknown) => Promise<void>;
@@ -86,6 +98,9 @@ export type Manifold = {
     stateStore: StateStore;
     eventLog: EventLog;
     config: ManifoldConfig;
+    rulesEngine: RulesEngine;
+    effectRegistry: EffectRegistry;
+    ruleInjections: string[];
   };
 };
 
@@ -122,6 +137,32 @@ export const createManifold = (config: ManifoldConfig = {}): Manifold => {
   const packBudget = config.defaultPackBudget ?? DEFAULT_PACK_BUDGET_TOKENS;
   const hooks = config.hooks ?? {};
 
+  // ─── Rules engine (Phase C) ─────────────────────────────
+  const effectRegistry = createEffectRegistry();
+  const rulesEngine = createRulesEngine(bus, effectRegistry);
+
+  // Rules engine inject effect → dynamic context producer. When a
+  // rule fires an inject effect, we store the message and a producer
+  // picks it up on the next pipeline build. This is the bridge
+  // between the rules engine and the context pipeline.
+  const ruleInjections: string[] = [];
+
+  // The inject producer reads from ruleInjections and emits them
+  // as system chunks. Registered as a global producer.
+  const ruleInjectProducer: ContextProducer = {
+    id: 'cortex.rule-inject',
+    priority: 85,
+    build: () => {
+      if (ruleInjections.length === 0) return [];
+      return ruleInjections.map((msg) => ({
+        role: 'system' as const,
+        content: msg,
+        source: 'cortex.rule-inject',
+        tags: ['rule', 'inject'],
+      }));
+    },
+  };
+
   // Tee bus → event log so the log captures everything.
   const teeUnsub = bus.on('#', async (event) => {
     try { await eventLog.append(event); } catch (e) { hooks.onError?.(e, {}); }
@@ -130,6 +171,52 @@ export const createManifold = (config: ManifoldConfig = {}): Manifold => {
   let started = false;
   let draining = false;
   let inFlight = 0;
+
+  // ─── Stateful producer wiring (Phase C) ─────────────────
+  //
+  // Producers with `subscribes` are attached to the bus when a
+  // workflow starts and detached when it ends. Each gets a
+  // per-(producer, workflow) ProducerState so onEvent accumulations
+  // are scoped. The BuildContext already carries the state store
+  // snapshot; stateful producers read their accumulated state via
+  // the same mechanism. The pipeline's build phase passes the
+  // workflow state snapshot to each producer's BuildContext.
+  //
+  // We track unsub functions per workflowId so we can clean up
+  // on workflow end.
+  const workflowProducerUnsubs = new Map<string, Unsubscribe[]>();
+
+  const attachStatefulProducers = (workflowId: string): void => {
+    const unsubs: Unsubscribe[] = [];
+    const allProducers = registry.allProducers();
+    for (const producer of allProducers) {
+      if (!producer.subscribes?.length || !producer.onEvent) continue;
+      const state = createProducerState();
+      // Store the producer state in the state store so the pipeline's
+      // BuildContext can expose it. Key: cortex.producer.<id>
+      const storeKey = `cortex.producer.${producer.id}`;
+      // Write initial empty state.
+      void stateStore.set(workflowId, storeKey, state.toObject());
+      for (const topic of producer.subscribes) {
+        unsubs.push(
+          bus.on(topic, (event) => {
+            producer.onEvent!(event, state);
+            // Persist after each event so the pipeline sees the latest.
+            void stateStore.set(workflowId, storeKey, state.toObject());
+          }),
+        );
+      }
+    }
+    if (unsubs.length > 0) workflowProducerUnsubs.set(workflowId, unsubs);
+  };
+
+  const detachStatefulProducers = (workflowId: string): void => {
+    const unsubs = workflowProducerUnsubs.get(workflowId);
+    if (unsubs) {
+      for (const unsub of unsubs) unsub();
+      workflowProducerUnsubs.delete(workflowId);
+    }
+  };
 
   // ─── Execution handler ───────────────────────────────────
   //
@@ -179,10 +266,12 @@ export const createManifold = (config: ManifoldConfig = {}): Manifold => {
       return;
     }
 
-    // Lifecycle: open ledger, track in-flight, emit workflow.started.
+    // Lifecycle: open ledger, track in-flight, attach stateful
+    // producers, emit workflow.started.
     const ownLedger = !ledger.isOpen(workflowId);
     if (ownLedger) ledger.open(workflowId);
     inFlight += 1;
+    attachStatefulProducers(workflowId);
 
     bus.emit({
       topic: CortexTopics.workflowStarted,
@@ -247,6 +336,7 @@ export const createManifold = (config: ManifoldConfig = {}): Manifold => {
         meta: { timestamp: Date.now(), correlationId, workflowId },
       });
     } finally {
+      detachStatefulProducers(workflowId);
       inFlight -= 1;
       if (ownLedger) ledger.close(workflowId);
     }
@@ -382,6 +472,49 @@ export const createManifold = (config: ManifoldConfig = {}): Manifold => {
     await stop();
   };
 
+  // Register the rule-inject producer so inject effects land in context.
+  registry.addProducer(ruleInjectProducer);
+
+  // Evaluate rules after each observation. We defer to a microtask
+  // so that all synchronous bus handlers (including accumulator
+  // handlers registered by rules) have finished processing the event
+  // before we read their state. Without this, evaluation runs before
+  // the accumulators increment and always sees stale values.
+  //
+  // If a rule fires an inject effect, push the message into
+  // ruleInjections so the inject producer picks it up on the next
+  // pipeline build. Abort effects are surfaced via a cortex.rule.fired
+  // event.
+  bus.on(CortexTopics.observationRecorded, () => {
+    void Promise.resolve().then(() => {
+      const snapshot = rulesEngine.snapshot();
+      const result = rulesEngine.evaluate();
+
+      // Always emit an evaluation event — whether a rule matched or not.
+      // This gives full observability: the runner can show accumulator
+      // state, which rule matched, and which didn't.
+      bus.emit({
+        topic: CortexTopics.ruleEvaluated,
+        payload: { result, accumulators: snapshot },
+        meta: { timestamp: Date.now(), correlationId: 'rule' },
+      });
+
+      if (!result.matched) return;
+      const effect = result.effect;
+
+      // Emit a fired event with the full effect and accumulator state.
+      bus.emit({
+        topic: CortexTopics.ruleFired,
+        payload: { ruleId: result.ruleId, effect, accumulators: snapshot },
+        meta: { timestamp: Date.now(), correlationId: 'rule' },
+      });
+
+      if (isInjectEffect(effect)) {
+        ruleInjections.push(effect.inject);
+      }
+    });
+  });
+
   // Soft warning for exact token mode (not yet implemented).
   if (config.tokenEstimation === 'exact') {
     bus.emit({
@@ -395,6 +528,8 @@ export const createManifold = (config: ManifoldConfig = {}): Manifold => {
     registerAgent: (agent) => registry.registerAgent(agent),
     registerTool: (tool) => registry.registerTool(tool),
     addProducer: (producer, scope) => registry.addProducer(producer, scope),
+    registerRule: (rule) => rulesEngine.register(rule),
+    registerEffect: (name, handler) => effectRegistry.register(name, handler),
     bus,
     getState: (workflowId, key) => stateStore.get(workflowId, key),
     setState: (workflowId, key, value) => stateStore.set(workflowId, key, value),
@@ -403,7 +538,7 @@ export const createManifold = (config: ManifoldConfig = {}): Manifold => {
     start,
     stop,
     drain,
-    _internal: { registry, ledger, stateStore, eventLog, config },
+    _internal: { registry, ledger, stateStore, eventLog, config, rulesEngine, effectRegistry, ruleInjections },
   };
 };
 

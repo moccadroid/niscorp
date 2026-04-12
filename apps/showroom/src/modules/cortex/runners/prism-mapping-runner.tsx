@@ -57,7 +57,7 @@ export const PrismMappingRunner: FC<Props> = ({ story }) => {
   useEffect(() => {
     if (storyId === undefined) return;
     if (status.phase === 'done') {
-      recordRun(storyId, status.result.matchesExpected ? 'pass' : 'fail');
+      recordRun(storyId, status.result.prism?.matchesExpected ? 'pass' : 'fail');
     } else if (status.phase === 'error') {
       recordRun(storyId, 'fail');
     }
@@ -126,11 +126,15 @@ export const PrismMappingRunner: FC<Props> = ({ story }) => {
     const matches = deepEqual(evaluated, story.expected);
     const lastRun: LastRun = {
       storyId: story.id,
-      config,
-      ...(reasoning && { reasoning }),
-      evaluated,
-      matchesExpected: matches,
+      kind: 'prism-mapping',
       durationMs: Date.now() - start,
+      result: evaluated,
+      prism: {
+        config,
+        ...(reasoning && { reasoning }),
+        evaluated,
+        matchesExpected: matches,
+      },
     };
     setLastRun(lastRun);
     setStatus({ phase: 'done', result: lastRun, attempts });
@@ -190,19 +194,19 @@ export const PrismMappingRunner: FC<Props> = ({ story }) => {
         </>
       )}
 
-      {isDone && (
+      {isDone && status.result.prism !== undefined && (
         <>
-          <Section title="Generated Prism config" body={JSON.stringify(status.result.config, null, 2)} />
-          {status.result.reasoning !== undefined && (
-            <Section title="Agent reasoning" body={status.result.reasoning} variant="muted" />
+          <Section title="Generated Prism config" body={JSON.stringify(status.result.prism.config, null, 2)} />
+          {status.result.prism.reasoning !== undefined && (
+            <Section title="Agent reasoning" body={status.result.prism.reasoning} variant="muted" />
           )}
           <Section
             title="Evaluated output"
-            body={JSON.stringify(status.result.evaluated, null, 2)}
-            variant={status.result.matchesExpected ? 'pass' : 'fail'}
+            body={JSON.stringify(status.result.prism.evaluated, null, 2)}
+            variant={status.result.prism.matchesExpected ? 'pass' : 'fail'}
           />
           <PassFailBadge
-            pass={status.result.matchesExpected}
+            pass={status.result.prism.matchesExpected}
             passLabel={`Output matches expected (${status.result.durationMs}ms)`}
             failLabel={`Output does not match expected (${status.result.durationMs}ms)`}
           />

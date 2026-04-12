@@ -108,7 +108,9 @@ export {
   ContentChunkSchema,
   PlanNodeKindSchema,
   ToolRiskLevelSchema,
+  ToolConfigSchema,
   AgentOutputModeSchema,
+  AgentConfigSchema,
   PolicyConfigSchema,
 } from './schemas';
 export type {
@@ -127,7 +129,11 @@ export type {
   ContentPart,
   PlanNodeKind,
   ToolRiskLevel,
+  ToolConfigInput,
+  ToolConfigParsed,
   AgentOutputMode,
+  AgentConfigInput,
+  AgentConfigParsed,
   PolicyConfig,
 } from './schemas';
 
@@ -166,6 +172,40 @@ export type {
 
 // System event topics
 export { CortexTopics, type CortexTopic } from './topics';
+
+// Rules engine (Phase C)
+export {
+  defineRule,
+  createRulesEngine,
+  createEffectRegistry,
+  evaluateCondition,
+  attachAccumulators,
+  isInjectEffect,
+  isAbortEffect,
+  isDenyEffect,
+  isCallEffect,
+  RuleDefinitionSchema,
+  RuleEntrySchema,
+  RuleEffectSchema,
+  ConditionSchema,
+  AccumulatorDefSchema,
+} from './rules';
+export type {
+  RegisteredRule,
+  EvaluationResult,
+  RulesEngine,
+  RuleEffect,
+  EffectContext,
+  EffectHandler,
+  EffectRegistry,
+  ConditionScope,
+  AccumulatorDef,
+  WatchDefs,
+  AccumulatorState,
+  RuleDefinition,
+  RuleDefinitionInput,
+  RuleEntry,
+} from './rules';
 
 // Utils
 export { matchesTopic, compileTopicPattern } from './utils/wildcard';

@@ -12,6 +12,7 @@ import {
   isStructuredExtractStory,
   isToolUseStory,
   isPlanModeStory,
+  isRulesStory,
   type CortexStory,
 } from '../story-types';
 import { mappingAgent } from '@niscorp/prism/agent';
@@ -55,6 +56,9 @@ const resolveStory = (story: CortexStory): ResolveStory | undefined => {
     return { agent: story.agent, tools: story.tools, input: story.prompt };
   }
   if (isPlanModeStory(story)) {
+    return { agent: story.agent, tools: story.tools ?? [], input: story.prompt };
+  }
+  if (isRulesStory(story)) {
     return { agent: story.agent, tools: story.tools ?? [], input: story.prompt };
   }
   return undefined;

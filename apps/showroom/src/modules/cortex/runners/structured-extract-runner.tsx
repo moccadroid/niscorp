@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState, type FC } from 'react';
 import { createSignal } from '@niscorp/signal';
 import { runAgentStandalone, type SignalClient, type CortexError } from '@niscorp/cortex';
 import { isStructuredExtractStory } from '../story-types';
+import { useCortexRuntime } from '../runtime-context';
 import { getKey } from '../../signal/settings/api-key-storage';
 import { createOpenAIClient } from '../../signal/openai-client';
 import { recordRun } from '../run-history';
@@ -34,6 +35,7 @@ type Props = { story: unknown };
 
 export const StructuredExtractRunner: FC<Props> = ({ story }) => {
   const [status, setStatus] = useState<RunStatus>({ phase: 'idle' });
+  const { setLastRun } = useCortexRuntime();
 
   const storyId = isStructuredExtractStory(story) ? story.id : undefined;
   useEffect(() => {
@@ -81,12 +83,15 @@ export const StructuredExtractRunner: FC<Props> = ({ story }) => {
       },
     });
 
+    const elapsed = Date.now() - start;
     if (!result.ok) {
       setStatus({ phase: 'error', message: `${result.error.code}: ${result.error.message}`, attempts });
+      setLastRun({ storyId: story.id, kind: 'structured-extract', durationMs: elapsed, error: result.error });
       return;
     }
-    setStatus({ phase: 'done', result: result.data, durationMs: Date.now() - start, attempts });
-  }, [story]);
+    setStatus({ phase: 'done', result: result.data, durationMs: elapsed, attempts });
+    setLastRun({ storyId: story.id, kind: 'structured-extract', durationMs: elapsed, result: result.data });
+  }, [story, setLastRun]);
 
   if (!isStructuredExtractStory(story)) {
     return <div style={{ padding: 24, color: '#9ca3af' }}>Not a structured-extract story.</div>;

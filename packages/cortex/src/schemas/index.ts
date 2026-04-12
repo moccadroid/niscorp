@@ -27,6 +27,20 @@ export {
   type ContentPart,
 } from './content-chunk.schema';
 
-export { ToolRiskLevelSchema, type ToolRiskLevel } from './tool-config.schema';
-export { AgentOutputModeSchema, type AgentOutputMode } from './agent-config.schema';
+export {
+  ToolRiskLevelSchema,
+  ToolConfigSchema,
+  type ToolRiskLevel,
+  type ToolConfigInput,
+  type ToolConfigParsed,
+} from './tool-config.schema';
+
+export {
+  AgentOutputModeSchema,
+  AgentConfigSchema,
+  type AgentOutputMode,
+  type AgentConfigInput,
+  type AgentConfigParsed,
+} from './agent-config.schema';
+
 export { PolicyConfigSchema, type PolicyConfig } from './policy.schema';

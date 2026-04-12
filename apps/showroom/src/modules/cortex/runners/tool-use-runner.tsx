@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState, type FC } from 'react';
 import { createSignal } from '@niscorp/signal';
 import { runAgentStandalone, type SignalClient, type CortexError, type Observation } from '@niscorp/cortex';
 import { isToolUseStory } from '../story-types';
+import { useCortexRuntime } from '../runtime-context';
 import { getKey } from '../../signal/settings/api-key-storage';
 import { createOpenAIClient } from '../../signal/openai-client';
 import { recordRun } from '../run-history';
@@ -107,6 +108,7 @@ type Props = { story: unknown };
 
 export const ToolUseRunner: FC<Props> = ({ story }) => {
   const [status, setStatus] = useState<RunStatus>({ phase: 'idle' });
+  const { setLastRun } = useCortexRuntime();
 
   const storyId = isToolUseStory(story) ? story.id : undefined;
   useEffect(() => {
@@ -171,6 +173,7 @@ export const ToolUseRunner: FC<Props> = ({ story }) => {
       },
     });
 
+    const elapsed = Date.now() - start;
     if (!result.ok) {
       setStatus({
         phase: 'error',
@@ -179,16 +182,18 @@ export const ToolUseRunner: FC<Props> = ({ story }) => {
         attempts,
         observations,
       });
+      setLastRun({ storyId: story.id, kind: 'tool-use', durationMs: elapsed, error: result.error, observations });
       return;
     }
     setStatus({
       phase: 'done',
       result: result.data,
-      durationMs: Date.now() - start,
+      durationMs: elapsed,
       attempts,
       observations,
     });
-  }, [story]);
+    setLastRun({ storyId: story.id, kind: 'tool-use', durationMs: elapsed, result: result.data, observations });
+  }, [story, setLastRun]);
 
   if (!isToolUseStory(story)) {
     return <div style={{ padding: 24, color: '#9ca3af' }}>Not a tool-use story.</div>;

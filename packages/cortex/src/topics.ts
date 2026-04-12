@@ -48,6 +48,10 @@ export const CortexTopics = {
   confirmationApproved: 'cortex.policy.confirmation.approved',
   confirmationDenied: 'cortex.policy.confirmation.denied',
 
+  // ─── Rules engine ────────────────────────────────────────
+  ruleEvaluated: 'cortex.rule.evaluated',
+  ruleFired: 'cortex.rule.fired',
+
   // ─── Context ─────────────────────────────────────────────
   contextBuilt: 'cortex.context.built',
 

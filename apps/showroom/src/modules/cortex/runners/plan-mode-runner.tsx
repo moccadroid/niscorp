@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState, type FC } from 'react';
 import { createSignal } from '@niscorp/signal';
 import { runAgentStandalone, type SignalClient, type CortexError, type Observation } from '@niscorp/cortex';
 import { isPlanModeStory } from '../story-types';
+import { useCortexRuntime } from '../runtime-context';
 import { getKey } from '../../signal/settings/api-key-storage';
 import { createOpenAIClient } from '../../signal/openai-client';
 import { recordRun } from '../run-history';
@@ -121,6 +122,7 @@ type Props = { story: unknown };
 
 export const PlanModeRunner: FC<Props> = ({ story }) => {
   const [status, setStatus] = useState<RunStatus>({ phase: 'idle' });
+  const { setLastRun } = useCortexRuntime();
 
   const storyId = isPlanModeStory(story) ? story.id : undefined;
   useEffect(() => {
@@ -183,6 +185,7 @@ export const PlanModeRunner: FC<Props> = ({ story }) => {
       },
     });
 
+    const elapsed = Date.now() - start;
     if (!result.ok) {
       setStatus({
         phase: 'error',
@@ -191,16 +194,18 @@ export const PlanModeRunner: FC<Props> = ({ story }) => {
         attempts,
         observations,
       });
+      setLastRun({ storyId: story.id, kind: 'plan-mode', durationMs: elapsed, error: result.error, observations });
       return;
     }
     setStatus({
       phase: 'done',
       result: result.data,
-      durationMs: Date.now() - start,
+      durationMs: elapsed,
       attempts,
       observations,
     });
-  }, [story]);
+    setLastRun({ storyId: story.id, kind: 'plan-mode', durationMs: elapsed, result: result.data, observations });
+  }, [story, setLastRun]);
 
   if (!isPlanModeStory(story)) {
     return <div style={{ padding: 24, color: '#9ca3af' }}>Not a plan-mode story.</div>;

@@ -4,21 +4,27 @@ import { createContext, useContext, useMemo, useState, type FC, type ReactNode }
 // Cortex runtime context
 // ═══════════════════════════════════════════════════════════
 //
-// Holds the last run's result so the inspector tabs (e.g. a future
-// "Observations" or "Context Pack" tab) can read it without each
-// tab re-running the agent. The runner publishes here when a run
-// finishes; tabs subscribe via useCortexRuntime.
-
-import type { Config } from '@niscorp/prism';
-import type { JsonValue } from '@niscorp/prism';
+// Holds the last run's result so the inspector tabs can read it
+// without each tab re-running the agent. The runner publishes here
+// when a run finishes; tabs subscribe via useCortexRuntime.
+//
+// The LastRun type is generic — it works for any story kind, not
+// just Prism mapping. Each runner publishes what it has.
 
 export type LastRun = {
   storyId: string;
-  config: Config;
-  reasoning?: string;
-  evaluated: JsonValue;
-  matchesExpected: boolean;
+  kind: string;
   durationMs: number;
+  result?: unknown;
+  error?: { code: string; message: string };
+  observations?: ReadonlyArray<unknown>;
+  // Prism-mapping-specific fields (populated by PrismMappingRunner only)
+  prism?: {
+    config: unknown;
+    reasoning?: string;
+    evaluated: unknown;
+    matchesExpected: boolean;
+  };
 };
 
 type CortexRuntimeApi = {

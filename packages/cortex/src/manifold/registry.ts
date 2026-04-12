@@ -42,6 +42,7 @@ export type Registry = {
 
   // Producer queries
   producersFor: (agentId: string) => ContextProducer[];
+  allProducers: () => ContextProducer[];
 
   // Read-only view for context producers
   asReadonly: () => ReadonlyRegistry;
@@ -114,6 +115,7 @@ export const createRegistry = (): Registry => {
     getTool: (id) => tools.get(id),
     producersFor: (agentId) =>
       producers.filter((s) => s.agentId === undefined || s.agentId === agentId).map((s) => s.producer),
+    allProducers: () => producers.map((s) => s.producer),
     asReadonly: () => ({
       listAgents: () => Array.from(agents.values()).map(agentView),
       listTools: () => Array.from(tools.values()).map(toolView),
