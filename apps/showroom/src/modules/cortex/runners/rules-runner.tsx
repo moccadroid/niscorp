@@ -253,6 +253,7 @@ export const RulesRunner: FC<Props> = ({ story }) => {
     const result = await runAgentStandalone(story.agent, story.prompt, {
       llm,
       tools: story.tools,
+      ...(story.specialists && { specialists: story.specialists }),
       rules: story.rules,
       effects: story.effects,
       onRetry: (payload) => {

@@ -13,6 +13,7 @@
 
 import type { BusEvent, Unsubscribe, Bus } from '../types';
 import type { RuleDefinition } from './rule.schema';
+import { resolvePath } from '../utils/resolve-path';
 
 // ───────────────────────────────────────────────────────────
 // Types — derived from Zod schema, not hand-written
@@ -26,22 +27,6 @@ export type AccumulatorDef = WatchDefs[string];
 export type AccumulatorState = {
   values: () => Record<string, unknown>;
   reset: () => void;
-};
-
-// ───────────────────────────────────────────────────────────
-// Field resolution on event payloads
-// ───────────────────────────────────────────────────────────
-
-const resolveField = (payload: unknown, field: string): unknown => {
-  if (payload === null || payload === undefined) return undefined;
-  const segments = field.split('.');
-  let current: unknown = payload;
-  for (const seg of segments) {
-    if (current === null || current === undefined) return undefined;
-    if (typeof current !== 'object') return undefined;
-    current = (current as Record<string, unknown>)[seg];
-  }
-  return current;
 };
 
 // ───────────────────────────────────────────────────────────
@@ -67,14 +52,14 @@ export const attachAccumulators = (
   for (const [name, def] of Object.entries(defs)) {
     const handler = (event: BusEvent): void => {
       if (def.aggregate === 'count') {
-        store.set(name, ((store.get(name) as number) ?? 0) + 1);
+        store.set(name, (Number(store.get(name)) || 0) + 1);
       } else if (def.aggregate === 'sum') {
-        const raw = resolveField(event.payload, def.field);
+        const raw = resolvePath(event.payload, def.field);
         const num = typeof raw === 'number' ? raw : 0;
-        store.set(name, ((store.get(name) as number) ?? 0) + num);
+        store.set(name, (Number(store.get(name)) || 0) + num);
       } else {
         // latest
-        store.set(name, resolveField(event.payload, def.field));
+        store.set(name, resolvePath(event.payload, def.field));
       }
     };
     unsubs.push(bus.on(def.event, handler));

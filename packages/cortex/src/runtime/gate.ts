@@ -1,28 +1,20 @@
 // ═══════════════════════════════════════════════════════════
-// Policy gate — checked before every plan node execution
+// Policy gate — checked before every tool call and delegation
 // ═══════════════════════════════════════════════════════════
 //
-// Per DESIGN.md §11. The gate translates the agent's PolicyConfig
-// (tools allow/deny, agents allow/deny, budget caps, risk levels)
-// into a per-step decision: allow, deny, or require confirmation.
-//
-// Confirmation flow is reserved but unimplemented in Phase B —
-// requireConfirmation tools deny in this phase. Confirmation lands
-// in Phase C as part of the interceptor system.
-//
-// The gate is a pure function over policy + ledger snapshot + node.
-// No I/O, no state. Tests can call it directly.
+// The gate reads the workflow's live policy (which rules may
+// have modified) and the ledger's budget snapshot. Pure function
+// over shared state — no threading, no stale snapshots.
 
-import type { PolicyConfig } from '../schemas/policy.schema';
 import type { ToolDefinition } from '../tool/define-tool';
 import type { Registry } from '../manifold/registry';
 import type { Ledger } from '../manifold/ledger';
+import type { WorkflowContext } from '../manifold/workflow-context';
 
 export type GateInput = {
-  policy: PolicyConfig | undefined;
+  workflow: WorkflowContext;
   registry: Registry;
   ledger: Ledger;
-  workflowId: string;
 };
 
 export type GateDecision =
@@ -56,12 +48,12 @@ const matchesAny = (id: string, patterns: ReadonlyArray<string> | undefined): bo
 };
 
 // ───────────────────────────────────────────────────────────
-// Budget check (run before EVERY node, not only the named ones)
+// Budget check
 // ───────────────────────────────────────────────────────────
 
 export const checkBudget = (input: GateInput): GateDecision => {
-  if (!input.ledger.isOpen(input.workflowId)) return { allowed: true };
-  const snap = input.ledger.snapshot(input.workflowId);
+  if (!input.ledger.isOpen(input.workflow.workflowId)) return { allowed: true };
+  const snap = input.ledger.snapshot(input.workflow.workflowId);
   if (snap.tokensRemaining <= 0) return { allowed: false, reason: 'budget_tokens_exceeded' };
   if (snap.ticksRemaining <= 0) return { allowed: false, reason: 'budget_ticks_exceeded' };
   if (snap.toolCallsRemaining <= 0) return { allowed: false, reason: 'budget_tool_calls_exceeded' };
@@ -82,7 +74,9 @@ export const checkTool = (input: CheckToolInput): GateDecision => {
   const tool: ToolDefinition | undefined = input.registry.getTool(input.toolId);
   if (!tool) return { allowed: false, reason: 'tool_not_registered', detail: input.toolId };
 
-  const toolPolicy = input.policy?.tools;
+  // Read the LIVE policy from the workflow context — rules may have
+  // added deny entries since the workflow started.
+  const toolPolicy = input.workflow.policy.tools;
   if (toolPolicy?.deny && matchesAny(input.toolId, toolPolicy.deny)) {
     return { allowed: false, reason: 'tool_denied_by_policy', detail: input.toolId };
   }
@@ -95,7 +89,6 @@ export const checkTool = (input: CheckToolInput): GateDecision => {
     }
   }
   if (toolPolicy?.requireConfirmation && matchesAny(input.toolId, toolPolicy.requireConfirmation)) {
-    // Confirmation flow lands in Phase C; for now we deny.
     return { allowed: false, reason: 'confirmation_required', detail: input.toolId };
   }
   return { allowed: true };
@@ -114,7 +107,7 @@ export const checkAgent = (input: CheckAgentInput): GateDecision => {
   if (!input.registry.getAgent(input.agentId)) {
     return { allowed: false, reason: 'agent_not_registered', detail: input.agentId };
   }
-  const agentPolicy = input.policy?.agents;
+  const agentPolicy = input.workflow.policy.agents;
   if (agentPolicy?.deny && matchesAny(input.agentId, agentPolicy.deny)) {
     return { allowed: false, reason: 'agent_denied_by_policy', detail: input.agentId };
   }

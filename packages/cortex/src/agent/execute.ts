@@ -14,9 +14,10 @@
 //   - plan       → tick loop: tool loop → ActionPlan → plan executor
 //                  → repeat until final or maxTicks
 //
-// Plan-mode delegation (ask_agent) recursively calls executeAgent
-// for in-process specialists, with workflowId preserved so the same
-// ledger / event log / state store track the whole tree.
+// The WorkflowContext carries all per-workflow runtime state:
+// abort signal, live policy (mutable by rules), and injections.
+// No threading of policy/abort/denials — the tool loop and plan
+// executor read from the shared WorkflowContext on every iteration.
 
 import type { AgentDefinition } from './define-agent';
 import type { Bus, BudgetState, Result } from '../types';
@@ -24,6 +25,7 @@ import type { ContextProducer, ContextSpec } from '../context/types';
 import type { SignalClient } from '../llm/signal-client';
 import type { Ledger } from '../manifold/ledger';
 import type { Registry } from '../manifold/registry';
+import type { WorkflowContext } from '../manifold/workflow-context';
 import type { TokenEstimationMode } from '../context/tokens';
 import type { ToolDefinition } from '../tool/define-tool';
 import type { CortexError } from '../errors/cortex.errors';
@@ -31,16 +33,9 @@ import type { Observation, ActionPlan, ContentChunk } from '../schemas';
 import type { StateStore } from '../store/types';
 import { runToolLoop, type ToolLoopResult } from '../tool-loop/loop';
 import { parseTextOutput, parseStructuredOutput, parsePlanOutput, trustAgentReturn } from './output-parser';
-import { CortexTopics } from '../topics';
+import { CortexTopics, type ExecuteFailedPayload, type ExecuteCompletedPayload } from '../topics';
 import { newCorrelationId } from '../utils/id';
-import { systemProducer } from '../context/producers/system.producer';
-import { inputProducer } from '../context/producers/input.producer';
-import { toolsProducer } from '../context/producers/tools.producer';
-import { historyProducer } from '../context/producers/history.producer';
-import { budgetProducer } from '../context/producers/budget.producer';
-import { actionContractProducer } from '../context/producers/action-contract.producer';
-import { agentsProducer } from '../context/producers/agents.producer';
-import { observationsProducer } from '../context/producers/observations.producer';
+import { defaultContextSpecFor } from '../context/defaults';
 import { runPlan, type ExecuteAgentForDelegation } from '../runtime/plan-executor';
 import { ok, err, makeError } from '../errors/cortex.errors';
 
@@ -49,42 +44,6 @@ const DEFAULT_MAX_TOOL_ITERATIONS = 10;
 const DEFAULT_MAX_TICKS = 20;
 const DEFAULT_MAX_PLAN_DEPTH = 2;
 const DEFAULT_MAX_OUTPUT_RETRIES = 2;
-
-const defaultContextSpecFor = (
-  mode: 'text' | 'structured' | 'plan',
-  instructions: string,
-  toolWhitelist: ReadonlyArray<string> | undefined,
-): ContextSpec => {
-  if (mode === 'plan') {
-    return {
-      producers: [
-        systemProducer(instructions),
-        actionContractProducer(),
-        toolsProducer(toolWhitelist ? { allowedIds: toolWhitelist } : {}),
-        agentsProducer(),
-        budgetProducer(),
-        historyProducer(),
-        observationsProducer(),
-        inputProducer(),
-      ],
-    };
-  }
-  // text / structured mode. If the agent has any tools, the
-  // observations producer MUST be in the spec — otherwise the model
-  // never sees what previous tool calls returned and the loop calls
-  // the same tool over and over until maxToolIterations fires.
-  // (Found in the wild via the weather demo: 30 identical Berlin
-  // calls because observations weren't surfaced.)
-  const hasTools = toolWhitelist !== undefined && toolWhitelist.length > 0;
-  const producers: ContextProducer[] = [
-    systemProducer(instructions),
-    toolsProducer(toolWhitelist ? { allowedIds: toolWhitelist } : {}),
-    historyProducer(),
-  ];
-  if (hasTools) producers.push(observationsProducer());
-  producers.push(inputProducer());
-  return { producers };
-};
 
 const resolveTools = (
   registry: Registry,
@@ -125,9 +84,8 @@ export type ExecuteAgentDeps = {
 export type ExecuteAgentArgs<T> = {
   agent: AgentDefinition<T>;
   input: unknown;
-  workflowId: string;
+  workflow: WorkflowContext;
   tick?: number;
-  abort?: AbortSignal;
 };
 
 export type ExecuteAgentOutcome<T> = {
@@ -137,12 +95,9 @@ export type ExecuteAgentOutcome<T> = {
 };
 
 // ───────────────────────────────────────────────────────────
-// Inner: one tool-loop run + output parse (text / structured / plan)
+// Inner: one tool-loop run + output parse
 // ───────────────────────────────────────────────────────────
 
-// Producer that injects a "your previous attempt failed validation"
-// message at high priority. Used by the retry loop to feed validation
-// errors back to the model on the next attempt.
 type FailedAttempt = {
   attempt: number;
   rawContent: string;
@@ -180,11 +135,6 @@ const retryFeedbackProducer = (attempts: ReadonlyArray<FailedAttempt>): ContextP
   },
 });
 
-// Raw single invocation: runs the tool loop and returns its result
-// WITHOUT parsing the output. The caller (runWithRetries) supplies a
-// parser that produces the typed Result<T> for whatever T the agent
-// declared. This separation is what lets the retry loop be fully
-// generic with no `as` casts.
 type RawRunResult =
   | { ok: true; loop: ToolLoopResult }
   | { ok: false; error: CortexError };
@@ -192,13 +142,13 @@ type RawRunResult =
 const runRawInvocation = async (
   deps: ExecuteAgentDeps,
   agent: AgentDefinition<unknown>,
-  workflowId: string,
+  workflow: WorkflowContext,
   input: unknown,
   tick: number,
   carriedObservations: ReadonlyArray<Observation>,
-  abort: AbortSignal | undefined,
   extraInlineProducers: ReadonlyArray<ContextProducer>,
 ): Promise<RawRunResult> => {
+  const workflowId = workflow.workflowId;
   const spec =
     agent.config.context ??
     deps.defaultContextSpec ??
@@ -212,7 +162,7 @@ const runRawInvocation = async (
   try {
     loopResult = await runToolLoop({
       agentId: agent.agentId,
-      workflowId,
+      workflow,
       tick,
       input,
       producers,
@@ -224,15 +174,9 @@ const runRawInvocation = async (
       fullRegistry: deps.registry,
       state: deps.state,
       budget,
-      ...(agent.config.policy && { policy: agent.config.policy }),
       llm: deps.llm,
       ledger: deps.ledger,
       bus: deps.bus,
-      ...(abort && { abort }),
-      // Carry observations from previous ticks into the pipeline so
-      // the observationsProducer can surface them. The tool loop
-      // already accumulates within a single invocation; this seeds
-      // the loop with the prior tick's observations.
       seedObservations: carriedObservations,
     });
   } catch (e) {
@@ -249,20 +193,16 @@ const runRawInvocation = async (
   return { ok: true, loop: loopResult.data };
 };
 
-// Retry wrapper, fully generic in T. The caller supplies a parser
-// that turns raw model content into Result<T>. On validation failure
-// the loop pushes the attempt, injects a feedback producer for the
-// next call, and tries again — up to maxOutputRetries.
 const runWithRetries = async <T>(
   deps: ExecuteAgentDeps,
   agent: AgentDefinition<unknown>,
-  workflowId: string,
+  workflow: WorkflowContext,
   input: unknown,
   tick: number,
   carriedObservations: ReadonlyArray<Observation>,
-  abort: AbortSignal | undefined,
   parse: (content: string) => Result<T>,
 ): Promise<Result<T>> => {
+  const workflowId = workflow.workflowId;
   const maxRetries = agent.config.maxOutputRetries ?? DEFAULT_MAX_OUTPUT_RETRIES;
   const failed: FailedAttempt[] = [];
 
@@ -271,11 +211,10 @@ const runWithRetries = async <T>(
     const raw = await runRawInvocation(
       deps,
       agent,
-      workflowId,
+      workflow,
       input,
       tick,
       carriedObservations,
-      abort,
       extraProducers,
     );
     if (!raw.ok) return err(raw.error);
@@ -283,7 +222,6 @@ const runWithRetries = async <T>(
     const parsed = parse(raw.loop.content);
     if (parsed.ok) return parsed;
 
-    // Only retry on output validation failures.
     const code = parsed.error.code;
     const isValidationError = code === 'output_validation_failed' || code === 'invalid_plan';
     if (!isValidationError || attempt > maxRetries) return parsed;
@@ -318,7 +256,8 @@ export const executeAgent = async <T>(
   deps: ExecuteAgentDeps,
   args: ExecuteAgentArgs<T>,
 ): Promise<Result<T>> => {
-  const { agent, input, workflowId } = args;
+  const { agent, input, workflow } = args;
+  const workflowId = workflow.workflowId;
   const tick = args.tick ?? 0;
   const ctx = { agentId: agent.agentId, workflowId };
 
@@ -346,19 +285,10 @@ export const executeAgent = async <T>(
   // ─── text mode ────────────────────────────────────────────
   if (agent.config.outputMode === 'text') {
     const result = await runWithRetries<T>(
-      deps,
-      agent,
-      workflowId,
-      input,
-      tick,
-      [],
-      args.abort,
+      deps, agent, workflow, input, tick, [],
       (content) => parseTextOutput<T>(content),
     );
-    if (!result.ok) {
-      emitFinalError(result.error);
-      return result;
-    }
+    if (!result.ok) { emitFinalError(result.error); return result; }
     emitCompleted(result.data);
     return result;
   }
@@ -374,49 +304,31 @@ export const executeAgent = async <T>(
       emitFinalError(error);
       return err(error);
     }
-    // The agent definition's outputSchema produces T (the same T that
-    // AgentDefinition<T> is generic over). parseStructuredOutput<T>
-    // returns Result<T> with no widening — it's the cleanest path.
     const schema = agent.config.outputSchema;
     const result = await runWithRetries<T>(
-      deps,
-      agent,
-      workflowId,
-      input,
-      tick,
-      [],
-      args.abort,
+      deps, agent, workflow, input, tick, [],
       (content) => parseStructuredOutput<T>(content, schema, ctx),
     );
-    if (!result.ok) {
-      emitFinalError(result.error);
-      return result;
-    }
+    if (!result.ok) { emitFinalError(result.error); return result; }
     emitCompleted(result.data);
     return result;
   }
 
   // ─── plan mode: tick loop ─────────────────────────────────
-  // maxTicks and maxToolIterations are now separate caps:
-  //   maxTicks (default 20) = outer tick loop (plan mode only)
-  //   maxToolIterations (default 10) = inner tool loop (per agent call)
   const maxTicks = agent.config.maxTicks ?? DEFAULT_MAX_TICKS;
 
-  // Delegation callback for ask_agent: dispatch through the bus so
-  // the specialist runs through the same event-based substrate as
-  // a top-level manifold.execute(). Interceptors (Phase C) will see
-  // this dispatch and can modify/abort before the handler runs.
+  // Delegation callback for ask_agent: dispatch through the bus.
   // Each delegation gets its own correlationId so completions route
   // back to exactly this waitFor, not to the parent or any sibling.
   const delegate: ExecuteAgentForDelegation = async ({ agentId: targetId, input: subInput, workflowId: wf }) => {
     const subCorrelationId = newCorrelationId();
-    // Subscribe BEFORE dispatching — the handler may resolve
-    // synchronously (e.g. an agent that returns immediately).
-    const completionPromise = deps.bus.waitFor('cortex.execute.*', {
+    // Subscribe BEFORE dispatching.
+    const completionPromise = deps.bus.waitFor(CortexTopics.executePattern, {
       filter: (e) =>
         e.meta.correlationId === subCorrelationId &&
         (e.topic === CortexTopics.executeCompleted || e.topic === CortexTopics.executeFailed),
       timeoutMs: 60_000,
+      signal: workflow.abort.signal,
     });
     deps.bus.dispatch(
       CortexTopics.executeRequested,
@@ -426,10 +338,10 @@ export const executeAgent = async <T>(
     try {
       const completion = await completionPromise;
       if (completion.topic === CortexTopics.executeFailed) {
-        const payload = completion.payload as { error: CortexError };
+        const payload = completion.payload as ExecuteFailedPayload;
         return { ok: false, error: payload.error };
       }
-      const payload = completion.payload as { result: Result<unknown> };
+      const payload = completion.payload as ExecuteCompletedPayload;
       if (!payload.result.ok) return { ok: false, error: payload.result.error };
       return { ok: true, data: payload.result.data };
     } catch (e) {
@@ -455,13 +367,7 @@ export const executeAgent = async <T>(
     });
 
     const planResultParsed = await runWithRetries<ActionPlan>(
-      deps,
-      agent,
-      workflowId,
-      input,
-      currentTick,
-      carriedObservations,
-      args.abort,
+      deps, agent, workflow, input, currentTick, carriedObservations,
       (content) => parsePlanOutput<ActionPlan>(content, ctx),
     );
     if (!planResultParsed.ok) {
@@ -485,13 +391,11 @@ export const executeAgent = async <T>(
       },
       {
         plan,
+        workflow,
         agentId: agent.agentId,
-        workflowId,
         tick: currentTick,
         depth: 0,
         maxPlanDepth: DEFAULT_MAX_PLAN_DEPTH,
-        ...(agent.config.policy && { policy: agent.config.policy }),
-        ...(args.abort && { abort: args.abort }),
       },
     );
     if (planResult.error) {

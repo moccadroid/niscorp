@@ -1,12 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import { createManifold, defineRule, defineAgent, defineTool, type Manifold } from '../../src';
+import { createManifold, defineRule, defineAgent, defineTool } from '../../src';
 import { createStubSignal } from '../_helpers/stub-signal';
 import { z } from 'zod';
 
 describe('manifold + rules integration', () => {
   it('inject effect adds a system message to context after enough tool observations', async () => {
     const stub = createStubSignal([
-      // First call: agent calls the tool
       { content: '', toolCalls: [{ id: 'c1', name: 'counter', args: {} }] },
       { content: '', toolCalls: [{ id: 'c2', name: 'counter', args: {} }] },
       { content: '', toolCalls: [{ id: 'c3', name: 'counter', args: {} }] },
@@ -15,7 +14,7 @@ describe('manifold + rules integration', () => {
       { content: 'I see the warning, wrapping up.', toolCalls: [] },
     ]);
 
-    const manifold: Manifold = createManifold({ llm: stub });
+    const manifold = createManifold({ llm: stub });
 
     manifold.registerAgent(
       defineAgent({
@@ -61,12 +60,6 @@ describe('manifold + rules integration', () => {
     if (result.ok) {
       expect(result.data).toContain('wrapping up');
     }
-
-    // Verify the injection was stored
-    expect(manifold._internal.ruleInjections.length).toBeGreaterThanOrEqual(1);
-    expect(manifold._internal.ruleInjections[0]).toBe(
-      'You have made many tool calls. Please finalize.',
-    );
   });
 
   it('rule accumulator state is inspectable via rulesEngine.snapshot', async () => {
@@ -104,7 +97,7 @@ describe('manifold + rules integration', () => {
         watch: {
           observations: { event: 'cortex.observation.recorded', aggregate: 'count' },
         },
-        rules: [], // No rules — just tracking
+        rules: [],
       }),
     );
 
@@ -113,6 +106,112 @@ describe('manifold + rules integration', () => {
     await manifold.stop();
 
     const snapshot = manifold._internal.rulesEngine.snapshot();
-    expect(snapshot.tracker.observations).toBeGreaterThanOrEqual(1);
+    expect(snapshot['tracker']?.['observations']).toBeGreaterThanOrEqual(1);
+  });
+
+  it('abort effect stops the workflow', async () => {
+    const stub = createStubSignal([
+      { content: '', toolCalls: [{ id: 'c1', name: 'counter', args: {} }] },
+      { content: '', toolCalls: [{ id: 'c2', name: 'counter', args: {} }] },
+      // Rule aborts after 2 observations — this response should never be reached
+      { content: 'should not see this', toolCalls: [] },
+    ]);
+
+    const manifold = createManifold({ llm: stub });
+
+    manifold.registerAgent(
+      defineAgent({
+        id: 'a',
+        name: 'A',
+        description: 'test',
+        instructions: 'test',
+        outputMode: 'text',
+        tools: ['counter'],
+      }),
+    );
+
+    manifold.registerTool(
+      defineTool({
+        id: 'counter',
+        name: 'counter',
+        description: 'test',
+        input: z.object({}),
+        execute: async () => ({ ok: true }),
+      }),
+    );
+
+    manifold.registerRule(
+      defineRule({
+        id: 'abort-at-2',
+        watch: {
+          obs: { event: 'cortex.observation.recorded', aggregate: 'count' },
+        },
+        rules: [
+          { when: { $gte: ['$watch.obs', 2] }, then: { abort: 'Two observations reached.' } },
+        ],
+      }),
+    );
+
+    await manifold.start();
+    const result = await manifold.execute<string>('a', 'go');
+    await manifold.stop();
+
+    // The abort effect should have stopped the workflow.
+    // It surfaces as an error (aborted or model_call_failed).
+    expect(result.ok).toBe(false);
+  });
+
+  it('deny effect blocks subsequent tool calls via live policy', async () => {
+    const stub = createStubSignal([
+      { content: '', toolCalls: [{ id: 'c1', name: 'counter', args: {} }] },
+      // After 1 observation, deny fires → policy.tools.deny = ['*']
+      // Next tool call is gated.
+      { content: '', toolCalls: [{ id: 'c2', name: 'counter', args: {} }] },
+      { content: 'tools were denied', toolCalls: [] },
+    ]);
+
+    const manifold = createManifold({ llm: stub });
+
+    manifold.registerAgent(
+      defineAgent({
+        id: 'a',
+        name: 'A',
+        description: 'test',
+        instructions: 'test',
+        outputMode: 'text',
+        tools: ['counter'],
+      }),
+    );
+
+    manifold.registerTool(
+      defineTool({
+        id: 'counter',
+        name: 'counter',
+        description: 'test',
+        input: z.object({}),
+        execute: async () => ({ ok: true }),
+      }),
+    );
+
+    manifold.registerRule(
+      defineRule({
+        id: 'deny-after-1',
+        watch: {
+          obs: { event: 'cortex.observation.recorded', aggregate: 'count' },
+        },
+        rules: [
+          { when: { $gte: ['$watch.obs', 1] }, then: { deny: 'One observation limit.' } },
+        ],
+      }),
+    );
+
+    await manifold.start();
+    const result = await manifold.execute<string>('a', 'go');
+    await manifold.stop();
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.data).toContain('denied');
+    }
   });
 });

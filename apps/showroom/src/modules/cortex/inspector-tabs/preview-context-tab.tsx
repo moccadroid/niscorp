@@ -13,6 +13,7 @@ import {
   isToolUseStory,
   isPlanModeStory,
   isRulesStory,
+  isConfirmationStory,
   type CortexStory,
 } from '../story-types';
 import { mappingAgent } from '@niscorp/prism/agent';
@@ -60,6 +61,9 @@ const resolveStory = (story: CortexStory): ResolveStory | undefined => {
   }
   if (isRulesStory(story)) {
     return { agent: story.agent, tools: story.tools ?? [], input: story.prompt };
+  }
+  if (isConfirmationStory(story)) {
+    return { agent: story.agent, tools: story.tools, input: story.prompt };
   }
   return undefined;
 };

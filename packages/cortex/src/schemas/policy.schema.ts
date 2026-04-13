@@ -33,6 +33,7 @@ export const PolicyConfigSchema = z.object({
   budget: BudgetPolicySchema.optional(),
   tools: ToolPolicySchema.optional(),
   agents: AgentPolicySchema.optional(),
+  confirmationTimeoutMs: z.number().int().positive().optional(),
 }).partial();
 
 export type PolicyConfig = z.infer<typeof PolicyConfigSchema>;

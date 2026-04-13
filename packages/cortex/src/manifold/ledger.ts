@@ -65,6 +65,8 @@ const EMPTY_SNAPSHOT: LedgerSnapshot = {
   durationRemainingMs: 0,
 };
 
+import { makeError, throwCortex } from '../errors/cortex.errors';
+
 export type CreateLedgerOptions = {
   defaultBudget?: Partial<LedgerBudget>;
 };
@@ -75,7 +77,7 @@ export const createLedger = (options: CreateLedgerOptions = {}): Ledger => {
 
   const requireEntry = (workflowId: string): LedgerEntry => {
     const entry = entries.get(workflowId);
-    if (!entry) throw new Error(`Ledger has no open entry for workflow ${workflowId}`);
+    if (!entry) throwCortex(makeError('unknown', `Ledger has no open entry for workflow ${workflowId}`, { workflowId }));
     return entry;
   };
 

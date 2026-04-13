@@ -8,13 +8,9 @@
 // completed or failed on the same correlationId. Concurrent
 // executions are routed by correlationId — no cross-talk.
 //
-// previewContext is the only read-only path that stays direct
-// (no bus round-trip, no lifecycle events, no LLM call).
-//
-// External systems can trigger agent execution by emitting
-// CortexTopics.executeRequested on the bus. Interceptors (Phase C)
-// subscribe at higher priority and can modify/abort before the
-// handler runs.
+// Per-workflow runtime state lives in a WorkflowContext — one per
+// active workflow. The tool loop, plan executor, and gate all read
+// from it. Rules write to it. The manifold creates and destroys it.
 
 import type { AgentDefinition } from '../agent/define-agent';
 import type { ToolDefinition } from '../tool/define-tool';
@@ -25,14 +21,11 @@ import type { CortexError } from '../errors/cortex.errors';
 import { runPipeline } from '../context/pipeline';
 import { counterFor, type TokenEstimationMode } from '../context/tokens';
 import { executeAgent } from '../agent/execute';
-import { systemProducer } from '../context/producers/system.producer';
-import { inputProducer } from '../context/producers/input.producer';
-import { toolsProducer } from '../context/producers/tools.producer';
-import { historyProducer } from '../context/producers/history.producer';
-import { budgetProducer } from '../context/producers/budget.producer';
+import { defaultContextSpecFor } from '../context/defaults';
 import { createBus, type CreateBusOptions } from './bus';
 import { createRegistry, type Registry } from './registry';
 import { createLedger, DEFAULT_BUDGET, type Ledger, type LedgerBudget } from './ledger';
+import { createWorkflowContext, destroyWorkflowContext, type WorkflowContext } from './workflow-context';
 import type { StateStore, EventLog } from '../store/types';
 import { createMemoryStateStore } from '../store/memory-state.store';
 import { createMemoryEventLog } from '../store/memory-event.log';
@@ -47,8 +40,10 @@ import {
   type EffectHandler,
   type EffectRegistry,
   isInjectEffect,
+  isAbortEffect,
+  isDenyEffect,
 } from '../rules';
-import { CortexTopics } from '../topics';
+import { CortexTopics, type ExecuteFailedPayload, type ExecuteCompletedPayload } from '../topics';
 
 // ───────────────────────────────────────────────────────────
 // Public surface
@@ -100,25 +95,8 @@ export type Manifold = {
     config: ManifoldConfig;
     rulesEngine: RulesEngine;
     effectRegistry: EffectRegistry;
-    ruleInjections: string[];
+    workflows: ReadonlyMap<string, WorkflowContext>;
   };
-};
-
-// ───────────────────────────────────────────────────────────
-// Default context spec
-// ───────────────────────────────────────────────────────────
-
-const defaultContextSpecFor = (mode: 'text' | 'structured' | 'plan', instructions: string): ContextSpec => {
-  const base: ContextProducer[] = [
-    systemProducer(instructions),
-    toolsProducer(),
-    historyProducer(),
-    inputProducer(),
-  ];
-  if (mode === 'plan') {
-    base.splice(2, 0, budgetProducer());
-  }
-  return { producers: base };
 };
 
 const DEFAULT_PACK_BUDGET_TOKENS = 32_000;
@@ -137,24 +115,26 @@ export const createManifold = (config: ManifoldConfig = {}): Manifold => {
   const packBudget = config.defaultPackBudget ?? DEFAULT_PACK_BUDGET_TOKENS;
   const hooks = config.hooks ?? {};
 
-  // ─── Rules engine (Phase C) ─────────────────────────────
+  // ─── Rules engine ───────────────────────────────────────
   const effectRegistry = createEffectRegistry();
   const rulesEngine = createRulesEngine(bus, effectRegistry);
 
-  // Rules engine inject effect → dynamic context producer. When a
-  // rule fires an inject effect, we store the message and a producer
-  // picks it up on the next pipeline build. This is the bridge
-  // between the rules engine and the context pipeline.
-  const ruleInjections: string[] = [];
+  // ─── Per-workflow runtime state ─────────────────────────
+  //
+  // One WorkflowContext per active workflow. The tool loop, plan
+  // executor, and gate all read from it. Rules write to it.
+  const workflows = new Map<string, WorkflowContext>();
 
-  // The inject producer reads from ruleInjections and emits them
-  // as system chunks. Registered as a global producer.
+  // The inject producer reads injections from the active workflow.
+  // Since producers don't receive the workflowId directly, we look
+  // up the workflow by the BuildContext's workflowId.
   const ruleInjectProducer: ContextProducer = {
     id: 'cortex.rule-inject',
     priority: 85,
-    build: () => {
-      if (ruleInjections.length === 0) return [];
-      return ruleInjections.map((msg) => ({
+    build: (ctx) => {
+      const wf = workflows.get(ctx.workflowId);
+      if (!wf || wf.injections.length === 0) return [];
+      return wf.injections.map((msg) => ({
         role: 'system' as const,
         content: msg,
         source: 'cortex.rule-inject',
@@ -172,77 +152,45 @@ export const createManifold = (config: ManifoldConfig = {}): Manifold => {
   let draining = false;
   let inFlight = 0;
 
-  // ─── Stateful producer wiring (Phase C) ─────────────────
+  // ─── Stateful producer wiring ───────────────────────────
   //
   // Producers with `subscribes` are attached to the bus when a
-  // workflow starts and detached when it ends. Each gets a
-  // per-(producer, workflow) ProducerState so onEvent accumulations
-  // are scoped. The BuildContext already carries the state store
-  // snapshot; stateful producers read their accumulated state via
-  // the same mechanism. The pipeline's build phase passes the
-  // workflow state snapshot to each producer's BuildContext.
-  //
-  // We track unsub functions per workflowId so we can clean up
-  // on workflow end.
-  const workflowProducerUnsubs = new Map<string, Unsubscribe[]>();
+  // workflow starts. Unsub functions are stored on the workflow's
+  // producerUnsubs array, cleaned up by destroyWorkflowContext.
 
-  const attachStatefulProducers = (workflowId: string): void => {
-    const unsubs: Unsubscribe[] = [];
+  const attachStatefulProducers = (workflow: WorkflowContext): void => {
     const allProducers = registry.allProducers();
     for (const producer of allProducers) {
       if (!producer.subscribes?.length || !producer.onEvent) continue;
       const state = createProducerState();
-      // Store the producer state in the state store so the pipeline's
-      // BuildContext can expose it. Key: cortex.producer.<id>
       const storeKey = `cortex.producer.${producer.id}`;
-      // Write initial empty state.
-      void stateStore.set(workflowId, storeKey, state.toObject());
+      void stateStore.set(workflow.workflowId, storeKey, state.toObject());
       for (const topic of producer.subscribes) {
-        unsubs.push(
+        workflow.producerUnsubs.push(
           bus.on(topic, (event) => {
             producer.onEvent!(event, state);
-            // Persist after each event so the pipeline sees the latest.
-            void stateStore.set(workflowId, storeKey, state.toObject());
+            void stateStore.set(workflow.workflowId, storeKey, state.toObject());
           }),
         );
       }
     }
-    if (unsubs.length > 0) workflowProducerUnsubs.set(workflowId, unsubs);
   };
 
-  const detachStatefulProducers = (workflowId: string): void => {
-    const unsubs = workflowProducerUnsubs.get(workflowId);
-    if (unsubs) {
-      for (const unsub of unsubs) unsub();
-      workflowProducerUnsubs.delete(workflowId);
-    }
-  };
-
-  // ─── Execution handler ───────────────────────────────────
+  // ─── Execution handler ──────────────────────────────────
   //
   // The bus-driven execution substrate. This handler is the ONLY
   // place where executeAgent is called. manifold.execute() is just
-  // dispatch + waitFor. External systems can also emit
-  // executeRequested directly to trigger agent runs.
-  //
-  // The handler is registered eagerly (not in start()) so the
-  // manifold works immediately after creation. start/stop are
-  // lifecycle hooks for draining and cleanup, not for enabling.
+  // dispatch + waitFor.
 
   bus.on(CortexTopics.executeRequested, async (event) => {
-    const { agentId, input, workflowId, abort } = event.payload as {
-      agentId: string;
-      input: unknown;
-      workflowId: string;
-      abort?: AbortSignal;
-    };
+    const { agentId, input, workflowId, abort: externalAbort } = event.payload;
     const correlationId = event.meta.correlationId;
 
     // Validate preconditions.
     let agent: AgentDefinition<unknown>;
     try {
       agent = registry.requireAgent(agentId);
-    } catch (e) {
+    } catch {
       bus.emit({
         topic: CortexTopics.executeFailed,
         payload: {
@@ -266,12 +214,19 @@ export const createManifold = (config: ManifoldConfig = {}): Manifold => {
       return;
     }
 
-    // Lifecycle: open ledger, track in-flight, attach stateful
-    // producers, emit workflow.started.
+    // Lifecycle: open ledger, create WorkflowContext, attach
+    // stateful producers, emit workflow.started.
     const ownLedger = !ledger.isOpen(workflowId);
     if (ownLedger) ledger.open(workflowId);
     inFlight += 1;
-    attachStatefulProducers(workflowId);
+
+    const workflow = createWorkflowContext(
+      workflowId,
+      agent.config.policy ?? {},
+      externalAbort,
+    );
+    workflows.set(workflowId, workflow);
+    attachStatefulProducers(workflow);
 
     bus.emit({
       topic: CortexTopics.workflowStarted,
@@ -297,19 +252,24 @@ export const createManifold = (config: ManifoldConfig = {}): Manifold => {
         {
           agent,
           input,
-          workflowId,
-          ...(abort && { abort }),
+          workflow,
         },
       );
 
+      const finalLedger = ledger.isOpen(workflowId) ? ledger.snapshot(workflowId) : undefined;
+
       bus.emit({
         topic: CortexTopics.workflowEnded,
-        payload: { workflowId, result: result.ok ? result.data : undefined, error: result.ok ? undefined : result.error },
+        payload: {
+          workflowId,
+          result: result.ok ? result.data : undefined,
+          error: result.ok ? undefined : result.error,
+          ...(finalLedger && { ledger: finalLedger }),
+        },
         meta: { timestamp: Date.now(), correlationId, workflowId },
       });
       hooks.onWorkflowEnd?.(workflowId, result.ok ? result.data : undefined);
 
-      // Emit completion. The caller's waitFor resolves on this.
       bus.emit({
         topic: CortexTopics.executeCompleted,
         payload: { result, workflowId },
@@ -323,29 +283,27 @@ export const createManifold = (config: ManifoldConfig = {}): Manifold => {
       );
       hooks.onError?.(e, { workflowId, agentId });
 
+      const finalLedger = ledger.isOpen(workflowId) ? ledger.snapshot(workflowId) : undefined;
       bus.emit({
         topic: CortexTopics.workflowEnded,
-        payload: { workflowId, error },
+        payload: { workflowId, error, ...(finalLedger && { ledger: finalLedger }) },
         meta: { timestamp: Date.now(), correlationId, workflowId },
       });
 
-      // Emit failure. The caller's waitFor resolves on this.
       bus.emit({
         topic: CortexTopics.executeFailed,
         payload: { error, workflowId },
         meta: { timestamp: Date.now(), correlationId, workflowId },
       });
     } finally {
-      detachStatefulProducers(workflowId);
+      destroyWorkflowContext(workflow);
+      workflows.delete(workflowId);
       inFlight -= 1;
       if (ownLedger) ledger.close(workflowId);
     }
   });
 
-  // ─── execute: dispatch + waitFor ─────────────────────────
-  //
-  // Three lines. The bus is the substrate. Everything else is
-  // handled by the subscription above.
+  // ─── execute: dispatch + waitFor ────────────────────────
 
   const execute = async <T>(
     agentId: string,
@@ -355,44 +313,34 @@ export const createManifold = (config: ManifoldConfig = {}): Manifold => {
     const correlationId = newCorrelationId();
     const workflowId = options.workflowId ?? newWorkflowId();
 
-    // IMPORTANT: subscribe BEFORE dispatching. The handler may emit
-    // the completion event synchronously during dispatch (e.g. when
-    // validation fails immediately). If we dispatched first and then
-    // subscribed, the completion event would fire before anyone is
-    // listening and waitFor would time out.
-    // Subscribe BEFORE dispatching. Filter on correlationId AND on
-    // the topic being a completion or failure — NOT the request
-    // event we're about to dispatch (which has the same correlationId).
     const isCompletionOrFailure = (e: { topic: string; meta: { correlationId: string } }): boolean =>
       e.meta.correlationId === correlationId &&
       (e.topic === CortexTopics.executeCompleted || e.topic === CortexTopics.executeFailed);
 
-    const completionPromise = bus.waitFor('cortex.execute.*', {
+    const completionPromise = bus.waitFor(CortexTopics.executePattern, {
       filter: isCompletionOrFailure,
       timeoutMs: DEFAULT_BUDGET.maxDurationMs,
       ...(options.signal && { signal: options.signal }),
     });
 
-    // Dispatch the request. The handler above picks it up.
     bus.dispatch(
       CortexTopics.executeRequested,
       { agentId, input, workflowId, ...(options.signal && { abort: options.signal }) },
       { correlationId, workflowId },
     );
 
-    // Await the completion (already subscribed above).
     const completion = await completionPromise;
 
     if (completion.topic === CortexTopics.executeFailed) {
-      const payload = completion.payload as { error: CortexError };
+      const payload = completion.payload as ExecuteFailedPayload;
       return err(payload.error);
     }
 
-    const payload = completion.payload as { result: Result<T> };
-    return payload.result;
+    const payload = completion.payload as ExecuteCompletedPayload;
+    return payload.result as Result<T>;
   };
 
-  // ─── previewContext — stays direct (no bus) ───────────────
+  // ─── previewContext — stays direct (no bus) ─────────────
 
   const previewContext = async (
     agentId: string,
@@ -426,7 +374,7 @@ export const createManifold = (config: ManifoldConfig = {}): Manifold => {
     const spec =
       agent.config.context ??
       config.defaultContextSpec ??
-      defaultContextSpecFor(agent.config.outputMode, agent.config.instructions);
+      defaultContextSpecFor(agent.config.outputMode, agent.config.instructions, agent.config.tools);
 
     const extraProducers = registry.producersFor(agentId);
     const allProducers = [...spec.producers, ...extraProducers];
@@ -450,7 +398,7 @@ export const createManifold = (config: ManifoldConfig = {}): Manifold => {
     );
   };
 
-  // ─── lifecycle ───────────────────────────────────────────
+  // ─── lifecycle ──────────────────────────────────────────
 
   const start = async (): Promise<void> => {
     if (started) return;
@@ -472,50 +420,61 @@ export const createManifold = (config: ManifoldConfig = {}): Manifold => {
     await stop();
   };
 
-  // Register the rule-inject producer so inject effects land in context.
+  // Register the rule-inject producer.
   registry.addProducer(ruleInjectProducer);
 
-  // Evaluate rules after each observation. We defer to a microtask
-  // so that all synchronous bus handlers (including accumulator
-  // handlers registered by rules) have finished processing the event
-  // before we read their state. Without this, evaluation runs before
-  // the accumulators increment and always sees stale values.
+  // ─── Rule evaluation ────────────────────────────────────
   //
-  // If a rule fires an inject effect, push the message into
-  // ruleInjections so the inject producer picks it up on the next
-  // pipeline build. Abort effects are surfaced via a cortex.rule.fired
-  // event.
-  bus.on(CortexTopics.observationRecorded, () => {
+  // Evaluate rules after each observation. Deferred to a microtask
+  // so accumulators have processed the event first.
+  //
+  // The trigger event's workflowId scopes all effects to the
+  // correct workflow — no global arrays, no iterating all controllers.
+  bus.on(CortexTopics.observationRecorded, (triggerEvent) => {
+    const triggerWorkflowId = triggerEvent.meta.workflowId;
     void Promise.resolve().then(() => {
       const snapshot = rulesEngine.snapshot();
       const result = rulesEngine.evaluate();
 
-      // Always emit an evaluation event — whether a rule matched or not.
-      // This gives full observability: the runner can show accumulator
-      // state, which rule matched, and which didn't.
       bus.emit({
         topic: CortexTopics.ruleEvaluated,
         payload: { result, accumulators: snapshot },
-        meta: { timestamp: Date.now(), correlationId: 'rule' },
+        meta: { timestamp: Date.now(), correlationId: triggerWorkflowId ?? 'rule', workflowId: triggerWorkflowId },
       });
 
       if (!result.matched) return;
       const effect = result.effect;
 
-      // Emit a fired event with the full effect and accumulator state.
       bus.emit({
         topic: CortexTopics.ruleFired,
         payload: { ruleId: result.ruleId, effect, accumulators: snapshot },
-        meta: { timestamp: Date.now(), correlationId: 'rule' },
+        meta: { timestamp: Date.now(), correlationId: triggerWorkflowId ?? 'rule', workflowId: triggerWorkflowId },
       });
 
+      // Resolve the workflow this effect applies to.
+      const wf = triggerWorkflowId ? workflows.get(triggerWorkflowId) : undefined;
+
       if (isInjectEffect(effect)) {
-        ruleInjections.push(effect.inject);
+        if (wf) wf.addInjection(effect.inject);
+      }
+      if (isAbortEffect(effect)) {
+        if (wf) wf.abort.abort(effect.abort);
+      }
+      if (isDenyEffect(effect)) {
+        if (wf) {
+          wf.updatePolicy((p) => ({
+            ...p,
+            tools: {
+              ...p.tools,
+              deny: [...(p.tools?.deny ?? []), '*'],
+            },
+          }));
+        }
       }
     });
   });
 
-  // Soft warning for exact token mode (not yet implemented).
+  // Soft warning for exact token mode.
   if (config.tokenEstimation === 'exact') {
     bus.emit({
       topic: CortexTopics.warning,
@@ -538,7 +497,7 @@ export const createManifold = (config: ManifoldConfig = {}): Manifold => {
     start,
     stop,
     drain,
-    _internal: { registry, ledger, stateStore, eventLog, config, rulesEngine, effectRegistry, ruleInjections },
+    _internal: { registry, ledger, stateStore, eventLog, config, rulesEngine, effectRegistry, workflows },
   };
 };
 

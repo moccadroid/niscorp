@@ -9,6 +9,7 @@ import {
   isToolUseStory,
   isPlanModeStory,
   isRulesStory,
+  isConfirmationStory,
   type CortexStory,
 } from '../story-types';
 
@@ -130,6 +131,7 @@ const resolveAgent = (story: CortexStory): AgentDefinition<unknown> | undefined 
   if (isToolUseStory(story)) return story.agent;
   if (isPlanModeStory(story)) return story.agent;
   if (isRulesStory(story)) return story.agent;
+  if (isConfirmationStory(story)) return story.agent;
   return undefined;
 };
 

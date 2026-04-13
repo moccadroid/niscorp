@@ -1,13 +1,8 @@
 // ═══════════════════════════════════════════════════════════
 // @niscorp/cortex — shared core types
 // ═══════════════════════════════════════════════════════════
-//
-// Hand-written types per STYLE_GUIDE.md §Types: anything that does
-// not need runtime validation lives here. Schemas (Zod) live in src/schemas.
-//
-// The types in this file are deliberately minimal — most subsystems
-// own their own types. Anything imported by more than one subsystem
-// is a candidate for living here.
+
+import type { TypedTopic } from './utils/typed-topic';
 
 // ───────────────────────────────────────────────────────────
 // Bus / events
@@ -20,25 +15,31 @@ export type EventMeta = {
   workflowId?: string;
 };
 
-export type BusEvent = {
+export type BusEvent<T = unknown> = {
   topic: string;
-  payload: unknown;
+  payload: T;
   meta: EventMeta;
 };
 
-export type BusHandler = (event: BusEvent) => void | Promise<void>;
+export type BusHandler<T = unknown> = (event: BusEvent<T>) => void | Promise<void>;
 export type Unsubscribe = () => void;
 
-export type WaitForOptions = {
+export type WaitForOptions<T = unknown> = {
   timeoutMs?: number;
-  filter?: (event: BusEvent) => boolean;
+  filter?: (event: BusEvent<T>) => boolean;
   signal?: AbortSignal;
 };
 
 export type Bus = {
   emit: (event: BusEvent) => void;
-  on: (pattern: string, handler: BusHandler) => Unsubscribe;
-  waitFor: (pattern: string, options?: WaitForOptions) => Promise<BusEvent>;
+  on: {
+    <T>(topic: TypedTopic<T>, handler: BusHandler<T>): Unsubscribe;
+    (pattern: string, handler: BusHandler): Unsubscribe;
+  };
+  waitFor: {
+    <T>(topic: TypedTopic<T>, options?: WaitForOptions<T>): Promise<BusEvent<T>>;
+    (pattern: string, options?: WaitForOptions): Promise<BusEvent>;
+  };
   dispatch: (topic: string, payload: unknown, meta?: Partial<EventMeta>) => string;
 };
 
@@ -51,7 +52,7 @@ export type Result<T, E = CortexError> =
   | { ok: false; error: E };
 
 // ───────────────────────────────────────────────────────────
-// Errors (re-exported here so dependents avoid a cycle)
+// Errors
 // ───────────────────────────────────────────────────────────
 
 export type ErrorCode =

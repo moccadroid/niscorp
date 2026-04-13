@@ -19,6 +19,7 @@
 import type { Bus, BusEvent, BusHandler, EventMeta, Unsubscribe, WaitForOptions } from '../types';
 import { compileTopicPattern } from '../utils/wildcard';
 import { newCorrelationId, newEventId } from '../utils/id';
+import { CortexTopics } from '../topics';
 
 type Subscription = {
   id: string;
@@ -46,11 +47,11 @@ export const createBus = (options: CreateBusOptions = {}): Bus => {
   const handleHandlerError = (error: unknown, event: BusEvent): void => {
     onHandlerError(error, event);
     if (emittingError) return;
-    if (event.topic === 'cortex.error') return;
+    if (event.topic === CortexTopics.error) return;
     emittingError = true;
     try {
       emit({
-        topic: 'cortex.error',
+        topic: CortexTopics.error,
         payload: {
           code: 'unknown',
           message: error instanceof Error ? error.message : String(error),

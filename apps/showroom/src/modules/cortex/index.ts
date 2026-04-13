@@ -14,12 +14,13 @@ const docs: readonly DocPage[] = [{ id: 'design', title: 'Design', content: desi
 
 // Sidebar groups by Cortex feature, not by demo content. The order
 // here is the order users see in the sidebar — easiest first.
-const KIND_ORDER: readonly string[] = ['standalone', 'tool-use', 'plan-mode', 'rules'];
+const KIND_ORDER: readonly string[] = ['standalone', 'tool-use', 'plan-mode', 'rules', 'confirmation'];
 const KIND_LABELS: Record<string, string> = {
   standalone: 'STANDALONE EXECUTION',
   'tool-use': 'TOOL USE',
   'plan-mode': 'PLAN MODE (TICK LOOP)',
   rules: 'RULES ENGINE',
+  confirmation: 'HUMAN IN THE LOOP',
 };
 
 const toSidebarEntry = (story: unknown): SidebarStoryEntry => {

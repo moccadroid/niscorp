@@ -12,22 +12,17 @@
 
 import type { AgentDefinition } from './define-agent';
 import type { ToolDefinition } from '../tool/define-tool';
-import type { Bus, BusEvent, Result, Unsubscribe } from '../types';
+import type { Bus, Result, Unsubscribe } from '../types';
 import type { SignalClient } from '../llm/signal-client';
 import type { Observation } from '../schemas';
 import type { RegisteredRule } from '../rules/engine';
 import type { EffectHandler } from '../rules/effects';
 import { createManifold, type Manifold, type ManifoldConfig } from '../manifold/manifold';
+import { CortexTopics, type AgentRetryPayload } from '../topics';
 import { newWorkflowId } from '../utils/id';
 
-export type RetryEventPayload = {
-  agentId: string;
-  workflowId: string;
-  attempt: number;
-  nextAttempt: number;
-  rawContent: string;
-  error: { code: string; message: string };
-};
+// Re-export under the established name so existing consumers don't break.
+export type RetryEventPayload = AgentRetryPayload;
 
 export type StandaloneOptions = {
   llm: SignalClient;
@@ -92,21 +87,15 @@ export const runAgentStandalone = async <T>(
   const subscriptions: Unsubscribe[] = [];
   if (options.onRetry) {
     subscriptions.push(
-      manifold.bus.on('cortex.agent.retry', (event: BusEvent) => {
-        // The retry-event payload is emitted by execute.ts and is
-        // the only producer of cortex.agent.retry, so the shape is
-        // stable. We assert it via a small typed adapter rather
-        // than threading the type through the entire bus.
-        const payload = event.payload as RetryEventPayload;
-        options.onRetry?.(payload);
+      manifold.bus.on(CortexTopics.agentRetry, (event) => {
+        options.onRetry?.(event.payload);
       }),
     );
   }
   if (options.onObservation) {
     subscriptions.push(
-      manifold.bus.on('cortex.observation.recorded', (event: BusEvent) => {
-        const observation = event.payload as Observation;
-        options.onObservation?.(observation);
+      manifold.bus.on(CortexTopics.observationRecorded, (event) => {
+        options.onObservation?.(event.payload);
       }),
     );
   }

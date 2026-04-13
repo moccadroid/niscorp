@@ -20,7 +20,7 @@ import type { PolicyConfig, ToolDefinition, AgentDefinition, RegisteredRule, Eff
 // Cortex feature groups (kinds)
 // ───────────────────────────────────────────────────────────
 
-export type CortexKind = 'standalone' | 'tool-use' | 'plan-mode' | 'rules';
+export type CortexKind = 'standalone' | 'tool-use' | 'plan-mode' | 'rules' | 'confirmation';
 
 // ───────────────────────────────────────────────────────────
 // Base shape
@@ -113,17 +113,26 @@ export type PlanModeStory = CortexStoryBase & {
 export type RulesStory = CortexStoryBase & {
   kind: 'rules';
   demo: 'rules';
-  // The agent being steered.
   agent: AgentDefinition<unknown>;
   tools?: ReadonlyArray<ToolDefinition>;
-  // Declarative rules that fire effects during the run.
+  // Plan-mode directors can delegate to specialists via ask_agent.
+  specialists?: ReadonlyArray<AgentDefinition<unknown>>;
   rules: ReadonlyArray<RegisteredRule>;
-  // Optional named effect handlers for `call` effects.
   effects?: ReadonlyArray<{ name: string; handler: EffectHandler }>;
   prompt: string;
-  // The rule source code to display in the code panel (as a string).
-  // This is the actual defineRule() call so users can see how easy it is.
   ruleCode: string;
+};
+
+// ───────────────────────────────────────────────────────────
+// CONFIRMATION — human-in-the-loop tool approval
+// ───────────────────────────────────────────────────────────
+
+export type ConfirmationStory = CortexStoryBase & {
+  kind: 'confirmation';
+  demo: 'confirmation';
+  agent: AgentDefinition<unknown>;
+  tools: ReadonlyArray<ToolDefinition>;
+  prompt: string;
 };
 
 // ───────────────────────────────────────────────────────────
@@ -135,7 +144,8 @@ export type CortexStory =
   | StructuredExtractStory
   | ToolUseStory
   | PlanModeStory
-  | RulesStory;
+  | RulesStory
+  | ConfirmationStory;
 
 export const isCortexStory = (value: unknown): value is CortexStory => {
   if (value === null || typeof value !== 'object') return false;
@@ -162,6 +172,9 @@ export const isPlanModeStory = (value: unknown): value is PlanModeStory =>
 
 export const isRulesStory = (value: unknown): value is RulesStory =>
   isCortexStory(value) && Reflect.get(value, 'demo') === 'rules';
+
+export const isConfirmationStory = (value: unknown): value is ConfirmationStory =>
+  isCortexStory(value) && Reflect.get(value, 'demo') === 'confirmation';
 
 // Re-export types that the runners need.
 export type { Config, JsonValue, JsonObject, ZodType, PolicyConfig };

@@ -5,7 +5,7 @@
 // Per DESIGN.md §7. The plan executor:
 //   1. Validates plan depth against maxPlanDepth
 //   2. Walks nodes top-to-bottom
-//   3. Gates each node before execution
+//   3. Gates each node before execution (reads live policy from WorkflowContext)
 //   4. Records an Observation per step
 //   5. Stops on `final` and returns its result
 //   6. On error: records the observation but continues — the next
@@ -15,12 +15,6 @@
 // The executor is NOT the tick loop. It runs ONE plan to completion
 // or to a `final` node. The tick loop (in execute.ts) calls the
 // executor repeatedly until a final lands or maxTicks elapses.
-//
-// `ask_agent` delegation happens through the bus per DESIGN.md §3.3
-// and §7.3: dispatch a request event, await a completion event,
-// in-process registry short-circuit for performance. The runtime
-// short-circuit calls executeAgent recursively but the contract is
-// event-based (events still fire so subscribers see everything).
 
 import type { Bus } from '../types';
 import type {
@@ -37,16 +31,14 @@ import type {
 import type { Registry } from '../manifold/registry';
 import type { Ledger } from '../manifold/ledger';
 import type { ToolContext } from '../tool/define-tool';
-import type { PolicyConfig } from '../schemas/policy.schema';
+import type { WorkflowContext } from '../manifold/workflow-context';
 import type { StateStore } from '../store/types';
 import type { CortexError } from '../errors/cortex.errors';
 import { checkAgent, checkTool, type GateDecision } from './gate';
 import { makeError } from '../errors/cortex.errors';
-import { CortexTopics } from '../topics';
+import { recordObservation } from '../utils/observation';
+import { withTimeout, DEFAULT_TOOL_TIMEOUT_MS } from '../utils/timeout';
 
-// Forward declaration to avoid circular import. The tick loop in
-// execute.ts passes its own executeAgent function in here so the
-// plan executor can recursively delegate without importing it.
 export type ExecuteAgentForDelegation = (args: {
   agentId: string;
   input: unknown;
@@ -68,33 +60,20 @@ export type PlanExecutorDeps = {
 
 export type PlanExecutorInput = {
   plan: ActionPlan;
+  workflow: WorkflowContext;
   agentId: string;
-  workflowId: string;
   tick: number;
   depth: number;
   maxPlanDepth: number;
-  policy?: PolicyConfig;
-  abort?: AbortSignal;
 };
 
 export type PlanExecutorResult = {
-  // True if the plan reached a `final` node and produced a result.
-  // False means the plan ran to completion without finalizing — the
-  // tick loop should call the agent again with the new observations.
   finalized: boolean;
   finalResult?: unknown;
   observations: Observation[];
 };
 
 const now = (): number => Date.now();
-
-const recordObservation = (bus: Bus, workflowId: string, observation: Observation): void => {
-  bus.emit({
-    topic: CortexTopics.observationRecorded,
-    payload: observation,
-    meta: { timestamp: now(), correlationId: workflowId, workflowId },
-  });
-};
 
 const denialMessage = (decision: GateDecision): string => {
   if (decision.allowed) return '';
@@ -120,6 +99,16 @@ const validateDepth = (nodes: ActionPlan, current: number, max: number): CortexE
 };
 
 // ───────────────────────────────────────────────────────────
+// Gate input builder — shared mutable references, always fresh
+// ───────────────────────────────────────────────────────────
+
+const gateFor = (deps: PlanExecutorDeps, input: PlanExecutorInput) => ({
+  workflow: input.workflow,
+  registry: deps.registry,
+  ledger: deps.ledger,
+});
+
+// ───────────────────────────────────────────────────────────
 // Per-node executors
 // ───────────────────────────────────────────────────────────
 
@@ -129,13 +118,8 @@ const executeUseTool = async (
   node: UseToolNode,
 ): Promise<Observation> => {
   const start = now();
-  const gate = checkTool({
-    policy: input.policy,
-    registry: deps.registry,
-    ledger: deps.ledger,
-    workflowId: input.workflowId,
-    toolId: node.toolId,
-  });
+  const workflowId = input.workflow.workflowId;
+  const gate = checkTool({ ...gateFor(deps, input), toolId: node.toolId });
   if (!gate.allowed) {
     return {
       stepKind: 'use_tool',
@@ -143,16 +127,16 @@ const executeUseTool = async (
       durationMs: now() - start,
       error: denialMessage(gate),
       timestamp: now(),
-      workflowId: input.workflowId,
+      workflowId,
       depth: input.depth,
       tick: input.tick,
     };
   }
   const tool = deps.registry.requireTool(node.toolId);
   const ctx: ToolContext = {
-    workflowId: input.workflowId,
+    workflowId,
     agentId: input.agentId,
-    signal: input.abort ?? new AbortController().signal,
+    signal: input.workflow.abort.signal,
     bus: deps.bus,
   };
   try {
@@ -164,20 +148,25 @@ const executeUseTool = async (
         durationMs: now() - start,
         error: `input_invalid: ${parsed.error.issues.map((i) => i.message).join('; ')}`,
         timestamp: now(),
-        workflowId: input.workflowId,
+        workflowId,
         depth: input.depth,
         tick: input.tick,
       };
     }
-    const result = await tool.config.execute(parsed.data, ctx);
-    deps.ledger.addToolCall(input.workflowId);
+    const timeout = node.timeoutMs ?? tool.config.timeoutMs ?? DEFAULT_TOOL_TIMEOUT_MS;
+    const result = await withTimeout(
+      tool.config.execute(parsed.data, ctx),
+      timeout,
+      `tool ${node.toolId}`,
+    );
+    deps.ledger.addToolCall(workflowId);
     return {
       stepKind: 'use_tool',
       toolId: tool.toolId,
       durationMs: now() - start,
       result,
       timestamp: now(),
-      workflowId: input.workflowId,
+      workflowId,
       depth: input.depth,
       tick: input.tick,
     };
@@ -188,7 +177,7 @@ const executeUseTool = async (
       durationMs: now() - start,
       error: e instanceof Error ? e.message : String(e),
       timestamp: now(),
-      workflowId: input.workflowId,
+      workflowId,
       depth: input.depth,
       tick: input.tick,
     };
@@ -201,14 +190,9 @@ const executeAskAgent = async (
   node: AskAgentNode,
 ): Promise<Observation> => {
   const start = now();
+  const workflowId = input.workflow.workflowId;
   const targetId = node.agentId;
-  const gate = checkAgent({
-    policy: input.policy,
-    registry: deps.registry,
-    ledger: deps.ledger,
-    workflowId: input.workflowId,
-    agentId: targetId,
-  });
+  const gate = checkAgent({ ...gateFor(deps, input), agentId: targetId });
   if (!gate.allowed) {
     return {
       stepKind: 'ask_agent',
@@ -216,19 +200,15 @@ const executeAskAgent = async (
       durationMs: now() - start,
       error: denialMessage(gate),
       timestamp: now(),
-      workflowId: input.workflowId,
+      workflowId,
       depth: input.depth,
       tick: input.tick,
     };
   }
-  // Delegate through the bus. The delegate callback dispatches
-  // CortexTopics.executeRequested with its own correlationId and
-  // awaits the completion — the manifold's execution handler picks
-  // it up. No direct emit here; the delegate owns the dispatch.
   const result = await deps.delegate({
     agentId: targetId,
     input: node.input,
-    workflowId: input.workflowId,
+    workflowId,
     parentDepth: input.depth,
   });
   if (!result.ok) {
@@ -238,7 +218,7 @@ const executeAskAgent = async (
       durationMs: now() - start,
       error: result.error.message,
       timestamp: now(),
-      workflowId: input.workflowId,
+      workflowId,
       depth: input.depth,
       tick: input.tick,
     };
@@ -249,7 +229,7 @@ const executeAskAgent = async (
     durationMs: now() - start,
     result: result.data,
     timestamp: now(),
-    workflowId: input.workflowId,
+    workflowId,
     depth: input.depth,
     tick: input.tick,
   };
@@ -261,17 +241,18 @@ const executeTellTopic = async (
   node: TellTopicNode,
 ): Promise<Observation> => {
   const start = now();
+  const workflowId = input.workflow.workflowId;
   deps.bus.emit({
     topic: node.topic,
     payload: node.payload,
-    meta: { timestamp: now(), correlationId: input.workflowId, workflowId: input.workflowId },
+    meta: { timestamp: now(), correlationId: workflowId, workflowId },
   });
   return {
     stepKind: 'tell_topic',
     topic: node.topic,
     durationMs: now() - start,
     timestamp: now(),
-    workflowId: input.workflowId,
+    workflowId,
     depth: input.depth,
     tick: input.tick,
   };
@@ -283,12 +264,13 @@ const executeWait = async (
   node: WaitNode,
 ): Promise<Observation> => {
   const start = now();
+  const workflowId = input.workflow.workflowId;
   const topic = node.topic;
   const timeoutMs = node.timeoutMs ?? 30_000;
   try {
     const event = await deps.bus.waitFor(topic, {
       timeoutMs,
-      ...(input.abort && { signal: input.abort }),
+      signal: input.workflow.abort.signal,
     });
     return {
       stepKind: 'wait',
@@ -296,7 +278,7 @@ const executeWait = async (
       durationMs: now() - start,
       result: event.payload,
       timestamp: now(),
-      workflowId: input.workflowId,
+      workflowId,
       depth: input.depth,
       tick: input.tick,
     };
@@ -307,7 +289,7 @@ const executeWait = async (
       durationMs: now() - start,
       error: e instanceof Error ? e.message : String(e),
       timestamp: now(),
-      workflowId: input.workflowId,
+      workflowId,
       depth: input.depth,
       tick: input.tick,
     };
@@ -320,21 +302,19 @@ const executeReflect = async (
   node: ReflectNode,
 ): Promise<Observation> => {
   const start = now();
+  const workflowId = input.workflow.workflowId;
   const content = node.content;
-  // Append to a scratch list in the workflow state store. The history
-  // / observations producers do not surface scratch directly — that's
-  // intentional. Future producers can read from this key.
   const key = 'cortex.scratch.reflections';
-  const existing = (await deps.stateStore.get(input.workflowId, key)) ?? [];
+  const existing = (await deps.stateStore.get(workflowId, key)) ?? [];
   const list = Array.isArray(existing) ? existing : [];
   list.push({ content, tick: input.tick, timestamp: now() });
-  await deps.stateStore.set(input.workflowId, key, list);
+  await deps.stateStore.set(workflowId, key, list);
   return {
     stepKind: 'reflect',
     durationMs: now() - start,
     result: { content },
     timestamp: now(),
-    workflowId: input.workflowId,
+    workflowId,
     depth: input.depth,
     tick: input.tick,
   };
@@ -343,19 +323,17 @@ const executeReflect = async (
 const executeParallel = async (
   deps: PlanExecutorDeps,
   input: PlanExecutorInput,
+  idempotencyCache: Map<string, Observation>,
   node: ParallelNode,
 ): Promise<{ observations: Observation[]; finalized: boolean; finalResult?: unknown }> => {
   const branches = node.branches;
   const maxConcurrency = node.maxConcurrency;
-  // Each branch is a SINGLE node, not a sub-plan. We wrap it in an
-  // array so we can reuse runPlanInner with depth+1.
   const childInput = (branchPlan: ActionPlan): PlanExecutorInput => ({
     ...input,
     plan: branchPlan,
     depth: input.depth + 1,
   });
-  const tasks = branches.map((branch) => async () => runPlanInner(deps, childInput([branch])));
-  // Naive concurrency limiter — chunk if maxConcurrency is set.
+  const tasks = branches.map((branch) => async () => runPlanInner(deps, childInput([branch]), idempotencyCache));
   const results: PlanExecutorResult[] = [];
   if (maxConcurrency && maxConcurrency > 0) {
     for (let i = 0; i < tasks.length; i += maxConcurrency) {
@@ -366,7 +344,6 @@ const executeParallel = async (
     results.push(...(await Promise.all(tasks.map((t) => t()))));
   }
   const observations = results.flatMap((r) => r.observations);
-  // If any branch finalized, propagate the FIRST one.
   const finalBranch = results.find((r) => r.finalized);
   if (finalBranch) {
     return { observations, finalized: true, finalResult: finalBranch.finalResult };
@@ -381,22 +358,38 @@ const executeParallel = async (
 const runPlanInner = async (
   deps: PlanExecutorDeps,
   input: PlanExecutorInput,
+  idempotencyCache: Map<string, Observation>,
 ): Promise<PlanExecutorResult> => {
+  const workflowId = input.workflow.workflowId;
   const observations: Observation[] = [];
   for (const raw of input.plan) {
-    if (input.abort?.aborted) {
+    if (input.workflow.abort.signal.aborted) {
       observations.push({
         stepKind: 'use_tool',
         durationMs: 0,
         error: 'aborted',
         timestamp: now(),
-        workflowId: input.workflowId,
+        workflowId,
         depth: input.depth,
         tick: input.tick,
       });
       return { finalized: false, observations };
     }
     const node: PlanNode = raw;
+
+    // Idempotency: if the node has a key and we've already executed
+    // it in this runPlan call, return the cached observation.
+    const hasMetaKey = node.kind === 'use_tool' || node.kind === 'ask_agent' || node.kind === 'tell_topic' || node.kind === 'wait';
+    const idemKey = hasMetaKey ? node.idempotencyKey : undefined;
+    if (idemKey) {
+      const cached = idempotencyCache.get(idemKey);
+      if (cached) {
+        observations.push(cached);
+        recordObservation(deps.bus, workflowId, cached);
+        continue;
+      }
+    }
+
     let observation: Observation | undefined;
     if (node.kind === 'use_tool') {
       observation = await executeUseTool(deps, input, node);
@@ -409,10 +402,10 @@ const runPlanInner = async (
     } else if (node.kind === 'reflect') {
       observation = await executeReflect(deps, input, node);
     } else if (node.kind === 'parallel') {
-      const result = await executeParallel(deps, input, node);
+      const result = await executeParallel(deps, input, idempotencyCache, node);
       for (const obs of result.observations) {
         observations.push(obs);
-        recordObservation(deps.bus, input.workflowId, obs);
+        recordObservation(deps.bus, workflowId, obs);
       }
       if (result.finalized) {
         return { finalized: true, finalResult: result.finalResult, observations };
@@ -426,17 +419,18 @@ const runPlanInner = async (
         durationMs: 0,
         result: finalResult,
         timestamp: now(),
-        workflowId: input.workflowId,
+        workflowId,
         depth: input.depth,
         tick: input.tick,
       };
       observations.push(obs);
-      recordObservation(deps.bus, input.workflowId, obs);
+      recordObservation(deps.bus, workflowId, obs);
       return { finalized: true, finalResult, observations };
     }
     if (observation) {
+      if (idemKey) idempotencyCache.set(idemKey, observation);
       observations.push(observation);
-      recordObservation(deps.bus, input.workflowId, observation);
+      recordObservation(deps.bus, workflowId, observation);
     }
   }
   return { finalized: false, observations };
@@ -450,10 +444,10 @@ export const runPlan = async (
   deps: PlanExecutorDeps,
   input: PlanExecutorInput,
 ): Promise<PlanExecutorResult & { error?: CortexError }> => {
-  // Depth validation runs once at the top.
   const depthError = validateDepth(input.plan, input.depth, input.maxPlanDepth);
   if (depthError) {
     return { finalized: false, observations: [], error: depthError };
   }
-  return runPlanInner(deps, input);
+  const idempotencyCache = new Map<string, Observation>();
+  return runPlanInner(deps, input, idempotencyCache);
 };

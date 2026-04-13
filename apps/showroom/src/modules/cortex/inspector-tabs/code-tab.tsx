@@ -6,12 +6,14 @@ import {
   isToolUseStory,
   isPlanModeStory,
   isRulesStory,
+  isConfirmationStory,
   type CortexStory,
   type PrismMappingStory,
   type StructuredExtractStory,
   type ToolUseStory,
   type PlanModeStory,
   type RulesStory,
+  type ConfirmationStory,
 } from '../story-types';
 
 // ═══════════════════════════════════════════════════════════
@@ -337,12 +339,69 @@ const generateRules = (story: RulesStory): string => {
   return lines.join('\n');
 };
 
+const generateConfirmation = (story: ConfirmationStory): string => {
+  const lines: string[] = [];
+  lines.push(`import { createSignal } from '@niscorp/signal';`);
+  lines.push(`import { runAgentStandalone, defineAgent, defineTool, CortexTopics } from '@niscorp/cortex';`);
+  lines.push(`import { z } from 'zod';`);
+  lines.push('');
+  lines.push(`// ─── Tools ────────────────────────────────────────────────`);
+  lines.push(`// check_balance runs freely. transfer_funds needs confirmation.`);
+  lines.push('');
+  lines.push(`const checkBalance = defineTool({ /* ... */ });`);
+  lines.push(`const transferFunds = defineTool({ /* ... */ });`);
+  lines.push('');
+  lines.push(`// ─── Agent with confirmation policy ────────────────────`);
+  lines.push('');
+  lines.push(`const agent = defineAgent({`);
+  lines.push(`  id: '${story.agent.config.id}',`);
+  lines.push(`  name: '${story.agent.config.name}',`);
+  lines.push(`  description: ${JSON.stringify(story.agent.config.description)},`);
+  lines.push(`  instructions: ${JSON.stringify(story.agent.config.instructions.slice(0, 120) + '...')},`);
+  lines.push(`  outputMode: 'text',`);
+  lines.push(`  tools: ${JSON.stringify(story.agent.config.tools)},`);
+  lines.push(`  // The key: requireConfirmation pauses the tool loop`);
+  lines.push(`  // and emits a bus event. Your UI handles approve/deny.`);
+  lines.push(`  policy: {`);
+  lines.push(`    tools: { requireConfirmation: ['demo.transfer_funds'] },`);
+  lines.push(`    confirmationTimeoutMs: 30_000,`);
+  lines.push(`  },`);
+  lines.push(`});`);
+  lines.push('');
+  lines.push(`const signal = createSignal('groq', {`);
+  lines.push(`  apiKey: process.env.GROQ_API_KEY,`);
+  lines.push(`  model: 'openai/gpt-oss-120b',`);
+  lines.push(`});`);
+  lines.push('');
+  lines.push(`const result = await runAgentStandalone(agent, ${JSON.stringify(story.prompt)}, {`);
+  lines.push(`  llm: signal,`);
+  lines.push(`  tools: [checkBalance, transferFunds],`);
+  lines.push(`  onBus: (bus) => {`);
+  lines.push(`    // Listen for confirmation requests`);
+  lines.push(`    bus.on(CortexTopics.confirmationRequested, (event) => {`);
+  lines.push(`      const { toolId, input } = event.payload;`);
+  lines.push(`      console.log('Approve tool call?', toolId, input);`);
+  lines.push(`      // Emit approval or denial on the bus`);
+  lines.push(`      bus.emit({`);
+  lines.push(`        topic: CortexTopics.confirmationApproved, // or confirmationDenied`);
+  lines.push(`        payload: { toolId },`);
+  lines.push(`        meta: { timestamp: Date.now(), correlationId: 'confirm' },`);
+  lines.push(`      });`);
+  lines.push(`    });`);
+  lines.push(`  },`);
+  lines.push(`});`);
+  lines.push('');
+  lines.push(`console.log(result.ok ? result.data : result.error);`);
+  return lines.join('\n');
+};
+
 const generateSnippet = (story: CortexStory): string => {
   if (isPrismMappingStory(story)) return generatePrismMapping(story);
   if (isStructuredExtractStory(story)) return generateStructuredExtract(story);
   if (isToolUseStory(story)) return generateToolUse(story);
   if (isPlanModeStory(story)) return generatePlanMode(story);
   if (isRulesStory(story)) return generateRules(story);
+  if (isConfirmationStory(story)) return generateConfirmation(story);
   return '';
 };
 

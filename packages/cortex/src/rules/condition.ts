@@ -6,7 +6,8 @@
 // Operators: $eq, $neq, $gt, $gte, $lt, $lte, $and, $or, $not.
 //
 // Path resolution: strings starting with "$" are resolved against
-// the scope. "$watch.toolCalls" → scope.watch.toolCalls.
+// the scope via the shared resolvePath utility.
+// "$watch.toolCalls" → scope.watch.toolCalls.
 // Anything else is a literal value.
 //
 // The evaluator accepts `unknown` for the condition parameter
@@ -17,6 +18,8 @@
 // adds no safety. This avoids `as` casts between the Zod-inferred
 // type and a hand-written mirror type.
 
+import { resolvePath } from '../utils/resolve-path';
+
 // ───────────────────────────────────────────────────────────
 // Types
 // ───────────────────────────────────────────────────────────
@@ -26,23 +29,12 @@
 export type ConditionScope = Record<string, Record<string, unknown> | unknown>;
 
 // ───────────────────────────────────────────────────────────
-// Path resolution
+// Value resolution
 // ───────────────────────────────────────────────────────────
-
-const resolvePath = (path: string, scope: ConditionScope): unknown => {
-  const segments = path.split('.');
-  let current: unknown = scope;
-  for (const seg of segments) {
-    if (current === null || current === undefined) return undefined;
-    if (typeof current !== 'object') return undefined;
-    current = (current as Record<string, unknown>)[seg];
-  }
-  return current;
-};
 
 const resolveValue = (value: unknown, scope: ConditionScope): unknown => {
   if (typeof value === 'string' && value.startsWith('$')) {
-    return resolvePath(value.slice(1), scope);
+    return resolvePath(scope, value.slice(1));
   }
   return value;
 };

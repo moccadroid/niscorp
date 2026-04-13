@@ -61,6 +61,7 @@ export type {
   LedgerBudget,
   LedgerSnapshot,
   LedgerEntry,
+  WorkflowContext,
 } from './manifold';
 
 // Stores
@@ -170,8 +171,31 @@ export type {
   ReadonlyLedger,
 } from './types';
 
-// System event topics
-export { CortexTopics, type CortexTopic } from './topics';
+// System event topics (typed — each topic carries a phantom payload type)
+export { CortexTopics } from './topics';
+export type {
+  CortexTopic,
+  ExecuteRequestedPayload,
+  ExecuteCompletedPayload,
+  ExecuteFailedPayload,
+  WorkflowStartedPayload,
+  WorkflowEndedPayload,
+  TickPayload,
+  AgentInvokedPayload,
+  AgentCompletedPayload,
+  AgentRetryPayload,
+  PlanProducedPayload,
+  ConfirmationRequestedPayload,
+  ConfirmationResponsePayload,
+  RuleEvaluatedPayload,
+  RuleFiredPayload,
+  ErrorPayload,
+  WarningPayload,
+} from './topics';
+
+// Typed topic factory — users create their own typed topics
+export { topic } from './utils/typed-topic';
+export type { TypedTopic } from './utils/typed-topic';
 
 // Rules engine (Phase C)
 export {

@@ -20,6 +20,7 @@ export const ToolConfigSchema = z.object({
   description: z.string().describe('What this tool does, for the model to read.'),
   category: z.string().optional().describe('Tool category for grouping.'),
   riskLevel: ToolRiskLevelSchema.optional().describe('Risk level: low, medium, or high.'),
+  timeoutMs: z.number().int().positive().optional().describe('Max execution time in ms. Default: 30000.'),
 }).strict();
 
 export type ToolConfigInput = z.input<typeof ToolConfigSchema>;

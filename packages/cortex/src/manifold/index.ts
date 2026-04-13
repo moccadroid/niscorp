@@ -15,3 +15,4 @@ export {
   type ManifoldHooks,
   type ExecuteOptions,
 } from './manifold';
+export { createWorkflowContext, destroyWorkflowContext, type WorkflowContext } from './workflow-context';

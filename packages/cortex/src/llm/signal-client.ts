@@ -37,7 +37,7 @@ export type CortexLlmToolDefinition = {
   name: string;
   description: string;
   // JSON Schema (draft-07-ish) for the tool's input. Cortex generates
-  // this from the tool's Zod input schema before calling step().
+  // this from the tool's Zod input schema via z.toJSONSchema().
   parameters: Record<string, unknown>;
 };
 
