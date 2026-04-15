@@ -9,7 +9,7 @@ const defB: ActionDefinition = { id: 'B', data: { v: 2 } };
 
 const makeShell = () =>
   createShell({
-    canvases: ['main', 'side'],
+    canvases: [{ id: 'main' }, { id: 'side' }],
     registry: createPermissiveRegistry(),
     layoutStore: createLayoutStore(),
     actions: { A: defA, B: defB },

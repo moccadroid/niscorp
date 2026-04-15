@@ -18,7 +18,7 @@ const mkShell = () => {
   const registry = createComponentRegistry<NovaComponent>();
   const def: ActionDefinition = { id: 'A', data: { count: 7 } };
   const shell = createShell({
-    canvases: ['main'],
+    canvases: [{ id: 'main' }],
     registry,
     layoutStore: createLayoutStore(),
     actions: { A: def },
@@ -61,7 +61,7 @@ describe('React hooks', () => {
     const registry = createComponentRegistry<NovaComponent>();
     const def: ActionDefinition = { id: 'A', data: { count: 7 } };
     const shell = createShell({
-      canvases: ['main'],
+      canvases: [{ id: 'main' }],
       registry,
       layoutStore: createLayoutStore(),
       actions: { A: def },

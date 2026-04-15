@@ -80,8 +80,10 @@ export const Sidebar: FC<Props> = ({
       style={{
         width: 240,
         flexShrink: 0,
-        alignSelf: 'stretch',
-        minHeight: '100%',
+        alignSelf: 'flex-start',
+        position: 'sticky',
+        top: 0,
+        height: '100vh',
         background: '#f3f4f6',
         overflowY: 'auto',
         padding: '12px 0',

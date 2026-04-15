@@ -6,7 +6,7 @@ import { createShell } from '@shell';
 import { DefinitionValidationError } from '@shared';
 
 const makeDeps = () => ({
-  canvases: ['main'],
+  canvases: [{ id: 'main' }],
   registry: createPermissiveRegistry(),
   layoutStore: createLayoutStore(),
 });

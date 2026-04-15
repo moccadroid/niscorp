@@ -1,5 +1,5 @@
 import type { DocPage, LibraryModule, SidebarStoryEntry } from '../types';
-import { isNovaStory } from './story-types';
+import { isStory } from './story-types';
 import { stories } from './stories';
 import { Runner } from './runner';
 import { NovaRuntimeProvider } from './runtime-context';
@@ -33,7 +33,7 @@ const KIND_LABELS: Record<string, string> = {
 };
 
 const toSidebarEntry = (story: unknown): SidebarStoryEntry => {
-  if (!isNovaStory(story)) {
+  if (!isStory(story)) {
     return { id: '?', name: '?', description: '', category: '?', kind: '?' };
   }
   return {

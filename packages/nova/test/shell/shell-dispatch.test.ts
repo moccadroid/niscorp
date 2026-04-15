@@ -8,7 +8,7 @@ const makeShell = () => {
   const eventBus = createEventBus();
   const messageBus = createMessageBus();
   const shell = createShell({
-    canvases: ['main'],
+    canvases: [{ id: 'main' }],
     registry: createComponentRegistry(),
     layoutStore: createLayoutStore(),
     actions: {},

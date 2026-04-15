@@ -40,7 +40,7 @@ const makeRig = (): Rig => {
     layout: { component: 'Text', props: {} },
   };
   const shell = createShell({
-    canvases: ['main'],
+    canvases: [{ id: 'main' }],
     registry,
     layoutStore: createLayoutStore(),
     actions: { Form, Other },

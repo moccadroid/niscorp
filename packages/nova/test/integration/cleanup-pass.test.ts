@@ -16,7 +16,7 @@ const tick = (n = 1): Promise<void> => {
 };
 
 const baseShellConfig = () => ({
-  canvases: ['main'],
+  canvases: [{ id: 'main' }],
   registry: createPermissiveRegistry(),
   layoutStore: createLayoutStore(),
 });

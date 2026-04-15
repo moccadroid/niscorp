@@ -76,7 +76,7 @@ const schemaToJsonString = (schema: z.ZodTypeAny): string => {
 };
 
 export const SetupTab: FC<Props> = ({ story }) => {
-  const setup = story.setup;
+  const { recipe } = story;
   return (
     <div>
       <div
@@ -93,11 +93,11 @@ export const SetupTab: FC<Props> = ({ story }) => {
       </div>
 
       <Section title="Provider">
-        <KV k="provider" v={setup.provider} />
-        <KV k="model" v={setup.model ?? '(provider default)'} />
+        <KV k="provider" v={recipe.provider} />
+        <KV k="model" v={recipe.model} />
       </Section>
 
-      {setup.systemPrompt !== undefined && (
+      {recipe.systemPrompt !== undefined && (
         <Section title="System prompt">
           <div
             style={{
@@ -111,14 +111,14 @@ export const SetupTab: FC<Props> = ({ story }) => {
               whiteSpace: 'pre-wrap',
             }}
           >
-            "{setup.systemPrompt}"
+            "{recipe.systemPrompt}"
           </div>
         </Section>
       )}
 
-      {setup.tools !== undefined && setup.tools.length > 0 && (
-        <Section title={`Tools (${setup.tools.length})`}>
-          {setup.tools.map((tool) => (
+      {recipe.tools !== undefined && recipe.tools.length > 0 && (
+        <Section title={`Tools (${recipe.tools.length})`}>
+          {recipe.tools.map((tool) => (
             <div key={tool.name} style={{ marginBottom: 12 }}>
               <div style={{ fontSize: 12, marginBottom: 4 }}>
                 <strong style={{ color: '#111827' }}>{tool.name}</strong>{' '}
@@ -133,18 +133,12 @@ export const SetupTab: FC<Props> = ({ story }) => {
         </Section>
       )}
 
-      {setup.schema !== undefined && (
+      {recipe.schema !== undefined && (
         <Section title="Output schema">
           <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 6 }}>
             Signal constrains the model's response to match this schema. The result is fully typed and validated.
           </div>
-          <Mono>{schemaToJsonString(setup.schema)}</Mono>
-        </Section>
-      )}
-
-      {setup.options !== undefined && (
-        <Section title="Options">
-          <Mono>{JSON.stringify(setup.options, null, 2)}</Mono>
+          <Mono>{schemaToJsonString(recipe.schema)}</Mono>
         </Section>
       )}
     </div>

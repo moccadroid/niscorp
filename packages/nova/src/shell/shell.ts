@@ -1,5 +1,7 @@
 import type { ActionDefinition, ActionRuntime, PublicActionRuntime } from '../action';
 // Note: ActionRuntime is used as the internal runtime type returned by spawn/registry.
+import type { LayoutNode, RenderNode } from '../layout';
+import { renderLayoutFromStore } from '../layout';
 import { createEventBus } from '../shared/event-bus';
 import { createMessageBus } from '../shared/message-bus';
 import type { Unsubscribe } from '../shared/common';
@@ -12,6 +14,8 @@ import {
 import { createIdFactory } from '../shared/ids';
 import { rememberShellRegistry } from './shell-internals';
 import { createCanvas, type Canvas } from './canvas';
+import { DEFAULT_ACTION_LAYOUT, DEFAULT_SHELL_LAYOUT } from './default-layouts';
+import { flattenRenderTree } from './flatten-render-tree';
 import { createLifecycleOps } from './lifecycle-ops';
 import { createNavigationHandler } from './navigation';
 import { createRuntimeRegistry } from './runtime-registry';
@@ -71,7 +75,11 @@ export const createShell = (config: ShellConfig): Shell => {
   });
 
   const canvases = new Map<string, Canvas>();
-  for (const cid of config.canvases) canvases.set(cid, createCanvas(cid));
+  const actionLayouts = new Map<string, LayoutNode | string>();
+  for (const cfg of config.canvases) {
+    canvases.set(cfg.id, createCanvas(cfg.id));
+    if (cfg.actionLayout !== undefined) actionLayouts.set(cfg.id, cfg.actionLayout);
+  }
 
   let disposed = false;
 
@@ -218,6 +226,45 @@ export const createShell = (config: ShellConfig): Shell => {
     return { canvases: out };
   };
 
+  const renderLayoutOrRef = (
+    layout: LayoutNode | string,
+    data: Record<string, unknown>,
+  ): RenderNode[] => {
+    const resolved = typeof layout === 'string' ? config.layoutStore.get(layout) : layout;
+    if (resolved === undefined) return [];
+    return renderLayoutFromStore(
+      resolved,
+      { get: () => data },
+      {
+        store: config.layoutStore,
+        registry: config.registry,
+        strict,
+        ...(config.onError === undefined ? {} : { onError: config.onError }),
+      },
+    );
+  };
+
+  const getShellRenderTree = (): RenderNode[] => {
+    const canvasList: CanvasState[] = [];
+    for (const cfg of config.canvases) {
+      const c = canvases.get(cfg.id);
+      canvasList.push(c === undefined ? { id: cfg.id, stack: [], active: undefined } : snapshotCanvas(c));
+    }
+    return renderLayoutOrRef(config.canvasLayout ?? DEFAULT_SHELL_LAYOUT, { canvases: canvasList });
+  };
+
+  const getCanvasRenderTree = (canvasId: string): RenderNode[] => {
+    const canvas = canvases.get(canvasId);
+    const state: CanvasState =
+      canvas === undefined ? { id: canvasId, stack: [], active: undefined } : snapshotCanvas(canvas);
+    const scope = {
+      instances: state.stack,
+      active: state.active,
+      count: state.stack.length,
+    };
+    return renderLayoutOrRef(actionLayouts.get(canvasId) ?? DEFAULT_ACTION_LAYOUT, scope);
+  };
+
   const dispatch = (event: Parameters<typeof eventBus.emit>[0]): void => {
     eventBus.emit(event);
   };
@@ -235,6 +282,9 @@ export const createShell = (config: ShellConfig): Shell => {
     getCanvasState,
     getRuntime,
     getState,
+    getShellRenderTree,
+    getCanvasRenderTree,
+    flattenRenderTree: (tree) => flattenRenderTree(tree, shell),
     dispatch,
     publish,
     onStateChange,

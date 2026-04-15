@@ -15,7 +15,7 @@ const tick = (): Promise<void> => new Promise((r) => setTimeout(r, 0));
 describe('shell — suspend/resume lifecycle hooks', () => {
   const setup = (actions: Record<string, ActionDefinition>) =>
     createShell({
-      canvases: ['main'],
+      canvases: [{ id: 'main' }],
       registry: createPermissiveRegistry(),
       layoutStore: createLayoutStore(),
       actions,
@@ -93,7 +93,7 @@ describe('shell — suspend/resume lifecycle hooks', () => {
     };
     const B: ActionDefinition = { id: 'B' };
     const shell = createShell({
-      canvases: ['main'],
+      canvases: [{ id: 'main' }],
       registry: createPermissiveRegistry(),
       layoutStore: createLayoutStore(),
       actions: { A, B },

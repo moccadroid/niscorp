@@ -1,24 +1,5 @@
-import { z } from 'zod';
 import type { RecipeStory } from '../../story-types';
-
-// The schema constrains the model's response. Signal's runtime selects a
-// strategy: providers with native JSON schema use that; others fall back
-// to a unified schema strategy via tool calls. Either way, .response is
-// the parsed object typed by the schema.
-const RecipeSchema = z.object({
-  title: z.string().describe('Name of the dish.'),
-  servings: z.number().int().positive().describe('Number of servings.'),
-  ingredients: z
-    .array(
-      z.object({
-        item: z.string(),
-        amount: z.string().describe('Quantity with unit, e.g. "2 cups".'),
-      }),
-    )
-    .describe('Full ingredient list.'),
-  steps: z.array(z.string()).describe('Ordered cooking steps.'),
-  tags: z.array(z.string()).describe('Cuisine / dietary tags.'),
-});
+import * as recipe from './structured-output.recipe';
 
 export const structuredOutputStory: RecipeStory = {
   id: 'structured-output',
@@ -29,41 +10,10 @@ export const structuredOutputStory: RecipeStory = {
   kind: 'recipe',
   pitch: {
     headline: "Define a Zod schema. Get a typed object back. That's it.",
-    body: 'No prompt engineering, no JSON.parse(), no validation glue. Hand signal a Zod schema and result.response is a fully-typed parsed object — even on providers that don\'t natively support JSON-schema mode (signal falls back to a tool-calling strategy automatically).',
+    body: "No prompt engineering, no JSON.parse(), no validation glue. Hand signal a Zod schema and result.response is a fully-typed parsed object — even on providers that don't natively support JSON-schema mode (signal falls back to a tool-calling strategy automatically).",
   },
   structuredRender: 'json',
-  setup: {
-    provider: 'groq',
-    model: 'openai/gpt-oss-120b',
-    schema: RecipeSchema,
-    input: 'Give me a recipe for classic spaghetti carbonara for 2 people.',
-  },
-  code: `import { z } from 'zod';
-import { createSignal } from '@niscorp/signal';
-
-const RecipeSchema = z.object({
-  title: z.string(),
-  servings: z.number().int().positive(),
-  ingredients: z.array(z.object({
-    item: z.string(),
-    amount: z.string(),
-  })),
-  steps: z.array(z.string()),
-  tags: z.array(z.string()),
-});
-
-const result = await createSignal('groq')
-  .apiKey(process.env.GROQ_API_KEY!)
-  .model('openai/gpt-oss-120b')
-  .schema(RecipeSchema)
-  .complete('Give me a recipe for classic spaghetti carbonara for 2 people.');
-
-// result.response is typed as z.infer<typeof RecipeSchema>.
-// Signal already validated it — go straight to using it.
-result.response.ingredients.forEach((ing) => {
-  console.log(\`\${ing.amount} \${ing.item}\`);
-});
-`,
+  recipe,
   snapshot: {
     result: {
       response: {
@@ -112,7 +62,5 @@ result.response.ingredients.forEach((ing) => {
     notes:
       'Illustrative snapshot. Live runs return the same shape but the wording will vary.',
   },
-  expected: {
-    contentIncludes: ['Carbonara'],
-  },
+  expected: { contentIncludes: ['Carbonara'] },
 };

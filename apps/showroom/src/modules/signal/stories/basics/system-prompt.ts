@@ -1,4 +1,5 @@
 import type { RecipeStory } from '../../story-types';
+import * as recipe from './system-prompt.recipe';
 
 export const systemPromptStory: RecipeStory = {
   id: 'system-prompt',
@@ -11,23 +12,7 @@ export const systemPromptStory: RecipeStory = {
     headline: 'Personality, role, constraints — one chained call.',
     body: 'A system prompt is the cheapest way to get consistent behavior. Set it once on the builder and every subsequent completion inherits it. No prompt-templating libraries, no string concatenation glue.',
   },
-  setup: {
-    provider: 'groq',
-    model: 'openai/gpt-oss-120b',
-    systemPrompt: 'You are a poet. Reply only in haiku (5/7/5 syllables).',
-    input: 'Describe the ocean.',
-  },
-  code: `import { createSignal } from '@niscorp/signal';
-
-const result = await createSignal('groq')
-  .apiKey(process.env.GROQ_API_KEY!)
-  .model('openai/gpt-oss-120b')
-  .systemPrompt('You are a poet. Reply only in haiku (5/7/5 syllables).')
-  .complete('Describe the ocean.');
-
-console.log(result.response);
-// → "Endless silver waves / Whisper secrets to the shore / Moon counts every tide"
-`,
+  recipe,
   snapshot: {
     result: {
       response: 'Endless silver waves\nWhisper secrets to the shore\nMoon counts every tide',
@@ -49,7 +34,5 @@ console.log(result.response);
     capturedWith: { provider: 'groq', model: 'openai/gpt-oss-120b' },
     notes: 'Illustrative snapshot — the model rarely produces the same haiku twice.',
   },
-  expected: {
-    contentIncludes: ['waves'],
-  },
+  expected: { contentIncludes: ['waves'] },
 };

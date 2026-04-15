@@ -34,7 +34,7 @@ describe('shell — integration', () => {
     };
 
     const shell = createShell({
-      canvases: ['main'],
+      canvases: [{ id: 'main' }],
       registry,
       layoutStore,
       actions: { Home, Detail },

@@ -1,27 +1,68 @@
+import type { ComponentType } from 'react';
 import type { z } from 'zod';
-import type { Message, Tool, SignalOptions, SignalResult } from '@niscorp/signal';
+import type { Message, SignalResult, Tool } from '@niscorp/signal';
 
 // ═══════════════════════════════════════════════════════════
-// Recipe story shape — a single signal demo:
-// take a setup (provider/model/messages/tools/etc.), run it
-// either against a snapshot or against a live API call.
+// Story shape for signal demos.
+//
+// Each story points at a *.recipe.{ts,tsx} module. The recipe
+// is the actual TypeScript a user would write — imports, the
+// Zod schema, the call function (for chat) or a React Demo
+// component (for streams). The showroom's runner invokes that
+// same function / mounts that same component directly: what
+// you see in the Source tab is what runs.
+//
+// Everything else on the story object is showroom metadata
+// (name, pitch, expected, snapshot) and renders around the
+// recipe.
 // ═══════════════════════════════════════════════════════════
 
-// Only the openai-compatible adapter is wired up today, so the only
-// usable providers are these three. Anthropic and Google adapters are
-// stubs that throw "not yet implemented".
 export type RecipeProvider = 'openai' | 'openrouter' | 'groq';
 
-export type RecipeSetup = {
+// How to render structured (object) responses in the chat.
+// 'json' = collapsible JSON viewer; 'card' = styled card.
+export type StructuredRender = 'json' | 'card';
+
+// ═══════════════════════════════════════════════════════════
+// Recipe modules
+// ═══════════════════════════════════════════════════════════
+
+// Non-streaming (chat) recipe. The recipe file exports a plain
+// async `complete` function — user copy-pastes into Node/server.
+// The showroom's ChatView calls it per user input.
+export type RecipeModule<T = unknown> = {
   provider: RecipeProvider;
-  model?: string;
+  model: string;
   systemPrompt?: string;
-  history?: Message[];
   schema?: z.ZodTypeAny;
   tools?: Tool[];
-  options?: SignalOptions;
-  input: string;
+  seedHistory?: Message[];
+  userInput: string;
+  complete: (
+    apiKey: string,
+    input: string,
+    history?: Message[],
+    client?: unknown,
+  ) => Promise<SignalResult<T>>;
 };
+
+// Streaming recipe. The recipe file exports a full React `Demo`
+// component — signal chain, solid wiring, state, buttons, all
+// visible in one .tsx file. The showroom's runner just mounts
+// `<recipe.Demo apiKey=... client=... />`.
+export type StreamRecipeModule = {
+  provider: RecipeProvider;
+  model: string;
+  systemPrompt?: string;
+  schema?: z.ZodTypeAny;
+  initial?: unknown;
+  userInput: string;
+  Demo: ComponentType<{ apiKey: string; client?: unknown }>;
+};
+
+// ═══════════════════════════════════════════════════════════
+// Story objects (showroom metadata)
+// ═══════════════════════════════════════════════════════════
 
 export type RecipeSnapshot = {
   result: SignalResult<unknown>;
@@ -36,16 +77,10 @@ export type RecipeExpectation = {
   finishReason?: string;
 };
 
-// One-liner that sells *why* this recipe matters to a developer.
-// Rendered as a callout above the chat.
 export type RecipePitch = {
   headline: string;
   body: string;
 };
-
-// How to render the assistant's structured output. 'json' = collapsible
-// JSON viewer; 'card' = render as a styled card (uses CardSchema fields).
-export type StructuredRender = 'json' | 'card';
 
 export type RecipeStory = {
   id: string;
@@ -53,19 +88,12 @@ export type RecipeStory = {
   description: string;
   category: string;
   kind: 'recipe';
-  setup: RecipeSetup;
+  recipe: RecipeModule;
   snapshot?: RecipeSnapshot;
   expected?: RecipeExpectation;
   pitch?: RecipePitch;
-  // Idiomatic TypeScript snippet that recreates this recipe — copy/paste ready.
-  code?: string;
-  // How to render structured (object) responses in the chat.
   structuredRender?: StructuredRender;
 };
-
-// ═══════════════════════════════════════════════════════════
-// Stream story shape — live streaming demo with signal.stream()
-// ═══════════════════════════════════════════════════════════
 
 export type StreamStory = {
   id: string;
@@ -73,24 +101,8 @@ export type StreamStory = {
   description: string;
   category: string;
   kind: 'stream';
-  setup: {
-    provider: RecipeProvider;
-    model?: string;
-    systemPrompt?: string;
-    schema?: z.ZodTypeAny;
-    tools?: Tool[];
-    options?: SignalOptions;
-    input: string;
-  };
+  recipe: StreamRecipeModule;
   pitch?: RecipePitch;
-  code?: string;
-  // When set, the runner renders a live solid stream alongside
-  // the raw text stream, using this schema + initial for createStream.
-  solid?: {
-    schema: z.ZodTypeAny;
-    initial: unknown;
-    selectPaths?: string[];
-  };
 };
 
 export const isStreamStory = (value: unknown): value is StreamStory => {
@@ -105,7 +117,7 @@ export const isRecipeStory = (value: unknown): value is RecipeStory => {
   if (typeof Reflect.get(value, 'name') !== 'string') return false;
   if (typeof Reflect.get(value, 'description') !== 'string') return false;
   if (typeof Reflect.get(value, 'category') !== 'string') return false;
-  const setup = Reflect.get(value, 'setup');
-  if (setup === null || typeof setup !== 'object') return false;
+  const recipe = Reflect.get(value, 'recipe');
+  if (recipe === null || typeof recipe !== 'object') return false;
   return true;
 };

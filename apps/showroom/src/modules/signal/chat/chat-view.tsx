@@ -59,6 +59,17 @@ export type ChatViewInitial = {
   // (object) response, the parsed object goes here so the bubble can
   // render it with JsonViewer / CardRenderer instead of stringified JSON.
   seededStructuredFinal?: unknown;
+  // Recipe mode: when provided, Send calls this function instead of
+  // building a signal chain inline. This is the `recipe.complete`
+  // from a RecipeModule — what you see in the Source tab is what runs.
+  // When absent, chat-view falls back to playground mode: it builds
+  // its own chain from provider/model/systemPrompt/tools/schema/options.
+  complete?: (
+    apiKey: string,
+    input: string,
+    history?: Message[],
+    client?: unknown,
+  ) => Promise<SignalResult<unknown>>;
 };
 
 type Props = {
@@ -269,19 +280,27 @@ export const ChatView: FC<Props> = ({ initial, onResult }) => {
     });
 
     const client = createOpenAIClient(provider, key);
-    const base = createSignal(provider, { client })
-      .apiKey(key)
-      .model(model)
-      .history(historyForApi);
-    const withPrompt = systemPrompt.length > 0 ? base.systemPrompt(systemPrompt) : base;
-    const withTools = initial.tools !== undefined ? withPrompt.tools(initial.tools) : withPrompt;
-    const withOptions = initial.options !== undefined ? withTools.options(initial.options) : withTools;
-    // .schema() narrows the response type. We type the final result as
-    // unknown so the same call site handles string and object responses.
-    const finalSignal = initial.schema !== undefined ? withOptions.schema(initial.schema) : withOptions;
 
-    (finalSignal as { complete: (input: string) => Promise<SignalResult<unknown>> })
-      .complete(text)
+    // Recipe mode: invoke the authored recipe function. Its file IS
+    // the code that runs — nothing is duplicated here.
+    // Playground mode: build the chain inline from form state.
+    const callPromise: Promise<SignalResult<unknown>> =
+      initial.complete !== undefined
+        ? initial.complete(key, text, historyForApi, client)
+        : (() => {
+            const base = createSignal(provider, { client })
+              .apiKey(key)
+              .model(model)
+              .history(historyForApi);
+            const withPrompt = systemPrompt.length > 0 ? base.systemPrompt(systemPrompt) : base;
+            const withTools = initial.tools !== undefined ? withPrompt.tools(initial.tools) : withPrompt;
+            const withOptions = initial.options !== undefined ? withTools.options(initial.options) : withTools;
+            const finalSignal = initial.schema !== undefined ? withOptions.schema(initial.schema) : withOptions;
+            return (finalSignal as { complete: (input: string) => Promise<SignalResult<unknown>> })
+              .complete(text);
+          })();
+
+    callPromise
       .then((result: SignalResult<unknown>) => {
         lastResultRef.current = result;
         const isStructured = typeof result.response === 'object' && result.response !== null;

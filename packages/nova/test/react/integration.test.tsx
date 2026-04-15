@@ -57,7 +57,7 @@ describe('React integration — model binding round-trip', () => {
     };
 
     const shell = createShell({
-      canvases: ['main'],
+      canvases: [{ id: 'main' }],
       registry,
       layoutStore,
       actions: { Form: def },

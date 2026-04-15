@@ -35,7 +35,7 @@ const okDef: ActionDefinition = { id: 'OK', data: { v: 0 } };
 
 const makeShell = (strict: boolean, onError?: (e: NovaError) => void) =>
   createShell({
-    canvases: ['main'],
+    canvases: [{ id: 'main' }],
     registry: createPermissiveRegistry(),
     layoutStore: createLayoutStore(),
     actions: {
@@ -126,7 +126,7 @@ describe('strict-mode lifecycle propagation', () => {
 
   it('strict: sync mount with no failing steps does not throw', async () => {
     const shell = createShell({
-      canvases: ['main'],
+      canvases: [{ id: 'main' }],
       registry: createPermissiveRegistry(),
       layoutStore: createLayoutStore(),
       actions: {

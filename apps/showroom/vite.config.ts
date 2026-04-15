@@ -18,4 +18,12 @@ export default defineConfig({
       allow: [workspaceRoot],
     },
   },
+  // Signal's openai-compatible adapter does `await import('openai')` at
+  // runtime. Vite can't statically analyse a dynamic specifier inside
+  // the workspace-linked signal/dist bundle, so we pre-bundle `openai`
+  // here. That lets recipe code call `createSignal('groq')` directly,
+  // with no `client` injection in user-facing recipes.
+  optimizeDeps: {
+    include: ['openai'],
+  },
 });

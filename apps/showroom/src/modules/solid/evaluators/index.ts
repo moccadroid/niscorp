@@ -15,10 +15,10 @@ const evaluateStory = (story: StreamDemoStory): 'gray' | 'green' | 'red' => {
   if (!story.expected) return 'gray';
 
   try {
-    const stream = createStream({ schema: story.demo.schema, initial: story.demo.initial });
+    const stream = createStream({ schema: story.recipe.schema, initial: story.recipe.initial });
 
     // Feed entire JSON at once for evaluation
-    stream.write(story.demo.json);
+    stream.write(story.recipe.json);
     stream.close();
 
     const final = stream.current();

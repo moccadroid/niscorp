@@ -1,4 +1,5 @@
 import type { RecipeStory } from '../../story-types';
+import * as recipe from './plain-completion.recipe';
 
 export const plainCompletionStory: RecipeStory = {
   id: 'plain-completion',
@@ -11,24 +12,7 @@ export const plainCompletionStory: RecipeStory = {
     headline: 'One builder, one call, any provider.',
     body: 'Signal is a unified LLM client. The same five-line builder hits OpenAI, Groq, OpenRouter, Anthropic, and Google — no per-provider SDKs to learn, no glue code to write. Swap one string and your app speaks to a different model.',
   },
-  setup: {
-    provider: 'groq',
-    model: 'openai/gpt-oss-120b',
-    input: 'What is the capital of France?',
-  },
-  code: `import { createSignal } from '@niscorp/signal';
-
-const result = await createSignal('groq')
-  .apiKey(process.env.GROQ_API_KEY!)
-  .model('openai/gpt-oss-120b')
-  .complete('What is the capital of France?');
-
-console.log(result.response);
-// → "The capital of France is Paris."
-
-console.log(result.meta.usage);     // { inputTokens, outputTokens, totalTokens }
-console.log(result.meta.durationMs); // wall-clock latency
-`,
+  recipe,
   snapshot: {
     result: {
       response: 'The capital of France is Paris.',
@@ -50,7 +34,5 @@ console.log(result.meta.durationMs); // wall-clock latency
     notes:
       'Illustrative snapshot — your live run will differ in exact wording, latency, and token counts.',
   },
-  expected: {
-    contentIncludes: ['Paris'],
-  },
+  expected: { contentIncludes: ['Paris'] },
 };

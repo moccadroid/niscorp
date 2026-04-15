@@ -16,8 +16,10 @@ import { ChatView, type ChatViewInitial } from '../chat/chat-view';
 type Props = { story: unknown };
 
 const buildInitial = (story: RecipeStory): ChatViewInitial => {
-  const seededHistory: Message[] = story.snapshot?.result.history ?? story.setup.history ?? [];
-  const initialInput = story.snapshot === undefined ? story.setup.input : '';
+  const { recipe } = story;
+  const seededHistory: Message[] =
+    story.snapshot?.result.history ?? recipe.seedHistory ?? [];
+  const initialInput = story.snapshot === undefined ? recipe.userInput : '';
 
   // If the snapshot's response was a structured (object) result, hand the
   // parsed object to ChatView so the seeded final assistant message renders
@@ -27,17 +29,18 @@ const buildInitial = (story: RecipeStory): ChatViewInitial => {
     typeof snapshotResponse === 'object' && snapshotResponse !== null ? snapshotResponse : undefined;
 
   return {
-    provider: story.setup.provider,
-    model: story.setup.model,
-    systemPrompt: story.setup.systemPrompt,
+    provider: recipe.provider,
+    model: recipe.model,
+    systemPrompt: recipe.systemPrompt,
     history: seededHistory,
-    tools: story.setup.tools,
-    schema: story.setup.schema,
-    options: story.setup.options,
+    tools: recipe.tools,
+    schema: recipe.schema,
     initialInput,
     allowProviderChange: false,
     structuredRender: story.structuredRender,
     seededStructuredFinal,
+    // The authored recipe function — this is what Send actually runs.
+    complete: recipe.complete,
   };
 };
 

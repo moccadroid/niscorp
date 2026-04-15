@@ -18,6 +18,49 @@ importers:
         specifier: ^6.0.2
         version: 6.0.2
 
+  apps/lab:
+    dependencies:
+      '@niscorp/cortex':
+        specifier: workspace:*
+        version: link:../../packages/cortex
+      '@niscorp/nova':
+        specifier: workspace:*
+        version: link:../../packages/nova
+      '@niscorp/prism':
+        specifier: workspace:*
+        version: link:../../packages/prism
+      '@niscorp/signal':
+        specifier: workspace:*
+        version: link:../../packages/signal
+      '@niscorp/solid':
+        specifier: workspace:*
+        version: link:../../packages/solid
+      react:
+        specifier: ^19.2.4
+        version: 19.2.4
+      react-dom:
+        specifier: ^19.2.4
+        version: 19.2.4(react@19.2.4)
+      zod:
+        specifier: ^4.3.6
+        version: 4.3.6
+    devDependencies:
+      '@types/react':
+        specifier: ^19.2.14
+        version: 19.2.14
+      '@types/react-dom':
+        specifier: ^19.2.0
+        version: 19.2.3(@types/react@19.2.14)
+      '@vitejs/plugin-react':
+        specifier: ^5.0.4
+        version: 5.2.0(vite@7.3.2(@types/node@25.5.2)(lightningcss@1.32.0)(tsx@4.21.0))
+      typescript:
+        specifier: ^6.0.2
+        version: 6.0.2
+      vite:
+        specifier: ^7.1.12
+        version: 7.3.2(@types/node@25.5.2)(lightningcss@1.32.0)(tsx@4.21.0)
+
   apps/showroom:
     dependencies:
       '@niscorp/cortex':

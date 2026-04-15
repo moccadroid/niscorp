@@ -134,9 +134,10 @@ export type {
 // ═══════════════════════════════════════════════════════════
 // Shell — top-level entry point for users
 // ═══════════════════════════════════════════════════════════
-export { createShell } from './shell';
+export { createShell, CANVAS_SLOT_NAME, ACTION_SLOT_NAME } from './shell';
 
 export type {
+  CanvasConfig,
   CanvasState,
   Shell,
   ShellConfig,

@@ -15,7 +15,7 @@ describe('shell — telemetry', () => {
   it('onStateChange fires on push/pop/replace/clear', async () => {
     const states: StateSnapshot[] = [];
     const shell = createShell({
-      canvases: ['main'],
+      canvases: [{ id: 'main' }],
       registry: createPermissiveRegistry(),
       layoutStore: createLayoutStore(),
       actions: { A, B },
@@ -33,7 +33,7 @@ describe('shell — telemetry', () => {
   it('onDataChange fires when action data changes', async () => {
     const events: ShellDataChangeEvent[] = [];
     const shell = createShell({
-      canvases: ['main'],
+      canvases: [{ id: 'main' }],
       registry: createPermissiveRegistry(),
       layoutStore: createLayoutStore(),
       actions: { A },
@@ -53,7 +53,7 @@ describe('shell — telemetry', () => {
   it('subscribed handlers stop after dispose', async () => {
     const events: ShellDataChangeEvent[] = [];
     const shell = createShell({
-      canvases: ['main'],
+      canvases: [{ id: 'main' }],
       registry: createPermissiveRegistry(),
       layoutStore: createLayoutStore(),
       actions: { A },

@@ -1,20 +1,5 @@
-import { z } from 'zod';
 import type { RecipeStory } from '../../story-types';
-
-// A common product pattern: assistant message + suggested follow-ups.
-// Schema enforces both shape and limits (max 4 suggestions, short labels).
-const ReplyWithActionsSchema = z.object({
-  reply: z.string().describe('Conversational answer to the user.'),
-  suggestions: z
-    .array(
-      z.object({
-        label: z.string().max(40).describe('Short button label, max 40 chars.'),
-        prompt: z.string().describe('The full follow-up message to send when clicked.'),
-      }),
-    )
-    .max(4)
-    .describe('Up to four suggested follow-up actions.'),
-});
+import * as recipe from './action-suggestions.recipe';
 
 export const actionSuggestionsStory: RecipeStory = {
   id: 'action-suggestions',
@@ -28,46 +13,12 @@ export const actionSuggestionsStory: RecipeStory = {
     body: 'Most production assistants need more than free-form text — they need typed metadata to drive UI: suggested replies, citations, attached entities. With signal, you describe that shape once in Zod and the model fills it in. The same builder, the same call, the same typed result.',
   },
   structuredRender: 'json',
-  setup: {
-    provider: 'groq',
-    model: 'openai/gpt-oss-120b',
-    schema: ReplyWithActionsSchema,
-    systemPrompt:
-      'You are a helpful product assistant. Always include 2-4 follow-up suggestions that move the conversation forward.',
-    input: 'I just signed up. What should I try first?',
-  },
-  code: `import { z } from 'zod';
-import { createSignal } from '@niscorp/signal';
-
-const ReplyWithActionsSchema = z.object({
-  reply: z.string(),
-  suggestions: z.array(z.object({
-    label: z.string().max(40),
-    prompt: z.string(),
-  })).max(4),
-});
-
-const result = await createSignal('groq')
-  .apiKey(process.env.GROQ_API_KEY!)
-  .model('openai/gpt-oss-120b')
-  .systemPrompt('Always include 2-4 follow-up suggestions.')
-  .schema(ReplyWithActionsSchema)
-  .complete('I just signed up. What should I try first?');
-
-// Render the reply, then map suggestions into clickable chips
-// that send their .prompt as the next user message.
-<>
-  <Bubble>{result.response.reply}</Bubble>
-  {result.response.suggestions.map((s) => (
-    <Chip onClick={() => send(s.prompt)}>{s.label}</Chip>
-  ))}
-</>
-`,
+  recipe,
   snapshot: {
     result: {
       response: {
         reply:
-          "Welcome aboard! The fastest way to feel the product is to spin up your first project — it takes about 30 seconds and unlocks everything else. From there, most people invite a teammate or hook up an integration so the data starts flowing in.",
+          'Welcome aboard! The fastest way to feel the product is to spin up your first project — it takes about 30 seconds and unlocks everything else. From there, most people invite a teammate or hook up an integration so the data starts flowing in.',
         suggestions: [
           { label: 'Create my first project', prompt: 'Walk me through creating my first project.' },
           { label: 'Invite a teammate', prompt: 'How do I invite a teammate to my workspace?' },
@@ -100,7 +51,5 @@ const result = await createSignal('groq')
     capturedWith: { provider: 'groq', model: 'openai/gpt-oss-120b' },
     notes: 'Illustrative snapshot. Live suggestions vary.',
   },
-  expected: {
-    contentIncludes: [],
-  },
+  expected: { contentIncludes: [] },
 };

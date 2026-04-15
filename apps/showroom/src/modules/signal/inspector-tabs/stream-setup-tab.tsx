@@ -45,7 +45,8 @@ const schemaToJsonString = (schema: z.ZodTypeAny): string => {
 };
 
 export const StreamSetupTab: FC<Props> = ({ story }) => {
-  const { setup, solid } = story;
+  const { recipe } = story;
+  const hasSolid = recipe.schema !== undefined && recipe.initial !== undefined;
   return (
     <div>
       <div style={{
@@ -56,19 +57,19 @@ export const StreamSetupTab: FC<Props> = ({ story }) => {
       </div>
 
       <Section title="Provider">
-        <KV k="provider" v={setup.provider} />
-        <KV k="model" v={setup.model ?? '(provider default)'} />
+        <KV k="provider" v={recipe.provider} />
+        <KV k="model" v={recipe.model} />
         <KV k="mode" v="stream" />
       </Section>
 
-      {setup.systemPrompt !== undefined && (
+      {recipe.systemPrompt !== undefined && (
         <Section title="System prompt">
           <div style={{
             padding: 10, background: '#f9fafb', border: '1px solid #e5e7eb',
             borderRadius: 6, fontSize: 12, fontStyle: 'italic', color: '#1f2937',
             whiteSpace: 'pre-wrap',
           }}>
-            &ldquo;{setup.systemPrompt}&rdquo;
+            &ldquo;{recipe.systemPrompt}&rdquo;
           </div>
         </Section>
       )}
@@ -78,31 +79,30 @@ export const StreamSetupTab: FC<Props> = ({ story }) => {
           padding: 10, background: '#eff6ff', border: '1px solid #bfdbfe',
           borderRadius: 6, fontSize: 12, color: '#1e40af', whiteSpace: 'pre-wrap',
         }}>
-          {setup.input}
+          {recipe.userInput}
         </div>
       </Section>
 
-      {setup.schema !== undefined && (
+      {recipe.schema !== undefined && (
         <Section title="Output schema">
           <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 6 }}>
             Signal streams JSON matching this schema. Zod validates at end-of-stream with auto-retry.
           </div>
-          <Mono>{schemaToJsonString(setup.schema)}</Mono>
+          <Mono>{schemaToJsonString(recipe.schema)}</Mono>
         </Section>
       )}
 
-      {solid !== undefined && (
+      {hasSolid && (
         <Section title="Solid integration">
           <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 6 }}>
             Text deltas are piped into <code style={{ fontFamily: 'ui-monospace, Menlo, monospace', background: '#f3f4f6', padding: '1px 4px', borderRadius: 3 }}>solid.createStream()</code> for
             live structured rendering with the always-valid invariant.
           </div>
-          <KV k="select paths" v={(solid.selectPaths ?? []).join(', ') || '(none)'} />
           <div style={{ marginTop: 8 }}>
             <div style={{ fontSize: 10, fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: 0.4, marginBottom: 4 }}>
               Initial value
             </div>
-            <Mono>{JSON.stringify(solid.initial, null, 2)}</Mono>
+            <Mono>{JSON.stringify(recipe.initial, null, 2)}</Mono>
           </div>
         </Section>
       )}

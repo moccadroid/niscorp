@@ -14,6 +14,8 @@ import { Text } from './text';
 import { Input } from './input';
 import { Button } from './button';
 import { Box } from './box';
+import { CanvasSlot } from './canvas-slot';
+import { ActionSlot } from './action-slot';
 
 // ─── Stack ─────────────────────────────────────────────────
 export { Stack, StackPropsSchema, type StackProps } from './stack';
@@ -30,6 +32,14 @@ export { Button, ButtonPropsSchema, type ButtonProps } from './button';
 // ─── Box ───────────────────────────────────────────────────
 export { Box, BoxPropsSchema, type BoxProps } from './box';
 
+// ─── Shell slots (react) ───────────────────────────────────
+// CanvasSlot / ActionSlot are shell-aware: they pull state from
+// the React shell context and must only be used inside a
+// <NovaShellProvider>. Non-React adapters register their own
+// equivalents implementing the same prop contract.
+export { CanvasSlot, CanvasSlotPropsSchema, type CanvasSlotProps } from './canvas-slot';
+export { ActionSlot, ActionSlotPropsSchema, type ActionSlotProps } from './action-slot';
+
 // ─── Bulk registration helper ──────────────────────────────
 export const registerNovaReactComponents = (
   registry: ComponentRegistry<NovaComponent>,
@@ -40,5 +50,7 @@ export const registerNovaReactComponents = (
     Input,
     Button,
     Box,
+    CanvasSlot,
+    ActionSlot,
   });
 };

@@ -22,7 +22,7 @@ describe('shell — cross-canvas messaging via shared event bus', () => {
     };
 
     const shell = createShell({
-      canvases: ['main', 'side'],
+      canvases: [{ id: 'main' }, { id: 'side' }],
       registry: createPermissiveRegistry(),
       layoutStore: createLayoutStore(),
       actions: { Emitter, Listener },

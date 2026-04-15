@@ -1,58 +1,15 @@
 import type { FC } from 'react';
+import { CodeView } from '../../../chrome/code-view';
 import type { Story } from '../story-types';
 
-const LEGEND =
-  'The story\u2019s definition JSON: the layout, action, or shellSetup that produced what you see in the canvas.';
+// Shows the story's `.demo.tsx` contents. The raw text is attached
+// to the story in its `.story.ts` file via a `?raw` import — no
+// filename magic, no side-car lookup.
 
-const extractSource = (story: Story): unknown => {
-  if (story.kind === 'layout') {
-    return { layout: story.layout, data: story.data ?? {}, preloadLayouts: story.preloadLayouts };
-  }
-  if (story.kind === 'action') {
-    return { action: story.action };
-  }
-  return {
-    shellSetup: story.shellSetup.toString(),
-    initialPushes: story.initialPushes,
-    canvases: story.canvases,
-  };
-};
+const LEGEND = "The story's .demo.tsx file verbatim.";
 
-const stringify = (value: unknown): string => {
-  if (typeof value === 'string') return value;
-  return JSON.stringify(value, null, 2);
-};
+const MISSING = '// This story has no .demo.tsx yet (still on the legacy shape).';
 
-type Props = { story: Story };
-
-export const SourceTab: FC<Props> = ({ story }) => {
-  const data = extractSource(story);
-  return (
-    <div>
-      <div
-        style={{
-          padding: '12px 16px',
-          background: '#f3f4f6',
-          color: '#4b5563',
-          fontSize: 11,
-          borderBottom: '1px solid #e5e7eb',
-          fontStyle: 'italic',
-        }}
-      >
-        {LEGEND}
-      </div>
-      <pre
-        style={{
-          margin: 0,
-          padding: 16,
-          fontSize: 11,
-          fontFamily: 'ui-monospace, Menlo, monospace',
-          whiteSpace: 'pre-wrap',
-          wordBreak: 'break-word',
-        }}
-      >
-        {stringify(data)}
-      </pre>
-    </div>
-  );
-};
+export const SourceTab: FC<{ story: Story }> = ({ story }) => (
+  <CodeView legend={LEGEND} source={story.source === '' ? MISSING : story.source} />
+);

@@ -1,4 +1,5 @@
 import type { RecipeStory } from '../../story-types';
+import * as recipe from './multi-turn.recipe';
 
 export const multiTurnStory: RecipeStory = {
   id: 'multi-turn',
@@ -11,39 +12,7 @@ export const multiTurnStory: RecipeStory = {
     headline: 'Stateful chats without the boilerplate.',
     body: 'Pass an array of past messages to .history() and the next .complete() picks up the thread. Signal returns the full updated history on every result, so persisting and rehydrating a conversation is just push the new messages and call again.',
   },
-  setup: {
-    provider: 'groq',
-    model: 'openai/gpt-oss-120b',
-    systemPrompt: 'You are a friendly tutor for new programmers.',
-    history: [
-      { role: 'user', content: 'What is a function in programming?' },
-      {
-        role: 'assistant',
-        content:
-          'A function is a reusable block of code that performs a specific task. You give it inputs (parameters), it does some work, and optionally returns a value.',
-      },
-    ],
-    input: 'Can you give me a tiny example in JavaScript?',
-  },
-  code: `import { createSignal, type Message } from '@niscorp/signal';
-
-const history: Message[] = [
-  { role: 'user', content: 'What is a function in programming?' },
-  { role: 'assistant', content: 'A function is a reusable block of code...' },
-];
-
-const result = await createSignal('groq')
-  .apiKey(process.env.GROQ_API_KEY!)
-  .model('openai/gpt-oss-120b')
-  .systemPrompt('You are a friendly tutor for new programmers.')
-  .history(history)
-  .complete('Can you give me a tiny example in JavaScript?');
-
-// result.history contains the full updated conversation —
-// system + previous turns + new user input + new assistant reply.
-// Persist it as-is and feed it back next turn.
-const nextHistory = result.history;
-`,
+  recipe,
   snapshot: {
     result: {
       response:
@@ -76,7 +45,5 @@ const nextHistory = result.history;
     capturedWith: { provider: 'groq', model: 'openai/gpt-oss-120b' },
     notes: 'Illustrative snapshot — code examples vary.',
   },
-  expected: {
-    contentIncludes: ['function', 'add'],
-  },
+  expected: { contentIncludes: ['function', 'add'] },
 };

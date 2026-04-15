@@ -35,6 +35,8 @@ export {
   useActionData,
   useActionStatus,
   useRenderTree,
+  useShellRenderTree,
+  useCanvasRenderTree,
   useNovaDispatch,
   useNovaPublish,
   useNovaRegistry,

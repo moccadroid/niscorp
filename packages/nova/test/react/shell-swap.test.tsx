@@ -27,7 +27,7 @@ const makeRig = (actionId: string): Rig => {
   const registry = createComponentRegistry<NovaComponent>();
   const def: ActionDefinition = { id: actionId, data: {} };
   const shell = createShell({
-    canvases: ['main'],
+    canvases: [{ id: 'main' }],
     registry,
     layoutStore: createLayoutStore(),
     actions: { [actionId]: def },

@@ -13,7 +13,7 @@ const C: ActionDefinition = { id: 'C', data: { tag: 'c' } };
 
 const setup = () =>
   createShell({
-    canvases: ['main'],
+    canvases: [{ id: 'main' }],
     registry: createPermissiveRegistry(),
     layoutStore: createLayoutStore(),
     actions: { A, B, C },
@@ -60,7 +60,7 @@ describe('shell — navigation via runtime steps', () => {
 
   it('replace effect with explicit canvas targets that canvas', async () => {
     const shell = createShell({
-      canvases: ['nav', 'content'],
+      canvases: [{ id: 'nav' }, { id: 'content' }],
       registry: createPermissiveRegistry(),
       layoutStore: createLayoutStore(),
       actions: { A, B, C },
@@ -83,7 +83,7 @@ describe('shell — navigation via runtime steps', () => {
       triggers: [{ event: 'ui:click', ref: 'go', do: [{ push: { action: 'B' } }] }],
     };
     const shell = createShell({
-      canvases: ['main'],
+      canvases: [{ id: 'main' }],
       registry: createPermissiveRegistry(),
       layoutStore: createLayoutStore(),
       actions: { Aclick, B },

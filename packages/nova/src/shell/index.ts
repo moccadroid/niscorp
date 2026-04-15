@@ -9,6 +9,7 @@
 // ═══════════════════════════════════════════════════════════
 
 export type {
+  CanvasConfig,
   CanvasState,
   Shell,
   ShellConfig,
@@ -20,3 +21,4 @@ export type {
 } from './types';
 
 export { createShell } from './shell';
+export { CANVAS_SLOT_NAME, ACTION_SLOT_NAME } from './slot-names';

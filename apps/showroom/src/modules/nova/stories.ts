@@ -1,77 +1,95 @@
-import { counterStory } from './stories/actions/counter';
-import { endpointStory } from './stories/actions/endpoint';
-import { endpointFullStory } from './stories/actions/endpoint-full';
-import { inputModelStory } from './stories/actions/input-model';
-import { lifecycleStory } from './stories/actions/lifecycle';
-import { listStory } from './stories/actions/list';
-import { setFromUndoStory } from './stories/actions/set-from-undo';
-import { strictErrorStory } from './stories/actions/strict-error';
-import { toggleStory } from './stories/actions/toggle';
-import { bindingsConditionalStory } from './stories/bindings/conditional';
-import { bindingsMissingPathsStory } from './stories/bindings/missing-paths';
-import { nestedConditionalsStory } from './stories/bindings/nested-conditionals';
-import { bindingsPathStory } from './stories/bindings/path';
-import { bindingsTemplatesStory } from './stories/bindings/templates';
-import { boxStory } from './stories/components/box';
-import { buttonVariantsStory } from './stories/components/button-variants';
-import { inputDisplayStory } from './stories/components/input-display';
-import { profileCardStory } from './stories/components/profile-card';
-import { stackStory } from './stories/components/stack';
-import { stackAlignmentsStory } from './stories/components/stack-alignments';
-import { textStory } from './stories/components/text';
-import { textColorsStory } from './stories/components/text-colors';
-import { textTypographyStory } from './stories/components/text-typography';
-import { structureConditionalInLoopStory } from './stories/structure/conditional-in-loop';
-import { emptyListStory } from './stories/structure/empty-list';
-import { structureLayoutRefsStory } from './stories/structure/layout-refs';
-import { structureLoopStory } from './stories/structure/loop';
-import { structureNestedLoopsStory } from './stories/structure/nested-loops';
-import { numberedListStory } from './stories/structure/numbered-list';
-import { crossCanvasMessagingStory } from './stories/shell/cross-canvas-messaging';
-import { multiCanvasStory } from './stories/shell/multi-canvas';
-import { pushPopNavigationStory } from './stories/shell/push-pop-navigation';
-import { replaceWizardStory } from './stories/shell/replace-wizard';
-import { suspendResumeOnNavStory } from './stories/shell/suspend-resume-on-nav';
 import type { Story } from './story-types';
 
-export const stories: Story[] = [
+// Bindings
+import { story as bindingsConditional } from './stories/bindings/conditional.story';
+import { story as bindingsMissingPaths } from './stories/bindings/missing-paths.story';
+import { story as bindingsNestedConditionals } from './stories/bindings/nested-conditionals.story';
+import { story as bindingsPath } from './stories/bindings/path.story';
+import { story as bindingsTemplates } from './stories/bindings/templates.story';
+
+// Components
+import { story as box } from './stories/components/box.story';
+import { story as buttonVariants } from './stories/components/button-variants.story';
+import { story as inputDisplay } from './stories/components/input-display.story';
+import { story as profileCard } from './stories/components/profile-card.story';
+import { story as stack } from './stories/components/stack.story';
+import { story as stackAlignments } from './stories/components/stack-alignments.story';
+import { story as text } from './stories/components/text.story';
+import { story as textColors } from './stories/components/text-colors.story';
+import { story as textTypography } from './stories/components/text-typography.story';
+
+// Structure
+import { story as structureConditionalInLoop } from './stories/structure/conditional-in-loop.story';
+import { story as structureEmptyList } from './stories/structure/empty-list.story';
+import { story as structureLayoutRefs } from './stories/structure/layout-refs.story';
+import { story as structureLoop } from './stories/structure/loop.story';
+import { story as structureNestedLoops } from './stories/structure/nested-loops.story';
+import { story as structureNumberedList } from './stories/structure/numbered-list.story';
+
+// Actions
+import { story as counter } from './stories/actions/counter.story';
+import { story as endpoint } from './stories/actions/endpoint.story';
+import { story as endpointFull } from './stories/actions/endpoint-full.story';
+import { story as inputModel } from './stories/actions/input-model.story';
+import { story as lifecycle } from './stories/actions/lifecycle.story';
+import { story as list } from './stories/actions/list.story';
+import { story as setFromUndo } from './stories/actions/set-from-undo.story';
+import { story as strictError } from './stories/actions/strict-error.story';
+import { story as toggle } from './stories/actions/toggle.story';
+
+// Shells
+import { story as conditionalDetail } from './stories/shell/conditional-detail.story';
+import { story as crossCanvasMessaging } from './stories/shell/cross-canvas-messaging.story';
+import { story as dashboardShell } from './stories/shell/dashboard-shell.story';
+import { story as listModeFeed } from './stories/shell/list-mode-feed.story';
+import { story as listModeKanban } from './stories/shell/list-mode-kanban.story';
+import { story as multiCanvas } from './stories/shell/multi-canvas.story';
+import { story as pushPopNavigation } from './stories/shell/push-pop-navigation.story';
+import { story as replaceWizard } from './stories/shell/replace-wizard.story';
+import { story as suspendResumeOnNav } from './stories/shell/suspend-resume-on-nav.story';
+
+export const stories: readonly Story[] = [
   // Bindings
-  bindingsConditionalStory,
-  bindingsMissingPathsStory,
-  bindingsPathStory,
-  bindingsTemplatesStory,
-  nestedConditionalsStory,
+  bindingsConditional,
+  bindingsMissingPaths,
+  bindingsPath,
+  bindingsTemplates,
+  bindingsNestedConditionals,
   // Components
-  boxStory,
-  buttonVariantsStory,
-  inputDisplayStory,
-  profileCardStory,
-  stackStory,
-  stackAlignmentsStory,
-  textStory,
-  textColorsStory,
-  textTypographyStory,
+  box,
+  buttonVariants,
+  inputDisplay,
+  profileCard,
+  stack,
+  stackAlignments,
+  text,
+  textColors,
+  textTypography,
   // Structure
-  structureConditionalInLoopStory,
-  structureLayoutRefsStory,
-  structureLoopStory,
-  structureNestedLoopsStory,
-  numberedListStory,
-  emptyListStory,
+  structureConditionalInLoop,
+  structureLayoutRefs,
+  structureLoop,
+  structureNestedLoops,
+  structureNumberedList,
+  structureEmptyList,
   // Actions
-  counterStory,
-  setFromUndoStory,
-  inputModelStory,
-  toggleStory,
-  listStory,
-  lifecycleStory,
-  endpointStory,
-  endpointFullStory,
-  strictErrorStory,
+  counter,
+  setFromUndo,
+  inputModel,
+  toggle,
+  list,
+  lifecycle,
+  endpoint,
+  endpointFull,
+  strictError,
   // Shells
-  pushPopNavigationStory,
-  replaceWizardStory,
-  multiCanvasStory,
-  crossCanvasMessagingStory,
-  suspendResumeOnNavStory,
+  pushPopNavigation,
+  replaceWizard,
+  multiCanvas,
+  crossCanvasMessaging,
+  suspendResumeOnNav,
+  listModeFeed,
+  listModeKanban,
+  dashboardShell,
+  conditionalDetail,
 ];
