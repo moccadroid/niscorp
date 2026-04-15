@@ -1,6 +1,6 @@
 import type { FC } from 'react';
-import { Cursor, FinalBadge, Placeholder, type PathStatus } from './_atoms';
-import type { Response } from './ai-response.recipe';
+import { Cursor, FinalBadge, Placeholder, type PathStatus } from '../atoms';
+import type { Response } from './ai-response.demo';
 
 // ═══════════════════════════════════════════════════════════
 // Chat response card that fills in as solid drives its value.

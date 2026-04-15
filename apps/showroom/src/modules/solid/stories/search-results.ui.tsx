@@ -1,6 +1,6 @@
 import type { FC } from 'react';
-import { Cursor, FinalBadge, Placeholder, type PathStatus } from './_atoms';
-import type { SearchData } from './search-results.recipe';
+import { Cursor, FinalBadge, Placeholder, type PathStatus } from '../atoms';
+import type { SearchData } from './search-results.demo';
 
 type Props = { value: SearchData; pathStatuses: Map<string, PathStatus> };
 

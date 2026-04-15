@@ -1,6 +1,6 @@
 import type { FC } from 'react';
-import { FinalBadge, Placeholder, Cursor, type PathStatus } from './_atoms';
-import type { DashboardData } from './dashboard.recipe';
+import { FinalBadge, Placeholder, Cursor, type PathStatus } from '../atoms';
+import type { DashboardData } from './dashboard.demo';
 
 type Props = { value: DashboardData; pathStatuses: Map<string, PathStatus> };
 

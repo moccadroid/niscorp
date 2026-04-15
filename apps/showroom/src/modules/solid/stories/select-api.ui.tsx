@@ -1,6 +1,6 @@
 import type { FC, ReactNode } from 'react';
-import { Cursor, FinalBadge, Placeholder, type PathStatus } from './_atoms';
-import type { SelectData } from './select-api.recipe';
+import { Cursor, FinalBadge, Placeholder, type PathStatus } from '../atoms';
+import type { SelectData } from './select-api.demo';
 
 type Props = { value: SelectData; pathStatuses: Map<string, PathStatus> };
 
