@@ -81,7 +81,10 @@ export {
   toolsProducer,
   budgetProducer,
   historyProducer,
+  recitationProducer,
 } from './context';
+export { createSummarizeCompressor } from './context/compressors/summarize.compressor';
+export type { SummarizeCompressorOptions } from './context/compressors/summarize.compressor';
 export type {
   BuildContext,
   Compressor,
@@ -99,6 +102,7 @@ export type {
   ToolsProducerOptions,
   HistoryProducerOptions,
   HistoryEntry,
+  RecitationProducerOptions,
 } from './context';
 
 // Schemas (Zod) and inferred types

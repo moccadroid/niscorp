@@ -6,3 +6,4 @@ export { historyProducer, type HistoryProducerOptions, type HistoryEntry } from 
 export { actionContractProducer } from './action-contract.producer';
 export { agentsProducer, type AgentsProducerOptions } from './agents.producer';
 export { observationsProducer, type ObservationsProducerOptions } from './observations.producer';
+export { recitationProducer, type RecitationProducerOptions } from './recitation.producer';

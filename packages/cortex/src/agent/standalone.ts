@@ -17,7 +17,8 @@ import type { SignalClient } from '../llm/signal-client';
 import type { Observation } from '../schemas';
 import type { RegisteredRule } from '../rules/engine';
 import type { EffectHandler } from '../rules/effects';
-import { createManifold, type Manifold, type ManifoldConfig } from '../manifold/manifold';
+import { createManifold } from '../manifold/manifold';
+import type { Manifold, ManifoldConfig } from '../manifold/types';
 import { CortexTopics, type AgentRetryPayload } from '../topics';
 import { newWorkflowId } from '../utils/id';
 

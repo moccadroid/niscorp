@@ -8,11 +8,6 @@ export {
   type LedgerEntry,
   type LedgerSnapshot,
 } from './ledger';
-export {
-  createManifold,
-  type Manifold,
-  type ManifoldConfig,
-  type ManifoldHooks,
-  type ExecuteOptions,
-} from './manifold';
+export { createManifold } from './manifold';
+export type { Manifold, ManifoldConfig, ManifoldHooks, ExecuteOptions } from './types';
 export { createWorkflowContext, destroyWorkflowContext, type WorkflowContext } from './workflow-context';
