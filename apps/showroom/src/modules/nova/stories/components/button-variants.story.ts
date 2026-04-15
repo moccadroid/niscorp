@@ -1,4 +1,4 @@
-import { Demo } from './button-variants.demo';
+import * as demo from './button-variants.demo';
 import source from './button-variants.demo?raw';
 
 export const story = {
@@ -7,6 +7,6 @@ export const story = {
   description: 'A row of Buttons covering each variant plus a disabled state.',
   category: 'Components',
   kind: 'layout' as const,
-  Demo,
+  ...demo,
   source,
 };

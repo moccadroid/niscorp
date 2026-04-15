@@ -1,11 +1,5 @@
-import {
-  createComponentRegistry,
-  createLayoutStore,
-  renderLayout,
-  type LayoutNode,
-} from '@niscorp/nova';
-import { NovaRenderProvider, RenderTree, type NovaComponent } from '@niscorp/nova/react';
-import { registerNovaReactComponents } from '@niscorp/nova/components/react';
+import type { LayoutNode } from '@niscorp/nova';
+import { Nova } from '@niscorp/nova/react';
 
 // Inputs with one-way `value` bindings via `{{…}}` templates. No
 // `model`, so typing doesn't write back to the data. The last
@@ -28,15 +22,6 @@ const data = {
   email: 'ada@example.com',
 };
 
-const registry = createComponentRegistry<NovaComponent>();
-registerNovaReactComponents(registry);
-const layoutStore = createLayoutStore();
-const nodes = renderLayout(layout, data, { store: layoutStore, registry });
+export { layout, data };
 
-const noop = (): void => {};
-
-export const Demo = () => (
-  <NovaRenderProvider registry={registry} dispatch={noop} publish={noop}>
-    <RenderTree nodes={nodes} />
-  </NovaRenderProvider>
-);
+export const Demo = () => <Nova.Layout layout={layout} data={data} />;

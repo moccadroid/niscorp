@@ -51,7 +51,8 @@ export {
 } from './guards';
 
 // Renderer
-export { renderLayout, renderLayoutFromStore } from './renderer';
+export { renderLayout, renderLayoutFromStore, render } from './renderer';
+export type { RenderOptions } from './renderer';
 
 // Store
 export { createLayoutStore } from './store';

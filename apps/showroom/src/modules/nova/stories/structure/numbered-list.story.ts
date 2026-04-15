@@ -1,4 +1,4 @@
-import { Demo } from './numbered-list.demo';
+import * as demo from './numbered-list.demo';
 import source from './numbered-list.demo?raw';
 
 export const story = {
@@ -8,6 +8,6 @@ export const story = {
     'The implicit `$index` scope variable combined with `{{$item.name}}` renders a zero-indexed list — no counter state needed.',
   category: 'Structure',
   kind: 'layout' as const,
-  Demo,
+  ...demo,
   source,
 };

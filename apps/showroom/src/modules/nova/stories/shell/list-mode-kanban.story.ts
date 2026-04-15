@@ -1,4 +1,4 @@
-import { Demo } from './list-mode-kanban.demo';
+import * as demo from './list-mode-kanban.demo';
 import source from './list-mode-kanban.demo?raw';
 
 export const story = {
@@ -8,6 +8,6 @@ export const story = {
     'Same list-mode trick as the feed story, but `direction: "row"` and `wrap: true` on the actionLayout Stack turn it into a wrapping kanban strip.',
   category: 'Layouts',
   kind: 'shell' as const,
-  Demo,
+  ...demo,
   source,
 };

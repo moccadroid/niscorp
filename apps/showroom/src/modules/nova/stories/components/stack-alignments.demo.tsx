@@ -1,11 +1,5 @@
-import {
-  createComponentRegistry,
-  createLayoutStore,
-  renderLayout,
-  type LayoutNode,
-} from '@niscorp/nova';
-import { NovaRenderProvider, RenderTree, type NovaComponent } from '@niscorp/nova/react';
-import { registerNovaReactComponents } from '@niscorp/nova/components/react';
+import type { LayoutNode } from '@niscorp/nova';
+import { Nova } from '@niscorp/nova/react';
 
 // Every align × justify combination on a row Stack. Build the
 // layout programmatically to cover the full matrix.
@@ -48,15 +42,6 @@ const layout: LayoutNode = {
   children: ALIGN_VALUES.map((a) => row(a)),
 };
 
-const registry = createComponentRegistry<NovaComponent>();
-registerNovaReactComponents(registry);
-const layoutStore = createLayoutStore();
-const nodes = renderLayout(layout, {}, { store: layoutStore, registry });
+export { layout };
 
-const noop = (): void => {};
-
-export const Demo = () => (
-  <NovaRenderProvider registry={registry} dispatch={noop} publish={noop}>
-    <RenderTree nodes={nodes} />
-  </NovaRenderProvider>
-);
+export const Demo = () => <Nova.Layout layout={layout} />;

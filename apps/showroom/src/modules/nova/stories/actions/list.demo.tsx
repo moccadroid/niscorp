@@ -1,16 +1,5 @@
-import {
-  createComponentRegistry,
-  createLayoutStore,
-  createShell,
-  type ActionDefinition,
-} from '@niscorp/nova';
-import {
-  NovaShellProvider,
-  RenderTree,
-  useShellRenderTree,
-  type NovaComponent,
-} from '@niscorp/nova/react';
-import { registerNovaReactComponents } from '@niscorp/nova/components/react';
+import { createShell, type ActionDefinition } from '@niscorp/nova';
+import { Nova } from '@niscorp/nova/react';
 
 // `push` appends to an array in the data store. The `for` loop below
 // reads the same array, so a push immediately grows the rendered list
@@ -51,24 +40,11 @@ const list: ActionDefinition = {
   ],
 };
 
-const registry = createComponentRegistry<NovaComponent>();
-registerNovaReactComponents(registry);
-const layoutStore = createLayoutStore();
-
 const shell = createShell({
-  canvases: [{ id: 'main' }],
-  registry,
-  layoutStore,
+  canvases: [{ id: 'main', initial: 'list' }],
   actions: { list },
 });
-shell.push('main', 'list');
 
-export { shell, registry };
+export { shell };
 
-const ShellView = () => <RenderTree nodes={useShellRenderTree()} />;
-
-export const Demo = () => (
-  <NovaShellProvider shell={shell} registry={registry}>
-    <ShellView />
-  </NovaShellProvider>
-);
+export const Demo = () => <Nova.Shell shell={shell} />;

@@ -1,16 +1,5 @@
-import {
-  createComponentRegistry,
-  createLayoutStore,
-  createShell,
-  type ActionDefinition,
-} from '@niscorp/nova';
-import {
-  NovaShellProvider,
-  RenderTree,
-  useShellRenderTree,
-  type NovaComponent,
-} from '@niscorp/nova/react';
-import { registerNovaReactComponents } from '@niscorp/nova/components/react';
+import { createShell, type ActionDefinition } from '@niscorp/nova';
+import { Nova } from '@niscorp/nova/react';
 
 // An action with a data store and two triggers. Click Increment /
 // Decrement — the trigger fires the `increment`/`decrement` op on
@@ -45,25 +34,12 @@ const counter: ActionDefinition = {
   ],
 };
 
-const registry = createComponentRegistry<NovaComponent>();
-registerNovaReactComponents(registry);
-const layoutStore = createLayoutStore();
-
 const shell = createShell({
-  canvases: [{ id: 'main' }],
-  registry,
-  layoutStore,
+  canvases: [{ id: 'main', initial: 'counter' }],
   actions: { counter },
 });
-shell.push('main', 'counter');
 
 // Showroom-only: the inspector reads live shell state from here.
-export { shell, registry };
+export { shell };
 
-const ShellView = () => <RenderTree nodes={useShellRenderTree()} />;
-
-export const Demo = () => (
-  <NovaShellProvider shell={shell} registry={registry}>
-    <ShellView />
-  </NovaShellProvider>
-);
+export const Demo = () => <Nova.Shell shell={shell} />;

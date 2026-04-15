@@ -1,4 +1,4 @@
-import { Demo } from './text-typography.demo';
+import * as demo from './text-typography.demo';
 import source from './text-typography.demo?raw';
 
 export const story = {
@@ -7,6 +7,6 @@ export const story = {
   description: 'Every size × weight combination, plus every supported `as` value.',
   category: 'Components',
   kind: 'layout' as const,
-  Demo,
+  ...demo,
   source,
 };

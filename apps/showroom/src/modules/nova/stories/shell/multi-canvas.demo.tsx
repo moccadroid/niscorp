@@ -1,16 +1,5 @@
-import {
-  createComponentRegistry,
-  createLayoutStore,
-  createShell,
-  type ActionDefinition,
-} from '@niscorp/nova';
-import {
-  NovaShellProvider,
-  RenderTree,
-  useShellRenderTree,
-  type NovaComponent,
-} from '@niscorp/nova/react';
-import { registerNovaReactComponents } from '@niscorp/nova/components/react';
+import { createShell, type ActionDefinition } from '@niscorp/nova';
+import { Nova } from '@niscorp/nova/react';
 
 // Two canvases side by side. The nav canvas drives the content
 // canvas: each button fires a `replace` targeted at `content`,
@@ -80,25 +69,13 @@ const articleA = buildArticle('articleA', 'Article A');
 const articleB = buildArticle('articleB', 'Article B');
 const articleC = buildArticle('articleC', 'Article C');
 
-const registry = createComponentRegistry<NovaComponent>();
-registerNovaReactComponents(registry);
-const layoutStore = createLayoutStore();
-
 const shell = createShell({
-  canvases: [{ id: 'nav' }, { id: 'content' }],
-  registry,
-  layoutStore,
+  canvases: [
+    { id: 'nav', initial: 'navigator' },
+    { id: 'content', initial: 'welcome' },
+  ],
   actions: { navigator, welcome, articleA, articleB, articleC },
 });
-shell.push('nav', 'navigator');
-shell.push('content', 'welcome');
 
-export { shell, registry };
-
-const ShellView = () => <RenderTree nodes={useShellRenderTree()} />;
-
-export const Demo = () => (
-  <NovaShellProvider shell={shell} registry={registry}>
-    <ShellView />
-  </NovaShellProvider>
-);
+export { shell };
+export const Demo = () => <Nova.Shell shell={shell} />;

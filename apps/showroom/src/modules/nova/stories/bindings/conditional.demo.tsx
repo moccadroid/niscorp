@@ -1,11 +1,5 @@
-import {
-  createComponentRegistry,
-  createLayoutStore,
-  renderLayout,
-  type LayoutNode,
-} from '@niscorp/nova';
-import { NovaRenderProvider, RenderTree, type NovaComponent } from '@niscorp/nova/react';
-import { registerNovaReactComponents } from '@niscorp/nova/components/react';
+import type { LayoutNode } from '@niscorp/nova';
+import { Nova } from '@niscorp/nova/react';
 
 // `if / then / else` layout nodes. The branch is picked at render
 // time based on the truthiness of the `if` expression. Flip
@@ -46,15 +40,6 @@ const layout: LayoutNode = {
 
 const data = { isLoggedIn: true, name: 'Linus' };
 
-const registry = createComponentRegistry<NovaComponent>();
-registerNovaReactComponents(registry);
-const layoutStore = createLayoutStore();
-const nodes = renderLayout(layout, data, { store: layoutStore, registry });
+export { layout, data };
 
-const noop = (): void => {};
-
-export const Demo = () => (
-  <NovaRenderProvider registry={registry} dispatch={noop} publish={noop}>
-    <RenderTree nodes={nodes} />
-  </NovaRenderProvider>
-);
+export const Demo = () => <Nova.Layout layout={layout} data={data} />;

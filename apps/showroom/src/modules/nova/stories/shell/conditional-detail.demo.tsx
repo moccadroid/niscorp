@@ -1,17 +1,5 @@
-import {
-  createComponentRegistry,
-  createLayoutStore,
-  createShell,
-  type ActionDefinition,
-  type LayoutNode,
-} from '@niscorp/nova';
-import {
-  NovaShellProvider,
-  RenderTree,
-  useShellRenderTree,
-  type NovaComponent,
-} from '@niscorp/nova/react';
-import { registerNovaReactComponents } from '@niscorp/nova/components/react';
+import { createShell, type ActionDefinition, type LayoutNode } from '@niscorp/nova';
+import { Nova } from '@niscorp/nova/react';
 
 // The shell's own canvasLayout is a LayoutNode — the same tree
 // language used inside actions. Here it's a row of two panels,
@@ -51,17 +39,40 @@ const list: ActionDefinition = {
       {
         component: 'Text',
         props: { size: 'sm', color: '#6b7280' },
-        children: 'Pick a contact to open the detail panel on the right. Close it to make the panel disappear.',
+        children:
+          'Pick a contact to open the detail panel on the right. Close it to make the panel disappear.',
       },
       { component: 'Button', ref: 'open-ada', children: 'Ada Lovelace' },
-      { component: 'Button', ref: 'open-alan', props: { variant: 'secondary' }, children: 'Alan Turing' },
-      { component: 'Button', ref: 'open-grace', props: { variant: 'ghost' }, children: 'Grace Hopper' },
+      {
+        component: 'Button',
+        ref: 'open-alan',
+        props: { variant: 'secondary' },
+        children: 'Alan Turing',
+      },
+      {
+        component: 'Button',
+        ref: 'open-grace',
+        props: { variant: 'ghost' },
+        children: 'Grace Hopper',
+      },
     ],
   },
   triggers: [
-    { event: 'ui:click', ref: 'open-ada', do: [{ replace: { action: 'detailAda', canvas: 'detail' } }] },
-    { event: 'ui:click', ref: 'open-alan', do: [{ replace: { action: 'detailAlan', canvas: 'detail' } }] },
-    { event: 'ui:click', ref: 'open-grace', do: [{ replace: { action: 'detailGrace', canvas: 'detail' } }] },
+    {
+      event: 'ui:click',
+      ref: 'open-ada',
+      do: [{ replace: { action: 'detailAda', canvas: 'detail' } }],
+    },
+    {
+      event: 'ui:click',
+      ref: 'open-alan',
+      do: [{ replace: { action: 'detailAlan', canvas: 'detail' } }],
+    },
+    {
+      event: 'ui:click',
+      ref: 'open-grace',
+      do: [{ replace: { action: 'detailGrace', canvas: 'detail' } }],
+    },
   ],
 };
 
@@ -100,25 +111,11 @@ const detailGrace = buildDetail(
   'Pioneered the development of compilers and the concept of machine-independent programming languages.',
 );
 
-const registry = createComponentRegistry<NovaComponent>();
-registerNovaReactComponents(registry);
-const layoutStore = createLayoutStore();
-
 const shell = createShell({
-  canvases: [{ id: 'list' }, { id: 'detail' }],
+  canvases: [{ id: 'list', initial: 'list' }, { id: 'detail' }],
   canvasLayout: shellLayout,
-  registry,
-  layoutStore,
   actions: { list, detailAda, detailAlan, detailGrace },
 });
-shell.push('list', 'list');
 
-export { shell, registry };
-
-const ShellView = () => <RenderTree nodes={useShellRenderTree()} />;
-
-export const Demo = () => (
-  <NovaShellProvider shell={shell} registry={registry}>
-    <ShellView />
-  </NovaShellProvider>
-);
+export { shell };
+export const Demo = () => <Nova.Shell shell={shell} />;

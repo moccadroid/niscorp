@@ -1,16 +1,5 @@
-import {
-  createComponentRegistry,
-  createLayoutStore,
-  createShell,
-  type ActionDefinition,
-} from '@niscorp/nova';
-import {
-  NovaShellProvider,
-  RenderTree,
-  useShellRenderTree,
-  type NovaComponent,
-} from '@niscorp/nova/react';
-import { registerNovaReactComponents } from '@niscorp/nova/components/react';
+import { createShell, type ActionDefinition } from '@niscorp/nova';
+import { Nova } from '@niscorp/nova/react';
 
 // A menu with three buttons, each pushing a screen onto the canvas.
 // Every screen has a Back button that pops. The canvas stack grows
@@ -56,25 +45,10 @@ const settings = screen('settings', 'Settings', 'Tweak your preferences here.');
 const profile = screen('profile', 'Profile', 'Your account details.');
 const help = screen('help', 'Help', 'Read the documentation.');
 
-const registry = createComponentRegistry<NovaComponent>();
-registerNovaReactComponents(registry);
-const layoutStore = createLayoutStore();
-
 const shell = createShell({
-  canvases: [{ id: 'main' }],
-  registry,
-  layoutStore,
+  canvases: [{ id: 'main', initial: 'menu' }],
   actions: { menu, settings, profile, help },
 });
-shell.push('main', 'menu');
 
-// Showroom-only: the inspector reads live shell state from here.
-export { shell, registry };
-
-const ShellView = () => <RenderTree nodes={useShellRenderTree()} />;
-
-export const Demo = () => (
-  <NovaShellProvider shell={shell} registry={registry}>
-    <ShellView />
-  </NovaShellProvider>
-);
+export { shell };
+export const Demo = () => <Nova.Shell shell={shell} />;

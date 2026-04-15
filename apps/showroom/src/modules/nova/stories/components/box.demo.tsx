@@ -1,11 +1,5 @@
-import {
-  createComponentRegistry,
-  createLayoutStore,
-  renderLayout,
-  type LayoutNode,
-} from '@niscorp/nova';
-import { NovaRenderProvider, RenderTree, type NovaComponent } from '@niscorp/nova/react';
-import { registerNovaReactComponents } from '@niscorp/nova/components/react';
+import type { LayoutNode } from '@niscorp/nova';
+import { Nova } from '@niscorp/nova/react';
 
 // A static layout showing the four main Box props: bare padding,
 // padding + background + radius, padding + border, and a dark
@@ -42,19 +36,6 @@ const layout: LayoutNode = {
   ],
 };
 
-const registry = createComponentRegistry<NovaComponent>();
-registerNovaReactComponents(registry);
-const layoutStore = createLayoutStore();
+export { layout };
 
-const nodes = renderLayout(layout, {}, { store: layoutStore, registry });
-
-// Showroom-only: the inspector reads the live render tree from here.
-export { nodes, registry };
-
-const noop = (): void => {};
-
-export const Demo = () => (
-  <NovaRenderProvider registry={registry} dispatch={noop} publish={noop}>
-    <RenderTree nodes={nodes} />
-  </NovaRenderProvider>
-);
+export const Demo = () => <Nova.Layout layout={layout} />;

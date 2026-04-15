@@ -1,4 +1,4 @@
-import { Demo } from './toggle.demo';
+import * as demo from './toggle.demo';
 import source from './toggle.demo?raw';
 
 export const story = {
@@ -8,6 +8,6 @@ export const story = {
     'The `toggle` op flips a boolean and an `if/then/else` swaps the visible Text between a green "Enabled" and a red "Disabled".',
   category: 'Basics',
   kind: 'action' as const,
-  Demo,
+  ...demo,
   source,
 };

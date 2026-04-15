@@ -1,16 +1,5 @@
-import {
-  createComponentRegistry,
-  createLayoutStore,
-  createShell,
-  type ActionDefinition,
-} from '@niscorp/nova';
-import {
-  NovaShellProvider,
-  RenderTree,
-  useShellRenderTree,
-  type NovaComponent,
-} from '@niscorp/nova/react';
-import { registerNovaReactComponents } from '@niscorp/nova/components/react';
+import { createShell, type ActionDefinition } from '@niscorp/nova';
+import { Nova } from '@niscorp/nova/react';
 
 // Two-way `model` binding on Input. Keystrokes write through to
 // `$.name`; the greeting Text reads the same path via `{{$.name}}`,
@@ -37,24 +26,11 @@ const inputModel: ActionDefinition = {
   },
 };
 
-const registry = createComponentRegistry<NovaComponent>();
-registerNovaReactComponents(registry);
-const layoutStore = createLayoutStore();
-
 const shell = createShell({
-  canvases: [{ id: 'main' }],
-  registry,
-  layoutStore,
+  canvases: [{ id: 'main', initial: 'input-model' }],
   actions: { 'input-model': inputModel },
 });
-shell.push('main', 'input-model');
 
-export { shell, registry };
+export { shell };
 
-const ShellView = () => <RenderTree nodes={useShellRenderTree()} />;
-
-export const Demo = () => (
-  <NovaShellProvider shell={shell} registry={registry}>
-    <ShellView />
-  </NovaShellProvider>
-);
+export const Demo = () => <Nova.Shell shell={shell} />;

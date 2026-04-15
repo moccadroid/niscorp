@@ -1,4 +1,4 @@
-import { Demo } from './stack.demo';
+import * as demo from './stack.demo';
 import source from './stack.demo?raw';
 
 export const story = {
@@ -8,6 +8,6 @@ export const story = {
     'The Stack flex primitive — direction, gap, padding, align. Three coloured Boxes side-by-side.',
   category: 'Components',
   kind: 'layout' as const,
-  Demo,
+  ...demo,
   source,
 };

@@ -1,4 +1,4 @@
-import { Demo } from './endpoint-full.demo';
+import * as demo from './endpoint-full.demo';
 import source from './endpoint-full.demo?raw';
 
 export const story = {
@@ -8,6 +8,6 @@ export const story = {
     'Templated URL, headers, and body; separate success / error chains; loading + result boxes. "Save (force fail)" hits a broken endpoint so `@error.message` surfaces in the error chain.',
   category: 'Endpoints',
   kind: 'action' as const,
-  Demo,
+  ...demo,
   source,
 };

@@ -1,17 +1,5 @@
-import {
-  createComponentRegistry,
-  createLayoutStore,
-  createShell,
-  type ActionDefinition,
-  type LayoutNode,
-} from '@niscorp/nova';
-import {
-  NovaShellProvider,
-  RenderTree,
-  useShellRenderTree,
-  type NovaComponent,
-} from '@niscorp/nova/react';
-import { registerNovaReactComponents } from '@niscorp/nova/components/react';
+import { createShell, type ActionDefinition, type LayoutNode } from '@niscorp/nova';
+import { Nova } from '@niscorp/nova/react';
 
 // The shell's `canvasLayout` is a NESTED LayoutNode: an outer
 // column (topbar + body) and an inner row (two boxed panels).
@@ -133,19 +121,13 @@ const eventRevenue = buildEvent('eventRevenue', 'Revenue widget viewed');
 const eventUsers = buildEvent('eventUsers', 'Users widget viewed');
 const eventErrors = buildEvent('eventErrors', 'Errors widget viewed');
 
-const registry = createComponentRegistry<NovaComponent>();
-registerNovaReactComponents(registry);
-const layoutStore = createLayoutStore();
-
 const shell = createShell({
   canvases: [
-    { id: 'topbar' },
-    { id: 'metrics' },
-    { id: 'activity', actionLayout: activityActionLayout },
+    { id: 'topbar', initial: 'topbar' },
+    { id: 'metrics', initial: 'widgetRevenue' },
+    { id: 'activity', actionLayout: activityActionLayout, initial: 'eventRevenue' },
   ],
   canvasLayout: shellLayout,
-  registry,
-  layoutStore,
   actions: {
     topbar,
     widgetRevenue,
@@ -156,16 +138,6 @@ const shell = createShell({
     eventErrors,
   },
 });
-shell.push('topbar', 'topbar');
-shell.push('metrics', 'widgetRevenue');
-shell.push('activity', 'eventRevenue');
 
-export { shell, registry };
-
-const ShellView = () => <RenderTree nodes={useShellRenderTree()} />;
-
-export const Demo = () => (
-  <NovaShellProvider shell={shell} registry={registry}>
-    <ShellView />
-  </NovaShellProvider>
-);
+export { shell };
+export const Demo = () => <Nova.Shell shell={shell} />;

@@ -1,4 +1,4 @@
-import { Demo } from './multi-canvas.demo';
+import * as demo from './multi-canvas.demo';
 import source from './multi-canvas.demo?raw';
 
 export const story = {
@@ -8,6 +8,6 @@ export const story = {
     'A nav canvas drives a separate content canvas. Each button fires a `replace` with `canvas: "content"`, swapping the article without touching the nav.',
   category: 'Multi-canvas',
   kind: 'shell' as const,
-  Demo,
+  ...demo,
   source,
 };

@@ -1,17 +1,5 @@
-import {
-  createComponentRegistry,
-  createLayoutStore,
-  createShell,
-  type ActionDefinition,
-  type LayoutNode,
-} from '@niscorp/nova';
-import {
-  NovaShellProvider,
-  RenderTree,
-  useShellRenderTree,
-  type NovaComponent,
-} from '@niscorp/nova/react';
-import { registerNovaReactComponents } from '@niscorp/nova/components/react';
+import { createShell, type ActionDefinition, type LayoutNode } from '@niscorp/nova';
+import { Nova } from '@niscorp/nova/react';
 
 // The same list-mode trick as the activity feed, but with
 // direction: 'row' and wrap: true. One prop change turns a
@@ -92,28 +80,14 @@ const cardTodo = buildCard('cardTodo', 'TODO', '#fee2e2', 'Wire up auth provider
 const cardDoing = buildCard('cardDoing', 'DOING', '#fef3c7', 'Refactor canvas layouts');
 const cardDone = buildCard('cardDone', 'DONE', '#dcfce7', 'Ship list-mode actionLayout');
 
-const registry = createComponentRegistry<NovaComponent>();
-registerNovaReactComponents(registry);
-const layoutStore = createLayoutStore();
-
 const shell = createShell({
-  canvases: [{ id: 'controls' }, { id: 'board', actionLayout: boardActionLayout }],
+  canvases: [
+    { id: 'controls', initial: 'panel' },
+    { id: 'board', actionLayout: boardActionLayout, initial: ['cardTodo', 'cardDoing', 'cardDone'] },
+  ],
   canvasLayout: shellLayout,
-  registry,
-  layoutStore,
   actions: { panel, cardTodo, cardDoing, cardDone },
 });
-shell.push('controls', 'panel');
-shell.push('board', 'cardTodo');
-shell.push('board', 'cardDoing');
-shell.push('board', 'cardDone');
 
-export { shell, registry };
-
-const ShellView = () => <RenderTree nodes={useShellRenderTree()} />;
-
-export const Demo = () => (
-  <NovaShellProvider shell={shell} registry={registry}>
-    <ShellView />
-  </NovaShellProvider>
-);
+export { shell };
+export const Demo = () => <Nova.Shell shell={shell} />;

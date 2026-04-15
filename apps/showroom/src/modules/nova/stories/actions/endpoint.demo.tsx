@@ -1,17 +1,9 @@
 import {
-  createComponentRegistry,
-  createLayoutStore,
   createShell,
   type ActionDefinition,
   type FetchFn,
 } from '@niscorp/nova';
-import {
-  NovaShellProvider,
-  RenderTree,
-  useShellRenderTree,
-  type NovaComponent,
-} from '@niscorp/nova/react';
-import { registerNovaReactComponents } from '@niscorp/nova/components/react';
+import { Nova } from '@niscorp/nova/react';
 
 // A mocked network call. The real code path is the same: a `call`
 // op dispatches an endpoint, Nova awaits the response, and writes
@@ -80,25 +72,12 @@ const endpoint: ActionDefinition = {
   ],
 };
 
-const registry = createComponentRegistry<NovaComponent>();
-registerNovaReactComponents(registry);
-const layoutStore = createLayoutStore();
-
 const shell = createShell({
-  canvases: [{ id: 'main' }],
-  registry,
-  layoutStore,
+  canvases: [{ id: 'main', initial: 'endpoint' }],
   actions: { endpoint },
   fetch: fakeFetch,
 });
-shell.push('main', 'endpoint');
 
-export { shell, registry };
+export { shell };
 
-const ShellView = () => <RenderTree nodes={useShellRenderTree()} />;
-
-export const Demo = () => (
-  <NovaShellProvider shell={shell} registry={registry}>
-    <ShellView />
-  </NovaShellProvider>
-);
+export const Demo = () => <Nova.Shell shell={shell} />;

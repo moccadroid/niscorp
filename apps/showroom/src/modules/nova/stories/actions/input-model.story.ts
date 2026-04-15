@@ -1,4 +1,4 @@
-import { Demo } from './input-model.demo';
+import * as demo from './input-model.demo';
 import source from './input-model.demo?raw';
 
 export const story = {
@@ -8,6 +8,6 @@ export const story = {
     '`model: "$.name"` binds an Input two-way. Keystrokes land in the data store; the greeting Text reads the same path and updates live.',
   category: 'Bindings',
   kind: 'action' as const,
-  Demo,
+  ...demo,
   source,
 };

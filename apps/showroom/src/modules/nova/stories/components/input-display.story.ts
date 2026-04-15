@@ -1,4 +1,4 @@
-import { Demo } from './input-display.demo';
+import * as demo from './input-display.demo';
 import source from './input-display.demo?raw';
 
 export const story = {
@@ -8,6 +8,6 @@ export const story = {
     'One-way `value` binding on Input via `{{…}}` templates (no `model`, so typing does not write back). Three inputs display fields of the data tree, plus a disabled input showing the read-only style.',
   category: 'Components',
   kind: 'layout' as const,
-  Demo,
+  ...demo,
   source,
 };

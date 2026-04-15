@@ -10,6 +10,7 @@
 
 export type {
   CanvasConfig,
+  CanvasInitialSeed,
   CanvasState,
   Shell,
   ShellConfig,

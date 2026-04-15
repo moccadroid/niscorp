@@ -6,7 +6,13 @@ import type {
   PublicActionRuntime,
   TransformFn,
 } from '../action';
-import type { ComponentRegistry, LayoutNode, LayoutStore, RenderNode } from '../layout';
+import type {
+  ComponentRegistry,
+  LayoutNode,
+  LayoutStore,
+  RegistrationInput,
+  RenderNode,
+} from '../layout';
 import type { Unsubscribe } from '../shared/common';
 import type { EventBus, NovaEvent } from '../shared/event-bus';
 import type { MessageBus } from '../shared/message-bus';
@@ -16,6 +22,12 @@ import type { IdFactory } from '../shared/ids';
 // Canvas
 // ═══════════════════════════════════════════════════════════
 
+// A seed is either an action id (string) or an { action, input } pair.
+// Used by CanvasConfig.initial to pre-populate the stack on startup.
+export type CanvasInitialSeed =
+  | string
+  | { action: string; input?: Record<string, unknown> };
+
 export type CanvasConfig = {
   id: string;
   // Layout describing how this canvas arranges its action instances.
@@ -23,6 +35,10 @@ export type CanvasConfig = {
   // canvas renders only the top-of-stack (card-deck) action.
   // Data scope available to resolvables: { instances, active, count }.
   actionLayout?: LayoutNode | string;
+  // Pre-populate the canvas stack on shell creation. Either a single seed
+  // or an ordered list (pushed left-to-right). Equivalent to calling
+  // shell.push(canvasId, ...) after createShell returns.
+  initial?: CanvasInitialSeed | CanvasInitialSeed[];
 };
 
 export type CanvasState = {
@@ -64,8 +80,16 @@ export type ShellConfig = {
   // rendered in a single flex row in declaration order.
   // Data scope available to resolvables: { canvases }.
   canvasLayout?: LayoutNode | string;
-  registry: ComponentRegistry;
-  layoutStore: LayoutStore;
+  // Optional pre-built registry. When omitted, createShell builds a fresh
+  // empty one. `components` (if provided) are merged into whichever registry
+  // ends up being used.
+  registry?: ComponentRegistry;
+  // Convenience: a map of components to register on the shell's registry.
+  // Equivalent to calling registry.registerAll(components).
+  components?: Record<string, RegistrationInput>;
+  // Optional pre-built layout store. When omitted, createShell builds a
+  // fresh empty one. Pass explicitly to share fragments across shells.
+  layoutStore?: LayoutStore;
   actions: Record<string, ActionDefinition>;
   transform?: TransformFn;
   fetch?: FetchFn;
@@ -82,6 +106,12 @@ export type ShellConfig = {
 
 export type Shell = {
   readonly id: string;
+
+  // The component registry and layout store the shell was created with
+  // (or the defaults createShell built when the caller didn't provide them).
+  // Exposed so adapters (e.g. <Nova.Shell>) can read them without re-threading.
+  readonly registry: ComponentRegistry;
+  readonly layoutStore: LayoutStore;
 
   push: (canvasId: string, actionId: string, input?: Record<string, unknown>) => string;
   pop: (canvasId: string) => void;

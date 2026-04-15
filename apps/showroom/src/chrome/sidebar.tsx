@@ -1,5 +1,4 @@
 import type { FC } from 'react';
-import { StatusDot, type DotColor } from './status-dot';
 
 export type SidebarStory = {
   id: string;
@@ -18,7 +17,6 @@ type Props = {
   stories: SidebarStory[];
   activeStoryId: string;
   onSelect: (id: string) => void;
-  statusMap: Record<string, DotColor>;
   kindOrder: string[];
   kindLabels: Record<string, string>;
   docs?: SidebarDoc[];
@@ -68,7 +66,6 @@ export const Sidebar: FC<Props> = ({
   stories,
   activeStoryId,
   onSelect,
-  statusMap,
   kindOrder,
   kindLabels,
   docs,
@@ -94,7 +91,6 @@ export const Sidebar: FC<Props> = ({
         {title}
       </div>
 
-      {/* DOCS group — appears first when the active library has docs. */}
       {hasDocs && (
         <div style={{ marginBottom: 16 }}>
           <div style={KIND_HEADER_STYLE}>Docs</div>
@@ -107,7 +103,6 @@ export const Sidebar: FC<Props> = ({
                 onClick={() => onSelect(doc.id)}
                 style={ITEM_STYLE(isActive)}
               >
-                <StatusDot color="gray" />
                 <span>{doc.title}</span>
               </button>
             );
@@ -141,7 +136,6 @@ export const Sidebar: FC<Props> = ({
                 </div>
                 {cats[cat]?.map((s) => {
                   const isActive = s.id === activeStoryId;
-                  const color = statusMap[s.id] ?? 'gray';
                   return (
                     <button
                       key={s.id}
@@ -149,7 +143,6 @@ export const Sidebar: FC<Props> = ({
                       onClick={() => onSelect(s.id)}
                       style={ITEM_STYLE(isActive)}
                     >
-                      <StatusDot color={color} />
                       <span>{s.name}</span>
                     </button>
                   );

@@ -67,6 +67,7 @@ export {
   isLayoutPrimitive,
   renderLayout,
   renderLayoutFromStore,
+  render,
   createLayoutStore,
   createComponentRegistry,
 } from './layout';
@@ -89,6 +90,7 @@ export type {
   RegistrationInput,
   EventMeta,
   LayoutStore,
+  RenderOptions,
 } from './layout';
 
 // ═══════════════════════════════════════════════════════════
@@ -138,6 +140,7 @@ export { createShell, CANVAS_SLOT_NAME, ACTION_SLOT_NAME } from './shell';
 
 export type {
   CanvasConfig,
+  CanvasInitialSeed,
   CanvasState,
   Shell,
   ShellConfig,

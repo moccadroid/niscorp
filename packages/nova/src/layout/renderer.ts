@@ -253,6 +253,27 @@ export const renderLayout = (
   return safeRenderSingle(node, createScopeChain(data), internal, undefined);
 };
 
+// Object-form alias for renderLayout. Same semantics, named parameters —
+// so the caller doesn't have to remember the positional order of
+// (layout, data, ctx) and so `data` can be omitted when the layout has
+// no resolvables.
+export type RenderOptions = {
+  layout: LayoutNode;
+  data?: Record<string, unknown>;
+  store: RenderContext['store'];
+  registry: RenderContext['registry'];
+  strict?: boolean;
+  onError?: RenderOnError;
+};
+
+export const render = (options: RenderOptions): RenderNode[] =>
+  renderLayout(options.layout, options.data ?? {}, {
+    store: options.store,
+    registry: options.registry,
+    ...(options.strict === undefined ? {} : { strict: options.strict }),
+    ...(options.onError === undefined ? {} : { onError: options.onError }),
+  });
+
 // Render a layout reading its root data from a DataStore view. Used by the
 // action runtime so layout and action share a single data store instance.
 export const renderLayoutFromStore = (

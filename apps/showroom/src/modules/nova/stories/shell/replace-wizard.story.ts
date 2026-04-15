@@ -1,4 +1,4 @@
-import { Demo } from './replace-wizard.demo';
+import * as demo from './replace-wizard.demo';
 import source from './replace-wizard.demo?raw';
 
 export const story = {
@@ -8,6 +8,6 @@ export const story = {
     'Each Next `replace`s the current step — stack depth stays at 2. A `summary` is pushed underneath step 1, so the final Done pops back to it.',
   category: 'Navigation',
   kind: 'shell' as const,
-  Demo,
+  ...demo,
   source,
 };

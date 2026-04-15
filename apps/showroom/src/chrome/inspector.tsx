@@ -1,10 +1,5 @@
-import { useState, useMemo, type FC, type ReactNode } from 'react';
-
-export type InspectorTabDef = {
-  id: string;
-  label: string;
-  render: () => ReactNode;
-};
+import { useState, useMemo, type FC } from 'react';
+import type { InspectorTabDef } from '../modules/types';
 
 type Props = {
   tabs: InspectorTabDef[];

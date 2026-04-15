@@ -1,11 +1,5 @@
-import {
-  createComponentRegistry,
-  createLayoutStore,
-  renderLayout,
-  type LayoutNode,
-} from '@niscorp/nova';
-import { NovaRenderProvider, RenderTree, type NovaComponent } from '@niscorp/nova/react';
-import { registerNovaReactComponents } from '@niscorp/nova/components/react';
+import type { LayoutNode } from '@niscorp/nova';
+import { Nova } from '@niscorp/nova/react';
 
 // Two conditional flavors, both scoped to `$item` inside a loop:
 // 1. Inline `{$if,$then,$else}` on the Box `background` prop —
@@ -68,15 +62,5 @@ const data = {
   ],
 };
 
-const registry = createComponentRegistry<NovaComponent>();
-registerNovaReactComponents(registry);
-const layoutStore = createLayoutStore();
-const nodes = renderLayout(layout, data, { store: layoutStore, registry });
-
-const noop = (): void => {};
-
-export const Demo = () => (
-  <NovaRenderProvider registry={registry} dispatch={noop} publish={noop}>
-    <RenderTree nodes={nodes} />
-  </NovaRenderProvider>
-);
+export { layout, data };
+export const Demo = () => <Nova.Layout layout={layout} data={data} />;

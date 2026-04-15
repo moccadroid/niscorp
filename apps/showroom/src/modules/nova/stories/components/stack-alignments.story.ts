@@ -1,4 +1,4 @@
-import { Demo } from './stack-alignments.demo';
+import * as demo from './stack-alignments.demo';
 import source from './stack-alignments.demo?raw';
 
 export const story = {
@@ -7,6 +7,6 @@ export const story = {
   description: 'Every align × justify combination on a row Stack.',
   category: 'Components',
   kind: 'layout' as const,
-  Demo,
+  ...demo,
   source,
 };

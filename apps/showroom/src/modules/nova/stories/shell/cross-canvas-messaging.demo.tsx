@@ -1,16 +1,5 @@
-import {
-  createComponentRegistry,
-  createLayoutStore,
-  createShell,
-  type ActionDefinition,
-} from '@niscorp/nova';
-import {
-  NovaShellProvider,
-  RenderTree,
-  useShellRenderTree,
-  type NovaComponent,
-} from '@niscorp/nova/react';
-import { registerNovaReactComponents } from '@niscorp/nova/components/react';
+import { createShell, type ActionDefinition } from '@niscorp/nova';
+import { Nova } from '@niscorp/nova/react';
 
 // Two canvases that don't share data — they talk via the shell's
 // message bus instead. Producer emits on the `cart-updated`
@@ -49,25 +38,13 @@ const consumer: ActionDefinition = {
   ],
 };
 
-const registry = createComponentRegistry<NovaComponent>();
-registerNovaReactComponents(registry);
-const layoutStore = createLayoutStore();
-
 const shell = createShell({
-  canvases: [{ id: 'producer' }, { id: 'consumer' }],
-  registry,
-  layoutStore,
+  canvases: [
+    { id: 'producer', initial: 'producer' },
+    { id: 'consumer', initial: 'consumer' },
+  ],
   actions: { producer, consumer },
 });
-shell.push('producer', 'producer');
-shell.push('consumer', 'consumer');
 
-export { shell, registry };
-
-const ShellView = () => <RenderTree nodes={useShellRenderTree()} />;
-
-export const Demo = () => (
-  <NovaShellProvider shell={shell} registry={registry}>
-    <ShellView />
-  </NovaShellProvider>
-);
+export { shell };
+export const Demo = () => <Nova.Shell shell={shell} />;

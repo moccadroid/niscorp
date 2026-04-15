@@ -1,11 +1,5 @@
-import {
-  createComponentRegistry,
-  createLayoutStore,
-  renderLayout,
-  type LayoutNode,
-} from '@niscorp/nova';
-import { NovaRenderProvider, RenderTree, type NovaComponent } from '@niscorp/nova/react';
-import { registerNovaReactComponents } from '@niscorp/nova/components/react';
+import { createLayoutStore, type LayoutNode } from '@niscorp/nova';
+import { Nova } from '@niscorp/nova/react';
 
 // Reusable layouts live in the layout store, keyed by name. A
 // `{ ref: 'user-card' }` node resolves to that template at render
@@ -41,16 +35,8 @@ const layout: LayoutNode = {
 
 const data = { name: 'Ada', email: 'ada@example.com' };
 
-const registry = createComponentRegistry<NovaComponent>();
-registerNovaReactComponents(registry);
 const layoutStore = createLayoutStore();
 layoutStore.set('user-card', userCard);
-const nodes = renderLayout(layout, data, { store: layoutStore, registry });
 
-const noop = (): void => {};
-
-export const Demo = () => (
-  <NovaRenderProvider registry={registry} dispatch={noop} publish={noop}>
-    <RenderTree nodes={nodes} />
-  </NovaRenderProvider>
-);
+export { layout, data, layoutStore };
+export const Demo = () => <Nova.Layout layout={layout} data={data} store={layoutStore} />;

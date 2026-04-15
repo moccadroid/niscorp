@@ -28,6 +28,19 @@ export { RenderNodeView, type RenderNodeViewProps } from './render-node';
 export { ErrorMarker, type ErrorMarkerProps } from './error-marker';
 export { NovaErrorBoundary, type NovaErrorBoundaryProps } from './error-boundary';
 
+// ─── High-level mountable components ───────────────────────
+// Most consumers only need these three. The primitives above
+// exist for custom composition.
+export {
+  Nova,
+  NovaLayout,
+  NovaShell,
+  NovaCanvas,
+  type NovaLayoutProps,
+  type NovaShellProps,
+  type NovaCanvasProps,
+} from './nova';
+
 export {
   useShell,
   useShellState,

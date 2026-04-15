@@ -4,14 +4,15 @@
 //
 // Each story is a Cortex feature demo. Sidebar grouping is by `kind`
 // (the Cortex feature) and `category` (the sub-group within the kind).
-// The runner discriminates by `demo` (the specific runner to invoke).
+// The shared Runner discriminates by `demo` (the specific runner to
+// invoke). Each story is wrapped as a chrome Story — Demo calls the
+// dispatcher with `this` story; source comes from the source-map.
 
+import type { Story } from '../types';
+import { Runner } from './runner';
+import { getStorySource } from './source-map';
 import type { CortexStory } from './story-types';
 import { personExtractorAgent } from './agents/structured-extract';
-
-// ═══════════════════════════════════════════════════════════
-// STANDALONE — runAgentStandalone, single LLM call (or call+retry)
-// ═══════════════════════════════════════════════════════════
 
 // ─── Structured extract (generic, no Prism) ───────────────
 
@@ -53,15 +54,8 @@ const fullNameAge: CortexStory = {
   category: 'Structured output (Prism mapping)',
   kind: 'standalone',
   demo: 'prism-mapping',
-  sampleInput: {
-    first: 'Ada',
-    last: 'Lovelace',
-    born: 1815,
-  },
-  expected: {
-    fullName: 'Ada Lovelace',
-    age: 211,
-  },
+  sampleInput: { first: 'Ada', last: 'Lovelace', born: 1815 },
+  expected: { fullName: 'Ada Lovelace', age: 211 },
   fieldDescriptions: {
     fullName: 'first and last joined with a single space.',
     age: 'Years between `born` and 2026 (the current year).',
@@ -83,11 +77,7 @@ const productSummary: CortexStory = {
     currency: 'USD',
     stock: 7,
   },
-  expected: {
-    title: 'Mechanical Keyboard',
-    priceLabel: 'USD 149.99',
-    inStock: true,
-  },
+  expected: { title: 'Mechanical Keyboard', priceLabel: 'USD 149.99', inStock: true },
   fieldDescriptions: {
     title: 'Just the product name.',
     priceLabel: 'currency followed by a space then the price.',
@@ -106,28 +96,16 @@ const flattenContact: CortexStory = {
   sampleInput: {
     name: 'Jane Doe',
     email: 'jane@example.com',
-    address: {
-      city: 'Berlin',
-      country: 'DE',
-    },
+    address: { city: 'Berlin', country: 'DE' },
   },
-  expected: {
-    name: 'Jane Doe',
-    email: 'jane@example.com',
-    city: 'Berlin',
-    country: 'DE',
-  },
+  expected: { name: 'Jane Doe', email: 'jane@example.com', city: 'Berlin', country: 'DE' },
   fieldDescriptions: {
     city: 'Read from address.city.',
     country: 'Read from address.country.',
   },
 };
 
-// ═══════════════════════════════════════════════════════════
-// Barrel — tool-use and plan-mode stories appended below as
-// each demo is added (rounds B and C).
-// ═══════════════════════════════════════════════════════════
-
+// Barrel — imported after inline stories above.
 import { weatherStories } from './stories/tool-use.stories';
 import { planModeStories } from './stories/plan-mode.stories';
 import { rulesStories } from './stories/rules.stories';
@@ -135,21 +113,22 @@ import { multiRuleStories } from './stories/multi-rule.stories';
 import { researchDeskStories } from './stories/research-desk.stories';
 import { confirmationStories } from './stories/confirmation.stories';
 
-export const stories: readonly CortexStory[] = [
-  // STANDALONE
+const raw: readonly CortexStory[] = [
   extractAda,
   extractTuring,
   fullNameAge,
   productSummary,
   flattenContact,
-  // TOOL USE
   ...weatherStories,
-  // PLAN MODE
   ...planModeStories,
-  // RULES ENGINE
   ...rulesStories,
   ...multiRuleStories,
   ...researchDeskStories,
-  // CONFIRMATION (HUMAN IN THE LOOP)
   ...confirmationStories,
 ];
+
+export const stories: readonly Story[] = raw.map((s): Story => ({
+  ...s,
+  Demo: () => <Runner story={s} />,
+  source: getStorySource(s.id),
+}));

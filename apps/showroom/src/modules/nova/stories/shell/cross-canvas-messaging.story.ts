@@ -1,4 +1,4 @@
-import { Demo } from './cross-canvas-messaging.demo';
+import * as demo from './cross-canvas-messaging.demo';
 import source from './cross-canvas-messaging.demo?raw';
 
 export const story = {
@@ -8,6 +8,6 @@ export const story = {
     'Two canvases communicate via the shell message bus. Producer `emit`s a `cart-updated` channel; Consumer listens with a `message:` trigger and increments its counter.',
   category: 'Multi-canvas',
   kind: 'shell' as const,
-  Demo,
+  ...demo,
   source,
 };

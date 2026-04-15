@@ -1,4 +1,4 @@
-import type { Story } from './story-types';
+import type { NovaStory } from './story-types';
 
 // Bindings
 import { story as bindingsConditional } from './stories/bindings/conditional.story';
@@ -48,7 +48,7 @@ import { story as pushPopNavigation } from './stories/shell/push-pop-navigation.
 import { story as replaceWizard } from './stories/shell/replace-wizard.story';
 import { story as suspendResumeOnNav } from './stories/shell/suspend-resume-on-nav.story';
 
-export const stories: readonly Story[] = [
+export const stories: readonly NovaStory[] = [
   // Bindings
   bindingsConditional,
   bindingsMissingPaths,

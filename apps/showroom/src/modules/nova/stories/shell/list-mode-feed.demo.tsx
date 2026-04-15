@@ -1,17 +1,5 @@
-import {
-  createComponentRegistry,
-  createLayoutStore,
-  createShell,
-  type ActionDefinition,
-  type LayoutNode,
-} from '@niscorp/nova';
-import {
-  NovaShellProvider,
-  RenderTree,
-  useShellRenderTree,
-  type NovaComponent,
-} from '@niscorp/nova/react';
-import { registerNovaReactComponents } from '@niscorp/nova/components/react';
+import { createShell, type ActionDefinition, type LayoutNode } from '@niscorp/nova';
+import { Nova } from '@niscorp/nova/react';
 
 // Two authored layouts on one shell:
 // 1. `canvasLayout` — controls bar on top, feed below.
@@ -101,26 +89,14 @@ const entryInfo = buildEntry('entryInfo', 'INFO', '#eff6ff', 'Heads up', 'A new 
 const entryWarn = buildEntry('entryWarn', 'WARNING', '#fef3c7', 'Elevated latency', 'p95 crossed 500ms on the API.');
 const entrySuccess = buildEntry('entrySuccess', 'SUCCESS', '#ecfdf5', 'Deploy green', 'Release 1.4.2 rolled out cleanly.');
 
-const registry = createComponentRegistry<NovaComponent>();
-registerNovaReactComponents(registry);
-const layoutStore = createLayoutStore();
-
 const shell = createShell({
-  canvases: [{ id: 'controls' }, { id: 'feed', actionLayout: feedActionLayout }],
+  canvases: [
+    { id: 'controls', initial: 'panel' },
+    { id: 'feed', actionLayout: feedActionLayout, initial: 'entryInfo' },
+  ],
   canvasLayout: shellLayout,
-  registry,
-  layoutStore,
   actions: { panel, entryInfo, entryWarn, entrySuccess },
 });
-shell.push('controls', 'panel');
-shell.push('feed', 'entryInfo');
 
-export { shell, registry };
-
-const ShellView = () => <RenderTree nodes={useShellRenderTree()} />;
-
-export const Demo = () => (
-  <NovaShellProvider shell={shell} registry={registry}>
-    <ShellView />
-  </NovaShellProvider>
-);
+export { shell };
+export const Demo = () => <Nova.Shell shell={shell} />;

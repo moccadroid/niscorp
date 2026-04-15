@@ -1,4 +1,4 @@
-import { Demo } from './nested-loops.demo';
+import * as demo from './nested-loops.demo';
 import source from './nested-loops.demo?raw';
 
 export const story = {
@@ -8,6 +8,6 @@ export const story = {
     'Two `for` loops stacked. Outer binds `$user`, inner iterates `$user.posts` and binds `$post` — both scopes visible to the innermost children.',
   category: 'Structure',
   kind: 'layout' as const,
-  Demo,
+  ...demo,
   source,
 };

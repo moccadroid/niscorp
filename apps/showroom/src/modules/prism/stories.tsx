@@ -1,3 +1,6 @@
+import type { Story } from '../types';
+import { Runner } from './runner';
+import { getStorySource } from './stories/source-map';
 import type { PrismStory } from './story-types';
 
 // Operators
@@ -47,48 +50,20 @@ import { sortAndSliceStory } from './stories/real-world/sort-and-slice';
 import { searchSortPaginateStory } from './stories/real-world/search-sort-paginate';
 import { analyticsSummaryStory } from './stories/real-world/analytics-summary';
 
-export const stories: readonly PrismStory[] = [
-  // Operators
-  constStory,
-  refStory,
-  withStory,
-  addStory,
-  mapStory,
-  filterStory,
-  reduceStory,
-  caseStory,
-  interpolateStory,
-  coalesceStory,
-  mergeStory,
-  pickStory,
-  omitStory,
-  keysValuesStory,
-  predicatesStory,
-  logicStory,
-  stringsStory,
-  keyByStory,
-  datesStory,
-  // Sugar
-  sumStory,
-  countStory,
-  avgStory,
-  minStory,
-  maxStory,
-  pluckStory,
-  takeStory,
-  dropStory,
-  matchStory,
-  flatMapStory,
-  // Composition
-  pickAndRenameStory,
-  mapShapeStory,
-  filterThenMapStory,
-  calculatedFieldsStory,
-  denormalizeJoinStory,
-  // Real world
-  apiToUiStory,
-  groupByStory,
-  sortAndSliceStory,
-  searchSortPaginateStory,
-  analyticsSummaryStory,
+const raw: readonly PrismStory[] = [
+  constStory, refStory, withStory, addStory, mapStory, filterStory, reduceStory,
+  caseStory, interpolateStory, coalesceStory, mergeStory, pickStory, omitStory,
+  keysValuesStory, predicatesStory, logicStory, stringsStory, keyByStory, datesStory,
+  sumStory, countStory, avgStory, minStory, maxStory, pluckStory, takeStory,
+  dropStory, matchStory, flatMapStory,
+  pickAndRenameStory, mapShapeStory, filterThenMapStory, calculatedFieldsStory, denormalizeJoinStory,
+  apiToUiStory, groupByStory, sortAndSliceStory, searchSortPaginateStory, analyticsSummaryStory,
 ];
+
+// Wrap each PrismStory as a chrome Story. Demo renders input/config/
+// output via the shared Runner; source comes from the source-map.
+export const stories: readonly Story[] = raw.map((s): Story => ({
+  ...s,
+  Demo: () => <Runner story={s} />,
+  source: getStorySource(s.id),
+}));

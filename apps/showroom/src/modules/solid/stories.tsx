@@ -1,3 +1,6 @@
+import type { Story } from '../types';
+import { Runner } from './runner';
+import { getStorySource } from './stories/source-map';
 import { aiResponseStory } from './stories/ai-response';
 import { searchResultsStory } from './stories/search-results';
 import { dashboardStory } from './stories/dashboard';
@@ -11,7 +14,7 @@ import { finalizeConstraintsStory } from './stories/finalize-constraints';
 import { scopedErrorsStory } from './stories/scoped-errors';
 import type { StreamDemoStory } from './story-types';
 
-export const stories: readonly StreamDemoStory[] = [
+const raw: readonly StreamDemoStory[] = [
   aiResponseStory,
   searchResultsStory,
   dashboardStory,
@@ -24,3 +27,9 @@ export const stories: readonly StreamDemoStory[] = [
   finalizeConstraintsStory,
   scopedErrorsStory,
 ];
+
+export const stories: readonly Story[] = raw.map((s): Story => ({
+  ...s,
+  Demo: () => <Runner story={s} />,
+  source: getStorySource(s.id),
+}));

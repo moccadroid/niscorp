@@ -1,4 +1,4 @@
-import { Demo } from './conditional-in-loop.demo';
+import * as demo from './conditional-in-loop.demo';
 import source from './conditional-in-loop.demo?raw';
 
 export const story = {
@@ -8,6 +8,6 @@ export const story = {
     'Per-item conditionals inside a `for`. Inline `{$if,$then,$else}` picks the Box background; a sibling `if/then/else` swaps the status label.',
   category: 'Structure',
   kind: 'layout' as const,
-  Demo,
+  ...demo,
   source,
 };

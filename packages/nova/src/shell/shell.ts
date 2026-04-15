@@ -1,7 +1,7 @@
 import type { ActionDefinition, ActionRuntime, PublicActionRuntime } from '../action';
 // Note: ActionRuntime is used as the internal runtime type returned by spawn/registry.
 import type { LayoutNode, RenderNode } from '../layout';
-import { renderLayoutFromStore } from '../layout';
+import { createComponentRegistry, createLayoutStore, renderLayoutFromStore } from '../layout';
 import { createEventBus } from '../shared/event-bus';
 import { createMessageBus } from '../shared/message-bus';
 import type { Unsubscribe } from '../shared/common';
@@ -42,6 +42,13 @@ export const createShell = (config: ShellConfig): Shell => {
   const messageBus = config.messageBus ?? createMessageBus();
   const registry = createRuntimeRegistry();
   const telemetry = createTelemetry(config.telemetry);
+
+  // Resolve component registry + layout store: use caller-provided ones when
+  // present, otherwise fabricate empty defaults. `components` (if provided) is
+  // merged into whichever registry we end up using.
+  const componentRegistry = config.registry ?? createComponentRegistry();
+  if (config.components !== undefined) componentRegistry.registerAll(config.components);
+  const layoutStore = config.layoutStore ?? createLayoutStore();
 
   // In strict mode, the next public shell call rethrows this error.
   // Lifecycle hooks are async fire-and-forget, so failures cannot
@@ -130,8 +137,8 @@ export const createShell = (config: ShellConfig): Shell => {
   const buildRuntime = createRuntimeFactory({
     eventBus,
     messageBus,
-    layoutStore: config.layoutStore,
-    registry: config.registry,
+    layoutStore,
+    registry: componentRegistry,
     ...(config.transform === undefined ? {} : { transform: config.transform }),
     ...(config.fetch === undefined ? {} : { fetch: config.fetch }),
     strict,
@@ -230,14 +237,14 @@ export const createShell = (config: ShellConfig): Shell => {
     layout: LayoutNode | string,
     data: Record<string, unknown>,
   ): RenderNode[] => {
-    const resolved = typeof layout === 'string' ? config.layoutStore.get(layout) : layout;
+    const resolved = typeof layout === 'string' ? layoutStore.get(layout) : layout;
     if (resolved === undefined) return [];
     return renderLayoutFromStore(
       resolved,
       { get: () => data },
       {
-        store: config.layoutStore,
-        registry: config.registry,
+        store: layoutStore,
+        registry: componentRegistry,
         strict,
         ...(config.onError === undefined ? {} : { onError: config.onError }),
       },
@@ -275,6 +282,8 @@ export const createShell = (config: ShellConfig): Shell => {
 
   const shell: Shell = {
     id,
+    registry: componentRegistry,
+    layoutStore,
     push,
     pop,
     replace,
@@ -292,5 +301,18 @@ export const createShell = (config: ShellConfig): Shell => {
     dispose,
   };
   rememberShellRegistry(shell, registry);
+
+  // Seed canvases whose config declares an `initial` action (or list). Done
+  // after the shell object is assembled so `push` works exactly as it would
+  // for a consumer calling push themselves.
+  for (const cfg of config.canvases) {
+    if (cfg.initial === undefined) continue;
+    const seeds = Array.isArray(cfg.initial) ? cfg.initial : [cfg.initial];
+    for (const seed of seeds) {
+      if (typeof seed === 'string') push(cfg.id, seed);
+      else push(cfg.id, seed.action, seed.input);
+    }
+  }
+
   return shell;
 };

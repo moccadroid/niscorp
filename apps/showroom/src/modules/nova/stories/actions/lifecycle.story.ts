@@ -1,4 +1,4 @@
-import { Demo } from './lifecycle.demo';
+import * as demo from './lifecycle.demo';
 import source from './lifecycle.demo?raw';
 
 export const story = {
@@ -8,6 +8,6 @@ export const story = {
     'The `mount` hook runs once at action startup. Its ops flip `mounted` to true and push a single "mount" event — both reflected in the view.',
   category: 'Lifecycle',
   kind: 'action' as const,
-  Demo,
+  ...demo,
   source,
 };

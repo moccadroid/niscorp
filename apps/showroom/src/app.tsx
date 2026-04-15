@@ -1,10 +1,11 @@
-import { useEffect, useMemo, useState, type FC } from 'react';
+import { useEffect, useMemo, useState, Fragment, type FC, type ComponentType, type ReactNode } from 'react';
 import { Sidebar as ChromeSidebar, type SidebarDoc } from './chrome/sidebar';
 import { CanvasPane as ChromeCanvasPane } from './chrome/canvas-pane';
-import { ChromeInspector, type InspectorTabDef } from './chrome/inspector';
+import { ChromeInspector } from './chrome/inspector';
 import { LibrarySwitcher, type Library } from './chrome/library-switcher';
 import { DocPane } from './chrome/doc-pane';
-import type { DocPage, LibraryModule, SidebarStoryEntry, StatusMap } from './modules/types';
+import { SourceTab } from './chrome/source-tab';
+import type { DocPage, InspectorTabDef, LibraryModule, Story } from './modules/types';
 
 type LibraryDef = {
   id: string;
@@ -22,19 +23,19 @@ const LIBRARIES: LibraryDef[] = [
 
 const LIBRARY_TABS: Library[] = LIBRARIES.map((l) => ({ id: l.id, name: l.name }));
 
-// A doc selection has its own id space; we prefix story-level routes with
-// 'doc:' so the same activeStoryId state can hold either a story id or a
-// doc id without collision.
 const DOC_PREFIX = 'doc:';
 const docId = (id: string): string => `${DOC_PREFIX}${id}`;
 const isDocSelection = (id: string): boolean => id.startsWith(DOC_PREFIX);
 const stripDocPrefix = (id: string): string => id.slice(DOC_PREFIX.length);
 
+const PassThroughProvider: ComponentType<{ children: ReactNode }> = ({ children }) => (
+  <Fragment>{children}</Fragment>
+);
+
 export const App: FC = () => {
   const [activeLibraryId, setActiveLibraryId] = useState<string>('nova');
   const [active, setActive] = useState<LibraryModule | undefined>(undefined);
   const [activeStoryId, setActiveStoryId] = useState<string>('');
-  const [statusMap, setStatusMap] = useState<StatusMap>({});
 
   useEffect(() => {
     let cancelled = false;
@@ -43,48 +44,27 @@ export const App: FC = () => {
     void lib.load().then((mod) => {
       if (cancelled) return;
       setActive(mod);
-      setStatusMap({});
-      // Default selection: first doc if any, else first story.
       const firstDoc = mod.docs?.[0];
       if (firstDoc !== undefined) {
         setActiveStoryId(docId(firstDoc.id));
         return;
       }
       const firstStory = mod.stories[0];
-      if (firstStory !== undefined) {
-        setActiveStoryId(mod.toSidebarEntry(firstStory).id);
-      } else {
-        setActiveStoryId('');
-      }
+      setActiveStoryId(firstStory?.id ?? '');
     });
     return (): void => {
       cancelled = true;
     };
   }, [activeLibraryId]);
 
-  useEffect(() => {
-    if (active === undefined) return;
-    let cancelled = false;
-    const refresh = (): void => {
-      void active.evaluateAll(active.stories).then((map) => {
-        if (cancelled) return;
-        setStatusMap(map);
-      });
-    };
-    refresh();
-    // If the library publishes a status-change subscription (e.g.
-    // Cortex's localStorage-backed run history), wire it up so the
-    // sidebar dots update without a manual refresh.
-    const unsubscribe = active.subscribeStatusChange?.(refresh);
-    return (): void => {
-      cancelled = true;
-      unsubscribe?.();
-    };
-  }, [active]);
-
-  const sidebarEntries = useMemo<SidebarStoryEntry[]>(() => {
+  const sidebarEntries = useMemo(() => {
     if (active === undefined) return [];
-    return active.stories.map((s) => active.toSidebarEntry(s));
+    return active.stories.map((s) => ({
+      id: s.id,
+      name: s.name,
+      category: s.category,
+      kind: s.kind,
+    }));
   }, [active]);
 
   const sidebarDocs = useMemo<SidebarDoc[]>(() => {
@@ -96,22 +76,25 @@ export const App: FC = () => {
     return <div style={{ padding: 24 }}>Loading…</div>;
   }
 
-  // Resolve the active selection: a doc page or a story.
   const activeDocPage: DocPage | undefined = isDocSelection(activeStoryId)
     ? active.docs?.find((d) => d.id === stripDocPrefix(activeStoryId))
     : undefined;
 
-  const activeIndex = activeDocPage === undefined
-    ? sidebarEntries.findIndex((e) => e.id === activeStoryId)
-    : -1;
-  const activeEntry = activeIndex >= 0 ? sidebarEntries[activeIndex] : undefined;
-  const activeStory = activeIndex >= 0 ? active.stories[activeIndex] : undefined;
+  const activeStory: Story | undefined = activeDocPage === undefined
+    ? active.stories.find((s) => s.id === activeStoryId)
+    : undefined;
 
-  const inspectorTabs: InspectorTabDef[] =
-    activeStory === undefined ? [] : active.buildInspectorTabs(activeStory);
+  // Chrome contributes the Source tab for every story. Modules can
+  // add extras via buildInspectorTabs.
+  const inspectorTabs: InspectorTabDef[] = activeStory === undefined
+    ? []
+    : [
+        { id: 'source', label: 'Source', render: () => <SourceTab story={activeStory} /> },
+        ...(active.buildInspectorTabs?.(activeStory) ?? []),
+      ];
 
-  const RuntimeProvider = active.RuntimeProvider;
-  const Runner = active.Runner;
+  const RuntimeProvider = active.RuntimeProvider ?? PassThroughProvider;
+  const Demo = activeStory?.Demo;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh', width: '100vw' }}>
@@ -126,23 +109,19 @@ export const App: FC = () => {
           stories={sidebarEntries}
           activeStoryId={activeStoryId}
           onSelect={setActiveStoryId}
-          statusMap={statusMap}
           kindOrder={[...active.kindOrder]}
           kindLabels={active.kindLabels}
           docs={sidebarDocs}
         />
         {activeDocPage !== undefined ? (
-          // Doc mode: full-width canvas with rendered markdown OR an
-          // interactive functional page (playground, settings, etc.).
-          // No inspector either way.
           <DocPane page={activeDocPage} />
         ) : (
           <RuntimeProvider>
             <ChromeCanvasPane
-              name={activeEntry?.name ?? ''}
-              description={activeEntry?.description ?? ''}
+              name={activeStory?.name ?? ''}
+              description={activeStory?.description ?? ''}
             >
-              {activeStory !== undefined && <Runner story={activeStory} />}
+              {Demo !== undefined && <Demo />}
             </ChromeCanvasPane>
             <ChromeInspector tabs={inspectorTabs} />
           </RuntimeProvider>

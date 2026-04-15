@@ -1,17 +1,9 @@
 import {
-  createComponentRegistry,
-  createLayoutStore,
   createShell,
   type ActionDefinition,
   type FetchFn,
 } from '@niscorp/nova';
-import {
-  NovaShellProvider,
-  RenderTree,
-  useShellRenderTree,
-  type NovaComponent,
-} from '@niscorp/nova/react';
-import { registerNovaReactComponents } from '@niscorp/nova/components/react';
+import { Nova } from '@niscorp/nova/react';
 
 // Full endpoint surface: templated URL, headers, and body; separate
 // success and error chains; an `emit` on success; and a deliberate
@@ -186,25 +178,12 @@ const endpointFull: ActionDefinition = {
   ],
 };
 
-const registry = createComponentRegistry<NovaComponent>();
-registerNovaReactComponents(registry);
-const layoutStore = createLayoutStore();
-
 const shell = createShell({
-  canvases: [{ id: 'main' }],
-  registry,
-  layoutStore,
+  canvases: [{ id: 'main', initial: 'endpoint-full' }],
   actions: { 'endpoint-full': endpointFull },
   fetch: fakeFetch,
 });
-shell.push('main', 'endpoint-full');
 
-export { shell, registry };
+export { shell };
 
-const ShellView = () => <RenderTree nodes={useShellRenderTree()} />;
-
-export const Demo = () => (
-  <NovaShellProvider shell={shell} registry={registry}>
-    <ShellView />
-  </NovaShellProvider>
-);
+export const Demo = () => <Nova.Shell shell={shell} />;

@@ -1,4 +1,4 @@
-import { Demo } from './list-mode-feed.demo';
+import * as demo from './list-mode-feed.demo';
 import source from './list-mode-feed.demo?raw';
 
 export const story = {
@@ -8,6 +8,6 @@ export const story = {
     'List-mode `actionLayout` on the feed canvas loops `$.instances` and emits an ActionSlot per entry — every push adds a card, nothing gets replaced.',
   category: 'Layouts',
   kind: 'shell' as const,
-  Demo,
+  ...demo,
   source,
 };

@@ -1,4 +1,4 @@
-import { Demo } from './list.demo';
+import * as demo from './list.demo';
 import source from './list.demo?raw';
 
 export const story = {
@@ -8,6 +8,6 @@ export const story = {
     '`push` feeds a `for` loop. Clicking Add grows `$.items`, the loop re-renders, and the counter text bumps automatically.',
   category: 'Data',
   kind: 'action' as const,
-  Demo,
+  ...demo,
   source,
 };
