@@ -1,5 +1,6 @@
 import OpenAI from 'openai';
-import type { RecipeProvider } from './story-types';
+
+export type RecipeProvider = 'openai' | 'openrouter' | 'groq';
 
 // ═══════════════════════════════════════════════════════════
 // Static OpenAI SDK adapter — bypasses signal's dynamic

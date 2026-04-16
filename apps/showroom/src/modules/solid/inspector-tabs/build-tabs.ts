@@ -1,6 +1,6 @@
 import { createElement } from 'react';
-import type { InspectorTabDef, Story } from '../../types';
-import { JsonViewer } from '../../signal/chat/json-viewer';
+import type { InspectorTabDef, Story } from '@showroom/modules/types';
+import { JsonViewer } from '@showroom/chrome/json-viewer';
 
 // Chrome provides the Source tab. Solid adds Source JSON — the raw
 // streaming payload the demo feeds through. `json` rides along on

@@ -1,7 +1,7 @@
 import { useRef, useState, type FC } from 'react';
 import { z } from 'zod';
 import { createStream } from '@niscorp/solid';
-import { Pitch } from '../../../chrome/pitch';
+import { Pitch } from '@showroom/chrome/pitch';
 import {
   DemoShell,
   PathBadges,
@@ -9,7 +9,7 @@ import {
   splitByTokens,
   type DemoState,
   type PathStatus,
-} from '../atoms';
+} from '@showroom/modules/solid/atoms';
 import { AIResponseCard } from './ai-response.ui';
 
 // `createStream({ schema, initial })` gives you a value that is

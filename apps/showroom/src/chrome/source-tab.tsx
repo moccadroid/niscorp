@@ -1,6 +1,6 @@
 import type { FC } from 'react';
 import { CodeView } from './code-view';
-import type { Story } from '../modules/types';
+import type { Story } from '@showroom/modules/types';
 
 // ═══════════════════════════════════════════════════════════
 // Chrome-owned Source tab.

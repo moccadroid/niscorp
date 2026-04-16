@@ -1,5 +1,5 @@
 import type { FC, ReactNode } from 'react';
-import { useCortexRuntime, type LastRun } from '../runtime-context';
+import { useCortexRuntime, type LastRun } from '@showroom/modules/cortex/runtime-context';
 
 // ═══════════════════════════════════════════════════════════
 // Last run tab — shows the most recent execution for this story

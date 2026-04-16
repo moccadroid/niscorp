@@ -1,5 +1,5 @@
 import type { JsonObject } from '@niscorp/prism';
-import { PrismView } from '../../prism-view';
+import { PrismView } from '@showroom/modules/prism/prism-view';
 export const input: JsonObject = { name: 'Ada Lovelace', age: 36, tags: ['math', 'engine'] };
 
 export const config = {

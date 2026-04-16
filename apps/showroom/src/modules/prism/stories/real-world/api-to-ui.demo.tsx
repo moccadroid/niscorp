@@ -1,5 +1,5 @@
 import type { JsonObject } from '@niscorp/prism';
-import { PrismView } from '../../prism-view';
+import { PrismView } from '@showroom/modules/prism/prism-view';
 export const input: JsonObject = {
     response: {
       meta: { total: 3, page: 1, perPage: 10 },

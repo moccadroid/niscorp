@@ -1,7 +1,7 @@
 import { useRef, useState, type FC } from 'react';
 import { z } from 'zod';
 import { createStream, type StreamError, type ValidationMode } from '@niscorp/solid';
-import { Pitch } from '../../../chrome/pitch';
+import { Pitch } from '@showroom/chrome/pitch';
 import {
   DemoShell,
   ErrorPanel,
@@ -12,7 +12,7 @@ import {
   splitByTokens,
   type DemoState,
   type PathStatus,
-} from '../atoms';
+} from '@showroom/modules/solid/atoms';
 
 // Three `mode` values, three behaviours under schema violations:
 //   'trust'   — no validation, the bad data flows through. Debug only.

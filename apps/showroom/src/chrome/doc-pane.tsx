@@ -1,5 +1,5 @@
 import type { FC } from 'react';
-import type { DocPage } from '../modules/types';
+import type { DocPage } from '@showroom/modules/types';
 import { MarkdownPane } from './markdown-pane';
 
 // ═══════════════════════════════════════════════════════════

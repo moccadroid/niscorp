@@ -1,5 +1,5 @@
 import type { JsonObject } from '@niscorp/prism';
-import { PrismView } from '../../prism-view';
+import { PrismView } from '@showroom/modules/prism/prism-view';
 export const input: JsonObject = { numbers: [10, 20, 30, 40, 50, 60, 70, 80] };
 
 export const config = { $drop: { from: { $ref: '$.numbers' }, count: 3 } };

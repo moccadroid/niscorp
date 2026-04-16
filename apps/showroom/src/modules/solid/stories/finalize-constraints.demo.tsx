@@ -6,7 +6,7 @@ import {
   type StreamError,
   type ValidationMode,
 } from '@niscorp/solid';
-import { Pitch } from '../../../chrome/pitch';
+import { Pitch } from '@showroom/chrome/pitch';
 import {
   DemoShell,
   ErrorPanel,
@@ -17,7 +17,7 @@ import {
   splitByTokens,
   type DemoState,
   type PathStatus,
-} from '../atoms';
+} from '@showroom/modules/solid/atoms';
 
 // Kind checks (string/number/array/etc.) are safe to run on every
 // chunk. But `.min(5)`, `.email()`, `.regex()`, `.refine()` are

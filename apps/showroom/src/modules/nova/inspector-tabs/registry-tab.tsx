@@ -1,6 +1,6 @@
 import { useMemo, useState, type FC } from 'react';
 import { z } from 'zod';
-import type { NovaStory } from '../story-types';
+import type { NovaStory } from '@showroom/modules/nova/story-types';
 import { getStoryRegistry } from './story-registry';
 
 // ═══════════════════════════════════════════════════════════

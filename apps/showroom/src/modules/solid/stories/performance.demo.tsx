@@ -1,7 +1,7 @@
 import { useRef, useState, type FC } from 'react';
 import { z } from 'zod';
 import { createStream } from '@niscorp/solid';
-import { Pitch } from '../../../chrome/pitch';
+import { Pitch } from '@showroom/chrome/pitch';
 import {
   DemoShell,
   PathBadges,
@@ -10,7 +10,7 @@ import {
   splitByTokens,
   type DemoState,
   type PathStatus,
-} from '../atoms';
+} from '@showroom/modules/solid/atoms';
 
 // Solid's incremental parser is linear in chunk size and uses
 // structural sharing for snapshots. No JSON.parse, no

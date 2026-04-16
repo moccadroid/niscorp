@@ -6,17 +6,8 @@ import {
   type AgentDefinition,
   type ToolDefinition,
 } from '@niscorp/cortex';
-import {
-  isCortexStory,
-  isPrismMappingStory,
-  isStructuredExtractStory,
-  isToolUseStory,
-  isPlanModeStory,
-  isRulesStory,
-  isConfirmationStory,
-  type CortexStory,
-} from '../story-types';
 import { mappingAgent } from '@niscorp/prism/agent';
+import type { Story } from '@showroom/modules/types';
 
 // ═══════════════════════════════════════════════════════════
 // Preview Context tab
@@ -37,38 +28,34 @@ type ResolveStory = {
   input: unknown;
 };
 
-const resolveStory = (story: CortexStory): ResolveStory | undefined => {
-  if (isPrismMappingStory(story)) {
+// Stories spread their config (agent, tools, prompt, inputText, …)
+// directly onto the story object via the demo module's `...demo`
+// spread. We read those fields by name and synthesize the manifold
+// inputs.
+//
+// Prism-mapping stories use the shared mappingAgent and pass an
+// envelope as input. They don't carry an `agent` field.
+const resolveStory = (story: Story): ResolveStory | undefined => {
+  if (story.id.startsWith('standalone.prism-mapping.')) {
     return {
       agent: mappingAgent,
       tools: [],
       input: {
-        sampleInput: story.sampleInput,
-        targetShape: story.expected,
-        ...(story.fieldDescriptions && { fieldDescriptions: story.fieldDescriptions }),
-        ...(story.notes && { notes: story.notes }),
+        sampleInput: story['sampleInput'],
+        targetShape: story['expected'],
+        ...(story['fieldDescriptions'] !== undefined && { fieldDescriptions: story['fieldDescriptions'] }),
+        ...(story['notes'] !== undefined && { notes: story['notes'] }),
       },
     };
   }
-  if (isStructuredExtractStory(story)) {
-    return { agent: story.agent, tools: [], input: story.inputText };
-  }
-  if (isToolUseStory(story)) {
-    return { agent: story.agent, tools: story.tools, input: story.prompt };
-  }
-  if (isPlanModeStory(story)) {
-    return { agent: story.agent, tools: story.tools ?? [], input: story.prompt };
-  }
-  if (isRulesStory(story)) {
-    return { agent: story.agent, tools: story.tools ?? [], input: story.prompt };
-  }
-  if (isConfirmationStory(story)) {
-    return { agent: story.agent, tools: story.tools, input: story.prompt };
-  }
-  return undefined;
+  const agent = story['agent'] as AgentDefinition<unknown> | undefined;
+  if (agent === undefined) return undefined;
+  const tools = (story['tools'] as ReadonlyArray<ToolDefinition> | undefined) ?? [];
+  const input = (story['inputText'] as string | undefined) ?? (story['prompt'] as string | undefined) ?? '';
+  return { agent, tools, input };
 };
 
-type Props = { story: unknown };
+type Props = { story: Story };
 
 export const PreviewContextTab: FC<Props> = ({ story }) => {
   const [resolved, setResolved] = useState<ResolvedContext | undefined>(undefined);
@@ -77,15 +64,9 @@ export const PreviewContextTab: FC<Props> = ({ story }) => {
 
   // Auto-compute on story change. previewContext is free (no LLM,
   // no API key, sub-10ms) so there's no reason to gate it behind a
-  // button. The user sees the resolved context immediately when they
-  // switch to a story or open this tab.
-  const storyId = isCortexStory(story) ? story.id : undefined;
+  // button.
+  const storyId = story.id;
   useEffect(() => {
-    if (!isCortexStory(story)) {
-      setResolved(undefined);
-      setError(undefined);
-      return;
-    }
     const resolvedStory = resolveStory(story);
     if (!resolvedStory) {
       setResolved(undefined);
@@ -113,10 +94,6 @@ export const PreviewContextTab: FC<Props> = ({ story }) => {
     void run();
     return () => { cancelled = true; };
   }, [storyId, story]);
-
-  if (!isCortexStory(story)) {
-    return <div style={{ padding: 16, color: '#9ca3af' }}>No story.</div>;
-  }
 
   return (
     <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>

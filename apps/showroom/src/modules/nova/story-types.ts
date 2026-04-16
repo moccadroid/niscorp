@@ -1,6 +1,6 @@
 import type { LayoutNode, LayoutStore, RegistrationInput, Shell } from '@niscorp/nova';
 import type { NovaComponent } from '@niscorp/nova/react';
-import type { Story as BaseStory } from '../types';
+import type { Story as BaseStory } from '@showroom/modules/types';
 
 // Nova extends the chrome Story with runtime refs the module's
 // inspector tabs can introspect. Stories export whichever ones

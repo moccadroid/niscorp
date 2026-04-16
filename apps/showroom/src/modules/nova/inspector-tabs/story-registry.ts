@@ -8,7 +8,7 @@ import {
 } from '@niscorp/nova';
 import type { NovaComponent } from '@niscorp/nova/react';
 import { registerNovaReactComponents } from '@niscorp/nova/components/react';
-import type { NovaStory } from '../story-types';
+import type { NovaStory } from '@showroom/modules/nova/story-types';
 
 // Resolve the component registry the inspector should introspect for
 // a given story. Shell stories own one on the Shell itself; layout

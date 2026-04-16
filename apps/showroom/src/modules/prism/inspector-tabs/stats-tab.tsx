@@ -1,7 +1,7 @@
 import type { FC } from 'react';
 import type { CompiledIr } from '@niscorp/prism';
-import type { PrismStory } from '../story-types';
-import { useCompiledIr } from '../use-compiled-ir';
+import type { PrismStory } from '@showroom/modules/prism/story-types';
+import { useCompiledIr } from '@showroom/modules/prism/use-compiled-ir';
 
 const LEGEND =
   'Static analysis of the compiled config: how many nodes, how deep, which ops, what source paths it touches.';

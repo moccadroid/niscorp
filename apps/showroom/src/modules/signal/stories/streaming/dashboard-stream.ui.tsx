@@ -1,5 +1,5 @@
 import type { FC } from 'react';
-import type { Dashboard } from './dashboard-stream.recipe';
+import type { Dashboard } from './dashboard-stream.demo';
 
 // ═══════════════════════════════════════════════════════════
 // Renderer for the Dashboard shape. Pure presentational — fed

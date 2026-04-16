@@ -1,8 +1,21 @@
 import type { FC, ReactNode } from 'react';
 import { z } from 'zod';
-import type { StreamStory } from '../story-types';
+import type { Story } from '@showroom/modules/types';
 
-type Props = { story: StreamStory };
+type Props = { story: Story };
+
+// Stream demos spread provider/model/systemPrompt/userInput/schema/
+// initial directly onto the story via `...demo`. This view type pulls
+// them out for local use; the inspector trusts that the story came
+// from the signal module so the cast is safe.
+type StreamView = {
+  provider?: string;
+  model?: string;
+  systemPrompt?: string;
+  userInput?: string;
+  schema?: z.ZodTypeAny;
+  initial?: unknown;
+};
 
 const Section: FC<{ title: string; children: ReactNode }> = ({ title, children }) => (
   <div style={{ marginBottom: 18 }}>
@@ -45,7 +58,7 @@ const schemaToJsonString = (schema: z.ZodTypeAny): string => {
 };
 
 export const StreamSetupTab: FC<Props> = ({ story }) => {
-  const { recipe } = story;
+  const recipe = story as unknown as StreamView;
   const hasSolid = recipe.schema !== undefined && recipe.initial !== undefined;
   return (
     <div>

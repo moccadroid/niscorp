@@ -1,11 +1,15 @@
 import { useEffect, useRef, useState, type FC, type ReactNode } from 'react';
 import { z } from 'zod';
 import { createSignal, type Message, type SignalResult, type Tool, type SignalOptions } from '@niscorp/signal';
-import { getKey } from '../settings/api-key-storage';
-import { createOpenAIClient } from '../openai-client';
-import { useSignalSetter } from '../runtime-context';
-import type { RecipeProvider, StructuredRender } from '../story-types';
-import { JsonViewer } from './json-viewer';
+import { getKey } from '@showroom/modules/signal/settings/api-key-storage';
+import { createOpenAIClient, type RecipeProvider } from '@showroom/modules/signal/openai-client';
+import { useSignalSetter } from '@showroom/modules/signal/runtime-context';
+
+// How to render structured (object) assistant responses: a
+// collapsible JSON viewer or a styled card (when the shape
+// matches CardData).
+export type StructuredRender = 'json' | 'card';
+import { JsonViewer } from '@showroom/chrome/json-viewer';
 import { CardRenderer, isCardData } from './card-renderer';
 
 // ═══════════════════════════════════════════════════════════

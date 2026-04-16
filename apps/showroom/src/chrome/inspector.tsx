@@ -1,5 +1,5 @@
 import { useState, useMemo, type FC } from 'react';
-import type { InspectorTabDef } from '../modules/types';
+import type { InspectorTabDef } from '@showroom/modules/types';
 
 type Props = {
   tabs: InspectorTabDef[];

@@ -1,5 +1,5 @@
-import type { InspectorTabDef, Story } from '../../types';
-import type { PrismStory } from '../story-types';
+import type { InspectorTabDef, Story } from '@showroom/modules/types';
+import type { PrismStory } from '@showroom/modules/prism/story-types';
 import { StatsTab } from './stats-tab';
 import { CompiledTab } from './compiled-tab';
 

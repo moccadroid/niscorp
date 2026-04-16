@@ -1,6 +1,6 @@
 import { useCallback, useRef, useSyncExternalStore, type FC } from 'react';
 import type { Shell, CanvasState } from '@niscorp/nova';
-import type { NovaStory } from '../story-types';
+import type { NovaStory } from '@showroom/modules/nova/story-types';
 
 // ═══════════════════════════════════════════════════════════
 // Data tab — shows live action-instance data, one section per

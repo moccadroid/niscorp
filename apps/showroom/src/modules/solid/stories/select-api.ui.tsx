@@ -1,5 +1,5 @@
 import type { FC, ReactNode } from 'react';
-import { Cursor, FinalBadge, Placeholder, type PathStatus } from '../atoms';
+import { Cursor, FinalBadge, Placeholder, type PathStatus } from '@showroom/modules/solid/atoms';
 import type { SelectData } from './select-api.demo';
 
 type Props = { value: SelectData; pathStatuses: Map<string, PathStatus> };

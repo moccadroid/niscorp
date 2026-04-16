@@ -1,5 +1,5 @@
 import type { FC } from 'react';
-import { FinalBadge, Placeholder, Cursor, type PathStatus } from '../atoms';
+import { FinalBadge, Placeholder, Cursor, type PathStatus } from '@showroom/modules/solid/atoms';
 import type { DashboardData } from './dashboard.demo';
 
 type Props = { value: DashboardData; pathStatuses: Map<string, PathStatus> };

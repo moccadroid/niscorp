@@ -1,5 +1,5 @@
 import type { FC } from 'react';
-import { Cursor, FinalBadge, Placeholder, type PathStatus } from '../atoms';
+import { Cursor, FinalBadge, Placeholder, type PathStatus } from '@showroom/modules/solid/atoms';
 import type { Response } from './ai-response.demo';
 
 // ═══════════════════════════════════════════════════════════

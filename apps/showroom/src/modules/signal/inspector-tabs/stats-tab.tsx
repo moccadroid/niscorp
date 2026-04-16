@@ -1,5 +1,5 @@
 import type { FC } from 'react';
-import { useSignalView } from '../runtime-context';
+import { useSignalView } from '@showroom/modules/signal/runtime-context';
 
 // ═══════════════════════════════════════════════════════════
 // Stats tab — meta info from the most recent live response.

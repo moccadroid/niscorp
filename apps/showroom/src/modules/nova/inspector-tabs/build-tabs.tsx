@@ -1,5 +1,5 @@
-import type { InspectorTabDef, Story } from '../../types';
-import { isNovaStory } from '../story-types';
+import type { InspectorTabDef, Story } from '@showroom/modules/types';
+import { isNovaStory } from '@showroom/modules/nova/story-types';
 import { StructureTab } from './structure-tab';
 import { DataTab } from './data-tab';
 import { RegistryTab } from './registry-tab';

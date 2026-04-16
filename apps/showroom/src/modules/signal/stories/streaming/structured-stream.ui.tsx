@@ -1,5 +1,5 @@
 import type { FC } from 'react';
-import type { Response } from './structured-stream.recipe';
+import type { Response } from './structured-stream.demo';
 
 // ═══════════════════════════════════════════════════════════
 // Renderer for the Response shape. Pure presentational — reads

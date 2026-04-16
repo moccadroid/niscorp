@@ -1,5 +1,5 @@
 import type { JsonObject } from '@niscorp/prism';
-import { PrismView } from '../../prism-view';
+import { PrismView } from '@showroom/modules/prism/prism-view';
 export const input: JsonObject = { createdAt: '2024-01-15T08:30:00Z', now: '2024-04-22T10:00:00Z' };
 
 export const config = {

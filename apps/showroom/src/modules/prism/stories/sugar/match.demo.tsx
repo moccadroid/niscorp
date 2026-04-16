@@ -1,5 +1,5 @@
 import type { JsonObject } from '@niscorp/prism';
-import { PrismView } from '../../prism-view';
+import { PrismView } from '@showroom/modules/prism/prism-view';
 export const input: JsonObject = { tags: ['frontend', 'backend', 'devops', 'frontend-react', 'database'] };
 
 export const config = { $match: { over: { $ref: '$.tags' }, as: 'tag', search: { $const: 'front' } } };

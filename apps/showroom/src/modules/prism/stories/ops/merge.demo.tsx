@@ -1,5 +1,5 @@
 import type { JsonObject } from '@niscorp/prism';
-import { PrismView } from '../../prism-view';
+import { PrismView } from '@showroom/modules/prism/prism-view';
 export const input: JsonObject = {
     defaults: { theme: 'light', fontSize: 14, autoSave: true },
     overrides: { theme: 'dark', fontSize: 16 },

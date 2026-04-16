@@ -1,5 +1,5 @@
 import type { JsonObject } from '@niscorp/prism';
-import { PrismView } from '../../prism-view';
+import { PrismView } from '@showroom/modules/prism/prism-view';
 
 // Returns a literal JSON value unchanged. The simplest op —
 // useful as a building block inside other expressions.

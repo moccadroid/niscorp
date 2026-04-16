@@ -1,4 +1,4 @@
-import type { Story as BaseStory } from '../types';
+import type { Story as BaseStory } from '@showroom/modules/types';
 
 // Solid adds no extras beyond the chrome Story base. The demo's
 // module exports (schema, initial, json) ride along on the story

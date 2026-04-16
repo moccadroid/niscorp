@@ -1,4 +1,4 @@
-import type { DocPage, LibraryModule } from '../types';
+import type { DocPage, LibraryModule } from '@showroom/modules/types';
 import { stories } from './stories';
 import { CortexRuntimeProvider } from './runtime-context';
 import { buildInspectorTabs } from './inspector-tabs/build-tabs';

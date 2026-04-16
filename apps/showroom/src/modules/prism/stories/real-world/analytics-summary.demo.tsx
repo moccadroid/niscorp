@@ -1,5 +1,5 @@
 import type { JsonObject } from '@niscorp/prism';
-import { PrismView } from '../../prism-view';
+import { PrismView } from '@showroom/modules/prism/prism-view';
 
 // Compute a small dashboard from raw events: total revenue,
 // average order value, top customer by spend, count of orders.

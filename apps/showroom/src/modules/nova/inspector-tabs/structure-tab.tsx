@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type FC } from 'react';
 import type { CanvasState, Shell } from '@niscorp/nova';
-import type { NovaStory } from '../story-types';
-import { JsonViewer } from '../../signal/chat/json-viewer';
+import type { NovaStory } from '@showroom/modules/nova/story-types';
+import { JsonViewer } from '@showroom/chrome/json-viewer';
 
 // ═══════════════════════════════════════════════════════════
 // Structure tab — shows the authored definitions behind the

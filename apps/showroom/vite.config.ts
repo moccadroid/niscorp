@@ -8,6 +8,15 @@ const workspaceRoot = resolve(here, '../..');
 
 export default defineConfig({
   plugins: [react()],
+  resolve: {
+    alias: {
+      '@showroom': resolve(here, 'src'),
+      // Workspace-internal access to package SOURCE (not the
+      // built dist). Used for showroom inspector tabs that show
+      // the original .ts of an agent or component via ?raw.
+      '@packages': resolve(workspaceRoot, 'packages'),
+    },
+  },
   server: {
     port: 5173,
     open: true,

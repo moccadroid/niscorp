@@ -1,5 +1,5 @@
 import type { JsonObject } from '@niscorp/prism';
-import type { Story as BaseStory } from '../types';
+import type { Story as BaseStory } from '@showroom/modules/types';
 
 // ═══════════════════════════════════════════════════════════
 // Prism extends the chrome Story with the authored input +

@@ -1,5 +1,5 @@
 import type { FC } from 'react';
-import { ChatView } from '../chat/chat-view';
+import { ChatView } from '@showroom/modules/signal/chat/chat-view';
 
 // ═══════════════════════════════════════════════════════════
 // PlaygroundPane — freeform interactive chat. Same ChatView

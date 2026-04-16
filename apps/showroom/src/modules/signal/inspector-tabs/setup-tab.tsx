@@ -1,6 +1,7 @@
 import type { FC, ReactNode } from 'react';
 import { z } from 'zod';
-import type { RecipeStory } from '../story-types';
+import type { Tool } from '@niscorp/signal';
+import type { Story } from '@showroom/modules/types';
 
 // ═══════════════════════════════════════════════════════════
 // Setup tab — the configuration the recipe was built with.
@@ -13,7 +14,18 @@ import type { RecipeStory } from '../story-types';
 const LEGEND =
   'Configuration for this recipe: provider, model, system prompt, tools (with input schemas), and output schema if any.';
 
-type Props = { story: RecipeStory };
+type Props = { story: Story };
+
+// Recipe demos spread provider/model/systemPrompt/tools/schema
+// directly onto the story via `...demo`. Pull them out with a
+// local view type — no cast chains further down.
+type RecipeView = {
+  provider?: string;
+  model?: string;
+  systemPrompt?: string;
+  tools?: Tool[];
+  schema?: z.ZodTypeAny;
+};
 
 const Section: FC<{ title: string; children: ReactNode }> = ({ title, children }) => (
   <div style={{ marginBottom: 18 }}>
@@ -76,7 +88,7 @@ const schemaToJsonString = (schema: z.ZodTypeAny): string => {
 };
 
 export const SetupTab: FC<Props> = ({ story }) => {
-  const { recipe } = story;
+  const recipe = story as unknown as RecipeView;
   return (
     <div>
       <div
