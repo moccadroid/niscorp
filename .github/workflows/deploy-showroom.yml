@@ -1,0 +1,60 @@
+name: Deploy showroom to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Cancel any in-progress run when a new push lands. Don't cancel an
+# in-progress deploy though — let it finish, queue the next one.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # `--workspace-concurrency=1` forces serial topo-order builds.
+      # Necessary because prism's `agent` sub-export imports cortex
+      # but only declares it as an optional peer, so without serial
+      # ordering pnpm runs prism's DTS build in parallel with cortex's
+      # and prism fails to find cortex's types. Builds the showroom
+      # plus all workspace deps it transitively needs.
+      - name: Build showroom
+        run: pnpm --filter showroom... --workspace-concurrency=1 run build
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: apps/showroom/dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

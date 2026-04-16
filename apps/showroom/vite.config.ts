@@ -6,7 +6,10 @@ import { dirname, resolve } from 'node:path';
 const here = dirname(fileURLToPath(import.meta.url));
 const workspaceRoot = resolve(here, '../..');
 
-export default defineConfig({
+export default defineConfig(({ command }) => ({
+  // GitHub Pages serves under /niscorp/. Apply the subpath only at
+  // build time so `pnpm dev` keeps serving from `/`.
+  base: command === 'build' ? '/niscorp/' : '/',
   plugins: [react()],
   resolve: {
     alias: {
@@ -35,4 +38,4 @@ export default defineConfig({
   optimizeDeps: {
     include: ['openai'],
   },
-});
+}));
