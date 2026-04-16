@@ -20,7 +20,11 @@ export const DocPane: FC<Props> = ({ page }) => {
     );
   }
   if (page.content !== undefined) {
-    return <MarkdownPane title={page.title} content={page.content} />;
+    return (
+      <div style={{ flex: 1, minWidth: 0, overflow: 'auto', background: '#ffffff' }}>
+        <MarkdownPane title={page.title} content={page.content} />
+      </div>
+    );
   }
   return (
     <div style={{ padding: 24, color: '#9ca3af', fontSize: 12 }}>

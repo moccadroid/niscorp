@@ -1,4 +1,4 @@
-import type { FC } from 'react';
+import type { CSSProperties, FC } from 'react';
 
 export type SidebarStory = {
   id: string;
@@ -20,6 +20,11 @@ type Props = {
   kindOrder: string[];
   kindLabels: Record<string, string>;
   docs?: SidebarDoc[];
+  // When true, render as a fixed overlay drawer from the left with
+  // a close button. Parent controls visibility via its own state +
+  // backdrop; this component just renders as a drawer.
+  isMobile?: boolean;
+  onClose?: () => void;
 };
 
 type Grouped = Record<string, Record<string, SidebarStory[]>>;
@@ -61,6 +66,36 @@ const ITEM_STYLE = (isActive: boolean) => ({
   fontSize: 13,
 });
 
+const DESKTOP_STYLE: CSSProperties = {
+  width: 240,
+  flexShrink: 0,
+  alignSelf: 'flex-start',
+  position: 'sticky',
+  top: 0,
+  height: '100vh',
+  background: '#f3f4f6',
+  overflowY: 'auto',
+  padding: '12px 0',
+  fontSize: 13,
+};
+
+// On mobile, the sidebar is an overlay: fixed position, full height,
+// slightly narrower than the viewport, z-index above the canvas.
+// The backdrop is rendered by the parent.
+const MOBILE_STYLE: CSSProperties = {
+  position: 'fixed',
+  top: 0,
+  left: 0,
+  bottom: 0,
+  width: 'min(280px, 85vw)',
+  background: '#f3f4f6',
+  overflowY: 'auto',
+  padding: '12px 0',
+  fontSize: 13,
+  zIndex: 50,
+  boxShadow: '4px 0 12px rgba(0,0,0,0.15)',
+};
+
 export const Sidebar: FC<Props> = ({
   title,
   stories,
@@ -69,26 +104,41 @@ export const Sidebar: FC<Props> = ({
   kindOrder,
   kindLabels,
   docs,
+  isMobile,
+  onClose,
 }) => {
   const grouped = groupStories(stories);
   const hasDocs = docs !== undefined && docs.length > 0;
   return (
-    <aside
-      style={{
-        width: 240,
-        flexShrink: 0,
-        alignSelf: 'flex-start',
-        position: 'sticky',
-        top: 0,
-        height: '100vh',
-        background: '#f3f4f6',
-        overflowY: 'auto',
-        padding: '12px 0',
-        fontSize: 13,
-      }}
-    >
-      <div style={{ padding: '0 16px 12px', fontWeight: 700, color: '#111827' }}>
-        {title}
+    <aside style={isMobile === true ? MOBILE_STYLE : DESKTOP_STYLE}>
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          padding: '0 16px 12px',
+        }}
+      >
+        <div style={{ fontWeight: 700, color: '#111827' }}>{title}</div>
+        {isMobile === true && onClose !== undefined && (
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close navigation"
+            style={{
+              width: 28,
+              height: 28,
+              background: 'transparent',
+              border: 'none',
+              cursor: 'pointer',
+              fontSize: 18,
+              color: '#374151',
+              lineHeight: 1,
+            }}
+          >
+            ×
+          </button>
+        )}
       </div>
 
       {hasDocs && (

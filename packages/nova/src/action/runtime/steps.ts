@@ -1,5 +1,5 @@
 import { createScopeChain, resolve } from '@shared/bindings';
-import type { ExtraScopes } from '@shared/bindings';
+import type { ExtraScopes, ScopeChain } from '@shared/bindings';
 import type { DataStore } from '@shared/data-store';
 import type { EventBus } from '@shared/event-bus';
 import { isObject } from '@shared/common';
@@ -37,6 +37,27 @@ export type StepContext = {
 
 export const noopOnError: OnErrorHandler = (_error: NovaError): void => {
   // default no-op; users install their own via config
+};
+
+// Only `set` (by-value) and `push` carry a user-supplied `value`
+// field that can hold a template like `{{@error.message}}`. The
+// other ops take paths, booleans, numbers, or nothing — no template
+// surface. Pre-resolving here keeps the mutation subsystem
+// scope-unaware: ops receive already-literal values.
+const resolveMutationValues = (
+  list: Mutation[],
+  chain: ScopeChain,
+  extras: ExtraScopes,
+): Mutation[] => {
+  return list.map((m) => {
+    if ('set' in m && 'value' in m) {
+      return { ...m, value: resolve(m.value, chain, extras) };
+    }
+    if ('push' in m && typeof m.push === 'string' && 'value' in m) {
+      return { ...m, value: resolve(m.value, chain, extras) };
+    }
+    return m;
+  });
 };
 
 const isMutationStep = (step: Step): step is Mutation => {
@@ -126,7 +147,12 @@ export const executeSteps = async (steps: Step[], ctx: StepContext): Promise<voi
     if (buffer.length === 0) return;
     const list = buffer;
     buffer = [];
-    ctx.dataStore.update((curr) => applyMutations(curr, list));
+    // Resolve templates against the state at flush entry, matching
+    // how `emit` captures data before publishing. The `@error` (and
+    // any other) scope lives in ctx.extras.
+    const chain = createScopeChain(ctx.dataStore.get());
+    const resolved = resolveMutationValues(list, chain, ctx.extras);
+    ctx.dataStore.update((curr) => applyMutations(curr, resolved));
   };
 
   for (const step of steps) {

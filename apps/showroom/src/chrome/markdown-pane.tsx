@@ -1,6 +1,7 @@
 import { useMemo, type FC, type ReactNode } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { useIsMobile } from './use-is-mobile';
 import Prism from 'prismjs';
 // Grammar load order matters — each prism component depends on its base.
 // markup → markup-templating → typescript/javascript → jsx → tsx, and the
@@ -35,7 +36,7 @@ const LANG_ALIASES: Record<string, string> = {
 // ═══════════════════════════════════════════════════════════
 
 type Props = {
-  title: string;
+  title?: string;
   content: string;
 };
 
@@ -149,29 +150,34 @@ const Pre: FC<{ children?: ReactNode }> = ({ children }) => (
 );
 
 export const MarkdownPane: FC<Props> = ({ title, content }) => {
+  const isMobile = useIsMobile();
   return (
     <div
       style={{
-        padding: '40px 56px 80px',
+        padding: isMobile ? '24px 18px 56px' : '40px 56px 80px',
         maxWidth: 820,
         margin: '0 auto',
+        width: '100%',
+        boxSizing: 'border-box',
         color: '#24292f',
         fontSize: 15,
         lineHeight: 1.7,
       }}
     >
-      <div
-        style={{
-          fontSize: 11,
-          color: '#9ca3af',
-          textTransform: 'uppercase',
-          letterSpacing: 0.8,
-          marginBottom: 14,
-          fontWeight: 600,
-        }}
-      >
-        Documentation · {title}
-      </div>
+      {title !== undefined && (
+        <div
+          style={{
+            fontSize: 11,
+            color: '#9ca3af',
+            textTransform: 'uppercase',
+            letterSpacing: 0.8,
+            marginBottom: 14,
+            fontWeight: 600,
+          }}
+        >
+          Documentation · {title}
+        </div>
+      )}
       <div className="md-content">
         <ReactMarkdown
           remarkPlugins={[remarkGfm]}

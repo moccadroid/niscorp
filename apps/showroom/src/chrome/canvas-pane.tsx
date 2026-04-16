@@ -4,17 +4,22 @@ type Props = {
   name: string;
   description: string;
   children: ReactNode;
+  // On mobile the canvas is full-width with no adjacent panes, so
+  // the vertical borders that separate it from sidebar/inspector on
+  // desktop become stray lines against the viewport edge.
+  isMobile?: boolean;
 };
 
-export const CanvasPane: FC<Props> = ({ name, description, children }) => {
+export const CanvasPane: FC<Props> = ({ name, description, children, isMobile }) => {
   return (
     <main
       style={{
         flex: 1,
+        minWidth: 0,
         background: '#ffffff',
         overflow: 'auto',
-        borderLeft: '1px solid #e5e7eb',
-        borderRight: '1px solid #e5e7eb',
+        borderLeft: isMobile === true ? 'none' : '1px solid #e5e7eb',
+        borderRight: isMobile === true ? 'none' : '1px solid #e5e7eb',
       }}
     >
       <header

@@ -1,5 +1,3 @@
-<div align="center">
-
 # Nisc
 
 ### An AI-native application platform.
@@ -13,8 +11,6 @@
 [![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178c6.svg?style=flat-square)](https://www.typescriptlang.org)
 
 [Packages](#packages) · [Philosophy](#philosophy) · [Quick start](#quick-start) · [Showroom](#showroom) · [Status](#status)
-
-</div>
 
 ---
 
@@ -34,11 +30,11 @@ Six libraries. Each one is self-sufficient. They also compose.
 
 | | Package | Description | Status |
 |---|---|---|---|
-| 💎 | [**`@niscorp/prism`**](packages/prism)   | JSON data-transformation DSL — ~50 ops, compile-time optimization, fingerprint-keyed cache, zero code execution. | ![](https://img.shields.io/badge/-shipping-22c55e?style=flat-square) |
-| 🧊 | [**`@niscorp/solid`**](packages/solid)   | Structured output streaming — incremental JSON parser with structural sharing. Always-valid, schema-backed object stream over partial JSON. | ![](https://img.shields.io/badge/-shipping-22c55e?style=flat-square) |
-| 🎨 | [**`@niscorp/nova`**](packages/nova)     | Declarative UI runtime — JSON layouts, actions, lifecycles, two-way bindings. Framework-agnostic core, React adapter shipped. | ![](https://img.shields.io/badge/-shipping-22c55e?style=flat-square) |
 | 📡 | [**`@niscorp/signal`**](packages/signal) | Universal LLM client — stateless, immutable, provider-agnostic. Structured output via Zod, tool calling, validation-retry. | ![](https://img.shields.io/badge/-shipping-22c55e?style=flat-square) |
-| 🧠 | [**`@niscorp/cortex`**](packages/cortex) | Agentic orchestration runtime — agents emit ActionPlans, runtime executes them under policy gates and budget caps. | ![](https://img.shields.io/badge/-design-f59e0b?style=flat-square) |
+| 🧊 | [**`@niscorp/solid`**](packages/solid)   | Structured output streaming — incremental JSON parser with structural sharing. Always-valid, schema-backed object stream over partial JSON. | ![](https://img.shields.io/badge/-shipping-22c55e?style=flat-square) |
+| 💎 | [**`@niscorp/prism`**](packages/prism)   | JSON data-transformation DSL — ~50 ops, compile-time optimization, fingerprint-keyed cache, zero code execution. | ![](https://img.shields.io/badge/-shipping-22c55e?style=flat-square) |
+| 🎨 | [**`@niscorp/nova`**](packages/nova)     | Declarative UI runtime — JSON layouts, actions, lifecycles, two-way bindings. Framework-agnostic core, React adapter shipped. | ![](https://img.shields.io/badge/-shipping-22c55e?style=flat-square) |
+| 🧠 | [**`@niscorp/cortex`**](packages/cortex) | Agentic orchestration runtime — typed agents, tool-call loop, plan-mode tick loop, declarative rules engine, human-in-the-loop confirmation. | ![](https://img.shields.io/badge/-shipping-22c55e?style=flat-square) |
 | 🔍 | [**`@niscorp/vex`**](packages/vex)       | Declarative query synthesis — English → constrained JSON DSL → SQL, with scope policies and shape-based caching. | ![](https://img.shields.io/badge/-design-f59e0b?style=flat-square) |
 
 > Each package ships its own `README.md` and `DESIGN.md`. **Read the design doc before reading the source.**
@@ -47,48 +43,29 @@ Six libraries. Each one is self-sufficient. They also compose.
 
 Five rules every package obeys, without exception. They're load-bearing.
 
-<table>
-<tr>
-<td width="33%" valign="top">
-
 ### 1 · JSON is the shape
+
 Layouts, transforms, queries, plans — all plain JSON. Serializable, diffable, cacheable, persistable, LLM-emittable. The moment something wants to be a code string, we stop and ask why.
 
-</td>
-<td width="33%" valign="top">
-
 ### 2 · Zod is the truth
+
 Every external input is parsed before it touches a runtime. Provider schemas are compliance hints; Zod is the truth. Errors are structured and, in LLM loops, fed back to the model.
 
-</td>
-<td width="33%" valign="top">
-
 ### 3 · Declarative = observable
+
 If the thing-to-execute is data, the runtime can inspect, log, gate, replay, fuzz, cache, dry-run, and ship it over the wire. Imperative gives you none of that.
 
-</td>
-</tr>
-<tr>
-<td valign="top">
-
 ### 4 · Zero-risk execution
+
 LLM-generated artifacts are untrusted by default. No `eval`, no SQL concat, no tool call without a policy check. If you can inject code into a Nisc runtime, it's a bug — file the report.
 
-</td>
-<td valign="top">
-
 ### 5 · No framework lock-in
+
 Nova has a React adapter; its core doesn't import React. Signal has no vendor SDK as a hard dep. Prism is a pure function. Use any one piece standalone — they don't phone home.
 
-</td>
-<td valign="top">
-
 ### Why JSON. Why now.
-LLMs are structurally bad at unbounded code and structurally excellent at constrained grammars. Give them a schema and they behave. SQL solved this in 1974; we're doing it one layer up.
 
-</td>
-</tr>
-</table>
+LLMs are structurally bad at unbounded code and structurally excellent at constrained grammars. Give them a schema and they behave. SQL solved this in 1974; we're doing it one layer up.
 
 ## Quick start
 
@@ -135,10 +112,10 @@ pnpm --filter @niscorp/nova dev      # tsup --watch
 ```
 niscorp/
 ├── packages/
-│   ├── prism/      💎  JSON transform DSL
-│   ├── solid/      🧊  structured output streaming
-│   ├── nova/       🎨  declarative UI runtime
 │   ├── signal/     📡  universal LLM client
+│   ├── solid/      🧊  structured output streaming
+│   ├── prism/      💎  JSON transform DSL
+│   ├── nova/       🎨  declarative UI runtime
 │   ├── cortex/     🧠  agentic orchestration
 │   └── vex/        🔍  query synthesis
 ├── apps/
@@ -151,8 +128,8 @@ niscorp/
 
 Nisc is **pre-1.0** and under active design.
 
-- **Shipping packages** (Prism, Solid, Nova, Signal) are tested and usable, but their public APIs are not frozen. Pin exact versions; expect to update.
-- **Design-only packages** (Cortex, Vex) have thorough `DESIGN.md` documents and stub source files. Read the architecture; don't expect runnable code yet.
+- **Shipping packages** (Signal, Solid, Prism, Nova, Cortex) are tested and usable, but their public APIs are not frozen. Pin exact versions; expect to update.
+- **Design-only packages** (Vex) have thorough `DESIGN.md` documents and stub source files. Read the architecture; don't expect runnable code yet.
 - Breaking changes land without ceremony until each package hits 1.0.
 
 ## Contributing
@@ -165,6 +142,4 @@ Issues and PRs welcome. Read the relevant package's `DESIGN.md` before proposing
 
 [MIT](LICENSE) © Nisc contributors
 
-<div align="center">
-<sub>Built with deliberate constraint. Powered by JSON.</sub>
-</div>
+_Built with deliberate constraint. Powered by JSON._
