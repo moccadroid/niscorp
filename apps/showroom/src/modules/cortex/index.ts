@@ -3,9 +3,13 @@ import { stories } from './stories';
 import { CortexRuntimeProvider } from './runtime-context';
 import { buildInspectorTabs } from './inspector-tabs/build-tabs';
 
+import readmeContent from '../../../../../packages/cortex/README.md?raw';
 import designContent from '../../../../../packages/cortex/DESIGN.md?raw';
 
-const docs: readonly DocPage[] = [{ id: 'design', title: 'Design', content: designContent }];
+const docs: readonly DocPage[] = [
+  { id: 'readme', title: 'README', content: readmeContent },
+  { id: 'design', title: 'Design', content: designContent },
+];
 
 const KIND_ORDER: readonly string[] = ['standalone', 'tool-use', 'plan-mode', 'rules', 'confirmation'];
 const KIND_LABELS: Record<string, string> = {

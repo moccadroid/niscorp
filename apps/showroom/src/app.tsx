@@ -97,7 +97,7 @@ export const App: FC = () => {
   const Demo = activeStory?.Demo;
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh', width: '100vw' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
       <LibrarySwitcher
         libraries={LIBRARY_TABS}
         activeId={activeLibraryId}
