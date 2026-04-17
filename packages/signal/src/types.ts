@@ -194,6 +194,15 @@ export type StreamEvent<T> =
   | { type: 'error'; error: Error; recovered: boolean }
   | { type: 'done'; response: T; history: Message[]; meta: SignalMeta };
 
+// Step-stream events — emitted by signal.stepStream(). Narrower than
+// StreamEvent because step-level streaming does one adapter call and
+// does not execute tools or handle schema retries. Text deltas are
+// emitted incrementally; tool calls are delivered in aggregate on the
+// final `done` event as part of the StepResult.
+export type StepStreamEvent =
+  | { type: 'text'; text: string }
+  | { type: 'done'; result: StepResult };
+
 // ═══════════════════════════════════════════════════════════
 // Stream options
 // ═══════════════════════════════════════════════════════════

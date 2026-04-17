@@ -104,9 +104,15 @@ export const createManifold = (config: ManifoldConfig = {}): Manifold => {
       ...(options.signal && { signal: options.signal }),
     });
 
-    bus.dispatch(
+    bus.emit(
       CortexTopics.executeRequested,
-      { agentId, input, workflowId, ...(options.signal && { abort: options.signal }) },
+      {
+        agentId,
+        input,
+        workflowId,
+        ...(options.signal && { abort: options.signal }),
+        ...(options.stream && { stream: options.stream }),
+      },
       { correlationId, workflowId },
     );
 
@@ -145,11 +151,11 @@ export const createManifold = (config: ManifoldConfig = {}): Manifold => {
 
   // Soft warning for exact token mode.
   if (config.tokenEstimation === 'exact') {
-    bus.emit({
-      topic: CortexTopics.warning,
-      payload: { message: 'tokenEstimation: "exact" not yet implemented. Falling back to fuzzy.' },
-      meta: { timestamp: Date.now(), correlationId: 'init' },
-    });
+    bus.emit(
+      CortexTopics.warning,
+      { message: 'tokenEstimation: "exact" not yet implemented. Falling back to fuzzy.' },
+      { correlationId: 'init' },
+    );
   }
 
   const previewDeps = { registry, ledger, stateStore, config, tokenMode, packBudget };

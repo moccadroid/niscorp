@@ -102,7 +102,7 @@ const runPlanInner = async (
       const cached = idempotencyCache.get(idemKey);
       if (cached) {
         observations.push(cached);
-        recordObservation(deps.bus, workflowId, cached);
+        recordObservation(input.workflow, cached);
         continue;
       }
     }
@@ -113,7 +113,7 @@ const runPlanInner = async (
     if ('childObservations' in result) {
       for (const obs of result.childObservations) {
         observations.push(obs);
-        recordObservation(deps.bus, workflowId, obs);
+        recordObservation(input.workflow, obs);
       }
       if (result.finalized) {
         return { finalized: true, finalResult: result.finalResult, observations };
@@ -125,7 +125,7 @@ const runPlanInner = async (
     const obs = result.observation;
     if (idemKey) idempotencyCache.set(idemKey, obs);
     observations.push(obs);
-    recordObservation(deps.bus, workflowId, obs);
+    recordObservation(input.workflow, obs);
 
     if (node.kind === 'final') {
       return { finalized: true, finalResult: obs.result, observations };

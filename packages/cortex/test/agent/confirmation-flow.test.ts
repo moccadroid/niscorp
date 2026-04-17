@@ -38,11 +38,11 @@ describe('confirmation flow', () => {
     // Auto-approve any confirmation request
     manifold.bus.on(CortexTopics.confirmationRequested, (event) => {
       const payload = event.payload as { toolId: string };
-      manifold.bus.emit({
-        topic: CortexTopics.confirmationApproved,
-        payload: { toolId: payload.toolId },
-        meta: { timestamp: Date.now(), correlationId: event.meta.correlationId },
-      });
+      manifold.bus.emit(
+        CortexTopics.confirmationApproved,
+        { toolId: payload.toolId },
+        { correlationId: event.meta.correlationId },
+      );
     });
 
     await manifold.start();
@@ -89,11 +89,11 @@ describe('confirmation flow', () => {
     // Auto-deny any confirmation request
     manifold.bus.on(CortexTopics.confirmationRequested, (event) => {
       const payload = event.payload as { toolId: string };
-      manifold.bus.emit({
-        topic: CortexTopics.confirmationDenied,
-        payload: { toolId: payload.toolId },
-        meta: { timestamp: Date.now(), correlationId: event.meta.correlationId },
-      });
+      manifold.bus.emit(
+        CortexTopics.confirmationDenied,
+        { toolId: payload.toolId },
+        { correlationId: event.meta.correlationId },
+      );
     });
 
     await manifold.start();

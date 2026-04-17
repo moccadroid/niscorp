@@ -31,7 +31,14 @@ export type WaitForOptions<T = unknown> = {
 };
 
 export type Bus = {
-  emit: (event: BusEvent) => void;
+  // Publish an event. Auto-fills timestamp; caller supplies
+  // correlationId (a fresh one is generated if omitted). Returns
+  // the correlationId used. Workflow-scoped callers should prefer
+  // `workflow.emit()` which binds workflowId + correlationId.
+  emit: {
+    <T>(topic: TypedTopic<T>, payload: T, meta?: Partial<EventMeta>): string;
+    (topic: string, payload: unknown, meta?: Partial<EventMeta>): string;
+  };
   on: {
     <T>(topic: TypedTopic<T>, handler: BusHandler<T>): Unsubscribe;
     (pattern: string, handler: BusHandler): Unsubscribe;
@@ -40,7 +47,6 @@ export type Bus = {
     <T>(topic: TypedTopic<T>, options?: WaitForOptions<T>): Promise<BusEvent<T>>;
     (pattern: string, options?: WaitForOptions): Promise<BusEvent>;
   };
-  dispatch: (topic: string, payload: unknown, meta?: Partial<EventMeta>) => string;
 };
 
 // ───────────────────────────────────────────────────────────

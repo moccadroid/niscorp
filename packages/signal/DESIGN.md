@@ -16,6 +16,8 @@ createSignal('groq', options?)     → immutable config bag
     ↓
     .complete('user message')      → execute (returns Promise<SignalResult>)
     .stream('user message')        → stream  (returns AsyncIterable<StreamEvent>)
+    .step({ messages, tools })     → one adapter call  (returns Promise<StepResult>)
+    .stepStream({ messages, tools}) → streaming step  (returns AsyncIterable<StepStreamEvent>)
     ↓
 Strategy Layer (picks approach based on capabilities)
     ↓
@@ -170,3 +172,5 @@ src/
 13. **Streaming validation is end-of-stream, not mid-stream.** Signal validates the complete response buffer after the SSE closes. Mid-stream structural validation is `@niscorp/solid`'s job — the consumer pipes `text` deltas into solid, which kind-checks at value-open. Signal doesn't know about solid; solid doesn't know about signal. The consumer is the glue.
 
 14. **`AbortSignal` for external cancellation.** `stream(input, { signal })` checks the signal between deltas. `for await + break` also works (iterator `return()` closes the underlying SSE). Both paths are clean and composable.
+
+15. **`step()` and `stepStream()` are the low-level primitives.** `complete()`/`stream()` run the full pipeline (schema retries, native tool execution); `step()`/`stepStream()` make exactly one adapter call and return what the model said — tool calls as data, no auto execution, no schema validation, no retries. They exist for orchestrators like `@niscorp/cortex` that own their own tool loop and need per-call attribution, gating, and observation. `stepStream()` is the streaming variant: yields `{type:'text'}` deltas as text arrives, then one `{type:'done', result}` with the aggregated `StepResult` — same shape as `step()`'s return. Keeping the two pairs symmetric (`complete`/`stream`, `step`/`stepStream`) means streaming is never a special case of the API, only of delivery.

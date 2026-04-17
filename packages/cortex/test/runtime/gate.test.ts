@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
 import { checkBudget, checkTool, checkAgent } from '../../src/runtime/gate';
+import { createBus } from '../../src/manifold/bus';
 import { createRegistry } from '../../src/manifold/registry';
 import { createLedger } from '../../src/manifold/ledger';
 import { createWorkflowContext } from '../../src/manifold/workflow-context';
@@ -49,7 +50,7 @@ const setup = (policy?: PolicyConfig): {
       outputMode: 'text',
     }),
   );
-  const gate = createWorkflowContext(wf, policy ?? {});
+  const gate = createWorkflowContext({ workflowId: wf, bus: createBus(), policy: policy ?? {} });
   return { registry, ledger, gate };
 };
 

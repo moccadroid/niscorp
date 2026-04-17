@@ -3,9 +3,10 @@
 // ═══════════════════════════════════════════════════════════
 //
 // The ONLY place where executeAgent is called. manifold.execute()
-// is just dispatch + waitFor. This handler picks up the request,
+// is just emit + waitFor. This handler picks up the request,
 // creates a WorkflowContext, runs the agent, and emits completed
-// or failed on the same correlationId.
+// or failed on the same correlationId so the caller's waitFor
+// can match.
 
 import type { AgentDefinition } from '../agent/define-agent';
 import type { Bus } from '../types';
@@ -18,6 +19,7 @@ import type { Ledger } from './ledger';
 import type { WorkflowContext } from './workflow-context';
 import type { ManifoldConfig, ManifoldHooks } from './types';
 import type { TokenEstimationMode } from '../context/tokens';
+import type { TypedTopic } from '../utils/typed-topic';
 import { executeAgent } from '../agent/execute';
 import { createWorkflowContext, destroyWorkflowContext } from './workflow-context';
 import { createProducerState } from '../context/producer-state';
@@ -70,33 +72,32 @@ export const registerExecutionHandler = (
   const { registry, bus, ledger, stateStore, config, hooks, tokenMode, packBudget, workflows } = deps;
 
   bus.on(CortexTopics.executeRequested, async (event) => {
-    const { agentId, input, workflowId, abort: externalAbort } = event.payload;
+    const { agentId, input, workflowId, abort: externalAbort, stream } = event.payload;
     const correlationId = event.meta.correlationId;
 
-    // Validate preconditions.
+    // Lifecycle bracket emits use the caller's correlationId (not the
+    // workflow's) so manifold.execute()'s waitFor can match them. They
+    // are NOT in-workflow events and therefore can't use workflow.emit
+    // — its meta would carry workflowId as correlationId instead.
+    const emitToCaller = <P>(topic: TypedTopic<P>, payload: P): void => {
+      bus.emit(topic, payload, { correlationId, workflowId });
+    };
+
     let agent: AgentDefinition<unknown>;
     try {
       agent = registry.requireAgent(agentId);
     } catch {
-      bus.emit({
-        topic: CortexTopics.executeFailed,
-        payload: {
-          error: makeError('agent_not_registered', `No agent: ${agentId}`, { agentId }),
-          workflowId,
-        },
-        meta: { timestamp: Date.now(), correlationId, workflowId },
+      emitToCaller(CortexTopics.executeFailed, {
+        error: makeError('agent_not_registered', `No agent: ${agentId}`, { agentId }),
+        workflowId,
       });
       return;
     }
 
     if (!config.llm) {
-      bus.emit({
-        topic: CortexTopics.executeFailed,
-        payload: {
-          error: makeError('model_call_failed', 'Manifold requires an `llm` SignalClient.', { agentId }),
-          workflowId,
-        },
-        meta: { timestamp: Date.now(), correlationId, workflowId },
+      emitToCaller(CortexTopics.executeFailed, {
+        error: makeError('model_call_failed', 'Manifold requires an `llm` SignalClient.', { agentId }),
+        workflowId,
       });
       return;
     }
@@ -107,19 +108,17 @@ export const registerExecutionHandler = (
     if (ownLedger) ledger.open(workflowId);
     handlerState.inFlight += 1;
 
-    const workflow = createWorkflowContext(
+    const workflow = createWorkflowContext({
       workflowId,
-      agent.config.policy ?? {},
-      externalAbort,
-    );
+      bus,
+      policy: agent.config.policy ?? {},
+      ...(externalAbort && { externalAbort }),
+      ...(stream !== undefined && { stream }),
+    });
     workflows.set(workflowId, workflow);
     attachStatefulProducers(workflow, registry, bus, stateStore);
 
-    bus.emit({
-      topic: CortexTopics.workflowStarted,
-      payload: { workflowId, agentId, input },
-      meta: { timestamp: Date.now(), correlationId, workflowId },
-    });
+    emitToCaller(CortexTopics.workflowStarted, { workflowId, agentId, input });
     hooks.onWorkflowStart?.(workflowId);
 
     try {
@@ -141,23 +140,15 @@ export const registerExecutionHandler = (
 
       const finalLedger = ledger.isOpen(workflowId) ? ledger.snapshot(workflowId) : undefined;
 
-      bus.emit({
-        topic: CortexTopics.workflowEnded,
-        payload: {
-          workflowId,
-          result: result.ok ? result.data : undefined,
-          error: result.ok ? undefined : result.error,
-          ...(finalLedger && { ledger: finalLedger }),
-        },
-        meta: { timestamp: Date.now(), correlationId, workflowId },
+      emitToCaller(CortexTopics.workflowEnded, {
+        workflowId,
+        result: result.ok ? result.data : undefined,
+        error: result.ok ? undefined : result.error,
+        ...(finalLedger && { ledger: finalLedger }),
       });
       hooks.onWorkflowEnd?.(workflowId, result.ok ? result.data : undefined);
 
-      bus.emit({
-        topic: CortexTopics.executeCompleted,
-        payload: { result, workflowId },
-        meta: { timestamp: Date.now(), correlationId, workflowId },
-      });
+      emitToCaller(CortexTopics.executeCompleted, { result, workflowId });
     } catch (e) {
       const error: CortexError = makeError(
         'unknown',
@@ -167,17 +158,13 @@ export const registerExecutionHandler = (
       hooks.onError?.(e, { workflowId, agentId });
 
       const finalLedger = ledger.isOpen(workflowId) ? ledger.snapshot(workflowId) : undefined;
-      bus.emit({
-        topic: CortexTopics.workflowEnded,
-        payload: { workflowId, error, ...(finalLedger && { ledger: finalLedger }) },
-        meta: { timestamp: Date.now(), correlationId, workflowId },
+      emitToCaller(CortexTopics.workflowEnded, {
+        workflowId,
+        error,
+        ...(finalLedger && { ledger: finalLedger }),
       });
 
-      bus.emit({
-        topic: CortexTopics.executeFailed,
-        payload: { error, workflowId },
-        meta: { timestamp: Date.now(), correlationId, workflowId },
-      });
+      emitToCaller(CortexTopics.executeFailed, { error, workflowId });
     } finally {
       destroyWorkflowContext(workflow);
       workflows.delete(workflowId);

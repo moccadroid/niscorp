@@ -17,7 +17,7 @@ const setup = (): { bus: Bus; engine: RulesEngine; effects: EffectRegistry } => 
 };
 
 const emit = (bus: Bus, topic: string, payload: unknown = {}): void => {
-  bus.emit({ topic, payload, meta: { timestamp: Date.now(), correlationId: 'test' } });
+  bus.emit(topic, payload, { correlationId: 'test' });
 };
 
 describe('RulesEngine', () => {

@@ -38,6 +38,7 @@ export type ManifoldConfig = {
 export type ExecuteOptions = {
   workflowId?: string;
   signal?: AbortSignal;
+  stream?: boolean;
 };
 
 export type Manifold = {

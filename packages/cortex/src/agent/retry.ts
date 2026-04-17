@@ -91,17 +91,13 @@ export const runWithRetries = async <T>(
     if (!isValidationError || attempt > maxRetries) return parsed;
 
     failed.push({ attempt, rawContent: raw.loop.content, error: parsed.error });
-    deps.bus.emit({
-      topic: CortexTopics.agentRetry,
-      payload: {
-        agentId: agent.agentId,
-        workflowId,
-        attempt,
-        nextAttempt: attempt + 1,
-        rawContent: raw.loop.content,
-        error: parsed.error,
-      },
-      meta: { timestamp: Date.now(), correlationId: workflowId, workflowId },
+    workflow.emit(CortexTopics.agentRetry, {
+      agentId: agent.agentId,
+      workflowId,
+      attempt,
+      nextAttempt: attempt + 1,
+      rawContent: raw.loop.content,
+      error: parsed.error,
     });
   }
   return err(

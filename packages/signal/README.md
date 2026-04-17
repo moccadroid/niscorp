@@ -35,7 +35,11 @@ const { response: user } = await signal
 
 ## API
 
-Every method returns a new immutable instance. `complete()` is the only method that executes.
+Every builder method returns a new immutable instance. `complete()`
+and `stream()` run the full Signal pipeline (schema, retries, tool
+loop). `step()` and `stepStream()` are the low-level primitives — one
+adapter call, no auto tool execution — used by orchestrators like
+`@niscorp/cortex` that own their own tool loop.
 
 ```typescript
 // Create
@@ -53,8 +57,27 @@ signal.capabilities({ ... })      // override provider defaults
 signal.onRetry(handler)            // retry hook
 signal.onToolCall(handler)         // tool call hook
 
-// Execute
+// Execute — high level
 const { response, history, meta } = await signal.complete('user message');
+
+// Execute — streaming
+for await (const event of signal.stream('user message')) {
+  if (event.type === 'text') process.stdout.write(event.text);
+  if (event.type === 'done') console.log(event.meta.usage);
+}
+
+// Execute — low level (single adapter call, no tool execution)
+const { content, toolCalls, usage, finishReason } = await signal.step({
+  messages: [...], tools: [{ name, description, parameters }],
+});
+
+// Execute — streaming low level (symmetric with step())
+for await (const event of signal.stepStream({ messages, tools })) {
+  if (event.type === 'text') process.stdout.write(event.text);
+  if (event.type === 'done') {
+    // event.result is the aggregated StepResult — same shape as step()
+  }
+}
 ```
 
 ## Providers

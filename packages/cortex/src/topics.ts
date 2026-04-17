@@ -25,6 +25,7 @@ export type ExecuteRequestedPayload = {
   input: unknown;
   workflowId: string;
   abort?: AbortSignal;
+  stream?: boolean;
 };
 
 export type ExecuteCompletedPayload = {
@@ -101,6 +102,14 @@ export type RuleFiredPayload = {
   accumulators: Record<string, Record<string, unknown>>;
 };
 
+export type LlmDeltaPayload = {
+  workflowId: string;
+  agentId: string;
+  text: string;
+  tick: number;
+  iteration: number;
+};
+
 export type ErrorPayload = CortexError;
 
 export type WarningPayload = {
@@ -152,6 +161,9 @@ export const CortexTopics = {
 
   // ─── Context ────────────────────────────────────────────
   contextBuilt: topic<unknown>('cortex.context.built'),
+
+  // ─── LLM streaming ──────────────────────────────────────
+  llmDelta: topic<LlmDeltaPayload>('cortex.llm.delta'),
 
   // ─── Errors / warnings ─────────────────────────────────
   error: topic<ErrorPayload>('cortex.error'),

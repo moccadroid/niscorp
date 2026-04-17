@@ -16,7 +16,7 @@
 // the provider sees a clean conversation rather than 8 system blocks.
 
 import type { ResolvedContext } from './types';
-import type { CortexLlmMessage } from '../llm/signal-client';
+import type { Message } from '@niscorp/signal';
 import type { ContentChunk } from '../schemas';
 
 const stringifyChunkContent = (chunk: ContentChunk): string => {
@@ -29,11 +29,11 @@ const stringifyChunkContent = (chunk: ContentChunk): string => {
     .join('');
 };
 
-export const toLlmMessages = (resolved: ResolvedContext): CortexLlmMessage[] => {
+export const toLlmMessages = (resolved: ResolvedContext): Message[] => {
   const surviving = resolved.chunks.filter((c) => !c.evicted);
   if (surviving.length === 0) return [];
 
-  const messages: CortexLlmMessage[] = [];
+  const messages: Message[] = [];
   let currentRole: 'system' | 'user' | 'assistant' | 'tool' | undefined;
   let buffer: string[] = [];
 

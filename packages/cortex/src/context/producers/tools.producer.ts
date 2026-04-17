@@ -2,11 +2,9 @@
 // toolsProducer — formats the registry's tool list for the model
 // ═══════════════════════════════════════════════════════════
 //
-// In v1 we ship a compact text format. The actual tool definitions
-// are also passed to the provider as native function-calling
-// metadata in the Cortex tool loop (next session) — this producer
-// only contributes the *prose* description that lives in the prompt
-// alongside it.
+// A compact text format listed in the prompt. The tool loop also
+// passes tool definitions to the provider as native function-calling
+// metadata; this producer only contributes the *prose* description.
 
 import type { ContextProducer, RegistryToolView } from '../types';
 

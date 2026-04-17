@@ -32,8 +32,8 @@ Cortex does five things and nothing else:
    sugar that dispatch a request event and await a completion event.
 
 **Anti-goals.** No HTTP. No UI. No database. No LLM client (Signal
-handles that). No MCP mounting. No framework coupling. No streaming in
-v1 — the API shape is reserved (see §12) but unimplemented.
+handles that). No MCP mounting. No framework coupling. Streaming is
+opt-in via `{ stream: true }` on `manifold.execute` — see §12.
 
 **Two peer dependencies and nothing else:**
 [`@niscorp/signal`](../signal) and `zod`.
@@ -112,7 +112,7 @@ path* alongside them.
 ```ts
 // Conceptually, sync execute is just:
 const execute = async (agentId, input) => {
-  const runId = manifold.bus.dispatch(CortexTopics.executeRequested.topic, { agentId, input, workflowId });
+  const runId = manifold.bus.emit(CortexTopics.executeRequested, { agentId, input, workflowId });
   const completion = await manifold.bus.waitFor(CortexTopics.executeCompleted.topic, {
     filter: (e) => e.meta.workflowId === workflowId,
   });
@@ -685,23 +685,21 @@ plain typed object.
 
 ---
 
-## 12. Streaming — reserved, not implemented
+## 12. Streaming
 
-Streaming is intentionally deferred. Shipping a partial-output
-streaming API in v1 requires the partial-JSON library to be properly
-designed first, and Cortex shouldn't wait on it. Token-level streaming
-(raw model tokens) and observation-level streaming (workflow events on
-the bus) are already free with the event substrate — anyone who wants
-them subscribes to the bus today.
+`manifold.execute(id, input, { stream: true })` switches the tool
+loop from `signal.step()` to `signal.stream()` per iteration,
+emitting `cortex.llm.delta` on the bus as text arrives. The return
+type is unchanged — streaming is a side effect, not a return shape.
 
-What's reserved: the *shape* of `manifold.execute(..., { stream: true })`
-is left as a future addition. When added, it returns
-`{ result: Promise<Result<T>>, stream: AsyncIterable<StreamEvent> }`.
-Until then, `execute` returns `Promise<Result<T>>` and that is the
-entire surface.
+Tools, gates, ledger, observations, and rules are unaffected: the
+tool loop still owns all of them. Structured-mode validation retries
+stay at the agent level and fire `cortex.agent.retry` as before;
+streaming consumers subscribe to that to reset partial-output state
+between attempts.
 
-Adding streaming later is additive. Rushing it now would be a
-mistake.
+`stream` is a field on `WorkflowContext` alongside `policy`, `abort`,
+and `injections`. The tool loop reads it live on each iteration.
 
 ---
 

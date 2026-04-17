@@ -7,8 +7,9 @@
 // drives the plan-mode tick loop. The tool loop, retry wrapper,
 // and raw invocation are in their own focused modules.
 //
-// The WorkflowContext carries all per-workflow runtime state:
-// abort signal, live policy (mutable by rules), and injections.
+// Per-workflow runtime state lives on `WorkflowContext`: abort
+// signal, streaming intent, live policy (mutable by rules), and
+// rule injections. See manifold/workflow-context.ts.
 
 import type { AgentDefinition } from './define-agent';
 import type { Bus, Result } from '../types';
@@ -73,25 +74,13 @@ export const executeAgent = async <T>(
   const tick = args.tick ?? 0;
   const ctx = { agentId: agent.agentId, workflowId };
 
-  deps.bus.emit({
-    topic: CortexTopics.agentInvoked,
-    payload: { agentId: agent.agentId, input },
-    meta: { timestamp: Date.now(), correlationId: workflowId, workflowId },
-  });
+  workflow.emit(CortexTopics.agentInvoked, { agentId: agent.agentId, input });
 
   const emitFinalError = (error: CortexError): void => {
-    deps.bus.emit({
-      topic: CortexTopics.error,
-      payload: error,
-      meta: { timestamp: Date.now(), correlationId: workflowId, workflowId },
-    });
+    workflow.emit(CortexTopics.error, error);
   };
   const emitCompleted = (output: unknown): void => {
-    deps.bus.emit({
-      topic: CortexTopics.agentCompleted,
-      payload: { agentId: agent.agentId, output },
-      meta: { timestamp: Date.now(), correlationId: workflowId, workflowId },
-    });
+    workflow.emit(CortexTopics.agentCompleted, { agentId: agent.agentId, output });
   };
 
   // ─── text mode ────────────────────────────────────────────
@@ -138,7 +127,7 @@ export const executeAgent = async <T>(
       timeoutMs: 60_000,
       signal: workflow.abort.signal,
     });
-    deps.bus.dispatch(
+    deps.bus.emit(
       CortexTopics.executeRequested,
       { agentId: targetId, input: subInput, workflowId: wf },
       { correlationId: subCorrelationId, workflowId: wf },
@@ -168,11 +157,7 @@ export const executeAgent = async <T>(
   let currentTick = tick;
   while (currentTick < maxTicks) {
     deps.ledger.addTick(workflowId);
-    deps.bus.emit({
-      topic: CortexTopics.tickStarted,
-      payload: { workflowId, tick: currentTick },
-      meta: { timestamp: Date.now(), correlationId: workflowId, workflowId },
-    });
+    workflow.emit(CortexTopics.tickStarted, { workflowId, tick: currentTick });
 
     const planResultParsed = await runWithRetries<ActionPlan>(
       deps, agent, workflow, input, currentTick, carriedObservations,
@@ -183,11 +168,7 @@ export const executeAgent = async <T>(
       return err(planResultParsed.error);
     }
     const plan = planResultParsed.data;
-    deps.bus.emit({
-      topic: CortexTopics.planProduced,
-      payload: { workflowId, agentId: agent.agentId, plan },
-      meta: { timestamp: Date.now(), correlationId: workflowId, workflowId },
-    });
+    workflow.emit(CortexTopics.planProduced, { workflowId, agentId: agent.agentId, plan });
 
     const planResult = await runPlan(
       {
@@ -207,27 +188,15 @@ export const executeAgent = async <T>(
       },
     );
     if (planResult.error) {
-      deps.bus.emit({
-        topic: CortexTopics.error,
-        payload: planResult.error,
-        meta: { timestamp: Date.now(), correlationId: workflowId, workflowId },
-      });
+      workflow.emit(CortexTopics.error, planResult.error);
       return err(planResult.error);
     }
     for (const obs of planResult.observations) carriedObservations.push(obs);
 
-    deps.bus.emit({
-      topic: CortexTopics.tickEnded,
-      payload: { workflowId, tick: currentTick },
-      meta: { timestamp: Date.now(), correlationId: workflowId, workflowId },
-    });
+    workflow.emit(CortexTopics.tickEnded, { workflowId, tick: currentTick });
 
     if (planResult.finalized) {
-      deps.bus.emit({
-        topic: CortexTopics.agentCompleted,
-        payload: { agentId: agent.agentId, output: planResult.finalResult },
-        meta: { timestamp: Date.now(), correlationId: workflowId, workflowId },
-      });
+      workflow.emit(CortexTopics.agentCompleted, { agentId: agent.agentId, output: planResult.finalResult });
       return ok(trustAgentReturn<T>(planResult.finalResult));
     }
     currentTick += 1;
@@ -238,10 +207,6 @@ export const executeAgent = async <T>(
     `Plan-mode agent exceeded ${maxTicks} ticks without finalizing`,
     { agentId: agent.agentId, workflowId },
   );
-  deps.bus.emit({
-    topic: CortexTopics.error,
-    payload: error,
-    meta: { timestamp: Date.now(), correlationId: workflowId, workflowId },
-  });
+  workflow.emit(CortexTopics.error, error);
   return err(error);
 };

@@ -12,11 +12,11 @@ describe('attachAccumulators', () => {
 
     expect(state.values().toolCalls).toBe(0);
 
-    bus.emit({ topic: 'cortex.tool.observed', payload: {}, meta: { timestamp: 0, correlationId: 'x' } });
+    bus.emit('cortex.tool.observed', {}, { correlationId: 'x' });
     expect(state.values().toolCalls).toBe(1);
 
-    bus.emit({ topic: 'cortex.tool.observed', payload: {}, meta: { timestamp: 0, correlationId: 'x' } });
-    bus.emit({ topic: 'cortex.tool.observed', payload: {}, meta: { timestamp: 0, correlationId: 'x' } });
+    bus.emit('cortex.tool.observed', {}, { correlationId: 'x' });
+    bus.emit('cortex.tool.observed', {}, { correlationId: 'x' });
     expect(state.values().toolCalls).toBe(3);
   });
 
@@ -27,8 +27,8 @@ describe('attachAccumulators', () => {
     };
     const { state } = attachAccumulators(bus, defs);
 
-    bus.emit({ topic: 'cortex.tool.observed', payload: { tokensUsed: 100 }, meta: { timestamp: 0, correlationId: 'x' } });
-    bus.emit({ topic: 'cortex.tool.observed', payload: { tokensUsed: 250 }, meta: { timestamp: 0, correlationId: 'x' } });
+    bus.emit('cortex.tool.observed', { tokensUsed: 100 }, { correlationId: 'x' });
+    bus.emit('cortex.tool.observed', { tokensUsed: 250 }, { correlationId: 'x' });
     expect(state.values().totalTokens).toBe(350);
   });
 
@@ -39,8 +39,8 @@ describe('attachAccumulators', () => {
     };
     const { state } = attachAccumulators(bus, defs);
 
-    bus.emit({ topic: 'test.event', payload: { usage: { tokens: 50 } }, meta: { timestamp: 0, correlationId: 'x' } });
-    bus.emit({ topic: 'test.event', payload: { usage: { tokens: 30 } }, meta: { timestamp: 0, correlationId: 'x' } });
+    bus.emit('test.event', { usage: { tokens: 50 } }, { correlationId: 'x' });
+    bus.emit('test.event', { usage: { tokens: 30 } }, { correlationId: 'x' });
     expect(state.values().total).toBe(80);
   });
 
@@ -53,10 +53,10 @@ describe('attachAccumulators', () => {
 
     expect(state.values().sentiment).toBeUndefined();
 
-    bus.emit({ topic: 'analysis.sentiment', payload: { score: 0.8 }, meta: { timestamp: 0, correlationId: 'x' } });
+    bus.emit('analysis.sentiment', { score: 0.8 }, { correlationId: 'x' });
     expect(state.values().sentiment).toBe(0.8);
 
-    bus.emit({ topic: 'analysis.sentiment', payload: { score: 0.3 }, meta: { timestamp: 0, correlationId: 'x' } });
+    bus.emit('analysis.sentiment', { score: 0.3 }, { correlationId: 'x' });
     expect(state.values().sentiment).toBe(0.3);
   });
 
@@ -67,7 +67,7 @@ describe('attachAccumulators', () => {
     };
     const { state } = attachAccumulators(bus, defs);
 
-    bus.emit({ topic: 'cortex.agent.completed', payload: {}, meta: { timestamp: 0, correlationId: 'x' } });
+    bus.emit('cortex.agent.completed', {}, { correlationId: 'x' });
     expect(state.values().toolCalls).toBe(0);
   });
 
@@ -80,7 +80,7 @@ describe('attachAccumulators', () => {
     };
     const { state } = attachAccumulators(bus, defs);
 
-    bus.emit({ topic: 'e', payload: { n: 10, v: 'hello' }, meta: { timestamp: 0, correlationId: 'x' } });
+    bus.emit('e', { n: 10, v: 'hello' }, { correlationId: 'x' });
     expect(state.values().calls).toBe(1);
     expect(state.values().total).toBe(10);
     expect(state.values().last).toBe('hello');
@@ -98,11 +98,11 @@ describe('attachAccumulators', () => {
     };
     const { state, unsub } = attachAccumulators(bus, defs);
 
-    bus.emit({ topic: 'e', payload: {}, meta: { timestamp: 0, correlationId: 'x' } });
+    bus.emit('e', {}, { correlationId: 'x' });
     expect(state.values().calls).toBe(1);
 
     unsub();
-    bus.emit({ topic: 'e', payload: {}, meta: { timestamp: 0, correlationId: 'x' } });
+    bus.emit('e', {}, { correlationId: 'x' });
     expect(state.values().calls).toBe(1);
   });
 });

@@ -3,29 +3,19 @@
 // ═══════════════════════════════════════════════════════════
 //
 // Used by both the tool loop and the plan executor to emit
-// observation events on the bus. One function, one place.
+// observation events. Always workflow-scoped — emits via
+// workflow.emit so meta is bound consistently.
 
-import type { Bus } from '../types';
 import type { Observation } from '../schemas';
+import type { WorkflowContext } from '../manifold/workflow-context';
 import { CortexTopics } from '../topics';
 
 export const recordObservation = (
-  bus: Bus,
-  workflowId: string,
+  workflow: WorkflowContext,
   observation: Observation,
 ): void => {
-  // All observations — every step kind.
-  bus.emit({
-    topic: CortexTopics.observationRecorded,
-    payload: observation,
-    meta: { timestamp: Date.now(), correlationId: workflowId, workflowId },
-  });
-  // Tool-specific — only when a tool was actually called.
+  workflow.emit(CortexTopics.observationRecorded, observation);
   if (observation.stepKind === 'use_tool') {
-    bus.emit({
-      topic: CortexTopics.toolObserved,
-      payload: observation,
-      meta: { timestamp: Date.now(), correlationId: workflowId, workflowId },
-    });
+    workflow.emit(CortexTopics.toolObserved, observation);
   }
 };

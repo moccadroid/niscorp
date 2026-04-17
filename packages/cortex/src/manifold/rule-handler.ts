@@ -7,6 +7,7 @@
 // event's workflowId scopes all effects to the correct workflow.
 
 import type { Bus } from '../types';
+import type { TypedTopic } from '../utils/typed-topic';
 import type { RulesEngine } from '../rules';
 import type { WorkflowContext } from './workflow-context';
 import { isInjectEffect, isAbortEffect, isDenyEffect } from '../rules';
@@ -23,39 +24,35 @@ export const registerRuleHandler = (
       const snapshot = rulesEngine.snapshot();
       const result = rulesEngine.evaluate();
 
-      bus.emit({
-        topic: CortexTopics.ruleEvaluated,
-        payload: { result, accumulators: snapshot },
-        meta: { timestamp: Date.now(), correlationId: triggerWorkflowId ?? 'rule', workflowId: triggerWorkflowId },
-      });
+      // If the trigger had a live workflow, use its emit (binds
+      // workflowId + correlationId). Otherwise the rule isn't
+      // workflow-scoped — fall back to bus.emit with `rule`.
+      const wf = triggerWorkflowId ? workflows.get(triggerWorkflowId) : undefined;
+      const emitRule = <P>(topic: TypedTopic<P>, payload: P): void => {
+        if (wf) wf.emit(topic, payload);
+        else bus.emit(topic, payload, { correlationId: 'rule' });
+      };
+
+      emitRule(CortexTopics.ruleEvaluated, { result, accumulators: snapshot });
 
       if (!result.matched) return;
       const effect = result.effect;
 
-      bus.emit({
-        topic: CortexTopics.ruleFired,
-        payload: { ruleId: result.ruleId, effect, accumulators: snapshot },
-        meta: { timestamp: Date.now(), correlationId: triggerWorkflowId ?? 'rule', workflowId: triggerWorkflowId },
-      });
+      emitRule(CortexTopics.ruleFired, { ruleId: result.ruleId, effect, accumulators: snapshot });
 
-      const wf = triggerWorkflowId ? workflows.get(triggerWorkflowId) : undefined;
+      // Effects only apply to a live workflow.
+      if (!wf) return;
 
-      if (isInjectEffect(effect)) {
-        if (wf) wf.addInjection(effect.inject);
-      }
-      if (isAbortEffect(effect)) {
-        if (wf) wf.abort.abort(effect.abort);
-      }
+      if (isInjectEffect(effect)) wf.addInjection(effect.inject);
+      if (isAbortEffect(effect)) wf.abort.abort(effect.abort);
       if (isDenyEffect(effect)) {
-        if (wf) {
-          wf.updatePolicy((p) => ({
-            ...p,
-            tools: {
-              ...p.tools,
-              deny: [...(p.tools?.deny ?? []), '*'],
-            },
-          }));
-        }
+        wf.updatePolicy((p) => ({
+          ...p,
+          tools: {
+            ...p.tools,
+            deny: [...(p.tools?.deny ?? []), '*'],
+          },
+        }));
       }
     });
   });

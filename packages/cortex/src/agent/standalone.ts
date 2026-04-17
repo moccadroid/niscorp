@@ -68,6 +68,7 @@ export type StandaloneOptions = {
    * inspector tabs, etc.
    */
   onBus?: (bus: Bus) => void;
+  stream?: boolean;
 };
 
 export const runAgentStandalone = async <T>(
@@ -107,7 +108,10 @@ export const runAgentStandalone = async <T>(
   await manifold.start();
   const workflowId = options.workflowId ?? newWorkflowId();
   try {
-    return await manifold.execute<T>(agent.agentId, input, { workflowId });
+    return await manifold.execute<T>(agent.agentId, input, {
+      workflowId,
+      ...(options.stream && { stream: options.stream }),
+    });
   } finally {
     for (const unsub of subscriptions) unsub();
     await manifold.stop();

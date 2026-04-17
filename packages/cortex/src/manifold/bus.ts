@@ -1,5 +1,5 @@
 // ═══════════════════════════════════════════════════════════
-// Bus — wildcard pub/sub with waitFor and dispatch
+// Bus — wildcard pub/sub with waitFor
 // ═══════════════════════════════════════════════════════════
 //
 // Per DESIGN.md §3.2. The bus is the substrate. Every state change
@@ -40,34 +40,9 @@ export const createBus = (options: CreateBusOptions = {}): Bus => {
   const subscriptions: Subscription[] = [];
   const onHandlerError = options.onHandlerError ?? (() => {});
 
-  // Used to suppress recursive error emission when a cortex.error handler
+  // Suppresses recursive error emission when a cortex.error handler
   // itself throws. Without this, a buggy handler causes an infinite loop.
   let emittingError = false;
-
-  const handleHandlerError = (error: unknown, event: BusEvent): void => {
-    onHandlerError(error, event);
-    if (emittingError) return;
-    if (event.topic === CortexTopics.error) return;
-    emittingError = true;
-    try {
-      emit({
-        topic: CortexTopics.error,
-        payload: {
-          code: 'unknown',
-          message: error instanceof Error ? error.message : String(error),
-          source: { topic: event.topic },
-        },
-        meta: {
-          timestamp: Date.now(),
-          correlationId: event.meta.correlationId,
-          causationId: event.meta.correlationId,
-          ...(event.meta.workflowId !== undefined && { workflowId: event.meta.workflowId }),
-        },
-      });
-    } finally {
-      emittingError = false;
-    }
-  };
 
   const dispatchToHandlers = (event: BusEvent): void => {
     // Snapshot the subscriber list at emit time so a handler that
@@ -86,8 +61,36 @@ export const createBus = (options: CreateBusOptions = {}): Bus => {
     }
   };
 
-  const emit = (event: BusEvent): void => {
-    dispatchToHandlers(event);
+  const emit = (topic: string, payload: unknown, metaPartial?: Partial<EventMeta>): string => {
+    const correlationId = metaPartial?.correlationId ?? newCorrelationId();
+    const meta: EventMeta = {
+      timestamp: metaPartial?.timestamp ?? Date.now(),
+      correlationId,
+      ...(metaPartial?.causationId !== undefined && { causationId: metaPartial.causationId }),
+      ...(metaPartial?.workflowId !== undefined && { workflowId: metaPartial.workflowId }),
+    };
+    dispatchToHandlers({ topic, payload, meta });
+    return correlationId;
+  };
+
+  const handleHandlerError = (error: unknown, event: BusEvent): void => {
+    onHandlerError(error, event);
+    if (emittingError) return;
+    if (event.topic === CortexTopics.error) return;
+    emittingError = true;
+    try {
+      emit(CortexTopics.error, {
+        code: 'unknown',
+        message: error instanceof Error ? error.message : String(error),
+        source: { topic: event.topic },
+      }, {
+        correlationId: event.meta.correlationId,
+        causationId: event.meta.correlationId,
+        ...(event.meta.workflowId !== undefined && { workflowId: event.meta.workflowId }),
+      });
+    } finally {
+      emittingError = false;
+    }
   };
 
   const on = (pattern: string, handler: BusHandler): Unsubscribe => {
@@ -151,17 +154,5 @@ export const createBus = (options: CreateBusOptions = {}): Bus => {
       }
     });
 
-  const dispatch = (topic: string, payload: unknown, metaPartial?: Partial<EventMeta>): string => {
-    const correlationId = metaPartial?.correlationId ?? newCorrelationId();
-    const meta: EventMeta = {
-      timestamp: metaPartial?.timestamp ?? Date.now(),
-      correlationId,
-      ...(metaPartial?.causationId !== undefined && { causationId: metaPartial.causationId }),
-      ...(metaPartial?.workflowId !== undefined && { workflowId: metaPartial.workflowId }),
-    };
-    emit({ topic, payload, meta });
-    return correlationId;
-  };
-
-  return { emit, on, waitFor, dispatch };
+  return { emit, on, waitFor };
 };

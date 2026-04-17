@@ -3,21 +3,28 @@
 // ═══════════════════════════════════════════════════════════
 //
 // Per DESIGN.md §6. We do NOT delegate to Signal's native tool loop.
-// We call signal.step() in a loop because we need:
+// We call signal.step() (or signal.stream() when workflow.stream) in
+// a loop because we need:
 //   - per-call ledger attribution (which tool burned which tokens)
-//   - per-call observation (debugging, replay, future streaming)
+//   - per-call observation (debugging, replay, streaming deltas)
 //   - per-call gating (policy + rule effects, read live from WorkflowContext)
 //   - context re-pack between iterations (new observations land in
 //     the next prompt as part of the regular pipeline)
 //
 // This module is pure with respect to its dependencies — it takes
-// a SignalClient (so tests pass a stub) and a tool executor function.
+// a SignalClient (so tests pass a stub), a list of tool definitions,
+// and the live WorkflowContext. It owns tool execution directly.
 
 import { z } from 'zod';
 import type { Bus, BudgetState, Result } from '../types';
 import { ok, err } from '../errors/cortex.errors';
 import type { ContextProducer, ResolvedContext } from '../context/types';
-import type { SignalClient, CortexLlmToolDefinition, CortexLlmMessage } from '../llm/signal-client';
+import type { SignalClient } from '../llm/signal-client';
+import type {
+  Message,
+  StepResult,
+  StepToolDescriptor,
+} from '@niscorp/signal';
 import type { ToolDefinition } from '../tool/define-tool';
 import type { Observation } from '../schemas';
 import type { WorkflowContext } from '../manifold/workflow-context';
@@ -30,6 +37,7 @@ import type { Ledger } from '../manifold/ledger';
 import { checkBudget, checkTool, type GateDecision } from '../runtime/gate';
 import { makeError, throwCortex } from '../errors/cortex.errors';
 import { recordObservation } from '../utils/observation';
+import { assertNever } from '../utils/assert-never';
 import { withTimeout, DEFAULT_TOOL_TIMEOUT_MS } from '../utils/timeout';
 import { CortexTopics, type ConfirmationResponsePayload } from '../topics';
 
@@ -60,7 +68,55 @@ export type ToolLoopResult = {
   finalContext: ResolvedContext;
 };
 
-const buildToolDescriptor = (tool: ToolDefinition): CortexLlmToolDefinition => {
+type ConsumeStreamArgs = {
+  input: ToolLoopInput;
+  iteration: number;
+  request: { messages: Message[]; tools?: StepToolDescriptor[] };
+};
+
+const consumeStream = async (
+  args: ConsumeStreamArgs,
+): Promise<Result<StepResult>> => {
+  const { input, iteration, request } = args;
+  const workflowId = input.workflow.workflowId;
+  const abortSignal = input.workflow.abort.signal;
+  let finalResult: StepResult | undefined;
+  try {
+    for await (const event of input.llm.stream(request, { signal: abortSignal })) {
+      if (abortSignal.aborted) break;
+      switch (event.type) {
+        case 'text':
+          input.workflow.emit(CortexTopics.llmDelta, {
+            workflowId,
+            agentId: input.agentId,
+            text: event.text,
+            tick: input.tick,
+            iteration,
+          });
+          break;
+        case 'done':
+          finalResult = event.result;
+          break;
+        default:
+          assertNever(event);
+      }
+    }
+  } catch (e) {
+    return err(makeError(
+      'model_call_failed',
+      e instanceof Error ? e.message : String(e),
+      { workflowId, agentId: input.agentId, cause: e },
+    ));
+  }
+
+  if (finalResult) return ok(finalResult);
+  if (abortSignal.aborted) {
+    return err(makeError('aborted', 'Stream aborted before completion', { workflowId, agentId: input.agentId }));
+  }
+  return err(makeError('model_call_failed', 'Stream ended without a done event', { workflowId, agentId: input.agentId }));
+};
+
+const buildToolDescriptor = (tool: ToolDefinition): StepToolDescriptor => {
   // z.toJSONSchema returns a plain object that IS a Record<string, unknown>
   // but Zod's return type doesn't express it. This is a Zod library gap.
   const parameters = z.toJSONSchema(tool.config.input, { target: 'draft-7' }) as Record<string, unknown>;
@@ -80,10 +136,13 @@ export const runToolLoop = async (input: ToolLoopInput): Promise<Result<ToolLoop
   for (const t of input.availableTools) toolMap.set(t.config.id, t);
   const toolDescriptors = input.availableTools.map(buildToolDescriptor);
 
-  let iterations = 0;
+  // iteration is 0-indexed and incremented at the end of each loop
+  // body. The ToolLoopResult returns `iteration + 1` so callers see
+  // a count of iterations run. Error messages add 1 for display.
+  let iteration = 0;
   let finalContext: ResolvedContext | undefined;
 
-  const runningMessages: CortexLlmMessage[] = [];
+  const runningMessages: Message[] = [];
 
   const stringifyToolResult = (value: unknown): string => {
     if (typeof value === 'string') return value;
@@ -118,22 +177,21 @@ export const runToolLoop = async (input: ToolLoopInput): Promise<Result<ToolLoop
     ledger: input.ledger,
   };
 
-  while (iterations < input.maxToolIterations) {
+  while (iteration < input.maxToolIterations) {
     if (workflow.abort.signal.aborted) {
       return err(makeError('aborted', 'Workflow aborted', { workflowId, agentId: input.agentId }));
     }
-    iterations += 1;
 
     // Budget gate before each iteration.
     const budgetGate = checkBudget(gateInput);
     if (!budgetGate.allowed) {
       const obs = denialObservation(budgetGate);
       observations.push(obs);
-      recordObservation(input.bus, workflowId, obs);
+      recordObservation(workflow, obs);
       return err(
         makeError(
           'budget_exceeded',
-          `Tool loop denied by gate before iteration ${iterations}: ${budgetGate.reason}${budgetGate.detail ? ` (${budgetGate.detail})` : ''}`,
+          `Tool loop denied by gate before iteration ${iteration + 1}: ${budgetGate.reason}${budgetGate.detail ? ` (${budgetGate.detail})` : ''}`,
           { workflowId, agentId: input.agentId },
         ),
       );
@@ -156,13 +214,21 @@ export const runToolLoop = async (input: ToolLoopInput): Promise<Result<ToolLoop
     );
     finalContext = resolved;
     const prefix = toLlmMessages(resolved);
-    const messages: CortexLlmMessage[] = [...prefix, ...runningMessages];
+    const messages: Message[] = [...prefix, ...runningMessages];
 
-    // Single model call.
-    const stepResult = await input.llm.step({
+    // Single model call — streaming if opted in, else one-shot.
+    const request = {
       messages,
       ...(toolDescriptors.length > 0 && { tools: toolDescriptors }),
-    });
+    };
+    let stepResult: StepResult;
+    if (workflow.stream) {
+      const streamResult = await consumeStream({ input, iteration, request });
+      if (!streamResult.ok) return err(streamResult.error);
+      stepResult = streamResult.data;
+    } else {
+      stepResult = await input.llm.step(request);
+    }
 
     // Check abort after step — a rule may have fired during the await.
     if (workflow.abort.signal.aborted) {
@@ -179,7 +245,7 @@ export const runToolLoop = async (input: ToolLoopInput): Promise<Result<ToolLoop
       return ok({
         content: stepResult.content,
         observations,
-        iterations,
+        iterations: iteration + 1,
         finalContext: resolved,
       });
     }
@@ -223,10 +289,10 @@ export const runToolLoop = async (input: ToolLoopInput): Promise<Result<ToolLoop
             },
             signal: workflow.abort.signal,
           });
-          input.bus.emit({
-            topic: CortexTopics.confirmationRequested,
-            payload: { workflowId, toolId: call.name, input: call.args },
-            meta: { timestamp: Date.now(), correlationId: workflowId, workflowId },
+          workflow.emit(CortexTopics.confirmationRequested, {
+            workflowId,
+            toolId: call.name,
+            input: call.args,
           });
           try {
             const response = await confirmationPromise;
@@ -235,21 +301,21 @@ export const runToolLoop = async (input: ToolLoopInput): Promise<Result<ToolLoop
             } else {
               const obs = denialObservation(toolGate, call.name);
               observations.push(obs);
-              recordObservation(input.bus, workflowId, obs);
+              recordObservation(workflow, obs);
               appendToolMessage(`error: confirmation_denied: ${call.name}`);
               continue;
             }
           } catch {
             const obs = denialObservation(toolGate, call.name);
             observations.push(obs);
-            recordObservation(input.bus, workflowId, obs);
+            recordObservation(workflow, obs);
             appendToolMessage(`error: confirmation_timeout: ${call.name}`);
             continue;
           }
         } else {
           const obs = denialObservation(toolGate, call.name);
           observations.push(obs);
-          recordObservation(input.bus, workflowId, obs);
+          recordObservation(workflow, obs);
           appendToolMessage(`error: gate_denied:${toolGate.reason}${toolGate.detail ? ` (${toolGate.detail})` : ''}`);
           continue;
         }
@@ -269,7 +335,7 @@ export const runToolLoop = async (input: ToolLoopInput): Promise<Result<ToolLoop
           tick: input.tick,
         };
         observations.push(obs);
-        recordObservation(input.bus, workflowId, obs);
+        recordObservation(workflow, obs);
         appendToolMessage(`error: tool_not_registered: ${call.name}`);
         continue;
       }
@@ -289,7 +355,7 @@ export const runToolLoop = async (input: ToolLoopInput): Promise<Result<ToolLoop
           tick: input.tick,
         };
         observations.push(obs);
-        recordObservation(input.bus, workflowId, obs);
+        recordObservation(workflow, obs);
         appendToolMessage(`error: input_invalid: ${issues}`);
         continue;
       }
@@ -318,7 +384,7 @@ export const runToolLoop = async (input: ToolLoopInput): Promise<Result<ToolLoop
           tick: input.tick,
         };
         observations.push(obs);
-        recordObservation(input.bus, workflowId, obs);
+        recordObservation(workflow, obs);
         appendToolMessage(stringifyToolResult(result));
       } catch (e) {
         const message = e instanceof Error ? e.message : String(e);
@@ -333,10 +399,12 @@ export const runToolLoop = async (input: ToolLoopInput): Promise<Result<ToolLoop
           tick: input.tick,
         };
         observations.push(obs);
-        recordObservation(input.bus, workflowId, obs);
+        recordObservation(workflow, obs);
         appendToolMessage(`error: ${message}`);
       }
     }
+
+    iteration += 1;
   }
 
   return err(

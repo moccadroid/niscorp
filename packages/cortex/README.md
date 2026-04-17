@@ -202,6 +202,26 @@ console.log(`total ~${resolved.totalTokens} / ${resolved.budget}`);
 
 Anything you can't explain in the preview, the model can't either.
 
+### LLM types
+
+Cortex re-exports Signal's LLM types under the `CortexLlm*` naming
+used throughout this package. Prefer these in code that lives in a
+Cortex-shaped surface (agents, tools, handlers, bus subscribers) so
+LLM types come from the same package as the rest of your imports:
+
+```ts
+import type {
+  SignalClient,
+  CortexLlmStepRequest,
+  CortexLlmStepResult,
+  CortexLlmStreamEvent,
+} from '@niscorp/cortex';
+```
+
+Both import paths resolve to the same underlying types — the
+originals remain available from `@niscorp/signal` for code that
+talks to Signal directly.
+
 ---
 
 ## The context pipeline
@@ -391,18 +411,56 @@ const agent = defineAgent({
 // Your UI subscribes and responds:
 manifold.bus.on(CortexTopics.confirmationRequested, async (event) => {
   const approved = await showDialog(event.payload);
-  manifold.bus.emit({
-    topic: approved
-      ? CortexTopics.confirmationApproved.topic
-      : CortexTopics.confirmationDenied.topic,
-    payload: { toolId: event.payload.toolId },
-    meta: { timestamp: Date.now(), correlationId: event.meta.correlationId },
-  });
+  manifold.bus.emit(
+    approved ? CortexTopics.confirmationApproved : CortexTopics.confirmationDenied,
+    { toolId: event.payload.toolId },
+    { correlationId: event.meta.correlationId },
+  );
 });
 ```
 
 If the timeout fires first, the tool call is denied and the agent
 reacts per its instructions.
+
+---
+
+## Streaming
+
+Opt in with `stream: true` — the tool loop emits `cortex.llm.delta`
+on the bus as the model produces text. Everything else (tools,
+gates, ledger, observations, rules) is unchanged.
+
+```ts
+import { CortexTopics, runAgentStandalone } from '@niscorp/cortex';
+
+let buffer = '';
+const result = await runAgentStandalone(agent, input, {
+  llm,
+  stream: true,
+  onBus: (bus) => {
+    bus.on(CortexTopics.llmDelta, (e) => { buffer += e.payload.text; });
+    bus.on(CortexTopics.agentRetry, () => { buffer = ''; });
+  },
+});
+```
+
+Or from a manifold:
+
+```ts
+manifold.bus.on(CortexTopics.llmDelta, (e) => { /* … */ });
+const result = await manifold.execute('agent-id', input, { stream: true });
+```
+
+The return type is unchanged — streaming is a side effect, not a
+return-shape change. `@niscorp/signal` satisfies the contract via
+its `stepStream()` primitive.
+
+Structured-mode validation failures re-prompt the model, and each
+retry starts a fresh stream of deltas. Listen to `cortex.agent.retry`
+to clear your partial-output accumulator before the next batch
+arrives — the example above does this with a simple string buffer;
+production consumers (e.g. a `@niscorp/solid` partial-JSON stream)
+reset their own state the same way.
 
 ---
 
@@ -500,6 +558,7 @@ Selected runtime topics (see `CortexTopics` for the full typed set):
 | `cortex.policy.confirmation.requested` / `.approved` / `.denied` | `{ toolId, … }` |
 | `cortex.rule.evaluated` / `.fired` | `{ result, accumulators }` / `{ ruleId, effect }` |
 | `cortex.observation.recorded` | `Observation` |
+| `cortex.llm.delta` | `{ workflowId, agentId, text, tick, iteration }` — fires per chunk when `stream: true` |
 | `cortex.error` / `cortex.warning` | `CortexError` / `{ message }` |
 
 ### Custom typed topics
@@ -510,11 +569,7 @@ import { topic } from '@niscorp/cortex';
 const sentiment = topic<{ score: number }>('analysis.sentiment');
 
 manifold.bus.on(sentiment, (e) => e.payload.score);  // typed
-manifold.bus.emit({
-  topic: sentiment.topic,
-  payload: { score: 0.8 },
-  meta: { timestamp: Date.now(), correlationId: 'x' },
-});
+manifold.bus.emit(sentiment, { score: 0.8 }, { correlationId: 'x' });
 ```
 
 ---

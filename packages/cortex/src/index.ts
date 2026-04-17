@@ -2,10 +2,9 @@
 // @niscorp/cortex — public API
 // ═══════════════════════════════════════════════════════════
 //
-// Phase A surface. The execution path (tool loop, agent execute,
-// runAgentStandalone) lands in the next session once the upstream
-// Signal additions are in place. previewContext, schemas, registry,
-// bus, and the context pipeline are all live and tested.
+// The full surface: agent + tool definitions, execution (standalone
+// and manifold), streaming, context pipeline, plan execution with
+// policy gating, declarative rules engine, bus, stores, and schemas.
 
 // Definitions
 export { defineAgent } from './agent/define-agent';
@@ -30,16 +29,21 @@ export {
 export { runToolLoop } from './tool-loop/loop';
 export type { ToolLoopInput, ToolLoopResult } from './tool-loop/loop';
 
-// LLM client contract
+// LLM client contract. Signal's LLM types are re-exported under
+// the CortexLlm* naming so consumers don't need a second import
+// from @niscorp/signal. Both import paths resolve to the same
+// underlying types.
 export type {
   SignalClient,
   CortexLlmMessage,
-  CortexLlmToolDefinition,
-  CortexLlmToolCall,
+  CortexLlmAssistantToolCall,
   CortexLlmStepRequest,
   CortexLlmStepResult,
+  CortexLlmToolCall,
+  CortexLlmToolDefinition,
+  CortexLlmStreamEvent,
+  CortexLlmStreamOptions,
   CortexLlmCountInput,
-  CortexMessageRole,
 } from './llm';
 
 // Manifold
@@ -62,6 +66,8 @@ export type {
   LedgerSnapshot,
   LedgerEntry,
   WorkflowContext,
+  WorkflowEmit,
+  CreateWorkflowContextInput,
 } from './manifold';
 
 // Stores
@@ -188,6 +194,7 @@ export type {
   AgentInvokedPayload,
   AgentCompletedPayload,
   AgentRetryPayload,
+  LlmDeltaPayload,
   PlanProducedPayload,
   ConfirmationRequestedPayload,
   ConfirmationResponsePayload,

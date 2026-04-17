@@ -112,13 +112,9 @@ describe('Manifold (Phase A)', () => {
     if (!result.ok) expect(result.error.code).toBe('agent_not_registered');
   });
 
-  it('teesz events into the in-memory event log', async () => {
+  it('tees events into the in-memory event log', async () => {
     const m = createManifold();
-    m.bus.emit({
-      topic: 'test.topic',
-      payload: { x: 1 },
-      meta: { timestamp: Date.now(), correlationId: 'c1', workflowId: 'wf1' },
-    });
+    m.bus.emit('test.topic', { x: 1 }, { correlationId: 'c1', workflowId: 'wf1' });
     // Allow the async tee to flush.
     await new Promise<void>((r) => setTimeout(r, 0));
     const events = await m._internal.eventLog.read('wf1');

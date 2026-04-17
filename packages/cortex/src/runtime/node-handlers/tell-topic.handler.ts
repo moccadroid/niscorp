@@ -5,24 +5,19 @@ import type { PlanExecutorDeps, PlanExecutorInput, NodeHandlerResult } from './t
 import { now } from './types';
 
 export const executeTellTopic = async (
-  deps: PlanExecutorDeps,
+  _deps: PlanExecutorDeps,
   input: PlanExecutorInput,
   node: TellTopicNode,
 ): Promise<NodeHandlerResult> => {
   const start = now();
-  const workflowId = input.workflow.workflowId;
-  deps.bus.emit({
-    topic: node.topic,
-    payload: node.payload,
-    meta: { timestamp: now(), correlationId: workflowId, workflowId },
-  });
+  input.workflow.emit(node.topic, node.payload);
   return {
     observation: {
       stepKind: 'tell_topic',
       topic: node.topic,
       durationMs: now() - start,
       timestamp: now(),
-      workflowId,
+      workflowId: input.workflow.workflowId,
       depth: input.depth,
       tick: input.tick,
     },

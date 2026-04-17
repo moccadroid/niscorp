@@ -10,4 +10,10 @@ export {
 } from './ledger';
 export { createManifold } from './manifold';
 export type { Manifold, ManifoldConfig, ManifoldHooks, ExecuteOptions } from './types';
-export { createWorkflowContext, destroyWorkflowContext, type WorkflowContext } from './workflow-context';
+export {
+  createWorkflowContext,
+  destroyWorkflowContext,
+  type WorkflowContext,
+  type WorkflowEmit,
+  type CreateWorkflowContextInput,
+} from './workflow-context';

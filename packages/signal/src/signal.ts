@@ -1,7 +1,7 @@
 import type { ZodType } from 'zod';
 import type {
   Message, ContentPart, Tool, SignalOptions, Capabilities,
-  SignalResult, SignalMeta, StreamEvent, StreamOptions,
+  SignalResult, SignalMeta, StreamEvent, StepStreamEvent, StreamOptions,
   ProviderAdapter, ProviderRequest, ProviderResponse,
   StepRequest, StepResult, StepToolCall, StepInputMessage, CountInput,
 } from './types';
@@ -17,6 +17,7 @@ import { runNativeToolLoop } from './tools/tool-loop';
 import { runUnifiedSchemaLoop } from './strategy/unified-schema';
 import { validateAndRetry } from './validation/retry';
 import { executeStream } from './stream/execute-stream';
+import { executeStepStream } from './stream/execute-step-stream';
 
 // ═══════════════════════════════════════════════════════════
 // Signal Type (public interface)
@@ -46,6 +47,12 @@ export type Signal<T = string> = {
   // tool loop with policy gating, ledger attribution, and
   // observation per call.
   step: (request: StepRequest) => Promise<StepResult>;
+  // stepStream(): the streaming variant of step(). Same single-call
+  // semantics — no schema validation, no auto tool execution, no
+  // retries — but yields text deltas incrementally and a final `done`
+  // event carrying the aggregated StepResult. The caller still owns
+  // the tool loop. Used by @niscorp/cortex when streaming is opted in.
+  stepStream: (request: StepRequest, options?: StreamOptions) => AsyncIterable<StepStreamEvent>;
   // count(): rough token count for an input. Currently a heuristic;
   // will become provider-aware once tokenizer integration lands.
   count: (input: CountInput) => Promise<number>;
@@ -397,6 +404,21 @@ const createSignalFromConfig = <T = string>(config: SignalConfig): Signal<T> => 
         finishReason: response.finishReason,
         raw: response.raw,
       };
+    },
+
+    // ─── Low-level: streaming variant of step() ──────────────
+    stepStream: (request: StepRequest, streamOptions) => {
+      const run = async function* (): AsyncGenerator<StepStreamEvent> {
+        const adapter = await getAdapter();
+        const resolved = resolveProvider(config);
+        yield* executeStepStream({
+          adapter,
+          model: resolved.model,
+          request,
+          ...(streamOptions && { streamOptions }),
+        });
+      };
+      return run();
     },
 
     // ─── Low-level: token counting (heuristic) ───────────────
