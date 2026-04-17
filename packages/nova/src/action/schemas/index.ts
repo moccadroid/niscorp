@@ -20,7 +20,10 @@ export const ActionDefinitionSchema = z
       .describe('Either a layout id stored in the layout store, or an inline LayoutNode.'),
     data: z.record(z.string(), z.unknown()).optional().describe('Static default data merged with input on mount.'),
     triggers: z.array(TriggerConfigSchema).optional().describe('Event/message triggers.'),
-    endpoints: z.record(z.string(), EndpointConfigSchema).optional().describe('Named HTTP endpoints.'),
+    endpoints: z
+      .record(z.string(), EndpointConfigSchema)
+      .optional()
+      .describe('Named endpoints — HTTP calls or local functions.'),
     lifecycle: LifecycleConfigSchema.optional().describe('Lifecycle hooks.'),
   })
   .strict()
@@ -38,6 +41,6 @@ export type { Effect, Step, CallEffect, EmitEffect, PushEffect, PopEffect, Repla
 export { TriggerConfigSchema } from './triggers';
 export type { TriggerConfig } from './triggers';
 export { EndpointConfigSchema } from './endpoints';
-export type { EndpointConfig } from './endpoints';
+export type { EndpointConfig, HttpEndpointConfig, FunctionEndpointConfig } from './endpoints';
 export { LifecycleConfigSchema } from './lifecycle';
 export type { LifecycleConfig } from './lifecycle';

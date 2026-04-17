@@ -30,6 +30,8 @@ import { story as structureNumberedList } from './stories/structure/numbered-lis
 import { story as counter } from './stories/actions/counter.story';
 import { story as endpoint } from './stories/actions/endpoint.story';
 import { story as endpointFull } from './stories/actions/endpoint-full.story';
+import { story as functionEndpoint } from './stories/actions/function-endpoint.story';
+import { story as functionEndpointMixed } from './stories/actions/function-endpoint-mixed.story';
 import { story as inputModel } from './stories/actions/input-model.story';
 import { story as lifecycle } from './stories/actions/lifecycle.story';
 import { story as list } from './stories/actions/list.story';
@@ -81,6 +83,8 @@ export const stories: readonly NovaStory[] = [
   lifecycle,
   endpoint,
   endpointFull,
+  functionEndpoint,
+  functionEndpointMixed,
   strictError,
   // Shells
   pushPopNavigation,

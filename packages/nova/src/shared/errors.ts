@@ -10,6 +10,7 @@ export const ErrorCodes = {
   layoutRefNotFound: 'LAYOUT_REF_NOT_FOUND',
   definitionValidation: 'DEFINITION_VALIDATION_ERROR',
   unknownAction: 'UNKNOWN_ACTION',
+  unknownFunction: 'UNKNOWN_FUNCTION',
   shellDisposed: 'SHELL_DISPOSED',
   lifecycle: 'LIFECYCLE_ERROR',
   mutation: 'MUTATION_ERROR',
@@ -114,6 +115,20 @@ export class ShellDisposedError extends NovaError {
   constructor(message: string, context?: NovaErrorContext, options?: { cause?: unknown }) {
     super(ErrorCodes.shellDisposed, message, context, options);
     this.name = 'ShellDisposedError';
+  }
+}
+
+export type UnknownFunctionContext = NovaErrorContext & { name: string };
+
+export class UnknownFunctionError extends NovaError {
+  constructor(name: string, options?: { cause?: unknown }) {
+    super(
+      ErrorCodes.unknownFunction,
+      `Unknown function: "${name}". Is it registered in shell config's \`functions\` map?`,
+      { name },
+      options,
+    );
+    this.name = 'UnknownFunctionError';
   }
 }
 

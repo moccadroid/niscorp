@@ -1,8 +1,8 @@
 import { createScopeChain, resolve } from '@shared/bindings';
 import { hasKey, isObject } from '@shared/common';
 import type { ScopeChain } from '@shared/bindings';
-import type { EndpointConfig } from '../schemas';
-import type { FetchFn, TransformFn } from '../types';
+import type { EndpointConfig, FunctionEndpointConfig, HttpEndpointConfig } from '../schemas';
+import type { FetchFn, FunctionHandler, TransformFn } from '../types';
 
 const stringifyForBody = (value: unknown): string | undefined => {
   if (typeof value === 'string') return value;
@@ -63,12 +63,20 @@ export type CallEndpointOptions = {
   fetch?: FetchFn;
   transform?: TransformFn;
   signal?: AbortSignal;
+  functions?: Record<string, FunctionHandler>;
 };
 
 export const callEndpoint = async (
   options: CallEndpointOptions,
 ): Promise<EndpointResult> => {
-  const { endpoint, data, fetch: fetchFn = defaultFetch, transform, signal } = options;
+  if ('fn' in options.endpoint) return callFunctionEndpoint(options.endpoint, options);
+  return callHttpEndpoint(options.endpoint, options);
+};
+
+const callHttpEndpoint = async (
+  endpoint: HttpEndpointConfig,
+  { data, fetch: fetchFn = defaultFetch, transform, signal }: CallEndpointOptions,
+): Promise<EndpointResult> => {
   const chain = createScopeChain(data);
   const resolvedUrl = resolve(endpoint.url, chain);
   const url = typeof resolvedUrl === 'string' ? resolvedUrl : String(resolvedUrl ?? '');
@@ -112,4 +120,37 @@ export const callEndpoint = async (
   }
 
   return { ok: true, data: result, status: response.status };
+};
+
+const callFunctionEndpoint = async (
+  endpoint: FunctionEndpointConfig,
+  { data, signal, functions }: CallEndpointOptions,
+): Promise<EndpointResult> => {
+  // Callers dispatching to a function endpoint must provide both a signal and
+  // a registered handler. `runCall` guarantees both before reaching here.
+  if (signal === undefined) {
+    throw new Error('callEndpoint: function variant requires an AbortSignal');
+  }
+  const handler = functions?.[endpoint.fn];
+  if (handler === undefined) {
+    throw new Error(`callEndpoint: function "${endpoint.fn}" is not registered`);
+  }
+
+  try {
+    const result = await handler(data, signal);
+    if (signal.aborted) {
+      return {
+        ok: false,
+        error: { status: 0, message: 'aborted', data: undefined, aborted: true },
+      };
+    }
+    return { ok: true, data: result, status: 0 };
+  } catch (err) {
+    const isAbort = err instanceof Error && err.name === 'AbortError';
+    const message = err instanceof Error ? err.message : 'function failed';
+    if (isAbort) {
+      return { ok: false, error: { status: 0, message, data: undefined, aborted: true } };
+    }
+    return { ok: false, error: { status: 0, message, data: undefined } };
+  }
 };

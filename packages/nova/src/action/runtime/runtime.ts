@@ -58,6 +58,7 @@ export const createActionRuntime = (config: ActionRuntimeConfig): ActionRuntime 
   const buildContext = (signal: AbortSignal = abortController.signal): StepContext => ({
     dataStore,
     endpoints: definition.endpoints ?? {},
+    functions: config.functions ?? {},
     eventBus: config.eventBus,
     messageBus: config.messageBus,
     ...(config.fetch === undefined ? {} : { fetch: config.fetch }),

@@ -22,6 +22,7 @@ const makeCtx = (overrides: Partial<StepContext> = {}): StepContext => {
   return {
     dataStore,
     endpoints: {},
+    functions: {},
     eventBus: createEventBus(),
     messageBus: createMessageBus(),
     extras: {},

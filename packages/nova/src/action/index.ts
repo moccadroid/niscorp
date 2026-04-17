@@ -47,6 +47,7 @@ export type {
   FetchFn,
   FetchInit,
   FetchResponse,
+  FunctionHandler,
   NavigationEffect,
   NavigateHandler,
   DataChangeHandler,

@@ -13,6 +13,7 @@ const makeBuild = (
 ): (() => StepContext) => () => ({
   dataStore,
   endpoints: {},
+  functions: {},
   eventBus,
   messageBus,
   extras: {},

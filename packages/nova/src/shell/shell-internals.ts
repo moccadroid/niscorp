@@ -1,4 +1,10 @@
-import type { ActionDefinition, ActionRuntime, NavigationEffect, OnErrorHandler } from '../action';
+import type {
+  ActionDefinition,
+  ActionRuntime,
+  FunctionHandler,
+  NavigationEffect,
+  OnErrorHandler,
+} from '../action';
 import { ActionDefinitionSchema } from '../action';
 import { createActionRuntime } from '../action/runtime/runtime';
 import type { RuntimeRegistry } from './runtime-registry';
@@ -50,6 +56,7 @@ export type RuntimeFactoryDeps = {
   registry: ComponentRegistry;
   transform?: TransformFn;
   fetch?: FetchFn;
+  functions?: Record<string, FunctionHandler>;
   strict: boolean;
   onError?: OnErrorHandler;
   instanceIdFn: IdFactory;
@@ -71,6 +78,7 @@ export const createRuntimeFactory = (deps: RuntimeFactoryDeps) => (
     registry: deps.registry,
     ...(deps.transform === undefined ? {} : { transform: deps.transform }),
     ...(deps.fetch === undefined ? {} : { fetch: deps.fetch }),
+    ...(deps.functions === undefined ? {} : { functions: deps.functions }),
     onNavigate: (effect) => deps.onNavigate(canvasId, effect),
     strict: deps.strict,
     ...(deps.onError === undefined ? {} : { onError: deps.onError }),

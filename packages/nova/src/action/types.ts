@@ -35,6 +35,10 @@ export type { Unsubscribe };
 
 export type TransformFn = (config: unknown, source: Record<string, unknown>) => unknown;
 export type FetchFn = (url: string, init?: FetchInit) => Promise<FetchResponse>;
+export type FunctionHandler = (
+  data: Record<string, unknown>,
+  signal: AbortSignal,
+) => Promise<unknown>;
 
 export type FetchInit = {
   method?: string;
@@ -75,6 +79,7 @@ export type ActionRuntimeConfig = {
   registry: ComponentRegistry;
   transform?: TransformFn;
   fetch?: FetchFn;
+  functions?: Record<string, FunctionHandler>;
   onNavigate?: NavigateHandler;
   strict?: boolean;
   onError?: OnErrorHandler;

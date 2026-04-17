@@ -7,9 +7,10 @@ import type { MessageBus } from '@shared/message-bus';
 import { setPath } from '@shared/bindings/paths';
 import { applyMutations } from '../mutations';
 import type { EndpointConfig, Mutation, Step } from '../schemas';
-import { LifecycleError, type LifecycleHook, type NovaError } from '@shared/errors';
+import { LifecycleError, UnknownFunctionError, type LifecycleHook, type NovaError } from '@shared/errors';
 import type {
   FetchFn,
+  FunctionHandler,
   NavigateHandler,
   NavigationEffect,
   OnErrorHandler,
@@ -20,6 +21,7 @@ import { callEndpoint } from './endpoints';
 export type StepContext = {
   dataStore: DataStore;
   endpoints: Record<string, EndpointConfig>;
+  functions: Record<string, FunctionHandler>;
   eventBus: EventBus;
   messageBus: MessageBus;
   fetch?: FetchFn;
@@ -85,6 +87,30 @@ const writeTarget = (
   });
 };
 
+// Shared fallback for "target name not resolvable" cases (unknown endpoint,
+// unknown function). Runs `onError` with a synthetic @error, else throws a
+// LifecycleError inside a lifecycle hook, else throws the caller-supplied
+// strict error, else silently returns.
+const raiseUnknown = async (
+  message: string,
+  onError: Step[] | undefined,
+  ctx: StepContext,
+  strictError?: NovaError,
+): Promise<void> => {
+  if (onError) {
+    const errorExtras: ExtraScopes = {
+      ...ctx.extras,
+      '@error': { message, status: 0 },
+    };
+    await executeSteps(onError, { ...ctx, extras: errorExtras });
+    return;
+  }
+  if (ctx.lifecycleHook !== undefined) {
+    throw new LifecycleError(message, { hook: ctx.lifecycleHook });
+  }
+  if (ctx.strict && strictError !== undefined) throw strictError;
+};
+
 const runCall = async (
   callName: string,
   onSuccess: Step[] | undefined,
@@ -93,19 +119,16 @@ const runCall = async (
 ): Promise<void> => {
   const endpoint = ctx.endpoints[callName];
   if (endpoint === undefined) {
-    if (onError) {
-      const errorExtras: ExtraScopes = {
-        ...ctx.extras,
-        '@error': { message: `unknown endpoint: ${callName}`, status: 0 },
-      };
-      await executeSteps(onError, { ...ctx, extras: errorExtras });
-      return;
-    }
-    if (ctx.lifecycleHook !== undefined) {
-      throw new LifecycleError(`unknown endpoint: ${callName}`, {
-        hook: ctx.lifecycleHook,
-      });
-    }
+    await raiseUnknown(`unknown endpoint: ${callName}`, onError, ctx);
+    return;
+  }
+  if ('fn' in endpoint && ctx.functions[endpoint.fn] === undefined) {
+    await raiseUnknown(
+      `unknown function: ${endpoint.fn}`,
+      onError,
+      ctx,
+      new UnknownFunctionError(endpoint.fn),
+    );
     return;
   }
   const result = await callEndpoint({
@@ -114,6 +137,7 @@ const runCall = async (
     fetch: ctx.fetch,
     transform: ctx.transform,
     signal: ctx.signal,
+    functions: ctx.functions,
   });
   if (ctx.signal.aborted) return;
   if (!result.ok && result.error.aborted === true) return;

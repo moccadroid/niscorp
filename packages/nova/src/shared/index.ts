@@ -15,6 +15,7 @@ export {
   LayoutRefNotFoundError,
   DefinitionValidationError,
   UnknownActionError,
+  UnknownFunctionError,
   ShellDisposedError,
   LifecycleError,
 } from './errors';
@@ -24,6 +25,7 @@ export type {
   ComponentNotFoundContext,
   LayoutRefNotFoundContext,
   UnknownActionContext,
+  UnknownFunctionContext,
   DefinitionValidationFailure,
   DefinitionValidationContext,
   LifecycleHook,

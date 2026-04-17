@@ -141,6 +141,7 @@ export const createShell = (config: ShellConfig): Shell => {
     registry: componentRegistry,
     ...(config.transform === undefined ? {} : { transform: config.transform }),
     ...(config.fetch === undefined ? {} : { fetch: config.fetch }),
+    ...(config.functions === undefined ? {} : { functions: config.functions }),
     strict,
     ...(config.onError === undefined ? {} : { onError: config.onError }),
     instanceIdFn,

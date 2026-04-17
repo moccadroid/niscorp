@@ -2,6 +2,7 @@ import type {
   ActionDefinition,
   ActionInstance,
   FetchFn,
+  FunctionHandler,
   OnErrorHandler,
   PublicActionRuntime,
   TransformFn,
@@ -93,6 +94,8 @@ export type ShellConfig = {
   actions: Record<string, ActionDefinition>;
   transform?: TransformFn;
   fetch?: FetchFn;
+  // Handlers for `{ fn: '<name>' }` endpoints. See `EndpointConfigSchema`.
+  functions?: Record<string, FunctionHandler>;
   telemetry?: ShellTelemetry;
   strict?: boolean;
   onError?: OnErrorHandler;
