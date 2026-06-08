@@ -8,6 +8,7 @@
     "node": ">=18.18.0"
   },
   "scripts": {
+    "preinstall": "npx only-allow pnpm",
     "build": "turbo build",
     "dev": "turbo dev",
     "test": "turbo test",
