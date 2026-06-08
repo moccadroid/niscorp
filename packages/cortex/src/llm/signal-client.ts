@@ -16,7 +16,7 @@ import type {
 
 export type SignalClient = {
   step: (request: StepRequest) => Promise<StepResult>;
-  stream: (
+  stepStream: (
     request: StepRequest,
     options?: StreamOptions,
   ) => AsyncIterable<StepStreamEvent>;

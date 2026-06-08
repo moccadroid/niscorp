@@ -70,11 +70,11 @@ export const ConfirmationDemo: FC<Props> = ({ storyId, prompt, runner }) => {
   const handleConfirmation = useCallback((approved: boolean, toolId: string) => {
     const b = busRef.current;
     if (!b) return;
-    b.emit({
-      topic: approved ? CortexTopics.confirmationApproved : CortexTopics.confirmationDenied,
-      payload: { toolId },
-      meta: { timestamp: Date.now(), correlationId: 'confirmation' },
-    });
+    b.emit(
+      approved ? CortexTopics.confirmationApproved : CortexTopics.confirmationDenied,
+      { toolId },
+      { correlationId: 'confirmation' },
+    );
     setStatus((prev) => {
       if (prev.phase !== 'running') return prev;
       return {

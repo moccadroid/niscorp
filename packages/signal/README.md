@@ -78,17 +78,23 @@ for await (const event of signal.stepStream({ messages, tools })) {
     // event.result is the aggregated StepResult — same shape as step()
   }
 }
+
+// Execute — embedding (separate client, embedding model)
+const embedder = createSignal('openai').model('text-embedding-3-small');
+const vector = await embedder.embed('wireless headphones');             // number[]
+const vectors = await embedder.embed(['shoes', 'boots', 'hat']);       // number[][]
+const small = await embedder.embed('text', { dimensions: 256 });       // truncated
 ```
 
 ## Providers
 
-| Provider | String | SDK |
-|----------|--------|-----|
-| Groq | `'groq'` | `openai` |
-| OpenAI | `'openai'` | `openai` |
-| OpenRouter | `'openrouter'` | `openai` |
-| Anthropic | `'anthropic'` | stub (use OpenRouter) |
-| Google | `'google'` | stub (use OpenRouter) |
+| Provider | String | SDK | Embedding |
+|----------|--------|-----|-----------|
+| Groq | `'groq'` | `openai` | No |
+| OpenAI | `'openai'` | `openai` | Yes |
+| OpenRouter | `'openrouter'` | `openai` | No |
+| Anthropic | `'anthropic'` | stub (use OpenRouter) | No |
+| Google | `'google'` | stub (use OpenRouter) | No |
 
 API keys are read from environment variables (`GROQ_API_KEY`, `OPENAI_API_KEY`, etc.) or passed via `.apiKey()` / options.
 

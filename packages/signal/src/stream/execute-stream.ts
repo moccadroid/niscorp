@@ -6,6 +6,7 @@ import type {
 import { SignalError, ErrorCode } from '../errors';
 import { selectStructuredOutputStrategy, applyStructuredOutput } from '../strategy/structured-output';
 import { selectToolCallingStrategy, toolsToProviderFormat } from '../strategy/tool-calling';
+import { asOutput } from '../output-trust';
 
 // ═══════════════════════════════════════════════════════════
 // executeStream — the async generator behind signal.stream()
@@ -129,7 +130,7 @@ export async function* executeStream<T>(
     }
 
     // No schema — emit raw content as done
-    yield makeDone<T>(contentBuffer as unknown as T, contentBuffer, messages, config.model, totalUsage, start, allToolCalls, retryCount);
+    yield makeDone<T>(asOutput<T>(contentBuffer), contentBuffer, messages, config.model, totalUsage, start, allToolCalls, retryCount);
     return;
   }
 }
@@ -215,7 +216,7 @@ async function* streamWithToolLoop<T>(
     return;
   }
 
-  yield makeDone<T>(contentBuffer as unknown as T, contentBuffer, messages, config.model, totalUsage, start, allToolCalls, retryCount);
+  yield makeDone<T>(asOutput<T>(contentBuffer), contentBuffer, messages, config.model, totalUsage, start, allToolCalls, retryCount);
 }
 
 // ═══════════════════════════════════════════════════════════

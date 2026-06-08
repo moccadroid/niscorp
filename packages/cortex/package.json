@@ -19,11 +19,9 @@
     "build": "tsup",
     "dev": "tsup --watch",
     "test": "vitest run",
-    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.examples.json",
-    "scratch": "tsx examples/scratch.ts"
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.examples.json"
   },
   "devDependencies": {
-    "@niscorp/prism": "workspace:*",
     "@niscorp/signal": "workspace:*",
     "@types/node": "^22.10.2",
     "tsup": "^8.5.1",

@@ -9,8 +9,13 @@
 [![pnpm](https://img.shields.io/badge/pnpm-9.15-f69220.svg?style=flat-square)](https://pnpm.io)
 [![Node](https://img.shields.io/badge/node-%E2%89%A518.18-339933.svg?style=flat-square)](https://nodejs.org)
 [![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178c6.svg?style=flat-square)](https://www.typescriptlang.org)
+[![Live Showroom](https://img.shields.io/badge/Live_Showroom-moccadroid.github.io-4f46e5.svg?style=flat-square)](https://moccadroid.github.io/niscorp/)
 
 [Packages](#packages) · [Philosophy](#philosophy) · [Quick start](#quick-start) · [Showroom](#showroom) · [Status](#status)
+
+### ▶ Try it live — [moccadroid.github.io/niscorp](https://moccadroid.github.io/niscorp/)
+
+Every package, running in your browser. No install. Vex even synthesizes SQL against a **real Postgres compiled to WebAssembly** — so English→query→SQL, vector search, and scope policies all work end-to-end with no backend.
 
 ---
 
@@ -35,7 +40,7 @@ Six libraries. Each one is self-sufficient. They also compose.
 | 💎 | [**`@niscorp/prism`**](packages/prism)   | JSON data-transformation DSL — ~50 ops, compile-time optimization, fingerprint-keyed cache, zero code execution. | ![](https://img.shields.io/badge/-shipping-22c55e?style=flat-square) |
 | 🎨 | [**`@niscorp/nova`**](packages/nova)     | Declarative UI runtime — JSON layouts, actions, lifecycles, two-way bindings. Framework-agnostic core, React adapter shipped. | ![](https://img.shields.io/badge/-shipping-22c55e?style=flat-square) |
 | 🧠 | [**`@niscorp/cortex`**](packages/cortex) | Agentic orchestration runtime — typed agents, tool-call loop, plan-mode tick loop, declarative rules engine, human-in-the-loop confirmation. | ![](https://img.shields.io/badge/-shipping-22c55e?style=flat-square) |
-| 🔍 | [**`@niscorp/vex`**](packages/vex)       | Declarative query synthesis — English → constrained JSON DSL → SQL, with scope policies and shape-based caching. | ![](https://img.shields.io/badge/-design-f59e0b?style=flat-square) |
+| 🔍 | [**`@niscorp/vex`**](packages/vex)       | Declarative query synthesis — English → constrained JSON DSL → SQL, with semantic (vector) search, scope policies, and shape-based caching. | ![](https://img.shields.io/badge/-shipping-22c55e?style=flat-square) |
 
 > Each package ships its own `README.md` and `DESIGN.md`. **Read the design doc before reading the source.**
 
@@ -80,7 +85,11 @@ pnpm build
 
 ## Showroom
 
-A live demo + inspector for the shipping packages. Stories render side-by-side with their JSON definitions, runtime data, and error states.
+**→ [moccadroid.github.io/niscorp](https://moccadroid.github.io/niscorp/) — live in your browser. No install.**
+
+A demo + inspector for every package: stories render side-by-side with their JSON definitions, runtime data, and error states. Vex runs a real Postgres (PGlite/WebAssembly) in the browser, so English→SQL synthesis, vector search, and shape-caching all work end-to-end with no server.
+
+Run it locally:
 
 ```bash
 pnpm --filter showroom dev
@@ -128,8 +137,7 @@ niscorp/
 
 Nisc is **pre-1.0** and under active design.
 
-- **Shipping packages** (Signal, Solid, Prism, Nova, Cortex) are tested and usable, but their public APIs are not frozen. Pin exact versions; expect to update.
-- **Design-only packages** (Vex) have thorough `DESIGN.md` documents and stub source files. Read the architecture; don't expect runnable code yet.
+- **All six packages** are tested and usable (Vex included — its engine, Postgres adapter, and reference agents are real and demoed live in the showroom), but their public APIs are not frozen. Pin exact versions; expect to update.
 - Breaking changes land without ceremony until each package hits 1.0.
 
 ## Contributing

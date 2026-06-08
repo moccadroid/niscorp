@@ -60,11 +60,26 @@ For providers that can't do native tools + structured output simultaneously (Gro
 
 The `_action` underscore prefix avoids collision with user schema fields.
 
+### Embedding
+
+`embed()` converts text to dense vectors via the provider's `/v1/embeddings` endpoint. Same builder pattern, different execution method:
+
+```typescript
+const embedder = createSignal('openai').model('text-embedding-3-small');
+const vector = await embedder.embed('search query');                    // number[]
+const vectors = await embedder.embed(['text a', 'text b']);            // number[][]
+const small = await embedder.embed('text', { dimensions: 256 });       // truncated
+```
+
+Embedding is a separate concern from chat — different models, different API endpoint, different use case. Use a separate Signal client for embedding. The `supportsEmbedding` capability in the registry indicates which providers support it (currently: OpenAI only).
+
+The adapter's `embed()` method is optional. Calling `embed()` on a provider without support throws. The embed function is lazy-loaded — the SDK instance for embeddings is created only on first call.
+
 ### Provider Adapters
 
 Three adapters cover all providers:
 
-- **openai-compatible** — OpenAI, Groq, OpenRouter, any OpenAI-compat endpoint
+- **openai-compatible** — OpenAI, Groq, OpenRouter, any OpenAI-compat endpoint. Supports `chat`, `chatStream`, and `embed`.
 - **anthropic** (stub) — Anthropic Messages API
 - **google** (stub) — Google Gemini API
 
@@ -81,14 +96,16 @@ Zero hard dependencies. The openai SDK is dynamically imported at runtime. If th
 Known providers are registered with defaults:
 
 ```
-'groq'       → api.groq.com       GROQ_API_KEY       openai-compatible  nativeTools:false  nativeJsonSchema:false
-'openai'     → api.openai.com     OPENAI_API_KEY      openai-compatible  nativeTools:true   nativeJsonSchema:true
-'openrouter' → openrouter.ai      OPENROUTER_API_KEY  openai-compatible  nativeTools:true   nativeJsonSchema:true
-'anthropic'  → api.anthropic.com  ANTHROPIC_API_KEY   anthropic          nativeTools:true   nativeJsonSchema:false
-'google'     → googleapis.com     GOOGLE_API_KEY      google             nativeTools:true   nativeJsonSchema:false
+'groq'       → api.groq.com       GROQ_API_KEY       openai-compatible  nativeTools:false  nativeJsonSchema:false  embedding:false
+'openai'     → api.openai.com     OPENAI_API_KEY      openai-compatible  nativeTools:true   nativeJsonSchema:true   embedding:true
+'openrouter' → openrouter.ai      OPENROUTER_API_KEY  openai-compatible  nativeTools:true   nativeJsonSchema:true   embedding:false
+'anthropic'  → api.anthropic.com  ANTHROPIC_API_KEY   anthropic          nativeTools:true   nativeJsonSchema:false  embedding:false
+'google'     → googleapis.com     GOOGLE_API_KEY      google             nativeTools:true   nativeJsonSchema:false  embedding:false
 ```
 
 The user can override any capability via `.capabilities()`.
+
+> OpenRouter can proxy some embedding models, but coverage is model-dependent, so the registry defaults it to `false`. Override via `.capabilities({ supportsEmbedding: true })` if your chosen model supports it.
 
 ---
 

@@ -24,6 +24,7 @@ const LIBRARIES: LibraryDef[] = [
   { id: 'signal', name: 'Signal', load: async () => (await import('./modules/signal')).signalModule },
   { id: 'solid', name: 'Solid', load: async () => (await import('./modules/solid')).solidModule },
   { id: 'prism', name: 'Prism', load: async () => (await import('./modules/prism')).prismModule },
+  { id: 'vex', name: 'Vex', load: async () => (await import('./modules/vex')).vexModule },
   { id: 'nova', name: 'Nova', load: async () => (await import('./modules/nova')).novaModule },
   { id: 'cortex', name: 'Cortex', load: async () => (await import('./modules/cortex')).cortexModule },
 ];

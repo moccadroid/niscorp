@@ -1,4 +1,4 @@
-import type { ProviderAdapter, ProviderRequest, ProviderResponse, ProviderStreamDelta, Message, ContentPart } from '../types';
+import type { ProviderAdapter, ProviderRequest, ProviderResponse, ProviderStreamDelta, EmbedRequest, EmbedResponse, Message, ContentPart } from '../types';
 import { SignalError, ErrorCode } from '../errors';
 import { loadSdk } from '../utils/sdk-loader';
 
@@ -33,7 +33,13 @@ type OpenAICompletion = {
   };
 };
 
-type ChatCreateFn = (params: Record<string, unknown>) => Promise<OpenAICompletion>;
+// Overloaded to mirror the SDK: a request with `stream: true` returns a
+// streaming async-iterable; otherwise a single completion. This lets the
+// streaming call site resolve to `OpenAIStream` with no cast.
+type ChatCreateFn = {
+  (params: Record<string, unknown> & { stream: true }): Promise<OpenAIStream>;
+  (params: Record<string, unknown>): Promise<OpenAICompletion>;
+};
 
 type OpenAIStreamChunk = {
   choices?: Array<{
@@ -55,6 +61,13 @@ type OpenAIStreamChunk = {
 };
 
 type OpenAIStream = AsyncIterable<OpenAIStreamChunk>;
+
+type OpenAIEmbeddingResponse = {
+  data?: Array<{ embedding: number[]; index: number }>;
+  usage?: { prompt_tokens?: number; total_tokens?: number };
+};
+
+type EmbedCreateFn = (params: Record<string, unknown>) => Promise<OpenAIEmbeddingResponse>;
 
 // ═══════════════════════════════════════════════════════════
 // Message Translation
@@ -123,6 +136,27 @@ const extractChatCreateFn = (obj: unknown): ChatCreateFn | undefined => {
   return create.bind(completions) as ChatCreateFn;
 };
 
+const extractEmbedCreateFn = (obj: unknown): EmbedCreateFn | undefined => {
+  if (!obj || typeof obj !== 'object') return undefined;
+  const embeddings = (obj as Record<string, unknown>)['embeddings'];
+  if (!embeddings || typeof embeddings !== 'object') return undefined;
+  const create = (embeddings as Record<string, unknown>)['create'];
+  if (typeof create !== 'function') return undefined;
+  return create.bind(embeddings) as EmbedCreateFn;
+};
+
+const createSdkInstance = async (config: OpenAICompatibleConfig): Promise<unknown> => {
+  const Sdk = await loadSdk('openai');
+  const Constructor = (typeof Sdk === 'function' ? Sdk : (Sdk as Record<string, unknown>)['default']) as
+    new (params: { apiKey?: string; baseURL?: string; dangerouslyAllowBrowser?: boolean }) => unknown;
+
+  return new Constructor({
+    apiKey: config.apiKey,
+    baseURL: config.baseUrl,
+    dangerouslyAllowBrowser: typeof globalThis.window !== 'undefined',
+  });
+};
+
 const loadChatCreateFn = async (config: OpenAICompatibleConfig): Promise<ChatCreateFn> => {
   if (config.client) {
     const fn = extractChatCreateFn(config.client);
@@ -130,18 +164,21 @@ const loadChatCreateFn = async (config: OpenAICompatibleConfig): Promise<ChatCre
     return fn;
   }
 
-  const Sdk = await loadSdk('openai');
-  const Constructor = (typeof Sdk === 'function' ? Sdk : (Sdk as Record<string, unknown>)['default']) as
-    new (params: { apiKey?: string; baseURL?: string; dangerouslyAllowBrowser?: boolean }) => unknown;
-
-  const instance = new Constructor({
-    apiKey: config.apiKey,
-    baseURL: config.baseUrl,
-    dangerouslyAllowBrowser: typeof globalThis.window !== 'undefined',
-  });
-
+  const instance = await createSdkInstance(config);
   const fn = extractChatCreateFn(instance);
   if (!fn) throw new SignalError('Failed to initialize OpenAI SDK', ErrorCode.MISSING_SDK);
+  return fn;
+};
+
+const loadEmbedCreateFn = async (config: OpenAICompatibleConfig): Promise<EmbedCreateFn> => {
+  if (config.client) {
+    const fn = extractEmbedCreateFn(config.client);
+    if (fn) return fn;
+  }
+
+  const instance = await createSdkInstance(config);
+  const fn = extractEmbedCreateFn(instance);
+  if (!fn) throw new SignalError('Embedding is not supported by this provider or SDK', ErrorCode.PROVIDER_ERROR);
   return fn;
 };
 
@@ -215,13 +252,15 @@ export const createOpenAICompatibleAdapter = async (
   };
 
   async function* chatStream(request: ProviderRequest): AsyncIterable<ProviderStreamDelta> {
-    const params = buildParams(request);
-    params['stream'] = true;
-    params['stream_options'] = { include_usage: true };
+    const streamParams = {
+      ...buildParams(request),
+      stream: true as const,
+      stream_options: { include_usage: true },
+    };
 
     let sseStream: OpenAIStream;
     try {
-      sseStream = await chatCreate(params) as unknown as OpenAIStream;
+      sseStream = await chatCreate(streamParams);
     } catch (error) {
       throw new SignalError(
         `Provider stream error: ${error instanceof Error ? error.message : String(error)}`,
@@ -260,7 +299,42 @@ export const createOpenAICompatibleAdapter = async (
     }
   }
 
-  return { id: 'openai-compatible', chat, chatStream };
+  let cachedEmbedCreate: EmbedCreateFn | undefined;
+
+  const embed = async (request: EmbedRequest): Promise<EmbedResponse> => {
+    if (!cachedEmbedCreate) cachedEmbedCreate = await loadEmbedCreateFn(config);
+
+    const params: Record<string, unknown> = {
+      model: request.model,
+      input: request.input,
+    };
+    if (request.dimensions !== undefined) params['dimensions'] = request.dimensions;
+
+    let response: OpenAIEmbeddingResponse;
+    try {
+      response = await cachedEmbedCreate(params);
+    } catch (error) {
+      throw new SignalError(
+        `Embedding error: ${error instanceof Error ? error.message : String(error)}`,
+        ErrorCode.PROVIDER_ERROR,
+        { raw: error },
+      );
+    }
+
+    const embeddings = (response.data ?? [])
+      .sort((a, b) => a.index - b.index)
+      .map(d => d.embedding);
+
+    return {
+      embeddings,
+      usage: {
+        inputTokens: response.usage?.prompt_tokens ?? 0,
+        totalTokens: response.usage?.total_tokens ?? 0,
+      },
+    };
+  };
+
+  return { id: 'openai-compatible', chat, chatStream, embed };
 };
 
 // ═══════════════════════════════════════════════════════════

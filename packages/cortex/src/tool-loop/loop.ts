@@ -3,7 +3,7 @@
 // ═══════════════════════════════════════════════════════════
 //
 // Per DESIGN.md §6. We do NOT delegate to Signal's native tool loop.
-// We call signal.step() (or signal.stream() when workflow.stream) in
+// We call signal.step() (or signal.stepStream() when workflow.stream) in
 // a loop because we need:
 //   - per-call ledger attribution (which tool burned which tokens)
 //   - per-call observation (debugging, replay, streaming deltas)
@@ -82,7 +82,7 @@ const consumeStream = async (
   const abortSignal = input.workflow.abort.signal;
   let finalResult: StepResult | undefined;
   try {
-    for await (const event of input.llm.stream(request, { signal: abortSignal })) {
+    for await (const event of input.llm.stepStream(request, { signal: abortSignal })) {
       if (abortSignal.aborted) break;
       switch (event.type) {
         case 'text':

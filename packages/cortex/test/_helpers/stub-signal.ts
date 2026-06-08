@@ -2,8 +2,8 @@
 // StubSignalClient — a scripted SignalClient for tests
 // ═══════════════════════════════════════════════════════════
 //
-// Hand the stub a queue of responses. step() and stream() each shift
-// one entry off the queue. stream() yields `chunks` (or `content` as
+// Hand the stub a queue of responses. step() and stepStream() each shift
+// one entry off the queue. stepStream() yields `chunks` (or `content` as
 // a single chunk when `chunks` is omitted) followed by one `done`
 // event carrying the aggregated StepResult.
 //
@@ -67,7 +67,7 @@ export const createStubSignal = (initial: StubStep[] = []): StubSignal => {
     return fillStep(queue.shift());
   };
 
-  const stream = (
+  const stepStream = (
     request: StepRequest,
     options?: StreamOptions,
   ): AsyncIterable<StepStreamEvent> => {
@@ -103,7 +103,7 @@ export const createStubSignal = (initial: StubStep[] = []): StubSignal => {
 
   return {
     step,
-    stream,
+    stepStream,
     count,
     calls,
     streamCalls,

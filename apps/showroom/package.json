@@ -10,11 +10,15 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@electric-sql/pglite": "^0.5.1",
+    "@electric-sql/pglite-pgvector": "^0.0.2",
     "@niscorp/cortex": "workspace:*",
     "@niscorp/nova": "workspace:*",
     "@niscorp/prism": "workspace:*",
     "@niscorp/signal": "workspace:*",
     "@niscorp/solid": "workspace:*",
+    "@niscorp/vex": "workspace:^",
+    "@noble/hashes": "^2.2.0",
     "openai": "^6.33.0",
     "prismjs": "^1.30.0",
     "react": "^19.2.4",

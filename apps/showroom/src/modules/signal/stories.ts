@@ -10,6 +10,7 @@ import { story as actionSuggestionsStory } from './stories/shaping/action-sugges
 import { story as textStreamStory } from './stories/streaming/text-stream.story';
 import { story as structuredStreamStory } from './stories/streaming/structured-stream.story';
 import { story as dashboardStreamStory } from './stories/streaming/dashboard-stream.story';
+import { story as embeddingSimilarityStory } from './stories/embedding/similarity.story';
 
 export const stories: readonly SignalStory[] = [
   plainCompletionStory,
@@ -22,4 +23,5 @@ export const stories: readonly SignalStory[] = [
   textStreamStory,
   structuredStreamStory,
   dashboardStreamStory,
+  embeddingSimilarityStory,
 ];

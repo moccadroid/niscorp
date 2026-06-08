@@ -10,6 +10,19 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
       "require": "./dist/index.cjs"
+    },
+    "./agent": {
+      "types": "./dist/agent/index.d.ts",
+      "import": "./dist/agent/index.js",
+      "require": "./dist/agent/index.cjs"
+    },
+    "./hono": {
+      "types": "./dist/adapters/hono/index.d.ts",
+      "import": "./dist/adapters/hono/index.js"
+    },
+    "./express": {
+      "types": "./dist/adapters/express/index.d.ts",
+      "import": "./dist/adapters/express/index.js"
     }
   },
   "files": [
@@ -19,14 +32,50 @@
     "build": "tsup",
     "dev": "tsup --watch",
     "test": "vitest run",
-    "typecheck": "tsc --noEmit"
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "seed": "tsup && tsx scripts/seed.ts",
+    "dev:server": "docker compose up -d --wait && tsup && tsx watch --env-file=.env scripts/dev.ts",
+    "test:queries": "tsx scripts/test-queries.ts",
+    "generate:embeddings": "tsx --env-file=.env scripts/generate-embeddings.ts",
+    "docker:up": "docker compose up -d",
+    "docker:down": "docker compose down"
   },
   "devDependencies": {
+    "@hono/node-server": "^2.0.4",
+    "@types/node": "^25.9.1",
+    "@types/pg": "^8.15.4",
+    "hono": "^4.12.23",
+    "pg": "^8.16.3",
     "tsup": "^8.5.1",
+    "tsx": "^4.20.3",
     "vitest": "^4.1.2",
     "zod": "^4.3.6"
   },
   "peerDependencies": {
+    "@niscorp/cortex": "workspace:*",
+    "@niscorp/prism": "workspace:*",
+    "@niscorp/signal": "workspace:*",
     "zod": "^4.3.6"
+  },
+  "peerDependenciesMeta": {
+    "pg": {
+      "optional": true
+    },
+    "hono": {
+      "optional": true
+    },
+    "express": {
+      "optional": true
+    },
+    "@niscorp/cortex": {
+      "optional": true
+    },
+    "@niscorp/prism": {
+      "optional": true
+    },
+    "@niscorp/signal": {
+      "optional": true
+    }
   }
 }

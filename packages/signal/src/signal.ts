@@ -4,6 +4,7 @@ import type {
   SignalResult, SignalMeta, StreamEvent, StepStreamEvent, StreamOptions,
   ProviderAdapter, ProviderRequest, ProviderResponse,
   StepRequest, StepResult, StepToolCall, StepInputMessage, CountInput,
+  EmbedOptions,
 } from './types';
 import type { SignalConfig, CustomProviderConfig } from './config';
 import { SignalError, ErrorCode } from './errors';
@@ -18,6 +19,7 @@ import { runUnifiedSchemaLoop } from './strategy/unified-schema';
 import { validateAndRetry } from './validation/retry';
 import { executeStream } from './stream/execute-stream';
 import { executeStepStream } from './stream/execute-step-stream';
+import { asOutput } from './output-trust';
 
 // ═══════════════════════════════════════════════════════════
 // Signal Type (public interface)
@@ -56,6 +58,12 @@ export type Signal<T = string> = {
   // count(): rough token count for an input. Currently a heuristic;
   // will become provider-aware once tokenizer integration lands.
   count: (input: CountInput) => Promise<number>;
+
+  // ─── Embedding ────────────────────────────────────────────
+  embed: {
+    (input: string, options?: EmbedOptions): Promise<number[]>;
+    (input: string[], options?: EmbedOptions): Promise<number[][]>;
+  };
 };
 
 // ═══════════════════════════════════════════════════════════
@@ -88,8 +96,8 @@ const resolveProvider = (config: SignalConfig): ResolvedProvider => {
 
 const resolveCapabilities = (config: SignalConfig): Capabilities => {
   const defaults: Capabilities = typeof config.provider === 'string'
-    ? providerRegistry[config.provider]?.capabilities ?? { nativeTools: false, nativeJsonSchema: false, nativeJsonMode: false, multimodal: false }
-    : { nativeTools: false, nativeJsonSchema: false, nativeJsonMode: false, multimodal: false };
+    ? providerRegistry[config.provider]?.capabilities ?? { nativeTools: false, nativeJsonSchema: false, nativeJsonMode: false, multimodal: false, supportsEmbedding: false }
+    : { nativeTools: false, nativeJsonSchema: false, nativeJsonMode: false, multimodal: false, supportsEmbedding: false };
   return { ...defaults, ...config.capabilities };
 };
 
@@ -161,7 +169,7 @@ const aggregateUsage = (responses: ProviderResponse[]): { inputTokens: number; o
 // ═══════════════════════════════════════════════════════════
 
 const parseResponse = <T>(content: string, schema: ZodType | undefined): T => {
-  if (!schema || !content) return content as unknown as T;
+  if (!schema || !content) return asOutput<T>(content);
 
   let json: unknown;
   try {
@@ -200,7 +208,7 @@ const executeSimple = async <T>(
 ): Promise<SignalResult<T>> => {
   const response = await adapter.chat({ model, messages, options });
   return {
-    response: response.content as unknown as T,
+    response: asOutput<T>(response.content),
     history: [...messages, { role: 'assistant', content: response.content }],
     meta: buildMeta(model, response.usage, Date.now() - start, [], [response.raw], []),
   };
@@ -420,6 +428,26 @@ const createSignalFromConfig = <T = string>(config: SignalConfig): Signal<T> => 
       };
       return run();
     },
+
+    // ─── Embedding ────────────────────────────────────────────
+    embed: (async (input: string | string[], options?: EmbedOptions): Promise<number[] | number[][]> => {
+      const adapter = await getAdapter();
+      if (!adapter.embed) {
+        throw new SignalError('This provider does not support embedding', ErrorCode.PROVIDER_ERROR);
+      }
+      const resolved = resolveProvider(config);
+      const response = await adapter.embed({
+        model: resolved.model,
+        input,
+        dimensions: options?.dimensions,
+      });
+      if (typeof input === 'string') {
+        const vector = response.embeddings[0];
+        if (!vector) throw new SignalError('No embedding returned', ErrorCode.PROVIDER_ERROR);
+        return vector;
+      }
+      return response.embeddings;
+    }) as Signal<T>['embed'],
 
     // ─── Low-level: token counting (heuristic) ───────────────
     count: async (input: CountInput): Promise<number> => {

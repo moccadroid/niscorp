@@ -36,6 +36,10 @@ export type {
   StepToolDescriptor,
   StepInputMessage,
   CountInput,
+  // Embedding
+  EmbedOptions,
+  EmbedRequest,
+  EmbedResponse,
 } from './types';
 
 export type { SignalConfig, CustomProviderConfig } from './config';

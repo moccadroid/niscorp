@@ -36,6 +36,7 @@ Each provider has a capability profile that Signal uses to pick the right strate
 - **`nativeJsonSchema`** — Can it enforce a JSON Schema on the response?
 - **`nativeJsonMode`** — Can it guarantee JSON output?
 - **`multimodal`** — Does it accept image content?
+- **`supportsEmbedding`** — Can it convert text to vectors?
 
 You don't need to think about this unless you're overriding defaults.
 
@@ -305,6 +306,69 @@ const r2 = await signal.history(r1.history).complete('What is my name?');
 ```
 
 `complete()` returns `history` which includes all messages (system, user, assistant, tool calls). Pass it back via `.history()` for the next turn.
+
+---
+
+## Embedding
+
+Convert text to dense vectors for similarity search, RAG, clustering, and classification.
+
+### Basic Usage
+
+```typescript
+const embedder = createSignal('openai').model('text-embedding-3-small');
+
+// Single text → single vector
+const vector = await embedder.embed('wireless headphones');
+// vector: number[] (1536 dimensions by default)
+
+// Batch — single API call
+const vectors = await embedder.embed([
+  'wireless headphones',
+  'bluetooth earbuds',
+  'industrial pump manual',
+]);
+// vectors: number[][] (3 vectors)
+```
+
+### Dimensions
+
+Some models support output truncation. Smaller vectors are faster to store and compare.
+
+```typescript
+const small = await embedder.embed('text', { dimensions: 256 });
+// small: number[256]
+```
+
+### Similarity
+
+Cosine similarity between embedding vectors measures semantic relatedness:
+
+```typescript
+const cosine = (a: number[], b: number[]) => {
+  const dot = a.reduce((s, x, i) => s + x * b[i], 0);
+  const mag = (v: number[]) => Math.sqrt(v.reduce((s, x) => s + x * x, 0));
+  return dot / (mag(a) * mag(b));
+};
+
+const [a, b] = await embedder.embed([
+  'comfortable running shoes',
+  'athletic footwear for jogging',
+]);
+const similarity = cosine(a, b);
+// ~0.92 — semantically similar
+```
+
+### Provider Support
+
+Only providers with `supportsEmbedding: true` can embed. Currently: **OpenAI** (`text-embedding-3-small`, `text-embedding-3-large`). Calling `embed()` on a provider without support throws `E_PROVIDER_ERROR`.
+
+Use a separate Signal client for embedding — embedding models are different from chat models:
+
+```typescript
+const chat = createSignal('openrouter', { model: 'openai/gpt-oss-120b' });
+const embed = createSignal('openai', { model: 'text-embedding-3-small' });
+```
 
 ---
 

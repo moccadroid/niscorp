@@ -1,0 +1,70 @@
+import { z } from 'zod';
+import { ContextRefSchema, ScopeRefSchema, FieldOrValueSchema } from './value.schema.js';
+import type { ContextRef, ScopeRef, FieldOrValue } from './value.schema.js';
+
+export type Filter =
+  | { eq: [FieldOrValue, FieldOrValue] }
+  | { neq: [FieldOrValue, FieldOrValue] }
+  | { gt: [FieldOrValue, FieldOrValue] }
+  | { gte: [FieldOrValue, FieldOrValue] }
+  | { lt: [FieldOrValue, FieldOrValue] }
+  | { lte: [FieldOrValue, FieldOrValue] }
+  | { in: [string, FieldOrValue[] | ContextRef | ScopeRef] }
+  | { notIn: [string, FieldOrValue[] | ContextRef | ScopeRef] }
+  | { like: [string, FieldOrValue] }
+  | { ilike: [string, FieldOrValue] }
+  | { isNull: string }
+  | { isNotNull: string }
+  | { and: Filter[] }
+  | { or: Filter[] }
+  | { not: Filter }
+  | { semantic: { field: string; query: ContextRef | ScopeRef; minScore?: number } }
+  | { fuzzy: { field: string; query: ContextRef | ScopeRef; maxDistance?: number } };
+
+const comparisonPair = z
+  .tuple([FieldOrValueSchema, FieldOrValueSchema])
+  .describe('[left, right] — both can be field paths, literals, or references');
+
+const fieldString = z.string().describe('Field path in entity.field format');
+
+const collectionTarget = z
+  .union([
+    z.array(FieldOrValueSchema).min(1).describe('Array of literal values or references'),
+    ContextRefSchema,
+    ScopeRefSchema,
+  ])
+  .describe('A set of values or a reference that resolves to an array');
+
+export const FilterSchema: z.ZodType<Filter> = z.lazy(() =>
+  z.union([
+    z.object({ eq: comparisonPair }).strict().describe('Equals: tests equality between two values'),
+    z.object({ neq: comparisonPair }).strict().describe('Not equals'),
+    z.object({ gt: comparisonPair }).strict().describe('Greater than'),
+    z.object({ gte: comparisonPair }).strict().describe('Greater than or equal'),
+    z.object({ lt: comparisonPair }).strict().describe('Less than'),
+    z.object({ lte: comparisonPair }).strict().describe('Less than or equal'),
+    z.object({ in: z.tuple([fieldString, collectionTarget]) }).strict().describe('Field value is in a set'),
+    z.object({ notIn: z.tuple([fieldString, collectionTarget]) }).strict().describe('Field value is not in a set'),
+    z.object({ like: z.tuple([fieldString, FieldOrValueSchema]) }).strict().describe('Case-sensitive LIKE pattern match (use % as wildcard)'),
+    z.object({ ilike: z.tuple([fieldString, FieldOrValueSchema]) }).strict().describe('Case-insensitive ILIKE pattern match (use % as wildcard)'),
+    z.object({ isNull: fieldString }).strict().describe('Field value is NULL'),
+    z.object({ isNotNull: fieldString }).strict().describe('Field value is NOT NULL'),
+    z.object({ and: z.array(FilterSchema).min(2) }).strict().describe('Logical AND: all conditions must be true'),
+    z.object({ or: z.array(FilterSchema).min(2) }).strict().describe('Logical OR: at least one condition must be true'),
+    z.object({ not: FilterSchema }).strict().describe('Logical NOT: negates the condition'),
+    z.object({
+      semantic: z.object({
+        field: z.string().describe('Vector column field path (entity.field)'),
+        query: z.union([ContextRefSchema, ScopeRefSchema]).describe('Text to embed and compare'),
+        minScore: z.number().min(0).max(1).optional().describe('Minimum cosine similarity (0–1)'),
+      }).strict(),
+    }).strict().describe('Semantic vector similarity search'),
+    z.object({
+      fuzzy: z.object({
+        field: z.string().describe('String field path'),
+        query: z.union([ContextRefSchema, ScopeRefSchema]).describe('Text to fuzzy-match'),
+        maxDistance: z.number().int().nonnegative().optional().describe('Maximum Levenshtein edit distance'),
+      }).strict(),
+    }).strict().describe('Fuzzy string match'),
+  ]),
+);

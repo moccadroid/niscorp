@@ -69,6 +69,7 @@ export type Capabilities = {
   nativeJsonSchema: boolean;
   nativeJsonMode: boolean;
   multimodal: boolean;
+  supportsEmbedding: boolean;
 };
 
 // ═══════════════════════════════════════════════════════════
@@ -183,6 +184,28 @@ export type StepResult = {
 export type CountInput = string | ReadonlyArray<StepInputMessage>;
 
 // ═══════════════════════════════════════════════════════════
+// Embedding
+// ═══════════════════════════════════════════════════════════
+
+export type EmbedOptions = {
+  dimensions?: number;
+};
+
+export type EmbedRequest = {
+  model: string;
+  input: string | string[];
+  dimensions?: number;
+};
+
+export type EmbedResponse = {
+  embeddings: number[][];
+  usage: {
+    inputTokens: number;
+    totalTokens: number;
+  };
+};
+
+// ═══════════════════════════════════════════════════════════
 // Stream Events (emitted by signal.stream())
 // ═══════════════════════════════════════════════════════════
 
@@ -261,4 +284,5 @@ export type ProviderAdapter = {
   id: string;
   chat: (request: ProviderRequest) => Promise<ProviderResponse>;
   chatStream: (request: ProviderRequest) => AsyncIterable<ProviderStreamDelta>;
+  embed?: (request: EmbedRequest) => Promise<EmbedResponse>;
 };
