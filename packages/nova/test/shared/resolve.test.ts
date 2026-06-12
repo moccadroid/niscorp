@@ -135,6 +135,37 @@ describe('resolve — $if directive', () => {
   });
 });
 
+describe('resolve — $eq directive', () => {
+  it('compares a resolved path to a literal', () => {
+    expect(resolve({ $eq: ['$.kind', 'circle'] }, createScopeChain({ kind: 'circle' }))).toBe(true);
+    expect(resolve({ $eq: ['$.kind', 'circle'] }, createScopeChain({ kind: 'rect' }))).toBe(false);
+  });
+
+  it('works as a condition inside $if', () => {
+    expect(
+      resolve(
+        { $if: { $eq: ['$.kind', 'circle'] }, $then: 'round', $else: 'other' },
+        createScopeChain({ kind: 'circle' }),
+      ),
+    ).toBe('round');
+  });
+});
+
+describe('resolve — $exists directive', () => {
+  it('is true when the path resolves to a present value, false when absent', () => {
+    expect(resolve({ $exists: '$.component' }, createScopeChain({ component: 'Box' }))).toBe(true);
+    // present but falsy still exists — the discriminating key, not its truthiness
+    expect(resolve({ $exists: '$.component' }, createScopeChain({ component: '' }))).toBe(true);
+    expect(resolve({ $exists: '$.component' }, createScopeChain({ for: '$.items' }))).toBe(false);
+  });
+
+  it('discriminates a branch by key presence inside $if', () => {
+    const branch = { $if: { $exists: '$.for' }, $then: 'loop', $else: 'other' };
+    expect(resolve(branch, createScopeChain({ for: '$.items' }))).toBe('loop');
+    expect(resolve(branch, createScopeChain({ component: 'Box' }))).toBe('other');
+  });
+});
+
 describe('resolve — truthiness rules', () => {
   it.each([
     [null, false],

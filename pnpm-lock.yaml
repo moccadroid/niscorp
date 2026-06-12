@@ -72,6 +72,9 @@ importers:
       '@niscorp/cortex':
         specifier: workspace:*
         version: link:../../packages/cortex
+      '@niscorp/loom':
+        specifier: workspace:^
+        version: link:../../packages/loom
       '@niscorp/nova':
         specifier: workspace:*
         version: link:../../packages/nova
@@ -151,6 +154,45 @@ importers:
       vitest:
         specifier: ^4.1.2
         version: 4.1.2(@types/node@22.19.17)(jsdom@25.0.1)(vite@8.0.3(@emnapi/core@1.9.2)(@emnapi/runtime@1.9.2)(@types/node@22.19.17)(esbuild@0.27.7)(tsx@4.21.0))
+      zod:
+        specifier: ^4.3.6
+        version: 4.3.6
+
+  packages/loom:
+    devDependencies:
+      '@niscorp/nova':
+        specifier: workspace:^
+        version: link:../nova
+      '@niscorp/prism':
+        specifier: workspace:^
+        version: link:../prism
+      '@niscorp/vex':
+        specifier: workspace:^
+        version: link:../vex
+      '@testing-library/react':
+        specifier: ^16.1.0
+        version: 16.3.2(@testing-library/dom@10.4.1)(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
+      '@types/react':
+        specifier: ^19.2.14
+        version: 19.2.14
+      '@types/react-dom':
+        specifier: ^19.2.0
+        version: 19.2.3(@types/react@19.2.14)
+      jsdom:
+        specifier: ^25.0.1
+        version: 25.0.1
+      react:
+        specifier: ^19.2.4
+        version: 19.2.4
+      react-dom:
+        specifier: ^19.2.4
+        version: 19.2.4(react@19.2.4)
+      tsup:
+        specifier: ^8.5.1
+        version: 8.5.1(postcss@8.5.8)(tsx@4.21.0)(typescript@6.0.2)
+      vitest:
+        specifier: ^4.1.2
+        version: 4.1.2(@types/node@25.9.1)(jsdom@25.0.1)(vite@8.0.3(@emnapi/core@1.9.2)(@emnapi/runtime@1.9.2)(@types/node@25.9.1)(esbuild@0.27.7)(tsx@4.21.0))
       zod:
         specifier: ^4.3.6
         version: 4.3.6

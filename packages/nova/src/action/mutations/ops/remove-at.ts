@@ -7,7 +7,9 @@ import type { MutationOp } from '../types';
 export const RemoveAtSchema = z
   .object({
     removeAt: z.string().describe('Array data path to remove an element from.'),
-    index: z.number().int().describe('Index to remove.'),
+    index: z
+      .union([z.number().int(), z.string()])
+      .describe('Index to remove. A string is a template (e.g. "{{@event.payload}}") resolved before applying.'),
   })
   .strict()
   .describe('Remove an element at a specific index of an array field.');
@@ -32,8 +34,11 @@ export const removeAtOp: MutationOp<RemoveAtMutation> = {
       }
       return data;
     }
+    // Index may be a literal number or a resolved template; coerce and guard.
+    const index = Number(mutation.index);
+    if (!Number.isInteger(index)) return data;
     const arr = current.slice();
-    arr.splice(mutation.index, 1);
+    arr.splice(index, 1);
     const next = setPath(data, mutation.removeAt, arr);
     return isObject(next) ? next : data;
   },

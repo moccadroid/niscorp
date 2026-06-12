@@ -8,6 +8,17 @@ import { MarkdownPane } from './chrome/markdown-pane';
 import { SourceTab } from './chrome/source-tab';
 import { useIsMobile } from './chrome/use-is-mobile';
 import type { DocPage, InspectorTabDef, LibraryModule, Story } from './modules/types';
+import {
+  START_ID,
+  docId,
+  isDocSelection,
+  stripDocPrefix,
+  initialRoute,
+  routeSegments,
+  buildPath,
+  resolvePage,
+  samePath,
+} from './routing';
 
 import startContent from '../../../README.md?raw';
 
@@ -27,20 +38,16 @@ const LIBRARIES: LibraryDef[] = [
   { id: 'vex', name: 'Vex', load: async () => (await import('./modules/vex')).vexModule },
   { id: 'nova', name: 'Nova', load: async () => (await import('./modules/nova')).novaModule },
   { id: 'cortex', name: 'Cortex', load: async () => (await import('./modules/cortex')).cortexModule },
+  { id: 'loom', name: 'Loom', load: async () => (await import('./modules/loom')).loomModule },
 ];
 
-// 'start' is a chrome-level landing page that renders the repo's
-// root README directly — no sidebar, no inspector. Not a LibraryDef.
-const START_ID = 'start';
+// 'start' is a chrome-level landing page that renders the repo's root README
+// directly (no sidebar, no inspector). Not a LibraryDef. START_ID and the
+// `doc:` selection helpers live in ./routing, which owns the URL mapping.
 const LIBRARY_TABS: Library[] = [
   { id: START_ID, name: 'Start' },
   ...LIBRARIES.map((l) => ({ id: l.id, name: l.name })),
 ];
-
-const DOC_PREFIX = 'doc:';
-const docId = (id: string): string => `${DOC_PREFIX}${id}`;
-const isDocSelection = (id: string): boolean => id.startsWith(DOC_PREFIX);
-const stripDocPrefix = (id: string): string => id.slice(DOC_PREFIX.length);
 
 const PassThroughProvider: ComponentType<{ children: ReactNode }> = ({ children }) => (
   <Fragment>{children}</Fragment>
@@ -60,37 +67,73 @@ const Backdrop: FC<{ onClick: () => void }> = ({ onClick }) => (
 );
 
 export const App: FC = () => {
-  const [activeLibraryId, setActiveLibraryId] = useState<string>(START_ID);
+  const initial = useMemo(initialRoute, []);
+  const [activeLibraryId, setActiveLibraryId] = useState<string>(initial.libraryId);
   const [active, setActive] = useState<LibraryModule | undefined>(undefined);
   const [activeStoryId, setActiveStoryId] = useState<string>('');
+  // URL segments after the library, awaiting the module to resolve into a
+  // selection. Null once resolved, and for user-driven navigation within a
+  // library (which sets the selection directly).
+  const [pending, setPending] = useState<string[] | null>(initial.pending);
   const [sidebarOpen, setSidebarOpen] = useState<boolean>(false);
   const [inspectorOpen, setInspectorOpen] = useState<boolean>(false);
   const isMobile = useIsMobile();
 
+  // Load the active library's module (lazy, code-split). An unknown id falls
+  // back to Start. The selection is resolved separately, once the module is in.
   useEffect(() => {
     if (activeLibraryId === START_ID) {
       setActive(undefined);
       setActiveStoryId('');
       return;
     }
-    let cancelled = false;
     const lib = LIBRARIES.find((l) => l.id === activeLibraryId);
-    if (lib === undefined) return;
+    if (lib === undefined) {
+      setActiveLibraryId(START_ID);
+      return;
+    }
+    let cancelled = false;
     void lib.load().then((mod) => {
-      if (cancelled) return;
-      setActive(mod);
-      const firstDoc = mod.docs?.[0];
-      if (firstDoc !== undefined) {
-        setActiveStoryId(docId(firstDoc.id));
-        return;
-      }
-      const firstStory = mod.stories[0];
-      setActiveStoryId(firstStory?.id ?? '');
+      if (!cancelled) setActive(mod);
     });
     return (): void => {
       cancelled = true;
     };
   }, [activeLibraryId]);
+
+  // Resolve the pending URL path into a selection, once the matching module is
+  // loaded. An empty path resolves to the library landing.
+  useEffect(() => {
+    if (pending === null) return;
+    if (activeLibraryId === START_ID) {
+      setPending(null);
+      return;
+    }
+    if (active === undefined || active.id !== activeLibraryId) return;
+    setActiveStoryId(resolvePage(active, pending));
+    setPending(null);
+  }, [active, pending, activeLibraryId]);
+
+  // Mirror the selection into the URL. Skipped while a URL-driven navigation is
+  // still resolving, so it never clobbers the address it came from.
+  useEffect(() => {
+    if (pending !== null) return;
+    const path = buildPath(activeLibraryId, activeStoryId, active);
+    if (!samePath(path, window.location.pathname)) {
+      window.history.pushState(null, '', path);
+    }
+  }, [activeLibraryId, activeStoryId, active, pending]);
+
+  // Browser back/forward: re-read the URL into (library, pending path).
+  useEffect(() => {
+    const onPop = (): void => {
+      const segments = routeSegments();
+      setActiveLibraryId(segments[0] ?? START_ID);
+      setPending(segments.slice(1));
+    };
+    window.addEventListener('popstate', onPop);
+    return (): void => window.removeEventListener('popstate', onPop);
+  }, []);
 
   // Crossing the breakpoint in either direction clears drawer state
   // so the desktop layout isn't left with a stale "open" flag and a
@@ -123,13 +166,20 @@ export const App: FC = () => {
     if (isMobile) setSidebarOpen(false);
   }, [isMobile]);
 
+  // Switching libraries goes to that library's landing; the resolver picks the
+  // first doc or story once the module loads (Start clears the pending path).
+  const onLibrarySelect = useCallback((id: string): void => {
+    setActiveLibraryId(id);
+    setPending([]);
+  }, []);
+
   if (activeLibraryId === START_ID) {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
         <LibrarySwitcher
           libraries={LIBRARY_TABS}
           activeId={activeLibraryId}
-          onSelect={setActiveLibraryId}
+          onSelect={onLibrarySelect}
         />
         <div style={{ flex: 1, minWidth: 0, overflow: 'auto', background: '#ffffff' }}>
           <MarkdownPane content={startContent} />
@@ -138,7 +188,9 @@ export const App: FC = () => {
     );
   }
 
-  if (active === undefined) {
+  // Still loading the module, or a URL-driven navigation has not resolved its
+  // selection yet. Either way there is no settled page to show.
+  if (active === undefined || pending !== null) {
     return <div style={{ padding: 24 }}>Loading…</div>;
   }
 
@@ -152,7 +204,7 @@ export const App: FC = () => {
 
   // Chrome contributes the Source tab for every story. Modules can
   // add extras via buildInspectorTabs.
-  const inspectorTabs: InspectorTabDef[] = activeStory === undefined
+  const inspectorTabs: InspectorTabDef[] = activeStory === undefined || activeStory.doc === true
     ? []
     : [
         { id: 'source', label: 'Source', render: () => <SourceTab story={activeStory} /> },
@@ -174,7 +226,7 @@ export const App: FC = () => {
       <LibrarySwitcher
         libraries={LIBRARY_TABS}
         activeId={activeLibraryId}
-        onSelect={setActiveLibraryId}
+        onSelect={onLibrarySelect}
         onMenuClick={isMobile ? () => setSidebarOpen((v) => !v) : undefined}
         onInspectorClick={isMobile && hasInspector ? () => setInspectorOpen((v) => !v) : undefined}
       />

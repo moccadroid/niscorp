@@ -125,6 +125,58 @@ describe('renderLayout — loops', () => {
     expect(second.props['v']).toBe('y');
   });
 
+  it('exposes $items — the whole array — to a control inside the loop', () => {
+    const node: LayoutNode = {
+      for: '$.items',
+      as: 'item',
+      do: { component: 'Text', props: { all: '$items', v: '$item' } },
+    };
+    const [frag] = renderLayout(node, { items: ['x', 'y'] }, makeCtx());
+    if (!frag || frag.type !== 'fragment') throw new Error('expected fragment');
+    const first = frag.children[0];
+    if (!first || first.type !== 'component') throw new Error('expected component');
+    expect(first.props['all']).toEqual(['x', 'y']); // the array, not the element
+    expect(first.props['v']).toBe('x');
+  });
+
+  it('binds $items to the list path, so `model: "$items"` is writable', () => {
+    const node: LayoutNode = {
+      for: '$.items',
+      as: 'item',
+      do: { component: 'Ctrl', model: '$items' },
+    };
+    const [frag] = renderLayout(node, { items: ['x', 'y'] }, makeCtx());
+    if (!frag || frag.type !== 'fragment') throw new Error('expected fragment');
+    const first = frag.children[0];
+    if (!first || first.type !== 'component') throw new Error('expected component');
+    // Resolves to the array's own path (not an element's), and auto-derives its
+    // value from it — a control can read the list and write a new one back.
+    expect(first.model?.path).toBe('items');
+    expect(first.props['value']).toEqual(['x', 'y']);
+  });
+
+  it('shadows $items innermost-first across nested loops', () => {
+    const node: LayoutNode = {
+      for: '$.groups',
+      as: 'g',
+      do: {
+        for: '$g.tags',
+        as: 'tag',
+        do: { component: 'Text', model: '$items', props: { here: '$items' } },
+      },
+    };
+    const data = { groups: [{ tags: ['a', 'b'] }, { tags: ['c'] }] };
+    const [outer] = renderLayout(node, data, makeCtx());
+    if (!outer || outer.type !== 'fragment') throw new Error('expected fragment');
+    const innerFrag = outer.children[0];
+    if (!innerFrag || innerFrag.type !== 'fragment') throw new Error('expected nested fragment');
+    const leaf = innerFrag.children[0];
+    if (!leaf || leaf.type !== 'component') throw new Error('expected component');
+    // The inner loop's `$items` is the inner list (the outer's doesn't leak).
+    expect(leaf.props['here']).toEqual(['a', 'b']);
+    expect(leaf.model?.path).toBe('groups.0.tags');
+  });
+
   it('returns empty fragment for non-array', () => {
     const node: LayoutNode = { for: '$.missing', as: 'x', do: 'A' };
     expect(renderLayout(node, {}, makeCtx())).toEqual([]);

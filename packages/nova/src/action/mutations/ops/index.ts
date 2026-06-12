@@ -1,14 +1,19 @@
 import { z } from 'zod';
-import { SetByValueSchema, SetByFromSchema, setValueOp, setFromOp } from './set';
-import { ToggleSchema, toggleOp } from './toggle';
-import { IncrementSchema, incrementOp } from './increment';
-import { DecrementSchema, decrementOp } from './decrement';
-import { PushSchema, pushOp } from './push';
-import { PopSchema, popOp } from './pop';
-import { RemoveAtSchema, removeAtOp } from './remove-at';
-import { ClearSchema, clearOp } from './clear';
-import { ResetSchema, resetOp } from './reset';
+import { setValueOp, setFromOp } from './set';
+import { toggleOp } from './toggle';
+import { incrementOp } from './increment';
+import { decrementOp } from './decrement';
+import { pushOp } from './push';
+import { popOp } from './pop';
+import { removeAtOp } from './remove-at';
+import { moveOp } from './move';
+import { clearOp } from './clear';
+import { resetOp } from './reset';
+import type { MutationOp } from '../types';
 
+// The single source of truth for mutation operations. The validation schema,
+// the `Mutation` type, and the runtime dispatch table (see registry.ts) are
+// all derived from this one list — adding an op is a one-line change here.
 export const OPS = [
   setValueOp,
   setFromOp,
@@ -18,23 +23,20 @@ export const OPS = [
   pushOp,
   popOp,
   removeAtOp,
+  moveOp,
   clearOp,
   resetOp,
 ] as const;
 
-export const MutationSchema = z
-  .union([
-    SetByValueSchema,
-    SetByFromSchema,
-    ToggleSchema,
-    IncrementSchema,
-    DecrementSchema,
-    PushSchema,
-    PopSchema,
-    RemoveAtSchema,
-    ClearSchema,
-    ResetSchema,
-  ])
-  .describe('A single immutable mutation applied to the action data.');
+// Precise mutation type, distributed from each op's own mutation shape.
+type MutationOf<O> = O extends MutationOp<infer T> ? T : never;
+export type Mutation = MutationOf<(typeof OPS)[number]>;
 
-export type Mutation = z.infer<typeof MutationSchema>;
+// Runtime validator, derived from the ops: a mutation is any one of their
+// schemas. The cast widens each op's schema to `z.ZodType<Mutation>` (sound —
+// every op's mutation is a Mutation) so the union's output type is `Mutation`.
+export const MutationSchema = z
+  .union(
+    OPS.map((op) => op.schema) as [z.ZodType<Mutation>, z.ZodType<Mutation>, ...z.ZodType<Mutation>[]],
+  )
+  .describe('A single immutable mutation applied to the action data.');

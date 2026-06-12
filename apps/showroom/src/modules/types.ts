@@ -27,6 +27,9 @@ export type Story = {
   kind: string;
   Demo: FC;
   source: string;
+  // A documentation page: a self-contained prose/diagram Demo. Chrome renders it
+  // full-width with no inspector (no Source/Definition tabs).
+  doc?: boolean;
   // Modules are free to attach arbitrary extras for their own
   // inspector tabs to read. Chrome never touches them.
   [extra: string]: unknown;

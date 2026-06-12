@@ -1,0 +1,19 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "outDir": "dist",
+    "rootDir": "src",
+    "jsx": "react-jsx",
+    "paths": {
+      "@compile": ["./src/compile"],
+      "@compile/*": ["./src/compile/*"],
+      "@editor": ["./src/editor"],
+      "@editor/*": ["./src/editor/*"],
+      "@plugins": ["./src/plugins"],
+      "@plugins/*": ["./src/plugins/*"],
+      "@react": ["./src/react"],
+      "@react/*": ["./src/react/*"]
+    }
+  },
+  "include": ["src"]
+}

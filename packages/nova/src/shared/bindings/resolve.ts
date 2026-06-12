@@ -113,14 +113,35 @@ const isTruthy = (value: unknown): boolean => {
   return true;
 };
 
-type IfDirectiveShape = {
-  $if: unknown;
-  $then?: unknown;
-  $else?: unknown;
+// Directives — evaluated objects keyed by an operator (`$if`, `$eq`, …). Each
+// resolves its operands and returns a value. Add an operator here and it works
+// everywhere bindings are resolved; later operators (`$gte`, `$and`, …) slot in
+// the same way.
+type Directive = (node: Record<string, unknown>, chain: ScopeChain, extras: ExtraScopes) => unknown;
+
+const DIRECTIVES: Record<string, Directive> = {
+  $if: (node, chain, extras) => {
+    if (isTruthy(resolve(node.$if, chain, extras))) return resolve(node.$then, chain, extras);
+    if (hasKey(node, '$else')) return resolve(node.$else, chain, extras);
+    return undefined;
+  },
+  $eq: (node, chain, extras) => {
+    const args = isArray(node.$eq) ? node.$eq : [];
+    return resolve(args[0], chain, extras) === resolve(args[1], chain, extras);
+  },
+  // True when the operand path resolves to a present value. The structural
+  // counterpart to `$eq`: discriminate a union by which key a branch carries
+  // (`{ $exists: "$.shape.component" }`) rather than a shared tag's value.
+  $exists: (node, chain, extras) => resolve(node.$exists, chain, extras) !== undefined,
 };
 
-const isIfDirective = (value: Record<string, unknown>): value is IfDirectiveShape =>
-  hasKey(value, '$if');
+const directiveOf = (value: Record<string, unknown>): Directive | undefined => {
+  for (const key of Object.keys(value)) {
+    const directive = DIRECTIVES[key];
+    if (directive !== undefined) return directive;
+  }
+  return undefined;
+};
 
 const resolveString = (value: string, chain: ScopeChain, extras: ExtraScopes): unknown => {
   const sole = value.match(SOLE_TEMPLATE_REGEX);
@@ -156,12 +177,8 @@ export const resolve = (
   if (typeof value === 'string') return resolveString(value, chain, extras);
   if (isArray(value)) return value.map((entry) => resolve(entry, chain, extras));
   if (isObject(value)) {
-    if (isIfDirective(value)) {
-      const condition = resolve(value.$if, chain, extras);
-      if (isTruthy(condition)) return resolve(value.$then, chain, extras);
-      if (hasKey(value, '$else')) return resolve(value.$else, chain, extras);
-      return undefined;
-    }
+    const directive = directiveOf(value);
+    if (directive !== undefined) return directive(value, chain, extras);
     const out: Record<string, unknown> = {};
     for (const key of Object.keys(value)) {
       out[key] = resolve(value[key], chain, extras);

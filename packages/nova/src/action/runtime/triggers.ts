@@ -37,9 +37,18 @@ const toNovaError = (err: unknown): NovaError => {
   return new NovaError(ErrorCodes.lifecycle, message, {}, { cause: err });
 };
 
-const fireTrigger = (trigger: TriggerConfig, buildContext: () => StepContext): void => {
-  const ctx = buildContext();
-  if (ctx.signal.aborted) return;
+const fireTrigger = (
+  trigger: TriggerConfig,
+  buildContext: () => StepContext,
+  event?: unknown,
+): void => {
+  const base = buildContext();
+  if (base.signal.aborted) return;
+  // Expose the firing event to the trigger's steps as `@event`, mirroring
+  // how `@error` is injected on failed calls — so a step can reference
+  // `{{@event.payload}}` (e.g. the clicked list index).
+  const ctx: StepContext =
+    event === undefined ? base : { ...base, extras: { ...base.extras, '@event': event } };
   void executeSteps(trigger.do, ctx).catch((err: unknown) => {
     ctx.onError(toNovaError(err));
   });
@@ -59,7 +68,7 @@ export const attachTriggers = (
       const triggerType: string = trigger.event;
       const off = eventBus.on(triggerType, (event) => {
         if (expectedRef !== undefined && eventRef(event) !== expectedRef) return;
-        fireTrigger(trigger, buildContext);
+        fireTrigger(trigger, buildContext, event);
       });
       unsubscribes.push(off);
       continue;

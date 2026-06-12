@@ -41,11 +41,11 @@ export const noopOnError: OnErrorHandler = (_error: NovaError): void => {
   // default no-op; users install their own via config
 };
 
-// Only `set` (by-value) and `push` carry a user-supplied `value`
-// field that can hold a template like `{{@error.message}}`. The
-// other ops take paths, booleans, numbers, or nothing — no template
-// surface. Pre-resolving here keeps the mutation subsystem
-// scope-unaware: ops receive already-literal values.
+// Template surfaces that get pre-resolved so the mutation subsystem stays
+// scope-unaware (ops receive already-literal values): `set`/`push` carry a
+// user value (e.g. `{{@error.message}}`); `removeAt`/`move` carry indices
+// that can reference the firing event (e.g. `{{@event.payload}}`). A string
+// index is resolved and coerced to a number; everything else passes through.
 const resolveMutationValues = (
   list: Mutation[],
   chain: ScopeChain,
@@ -58,6 +58,16 @@ const resolveMutationValues = (
     if ('push' in m && typeof m.push === 'string' && 'value' in m) {
       return { ...m, value: resolve(m.value, chain, extras) };
     }
+    if ('removeAt' in m && typeof m.index === 'string') {
+      return { ...m, index: Number(resolve(m.index, chain, extras)) };
+    }
+    if ('move' in m) {
+      return {
+        ...m,
+        from: typeof m.from === 'string' ? Number(resolve(m.from, chain, extras)) : m.from,
+        to: typeof m.to === 'string' ? Number(resolve(m.to, chain, extras)) : m.to,
+      };
+    }
     return m;
   });
 };
@@ -68,6 +78,7 @@ const isMutationStep = (step: Step): step is Mutation => {
   if ('increment' in step) return true;
   if ('decrement' in step) return true;
   if ('removeAt' in step) return true;
+  if ('move' in step) return true;
   if ('clear' in step) return true;
   if ('reset' in step) return true;
   if ('push' in step) return typeof step.push === 'string';

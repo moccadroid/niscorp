@@ -1,16 +1,31 @@
-import { defineConfig } from 'vite';
+import { defineConfig, type Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
+import { copyFileSync, existsSync } from 'node:fs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const workspaceRoot = resolve(here, '../..');
+
+// GitHub Pages serves index.html only for exact matches and falls back to
+// 404.html for any other path. Client-side routes (e.g. /loom/plugins/...) are
+// not real files, so a deep link or refresh would 404. Copying index.html to
+// 404.html makes Pages serve the app for those paths; client routing then reads
+// the original URL and renders the right page. Build-only (closeBundle).
+const spaFallback = (): Plugin => ({
+  name: 'showroom-spa-404-fallback',
+  apply: 'build',
+  closeBundle() {
+    const index = resolve(here, 'dist/index.html');
+    if (existsSync(index)) copyFileSync(index, resolve(here, 'dist/404.html'));
+  },
+});
 
 export default defineConfig(({ command }) => ({
   // GitHub Pages serves under /niscorp/. Apply the subpath only at
   // build time so `pnpm dev` keeps serving from `/`.
   base: command === 'build' ? '/niscorp/' : '/',
-  plugins: [react()],
+  plugins: [react(), spaFallback()],
   resolve: {
     alias: {
       '@showroom': resolve(here, 'src'),

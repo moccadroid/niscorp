@@ -36,6 +36,21 @@ describe('attachTriggers', () => {
     expect(dataStore.get()).toEqual({ n: 1 });
   });
 
+  it('exposes the firing event to steps as @event (e.g. a clicked list index)', async () => {
+    const eventBus = createEventBus();
+    const messageBus = createMessageBus();
+    const dataStore = createDataStore({ items: ['a', 'b', 'c'] });
+    attachTriggers(
+      [{ event: 'ui:click', ref: 'remove', do: [{ removeAt: 'items', index: '{{@event.payload}}' }] }],
+      eventBus,
+      messageBus,
+      makeBuild(dataStore, eventBus, messageBus),
+    );
+    eventBus.emit({ type: 'ui:click', ref: 'remove', payload: 1 });
+    await tick();
+    expect(dataStore.get()).toEqual({ items: ['a', 'c'] });
+  });
+
   it('ignores ui event when ref does not match', async () => {
     const eventBus = createEventBus();
     const messageBus = createMessageBus();

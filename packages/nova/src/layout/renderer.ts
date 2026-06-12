@@ -139,12 +139,19 @@ const renderNode = (
       : undefined;
     const out: RenderNode[] = [];
     items.forEach((item, index) => {
-      const innerChain = pushScope(chain, { [node.as]: item, index });
-      const itemPath = loopBasePath === undefined ? undefined : `${loopBasePath}.${index}`;
+      // Each iteration binds three reserved loop vars: the element (`$<as>`),
+      // its position (`$index`), and the array itself (`$items`). `$items`
+      // lets a control inside the loop edit the whole list — remove or reorder
+      // an element — not just its own value. Both `index` and `items` are
+      // reserved names; an `as` of `'index'` or `'items'` would shadow them.
+      const innerChain = pushScope(chain, { [node.as]: item, index, items });
+      // `$items` resolves to a *writable* path (so `model: "$items"` works) only
+      // when the loop's source is itself a resolvable path; a literal-array loop
+      // exposes the value but stays read-only, exactly as `$<as>` does.
       const nextScopePaths =
-        itemPath === undefined
+        loopBasePath === undefined
           ? ctx.scopePaths
-          : [...ctx.scopePaths, `${node.as}=${itemPath}`];
+          : [...ctx.scopePaths, `${node.as}=${loopBasePath}.${index}`, `items=${loopBasePath}`];
       const innerCtx: InternalRenderContext = { ...ctx, scopePaths: nextScopePaths };
       out.push(...safeRenderSingle(node.do, innerChain, innerCtx, undefined));
     });

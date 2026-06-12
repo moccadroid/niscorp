@@ -22,6 +22,7 @@ import { createRuntimeRegistry } from './runtime-registry';
 import { createRuntimeFactory, snapshotCanvas, validateActions } from './shell-internals';
 import { createTelemetry } from './telemetry';
 import type {
+  CanvasConfig,
   CanvasState,
   DataChangeHandler,
   Shell,
@@ -88,6 +89,16 @@ export const createShell = (config: ShellConfig): Shell => {
     if (cfg.actionLayout !== undefined) actionLayouts.set(cfg.id, cfg.actionLayout);
   }
 
+  // Mutable so addCanvas / removeCanvas / setCanvasLayout can change the rendered
+  // canvas set and arrangement after creation. Seeded from config; the canvas
+  // ids keep declaration order (getShellRenderTree renders them in this order).
+  const canvasOrder: string[] = config.canvases.map((cfg) => cfg.id);
+  let canvasLayout = config.canvasLayout;
+
+  // Mutable so registerAction can add definitions at runtime (push/seed resolve
+  // through this, not config.actions).
+  const actions: Record<string, ActionDefinition> = { ...config.actions };
+
   let disposed = false;
 
   const guardNotDisposed = (): void => {
@@ -115,9 +126,15 @@ export const createShell = (config: ShellConfig): Shell => {
   };
 
   const getDefinition = (actionId: string): ActionDefinition => {
-    const def = config.actions[actionId];
+    const def = actions[actionId];
     if (def === undefined) throw new UnknownActionError(`Unknown action: ${actionId}`, { actionId });
     return def;
+  };
+
+  const registerAction = (definition: ActionDefinition): void => {
+    guard();
+    validateActions({ [definition.id]: definition });
+    actions[definition.id] = definition;
   };
 
   const fireState = (): void => {
@@ -206,6 +223,46 @@ export const createShell = (config: ShellConfig): Shell => {
     fireState();
   };
 
+  // Push a canvas's `initial` action(s), if any. Shared by createShell's seeding
+  // loop and addCanvas, so both seed identically.
+  const seedCanvas = (cfg: CanvasConfig): void => {
+    if (cfg.initial === undefined) return;
+    const seeds = Array.isArray(cfg.initial) ? cfg.initial : [cfg.initial];
+    for (const seed of seeds) {
+      if (typeof seed === 'string') push(cfg.id, seed);
+      else push(cfg.id, seed.action, seed.input);
+    }
+  };
+
+  const addCanvas = (cfg: CanvasConfig): void => {
+    guard();
+    if (canvases.has(cfg.id)) return;
+    canvases.set(cfg.id, createCanvas(cfg.id));
+    if (cfg.actionLayout !== undefined) actionLayouts.set(cfg.id, cfg.actionLayout);
+    canvasOrder.push(cfg.id);
+    seedCanvas(cfg);
+    fireState();
+  };
+
+  const removeCanvas = (canvasId: string): void => {
+    if (disposed) return;
+    guardNoPendingStrictError();
+    const canvas = canvases.get(canvasId);
+    if (canvas === undefined) return;
+    for (const inst of canvas.clearStack()) ops.unmountInstance(inst.id);
+    canvases.delete(canvasId);
+    actionLayouts.delete(canvasId);
+    const index = canvasOrder.indexOf(canvasId);
+    if (index >= 0) canvasOrder.splice(index, 1);
+    fireState();
+  };
+
+  const setCanvasLayout = (layout: LayoutNode | string): void => {
+    guard();
+    canvasLayout = layout;
+    fireState();
+  };
+
   const getCanvasState = (canvasId: string): CanvasState => {
     guardNoPendingStrictError();
     const canvas = canvases.get(canvasId);
@@ -254,11 +311,11 @@ export const createShell = (config: ShellConfig): Shell => {
 
   const getShellRenderTree = (): RenderNode[] => {
     const canvasList: CanvasState[] = [];
-    for (const cfg of config.canvases) {
-      const c = canvases.get(cfg.id);
-      canvasList.push(c === undefined ? { id: cfg.id, stack: [], active: undefined } : snapshotCanvas(c));
+    for (const cid of canvasOrder) {
+      const c = canvases.get(cid);
+      canvasList.push(c === undefined ? { id: cid, stack: [], active: undefined } : snapshotCanvas(c));
     }
-    return renderLayoutOrRef(config.canvasLayout ?? DEFAULT_SHELL_LAYOUT, { canvases: canvasList });
+    return renderLayoutOrRef(canvasLayout ?? DEFAULT_SHELL_LAYOUT, { canvases: canvasList });
   };
 
   const getCanvasRenderTree = (canvasId: string): RenderNode[] => {
@@ -289,6 +346,10 @@ export const createShell = (config: ShellConfig): Shell => {
     pop,
     replace,
     clear,
+    registerAction,
+    addCanvas,
+    removeCanvas,
+    setCanvasLayout,
     getCanvasState,
     getRuntime,
     getState,
@@ -306,14 +367,7 @@ export const createShell = (config: ShellConfig): Shell => {
   // Seed canvases whose config declares an `initial` action (or list). Done
   // after the shell object is assembled so `push` works exactly as it would
   // for a consumer calling push themselves.
-  for (const cfg of config.canvases) {
-    if (cfg.initial === undefined) continue;
-    const seeds = Array.isArray(cfg.initial) ? cfg.initial : [cfg.initial];
-    for (const seed of seeds) {
-      if (typeof seed === 'string') push(cfg.id, seed);
-      else push(cfg.id, seed.action, seed.input);
-    }
-  }
+  for (const cfg of config.canvases) seedCanvas(cfg);
 
   return shell;
 };

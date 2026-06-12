@@ -1,53 +1,33 @@
 import { hasKey, isObject } from '@shared/common';
-import type { Mutation } from './ops';
-import { setValueOp, setFromOp } from './ops/set';
-import { toggleOp } from './ops/toggle';
-import { incrementOp } from './ops/increment';
-import { decrementOp } from './ops/decrement';
-import { pushOp } from './ops/push';
-import { popOp } from './ops/pop';
-import { removeAtOp } from './ops/remove-at';
-import { clearOp } from './ops/clear';
-import { resetOp } from './ops/reset';
+import { OPS, type Mutation } from './ops';
 import type { MutationContext, MutationData, MutationOp } from './types';
 
 // ═══════════════════════════════════════════════════════════
-// Pure dispatch over the op registry. Each op's `apply` is
-// typed for its own mutation shape; we erase that T here via a
-// per-op wrapper that runs the op's own schema parse, so no
-// cast is required.
+// Pure dispatch over the op list. Each op is generic over its own
+// mutation shape; `toDispatchOp` collapses that into a uniform handler
+// that runs the op's own schema parse before apply. The single `any` is
+// the deliberate type-erasure boundary where the heterogeneous ops meet
+// one dispatch table — each op's schema/apply stay type-checked at their
+// definition. The table is derived from OPS, so it can't drift from it.
 // ═══════════════════════════════════════════════════════════
 
-type ErasedOp = {
+type DispatchOp = {
   key: string;
   match: (mutation: Record<string, unknown>) => boolean;
   run: (data: MutationData, mutation: Record<string, unknown>, ctx: MutationContext) => MutationData;
 };
 
-const erase = <T>(op: MutationOp<T>): ErasedOp => ({
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- erasure boundary
+const toDispatchOp = (op: MutationOp<any>): DispatchOp => ({
   key: op.key,
   match: op.match ?? ((mutation) => hasKey(mutation, op.key)),
-  run: (data, mutation, ctx) => {
-    const parsed = op.schema.parse(mutation);
-    return op.apply(data, parsed, ctx);
-  },
+  run: (data, mutation, ctx) => op.apply(data, op.schema.parse(mutation), ctx),
 });
 
-const ERASED: readonly ErasedOp[] = [
-  erase(setValueOp),
-  erase(setFromOp),
-  erase(toggleOp),
-  erase(incrementOp),
-  erase(decrementOp),
-  erase(pushOp),
-  erase(popOp),
-  erase(removeAtOp),
-  erase(clearOp),
-  erase(resetOp),
-];
+const DISPATCH: readonly DispatchOp[] = OPS.map(toDispatchOp);
 
-const findOp = (mutation: Record<string, unknown>): ErasedOp | undefined => {
-  for (const op of ERASED) {
+const findOp = (mutation: Record<string, unknown>): DispatchOp | undefined => {
+  for (const op of DISPATCH) {
     if (op.match(mutation)) return op;
   }
   return undefined;

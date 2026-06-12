@@ -1,0 +1,131 @@
+{
+  "name": "@niscorp/loom",
+  "version": "0.1.0",
+  "description": "Schema-driven editors that run on Nova — turn any schema into an editing UI",
+  "license": "MIT",
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
+    },
+    "./react": {
+      "import": {
+        "types": "./dist/react/index.d.ts",
+        "default": "./dist/react/index.js"
+      },
+      "require": {
+        "types": "./dist/react/index.d.cts",
+        "default": "./dist/react/index.cjs"
+      }
+    },
+    "./plugins/vex": {
+      "import": {
+        "types": "./dist/plugins/vex/index.d.ts",
+        "default": "./dist/plugins/vex/index.js"
+      },
+      "require": {
+        "types": "./dist/plugins/vex/index.d.cts",
+        "default": "./dist/plugins/vex/index.cjs"
+      }
+    },
+    "./plugins/vex/react": {
+      "import": {
+        "types": "./dist/plugins/vex/react/index.d.ts",
+        "default": "./dist/plugins/vex/react/index.js"
+      },
+      "require": {
+        "types": "./dist/plugins/vex/react/index.d.cts",
+        "default": "./dist/plugins/vex/react/index.cjs"
+      }
+    },
+    "./plugins/nova": {
+      "import": {
+        "types": "./dist/plugins/nova/index.d.ts",
+        "default": "./dist/plugins/nova/index.js"
+      },
+      "require": {
+        "types": "./dist/plugins/nova/index.d.cts",
+        "default": "./dist/plugins/nova/index.cjs"
+      }
+    },
+    "./plugins/nova/react": {
+      "import": {
+        "types": "./dist/plugins/nova/react/index.d.ts",
+        "default": "./dist/plugins/nova/react/index.js"
+      },
+      "require": {
+        "types": "./dist/plugins/nova/react/index.d.cts",
+        "default": "./dist/plugins/nova/react/index.cjs"
+      }
+    },
+    "./plugins/prism": {
+      "import": {
+        "types": "./dist/plugins/prism/index.d.ts",
+        "default": "./dist/plugins/prism/index.js"
+      },
+      "require": {
+        "types": "./dist/plugins/prism/index.d.cts",
+        "default": "./dist/plugins/prism/index.cjs"
+      }
+    },
+    "./plugins/prism/react": {
+      "import": {
+        "types": "./dist/plugins/prism/react/index.d.ts",
+        "default": "./dist/plugins/prism/react/index.js"
+      },
+      "require": {
+        "types": "./dist/plugins/prism/react/index.d.cts",
+        "default": "./dist/plugins/prism/react/index.cjs"
+      }
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@niscorp/nova": "workspace:^",
+    "@niscorp/prism": "workspace:^",
+    "@niscorp/vex": "workspace:^",
+    "@testing-library/react": "^16.1.0",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.0",
+    "jsdom": "^25.0.1",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4",
+    "tsup": "^8.5.1",
+    "vitest": "^4.1.2",
+    "zod": "^4.3.6"
+  },
+  "peerDependencies": {
+    "@niscorp/nova": "workspace:^",
+    "@niscorp/prism": "workspace:^",
+    "@niscorp/vex": "workspace:^",
+    "react": "^19.2.4",
+    "zod": "^4.3.6"
+  },
+  "peerDependenciesMeta": {
+    "react": {
+      "optional": true
+    },
+    "@niscorp/prism": {
+      "optional": true
+    },
+    "@niscorp/vex": {
+      "optional": true
+    }
+  }
+}

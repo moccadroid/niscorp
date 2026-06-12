@@ -172,18 +172,22 @@ export const Sidebar: FC<Props> = ({
             </div>
             {catNames.map((cat) => (
               <div key={cat} style={{ marginTop: 4 }}>
-                <div
-                  style={{
-                    padding: '6px 16px 2px',
-                    fontSize: 11,
-                    color: '#374151',
-                    fontWeight: 700,
-                    textTransform: 'uppercase',
-                    letterSpacing: 0.4,
-                  }}
-                >
-                  {cat}
-                </div>
+                {/* Skip a category header that just repeats the kind label
+                    (a module with one category per kind is really 2-level). */}
+                {cat !== (kindLabels[kind] ?? kind) && (
+                  <div
+                    style={{
+                      padding: '6px 16px 2px',
+                      fontSize: 11,
+                      color: '#374151',
+                      fontWeight: 700,
+                      textTransform: 'uppercase',
+                      letterSpacing: 0.4,
+                    }}
+                  >
+                    {cat}
+                  </div>
+                )}
                 {cats[cat]?.map((s) => {
                   const isActive = s.id === activeStoryId;
                   return (

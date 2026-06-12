@@ -137,6 +137,14 @@ export type {
 } from './action';
 
 // ═══════════════════════════════════════════════════════════
+// Bindings — read a value out of a data tree by dot path. The one
+// path helper exposed: editors and custom widgets read sibling
+// document state by path (set/delete stay internal — writes go
+// through the runtime's `ui:model` pipeline, not direct mutation).
+// ═══════════════════════════════════════════════════════════
+export { getPath } from './shared';
+
+// ═══════════════════════════════════════════════════════════
 // Shell — top-level entry point for users
 // ═══════════════════════════════════════════════════════════
 export { createShell, CANVAS_SLOT_NAME, ACTION_SLOT_NAME } from './shell';

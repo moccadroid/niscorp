@@ -121,6 +121,18 @@ export type Shell = {
   replace: (canvasId: string, actionId: string, input?: Record<string, unknown>) => string;
   clear: (canvasId: string) => void;
 
+  // Register an action definition at runtime, so a canvas can push/seed it. The
+  // shell starts from createShell's `actions`; this adds (or replaces) one.
+  registerAction: (definition: ActionDefinition) => void;
+
+  // Mutate the canvas set and the shell's canvasLayout after creation. The shell
+  // starts from createShell's `canvases` + `canvasLayout`; these change it live.
+  // `addCanvas` appends (and seeds its `initial`); a no-op if the id exists.
+  // `removeCanvas` unmounts the canvas's instances and drops it.
+  addCanvas: (config: CanvasConfig) => void;
+  removeCanvas: (canvasId: string) => void;
+  setCanvasLayout: (layout: LayoutNode | string) => void;
+
   getCanvasState: (canvasId: string) => CanvasState;
   getRuntime: (instanceId: string) => PublicActionRuntime | undefined;
   getState: () => StateSnapshot;
