@@ -31,7 +31,7 @@ If that sounds austere: good.
 
 ## Packages
 
-Six libraries. Each one is self-sufficient. They also compose.
+Seven libraries. Each one is self-sufficient. They also compose.
 
 | | Package | Description | Status |
 |---|---|---|---|
@@ -41,6 +41,7 @@ Six libraries. Each one is self-sufficient. They also compose.
 | 🎨 | [**`@niscorp/nova`**](packages/nova)     | Declarative UI runtime — JSON layouts, actions, lifecycles, two-way bindings. Framework-agnostic core, React adapter shipped. | ![](https://img.shields.io/badge/-shipping-22c55e?style=flat-square) |
 | 🧠 | [**`@niscorp/cortex`**](packages/cortex) | Agentic orchestration runtime — typed agents, tool-call loop, plan-mode tick loop, declarative rules engine, human-in-the-loop confirmation. | ![](https://img.shields.io/badge/-shipping-22c55e?style=flat-square) |
 | 🔍 | [**`@niscorp/vex`**](packages/vex)       | Declarative query synthesis — English → constrained JSON DSL → SQL, with semantic (vector) search, scope policies, and shape-based caching. | ![](https://img.shields.io/badge/-shipping-22c55e?style=flat-square) |
+| 🧵 | [**`@niscorp/loom`**](packages/loom)     | Schema → editing UI — compiles a Zod schema into a Nova form that views, creates, and edits valid JSON. Headless compiler plus a plugin host with live preview. | ![](https://img.shields.io/badge/-shipping-22c55e?style=flat-square) |
 
 > Each package ships its own `README.md` and `DESIGN.md`. **Read the design doc before reading the source.**
 
@@ -126,7 +127,8 @@ niscorp/
 │   ├── prism/      💎  JSON transform DSL
 │   ├── nova/       🎨  declarative UI runtime
 │   ├── cortex/     🧠  agentic orchestration
-│   └── vex/        🔍  query synthesis
+│   ├── vex/        🔍  query synthesis
+│   └── loom/       🧵  schema → editing UI
 ├── apps/
 │   └── showroom/        live demo + inspector
 ├── pnpm-workspace.yaml
@@ -137,7 +139,7 @@ niscorp/
 
 Nisc is **pre-1.0** and under active design.
 
-- **All six packages** are tested and usable (Vex included — its engine, Postgres adapter, and reference agents are real and demoed live in the showroom), but their public APIs are not frozen. Pin exact versions; expect to update.
+- **All seven packages** are tested and usable (Vex included — its engine, Postgres adapter, and reference agents are real and demoed live in the showroom), but their public APIs are not frozen. Pin exact versions; expect to update.
 - Breaking changes land without ceremony until each package hits 1.0.
 
 ## Contributing
