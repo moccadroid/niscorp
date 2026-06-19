@@ -17,6 +17,7 @@ export {
   EndpointConfigSchema,
   LifecycleConfigSchema,
   ActionDefinitionSchema,
+  ActionFragmentSchema,
 } from './schemas';
 
 export type {
@@ -32,7 +33,11 @@ export type {
   EndpointConfig,
   LifecycleConfig,
   ActionDefinition,
+  ActionFragment,
 } from './schemas';
+
+// Composition (fragment merge)
+export { composeAction } from './compose';
 
 // Types — public + internal runtime types are both exported here so
 // the shell (which holds the full runtime) can import them; the

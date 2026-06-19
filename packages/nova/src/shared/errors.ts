@@ -10,6 +10,7 @@ export const ErrorCodes = {
   layoutRefNotFound: 'LAYOUT_REF_NOT_FOUND',
   definitionValidation: 'DEFINITION_VALIDATION_ERROR',
   unknownAction: 'UNKNOWN_ACTION',
+  unknownFragment: 'UNKNOWN_FRAGMENT',
   unknownFunction: 'UNKNOWN_FUNCTION',
   shellDisposed: 'SHELL_DISPOSED',
   lifecycle: 'LIFECYCLE_ERROR',
@@ -108,6 +109,19 @@ export class UnknownActionError extends NovaError {
   ) {
     super(ErrorCodes.unknownAction, message, context, options);
     this.name = 'UnknownActionError';
+  }
+}
+
+export type UnknownFragmentContext = NovaErrorContext & { fragmentId: string };
+
+export class UnknownFragmentError extends NovaError {
+  constructor(
+    message: string,
+    context: UnknownFragmentContext,
+    options?: { cause?: unknown },
+  ) {
+    super(ErrorCodes.unknownFragment, message, context, options);
+    this.name = 'UnknownFragmentError';
   }
 }
 

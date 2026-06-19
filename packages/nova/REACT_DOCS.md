@@ -318,6 +318,84 @@ registry.register('MyButton', MyButton);
 
 ---
 
+## The `slotWrapper` seam
+
+`slotWrapper` is the one pluggable point for wrapping an action instance's content as it mounts and unmounts. It's how you add **animation**, an **auth / feature gate**, **logging**, or an **error boundary** to a nova UI — without nova owning any of that logic.
+
+Pass it to `<Nova.Shell>` (or to `NovaShellProvider` / `NovaRenderProvider` directly):
+
+```tsx
+<Nova.Shell shell={shell} slotWrapper={MySlotWrapper} />
+```
+
+Nova renders **every action instance's content** through it, at the `ActionSlot` seam — the single place an instance's content appears and disappears. (`ActionSlot` is what a canvas's action layout uses to render its active instance; it's how the shell paints each canvas.) `CanvasSlot` is a router, not a content seam, so it is *not* wrapped — there is exactly one place a `slotWrapper` lives.
+
+### The contract
+
+```tsx
+import type { SlotWrapper } from '@niscorp/nova/react';
+
+const MySlotWrapper: SlotWrapper = ({ canvasId, instanceId, action, children }) => {
+  // Decide what to render for this slot.
+  return <>{children}</>;
+};
+```
+
+Nova hands the wrapper **identity, never live state**:
+
+- **`canvasId`** — which canvas the instance lives in. Route by region: "animate `detail`", "gate `admin`".
+- **`action`** — the full `ActionDefinition`. Route by action: gate on `action.id`, read `action.name`, etc.
+- **`instanceId`** — the instance id. Use it as a React `key` for presence/animation.
+- **`children`** — the rendered content, or `null`.
+
+All three identity fields are `undefined` while a slot is **empty or exiting** (the instance is gone). A presence-managing wrapper captured them when the content was present.
+
+> **Identity, not state.** The wrapper deliberately does *not* receive the action's live data — that would turn a presence/gate seam into a reactive render path. A wrapper that needs data reads it with a hook itself.
+
+With no `slotWrapper`, rendering is unchanged — the default is a transparent passthrough.
+
+### What nova owns here: nothing but the seam
+
+No animation logic, no timing, no `animationend`, no transition names, and **no layout/JSON changes**. The animation library (framer-motion, react-transition-group, plain CSS), the durations, the easing, the gate policy — all live in your wrapper, app-side. Swap framer for CSS and nova doesn't change. Policy is keyed off `canvasId` / `action.id` in *your* code, never on the `ActionDefinition` schema (it's `.strict()`) or in the layout an author — or a model — writes.
+
+### Example: animate one region
+
+```tsx
+const AnimatedSlot: SlotWrapper = ({ canvasId, instanceId, children }) => {
+  if (canvasId !== 'main') return <>{children}</>;       // only the main region animates
+  return <div key={instanceId} className="slide-in">{children}</div>; // fresh key replays the enter
+};
+```
+
+```css
+@keyframes slide-in { from { opacity: 0; transform: translateY(10px) } }
+.slide-in { animation: slide-in 240ms ease-out }
+```
+
+That's a CSS *enter*. A full *exit* (animate out on close) is the same seam plus a presence library: nova renders the wrapper persistently (`children` becomes `null` while the instance is exiting), so an `AnimatePresence` / `TransitionGroup` inside your wrapper can hold the leaving content and animate it out on its own clock — nova never waits and never signals completion.
+
+### Example: an auth / feature gate
+
+```tsx
+const AuthGate: SlotWrapper = ({ action, children }) => {
+  const authed = useContext(AuthContext);                  // your app state, not nova data
+  if (action?.id.startsWith('secret') && !authed) {
+    return <Locked name={action.name} />;                  // a fallback instead of the content
+  }
+  return <>{children}</>;
+};
+```
+
+The same seam, used as a gate: the wrapper decides whether to render the content or a fallback, keyed off the `ActionDefinition`. A generated layout that invents a brand-new canvas flows through the *same* wrapper and hits its default branch automatically — there is nothing to register per slot.
+
+### `useSlotWrapper()`
+
+Reads the active `slotWrapper` from render context (or `undefined`). You rarely call it directly — `ActionSlot` does — but it's there if you build your own slot rendering.
+
+Both examples above ship as runnable demos in the showroom under **Slot wrappers**.
+
+---
+
 ## Error handling
 
 The renderer can produce error nodes when in lax mode (the default). The React adapter renders them via the `ErrorMarker` component:
@@ -401,9 +479,10 @@ const SomeReactComponent = () => {
 ## Quick reference
 
 ```tsx
-// Providers
-<NovaShellProvider shell registry>...</NovaShellProvider>
-<NovaRenderProvider registry dispatch publish>...</NovaRenderProvider>
+// Providers (all accept an optional slotWrapper)
+<NovaShellProvider shell registry slotWrapper?>...</NovaShellProvider>
+<NovaRenderProvider registry dispatch publish slotWrapper?>...</NovaRenderProvider>
+<Nova.Shell shell slotWrapper? />
 
 // Hooks
 useShell()                    // → Shell (throws outside provider)
@@ -415,9 +494,18 @@ useRenderTree(instanceId)     // → RenderNode[]
 useNovaDispatch()             // → (event) => void
 useNovaPublish()              // → (channel, payload?) => void
 useNovaRegistry()             // → ComponentRegistry
+useSlotWrapper()              // → SlotWrapper | undefined
 
 // Render
 <RenderTree nodes={...} />
+
+// Slot wrapper (animation, gates, logging, error boundaries)
+type SlotWrapper = FC<{
+  canvasId?: string;          // undefined while the slot is empty/exiting
+  instanceId?: string;
+  action?: ActionDefinition;
+  children?: ReactNode;
+}>;
 
 // Errors
 <ErrorMarker code message />

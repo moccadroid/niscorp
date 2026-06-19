@@ -4,6 +4,18 @@ import type { AggregateExpression } from '../../schemas/aggregate.schema.js';
 import type { FieldOrValue } from '../../schemas/value.schema.js';
 import type { ParamSlot } from '../adapter.types.js';
 import type { FieldSchema } from '../../schemas/database.schema.js';
+import { RESERVED_CONTEXT_KEYS } from '../../schemas/request.schema.js';
+import { VexError } from '../../errors.js';
+
+// A `$context` ref naming a reserved sort key would otherwise become a bound
+// param; reject it at compile so reserved keys only ever drive ORDER BY.
+const assertNotReserved = (key: string): void => {
+  if (RESERVED_CONTEXT_KEYS.has(key))
+    throw new VexError(
+      'invalid_dsl',
+      `"${key}" is a reserved sort key (applied to ORDER BY); it cannot be bound as a parameter.`,
+    );
+};
 
 // ═══════════════════════════════════════════════════════════════
 // Types
@@ -62,6 +74,7 @@ export const compileFieldOrValue = (
   // Object: $context or $scope — after eliminating primitives, only these remain
   if (typeof fov === 'object' && fov !== null && '$context' in fov) {
     const key = fov.$context;
+    assertNotReserved(key);
     ctx.paramCounter.value += 1;
     ctx.paramSlots.push({
       key,
@@ -125,6 +138,7 @@ export const compileFilter = (
 
     // ContextRef or ScopeRef → array parameter
     if ('$context' in target) {
+      assertNotReserved(target.$context);
       ctx.paramCounter.value += 1;
       ctx.paramSlots.push({ key: target.$context, kind: 'context', type: 'string[]' });
       return `${col} = ANY($${ctx.paramCounter.value})`;
@@ -150,6 +164,7 @@ export const compileFilter = (
     }
 
     if ('$context' in target) {
+      assertNotReserved(target.$context);
       ctx.paramCounter.value += 1;
       ctx.paramSlots.push({ key: target.$context, kind: 'context', type: 'string[]' });
       return `${col} <> ALL($${ctx.paramCounter.value})`;
@@ -214,6 +229,7 @@ export const compileFilter = (
 
     const queryRef = filter.semantic.query;
     const key = '$context' in queryRef ? queryRef.$context : queryRef.$scope;
+    if ('$context' in queryRef) assertNotReserved(queryRef.$context);
 
     // Look up vector dimensions from resolved paths
     const res = ctx.resolvedPaths.get(fieldPath);
@@ -240,6 +256,7 @@ export const compileFilter = (
     const queryRef = filter.fuzzy.query;
     const key = '$context' in queryRef ? queryRef.$context : queryRef.$scope;
     const kind = '$context' in queryRef ? 'context' as const : 'scope' as const;
+    if ('$context' in queryRef) assertNotReserved(queryRef.$context);
 
     ctx.paramCounter.value += 1;
     ctx.paramSlots.push({ key, kind, type: 'string' });
@@ -317,6 +334,11 @@ export const compileCompute = (
 // Aggregate expression compilation
 // ═══════════════════════════════════════════════════════════════
 
+// SUM/AVG/MIN/MAX take a field path (mapped to its qualified column) OR a
+// compute expression (compiled to SQL). count stays a plain field/`*`.
+const aggArg = (arg: string | ComputeExpression, ctx: CompilationContext): string =>
+  typeof arg === 'string' ? (ctx.aliasMap.get(arg) ?? arg) : compileCompute(arg, ctx);
+
 export const compileAggregate = (
   expr: AggregateExpression,
   ctx: CompilationContext,
@@ -326,27 +348,10 @@ export const compileAggregate = (
     const mapped = ctx.aliasMap.get(expr.count);
     return `COUNT(${mapped ?? expr.count})`;
   }
-
-  if ('sum' in expr) {
-    const mapped = ctx.aliasMap.get(expr.sum);
-    return `SUM(${mapped ?? expr.sum})`;
-  }
-
-  if ('avg' in expr) {
-    const mapped = ctx.aliasMap.get(expr.avg);
-    return `AVG(${mapped ?? expr.avg})`;
-  }
-
-  if ('min' in expr) {
-    const mapped = ctx.aliasMap.get(expr.min);
-    return `MIN(${mapped ?? expr.min})`;
-  }
-
-  if ('max' in expr) {
-    const mapped = ctx.aliasMap.get(expr.max);
-    return `MAX(${mapped ?? expr.max})`;
-  }
-
+  if ('sum' in expr) return `SUM(${aggArg(expr.sum, ctx)})`;
+  if ('avg' in expr) return `AVG(${aggArg(expr.avg, ctx)})`;
+  if ('min' in expr) return `MIN(${aggArg(expr.min, ctx)})`;
+  if ('max' in expr) return `MAX(${aggArg(expr.max, ctx)})`;
   return 'NULL';
 };
 

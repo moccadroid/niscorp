@@ -148,13 +148,17 @@ const collectFromCompute = (expr: ComputeExpression, out: Set<string>): void => 
 // ───────────────────────────────────────────────────────────────
 
 const collectFromAggregate = (expr: AggregateExpression, out: Set<string>): void => {
-  // Each aggregate variant has a single string field path
-  const path = ('count' in expr) ? expr.count
+  const arg = ('count' in expr) ? expr.count
     : ('sum' in expr) ? expr.sum
     : ('avg' in expr) ? expr.avg
     : ('min' in expr) ? expr.min
     : expr.max;
-  const entity = extractEntityFromPath(path);
+  // sum/avg/min/max may take a compute expression — walk it for entities.
+  if (typeof arg !== 'string') {
+    collectFromCompute(arg, out);
+    return;
+  }
+  const entity = extractEntityFromPath(arg);
   if (entity !== undefined) out.add(entity);
 };
 
@@ -173,9 +177,9 @@ const collectFromQuery = (dsl: Query, out: Set<string>): void => {
     }
   }
 
-  // fields
-  for (const field of dsl.fields) {
-    const entity = extractEntityFromPath(field);
+  // fields (optional; an entry may be a bare path or { field, as })
+  for (const ref of dsl.fields ?? []) {
+    const entity = extractEntityFromPath(typeof ref === 'string' ? ref : ref.field);
     if (entity !== undefined) out.add(entity);
   }
 

@@ -111,6 +111,19 @@ describe('executeSteps — navigation', () => {
     );
     expect(seen).toHaveLength(3);
   });
+
+  it('resolves a push/replace action from a binding; literals pass through', async () => {
+    const seen: NavigationEffect[] = [];
+    await executeSteps(
+      [
+        { push: { action: '{{@event.payload}}', canvas: 'modal' } },
+        { replace: { action: 'home' } },
+      ],
+      makeCtx({ onNavigate: (e) => seen.push(e), extras: { '@event': { payload: 'launch-me' } } }),
+    );
+    expect((seen[0] as { push: { action: string } }).push.action).toBe('launch-me');
+    expect((seen[1] as { replace: { action: string } }).replace.action).toBe('home');
+  });
 });
 
 describe('executeSteps — interleaving', () => {

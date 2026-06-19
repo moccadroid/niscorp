@@ -1,5 +1,6 @@
-import type { ActionDefinition, ActionRuntime, PublicActionRuntime } from '../action';
+import type { ActionDefinition, ActionFragment, ActionRuntime, PublicActionRuntime } from '../action';
 // Note: ActionRuntime is used as the internal runtime type returned by spawn/registry.
+import { composeAction } from '../action';
 import type { LayoutNode, RenderNode } from '../layout';
 import { createComponentRegistry, createLayoutStore, renderLayoutFromStore } from '../layout';
 import { createEventBus } from '../shared/event-bus';
@@ -10,6 +11,7 @@ import {
   NovaError,
   ShellDisposedError,
   UnknownActionError,
+  UnknownFragmentError,
 } from '../shared/errors';
 import { createIdFactory } from '../shared/ids';
 import { rememberShellRegistry } from './shell-internals';
@@ -19,7 +21,7 @@ import { flattenRenderTree } from './flatten-render-tree';
 import { createLifecycleOps } from './lifecycle-ops';
 import { createNavigationHandler } from './navigation';
 import { createRuntimeRegistry } from './runtime-registry';
-import { createRuntimeFactory, snapshotCanvas, validateActions } from './shell-internals';
+import { createRuntimeFactory, snapshotCanvas, validateActions, validateFragments } from './shell-internals';
 import { createTelemetry } from './telemetry';
 import type {
   CanvasConfig,
@@ -99,6 +101,10 @@ export const createShell = (config: ShellConfig): Shell => {
   // through this, not config.actions).
   const actions: Record<string, ActionDefinition> = { ...config.actions };
 
+  // Reusable partial actions, composed into a concrete action at push/replace
+  // time via the effect's `with: [...]`. Abstract — never instantiated alone.
+  const fragments: Record<string, ActionFragment> = { ...(config.fragments ?? {}) };
+
   let disposed = false;
 
   const guardNotDisposed = (): void => {
@@ -137,6 +143,28 @@ export const createShell = (config: ShellConfig): Shell => {
     actions[definition.id] = definition;
   };
 
+  const getFragment = (fragmentId: string): ActionFragment => {
+    const frag = fragments[fragmentId];
+    if (frag === undefined) throw new UnknownFragmentError(`Unknown fragment: ${fragmentId}`, { fragmentId });
+    return frag;
+  };
+
+  const registerFragment = (fragment: ActionFragment): void => {
+    guard();
+    if (fragment.id === undefined) throw new UnknownFragmentError('Fragment is missing an id', { fragmentId: '' });
+    validateFragments({ [fragment.id]: fragment });
+    fragments[fragment.id] = fragment;
+  };
+
+  // Resolve an action id to its (optionally fragment-composed) definition. The
+  // effect's `with: [...]` names fragments to merge in; the action wins on
+  // conflict. See composeAction.
+  const resolveDefinition = (actionId: string, fragmentIds?: string[]): ActionDefinition => {
+    const def = getDefinition(actionId);
+    if (fragmentIds === undefined || fragmentIds.length === 0) return def;
+    return composeAction(def, fragmentIds.map(getFragment));
+  };
+
   const fireState = (): void => {
     if (disposed) return;
     const out: Record<string, CanvasState> = {};
@@ -146,9 +174,9 @@ export const createShell = (config: ShellConfig): Shell => {
   };
 
   const navigationHandler = createNavigationHandler({
-    push: (cid, aid, input) => push(cid, aid, input),
+    push: (cid, aid, input, frags) => push(cid, aid, input, frags),
     pop: (cid) => pop(cid),
-    replace: (cid, aid, input) => replace(cid, aid, input),
+    replace: (cid, aid, input, frags) => replace(cid, aid, input, frags),
   });
 
   const buildRuntime = createRuntimeFactory({
@@ -180,10 +208,15 @@ export const createShell = (config: ShellConfig): Shell => {
     return runtime;
   };
 
-  const push = (canvasId: string, actionId: string, input?: Record<string, unknown>): string => {
+  const push = (
+    canvasId: string,
+    actionId: string,
+    input?: Record<string, unknown>,
+    fragmentIds?: string[],
+  ): string => {
     guard();
     const canvas = getCanvas(canvasId);
-    const definition = getDefinition(actionId);
+    const definition = resolveDefinition(actionId, fragmentIds);
     ops.suspendTop(canvas);
     const runtime = spawn(canvasId, definition, input);
     canvas.pushInstance(runtime.instance);
@@ -202,10 +235,15 @@ export const createShell = (config: ShellConfig): Shell => {
     fireState();
   };
 
-  const replace = (canvasId: string, actionId: string, input?: Record<string, unknown>): string => {
+  const replace = (
+    canvasId: string,
+    actionId: string,
+    input?: Record<string, unknown>,
+    fragmentIds?: string[],
+  ): string => {
     guard();
     const canvas = getCanvas(canvasId);
-    const definition = getDefinition(actionId);
+    const definition = resolveDefinition(actionId, fragmentIds);
     const old = canvas.popInstance();
     if (old !== undefined) ops.unmountInstance(old.id);
     const runtime = spawn(canvasId, definition, input);
@@ -230,7 +268,7 @@ export const createShell = (config: ShellConfig): Shell => {
     const seeds = Array.isArray(cfg.initial) ? cfg.initial : [cfg.initial];
     for (const seed of seeds) {
       if (typeof seed === 'string') push(cfg.id, seed);
-      else push(cfg.id, seed.action, seed.input);
+      else push(cfg.id, seed.action, seed.input, seed.with);
     }
   };
 
@@ -260,6 +298,17 @@ export const createShell = (config: ShellConfig): Shell => {
   const setCanvasLayout = (layout: LayoutNode | string): void => {
     guard();
     canvasLayout = layout;
+    fireState();
+  };
+
+  // Swap the target of a LayoutRef. The frame (canvasLayout) embeds
+  // `{ ref: id }` placeholders for dynamic regions; this replaces what one
+  // resolves to and re-renders. The frame/chrome itself is never touched, so
+  // a swap can't remove the sidebar/topbar — they live in the frame, not the
+  // ref. This is the hook an LLM/agent uses to hot-swap a region's layout.
+  const setLayout = (refId: string, layout: LayoutNode): void => {
+    guard();
+    layoutStore.set(refId, layout);
     fireState();
   };
 
@@ -347,9 +396,11 @@ export const createShell = (config: ShellConfig): Shell => {
     replace,
     clear,
     registerAction,
+    registerFragment,
     addCanvas,
     removeCanvas,
     setCanvasLayout,
+    setLayout,
     getCanvasState,
     getRuntime,
     getState,

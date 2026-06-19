@@ -6,13 +6,17 @@ import type { Query } from './schemas/query.schema.js';
 import type { QueryRequest, QueryResponse } from './schemas/request.schema.js';
 import type { TestResult } from './engine/engine.types.js';
 import type { VexEventHandler } from './events.js';
-import type { CompiledIr } from '@niscorp/prism';
+import type { CompiledIr, JsonValue } from '@niscorp/prism';
 
 /** DSL generation from intent + shape. Wire to a Cortex agent (see agent/). */
 export type GenerateDsl = (request: QueryRequest, schema: DatabaseSchema) => Promise<Query>;
 
-/** Result mapping from raw rows to the requested shape. Wire to Prism's mapping agent. */
-export type MapToShape = (rows: Row[], shape: unknown) => Promise<{ ir: CompiledIr; transformed: unknown[] }>;
+/**
+ * Result mapping from the raw row set to the requested shape. The mapping runs
+ * ONCE over `{ result: rows }`, so `transformed` is whatever it produced — an
+ * array, a single object, or a scalar. Wire to Prism's mapping agent.
+ */
+export type MapToShape = (rows: Row[], shape: unknown) => Promise<{ ir: CompiledIr; transformed: JsonValue }>;
 
 export type QueryEngineConfig = {
   adapter: DatabaseAdapter;

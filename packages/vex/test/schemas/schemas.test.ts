@@ -529,3 +529,22 @@ describe('Request schema', () => {
     }
   });
 });
+
+describe('Query schema — fields optional / alias / aggregate expression', () => {
+  it('accepts an aggregate-only query (no fields)', () => {
+    expect(QuerySchema.safeParse({ from: ['users'], aggregate: { n: { count: '*' } } }).success).toBe(true);
+  });
+
+  it('rejects a query with neither fields nor aggregate', () => {
+    expect(QuerySchema.safeParse({ from: ['users'] }).success).toBe(false);
+  });
+
+  it('accepts an aliased field { field, as }', () => {
+    expect(QuerySchema.safeParse({ from: ['users'], fields: [{ field: 'users.name', as: 'customer' }] }).success).toBe(true);
+  });
+
+  it('accepts SUM of a compute expression and of a bare field', () => {
+    expect(AggregateExpressionSchema.safeParse({ sum: { multiply: ['o.qty', 'o.price'] } }).success).toBe(true);
+    expect(AggregateExpressionSchema.safeParse({ sum: 'o.total' }).success).toBe(true);
+  });
+});

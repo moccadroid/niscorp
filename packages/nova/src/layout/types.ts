@@ -12,23 +12,29 @@ export type ModelBindingDescriptor = {
   ref: string;
 };
 
+// `key` is the React-identity key, distinct from `ref` (the event-target id).
+// The renderer stamps it on loop items from `LoopNode.key` (or the index), so a
+// shared `ref` across looped rows no longer collides as a React key.
 export type RenderComponentNode = {
   type: 'component';
   name: string;
   props: Record<string, unknown>;
   children: RenderNode[];
   ref?: string;
+  key?: string;
   model?: ModelBindingDescriptor;
 };
 
 export type RenderTextNode = {
   type: 'text';
   value: string;
+  key?: string;
 };
 
 export type RenderFragmentNode = {
   type: 'fragment';
   children: RenderNode[];
+  key?: string;
 };
 
 export type RenderErrorNode = {
@@ -36,6 +42,7 @@ export type RenderErrorNode = {
   code: string;
   message: string;
   nodeRef?: string;
+  key?: string;
 };
 
 export type RenderNode =

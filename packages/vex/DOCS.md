@@ -48,6 +48,11 @@ agent and referenced via `{ $context: "key" }`. `scope` is server-side access
 control, invisible to the agent, injected as filters via `{ $scope: "key" }`.
 They are passed through different channels and must never be conflated.
 
+**Reserved sort keys.** `sortBy` (an `entity.field`) and `sortDir` (`asc`/`desc`)
+are reserved keys in `context`: the engine reads them straight into the `ORDER BY`
+(the column is schema-validated), overriding the query's literal `sort` for that
+run. They drive sorting directly and are never bound as parameters.
+
 ---
 
 ## Installation
@@ -122,7 +127,7 @@ type QueryEngineConfig = {
   cache?: CacheBackend;                     // default: createMemoryCache()
   onEvent?: VexEventHandler;                // pipeline event stream
   generateDsl?: (request, schema) => Promise<Query>;
-  mapToShape?: (rows, shape) => Promise<{ ir: CompiledIr; transformed: unknown[] }>;
+  mapToShape?: (rows, shape) => Promise<{ ir: CompiledIr; transformed: JsonValue }>;
   embed?: (text, dimensions?) => Promise<number[]>;  // text→vector for semantic filters
   config?: {
     maxNestingDepth?: number;               // default: 2
@@ -169,7 +174,7 @@ Scope filters are injected only when **both** a `scope` policy is configured and
 type QueryRequest = {
   intent?: string;                      // natural language (drives the agent)
   shape: unknown;                        // example of the desired output structure
-  context?: Record<string, unknown>;     // runtime values for { $context } refs (default {})
+  context?: Record<string, unknown>;     // runtime values for { $context } refs; reserved `sortBy`/`sortDir` drive ORDER BY (default {})
 };
 ```
 
@@ -179,13 +184,19 @@ with a 400.
 
 The **shape** is an example, not a schema: use empty strings, zeros, and
 booleans as type markers. `[{ id: '', total: 0 }]` means "an array of objects
-with a string `id` and a number `total`." A bare object means a single object.
+with a string `id` and a number `total`." A bare object means a single record.
+
+The shape also picks the result envelope: an **array** shape maps over the whole
+row set (the mapping sees `$.result` as the rows array — a `$map`/identity); a
+**non-array** shape maps the single (first) row (the mapping sees `$.result` as
+that row, so a detail reads `$.result.field`). So the mapping — not Vex — owns
+the output: array, single object, or scalar.
 
 ### Response
 
 ```typescript
 type QueryResponse = {
-  result: Row[];                         // rows, mapped to the requested shape if mapping ran
+  result: JsonValue;                     // the mapping's output (array / object / scalar); raw Row[] if no mapping
   meta: {
     cache: { hit: boolean; key?: string };       // key is the shape hash
     context: Record<string, {                      // the resolved parameter contract
@@ -247,7 +258,7 @@ this in, and the schema's `.describe()` annotations teach it how.
 ```typescript
 type Query = {
   from: Source[];                                  // min 1
-  fields: string[];                                // min 1, "entity.field" — required
+  fields?: FieldRef[];                             // optional with `aggregate`; "entity.field" or { field, as }
   filter?: Filter;
   compute?: Record<string, ComputeExpression>;     // alias → expression
   aggregate?: Record<string, AggregateExpression>; // alias → function
@@ -257,17 +268,22 @@ type Query = {
   distinct?: boolean;
 };
 
-type Source = string | { as: string; query: Query };  // entity name or subquery
+type Source   = string | { as: string; query: Query };  // entity name or subquery
+type FieldRef = string | { field: string; as: string }; // bare column, or aliased output key
 ```
 
 ### Fields
 
-Always `entity.field`. There is no `SELECT *` — `fields` is required and must
-list at least one path. Every entity referenced anywhere in the query must also
-appear in `from`.
+Each entry is `entity.field`, or `{ field, as }` to set a distinct output key
+(so three joined `name` columns can become `company` / `stage` / `owner`
+without a compute). There is no `SELECT *`. `fields` is **optional** — omit it
+for an aggregate-only query (e.g. a bare `COUNT(*)`); a query must have at least
+one of `fields` / `aggregate`. Every entity referenced anywhere must also appear
+in `from`.
 
 ```json
-{ "from": ["order"], "fields": ["order.id", "order.total", "order.createdAt"] }
+{ "from": ["order", "customer"],
+  "fields": ["order.id", "order.total", { "field": "customer.name", "as": "customer" }] }
 ```
 
 ### Filters
@@ -341,25 +357,62 @@ Operators: `add`, `subtract`, `multiply`, `divide` (binary), `concat`,
 
 ### Aggregates
 
-Record of `alias → function`. Pair with `groupBy` for grouped results;
-without it the analyzer warns and you get a single aggregated row.
+Record of `alias → function`. Pair with `groupBy` for grouped results; without
+it the analyzer warns and you get a single aggregated row. Omit `fields` for an
+aggregate-only query (a bare count):
+
+```json
+{ "from": ["order"], "aggregate": { "orders": { "count": "*" } } }
+```
+
+`sum` / `avg` / `min` / `max` take a field path **or a compute expression**, so
+you can aggregate a derived value (no extra column needed):
 
 ```json
 {
-  "from": ["order"],
-  "fields": ["order.customerId"],
-  "aggregate": { "revenue": { "sum": "order.total" }, "orders": { "count": "*" } },
-  "groupBy": ["order.customerId"]
+  "from": ["order", "stage"],
+  "aggregate": { "weighted": { "sum": { "multiply": ["order.value", "stage.win_probability"] } } },
+  "filter": { "eq": ["order.status", "open"] }
 }
 ```
 
-Functions: `count` (field path or `"*"`), `sum`, `avg`, `min`, `max`.
+Grouped, with a renamed field:
+
+```json
+{
+  "from": ["order", "customer"],
+  "fields": [{ "field": "customer.name", "as": "customer" }],
+  "aggregate": { "revenue": { "sum": "order.total" }, "orders": { "count": "*" } },
+  "groupBy": ["customer.name"]
+}
+```
+
+Functions: `count` (field path or `"*"`); `sum` / `avg` / `min` / `max` (a field
+path or a compute expression).
 
 ### Subqueries
 
 A `from` entry can be `{ as, query }`. Nesting is bounded by
 `config.maxNestingDepth` (default 2). Scope, discovery, and resolution all
-recurse into subqueries.
+recurse into subqueries. A subquery's output columns are referenceable from the
+outer query as `alias.field` — every selected field (under its `as`, if
+aliased) plus every `compute`/`aggregate` alias.
+
+**Joins.** String entity sources are joined automatically by foreign key; a
+source with no FK path to the others is an error. Subquery sources are **never**
+FK-joined — any beyond the first are `CROSS JOIN`ed. That makes a row of
+independent aggregates expressible: cross-join N single-row `COUNT(*)`
+subqueries and select each one's count, and you get one row with N counts in a
+single read (use an object shape so Vex maps that single row).
+
+```json
+{ "from": [{ "as": "c",  "query": { "from": ["contact"], "aggregate": { "n": { "count": "*" } } } },
+           { "as": "co", "query": { "from": ["company"], "aggregate": { "n": { "count": "*" } } } }],
+  "fields": [{ "field": "c.n", "as": "contacts" }, { "field": "co.n", "as": "companies" }] }
+```
+
+(Limitation: subquery SQL params are embedded verbatim, so at most one bound
+`$context`/`$scope` param across all subqueries is supported today.)
 
 ### Semantic search
 
@@ -386,27 +439,31 @@ is for `semantic` filters only.)
 
 ## Scope policies
 
-Server-side, LLM-invisible access control. A policy maps entity names to rules;
-matched rules become filter clauses bound to `$scope` values and AND-merged into
-the DSL after generation.
+Server-side, LLM-invisible access control, applied to the resolved query/mutation
+*after* it is authored — so a generated or injected DSL can never reference,
+dodge, or forge it. Two roles, named for the SQL they produce:
+
+- **`match`** (RLS) — the row's column must equal a scope value. A `WHERE` filter
+  on read/update/delete; on insert the column is pinned to that value.
+- **`set`** (identity) — on insert the engine fills the column from a scope value
+  (a stamp). Insert-only.
 
 ```typescript
 type ScopePolicy = {
-  default: 'allow' | 'deny';                  // for entities with no explicit rule
+  default: 'allow' | 'deny';                  // fallback for unlisted entities / absent phases
   entities: Record<string, ScopeEntityRule>;
 };
 
 type ScopeEntityRule =
-  | { public: true }                           // accessible, no filtering
-  | { deny: true }                             // never accessible
-  | ScopeFilterRule
-  | ScopeFilterRule[];                         // multiple rules, AND-combined
+  | { public: true }                          // fully open
+  | { deny: true }                            // fully closed
+  | {
+      read?:  ScopeMatch[];                   // SELECT WHERE (match only)
+      write?: (ScopeMatch | ScopeSet)[];      // UPDATE/DELETE WHERE + INSERT pin (match); INSERT stamp (set)
+    };
 
-type ScopeFilterRule = {
-  field: string;                               // entity field to constrain
-  source: string;                              // key in options.scope to bind
-  op?: 'eq' | 'in' | 'neq';                    // default: 'eq'
-};
+type ScopeMatch = { match: string; to: string };  // row.<match> = scope[to]
+type ScopeSet   = { set:   string; to: string };   // INSERT row.<set> := scope[to]
 ```
 
 Example:
@@ -415,29 +472,32 @@ Example:
 const scope: ScopePolicy = {
   default: 'deny',
   entities: {
-    order:    { field: 'accountId', source: 'accountId' },
-    customer: { field: 'accountId', source: 'accountId' },
-    country:  { public: true },
-    secret:   { deny: true },
+    order:   { read:  [{ match: 'accountId', to: 'accountId' }],
+               write: [{ match: 'accountId', to: 'accountId' }, { set: 'owner_id', to: 'userId' }] },
+    country: { public: true },
+    secret:  { deny: true },
   },
 };
 
 const engine = createQueryEngine({ adapter, scope });
-
-await engine.execute(request, { scope: { accountId: 'acc-99' } });
+await engine.execute(request, { scope: { accountId: 'acc-99', userId: 'u-1' } });
 ```
 
 Behavior:
 
-- A discovered entity with **no rule** under `default: 'deny'` throws
-  `VexScopeError` (`scope_denied`). Under `default: 'allow'` it passes through
-  unfiltered.
-- `{ public: true }` passes through; `{ deny: true }` throws.
-- A filter rule injects e.g. `{ eq: ["order.accountId", { $scope: "accountId" }] }`.
-  `op: 'in'` handles "belongs to many" (e.g. multiple orgs); an array of rules
-  AND-combines them.
-- If a scope-bound `$scope` key is missing from `options.scope`, it surfaces via
-  `meta.missingContext` (the response is empty but valid), not a thrown error.
+- The query engine enforces the **`read`** rules: each `match` becomes
+  `{ eq: ["order.accountId", { $scope: "accountId" }] }`, AND-merged into the DSL.
+- `default` covers a discovered entity with no rule *and* a listed entity with no
+  matching phase: `'deny'` throws `VexScopeError` (`scope_denied`), `'allow'`
+  passes through unfiltered. `{ public: true }` passes; `{ deny: true }` throws.
+- The **`write`** rules are the contract for a mutation executor (the query engine
+  is read-only): `match` filters update/delete and pins the column on insert; `set`
+  stamps the column on insert. Applied server-side, never authored in the mutation
+  — so identity/ownership can't be forged.
+- A missing `$scope` key surfaces via `meta.missingContext` (empty-but-valid), not
+  a thrown error.
+- `match` is equality today; an `op` for `in` / multi-valued boundaries is additive
+  when a real one appears.
 
 Scope is applied only when a policy is configured **and** `options.scope` is
 provided.
@@ -470,6 +530,16 @@ generation. `refresh`/`bypass` opt out.
 - Every entry stores a **schema fingerprint**. After a schema change the
   fingerprint no longer matches and the entry is treated as a miss and evicted —
   its cached DSL might reference columns that changed.
+
+> **Give each distinct query a distinct shape.** Because the key is the shape —
+> not the intent or DSL — two *different* queries whose shapes are identical
+> collide on one cache entry: the last one written wins, and the other silently
+> serves the wrong DSL (returns 0 / wrong rows though its SQL looks right). This
+> is by design — the shape *is* the question. The classic trap is a list query
+> `[{ id, … }]` and a load-one-by-id query that returns the same fields. The
+> convention: name the by-id record's own key `<entity>_id` (map the SQL `id` to
+> it via the prism mapping) so its shape can never match the list's `{ id, … }`.
+> No filler columns needed.
 
 ### Backends
 

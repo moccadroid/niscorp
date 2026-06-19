@@ -133,6 +133,18 @@ const DIRECTIVES: Record<string, Directive> = {
   // counterpart to `$eq`: discriminate a union by which key a branch carries
   // (`{ $exists: "$.shape.component" }`) rather than a shared tag's value.
   $exists: (node, chain, extras) => resolve(node.$exists, chain, extras) !== undefined,
+  // Read an array element by a (dynamic) index: `{ $at: ["$.results", "$.i"] }`.
+  // An optional third arg pulls one field off the element: `["$.results", "$.i",
+  // "id"]`. Returns undefined when the array/index doesn't resolve.
+  $at: (node, chain, extras) => {
+    const args = isArray(node.$at) ? node.$at : [];
+    const arr = resolve(args[0], chain, extras);
+    const index = Number(resolve(args[1], chain, extras));
+    if (!isArray(arr) || Number.isNaN(index)) return undefined;
+    const element = arr[index];
+    const field = args[2];
+    return field !== undefined && isObject(element) ? element[String(field)] : element;
+  },
 };
 
 const directiveOf = (value: Record<string, unknown>): Directive | undefined => {

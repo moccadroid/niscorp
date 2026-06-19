@@ -133,6 +133,91 @@ export const scenarios: readonly VexScenario[] = [
     },
   },
   {
+    id: 'count-total',
+    name: 'Bare count (no fields)',
+    description: 'An aggregate-only query — no `fields` at all. The object shape returns a single object: Vex maps the one aggregated row.',
+    kind: KIND_DSL,
+    mode: 'execute',
+    intent: 'How many orders are there in total?',
+    shape: { orders: 0 },
+    dsl: {
+      from: ['orders'],
+      aggregate: { orders: { count: '*' } },
+    },
+  },
+  {
+    id: 'field-alias',
+    name: 'Field alias (as)',
+    description: 'A `{ field, as }` entry sets a distinct output key — the joined customer name becomes `customer`, so it never collides with other `name` columns and needs no compute.',
+    kind: KIND_DSL,
+    mode: 'execute',
+    intent: "The biggest orders with each customer's name",
+    shape: [{ id: '', customer: '', total: 0 }],
+    dsl: {
+      from: ['orders', 'customers'],
+      fields: ['orders.id', { field: 'customers.name', as: 'customer' }, 'orders.total'],
+      sort: [{ field: 'orders.total', dir: 'desc' }],
+      limit: 8,
+    },
+  },
+  {
+    id: 'aggregate-expression',
+    name: 'Aggregate an expression',
+    description: 'SUM of a derived value — `quantity × unit_price` — per order. `sum`/`avg`/`min`/`max` take a compute expression, not just a column.',
+    kind: KIND_DSL,
+    mode: 'execute',
+    intent: 'Total line-item revenue for each order',
+    shape: [{ order_id: '', revenue: 0 }],
+    dsl: {
+      from: ['order_items'],
+      fields: [{ field: 'order_items.order_id', as: 'order_id' }],
+      aggregate: { revenue: { sum: { multiply: ['order_items.quantity', 'order_items.unit_price'] } } },
+      groupBy: ['order_items.order_id'],
+      limit: 8,
+    },
+  },
+  {
+    id: 'single-record',
+    name: 'Single record (object shape)',
+    description: 'An object shape (not an array) returns one object: Vex maps the single — here the top-spending — customer, so the mapping reads `$.result.field` (no index).',
+    kind: KIND_SHAPE,
+    mode: 'execute',
+    intent: 'The top customer by lifetime spend, as one record',
+    shape: { name: '', email: '', spent: 0 },
+    dsl: {
+      from: ['customers'],
+      fields: ['customers.name', 'customers.email', 'customers.total_spent'],
+      sort: [{ field: 'customers.total_spent', dir: 'desc' }],
+      limit: 1,
+    },
+    mapping: {
+      name: { $ref: '$.result.name' },
+      email: { $ref: '$.result.email' },
+      spent: { $ref: '$.result.total_spent' },
+    },
+  },
+  {
+    id: 'cross-join-counts',
+    name: 'Counts across tables (one query)',
+    description: 'Independent COUNT(*) subqueries with no foreign key between them cross-join into a SINGLE row. One read returns { customers, orders, products }; the object shape maps that one row — no per-table round-trips.',
+    kind: KIND_DSL,
+    mode: 'execute',
+    intent: 'How many customers, orders and products are there in total?',
+    shape: { customers: 0, orders: 0, products: 0 },
+    dsl: {
+      from: [
+        { as: 'c', query: { from: ['customers'], aggregate: { n: { count: '*' } } } },
+        { as: 'o', query: { from: ['orders'], aggregate: { n: { count: '*' } } } },
+        { as: 'p', query: { from: ['products'], aggregate: { n: { count: '*' } } } },
+      ],
+      fields: [
+        { field: 'c.n', as: 'customers' },
+        { field: 'o.n', as: 'orders' },
+        { field: 'p.n', as: 'products' },
+      ],
+    },
+  },
+  {
     id: 'compute-case',
     name: 'Computed tier',
     description: 'A `case` expression derives a per-row value (a loyalty tier) without any post-processing in app code.',
@@ -208,9 +293,15 @@ export const scenarios: readonly VexScenario[] = [
       limit: 8,
     },
     mapping: {
-      customer: { $ref: '$.result.name' },
-      spent: { $ref: '$.result.total_spent' },
-      standing: { $ref: '$.result.status' },
+      $map: {
+        over: { $ref: '$.result' },
+        as: 'row',
+        body: {
+          customer: { $get: { from: { $var: 'row' }, path: ['name'] } },
+          spent: { $get: { from: { $var: 'row' }, path: ['total_spent'] } },
+          standing: { $get: { from: { $var: 'row' }, path: ['status'] } },
+        },
+      },
     },
   },
   {
@@ -229,11 +320,17 @@ export const scenarios: readonly VexScenario[] = [
       limit: 8,
     },
     mapping: {
-      id: { $ref: '$.result.id' },
-      total: { $ref: '$.result.total' },
-      customer: {
-        name: { $ref: '$.result.name' },
-        email: { $ref: '$.result.email' },
+      $map: {
+        over: { $ref: '$.result' },
+        as: 'row',
+        body: {
+          id: { $get: { from: { $var: 'row' }, path: ['id'] } },
+          total: { $get: { from: { $var: 'row' }, path: ['total'] } },
+          customer: {
+            name: { $get: { from: { $var: 'row' }, path: ['name'] } },
+            email: { $get: { from: { $var: 'row' }, path: ['email'] } },
+          },
+        },
       },
     },
   },
@@ -253,18 +350,24 @@ export const scenarios: readonly VexScenario[] = [
       limit: 8,
     },
     mapping: {
-      contact: {
-        $join: {
-          sep: '',
-          parts: [
-            { $ref: '$.result.name' },
-            { $const: ' <' },
-            { $ref: '$.result.email' },
-            { $const: '>' },
-          ],
+      $map: {
+        over: { $ref: '$.result' },
+        as: 'row',
+        body: {
+          contact: {
+            $join: {
+              sep: '',
+              parts: [
+                { $get: { from: { $var: 'row' }, path: ['name'] } },
+                { $const: ' <' },
+                { $get: { from: { $var: 'row' }, path: ['email'] } },
+                { $const: '>' },
+              ],
+            },
+          },
+          spent: { $get: { from: { $var: 'row' }, path: ['total_spent'] } },
         },
       },
-      spent: { $ref: '$.result.total_spent' },
     },
   },
 

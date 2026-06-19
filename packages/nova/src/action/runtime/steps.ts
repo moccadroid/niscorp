@@ -175,6 +175,39 @@ const navigate = (effect: NavigationEffect, ctx: StepContext): void => {
   ctx.onNavigate(effect);
 };
 
+// Resolve a push/replace effect's `input` against the firing scope (current
+// data + `@event`), so a trigger can pass dynamic data to the action it opens
+// — e.g. `input: { record: '@event.payload' }`. Mirrors how `emit.payload` is
+// resolved; without it, input values reach the new action as raw templates.
+const resolveInputMap = (
+  input: Record<string, unknown>,
+  ctx: StepContext,
+): Record<string, unknown> => {
+  const chain = createScopeChain(ctx.dataStore.get());
+  return Object.fromEntries(
+    Object.entries(input).map(([key, value]) => [key, resolve(value, chain, ctx.extras)]),
+  );
+};
+
+// Resolve a push/replace target: its `action` (so a trigger can open the action
+// a binding names — e.g. `action: '{{@event.payload}}'` to launch the clicked
+// result; literal ids pass through unchanged) and its `input` map.
+const resolveNavTarget = <T extends { action: string; input?: Record<string, unknown> }>(
+  nav: T,
+  ctx: StepContext,
+): T => {
+  const chain = createScopeChain(ctx.dataStore.get());
+  const out: T = { ...nav, action: String(resolve(nav.action, chain, ctx.extras) ?? '') };
+  if (nav.input !== undefined) out.input = resolveInputMap(nav.input, ctx);
+  return out;
+};
+
+const resolveNavInput = (effect: NavigationEffect, ctx: StepContext): NavigationEffect => {
+  if ('push' in effect) return { push: resolveNavTarget(effect.push, ctx) };
+  if ('replace' in effect) return { replace: resolveNavTarget(effect.replace, ctx) };
+  return effect;
+};
+
 export const executeSteps = async (steps: Step[], ctx: StepContext): Promise<void> => {
   let buffer: Mutation[] = [];
 
@@ -220,7 +253,7 @@ export const executeSteps = async (steps: Step[], ctx: StepContext): Promise<voi
       continue;
     }
     if ('push' in step) {
-      navigate(step, ctx);
+      navigate(resolveNavInput(step, ctx), ctx);
       continue;
     }
     if ('pop' in step) {
@@ -228,7 +261,7 @@ export const executeSteps = async (steps: Step[], ctx: StepContext): Promise<voi
       continue;
     }
     if ('replace' in step) {
-      navigate(step, ctx);
+      navigate(resolveNavInput(step, ctx), ctx);
       continue;
     }
   }

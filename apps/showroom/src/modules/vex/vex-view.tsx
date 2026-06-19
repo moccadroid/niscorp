@@ -201,7 +201,10 @@ const scopeClauseText = (dsl: Query, scopeKey: string): string | undefined => {
   for (const src of dsl.from) {
     if (typeof src !== 'string') continue;
     const rule = scopePolicy.entities[src];
-    if (rule && 'field' in rule && rule.source === scopeKey) return `${src}.${rule.field} ${rule.op ?? 'eq'} $scope.${scopeKey}`;
+    if (rule && 'read' in rule) {
+      const m = rule.read?.find((r) => r.to === scopeKey);
+      if (m) return `${src}.${m.match} = $scope.${scopeKey}`;
+    }
   }
   return undefined;
 };

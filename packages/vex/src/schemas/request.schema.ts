@@ -1,10 +1,25 @@
 import { z } from 'zod';
-import type { Row } from '../adapters/adapter.types.js';
+import type { JsonValue } from '@niscorp/prism';
+
+// Context keys the engine consumes directly (for ORDER BY) instead of binding as
+// SQL parameters. A `{ $context: 'sortBy' }` ref is rejected at compile so these
+// can never reach the param path.
+export const RESERVED_CONTEXT_KEYS = new Set<string>(['sortBy', 'sortDir']);
+
+export const ContextSchema = z
+  .object({
+    sortBy: z.string().optional(),
+    sortDir: z.enum(['asc', 'desc']).optional(),
+  })
+  .catchall(z.unknown())
+  .describe(
+    'Caller runtime values. Keys referenced from the DSL via { $context: "key" } are bound as SQL parameters. `sortBy` (an entity.field, schema-validated) and `sortDir` ("asc"|"desc") are reserved keys that drive ORDER BY directly and are never bound as parameters.',
+  );
 
 export const QueryRequestSchema = z.object({
   intent: z.string().optional(),
   shape: z.unknown(),
-  context: z.record(z.string(), z.unknown()).default({}),
+  context: ContextSchema.default({}),
 });
 
 export type QueryRequest = z.infer<typeof QueryRequestSchema>;
@@ -27,7 +42,11 @@ export type ContextMeta = {
 };
 
 export type QueryResponse = {
-  result: Row[];
+  // Whatever the Prism mapping produced over the full row set: an array (the
+  // common case — a `$map` or identity over `$.result`), a single object (a
+  // detail picking `$.result[0]`), or a scalar (an aggregate). Vex no longer
+  // forces an array — the mapping owns the output shape.
+  result: JsonValue;
   meta: {
     cache: CacheMeta;
     context: Record<string, ContextMeta>;

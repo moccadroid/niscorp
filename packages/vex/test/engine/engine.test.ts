@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { resolve } from '../../src/engine/resolver.js';
 import { analyze } from '../../src/engine/analyzer.js';
 import { compileQuery } from '../../src/adapters/postgres/compile.js';
+import { applySortContext } from '../../src/engine/runtime.js';
 import { VexError } from '../../src/errors.js';
 import type { DatabaseSchema } from '../../src/schemas/database.schema.js';
 import type { Query } from '../../src/schemas/query.schema.js';
@@ -314,6 +315,56 @@ describe('Resolver', () => {
       expect(result.sources[0]?.alias).toBe('sub');
       expect(result.fields).toHaveLength(2);
       expect(result.fields[0]?.alias).toBe('sub');
+    });
+
+    it("exposes a subquery's aggregate output as a referenceable field", () => {
+      const dsl: Query = {
+        from: [{ as: 'c', query: { from: ['customers'], aggregate: { n: { count: '*' } } } }],
+        fields: [{ field: 'c.n', as: 'total' }],
+      };
+
+      const result = resolve(dsl, schema);
+
+      expect(result.fields).toHaveLength(1);
+      expect(result.fields[0]?.column).toBe('n');
+      expect(result.fields[0]?.outputName).toBe('total');
+    });
+
+    it('exposes a subquery field under its output alias (`as`)', () => {
+      const dsl: Query = {
+        from: [{ as: 's', query: { from: ['orders'], fields: [{ field: 'orders.customer_id', as: 'cust' }] } }],
+        fields: ['s.cust'],
+      };
+
+      const result = resolve(dsl, schema);
+
+      // The derived table exposes the column under its alias, not the raw name.
+      expect(result.fields[0]?.column).toBe('cust');
+    });
+
+    it('cross-joins independent aggregate subqueries into one row of counts', () => {
+      const dsl: Query = {
+        from: [
+          { as: 'c', query: { from: ['customers'], aggregate: { n: { count: '*' } } } },
+          { as: 'o', query: { from: ['orders'], aggregate: { n: { count: '*' } } } },
+        ],
+        fields: [
+          { field: 'c.n', as: 'customers' },
+          { field: 'o.n', as: 'orders' },
+        ],
+      };
+
+      const resolved = resolve(dsl, schema);
+      // Subquery sources are never FK-joined, so no join is discovered.
+      expect(resolved.joins).toHaveLength(0);
+      expect(resolved.sources).toHaveLength(2);
+
+      const compiled = compileQuery(resolved);
+      // First source in FROM, the rest cross-joined (single-row × single-row = one row).
+      expect(compiled.sql).toContain('FROM (');
+      expect(compiled.sql).toContain('CROSS JOIN (');
+      expect(compiled.sql).toContain('c.n AS "customers"');
+      expect(compiled.sql).toContain('o.n AS "orders"');
     });
   });
 
@@ -845,5 +896,111 @@ describe('Full pipeline', () => {
     expect(joinIdx).toBeLessThan(whereIdx);
     expect(whereIdx).toBeLessThan(orderIdx);
     expect(orderIdx).toBeLessThan(limitIdx);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════
+// Context-driven sort (reserved sortBy / sortDir keys)
+// ═══════════════════════════════════════════════════════════════
+
+describe('Context-driven sort', () => {
+  const schema = createTestSchema();
+
+  it('applySortContext replaces the literal sort with the context column + dir', () => {
+    const dsl: Query = { from: ['orders'], fields: ['orders.id'], sort: [{ field: 'orders.created_at', dir: 'asc' }] };
+    const out = applySortContext(dsl, { sortBy: 'orders.total', sortDir: 'desc' });
+    expect(out.sort).toEqual([{ field: 'orders.total', dir: 'desc' }]);
+  });
+
+  it('applySortContext keeps the literal sort (the default) when sortBy is absent', () => {
+    const dsl: Query = { from: ['orders'], fields: ['orders.id'], sort: [{ field: 'orders.created_at', dir: 'asc' }] };
+    expect(applySortContext(dsl, {})).toBe(dsl);
+    expect(applySortContext(dsl, { q: '%x%' }).sort).toEqual([{ field: 'orders.created_at', dir: 'asc' }]);
+  });
+
+  it('applySortContext defaults sortDir to asc', () => {
+    const dsl: Query = { from: ['orders'], fields: ['orders.id'] };
+    expect(applySortContext(dsl, { sortBy: 'orders.total' }).sort).toEqual([{ field: 'orders.total', dir: 'asc' }]);
+  });
+
+  it('the context sort compiles to a real ORDER BY on the column (no params)', () => {
+    const dsl: Query = { from: ['orders'], fields: ['orders.id'] };
+    const compiled = compileQuery(resolve(applySortContext(dsl, { sortBy: 'orders.total', sortDir: 'desc' }), schema));
+    expect(compiled.sql).toMatch(/ORDER BY \w+\.total DESC/);
+    expect(compiled.paramSlots).toHaveLength(0);
+  });
+
+  it('an unknown sort column is rejected by resolve', () => {
+    const dsl: Query = { from: ['orders'], fields: ['orders.id'] };
+    expect(() => resolve(applySortContext(dsl, { sortBy: 'orders.nope' }), schema)).toThrow(VexError);
+  });
+
+  it('a reserved key used as a { $context } ref is rejected at compile (can never become a param)', () => {
+    const dsl: Query = { from: ['orders'], fields: ['orders.id'], filter: { eq: ['orders.status', { $context: 'sortBy' }] } };
+    expect(() => compileQuery(resolve(dsl, schema))).toThrow(/reserved sort key/);
+  });
+
+  it('a non-reserved { $context } ref still compiles to a bound param', () => {
+    const dsl: Query = { from: ['orders'], fields: ['orders.id'], filter: { eq: ['orders.status', { $context: 'statusFilter' }] } };
+    const compiled = compileQuery(resolve(dsl, schema));
+    expect(compiled.paramSlots).toHaveLength(1);
+    expect(compiled.paramSlots[0]?.key).toBe('statusFilter');
+  });
+});
+
+describe('Field alias (`as`)', () => {
+  const schema = createTestSchema();
+
+  it('aliases a column to a distinct output key', () => {
+    const dsl: Query = { from: ['customers'], fields: [{ field: 'customers.name', as: 'customer' }] };
+    const compiled = compileQuery(resolve(dsl, schema));
+    expect(compiled.sql).toContain('c1.name AS "customer"');
+  });
+
+  it('disambiguates two same-named joined columns', () => {
+    const dsl: Query = {
+      from: ['orders', 'customers'],
+      fields: [{ field: 'orders.id', as: 'order_id' }, { field: 'customers.name', as: 'customer' }],
+    };
+    const compiled = compileQuery(resolve(dsl, schema));
+    expect(compiled.sql).toContain('AS "order_id"');
+    expect(compiled.sql).toContain('AS "customer"');
+  });
+
+  it('a bare string field still uses the column name (non-breaking)', () => {
+    const dsl: Query = { from: ['customers'], fields: ['customers.name'] };
+    const compiled = compileQuery(resolve(dsl, schema));
+    expect(compiled.sql).toContain('c1.name AS "name"');
+  });
+});
+
+describe('Aggregate over an expression', () => {
+  const schema = createTestSchema();
+
+  it('compiles SUM of a compute expression', () => {
+    const dsl: Query = {
+      from: ['order_items'],
+      aggregate: { revenue: { sum: { multiply: ['order_items.quantity', 'order_items.unit_price'] } } },
+    };
+    const compiled = compileQuery(resolve(dsl, schema));
+    expect(compiled.sql).toMatch(/SUM\(\(.*quantity.*\*.*unit_price.*\)\) AS "revenue"/);
+  });
+
+  it('SUM of a bare field path still works (non-breaking)', () => {
+    const dsl: Query = { from: ['orders'], aggregate: { total: { sum: 'orders.total' } }, groupBy: ['orders.status'], fields: ['orders.status'] };
+    const compiled = compileQuery(resolve(dsl, schema));
+    expect(compiled.sql).toContain('SUM(');
+    expect(compiled.sql).toContain('AS "total"');
+  });
+});
+
+describe('Aggregate-only query (fields optional)', () => {
+  const schema = createTestSchema();
+
+  it('compiles a bare COUNT(*) with no fields', () => {
+    const dsl: Query = { from: ['customers'], aggregate: { n: { count: '*' } } };
+    const compiled = compileQuery(resolve(dsl, schema));
+    expect(compiled.sql).toContain('SELECT COUNT(*) AS "n"');
+    expect(compiled.sql).toContain('FROM customers AS c1');
   });
 });

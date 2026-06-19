@@ -59,6 +59,25 @@ const UiModelSchema = z
   .strict()
   .describe('A two-way-bound model update event.');
 
+const UiKeySchema = z
+  .object({
+    type: z.literal('ui:key').describe('Event type discriminator.'),
+    key: z.string().describe('The key pressed, e.g. "ArrowDown", "Enter", "Escape".'),
+    ref: z.string().optional().describe('Target component ref (scope the key to a component).'),
+    payload: z.unknown().optional().describe('Optional event payload.'),
+  })
+  .strict()
+  .describe('A keyboard key event. A trigger filters it by `key` (and optionally `ref`).');
+
+const UiDropSchema = z
+  .object({
+    type: z.literal('ui:drop').describe('Event type discriminator.'),
+    ref: z.string().optional().describe('Target component ref (the drop zone).'),
+    payload: z.unknown().optional().describe('Optional event payload, e.g. { id, toStage }.'),
+  })
+  .strict()
+  .describe('A drag-and-drop "drop" event — the semantic outcome of a drag gesture, dispatched by a drop zone. The gesture mechanics stay in the component; only the drop reaches Nova.');
+
 export const NovaEventSchema = z
   .discriminatedUnion('type', [
     UiClickSchema,
@@ -67,6 +86,8 @@ export const NovaEventSchema = z
     UiFocusSchema,
     UiBlurSchema,
     UiModelSchema,
+    UiKeySchema,
+    UiDropSchema,
   ])
   .describe('Discriminated union of the built-in Nova UI events.');
 

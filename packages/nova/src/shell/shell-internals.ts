@@ -1,11 +1,12 @@
 import type {
   ActionDefinition,
+  ActionFragment,
   ActionRuntime,
   FunctionHandler,
   NavigationEffect,
   OnErrorHandler,
 } from '../action';
-import { ActionDefinitionSchema } from '../action';
+import { ActionDefinitionSchema, ActionFragmentSchema } from '../action';
 import { createActionRuntime } from '../action/runtime/runtime';
 import type { RuntimeRegistry } from './runtime-registry';
 import type { Shell } from './types';
@@ -35,6 +36,20 @@ export const validateActions = (actions: Record<string, ActionDefinition>): void
   if (failures.length > 0) {
     throw new DefinitionValidationError(
       `${failures.length} action definition(s) failed validation`,
+      { failures },
+    );
+  }
+};
+
+export const validateFragments = (fragments: Record<string, ActionFragment>): void => {
+  const failures: DefinitionValidationFailure[] = [];
+  for (const [fragmentId, frag] of Object.entries(fragments)) {
+    const result = ActionFragmentSchema.safeParse(frag);
+    if (!result.success) failures.push({ id: fragmentId, issues: result.error.issues });
+  }
+  if (failures.length > 0) {
+    throw new DefinitionValidationError(
+      `${failures.length} action fragment(s) failed validation`,
       { failures },
     );
   }

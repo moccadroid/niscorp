@@ -5,7 +5,7 @@ import {
   NovaError,
   RenderError,
 } from '../shared/errors';
-import { createScopeChain, pushScope, resolve } from '../shared/bindings';
+import { createScopeChain, getPath, pushScope, resolve } from '../shared/bindings';
 import type { ScopeChain } from '../shared/bindings';
 import {
   isComponentNode,
@@ -13,6 +13,7 @@ import {
   isLayoutPrimitive,
   isLayoutRefNode,
   isLoopNode,
+  isSlotNode,
 } from './guards';
 import type { ComponentNode, LayoutNode } from './schemas';
 import type {
@@ -118,6 +119,11 @@ const renderNode = (
     }
     return renderNode(target, chain, ctx);
   }
+  if (isSlotNode(node)) {
+    // A slot is filled at fragment-merge time (fillSlots). One that survives to
+    // render was never filled — render nothing.
+    return [];
+  }
   if (isConditionalNode(node)) {
     const condition = resolve(node.if, chain);
     const truthy =
@@ -153,7 +159,15 @@ const renderNode = (
           ? ctx.scopePaths
           : [...ctx.scopePaths, `${node.as}=${loopBasePath}.${index}`, `items=${loopBasePath}`];
       const innerCtx: InternalRenderContext = { ...ctx, scopePaths: nextScopePaths };
-      out.push(...safeRenderSingle(node.do, innerChain, innerCtx, undefined));
+      // Stamp a stable React-identity key on each item's output: the value at
+      // `node.key` (e.g. the row id), or the index when no key path is given.
+      // This is what lets looped rows share a `ref` (the trigger target) without
+      // colliding as React keys. `withKey` (in render-tree) prefers it over ref.
+      const idKey = node.key !== undefined ? getPath(item, node.key) : index;
+      const rendered = safeRenderSingle(node.do, innerChain, innerCtx, undefined);
+      rendered.forEach((rn, sub) => {
+        out.push({ ...rn, key: rendered.length === 1 ? String(idKey) : `${String(idKey)}:${sub}` });
+      });
     });
     return [fragment(out)];
   }

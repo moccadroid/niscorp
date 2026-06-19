@@ -1,9 +1,9 @@
 import type { NavigationEffect } from '../action';
 
 export type ShellNavOps = {
-  push: (canvasId: string, actionId: string, input?: Record<string, unknown>) => string;
+  push: (canvasId: string, actionId: string, input?: Record<string, unknown>, fragments?: string[]) => string;
   pop: (canvasId: string) => void;
-  replace: (canvasId: string, actionId: string, input?: Record<string, unknown>) => string;
+  replace: (canvasId: string, actionId: string, input?: Record<string, unknown>, fragments?: string[]) => string;
 };
 
 export type NavigationHandler = (currentCanvasId: string, effect: NavigationEffect) => void;
@@ -12,7 +12,7 @@ export const createNavigationHandler = (ops: ShellNavOps): NavigationHandler => 
   return (currentCanvasId, effect): void => {
     if ('push' in effect) {
       const target = effect.push.canvas ?? currentCanvasId;
-      ops.push(target, effect.push.action, effect.push.input);
+      ops.push(target, effect.push.action, effect.push.input, effect.push.with);
       return;
     }
     if ('pop' in effect) {
@@ -21,7 +21,7 @@ export const createNavigationHandler = (ops: ShellNavOps): NavigationHandler => 
     }
     if ('replace' in effect) {
       const target = effect.replace.canvas ?? currentCanvasId;
-      ops.replace(target, effect.replace.action, effect.replace.input);
+      ops.replace(target, effect.replace.action, effect.replace.input, effect.replace.with);
     }
   };
 };

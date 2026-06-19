@@ -9,6 +9,12 @@ export { executeQuery, buildContextContract, findMissingContext } from './engine
 
 // ─── Adapters ────────────────────────────────────────────────
 export { createPostgresAdapter } from './adapters/postgres/index.js';
+// Low-level SQL compilation primitives. Exposed so a write path (the Relay
+// mutation prototype) can compile a `Filter` → WHERE and a `FieldOrValue` →
+// value with the SAME binding/param logic as reads, instead of reinventing it.
+// Candidate internals to back a future first-class Vex mutation compiler.
+export { compileFilter, compileFieldOrValue } from './adapters/postgres/operators.js';
+export type { CompilationContext } from './adapters/postgres/operators.js';
 
 // ─── Schemas ─────────────────────────────────────────────────
 export { QuerySchema } from './schemas/query.schema.js';
@@ -52,7 +58,7 @@ export type { DatabaseSchema, EntitySchema, FieldSchema, RelationSchema, IndexSc
 export type { QueryRequest, QueryResponse, QueryErrorResponse, QueryErrorCode, ContextMeta } from './schemas/request.schema.js';
 export type { DatabaseAdapter, AdapterCapabilities, CompiledQuery, ParamSlot, BoundParams, Row, IntrospectOptions } from './adapters/adapter.types.js';
 export type { PostgresAdapterConfig, PgPool } from './adapters/postgres/index.js';
-export type { ScopePolicy, ScopeEntityRule, ScopeFilterRule, ScopeValues } from './scope/scope.types.js';
+export type { ScopePolicy, ScopeEntityRule, ScopeRule, ScopeMatch, ScopeSet, ScopeValues } from './scope/scope.types.js';
 export type { CacheBackend, CacheEntry, OkCacheEntry, UnsatisfiableCacheEntry, CacheMode } from './cache/cache.types.js';
 export type { PostgresCacheConfig, PostgresCache } from './cache/postgres.js';
 export type { TieredCacheConfig, TieredCache, WarmupMode } from './cache/tiered.js';

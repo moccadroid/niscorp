@@ -5,9 +5,9 @@ import { deepEqual } from '@showroom/lib/deep-equal';
 import type { VexRuntime } from './runtime/boot';
 import type { VexScenario } from './scenarios';
 
-// Identity Prism transform applied per row (engine wraps each row as
-// { result: row }). Returns the row unchanged — used when the rows
-// already match the requested shape, so no LLM mapping is needed.
+// Identity Prism transform. The engine runs the mapping once over the whole
+// row set as { result: rows }, so this returns the rows array unchanged — used
+// when the rows already match the requested shape, so no LLM mapping is needed.
 const IDENTITY_MAPPING = { $ref: '$.result' };
 
 // ═══════════════════════════════════════════════════════════
@@ -196,7 +196,10 @@ const toOutcome = (
   ok: true,
   dsl: dslFromEvents(events, scenario.dsl),
   sql: sqlFromEvents(events),
-  rows: res.result,
+  // The mapping owns the output shape: an array (the scenarios here), or a
+  // single object/scalar. The visualizer renders a row list, so wrap a
+  // non-array result into one.
+  rows: Array.isArray(res.result) ? res.result : [res.result],
   warnings: res.meta.warnings ?? [],
   params: res.meta.context as Record<string, ParamMeta>,
   missingContext: res.meta.missingContext,

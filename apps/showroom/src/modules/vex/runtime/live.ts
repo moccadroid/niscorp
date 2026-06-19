@@ -3,6 +3,7 @@ import type { SignalClient } from '@niscorp/cortex';
 import { createQueryDsl, createShapeMapper } from '@niscorp/vex/agent';
 import type { DatabaseAdapter, DatabaseSchema, QueryEngineConfig, Row } from '@niscorp/vex';
 import { compile } from '@niscorp/prism';
+import type { JsonValue } from '@niscorp/prism';
 import { getKey } from '@showroom/modules/signal/settings/api-key-storage';
 import { createOpenAIClient } from '@showroom/modules/signal/openai-client';
 import { scopePolicy } from './scope';
@@ -100,8 +101,10 @@ const rowsSatisfyShape = (rows: Row[], shape: unknown): boolean => {
 export const makeMapToShape = (): MapToShape => {
   return async (rows, shape) => {
     if (rowsSatisfyShape(rows, shape)) {
+      // Identity over the whole set: `$.result` is the rows array → returned
+      // unchanged. Matches the runtime replaying this IR over { result: rows }.
       const ir = await compile({ $ref: '$.result' });
-      return { ir, transformed: rows };
+      return { ir, transformed: rows as unknown as JsonValue };
     }
     return createShapeMapper(buildLlm())(rows, shape);
   };

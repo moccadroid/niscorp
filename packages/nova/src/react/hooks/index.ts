@@ -9,3 +9,4 @@ export { useCanvasRenderTree } from './use-canvas-render-tree';
 export { useNovaDispatch } from './use-nova-dispatch';
 export { useNovaPublish } from './use-nova-publish';
 export { useNovaRegistry } from './use-nova-registry';
+export { useSlotWrapper } from './use-slot-wrapper';

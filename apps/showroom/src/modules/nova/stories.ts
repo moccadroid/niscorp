@@ -39,6 +39,13 @@ import { story as setFromUndo } from './stories/actions/set-from-undo.story';
 import { story as strictError } from './stories/actions/strict-error.story';
 import { story as toggle } from './stories/actions/toggle.story';
 
+// Composition (ActionFragments)
+import { story as composeSlot } from './stories/composition/slot-fill.story';
+import { story as composeReuse } from './stories/composition/reuse.story';
+import { story as composeMerge } from './stories/composition/merge-rules.story';
+import { story as composeStack } from './stories/composition/stacking.story';
+import { story as composeModal } from './stories/composition/modal.story';
+
 // Shells
 import { story as conditionalDetail } from './stories/shell/conditional-detail.story';
 import { story as crossCanvasMessaging } from './stories/shell/cross-canvas-messaging.story';
@@ -48,6 +55,8 @@ import { story as listModeKanban } from './stories/shell/list-mode-kanban.story'
 import { story as multiCanvas } from './stories/shell/multi-canvas.story';
 import { story as pushPopNavigation } from './stories/shell/push-pop-navigation.story';
 import { story as replaceWizard } from './stories/shell/replace-wizard.story';
+import { story as slotWrapperAnimation } from './stories/shell/slot-wrapper-animation.story';
+import { story as slotWrapperAuthGate } from './stories/shell/slot-wrapper-auth-gate.story';
 import { story as suspendResumeOnNav } from './stories/shell/suspend-resume-on-nav.story';
 
 export const stories: readonly NovaStory[] = [
@@ -86,6 +95,12 @@ export const stories: readonly NovaStory[] = [
   functionEndpoint,
   functionEndpointMixed,
   strictError,
+  // Composition (ActionFragments)
+  composeSlot,
+  composeReuse,
+  composeMerge,
+  composeStack,
+  composeModal,
   // Shells
   pushPopNavigation,
   replaceWizard,
@@ -96,4 +111,6 @@ export const stories: readonly NovaStory[] = [
   listModeKanban,
   dashboardShell,
   conditionalDetail,
+  slotWrapperAnimation,
+  slotWrapperAuthGate,
 ];

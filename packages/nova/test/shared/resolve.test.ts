@@ -166,6 +166,19 @@ describe('resolve — $exists directive', () => {
   });
 });
 
+describe('resolve — $at directive', () => {
+  const data = { items: [{ id: 'a' }, { id: 'b' }, { id: 'c' }], i: 1 };
+  it('reads an array element by a dynamic index', () => {
+    expect(resolve({ $at: ['$.items', '$.i'] }, createScopeChain(data))).toEqual({ id: 'b' });
+  });
+  it('pulls a field off the element with the optional third arg', () => {
+    expect(resolve({ $at: ['$.items', '$.i', 'id'] }, createScopeChain(data))).toBe('b');
+  });
+  it('is undefined for an out-of-range index', () => {
+    expect(resolve({ $at: ['$.items', 9, 'id'] }, createScopeChain(data))).toBeUndefined();
+  });
+});
+
 describe('resolve — truthiness rules', () => {
   it.each([
     [null, false],

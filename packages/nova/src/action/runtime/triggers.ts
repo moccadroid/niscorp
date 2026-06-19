@@ -31,6 +31,12 @@ const eventRef = (event: unknown): string | undefined => {
   return typeof candidate === 'string' ? candidate : undefined;
 };
 
+const eventKey = (event: unknown): string | undefined => {
+  if (!hasKey(event, 'key')) return undefined;
+  const candidate = event['key'];
+  return typeof candidate === 'string' ? candidate : undefined;
+};
+
 const toNovaError = (err: unknown): NovaError => {
   if (err instanceof NovaError) return err;
   const message = err instanceof Error ? err.message : String(err);
@@ -65,9 +71,11 @@ export const attachTriggers = (
   for (const trigger of triggers) {
     if (trigger.event !== undefined) {
       const expectedRef = trigger.ref;
+      const expectedKey = trigger.key;
       const triggerType: string = trigger.event;
       const off = eventBus.on(triggerType, (event) => {
         if (expectedRef !== undefined && eventRef(event) !== expectedRef) return;
+        if (expectedKey !== undefined && eventKey(event) !== expectedKey) return;
         fireTrigger(trigger, buildContext, event);
       });
       unsubscribes.push(off);

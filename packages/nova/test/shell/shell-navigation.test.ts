@@ -100,4 +100,50 @@ describe('shell — navigation via runtime steps', () => {
     await tick();
     expect(shell.getCanvasState('main').active?.definitionId).toBe('B');
   });
+
+  it('resolves push `input` against the firing data scope', async () => {
+    const Src: ActionDefinition = { id: 'Src', data: { ref: 'r-42' } };
+    const Dst: ActionDefinition = { id: 'Dst', data: {} };
+    const shell = createShell({
+      canvases: [{ id: 'main' }],
+      registry: createPermissiveRegistry(),
+      layoutStore: createLayoutStore(),
+      actions: { Src, Dst },
+    });
+    const srcId = shell.push('main', 'Src');
+    await tick();
+    const srcRuntime = getInternalRuntime(shell, srcId);
+    if (srcRuntime === undefined) throw new Error('no src');
+    await srcRuntime.executeSteps([
+      { push: { action: 'Dst', input: { picked: '$.ref', literal: 'static' } } },
+    ]);
+    await tick();
+    const dst = shell.getCanvasState('main').active;
+    expect(dst?.definitionId).toBe('Dst');
+    expect(dst?.data['picked']).toBe('r-42'); // resolved from Src's data
+    expect(dst?.data['literal']).toBe('static'); // non-binding passes through
+  });
+
+  it('resolves push `input` from the firing event payload (@event)', async () => {
+    const Src: ActionDefinition = {
+      id: 'Src',
+      triggers: [
+        { event: 'ui:click', ref: 'open', do: [{ push: { action: 'Dst', input: { record: '@event.payload' } } }] },
+      ],
+    };
+    const Dst: ActionDefinition = { id: 'Dst', data: {} };
+    const shell = createShell({
+      canvases: [{ id: 'main' }],
+      registry: createPermissiveRegistry(),
+      layoutStore: createLayoutStore(),
+      actions: { Src, Dst },
+    });
+    shell.push('main', 'Src');
+    await tick();
+    shell.dispatch({ type: 'ui:click', ref: 'open', payload: { id: 'c-1', name: 'Ada' } });
+    await tick();
+    const dst = shell.getCanvasState('main').active;
+    expect(dst?.definitionId).toBe('Dst');
+    expect(dst?.data['record']).toEqual({ id: 'c-1', name: 'Ada' });
+  });
 });

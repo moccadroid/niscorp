@@ -96,6 +96,24 @@ export const compileQuery = (resolved: ResolvedQuery): CompiledQuery => {
     }
   }
 
+  // ─── CROSS JOIN ────────────────────────────────────────────
+  // Sources past the first with no join condition are cross-joined. A string
+  // entity always gets an FK join (or the resolver throws), so in practice only
+  // subquery sources land here — independent derived tables the author chose to
+  // combine (e.g. four single-row COUNT aggregates → one row of counts). The
+  // cartesian product is therefore intended, not an inferred mistake.
+  const joinedAliases = new Set(resolved.joins.map((j) => j.toAlias));
+  for (const source of resolved.sources) {
+    if (source.alias === firstSource?.alias || joinedAliases.has(source.alias)) continue;
+    if (source.subquery !== undefined) {
+      const subSql = compileQuery(source.subquery);
+      mergeSubqueryParams(subSql, paramSlots, paramCounter);
+      sqlParts.push(`CROSS JOIN (${subSql.sql}) AS ${source.alias}`);
+    } else if (source.table !== undefined) {
+      sqlParts.push(`CROSS JOIN ${source.table} AS ${source.alias}`);
+    }
+  }
+
   // ─── WHERE ─────────────────────────────────────────────────
   if (resolved.filter !== undefined) {
     const whereClause = compileFilter(resolved.filter.original, ctx);

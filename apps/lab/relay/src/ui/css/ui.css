@@ -1,0 +1,421 @@
+/* ═══════════════════════════════════════════════════════════
+   Relay component kit styles. Class-prefixed `rl-`. Reads tokens
+   from theme.css. One stylesheet, all components.
+   ═══════════════════════════════════════════════════════════ */
+
+/* ─── Button ───────────────────────────────────────────── */
+.rl-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  height: 30px; padding: 0 11px;
+  font-size: var(--fs-sm); font-weight: 540; line-height: 1; white-space: nowrap;
+  border: 1px solid transparent; border-radius: var(--r-sm);
+  cursor: pointer; user-select: none;
+  transition: background var(--t-fast) var(--ease), border-color var(--t-fast) var(--ease),
+    color var(--t-fast) var(--ease), box-shadow var(--t-fast) var(--ease), transform var(--t-fast) var(--ease);
+}
+.rl-btn:active { transform: translateY(0.5px); }
+.rl-btn:disabled { opacity: 0.45; pointer-events: none; }
+.rl-btn svg { width: 15px; height: 15px; }
+
+.rl-btn--sm { height: 26px; padding: 0 8px; font-size: var(--fs-xs); }
+.rl-btn--lg { height: 36px; padding: 0 16px; font-size: var(--fs-md); }
+
+.rl-btn--primary { background: var(--accent); color: var(--accent-fg); }
+.rl-btn--primary:hover { background: var(--accent-hover); box-shadow: 0 0 18px -6px var(--accent); }
+.rl-btn--primary:active { background: var(--accent-press); }
+
+.rl-btn--default { background: var(--surface-2); color: var(--text); border-color: var(--border-2); }
+.rl-btn--default:hover { background: var(--surface-3); border-color: var(--border-strong); }
+
+.rl-btn--ghost { background: transparent; color: var(--text-2); }
+.rl-btn--ghost:hover { background: var(--hover); color: var(--text); }
+
+.rl-btn--danger { background: transparent; color: var(--red); border-color: var(--border-2); }
+.rl-btn--danger:hover { background: var(--red-soft); border-color: var(--red); }
+
+/* ─── IconButton ───────────────────────────────────────── */
+.rl-iconbtn {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 30px; height: 30px; padding: 0;
+  color: var(--text-dim); background: transparent;
+  border: 1px solid transparent; border-radius: var(--r-sm); cursor: pointer;
+  transition: background var(--t-fast) var(--ease), color var(--t-fast) var(--ease);
+}
+.rl-iconbtn:hover { background: var(--hover); color: var(--text); }
+.rl-iconbtn:disabled { opacity: 0.4; pointer-events: none; }
+.rl-iconbtn svg { width: 16px; height: 16px; }
+.rl-iconbtn--sm { width: 24px; height: 24px; }
+.rl-iconbtn--sm svg { width: 14px; height: 14px; }
+
+/* ─── Input / Textarea / Select ────────────────────────── */
+.rl-field { display: flex; flex-direction: column; gap: 5px; }
+.rl-label { font-size: var(--fs-sm); font-weight: 540; color: var(--text-2); }
+.rl-label span { color: var(--red); margin-left: 3px; }
+.rl-desc { font-size: var(--fs-xs); color: var(--text-mute); }
+.rl-err { font-size: var(--fs-xs); color: var(--red); }
+
+.rl-input, .rl-textarea, .rl-select {
+  width: 100%; color: var(--text);
+  background: var(--bg-sunken); border: 1px solid var(--border-2); border-radius: var(--r-sm);
+  font-size: var(--fs-md); font-family: inherit;
+  transition: border-color var(--t-fast) var(--ease), box-shadow var(--t-fast) var(--ease), background var(--t-fast) var(--ease);
+}
+.rl-input, .rl-select { height: 32px; padding: 0 10px; }
+.rl-textarea { padding: 8px 10px; min-height: 72px; resize: vertical; line-height: 1.5; }
+.rl-input::placeholder, .rl-textarea::placeholder { color: var(--text-mute); }
+.rl-input:hover, .rl-textarea:hover, .rl-select:hover { border-color: var(--border-strong); }
+.rl-input:focus, .rl-textarea:focus, .rl-select:focus {
+  outline: none; border-color: var(--accent-line); background: var(--surface);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+.rl-input--invalid, .rl-textarea--invalid { border-color: var(--red); }
+.rl-select { appearance: none; cursor: pointer; padding-right: 28px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23888d99' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: right 8px center;
+}
+
+/* input with leading icon (search) */
+.rl-inputwrap { position: relative; display: flex; align-items: center; }
+.rl-inputwrap > svg { position: absolute; left: 10px; width: 15px; height: 15px; color: var(--text-mute); pointer-events: none; }
+.rl-inputwrap .rl-input { padding-left: 32px; }
+
+/* ─── Checkbox / Switch ────────────────────────────────── */
+.rl-check { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; font-size: var(--fs-md); color: var(--text-2); user-select: none; }
+.rl-check input { position: absolute; opacity: 0; width: 0; height: 0; }
+.rl-check__box {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 17px; height: 17px; border-radius: 5px; border: 1.5px solid var(--border-strong);
+  background: var(--bg-sunken); color: transparent; transition: all var(--t-fast) var(--ease);
+}
+.rl-check__box svg { width: 12px; height: 12px; }
+.rl-check input:checked + .rl-check__box { background: var(--accent); border-color: var(--accent); color: #fff; }
+.rl-check input:focus-visible + .rl-check__box { box-shadow: 0 0 0 3px var(--accent-soft); }
+
+.rl-switch { position: relative; display: inline-flex; width: 34px; height: 20px; cursor: pointer; }
+.rl-switch input { position: absolute; opacity: 0; width: 0; height: 0; }
+.rl-switch__track { width: 100%; height: 100%; border-radius: 999px; background: var(--surface-3); border: 1px solid var(--border-2); transition: all var(--t-med) var(--ease); }
+.rl-switch__thumb { position: absolute; top: 3px; left: 3px; width: 14px; height: 14px; border-radius: 50%; background: var(--text-dim); transition: all var(--t-med) var(--ease); }
+.rl-switch input:checked ~ .rl-switch__track { background: var(--accent); border-color: var(--accent); }
+.rl-switch input:checked ~ .rl-switch__thumb { left: 17px; background: #fff; }
+
+/* ─── Badge / Tag ──────────────────────────────────────── */
+.rl-badge {
+  display: inline-flex; align-items: center; gap: 5px;
+  height: 20px; padding: 0 8px; border-radius: var(--r-pill);
+  font-size: var(--fs-xs); font-weight: 560; white-space: nowrap;
+  background: var(--slate-soft); color: var(--slate);
+}
+.rl-badge__dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.rl-badge--accent { background: var(--accent-soft); color: var(--accent-hover); }
+.rl-badge--green { background: var(--green-soft); color: var(--green); }
+.rl-badge--amber { background: var(--amber-soft); color: var(--amber); }
+.rl-badge--red   { background: var(--red-soft);   color: var(--red); }
+.rl-badge--blue  { background: var(--blue-soft);  color: var(--blue); }
+.rl-badge--pink  { background: var(--pink-soft);  color: var(--pink); }
+
+.rl-tag {
+  display: inline-flex; align-items: center; gap: 5px; height: 22px; padding: 0 8px;
+  border-radius: var(--r-sm); font-size: var(--fs-xs); font-weight: 520;
+  background: var(--surface-2); color: var(--text-2); border: 1px solid var(--border-2);
+}
+.rl-tag button { display: inline-flex; border: none; background: none; color: var(--text-mute); cursor: pointer; padding: 0; }
+.rl-tag button:hover { color: var(--text); }
+
+/* ─── Avatar ───────────────────────────────────────────── */
+.rl-avatar {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 26px; height: 26px; border-radius: 50%; flex-shrink: 0;
+  font-size: 10.5px; font-weight: 640; color: #fff; letter-spacing: 0.2px;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+}
+.rl-avatar--sm { width: 20px; height: 20px; font-size: 9px; }
+.rl-avatar--lg { width: 38px; height: 38px; font-size: 14px; }
+.rl-avatars { display: inline-flex; }
+.rl-avatars .rl-avatar { margin-left: -7px; box-shadow: inset 0 0 0 1px rgba(255,255,255,0.08), 0 0 0 2px var(--surface); }
+.rl-avatars .rl-avatar:first-child { margin-left: 0; }
+
+/* ─── Card / StatCard ──────────────────────────────────── */
+.rl-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg); }
+.rl-card__head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 13px 16px; border-bottom: 1px solid var(--border); }
+.rl-card__title { font-size: var(--fs-md); font-weight: 600; }
+.rl-card__sub { font-size: var(--fs-xs); color: var(--text-mute); margin-top: 1px; }
+.rl-card__body { padding: 16px; }
+.rl-card__body--flush { padding: 0; }
+
+.rl-stat { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg); padding: 15px 16px; transition: border-color var(--t-fast) var(--ease); }
+.rl-stat:hover { border-color: var(--border-2); }
+.rl-stat__label { display: flex; align-items: center; gap: 7px; font-size: var(--fs-sm); color: var(--text-dim); font-weight: 500; }
+.rl-stat__label svg { width: 14px; height: 14px; color: var(--text-mute); }
+.rl-stat__value { font-size: var(--fs-2xl); font-weight: 680; letter-spacing: -0.5px; margin-top: 8px; }
+.rl-stat__delta { font-size: var(--fs-xs); font-weight: 560; margin-top: 5px; display: inline-flex; align-items: center; gap: 3px; }
+.rl-stat__delta--up { color: var(--green); }
+.rl-stat__delta--down { color: var(--red); }
+
+/* ─── Table ────────────────────────────────────────────── */
+.rl-table { width: 100%; border-collapse: collapse; font-size: var(--fs-md); }
+.rl-table thead th {
+  text-align: left; padding: 9px 14px; font-size: var(--fs-xs); font-weight: 580; letter-spacing: 0.3px;
+  text-transform: uppercase; color: var(--text-mute); border-bottom: 1px solid var(--border);
+  position: sticky; top: 0; background: var(--surface); z-index: 1; white-space: nowrap;
+}
+.rl-table tbody td { padding: 10px 14px; border-bottom: 1px solid var(--border); color: var(--text-2); vertical-align: middle; }
+.rl-table tbody tr { transition: background var(--t-fast) var(--ease); }
+.rl-table tbody tr:hover { background: var(--hover); }
+.rl-table tbody tr:hover td { color: var(--text); }
+.rl-table--clickable tbody tr { cursor: pointer; }
+.rl-table tbody tr:last-child td { border-bottom: none; }
+.rl-table .rl-td-strong { color: var(--text); font-weight: 540; }
+.rl-table th.rl-th-sort { cursor: pointer; user-select: none; }
+.rl-table th.rl-th-sort:hover { color: var(--text-dim); }
+.rl-th-sort span { display: inline-flex; align-items: center; gap: 4px; }
+
+/* ─── Segmented control (Tabs primitive) ───────────────── */
+.rl-seg { display: inline-flex; gap: 2px; padding: 2px; background: var(--bg-sunken); border: 1px solid var(--border-2); border-radius: var(--r-md); }
+.rl-seg__item {
+  padding: 4px 11px; font-size: var(--fs-sm); font-weight: 540; line-height: 1.4;
+  color: var(--text-dim); background: none; border: none; border-radius: var(--r-sm); cursor: pointer; white-space: nowrap;
+  transition: background var(--t-fast) var(--ease), color var(--t-fast) var(--ease);
+}
+.rl-seg__item:hover { color: var(--text); }
+.rl-seg__item--active { background: var(--surface-3); color: var(--text); box-shadow: var(--shadow-sm); }
+
+/* ─── Sortable column header (SortHeader primitive) ────── */
+.rl-th-sort {
+  display: inline-flex; align-items: center; gap: 4px; padding: 0;
+  font-size: var(--fs-xs); font-weight: 600; letter-spacing: 0.4px; text-transform: uppercase;
+  color: var(--text-mute); background: none; border: none; cursor: pointer;
+  transition: color var(--t-fast) var(--ease);
+}
+.rl-th-sort:hover { color: var(--text-dim); }
+.rl-th-sort--active { color: var(--text-2); }
+.rl-th-sort svg { width: 12px; height: 12px; }
+
+/* ─── Tabs ─────────────────────────────────────────────── */
+.rl-tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--border); }
+.rl-tab {
+  position: relative; padding: 9px 12px; font-size: var(--fs-sm); font-weight: 540;
+  color: var(--text-dim); background: none; border: none; cursor: pointer;
+  transition: color var(--t-fast) var(--ease);
+}
+.rl-tab:hover { color: var(--text-2); }
+.rl-tab--active { color: var(--text); }
+.rl-tab--active::after { content: ''; position: absolute; left: 8px; right: 8px; bottom: -1px; height: 2px; background: var(--accent); border-radius: 2px; }
+.rl-tab__count { margin-left: 6px; font-size: var(--fs-xs); color: var(--text-mute); }
+
+/* ─── EmptyState ───────────────────────────────────────── */
+.rl-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; padding: 48px 24px; text-align: center; }
+.rl-empty__icon { display: flex; align-items: center; justify-content: center; width: 44px; height: 44px; border-radius: var(--r-lg); background: var(--surface-2); color: var(--text-mute); margin-bottom: 4px; }
+.rl-empty__icon svg { width: 21px; height: 21px; }
+.rl-empty__title { font-size: var(--fs-md); font-weight: 600; color: var(--text); }
+.rl-empty__sub { font-size: var(--fs-sm); color: var(--text-mute); max-width: 320px; }
+
+/* ─── Spinner / Skeleton ───────────────────────────────── */
+.rl-spinner { display: inline-block; width: 16px; height: 16px; border: 2px solid var(--border-strong); border-top-color: var(--accent); border-radius: 50%; animation: rl-spin 0.6s linear infinite; }
+@keyframes rl-spin { to { transform: rotate(360deg); } }
+.rl-skel { background: linear-gradient(90deg, var(--surface-2) 25%, var(--surface-3) 50%, var(--surface-2) 75%); background-size: 200% 100%; border-radius: var(--r-sm); animation: rl-shimmer 1.4s ease infinite; }
+@keyframes rl-shimmer { to { background-position: -200% 0; } }
+
+/* ─── Dialog ───────────────────────────────────────────── */
+.rl-overlay { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.55); backdrop-filter: blur(2px); display: flex; align-items: flex-start; justify-content: center; padding: 7vh 16px; z-index: 100; animation: rl-fade var(--t-med) var(--ease); }
+/* A column flexbox capped at the viewport, so a tall body (a quickviewed list)
+   scrolls inside the dialog instead of overflowing the screen. */
+.rl-dialog { display: flex; flex-direction: column; width: 100%; max-width: 460px; max-height: 86vh; background: var(--surface); border: 1px solid var(--border-2); border-radius: var(--r-xl); box-shadow: var(--shadow-lg); animation: rl-pop var(--t-med) var(--ease); }
+/* The quickview launcher shows a whole screen (often a table) — far wider than a
+   form. Responsive: near-full-width on small screens, a comfortable cap on large. */
+.rl-dialog--wide { max-width: min(1040px, 94vw); }
+.rl-dialog--narrow { max-width: 400px; }
+.rl-dialog__head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 16px 18px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+.rl-dialog__title { font-size: var(--fs-lg); font-weight: 620; letter-spacing: -0.2px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rl-dialog__sub { font-size: var(--fs-sm); color: var(--text-mute); margin-top: 2px; }
+.rl-dialog__body { padding: 18px; overflow: auto; min-height: 0; }
+.rl-dialog__foot { display: flex; justify-content: flex-end; gap: 8px; padding: 14px 18px; border-top: 1px solid var(--border); flex-shrink: 0; }
+@keyframes rl-fade { from { opacity: 0; } }
+@keyframes rl-pop { from { opacity: 0; transform: translateY(8px) scale(0.98); } }
+
+/* Progress bar (e.g. a deal's win-probability). Fill width is set inline. */
+.rl-bar { height: 6px; background: var(--bg-sunken); border-radius: var(--r-pill); overflow: hidden; }
+.rl-bar__fill { height: 100%; background: var(--accent); border-radius: var(--r-pill); }
+
+/* Activity-feed type node — a coloured circle (tone from data) holding the type
+   icon, so the feed reads by colour, not a wall of similar white icons. */
+.rl-actdot { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 50%; flex-shrink: 0; }
+.rl-actdot svg { width: 14px; height: 14px; }
+.rl-actdot--green { background: var(--green-soft); color: var(--green); }
+.rl-actdot--blue  { background: var(--blue-soft);  color: var(--blue); }
+.rl-actdot--amber { background: var(--amber-soft); color: var(--amber); }
+.rl-actdot--slate { background: var(--slate-soft); color: var(--slate); }
+/* Mobile: reclaim the chrome's padding so the content gets the width. */
+@media (max-width: 640px) {
+  .rl-overlay { padding: 4vh 10px; }
+  .rl-dialog__head { padding: 13px 14px; }
+  .rl-dialog__body { padding: 13px; }
+}
+
+/* ─── Menu / Dropdown ──────────────────────────────────── */
+.rl-menu { min-width: 180px; background: var(--surface-2); border: 1px solid var(--border-2); border-radius: var(--r-md); box-shadow: var(--shadow); padding: 5px; animation: rl-pop var(--t-fast) var(--ease); }
+.rl-menu__item { display: flex; align-items: center; gap: 9px; width: 100%; padding: 7px 9px; font-size: var(--fs-sm); color: var(--text-2); background: none; border: none; border-radius: var(--r-sm); cursor: pointer; text-align: left; transition: background var(--t-fast) var(--ease), color var(--t-fast) var(--ease); }
+.rl-menu__item svg { width: 15px; height: 15px; color: var(--text-mute); }
+.rl-menu__item:hover { background: var(--hover); color: var(--text); }
+.rl-menu__item:hover svg { color: var(--text-2); }
+.rl-menu__item--danger { color: var(--red); }
+.rl-menu__item--danger svg { color: var(--red); }
+.rl-menu__item--danger:hover { background: var(--red-soft); color: var(--red); }
+.rl-menu__sep { height: 1px; background: var(--border); margin: 5px 0; }
+/* Row `⋯` menu: a .rl-menu floated under its kebab (inside a .rl-popover). Opens
+   to the left so it stays inside the table on the trailing column. */
+.rl-rowmenu { position: absolute; top: calc(100% + 4px); right: 0; z-index: 60; min-width: 168px; }
+
+/* ─── Toast ────────────────────────────────────────────── */
+.rl-toasts { position: fixed; bottom: 20px; right: 20px; display: flex; flex-direction: column; gap: 10px; z-index: 200; }
+.rl-toast { display: flex; align-items: center; gap: 10px; min-width: 260px; max-width: 380px; padding: 11px 13px; background: var(--surface-2); border: 1px solid var(--border-2); border-radius: var(--r-md); box-shadow: var(--shadow); animation: rl-toast-in var(--t-med) var(--ease); }
+.rl-toast svg { width: 16px; height: 16px; flex-shrink: 0; }
+.rl-toast__msg { font-size: var(--fs-sm); color: var(--text); }
+.rl-toast--success svg { color: var(--green); }
+.rl-toast--error svg { color: var(--red); }
+.rl-toast--info svg { color: var(--blue); }
+@keyframes rl-toast-in { from { opacity: 0; transform: translateX(12px); } }
+
+/* ─── Tooltip ──────────────────────────────────────────── */
+.rl-tip { position: relative; display: inline-flex; }
+.rl-tip__bubble { position: absolute; bottom: calc(100% + 7px); left: 50%; transform: translateX(-50%); padding: 5px 9px; background: var(--surface-3); border: 1px solid var(--border-2); border-radius: var(--r-sm); font-size: var(--fs-xs); color: var(--text); white-space: nowrap; box-shadow: var(--shadow-sm); opacity: 0; pointer-events: none; transition: opacity var(--t-fast) var(--ease); z-index: 50; }
+.rl-tip:hover .rl-tip__bubble { opacity: 1; }
+
+/* ─── App shell ────────────────────────────────────────── */
+.rl-shell { display: grid; grid-template-columns: 232px 1fr; height: 100vh; background: var(--bg); }
+
+.rl-sidebar { display: flex; flex-direction: column; background: var(--bg-sunken); border-right: 1px solid var(--border); min-height: 0; }
+.rl-sidebar__brand { display: flex; align-items: center; gap: 9px; padding: 15px 16px 14px; }
+.rl-sidebar__logo { display: flex; align-items: center; justify-content: center; width: 26px; height: 26px; border-radius: 7px; background: linear-gradient(135deg, var(--accent), #b06cff); color: #fff; box-shadow: var(--accent-glow); }
+.rl-sidebar__logo svg { width: 15px; height: 15px; }
+.rl-sidebar__name { font-size: var(--fs-lg); font-weight: 680; letter-spacing: -0.3px; }
+.rl-sidebar__search { padding: 4px 12px 10px; }
+.rl-nav { display: flex; flex-direction: column; gap: 1px; padding: 6px 10px; overflow-y: auto; flex: 1; }
+.rl-nav__section { font-size: 10.5px; font-weight: 620; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-mute); padding: 14px 8px 5px; }
+.rl-navitem { display: flex; align-items: center; gap: 10px; padding: 7px 8px; border-radius: var(--r-sm); font-size: var(--fs-md); font-weight: 500; color: var(--text-dim); cursor: pointer; border: none; background: none; text-align: left; width: 100%; transition: background var(--t-fast) var(--ease), color var(--t-fast) var(--ease); }
+.rl-navitem svg { width: 16px; height: 16px; }
+.rl-navitem:hover { background: var(--hover); color: var(--text); }
+.rl-navitem--active { background: var(--selected); color: var(--text); }
+.rl-navitem--active svg { color: var(--accent); }
+.rl-navitem__count { margin-left: auto; font-size: var(--fs-xs); color: var(--text-mute); }
+.rl-sidebar__foot { display: flex; align-items: center; gap: 9px; padding: 11px 14px; border-top: 1px solid var(--border); }
+.rl-sidebar__user { display: flex; flex-direction: column; min-width: 0; }
+.rl-sidebar__uname { font-size: var(--fs-sm); font-weight: 560; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rl-sidebar__urole { font-size: 10.5px; color: var(--text-mute); }
+
+.rl-main { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+.rl-topbar { display: flex; align-items: center; gap: 14px; height: 52px; padding: 0 20px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+.rl-topbar__title { font-size: var(--fs-lg); font-weight: 620; letter-spacing: -0.2px; }
+.rl-topbar__sub { font-size: var(--fs-sm); color: var(--text-mute); }
+.rl-topbar__spacer { flex: 1; }
+.rl-topbar__actions { display: flex; align-items: center; gap: 8px; }
+.rl-page { flex: 1; overflow-y: auto; padding: 22px 24px; }
+.rl-page__inner { max-width: 1280px; margin: 0 auto; }
+
+/* A flex child that must be allowed to shrink below its content so an inner
+   overflow:auto scrolls (and a wide board scrolls horizontally) instead of
+   pushing the page past 100vh. */
+.rl-min0 { min-width: 0; min-height: 0; }
+
+.rl-grid { display: grid; gap: 14px; }
+.rl-row { display: flex; align-items: center; gap: 10px; }
+.rl-stack { display: flex; flex-direction: column; gap: 14px; }
+
+/* ─── Kanban ───────────────────────────────────────────── */
+.rl-kanban { display: flex; gap: 12px; align-items: flex-start; overflow-x: auto; padding-bottom: 10px; }
+.rl-kanban__col { flex: 1 1 0; min-width: 280px; display: flex; flex-direction: column; max-height: calc(100vh - 200px); background: var(--bg-sunken); border: 1px solid var(--border); border-radius: var(--r-lg); }
+.rl-kanban__head { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 11px 13px; border-bottom: 1px solid var(--border); }
+.rl-kanban__title { display: flex; align-items: center; gap: 8px; font-size: var(--fs-sm); font-weight: 600; }
+.rl-kanban__total { font-size: var(--fs-xs); color: var(--text-mute); font-variant-numeric: tabular-nums; }
+.rl-kanban__cards { display: flex; flex-direction: column; gap: 8px; padding: 10px; overflow-y: auto; border: 2px solid transparent; border-radius: var(--r-md); transition: border-color var(--t-fast) var(--ease), background var(--t-fast) var(--ease); }
+.rl-kanban__cards:empty::after { content: 'No deals'; color: var(--text-mute); font-size: var(--fs-xs); padding: 8px 2px; }
+/* Drop target lights up while a card is dragged over it. */
+.rl-dropover { border-color: var(--brand); background: color-mix(in srgb, var(--brand) 8%, transparent); }
+.rl-kanban__card { background: var(--surface); border: 1px solid var(--border-2); border-radius: var(--r-md); padding: 11px 12px; cursor: pointer; transition: border-color var(--t-fast) var(--ease), transform var(--t-fast) var(--ease); }
+.rl-kanban__card:hover { border-color: var(--border-strong); transform: translateY(-1px); }
+.rl-kanban__card-title { font-size: var(--fs-sm); font-weight: 540; color: var(--text); line-height: 1.35; }
+.rl-kanban__card-sub { font-size: var(--fs-xs); color: var(--text-dim); margin-top: 3px; }
+.rl-kanban__card-val { font-size: var(--fs-sm); font-weight: 640; color: var(--text); margin-top: 9px; font-variant-numeric: tabular-nums; }
+/* Stage-coloured top accent — the tone is interpolated into the column class. */
+.rl-kanban__col--slate { box-shadow: inset 0 2px 0 var(--slate); }
+.rl-kanban__col--blue  { box-shadow: inset 0 2px 0 var(--blue); }
+.rl-kanban__col--amber { box-shadow: inset 0 2px 0 var(--amber); }
+.rl-kanban__col--pink  { box-shadow: inset 0 2px 0 var(--pink); }
+.rl-kanban__col--green { box-shadow: inset 0 2px 0 var(--green); }
+/* Drag affordance (cards are draggable). */
+.rl-kanban__card { cursor: grab; }
+.rl-kanban__card:active { cursor: grabbing; }
+
+/* ─── Nova primitive polish ────────────────────────────── */
+/* Table-row hover (Grid hover prop). */
+.rl-rowhover { transition: background var(--t-fast) var(--ease); }
+.rl-rowhover:hover { background: var(--hover); }
+/* The row whose record is open in the detail panel (Grid selected prop). */
+.rl-rowselected, .rl-rowselected.rl-rowhover:hover { background: var(--accent-soft); box-shadow: inset 2px 0 0 var(--accent); }
+
+/* ─── Table primitive ──────────────────────────────────── */
+/* The grid columns come from a `rl-cols-*` class (below); these add the row
+   chrome. Head/row are grid rows (the cols class sets display:grid). */
+.rl-tbl__head, .rl-tbl__row { align-items: center; border-bottom: 1px solid var(--border); }
+.rl-tbl__row { cursor: pointer; }
+.rl-tbl__hcell { padding: 11px 18px; min-width: 0; }
+.rl-tbl__cell { padding: 13px 18px; min-width: 0; }
+.rl-tbl__hcell--end, .rl-tbl__cell--end { justify-self: end; text-align: right; }
+.rl-tbl__menu { display: flex; justify-content: center; padding: 8px; }
+.rl-tbl__skel { padding: 15px 18px; border-bottom: 1px solid var(--border); }
+.rl-tbl__empty { padding: 44px 24px; text-align: center; font-size: var(--fs-sm); color: var(--text-mute); }
+
+/* ─── Responsive list tables ───────────────────────────── */
+/* A list card is a query container, so its table reflows to the width actually
+   available — wide on the full page, narrow inside a quickview or on a phone.
+   The columns live here (a Grid `class:` instead of an inline `template:`) so a
+   `@container` query can drop the secondary ones when space is tight. The same
+   nth-child indices apply to the header Grid and every row Grid, so they align. */
+.rl-listcard { container-type: inline-size; }
+
+/* Each ends with an `auto` column for the row `⋯` kebab. */
+.rl-cols-contacts  { display: grid; grid-template-columns: 1.4fr 1fr 1.2fr 1.4fr auto; }
+.rl-cols-companies { display: grid; grid-template-columns: 1.4fr 1fr 1fr 1.2fr auto; }
+.rl-cols-deals     { display: grid; grid-template-columns: 2fr 1.5fr 1.2fr 1fr 0.9fr 1fr auto; }
+.rl-cols-tasks     { display: grid; grid-template-columns: auto 2fr 1fr 1fr auto; }
+.rl-tbl__check     { width: 16px; height: 16px; cursor: pointer; accent-color: var(--brand); }
+
+@container (max-width: 600px) {
+  /* Contacts → Name + Company + ⋯ (drop Title, Email). */
+  .rl-cols-contacts  { grid-template-columns: minmax(0, 1fr) auto auto; }
+  .rl-cols-contacts  > :nth-child(2), .rl-cols-contacts  > :nth-child(4) { display: none; }
+  /* Companies → Company + Industry + ⋯ (drop Size, Domain). */
+  .rl-cols-companies { grid-template-columns: minmax(0, 1fr) auto auto; }
+  .rl-cols-companies > :nth-child(3), .rl-cols-companies > :nth-child(4) { display: none; }
+  /* Deals → Deal + Value + Status + ⋯ (drop Company, Stage, Created). */
+  .rl-cols-deals     { grid-template-columns: minmax(0, 1fr) auto auto auto; }
+  .rl-cols-deals     > :nth-child(2), .rl-cols-deals > :nth-child(3), .rl-cols-deals > :nth-child(6) { display: none; }
+  /* Tasks → ✓ + Task + Due + ⋯ (drop Created). */
+  .rl-cols-tasks     { grid-template-columns: auto minmax(0, 1fr) auto auto; }
+  .rl-cols-tasks     > :nth-child(4) { display: none; }
+}
+
+/* Cross-link affordances. LinkRow: a clickable nav row that hover-highlights
+   and slides in a → chevron — the one way to link a record. */
+.rl-linkrow { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 7px 9px; margin: 0 -9px; border-radius: var(--r-sm); cursor: pointer; transition: background var(--t-fast) var(--ease); }
+.rl-linkrow:hover { background: var(--hover); }
+.rl-linkrow__body { flex: 1; min-width: 0; }
+.rl-linkrow__chev { display: inline-flex; flex-shrink: 0; color: var(--text-mute); opacity: 0; transform: translateX(-4px); transition: opacity var(--t-fast) var(--ease), transform var(--t-fast) var(--ease); }
+.rl-linkrow:hover .rl-linkrow__chev { opacity: 1; transform: translateX(0); }
+
+/* Popover — a floating panel anchored under a trigger (open state is a layout
+   conditional, not React). Used by the action search + (later) row menus. */
+.rl-popover { position: relative; }
+.rl-popover__panel { position: absolute; top: calc(100% + 6px); left: 0; min-width: 340px; z-index: 60; background: var(--surface-2); border: 1px solid var(--border-2); border-radius: var(--r-md); box-shadow: var(--shadow); padding: 5px; max-height: 380px; overflow: auto; animation: rl-pop var(--t-fast) var(--ease); }
+/* Search result rows: a clickable Grid (hover/selected) wrapping name + desc. */
+.rl-popover__panel .rl-rowhover, .rl-popover__panel .rl-rowselected { border-radius: var(--r-sm); }
+.rl-popover__panel .rl-rowselected { box-shadow: none; }
+/* Kill the mouse-click focus ring; keep a clean ring for keyboard nav. */
+.rl-navitem, .rl-btn, .rl-iconbtn { outline: none; }
+.rl-navitem:focus-visible, .rl-btn:focus-visible, .rl-iconbtn:focus-visible { outline: 2px solid var(--accent-line); outline-offset: 1px; }
+
+/* ─── Action entrance ──────────────────────────────────── */
+/* The Relay slotWrapper wraps every action's content in `.rl-fade-in`, so an
+   action fades in when it appears. Opacity + a hair of rise — compositor-only,
+   no reflow. (Animating a slot's footprint is a separate, deferred problem.) */
+@keyframes rl-fade-in { from { opacity: 0; transform: translateY(3px); } }
+.rl-fade-in { animation: rl-fade-in 180ms cubic-bezier(0.2, 0.7, 0.2, 1); }

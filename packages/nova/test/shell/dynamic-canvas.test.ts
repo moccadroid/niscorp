@@ -53,6 +53,35 @@ describe('createShell — dynamic canvases', () => {
     expect(tree).not.toContain('CanvasSlot');
   });
 
+  it('setLayout swaps a LayoutRef target without touching the frame chrome', () => {
+    const shell = createShell({
+      canvases: [{ id: 'sidebar' }, { id: 'main' }],
+      // Frame: sidebar is real chrome; `main` is a dynamic region behind a ref.
+      canvasLayout: {
+        component: 'Row',
+        children: [
+          { component: 'CanvasSlot', props: { canvasId: 'sidebar' } },
+          { ref: 'main' },
+        ],
+      },
+      registry: createPermissiveRegistry(),
+      layoutStore: createLayoutStore(),
+      actions: { A: defA },
+    });
+
+    shell.setLayout('main', { component: 'CanvasSlot', props: { canvasId: 'main' } });
+    let tree = JSON.stringify(shell.getShellRenderTree());
+    expect(tree).toContain('"canvasId":"sidebar"');
+    expect(tree).toContain('"canvasId":"main"');
+
+    // Swap only the ref target. The sidebar (frame) is untouched; the region changes.
+    shell.setLayout('main', { component: 'Splitpane' });
+    tree = JSON.stringify(shell.getShellRenderTree());
+    expect(tree).toContain('"canvasId":"sidebar"');   // chrome intact — can't be removed
+    expect(tree).toContain('Splitpane');               // new region layout
+    expect(tree).not.toContain('"canvasId":"main"');   // old region replaced
+  });
+
   it('registerAction adds a definition a canvas can then seed', async () => {
     const shell = makeShell();
     shell.registerAction({ id: 'B', data: { v: 2 } });

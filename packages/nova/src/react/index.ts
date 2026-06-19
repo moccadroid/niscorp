@@ -14,7 +14,7 @@ export type {
   NovaPublish,
 } from './types';
 
-export type { NovaRenderContextValue } from './context';
+export type { NovaRenderContextValue, SlotWrapper, SlotWrapperProps } from './context';
 
 export {
   NovaRenderProvider,
@@ -53,4 +53,5 @@ export {
   useNovaDispatch,
   useNovaPublish,
   useNovaRegistry,
+  useSlotWrapper,
 } from './hooks';

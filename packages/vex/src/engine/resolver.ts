@@ -3,7 +3,7 @@ import type { Filter } from '../schemas/filter.schema.js';
 import type { ComputeExpression } from '../schemas/compute.schema.js';
 import type { AggregateExpression } from '../schemas/aggregate.schema.js';
 import type { FieldOrValue } from '../schemas/value.schema.js';
-import type { DatabaseSchema, EntitySchema, FieldSchema } from '../schemas/database.schema.js';
+import type { DatabaseSchema, EntitySchema, FieldSchema, NormalizedType } from '../schemas/database.schema.js';
 import type {
   ResolvedQuery,
   ResolvedSource,
@@ -385,10 +385,23 @@ export const resolve = (dsl: Query, schema: DatabaseSchema): ResolvedQuery => {
       const subResolved = resolve(source.query, schema);
       const alias = source.as;
 
-      // Create a synthetic entity lookup for the subquery alias
-      // Fields from the subquery can be referenced as alias.field
-      // Build a synthetic EntitySchema from the subquery's output fields
-      const syntheticFields = subResolved.fields.map((f) => f.schema);
+      // Expose the subquery's OUTPUT columns as a synthetic entity, so the
+      // outer query can reference them as `alias.field`. That's every selected
+      // field (under its output name — `as` if aliased), plus every compute and
+      // aggregate alias. Without the aggregate outputs, a cross-joined count
+      // subquery's `alias.n` would not resolve.
+      const synthField = (name: string, normalizedType: NormalizedType): FieldSchema => ({
+        name,
+        type: normalizedType,
+        normalizedType,
+        nullable: true,
+        primaryKey: false,
+      });
+      const syntheticFields: FieldSchema[] = [
+        ...subResolved.fields.map((f) => ({ ...f.schema, name: f.outputName })),
+        ...subResolved.computes.map((c) => synthField(c.name, 'unknown')),
+        ...subResolved.aggregates.map((a) => synthField(a.name, 'number')),
+      ];
       const syntheticEntity: EntitySchema = {
         name: alias,
         table: alias,
@@ -431,11 +444,14 @@ export const resolve = (dsl: Query, schema: DatabaseSchema): ResolvedQuery => {
   }
 
   // ─── Resolve fields ────────────────────────────────────────
+  // `fields` is optional (an aggregate-only query selects none); an entry may be
+  // a bare `entity.field` or `{ field, as }`, where `as` overrides the output key.
   const fields: ResolvedField[] = [];
-  for (const fieldPath of dsl.fields) {
-    const { resolved } = resolveFieldPath(fieldPath, entityLookup, schema);
-    fields.push(resolved);
-    aliasMap.set(fieldPath, `${resolved.alias}.${resolved.column}`);
+  for (const ref of dsl.fields ?? []) {
+    const path = typeof ref === 'string' ? ref : ref.field;
+    const { resolved } = resolveFieldPath(path, entityLookup, schema);
+    fields.push(typeof ref === 'string' ? resolved : { ...resolved, outputName: ref.as });
+    aliasMap.set(path, `${resolved.alias}.${resolved.column}`);
   }
 
   // ─── Resolve filter ────────────────────────────────────────
@@ -584,17 +600,23 @@ const resolveAggregatePaths = (
   schema: DatabaseSchema,
   aliasMap: Map<string, string>,
 ): void => {
-  const path = ('count' in expr) ? expr.count
+  const arg = ('count' in expr) ? expr.count
     : ('sum' in expr) ? expr.sum
     : ('avg' in expr) ? expr.avg
     : ('min' in expr) ? expr.min
     : expr.max;
 
-  // COUNT(*) is special — no field path
-  if (path === '*') return;
+  // COUNT(*) is special — no field path.
+  if (arg === '*') return;
 
-  if (isFieldPath(path) && !aliasMap.has(path)) {
-    const { resolved } = resolveFieldPath(path, entityLookup, schema);
-    aliasMap.set(path, `${resolved.alias}.${resolved.column}`);
+  // sum/avg/min/max may take a compute expression — resolve the columns it refs.
+  if (typeof arg !== 'string') {
+    resolveComputePaths(arg, entityLookup, schema, aliasMap);
+    return;
+  }
+
+  if (isFieldPath(arg) && !aliasMap.has(arg)) {
+    const { resolved } = resolveFieldPath(arg, entityLookup, schema);
+    aliasMap.set(arg, `${resolved.alias}.${resolved.column}`);
   }
 };

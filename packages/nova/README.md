@@ -13,6 +13,11 @@ Components are decoupled from the shell — they receive only the
 layout's `props` plus `children` / `novaModel`, and emit events via
 context hooks.
 
+An optional `slotWrapper` prop wraps every action instance's content at
+its mount/unmount seam — one pluggable point for animation, auth / feature
+gates, logging, or error boundaries, with nova owning none of that logic.
+See `REACT_DOCS.md`.
+
 ---
 
 ## What it is
@@ -135,14 +140,23 @@ The runtime is a closure factory (`createActionRuntime`) — no classes.
 It owns a reactive data store, an `AbortController`, the trigger
 handles, and the model-binding listeners.
 
+An `ActionFragment` is a reusable partial action (every field optional, a
+`kind: 'fragment'` marker) — layout chrome plus wired triggers/data. It is
+composed into a concrete action at the call site via a push/replace
+`with: ['id']`: the fragment wraps the action, dropping the action's layout
+into its `{ slot: 'body' }`; the action wins on conflict. Pure data, so it
+ships in a DB row and can be referenced rather than inlined.
+
 ### Shell
 
 The orchestrator. `createShell(config)` validates every action
 definition at construction (boundary Zod validation) and returns a
-`Shell` with `push`, `pop`, `replace`, `clear`, `getCanvasState`,
-`getRuntime`, `onStateChange`, `onDataChange`, `dispose`. It maintains
-a stack per canvas, drives lifecycle hooks via the runtime, and routes
-navigation effects emitted from action steps back into shell calls.
+`Shell` with `push`, `pop`, `replace`, `clear`, `registerAction`,
+`registerFragment`, `getCanvasState`, `getRuntime`, `onStateChange`,
+`onDataChange`, `dispose`. It maintains a stack per canvas, drives
+lifecycle hooks via the runtime, composes any `with` fragments into the
+action at push/replace time, and routes navigation effects emitted from
+action steps back into shell calls.
 
 ---
 
@@ -152,10 +166,10 @@ The Zod schemas are the source of truth and are validated at every
 boundary. They are exported from the package root:
 
 - `LayoutNodeSchema`, `ComponentNodeSchema`, `ConditionalNodeSchema`,
-  `LoopNodeSchema`, `LayoutRefNodeSchema`
-- `ActionDefinitionSchema`, `MutationSchema`, `StepSchema`,
-  `EffectSchema`, `TriggerConfigSchema`, `EndpointConfigSchema`,
-  `LifecycleConfigSchema`
+  `LoopNodeSchema`, `LayoutRefNodeSchema`, `SlotNodeSchema`
+- `ActionDefinitionSchema`, `ActionFragmentSchema`, `MutationSchema`,
+  `StepSchema`, `EffectSchema`, `TriggerConfigSchema`,
+  `EndpointConfigSchema`, `LifecycleConfigSchema`
 
 Boundary throws use `DefinitionValidationError` with a structured
 `failures` array.

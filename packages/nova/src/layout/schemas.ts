@@ -88,11 +88,30 @@ export const LayoutRefNodeSchema = z
 
 export type LayoutRefNode = z.infer<typeof LayoutRefNodeSchema>;
 
+export const SlotNodeSchema = z
+  .object({
+    slot: z
+      .string()
+      .describe(
+        'Name of a slot placeholder. When an ActionFragment is composed with an action ' +
+          '(a push/replace `with`), the fragment\'s `{ slot: "body" }` node is replaced by ' +
+          'the composing action\'s own layout. An unfilled slot renders nothing.',
+      ),
+  })
+  .strict()
+  .describe(
+    'A placeholder that a fragment-merge fills with a composing action\'s layout. ' +
+      'Only meaningful inside an ActionFragment\'s layout.',
+  );
+
+export type SlotNode = z.infer<typeof SlotNodeSchema>;
+
 export type LayoutNode =
   | ComponentNode
   | ConditionalNode
   | LoopNode
   | LayoutRefNode
+  | SlotNode
   | LayoutNode[]
   | LayoutPrimitive;
 
@@ -103,8 +122,9 @@ export const LayoutNodeSchema: z.ZodType<LayoutNode> = z.lazy(() =>
       ConditionalNodeSchema,
       LoopNodeSchema,
       LayoutRefNodeSchema,
+      SlotNodeSchema,
       z.array(LayoutNodeSchema),
       LayoutPrimitiveSchema,
     ])
-    .describe('Any layout node: component, conditional, loop, layout ref, array of nodes, or a primitive text value.'),
+    .describe('Any layout node: component, conditional, loop, layout ref, slot, array of nodes, or a primitive text value.'),
 );

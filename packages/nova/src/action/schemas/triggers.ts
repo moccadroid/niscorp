@@ -6,6 +6,7 @@ export const TriggerConfigSchema = z
     event: z.string().optional().describe('UI event type to listen for, e.g. "ui:click".'),
     message: z.string().optional().describe('Message bus channel name to listen on.'),
     ref: z.string().optional().describe('Component ref to filter events by.'),
+    key: z.string().optional().describe('Key to filter "ui:key" events by, e.g. "ArrowDown".'),
     do: z.array(StepSchema).describe('Ordered steps to execute when the trigger fires.'),
   })
   .strict()

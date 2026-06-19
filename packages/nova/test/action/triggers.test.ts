@@ -66,6 +66,24 @@ describe('attachTriggers', () => {
     expect(dataStore.get()).toEqual({ n: 0 });
   });
 
+  it('fires on ui:key only for the matching key', async () => {
+    const eventBus = createEventBus();
+    const messageBus = createMessageBus();
+    const dataStore = createDataStore({ n: 0 });
+    attachTriggers(
+      [{ event: 'ui:key', key: 'ArrowDown', do: [{ increment: 'n' }] }],
+      eventBus,
+      messageBus,
+      makeBuild(dataStore, eventBus, messageBus),
+    );
+    eventBus.emit({ type: 'ui:key', key: 'ArrowUp' });
+    await tick();
+    expect(dataStore.get()).toEqual({ n: 0 }); // non-matching key ignored
+    eventBus.emit({ type: 'ui:key', key: 'ArrowDown' });
+    await tick();
+    expect(dataStore.get()).toEqual({ n: 1 }); // matching key fires
+  });
+
   it('fires multiple matching triggers in order', async () => {
     const eventBus = createEventBus();
     const messageBus = createMessageBus();

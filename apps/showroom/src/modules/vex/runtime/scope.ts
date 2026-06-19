@@ -7,10 +7,12 @@ import type { ScopePolicy } from '@niscorp/vex';
 //
 // At query time the engine AND-merges
 //   { eq: ["orders.account_id", { $scope: "accountId" }] }
-// into the generated DSL — only when options.scope provides accountId.
+// into the generated DSL — only when options.scope provides accountId. The
+// `read` block carries the row-level `match`; a `write` block (set/match) would
+// govern mutations, but the showroom only demos reads.
 export const scopePolicy: ScopePolicy = {
   default: 'allow',
   entities: {
-    orders: { field: 'account_id', source: 'accountId' },
+    orders: { read: [{ match: 'account_id', to: 'accountId' }] },
   },
 };

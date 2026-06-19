@@ -238,92 +238,66 @@ describe('applyScope', () => {
 
   it('no-op when policy default is allow and no entity rules', () => {
     const policy: ScopePolicy = { default: 'allow', entities: {} };
-    const entities = new Set(['users']);
-    const result = applyScope(baseDsl, entities, policy);
+    const result = applyScope(baseDsl, new Set(['users']), policy);
     expect(result.filter).toBeUndefined();
     expect(result.from).toEqual(['users']);
   });
 
   it('throws VexScopeError when entity denied explicitly', () => {
-    const policy: ScopePolicy = {
-      default: 'allow',
-      entities: { users: { deny: true } },
-    };
-    const entities = new Set(['users']);
-    expect(() => applyScope(baseDsl, entities, policy)).toThrow(VexScopeError);
+    const policy: ScopePolicy = { default: 'allow', entities: { users: { deny: true } } };
+    expect(() => applyScope(baseDsl, new Set(['users']), policy)).toThrow(VexScopeError);
   });
 
   it('throws VexScopeError when entity has no rule and default is deny', () => {
     const policy: ScopePolicy = { default: 'deny', entities: {} };
-    const entities = new Set(['users']);
-    expect(() => applyScope(baseDsl, entities, policy)).toThrow(VexScopeError);
+    expect(() => applyScope(baseDsl, new Set(['users']), policy)).toThrow(VexScopeError);
   });
 
-  it('skips public entities', () => {
+  it('throws on read when a listed entity has only a write block and default is deny', () => {
     const policy: ScopePolicy = {
       default: 'deny',
-      entities: { users: { public: true } },
+      entities: { users: { write: [{ set: 'owner_id', to: 'userId' }] } },
     };
-    const entities = new Set(['users']);
-    const result = applyScope(baseDsl, entities, policy);
+    expect(() => applyScope(baseDsl, new Set(['users']), policy)).toThrow(VexScopeError);
+  });
+
+  it('a write-only rule does not filter reads (default allow)', () => {
+    const policy: ScopePolicy = {
+      default: 'allow',
+      entities: { users: { write: [{ set: 'owner_id', to: 'userId' }] } },
+    };
+    const result = applyScope(baseDsl, new Set(['users']), policy);
     expect(result.filter).toBeUndefined();
   });
 
-  it('injects eq filter for filter rule with default op', () => {
-    const policy: ScopePolicy = {
-      default: 'allow',
-      entities: {
-        users: { field: 'tenantId', source: 'tenant' },
-      },
-    };
-    const entities = new Set(['users']);
-    const result = applyScope(baseDsl, entities, policy);
-    expect(result.filter).toEqual({
-      eq: ['users.tenantId', { $scope: 'tenant' }],
-    });
+  it('skips public entities', () => {
+    const policy: ScopePolicy = { default: 'deny', entities: { users: { public: true } } };
+    const result = applyScope(baseDsl, new Set(['users']), policy);
+    expect(result.filter).toBeUndefined();
   });
 
-  it('injects in filter for op: in rule', () => {
-    const policy: ScopePolicy = {
-      default: 'allow',
-      entities: {
-        users: { field: 'orgId', source: 'orgs', op: 'in' },
-      },
-    };
-    const entities = new Set(['users']);
-    const result = applyScope(baseDsl, entities, policy);
-    expect(result.filter).toEqual({
-      in: ['users.orgId', { $scope: 'orgs' }],
-    });
+  it('an empty read block allows reads with no filter', () => {
+    const policy: ScopePolicy = { default: 'deny', entities: { users: { read: [] } } };
+    const result = applyScope(baseDsl, new Set(['users']), policy);
+    expect(result.filter).toBeUndefined();
   });
 
-  it('injects neq filter for op: neq rule', () => {
+  it('injects an eq filter for a read match rule', () => {
     const policy: ScopePolicy = {
       default: 'allow',
-      entities: {
-        users: { field: 'status', source: 'excludeStatus', op: 'neq' },
-      },
+      entities: { users: { read: [{ match: 'tenantId', to: 'tenant' }] } },
     };
-    const entities = new Set(['users']);
-    const result = applyScope(baseDsl, entities, policy);
-    expect(result.filter).toEqual({
-      neq: ['users.status', { $scope: 'excludeStatus' }],
-    });
+    const result = applyScope(baseDsl, new Set(['users']), policy);
+    expect(result.filter).toEqual({ eq: ['users.tenantId', { $scope: 'tenant' }] });
   });
 
-  it('AND-merges scope filter with existing filter', () => {
-    const dslWithFilter: Query = {
-      ...baseDsl,
-      filter: { eq: ['users.active', true] },
-    };
+  it('AND-merges the scope filter with an existing filter', () => {
+    const dslWithFilter: Query = { ...baseDsl, filter: { eq: ['users.active', true] } };
     const policy: ScopePolicy = {
       default: 'allow',
-      entities: {
-        users: { field: 'tenantId', source: 'tenant' },
-      },
+      entities: { users: { read: [{ match: 'tenantId', to: 'tenant' }] } },
     };
-    const entities = new Set(['users']);
-    const result = applyScope(dslWithFilter, entities, policy);
+    const result = applyScope(dslWithFilter, new Set(['users']), policy);
     expect(result.filter).toEqual({
       and: [
         { eq: ['users.active', true] },
@@ -332,54 +306,35 @@ describe('applyScope', () => {
     });
   });
 
-  it('multiple filter rules produce AND-combined filters', () => {
+  it('multiple read matches produce AND-combined filters', () => {
     const policy: ScopePolicy = {
       default: 'allow',
-      entities: {
-        users: [
-          { field: 'tenantId', source: 'tenant' },
-          { field: 'orgId', source: 'org', op: 'in' },
-        ],
-      },
+      entities: { users: { read: [{ match: 'tenantId', to: 'tenant' }, { match: 'orgId', to: 'org' }] } },
     };
-    const entities = new Set(['users']);
-    const result = applyScope(baseDsl, entities, policy);
+    const result = applyScope(baseDsl, new Set(['users']), policy);
     expect(result.filter).toEqual({
       and: [
         { eq: ['users.tenantId', { $scope: 'tenant' }] },
-        { in: ['users.orgId', { $scope: 'org' }] },
+        { eq: ['users.orgId', { $scope: 'org' }] },
       ],
     });
   });
 
   it('recurses into subqueries', () => {
     const dslWithSub: Query = {
-      from: [
-        {
-          as: 'sub',
-          query: {
-            from: ['orders'],
-            fields: ['orders.userId'],
-          },
-        },
-      ],
+      from: [{ as: 'sub', query: { from: ['orders'], fields: ['orders.userId'] } }],
       fields: ['sub.userId'],
     };
     const policy: ScopePolicy = {
       default: 'allow',
-      entities: {
-        orders: { field: 'tenantId', source: 'tenant' },
-      },
+      entities: { orders: { read: [{ match: 'tenantId', to: 'tenant' }] } },
     };
-    const entities = new Set(['orders', 'sub']);
-    const result = applyScope(dslWithSub, entities, policy);
+    const result = applyScope(dslWithSub, new Set(['orders', 'sub']), policy);
 
     const subSource = result.from[0];
     expect(typeof subSource).toBe('object');
     if (typeof subSource === 'object' && subSource !== null && 'query' in subSource) {
-      expect(subSource.query.filter).toEqual({
-        eq: ['orders.tenantId', { $scope: 'tenant' }],
-      });
+      expect(subSource.query.filter).toEqual({ eq: ['orders.tenantId', { $scope: 'tenant' }] });
     }
   });
 
@@ -392,12 +347,9 @@ describe('applyScope', () => {
     const originalCopy = JSON.parse(JSON.stringify(original)) as Query;
     const policy: ScopePolicy = {
       default: 'allow',
-      entities: {
-        users: { field: 'tenantId', source: 'tenant' },
-      },
+      entities: { users: { read: [{ match: 'tenantId', to: 'tenant' }] } },
     };
-    const entities = new Set(['users']);
-    applyScope(original, entities, policy);
+    applyScope(original, new Set(['users']), policy);
     expect(original).toEqual(originalCopy);
   });
 });

@@ -19,13 +19,13 @@ export type EmitEffect = {
 };
 
 export type PushEffect = {
-  push: { action: string; canvas?: string; input?: Record<string, unknown> };
+  push: { action: string; canvas?: string; input?: Record<string, unknown>; with?: string[] };
 };
 
 export type PopEffect = { pop: true };
 
 export type ReplaceEffect = {
-  replace: { action: string; canvas?: string; input?: Record<string, unknown> };
+  replace: { action: string; canvas?: string; input?: Record<string, unknown>; with?: string[] };
 };
 
 export type Effect = CallEffect | EmitEffect | PushEffect | PopEffect | ReplaceEffect;
@@ -74,6 +74,10 @@ const PushEffectSchema = z
           .record(z.string(), z.unknown())
           .optional()
           .describe('Initial input merged into the new action data.'),
+        with: z
+          .array(z.string())
+          .optional()
+          .describe('Fragment ids to compose the action with before it is instantiated. Each wraps the action (the action fills its `{ slot }`) and contributes its triggers/data; the action wins on conflict. See ActionFragment.'),
       })
       .strict()
       .describe('Push parameters.'),
@@ -101,6 +105,10 @@ const ReplaceEffectSchema = z
           .record(z.string(), z.unknown())
           .optional()
           .describe('Initial input merged into the new action data.'),
+        with: z
+          .array(z.string())
+          .optional()
+          .describe('Fragment ids to compose the action with before it is instantiated. Each wraps the action (the action fills its `{ slot }`) and contributes its triggers/data; the action wins on conflict. See ActionFragment.'),
       })
       .strict()
       .describe('Replace parameters.'),

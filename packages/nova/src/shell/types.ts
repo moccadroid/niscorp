@@ -1,5 +1,6 @@
 import type {
   ActionDefinition,
+  ActionFragment,
   ActionInstance,
   FetchFn,
   FunctionHandler,
@@ -23,11 +24,13 @@ import type { IdFactory } from '../shared/ids';
 // Canvas
 // ═══════════════════════════════════════════════════════════
 
-// A seed is either an action id (string) or an { action, input } pair.
-// Used by CanvasConfig.initial to pre-populate the stack on startup.
+// A seed is either an action id (string) or an { action, input, with } object.
+// Used by CanvasConfig.initial to pre-populate the stack on startup. `with` is a
+// list of ActionFragment ids to compose the action with before instantiation —
+// same as a push/replace effect's `with: [...]`.
 export type CanvasInitialSeed =
   | string
-  | { action: string; input?: Record<string, unknown> };
+  | { action: string; input?: Record<string, unknown>; with?: string[] };
 
 export type CanvasConfig = {
   id: string;
@@ -92,6 +95,9 @@ export type ShellConfig = {
   // fresh empty one. Pass explicitly to share fragments across shells.
   layoutStore?: LayoutStore;
   actions: Record<string, ActionDefinition>;
+  // Reusable partial actions (ActionFragments), composed into a concrete action
+  // at push/replace time via the effect's `with: [...]`. Keyed by fragment id.
+  fragments?: Record<string, ActionFragment>;
   transform?: TransformFn;
   fetch?: FetchFn;
   // Handlers for `{ fn: '<name>' }` endpoints. See `EndpointConfigSchema`.
@@ -116,14 +122,20 @@ export type Shell = {
   readonly registry: ComponentRegistry;
   readonly layoutStore: LayoutStore;
 
-  push: (canvasId: string, actionId: string, input?: Record<string, unknown>) => string;
+  // `fragments` (optional) names ActionFragments to compose the action with
+  // before instantiation — same as a push/replace effect's `with: [...]`.
+  push: (canvasId: string, actionId: string, input?: Record<string, unknown>, fragments?: string[]) => string;
   pop: (canvasId: string) => void;
-  replace: (canvasId: string, actionId: string, input?: Record<string, unknown>) => string;
+  replace: (canvasId: string, actionId: string, input?: Record<string, unknown>, fragments?: string[]) => string;
   clear: (canvasId: string) => void;
 
   // Register an action definition at runtime, so a canvas can push/seed it. The
   // shell starts from createShell's `actions`; this adds (or replaces) one.
   registerAction: (definition: ActionDefinition) => void;
+
+  // Register an ActionFragment at runtime, referenceable from a push/replace
+  // `with: [...]`. The shell starts from createShell's `fragments`.
+  registerFragment: (fragment: ActionFragment) => void;
 
   // Mutate the canvas set and the shell's canvasLayout after creation. The shell
   // starts from createShell's `canvases` + `canvasLayout`; these change it live.
@@ -132,6 +144,12 @@ export type Shell = {
   addCanvas: (config: CanvasConfig) => void;
   removeCanvas: (canvasId: string) => void;
   setCanvasLayout: (layout: LayoutNode | string) => void;
+
+  // Swap the target of a LayoutRef in the layout store. The canvasLayout
+  // (frame) embeds `{ ref: id }` placeholders for dynamic regions; this
+  // replaces what one resolves to and re-renders, leaving the frame/chrome
+  // intact. The hot-swap hook for dynamic (e.g. LLM-chosen) region layouts.
+  setLayout: (refId: string, layout: LayoutNode) => void;
 
   getCanvasState: (canvasId: string) => CanvasState;
   getRuntime: (instanceId: string) => PublicActionRuntime | undefined;

@@ -18,7 +18,7 @@ import { VexError } from '../errors.js';
 import { mappingAgent } from '@niscorp/prism/agent';
 import type { MappingAgentOutput } from '@niscorp/prism/agent';
 import { compile, execute } from '@niscorp/prism';
-import type { JsonObject } from '@niscorp/prism';
+import type { JsonObject, JsonValue } from '@niscorp/prism';
 import { createQueryTools } from './tools.js';
 import { createQueryProducers } from './producers.js';
 import { queryRules } from './rules.js';
@@ -118,25 +118,34 @@ export const createQueryDsl = (config: QueryDslConfig): GenerateDsl => {
 // ═══════════════════════════════════════════════════════════════
 // mapToShape hook factory — runs Prism's mappingAgent
 //
-// The { result: row } envelope below must match the runtime's cache-hit
-// path (engine/runtime.ts), which replays the cached IR against the same
-// envelope. Keep them in lockstep.
+// The mapping runs ONCE over the whole row set as { result: rows }, and its
+// output IS the result (array / object / scalar). The { result: rows } envelope
+// here must match the runtime's cache-hit path (engine/runtime.ts), which
+// replays the cached IR against the same envelope. Keep them in lockstep.
+//
+// NOTE: for the agent to actually author a whole-set mapping (a `$map` over
+// `$.result` for arrays), its instructions must teach that — tracked as a
+// follow-up. Canned/relay paths use a hand-authored, seeded IR and are correct
+// today; this affects only live generation.
 // ═══════════════════════════════════════════════════════════════
 
 export const createShapeMapper = (llm: SignalClient): MapToShape => {
   return async (rows, shape) => {
-    const sampleInput: JsonObject = { result: rows.length > 0 ? (rows[0] as JsonObject) : {} };
+    // Array shape → map the whole set; a non-array shape → map the single
+    // (first) row. The envelope here must match the runtime's (engine/runtime.ts).
+    const single = !Array.isArray(shape);
+    const envelope = { result: single ? (rows[0] ?? null) : rows } as unknown as JsonObject;
 
     const result: Result<MappingAgentOutput> = await runAgentStandalone(
       mappingAgent,
-      { sampleInput, targetShape: shape },
+      { sampleInput: envelope, targetShape: shape },
       { llm },
     );
 
     if (!isOk(result)) throw result.error;
 
     const ir = await compile(result.data.config);
-    const transformed = rows.map((row) => execute(ir, { result: row } as JsonObject));
+    const transformed = execute(ir, envelope);
     return { ir, transformed };
   };
 };

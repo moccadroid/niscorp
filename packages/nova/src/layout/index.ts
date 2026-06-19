@@ -10,6 +10,7 @@ export {
   ConditionalNodeSchema,
   LoopNodeSchema,
   LayoutRefNodeSchema,
+  SlotNodeSchema,
 } from './schemas';
 
 export type {
@@ -19,6 +20,7 @@ export type {
   ConditionalNode,
   LoopNode,
   LayoutRefNode,
+  SlotNode,
 } from './schemas';
 
 // Types
@@ -46,6 +48,7 @@ export {
   isConditionalNode,
   isLoopNode,
   isLayoutRefNode,
+  isSlotNode,
   isLayoutNode,
   isLayoutPrimitive,
 } from './guards';
@@ -53,6 +56,9 @@ export {
 // Renderer
 export { renderLayout, renderLayoutFromStore, render } from './renderer';
 export type { RenderOptions } from './renderer';
+
+// Compose (fragment slot-fill)
+export { fillSlots } from './compose';
 
 // Store
 export { createLayoutStore } from './store';

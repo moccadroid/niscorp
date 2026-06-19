@@ -111,6 +111,31 @@ describe('renderLayout — loops', () => {
     expect(first.props['value']).toBe('a');
   });
 
+  it('stamps a stable React key from `key`, distinct from a shared `ref`', () => {
+    const node: LayoutNode = {
+      for: '$.rows',
+      as: 'r',
+      key: 'id',
+      do: { component: 'Grid', ref: 'row', props: { v: '$r.id' } },
+    };
+    const [frag] = renderLayout(node, { rows: [{ id: 'a' }, { id: 'b' }, { id: 'c' }] }, makeCtx());
+    if (!frag || frag.type !== 'fragment') throw new Error('expected fragment');
+    // Identity comes from the row id — so rows survive sort/filter without remount...
+    expect(frag.children.map((c) => c.key)).toEqual(['a', 'b', 'c']);
+    // ...while every row keeps the SAME ref (the event-target the trigger matches).
+    for (const c of frag.children) {
+      if (c.type !== 'component') throw new Error('expected component');
+      expect(c.ref).toBe('row');
+    }
+  });
+
+  it('falls back to the index for the React key when no `key` path is given', () => {
+    const node: LayoutNode = { for: '$.rows', as: 'r', do: { component: 'Text', props: { v: '$r' } } };
+    const [frag] = renderLayout(node, { rows: ['x', 'y'] }, makeCtx());
+    if (!frag || frag.type !== 'fragment') throw new Error('expected fragment');
+    expect(frag.children.map((c) => c.key)).toEqual(['0', '1']);
+  });
+
   it('exposes $index', () => {
     const node: LayoutNode = {
       for: '$.items',

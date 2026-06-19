@@ -3,6 +3,9 @@ import type { RenderNode } from '@layout';
 import { RenderNodeView } from './render-node';
 
 const nodeKey = (node: RenderNode, index: number): string => {
+  // Loop identity (stamped from LoopNode.key/index) wins over ref: a shared
+  // `ref` across looped rows is an event-target id, not a React key.
+  if (node.key !== undefined) return `k:${node.key}`;
   if (node.type === 'component') {
     if (node.ref !== undefined) return `c:${node.ref}`;
     return `c:${node.name}:${index}`;

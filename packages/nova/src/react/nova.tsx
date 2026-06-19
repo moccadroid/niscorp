@@ -11,6 +11,7 @@ import {
 } from '@layout';
 import type { Shell } from '@shell';
 import { registerNovaReactComponents } from '../components/react';
+import type { SlotWrapper } from './context';
 import { NovaRenderProvider, NovaShellProvider } from './provider';
 import { RenderTree } from './render-tree';
 import { useCanvasRenderTree } from './hooks/use-canvas-render-tree';
@@ -118,6 +119,10 @@ export type NovaShellProps = {
   // Pass this only when the same shell should render against a different
   // component set (rare — typically for theming or A/B swaps).
   registry?: ComponentRegistry<NovaComponent>;
+  // Optional app-supplied component that wraps every action instance's content
+  // at the ActionSlot seam (animation, auth/feature gates, logging, …). Nova
+  // owns none of that logic — see `SlotWrapper`. Omit for plain rendering.
+  slotWrapper?: SlotWrapper;
   // Ensure the React adapter's slot components are registered on the
   // shell's registry. Default true. Safe to leave on — idempotent.
   builtins?: boolean;
@@ -128,7 +133,7 @@ const ShellRenderTreeView: FC = () => {
   return <RenderTree nodes={nodes} />;
 };
 
-export const NovaShell: FC<NovaShellProps> = ({ shell, registry, builtins = true }) => {
+export const NovaShell: FC<NovaShellProps> = ({ shell, registry, slotWrapper, builtins = true }) => {
   const resolvedRegistry = (registry ?? shell.registry) as ComponentRegistry<NovaComponent>;
   // Register React builtins onto the resolved registry on first render.
   // useState's lazy initializer gives us a synchronous, once-per-mount hook.
@@ -137,7 +142,7 @@ export const NovaShell: FC<NovaShellProps> = ({ shell, registry, builtins = true
     return true;
   });
   return (
-    <NovaShellProvider shell={shell} registry={resolvedRegistry}>
+    <NovaShellProvider shell={shell} registry={resolvedRegistry} slotWrapper={slotWrapper}>
       <ShellRenderTreeView />
     </NovaShellProvider>
   );

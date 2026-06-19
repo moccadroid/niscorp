@@ -166,7 +166,9 @@ extra filter clauses.
 ### Engine (deterministic pipeline)
 
 - **resolver** (`resolve`) turns the scoped DSL into a `ResolvedQuery`: field
-  paths → table aliases + columns, FK-based join discovery between sources,
+  paths → table aliases + columns, FK-based join discovery between entity
+  sources (subquery sources are not FK-joined — the compiler cross-joins them,
+  and the outer query can reference their field/compute/aggregate outputs),
   subquery recursion.
 - **analyzer** (`analyze`) validates the resolved query and returns
   `{ warnings, errors }`. Errors halt the pipeline; warnings ride along in the

@@ -2,7 +2,7 @@ import type { QueryEngine, QueryEngineConfig, ExecuteOptions } from '../types.js
 import type { DatabaseSchema } from '../schemas/database.schema.js';
 import type { Query } from '../schemas/query.schema.js';
 import type { QueryRequest, QueryResponse } from '../schemas/request.schema.js';
-import type { CompiledQuery, Row } from '../adapters/adapter.types.js';
+import type { CompiledQuery } from '../adapters/adapter.types.js';
 import type { TestResult, AnalysisConfig } from './engine.types.js';
 import type { ScopeValues } from '../scope/scope.types.js';
 import type { CacheBackend, CacheMode, CacheEntry } from '../cache/cache.types.js';
@@ -19,8 +19,19 @@ import { computeShapeHash, computeSchemaFingerprint, computeRequestHash } from '
 import { isEntryFresh } from '../cache/util.js';
 import { buildValidationContext } from '../utils/context.js';
 import { VexError } from '../errors.js';
-import type { CompiledIr, JsonObject } from '@niscorp/prism';
+import type { CompiledIr, JsonObject, JsonValue } from '@niscorp/prism';
 import { execute as executePrism } from '@niscorp/prism';
+
+// `sortBy`/`sortDir` are reserved context keys: when present they replace the
+// query's literal `sort` (its default) with a single ORDER BY for this run. The
+// column is validated downstream by resolve()/resolveFieldPath — an unknown
+// column throws — and never becomes a param (operators.ts guards $context refs).
+export const applySortContext = (dsl: Query, context: Record<string, unknown>): Query => {
+  const sortBy = context['sortBy'];
+  if (typeof sortBy !== 'string' || sortBy === '') return dsl;
+  const dir: 'asc' | 'desc' = context['sortDir'] === 'desc' ? 'desc' : 'asc';
+  return { ...dsl, sort: [{ field: sortBy, dir }] };
+};
 
 // ═══════════════════════════════════════════════════════════════
 // Pipeline result (compiled query + analysis warnings)
@@ -262,7 +273,7 @@ export const createQueryEngine = (engineConfig: QueryEngineConfig): QueryEngine 
 
   // ─── Execute SQL + map to shape ────────────────────────────
 
-  type MapResult = { result: Row[]; executionMs: number; mappingMs?: number; mappedIr?: CompiledIr };
+  type MapResult = { result: JsonValue; executionMs: number; mappingMs?: number; mappedIr?: CompiledIr };
 
   const executeAndMap = async (
     compiled: CompiledQuery,
@@ -276,22 +287,28 @@ export const createQueryEngine = (engineConfig: QueryEngineConfig): QueryEngine 
     const executionMs = Date.now() - execStart;
     emit({ type: 'query.rows', count: rows.length, executionMs });
 
-    let result: Row[] = rows;
+    // No shape declared → hand back the raw rows untouched.
+    let result: JsonValue = rows as unknown as JsonValue;
     let mappingMs: number | undefined;
     let mappedIr: CompiledIr | undefined = cachedIr;
 
     if (validRequest.shape !== undefined) {
-      const rowShape = Array.isArray(validRequest.shape) ? validRequest.shape[0] : validRequest.shape;
+      // Prism runs ONCE and its output IS the result. The shape decides the
+      // envelope: an ARRAY shape maps over the whole row set (`$.result` is the
+      // array — a `$map`/identity); a non-array shape maps the SINGLE (first)
+      // row (`$.result` is that row — a detail/aggregate reads `$.result.field`,
+      // no `[0]`). Vex never forces an array: the mapping owns the shape.
+      const single = !Array.isArray(validRequest.shape);
+      const source = { result: single ? (rows[0] ?? null) : rows } as unknown as JsonObject;
       if (cachedIr !== undefined) {
-        const ir = cachedIr;
         const mapStart = Date.now();
-        result = rows.map(row => executePrism(ir, { result: row } as JsonObject) as Row);
+        result = executePrism(cachedIr, source);
         mappingMs = Date.now() - mapStart;
       } else if (mapToShape !== undefined) {
         const mapStart = Date.now();
-        const mapped = await mapToShape(rows, rowShape);
+        const mapped = await mapToShape(rows, validRequest.shape);
         mappingMs = Date.now() - mapStart;
-        result = mapped.transformed as Row[];
+        result = mapped.transformed;
         mappedIr = mapped.ir;
       }
       if (mappingMs !== undefined) emit({ type: 'query.mapped', mappingMs });
@@ -335,8 +352,9 @@ export const createQueryEngine = (engineConfig: QueryEngineConfig): QueryEngine 
       emit({ type: 'query.dsl', dsl, agentMs });
     }
 
-    // Run the pipeline
-    const { compiled, warnings } = runPipeline(dsl, scopeValues);
+    // Run the pipeline. `sortBy`/`sortDir` from context override the literal
+    // `sort` for this run (the cached `dsl` keeps its default — see cache.set below).
+    const { compiled, warnings } = runPipeline(applySortContext(dsl, validRequest.context), scopeValues);
     emit({ type: 'query.sql', sql: compiled.sql, warnings });
 
     // Check for missing context

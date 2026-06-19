@@ -6,6 +6,7 @@ import type {
   LayoutPrimitive,
   LayoutRefNode,
   LoopNode,
+  SlotNode,
 } from './schemas';
 
 export const isLayoutPrimitive = (value: unknown): value is LayoutPrimitive =>
@@ -30,10 +31,17 @@ export const isLayoutRefNode = (value: unknown): value is LayoutRefNode =>
   !hasKey(value, 'component') &&
   Object.keys(value).length === 1;
 
+export const isSlotNode = (value: unknown): value is SlotNode =>
+  isObject(value) &&
+  hasKey(value, 'slot') &&
+  typeof value['slot'] === 'string' &&
+  Object.keys(value).length === 1;
+
 export const isLayoutNode = (value: unknown): value is LayoutNode =>
   isLayoutPrimitive(value) ||
   Array.isArray(value) ||
   isComponentNode(value) ||
   isConditionalNode(value) ||
   isLoopNode(value) ||
-  isLayoutRefNode(value);
+  isLayoutRefNode(value) ||
+  isSlotNode(value);

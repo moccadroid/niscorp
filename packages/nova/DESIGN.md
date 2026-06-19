@@ -57,6 +57,7 @@ NovaError                         (base; carries code + context + cause)
 ├── LayoutRefNotFoundError        (layout store miss)
 ├── DefinitionValidationError     (Zod failure at boundary)
 ├── UnknownActionError            (shell.push of unregistered id)
+├── UnknownFragmentError          (push `with` names an unregistered fragment)
 ├── ShellDisposedError            (post-dispose call)
 └── LifecycleError                (hook failure; carries hook + cause)
 ```
@@ -308,16 +309,22 @@ createShell(config: ShellConfig): Shell
 `Shell` exposes:
 
 ```
-push(canvasId, actionId, input?): string
+push(canvasId, actionId, input?, fragments?): string
 pop(canvasId): void
-replace(canvasId, actionId, input?): string
+replace(canvasId, actionId, input?, fragments?): string
 clear(canvasId): void
+registerAction(definition): void
+registerFragment(fragment): void
 getCanvasState(canvasId): CanvasState
 getRuntime(instanceId): PublicActionRuntime | undefined
 onStateChange(handler): Unsubscribe
 onDataChange(handler): Unsubscribe
 dispose(): void
 ```
+
+`fragments` is a list of `ActionFragment` ids to compose the action with
+before it is instantiated (same as a push/replace effect's `with: [...]`).
+See "ActionFragment composition" below.
 
 `push`, `pop`, `replace`, `clear`, `getCanvasState` are **synchronous**
 in both lax and strict mode. The runtime's lifecycle methods are async
@@ -356,13 +363,53 @@ fire-and-forget failures via a synchronous API without making
 - `runtime.executeSteps` validates `Step[]` input via
   `StepSchema.safeParse` before running.
 
+### ActionFragment composition
+
+An `ActionFragment` is a reusable **partial action** — every
+`ActionDefinition` field optional, plus a `kind: 'fragment'` discriminator.
+It is **abstract**: it lives in a separate registry (`ShellConfig.fragments`
+/ `registerFragment`), can never be `push`ed as an action (its id isn't in
+`actions`, so that throws `UnknownActionError`), and only exists once merged.
+Because it is pure data it ships in a DB row and an agent can author it; a
+reference (`with: ['modal']`) collapses an arbitrary amount of chrome to a
+single token in the model's context.
+
+Composition is **call-site**, not on the action — an action never knows where
+it renders, so the modal-ness lives on the push: `{ push: { action:
+'new-contact', with: ['modal'], canvas: 'modal' } }`. The same `with: [...]` is
+accepted on a `replace` effect and on a canvas `initial` seed (`{ action,
+with }`), and as the `fragments?` arg of `shell.push`/`replace`.
+`composeAction(action, fragments[])` produces the effective `ActionDefinition`
+that spawns:
+
+- **layout** — `fillSlots(fragment.layout, { body: action.layout })`: the
+  fragment is the outer chrome, the action's own layout is dropped into the
+  fragment's `{ slot: 'body' }` node. The fragment wraps; the action is the
+  innermost content. Multiple fragments fold in array order (last listed is
+  outermost). An unfilled slot renders nothing.
+- **data / endpoints** — shallow-merge, **action wins** on conflict.
+- **triggers** — concat, fragment's first (so a fragment's `close`/`cancel`
+  and the action's `confirm` coexist; authors keep refs distinct).
+- **lifecycle** — per-hook concat, fragment steps run before the action's.
+- **id / name / description** — the action's. The result is a full
+  `ActionDefinition` with no `kind` — composition, not inheritance.
+
+`slot` is a fourth layout placeholder (beside `LayoutRef`): `{ slot: name }`,
+filled only at compose time by `fillSlots`. A slot that survives to the
+renderer was never filled, so the renderer emits nothing for it. This is the
+single seam a fragment uses to wrap an action; named/multiple slots are future
+work (v1 fills one `body` slot with the action's `layout`).
+
 ---
 
 ## Data flow (push to render)
 
 1. User calls `shell.push('main', 'A', input)`.
 2. `validateActions` already passed at construction. `getDefinition('A')`
-   returns the validated `ActionDefinition`.
+   returns the validated `ActionDefinition`. When the call carries
+   `fragments` (or the effect a `with: [...]`), `composeAction` folds the
+   named fragments into the definition first (see "ActionFragment
+   composition"); the merged result is what spawns.
 3. `ops.suspendTop(canvas)` runs the previous top's `suspend` hook
    (fire-and-forget; strict mode wires errors back).
 4. `spawn` calls `buildRuntime` → `createActionRuntime`. The runtime
@@ -444,6 +491,47 @@ needs to emit, it calls `useNovaDispatch()` or `useNovaPublish()`. If a
 component needs to introspect the registry, it calls
 `useNovaRegistry()`. New props on the `NovaComponentProps` bag require
 explicit justification — see `CONTEXT.md`.
+
+### The `slotWrapper` seam
+
+Cross-cutting rendering concerns — enter/leave animation, auth / feature
+gates, logging, error boundaries — do not belong in the core. Animation in
+particular is fickle and opinionated (framer-motion vs react-transition-group
+vs plain CSS), so the core owns **none** of it. Instead the React adapter
+exposes a single seam: an optional `slotWrapper` component, threaded through
+`NovaRenderContext` (so it reaches deeply-nested slots) and accepted on
+`<Nova.Shell>` and both providers.
+
+Deliberate boundaries:
+
+- **Adapter-only, never core.** `slotWrapper` is a React component — it lives
+  in `src/react`, not in `ShellConfig` or any schema. The core stays
+  serializable data + a state machine; a future Vue adapter would expose its
+  own equivalent. Nothing here touches `LayoutNode`, so a model-authored (or
+  DB-stored) layout never carries animation/gate concerns.
+- **One seam: `ActionSlot`.** That is the single place an instance's content
+  mounts and unmounts. `CanvasSlot` is a router (it expands to `ActionSlot`s),
+  so it is not wrapped — there is exactly one place a wrapper exists, which is
+  why the wrapper takes no `kind` discriminator.
+- **Identity, not state.** The wrapper receives `{ canvasId, instanceId,
+  action }` (resolved from `shell.getRuntime(instanceId)`), never the live
+  data. `canvasId`/`action` are the policy axes (route by region or by
+  `action.id`); `instanceId` is the keying axis. Passing live data would turn
+  a presence/gate seam into a reactive render path — the wrong tool.
+- **Persistent render, no timing.** When a `slotWrapper` is present,
+  `ActionSlot` renders it even with no active instance (`children` becomes
+  `null`, identity becomes `undefined`), so a presence-managing wrapper can
+  hold and animate the leaving content. The core disposes the instance
+  immediately on pop; nova never waits on `animationend` or any completion
+  callback — the wrapper (and whatever library it plugs in) owns the exit
+  lifecycle entirely.
+- **Passthrough default.** With no `slotWrapper`, `ActionSlot` renders exactly
+  as before. Generated layouts that introduce new canvases flow through the
+  same single wrapper and hit its default branch — nothing is registered per
+  slot.
+
+Verified by `test/react/slot-wrapper.test.tsx` (correct identity, passthrough
+default, and that the wrapper still mounts for an empty slot so exits can run).
 
 ### Snapshot caching strategy
 

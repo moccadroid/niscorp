@@ -31,6 +31,42 @@ export const ActionDefinitionSchema = z
 
 export type ActionDefinition = z.infer<typeof ActionDefinitionSchema>;
 
+// ═══════════════════════════════════════════════════════════
+// Action Fragment — a reusable PARTIAL action (every field optional) that is
+// MERGED into a concrete action at a push/replace `with`, producing the
+// effective ActionDefinition that gets instantiated. This is composition, not
+// inheritance: `Action + ActionFragment ⇒ Action`. A fragment is abstract — it
+// only exists merged, lives in its own registry, and cannot be pushed as an
+// action on its own. Its `layout` is the chrome that WRAPS the action; a
+// `{ slot: 'body' }` node in it is filled with the composing action's layout.
+// On merge: the action's layout fills the slot; data/endpoints deep-merge with
+// the action winning; triggers and per-hook lifecycle steps concatenate
+// (fragment first). See `composeAction`.
+// ═══════════════════════════════════════════════════════════
+
+export const ActionFragmentSchema = z
+  .object({
+    kind: z.literal('fragment').describe('Discriminator — marks this as an abstract, merge-only fragment.'),
+    id: z.string().describe('Stable fragment id, referenced from a push/replace `with: [...]`.'),
+    name: z.string().optional().describe('Human-readable name.'),
+    description: z.string().optional().describe('Free-form description.'),
+    layout: z
+      .union([z.string(), LayoutNodeSchema])
+      .optional()
+      .describe('The wrapping (chrome) layout, or a layout id. Put a `{ slot: "body" }` node where the composing action\'s own layout is dropped in.'),
+    data: z.record(z.string(), z.unknown()).optional().describe('Partial default data; deep-merged under the action (the action wins on conflict).'),
+    triggers: z.array(TriggerConfigSchema).optional().describe('Pre-wired triggers (e.g. a modal\'s close/cancel). Concatenated before the action\'s triggers.'),
+    endpoints: z
+      .record(z.string(), EndpointConfigSchema)
+      .optional()
+      .describe('Named endpoints, merged under the action (the action wins on a name clash).'),
+    lifecycle: LifecycleConfigSchema.optional().describe('Lifecycle hooks; per-hook steps run before the action\'s.'),
+  })
+  .strict()
+  .describe('A reusable partial action — layout + wired behavior — merged into a concrete action at a push `with`. Abstract: only exists merged, never instantiated alone.');
+
+export type ActionFragment = z.infer<typeof ActionFragmentSchema>;
+
 // Re-export mutations schema (for backwards-compatible imports within action/)
 export { MutationSchema };
 export type { Mutation } from '../mutations';
