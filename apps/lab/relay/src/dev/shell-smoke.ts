@@ -63,8 +63,8 @@ const main = async () => {
   console.log('\nfragment id not pushable as action  ✓');
 
   // Push the form `with: ['modal']` — the fragment wraps it in dialog chrome.
-  // new-company exercises both control kinds (Inputs + Selects) inside the modal.
-  shell.push('modal', 'new-company', undefined, ['modal']);
+  // company.form exercises the modal fragment wrapping a form's inputs.
+  shell.push('modal', 'company.form', undefined, ['modal']);
   await new Promise((r) => setTimeout(r, 0));
 
   const modal = inspect(shell.flattenRenderTree(shell.getCanvasRenderTree('modal')));

@@ -12,7 +12,7 @@ import { scopePolicy } from '../vex/scope';
 import { companyCreate } from '@relay/api/companies';
 import { contactCreate, contactUpdate } from '@relay/api/contacts';
 import { dealCreate } from '@relay/api/deals';
-import { newContactPrism } from '../nova/screens/new-contact/new-contact.prism';
+import { contactFormMutations } from '../nova/domains/contact/contact.form.prism';
 
 const settle = (ms = 150): Promise<void> => new Promise((r) => setTimeout(r, ms));
 const mainData = (): Record<string, unknown> | undefined => {
@@ -62,7 +62,7 @@ const main = async (): Promise<void> => {
   // ── The seam: the form's data (a single "Name", a "Relationship") is mapped to
   // DB columns by the input prism — split name → first/last, drop relationship —
   // BEFORE the write. Action shape ≠ DB shape.
-  const ctx = evaluate(newContactPrism['contact.create'], {
+  const ctx = evaluate(contactFormMutations['contact.create'], {
     name: 'Ada Lovelace',
     email: 'ada@analytical.io',
     phone: '+1 (555) 010-1010',
@@ -113,7 +113,10 @@ const main = async (): Promise<void> => {
   const before = companyRows().length;
   shell.publish('new'); // same channel the topbar's "+ New" emits
   await settle();
-  modalRt()?.setData({ name: 'Shell Co', domain: 'shell.co', industry: 'technology', size: '11-50', modalTitle: 'New company', confirmLabel: 'Create' });
+  // setData fully replaces the store, so carry `saveFn` (the create/edit mode the
+  // form's `save` endpoint resolves). In the app, field edits are per-path `set`s
+  // via model bindings, so the default `saveFn` survives untouched.
+  modalRt()?.setData({ saveFn: 'company.create', name: 'Shell Co', domain: 'shell.co', industry: 'technology', size: '11-50', modalTitle: 'New company', confirmLabel: 'Create' });
   shell.dispatch({ type: 'ui:click', ref: 'confirm' });
   await settle(300);
   const rows = companyRows();

@@ -1,5 +1,5 @@
 import type { Shell } from '@niscorp/nova';
-import { SCREEN_PATH, DETAIL_SEGMENT, SEGMENT } from '../nova/routes';
+import { SCREEN_PATH, VIEW_PATH, DETAIL_SEGMENT, SEGMENT } from '../nova/shell/routes';
 
 // Edge adapter: keeps the address bar and the shell in sync, in memory (no
 // reload, no fetch). Nova stays URL-agnostic — this is the only code that
@@ -9,12 +9,16 @@ import { SCREEN_PATH, DETAIL_SEGMENT, SEGMENT } from '../nova/routes';
 //
 // The route table it reads (nova/routes.ts) is pure data.
 
-const activeOf = (shell: Shell, canvasId: string): { action: string; id: unknown } | undefined => {
+const activeOf = (
+  shell: Shell,
+  canvasId: string,
+): { action: string; id: unknown; view: unknown } | undefined => {
   const active = shell.getCanvasState(canvasId).active;
   if (active === undefined) return undefined;
   const rt = shell.getRuntime(active.id);
   if (rt === undefined) return undefined;
-  return { action: rt.definition.id, id: rt.getData()['id'] };
+  const data = rt.getData();
+  return { action: rt.definition.id, id: data['id'], view: data['view'] };
 };
 
 export const installRouter = (shell: Shell): (() => void) => {
@@ -31,7 +35,10 @@ export const installRouter = (shell: Shell): (() => void) => {
       }
     }
     const main = activeOf(shell, 'main');
-    return (main !== undefined ? SCREEN_PATH[main.action] : undefined) ?? '/';
+    if (main === undefined) return '/';
+    // A view-specific path wins (deals board → /pipeline), else the screen home.
+    const viewPath = typeof main.view === 'string' ? VIEW_PATH[`${main.action}:${main.view}`] : undefined;
+    return viewPath ?? SCREEN_PATH[main.action] ?? '/';
   };
 
   // Drive the shell from a path. Publishes `screen-*` so the sidebar highlight +
@@ -47,12 +54,18 @@ export const installRouter = (shell: Shell): (() => void) => {
       const opensDetail = recordId !== undefined && route?.detail !== undefined;
 
       // Switching the main list with a record open seeds the list's
-      // `highlight_id` so the matching row is marked.
+      // `highlight_id` so the matching row is marked. A view-bearing route (the
+      // deals table vs board) also remounts when only the view differs, seeding
+      // `$.view` so the right layout shows.
       const main = activeOf(shell, 'main');
-      if (main?.action !== screen) {
-        shell.replace('main', screen, opensDetail ? { highlight_id: recordId } : undefined);
+      const viewChanged = route?.view !== undefined && main?.view !== route.view;
+      if (main?.action !== screen || viewChanged) {
+        shell.replace('main', screen, {
+          ...(route?.view !== undefined ? { view: route.view } : {}),
+          ...(opensDetail ? { highlight_id: recordId } : {}),
+        });
       }
-      shell.publish(`screen-${screen}`);
+      shell.publish(route?.channel ?? `screen-${screen}`);
 
       const detail = activeOf(shell, 'detail');
       if (opensDetail) {

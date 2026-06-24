@@ -35,7 +35,7 @@ const main = async (): Promise<void> => {
   // ── Activity slot: the contact with the most activity ──
   const cAct = await one(`SELECT contact_id AS id FROM activities WHERE contact_id IS NOT NULL GROUP BY contact_id ORDER BY count(*) DESC LIMIT 1`);
   await openContact(cAct!);
-  checks.push([`contact detail mounted (got ${String(detailRt()?.definition.id)})`, detailRt()?.definition.id === 'contact-detail']);
+  checks.push([`contact detail mounted (got ${String(detailRt()?.definition.id)})`, detailRt()?.definition.id === 'contact']);
   const acts = (view()['activity'] ?? []) as Record<string, unknown>[];
   const dbActs = await count('SELECT count(*)::int AS n FROM activities WHERE contact_id=$1', [cAct]);
   checks.push([`activity matches the DB (${acts.length} = min(${dbActs},12)) and is non-empty`, acts.length === Math.min(dbActs, 12) && acts.length > 0]);
@@ -82,7 +82,7 @@ const main = async (): Promise<void> => {
   await settle(320);
   shell.dispatch({ type: 'ui:click', ref: 'row', payload: company });
   await settle(340);
-  checks.push([`company detail mounted (got ${String(detailRt()?.definition.id)})`, detailRt()?.definition.id === 'company-detail']);
+  checks.push([`company detail mounted (got ${String(detailRt()?.definition.id)})`, detailRt()?.definition.id === 'company']);
   const coDeals = (view()['deals'] ?? []) as Record<string, unknown>[];
   const dbCoDeals = await count("SELECT count(*)::int AS n FROM deals WHERE company_id=$1 AND status='open'", [company]);
   checks.push([`company open deals match the DB (${coDeals.length} = ${dbCoDeals})`, coDeals.length === dbCoDeals && coDeals.length > 0]);

@@ -27,15 +27,17 @@ const main = async (): Promise<void> => {
   await settle(320);
   shell.dispatch({ type: 'ui:click', ref: 'card', payload: deal.id });
   await settle(300);
-  checks.push([`deal modal opened (got ${String(modalId())})`, modalId() === 'deal-modal']);
+  checks.push([`deal workspace opened (got ${String(modalId())})`, modalId() === 'deal']);
   const rec = (modalData()['view'] as Record<string, unknown>)?.['record'] as Record<string, unknown>;
   checks.push([`record value is a number (got ${typeof rec?.['value']} ${String(rec?.['value'])})`, typeof rec?.['value'] === 'number']);
   checks.push([`record carries the raw stage_id (got ${String(rec?.['stage_id'])})`, rec?.['stage_id'] === deal.stage_id]);
 
-  // Click Edit → the edit-deal form stacks on the modal canvas, seeded raw.
+  // Click Edit → the deal form (edit mode: saveFn=deal.update) stacks on the
+  // modal canvas, seeded raw from the record.
   shell.dispatch({ type: 'ui:click', ref: 'edit' });
   await settle(300);
-  checks.push([`Edit opens the edit-deal form (got ${String(modalId())})`, modalId() === 'edit-deal']);
+  checks.push([`Edit opens the deal form (got ${String(modalId())})`, modalId() === 'deal.form']);
+  checks.push([`form is in edit mode (saveFn=${String(modalData()['saveFn'])})`, modalData()['saveFn'] === 'deal.update']);
   const seeded = modalData();
   checks.push([`form seeded value as a number (got ${typeof seeded['value']} ${String(seeded['value'])})`, typeof seeded['value'] === 'number' && seeded['value'] === rec['value']]);
   checks.push([`form seeded the stage_id (so the Stage select pre-selects, got ${String(seeded['stage'])})`, seeded['stage'] === deal.stage_id]);
@@ -45,7 +47,9 @@ const main = async (): Promise<void> => {
   modalRt()?.setData({ ...seeded, value: newValue, stage: otherStage.id });
   shell.dispatch({ type: 'ui:click', ref: 'confirm' });
   await settle(360);
-  checks.push([`save pops back to the deal workspace (got ${String(modalId())})`, modalId() === 'deal-modal']);
+  // Save now REPLACES the form with the deal workspace for the saved id (unified
+  // create/edit post-success), rather than popping.
+  checks.push([`save returns to the deal workspace (got ${String(modalId())})`, modalId() === 'deal']);
 
   // The DB row reflects the edit, value still numeric.
   const after = (await rt.db.query('SELECT value, stage_id FROM deals WHERE id = $1', [deal.id])).rows[0] as { value: unknown; stage_id: string };

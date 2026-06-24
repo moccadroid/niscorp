@@ -108,7 +108,7 @@ const main = async (): Promise<void> => {
   // modal) and closes the menu (and actually works — no dismiss storm).
   shell.dispatch({ type: 'ui:click', ref: 'row-open', payload: firstRow });
   await settle(160);
-  checks.push([`"Open" opens the deal workspace (got ${String(modalAction())})`, modalAction() === 'deal-modal']);
+  checks.push([`"Open" opens the deal workspace (got ${String(modalAction())})`, modalAction() === 'deal']);
   checks.push([`"Open" closes the menu (got ${String(mainData()?.['menuOpenId'])})`, mainData()?.['menuOpenId'] === '']);
 
   let ok = true;

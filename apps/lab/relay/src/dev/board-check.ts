@@ -29,7 +29,8 @@ const main = async (): Promise<void> => {
   // Navigate to the pipeline board (sidebar nav).
   shell.dispatch({ type: 'ui:click', ref: 'nav-pipeline' });
   await settle(320);
-  checks.push([`pipeline board mounted (got ${String(mainAction())})`, mainAction() === 'deals-board']);
+  // The board is now the `deals` action in board view (one action, two layouts).
+  checks.push([`pipeline board mounted (got ${String(mainAction())} view=${String(mainData()?.['view'])})`, mainAction() === 'deals' && mainData()?.['view'] === 'board']);
   const stages = board().stages ?? [];
   const deals = board().deals ?? [];
   checks.push([`columns loaded (got ${stages.length})`, stages.length > 0]);
@@ -49,7 +50,7 @@ const main = async (): Promise<void> => {
   const mr = modalRt();
   const view = (mr?.getData()?.['view'] ?? {}) as Record<string, unknown>;
   const rec = (view['record'] ?? {}) as Record<string, unknown>;
-  checks.push([`card opens the deal modal (got ${String(mr?.definition.id)})`, mr?.definition.id === 'deal-modal']);
+  checks.push([`card opens the deal workspace (got ${String(mr?.definition.id)})`, mr?.definition.id === 'deal']);
   checks.push([`modal loaded the deal (${String(rec['title'])}, prob ${String(rec['prob'])})`, rec['deal_id'] === firstDeal && rec['prob'] !== undefined]);
   checks.push([`modal has the activity feed (got ${(view['activities'] as unknown[] | undefined)?.length ?? 0})`, Array.isArray(view['activities']) && (view['activities'] as unknown[]).length > 0]);
   // close it

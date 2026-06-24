@@ -128,19 +128,24 @@ const runCall = async (
   onError: Step[] | undefined,
   ctx: StepContext,
 ): Promise<void> => {
-  const endpoint = ctx.endpoints[callName];
-  if (endpoint === undefined) {
+  const raw = ctx.endpoints[callName];
+  if (raw === undefined) {
     await raiseUnknown(`unknown endpoint: ${callName}`, onError, ctx);
     return;
   }
-  if ('fn' in endpoint && ctx.functions[endpoint.fn] === undefined) {
-    await raiseUnknown(
-      `unknown function: ${endpoint.fn}`,
-      onError,
-      ctx,
-      new UnknownFunctionError(endpoint.fn),
-    );
-    return;
+  // Resolve a function endpoint's `fn` through the data scope before dispatch, so
+  // `fn: '{{$.saveFn}}'` lets one action pick its handler from data — the same way
+  // push/replace already resolve their `action` target (see resolveNavTarget).
+  // Literal fn names (no template) pass through resolve() unchanged.
+  let endpoint = raw;
+  if ('fn' in raw) {
+    const chain = createScopeChain(ctx.dataStore.get());
+    const fn = String(resolve(raw.fn, chain, ctx.extras) ?? '');
+    endpoint = { ...raw, fn };
+    if (ctx.functions[fn] === undefined) {
+      await raiseUnknown(`unknown function: ${fn}`, onError, ctx, new UnknownFunctionError(fn));
+      return;
+    }
   }
   const result = await callEndpoint({
     endpoint,

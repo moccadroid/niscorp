@@ -325,12 +325,14 @@ export const buildSeedSql = (): string => {
         ['contacts', 'Contacts', 'Browse all people', 'crm', 'screen', '{}'],
         ['companies', 'Companies', 'Browse all accounts', 'crm', 'screen', '{}'],
         ['deals', 'Deals', 'Browse all deals as a table', 'crm', 'screen', '{}'],
-        ['deals-board', 'Pipeline', 'The deals pipeline board (Kanban by stage)', 'crm', 'screen', '{}'],
+        // Pipeline (the deals board view) is reachable via the sidebar; it returns
+        // to the search catalog in Phase 6, when a row carries a full invocation
+        // descriptor (action + `$.view`) instead of just an id.
         ['settings', 'Settings', 'Workspace preferences', 'crm', 'screen', '{}'],
-        ['new-contact', 'New contact', 'Add a person to the workspace', 'crm', 'create', '{}'],
-        ['new-company', 'New company', 'Add a company or account', 'crm', 'create', '{}'],
-        ['new-deal', 'New deal', 'Start tracking a new opportunity', 'crm', 'create', '{}'],
-        ['new-task', 'New task', 'Add a to-do for yourself', 'crm', 'create', '{}'],
+        ['contact.form', 'New contact', 'Add a person to the workspace', 'crm', 'create', '{}'],
+        ['company.form', 'New company', 'Add a company or account', 'crm', 'create', '{}'],
+        ['deal.form', 'New deal', 'Start tracking a new opportunity', 'crm', 'create', '{}'],
+        ['task.form', 'New task', 'Add a to-do for yourself', 'crm', 'create', '{}'],
       ],
     ),
   );

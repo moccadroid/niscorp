@@ -45,7 +45,7 @@ const main = async (): Promise<void> => {
   }))[0] ?? {};
   console.log(`created deal ${String(created['id']).slice(0, 8)}… status=${String(created['status'])} stage=${stg.name} company=${co.name}`);
 
-  // Announce the change the way the new-deal form does; the board re-reads.
+  // Announce the change the way the deal form does on create; the board re-reads.
   shell.publish('deals-changed');
   await settle(350);
   const after = board().deals ?? [];
@@ -60,7 +60,7 @@ const main = async (): Promise<void> => {
   checks.push([`value is a number (got ${typeof mine?.['value']} ${String(mine?.['value'])})`, typeof mine?.['value'] === 'number' && mine?.['value'] === 4242]);
   checks.push([`value_display is formatted (got ${String(mine?.['value_display'])})`, typeof mine?.['value_display'] === 'string' && String(mine?.['value_display']).startsWith('$')]);
 
-  // The new-deal Stage picker must only offer in-progress pipeline stages — never
+  // The deal form's Stage picker must only offer in-progress pipeline stages — never
   // the terminal Closed Won/Lost (an open deal there would have no board column).
   shell.publish('new');
   await settle(280);

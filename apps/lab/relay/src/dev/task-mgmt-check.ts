@@ -65,7 +65,7 @@ const main = async (): Promise<void> => {
   const er = rows()[0];
   shell.dispatch({ type: 'ui:click', ref: 'row-edit', payload: er });
   await settle(280);
-  checks.push([`Edit opens the form (got ${String(modalId())})`, modalId() === 'edit-task']);
+  checks.push([`Edit opens the form (got ${String(modalId())})`, modalId() === 'task.form']);
   checks.push([`form seeded id/title/raw due from the row`, modalData()['id'] === er['task_id'] && modalData()['title'] === er['title'] && modalData()['due'] === er['due_date']]);
   modalRt()?.setData({ ...modalData(), title: 'Renamed by check' });
   shell.dispatch({ type: 'ui:click', ref: 'confirm' });
@@ -88,7 +88,7 @@ const main = async (): Promise<void> => {
   await settle(320);
   shell.dispatch({ type: 'ui:click', ref: 'card', payload: dealWithTask.deal_id });
   await settle(320);
-  checks.push([`deal workspace open (got ${String(modalId())})`, modalId() === 'deal-modal']);
+  checks.push([`deal workspace open (got ${String(modalId())})`, modalId() === 'deal']);
   shell.dispatch({ type: 'ui:click', ref: 'complete-task', payload: dealWithTask.task_id });
   await settle(360);
   checks.push([`deal task completed from the workspace`, (await count('SELECT count(*)::int n FROM tasks WHERE id=$1 AND done=true', [dealWithTask.task_id])) === 1]);

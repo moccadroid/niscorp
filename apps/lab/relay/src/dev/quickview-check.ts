@@ -33,7 +33,7 @@ const main = async (): Promise<void> => {
   await search('new');
   await enter();
   const create = actionOf('modal');
-  checks.push([`create opens in the modal (got ${String(create)})`, typeof create === 'string' && create.startsWith('new-')]);
+  checks.push([`create opens in the modal (got ${String(create)})`, typeof create === 'string' && create.endsWith('.form')]);
   shell.clear('modal');
   await settle();
 

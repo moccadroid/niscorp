@@ -23,16 +23,16 @@ const main = async (): Promise<void> => {
   // Be on Companies, open a company in the detail panel.
   shell.replace('main', 'companies');
   shell.publish('screen-companies');
-  shell.replace('detail', 'company-detail', { id: 'cmp_001' });
+  shell.replace('detail', 'company', { id: 'cmp_001' });
   await settle();
 
-  // Cross-link to one of its people (fires company-detail's open-contact).
+  // Cross-link to one of its people (fires the company's open-contact).
   shell.dispatch({ type: 'ui:click', ref: 'open-contact', payload: 'con_001' });
   await settle();
 
   const checks: [string, unknown, unknown][] = [
     ['main      → contacts', actionOf('main'), 'contacts'],
-    ['detail    → contact-detail', actionOf('detail'), 'contact-detail'],
+    ['detail    → contact', actionOf('detail'), 'contact'],
     ['sidebar   → contacts', sidebarActive(), 'contacts'],
     ['highlight → con_001', mainHighlight(), 'con_001'],
   ];

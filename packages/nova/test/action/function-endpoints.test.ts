@@ -148,6 +148,61 @@ describe('runtime — function endpoints via triggers', () => {
     expect(runtime.getData()).toEqual({ result: { value: 7 }, status: 'done' });
   });
 
+  it('resolves a templated `fn` through data — one endpoint dispatches by data', async () => {
+    const definition: ActionDefinition = {
+      id: 'fn-by-data',
+      data: { saveFn: 'update', result: null },
+      endpoints: {
+        save: { fn: '{{$.saveFn}}', target: 'result' },
+      },
+      triggers: [{ event: 'ui:click', ref: 'go', do: [{ call: 'save' }] }],
+    };
+    const deps = baseDeps();
+    const runtime = createActionRuntime({
+      definition,
+      ...deps,
+      functions: {
+        create: async () => ({ via: 'create' }),
+        update: async () => ({ via: 'update' }),
+      },
+    });
+    await runtime.mount();
+    deps.eventBus.emit({ type: 'ui:click', ref: 'go' });
+    await tick();
+    expect(runtime.getData()['result']).toEqual({ via: 'update' });
+
+    // Flip the data accessor → the same endpoint now dispatches to `create`.
+    runtime.setData({ saveFn: 'create', result: null });
+    deps.eventBus.emit({ type: 'ui:click', ref: 'go' });
+    await tick();
+    expect(runtime.getData()['result']).toEqual({ via: 'create' });
+  });
+
+  it('an unknown templated `fn` routes to the call onError branch with @error', async () => {
+    const definition: ActionDefinition = {
+      id: 'fn-by-data-bad',
+      data: { saveFn: 'missing', err: null },
+      endpoints: { save: { fn: '{{$.saveFn}}' } },
+      triggers: [
+        {
+          event: 'ui:click',
+          ref: 'go',
+          do: [{ call: 'save', onError: [{ set: 'err', value: '{{@error.message}}' }] }],
+        },
+      ],
+    };
+    const deps = baseDeps();
+    const runtime = createActionRuntime({
+      definition,
+      ...deps,
+      functions: { create: async () => ({}) },
+    });
+    await runtime.mount();
+    deps.eventBus.emit({ type: 'ui:click', ref: 'go' });
+    await tick();
+    expect(String(runtime.getData()['err'])).toContain('missing');
+  });
+
   it('writes the error to errorTarget and binds @error in onError', async () => {
     const definition: ActionDefinition = {
       id: 'fn-error',
