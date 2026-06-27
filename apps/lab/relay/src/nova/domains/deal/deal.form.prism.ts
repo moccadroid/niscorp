@@ -7,11 +7,10 @@ export const dealFormReads: Record<string, unknown> = {
   'options.contacts': { shape: { $const: contactOptions.shape }, context: {} },
 };
 
-// Mutation input seam (create + edit): map the form's data → the deal columns.
-// `company`/`stage`/`contact` already hold real FK ids (the selects' values);
-// empties coerce — value → 0, FK/date → null (an empty string isn't a valid
-// numeric / FK / DATE). `update` adds the `id` for the WHERE. The form's `save`
-// endpoint resolves `{{$.saveFn}}` to one of these two keys.
+// Mutation input seam for the deal `upsert`: map the form's data → the deal
+// columns. `company`/`stage`/`contact` already hold real FK ids (the selects'
+// values); empties coerce — value → 0, FK/date → null. `id` always flows
+// through, so the mutation desugars to insert (id empty) or update (id set).
 const emptyToNull = (path: string) => ({ $case: { branches: [{ when: { $ref: path }, then: { $ref: path } }], else: null } });
 const fields = {
   title: { $ref: '$.title' },
@@ -23,6 +22,5 @@ const fields = {
 };
 
 export const dealFormMutations: Record<string, unknown> = {
-  'deal.create': fields,
-  'deal.update': { ...fields, id: { $ref: '$.id' } },
+  'deal.upsert': { ...fields, id: { $ref: '$.id' } },
 };

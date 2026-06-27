@@ -16,10 +16,10 @@ import { activitiesByDeal, dealLineItems } from '@relay/api/activities';
 import { actionsSearch } from '@relay/api/actions';
 
 const checks: { def: CacheEntry; ctx?: Record<string, unknown> }[] = [
-  { def: contactsList, ctx: { q: '%' } },
-  { def: companiesList, ctx: { q: '%' } },
-  { def: dealsList, ctx: { q: '%' } },
-  { def: dealsByOwner, ctx: { ownerId: CURRENT_USER_ID, q: '%' } },
+  { def: contactsList, ctx: { search: '%' } },
+  { def: companiesList, ctx: { search: '%' } },
+  { def: dealsList, ctx: { search: '%' } },
+  { def: dealsByOwner, ctx: { ownerId: CURRENT_USER_ID, search: '%' } },
   { def: dealsBoard },
   { def: dealsOpenByStage },
   { def: dealsForecast },
@@ -32,11 +32,11 @@ const checks: { def: CacheEntry; ctx?: Record<string, unknown> }[] = [
   { def: activitiesByDeal, ctx: { id: 'deal_001' } },
   { def: dealLineItems, ctx: { id: 'deal_001' } },
   { def: tasksByDeal, ctx: { id: 'deal_001' } },
-  { def: tasksMine, ctx: { userId: CURRENT_USER_ID, q: '%' } },
+  { def: tasksMine, ctx: { userId: CURRENT_USER_ID, search: '%' } },
   { def: dealsByStatus, ctx: { status: 'open' } },
   { def: dealsByStatus, ctx: { status: 'won' } },
   { def: tasksOpenCount },
-  { def: actionsSearch, ctx: { q: '%new%' } },
+  { def: actionsSearch, ctx: { search: '%new%' } },
 ];
 
 const describe = (r: unknown): string =>

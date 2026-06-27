@@ -68,6 +68,7 @@ export const createActionRuntime = (config: ActionRuntimeConfig): ActionRuntime 
     strict,
     onError,
     signal,
+    suspended: instance.status === 'suspended',
   });
 
   const setStatus = (next: ActionStatus): void => {
@@ -86,7 +87,7 @@ export const createActionRuntime = (config: ActionRuntimeConfig): ActionRuntime 
     if (triggerHandle !== undefined) return;
     const triggers = definition.triggers;
     if (triggers === undefined || triggers.length === 0) return;
-    triggerHandle = attachTriggers(triggers, config.eventBus, config.messageBus, buildContext);
+    triggerHandle = attachTriggers(triggers, config.eventBus, config.messageBus, buildContext, instance.id);
   };
 
   const detach = (): void => {
@@ -158,13 +159,22 @@ export const createActionRuntime = (config: ActionRuntimeConfig): ActionRuntime 
   };
 
   const resume = async (): Promise<void> => {
-    await runLifecycleHook('resume', definition, buildContext);
+    // Becoming active again re-runs `mount` to refresh the action's data — so a
+    // backgrounded action (which ignored everything while suspended) is current
+    // when it's revealed, with no need to keep it live underneath — then the
+    // `resume` hook, if the action defines one.
     setStatus('active');
+    await runLifecycleHook('mount', definition, buildContext);
+    await runLifecycleHook('resume', definition, buildContext);
   };
 
   const installModelListener = (ref: string, path: string): void => {
     const off = config.eventBus.on('ui:model', (event) => {
+      if (instance.status === 'suspended') return;
       if (event.type !== 'ui:model') return;
+      // Same origin scoping as triggers: a stamped model event is delivered to
+      // its own instance only; an unstamped (global) one reaches everyone.
+      if (event.origin !== undefined && event.origin !== instance.id) return;
       if (event.ref !== ref) return;
       dataStore.update((curr) =>
         applyMutations(curr, [{ set: path, value: event.payload }], {

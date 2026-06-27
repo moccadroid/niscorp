@@ -1,6 +1,8 @@
+import { useContext, useMemo } from 'react';
 import { z } from 'zod';
 import { RenderTree, useRenderTree, useShell, useSlotWrapper } from '@react';
-import type { NovaComponent, NovaComponentProps } from '@react';
+import type { NovaComponent, NovaComponentProps, NovaRenderContextValue } from '@react';
+import { NovaRenderContext } from '@react/context';
 
 // ═══════════════════════════════════════════════════════════
 // ActionSlot — structural component that renders a single action
@@ -33,10 +35,26 @@ export const ActionSlot: NovaComponent<ActionSlotProps> = ({
   const shell = useShell();
   const hasInstance = instanceId !== undefined && instanceId !== '';
 
-  // No app-supplied wrapper → original behavior, unchanged.
+  // Scope dispatch to THIS instance: every UI event dispatched from within its
+  // rendered subtree gets stamped with `origin: instanceId`, so the runtime
+  // delivers it to this instance's own triggers only (two instances of the same
+  // action on different canvases no longer both react to one click). An event
+  // that already carries an origin (a re-dispatch) keeps it.
+  const ctx = useContext(NovaRenderContext);
+  const scoped = useMemo<NovaRenderContextValue | undefined>(() => {
+    if (ctx === undefined || instanceId === undefined || instanceId === '') return ctx;
+    const base = ctx.dispatch;
+    return { ...ctx, dispatch: (e) => base(e.origin === undefined ? { ...e, origin: instanceId } : e) };
+  }, [ctx, instanceId]);
+
+  // No app-supplied wrapper → original behavior, plus the scoped dispatch.
   if (slotWrapper === undefined) {
     if (!hasInstance) return null;
-    return <RenderTree nodes={tree} />;
+    return (
+      <NovaRenderContext.Provider value={scoped}>
+        <RenderTree nodes={tree} />
+      </NovaRenderContext.Provider>
+    );
   }
 
   // With a wrapper, render it PERSISTENTLY (content or null) so a
@@ -51,7 +69,11 @@ export const ActionSlot: NovaComponent<ActionSlotProps> = ({
       instanceId={hasInstance ? instanceId : undefined}
       action={runtime?.definition}
     >
-      {hasInstance && tree.length ? <RenderTree nodes={tree} /> : null}
+      {hasInstance && tree.length ? (
+        <NovaRenderContext.Provider value={scoped}>
+          <RenderTree nodes={tree} />
+        </NovaRenderContext.Provider>
+      ) : null}
     </Wrapper>
   );
 };

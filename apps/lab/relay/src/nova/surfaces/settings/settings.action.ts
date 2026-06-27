@@ -6,6 +6,7 @@ import { settingsLayout } from './settings.layout';
 // concern; for now the controls are live but local.
 export const settingsAction: ActionDefinition = {
   id: 'settings',
+  title: 'Settings',
   data: {
     settings: {
       name: 'Alex Morgan',

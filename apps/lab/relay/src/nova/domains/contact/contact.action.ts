@@ -10,7 +10,9 @@ import { contactLayout } from './contact.layout';
 // aborts the rest of the trigger, so the self-canvas replace must come LAST.
 export const contactAction: ActionDefinition = {
   id: 'contact',
-  data: { id: '', view: { record: {}, deals: [], tasks: [], activity: [] }, loading: true, toggleId: '', toggleDone: false },
+  // Stack-nav label — the chip + its depth menu read `instance.title`.
+  title: '{{$.view.record.name}}',
+  data: { id: '', view: { record: {}, deals: [], tasks: [], activity: [] }, loading: true, toggleId: '', toggleDone: false, panelClass: 'rl-dialog--wide' },
   layout: contactLayout,
   // Four reads into slots of `$.view`: the record, plus the contact's deals, open
   // tasks and recent activity — the same section structure as the company profile
@@ -24,7 +26,6 @@ export const contactAction: ActionDefinition = {
   },
   lifecycle: { mount: [{ call: 'load', onSuccess: [{ set: 'loading', value: false }] }, { call: 'loadDeals' }, { call: 'loadTasks' }, { call: 'loadActivity' }] },
   triggers: [
-    { event: 'ui:click', ref: 'close', do: [{ emit: { channel: 'deselect' } }, { pop: true }] },
     { message: 'nav', do: [{ pop: true }] },
     // The list deleted a record → close this panel (it may be showing the now-gone
     // contact; the list already cleared the row highlight via `deselect`).
@@ -41,7 +42,7 @@ export const contactAction: ActionDefinition = {
             action: 'contact.form',
             canvas: 'modal',
             with: ['modal'],
-            input: { saveFn: 'contact.update', modalTitle: 'Edit contact', confirmLabel: 'Save', id: '$.view.record.contact_id', name: '$.view.record.name', email: '$.view.record.email', phone: '$.view.record.phone', title: '$.view.record.title', company: '$.view.record.company.company_id' },
+            input: { modalTitle: 'Edit contact', confirmLabel: 'Save', id: '$.view.record.contact_id', name: '$.view.record.name', email: '$.view.record.email', phone: '$.view.record.phone', title: '$.view.record.title', company: '$.view.record.company.company_id' },
           },
         },
       ],
@@ -51,17 +52,9 @@ export const contactAction: ActionDefinition = {
     // the rest of the app) on success.
     { event: 'ui:click', ref: 'complete-task', do: [{ set: 'toggleId', value: '@event.payload' }, { set: 'toggleDone', value: true }, { call: 'setDone', onSuccess: [{ emit: { channel: 'tasks-changed' } }] }] },
     { message: 'tasks-changed', do: [{ call: 'loadTasks' }] },
-    // A deal in the contact's list opens the deal workspace (the one deal view),
-    // as a modal over this panel.
-    { event: 'ui:click', ref: 'open-deal', do: [{ push: { action: 'deal', canvas: 'modal', input: { id: '@event.payload' } } }] },
-    {
-      event: 'ui:click',
-      ref: 'open-company',
-      do: [
-        { replace: { action: 'companies', canvas: 'main', input: { highlight_id: '@event.payload' } } },
-        { emit: { channel: 'screen-companies' } },
-        { replace: { action: 'company', canvas: 'detail', input: { id: '@event.payload' } } },
-      ],
-    },
+    // Cross-links push onto THIS canvas (the stack), so the current record stays
+    // beneath and Back returns to it — `main` is untouched.
+    { event: 'ui:click', ref: 'open-deal', do: [{ push: { action: 'deal', input: { id: '@event.payload' } } }] },
+    { event: 'ui:click', ref: 'open-company', do: [{ push: { action: 'company', input: { id: '@event.payload' } } }] },
   ],
 };

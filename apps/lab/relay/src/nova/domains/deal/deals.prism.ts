@@ -18,7 +18,7 @@ export const dealsReads: Record<string, unknown> = {
       },
     },
     context: {
-      q: { $join: { parts: ['%', { $ref: '$.q' }, '%'], sep: '' } },
+      q: { $join: { parts: ['%', { $ref: '$.search' }, '%'], sep: '' } },
       ownerId: { $case: { branches: [{ when: { $eq: [{ $ref: '$.ownerId' }, 'me'] }, then: { $ref: '$.userId' } }], else: { $ref: '$.ownerId' } } },
       sortBy: { $ref: '$.sortBy' },
       sortDir: { $ref: '$.sortDir' },

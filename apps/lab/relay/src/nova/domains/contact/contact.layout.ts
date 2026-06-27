@@ -49,12 +49,10 @@ const activityRow: LayoutNode = {
 };
 
 export const contactLayout: LayoutNode = {
-  component: 'Box',
-  props: { width: 'min(560px, 46vw)', h: '100%', scroll: true, border: 'left' },
-  children: {
-    component: 'Stack',
-    props: { pad: 22, gap: 20 },
-    children: [
+  // Pure content — the placement (stack content box / panel) owns scroll + padding.
+  component: 'Stack',
+  props: { gap: 20 },
+  children: [
       // ── Header (close always available; identity skeletons while loading) ──
       {
         component: 'Row',
@@ -86,14 +84,7 @@ export const contactLayout: LayoutNode = {
               ],
             },
           },
-          {
-            component: 'Row',
-            props: { gap: 6, align: 'center' },
-            children: [
-              { component: 'Button', ref: 'edit', props: { variant: 'default', size: 'sm', icon: 'edit' }, children: 'Edit' },
-              { component: 'Button', ref: 'close', props: { variant: 'ghost', size: 'sm' }, children: '✕' },
-            ],
-          },
+          { component: 'Button', ref: 'edit', props: { variant: 'default', size: 'sm', icon: 'edit' }, children: 'Edit' },
         ],
       },
       // ── Body ──
@@ -226,5 +217,4 @@ export const contactLayout: LayoutNode = {
         },
       },
     ],
-  },
 };

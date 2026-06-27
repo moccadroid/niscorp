@@ -31,6 +31,9 @@ export type StepContext = {
   strict: boolean;
   onError: OnErrorHandler;
   signal: AbortSignal;
+  // True when the owning action is suspended (backgrounded under a stack). Event
+  // triggers no-op while suspended — only the active action reacts.
+  suspended?: boolean;
   // When set, this step execution is running inside a lifecycle hook.
   // In strict mode, hard failures (unknown endpoint, fetch error without
   // a handler) propagate as LifecycleError instead of being swallowed.
@@ -210,6 +213,11 @@ const resolveNavTarget = <T extends { action: string; input?: Record<string, unk
 const resolveNavInput = (effect: NavigationEffect, ctx: StepContext): NavigationEffect => {
   if ('push' in effect) return { push: resolveNavTarget(effect.push, ctx) };
   if ('replace' in effect) return { replace: resolveNavTarget(effect.replace, ctx) };
+  if ('resetTo' in effect) return { resetTo: resolveNavTarget(effect.resetTo, ctx) };
+  if ('popTo' in effect) {
+    const chain = createScopeChain(ctx.dataStore.get());
+    return { popTo: { ...effect.popTo, instance: String(resolve(effect.popTo.instance, chain, ctx.extras) ?? '') } };
+  }
   return effect;
 };
 
@@ -266,6 +274,14 @@ export const executeSteps = async (steps: Step[], ctx: StepContext): Promise<voi
       continue;
     }
     if ('replace' in step) {
+      navigate(resolveNavInput(step, ctx), ctx);
+      continue;
+    }
+    if ('popTo' in step) {
+      navigate(resolveNavInput(step, ctx), ctx);
+      continue;
+    }
+    if ('resetTo' in step) {
       navigate(resolveNavInput(step, ctx), ctx);
       continue;
     }

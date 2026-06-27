@@ -46,13 +46,13 @@ const main = async (): Promise<void> => {
   checks.push([`all deals loaded (got ${rows().length})`, rows().length === 120]);
 
   // Search box filters in place.
-  shell.dispatch({ type: 'ui:model', ref: 'q', payload: 'acme' });
+  shell.dispatch({ type: 'ui:model', ref: 'search', payload: 'acme' });
   await settle(240);
   const searched = rows().length;
   checks.push([`search "acme" filters the list (got ${searched})`, searched > 0 && searched < 120]);
 
   // Clearing the box restores all.
-  shell.dispatch({ type: 'ui:model', ref: 'q', payload: '' });
+  shell.dispatch({ type: 'ui:model', ref: 'search', payload: '' });
   await settle(240);
   checks.push([`clearing the search restores all (got ${rows().length})`, rows().length === 120]);
 
@@ -65,13 +65,13 @@ const main = async (): Promise<void> => {
   checks.push([`My deals is a non-empty subset (got ${mine})`, mine > 0 && mine < 120]);
 
   // Search composes with the tab.
-  shell.dispatch({ type: 'ui:model', ref: 'q', payload: 'a' });
+  shell.dispatch({ type: 'ui:model', ref: 'search', payload: 'a' });
   await settle(240);
   const mineFiltered = rows().length;
   checks.push([`search composes with the tab (got ${mineFiltered} ≤ ${mine})`, mineFiltered > 0 && mineFiltered <= mine]);
 
   // Back to All.
-  shell.dispatch({ type: 'ui:model', ref: 'q', payload: '' });
+  shell.dispatch({ type: 'ui:model', ref: 'search', payload: '' });
   shell.dispatch({ type: 'ui:click', ref: 'tab', payload: '' });
   await settle(240);
   checks.push([`All tab restores the full list (got ${rows().length})`, rows().length === 120]);
@@ -104,12 +104,10 @@ const main = async (): Promise<void> => {
   await settle(80);
   checks.push([`row ⋯ opens its menu (menuOpenId=${String(mainData()?.['menuOpenId'])})`, mainData()?.['menuOpenId'] === firstId && firstId !== undefined]);
 
-  // "Open" item (carrying the row) opens the deal workspace (the one deal view, a
-  // modal) and closes the menu (and actually works — no dismiss storm).
+  // "Open" item (carrying the row) drills into the deal workspace on `main`.
   shell.dispatch({ type: 'ui:click', ref: 'row-open', payload: firstRow });
   await settle(160);
-  checks.push([`"Open" opens the deal workspace (got ${String(modalAction())})`, modalAction() === 'deal']);
-  checks.push([`"Open" closes the menu (got ${String(mainData()?.['menuOpenId'])})`, mainData()?.['menuOpenId'] === '']);
+  checks.push([`"Open" drills into the deal workspace (got ${String(mainAction())})`, mainAction() === 'deal']);
 
   let ok = true;
   for (const [label, pass] of checks) {

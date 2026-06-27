@@ -22,6 +22,7 @@ import {
   SlidersHorizontal,
   Bell,
   ChevronDown,
+  ChevronLeft,
   ChevronRight,
   MoreHorizontal,
   Command,
@@ -37,6 +38,7 @@ import {
   Trash2,
   ArrowUp,
   ArrowDown,
+  Sparkles,
   type LucideIcon,
 } from 'lucide-react';
 import { cx } from '../lib/cx';
@@ -168,6 +170,7 @@ const ICONS: Record<string, LucideIcon> = {
   sliders: SlidersHorizontal,
   bell: Bell,
   'chevron-down': ChevronDown,
+  'chevron-left': ChevronLeft,
   'chevron-right': ChevronRight,
   more: MoreHorizontal,
   command: Command,
@@ -183,6 +186,7 @@ const ICONS: Record<string, LucideIcon> = {
   trash: Trash2,
   'arrow-up': ArrowUp,
   'arrow-down': ArrowDown,
+  sparkles: Sparkles,
 };
 
 const IconProps = z.object({ name: z.string(), size: z.number().optional() }).strict();

@@ -16,7 +16,7 @@ export const tasksReads: Record<string, unknown> = {
     context: {
       userId: { $ref: '$.userId' },
       today: { $ref: '$.today' },
-      q: { $join: { parts: ['%', { $ref: '$.q' }, '%'], sep: '' } },
+      q: { $join: { parts: ['%', { $ref: '$.search' }, '%'], sep: '' } },
       // done range: open/overdue → [false,false], done → [true,true], all → [false,true]
       doneMin: { $case: { branches: [{ when: { $eq: [{ $ref: '$.scope' }, 'done'] }, then: true }], else: false } },
       doneMax: {

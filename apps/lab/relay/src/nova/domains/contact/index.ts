@@ -2,7 +2,7 @@
 //
 //   contacts      — the collection (list)
 //   contact       — the single contact (profile, in the detail rail)
-//   contact.form  — create AND edit (one action; `$.saveFn` picks the write)
+//   contact.form  — create AND edit (one action; the `upsert` mutation desugars insert/update by `id`)
 //
 // The form's company picker uses the shared `options.companies` read (registered
 // by the deal entity); only its write seam lives here.

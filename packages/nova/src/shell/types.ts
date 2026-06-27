@@ -126,6 +126,10 @@ export type Shell = {
   // before instantiation — same as a push/replace effect's `with: [...]`.
   push: (canvasId: string, actionId: string, input?: Record<string, unknown>, fragments?: string[]) => string;
   pop: (canvasId: string) => void;
+  // Pop a canvas down to a given instance (unmount everything above it). A no-op
+  // if the instance isn't in the stack. Lets stack-nav chrome (a breadcrumb, a
+  // tab) jump straight to an ancestor via `useShell().popTo(...)`.
+  popTo: (canvasId: string, instanceId: string) => void;
   replace: (canvasId: string, actionId: string, input?: Record<string, unknown>, fragments?: string[]) => string;
   clear: (canvasId: string) => void;
 

@@ -8,7 +8,7 @@ import { getVexRuntime } from '../vex/runtime';
 
 const settle = (ms = 300): Promise<void> => new Promise((r) => setTimeout(r, ms));
 const detailRt = (): ReturnType<typeof shell.getRuntime> => {
-  const a = shell.getCanvasState('detail').active;
+  const a = shell.getCanvasState('main').active;
   return a !== undefined ? shell.getRuntime(a.id) : undefined;
 };
 const view = (): Record<string, unknown> => ((detailRt()?.getData()?.['view'] ?? {}) as Record<string, unknown>);
@@ -35,7 +35,7 @@ const main = async (): Promise<void> => {
   // ── Activity slot: the contact with the most activity ──
   const cAct = await one(`SELECT contact_id AS id FROM activities WHERE contact_id IS NOT NULL GROUP BY contact_id ORDER BY count(*) DESC LIMIT 1`);
   await openContact(cAct!);
-  checks.push([`contact detail mounted (got ${String(detailRt()?.definition.id)})`, detailRt()?.definition.id === 'contact']);
+  checks.push([`contact opened on main (got ${String(detailRt()?.definition.id)})`, detailRt()?.definition.id === 'contact']);
   const acts = (view()['activity'] ?? []) as Record<string, unknown>[];
   const dbActs = await count('SELECT count(*)::int AS n FROM activities WHERE contact_id=$1', [cAct]);
   checks.push([`activity matches the DB (${acts.length} = min(${dbActs},12)) and is non-empty`, acts.length === Math.min(dbActs, 12) && acts.length > 0]);
@@ -65,7 +65,7 @@ const main = async (): Promise<void> => {
     if (n.type === 'error') errs.push(`${n.name ?? '?'}: ${n.message ?? ''}`);
     if (n.children !== undefined) walkErr(n.children);
   };
-  walkErr(shell.flattenRenderTree(shell.getCanvasRenderTree('detail')));
+  walkErr(shell.flattenRenderTree(shell.getCanvasRenderTree('main')));
   checks.push([`contact panel renders with no error nodes (${errs.join('; ') || 'none'})`, errs.length === 0]);
 
   // ── Tasks slot: the contact with the most open tasks ──
@@ -82,7 +82,7 @@ const main = async (): Promise<void> => {
   await settle(320);
   shell.dispatch({ type: 'ui:click', ref: 'row', payload: company });
   await settle(340);
-  checks.push([`company detail mounted (got ${String(detailRt()?.definition.id)})`, detailRt()?.definition.id === 'company']);
+  checks.push([`company opened on main (got ${String(detailRt()?.definition.id)})`, detailRt()?.definition.id === 'company']);
   const coDeals = (view()['deals'] ?? []) as Record<string, unknown>[];
   const dbCoDeals = await count("SELECT count(*)::int AS n FROM deals WHERE company_id=$1 AND status='open'", [company]);
   checks.push([`company open deals match the DB (${coDeals.length} = ${dbCoDeals})`, coDeals.length === dbCoDeals && coDeals.length > 0]);

@@ -1,15 +1,16 @@
 import type { LayoutNode } from '@niscorp/nova';
 
-// The company profile panel — wider than a contact (min(560px, 46vw)), so it
-// uses a two-column body: People | Open deals. Loads by id: `loadCompany` fills
-// `$.view` with { record, contacts, deals }. People and deals are LinkRows —
-// click one to open that contact/deal in this same panel (cross-linking by id).
+// The company profile — responsive content that fills whatever canvas holds it
+// (the aside rail is sized by the shell; a modal by the `panel` fragment). A
+// two-column body: People | Open deals. Loads by id: `loadCompany` fills `$.view`
+// with { record, contacts, deals }. People and deals are LinkRows — click one to
+// open that contact/deal.
 export const companyLayout: LayoutNode = {
+  // Pure content — the placement (stack content box / panel) owns scroll + padding.
   component: 'Box',
-  props: { width: 'min(560px, 46vw)', h: '100%', scroll: true, border: 'left' },
   children: {
     component: 'Stack',
-    props: { pad: 24, gap: 22 },
+    props: { gap: 22 },
     children: [
       // ── Header ──
       {
@@ -42,14 +43,7 @@ export const companyLayout: LayoutNode = {
               ],
             },
           },
-          {
-            component: 'Row',
-            props: { gap: 6, align: 'center' },
-            children: [
-              { component: 'Button', ref: 'edit', props: { variant: 'default', size: 'sm', icon: 'edit' }, children: 'Edit' },
-              { component: 'Button', ref: 'close', props: { variant: 'ghost', size: 'sm' }, children: '✕' },
-            ],
-          },
+          { component: 'Button', ref: 'edit', props: { variant: 'default', size: 'sm', icon: 'edit' }, children: 'Edit' },
         ],
       },
 

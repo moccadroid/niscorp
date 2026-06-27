@@ -193,7 +193,8 @@ export const Textarea: NovaComponent<z.infer<typeof TextareaProps>> = ({
   rows,
   value,
   novaModel,
-}: z.infer<typeof TextareaProps> & Bound) => {
+  novaRef,
+}: z.infer<typeof TextareaProps> & Bound & { novaRef?: string }) => {
   const dispatch = useNovaDispatch();
   return field(
     label,
@@ -205,6 +206,15 @@ export const Textarea: NovaComponent<z.infer<typeof TextareaProps>> = ({
       value={asText(value)}
       onChange={(e) => {
         if (novaModel) dispatch({ type: 'ui:model', ref: novaModel.ref, payload: e.target.value });
+      }}
+      onKeyDown={(e) => {
+        // With a ref, Enter submits (emits `ui:key`); Shift+Enter inserts a newline
+        // (default). Lets a chat box send on Enter while keeping multi-line input.
+        if (novaRef === undefined) return;
+        if (e.key === 'Enter' && !e.shiftKey) {
+          e.preventDefault();
+          dispatch({ type: 'ui:key', ref: novaRef, key: 'Enter' });
+        }
       }}
     />,
   );

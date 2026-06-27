@@ -130,4 +130,33 @@ describe('shell — suspend/resume lifecycle hooks', () => {
     // Data unchanged — no hooks defined, no mutations.
     expect(aRuntime.getData()['value']).toBe(1);
   });
+
+  it('a suspended action ignores ui events; reacts again after resume', async () => {
+    const A: ActionDefinition = {
+      id: 'A',
+      data: { pings: 0 },
+      triggers: [{ event: 'ui:click', ref: 'ping', do: [{ increment: 'pings' }] }],
+    };
+    const B: ActionDefinition = { id: 'B' };
+    const shell = setup({ A, B });
+    const pings = (id: string): unknown => shell.getRuntime(id)?.getData()['pings'];
+
+    const aId = shell.push('main', 'A');
+    await tick();
+    shell.dispatch({ type: 'ui:click', ref: 'ping' });
+    await tick();
+    expect(pings(aId)).toBe(1); // active → fires
+
+    shell.push('main', 'B'); // A suspended
+    await tick();
+    shell.dispatch({ type: 'ui:click', ref: 'ping' });
+    await tick();
+    expect(pings(aId)).toBe(1); // suspended → ignored
+
+    shell.pop('main'); // A resumes
+    await tick();
+    shell.dispatch({ type: 'ui:click', ref: 'ping' });
+    await tick();
+    expect(pings(aId)).toBe(2); // active again → fires
+  });
 });

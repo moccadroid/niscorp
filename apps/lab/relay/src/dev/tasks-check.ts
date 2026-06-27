@@ -43,11 +43,11 @@ const main = async (): Promise<void> => {
   checks.push([`default sort is due-date asc (got ${String(mainData()?.['sortBy'])} ${String(mainData()?.['sortDir'])})`, mainData()?.['sortBy'] === 'tasks.due_date' && mainData()?.['sortDir'] === 'asc']);
 
   // Search filters in place.
-  shell.dispatch({ type: 'ui:model', ref: 'q', payload: 'follow' });
+  shell.dispatch({ type: 'ui:model', ref: 'search', payload: 'follow' });
   await settle(240);
   const searched = rows().length;
   checks.push([`search "follow" filters in place (got ${searched} ≤ ${all})`, searched > 0 && searched <= all]);
-  shell.dispatch({ type: 'ui:model', ref: 'q', payload: '' });
+  shell.dispatch({ type: 'ui:model', ref: 'search', payload: '' });
   await settle(240);
   checks.push([`clearing the search restores all (got ${rows().length})`, rows().length === all]);
 

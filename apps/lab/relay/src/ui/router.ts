@@ -1,5 +1,5 @@
 import type { Shell } from '@niscorp/nova';
-import { SCREEN_PATH, VIEW_PATH, DETAIL_SEGMENT, SEGMENT } from '../nova/shell/routes';
+import { SCREEN_PATH, VIEW_PATH, SEGMENT } from '../nova/shell/routes';
 
 // Edge adapter: keeps the address bar and the shell in sync, in memory (no
 // reload, no fetch). Nova stays URL-agnostic — this is the only code that
@@ -7,75 +7,49 @@ import { SCREEN_PATH, VIEW_PATH, DETAIL_SEGMENT, SEGMENT } from '../nova/shell/r
 //   state → URL — observe shell structure changes, pushState the derived path.
 //   URL → state — on load + back/forward, drive the shell to match.
 //
-// The route table it reads (nova/routes.ts) is pure data.
+// The route table it reads (shell/routes.ts) is pure data. The URL tracks the
+// main stack's ROOT screen; drilling into records pushes onto main but keeps the
+// screen-level URL (deep-linking a drilled record is a later pass).
 
-const activeOf = (
-  shell: Shell,
-  canvasId: string,
-): { action: string; id: unknown; view: unknown } | undefined => {
-  const active = shell.getCanvasState(canvasId).active;
-  if (active === undefined) return undefined;
-  const rt = shell.getRuntime(active.id);
-  if (rt === undefined) return undefined;
-  const data = rt.getData();
-  return { action: rt.definition.id, id: data['id'], view: data['view'] };
+// The ROOT of a canvas's stack (the screen), regardless of how deep you've
+// drilled. The URL tracks the screen, not the drill depth (deep-linking a drilled
+// record is a later router pass).
+const rootOf = (shell: Shell, canvasId: string): { action: string; view: unknown } | undefined => {
+  const root = shell.getCanvasState(canvasId).stack[0];
+  return root === undefined ? undefined : { action: root.definitionId, view: root.data['view'] };
 };
 
 export const installRouter = (shell: Shell): (() => void) => {
   let applying = false; // suppress state→URL while we drive state from a URL
 
-  // The path the current shell state should show: an open detail wins (a record
-  // is canonical), else the main screen.
+  // The path the current shell state should show: the main stack's ROOT screen
+  // (drilling into records pushes onto main but keeps the screen-level URL).
   const pathFromState = (): string => {
-    const detail = activeOf(shell, 'detail');
-    if (detail !== undefined) {
-      const seg = DETAIL_SEGMENT[detail.action];
-      if (seg !== undefined && typeof detail.id === 'string' && detail.id !== '') {
-        return `/${seg}/${detail.id}`;
-      }
-    }
-    const main = activeOf(shell, 'main');
-    if (main === undefined) return '/';
+    const root = rootOf(shell, 'main');
+    if (root === undefined) return '/';
     // A view-specific path wins (deals board → /pipeline), else the screen home.
-    const viewPath = typeof main.view === 'string' ? VIEW_PATH[`${main.action}:${main.view}`] : undefined;
-    return viewPath ?? SCREEN_PATH[main.action] ?? '/';
+    const viewPath = typeof root.view === 'string' ? VIEW_PATH[`${root.action}:${root.view}`] : undefined;
+    return viewPath ?? SCREEN_PATH[root.action] ?? '/';
   };
 
-  // Drive the shell from a path. Publishes `screen-*` so the sidebar highlight +
-  // topbar title follow (the same channel a nav click emits). Guards avoid
-  // remounting a screen/detail that's already showing.
+  // Drive the shell from a path: reset `main` to the screen root (clearing any
+  // drill stack), seeding the deals view when the route carries one. Publishes
+  // `screen-*` so the sidebar highlight + topbar title follow. Deep-linking a
+  // drilled record is a later pass; the URL is screen-level for now.
   const applyPath = (path: string): void => {
     applying = true;
     try {
       const parts = path.split('/').filter((p) => p !== '');
       const route = SEGMENT[parts[0] ?? ''] ?? SEGMENT[''];
       const screen = route?.screen ?? 'home';
-      const recordId = parts[1];
-      const opensDetail = recordId !== undefined && route?.detail !== undefined;
 
-      // Switching the main list with a record open seeds the list's
-      // `highlight_id` so the matching row is marked. A view-bearing route (the
-      // deals table vs board) also remounts when only the view differs, seeding
-      // `$.view` so the right layout shows.
-      const main = activeOf(shell, 'main');
-      const viewChanged = route?.view !== undefined && main?.view !== route.view;
-      if (main?.action !== screen || viewChanged) {
-        shell.replace('main', screen, {
-          ...(route?.view !== undefined ? { view: route.view } : {}),
-          ...(opensDetail ? { highlight_id: recordId } : {}),
-        });
+      const root = rootOf(shell, 'main');
+      const viewChanged = route?.view !== undefined && root?.view !== route.view;
+      if (root?.action !== screen || viewChanged) {
+        shell.clear('main');
+        shell.push('main', screen, route?.view !== undefined ? { view: route.view } : undefined);
       }
       shell.publish(route?.channel ?? `screen-${screen}`);
-
-      const detail = activeOf(shell, 'detail');
-      if (opensDetail) {
-        if (detail?.action !== route?.detail || detail?.id !== recordId) {
-          shell.replace('detail', route!.detail!, { id: recordId });
-        }
-      } else if (detail !== undefined) {
-        shell.publish('deselect'); // back-to-list clears the row highlight
-        shell.clear('detail');
-      }
     } finally {
       applying = false;
     }

@@ -12,6 +12,10 @@ const mainData = (): Record<string, unknown> => {
   return (a !== undefined ? shell.getRuntime(a.id)?.getData() : {}) as Record<string, unknown>;
 };
 const rows = (): Record<string, unknown>[] => (mainData()['rows'] ?? []) as Record<string, unknown>[];
+const mainId = (): string | undefined => {
+  const a = shell.getCanvasState('main').active;
+  return a !== undefined ? shell.getRuntime(a.id)?.definition.id : undefined;
+};
 const modalRt = (): ReturnType<typeof shell.getRuntime> => {
   const a = shell.getCanvasState('modal').active;
   return a !== undefined ? shell.getRuntime(a.id) : undefined;
@@ -88,7 +92,7 @@ const main = async (): Promise<void> => {
   await settle(320);
   shell.dispatch({ type: 'ui:click', ref: 'card', payload: dealWithTask.deal_id });
   await settle(320);
-  checks.push([`deal workspace open (got ${String(modalId())})`, modalId() === 'deal']);
+  checks.push([`deal workspace drilled on main (got ${String(mainId())})`, mainId() === 'deal']);
   shell.dispatch({ type: 'ui:click', ref: 'complete-task', payload: dealWithTask.task_id });
   await settle(360);
   checks.push([`deal task completed from the workspace`, (await count('SELECT count(*)::int n FROM tasks WHERE id=$1 AND done=true', [dealWithTask.task_id])) === 1]);

@@ -14,7 +14,11 @@ import type { SlotWrapper } from '@niscorp/nova/react';
 // separate, deferred problem — the footprint still appears instantly; only the
 // content fades.
 export const relaySlotWrapper: SlotWrapper = ({ canvasId, instanceId, children }) => {
-  if (canvasId === 'modal') return <Fragment>{children}</Fragment>;
+  // An empty slot must render NO DOM, so a sized canvas region (e.g. `.rl-aside`)
+  // collapses via `:empty`. ActionSlot renders this wrapper persistently even
+  // when the canvas is empty (for exit animations we don't use), so guard on
+  // instanceId — render nothing when there's no instance.
+  if (canvasId === 'modal' || instanceId === undefined) return <Fragment>{children}</Fragment>;
   return (
     <div key={instanceId} className="rl-fade-in">
       {children}

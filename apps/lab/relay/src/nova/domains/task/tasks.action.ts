@@ -2,15 +2,16 @@ import type { ActionDefinition } from '@niscorp/nova';
 import { tasksLayout } from './tasks.layout';
 
 // The tasks screen — now a full management surface. `tasks.mine` is scoped by
-// the `$.scope` tab (Open / Overdue / Done / All); search (`$.q`) and the table's
+// the `$.scope` tab (Open / Overdue / Done / All); search (`$.search`) and the table's
 // reserved sort re-run it. Each row has an inline checkbox (complete/reopen via
 // `task.setDone`) and a ⋯ menu (Edit seeds the form from the row; Delete confirms
 // then removes). Every write announces `tasks-changed` so this list, the deal
 // modal, the contact panel and the sidebar badge all re-read.
 export const tasksAction: ActionDefinition = {
   id: 'tasks',
+  title: 'Tasks',
   data: {
-    q: '',
+    search: '',
     scope: 'open',
     rows: [],
     loading: true,
@@ -31,7 +32,7 @@ export const tasksAction: ActionDefinition = {
   lifecycle: { mount: [{ call: 'load', onSuccess: [{ set: 'loading', value: false }] }] },
   triggers: [
     // Toolbar: search + scope tabs + sortable headers each re-run the list.
-    { event: 'ui:model', ref: 'q', do: [{ set: 'q', value: '@event.payload' }, { call: 'load' }] },
+    { event: 'ui:model', ref: 'search', do: [{ set: 'search', value: '@event.payload' }, { call: 'load' }] },
     { event: 'ui:click', ref: 'tab', do: [{ set: 'scope', value: '@event.payload' }, { call: 'load' }] },
     { event: 'ui:click', ref: 'sort', do: [{ set: 'sortBy', value: '@event.payload.sortBy' }, { set: 'sortDir', value: '@event.payload.sortDir' }, { call: 'load' }] },
     // Inline checkbox → persist the new done state. The check cell hands
@@ -50,7 +51,7 @@ export const tasksAction: ActionDefinition = {
       ref: 'row-edit',
       do: [
         { set: 'menuOpenId', value: '' },
-        { push: { action: 'task.form', canvas: 'modal', with: ['modal'], input: { saveFn: 'task.update', modalTitle: 'Edit task', confirmLabel: 'Save', id: '@event.payload.task_id', title: '@event.payload.title', due: '@event.payload.due_date' } } },
+        { push: { action: 'task.form', canvas: 'modal', with: ['modal'], input: { modalTitle: 'Edit task', confirmLabel: 'Save', id: '@event.payload.task_id', title: '@event.payload.title', due: '@event.payload.due_date' } } },
       ],
     },
     {
@@ -60,7 +61,7 @@ export const tasksAction: ActionDefinition = {
         { set: 'menuOpenId', value: '' },
         { set: 'pendingDeleteId', value: '@event.payload.task_id' },
         { set: 'pendingDeleteLabel', value: '@event.payload.title' },
-        { push: { action: 'confirm-delete', canvas: 'modal', input: { label: '@event.payload.title', message: 'This permanently deletes the task. This can’t be undone.' } } },
+        { push: { action: 'confirm-delete', canvas: 'modal', with: ['panel'], input: { label: '@event.payload.title', message: 'This permanently deletes the task. This can’t be undone.' } } },
       ],
     },
     { message: 'confirm-delete', do: [{ call: 'remove', onSuccess: [{ emit: { channel: 'tasks-changed' } }, { set: 'pendingDeleteId', value: '' }] }] },

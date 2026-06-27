@@ -1,16 +1,14 @@
 import type { ActionDefinition } from '@niscorp/nova';
 import { contactFormLayout } from './contact.form.layout';
 
-// The contact form — create AND edit in one action (Approach B: `$.saveFn` picks
-// the write). Bare push is CREATE (`saveFn` defaults to `contact.create`, fields
-// empty); an edit push overrides `saveFn:'contact.update'` + the `id` and fields.
-// On mount it loads the company picker (shared `options.companies` read). On
-// success it announces `contacts-changed`, opens the saved contact in the detail
-// rail, and pops — identical for create (new contact) and edit (the same one).
+// The contact form — create AND edit in one action. The `save` endpoint is the
+// `contact.upsert` mutation, which desugars to insert (no `id`) or update (`id`
+// set): a bare push creates, an edit push (with `id` + fields) edits. On mount it
+// loads the company picker (shared `options.companies` read). On success it
+// announces `contacts-changed`, opens the saved contact, and pops.
 export const contactFormAction: ActionDefinition = {
   id: 'contact.form',
   data: {
-    saveFn: 'contact.create',
     modalTitle: 'New contact',
     confirmLabel: 'Create',
     id: '', name: '', email: '', phone: '', title: '', company: '', companyOptions: [],
@@ -18,21 +16,19 @@ export const contactFormAction: ActionDefinition = {
   layout: contactFormLayout,
   endpoints: {
     loadCompanies: { fn: 'options.companies', target: 'companyOptions' },
-    save: { fn: '{{$.saveFn}}', target: 'saved' },
+    // One write — `contact.upsert` desugars to insert (id empty) or update (id set).
+    save: { fn: 'contact.upsert', target: 'saved' },
   },
   lifecycle: { mount: [{ call: 'loadCompanies' }] },
   triggers: [
+    { event: 'ui:click', ref: 'cancel', do: [{ pop: true }] },
     {
       event: 'ui:click',
       ref: 'confirm',
       do: [
         {
           call: 'save',
-          onSuccess: [
-            { emit: { channel: 'contacts-changed' } },
-            { replace: { action: 'contact', canvas: 'detail', input: { id: '$.saved.id' } } },
-            { pop: true },
-          ],
+          onSuccess: [{ emit: { channel: 'contacts-changed' } }, { pop: true }],
         },
       ],
     },

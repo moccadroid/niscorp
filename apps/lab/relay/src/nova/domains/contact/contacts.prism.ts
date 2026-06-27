@@ -8,7 +8,7 @@ export const contactsReads: Record<string, unknown> = {
   'contacts.list': {
     shape: { $const: contactsList.shape },
     context: {
-      q: { $join: { parts: ['%', { $ref: '$.q' }, '%'], sep: '' } },
+      q: { $join: { parts: ['%', { $ref: '$.search' }, '%'], sep: '' } },
       sortBy: { $ref: '$.sortBy' },
       sortDir: { $ref: '$.sortDir' },
     },

@@ -30,7 +30,7 @@ describe('attachTriggers', () => {
     const triggers: TriggerConfig[] = [
       { event: 'ui:click', ref: 'btn', do: [{ increment: 'n' }] },
     ];
-    attachTriggers(triggers, eventBus, messageBus, makeBuild(dataStore, eventBus, messageBus));
+    attachTriggers(triggers, eventBus, messageBus, makeBuild(dataStore, eventBus, messageBus), 'inst');
     eventBus.emit({ type: 'ui:click', ref: 'btn' });
     await tick();
     expect(dataStore.get()).toEqual({ n: 1 });
@@ -45,6 +45,7 @@ describe('attachTriggers', () => {
       eventBus,
       messageBus,
       makeBuild(dataStore, eventBus, messageBus),
+      'inst',
     );
     eventBus.emit({ type: 'ui:click', ref: 'remove', payload: 1 });
     await tick();
@@ -60,6 +61,7 @@ describe('attachTriggers', () => {
       eventBus,
       messageBus,
       makeBuild(dataStore, eventBus, messageBus),
+      'inst',
     );
     eventBus.emit({ type: 'ui:click', ref: 'other' });
     await tick();
@@ -75,6 +77,7 @@ describe('attachTriggers', () => {
       eventBus,
       messageBus,
       makeBuild(dataStore, eventBus, messageBus),
+      'inst',
     );
     eventBus.emit({ type: 'ui:key', key: 'ArrowUp' });
     await tick();
@@ -96,6 +99,7 @@ describe('attachTriggers', () => {
       eventBus,
       messageBus,
       makeBuild(dataStore, eventBus, messageBus),
+      'inst',
     );
     eventBus.emit({ type: 'ui:submit' });
     await tick();
@@ -112,6 +116,7 @@ describe('attachTriggers', () => {
       eventBus,
       messageBus,
       makeBuild(dataStore, eventBus, messageBus),
+      'inst',
     );
     messageBus.publish('cart-updated');
     await tick();
@@ -127,6 +132,7 @@ describe('attachTriggers', () => {
       eventBus,
       messageBus,
       makeBuild(dataStore, eventBus, messageBus),
+      'inst',
     );
     handle.detach();
     eventBus.emit({ type: 'ui:click' });

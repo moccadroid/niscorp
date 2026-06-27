@@ -3,7 +3,7 @@ import { topbarLayout } from './topbar.layout';
 
 // The topbar shows the active screen title and hosts the action search.
 //
-// The search Input (`model: $.q`, `ref: search`) emits `ui:model` (each keystroke
+// The search Input (`model: $.search`, `ref: search`) emits `ui:model` (each keystroke
 // re-runs `searchActions` into `$.results`) and `ui:key` (↑/↓ move `$.highlight`,
 // Enter runs the highlighted action, Esc clears). A result row click carries its
 // whole record. Running an action stashes its id/kind/name then `emit
@@ -13,11 +13,11 @@ import { topbarLayout } from './topbar.layout';
 // fullscreen button. Push/replace resolve their `action` from `$.chosen_id`.
 export const topbarAction: ActionDefinition = {
   id: 'topbar',
-  data: { title: 'Home', q: '', results: [], highlight: 0, chosen_id: '', chosen_kind: '', chosen_name: '' },
+  data: { title: 'Home', search: '', results: [], highlight: 0, chosen_id: '', chosen_kind: '', chosen_name: '' },
   layout: topbarLayout,
   endpoints: { search: { fn: 'topbar.search', target: 'results' } },
   triggers: [
-    { event: 'ui:model', ref: 'search', do: [{ set: 'q', value: '@event.payload' }, { call: 'search', onSuccess: [{ set: 'highlight', value: 0 }] }] },
+    { event: 'ui:model', ref: 'search', do: [{ set: 'search', value: '@event.payload' }, { call: 'search', onSuccess: [{ set: 'highlight', value: 0 }] }] },
     { event: 'ui:key', ref: 'search', key: 'ArrowDown', do: [{ increment: 'highlight' }] },
     { event: 'ui:key', ref: 'search', key: 'ArrowUp', do: [{ decrement: 'highlight' }] },
     {
@@ -31,7 +31,7 @@ export const topbarAction: ActionDefinition = {
         { emit: { channel: 'run-{{$.chosen_kind}}' } },
       ],
     },
-    { event: 'ui:key', ref: 'search', key: 'Escape', do: [{ set: 'q', value: '' }, { set: 'results', value: [] }] },
+    { event: 'ui:key', ref: 'search', key: 'Escape', do: [{ set: 'search', value: '' }, { set: 'results', value: [] }] },
     {
       event: 'ui:click',
       ref: 'run',
@@ -42,19 +42,21 @@ export const topbarAction: ActionDefinition = {
         { emit: { channel: 'run-{{$.chosen_kind}}' } },
       ],
     },
-    { event: 'ui:click', ref: 'search-close', do: [{ set: 'q', value: '' }, { set: 'results', value: [] }] },
+    { event: 'ui:click', ref: 'search-close', do: [{ set: 'search', value: '' }, { set: 'results', value: [] }] },
     // A create opens the form modal; a screen opens as a quickview on the modal
     // canvas (carrying its id/name so the quickview can navigate + title itself).
-    { message: 'run-create', do: [{ push: { action: '{{$.chosen_id}}', canvas: 'modal', with: ['modal'] } }, { set: 'q', value: '' }, { set: 'results', value: [] }] },
+    { message: 'run-create', do: [{ push: { action: '{{$.chosen_id}}', canvas: 'modal', with: ['modal'] } }, { set: 'search', value: '' }, { set: 'results', value: [] }] },
     {
       message: 'run-screen',
       do: [
         { push: { action: '{{$.chosen_id}}', canvas: 'modal', with: ['quickview'], input: { fullscreenAction: '{{$.chosen_id}}', quickviewTitle: '{{$.chosen_name}}' } } },
-        { set: 'q', value: '' },
+        { set: 'search', value: '' },
         { set: 'results', value: [] },
       ],
     },
     { event: 'ui:click', ref: 'new', do: [{ emit: { channel: 'new' } }] },
+    // Open Ray, the assistant, as a modal panel.
+    { event: 'ui:click', ref: 'assistant', do: [{ push: { action: 'assistant', canvas: 'modal', with: ['dock'] } }] },
     { message: 'screen-home', do: [{ set: 'title', value: 'Home' }] },
     { message: 'screen-tasks', do: [{ set: 'title', value: 'My tasks' }] },
     { message: 'screen-pipeline', do: [{ set: 'title', value: 'Pipeline' }] },

@@ -229,6 +229,62 @@
 .rl-dialog__sub { font-size: var(--fs-sm); color: var(--text-mute); margin-top: 2px; }
 .rl-dialog__body { padding: 18px; overflow: auto; min-height: 0; }
 .rl-dialog__foot { display: flex; justify-content: flex-end; gap: 8px; padding: 14px 18px; border-top: 1px solid var(--border); flex-shrink: 0; }
+
+/* A form's own footer (Cancel + Confirm), inline at the bottom of its layout —
+   renders on every canvas, not just inside a dialog. */
+.rl-form__foot { display: flex; justify-content: flex-end; gap: 8px; padding-top: 14px; margin-top: 4px; border-top: 1px solid var(--border); }
+/* The aside (detail) rail — the SHELL owns its size, not the action loaded into
+   it. `:empty` collapses it when nothing is loaded (an empty CanvasSlot renders
+   no DOM), so the rail only takes space when occupied. */
+.rl-aside { display: flex; flex-direction: column; width: min(560px, 46vw); height: 100%; border-left: 1px solid var(--border); }
+.rl-aside:empty { display: none; }
+
+/* Per-canvas stack: a column with the (optional) nav bar on top and the active
+   action filling the rest. The action's scroll + padding live in the stack
+   layout's content box, so every canvas pads its content identically. */
+.rl-stack { display: flex; flex-direction: column; }
+
+/* The stack context chip — per-canvas nav above the active screen. A back button
+   labelled with the parent (truncated), plus a depth pill that opens a menu to
+   jump to any ancestor. Self-hides at depth < 1, so a base screen shows none. */
+.rl-chip { position: relative; display: flex; align-items: center; gap: 6px; min-height: 30px; padding: 8px 20px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+.rl-chip__back,
+.rl-chip__more {
+  display: inline-flex; align-items: center; gap: 4px; height: 22px; padding: 0 6px;
+  border: none; border-radius: var(--r-sm); background: none; color: var(--text-2);
+  font-size: var(--fs-xs); cursor: pointer; transition: background var(--t-fast) var(--ease), color var(--t-fast) var(--ease);
+}
+.rl-chip__back:hover,
+.rl-chip__more:hover { background: var(--surface-2); color: var(--text); }
+.rl-chip__back { max-width: 60%; font-weight: 540; }
+.rl-chip__name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rl-chip__more { color: var(--text-dim); font-variant-numeric: tabular-nums; }
+
+/* The jump menu — a small popover listing the full stack (root → current). */
+.rl-chip__backdrop { position: fixed; inset: 0; z-index: 40; }
+.rl-chip__menu {
+  position: absolute; top: 100%; left: 20px; z-index: 41; min-width: 180px; max-width: 320px;
+  margin-top: 2px; padding: 4px; display: flex; flex-direction: column;
+  background: var(--surface); border: 1px solid var(--border-2); border-radius: var(--r-md); box-shadow: var(--shadow-lg);
+  animation: rl-fade-in var(--t-fast) var(--ease);
+}
+.rl-chip__row {
+  text-align: left; padding: 6px 8px; border: none; border-radius: var(--r-sm); background: none;
+  color: var(--text-2); font-size: var(--fs-sm); cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.rl-chip__row:hover { background: var(--surface-2); color: var(--text); }
+.rl-chip__row--current { color: var(--text); font-weight: 540; cursor: default; }
+.rl-chip__row--current:hover { background: none; }
+
+/* The panel fragment's floating close (records / Ray content on the modal canvas). */
+.rl-panel { position: relative; }
+.rl-panel__close { position: absolute; top: 10px; right: 10px; z-index: 1; }
+
+/* Ray's assistant dock — a right-docked panel (the `dock` fragment), so the
+   screen stays visible beside it and you watch Ray drive the shell live. */
+.rl-assistant { position: fixed; top: 0; right: 0; bottom: 0; width: 420px; max-width: 92vw; display: flex; flex-direction: column; background: var(--surface); border-left: 1px solid var(--border-2); box-shadow: var(--shadow-lg); z-index: 100; animation: rl-slide-in var(--t-med) var(--ease); }
+.rl-assistant .rl-dialog__foot { justify-content: stretch; }
+@keyframes rl-slide-in { from { transform: translateX(20px); opacity: 0; } }
 @keyframes rl-fade { from { opacity: 0; } }
 @keyframes rl-pop { from { opacity: 0; transform: translateY(8px) scale(0.98); } }
 

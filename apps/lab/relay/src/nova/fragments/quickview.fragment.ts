@@ -64,7 +64,7 @@ export const quickviewFragment: ActionFragment = {
       ref: 'fullscreen',
       do: [
         {
-          replace: {
+          resetTo: {
             action: '{{$.fullscreenAction}}',
             canvas: 'main',
             input: {

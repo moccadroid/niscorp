@@ -22,21 +22,15 @@ export const VIEW_PATH: Record<string, string> = {
   'deals:board': '/pipeline',
 };
 
-// Detail (detail canvas) action id → its list segment. A detail's URL is
-// `/<segment>/<id>`.
-export const DETAIL_SEGMENT: Record<string, string> = {
-  contact: 'contacts',
-  company: 'companies',
-};
-
-// Reverse: a path's first segment → the screen action it shows, the detail action
-// to open (when the path carries an id), the `$.view` to seed, and the `screen-*`
-// channel to publish (defaults to `screen-<screen>`).
-export const SEGMENT: Record<string, { screen: string; detail?: string; view?: string; channel?: string }> = {
+// Reverse: a path's first segment → the screen action it shows, the `$.view` to
+// seed, and the `screen-*` channel to publish (defaults to `screen-<screen>`).
+// (Records drill on the main stack now; deep-linking a drilled record is a later
+// pass, so there's no per-record segment here.)
+export const SEGMENT: Record<string, { screen: string; view?: string; channel?: string }> = {
   '': { screen: 'home' },
   tasks: { screen: 'tasks' },
-  contacts: { screen: 'contacts', detail: 'contact' },
-  companies: { screen: 'companies', detail: 'company' },
+  contacts: { screen: 'contacts' },
+  companies: { screen: 'companies' },
   deals: { screen: 'deals', view: 'table', channel: 'screen-deals' },
   pipeline: { screen: 'deals', view: 'board', channel: 'screen-pipeline' },
   settings: { screen: 'settings' },

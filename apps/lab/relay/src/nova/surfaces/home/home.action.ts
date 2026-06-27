@@ -5,6 +5,7 @@ import { homeLayout } from './home.layout';
 // `$.dash`, then clears `loading`.
 export const homeAction: ActionDefinition = {
   id: 'home',
+  title: 'Home',
   data: { dash: { open: {}, won: {}, tasks: {}, stages: [] }, loading: true },
   layout: homeLayout,
   // Each KPI + the by-stage table is its own read into a slot of `$.dash`.

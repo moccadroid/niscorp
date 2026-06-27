@@ -35,32 +35,21 @@ export const companyById: CacheEntry = {
   mapping: { $ref: '$.result' },
 };
 
-// Create a company. The form's values arrive via `$context` (shaped by the
-// input prism). `owner_id` is NOT here: identity is stamped by the engine from
-// the scope policy, never authored in the DSL. `id`/`created_at` default in the DB.
-export const companyCreate: Mutation = {
-  op: 'insert',
+// Create-or-edit a company. The form's values arrive via `$context` (shaped by
+// the input prism). `upsert` keys on `id`: present → update that row, absent →
+// insert (the engine desugars it to update/insert). `owner_id` is NOT here —
+// identity is stamped by the engine from the scope policy on the insert branch;
+// `id`/`created_at` default in the DB on create.
+export const companyUpsert: Mutation = {
+  op: 'upsert',
   table: 'companies',
-  values: {
+  key: 'id',
+  columns: {
     name: { $context: 'name' },
     domain: { $context: 'domain' },
     industry: { $context: 'industry' },
     size: { $context: 'size' },
   },
-};
-
-// Edit a company (the detail's Edit button seeds the form from the open record).
-// Same columns + the `id` for the WHERE; `owner_id` is left as-is.
-export const companyUpdate: Mutation = {
-  op: 'update',
-  table: 'companies',
-  set: {
-    name: { $context: 'name' },
-    domain: { $context: 'domain' },
-    industry: { $context: 'industry' },
-    size: { $context: 'size' },
-  },
-  where: { eq: ['companies.id', { $context: 'id' }] },
 };
 
 // Delete a company by id (the row ⋯ → Delete, behind a confirm). The schema

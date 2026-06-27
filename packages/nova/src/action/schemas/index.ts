@@ -14,6 +14,12 @@ export const ActionDefinitionSchema = z
     id: z.string().describe('Stable definition id.'),
     name: z.string().optional().describe('Human-readable name.'),
     description: z.string().optional().describe('Free-form description.'),
+    title: z
+      .string()
+      .optional()
+      .describe(
+        "A resolvable label for this instance, evaluated against its own data (e.g. '{{$.view.record.name}}'). Exposed as `instance.title` on a canvas's actionLayout scope so stack-nav chrome can label crumbs/tabs; falls back to `name` then the action id.",
+      ),
     layout: z
       .union([z.string(), LayoutNodeSchema])
       .optional()
@@ -73,7 +79,7 @@ export type { Mutation } from '../mutations';
 
 // Re-export sibling schemas + inferred types
 export { EffectSchema, StepSchema } from './effects';
-export type { Effect, Step, CallEffect, EmitEffect, PushEffect, PopEffect, ReplaceEffect } from './effects';
+export type { Effect, Step, CallEffect, EmitEffect, PushEffect, PopEffect, ReplaceEffect, PopToEffect, ResetToEffect } from './effects';
 export { TriggerConfigSchema } from './triggers';
 export type { TriggerConfig } from './triggers';
 export { EndpointConfigSchema } from './endpoints';

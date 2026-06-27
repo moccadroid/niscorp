@@ -2,10 +2,10 @@ import type { OkCacheEntry } from '@niscorp/vex';
 import { computeShapeHash } from '@niscorp/vex';
 import { compile } from '@niscorp/prism';
 import type { MutationDefinition } from '@relay/vex/mutations';
-import { contactsList, contactById, contactsByCompany, contactCreate, contactUpdate, contactDelete } from './contacts';
-import { companiesList, companyById, companyCreate, companyUpdate, companyDelete } from './companies';
-import { dealsList, dealsByOwner, dealById, dealsByCompany, dealsByContact, dealsBoard, dealsOpenByStage, dealsForecast, dealsByStatus, dealsByStage, companyOptions, stageOptions, contactOptions, dealCreate, dealUpdate, dealMoveStage, dealMarkWon, dealMarkLost, dealDelete } from './deals';
-import { tasksMine, tasksOverdue, tasksByDeal, tasksByContact, tasksOpenCount, taskCreate, taskSetDone, taskUpdate, taskDelete } from './tasks';
+import { contactsList, contactById, contactsByCompany, contactUpsert, contactDelete } from './contacts';
+import { companiesList, companyById, companyUpsert, companyDelete } from './companies';
+import { dealsList, dealsByOwner, dealById, dealsByCompany, dealsByContact, dealsBoard, dealsOpenByStage, dealsForecast, dealsByStatus, dealsByStage, companyOptions, stageOptions, contactOptions, dealUpsert, dealMoveStage, dealMarkWon, dealMarkLost, dealDelete } from './deals';
+import { tasksMine, tasksOverdue, tasksByDeal, tasksByContact, tasksOpenCount, taskUpsert, taskSetDone, taskDelete } from './tasks';
 import { activitiesByDeal, activitiesByContact, dealLineItems } from './activities';
 import { actionsSearch } from './actions';
 import { sidebarCounts } from './counts';
@@ -84,18 +84,14 @@ export const buildCacheSeed = async (): Promise<string> => {
 // ═══════════════════════════════════════════════════════════
 
 export const MUTATIONS: Record<string, MutationDefinition> = {
-  'contact.create': contactCreate,
-  'contact.update': contactUpdate,
+  'contact.upsert': contactUpsert,
   'contact.delete': contactDelete,
-  'company.create': companyCreate,
-  'company.update': companyUpdate,
+  'company.upsert': companyUpsert,
   'company.delete': companyDelete,
-  'task.create': taskCreate,
+  'task.upsert': taskUpsert,
   'task.setDone': taskSetDone,
-  'task.update': taskUpdate,
   'task.delete': taskDelete,
-  'deal.create': dealCreate,
-  'deal.update': dealUpdate,
+  'deal.upsert': dealUpsert,
   'deal.moveStage': dealMoveStage,
   'deal.markWon': dealMarkWon,
   'deal.markLost': dealMarkLost,

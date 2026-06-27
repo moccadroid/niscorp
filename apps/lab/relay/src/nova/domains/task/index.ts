@@ -2,7 +2,7 @@
 // single-record view, so there's no `task` action — just the collection and form.
 //
 //   tasks      — the collection (Open / Overdue / Done / All)
-//   task.form  — create AND edit (one action; `$.saveFn` picks the write)
+//   task.form  — create AND edit (one action; the `upsert` mutation desugars insert/update by `id`)
 export { tasksAction } from './tasks.action';
 export { taskFormAction } from './task.form.action';
 

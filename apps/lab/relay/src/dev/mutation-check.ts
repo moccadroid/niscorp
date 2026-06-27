@@ -9,9 +9,9 @@ import { shell } from '../nova/shell';
 import { getVexRuntime } from '../vex/runtime';
 import { executeMutation, MutationDefinitionSchema } from '../vex/mutations';
 import { scopePolicy } from '../vex/scope';
-import { companyCreate } from '@relay/api/companies';
-import { contactCreate, contactUpdate } from '@relay/api/contacts';
-import { dealCreate } from '@relay/api/deals';
+import { companyUpsert } from '@relay/api/companies';
+import { contactUpsert } from '@relay/api/contacts';
+import { dealUpsert } from '@relay/api/deals';
 import { contactFormMutations } from '../nova/domains/contact/contact.form.prism';
 
 const settle = (ms = 150): Promise<void> => new Promise((r) => setTimeout(r, ms));
@@ -34,8 +34,9 @@ const main = async (): Promise<void> => {
   }
   const checks: [string, boolean][] = [];
 
-  // ── Engine: a direct insert proves the DB write + RETURNING + scope + id default.
-  const inserted = await executeMutation(rt.db, companyCreate, {
+  // ── Engine: a direct upsert with NO id desugars to insert — proves the DB write
+  // + RETURNING + scope + id default.
+  const inserted = await executeMutation(rt.db, companyUpsert, {
     context: { name: 'Probe Inc', domain: 'probe.io', industry: 'finance', size: '1-10' },
     scope: { userId: 'usr_001' },
     policy: scopePolicy,
@@ -62,7 +63,8 @@ const main = async (): Promise<void> => {
   // ── The seam: the form's data (a single "Name", a "Relationship") is mapped to
   // DB columns by the input prism — split name → first/last, drop relationship —
   // BEFORE the write. Action shape ≠ DB shape.
-  const ctx = evaluate(contactFormMutations['contact.create'], {
+  const ctx = evaluate(contactFormMutations['contact.upsert'], {
+    id: '', // the form always carries an id (default ''); empty → the upsert inserts
     name: 'Ada Lovelace',
     email: 'ada@analytical.io',
     phone: '+1 (555) 010-1010',
@@ -70,21 +72,21 @@ const main = async (): Promise<void> => {
     company: '',
     relationship: 'lead',
   }) as Record<string, unknown>;
-  const contactRow = (await executeMutation(rt.db, contactCreate, { context: ctx, scope: { userId: 'usr_001' }, policy: scopePolicy, schema }))[0] ?? {};
+  const contactRow = (await executeMutation(rt.db, contactUpsert, { context: ctx, scope: { userId: 'usr_001' }, policy: scopePolicy, schema }))[0] ?? {};
   checks.push([`prism splits "Ada Lovelace" → first/last (${String(contactRow['first_name'])}/${String(contactRow['last_name'])})`, contactRow['first_name'] === 'Ada' && contactRow['last_name'] === 'Lovelace']);
   checks.push(['form-only "relationship" (no column) never reaches the row', !('relationship' in contactRow)]);
 
-  // ── Update: edit the just-created contact by id (forms double as edit forms).
-  const edited = (await executeMutation(rt.db, contactUpdate, {
+  // ── Update: the SAME upsert WITH an id desugars to update — edits by id.
+  const edited = (await executeMutation(rt.db, contactUpsert, {
     context: { id: contactRow['id'], first_name: 'Augusta', last_name: 'King', email: 'augusta@x.io', phone: '', title: 'Countess', company_id: null },
     scope: { userId: 'usr_001' }, policy: scopePolicy, schema,
   }))[0] ?? {};
-  checks.push([`update edits the row by id (${String(contactRow['first_name'])} → ${String(edited['first_name'])})`, edited['first_name'] === 'Augusta' && edited['id'] === contactRow['id']]);
+  checks.push([`upsert with id edits the row (${String(contactRow['first_name'])} → ${String(edited['first_name'])})`, edited['first_name'] === 'Augusta' && edited['id'] === contactRow['id']]);
 
   // ── Deal create: real FK ids (company + stage), owner stamped, status defaults.
   const co = (await rt.db.query('SELECT id FROM companies LIMIT 1')).rows[0] as { id: string };
   const stg = (await rt.db.query("SELECT id FROM stages WHERE name='Lead' LIMIT 1")).rows[0] as { id: string };
-  const newDeal = (await executeMutation(rt.db, dealCreate, {
+  const newDeal = (await executeMutation(rt.db, dealUpsert, {
     context: { title: 'Engine Deal', company_id: co.id, stage_id: stg.id, primary_contact_id: null, value: 1000, close_date: null },
     scope: { userId: 'usr_001' }, policy: scopePolicy, schema,
   }))[0] ?? {};
@@ -113,10 +115,8 @@ const main = async (): Promise<void> => {
   const before = companyRows().length;
   shell.publish('new'); // same channel the topbar's "+ New" emits
   await settle();
-  // setData fully replaces the store, so carry `saveFn` (the create/edit mode the
-  // form's `save` endpoint resolves). In the app, field edits are per-path `set`s
-  // via model bindings, so the default `saveFn` survives untouched.
-  modalRt()?.setData({ saveFn: 'company.create', name: 'Shell Co', domain: 'shell.co', industry: 'technology', size: '11-50', modalTitle: 'New company', confirmLabel: 'Create' });
+  // No `id` in the form data → the `company.upsert` write desugars to insert.
+  modalRt()?.setData({ id: '', name: 'Shell Co', domain: 'shell.co', industry: 'technology', size: '11-50', modalTitle: 'New company', confirmLabel: 'Create' });
   shell.dispatch({ type: 'ui:click', ref: 'confirm' });
   await settle(300);
   const rows = companyRows();

@@ -98,10 +98,14 @@ export const contactsByCompany: CacheEntry = {
 // "Name"). `owner_id` is NOT here — the engine stamps identity from the scope
 // policy. `id`/`created_at` default in the DB. (No company yet — that needs an
 // id-bearing company picker.)
-export const contactCreate: Mutation = {
-  op: 'insert',
+// Create-or-edit a contact. `upsert` keys on `id` — present → update that row,
+// absent → insert. `owner_id` is stamped by scope on the insert branch (not
+// reassigned on edit); `id`/`created_at` default in the DB on create.
+export const contactUpsert: Mutation = {
+  op: 'upsert',
   table: 'contacts',
-  values: {
+  key: 'id',
+  columns: {
     first_name: { $context: 'first_name' },
     last_name: { $context: 'last_name' },
     email: { $context: 'email' },
@@ -109,23 +113,6 @@ export const contactCreate: Mutation = {
     title: { $context: 'title' },
     company_id: { $context: 'company_id' },
   },
-};
-
-// Edit a contact (the detail's Edit button seeds the form from the open record).
-// Same columns as create + the `id` for the WHERE. `owner_id` is not touched —
-// editing doesn't reassign ownership.
-export const contactUpdate: Mutation = {
-  op: 'update',
-  table: 'contacts',
-  set: {
-    first_name: { $context: 'first_name' },
-    last_name: { $context: 'last_name' },
-    email: { $context: 'email' },
-    phone: { $context: 'phone' },
-    title: { $context: 'title' },
-    company_id: { $context: 'company_id' },
-  },
-  where: { eq: ['contacts.id', { $context: 'id' }] },
 };
 
 // Delete a contact by id (the row ⋯ → Delete, behind a confirm). The schema's

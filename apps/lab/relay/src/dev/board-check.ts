@@ -42,21 +42,22 @@ const main = async (): Promise<void> => {
   const summary = board().summary ?? {};
   checks.push([`forecast: total=${String(summary['total'])} weighted=${String(summary['weighted'])}`, typeof summary['total'] === 'string' && String(summary['total']).startsWith('$') && String(summary['weighted']).startsWith('$')]);
 
-  // A card click opens the deal WORKSPACE MODAL (on the modal canvas), and it
-  // loads the rich view (record + activities + line items + tasks + contact).
+  // A card click DRILLS into the deal workspace on `main` (pushed over the board),
+  // loading the rich view (record + activities + line items + tasks + contact).
   const firstDeal = (deals[0] as Record<string, unknown> | undefined)?.['deal_id'];
   shell.dispatch({ type: 'ui:click', ref: 'card', payload: firstDeal });
   await settle(260);
-  const mr = modalRt();
+  const active = shell.getCanvasState('main').active;
+  const mr = active !== undefined ? shell.getRuntime(active.id) : undefined;
   const view = (mr?.getData()?.['view'] ?? {}) as Record<string, unknown>;
   const rec = (view['record'] ?? {}) as Record<string, unknown>;
-  checks.push([`card opens the deal workspace (got ${String(mr?.definition.id)})`, mr?.definition.id === 'deal']);
-  checks.push([`modal loaded the deal (${String(rec['title'])}, prob ${String(rec['prob'])})`, rec['deal_id'] === firstDeal && rec['prob'] !== undefined]);
-  checks.push([`modal has the activity feed (got ${(view['activities'] as unknown[] | undefined)?.length ?? 0})`, Array.isArray(view['activities']) && (view['activities'] as unknown[]).length > 0]);
-  // close it
-  shell.dispatch({ type: 'ui:click', ref: 'close' });
+  checks.push([`card drills into the deal workspace (got ${String(mr?.definition.id)})`, mr?.definition.id === 'deal']);
+  checks.push([`deal loaded (${String(rec['title'])}, prob ${String(rec['prob'])})`, rec['deal_id'] === firstDeal && rec['prob'] !== undefined]);
+  checks.push([`workspace has the activity feed (got ${(view['activities'] as unknown[] | undefined)?.length ?? 0})`, Array.isArray(view['activities']) && (view['activities'] as unknown[]).length > 0]);
+  // The chip's Back pops the deal off main and returns to the board.
+  shell.pop('main');
   await settle(80);
-  checks.push([`✕ closes the modal`, shell.getCanvasState('modal').active === undefined]);
+  checks.push([`Back returns to the board (got ${String(mainAction())})`, mainAction() === 'deals']);
 
   // A drop fires ui:drop → `deal.moveStage` persists, the board reloads, and the
   // card lands in the target column (the DropZone carries the real stage_id).

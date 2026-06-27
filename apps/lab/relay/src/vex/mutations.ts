@@ -58,8 +58,26 @@ const InsertSchema = z.object({ op: z.literal('insert'), table: z.string(), valu
 const UpdateSchema = z.object({ op: z.literal('update'), table: z.string(), set: Columns, where: FilterSchema }).strict();
 const DeleteSchema = z.object({ op: z.literal('delete'), table: z.string(), where: FilterSchema }).strict();
 
-export const MutationSchema = z.discriminatedUnion('op', [InsertSchema, UpdateSchema, DeleteSchema]);
+// ── Sugar ──────────────────────────────────────────────────
+// A sugar op is a write convenience that rewrites to the core ops above before
+// anything runs (see `desugarMutation`). `upsert` is insert-or-update keyed on
+// `key`: present in the call's context → update that row, absent → insert.
+const UpsertSchema = z
+  .object({
+    op: z.literal('upsert'),
+    table: z.string(),
+    columns: Columns, // set on BOTH branches (update SET, and part of the insert)
+    insert: Columns.optional(), // extra columns set ONLY on insert — immutable-on-create (e.g. a FK)
+    key: z.string(),
+  })
+  .strict()
+  .describe('Sugar: insert-or-update by `key` (e.g. "id"). Desugars to update (SET columns WHERE key) when the key is present, else insert (columns + `insert`-only).');
+
+export const MutationSchema = z.discriminatedUnion('op', [InsertSchema, UpdateSchema, DeleteSchema, UpsertSchema]);
 export type Mutation = z.infer<typeof MutationSchema>;
+// The three core ops a sugar desugars TO — what the pipeline (scope/validate/
+// compile) actually handles. `upsert` never reaches them.
+type CoreMutation = Exclude<Mutation, { op: 'upsert' }>;
 
 // One write, or a batch run together in a single transaction.
 export const MutationDefinitionSchema = z.union([MutationSchema, MutationSchema.array().min(1)]);
@@ -97,7 +115,7 @@ const assertWritableColumns = (m: ResolvedMutation, schema: DatabaseSchema): voi
 // (identity safety). A `match` pins its column on insert and ANDs a filter into
 // update/delete WHERE (RLS boundary). Absent `write` (or unlisted table) falls
 // to `default`: deny throws, allow leaves the mutation ungoverned.
-const scopeMutation = (m: Mutation, policy: ScopePolicy): ResolvedMutation => {
+const scopeMutation = (m: CoreMutation, policy: ScopePolicy): ResolvedMutation => {
   const rule = policy.entities[m.table];
   if (rule === undefined) {
     if (policy.default === 'deny') throw new VexScopeError(m.table, `Writes to "${m.table}" are not allowed by scope policy (default: deny).`);
@@ -178,6 +196,26 @@ const compileMutation = (m: ResolvedMutation): Compiled => {
   return { sql: `DELETE FROM ${m.table} WHERE ${where} RETURNING *`, slots: ctx.paramSlots };
 };
 
+// ─── Desugar (sugar → core) ────────────────────────────────
+// The write-side analogue of prism's desugar(): rewrite each sugar op to a core
+// insert/update/delete BEFORE scope/validate/compile, so those stages only ever
+// see the three primitives. Each SUGAR entry is one sugar op — adding `archive`/
+// `touch` later is one more entry; the core pipeline never changes. Mutations are
+// flat, so this is a per-op dispatch, not Prism's recursive walk.
+const SUGAR: { [K in Mutation['op']]?: (m: Extract<Mutation, { op: K }>, context: Record<string, unknown>) => CoreMutation } = {
+  upsert: (m, context) => {
+    const keyed = context[m.key] !== undefined && context[m.key] !== '';
+    return keyed
+      ? { op: 'update', table: m.table, set: m.columns, where: { eq: [`${m.table}.${m.key}`, { $context: m.key }] } }
+      : { op: 'insert', table: m.table, values: { ...m.columns, ...m.insert } };
+  },
+};
+
+const desugarMutation = (m: Mutation, context: Record<string, unknown>): CoreMutation => {
+  const rewrite = SUGAR[m.op] as ((m: Mutation, c: Record<string, unknown>) => CoreMutation) | undefined;
+  return rewrite === undefined ? (m as CoreMutation) : rewrite(m, context);
+};
+
 // ─── Execute ───────────────────────────────────────────────
 export type MutationContext = {
   context: Record<string, unknown>; // dynamic values for `$context` refs (the action's data)
@@ -192,7 +230,7 @@ export const executeMutation = async (db: PGlite, def: MutationDefinition, mctx:
   const parsed = MutationDefinitionSchema.parse(def);
   const entries = Array.isArray(parsed) ? parsed : [parsed];
   const compiled = entries.map((entry) => {
-    const m = scopeMutation(entry, mctx.policy);
+    const m = scopeMutation(desugarMutation(entry, mctx.context), mctx.policy);
     assertWritableColumns(m, mctx.schema);
     return compileMutation(m);
   });

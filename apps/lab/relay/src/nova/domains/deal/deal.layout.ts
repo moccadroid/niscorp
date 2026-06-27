@@ -15,29 +15,24 @@ const label = (text: string): LayoutNode => ({
 });
 
 export const dealLayout: LayoutNode = {
-  component: 'Overlay',
-  children: {
-    component: 'Box',
-    props: { class: 'rl-dialog rl-dialog--wide' },
-    children: [
+  // Pure content — the placement (stack content box / panel) owns scroll + padding.
+  component: 'Box',
+  children: [
       {
         component: 'Box',
-        props: { class: 'rl-dialog__head' },
-        children: [
-          {
-            component: 'Stack',
-            props: { gap: 2 },
-            children: [
-              { component: 'Box', props: { class: 'rl-dialog__title' }, children: '{{$.view.record.title}}' },
-              { component: 'Text', props: { size: 'sm', color: 'mute' }, children: '{{$.view.record.company}}' },
-            ],
-          },
-          { component: 'Button', ref: 'close', props: { variant: 'ghost', size: 'sm' }, children: '✕' },
-        ],
+        props: { border: 'bottom', py: 14 },
+        children: {
+          component: 'Stack',
+          props: { gap: 2 },
+          children: [
+            { component: 'Box', props: { class: 'rl-dialog__title' }, children: '{{$.view.record.title}}' },
+            { component: 'Text', props: { size: 'sm', color: 'mute' }, children: '{{$.view.record.company}}' },
+          ],
+        },
       },
       {
         component: 'Box',
-        props: { class: 'rl-dialog__body' },
+        props: { py: 18 },
         children: {
           if: '$.loading',
           then: { component: 'Stack', props: { gap: 14 }, children: [{ component: 'Skeleton', props: { width: '40%', height: 30 } }, { component: 'Skeleton', props: { width: '100%', height: 8 } }, { component: 'Skeleton', props: { width: '60%' } }, { component: 'Skeleton', props: { width: '80%' } }] },
@@ -88,10 +83,10 @@ export const dealLayout: LayoutNode = {
                   { component: 'Button', ref: 'lost', props: { variant: 'danger', size: 'sm' }, children: 'Mark lost' },
                 ],
               },
-              // ── Two columns ──
+              // ── Two columns (wrap on a narrow canvas) ──
               {
                 component: 'Row',
-                props: { gap: 24, align: 'start' },
+                props: { gap: 24, align: 'start', wrap: true },
                 children: [
                   {
                     component: 'Stack',
@@ -187,7 +182,7 @@ export const dealLayout: LayoutNode = {
                   // RIGHT column: contact + activity
                   {
                     component: 'Box',
-                    props: { width: 340 },
+                    props: { width: 'min(340px, 100%)' },
                     children: {
                       component: 'Stack',
                       props: { gap: 20 },
@@ -289,5 +284,4 @@ export const dealLayout: LayoutNode = {
         },
       },
     ],
-  },
 };

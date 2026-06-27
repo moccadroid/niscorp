@@ -5,17 +5,14 @@
 // deal (else '', coerced to null — '' isn't a valid FK). Action shape ≠ DB shape.
 const emptyToNull = (path: string) => ({ $case: { branches: [{ when: { $ref: path }, then: { $ref: path } }], else: null } });
 
+// One `upsert` seam. All of title/due/deal_id/id flow into context; the mutation
+// desugars by `id` — update sets title+due (its `columns`), insert adds the
+// `insert`-only `deal_id`, so editing can't re-link or wipe the task's deal.
 export const taskFormMutations: Record<string, unknown> = {
-  'task.create': {
+  'task.upsert': {
     title: { $ref: '$.title' },
     due_date: emptyToNull('$.due'),
     deal_id: emptyToNull('$.deal_id'),
-  },
-  // Edit (the form doubles as edit-task): title + due, plus the `id` for the
-  // WHERE. `deal_id` is left as-is (not re-linked from the edit form).
-  'task.update': {
-    title: { $ref: '$.title' },
-    due_date: emptyToNull('$.due'),
     id: { $ref: '$.id' },
   },
 };

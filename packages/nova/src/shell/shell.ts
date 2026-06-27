@@ -1,6 +1,7 @@
-import type { ActionDefinition, ActionFragment, ActionRuntime, PublicActionRuntime } from '../action';
+import type { ActionDefinition, ActionFragment, ActionInstance, ActionRuntime, PublicActionRuntime } from '../action';
 // Note: ActionRuntime is used as the internal runtime type returned by spawn/registry.
 import { composeAction } from '../action';
+import { createScopeChain, resolve } from '../shared/bindings';
 import type { LayoutNode, RenderNode } from '../layout';
 import { createComponentRegistry, createLayoutStore, renderLayoutFromStore } from '../layout';
 import { createEventBus } from '../shared/event-bus';
@@ -177,6 +178,8 @@ export const createShell = (config: ShellConfig): Shell => {
     push: (cid, aid, input, frags) => push(cid, aid, input, frags),
     pop: (cid) => pop(cid),
     replace: (cid, aid, input, frags) => replace(cid, aid, input, frags),
+    clear: (cid) => clear(cid),
+    popTo: (cid, iid) => popTo(cid, iid),
   });
 
   const buildRuntime = createRuntimeFactory({
@@ -233,6 +236,30 @@ export const createShell = (config: ShellConfig): Shell => {
     if (top !== undefined) ops.unmountInstance(top.id);
     ops.resumeTop(canvas);
     fireState();
+  };
+
+  // Pop a canvas down to a given instance — unmount everything above it, then
+  // resume the target once. A no-op if the instance isn't in this canvas's stack
+  // (so a stale breadcrumb can't clear the canvas). Powers the breadcrumb jump.
+  const popTo = (canvasId: string, instanceId: string): void => {
+    if (disposed) return;
+    guardNoPendingStrictError();
+    const canvas = canvases.get(canvasId);
+    if (canvas === undefined) return;
+    if (!snapshotCanvas(canvas).stack.some((i) => i.id === instanceId)) return;
+    let changed = false;
+    for (;;) {
+      const active = snapshotCanvas(canvas).active;
+      if (active === undefined || active.id === instanceId) break;
+      const top = canvas.popInstance();
+      if (top === undefined) break;
+      ops.unmountInstance(top.id);
+      changed = true;
+    }
+    if (changed) {
+      ops.resumeTop(canvas);
+      fireState();
+    }
   };
 
   const replace = (
@@ -367,14 +394,28 @@ export const createShell = (config: ShellConfig): Shell => {
     return renderLayoutOrRef(canvasLayout ?? DEFAULT_SHELL_LAYOUT, { canvases: canvasList });
   };
 
+  // An instance's display label: the (composed) definition's `title` resolvable
+  // evaluated against the instance's own live data, falling back to `name` then
+  // the action id. Surfaced as `instance.title` on the actionLayout scope so
+  // stack-nav chrome (crumbs, tabs) can label without reaching into raw data.
+  const titleOf = (instance: ActionInstance): string => {
+    const def = registry.get(instance.id)?.definition ?? actions[instance.definitionId];
+    if (def?.title !== undefined) {
+      const resolved = resolve(def.title, createScopeChain(instance.data));
+      if (resolved !== undefined && resolved !== null && resolved !== '') return String(resolved);
+    }
+    return def?.name ?? instance.definitionId;
+  };
+
   const getCanvasRenderTree = (canvasId: string): RenderNode[] => {
     const canvas = canvases.get(canvasId);
     const state: CanvasState =
       canvas === undefined ? { id: canvasId, stack: [], active: undefined } : snapshotCanvas(canvas);
+    const instances = state.stack.map((i) => ({ ...i, title: titleOf(i) }));
     const scope = {
-      instances: state.stack,
-      active: state.active,
-      count: state.stack.length,
+      instances,
+      active: instances.length === 0 ? undefined : instances[instances.length - 1],
+      count: instances.length,
     };
     return renderLayoutOrRef(actionLayouts.get(canvasId) ?? DEFAULT_ACTION_LAYOUT, scope);
   };
@@ -393,6 +434,7 @@ export const createShell = (config: ShellConfig): Shell => {
     layoutStore,
     push,
     pop,
+    popTo,
     replace,
     clear,
     registerAction,

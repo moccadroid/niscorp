@@ -3,11 +3,11 @@ import type { LayoutNode } from '@niscorp/nova';
 // Companies list — search toolbar (Nova) over the reusable `Table` primitive.
 export const companiesLayout: LayoutNode = {
   component: 'Box',
-  props: { bg: 'surface', border: true, radius: 13, class: 'rl-listcard' },
+  props: { class: 'rl-listcard' },
   children: [
     {
       component: 'Box',
-      props: { px: 18, py: 12, border: 'bottom' },
+      props: { px: 14, py: 12, border: 'bottom' },
       children: {
         component: 'Row',
         props: { justify: 'between', align: 'center', gap: 12, wrap: true },
@@ -17,7 +17,7 @@ export const companiesLayout: LayoutNode = {
             component: 'Row',
             props: { gap: 12, align: 'center' },
             children: [
-              { component: 'Box', props: { width: 210 }, children: { component: 'Input', ref: 'q', model: '$.q', props: { icon: 'search', placeholder: 'Search companies…', debounce: 200 } } },
+              { component: 'Box', props: { width: 210 }, children: { component: 'Input', ref: 'search', model: '$.search', props: { icon: 'search', placeholder: 'Search companies…', debounce: 200 } } },
               { if: '$.loading', then: '', else: { component: 'Text', props: { size: 'sm', color: 'mute' }, children: '{{$.rows.length}} accounts' } },
             ],
           },

@@ -1,13 +1,14 @@
 import type { ActionDefinition } from '@niscorp/nova';
 import { confirmDeleteLayout } from './confirm-delete.layout';
 
-// Reusable "are you sure?" for destructive deletes. Pushed on the `modal` canvas
-// with `input: { label, message }`. It owns no data about WHAT is being deleted
-// beyond the display text — the list that opened it stashed the id and listens
-// for `confirm-delete` to run the write. Cancel / ✕ just pop.
+// Reusable "are you sure?" for destructive deletes. Pushed onto the `modal`
+// canvas `with: ['panel']` (which supplies the card chrome) and `input: { label,
+// message }`. It owns no data about WHAT is being deleted beyond the display text
+// — the list that opened it stashed the id and listens for `confirm-delete` to
+// run the write. Cancel / ✕ just pop.
 export const confirmDeleteAction: ActionDefinition = {
   id: 'confirm-delete',
-  data: { label: 'this record', message: 'This can’t be undone.' },
+  data: { label: 'this record', message: 'This can’t be undone.', panelClass: 'rl-dialog--narrow' },
   layout: confirmDeleteLayout,
   triggers: [
     { event: 'ui:click', ref: 'close', do: [{ pop: true }] },

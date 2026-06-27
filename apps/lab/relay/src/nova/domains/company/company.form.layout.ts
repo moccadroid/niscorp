@@ -1,9 +1,8 @@
 import type { LayoutNode } from '@niscorp/nova';
 
-// The new-company form body — wrapped by the `modal` fragment at the push. Each
-// field is two-way bound to the action data (`$.name`, …): this is the FORM's
-// own shape, not the table's. The `company.create` input prism
-// (new-company.prism.ts) maps it to the DB columns. Literal + serializable.
+// The company form body — the modal chrome is the `modal` fragment. Each field is
+// two-way bound to the action data (`$.name`, …): the FORM's shape, not the
+// table's. The `company.upsert` input prism maps it to DB columns.
 export const companyFormLayout: LayoutNode = {
   component: 'Stack',
   props: { gap: 13 },
@@ -48,6 +47,16 @@ export const companyFormLayout: LayoutNode = {
           { value: '1000+', label: '1000+' },
         ],
       },
+    },
+    // The form's own footer — its buttons live here, in its layout, handled by
+    // its action's `cancel`/`confirm` triggers. Renders on every canvas.
+    {
+      component: 'Row',
+      props: { class: 'rl-form__foot' },
+      children: [
+        { component: 'Button', ref: 'cancel', props: { variant: 'default' }, children: 'Cancel' },
+        { component: 'Button', ref: 'confirm', props: { variant: 'primary' }, children: '$.confirmLabel' },
+      ],
     },
   ],
 };

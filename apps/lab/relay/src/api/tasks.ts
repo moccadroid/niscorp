@@ -147,15 +147,19 @@ export const tasksOpenCount: CacheEntry = {
   mapping: { $ref: '$.result' },
 };
 
-// Create a task. `done` defaults false, `id`/`created_at` default in the DB. The
-// input prism supplies `due_date` already coerced (empty → null). `assignee_id`
-// is NOT here — the engine stamps identity from the scope policy, never the DSL.
-export const taskCreate: Mutation = {
-  op: 'insert',
+// Create-or-edit a task. `upsert` keys on `id`. `done` defaults false and
+// `id`/`created_at` default in the DB on create; `assignee_id` is scope-stamped,
+// never the DSL. `deal_id` is `insert`-only — a task's deal is set at creation
+// (a deal's "Add task") and NOT re-linked on edit, so it can't be wiped.
+export const taskUpsert: Mutation = {
+  op: 'upsert',
   table: 'tasks',
-  values: {
+  key: 'id',
+  columns: {
     title: { $context: 'title' },
     due_date: { $context: 'due_date' },
+  },
+  insert: {
     deal_id: { $context: 'deal_id' },
   },
 };
@@ -166,18 +170,6 @@ export const taskSetDone: Mutation = {
   op: 'update',
   table: 'tasks',
   set: { done: { $context: 'done' } },
-  where: { eq: ['tasks.id', { $context: 'id' }] },
-};
-
-// Edit a task (the row ⋯ → Edit seeds the form from the row). Title + due date;
-// the input prism coerces an empty due → null. `assignee_id` is left as-is.
-export const taskUpdate: Mutation = {
-  op: 'update',
-  table: 'tasks',
-  set: {
-    title: { $context: 'title' },
-    due_date: { $context: 'due_date' },
-  },
   where: { eq: ['tasks.id', { $context: 'id' }] },
 };
 

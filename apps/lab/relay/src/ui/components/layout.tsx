@@ -19,6 +19,7 @@ const BoxProps = z
     glow: z.boolean().optional(),
     grow: z.boolean().optional(),
     scroll: z.boolean().optional(),
+    stickBottom: z.boolean().optional().describe('Keep a scroll container pinned to the bottom as content grows (e.g. a chat log).'),
     center: z.boolean().optional(),
     width: dim,
     h: dim,
@@ -36,12 +37,21 @@ export const Box: NovaComponent<z.infer<typeof BoxProps>> = ({
   glow,
   grow,
   scroll,
+  stickBottom,
   center,
   width,
   h,
   class: cls,
   children,
 }) => {
+  // Pin to the bottom as content grows — re-runs every render (no deps), so each
+  // appended message scrolls the log to the latest.
+  const scrollRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (stickBottom === true && scrollRef.current !== null) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    }
+  });
   // Only emit the keys that are actually set. Mixing a shorthand (`padding`,
   // `border`) with undefined longhands makes React write the longhands as
   // empty strings, which wipes the shorthand — so build the style additively.
@@ -64,7 +74,7 @@ export const Box: NovaComponent<z.infer<typeof BoxProps>> = ({
     ...(h !== undefined ? { height: h } : {}),
   };
   return (
-    <div className={cls} style={style}>
+    <div ref={scrollRef} className={cls} style={style}>
       {children}
     </div>
   );

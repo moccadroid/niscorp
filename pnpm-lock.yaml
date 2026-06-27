@@ -26,6 +26,9 @@ importers:
       '@electric-sql/pglite-pgvector':
         specifier: ^0.0.2
         version: 0.0.2(@electric-sql/pglite@0.5.1)
+      '@niscorp/cortex':
+        specifier: workspace:^
+        version: link:../../../packages/cortex
       '@niscorp/loom':
         specifier: workspace:^
         version: link:../../../packages/loom
@@ -35,6 +38,9 @@ importers:
       '@niscorp/prism':
         specifier: workspace:^
         version: link:../../../packages/prism
+      '@niscorp/signal':
+        specifier: workspace:^
+        version: link:../../../packages/signal
       '@niscorp/vex':
         specifier: workspace:^
         version: link:../../../packages/vex
@@ -44,6 +50,9 @@ importers:
       lucide-react:
         specifier: ^1.18.0
         version: 1.18.0(react@19.2.4)
+      openai:
+        specifier: ^6.33.0
+        version: 6.33.0(ws@8.20.0)(zod@4.3.6)
       react:
         specifier: ^19.2.4
         version: 19.2.4

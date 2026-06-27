@@ -14,7 +14,8 @@ const fields = {
   company_id: emptyToNull('$.company'),
 };
 
+// One `upsert` seam — `id` always flows through; the mutation desugars to insert
+// (id empty) or update (id set).
 export const contactFormMutations: Record<string, unknown> = {
-  'contact.create': fields,
-  'contact.update': { ...fields, id: { $ref: '$.id' } },
+  'contact.upsert': { ...fields, id: { $ref: '$.id' } },
 };

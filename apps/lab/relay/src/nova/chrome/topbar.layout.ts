@@ -29,12 +29,12 @@ export const topbarLayout: LayoutNode = {
                 children: {
                   component: 'Input',
                   ref: 'search',
-                  model: '$.q',
+                  model: '$.search',
                   props: { placeholder: 'Search actions…', debounce: 200 },
                 },
               },
               {
-                if: '$.q',
+                if: '$.search',
                 then: {
                   component: 'Box',
                   props: { class: 'rl-popover__panel' },
@@ -89,6 +89,7 @@ export const topbarLayout: LayoutNode = {
               },
             ],
           },
+          { component: 'Button', ref: 'assistant', props: { variant: 'ghost', icon: 'sparkles' } },
           { component: 'Button', ref: 'notifications', props: { variant: 'ghost', icon: 'bell' } },
           {
             component: 'Button',

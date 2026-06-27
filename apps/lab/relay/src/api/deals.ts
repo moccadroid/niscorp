@@ -398,14 +398,15 @@ export const contactOptions: CacheEntry = {
   },
 };
 
-// Create a deal. `company_id`/`stage_id`/`primary_contact_id` are real FK ids
-// (the form's id-bearing selects); `owner_id` is scope-stamped; `status`/
-// `currency`/`id` default in the DB. The input prism coerces empty value→0 and
-// empty FK/date→null.
-export const dealCreate: Mutation = {
-  op: 'insert',
+// Create-or-edit a deal. `company_id`/`stage_id`/`primary_contact_id` are real FK
+// ids (the form's id-bearing selects). `upsert` keys on `id`. `owner_id` is scope-stamped on
+// insert; `status`/`currency`/`id` default in the DB on create. The input prism
+// coerces empty value→0 and empty FK/date→null.
+export const dealUpsert: Mutation = {
+  op: 'upsert',
   table: 'deals',
-  values: {
+  key: 'id',
+  columns: {
     title: { $context: 'title' },
     company_id: { $context: 'company_id' },
     stage_id: { $context: 'stage_id' },
@@ -413,24 +414,6 @@ export const dealCreate: Mutation = {
     value: { $context: 'value' },
     close_date: { $context: 'close_date' },
   },
-};
-
-// Edit a deal. The deal view's Edit button seeds the form straight from the
-// already-loaded record — `dealById` exposes the raw `value`/`close_date`/
-// `stage_id` alongside the `*_display` strings, so no separate raw read is needed.
-// Same columns as create + the `id` for the WHERE.
-export const dealUpdate: Mutation = {
-  op: 'update',
-  table: 'deals',
-  set: {
-    title: { $context: 'title' },
-    company_id: { $context: 'company_id' },
-    stage_id: { $context: 'stage_id' },
-    primary_contact_id: { $context: 'primary_contact_id' },
-    value: { $context: 'value' },
-    close_date: { $context: 'close_date' },
-  },
-  where: { eq: ['deals.id', { $context: 'id' }] },
 };
 
 // ── Writes ──────────────────────────────────────────────────

@@ -2,6 +2,7 @@ import { createShell, type ActionDefinition } from '@niscorp/nova';
 import { buildRegistry } from '../../ui';
 import { frameLayout } from './frame.layout';
 import { mainSplitLayout } from './main-split.layout';
+import { mainStackLayout, asideStackLayout } from './stack-nav.layout';
 import { queries, mutations } from './functions';
 import { MUTATIONS } from '../../api';
 import { deleteMutations } from '../shared/confirm-delete.prism';
@@ -14,6 +15,8 @@ import { homePrism } from '../surfaces/home/home.prism';
 import { homeAction } from '../surfaces/home/home.action';
 import { settingsAction } from '../surfaces/settings/settings.action';
 import { placeholderAction } from '../surfaces/placeholder/placeholder.action';
+import { assistantAction } from '../surfaces/assistant/assistant.action';
+import { rayRun, raySetKey, rayLoad, rayNewSession, raySwitchSession, bindShell } from '../../ray';
 // Domains — one barrel each: the actions + their read/write prism seams.
 import {
   dealsAction, dealAction, dealFormAction,
@@ -33,6 +36,8 @@ import {
 } from '../domains/task';
 import { modalFragment } from '../fragments/modal.fragment';
 import { quickviewFragment } from '../fragments/quickview.fragment';
+import { panelFragment } from '../fragments/panel.fragment';
+import { dockFragment } from '../fragments/dock.fragment';
 
 // Every screen the shell can show, by id. Each is a literal, serializable
 // ActionDefinition (layout included) — DB-ready.
@@ -44,6 +49,7 @@ export const ACTIONS: Record<string, ActionDefinition> = Object.fromEntries(
     settingsAction,
     confirmDeleteAction,
     placeholderAction,
+    assistantAction,
     // Entities
     contactsAction, contactAction, contactFormAction,
     companiesAction, companyAction, companyFormAction,
@@ -53,22 +59,24 @@ export const ACTIONS: Record<string, ActionDefinition> = Object.fromEntries(
 );
 
 // The Relay shell. The `frameLayout` is fixed chrome that places sidebar /
-// topbar and leaves `main` + `modal` as LayoutRefs. `detail` and `modal` start
+// topbar and leaves `main` + `modal` as LayoutRefs. `aside` and `modal` start
 // empty (their CanvasSlots render nothing until something is pushed). Everything
 // visible is an action; React only mounts <NovaShell> against this.
 export const shell = createShell({
   canvases: [
     { id: 'sidebar', initial: 'sidebar' },
     { id: 'topbar', initial: 'topbar' },
-    { id: 'main', initial: 'home' },
-    { id: 'detail' },
+    // main + aside get the per-canvas stack nav (back + breadcrumb trail);
+    // modal stays a single card (chrome from the panel/modal fragment).
+    { id: 'main', initial: 'home', actionLayout: mainStackLayout },
+    { id: 'aside', actionLayout: asideStackLayout },
     { id: 'modal' },
   ],
   canvasLayout: frameLayout,
   actions: ACTIONS,
   // Reusable partial actions, composed into a concrete action at a push `with`.
   // `modal` wraps a pushed action in dialog chrome (see modal.fragment.ts).
-  fragments: { modal: modalFragment, quickview: quickviewFragment },
+  fragments: { modal: modalFragment, quickview: quickviewFragment, panel: panelFragment, dock: dockFragment },
   // The shell assembly: each screen's `.prism.ts` read seam becomes one reader
   // per `fn` id, and each `/api` mutation becomes one writer per `fn` id. Both
   // are `FunctionHandler`s — Nova calls them the same way; the id namespace
@@ -100,9 +108,20 @@ export const shell = createShell({
       },
       MUTATIONS,
     ),
+    // Ray — the assistant agent, exposed as plain Nova functions the chat surface
+    // calls. `ray.run` runs the Cortex agent; `ray.setKey` stores the Groq key.
+    'ray.run': rayRun,
+    'ray.setKey': raySetKey,
+    'ray.load': rayLoad,
+    'ray.newSession': rayNewSession,
+    'ray.switch': raySwitchSession,
   },
   registry: buildRegistry(),
 });
+
+// Let Ray's tools/run reach this shell (registered into it, so they can't import
+// it — see ray/bridge.ts).
+bindShell(shell);
 
 // Seed the targets of the frame's LayoutRefs. `main` → the master/detail split;
 // `modal` → a bare overlay slot (empty until a modal action is pushed). These

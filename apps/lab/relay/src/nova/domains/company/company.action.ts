@@ -7,7 +7,9 @@ import { companyLayout } from './company.layout';
 // that record — cross-linking by id.
 export const companyAction: ActionDefinition = {
   id: 'company',
-  data: { id: '', view: { record: {}, contacts: [], deals: [] }, loading: true },
+  // Stack-nav label — the chip + its depth menu read `instance.title`.
+  title: '{{$.view.record.name}}',
+  data: { id: '', view: { record: {}, contacts: [], deals: [] }, loading: true, panelClass: 'rl-dialog--wide' },
   layout: companyLayout,
   endpoints: {
     loadRecord: { fn: 'company.byId', target: 'view.record' },
@@ -19,7 +21,6 @@ export const companyAction: ActionDefinition = {
   // self-canvas `detail` replace must be LAST: it pops this action and aborts
   // the rest of the trigger, so anything after it would be silently skipped.
   triggers: [
-    { event: 'ui:click', ref: 'close', do: [{ emit: { channel: 'deselect' } }, { pop: true }] },
     { message: 'nav', do: [{ pop: true }] },
     // The list deleted a record → close this panel (it may be showing the now-gone
     // company; the list already cleared the row highlight via `deselect`).
@@ -35,23 +36,14 @@ export const companyAction: ActionDefinition = {
             action: 'company.form',
             canvas: 'modal',
             with: ['modal'],
-            input: { saveFn: 'company.update', modalTitle: 'Edit company', confirmLabel: 'Save', id: '$.view.record.company_id', name: '$.view.record.name', domain: '$.view.record.domain', industry: '$.view.record.industry', size: '$.view.record.size' },
+            input: { modalTitle: 'Edit company', confirmLabel: 'Save', id: '$.view.record.company_id', name: '$.view.record.name', domain: '$.view.record.domain', industry: '$.view.record.industry', size: '$.view.record.size' },
           },
         },
       ],
     },
     { message: 'companies-changed', do: [{ call: 'loadRecord' }] },
-    {
-      event: 'ui:click',
-      ref: 'open-contact',
-      do: [
-        { replace: { action: 'contacts', canvas: 'main', input: { highlight_id: '@event.payload' } } },
-        { emit: { channel: 'screen-contacts' } },
-        { replace: { action: 'contact', canvas: 'detail', input: { id: '@event.payload' } } },
-      ],
-    },
-    // Open one of the company's deals in the deal workspace (the one deal view),
-    // as a modal over this panel.
-    { event: 'ui:click', ref: 'open-deal', do: [{ push: { action: 'deal', canvas: 'modal', input: { id: '@event.payload' } } }] },
+    // Cross-links push onto THIS canvas (the stack); Back returns to this company.
+    { event: 'ui:click', ref: 'open-contact', do: [{ push: { action: 'contact', input: { id: '@event.payload' } } }] },
+    { event: 'ui:click', ref: 'open-deal', do: [{ push: { action: 'deal', input: { id: '@event.payload' } } }] },
   ],
 };

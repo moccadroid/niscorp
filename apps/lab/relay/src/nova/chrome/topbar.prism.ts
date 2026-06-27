@@ -6,7 +6,7 @@ export const topbarPrism: Record<string, unknown> = {
   'topbar.search': {
     shape: { $const: actionsSearch.shape },
     context: {
-      q: { $case: { branches: [{ when: { $ref: '$.q' }, then: { $join: { parts: ['%', { $ref: '$.q' }, '%'], sep: '' } } }], else: ' ' } },
+      q: { $case: { branches: [{ when: { $ref: '$.search' }, then: { $join: { parts: ['%', { $ref: '$.search' }, '%'], sep: '' } } }], else: ' ' } },
     },
   },
 };
