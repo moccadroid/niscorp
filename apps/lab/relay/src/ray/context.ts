@@ -1,4 +1,3 @@
-import { z } from 'zod';
 import type { Shell } from '@niscorp/nova';
 import { CATALOG } from './catalog';
 
@@ -29,7 +28,7 @@ export const buildContext = (shell: Shell): string => {
   }
 
   const actions = CATALOG.map(
-    (c) => `  ${c.id} — ${c.description}\n    input: ${JSON.stringify(z.toJSONSchema(c.input))}`,
+    (c) => `  ${c.id} — ${c.description}\n    input: ${JSON.stringify(c.input)}`,
   ).join('\n');
 
   return [

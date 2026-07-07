@@ -10,6 +10,8 @@ import { Overlay } from './components/overlay';
 import { Table } from './components/table';
 import { Draggable, DropZone } from './components/dnd';
 import { StackChip } from './components/stack-chip';
+import { RayTrace } from './components/ray-trace';
+import { RayView } from './components/ray-view';
 
 // The Relay primitive vocabulary — every component a Nova layout can name.
 const RELAY_PRIMITIVES = {
@@ -40,6 +42,8 @@ const RELAY_PRIMITIVES = {
   Draggable,
   DropZone,
   StackChip,
+  RayTrace,
+  RayView,
 } as unknown as Record<string, NovaComponent>;
 
 // The component registry the shell renders against. CanvasSlot / ActionSlot are

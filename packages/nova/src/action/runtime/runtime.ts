@@ -27,7 +27,7 @@ const defaultInstanceIdFactory = createIdFactory('act');
 
 export const createActionRuntime = (config: ActionRuntimeConfig): ActionRuntime => {
   const definition = config.definition;
-  const initialData = buildInitialData(definition, config.input, config.transform);
+  const initialData = buildInitialData(definition, config.input);
   // Deep-clone so `reset` can restore nested structures without sharing
   // references with the live data store. Fixes correctness bug where
   // mutating nested objects would corrupt the snapshot used by reset.
@@ -131,7 +131,7 @@ export const createActionRuntime = (config: ActionRuntimeConfig): ActionRuntime 
 
   const mount = async (input?: Record<string, unknown>): Promise<void> => {
     if (input !== undefined) {
-      const next = buildInitialData(definition, input, config.transform);
+      const next = buildInitialData(definition, input);
       dataStore.update(() => next);
     }
     attach();

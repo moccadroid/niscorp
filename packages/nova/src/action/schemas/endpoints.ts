@@ -5,19 +5,27 @@ const HttpEndpointSchema = z
     url: z.string().describe('Template URL, e.g. "/api/users/{{$.userId}}".'),
     method: z.enum(['GET', 'POST', 'PUT', 'PATCH', 'DELETE']).describe('HTTP method.'),
     headers: z.record(z.string(), z.string()).optional().describe('Static request headers.'),
-    body: z
-      .union([z.string(), z.record(z.string(), z.unknown())])
-      .optional()
-      .describe('Request body; templates are resolved.'),
-    target: z.string().optional().describe('Data path to store the response at on success.'),
-    errorTarget: z.string().optional().describe('Data path to store the error at on failure.'),
-    transform: z
+    request: z
       .unknown()
       .optional()
-      .describe('Optional Prism-style transform config applied to the response.'),
+      .describe(
+        'Transform config run by the injected evaluator over the action data to build the ' +
+          "request body. Static parts are literal; dynamic parts use the evaluator's ops. " +
+          'Requires an injected transform.',
+      ),
+    response: z
+      .unknown()
+      .optional()
+      .describe(
+        'Transform config run by the injected evaluator over the reply as received ' +
+          '(`$` is the reply — object, array, or scalar) to produce the value stored at `target`. ' +
+          'Requires an injected transform.',
+      ),
+    target: z.string().optional().describe('Data path to store the result at on success.'),
+    errorTarget: z.string().optional().describe('Data path to store the error at on failure.'),
   })
   .strict()
-  .describe('A named HTTP call with template URL, body, and response targeting.');
+  .describe('A named HTTP call. `request`/`response` shape the body/reply via the injected transform.');
 
 const FunctionEndpointSchema = z
   .object({

@@ -1,29 +1,17 @@
-import { isObject } from '@shared/common';
 import { LifecycleError, type LifecycleHook } from '@shared/errors';
 import type { ActionDefinition } from '../schemas';
-import type { TransformFn } from '../types';
 import { executeSteps, type StepContext } from './steps';
 
 export const buildInitialData = (
   definition: ActionDefinition,
   input: Record<string, unknown> | undefined,
-  transform: TransformFn | undefined,
 ): Record<string, unknown> => {
   const defaults = definition.data ?? {};
-  // Deep-clone up front so the runtime owns an isolated data tree:
-  // neither `definition.data` nor the caller's `input` can be mutated
-  // by later in-place mutations, and `transform` receives a copy it
-  // can freely mutate without leaking into caller-owned state.
-  const merged: Record<string, unknown> = structuredClone({
-    ...defaults,
-    ...(input ?? {}),
-  });
-  if (transform === undefined) return merged;
-  const transformed = transform({ pass: true }, merged);
-  // Clone the transform output too — user code may return an object that
-  // shares references with its own closure state; isolate it here.
-  if (isObject(transformed)) return structuredClone(transformed);
-  return merged;
+  // Deep-clone so the runtime owns an isolated data tree: neither
+  // `definition.data` nor the caller's `input` can be mutated by later in-place
+  // mutations. Initial data is NOT transformed — the injected `transform` is
+  // endpoint-only (request/response), never applied to the data on mount.
+  return structuredClone({ ...defaults, ...(input ?? {}) });
 };
 
 export const runLifecycleHook = async (

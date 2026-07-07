@@ -16,7 +16,7 @@ const mainAction = (): string | undefined => {
   return a !== undefined ? shell.getRuntime(a.id)?.definition.id : undefined;
 };
 const board = (): { stages?: unknown[]; deals?: unknown[]; summary?: Record<string, unknown> } =>
-  (mainData()?.['board'] ?? {}) as { stages?: unknown[]; deals?: unknown[]; summary?: Record<string, unknown> };
+  (mainData() ?? {}) as { stages?: unknown[]; deals?: unknown[]; summary?: Record<string, unknown> };
 const modalRt = (): ReturnType<typeof shell.getRuntime> => {
   const a = shell.getCanvasState('modal').active;
   return a !== undefined ? shell.getRuntime(a.id) : undefined;
@@ -49,7 +49,7 @@ const main = async (): Promise<void> => {
   await settle(260);
   const active = shell.getCanvasState('main').active;
   const mr = active !== undefined ? shell.getRuntime(active.id) : undefined;
-  const view = (mr?.getData()?.['view'] ?? {}) as Record<string, unknown>;
+  const view = (mr?.getData() ?? {}) as Record<string, unknown>;
   const rec = (view['record'] ?? {}) as Record<string, unknown>;
   checks.push([`card drills into the deal workspace (got ${String(mr?.definition.id)})`, mr?.definition.id === 'deal']);
   checks.push([`deal loaded (${String(rec['title'])}, prob ${String(rec['prob'])})`, rec['deal_id'] === firstDeal && rec['prob'] !== undefined]);

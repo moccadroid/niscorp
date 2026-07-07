@@ -17,6 +17,10 @@
     "./components/react": {
       "import": { "types": "./dist/components/react.d.ts", "default": "./dist/components/react.js" },
       "require": { "types": "./dist/components/react.d.cts", "default": "./dist/components/react.cjs" }
+    },
+    "./agent": {
+      "import": { "types": "./dist/agent/index.d.ts", "default": "./dist/agent/index.js" },
+      "require": { "types": "./dist/agent/index.d.cts", "default": "./dist/agent/index.cjs" }
     }
   },
   "files": [
@@ -29,6 +33,7 @@
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
+    "@niscorp/cortex": "workspace:*",
     "@testing-library/react": "^16.1.0",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.0",
@@ -40,10 +45,14 @@
     "zod": "^4.3.6"
   },
   "peerDependencies": {
+    "@niscorp/cortex": "workspace:*",
     "react": "^19.2.4",
     "zod": "^4.3.6"
   },
   "peerDependenciesMeta": {
+    "@niscorp/cortex": {
+      "optional": true
+    },
     "react": {
       "optional": true
     }

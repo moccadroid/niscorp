@@ -4,7 +4,7 @@ import type { LayoutNode } from '@niscorp/nova';
 // row. A hero (value + win-probability bar), the action surface (advance / log /
 // add task / edit / won / lost), then two columns: line items + tasks on the
 // left, the primary contact + the activity feed (calls/emails/meetings/notes) on
-// the right. Everything binds `$.view.*` (loaded by the action's mount). Carries
+// the right. Everything binds `$.*` (loaded by the action's mount). Carries
 // its own Overlay chrome today (it's pushed onto the `modal` canvas); decoupling
 // that so it can also load into a detail rail is a follow-up.
 
@@ -25,8 +25,8 @@ export const dealLayout: LayoutNode = {
           component: 'Stack',
           props: { gap: 2 },
           children: [
-            { component: 'Box', props: { class: 'rl-dialog__title' }, children: '{{$.view.record.title}}' },
-            { component: 'Text', props: { size: 'sm', color: 'mute' }, children: '{{$.view.record.company}}' },
+            { component: 'Box', props: { class: 'rl-dialog__title' }, children: '{{$.record.title}}' },
+            { component: 'Text', props: { size: 'sm', color: 'mute' }, children: '{{$.record.company}}' },
           ],
         },
       },
@@ -49,12 +49,12 @@ export const dealLayout: LayoutNode = {
                     component: 'Row',
                     props: { gap: 12, align: 'center' },
                     children: [
-                      { component: 'Text', props: { size: '2xl', weight: 680 }, children: '{{$.view.record.value_display}}' },
-                      { component: 'Badge', props: { tone: 'blue', dot: true }, children: '{{$.view.record.status}}' },
-                      { component: 'Badge', props: { tone: 'slate' }, children: '{{$.view.record.stage}}' },
+                      { component: 'Text', props: { size: '2xl', weight: 680 }, children: '{{$.record.value_display}}' },
+                      { component: 'Badge', props: { tone: 'blue', dot: true }, children: '{{$.record.status}}' },
+                      { component: 'Badge', props: { tone: 'slate' }, children: '{{$.record.stage}}' },
                     ],
                   },
-                  { component: 'Text', props: { size: 'sm', color: 'mute' }, children: 'Closes {{$.view.record.close_date_display}}' },
+                  { component: 'Text', props: { size: 'sm', color: 'mute' }, children: 'Closes {{$.record.close_date_display}}' },
                 ],
               },
               // ── Win-probability bar ──
@@ -65,9 +65,9 @@ export const dealLayout: LayoutNode = {
                   {
                     component: 'Row',
                     props: { justify: 'between', align: 'center' },
-                    children: [label('Win probability'), { component: 'Text', props: { size: 'xs', weight: 560 }, children: '{{$.view.record.prob}}%' }],
+                    children: [label('Win probability'), { component: 'Text', props: { size: 'xs', weight: 560 }, children: '{{$.record.prob}}%' }],
                   },
-                  { component: 'Box', props: { class: 'rl-bar' }, children: { component: 'Box', props: { class: 'rl-bar__fill', width: '{{$.view.record.prob}}%' } } },
+                  { component: 'Box', props: { class: 'rl-bar' }, children: { component: 'Box', props: { class: 'rl-bar__fill', width: '{{$.record.prob}}%' } } },
                 ],
               },
               // ── Action surface. Edit re-opens the form (stage included, so a
@@ -99,12 +99,12 @@ export const dealLayout: LayoutNode = {
                         children: [
                           label('Line items'),
                           {
-                            if: '$.view.lineItems.length',
+                            if: '$.lineItems.length',
                             then: {
                               component: 'Stack',
                               props: { gap: 0 },
                               children: {
-                                for: '$.view.lineItems',
+                                for: '$.lineItems',
                                 as: 'li',
                                 key: 'line_item_id',
                                 do: {
@@ -139,12 +139,12 @@ export const dealLayout: LayoutNode = {
                         children: [
                           label('Tasks'),
                           {
-                            if: '$.view.tasks.length',
+                            if: '$.tasks.length',
                             then: {
                               component: 'Stack',
                               props: { gap: 0 },
                               children: {
-                                for: '$.view.tasks',
+                                for: '$.tasks',
                                 as: 't',
                                 key: 'task_id',
                                 do: {
@@ -194,7 +194,7 @@ export const dealLayout: LayoutNode = {
                           children: [
                             label('Primary contact'),
                             {
-                              if: '$.view.contact.name',
+                              if: '$.contact.name',
                               then: {
                                 component: 'Stack',
                                 props: { gap: 8 },
@@ -203,19 +203,19 @@ export const dealLayout: LayoutNode = {
                                     component: 'Row',
                                     props: { gap: 10, align: 'center' },
                                     children: [
-                                      { component: 'Avatar', props: { name: '$.view.contact.name' } },
+                                      { component: 'Avatar', props: { name: '$.contact.name' } },
                                       {
                                         component: 'Stack',
                                         props: { gap: 1 },
                                         children: [
-                                          { component: 'Text', props: { size: 'sm', weight: 560 }, children: '{{$.view.contact.name}}' },
-                                          { component: 'Text', props: { size: 'xs', color: 'mute' }, children: '{{$.view.contact.title}}' },
+                                          { component: 'Text', props: { size: 'sm', weight: 560 }, children: '{{$.contact.name}}' },
+                                          { component: 'Text', props: { size: 'xs', color: 'mute' }, children: '{{$.contact.title}}' },
                                         ],
                                       },
                                     ],
                                   },
-                                  { component: 'Row', props: { gap: 7, align: 'center' }, children: [{ component: 'Icon', props: { name: 'mail', size: 14 } }, { component: 'Text', props: { size: 'sm', mono: true, color: 'dim' }, children: '{{$.view.contact.email}}' }] },
-                                  { component: 'Row', props: { gap: 7, align: 'center' }, children: [{ component: 'Icon', props: { name: 'phone', size: 14 } }, { component: 'Text', props: { size: 'sm', color: 'dim' }, children: '{{$.view.contact.phone}}' }] },
+                                  { component: 'Row', props: { gap: 7, align: 'center' }, children: [{ component: 'Icon', props: { name: 'mail', size: 14 } }, { component: 'Text', props: { size: 'sm', mono: true, color: 'dim' }, children: '{{$.contact.email}}' }] },
+                                  { component: 'Row', props: { gap: 7, align: 'center' }, children: [{ component: 'Icon', props: { name: 'phone', size: 14 } }, { component: 'Text', props: { size: 'sm', color: 'dim' }, children: '{{$.contact.phone}}' }] },
                                 ],
                               },
                               else: { component: 'Text', props: { size: 'sm', color: 'mute' }, children: 'No primary contact.' },
@@ -229,12 +229,12 @@ export const dealLayout: LayoutNode = {
                           children: [
                             label('Activity'),
                             {
-                              if: '$.view.activities.length',
+                              if: '$.activities.length',
                               then: {
                                 component: 'Stack',
                                 props: { gap: 13 },
                                 children: {
-                                  for: '$.view.activities',
+                                  for: '$.activities',
                                   as: 'a',
                                   key: 'activity_id',
                                   do: {

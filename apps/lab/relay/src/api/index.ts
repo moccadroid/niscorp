@@ -64,8 +64,13 @@ export const buildCacheSeed = async (): Promise<string> => {
   const stmts: string[] = [];
   for (const e of ENTRIES) {
     const key = computeShapeHash(e.shape);
-    const prismIr = e.mapping !== undefined ? await compile(e.mapping) : undefined;
-    const prismCol = prismIr !== undefined ? `$j$${JSON.stringify(prismIr)}$j$::jsonb` : 'NULL';
+    // A mapping-less entry is identity: its DSL already aliases columns to the
+    // shape's field names, so `$.result` IS the result. Seed that identity IR
+    // explicitly — a NULL prism_ir makes Vex's reader fall through to the LLM
+    // mapper (needs a key, re-runs every load since the DSL cache-hits and the
+    // generated mapping never gets stored).
+    const prismIr = await compile(e.mapping ?? { $ref: '$.result' });
+    const prismCol = `$j$${JSON.stringify(prismIr)}$j$::jsonb`;
     stmts.push(
       `INSERT INTO vex_cache (key, kind, intent, shape, dsl, prism_ir, created_at) VALUES (` +
         `$j$${key}$j$, 'ok', $j$${e.intent ?? ''}$j$, ` +

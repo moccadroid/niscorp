@@ -27,6 +27,9 @@ export type QueryRequest = z.infer<typeof QueryRequestSchema>;
 export type CacheMeta = {
   hit: boolean;
   key?: string;
+  // The intent stored with the cached query (on a hit) or the request's own intent
+  // (on a miss) — descriptive only, so a caller can see what the query is for.
+  intent?: string;
 };
 
 export type TimingMeta = {

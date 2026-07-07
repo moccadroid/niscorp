@@ -176,7 +176,7 @@ export const createQueryEngine = (engineConfig: QueryEngineConfig): QueryEngine 
 
   // ─── Cache read ────────────────────────────────────────────
 
-  type CacheRead = { dsl?: Query; cachedIr?: CompiledIr; hit: boolean };
+  type CacheRead = { dsl?: Query; cachedIr?: CompiledIr; intent?: string; hit: boolean };
 
   // Fresh = not past TTL and written against the current schema. A
   // non-fresh entry is evicted here, then treated as a miss.
@@ -198,7 +198,7 @@ export const createQueryEngine = (engineConfig: QueryEngineConfig): QueryEngine 
 
     const positive = await cache.get(shapeHash);
     if (positive?.kind === 'ok' && freshOrEvict(positive, shapeHash)) {
-      return { dsl: positive.dsl, cachedIr: positive.prismIr, hit: true };
+      return { dsl: positive.dsl, cachedIr: positive.prismIr, intent: positive.intent, hit: true };
     }
 
     const negative = await cache.get(negKey);
@@ -366,7 +366,7 @@ export const createQueryEngine = (engineConfig: QueryEngineConfig): QueryEngine 
       return {
         result: [],
         meta: {
-          cache: { hit: cached.hit, key: shapeHash },
+          cache: { hit: cached.hit, key: shapeHash, intent: cached.intent ?? validRequest.intent },
           context: buildContextContract(compiled),
           warnings: warnings.length > 0 ? warnings : undefined,
           missingContext: missingKeys,
@@ -397,7 +397,7 @@ export const createQueryEngine = (engineConfig: QueryEngineConfig): QueryEngine 
     return {
       result,
       meta: {
-        cache: { hit: cached.hit, key: shapeHash },
+        cache: { hit: cached.hit, key: shapeHash, intent: cached.intent ?? validRequest.intent },
         context: buildContextContract(compiled),
         timing: {
           ...(agentMs !== undefined ? { agentMs } : {}),

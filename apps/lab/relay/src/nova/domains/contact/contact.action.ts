@@ -1,5 +1,9 @@
+import { z } from 'zod';
 import type { ActionDefinition } from '@niscorp/nova';
 import { contactLayout } from './contact.layout';
+import { contactByIdPrism, contactDealsPrism, contactTasksPrism, contactActivityPrism } from './contact.prism';
+import { setDoneTaskPrism } from '../task/tasks.prism';
+import { resultPrism } from '@relay/nova/shared/result.prism';
 
 // Pushed onto the `detail` canvas with `input: { id }` (from a contacts row, a
 // company's people list, or a deep URL). On mount it loads the contact by id
@@ -11,18 +15,18 @@ import { contactLayout } from './contact.layout';
 export const contactAction: ActionDefinition = {
   id: 'contact',
   // Stack-nav label — the chip + its depth menu read `instance.title`.
-  title: '{{$.view.record.name}}',
-  data: { id: '', view: { record: {}, deals: [], tasks: [], activity: [] }, loading: true, toggleId: '', toggleDone: false, panelClass: 'rl-dialog--wide' },
+  title: '{{$.record.name}}',
+  data: { id: '', record: {}, deals: [], tasks: [], activity: [], loading: true, toggleId: '', toggleDone: false, panelClass: 'rl-dialog--wide' },
   layout: contactLayout,
-  // Four reads into slots of `$.view`: the record, plus the contact's deals, open
+  // Four reads, each into a top-level slot: the record, plus the contact's deals, open
   // tasks and recent activity — the same section structure as the company profile
   // and the deal workspace.
   endpoints: {
-    load: { fn: 'contact.byId', target: 'view.record' },
-    loadDeals: { fn: 'contact.deals', target: 'view.deals' },
-    loadTasks: { fn: 'contact.tasks', target: 'view.tasks' },
-    loadActivity: { fn: 'contact.activity', target: 'view.activity' },
-    setDone: { fn: 'task.setDone' },
+    load:         { url: '/api/contacts/vex?cache=use', method: 'POST', request: contactByIdPrism,    response: resultPrism, target: 'record' },
+    loadDeals:    { url: '/api/contacts/vex?cache=use', method: 'POST', request: contactDealsPrism,   response: resultPrism, target: 'deals' },
+    loadTasks:    { url: '/api/contacts/vex?cache=use', method: 'POST', request: contactTasksPrism,   response: resultPrism, target: 'tasks' },
+    loadActivity: { url: '/api/contacts/vex?cache=use', method: 'POST', request: contactActivityPrism, response: resultPrism, target: 'activity' },
+    setDone:      { url: '/api/tasks/vex',              method: 'POST', request: setDoneTaskPrism },
   },
   lifecycle: { mount: [{ call: 'load', onSuccess: [{ set: 'loading', value: false }] }, { call: 'loadDeals' }, { call: 'loadTasks' }, { call: 'loadActivity' }] },
   triggers: [
@@ -42,7 +46,7 @@ export const contactAction: ActionDefinition = {
             action: 'contact.form',
             canvas: 'modal',
             with: ['modal'],
-            input: { modalTitle: 'Edit contact', confirmLabel: 'Save', id: '$.view.record.contact_id', name: '$.view.record.name', email: '$.view.record.email', phone: '$.view.record.phone', title: '$.view.record.title', company: '$.view.record.company.company_id' },
+            input: { modalTitle: 'Edit contact', confirmLabel: 'Save', id: '$.record.contact_id', name: '$.record.name', email: '$.record.email', phone: '$.record.phone', title: '$.record.title', company: '$.record.company.company_id' },
           },
         },
       ],
@@ -58,3 +62,8 @@ export const contactAction: ActionDefinition = {
     { event: 'ui:click', ref: 'open-company', do: [{ push: { action: 'company', input: { id: '@event.payload' } } }] },
   ],
 };
+
+// Settable inputs an opener may pass — authored in zod, exported as JSON Schema.
+export const contactInputSchema = z.toJSONSchema(
+  z.object({ id: z.string().describe('contact id (use find_records to resolve a name to an id)') }),
+);

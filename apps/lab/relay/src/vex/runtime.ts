@@ -8,18 +8,25 @@ import { DDL } from './schema';
 import { buildSeedSql } from './seed';
 import { createPglitePool, RAW_DATE_PARSERS } from './pool';
 import { scopePolicy } from './scope';
+import { createQueryDsl, createShapeMapper } from '@niscorp/vex/agent';
+import type { SignalClient } from '@niscorp/cortex';
+import { getKey, createGroqClient } from '../llm/groq';
 import { buildCacheSeed } from '@relay/api';
 
 // ═══════════════════════════════════════════════════════════
 // Relay runtime — a real @niscorp/vex engine over an in-browser PGlite
-// (Postgres-in-WASM). No server, no LLM. Setup only.
+// (Postgres-in-WASM). No server. Setup only.
 //
 // At boot the DB is seeded three ways: the schema (DDL), the demo data, and the
 // CACHE — the prewarmed entries from `@relay/api`, compiled to SQL and inserted
 // straight into Vex's own `vex_cache` table. After that the cache just exists in
-// the DB; Vex's normal `cache:'use'` serves every read by the deterministic
-// pipeline (scope → SQL → execute → Prism map). There is no prewarm routine and
-// no generateDsl: a miss would be a genuine "needs the LLM", which v1 never does.
+// the DB; Vex's normal `cache:'use'` serves every predefined read by the
+// deterministic pipeline (scope → SQL → execute → Prism map) with no LLM.
+//
+// The engine ALSO carries the LLM hooks (generateDsl / mapToShape, built from the
+// stored Groq key below) so a NOVEL shape — Ray asking a question no screen
+// prewarmed — is a cache miss that runs Vex's query + mapping agents, then caches.
+// The warm reads never touch them; only Ray's ad-hoc queries do.
 //
 // Memoized; the first caller boots + seeds.
 // ═══════════════════════════════════════════════════════════
@@ -27,6 +34,15 @@ import { buildCacheSeed } from '@relay/api';
 export type VexRuntime = {
   db: PGlite;
   engine: QueryEngine;
+};
+
+// The LLM, rebuilt from the stored Groq key on every call — so a key set or
+// changed mid-session is picked up, and a key-less call throws a readable error.
+// The warm cache reads never reach here; only a novel shape (a cache miss) does.
+const buildLlm = (): SignalClient => {
+  const key = getKey();
+  if (key === undefined) throw new Error('Set a Groq key (🔑) before reading data.');
+  return createGroqClient(key);
 };
 
 const boot = async (): Promise<VexRuntime> => {
@@ -44,7 +60,22 @@ const boot = async (): Promise<VexRuntime> => {
   // into vex_cache). The cache is now warm DB data — Vex serves it naturally.
   await db.exec(await buildCacheSeed());
 
-  const engine = createQueryEngine({ adapter, scope: scopePolicy, cache });
+  // The DSL JSON Schema is static (z.toJSONSchema(QuerySchema)); a throwaway
+  // probe yields it without touching the DB. The generateDsl hook needs it up
+  // front; the live schema arrives per call from the engine.
+  const dslJsonSchema = createQueryEngine({ adapter }).getDslSchema();
+
+  const engine = createQueryEngine({
+    adapter,
+    scope: scopePolicy,
+    cache,
+    // Vex's reference agents — the query agent (intent + shape → DSL) and Prism's
+    // mapping agent (rows → shape) — each handed an LLM rebuilt per call. The
+    // engine passes the live schema; only a cache miss invokes them.
+    generateDsl: (request, schema) =>
+      createQueryDsl({ adapter, llm: buildLlm(), scopePolicy, schema, queryJsonSchema: dslJsonSchema })(request, schema),
+    mapToShape: (rows, shape) => createShapeMapper(buildLlm())(rows, shape),
+  });
   await engine.introspect();
 
   return { db, engine };

@@ -41,7 +41,7 @@ export const homeLayout: LayoutNode = {
               props: { gap: 9 },
               children: [
                 { component: 'Row', props: { gap: 8 }, children: [{ component: 'Icon', props: { name: 'dollar', size: 15 } }, { component: 'Text', props: { size: 'sm', color: 'dim' }, children: 'Open pipeline' }] },
-                { component: 'Text', props: { size: '2xl', weight: 680 }, children: '$.dash.open.value' },
+                { component: 'Text', props: { size: '2xl', weight: 680 }, children: '$.open.value' },
               ],
             },
           },
@@ -53,7 +53,7 @@ export const homeLayout: LayoutNode = {
               props: { gap: 9 },
               children: [
                 { component: 'Row', props: { gap: 8 }, children: [{ component: 'Icon', props: { name: 'trending-up', size: 15 } }, { component: 'Text', props: { size: 'sm', color: 'dim' }, children: 'Won' }] },
-                { component: 'Text', props: { size: '2xl', weight: 680 }, children: '$.dash.won.value' },
+                { component: 'Text', props: { size: '2xl', weight: 680 }, children: '$.won.value' },
               ],
             },
           },
@@ -65,7 +65,7 @@ export const homeLayout: LayoutNode = {
               props: { gap: 9 },
               children: [
                 { component: 'Row', props: { gap: 8 }, children: [{ component: 'Icon', props: { name: 'check-square', size: 15 } }, { component: 'Text', props: { size: 'sm', color: 'dim' }, children: 'Open tasks' }] },
-                { component: 'Text', props: { size: '2xl', weight: 680 }, children: '$.dash.tasks.count' },
+                { component: 'Text', props: { size: '2xl', weight: 680 }, children: '$.tasks.count' },
               ],
             },
           },
@@ -86,7 +86,7 @@ export const homeLayout: LayoutNode = {
             ],
           },
           {
-            for: '$.dash.stages',
+            for: '$.stages',
             as: 's',
             key: 'name',
             do: {

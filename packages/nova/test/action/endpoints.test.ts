@@ -27,16 +27,32 @@ describe('callEndpoint', () => {
     expect(fetchFn).toHaveBeenCalledWith('/api/users/u1', expect.objectContaining({ method: 'GET' }));
   });
 
-  it('serializes object body with template resolution', async () => {
+  it('builds the request body via the injected transform', async () => {
     const fetchFn: FetchFn = vi.fn(() => Promise.resolve(ok({})));
+    const transform = vi.fn((_config: unknown, source: unknown) => ({ name: (source as { name: string }).name }));
     await callEndpoint({
-      endpoint: { url: '/x', method: 'POST', body: { name: '{{$.name}}' } },
+      endpoint: { url: '/x', method: 'POST', request: { name: { ref: '$.name' } } },
       data: { name: 'Ada' },
       fetch: fetchFn,
+      transform,
     });
+    expect(transform).toHaveBeenCalledWith({ name: { ref: '$.name' } }, { name: 'Ada' });
     const call = (fetchFn as ReturnType<typeof vi.fn>).mock.calls[0];
     if (!call) throw new Error('no call');
     expect(call[1]).toMatchObject({ method: 'POST', body: '{"name":"Ada"}' });
+  });
+
+  it('errors when `request` is declared but no transform is injected', async () => {
+    const fetchFn: FetchFn = vi.fn(() => Promise.resolve(ok({})));
+    const result = await callEndpoint({
+      endpoint: { url: '/x', method: 'POST', request: { a: 1 } },
+      data: {},
+      fetch: fetchFn,
+    });
+    expect(result.ok).toBe(false);
+    if (result.ok) throw new Error('expected error');
+    expect(result.error.message).toMatch(/request/);
+    expect(fetchFn).not.toHaveBeenCalled();
   });
 
   it('returns ok result on success', async () => {
@@ -64,18 +80,30 @@ describe('callEndpoint', () => {
     expect(result.error.message).toBe('nope');
   });
 
-  it('applies injected transform on success', async () => {
+  it('shapes the response via the injected transform', async () => {
     const fetchFn: FetchFn = () => Promise.resolve(ok({ a: 1, b: 2 }));
     const transform = vi.fn(() => ({ shaped: true }));
     const result = await callEndpoint({
-      endpoint: { url: '/x', method: 'GET', transform: { pick: 'a' } },
+      endpoint: { url: '/x', method: 'GET', response: { pick: 'a' } },
       data: {},
       fetch: fetchFn,
       transform,
     });
-    expect(transform).toHaveBeenCalled();
+    expect(transform).toHaveBeenCalledWith({ pick: 'a' }, { a: 1, b: 2 });
     if (!result.ok) throw new Error('expected ok');
     expect(result.data).toEqual({ shaped: true });
+  });
+
+  it('errors when `response` is declared but no transform is injected', async () => {
+    const fetchFn: FetchFn = () => Promise.resolve(ok({ a: 1 }));
+    const result = await callEndpoint({
+      endpoint: { url: '/x', method: 'GET', response: { pick: 'a' } },
+      data: {},
+      fetch: fetchFn,
+    });
+    expect(result.ok).toBe(false);
+    if (result.ok) throw new Error('expected error');
+    expect(result.error.message).toMatch(/response/);
   });
 
   it('handles fetch throwing', async () => {

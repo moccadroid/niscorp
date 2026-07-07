@@ -47,13 +47,21 @@ export const assistantLayout: LayoutNode = [
                 props: { gap: 2 },
                 children: [
                   { component: 'Text', props: { size: 'xs', weight: 600, color: 'mute', upper: true }, children: '{{$.m.role}}' },
+                  // The tool calls Ray made for this reply — between the name and
+                  // the response. Always shows the tools; the debug toggle adds the
+                  // expandable JSON. Absent on user messages (no trace).
+                  { if: '$.m.trace', then: { component: 'RayTrace', props: { steps: '$.m.trace', ms: '$.m.ms' } } },
                   { component: 'Text', props: { size: 'sm' }, children: '{{$.m.text}}' },
+                  // A layout Ray rendered for this message (step 1: static, in-chat).
+                  { if: '$.m.view', then: { component: 'RayView', props: { layout: '$.m.view.layout', data: '$.m.view.data' } } },
                 ],
               },
             },
             else: { component: 'Text', props: { size: 'sm', color: 'mute' }, children: 'Ask Ray to open something, find a record, or describe what’s on screen.' },
           },
-          { if: { $eq: ['$.status', 'thinking'] }, then: { component: 'Text', props: { size: 'sm', color: 'mute' }, children: 'Ray is thinking…' } },
+          // While thinking, the live trace streams in real time (debug on); with
+          // debug off it just reads "Ray is thinking…".
+          { if: { $eq: ['$.status', 'thinking'] }, then: { component: 'RayTrace', props: { live: true } } },
         ],
       },
     },

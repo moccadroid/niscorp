@@ -176,8 +176,8 @@ describe('endpoint — transform throws', () => {
         text: () => Promise.resolve('{"raw":1}'),
       });
     const transform: TransformFn = (config) => {
-      // Only throw for the endpoint's transform config; let the no-op
-      // initial-data transform (`{ pass: true }`) pass through.
+      // The injected evaluator is endpoint-only now; this throws for the
+      // endpoint's `response` config to exercise the error path.
       if (config !== null && typeof config === 'object' && 'map' in config) {
         throw new Error('kaboom');
       }
@@ -192,7 +192,7 @@ describe('endpoint — transform throws', () => {
           method: 'GET',
           target: 'value',
           errorTarget: 'err',
-          transform: { map: 'yes' },
+          response: { map: 'yes' },
         },
       },
       triggers: [

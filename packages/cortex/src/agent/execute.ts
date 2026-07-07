@@ -124,7 +124,9 @@ export const executeAgent = async <T>(
       filter: (e) =>
         e.meta.correlationId === subCorrelationId &&
         (e.topic === CortexTopics.executeCompleted || e.topic === CortexTopics.executeFailed),
-      timeoutMs: 60_000,
+      // Bound the delegation by the running workflow's configured budget, not a
+      // hardcoded ceiling — same knob as the top-level run deadline.
+      timeoutMs: deps.ledger.budgetOf(workflowId).maxDurationMs,
       signal: workflow.abort.signal,
     });
     deps.bus.emit(

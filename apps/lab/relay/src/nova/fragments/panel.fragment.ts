@@ -16,7 +16,10 @@ export const panelFragment: ActionFragment = {
       props: { class: 'rl-dialog rl-panel {{$.panelClass}}' },
       children: [
         { component: 'Box', props: { class: 'rl-panel__close' }, children: { component: 'Button', ref: 'panel-close', props: { variant: 'ghost', size: 'sm' }, children: '✕' } },
-        { slot: 'body' },
+        // Scroll region so tall content (e.g. Settings opened on the modal canvas)
+        // scrolls inside the height-bounded card instead of overflowing it. The
+        // card's max-height: 86vh bounds it; the absolute ✕ above stays pinned.
+        { component: 'Box', props: { scroll: true, grow: true }, children: { slot: 'body' } },
       ],
     },
   },

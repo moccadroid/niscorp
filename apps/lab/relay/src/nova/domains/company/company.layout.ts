@@ -31,13 +31,13 @@ export const companyLayout: LayoutNode = {
               component: 'Row',
               props: { gap: 12 },
               children: [
-                { component: 'Avatar', props: { name: '$.view.record.name', size: 'lg' } },
+                { component: 'Avatar', props: { name: '$.record.name', size: 'lg' } },
                 {
                   component: 'Stack',
                   props: { gap: 2 },
                   children: [
-                    { component: 'Text', props: { size: 'lg', weight: 650 }, children: '$.view.record.name' },
-                    { component: 'Text', props: { mono: true, size: 'sm', color: 'dim' }, children: '$.view.record.domain' },
+                    { component: 'Text', props: { size: 'lg', weight: 650 }, children: '$.record.name' },
+                    { component: 'Text', props: { mono: true, size: 'sm', color: 'dim' }, children: '$.record.domain' },
                   ],
                 },
               ],
@@ -57,7 +57,7 @@ export const companyLayout: LayoutNode = {
             props: { gap: 5 },
             children: [
               { component: 'Text', props: { size: 'xs', weight: 600, color: 'mute', upper: true }, children: 'Industry' },
-              { component: 'Row', props: {}, children: { component: 'Badge', props: { tone: 'slate' }, children: '$.view.record.industry' } },
+              { component: 'Row', props: {}, children: { component: 'Badge', props: { tone: 'slate' }, children: '$.record.industry' } },
             ],
           },
           {
@@ -65,7 +65,7 @@ export const companyLayout: LayoutNode = {
             props: { gap: 5 },
             children: [
               { component: 'Text', props: { size: 'xs', weight: 600, color: 'mute', upper: true }, children: 'Size' },
-              { component: 'Text', props: { color: 'secondary' }, children: '$.view.record.size' },
+              { component: 'Text', props: { color: 'secondary' }, children: '$.record.size' },
             ],
           },
         ],
@@ -81,14 +81,14 @@ export const companyLayout: LayoutNode = {
             component: 'Stack',
             props: { gap: 8 },
             children: [
-              { component: 'Text', props: { size: 'xs', weight: 600, color: 'mute', upper: true }, children: 'People · {{$.view.contacts.length}}' },
+              { component: 'Text', props: { size: 'xs', weight: 600, color: 'mute', upper: true }, children: 'People · {{$.contacts.length}}' },
               {
-                if: '$.view.contacts.length',
+                if: '$.contacts.length',
                 then: {
                   component: 'Stack',
                   props: { gap: 2 },
                   children: {
-                    for: '$.view.contacts',
+                    for: '$.contacts',
                     as: 'c',
                     key: 'contact_id',
                     do: {
@@ -122,14 +122,14 @@ export const companyLayout: LayoutNode = {
             component: 'Stack',
             props: { gap: 8 },
             children: [
-              { component: 'Text', props: { size: 'xs', weight: 600, color: 'mute', upper: true }, children: 'Open deals · {{$.view.deals.length}}' },
+              { component: 'Text', props: { size: 'xs', weight: 600, color: 'mute', upper: true }, children: 'Open deals · {{$.deals.length}}' },
               {
-                if: '$.view.deals.length',
+                if: '$.deals.length',
                 then: {
                   component: 'Stack',
                   props: { gap: 2 },
                   children: {
-                    for: '$.view.deals',
+                    for: '$.deals',
                     as: 'd',
                     key: 'deal_id',
                     do: {

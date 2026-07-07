@@ -1,5 +1,7 @@
 import type { ActionDefinition } from '@niscorp/nova';
 import { sidebarLayout } from './sidebar.layout';
+import { sidebarCountsPrism } from './sidebar.prism';
+import { resultPrism } from '@relay/nova/shared/result.prism';
 
 // Each nav click replaces the action on the `main` canvas, emits `nav` (so an
 // open detail self-closes — see contact-detail's `nav` trigger), and emits on a
@@ -15,7 +17,7 @@ export const sidebarAction: ActionDefinition = {
   data: { active: 'home', counts: { contacts: 0, companies: 0, deals: 0, tasks: 0 } },
   layout: sidebarLayout,
   endpoints: {
-    loadCounts: { fn: 'sidebar.counts', target: 'counts' },
+    loadCounts: { url: '/api/vex?cache=use', method: 'POST', request: sidebarCountsPrism, response: resultPrism, target: 'counts' },
   },
   lifecycle: { mount: [{ call: 'loadCounts' }] },
   triggers: [

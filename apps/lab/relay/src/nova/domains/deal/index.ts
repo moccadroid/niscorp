@@ -8,6 +8,5 @@ export { dealsAction } from './deals.action';
 export { dealAction } from './deal.action';
 export { dealFormAction } from './deal.form.action';
 
-export { dealsReads, dealsMutations } from './deals.prism';
-export { dealReads, dealMutations } from './deal.prism';
-export { dealFormReads, dealFormMutations } from './deal.form.prism';
+// Ray's `find_records` reuses the list prism (the only one needed outside the domain).
+export { listDealsPrism } from './deals.prism';

@@ -12,7 +12,7 @@ import { scopePolicy } from '../vex/scope';
 import { companyUpsert } from '@relay/api/companies';
 import { contactUpsert } from '@relay/api/contacts';
 import { dealUpsert } from '@relay/api/deals';
-import { contactFormMutations } from '../nova/domains/contact/contact.form.prism';
+import { upsertContactPrism } from '../nova/domains/contact/contact.form.prism';
 
 const settle = (ms = 150): Promise<void> => new Promise((r) => setTimeout(r, ms));
 const mainData = (): Record<string, unknown> | undefined => {
@@ -63,7 +63,9 @@ const main = async (): Promise<void> => {
   // ── The seam: the form's data (a single "Name", a "Relationship") is mapped to
   // DB columns by the input prism — split name → first/last, drop relationship —
   // BEFORE the write. Action shape ≠ DB shape.
-  const ctx = evaluate(contactFormMutations['contact.upsert'], {
+  // The prism is now the full request body `{ mutation, context }`; the input seam
+  // we're testing is its `.context` (form data → DB columns).
+  const ctx = (evaluate(upsertContactPrism, {
     id: '', // the form always carries an id (default ''); empty → the upsert inserts
     name: 'Ada Lovelace',
     email: 'ada@analytical.io',
@@ -71,7 +73,7 @@ const main = async (): Promise<void> => {
     title: 'Engineer',
     company: '',
     relationship: 'lead',
-  }) as Record<string, unknown>;
+  }) as { context: Record<string, unknown> }).context;
   const contactRow = (await executeMutation(rt.db, contactUpsert, { context: ctx, scope: { userId: 'usr_001' }, policy: scopePolicy, schema }))[0] ?? {};
   checks.push([`prism splits "Ada Lovelace" → first/last (${String(contactRow['first_name'])}/${String(contactRow['last_name'])})`, contactRow['first_name'] === 'Ada' && contactRow['last_name'] === 'Lovelace']);
   checks.push(['form-only "relationship" (no column) never reaches the row', !('relationship' in contactRow)]);

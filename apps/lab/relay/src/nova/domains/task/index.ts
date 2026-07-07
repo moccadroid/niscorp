@@ -5,6 +5,3 @@
 //   task.form  — create AND edit (one action; the `upsert` mutation desugars insert/update by `id`)
 export { tasksAction } from './tasks.action';
 export { taskFormAction } from './task.form.action';
-
-export { tasksReads, tasksMutations } from './tasks.prism';
-export { taskFormMutations } from './task.form.prism';

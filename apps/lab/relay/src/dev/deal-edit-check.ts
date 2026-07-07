@@ -33,7 +33,7 @@ const main = async (): Promise<void> => {
   shell.dispatch({ type: 'ui:click', ref: 'card', payload: deal.id });
   await settle(300);
   checks.push([`deal workspace drilled on main (got ${String(mainId())})`, mainId() === 'deal']);
-  const rec = (mainData()['view'] as Record<string, unknown>)?.['record'] as Record<string, unknown>;
+  const rec = mainData()['record'] as Record<string, unknown>;
   checks.push([`record value is a number (got ${typeof rec?.['value']} ${String(rec?.['value'])})`, typeof rec?.['value'] === 'number']);
   checks.push([`record carries the raw stage_id (got ${String(rec?.['stage_id'])})`, rec?.['stage_id'] === deal.stage_id]);
 
@@ -64,7 +64,7 @@ const main = async (): Promise<void> => {
   checks.push([`DB stage moved (got ${after.stage_id})`, after.stage_id === otherStage.id]);
 
   // The re-read record (deals-changed → resume/mount) shows the new value as a number.
-  const rec2 = (mainData()['view'] as Record<string, unknown>)?.['record'] as Record<string, unknown>;
+  const rec2 = mainData()['record'] as Record<string, unknown>;
   checks.push([`re-read record value is the new number (got ${typeof rec2?.['value']} ${String(rec2?.['value'])})`, rec2?.['value'] === newValue]);
   checks.push([`value_display is formatted off it (got ${String(rec2?.['value_display'])})`, typeof rec2?.['value_display'] === 'string' && String(rec2?.['value_display']).startsWith('$')]);
 

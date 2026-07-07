@@ -73,8 +73,10 @@ resolve(value: unknown, chain: ScopeChain, extras?: ExtraScopes): unknown
 ```
 
 It is the **only** binding-resolution entry point. Every binding site —
-component props, conditional `if`, loop `for`, endpoint url/body, trigger
-emit channel, mutation operands — calls it.
+component props, conditional `if`, loop `for`, endpoint url/headers, trigger
+emit channel, mutation operands — calls it. (An endpoint's `request`/`response`
+are the exception: they run through the injected `transform` evaluator, not the
+binding resolver — see `endpoints.ts`.)
 
 Resolution rules:
 
@@ -185,8 +187,16 @@ Split into focused files:
 - `effects.ts` — `CallEffect`, `EmitEffect`, navigation effects (`Push`,
   `Pop`, `Replace`).
 - `triggers.ts` — `TriggerConfigSchema { event?, message?, ref?, do }`.
-- `endpoints.ts` — `EndpointConfigSchema { method, url, body?, headers?,
-  target?, errorTarget? }`.
+- `endpoints.ts` — `EndpointConfigSchema`: a function call `{ fn, target?,
+  errorTarget? }` **or** an HTTP call `{ method, url, headers?, request?,
+  response?, target?, errorTarget? }`. `request` is run by the injected
+  `transform` evaluator over the action data to build the body; `response` is
+  run over the reply exactly as received (`$` is the reply — object, array, or
+  scalar; no wrapping) to produce the value stored at `target`. Both are opaque
+  to Nova (the host injects the interpreter, e.g.
+  Prism), so Prism stays an optional dependency; declaring either without an
+  injected transform errors. The injected transform is endpoint-only — initial
+  data is never transformed.
 - `lifecycle.ts` — `LifecycleConfigSchema { mount?, unmount?, suspend?,
   resume? }`. Each is `Step[]`.
 - `index.ts` — `StepSchema = Mutation | Effect`, `ActionDefinitionSchema`,
@@ -214,7 +224,7 @@ union.
   trigger handle, model listeners, status subscribers. Owns the
   lifecycle methods (`mount`, `unmount`, `suspend`, `resume`).
 - **`lifecycle.ts`** — `buildInitialData` merges `definition.data` with
-  input (optionally via the injected `transform`); `runLifecycleHook`
+  input (clone only — no transform); `runLifecycleHook`
   invokes the hook's steps with `lifecycleHook` set on the step
   context. In strict mode it rethrows hook failures as `LifecycleError`;
   in lax mode it routes them through `ctx.onError`.

@@ -10,6 +10,5 @@ export { contactsAction } from './contacts.action';
 export { contactAction } from './contact.action';
 export { contactFormAction } from './contact.form.action';
 
-export { contactsReads } from './contacts.prism';
-export { contactReads } from './contact.prism';
-export { contactFormMutations } from './contact.form.prism';
+// Ray's `find_records` reuses the list prism (the only one needed outside the domain).
+export { listContactsPrism } from './contacts.prism';

@@ -33,7 +33,15 @@ export type { Unsubscribe };
 // Transform / Fetch injection
 // ═══════════════════════════════════════════════════════════
 
-export type TransformFn = (config: unknown, source: Record<string, unknown>) => unknown;
+// The injected transform evaluator. Runs an opaque `config` over a `source`
+// value and returns the result. Nova never interprets the config — the host
+// injects the interpreter (e.g. Prism's `evaluate`), so Prism stays an optional
+// dependency. Used only on endpoints: `request` runs over the action data → the
+// request body; `response` runs over the reply exactly as received (`$` is the
+// reply — object, array, or scalar; no wrapping) → the value stored at `target`.
+// Declaring a `request`/`response` without injecting a transform is an error
+// (never a silent skip). Initial data is never transformed.
+export type TransformFn = (config: unknown, source: unknown) => unknown;
 export type FetchFn = (url: string, init?: FetchInit) => Promise<FetchResponse>;
 export type FunctionHandler = (
   data: Record<string, unknown>,

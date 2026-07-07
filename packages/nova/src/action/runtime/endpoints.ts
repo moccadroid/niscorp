@@ -1,5 +1,5 @@
 import { createScopeChain, resolve } from '@shared/bindings';
-import { hasKey, isObject } from '@shared/common';
+import { hasKey } from '@shared/common';
 import type { ScopeChain } from '@shared/bindings';
 import type { EndpointConfig, FunctionEndpointConfig, HttpEndpointConfig } from '../schemas';
 import type { FetchFn, FunctionHandler, TransformFn } from '../types';
@@ -29,14 +29,6 @@ const resolveHeaders = (
 export type EndpointResult =
   | { ok: true; data: unknown; status: number }
   | { ok: false; error: { status: number; message: string; data: unknown; aborted?: boolean } };
-
-const buildBody = (
-  body: string | Record<string, unknown> | undefined,
-  chain: ScopeChain,
-): string | undefined => {
-  if (body === undefined) return undefined;
-  return stringifyForBody(resolve(body, chain));
-};
 
 const defaultFetch: FetchFn = () => {
   throw new Error('No fetch implementation provided to action runtime');
@@ -80,8 +72,22 @@ const callHttpEndpoint = async (
   const chain = createScopeChain(data);
   const resolvedUrl = resolve(endpoint.url, chain);
   const url = typeof resolvedUrl === 'string' ? resolvedUrl : String(resolvedUrl ?? '');
-  const body = buildBody(endpoint.body, chain);
   const headers = resolveHeaders(endpoint.headers, chain);
+
+  // `request` builds the body from the action data via the injected evaluator.
+  // Declared without one is a hard error (never a silent empty body).
+  let body: string | undefined;
+  if (endpoint.request !== undefined) {
+    if (transform === undefined) {
+      return { ok: false, error: { status: 0, message: 'endpoint declares `request` but no transform was injected into the shell', data: undefined } };
+    }
+    try {
+      body = stringifyForBody(transform(endpoint.request, data));
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'request transform failed';
+      return { ok: false, error: { status: 0, message, data: undefined } };
+    }
+  }
 
   let response;
   try {
@@ -108,13 +114,19 @@ const callHttpEndpoint = async (
     return { ok: false, error: { status: response.status, message, data: payload } };
   }
 
+  // `response` shapes the reply via the injected evaluator — over the reply
+  // exactly as received (`$` is the reply: object, array, or scalar; no wrapping).
+  // Declared without an evaluator is a hard error (never silently serve the
+  // unshaped reply).
   let result: unknown = payload;
-  if (endpoint.transform !== undefined && transform !== undefined) {
-    const source: Record<string, unknown> = isObject(payload) ? payload : { value: payload };
+  if (endpoint.response !== undefined) {
+    if (transform === undefined) {
+      return { ok: false, error: { status: response.status, message: 'endpoint declares `response` but no transform was injected into the shell', data: payload } };
+    }
     try {
-      result = transform(endpoint.transform, source);
+      result = transform(endpoint.response, payload);
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'transform failed';
+      const message = err instanceof Error ? err.message : 'response transform failed';
       return { ok: false, error: { status: response.status, message, data: payload } };
     }
   }

@@ -155,6 +155,50 @@ export const settingsLayout: LayoutNode = {
           },
         ],
       },
+      // ─── Ray (assistant) ───────────────────────────────────
+      {
+        component: 'Box',
+        props: { bg: 'surface', border: true, radius: 13 },
+        children: [
+          { component: 'Box', props: { px: 18, py: 14, border: 'bottom' }, children: { component: 'Text', props: { weight: 600 }, children: 'Ray (assistant)' } },
+          {
+            component: 'Box',
+            props: { px: 18, py: 14, border: 'bottom' },
+            children: {
+              component: 'Row',
+              props: { justify: 'between', align: 'center' },
+              children: [
+                { component: 'Stack', props: { gap: 2 }, children: [{ component: 'Text', props: { weight: 500 }, children: 'Show debug output' }, { component: 'Text', props: { size: 'sm', color: 'mute' }, children: "Stream Ray's tool calls — inputs and results — into the chat" }] },
+                { component: 'Switch', ref: 'ray-debug', model: '$.rayDebug' },
+              ],
+            },
+          },
+          {
+            component: 'Box',
+            props: { px: 18, py: 14, border: 'bottom' },
+            children: {
+              component: 'Row',
+              props: { justify: 'between', align: 'center' },
+              children: [
+                { component: 'Stack', props: { gap: 2 }, children: [{ component: 'Text', props: { weight: 500 }, children: 'Chat storage' }, { component: 'Text', props: { size: 'sm', color: 'mute' }, children: 'Estimated browser storage Ray is using' }] },
+                { component: 'Text', props: { size: 'sm', color: 'mute', mono: true }, children: '{{$.rayStorage}}' },
+              ],
+            },
+          },
+          {
+            component: 'Box',
+            props: { px: 18, py: 14 },
+            children: {
+              component: 'Row',
+              props: { justify: 'between', align: 'center' },
+              children: [
+                { component: 'Stack', props: { gap: 2 }, children: [{ component: 'Text', props: { weight: 500 }, children: 'Clear chat sessions' }, { component: 'Text', props: { size: 'sm', color: 'mute' }, children: 'Delete every saved Ray conversation' }] },
+                { component: 'Button', ref: 'ray-clear-sessions', props: { variant: 'danger', size: 'sm', icon: 'trash' }, children: 'Clear sessions' },
+              ],
+            },
+          },
+        ],
+      },
     ],
   },
 };

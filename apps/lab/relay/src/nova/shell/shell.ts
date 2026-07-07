@@ -1,39 +1,24 @@
 import { createShell, type ActionDefinition } from '@niscorp/nova';
+import { evaluate } from '@niscorp/prism';
 import { buildRegistry } from '../../ui';
+import { vexFetch } from '../../vex/http';
+import { CURRENT_USER_ID, CURRENT_DATE } from '@relay/vex/runtime';
 import { frameLayout } from './frame.layout';
 import { mainSplitLayout } from './main-split.layout';
 import { mainStackLayout, asideStackLayout } from './stack-nav.layout';
-import { queries, mutations } from './functions';
-import { MUTATIONS } from '../../api';
-import { deleteMutations } from '../shared/confirm-delete.prism';
 import { confirmDeleteAction } from '../shared/confirm-delete.action';
-import { sidebarPrism } from '../chrome/sidebar.prism';
-import { topbarPrism } from '../chrome/topbar.prism';
 import { sidebarAction } from '../chrome/sidebar.action';
 import { topbarAction } from '../chrome/topbar.action';
-import { homePrism } from '../surfaces/home/home.prism';
 import { homeAction } from '../surfaces/home/home.action';
 import { settingsAction } from '../surfaces/settings/settings.action';
 import { placeholderAction } from '../surfaces/placeholder/placeholder.action';
 import { assistantAction } from '../surfaces/assistant/assistant.action';
-import { rayRun, raySetKey, rayLoad, rayNewSession, raySwitchSession, bindShell } from '../../ray';
+import { rayRun, raySetKey, rayLoad, rayNewSession, raySwitchSession, bindShell, getDebug, setDebug, clearAll, storageEstimate } from '../../ray';
 // Domains — one barrel each: the actions + their read/write prism seams.
-import {
-  dealsAction, dealAction, dealFormAction,
-  dealsReads, dealsMutations, dealReads, dealMutations, dealFormReads, dealFormMutations,
-} from '../domains/deal';
-import {
-  contactsAction, contactAction, contactFormAction,
-  contactsReads, contactReads, contactFormMutations,
-} from '../domains/contact';
-import {
-  companiesAction, companyAction, companyFormAction,
-  companiesReads, companyReads, companyFormMutations,
-} from '../domains/company';
-import {
-  tasksAction, taskFormAction,
-  tasksReads, tasksMutations, taskFormMutations,
-} from '../domains/task';
+import { dealsAction, dealAction, dealFormAction } from '../domains/deal';
+import { contactsAction, contactAction, contactFormAction } from '../domains/contact';
+import { companiesAction, companyAction, companyFormAction } from '../domains/company';
+import { tasksAction, taskFormAction } from '../domains/task';
 import { modalFragment } from '../fragments/modal.fragment';
 import { quickviewFragment } from '../fragments/quickview.fragment';
 import { panelFragment } from '../fragments/panel.fragment';
@@ -77,37 +62,11 @@ export const shell = createShell({
   // Reusable partial actions, composed into a concrete action at a push `with`.
   // `modal` wraps a pushed action in dialog chrome (see modal.fragment.ts).
   fragments: { modal: modalFragment, quickview: quickviewFragment, panel: panelFragment, dock: dockFragment },
-  // The shell assembly: each screen's `.prism.ts` read seam becomes one reader
-  // per `fn` id, and each `/api` mutation becomes one writer per `fn` id. Both
-  // are `FunctionHandler`s — Nova calls them the same way; the id namespace
-  // (`contacts.list` vs `contact.create`) keeps reads and writes apart.
+  // The shell assembly: both reads AND writes are declarative HTTP endpoints now
+  // (each screen's `.prism.ts` seam is imported into its action as the endpoint's
+  // `request`, served by `vexFetch` → Vex's resource handler). The only `fn`s left
+  // are Ray's — genuinely local functions, not data access.
   functions: {
-    ...queries({
-      ...sidebarPrism,
-      ...topbarPrism,
-      ...homePrism,
-      ...contactsReads,
-      ...contactReads,
-      ...companiesReads,
-      ...companyReads,
-      ...dealsReads,
-      ...dealReads,
-      ...dealFormReads,
-      ...tasksReads,
-    }),
-    ...mutations(
-      {
-        ...contactFormMutations,
-        ...companyFormMutations,
-        ...taskFormMutations,
-        ...dealFormMutations,
-        ...dealsMutations,
-        ...dealMutations,
-        ...deleteMutations,
-        ...tasksMutations,
-      },
-      MUTATIONS,
-    ),
     // Ray — the assistant agent, exposed as plain Nova functions the chat surface
     // calls. `ray.run` runs the Cortex agent; `ray.setKey` stores the Groq key.
     'ray.run': rayRun,
@@ -115,8 +74,37 @@ export const shell = createShell({
     'ray.load': rayLoad,
     'ray.newSession': rayNewSession,
     'ray.switch': raySwitchSession,
+    // Ray's debug toggle (browser-local). getDebug → the switch's initial state;
+    // setDebug persists a change. run.ts reads the same flag to capture a trace.
+    'ray.getDebug': async () => getDebug(),
+    'ray.setDebug': async (d) => {
+      setDebug(Boolean((d as { rayDebug?: unknown }).rayDebug));
+      return getDebug();
+    },
+    // Clear every saved chat session; report Ray's localStorage footprint.
+    'ray.clearSessions': async () => {
+      clearAll();
+      return true;
+    },
+    'ray.storageSize': async () => storageEstimate(),
   },
   registry: buildRegistry(),
+  // The injected Prism evaluator runs endpoint `request`/`response` transforms
+  // (request over the action data; response over the reply wrapped as
+  // `{ result: <reply> }`). Endpoint-only — never touches an action's own data.
+  // We fold in the signed-in user (`$.userId`) and the app's "today" (`$.today`)
+  // as ambient context so read prisms resolve them — exactly what the old `query`
+  // reader injected. Harmless on the `{ result }` response source.
+  transform: (config, source) =>
+    evaluate(
+      config as Parameters<typeof evaluate>[0],
+      (source !== null && typeof source === 'object' && !Array.isArray(source)
+        ? { ...(source as Record<string, unknown>), userId: CURRENT_USER_ID, today: CURRENT_DATE }
+        : source) as Parameters<typeof evaluate>[1],
+    ),
+  // In-browser Vex-as-HTTP: `/vex` URLs hit the in-process engine via Vex's own
+  // handler; everything else is a real fetch.
+  fetch: vexFetch,
 });
 
 // Let Ray's tools/run reach this shell (registered into it, so they can't import

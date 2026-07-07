@@ -13,7 +13,7 @@ const SEND = [
   {
     call: 'ask',
     onSuccess: [
-      { push: 'messages', value: { role: 'ray', text: '$.reply' } },
+      { push: 'messages', value: { role: 'ray', text: '$.reply.text', trace: '$.reply.trace', ms: '$.reply.ms', view: '$.reply.view' } },
       { set: 'status', value: 'idle' },
     ],
     onError: [

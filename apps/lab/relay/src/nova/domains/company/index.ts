@@ -7,6 +7,5 @@ export { companiesAction } from './companies.action';
 export { companyAction } from './company.action';
 export { companyFormAction } from './company.form.action';
 
-export { companiesReads } from './companies.prism';
-export { companyReads } from './company.prism';
-export { companyFormMutations } from './company.form.prism';
+// Ray's `find_records` reuses the list prism (the only one needed outside the domain).
+export { listCompaniesPrism } from './companies.prism';

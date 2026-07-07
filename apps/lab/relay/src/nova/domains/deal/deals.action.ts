@@ -1,5 +1,8 @@
+import { z } from 'zod';
 import type { ActionDefinition } from '@niscorp/nova';
 import { dealsLayout } from './deals.layout';
+import { listDealsPrism, boardStagesPrism, boardDealsPrism, boardSummaryPrism, moveDealPrism, deleteDealPrism } from './deals.prism';
+import { resultPrism } from '@relay/nova/shared/result.prism';
 
 // The deals collection — ONE action, two layouts (`$.view`: 'table' | 'board').
 // Navigation sets the initial view (sidebar Deals → table, Pipeline → board; the
@@ -20,16 +23,16 @@ export const dealsAction: ActionDefinition = {
     search: '', ownerId: '', rows: [], loading: true, highlight_id: '', menuOpenId: '',
     sortBy: 'deals.created_at', sortDir: 'desc', pendingDeleteId: '', pendingDeleteLabel: '',
     // ── board view ──
-    board: { stages: [], deals: [], summary: {} }, boardLoading: true, moveId: '', moveStage: '',
+    stages: [], deals: [], summary: {}, boardLoading: true, moveId: '', moveStage: '',
   },
   layout: dealsLayout,
   endpoints: {
-    load: { fn: 'deals.list', target: 'rows' },
-    remove: { fn: 'deal.delete' },
-    loadStages: { fn: 'board.stages', target: 'board.stages' },
-    loadDeals: { fn: 'board.deals', target: 'board.deals' },
-    loadSummary: { fn: 'board.summary', target: 'board.summary' },
-    move: { fn: 'deal.moveStage' },
+    load:        { url: '/api/deals/vex?cache=use', method: 'POST', request: listDealsPrism,    response: resultPrism, target: 'rows' },
+    remove:      { url: '/api/deals/vex',           method: 'POST', request: deleteDealPrism },
+    loadStages:  { url: '/api/deals/vex?cache=use', method: 'POST', request: boardStagesPrism,  response: resultPrism, target: 'stages' },
+    loadDeals:   { url: '/api/deals/vex?cache=use', method: 'POST', request: boardDealsPrism,   response: resultPrism, target: 'deals' },
+    loadSummary: { url: '/api/deals/vex?cache=use', method: 'POST', request: boardSummaryPrism, response: resultPrism, target: 'summary' },
+    move:        { url: '/api/deals/vex',           method: 'POST', request: moveDealPrism },
   },
   lifecycle: {
     mount: [
@@ -92,3 +95,17 @@ export const dealsAction: ActionDefinition = {
     { message: 'deals-changed', do: [{ call: 'load' }, { call: 'loadStages' }, { call: 'loadDeals' }, { call: 'loadSummary' }] },
   ],
 };
+
+// The settable inputs an opener (Ray, a URL, a command palette) may pass — authored
+// in zod for concision, exported as JSON Schema (serializable). The catalog pairs
+// it with this action's id + description.
+export const dealsInputSchema = z.toJSONSchema(
+  z.object({
+    view: z.enum(['table', 'board']).optional().describe("'board' for the pipeline Kanban, else the table"),
+    ownerId: z.enum(['', 'me']).optional().describe("'me' to show only the current user's deals"),
+    sortBy: z.string().optional().describe("e.g. 'deals.value', 'deals.created_at'"),
+    sortDir: z.enum(['asc', 'desc']).optional(),
+    search: z.string().optional().describe('search text'),
+    highlight_id: z.string().optional().describe('a deal id to highlight'),
+  }),
+);

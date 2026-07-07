@@ -1,5 +1,8 @@
+import { z } from 'zod';
 import type { ActionDefinition } from '@niscorp/nova';
 import { companyFormLayout } from './company.form.layout';
+import { upsertCompanyPrism } from './company.form.prism';
+import { resultPrism } from '@relay/nova/shared/result.prism';
 
 // The company form — create AND edit in one action. The `save` endpoint is the
 // `company.upsert` mutation, which desugars to insert (no `id`) or update (`id`
@@ -17,7 +20,7 @@ export const companyFormAction: ActionDefinition = {
   // One write: the `upsert` mutation desugars to insert (id empty) or update
   // (id set) — the form never picks. The header comment's create/edit split lives
   // in the mutation now, not here.
-  endpoints: { save: { fn: 'company.upsert', target: 'saved' } },
+  endpoints: { save: { url: '/api/companies/vex', method: 'POST', request: upsertCompanyPrism, response: resultPrism, target: 'saved' } },
   triggers: [
     { event: 'ui:click', ref: 'cancel', do: [{ pop: true }] },
     {
@@ -32,3 +35,14 @@ export const companyFormAction: ActionDefinition = {
     },
   ],
 };
+
+// Settable inputs an opener may pass — authored in zod, exported as JSON Schema.
+export const companyFormInputSchema = z.toJSONSchema(
+  z.object({
+    name: z.string().optional(),
+    domain: z.string().optional(),
+    industry: z.string().optional(),
+    size: z.string().optional(),
+    id: z.string().optional(),
+  }),
+);

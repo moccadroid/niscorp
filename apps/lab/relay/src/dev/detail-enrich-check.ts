@@ -11,7 +11,7 @@ const detailRt = (): ReturnType<typeof shell.getRuntime> => {
   const a = shell.getCanvasState('main').active;
   return a !== undefined ? shell.getRuntime(a.id) : undefined;
 };
-const view = (): Record<string, unknown> => ((detailRt()?.getData()?.['view'] ?? {}) as Record<string, unknown>);
+const view = (): Record<string, unknown> => ((detailRt()?.getData() ?? {}) as Record<string, unknown>);
 const openContact = async (id: string): Promise<void> => {
   shell.dispatch({ type: 'ui:click', ref: 'row', payload: id });
   await settle(340);

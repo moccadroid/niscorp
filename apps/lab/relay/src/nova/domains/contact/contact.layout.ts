@@ -72,13 +72,13 @@ export const contactLayout: LayoutNode = {
               component: 'Row',
               props: { gap: 12 },
               children: [
-                { component: 'Avatar', props: { name: '$.view.record.name', size: 'lg' } },
+                { component: 'Avatar', props: { name: '$.record.name', size: 'lg' } },
                 {
                   component: 'Stack',
                   props: { gap: 2 },
                   children: [
-                    { component: 'Text', props: { size: 'lg', weight: 650 }, children: '$.view.record.name' },
-                    { component: 'Text', props: { size: 'sm', color: 'dim' }, children: '$.view.record.title' },
+                    { component: 'Text', props: { size: 'lg', weight: 650 }, children: '$.record.name' },
+                    { component: 'Text', props: { size: 'sm', color: 'dim' }, children: '$.record.title' },
                   ],
                 },
               ],
@@ -102,8 +102,8 @@ export const contactLayout: LayoutNode = {
               children: [
                 label('Company'),
                 {
-                  if: '$.view.record.company.company_id',
-                  then: { component: 'LinkRow', ref: 'open-company', props: { value: '$.view.record.company.company_id' }, children: { component: 'Row', props: { gap: 9, align: 'center' }, children: [{ component: 'Avatar', props: { name: '$.view.record.company.name', size: 'sm' } }, { component: 'Text', props: { size: 'sm', weight: 500 }, children: '$.view.record.company.name' }] } },
+                  if: '$.record.company.company_id',
+                  then: { component: 'LinkRow', ref: 'open-company', props: { value: '$.record.company.company_id' }, children: { component: 'Row', props: { gap: 9, align: 'center' }, children: [{ component: 'Avatar', props: { name: '$.record.company.name', size: 'sm' } }, { component: 'Text', props: { size: 'sm', weight: 500 }, children: '$.record.company.name' }] } },
                   else: { component: 'Text', props: { size: 'sm', color: 'dim' }, children: 'No company' },
                 },
               ],
@@ -116,12 +116,12 @@ export const contactLayout: LayoutNode = {
                 {
                   component: 'Stack',
                   props: { gap: 5 },
-                  children: [label('Email'), { component: 'Text', props: { mono: true, size: 'sm', color: 'secondary' }, children: '$.view.record.email' }],
+                  children: [label('Email'), { component: 'Text', props: { mono: true, size: 'sm', color: 'secondary' }, children: '$.record.email' }],
                 },
                 {
                   component: 'Stack',
                   props: { gap: 5 },
-                  children: [label('Phone'), { component: 'Text', props: { mono: true, size: 'sm', color: 'secondary' }, children: '$.view.record.phone' }],
+                  children: [label('Phone'), { component: 'Text', props: { mono: true, size: 'sm', color: 'secondary' }, children: '$.record.phone' }],
                 },
               ],
             },
@@ -131,14 +131,14 @@ export const contactLayout: LayoutNode = {
               component: 'Stack',
               props: { gap: 8 },
               children: [
-                label('Deals · {{$.view.deals.length}}'),
+                label('Deals · {{$.deals.length}}'),
                 {
-                  if: '$.view.deals.length',
+                  if: '$.deals.length',
                   then: {
                     component: 'Stack',
                     props: { gap: 2 },
                     children: {
-                      for: '$.view.deals',
+                      for: '$.deals',
                       as: 'd',
                       key: 'deal_id',
                       do: {
@@ -172,14 +172,14 @@ export const contactLayout: LayoutNode = {
               component: 'Stack',
               props: { gap: 8 },
               children: [
-                label('Open tasks · {{$.view.tasks.length}}'),
+                label('Open tasks · {{$.tasks.length}}'),
                 {
-                  if: '$.view.tasks.length',
+                  if: '$.tasks.length',
                   then: {
                     component: 'Stack',
                     props: { gap: 0 },
                     children: {
-                      for: '$.view.tasks',
+                      for: '$.tasks',
                       as: 't',
                       key: 'task_id',
                       do: {
@@ -207,8 +207,8 @@ export const contactLayout: LayoutNode = {
               children: [
                 label('Activity'),
                 {
-                  if: '$.view.activity.length',
-                  then: { component: 'Stack', props: { gap: 13 }, children: { for: '$.view.activity', as: 'a', key: 'activity_id', do: activityRow } },
+                  if: '$.activity.length',
+                  then: { component: 'Stack', props: { gap: 13 }, children: { for: '$.activity', as: 'a', key: 'activity_id', do: activityRow } },
                   else: { component: 'Text', props: { size: 'sm', color: 'dim' }, children: 'No activity logged' },
                 },
               ],

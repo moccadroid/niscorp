@@ -202,7 +202,7 @@ export const evaluateNode: EvaluateFn = (node: unknown, context: EvalContext): J
 // Public Entry Points
 // ═══════════════════════════════════════════════════════════
 
-export const evaluate = (config: Config, source: JsonObject): JsonValue => {
+export const evaluate = (config: Config, source: JsonValue): JsonValue => {
   const parsed = ConfigSchema.safeParse(config);
   if (!parsed.success) {
     const issues = parsed.error.issues.map((i) => ({
@@ -216,7 +216,7 @@ export const evaluate = (config: Config, source: JsonObject): JsonValue => {
   return evaluateNode(desugared, { source, vars: {} });
 };
 
-export const evaluateSafe = (config: Config, source: JsonObject): Result<JsonValue> => {
+export const evaluateSafe = (config: Config, source: JsonValue): Result<JsonValue> => {
   try {
     return { ok: true, data: evaluate(config, source) };
   } catch (error) {

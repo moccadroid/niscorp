@@ -5,6 +5,7 @@ export default defineConfig({
     index: 'src/index.ts',
     'react/index': 'src/react/index.ts',
     'components/react': 'src/components/react/index.ts',
+    'agent/index': 'src/agent/index.ts',
   },
   format: ['esm', 'cjs'],
   dts: true,
@@ -12,5 +13,5 @@ export default defineConfig({
   clean: true,
   treeshake: true,
   target: 'es2022',
-  external: ['react'],
+  external: ['react', '@niscorp/cortex'],
 });

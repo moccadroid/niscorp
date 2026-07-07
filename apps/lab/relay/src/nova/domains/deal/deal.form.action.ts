@@ -1,5 +1,8 @@
+import { z } from 'zod';
 import type { ActionDefinition } from '@niscorp/nova';
 import { dealFormLayout } from './deal.form.layout';
+import { companyOptionsPrism, stageOptionsPrism, contactOptionsPrism, upsertDealPrism } from './deal.form.prism';
+import { resultPrism } from '@relay/nova/shared/result.prism';
 
 // The deal form — create AND edit in one action. The single `save` endpoint is
 // the `deal.upsert` mutation, which desugars to insert (no `id`) or update (`id`
@@ -17,11 +20,11 @@ export const dealFormAction: ActionDefinition = {
   },
   layout: dealFormLayout,
   endpoints: {
-    loadCompanies: { fn: 'options.companies', target: 'companyOptions' },
-    loadStages: { fn: 'options.stages', target: 'stageOptions' },
-    loadContacts: { fn: 'options.contacts', target: 'contactOptions' },
+    loadCompanies: { url: '/api/companies/vex?cache=use', method: 'POST', request: companyOptionsPrism, response: resultPrism, target: 'companyOptions' },
+    loadStages:    { url: '/api/deals/vex?cache=use',     method: 'POST', request: stageOptionsPrism,   response: resultPrism, target: 'stageOptions' },
+    loadContacts:  { url: '/api/contacts/vex?cache=use',  method: 'POST', request: contactOptionsPrism, response: resultPrism, target: 'contactOptions' },
     // One write — `deal.upsert` desugars to insert (id empty) or update (id set).
-    save: { fn: 'deal.upsert', target: 'saved' },
+    save:          { url: '/api/deals/vex',               method: 'POST', request: upsertDealPrism,    response: resultPrism, target: 'saved' },
   },
   lifecycle: { mount: [{ call: 'loadCompanies' }, { call: 'loadStages' }, { call: 'loadContacts' }] },
   triggers: [
@@ -33,3 +36,16 @@ export const dealFormAction: ActionDefinition = {
     },
   ],
 };
+
+// Settable inputs an opener may pass — authored in zod, exported as JSON Schema.
+export const dealFormInputSchema = z.toJSONSchema(
+  z.object({
+    title: z.string().optional(),
+    company: z.string().optional().describe('company id'),
+    stage: z.string().optional().describe('stage id'),
+    contact: z.string().optional().describe('primary contact id'),
+    value: z.number().optional(),
+    close_date: z.string().optional().describe('ISO date'),
+    id: z.string().optional().describe('deal id when editing'),
+  }),
+);

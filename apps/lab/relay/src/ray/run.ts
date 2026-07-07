@@ -1,39 +1,69 @@
-import type { FunctionHandler } from '@niscorp/nova';
+import type { FunctionHandler, Shell } from '@niscorp/nova';
 import { runAgentStandalone } from '@niscorp/cortex';
-import { getShell } from './bridge';
 import { buildContext } from './context';
-import { makeTools } from './tools';
+import { makeTools, type Turn } from './tools';
 import { rayAgent } from './agent';
-import { createRayLlm } from './llm';
-import { getKey, setKey } from './api-key';
+import { createGroqClient, getKey, setKey } from '../llm/groq';
+import { traceStore, traced, type TraceStep } from './trace';
 import { ensureCurrent, newSession, switchTo, setMessages, sessionList, type ChatMessage } from './sessions';
 
 const messagesOf = (data: Record<string, unknown>): ChatMessage[] =>
   Array.isArray(data['messages']) ? (data['messages'] as ChatMessage[]) : [];
 
+// The shell is created in nova/shell and binds itself here once built — it
+// registers `ray.run`, so ray can't import the shell back (a cycle). The run
+// reads it at call time.
+let boundShell: Shell | undefined;
+export const bindShell = (s: Shell): void => {
+  boundShell = s;
+};
+const getShell = (): Shell => {
+  if (boundShell === undefined) throw new Error('Ray: shell not bound yet');
+  return boundShell;
+};
+
 // The agent as a Nova function. The assistant action calls `ray.run` with its
 // data (the message transcript so far, including the just-typed user line); this
 // builds the live context, runs the standalone Cortex agent (whose tools drive
 // the same shell), persists the exchange to the current session, and returns the
-// reply text for Nova to write back into the chat.
+// reply text (+ a tool-call trace when debug is on) for Nova to write into the chat.
 export const rayRun: FunctionHandler = async (data) => {
   const key = getKey();
-  if (key === undefined) return 'No Groq API key set yet — click the 🔑 button to add one.';
+  if (key === undefined) return { text: 'No Groq API key set yet — click the 🔑 button to add one.', trace: [], ms: 0 };
 
+  const startedAt = Date.now();
   const shell = getShell();
+  const turn: Turn = {};
   const messages = messagesOf(data);
   const transcript = messages.map((m) => `${m.role === 'user' ? 'User' : 'Ray'}: ${m.text}`).join('\n');
   const input = `${buildContext(shell)}\n\nConversation:\n${transcript}\n\nRay:`;
 
-  const result = await runAgentStandalone<string>(rayAgent, input, {
-    llm: createRayLlm(key),
-    tools: makeTools(shell),
-  });
-  if (!result.ok) throw new Error(result.error.message);
+  // Always capture the trace — tool calls are shown in the chat regardless of the
+  // debug toggle (which only governs the expandable JSON detail in RayTrace).
+  const trace: TraceStep[] = [];
+  const tools = traced(makeTools(shell, turn), trace);
+  traceStore.begin();
+  try {
+    const result = await runAgentStandalone<string>(rayAgent, input, {
+      llm: createGroqClient(key),
+      tools,
+      // A Ray turn can fan out to several Vex queries, each running nested LLM
+      // agents (DSL synthesis + reshape) on a cache miss — well past the 60s
+      // cortex default. Grant the run 5 minutes.
+      manifold: { defaultBudget: { maxDurationMs: 5 * 60_000 } },
+    });
+    if (!result.ok) throw new Error(result.error.message);
 
-  const current = ensureCurrent();
-  setMessages(current.id, [...messages, { role: 'ray', text: result.data }]);
-  return result.data;
+    const current = ensureCurrent();
+    const ms = Date.now() - startedAt;
+    const view = turn.pendingView;
+    // Persist the trace + duration + any rendered view with the message — always,
+    // regardless of the debug toggle (visibility ≠ persistence). Restores on reopen.
+    setMessages(current.id, [...messages, { role: 'ray', text: result.data, trace, ms, view }]);
+    return { text: result.data, trace, ms, view };
+  } finally {
+    traceStore.end();
+  }
 };
 
 // Mount: hand the chat its current session's messages + the session list.

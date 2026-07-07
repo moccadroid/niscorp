@@ -1,5 +1,9 @@
+import { z } from 'zod';
 import type { ActionDefinition } from '@niscorp/nova';
 import { contactFormLayout } from './contact.form.layout';
+import { companyOptionsPrism } from '../deal/deal.form.prism';
+import { upsertContactPrism } from './contact.form.prism';
+import { resultPrism } from '@relay/nova/shared/result.prism';
 
 // The contact form — create AND edit in one action. The `save` endpoint is the
 // `contact.upsert` mutation, which desugars to insert (no `id`) or update (`id`
@@ -15,9 +19,9 @@ export const contactFormAction: ActionDefinition = {
   },
   layout: contactFormLayout,
   endpoints: {
-    loadCompanies: { fn: 'options.companies', target: 'companyOptions' },
+    loadCompanies: { url: '/api/companies/vex?cache=use', method: 'POST', request: companyOptionsPrism, response: resultPrism, target: 'companyOptions' },
     // One write — `contact.upsert` desugars to insert (id empty) or update (id set).
-    save: { fn: 'contact.upsert', target: 'saved' },
+    save:          { url: '/api/contacts/vex',            method: 'POST', request: upsertContactPrism, response: resultPrism, target: 'saved' },
   },
   lifecycle: { mount: [{ call: 'loadCompanies' }] },
   triggers: [
@@ -34,3 +38,15 @@ export const contactFormAction: ActionDefinition = {
     },
   ],
 };
+
+// Settable inputs an opener may pass — authored in zod, exported as JSON Schema.
+export const contactFormInputSchema = z.toJSONSchema(
+  z.object({
+    name: z.string().optional(),
+    email: z.string().optional(),
+    phone: z.string().optional(),
+    title: z.string().optional(),
+    company: z.string().optional().describe('company id'),
+    id: z.string().optional(),
+  }),
+);

@@ -15,7 +15,7 @@ const mainData = (): Record<string, unknown> | undefined => {
   return a !== undefined ? shell.getRuntime(a.id)?.getData() : undefined;
 };
 const board = (): { stages?: Record<string, unknown>[]; deals?: Record<string, unknown>[] } =>
-  (mainData()?.['board'] ?? {}) as { stages?: Record<string, unknown>[]; deals?: Record<string, unknown>[] };
+  (mainData() ?? {}) as { stages?: Record<string, unknown>[]; deals?: Record<string, unknown>[] };
 const modalData = (): Record<string, unknown> | undefined => {
   const a = shell.getCanvasState('modal').active;
   return a !== undefined ? shell.getRuntime(a.id)?.getData() : undefined;

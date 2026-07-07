@@ -1,5 +1,8 @@
+import { z } from 'zod';
 import type { ActionDefinition } from '@niscorp/nova';
 import { contactsLayout } from './contacts.layout';
+import { listContactsPrism, deleteContactPrism } from './contacts.prism';
+import { resultPrism } from '@relay/nova/shared/result.prism';
 
 // A literal action. On mount it calls the `contacts.list` data prism, which
 // builds the Vex request from `$.search`/`$.sortBy` and runs it into `$.rows`.
@@ -12,7 +15,10 @@ export const contactsAction: ActionDefinition = {
   // about (set when Delete is clicked, consumed when the dialog confirms).
   data: { search: '', rows: [], loading: true, highlight_id: '', menuOpenId: '', sortBy: 'contacts.last_name', sortDir: 'asc', pendingDeleteId: '', pendingDeleteLabel: '' },
   layout: contactsLayout,
-  endpoints: { load: { fn: 'contacts.list', target: 'rows' }, remove: { fn: 'contact.delete' } },
+  endpoints: {
+    load:   { url: '/api/contacts/vex?cache=use', method: 'POST', request: listContactsPrism, response: resultPrism, target: 'rows' },
+    remove: { url: '/api/contacts/vex',           method: 'POST', request: deleteContactPrism },
+  },
   // On resume (a drilled record popped back to the list) clear the row highlight —
   // the chip's Back pops the record directly, so there's no `deselect` to do it.
   lifecycle: {
@@ -64,3 +70,13 @@ export const contactsAction: ActionDefinition = {
     { message: 'confirm-delete', do: [{ call: 'remove', onSuccess: [{ emit: { channel: 'contacts-changed' } }, { emit: { channel: 'deselect' } }, { emit: { channel: 'detail-close' } }, { set: 'pendingDeleteId', value: '' }] }] },
   ],
 };
+
+// Settable inputs an opener may pass — authored in zod, exported as JSON Schema.
+export const contactsInputSchema = z.toJSONSchema(
+  z.object({
+    search: z.string().optional(),
+    sortBy: z.string().optional().describe("a column: 'contacts.last_name', 'contacts.title', 'contacts.email', 'companies.name'"),
+    sortDir: z.enum(['asc', 'desc']).optional(),
+    highlight_id: z.string().optional(),
+  }),
+);

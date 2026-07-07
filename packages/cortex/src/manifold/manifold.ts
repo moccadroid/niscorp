@@ -100,7 +100,10 @@ export const createManifold = (config: ManifoldConfig = {}): Manifold => {
 
     const completionPromise = bus.waitFor(CortexTopics.executePattern, {
       filter: isCompletionOrFailure,
-      timeoutMs: DEFAULT_BUDGET.maxDurationMs,
+      // The run's wall-clock deadline. Honors the configured budget (so a
+      // consumer can grant a long-running agent more than the 60s default);
+      // falls back to DEFAULT_BUDGET when unset.
+      timeoutMs: config.defaultBudget?.maxDurationMs ?? DEFAULT_BUDGET.maxDurationMs,
       ...(options.signal && { signal: options.signal }),
     });
 

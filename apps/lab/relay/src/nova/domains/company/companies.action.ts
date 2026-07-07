@@ -1,5 +1,8 @@
+import { z } from 'zod';
 import type { ActionDefinition } from '@niscorp/nova';
 import { companiesLayout } from './companies.layout';
+import { listCompaniesPrism, deleteCompanyPrism } from './companies.prism';
+import { resultPrism } from '@relay/nova/shared/result.prism';
 
 export const companiesAction: ActionDefinition = {
   id: 'companies',
@@ -11,7 +14,10 @@ export const companiesAction: ActionDefinition = {
   // about (set when Delete is clicked, consumed when the dialog confirms).
   data: { search: '', rows: [], loading: true, highlight_id: '', menuOpenId: '', sortBy: 'companies.name', sortDir: 'asc', pendingDeleteId: '', pendingDeleteLabel: '' },
   layout: companiesLayout,
-  endpoints: { load: { fn: 'companies.list', target: 'rows' }, remove: { fn: 'company.delete' } },
+  endpoints: {
+    load:   { url: '/api/companies/vex?cache=use', method: 'POST', request: listCompaniesPrism, response: resultPrism, target: 'rows' },
+    remove: { url: '/api/companies/vex',           method: 'POST', request: deleteCompanyPrism },
+  },
   // On resume (a drilled record popped back to the list) clear the row highlight —
   // the chip's Back pops the record directly, so there's no `deselect` to do it.
   lifecycle: {
@@ -58,3 +64,13 @@ export const companiesAction: ActionDefinition = {
     { message: 'confirm-delete', do: [{ call: 'remove', onSuccess: [{ emit: { channel: 'companies-changed' } }, { emit: { channel: 'deselect' } }, { emit: { channel: 'detail-close' } }, { set: 'pendingDeleteId', value: '' }] }] },
   ],
 };
+
+// Settable inputs an opener may pass — authored in zod, exported as JSON Schema.
+export const companiesInputSchema = z.toJSONSchema(
+  z.object({
+    search: z.string().optional(),
+    sortBy: z.string().optional().describe("a column: 'companies.name', 'companies.industry', 'companies.size', 'companies.domain'"),
+    sortDir: z.enum(['asc', 'desc']).optional(),
+    highlight_id: z.string().optional(),
+  }),
+);

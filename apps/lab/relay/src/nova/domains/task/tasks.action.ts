@@ -1,5 +1,8 @@
+import { z } from 'zod';
 import type { ActionDefinition } from '@niscorp/nova';
 import { tasksLayout } from './tasks.layout';
+import { listTasksPrism, setDoneTaskPrism, deleteTaskPrism } from './tasks.prism';
+import { resultPrism } from '@relay/nova/shared/result.prism';
 
 // The tasks screen — now a full management surface. `tasks.mine` is scoped by
 // the `$.scope` tab (Open / Overdue / Done / All); search (`$.search`) and the table's
@@ -25,9 +28,9 @@ export const tasksAction: ActionDefinition = {
   },
   layout: tasksLayout,
   endpoints: {
-    load: { fn: 'tasks.mine', target: 'rows' },
-    setDone: { fn: 'task.setDone' },
-    remove: { fn: 'task.delete' },
+    load:    { url: '/api/tasks/vex?cache=use', method: 'POST', request: listTasksPrism,   response: resultPrism, target: 'rows' },
+    setDone: { url: '/api/tasks/vex',           method: 'POST', request: setDoneTaskPrism },
+    remove:  { url: '/api/tasks/vex',           method: 'POST', request: deleteTaskPrism },
   },
   lifecycle: { mount: [{ call: 'load', onSuccess: [{ set: 'loading', value: false }] }] },
   triggers: [
@@ -67,3 +70,13 @@ export const tasksAction: ActionDefinition = {
     { message: 'confirm-delete', do: [{ call: 'remove', onSuccess: [{ emit: { channel: 'tasks-changed' } }, { set: 'pendingDeleteId', value: '' }] }] },
   ],
 };
+
+// Settable inputs an opener may pass — authored in zod, exported as JSON Schema.
+export const tasksInputSchema = z.toJSONSchema(
+  z.object({
+    scope: z.enum(['open', 'overdue', 'done', 'all']).optional(),
+    search: z.string().optional(),
+    sortBy: z.string().optional().describe("a column: 'tasks.due_date', 'tasks.title', 'tasks.created_at'"),
+    sortDir: z.enum(['asc', 'desc']).optional(),
+  }),
+);

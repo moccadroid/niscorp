@@ -2,8 +2,8 @@ import type { LayoutNode } from '@niscorp/nova';
 
 // The deals board view — the pipeline Kanban, a pure Nova layout (no grouping
 // code). A forecast bar (total + weighted, assembled in `loadSummary`), then a
-// column per open stage (`$.board.stages`) with its count + win-% + total and a
-// stage-coloured top accent. Cards are ALL open deals (`$.board.deals`) filtered
+// column per open stage (`$.stages`) with its count + win-% + total and a
+// stage-coloured top accent. Cards are ALL open deals (`$.deals`) filtered
 // into each column in-layout by `{$eq:[d.stage, col.stage]}`. A card click opens
 // the deal workspace; a card drag fires `ui:drop`. Gated on `$.boardLoading` (the
 // table view has its own `$.loading`). One of the two layouts the `deals` action
@@ -30,10 +30,10 @@ export const dealsBoardLayout: LayoutNode = {
         component: 'Row',
         props: { gap: 8, align: 'baseline', wrap: true },
         children: [
-          { component: 'Text', props: { size: 'xl', weight: 680 }, children: '{{$.board.summary.total}}' },
+          { component: 'Text', props: { size: 'xl', weight: 680 }, children: '{{$.summary.total}}' },
           { component: 'Text', props: { size: 'sm', color: 'mute' }, children: 'total pipeline' },
           { component: 'Text', props: { size: 'sm', color: 'mute' }, children: '·' },
-          { component: 'Text', props: { size: 'xl', weight: 680, color: 'accent' }, children: '{{$.board.summary.weighted}}' },
+          { component: 'Text', props: { size: 'xl', weight: 680, color: 'accent' }, children: '{{$.summary.weighted}}' },
           { component: 'Text', props: { size: 'sm', color: 'mute' }, children: 'weighted' },
         ],
       },
@@ -42,7 +42,7 @@ export const dealsBoardLayout: LayoutNode = {
         component: 'Box',
         props: { class: 'rl-kanban rl-min0', grow: true },
         children: {
-          for: '$.board.stages',
+          for: '$.stages',
           as: 'col',
           key: 'stage',
           do: {
@@ -69,7 +69,7 @@ export const dealsBoardLayout: LayoutNode = {
                 ref: 'move-deal',
                 props: { value: '$.col.stage_id', class: 'rl-kanban__cards' },
                 children: {
-                  for: '$.board.deals',
+                  for: '$.deals',
                   as: 'd',
                   key: 'deal_id',
                   do: {

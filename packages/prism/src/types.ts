@@ -11,7 +11,10 @@ export type JsonObject = { [key: string]: JsonValue };
 // ═══════════════════════════════════════════════════════════
 
 export type EvalContext = {
-  readonly source: JsonObject;
+  // The binding root for `$ref` paths — any JSON value. `$` resolves to it as-is
+  // (object, array, or scalar); `getByPath` walks from there. Not forced to an
+  // object: a transform over an array/scalar reply binds `$` directly.
+  readonly source: JsonValue;
   readonly vars: Record<string, JsonValue>;
 };
 

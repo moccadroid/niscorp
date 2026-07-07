@@ -1,5 +1,7 @@
 import type { ActionDefinition } from '@niscorp/nova';
 import { topbarLayout } from './topbar.layout';
+import { topbarSearchPrism } from './topbar.prism';
+import { resultPrism } from '@relay/nova/shared/result.prism';
 
 // The topbar shows the active screen title and hosts the action search.
 //
@@ -15,7 +17,7 @@ export const topbarAction: ActionDefinition = {
   id: 'topbar',
   data: { title: 'Home', search: '', results: [], highlight: 0, chosen_id: '', chosen_kind: '', chosen_name: '' },
   layout: topbarLayout,
-  endpoints: { search: { fn: 'topbar.search', target: 'results' } },
+  endpoints: { search: { url: '/api/vex?cache=use', method: 'POST', request: topbarSearchPrism, response: resultPrism, target: 'results' } },
   triggers: [
     { event: 'ui:model', ref: 'search', do: [{ set: 'search', value: '@event.payload' }, { call: 'search', onSuccess: [{ set: 'highlight', value: 0 }] }] },
     { event: 'ui:key', ref: 'search', key: 'ArrowDown', do: [{ increment: 'highlight' }] },

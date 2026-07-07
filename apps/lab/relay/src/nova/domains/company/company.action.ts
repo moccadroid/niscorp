@@ -1,5 +1,8 @@
+import { z } from 'zod';
 import type { ActionDefinition } from '@niscorp/nova';
 import { companyLayout } from './company.layout';
+import { companyByIdPrism, companyContactsPrism, companyDealsPrism } from './company.prism';
+import { resultPrism } from '@relay/nova/shared/result.prism';
 
 // Pushed onto the `detail` canvas with `input: { id }`. On mount, `loadCompany`
 // fills `$.view` with the company record + its people + open deals. Close pops;
@@ -8,13 +11,13 @@ import { companyLayout } from './company.layout';
 export const companyAction: ActionDefinition = {
   id: 'company',
   // Stack-nav label — the chip + its depth menu read `instance.title`.
-  title: '{{$.view.record.name}}',
-  data: { id: '', view: { record: {}, contacts: [], deals: [] }, loading: true, panelClass: 'rl-dialog--wide' },
+  title: '{{$.record.name}}',
+  data: { id: '', record: {}, contacts: [], deals: [], loading: true, panelClass: 'rl-dialog--wide' },
   layout: companyLayout,
   endpoints: {
-    loadRecord: { fn: 'company.byId', target: 'view.record' },
-    loadContacts: { fn: 'company.contacts', target: 'view.contacts' },
-    loadDeals: { fn: 'company.deals', target: 'view.deals' },
+    loadRecord:   { url: '/api/companies/vex?cache=use', method: 'POST', request: companyByIdPrism,     response: resultPrism, target: 'record' },
+    loadContacts: { url: '/api/companies/vex?cache=use', method: 'POST', request: companyContactsPrism, response: resultPrism, target: 'contacts' },
+    loadDeals:    { url: '/api/companies/vex?cache=use', method: 'POST', request: companyDealsPrism,    response: resultPrism, target: 'deals' },
   },
   lifecycle: { mount: [{ call: 'loadRecord', onSuccess: [{ set: 'loading', value: false }] }, { call: 'loadContacts' }, { call: 'loadDeals' }] },
   // Cross-links switch `main` (+ emit `screen-*`) and THEN swap the panel. The
@@ -36,7 +39,7 @@ export const companyAction: ActionDefinition = {
             action: 'company.form',
             canvas: 'modal',
             with: ['modal'],
-            input: { modalTitle: 'Edit company', confirmLabel: 'Save', id: '$.view.record.company_id', name: '$.view.record.name', domain: '$.view.record.domain', industry: '$.view.record.industry', size: '$.view.record.size' },
+            input: { modalTitle: 'Edit company', confirmLabel: 'Save', id: '$.record.company_id', name: '$.record.name', domain: '$.record.domain', industry: '$.record.industry', size: '$.record.size' },
           },
         },
       ],
@@ -47,3 +50,8 @@ export const companyAction: ActionDefinition = {
     { event: 'ui:click', ref: 'open-deal', do: [{ push: { action: 'deal', input: { id: '@event.payload' } } }] },
   ],
 };
+
+// Settable inputs an opener may pass — authored in zod, exported as JSON Schema.
+export const companyInputSchema = z.toJSONSchema(
+  z.object({ id: z.string().describe('company id (use find_records to resolve a name to an id)') }),
+);
