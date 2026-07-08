@@ -4,10 +4,12 @@ import {
   type FetchFn,
 } from '@niscorp/nova';
 import { Nova } from '@niscorp/nova/react';
+import { evaluate } from '@niscorp/prism';
 
-// Full endpoint surface: templated URL, headers, and body; separate
-// success and error chains; an `emit` on success; and a deliberate
-// failure variant that reads `@error.message` from the onError scope.
+// Full endpoint surface: templated URL, headers, and a `request` transform
+// that builds the body from the action data; separate success and error
+// chains; an `emit` on success; and a deliberate failure variant that reads
+// `@error.message` from the onError scope.
 
 const fakeFetch: FetchFn = async (url) => {
   await new Promise<void>((resolve) => setTimeout(resolve, 400));
@@ -120,7 +122,7 @@ const endpointFull: ActionDefinition = {
         'content-type': 'application/json',
         'x-request-id': '{{$.userId}}-{{$.name}}',
       },
-      body: { name: '{{$.name}}', email: '{{$.email}}' },
+      request: { name: { $ref: '$.name' }, email: { $ref: '$.email' } },
       target: 'savedUser',
       errorTarget: 'errorPayload',
     },
@@ -128,7 +130,7 @@ const endpointFull: ActionDefinition = {
       url: '/api/broken',
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: { name: '{{$.name}}', email: '{{$.email}}' },
+      request: { name: { $ref: '$.name' }, email: { $ref: '$.email' } },
       target: 'savedUser',
       errorTarget: 'errorPayload',
     },
@@ -182,6 +184,9 @@ const shell = createShell({
   canvases: [{ id: 'main', initial: 'endpoint-full' }],
   actions: { 'endpoint-full': endpointFull },
   fetch: fakeFetch,
+  // Prism runs the endpoint `request` transform over the action data.
+  transform: (config, source) =>
+    evaluate(config as Parameters<typeof evaluate>[0], source as Parameters<typeof evaluate>[1]),
 });
 
 export { shell };
