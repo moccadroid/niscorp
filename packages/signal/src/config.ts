@@ -27,4 +27,6 @@ export type CustomProviderConfig = {
   model?: string;
   adapter?: 'openai-compatible' | 'anthropic' | 'google';
   capabilities?: Partial<Capabilities>;
+  // Wire strategy ids (see src/wire/strategies.ts), like a registry entry's.
+  wire?: string[];
 };

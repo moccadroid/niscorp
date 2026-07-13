@@ -2,246 +2,71 @@
 // @niscorp/cortex — public API
 // ═══════════════════════════════════════════════════════════
 //
-// The full surface: agent + tool definitions, execution (standalone
-// and manifold), streaming, context pipeline, plan execution with
-// policy gating, declarative rules engine, bus, stores, and schemas.
+// One loop, one output contract (the envelope), typed events,
+// code-hook gates, and a thin manifold. See DESIGN.md.
 
-// Definitions
+// ─── Definitions ────────────────────────────────────────────
 export { defineAgent } from './agent/define-agent';
-export type { AgentConfig, AgentDefinition } from './agent/define-agent';
+export type { AgentConfig, AgentDefinition, OutputConfig, RunArgs } from './agent/define-agent';
 
 export { defineTool } from './tool/define-tool';
 export type { ToolConfig, ToolDefinition, ToolContext } from './tool/define-tool';
 
-// Agent execution
-export { executeAgent } from './agent/execute';
-export type { ExecuteAgentArgs, ExecuteAgentDeps, ExecuteAgentOutcome } from './agent/execute';
-export { runAgentStandalone } from './agent/standalone';
-export type { StandaloneOptions, RetryEventPayload } from './agent/standalone';
-export {
-  parseTextOutput,
-  parseStructuredOutput,
-  parsePlanOutput,
-  trustAgentReturn,
-} from './agent/output-parser';
+// ─── Execution ──────────────────────────────────────────────
+export { resumeRun } from './agent/run';
+export type { RunHandle, RunOptions, RunSnapshot } from './agent/run';
+export type { ResolvedPreview } from './agent/preview';
 
-// Tool loop
-export { runToolLoop } from './tool-loop/loop';
-export type { ToolLoopInput, ToolLoopResult } from './tool-loop/loop';
+// ─── Composition ────────────────────────────────────────────
+export { createManifold } from './manifold/manifold';
+export type { Manifold, ManifoldConfig, Registrable, ManifoldAsToolOptions } from './manifold/manifold';
+export { asTool } from './manifold/as-tool';
+export type { AsToolOptions } from './manifold/as-tool';
+export type { ErasedAgent, ErasedRunOptions } from './manifold/types';
 
-// LLM client contract. Signal's LLM types are re-exported under
-// the CortexLlm* naming so consumers don't need a second import
-// from @niscorp/signal. Both import paths resolve to the same
-// underlying types.
+// ─── The envelope + results ─────────────────────────────────
 export type {
+  Envelope,
+  RunResult,
+  RunMeta,
+  Usage,
+  OutputStrategy,
+  StopReason,
+  CortexError,
+  ErrorCode,
+  ToolObservation,
   SignalClient,
-  CortexLlmMessage,
-  CortexLlmAssistantToolCall,
-  CortexLlmStepRequest,
-  CortexLlmStepResult,
-  CortexLlmToolCall,
-  CortexLlmToolDefinition,
-  CortexLlmStreamEvent,
-  CortexLlmStreamOptions,
-  CortexLlmCountInput,
-} from './llm';
-
-// Manifold
-export {
-  createManifold,
-  createBus,
-  createRegistry,
-  createLedger,
-  DEFAULT_BUDGET,
-} from './manifold';
-export type {
-  Manifold,
-  ManifoldConfig,
-  ManifoldHooks,
-  ExecuteOptions,
-  CreateBusOptions,
-  Registry,
-  Ledger,
-  LedgerBudget,
-  LedgerSnapshot,
-  LedgerEntry,
-  WorkflowContext,
-  WorkflowEmit,
-  CreateWorkflowContextInput,
-} from './manifold';
-
-// Stores
-export { createMemoryStateStore, createMemoryEventLog } from './store';
-export type { StateStore, EventLog, EventLogReadOptions } from './store';
-
-// Context engineering
-export {
-  runPipeline,
-  createProducerState,
-  fuzzyCount,
-  exactCount,
-  counterFor,
-  truncateCompressor,
-  systemProducer,
-  inputProducer,
-  toolsProducer,
-  budgetProducer,
-  historyProducer,
-  recitationProducer,
-} from './context';
-export { createSummarizeCompressor } from './context/compressors/summarize.compressor';
-export type { SummarizeCompressorOptions } from './context/compressors/summarize.compressor';
-export type {
-  BuildContext,
-  Compressor,
-  ContextProducer,
-  ContextSpec,
-  ProducerState,
-  ReadonlyRegistry,
-  RegistryAgentView,
-  RegistryToolView,
-  ResolvedChunk,
-  ResolvedContext,
-  RunPipelineOptions,
-  TokenCounter,
-  TokenEstimationMode,
-  ToolsProducerOptions,
-  HistoryProducerOptions,
-  HistoryEntry,
-  RecitationProducerOptions,
-} from './context';
-
-// Schemas (Zod) and inferred types
-export {
-  ActionPlanSchema,
-  PlanNodeSchema,
-  ObservationSchema,
-  ContentChunkSchema,
-  PlanNodeKindSchema,
-  ToolRiskLevelSchema,
-  ToolConfigSchema,
-  AgentOutputModeSchema,
-  AgentConfigSchema,
-  PolicyConfigSchema,
-} from './schemas';
-export type {
-  ActionPlan,
-  PlanNode,
-  PlanNodeMeta,
-  UseToolNode,
-  AskAgentNode,
-  TellTopicNode,
-  WaitNode,
-  ParallelNode,
-  ReflectNode,
-  FinalNode,
-  Observation,
-  ContentChunk,
-  ContentPart,
-  PlanNodeKind,
-  ToolRiskLevel,
-  ToolConfigInput,
-  ToolConfigParsed,
-  AgentOutputMode,
-  AgentConfigInput,
-  AgentConfigParsed,
-  PolicyConfig,
-} from './schemas';
-
-// Plan execution + policy gate (Phase B)
-export { runPlan } from './runtime/plan-executor';
-export type {
-  PlanExecutorDeps,
-  PlanExecutorInput,
-  PlanExecutorResult,
-  ExecuteAgentForDelegation,
-  DelegationResult,
-} from './runtime/plan-executor';
-export { checkBudget, checkTool, checkAgent } from './runtime/gate';
-export type { GateInput, GateDecision, GateDenialReason, CheckToolInput, CheckAgentInput } from './runtime/gate';
-
-// Plan-mode producers
-export { actionContractProducer, agentsProducer, observationsProducer } from './context';
-export type { AgentsProducerOptions, ObservationsProducerOptions } from './context';
-
-// Errors and Result
-export { makeError, ok, err, isOk, isErr, throwCortex } from './errors/cortex.errors';
-export type { CortexError, ErrorCode } from './errors/cortex.errors';
-
-// Bus and shared types
-export type {
-  Bus,
-  BusEvent,
-  BusHandler,
-  EventMeta,
   Unsubscribe,
-  WaitForOptions,
-  Result,
-  BudgetState,
-  ReadonlyLedger,
 } from './types';
+export type { ResponseMode } from './schemas/envelope.schema';
+export type { OutputValidator } from './loop/loop';
 
-// System event topics (typed — each topic carries a phantom payload type)
-export { CortexTopics } from './topics';
+// ─── Events ─────────────────────────────────────────────────
+export type { CortexEvent, CortexEventBody, ApprovalRequest } from './events/types';
+
+// ─── Schema-issue formatting — union errors that teach ──────
+export { flattenSchemaIssues } from './utils/schema-issues';
+export type { SchemaIssue } from './utils/schema-issues';
+
+// ─── Context — entries and the producers that make them ─────
+export { schemaDoc } from './context/schema-doc';
+export { inputMessages, estimateTokens, toolGuidesMessage } from './context/assemble';
+export type { ContextEntry, Producer, ProducerArgs, RunInput, AgentInfo } from './context/assemble';
+
+// ─── Gates, hooks, stop conditions ──────────────────────────
+export { policyGate } from './gates/policy';
+export type { ToolPolicy } from './gates/policy';
 export type {
-  CortexTopic,
-  ExecuteRequestedPayload,
-  ExecuteCompletedPayload,
-  ExecuteFailedPayload,
-  WorkflowStartedPayload,
-  WorkflowEndedPayload,
-  TickPayload,
-  AgentInvokedPayload,
-  AgentCompletedPayload,
-  AgentRetryPayload,
-  LlmDeltaPayload,
-  PlanProducedPayload,
-  ConfirmationRequestedPayload,
-  ConfirmationResponsePayload,
-  RuleEvaluatedPayload,
-  RuleFiredPayload,
-  ErrorPayload,
-  WarningPayload,
-} from './topics';
-
-// Typed topic factory — users create their own typed topics
-export { topic } from './utils/typed-topic';
-export type { TypedTopic } from './utils/typed-topic';
-
-// Rules engine (Phase C)
-export {
-  defineRule,
-  createRulesEngine,
-  createEffectRegistry,
-  evaluateCondition,
-  attachAccumulators,
-  isInjectEffect,
-  isAbortEffect,
-  isDenyEffect,
-  isCallEffect,
-  RuleDefinitionSchema,
-  RuleEntrySchema,
-  RuleEffectSchema,
-  ConditionSchema,
-  AccumulatorDefSchema,
-} from './rules';
-export type {
-  RegisteredRule,
-  EvaluationResult,
-  RulesEngine,
-  RuleEffect,
-  EffectContext,
-  EffectHandler,
-  EffectRegistry,
-  ConditionScope,
-  AccumulatorDef,
-  WatchDefs,
-  AccumulatorState,
-  RuleDefinition,
-  RuleDefinitionInput,
-  RuleEntry,
-} from './rules';
-
-// Utils
-export { matchesTopic, compileTopicPattern } from './utils/wildcard';
-export { newWorkflowId, newCorrelationId, newRunId, newEventId } from './utils/id';
+  ToolGate,
+  GateDecision,
+  ToolCallInfo,
+  RunCtx,
+  ToolResultHook,
+  PrepareStep,
+  PrepareStepInfo,
+  PrepareStepResult,
+  StopCondition,
+  StopVerdict,
+  RunProgress,
+} from './gates/types';
+export { stepCount, tokens, duration, outputRetries, DEFAULT_STOP_CONDITIONS } from './gates/stop';

@@ -20,9 +20,9 @@ export const dealFormAction: ActionDefinition = {
   },
   layout: dealFormLayout,
   endpoints: {
-    loadCompanies: { url: '/api/companies/vex?cache=use', method: 'POST', request: companyOptionsPrism, response: resultPrism, target: 'companyOptions' },
-    loadStages:    { url: '/api/deals/vex?cache=use',     method: 'POST', request: stageOptionsPrism,   response: resultPrism, target: 'stageOptions' },
-    loadContacts:  { url: '/api/contacts/vex?cache=use',  method: 'POST', request: contactOptionsPrism, response: resultPrism, target: 'contactOptions' },
+    loadCompanies: { url: '/api/companies/vex', method: 'POST', request: companyOptionsPrism, response: resultPrism, target: 'companyOptions' },
+    loadStages:    { url: '/api/deals/vex',     method: 'POST', request: stageOptionsPrism,   response: resultPrism, target: 'stageOptions' },
+    loadContacts:  { url: '/api/contacts/vex',  method: 'POST', request: contactOptionsPrism, response: resultPrism, target: 'contactOptions' },
     // One write — `deal.upsert` desugars to insert (id empty) or update (id set).
     save:          { url: '/api/deals/vex',               method: 'POST', request: upsertDealPrism,    response: resultPrism, target: 'saved' },
   },

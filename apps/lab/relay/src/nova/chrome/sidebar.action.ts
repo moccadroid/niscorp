@@ -17,7 +17,7 @@ export const sidebarAction: ActionDefinition = {
   data: { active: 'home', counts: { contacts: 0, companies: 0, deals: 0, tasks: 0 } },
   layout: sidebarLayout,
   endpoints: {
-    loadCounts: { url: '/api/vex?cache=use', method: 'POST', request: sidebarCountsPrism, response: resultPrism, target: 'counts' },
+    loadCounts: { url: '/api/vex', method: 'POST', request: sidebarCountsPrism, response: resultPrism, target: 'counts' },
   },
   lifecycle: { mount: [{ call: 'loadCounts' }] },
   triggers: [

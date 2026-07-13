@@ -1,19 +1,19 @@
 import { tasksMine, tasksOverdue, taskSetDone, taskDelete } from '@relay/api/tasks';
 
 // Read/write seams for the tasks collection — each a full Vex request body,
-// attached to an endpoint's `request`. (Query → { shape, context }; write →
+// attached to an endpoint's `request`. (Query → { fingerprint, context }; write →
 // { mutation, context }.)
 //
-// The tasks list, scoped by the toolbar tab (`$.scope`): 'overdue' reads the
+// The tasks list, scoped by the toolbar tab (`$.scope`): 'overdue' replays the
 // dedicated overdue entry (due before the injected `$.today`); 'open' / 'done' /
-// 'all' all read `tasksMine` (same shape → same cached plan) and differ only by
-// the `done` RANGE — doneMin/doneMax bound the boolean so it collapses to
+// 'all' all replay `tasksMine` (same fingerprint → same cached plan) and differ
+// only by the `done` RANGE — doneMin/doneMax bound the boolean so it collapses to
 // false-only / true-only / both. `$.userId`/`$.today` are reader-injected.
 export const listTasksPrism = {
-  shape: {
+  fingerprint: {
     $case: {
-      branches: [{ when: { $eq: [{ $ref: '$.scope' }, 'overdue'] }, then: { $const: tasksOverdue.shape } }],
-      else: { $const: tasksMine.shape },
+      branches: [{ when: { $eq: [{ $ref: '$.scope' }, 'overdue'] }, then: tasksOverdue.fingerprint }],
+      else: tasksMine.fingerprint,
     },
   },
   context: {

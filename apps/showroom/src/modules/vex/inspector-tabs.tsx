@@ -78,7 +78,7 @@ const CacheTab: FC<{ scenario: VexScenario }> = ({ scenario }) => {
   const view = useVexRunView();
   const live = view?.scenarioId === scenario.id ? view : undefined;
   const lines = [
-    `shape key : ${live?.cacheKey ?? '—'}`,
+    `fingerprint : ${live?.fingerprint ?? '—'}`,
     `verdict   : ${live === undefined ? '—' : live.cacheHit ? 'HIT (DSL reused, 0 LLM)' : 'generated + cached'}`,
     `agent     : ${live?.timing?.agentMs !== undefined ? `${Math.round(live.timing.agentMs)}ms` : '— (cached)'}`,
     `execution : ${live?.timing?.executionMs !== undefined ? `${Math.round(live.timing.executionMs)}ms` : '—'}`,
@@ -87,11 +87,11 @@ const CacheTab: FC<{ scenario: VexScenario }> = ({ scenario }) => {
   ];
   return (
     <Wrap>
-      <div style={labelStyle}>Shape cache</div>
+      <div style={labelStyle}>Fingerprint cache</div>
       {pre(lines.join('\n'))}
       <div style={{ fontSize: 12, color: '#6b7280', marginTop: 10 }}>
-        The positive cache key is a hash of the output <em>shape</em> with values replaced by type tokens — so the
-        same shape with different values reuses the same DSL.
+        The cache key is the <em>fingerprint</em> — minted on generation or caller-named. Context values are
+        runtime data, not identity, so replaying the same fingerprint with different values reuses the same DSL.
       </div>
     </Wrap>
   );

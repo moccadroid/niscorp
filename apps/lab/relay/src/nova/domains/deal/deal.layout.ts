@@ -25,7 +25,7 @@ export const dealLayout: LayoutNode = {
           component: 'Stack',
           props: { gap: 2 },
           children: [
-            { component: 'Box', props: { class: 'rl-dialog__title' }, children: '{{$.record.title}}' },
+            { component: 'DialogTitle', children: '{{$.record.title}}' },
             { component: 'Text', props: { size: 'sm', color: 'mute' }, children: '{{$.record.company}}' },
           ],
         },
@@ -67,7 +67,7 @@ export const dealLayout: LayoutNode = {
                     props: { justify: 'between', align: 'center' },
                     children: [label('Win probability'), { component: 'Text', props: { size: 'xs', weight: 560 }, children: '{{$.record.prob}}%' }],
                   },
-                  { component: 'Box', props: { class: 'rl-bar' }, children: { component: 'Box', props: { class: 'rl-bar__fill', width: '{{$.record.prob}}%' } } },
+                  { component: 'Progress', props: { value: '{{$.record.prob}}%' } },
                 ],
               },
               // ── Action surface. Edit re-opens the form (stage included, so a
@@ -242,8 +242,8 @@ export const dealLayout: LayoutNode = {
                                     props: { gap: 10, align: 'center' },
                                     children: [
                                       {
-                                        component: 'Box',
-                                        props: { class: 'rl-actdot rl-actdot--{{$.a.tone}}' },
+                                        component: 'ActivityDot',
+                                        props: { tone: '$.a.tone' },
                                         children: {
                                           if: { $eq: ['$.a.type', 'call'] },
                                           then: { component: 'Icon', props: { name: 'phone', size: 14 } },

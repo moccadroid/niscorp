@@ -79,12 +79,14 @@ const PushEffectSchema = z
   .object({
     push: z
       .object({
-        action: z.string().describe('Definition id of the action to push onto a canvas.'),
+        action: z
+          .string()
+          .describe('Definition id of the action to push onto a canvas — MUST be an id that actually exists (an unknown id fails at click time, invisible to a mount check).'),
         canvas: z.string().optional().describe('Canvas id to push onto; defaults to the current canvas.'),
         input: z
           .record(z.string(), z.unknown())
           .optional()
-          .describe('Initial input merged into the new action data.'),
+          .describe('Initial input merged into the new action data. Keys must belong to the target action\'s declared input contract — invented keys are silently useless.'),
         with: z
           .array(z.string())
           .optional()

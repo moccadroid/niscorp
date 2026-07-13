@@ -80,26 +80,26 @@ describe('handler', () => {
   });
 
   describe('handleDiscovery', () => {
-    it('returns vex version and description', () => {
-      const result = handleDiscovery({ engine });
+    it('returns vex version and description', async () => {
+      const result = await handleDiscovery({ engine });
       expect(result.vex).toBe('1.0');
       expect(result.description).toContain('natural language');
     });
 
-    it('includes all entities when no filter', () => {
-      const result = handleDiscovery({ engine });
+    it('includes all entities when no filter', async () => {
+      const result = await handleDiscovery({ engine });
       expect(result.entities).toHaveLength(2);
       expect(result.entities.map(e => e.name)).toEqual(['customers', 'orders']);
     });
 
-    it('filters entities when specified', () => {
-      const result = handleDiscovery({ engine, entities: ['customers'] });
+    it('filters entities when specified', async () => {
+      const result = await handleDiscovery({ engine, entities: ['customers'] });
       expect(result.entities).toHaveLength(1);
       expect(result.entities[0]!.name).toBe('customers');
     });
 
-    it('includes fields with types', () => {
-      const result = handleDiscovery({ engine, entities: ['customers'] });
+    it('includes fields with types', async () => {
+      const result = await handleDiscovery({ engine, entities: ['customers'] });
       const customer = result.entities[0]!;
       expect(customer.fields).toContainEqual({
         name: 'id',
@@ -115,8 +115,8 @@ describe('handler', () => {
       });
     });
 
-    it('includes relations', () => {
-      const result = handleDiscovery({ engine, entities: ['customers'] });
+    it('includes relations', async () => {
+      const result = await handleDiscovery({ engine, entities: ['customers'] });
       const customer = result.entities[0]!;
       expect(customer.relations).toContainEqual({
         entity: 'orders',
@@ -125,27 +125,30 @@ describe('handler', () => {
       });
     });
 
-    it('includes row counts', () => {
-      const result = handleDiscovery({ engine, entities: ['customers'] });
+    it('includes row counts', async () => {
+      const result = await handleDiscovery({ engine, entities: ['customers'] });
       expect(result.entities[0]!.rowCount).toBe(20);
     });
 
-    it('includes query format documentation', () => {
-      const result = handleDiscovery({ engine });
+    it('includes query format documentation (fingerprint in the body)', async () => {
+      const result = await handleDiscovery({ engine });
       expect(result.query.method).toBe('POST');
       expect(result.query.accepts).toBe('application/json');
+      expect(result.query.body).toHaveProperty('fingerprint');
       expect(result.query.body).toHaveProperty('intent');
       expect(result.query.body).toHaveProperty('shape');
       expect(result.query.body).toHaveProperty('context');
     });
 
-    it('includes cache query param docs', () => {
-      const result = handleDiscovery({ engine });
-      expect(result.query.queryParams['cache']!.values).toEqual(['use', 'refresh', 'bypass', 'only']);
+    it('reports governance: protection summary, locked flag, fingerprint list', async () => {
+      const result = await handleDiscovery({ engine });
+      expect(result.protection).toBe('none');
+      expect(result.locked).toBe(false);
+      expect(Array.isArray(result.fingerprints)).toBe(true);
     });
 
-    it('includes DSL JSON Schema', () => {
-      const result = handleDiscovery({ engine });
+    it('includes DSL JSON Schema', async () => {
+      const result = await handleDiscovery({ engine });
       expect(result.dsl).toBeDefined();
       expect(typeof result.dsl).toBe('object');
     });
@@ -153,13 +156,13 @@ describe('handler', () => {
 
   describe('handleQuery', () => {
     it('rejects invalid request body', async () => {
-      const result = await handleQuery({ engine }, 'not json', {}, 'use');
+      const result = await handleQuery({ engine }, 'not json', {});
       expect(result.status).toBe(400);
       expect((result.body as Record<string, unknown>)['error']).toBe('invalid_request');
     });
 
-    it('rejects missing shape', async () => {
-      const result = await handleQuery({ engine }, { intent: 'test' }, {}, 'use');
+    it('rejects a request with neither shape nor fingerprint', async () => {
+      const result = await handleQuery({ engine }, { intent: 'test' }, {});
       expect(result.status).toBe(400);
     });
 
@@ -168,20 +171,24 @@ describe('handler', () => {
         { engine },
         { shape: [{ id: '', name: '' }], context: {} },
         {},
-        'use',
       );
       expect(result.status).toBeGreaterThanOrEqual(400);
     });
 
-    it('returns cache miss error with cache mode only', async () => {
+    it('replaying an unknown fingerprint is a 404 cache miss', async () => {
+      const result = await handleQuery({ engine }, { fingerprint: 'nope/nothing' }, {});
+      expect(result.status).toBe(404);
+      expect((result.body as Record<string, unknown>)['error']).toBe('cache_miss');
+    });
+
+    it('locked endpoints refuse generation', async () => {
       const result = await handleQuery(
-        { engine },
+        { engine, locked: true },
         { shape: [{ id: '', name: '' }], context: {} },
         {},
-        'only',
       );
-      expect(result.status).toBeGreaterThanOrEqual(400);
-      expect((result.body as Record<string, unknown>)['error']).toBe('cache_miss');
+      expect(result.status).toBe(400);
+      expect((result.body as Record<string, unknown>)['error']).toBe('locked');
     });
   });
 });

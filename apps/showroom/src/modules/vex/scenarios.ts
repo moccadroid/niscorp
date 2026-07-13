@@ -4,10 +4,11 @@ import { ACCOUNTS } from './runtime/seed-data';
 // ═══════════════════════════════════════════════════════════
 // Canned scenarios — each is a real request (intent + shape) plus
 // the DSL an agent would generate for it. The DSL is seeded into the
-// cache at boot, so every story runs the genuine deterministic
-// pipeline (resolve → scope → analyze → compile → execute) against
-// PGlite with ZERO LLM calls — the shape-cache hot path Vex is built
-// around. With a key set, the same stories can also be re-run live.
+// cache under a named fingerprint (`vex-demo/<id>`), so every story
+// replays the genuine deterministic pipeline (resolve → scope →
+// analyze → compile → execute) against PGlite with ZERO LLM calls —
+// the fingerprint-replay hot path Vex is built around. With a key
+// set, the same stories can also be re-run live.
 // ═══════════════════════════════════════════════════════════
 
 export type ScenarioMode =
@@ -40,7 +41,7 @@ export type VexScenario = {
   scopeKey?: string;
   scope?: ScopeValues;
   // Context keys the visualizer exposes as editable controls (drives
-  // the "same shape, different values → cache HIT" demo).
+  // the "same fingerprint, different values → cache HIT" demo).
   editable?: EditableContext[];
   // Optional Prism mapping config (applied per row as the engine wraps
   // each row in { result: row }). Present only when the requested shape
@@ -478,10 +479,10 @@ export const scenarios: readonly VexScenario[] = [
 
   // ─── Caching ───────────────────────────────────────────────
   {
-    id: 'shape-cache',
-    name: 'Same shape, zero cost',
+    id: 'fingerprint-replay',
+    name: 'Same fingerprint, zero cost',
     description:
-      'The cache is keyed by output shape, not by values. Change the status and re-run: same shape → cache HIT → the DSL is reused, no LLM call, only the deterministic pipeline runs again with the new value.',
+      'The cache is keyed by fingerprint; context values are runtime data, not identity. Change the status and re-run: same fingerprint → cache HIT → the DSL is reused, no LLM call, only the deterministic pipeline runs again with the new value.',
     kind: KIND_CACHING,
     mode: 'execute',
     intent: 'Customers with a given status',

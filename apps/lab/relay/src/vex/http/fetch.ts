@@ -1,5 +1,4 @@
-import { handleQuery, handleDiscovery } from '@niscorp/vex';
-import type { CacheMode } from '@niscorp/vex';
+import { handleQuery, handleDiscovery, handleFingerprintPatch, handleFingerprintDelete } from '@niscorp/vex';
 import { getVexRuntime, CURRENT_USER_ID } from '../runtime';
 import { resourceEntities } from './resources';
 import { handleMutation } from '../mutations';
@@ -14,9 +13,11 @@ import { scopePolicy } from '../scope';
 // is a real backend, drop this shim and point the URLs at it, nothing changes.
 //
 //   GET  /api/<resource>/vex   → discovery, scoped to that resource's entities
-//   POST /api/<resource>/vex   → a query `{ shape, intent, context }` (read), or a
-//                                mutation `{ mutation, context }` (write) — the
+//   POST /api/<resource>/vex   → a query — `{ fingerprint, context }` (replay) or
+//                                `{ intent, shape, context }` (generate) — or a
+//                                mutation `{ mutation, context }` (write); the
 //                                body discriminates. Reads are entity-scoped.
+//   PATCH/DELETE .../vex       → fingerprint management ({ fingerprint } in body)
 //   GET/POST /api/vex          → the base: full schema (cross-resource reads)
 //
 // The entity filter comes from `resources.ts`. Real URLs fall through to fetch.
@@ -67,7 +68,19 @@ export const vexFetch = async (url: string, init?: Init): Promise<Resp> => {
     return wrap(res.status, res.body);
   }
 
-  const cache = (parsed.searchParams.get('cache') ?? 'use') as CacheMode;
-  const res = await handleQuery({ engine, entities }, body, scope, cache);
+  // Fingerprint management: `{ fingerprint, protected? }` in the body (names
+  // contain '/', so they don't travel in the path).
+  if (method === 'PATCH' || method === 'DELETE') {
+    const b = (body ?? {}) as { fingerprint?: unknown; protected?: boolean };
+    if (typeof b.fingerprint !== 'string' || b.fingerprint === '') {
+      return wrap(400, { error: 'invalid_request', message: 'Body must carry a `fingerprint`.' });
+    }
+    const res = method === 'PATCH'
+      ? await handleFingerprintPatch({ engine }, b.fingerprint, { protected: b.protected })
+      : await handleFingerprintDelete({ engine }, b.fingerprint);
+    return wrap(res.status, res.body);
+  }
+
+  const res = await handleQuery({ engine, entities }, body, scope);
   return wrap(res.status, res.body);
 };

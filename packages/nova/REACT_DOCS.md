@@ -48,7 +48,7 @@ const App = () => {
     const layoutStore = createLayoutStore();
     return {
       shell: createShell({
-        canvases: ['main'],
+        canvases: [{ id: 'main' }],
         registry,
         layoutStore,
         actions: { counter },
@@ -298,15 +298,17 @@ registry.registerAll({ MyButton });
 
 ### The default component set
 
-`@niscorp/nova/components/react` ships five components and a registration helper:
+`@niscorp/nova/components/react` ships seven components and a registration helper:
 
 ```ts
 import { registerNovaReactComponents } from '@niscorp/nova/components/react';
 
 const registry = createComponentRegistry();
 registerNovaReactComponents(registry);
-// Now Stack, Text, Input, Button, Box are all registered.
+// Now Stack, Text, Input, Button, Box, CanvasSlot, ActionSlot are all registered.
 ```
+
+`CanvasSlot` and `ActionSlot` are shell-aware: they pull state from the React shell context and must only be used inside a `<NovaShellProvider>` (they are what shell/canvas layouts use to paint their regions).
 
 You can mix the default set with your own:
 

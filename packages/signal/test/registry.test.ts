@@ -23,8 +23,17 @@ describe('providerRegistry', () => {
     expect(providerRegistry['google']!.adapter).toBe('google');
   });
 
-  it('groq defaults to no native tools', () => {
-    expect(providerRegistry['groq']!.capabilities.nativeTools).toBe(false);
+  it('groq has native tools but cannot combine them with response_format', () => {
+    expect(providerRegistry['groq']!.capabilities.nativeTools).toBe(true);
+    expect(providerRegistry['groq']!.capabilities.toolsWithStructuredOutput).toBe(false);
+  });
+
+  it('openai can combine tools with structured output', () => {
+    expect(providerRegistry['openai']!.capabilities.toolsWithStructuredOutput).toBe(true);
+  });
+
+  it('openrouter defaults to no tools+structured-output combination', () => {
+    expect(providerRegistry['openrouter']!.capabilities.toolsWithStructuredOutput).toBe(false);
   });
 });
 

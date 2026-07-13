@@ -1,7 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { compile } from '@niscorp/prism';
 import { createQueryEngine } from '../../src/engine/runtime.js';
-import { computeShapeHash } from '../../src/cache/hash.js';
 import type { QueryEngine } from '../../src/types.js';
 import type { DatabaseAdapter, CompiledQuery, BoundParams, Row } from '../../src/adapters/adapter.types.js';
 import type { DatabaseSchema } from '../../src/schemas/database.schema.js';
@@ -56,18 +55,22 @@ const makeAdapter = (rows: Row[]): DatabaseAdapter => ({
   },
 });
 
-// Seed the cache with the DSL + a compiled mapping IR, keyed by shape, so
-// execute() takes the cache-hit path (no LLM) and replays the mapping over the
-// whole row set. No fingerprint/expiry → always fresh (see isEntryFresh).
+// Seed the cache with the DSL + a compiled mapping IR under a NAMED
+// fingerprint (the seed pattern), so execute() takes the replay path
+// (no LLM) and replays the mapping over the whole row set. The stored
+// `shape` drives the array-vs-single envelope on replay.
+const FP = 'test/mapping';
+
 const makeEngine = async (shape: unknown, mapping: unknown): Promise<QueryEngine> => {
   const engine = createQueryEngine({ adapter: makeAdapter(ROWS) });
   await engine.introspect();
   const prismIr = await compile(mapping);
-  await engine.cache.set(computeShapeHash(shape), {
+  await engine.cache.set(FP, {
     kind: 'ok',
     dsl: DSL,
     prismIr,
     createdAt: Date.now(),
+    shape,
   });
   return engine;
 };
@@ -86,7 +89,7 @@ describe('Whole-set Prism mapping', () => {
       },
     });
 
-    const res = await engine.execute({ shape, context: {} }, { cache: 'use' });
+    const res = await engine.execute({ fingerprint: FP, context: {} });
 
     expect(res.meta.cache.hit).toBe(true);
     expect(res.result).toEqual([
@@ -104,7 +107,7 @@ describe('Whole-set Prism mapping', () => {
       name: { $ref: '$.result.name' },
     });
 
-    const res = await engine.execute({ shape, context: {} }, { cache: 'use' });
+    const res = await engine.execute({ fingerprint: FP, context: {} });
 
     expect(res.meta.cache.hit).toBe(true);
     expect(Array.isArray(res.result)).toBe(false);
@@ -115,7 +118,7 @@ describe('Whole-set Prism mapping', () => {
     const shape = 0;
     const engine = await makeEngine(shape, { $ref: '$.result.total' });
 
-    const res = await engine.execute({ shape, context: {} }, { cache: 'use' });
+    const res = await engine.execute({ fingerprint: FP, context: {} });
 
     expect(res.result).toBe(100);
   });
@@ -124,7 +127,7 @@ describe('Whole-set Prism mapping', () => {
     const shape = [{ id: '', name: '', total: 0 }];
     const engine = await makeEngine(shape, { $ref: '$.result' });
 
-    const res = await engine.execute({ shape, context: {} }, { cache: 'use' });
+    const res = await engine.execute({ fingerprint: FP, context: {} });
 
     expect(res.result).toEqual(ROWS);
   });

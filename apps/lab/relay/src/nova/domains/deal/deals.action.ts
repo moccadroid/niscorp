@@ -27,11 +27,11 @@ export const dealsAction: ActionDefinition = {
   },
   layout: dealsLayout,
   endpoints: {
-    load:        { url: '/api/deals/vex?cache=use', method: 'POST', request: listDealsPrism,    response: resultPrism, target: 'rows' },
+    load:        { url: '/api/deals/vex', method: 'POST', request: listDealsPrism,    response: resultPrism, target: 'rows' },
     remove:      { url: '/api/deals/vex',           method: 'POST', request: deleteDealPrism },
-    loadStages:  { url: '/api/deals/vex?cache=use', method: 'POST', request: boardStagesPrism,  response: resultPrism, target: 'stages' },
-    loadDeals:   { url: '/api/deals/vex?cache=use', method: 'POST', request: boardDealsPrism,   response: resultPrism, target: 'deals' },
-    loadSummary: { url: '/api/deals/vex?cache=use', method: 'POST', request: boardSummaryPrism, response: resultPrism, target: 'summary' },
+    loadStages:  { url: '/api/deals/vex', method: 'POST', request: boardStagesPrism,  response: resultPrism, target: 'stages' },
+    loadDeals:   { url: '/api/deals/vex', method: 'POST', request: boardDealsPrism,   response: resultPrism, target: 'deals' },
+    loadSummary: { url: '/api/deals/vex', method: 'POST', request: boardSummaryPrism, response: resultPrism, target: 'summary' },
     move:        { url: '/api/deals/vex',           method: 'POST', request: moveDealPrism },
   },
   lifecycle: {

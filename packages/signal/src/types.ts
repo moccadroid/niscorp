@@ -68,6 +68,25 @@ export type Capabilities = {
   nativeTools: boolean;
   nativeJsonSchema: boolean;
   nativeJsonMode: boolean;
+  // Can the provider combine response_format with tool calling in ONE
+  // request? OpenAI can; Groq and OpenRouter reject the combination.
+  // Orchestrators (cortex) use this to pick an output strategy.
+  toolsWithStructuredOutput: boolean;
+  // Does the provider validate tool-call arguments SERVER-SIDE against
+  // the declared `parameters` schema and 400 the whole request on a
+  // mismatch (Groq's tool_use_failed)? When true, orchestrators keep
+  // the wire `parameters` of large/repairable payloads permissive and
+  // validate client-side — a client sees the attempt and can repair or
+  // correct specifically; a server 400 destroys it.
+  validatesToolArgs: boolean;
+  // Does the provider/model corrupt STRUCTURED tool-call arguments?
+  // Observed on Groq gpt-oss: nested arrays inside function args arrive
+  // JSON-STRINGIFIED (`"children": "[{\"component\":..."`), while the
+  // model emits the identical JSON cleanly on the content channel.
+  // When true, orchestrators should carry large structured payloads on
+  // the content channel (cortex resolves output strategy to 'emit')
+  // instead of through tool args.
+  manglesNestedToolArgs: boolean;
   multimodal: boolean;
   supportsEmbedding: boolean;
 };
@@ -146,6 +165,50 @@ export type StepInputMessage =
       content: string;
     };
 
+// ═══════════════════════════════════════════════════════════
+// Wire contract — the routed view of one model response
+// ═══════════════════════════════════════════════════════════
+//
+// Signal's contract is "what comes out conforms to the schema that
+// went in". Every response (and every recovered provider rejection)
+// is normalized by the wire layer (src/wire) and ROUTED: a call
+// matching a declared tool is a tool call; anything else whose
+// repaired value validates against the acceptance schema is output;
+// what survives neither is a typed failure with evidence.
+
+// A provider rejected the model's emission; a recovery entry pulled
+// what it could from the error body.
+export type Rejection = {
+  // Tool name, when the attempt parsed (possibly after closing a
+  // truncated body) as a { name, arguments } call.
+  name?: string;
+  // Parsed arguments, when parseable.
+  args?: unknown;
+  // The raw recovered bytes — always present, may be ''.
+  argsText: string;
+  // The recovered bytes ended mid-structure.
+  truncated: boolean;
+};
+
+export type StepOutcome =
+  | { kind: 'tool_calls'; calls: StepToolCall[] }
+  // value is the RAW accepted candidate, not the schema-transformed
+  // parse: the acceptance schema is a GATE (a transport concern —
+  // "is this a real attempt"), semantics stay the caller's.
+  | { kind: 'output'; value: unknown }
+  | { kind: 'failed'; evidence: string; truncated?: boolean };
+
+// How the outcome came to be — evidence for events/telemetry, and how
+// dead-weight recovery entries get found.
+export type WireReport = {
+  // The ladder rung or recovery entry that produced the accepted
+  // candidate ('parse' when nothing had to be repaired).
+  rung?: string;
+  // An error-hook recovery entry recovered a provider rejection.
+  recovered?: { strategy: string; name?: string; truncated: boolean };
+  notes?: string[];
+};
+
 // A tool descriptor for step(). Note: NO `execute` field — step() never
 // runs tools, it only describes them to the model. The caller owns the
 // loop and is responsible for executing whatever the model asks for.
@@ -157,11 +220,37 @@ export type StepToolDescriptor = {
   parameters: Record<string, unknown>;
 };
 
+// Response-format constraint passed through to the provider. Shared by
+// StepRequest (caller-facing) and ProviderRequest (adapter-facing).
+export type ResponseFormat =
+  | {
+      type: 'json_schema';
+      jsonSchema: { name: string; strict: boolean; schema: Record<string, unknown> };
+    }
+  | { type: 'json_object' };
+
 export type StepRequest = {
   messages: ReadonlyArray<StepInputMessage>;
   tools?: ReadonlyArray<StepToolDescriptor>;
-  // Force tool selection. 'auto' (default), 'none', or a specific tool name.
-  toolChoice?: 'auto' | 'none' | { name: string };
+  // Force tool selection. 'auto' (default), 'none', 'required' (the model
+  // MUST call some tool this turn), or a specific tool name.
+  toolChoice?: 'auto' | 'none' | 'required' | { name: string };
+  // Routing acceptance. When set, signal NORMALIZES the response
+  // (solid's repair ladder, provider wire strategies — all rescue-only
+  // and gated by this schema) and ROUTES it: StepResult.outcome says
+  // whether the turn is tool calls, a final output that validates, or
+  // a typed failure with evidence. The schema is a GATE, not a
+  // transform — outcome.value is the raw accepted candidate. Provider
+  // rejections that carry the attempt (Groq failed_generation) are
+  // recovered and routed the same way: a rejected call to a DECLARED
+  // tool comes back as a normal tool call. `outputTool` names the
+  // synthetic exit tool (respond transport) whose calls are OUTPUT,
+  // never tool calls.
+  output?: { accept: z.ZodType; outputTool?: string };
+  // Provider-native response format (json_schema / json_object), passed
+  // through verbatim. Check Capabilities.toolsWithStructuredOutput before
+  // combining with `tools` — providers that can't combine reject the request.
+  responseFormat?: ResponseFormat;
   options?: SignalOptions;
 };
 
@@ -175,6 +264,12 @@ export type StepResult = {
   };
   finishReason: string;
   raw: unknown;
+  // The routed view (present when the request carried output.accept,
+  // and always on recovered provider rejections). Consumers should
+  // switch on this instead of parsing content/toolCalls themselves.
+  outcome?: StepOutcome;
+  // How the outcome came to be (repair rung, recovery entry).
+  wire?: WireReport;
 };
 
 // ═══════════════════════════════════════════════════════════
@@ -219,11 +314,14 @@ export type StreamEvent<T> =
 
 // Step-stream events — emitted by signal.stepStream(). Narrower than
 // StreamEvent because step-level streaming does one adapter call and
-// does not execute tools or handle schema retries. Text deltas are
-// emitted incrementally; tool calls are delivered in aggregate on the
-// final `done` event as part of the StepResult.
+// does not execute tools or handle schema retries. Text deltas and
+// tool-call argument fragments are emitted incrementally; tool calls
+// are ALSO delivered fully assembled on the final `done` event as part
+// of the StepResult. `tool_call_delta` is what makes progressive
+// parsing of function-call payloads possible (cortex → solid).
 export type StepStreamEvent =
   | { type: 'text'; text: string }
+  | { type: 'tool_call_delta'; index: number; id?: string; name?: string; argsText: string }
   | { type: 'done'; result: StepResult };
 
 // ═══════════════════════════════════════════════════════════
@@ -251,16 +349,12 @@ export type ProviderStreamDelta =
 export type ProviderRequest = {
   model: string;
   messages: Message[];
-  responseFormat?: {
-    type: 'json_schema';
-    jsonSchema: { name: string; strict: boolean; schema: Record<string, unknown> };
-  } | {
-    type: 'json_object';
-  };
+  responseFormat?: ResponseFormat;
   tools?: Array<{
     type: 'function';
     function: { name: string; description: string; parameters: Record<string, unknown> };
   }>;
+  toolChoice?: 'auto' | 'none' | 'required' | { name: string };
   options?: SignalOptions;
 };
 

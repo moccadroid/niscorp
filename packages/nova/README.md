@@ -88,7 +88,7 @@ const counter: ActionDefinition = {
 };
 
 const shell = createShell({
-  canvases: ['main'],
+  canvases: [{ id: 'main' }],
   registry: createComponentRegistry(),
   layoutStore: createLayoutStore(),
   actions: { counter },
@@ -125,15 +125,20 @@ nodes also have first-class `if` / `for` / `ref` shapes. See
 A stateful unit. An `ActionDefinition` carries:
 
 - `data` — the initial state record.
-- `endpoints` — named HTTP-ish call configurations.
+- `input` — optional JSON Schema of the `data` keys an opener may seed
+  when loading the action (its openable-input contract; descriptive,
+  not enforced by the runtime).
+- `endpoints` — named HTTP or local-function call configurations, with
+  optional `request`/`response` transform configs run by the injected
+  evaluator.
 - `triggers` — `(event | message) + ref → do: Step[]` bindings.
 - `lifecycle` — `mount`, `unmount`, `suspend`, `resume` hooks, each a
   `Step[]`.
 - `layout` — the layout to render.
 
 A `Step` is either a **mutation** (one of `set`, `toggle`, `increment`,
-`decrement`, `push`, `pop`, `removeAt`, `clear`, `reset`) or an
-**effect** (`call`, `emit`, navigation `push`/`pop`/`replace`).
+`decrement`, `push`, `pop`, `removeAt`, `move`, `clear`, `reset`) or an
+**effect** (`call`, `emit`, navigation `push`/`pop`/`replace`/`popTo`/`resetTo`).
 Mutations are op-per-file under `action/mutations/ops/`.
 
 The runtime is a closure factory (`createActionRuntime`) — no classes.
@@ -151,12 +156,17 @@ ships in a DB row and can be referenced rather than inlined.
 
 The orchestrator. `createShell(config)` validates every action
 definition at construction (boundary Zod validation) and returns a
-`Shell` with `push`, `pop`, `replace`, `clear`, `registerAction`,
-`registerFragment`, `getCanvasState`, `getRuntime`, `onStateChange`,
-`onDataChange`, `dispose`. It maintains a stack per canvas, drives
-lifecycle hooks via the runtime, composes any `with` fragments into the
-action at push/replace time, and routes navigation effects emitted from
-action steps back into shell calls.
+`Shell` with `push`, `pop`, `popTo`, `replace`, `clear`,
+`registerAction`, `registerFragment`, `addCanvas`, `removeCanvas`,
+`setCanvasLayout`, `setLayout`, `getCanvasState`, `getRuntime`,
+`getState`, `getShellRenderTree`, `getCanvasRenderTree`,
+`flattenRenderTree`, `dispatch`, `publish`, `onStateChange`,
+`onDataChange`, `dispose`. Canvases are `CanvasConfig`s (`{ id,
+actionLayout?, initial? }`) — a canvas can pre-seed its stack and
+declare how its instances are arranged. The shell maintains a stack per
+canvas, drives lifecycle hooks via the runtime, composes any `with`
+fragments into the action at push/replace time, and routes navigation
+effects emitted from action steps back into shell calls.
 
 ---
 

@@ -7,8 +7,7 @@ import type { LayoutNode } from '@niscorp/nova';
 // sessions to `$.sessions` / `$.currentId`.
 export const assistantLayout: LayoutNode = [
     {
-      component: 'Box',
-      props: { class: 'rl-dialog__head' },
+      component: 'DialogHead',
       children: [
         {
           component: 'Row',
@@ -29,8 +28,8 @@ export const assistantLayout: LayoutNode = [
       ],
     },
     {
-      component: 'Box',
-      props: { class: 'rl-dialog__body', scroll: true, grow: true, stickBottom: true },
+      component: 'DialogBody',
+      props: { grow: true, stickBottom: true },
       children: {
         component: 'Stack',
         props: { gap: 12 },
@@ -66,8 +65,7 @@ export const assistantLayout: LayoutNode = [
       },
     },
     {
-      component: 'Box',
-      props: { class: 'rl-dialog__foot' },
+      component: 'DialogFoot',
       children: {
         component: 'Row',
         props: { gap: 8, align: 'end', grow: true },

@@ -19,9 +19,10 @@ import { buildCacheSeed } from '@relay/api';
 //
 // At boot the DB is seeded three ways: the schema (DDL), the demo data, and the
 // CACHE — the prewarmed entries from `@relay/api`, compiled to SQL and inserted
-// straight into Vex's own `vex_cache` table. After that the cache just exists in
-// the DB; Vex's normal `cache:'use'` serves every predefined read by the
-// deterministic pipeline (scope → SQL → execute → Prism map) with no LLM.
+// straight into Vex's own `vex_cache` table under named, protected fingerprints.
+// After that the cache just exists in the DB; every predefined read replays its
+// entry by fingerprint through the deterministic pipeline (scope → SQL →
+// execute → Prism map) with no LLM.
 //
 // The engine ALSO carries the LLM hooks (generateDsl / mapToShape, built from the
 // stored Groq key below) so a NOVEL shape — Ray asking a question no screen

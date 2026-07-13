@@ -4,11 +4,10 @@ import type { SignalClient } from '@niscorp/cortex';
 import { lsGet, lsSet } from '../storage';
 
 // ═══════════════════════════════════════════════════════════
-// The Groq LLM seam — shared, neutral infra.
+// The Groq LLM adapter.
 //
-// Both Vex's query/mapping agents (vex/agent.ts) and Ray (the assistant) build a
-// client from the same browser-local key. It lives here, owned by neither, so the
-// data layer and the assistant don't depend on each other for it.
+// One concrete provider adapter. The ACTIVE provider is selected in llm/index.ts,
+// so call sites depend on that neutral seam and never name a provider here.
 //
 // Groq via the OpenAI-compatible adapter — `openai/gpt-oss-120b`. We build the
 // OpenAI SDK client statically and inject it (Vite can't resolve Signal's dynamic

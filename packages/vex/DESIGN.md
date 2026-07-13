@@ -202,14 +202,14 @@ The Postgres adapter advertises vector search, JSON fields, full-text, CTEs,
 window functions, RETURNING, and statement timeout; it coerces numeric column
 strings (int8/numeric/float) back to JS numbers on the way out.
 
-### Cache
+### Cache — mechanics
 
-- **Shape hash** (`computeShapeHash`) normalizes the shape — sort keys, collapse
-  arrays to their first-element shape, replace scalars with type tokens — then
-  SHA-256s it. This is the positive-cache key.
+Identity is the **fingerprint** (see Cache v2 below). The supporting hashes:
+
 - **Request hash** (`computeRequestHash`) hashes intent + normalized shape +
-  *context key names* (not values). It keys the negative cache and single-flight
-  de-duplication, where intent matters.
+  *context key names* (not values). It identifies the *request* stored with a
+  named slot (match → hit, differ → regenerate-and-replace), and keys the
+  negative cache and single-flight de-duplication.
 - **Schema fingerprint** (`computeSchemaFingerprint`) is a stable hash of the
   structural schema (names, types, nullability, PKs, relations, indexes —
   excluding volatile rowCount and cosmetic fields). It is stored on each entry;
@@ -220,13 +220,130 @@ strings (int8/numeric/float) back to JS numbers on the way out.
   `unsatisfiable` (a TTL'd negative result — a request the agent declared
   impossible, so it isn't re-run until the TTL lapses or the schema changes).
 - **Backends.** In-memory (`createMemoryCache`), durable Postgres
-  (`createPostgresCache`, jsonb table, server-side TTL, validate-on-write and
-  evict-on-read), and tiered (`createTieredCache`, L1 + L2 read-through/
-  write-through with `full`/`lazy`/`partial` warm-up). Every backend implements
-  the same `CacheBackend` contract; `init`/`entries` are optional capabilities
-  used for warm-up and a future management UI.
+  (`createPostgresCache`, jsonb table, server-side TTL, `protected`/
+  `last_used_at`/`request_hash` columns with idempotent ALTER migrations,
+  validate-on-write and evict-on-read), and tiered (`createTieredCache`, L1 +
+  L2 read-through/write-through with `full`/`lazy`/`partial` warm-up). Every
+  backend implements the same `CacheBackend` contract; `init`/`entries` are
+  optional capabilities used for warm-up and the discovery overview.
 - **Validation** (`validateEntry`) guards every write and every promotion into
   memory, so a corrupt or schema-drifted row can never poison the cache.
+- **GC** (`sweepCache`) evicts entries idle past `maxIdleMs`
+  (`lastUsedAt ?? createdAt`), skipping protected ones. Hygiene, not necessity.
+
+### Cache v2 — fingerprints
+
+Agreed and implemented 2026-07-10; replaced shape-keyed caching everywhere
+(engine, HTTP layer, and all consumers — relay, fable, mythos, showroom).
+
+**Why v1 has to go.** Shape-hash identity collides: two different intents with
+the same normalized shape share one slot, so the second silently returns the
+first's data stamped `hit: true`. Entries are anonymous — no way to pin,
+promote, iterate, or roll back a generation. And running a query writes the
+cache as a side effect, so *testing* and *publishing* are the same physical
+act: callers either bypass the cache and lose the artifact, or hit it and can
+never change it.
+
+**The model: one identity, `fingerprint`.**
+
+- A request WITHOUT a fingerprint generates and caches; the server mints a
+  fingerprint (`fp_…`) and returns it in `meta.cache.fingerprint`.
+- A minted fingerprint is an **immutable pin** — embed it and replay the exact
+  generation forever. Changing the query means proving again and embedding the
+  new fingerprint. (git: a commit hash.)
+- A caller-chosen fingerprint (any string) is a **mutable named slot** — the
+  name is yours, its content follows your request. (git: a branch.)
+- Intent NEVER keys anything: natural language is fake identity in both
+  directions. It remains generator input + human metadata.
+
+**Three request postures** — the body replaces every cache mode:
+
+```jsonc
+// 1. Explore: generate, cache, mint
+{ "intent": "top 10 open deals by value…", "shape": [{ "id": "", "value_display": "" }] }
+// → meta.cache: { "fingerprint": "fp_9k27ax", "hit": false }
+
+// 2. Replay: fingerprint alone (+ context VALUES welcome) — never generates
+{ "fingerprint": "fp_9k27ax", "context": { "sortBy": "deals.value" } }
+// → meta.cache: { "fingerprint": "fp_9k27ax", "hit": true }; unknown fp → 404
+
+// 3. Own a slot: fingerprint + request
+{ "fingerprint": "deals/table", "intent": "…", "shape": [ … ] }
+// stored request matches → hit; differs → regenerate + REPLACE the slot
+// (meta.cache.replaced: true) — unless protected → 409
+```
+
+Request equality = intent string + normalized shape + context KEY NAMES
+(`normalizeShape` survives for this comparison; context values are runtime
+data and never identity — which is what makes replays parameterizable:
+`sortBy`/search terms may vary per call against one cached DSL).
+
+**Lifetime = usage.** Every replay stamps `lastUsedAt`; a GC sweep evicts
+entries unused for N days. An embedded pin is touched on every mount and lives
+forever by being used; an abandoned exploration ages out. There are NO
+provisional/permanent tiers and NO promote API — the distinction is replaced
+by the convention *alive = used*. (Entries are single-digit KB; the sweep is
+hygiene, not necessity.)
+
+**Protection: one stored bit, two writers, one knob.**
+
+- `protected: true` on an entry means a differing request 409s instead of
+  replacing. Written ONLY by (i) the seed path and (ii) an explicit `PATCH`
+  (which is what "save/lock this view" calls). Runtime writes are never
+  protected by default.
+- One endpoint knob: `locked: true` = replay-only posture (no generation at
+  all — the production stance; v1's `cache: 'only'` promoted from caller flag
+  to endpoint config).
+- No governance fields ever ride in the query body.
+
+**The REST surface.** Vex is an API endpoint over REST and is designed as one.
+Scoped mounts (`/api/deals/vex`) ride the existing `options.entities` filter —
+scope constrains *generation* (smaller schema, no out-of-scope joins);
+identity stays global.
+
+- `POST /api/<scope>/vex` — execute (the three postures above). Errors:
+  unknown fingerprint replay → 404 `cache_miss`; protected slot + differing
+  request → 409 `fingerprint_protected`; locked endpoint asked to generate →
+  403 `locked`.
+- `GET /api/<scope>/vex` — self-description: `{ protection:
+  "all"|"some"|"none", locked, fingerprints: [{ fingerprint, protected,
+  schemaFresh, intent, lastUsedAt }] }` plus the schema/DSL/body docs. Doubles
+  as agent-facing discovery: "does a named query already cover this?" is one
+  call.
+- `PATCH /…/vex` with `{ fingerprint, protected }` — flip the bit. `DELETE`
+  with `{ fingerprint }` — evict (unprotected only). Fingerprints ride the
+  body, not the path — names contain `/`.
+
+**What dies with v1:**
+
+- `CacheMode` (`use`/`refresh`/`bypass`/`only`), `ExecuteOptions.cache`, the
+  `?cache=` query param — the request body says everything now.
+- The shape hash as a cache key (and with it the entire collision class).
+- The embed-VERBATIM requirement for generated screens: a pin has no wording
+  to drift, and context may vary per replay — sorting and parameterized
+  reloads become legal on cached queries again.
+
+**Unchanged:** the negative cache (request-hash keyed, TTL'd), schema-
+fingerprint freshness/eviction, backends and tiering, `validateEntry`.
+
+**Where it landed:**
+
+- Engine (`engine/runtime.ts`): `resolveFingerprint` — no fp → mint; fp alone
+  → replay or `cache_miss`; fp + request → hit on matching request hash,
+  regenerate-and-replace on mismatch (409 when protected). Fingerprint-only
+  replays use the entry's STORED shape for the array-vs-single envelope.
+  Replays touch `lastUsedAt`.
+- Request schema: `fingerprint` in; `intent`/`shape` optional. Meta:
+  `cache: { hit, fingerprint, replaced?, intent? }`.
+- Backends: keys are fingerprint strings; entries carry `protected`,
+  `lastUsedAt`, `requestHash`; `sweepCache` GC; postgres migrates in place.
+- HTTP: `handleQuery` (no cache param), async `handleDiscovery` overview,
+  `handleFingerprintPatch`/`handleFingerprintDelete`; express + hono adapters.
+- Consumers: seeds re-keyed to protected names (`deals/list`, `todos/open`,
+  …); every hand-authored read replays `{ fingerprint, context }`; relay's
+  architect embeds `{ fingerprint: meta.cache.fingerprint, context }`; mythos'
+  `/api/query` is `locked` (replay-only); showroom's demos own
+  `vex-demo/<id>` slots (canned = seed + replay, live = delete + regenerate).
 
 ### LLM integration (decoupled)
 
@@ -413,8 +530,8 @@ Only `zod` is mandatory. Everything else is pulled in only by the path you use.
 
 - MySQL / SQLite adapters — the interface is ready; implementation on demand.
 - Multi-level field paths — addable in the resolver without DSL changes.
-- Intent-aware positive caching — shape design guidelines first; developer-
-  assigned keys if collisions bite.
+- ~~Intent-aware positive caching~~ — superseded: collisions did bite, and the
+  answer is identity, not intent-matching. See **Cache v2 — fingerprints**.
 - Cross-process cache coherence for the tiered backend (an L1 TTL refresh).
 - Adapter-owned vector serialization — the pgvector `[...]` literal is currently
   formed in the generic binding step; a second adapter would move it behind the

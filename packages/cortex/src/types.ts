@@ -1,103 +1,136 @@
 // ═══════════════════════════════════════════════════════════
-// @niscorp/cortex — shared core types
+// Cortex core types
 // ═══════════════════════════════════════════════════════════
+//
+// Per DESIGN.md: one loop, one output contract (the envelope),
+// runtime-authored meta, typed observations. Types that need
+// runtime validation live in schemas/; everything here is a
+// hand-written contract.
 
-import type { TypedTopic } from './utils/typed-topic';
+import type {
+  StepRequest,
+  StepResult,
+  StepStreamEvent,
+  StreamOptions,
+  CountInput,
+  SignalDescription,
+} from '@niscorp/signal';
 
 // ───────────────────────────────────────────────────────────
-// Bus / events
+// SignalClient — the slice of @niscorp/signal cortex needs
 // ───────────────────────────────────────────────────────────
+//
+// Structural, so tests can pass a scripted stub. A real Signal
+// instance satisfies this directly.
 
-export type EventMeta = {
-  timestamp: number;
-  correlationId: string;
-  causationId?: string;
-  workflowId?: string;
-};
-
-export type BusEvent<T = unknown> = {
-  topic: string;
-  payload: T;
-  meta: EventMeta;
-};
-
-export type BusHandler<T = unknown> = (event: BusEvent<T>) => void | Promise<void>;
-export type Unsubscribe = () => void;
-
-export type WaitForOptions<T = unknown> = {
-  timeoutMs?: number;
-  filter?: (event: BusEvent<T>) => boolean;
-  signal?: AbortSignal;
-};
-
-export type Bus = {
-  // Publish an event. Auto-fills timestamp; caller supplies
-  // correlationId (a fresh one is generated if omitted). Returns
-  // the correlationId used. Workflow-scoped callers should prefer
-  // `workflow.emit()` which binds workflowId + correlationId.
-  emit: {
-    <T>(topic: TypedTopic<T>, payload: T, meta?: Partial<EventMeta>): string;
-    (topic: string, payload: unknown, meta?: Partial<EventMeta>): string;
-  };
-  on: {
-    <T>(topic: TypedTopic<T>, handler: BusHandler<T>): Unsubscribe;
-    (pattern: string, handler: BusHandler): Unsubscribe;
-  };
-  waitFor: {
-    <T>(topic: TypedTopic<T>, options?: WaitForOptions<T>): Promise<BusEvent<T>>;
-    (pattern: string, options?: WaitForOptions): Promise<BusEvent>;
-  };
+export type SignalClient = {
+  step: (request: StepRequest) => Promise<StepResult>;
+  stepStream: (request: StepRequest, options?: StreamOptions) => AsyncIterable<StepStreamEvent>;
+  count: (input: CountInput) => Promise<number>;
+  describe: () => SignalDescription;
 };
 
 // ───────────────────────────────────────────────────────────
-// Result — for fallible APIs (programmer errors throw)
+// The envelope — every agent returns this shape
+// ───────────────────────────────────────────────────────────
+//
+// `response` is human-facing text; `data` is the schema-typed
+// payload (undefined for pure chat agents); `reasoning` is the
+// model's own short WHY. Provider reasoning *tokens* are runtime
+// telemetry and surface as model-delta events, never here.
+// Run-level metadata (usage, strategy, attempts) is authored by
+// cortex on RunMeta — models do not self-report metadata.
+
+export type Envelope<TData> = {
+  response?: string;
+  data: TData;
+  reasoning?: string;
+};
+
+// ───────────────────────────────────────────────────────────
+// Usage / meta / results
 // ───────────────────────────────────────────────────────────
 
-export type Result<T, E = CortexError> =
-  | { ok: true; data: T }
-  | { ok: false; error: E };
+export type Usage = {
+  inputTokens: number;
+  outputTokens: number;
+  totalTokens: number;
+};
 
-// ───────────────────────────────────────────────────────────
-// Errors
-// ───────────────────────────────────────────────────────────
+export const EMPTY_USAGE: Usage = { inputTokens: 0, outputTokens: 0, totalTokens: 0 };
+
+export const addUsage = (a: Usage, b: Usage): Usage => ({
+  inputTokens: a.inputTokens + b.inputTokens,
+  outputTokens: a.outputTokens + b.outputTokens,
+  totalTokens: a.totalTokens + b.totalTokens,
+});
+
+// The envelope's TRANSPORT. The output contract is ALWAYS the JSON
+// envelope; the transport only picks which channel its bytes travel:
+// respond = tool-call arguments; emit = the content channel (the model
+// emits the envelope as its completion); native = provider grammar.
+// There is no mode in which the model "returns text". Resolution and
+// mechanics are SIGNAL's (transport is provider knowledge) — cortex
+// re-exports the name for its public meta/config surface.
+export type OutputStrategy = import('@niscorp/signal').OutputTransport;
+
+export type RunMeta = {
+  usage: Usage;
+  strategy: OutputStrategy;
+  steps: number;
+  outputRetries: number;
+  elapsedMs: number;
+};
+
+export type StopReason = 'steps' | 'tokens' | 'duration' | 'output_retries' | 'custom';
 
 export type ErrorCode =
-  | 'agent_not_registered'
-  | 'tool_not_registered'
-  | 'invalid_plan'
-  | 'plan_depth_exceeded'
-  | 'ticks_exceeded'
-  | 'tool_iterations_exceeded'
-  | 'duration_exceeded'
-  | 'budget_exceeded'
-  | 'gate_denied'
-  | 'tool_execution_failed'
-  | 'output_validation_failed'
   | 'model_call_failed'
+  | 'output_invalid'
+  | 'stopped'
   | 'aborted'
-  | 'timeout'
   | 'unknown';
 
 export type CortexError = {
   code: ErrorCode;
   message: string;
-  workflowId?: string;
-  agentId?: string;
+  runId: string;
+  agentPath: ReadonlyArray<string>;
+  // Which stop condition fired. Present only when code === 'stopped'.
+  stop?: StopReason;
+  // The model's LAST semantically-invalid output (the raw routed value)
+  // when the run died on output retries. A failed run's best candidate
+  // is often repairable — callers may continue from it (edit mode)
+  // instead of rebuilding from nothing.
+  lastOutput?: unknown;
   cause?: unknown;
 };
 
+export type RunResult<TData> =
+  | { ok: true; output: Envelope<TData>; meta: RunMeta }
+  | { ok: false; error: CortexError; meta: RunMeta };
+
+// Internal fallible-call contract (tool results, parses).
+export type Result<T> =
+  | { ok: true; data: T }
+  | { ok: false; error: CortexError };
+
 // ───────────────────────────────────────────────────────────
-// Budget / ledger view
+// Observations — the record of one tool call
+// ───────────────────────────────────────────────────────────
+//
+// A discriminated union so consumers never cast. Denials and
+// unknown tools are observations too: the model sees them as
+// tool error results and reacts; the run does not fail.
+
+export type ToolObservation =
+  | { kind: 'result'; callId: string; toolId: string; args: unknown; result: unknown; durationMs: number }
+  | { kind: 'error'; callId: string; toolId: string; args: unknown; error: string; durationMs: number }
+  | { kind: 'denied'; callId: string; toolId: string; args: unknown; reason: string }
+  | { kind: 'unknown-tool'; callId: string; toolId: string; args: unknown };
+
+// ───────────────────────────────────────────────────────────
+// Misc
 // ───────────────────────────────────────────────────────────
 
-export type BudgetState = {
-  tokensUsed: number;
-  tokensRemaining: number;
-  ticksUsed: number;
-  ticksRemaining: number;
-  toolCallsUsed: number;
-};
-
-export type ReadonlyLedger = {
-  snapshot: (workflowId: string) => BudgetState;
-};
+export type Unsubscribe = () => void;

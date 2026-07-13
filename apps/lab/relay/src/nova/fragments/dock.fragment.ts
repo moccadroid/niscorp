@@ -8,8 +8,7 @@ export const dockFragment: ActionFragment = {
   kind: 'fragment',
   id: 'dock',
   layout: {
-    component: 'Box',
-    props: { class: 'rl-assistant' },
+    component: 'AssistantDock',
     children: { slot: 'body' },
   },
 };

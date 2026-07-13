@@ -2,49 +2,43 @@
 // Cortex error model
 // ═══════════════════════════════════════════════════════════
 //
-// Per DESIGN.md §11:
+// Per DESIGN.md §9:
 //   - Programmer errors throw (caller called the API wrong; bug)
-//   - Runtime conditions return Result<T> with a CortexError (caller decides)
-//   - Observations carry errors, not exceptions
+//   - Runtime conditions return RunResult / Result with a CortexError
+//   - Tool failures are observations, not exceptions
 //
 // Per STYLE_GUIDE.md: no classes. CortexError is a typed object,
 // not an Error subclass. The throw helper wraps it in a real Error
 // for stack-trace purposes.
 
-import type { CortexError, ErrorCode, Result } from '../types';
+import type { CortexError, ErrorCode, Result, StopReason } from '../types';
 
 export type { CortexError, ErrorCode };
 
-export const makeError = (
-  code: ErrorCode,
-  message: string,
-  context?: { workflowId?: string; agentId?: string; cause?: unknown },
-): CortexError => ({
+export type ErrorContext = {
+  runId: string;
+  agentPath: ReadonlyArray<string>;
+  stop?: StopReason;
+  lastOutput?: unknown;
+  cause?: unknown;
+};
+
+export const makeError = (code: ErrorCode, message: string, context: ErrorContext): CortexError => ({
   code,
   message,
-  ...(context?.workflowId !== undefined && { workflowId: context.workflowId }),
-  ...(context?.agentId !== undefined && { agentId: context.agentId }),
-  ...(context?.cause !== undefined && { cause: context.cause }),
+  runId: context.runId,
+  agentPath: context.agentPath,
+  ...(context.stop !== undefined && { stop: context.stop }),
+  ...(context.lastOutput !== undefined && { lastOutput: context.lastOutput }),
+  ...(context.cause !== undefined && { cause: context.cause }),
 });
 
 // ───────────────────────────────────────────────────────────
-// Programmer-error helpers — these throw a real Error
+// Programmer-error helper — throws a real Error
 // ───────────────────────────────────────────────────────────
 
-const formatError = (error: CortexError): string => {
-  const tags: string[] = [error.code];
-  if (error.agentId) tags.push(`agent=${error.agentId}`);
-  if (error.workflowId) tags.push(`workflow=${error.workflowId}`);
-  return `[cortex:${tags.join(' ')}] ${error.message}`;
-};
-
-// Note: explicit `(error) => never` annotation form is required so
-// TypeScript narrows correctly at call sites. The arrow-with-`: never`
-// inline return type does not always propagate through const assignment.
-export const throwCortex: (error: CortexError) => never = (error) => {
-  const wrapped = new Error(formatError(error));
-  Object.assign(wrapped, { cortex: error });
-  throw wrapped;
+export const throwConfig: (message: string) => never = (message) => {
+  throw new Error(`[cortex:config] ${message}`);
 };
 
 // ───────────────────────────────────────────────────────────
@@ -53,6 +47,3 @@ export const throwCortex: (error: CortexError) => never = (error) => {
 
 export const ok = <T>(data: T): Result<T> => ({ ok: true, data });
 export const err = <T = never>(error: CortexError): Result<T> => ({ ok: false, error });
-
-export const isOk = <T>(result: Result<T>): result is { ok: true; data: T } => result.ok;
-export const isErr = <T>(result: Result<T>): result is { ok: false; error: CortexError } => !result.ok;

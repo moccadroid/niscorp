@@ -74,7 +74,7 @@ export const companyLayout: LayoutNode = {
       // ── Two columns: People | Open deals ──
       {
         component: 'Grid',
-        props: { template: '1fr 1fr', gap: 24, align: 'start' },
+        props: { weights: [1, 1], gap: 24, align: 'start' },
         children: [
           // People
           {

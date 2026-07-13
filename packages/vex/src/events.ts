@@ -1,6 +1,6 @@
 export type VexEvent =
-  | { type: 'query.start'; intent?: string; shape: unknown; cache: string; hash: string; entities?: string[] }
-  | { type: 'query.cache'; hit: boolean }
+  | { type: 'query.start'; intent?: string; shape?: unknown; fingerprint?: string; entities?: string[] }
+  | { type: 'query.cache'; hit: boolean; fingerprint?: string; replaced?: boolean }
   | { type: 'query.dsl'; dsl: unknown; agentMs: number }
   | { type: 'query.sql'; sql: string; warnings: string[] }
   | { type: 'query.rows'; count: number; executionMs: number }

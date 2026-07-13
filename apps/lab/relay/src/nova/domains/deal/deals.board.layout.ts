@@ -10,17 +10,16 @@ import type { LayoutNode } from '@niscorp/nova';
 // renders (see deals.layout.ts).
 
 const skeletonColumn: LayoutNode = {
-  component: 'Box',
-  props: { class: 'rl-kanban__col' },
+  component: 'KanbanColumn',
   children: [
-    { component: 'Box', props: { class: 'rl-kanban__head' }, children: { component: 'Skeleton', props: { width: '50%' } } },
-    { component: 'Box', props: { class: 'rl-kanban__cards' }, children: { component: 'Stack', props: { gap: 8 }, children: [{ component: 'Skeleton', props: { width: '100%', height: 54 } }, { component: 'Skeleton', props: { width: '100%', height: 54 } }] } },
+    { component: 'KanbanHead', children: { component: 'Skeleton', props: { width: '50%' } } },
+    { component: 'KanbanCards', children: { component: 'Stack', props: { gap: 8 }, children: [{ component: 'Skeleton', props: { width: '100%', height: 54 } }, { component: 'Skeleton', props: { width: '100%', height: 54 } }] } },
   ],
 };
 
 export const dealsBoardLayout: LayoutNode = {
   if: '$.boardLoading',
-  then: { component: 'Box', props: { class: 'rl-kanban' }, children: { for: [1, 1, 1, 1], as: 's', do: skeletonColumn } },
+  then: { component: 'KanbanBoard', children: { for: [1, 1, 1, 1], as: 's', do: skeletonColumn } },
   else: {
     component: 'Stack',
     props: { gap: 16, h: '100%' },
@@ -39,19 +38,18 @@ export const dealsBoardLayout: LayoutNode = {
       },
       // ── Columns ──
       {
-        component: 'Box',
-        props: { class: 'rl-kanban rl-min0', grow: true },
+        component: 'KanbanBoard',
+        props: { grow: true, shrink: true },
         children: {
           for: '$.stages',
           as: 'col',
           key: 'stage',
           do: {
-            component: 'Box',
-            props: { class: 'rl-kanban__col rl-kanban__col--{{$.col.tone}}' },
+            component: 'KanbanColumn',
+            props: { tone: '$.col.tone' },
             children: [
               {
-                component: 'Box',
-                props: { class: 'rl-kanban__head' },
+                component: 'KanbanHead',
                 children: [
                   {
                     component: 'Stack',
@@ -65,9 +63,9 @@ export const dealsBoardLayout: LayoutNode = {
                 ],
               },
               {
-                component: 'DropZone',
+                component: 'KanbanCards',
                 ref: 'move-deal',
-                props: { value: '$.col.stage_id', class: 'rl-kanban__cards' },
+                props: { value: '$.col.stage_id' },
                 children: {
                   for: '$.deals',
                   as: 'd',
@@ -75,9 +73,9 @@ export const dealsBoardLayout: LayoutNode = {
                   do: {
                     if: { $eq: ['$.d.stage', '$.col.stage'] },
                     then: {
-                      component: 'Draggable',
+                      component: 'KanbanCard',
                       ref: 'card',
-                      props: { value: '$.d.deal_id', class: 'rl-kanban__card' },
+                      props: { value: '$.d.deal_id' },
                       children: {
                         component: 'Stack',
                         props: { gap: 9 },

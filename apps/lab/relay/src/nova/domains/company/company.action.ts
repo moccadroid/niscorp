@@ -12,12 +12,12 @@ export const companyAction: ActionDefinition = {
   id: 'company',
   // Stack-nav label — the chip + its depth menu read `instance.title`.
   title: '{{$.record.name}}',
-  data: { id: '', record: {}, contacts: [], deals: [], loading: true, panelClass: 'rl-dialog--wide' },
+  data: { id: '', record: {}, contacts: [], deals: [], loading: true, panelSize: 'wide' },
   layout: companyLayout,
   endpoints: {
-    loadRecord:   { url: '/api/companies/vex?cache=use', method: 'POST', request: companyByIdPrism,     response: resultPrism, target: 'record' },
-    loadContacts: { url: '/api/companies/vex?cache=use', method: 'POST', request: companyContactsPrism, response: resultPrism, target: 'contacts' },
-    loadDeals:    { url: '/api/companies/vex?cache=use', method: 'POST', request: companyDealsPrism,    response: resultPrism, target: 'deals' },
+    loadRecord:   { url: '/api/companies/vex', method: 'POST', request: companyByIdPrism,     response: resultPrism, target: 'record' },
+    loadContacts: { url: '/api/companies/vex', method: 'POST', request: companyContactsPrism, response: resultPrism, target: 'contacts' },
+    loadDeals:    { url: '/api/companies/vex', method: 'POST', request: companyDealsPrism,    response: resultPrism, target: 'deals' },
   },
   lifecycle: { mount: [{ call: 'loadRecord', onSuccess: [{ set: 'loading', value: false }] }, { call: 'loadContacts' }, { call: 'loadDeals' }] },
   // Cross-links switch `main` (+ emit `screen-*`) and THEN swap the panel. The

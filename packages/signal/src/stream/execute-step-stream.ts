@@ -52,6 +52,8 @@ const buildProviderRequest = (
     model,
     messages: request.messages.slice() as Message[],
     ...(providerTools && { tools: providerTools }),
+    ...(request.toolChoice !== undefined && { toolChoice: request.toolChoice }),
+    ...(request.responseFormat !== undefined && { responseFormat: request.responseFormat }),
     ...(request.options !== undefined && { options: request.options }),
   };
 };
@@ -77,6 +79,15 @@ export async function* executeStepStream(
         break;
       case 'tool_call':
         assembleToolCall(assembledToolCalls, delta);
+        // Surface the fragment so callers can parse function-call
+        // payloads progressively (cortex feeds these into solid).
+        yield {
+          type: 'tool_call_delta',
+          index: delta.index,
+          ...(delta.id !== undefined && { id: delta.id }),
+          ...(delta.name !== undefined && { name: delta.name }),
+          argsText: delta.argsFragment ?? '',
+        };
         break;
       case 'usage':
         totalUsage = {

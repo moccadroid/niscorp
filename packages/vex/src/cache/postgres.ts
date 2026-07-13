@@ -50,15 +50,20 @@ const quoteIdent = (name: string, label: string): string => {
   return `"${name}"`;
 };
 
-const SELECT_COLS ='key, kind, intent, shape, dsl, prism_ir, reason, created_at, expires_at, schema_fingerprint';
+const SELECT_COLS =
+  'key, kind, intent, shape, dsl, prism_ir, reason, created_at, expires_at, schema_fingerprint, protected, last_used_at, request_hash';
 
 const rowToEntry = (row: Record<string, unknown>): CacheEntry => {
   const createdAt = (row['created_at'] as Date).getTime();
   const expiresAtRaw = row['expires_at'] as Date | null;
+  const lastUsedRaw = row['last_used_at'] as Date | null;
   const fingerprint = row['schema_fingerprint'] as string | null;
   const meta = {
     createdAt,
     ...(expiresAtRaw ? { expiresAt: expiresAtRaw.getTime() } : {}),
+    ...(lastUsedRaw ? { lastUsedAt: lastUsedRaw.getTime() } : {}),
+    ...(row['protected'] === true ? { protected: true } : {}),
+    ...(row['request_hash'] != null ? { requestHash: String(row['request_hash']) } : {}),
     ...(fingerprint ? { schemaFingerprint: fingerprint } : {}),
     ...(row['intent'] != null ? { intent: String(row['intent']) } : {}),
     ...(row['shape'] != null ? { shape: row['shape'] } : {}),
@@ -94,9 +99,16 @@ export const createPostgresCache = (config: PostgresCacheConfig): PostgresCache 
         reason             text,
         created_at         timestamptz NOT NULL DEFAULT now(),
         expires_at         timestamptz,
-        schema_fingerprint text
+        schema_fingerprint text,
+        protected          boolean NOT NULL DEFAULT false,
+        last_used_at       timestamptz,
+        request_hash       text
       )`,
     );
+    // Migrate pre-fingerprint tables in place (idempotent).
+    await pool.query(`ALTER TABLE ${qualified} ADD COLUMN IF NOT EXISTS protected boolean NOT NULL DEFAULT false`);
+    await pool.query(`ALTER TABLE ${qualified} ADD COLUMN IF NOT EXISTS last_used_at timestamptz`);
+    await pool.query(`ALTER TABLE ${qualified} ADD COLUMN IF NOT EXISTS request_hash text`);
   };
 
   const evict = (key: string, reason: string): void => {
@@ -146,10 +158,13 @@ export const createPostgresCache = (config: PostgresCacheConfig): PostgresCache 
     const createdAt = new Date(entry.createdAt);
     const expiresAt = entry.expiresAt !== undefined ? new Date(entry.expiresAt) : null;
     const fingerprint = entry.schemaFingerprint ?? null;
+    const isProtected = entry.protected === true;
+    const lastUsedAt = entry.lastUsedAt !== undefined ? new Date(entry.lastUsedAt) : null;
+    const requestHash = entry.requestHash ?? null;
 
     await pool.query(
-      `INSERT INTO ${qualified} (key, kind, intent, shape, dsl, prism_ir, reason, created_at, expires_at, schema_fingerprint)
-       VALUES ($1, $2, $3, $4::jsonb, $5::jsonb, $6::jsonb, $7, $8, $9, $10)
+      `INSERT INTO ${qualified} (key, kind, intent, shape, dsl, prism_ir, reason, created_at, expires_at, schema_fingerprint, protected, last_used_at, request_hash)
+       VALUES ($1, $2, $3, $4::jsonb, $5::jsonb, $6::jsonb, $7, $8, $9, $10, $11, $12, $13)
        ON CONFLICT (key) DO UPDATE SET
          kind               = EXCLUDED.kind,
          intent             = EXCLUDED.intent,
@@ -159,8 +174,11 @@ export const createPostgresCache = (config: PostgresCacheConfig): PostgresCache 
          reason             = EXCLUDED.reason,
          created_at         = EXCLUDED.created_at,
          expires_at         = EXCLUDED.expires_at,
-         schema_fingerprint = EXCLUDED.schema_fingerprint`,
-      [key, entry.kind, intent, shape, dsl, prismIr, reason, createdAt, expiresAt, fingerprint],
+         schema_fingerprint = EXCLUDED.schema_fingerprint,
+         protected          = EXCLUDED.protected,
+         last_used_at       = EXCLUDED.last_used_at,
+         request_hash       = EXCLUDED.request_hash`,
+      [key, entry.kind, intent, shape, dsl, prismIr, reason, createdAt, expiresAt, fingerprint, isProtected, lastUsedAt, requestHash],
     );
   };
 

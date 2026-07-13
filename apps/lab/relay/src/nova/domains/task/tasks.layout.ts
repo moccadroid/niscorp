@@ -7,7 +7,7 @@ import type { LayoutNode } from '@niscorp/nova';
 // fields verbatim. Literal + serializable.
 export const tasksLayout: LayoutNode = {
   component: 'Box',
-  props: { class: 'rl-listcard' },
+  props: {},
   children: [
     {
       component: 'Box',
@@ -52,7 +52,6 @@ export const tasksLayout: LayoutNode = {
       props: {
         rows: '$.rows',
         loading: '$.loading',
-        cols: 'rl-cols-tasks',
         rowKey: 'task_id',
         sortBy: '$.sortBy',
         sortDir: '$.sortDir',
@@ -68,10 +67,10 @@ export const tasksLayout: LayoutNode = {
           ],
         },
         columns: [
-          { label: '', cell: { kind: 'check', key: 'done', ref: 'toggle' } },
-          { label: 'Task', sort: 'tasks.title', cell: { kind: 'primary', key: 'title' } },
-          { label: 'Due', sort: 'tasks.due_date', cell: { kind: 'text', key: 'due_date_display', color: 'secondary' } },
-          { label: 'Created', sort: 'tasks.created_at', cell: { kind: 'text', key: 'created_at', color: 'secondary' } },
+          { label: '', w: 'auto', cell: { kind: 'check', key: 'done', ref: 'toggle' } },
+          { label: 'Task', sort: 'tasks.title', w: 2, cell: { kind: 'primary', key: 'title' } },
+          { label: 'Due', sort: 'tasks.due_date', w: 1, cell: { kind: 'text', key: 'due_date_display', color: 'secondary' } },
+          { label: 'Created', sort: 'tasks.created_at', w: 1, hideNarrow: true, cell: { kind: 'text', key: 'created_at', color: 'secondary' } },
         ],
       },
     },

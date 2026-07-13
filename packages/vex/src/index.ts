@@ -16,6 +16,9 @@ export { createPostgresAdapter } from './adapters/postgres/index.js';
 export { compileFilter, compileFieldOrValue } from './adapters/postgres/operators.js';
 export type { CompilationContext } from './adapters/postgres/operators.js';
 
+// ─── Agent-facing knowledge ──────────────────────────────────
+export { vexGuide } from './guide.js';
+
 // ─── Schemas ─────────────────────────────────────────────────
 export { QuerySchema } from './schemas/query.schema.js';
 export { FilterSchema } from './schemas/filter.schema.js';
@@ -32,14 +35,15 @@ export { createMemoryCache } from './cache/memory.js';
 export { createPostgresCache } from './cache/postgres.js';
 export { createTieredCache } from './cache/tiered.js';
 export { validateEntry } from './cache/validate.js';
-export { computeShapeHash, normalizeShape, computeRequestHash, computeSchemaFingerprint } from './cache/hash.js';
+export { normalizeShape, computeRequestHash, computeSchemaFingerprint, mintFingerprint } from './cache/hash.js';
+export { sweepCache } from './cache/util.js';
 
 // ─── Utils ───────────────────────────────────────────────────
 export { buildValidationContext, resolveParams } from './utils/context.js';
 
 // ─── Handler ────────────────────────────────────────────────
-export { handleDiscovery, handleQuery } from './handler.js';
-export type { VexHandlerConfig, DiscoveryResponse, QueryResult } from './handler.js';
+export { handleDiscovery, handleQuery, handleFingerprintPatch, handleFingerprintDelete } from './handler.js';
+export type { VexHandlerConfig, DiscoveryResponse, DiscoveryFingerprint, QueryResult } from './handler.js';
 
 // ─── Events ─────────────────────────────────────────────────
 export type { VexEvent, VexEventHandler } from './events.js';
@@ -59,7 +63,7 @@ export type { QueryRequest, QueryResponse, QueryErrorResponse, QueryErrorCode, C
 export type { DatabaseAdapter, AdapterCapabilities, CompiledQuery, ParamSlot, BoundParams, Row, IntrospectOptions } from './adapters/adapter.types.js';
 export type { PostgresAdapterConfig, PgPool } from './adapters/postgres/index.js';
 export type { ScopePolicy, ScopeEntityRule, ScopeRule, ScopeMatch, ScopeSet, ScopeValues } from './scope/scope.types.js';
-export type { CacheBackend, CacheEntry, OkCacheEntry, UnsatisfiableCacheEntry, CacheMode } from './cache/cache.types.js';
+export type { CacheBackend, CacheEntry, OkCacheEntry, UnsatisfiableCacheEntry } from './cache/cache.types.js';
 export type { PostgresCacheConfig, PostgresCache } from './cache/postgres.js';
 export type { TieredCacheConfig, TieredCache, WarmupMode } from './cache/tiered.js';
 export type { ResolvedQuery, ResolvedSource, ResolvedField, ResolvedJoin, ResolvedFilter, ResolvedSemantic, AnalysisResult, AnalysisConfig, TestResult } from './engine/engine.types.js';

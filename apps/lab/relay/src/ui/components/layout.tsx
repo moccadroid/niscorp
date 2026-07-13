@@ -5,7 +5,9 @@ import { cx } from '../lib/cx';
 import { ALIGN, BG, JUSTIFY, LINE, border, dim } from '../lib/tokens';
 
 // Layout primitives — Box, Stack, Row, Grid. Thin styled divs that turn JSON
-// props into inline styles. No feature logic.
+// props into inline styles. No feature logic. Layouts NEVER pass classes or
+// CSS strings: props are simple semantic values; any kit class is applied
+// internally by a component that owns it.
 
 // ─── Box ───────────────────────────────────────────────────
 const BoxProps = z
@@ -23,7 +25,7 @@ const BoxProps = z
     center: z.boolean().optional(),
     width: dim,
     h: dim,
-    class: z.string().optional().describe('A CSS class from the kit (ui.css), e.g. "rl-dialog". Escape hatch for kit chrome.'),
+    shrink: z.boolean().optional().describe('Allow this flex child to shrink below its content (so an inner scroll area works).'),
   })
   .strict();
 
@@ -41,7 +43,7 @@ export const Box: NovaComponent<z.infer<typeof BoxProps>> = ({
   center,
   width,
   h,
-  class: cls,
+  shrink,
   children,
 }) => {
   // Pin to the bottom as content grows — re-runs every render (no deps), so each
@@ -72,15 +74,16 @@ export const Box: NovaComponent<z.infer<typeof BoxProps>> = ({
     ...(scroll === true ? { overflow: 'auto', minHeight: 0 } : {}),
     ...(width !== undefined ? { width } : {}),
     ...(h !== undefined ? { height: h } : {}),
+    ...(shrink === true ? { minWidth: 0, minHeight: 0 } : {}),
   };
   return (
-    <div ref={scrollRef} className={cls} style={style}>
+    <div ref={scrollRef} style={style}>
       {children}
     </div>
   );
 };
 Box.meta = {
-  description: 'Styling container: padding, background, border (true or a side), radius, glow, or a kit `class`.',
+  description: 'Styling container: padding, background, border (true or a side), radius, glow.',
   propsSchema: BoxProps,
 };
 
@@ -93,7 +96,7 @@ const StackProps = z
     grow: z.boolean().optional(),
     scroll: z.boolean().optional(),
     h: dim,
-    class: z.string().optional().describe('A CSS class from the kit (e.g. "rl-min0" for a flex child that must shrink/scroll).'),
+    shrink: z.boolean().optional().describe('Allow this flex child to shrink below its content (so an inner scroll area works).'),
   })
   .strict();
 
@@ -104,11 +107,10 @@ export const Stack: NovaComponent<z.infer<typeof StackProps>> = ({
   grow,
   scroll,
   h,
-  class: cls,
+  shrink,
   children,
 }) => (
   <div
-    className={cls}
     style={{
       display: 'flex',
       flexDirection: 'column',
@@ -117,7 +119,8 @@ export const Stack: NovaComponent<z.infer<typeof StackProps>> = ({
       alignItems: align !== undefined ? ALIGN[align] : undefined,
       flex: grow === true ? 1 : undefined,
       overflow: scroll === true ? 'auto' : undefined,
-      minHeight: scroll === true ? 0 : undefined,
+      minHeight: scroll === true || shrink === true ? 0 : undefined,
+      minWidth: shrink === true ? 0 : undefined,
       height: h,
     }}
   >
@@ -136,7 +139,7 @@ const RowProps = z
     grow: z.boolean().optional(),
     wrap: z.boolean().optional(),
     h: dim,
-    class: z.string().optional().describe('A CSS class from the kit (e.g. "rl-min0" for a flex child that must shrink/scroll).'),
+    shrink: z.boolean().optional().describe('Allow this flex child to shrink below its content (so an inner scroll area works).'),
   })
   .strict();
 
@@ -148,11 +151,10 @@ export const Row: NovaComponent<z.infer<typeof RowProps>> = ({
   grow,
   wrap,
   h,
-  class: cls,
+  shrink,
   children,
 }) => (
   <div
-    className={cls}
     style={{
       display: 'flex',
       flexDirection: 'row',
@@ -163,6 +165,8 @@ export const Row: NovaComponent<z.infer<typeof RowProps>> = ({
       flex: grow === true ? 1 : undefined,
       flexWrap: wrap === true ? 'wrap' : undefined,
       height: h,
+      minWidth: shrink === true ? 0 : undefined,
+      minHeight: shrink === true ? 0 : undefined,
     }}
   >
     {children}
@@ -176,17 +180,16 @@ Row.meta = { description: 'Horizontal flex row with a gap.', propsSchema: RowPro
 // trigger (which can then push/replace it onto another canvas).
 const GridProps = z
   .object({
-    template: z.string().optional(),
-    columns: z.number().optional(),
+    weights: z
+      .array(z.union([z.number(), z.literal('auto')]))
+      .optional()
+      .describe('One entry per column: a number is a flexible fraction (2 = twice as wide as 1), "auto" hugs content.'),
+    columns: z.number().optional().describe('Equal-width column count (ignored when weights is set).'),
     gap: z.number().optional(),
     align: z.string().optional(),
     hover: z.boolean().optional(),
     selected: z.boolean().optional().describe('Marks the row as selected (e.g. the record open in the detail panel).'),
     border,
-    class: z
-      .string()
-      .optional()
-      .describe('A CSS class from the kit (ui.css) that defines the columns — e.g. "rl-cols-deals". When set (and no `template`), the columns come from CSS, so they can reflow responsively per container width.'),
     value: z
       .unknown()
       .optional()
@@ -197,28 +200,30 @@ const GridProps = z
 type GridP = z.infer<typeof GridProps> & { novaRef?: string; children?: ReactNode };
 
 export const Grid: NovaComponent<z.infer<typeof GridProps>> = ({
-  template,
+  weights,
   columns,
   gap,
   align,
   hover,
   selected,
   border,
-  class: cls,
   value,
   novaRef,
   children,
 }: GridP) => {
   const dispatch = useNovaDispatch();
   const clickable = novaRef !== undefined;
-  // Columns come from `template`, else an explicit `columns` count, else a CSS
-  // `class` (left unset inline so the class — and its media/container queries —
-  // wins), else a 2-up default.
+  // Columns come from `weights` (fractions/auto), else an equal `columns`
+  // count, else a 2-up default.
   const cols =
-    template ?? (columns !== undefined ? `repeat(${columns}, 1fr)` : cls !== undefined ? undefined : 'repeat(2, 1fr)');
+    weights !== undefined
+      ? weights.map((w) => (w === 'auto' ? 'auto' : `${w}fr`)).join(' ')
+      : columns !== undefined
+        ? `repeat(${columns}, 1fr)`
+        : 'repeat(2, 1fr)';
   return (
     <div
-      className={cx(cls, hover === true && 'rl-rowhover', selected === true && 'rl-rowselected')}
+      className={cx(hover === true && 'rl-rowhover', selected === true && 'rl-rowselected')}
       style={{
         display: 'grid',
         gridTemplateColumns: cols,
@@ -237,7 +242,7 @@ export const Grid: NovaComponent<z.infer<typeof GridProps>> = ({
 };
 Grid.meta = {
   description:
-    'CSS grid. `template` sets columns; `hover` highlights rows; with a `ref` it is clickable and emits its `value`.',
+    'CSS grid. `weights` sets column proportions (numbers = fractions, "auto" hugs); `hover` highlights rows; with a `ref` it is clickable and emits its `value`.',
   propsSchema: GridProps,
 };
 
@@ -278,6 +283,19 @@ export const Popover: NovaComponent<z.infer<typeof PopoverProps>> = ({
   );
 };
 Popover.meta = {
-  description: 'Positioning anchor for a floating panel (.rl-popover__panel); `closeRef` dismisses on outside click.',
+  description: 'Positioning anchor for a floating panel (a PopoverPanel child); `closeRef` dismisses on outside click.',
   propsSchema: PopoverProps,
+};
+
+// ─── PopoverPanel ──────────────────────────────────────────
+const PopoverPanelProps = z.object({}).strict();
+
+export const PopoverPanel: NovaComponent<z.infer<typeof PopoverPanelProps>> = ({
+  children,
+}: z.infer<typeof PopoverPanelProps> & { children?: ReactNode }) => (
+  <div className="rl-popover__panel">{children}</div>
+);
+PopoverPanel.meta = {
+  description: 'The floating panel inside a Popover — positioned beneath the trigger.',
+  propsSchema: PopoverPanelProps,
 };

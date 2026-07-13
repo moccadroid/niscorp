@@ -9,8 +9,10 @@ const HttpEndpointSchema = z
       .unknown()
       .optional()
       .describe(
-        'Transform config run by the injected evaluator over the action data to build the ' +
-          "request body. Static parts are literal; dynamic parts use the evaluator's ops. " +
+        'Transform config run by the injected evaluator over the ACTION DATA to build the ' +
+          'request body — EVALUATED ON EVERY CALL, so body values can follow screen state. ' +
+          'Static parts are literal JSON; a dynamic part is an evaluator op over the data root, ' +
+          'e.g. { "q": { "$ref": "$.search" } } makes body field q carry the current $.search each call. ' +
           'Requires an injected transform.',
       ),
     response: z

@@ -108,15 +108,12 @@ describe('express adapter', () => {
       expect(result.statusCode).toBeGreaterThanOrEqual(400);
     });
 
-    it('reads cache mode from query', async () => {
+    it('replaying an unknown fingerprint is a 404 cache miss', async () => {
       const handler = vex({ engine });
       const { res, result } = mockRes();
-      await handler(
-        mockReq('POST', { shape: [{ id: 0 }], context: {} }, { cache: 'only' }),
-        res,
-      );
+      await handler(mockReq('POST', { fingerprint: 'nope/nothing' }), res);
 
-      expect(result.statusCode).toBeGreaterThanOrEqual(400);
+      expect(result.statusCode).toBe(404);
       expect((result.body as Record<string, unknown>)['error']).toBe('cache_miss');
     });
   });
@@ -129,13 +126,23 @@ describe('express adapter', () => {
 
       expect(result.statusCode).toBe(405);
     });
+  });
 
-    it('returns 405 for DELETE', async () => {
+  describe('fingerprint management', () => {
+    it('DELETE without a fingerprint in the body is a 400', async () => {
       const handler = vex({ engine });
       const { res, result } = mockRes();
-      await handler(mockReq('DELETE'), res);
+      await handler(mockReq('DELETE', {}), res);
 
-      expect(result.statusCode).toBe(405);
+      expect(result.statusCode).toBe(400);
+    });
+
+    it('PATCH on an unknown fingerprint is a 404', async () => {
+      const handler = vex({ engine });
+      const { res, result } = mockRes();
+      await handler(mockReq('PATCH', { fingerprint: 'nope/nothing', protected: true }), res);
+
+      expect(result.statusCode).toBe(404);
     });
   });
 

@@ -1,10 +1,9 @@
 import type { FunctionHandler, Shell } from '@niscorp/nova';
-import { runAgentStandalone } from '@niscorp/cortex';
-import { buildContext } from './context';
+import type { Message } from '@niscorp/signal';
 import { makeTools, type Turn } from './tools';
 import { rayAgent } from './agent';
-import { createGroqClient, getKey, setKey } from '../llm/groq';
-import { traceStore, traced, type TraceStep } from './trace';
+import { createLlmClient, getKey, setKey } from '../llm';
+import { traceStore, traceWiring, type TraceStep } from './trace';
 import { ensureCurrent, newSession, switchTo, setMessages, sessionList, type ChatMessage } from './sessions';
 
 const messagesOf = (data: Record<string, unknown>): ChatMessage[] =>
@@ -22,11 +21,19 @@ const getShell = (): Shell => {
   return boundShell;
 };
 
+// The chat transcript IS the run input (caller-owned history, per cortex v2):
+// each stored line becomes a user/assistant message; the just-typed user line
+// is already the last entry. SCREEN + ACTIONS ride the agent's context deps.
+const toTranscript = (messages: ChatMessage[]): Message[] =>
+  messages.map((m): Message =>
+    m.role === 'user' ? { role: 'user', content: m.text } : { role: 'assistant', content: m.text },
+  );
+
 // The agent as a Nova function. The assistant action calls `ray.run` with its
 // data (the message transcript so far, including the just-typed user line); this
-// builds the live context, runs the standalone Cortex agent (whose tools drive
-// the same shell), persists the exchange to the current session, and returns the
-// reply text (+ a tool-call trace when debug is on) for Nova to write into the chat.
+// runs the cortex agent (whose tools drive the same shell), persists the exchange
+// to the current session, and returns the reply text (+ the tool-call trace) for
+// Nova to write into the chat.
 export const rayRun: FunctionHandler = async (data) => {
   const key = getKey();
   if (key === undefined) return { text: 'No Groq API key set yet — click the 🔑 button to add one.', trace: [], ms: 0 };
@@ -35,32 +42,31 @@ export const rayRun: FunctionHandler = async (data) => {
   const shell = getShell();
   const turn: Turn = {};
   const messages = messagesOf(data);
-  const transcript = messages.map((m) => `${m.role === 'user' ? 'User' : 'Ray'}: ${m.text}`).join('\n');
-  const input = `${buildContext(shell)}\n\nConversation:\n${transcript}\n\nRay:`;
 
   // Always capture the trace — tool calls are shown in the chat regardless of the
   // debug toggle (which only governs the expandable JSON detail in RayTrace).
   const trace: TraceStep[] = [];
-  const tools = traced(makeTools(shell, turn), trace);
+  const tools = makeTools(shell, turn);
+  const wiring = traceWiring(tools, trace);
   traceStore.begin();
   try {
-    const result = await runAgentStandalone<string>(rayAgent, input, {
-      llm: createGroqClient(key),
+    const result = await rayAgent.run(toTranscript(messages), {
+      llm: createLlmClient(key),
+      deps: { shell },
       tools,
-      // A Ray turn can fan out to several Vex queries, each running nested LLM
-      // agents (DSL synthesis + reshape) on a cache miss — well past the 60s
-      // cortex default. Grant the run 5 minutes.
-      manifold: { defaultBudget: { maxDurationMs: 5 * 60_000 } },
-    });
+      onEvent: wiring.onEvent,
+      onToolResult: [wiring.onToolResult],
+    }).result;
     if (!result.ok) throw new Error(result.error.message);
 
     const current = ensureCurrent();
     const ms = Date.now() - startedAt;
     const view = turn.pendingView;
+    const text = result.output.response ?? '';
     // Persist the trace + duration + any rendered view with the message — always,
     // regardless of the debug toggle (visibility ≠ persistence). Restores on reopen.
-    setMessages(current.id, [...messages, { role: 'ray', text: result.data, trace, ms, view }]);
-    return { text: result.data, trace, ms, view };
+    setMessages(current.id, [...messages, { role: 'ray', text, trace, ms, view }]);
+    return { text, trace, ms, view };
   } finally {
     traceStore.end();
   }

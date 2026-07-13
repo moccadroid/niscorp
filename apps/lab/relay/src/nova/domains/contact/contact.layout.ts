@@ -21,8 +21,8 @@ const activityRow: LayoutNode = {
   props: { gap: 10, align: 'center' },
   children: [
     {
-      component: 'Box',
-      props: { class: 'rl-actdot rl-actdot--{{$.a.tone}}' },
+      component: 'ActivityDot',
+      props: { tone: '$.a.tone' },
       children: {
         if: { $eq: ['$.a.type', 'call'] },
         then: { component: 'Icon', props: { name: 'phone', size: 14 } },

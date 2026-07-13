@@ -36,8 +36,7 @@ export const topbarLayout: LayoutNode = {
               {
                 if: '$.search',
                 then: {
-                  component: 'Box',
-                  props: { class: 'rl-popover__panel' },
+                  component: 'PopoverPanel',
                   children: {
                     if: '$.results.length',
                     then: {

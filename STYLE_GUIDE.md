@@ -136,6 +136,12 @@ Plain `name.ts` is fine when the file's role is obvious from context or when it'
 | Factories | `create` prefix | `createShell`, `createMessageBus` |
 | Type guards | `is` prefix | `isComponentNode`, `isBinding` |
 
+Names carry their SUBJECT — the reader must never have to open the body to learn what a thing operates on or emits:
+
+- **A producer is named for the block it emits** — `componentPalette`, `actionCatalog`, `transformDsl`, `editingGuide`. If the name and the emitted block's heading disagree, one of them is wrong. Annotate definitions `satisfies Producer`.
+- **A function that transforms X carries X in its name** — `namespaceActionId(def)`, never `namespaced(def)`. Same for locals: `buildResult`, not `built`; `builtAction`, not `def`.
+- **Agent files are `<name>.agent.ts` exporting `<name>Agent`.** Producers live in `producers.ts` (agent-domain) or `knowledge.ts` (app-domain) — never inside agent files. A lone producer in an agent file is a filing error, not a convention.
+
 ---
 
 ## Patterns
@@ -169,6 +175,11 @@ export const createShell = (config: ShellConfig, deps: ShellDeps): Shell => { ..
 // no
 export const createShell = (config: ShellConfig, bus: MessageBus, reg: Registry, eb?: EventBus): Shell => { ... };
 ```
+
+**Model-boundary schemas** (tool inputs, envelope fields, anything a model fills in):
+
+- Models say `null` for "absent". Every optional field is `.nullish()`, never bare `.optional()`; code normalizes `?? undefined`. A field that is genuinely REQUIRED stays strict — `null` there is a real failure.
+- No `.transform()` in tool input schemas — they serialize to JSON Schema for the wire and `z.toJSONSchema` throws on transforms. Normalize inside `execute`.
 
 ---
 

@@ -14,16 +14,14 @@ export const quickviewFragment: ActionFragment = {
   layout: {
     component: 'Overlay',
     children: {
-      component: 'Box',
-      props: { class: 'rl-dialog rl-dialog--wide' },
+      component: 'Dialog',
+      props: { size: 'wide' },
       children: [
         {
-          component: 'Box',
-          props: { class: 'rl-dialog__head' },
+          component: 'DialogHead',
           children: [
             {
-              component: 'Box',
-              props: { class: 'rl-dialog__title' },
+              component: 'DialogTitle',
               children: '$.quickviewTitle',
             },
             {
@@ -47,8 +45,7 @@ export const quickviewFragment: ActionFragment = {
           ],
         },
         {
-          component: 'Box',
-          props: { class: 'rl-dialog__body' },
+          component: 'DialogBody',
           children: { slot: 'body' },
         },
       ],

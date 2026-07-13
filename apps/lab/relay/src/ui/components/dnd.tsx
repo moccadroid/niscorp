@@ -3,27 +3,27 @@ import { z } from 'zod';
 import { useNovaDispatch, type NovaComponent } from '@niscorp/nova/react';
 import { cx } from '../lib/cx';
 
-// Drag-and-drop primitives. The browser drag mechanics stay here; only the
-// SEMANTIC outcomes reach Nova — a `Draggable` emits `ui:click` on a plain click
-// (so a card is still openable) and the dragged id rides in the native
-// `dataTransfer`; a `DropZone` emits `ui:drop` carrying `{ id, toStage }` so a
-// trigger can act. No DnD library, no raw DOM events plumbed into Nova.
+// Kanban drag-and-drop. The browser drag mechanics stay here; only the
+// SEMANTIC outcomes reach Nova — a `KanbanCard` emits `ui:click` on a plain
+// click (so a card is still openable) and the dragged id rides in the native
+// `dataTransfer`; `KanbanCards` (a column's drop zone) emits `ui:drop`
+// carrying `{ id, toStage }` so a trigger can act. The kit card/zone chrome
+// is applied internally — layouts declare no classes.
 
-// ─── Draggable ─────────────────────────────────────────────
-const DraggableProps = z
+// ─── KanbanCard ────────────────────────────────────────────
+const KanbanCardProps = z
   .object({
     value: z.unknown().optional().describe('The record id — drag payload (dataTransfer) and click payload.'),
-    class: z.string().optional().describe('A CSS class from the kit (e.g. "rl-kanban__card").'),
   })
   .strict();
 
-type DraggableP = z.infer<typeof DraggableProps> & { novaRef?: string; children?: ReactNode };
+type KanbanCardP = z.infer<typeof KanbanCardProps> & { novaRef?: string; children?: ReactNode };
 
-export const Draggable: NovaComponent<z.infer<typeof DraggableProps>> = ({ value, class: cls, novaRef, children }: DraggableP) => {
+export const KanbanCard: NovaComponent<z.infer<typeof KanbanCardProps>> = ({ value, novaRef, children }: KanbanCardP) => {
   const dispatch = useNovaDispatch();
   return (
     <div
-      className={cls}
+      className="rl-kanban__card"
       draggable
       onDragStart={(e) => {
         e.dataTransfer.setData('text/plain', String(value ?? ''));
@@ -37,19 +37,18 @@ export const Draggable: NovaComponent<z.infer<typeof DraggableProps>> = ({ value
     </div>
   );
 };
-Draggable.meta = { description: 'A draggable + clickable wrapper. Click fires ui:click; drag carries `value` (the id) for a DropZone.', propsSchema: DraggableProps };
+KanbanCard.meta = { description: 'A draggable + clickable kanban card. Click fires ui:click; drag carries `value` (the id) for a KanbanCards zone.', propsSchema: KanbanCardProps };
 
-// ─── DropZone ──────────────────────────────────────────────
-const DropZoneProps = z
+// ─── KanbanCards ───────────────────────────────────────────
+const KanbanCardsProps = z
   .object({
     value: z.unknown().optional().describe('Where a drop lands (e.g. the stage); sent as `toStage`.'),
-    class: z.string().optional(),
   })
   .strict();
 
-type DropZoneP = z.infer<typeof DropZoneProps> & { novaRef?: string; children?: ReactNode };
+type KanbanCardsP = z.infer<typeof KanbanCardsProps> & { novaRef?: string; children?: ReactNode };
 
-export const DropZone: NovaComponent<z.infer<typeof DropZoneProps>> = ({ value, class: cls, novaRef, children }: DropZoneP) => {
+export const KanbanCards: NovaComponent<z.infer<typeof KanbanCardsProps>> = ({ value, novaRef, children }: KanbanCardsP) => {
   const dispatch = useNovaDispatch();
   // Light up while a card is dragged over. A depth counter (enter++/leave--)
   // survives the dragenter/dragleave the nested cards fire, so the highlight
@@ -57,7 +56,7 @@ export const DropZone: NovaComponent<z.infer<typeof DropZoneProps>> = ({ value, 
   const [depth, setDepth] = useState(0);
   return (
     <div
-      className={cx(cls, depth > 0 && 'rl-dropover')}
+      className={cx('rl-kanban__cards', depth > 0 && 'rl-dropover')}
       onDragEnter={(e) => {
         e.preventDefault();
         setDepth((d) => d + 1);
@@ -78,4 +77,4 @@ export const DropZone: NovaComponent<z.infer<typeof DropZoneProps>> = ({ value, 
     </div>
   );
 };
-DropZone.meta = { description: 'A drop target. On drop, fires ui:drop with { id (the dragged value), toStage (this zone\'s value) }.', propsSchema: DropZoneProps };
+KanbanCards.meta = { description: 'A kanban column\'s card list + drop target. On drop, fires ui:drop with { id (the dragged value), toStage (this zone\'s value) }.', propsSchema: KanbanCardsProps };

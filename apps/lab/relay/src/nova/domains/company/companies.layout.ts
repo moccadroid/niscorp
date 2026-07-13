@@ -3,7 +3,7 @@ import type { LayoutNode } from '@niscorp/nova';
 // Companies list — search toolbar (Nova) over the reusable `Table` primitive.
 export const companiesLayout: LayoutNode = {
   component: 'Box',
-  props: { class: 'rl-listcard' },
+  props: {},
   children: [
     {
       component: 'Box',
@@ -29,7 +29,6 @@ export const companiesLayout: LayoutNode = {
       props: {
         rows: '$.rows',
         loading: '$.loading',
-        cols: 'rl-cols-companies',
         rowRef: 'row',
         rowKey: 'company_id',
         selectedId: '$.highlight_id',
@@ -48,10 +47,10 @@ export const companiesLayout: LayoutNode = {
           ],
         },
         columns: [
-          { label: 'Company', sort: 'companies.name', cell: { kind: 'avatarName', key: 'name' } },
-          { label: 'Industry', sort: 'companies.industry', cell: { kind: 'badge', key: 'industry' } },
-          { label: 'Size', sort: 'companies.size', cell: { kind: 'text', key: 'size', color: 'dim' } },
-          { label: 'Domain', sort: 'companies.domain', cell: { kind: 'text', key: 'domain', mono: true, size: 'sm', color: 'dim' } },
+          { label: 'Company', sort: 'companies.name', w: 1.4, cell: { kind: 'avatarName', key: 'name' } },
+          { label: 'Industry', sort: 'companies.industry', w: 1, cell: { kind: 'badge', key: 'industry' } },
+          { label: 'Size', sort: 'companies.size', w: 1, hideNarrow: true, cell: { kind: 'text', key: 'size', color: 'dim' } },
+          { label: 'Domain', sort: 'companies.domain', w: 1.2, hideNarrow: true, cell: { kind: 'text', key: 'domain', mono: true, size: 'sm', color: 'dim' } },
         ],
       },
     },

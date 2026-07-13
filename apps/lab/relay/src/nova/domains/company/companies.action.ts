@@ -15,7 +15,7 @@ export const companiesAction: ActionDefinition = {
   data: { search: '', rows: [], loading: true, highlight_id: '', menuOpenId: '', sortBy: 'companies.name', sortDir: 'asc', pendingDeleteId: '', pendingDeleteLabel: '' },
   layout: companiesLayout,
   endpoints: {
-    load:   { url: '/api/companies/vex?cache=use', method: 'POST', request: listCompaniesPrism, response: resultPrism, target: 'rows' },
+    load:   { url: '/api/companies/vex', method: 'POST', request: listCompaniesPrism, response: resultPrism, target: 'rows' },
     remove: { url: '/api/companies/vex',           method: 'POST', request: deleteCompanyPrism },
   },
   // On resume (a drilled record popped back to the list) clear the row highlight —

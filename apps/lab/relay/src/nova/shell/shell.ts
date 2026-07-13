@@ -1,4 +1,4 @@
-import { createShell, type ActionDefinition } from '@niscorp/nova';
+import { createShell } from '@niscorp/nova';
 import { evaluate } from '@niscorp/prism';
 import { buildRegistry } from '../../ui';
 import { vexFetch } from '../../vex/http';
@@ -6,42 +6,15 @@ import { CURRENT_USER_ID, CURRENT_DATE } from '@relay/vex/runtime';
 import { frameLayout } from './frame.layout';
 import { mainSplitLayout } from './main-split.layout';
 import { mainStackLayout, asideStackLayout } from './stack-nav.layout';
-import { confirmDeleteAction } from '../shared/confirm-delete.action';
-import { sidebarAction } from '../chrome/sidebar.action';
-import { topbarAction } from '../chrome/topbar.action';
-import { homeAction } from '../surfaces/home/home.action';
-import { settingsAction } from '../surfaces/settings/settings.action';
-import { placeholderAction } from '../surfaces/placeholder/placeholder.action';
-import { assistantAction } from '../surfaces/assistant/assistant.action';
+import { keysLoad, keysSave } from '../../llm/keys';
 import { rayRun, raySetKey, rayLoad, rayNewSession, raySwitchSession, bindShell, getDebug, setDebug, clearAll, storageEstimate } from '../../ray';
-// Domains — one barrel each: the actions + their read/write prism seams.
-import { dealsAction, dealAction, dealFormAction } from '../domains/deal';
-import { contactsAction, contactAction, contactFormAction } from '../domains/contact';
-import { companiesAction, companyAction, companyFormAction } from '../domains/company';
-import { tasksAction, taskFormAction } from '../domains/task';
+import { ACTIONS } from './actions';
 import { modalFragment } from '../fragments/modal.fragment';
 import { quickviewFragment } from '../fragments/quickview.fragment';
 import { panelFragment } from '../fragments/panel.fragment';
 import { dockFragment } from '../fragments/dock.fragment';
 
-// Every screen the shell can show, by id. Each is a literal, serializable
-// ActionDefinition (layout included) — DB-ready.
-export const ACTIONS: Record<string, ActionDefinition> = Object.fromEntries(
-  [
-    sidebarAction,
-    topbarAction,
-    homeAction,
-    settingsAction,
-    confirmDeleteAction,
-    placeholderAction,
-    assistantAction,
-    // Entities
-    contactsAction, contactAction, contactFormAction,
-    companiesAction, companyAction, companyFormAction,
-    dealsAction, dealAction, dealFormAction,
-    tasksAction, taskFormAction,
-  ].map((a) => [a.id, a]),
-);
+export { ACTIONS } from './actions';
 
 // The Relay shell. The `frameLayout` is fixed chrome that places sidebar /
 // topbar and leaves `main` + `modal` as LayoutRefs. `aside` and `modal` start
@@ -71,6 +44,9 @@ export const shell = createShell({
     // calls. `ray.run` runs the Cortex agent; `ray.setKey` stores the Groq key.
     'ray.run': rayRun,
     'ray.setKey': raySetKey,
+    // The API-keys modal (keys.action.ts): load current keys, save both.
+    'keys.load': keysLoad,
+    'keys.save': keysSave,
     'ray.load': rayLoad,
     'ray.newSession': rayNewSession,
     'ray.switch': raySwitchSession,

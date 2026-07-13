@@ -46,7 +46,7 @@ export const assistantAction: ActionDefinition = {
   triggers: [
     { event: 'ui:model', ref: 'ray-draft', do: [{ set: 'draft', value: '@event.payload' }] },
     { event: 'ui:click', ref: 'ray-close', do: [{ pop: true }] },
-    { event: 'ui:click', ref: 'ray-set-key', do: [{ call: 'setKey', onSuccess: [{ push: 'messages', value: { role: 'ray', text: '$.keyStatus' } }] }] },
+    { event: 'ui:click', ref: 'ray-set-key', do: [{ push: { action: 'keys', canvas: 'modal', with: ['modal'] } }] },
     { event: 'ui:click', ref: 'ray-new-session', do: [{ call: 'newSession', onSuccess: fromSession }] },
     { event: 'ui:model', ref: 'ray-session-select', do: [{ set: 'currentId', value: '@event.payload' }, { call: 'switchSession', onSuccess: fromSession }] },
     { event: 'ui:click', ref: 'ray-send', do: SEND },

@@ -12,20 +12,17 @@ export const modalFragment: ActionFragment = {
   layout: {
     component: 'Overlay',
     children: {
-      component: 'Box',
-      props: { class: 'rl-dialog' },
+      component: 'Dialog',
       children: [
         {
-          component: 'Box',
-          props: { class: 'rl-dialog__head' },
+          component: 'DialogHead',
           children: [
-            { component: 'Box', props: { class: 'rl-dialog__title' }, children: '$.modalTitle' },
+            { component: 'DialogTitle', children: '$.modalTitle' },
             { component: 'Button', ref: 'close', props: { variant: 'ghost', size: 'sm' }, children: '✕' },
           ],
         },
         {
-          component: 'Box',
-          props: { class: 'rl-dialog__body' },
+          component: 'DialogBody',
           children: { slot: 'body' },
         },
       ],

@@ -1,0 +1,174 @@
+/* ═══════════════════════════════════════════════════════════
+   Fable kit classes. The primitives reference these; layouts
+   reach them only through a Box/Stack `class` prop.
+   ═══════════════════════════════════════════════════════════ */
+
+/* Flex child that must shrink so inner regions scroll. */
+.fb-min0 { min-width: 0; min-height: 0; }
+
+/* The centered content column of the main canvas. */
+.fb-main { max-width: 880px; margin: 0 auto; padding: 22px 20px 56px; }
+
+/* ─── Buttons ─────────────────────────────────────────────── */
+.fb-btn {
+  display: inline-flex; align-items: center; gap: 7px;
+  padding: 6px 13px; border-radius: var(--r-md);
+  border: 1px solid var(--border-2); background: var(--surface-2); color: var(--text);
+  font-size: var(--fs-sm); font-weight: 500; cursor: pointer;
+  transition: background var(--t-fast) var(--ease), border-color var(--t-fast) var(--ease);
+}
+.fb-btn:hover { background: var(--hover); border-color: var(--border-strong); }
+.fb-btn--primary { background: var(--accent); border-color: transparent; color: var(--accent-fg); }
+.fb-btn--primary:hover { background: var(--accent-hover); }
+.fb-btn--primary:active { background: var(--accent-press); }
+.fb-btn--ghost { background: transparent; border-color: transparent; color: var(--text-dim); }
+.fb-btn--ghost:hover { background: var(--hover); color: var(--text); }
+.fb-btn--danger { background: var(--red-soft); border-color: transparent; color: var(--red); }
+.fb-btn--danger:hover { background: rgba(255, 106, 95, 0.24); }
+.fb-btn--sm { padding: 3px 8px; border-radius: var(--r-sm); }
+
+/* ─── Segmented tabs ──────────────────────────────────────── */
+.fb-seg {
+  display: inline-flex; gap: 2px; padding: 2px;
+  background: var(--bg-sunken); border: 1px solid var(--border); border-radius: var(--r-md);
+}
+.fb-seg__item {
+  padding: 3px 11px; border: 0; border-radius: var(--r-sm);
+  background: transparent; color: var(--text-dim);
+  font-size: var(--fs-sm); font-weight: 500; cursor: pointer;
+  transition: background var(--t-fast) var(--ease), color var(--t-fast) var(--ease);
+}
+.fb-seg__item:hover { color: var(--text); }
+.fb-seg__item--active { background: var(--surface-2); color: var(--text); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.4); }
+
+/* ─── Badge ───────────────────────────────────────────────── */
+.fb-badge {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 1px 8px; border-radius: 999px;
+  background: var(--slate-soft); color: var(--slate);
+  font-size: var(--fs-xs); font-weight: 550; text-transform: capitalize;
+}
+.fb-badge--accent { background: var(--accent-soft); color: var(--accent-hover); }
+.fb-badge--green { background: var(--green-soft); color: var(--green); }
+.fb-badge--amber { background: var(--amber-soft); color: var(--amber); }
+.fb-badge--red { background: var(--red-soft); color: var(--red); }
+.fb-badge--blue { background: var(--blue-soft); color: var(--blue); }
+
+/* ─── Form fields ─────────────────────────────────────────── */
+.fb-field { display: flex; flex-direction: column; gap: 5px; flex: 1; }
+.fb-label { font-size: var(--fs-xs); font-weight: 550; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.4px; }
+.fb-label span { color: var(--red); margin-left: 2px; }
+
+.fb-input, .fb-select, .fb-textarea {
+  width: 100%; padding: 7px 10px;
+  background: var(--bg-sunken); color: var(--text);
+  border: 1px solid var(--border-2); border-radius: var(--r-md);
+  font-size: var(--fs-md); font-family: inherit; outline: none;
+  transition: border-color var(--t-fast) var(--ease), box-shadow var(--t-fast) var(--ease);
+}
+.fb-input:focus, .fb-select:focus, .fb-textarea:focus {
+  border-color: var(--accent-line); box-shadow: 0 0 0 3px var(--accent-soft);
+}
+.fb-input::placeholder, .fb-textarea::placeholder { color: var(--text-mute); }
+.fb-textarea { resize: vertical; min-height: 60px; }
+.fb-select { appearance: none; }
+
+.fb-inputwrap { position: relative; display: flex; align-items: center; }
+.fb-inputwrap svg { position: absolute; left: 9px; color: var(--text-mute); pointer-events: none; }
+.fb-inputwrap .fb-input { padding-left: 30px; }
+
+/* Date inputs: match the dark theme's picker icon. */
+.fb-input::-webkit-calendar-picker-indicator { filter: invert(0.6); cursor: pointer; }
+
+/* ─── Stat tiles ──────────────────────────────────────────── */
+.fb-stat {
+  flex: 1; display: flex; flex-direction: column; gap: 2px;
+  padding: 13px 15px;
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg);
+}
+
+/* ─── List card + table ───────────────────────────────────── */
+.fb-listcard {
+  margin-top: 14px;
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg);
+  overflow: hidden;
+}
+
+.fb-cols-todos {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr) 96px 96px 40px;
+  align-items: center; column-gap: 10px;
+  padding: 0 14px;
+}
+
+.fb-tbl__head { border-bottom: 1px solid var(--border); background: var(--bg-sunken); }
+.fb-tbl__hcell {
+  padding: 8px 0; font-size: var(--fs-xs); font-weight: 550;
+  color: var(--text-mute); text-transform: uppercase; letter-spacing: 0.4px;
+}
+.fb-tbl__hcell--end, .fb-tbl__cell--end { text-align: right; }
+.fb-tbl__row { border-bottom: 1px solid var(--border); }
+.fb-tbl__row:last-child { border-bottom: 0; }
+.fb-tbl__cell { padding: 9px 0; min-width: 0; }
+.fb-rowhover { transition: background var(--t-fast) var(--ease); }
+.fb-rowhover:hover { background: var(--hover); }
+
+.fb-tbl__check {
+  appearance: none; width: 16px; height: 16px; margin: 0;
+  border: 1px solid var(--border-strong); border-radius: 5px;
+  background: var(--bg-sunken); cursor: pointer; display: block; position: relative;
+  transition: background var(--t-fast) var(--ease), border-color var(--t-fast) var(--ease);
+}
+.fb-tbl__check:hover { border-color: var(--accent-line); }
+.fb-tbl__check:checked { background: var(--accent); border-color: var(--accent); }
+.fb-tbl__check:checked::after {
+  content: ''; position: absolute; left: 4.5px; top: 1.5px;
+  width: 4px; height: 8px;
+  border: solid var(--accent-fg); border-width: 0 2px 2px 0; transform: rotate(45deg);
+}
+
+.fb-tbl__skel { padding: 12px 14px; border-bottom: 1px solid var(--border); }
+.fb-tbl__empty { padding: 36px 14px; text-align: center; color: var(--text-mute); font-size: var(--fs-sm); }
+.fb-tbl__menu { display: flex; justify-content: flex-end; }
+
+/* ─── Popover + menu ──────────────────────────────────────── */
+.fb-popover { position: relative; display: inline-flex; }
+.fb-menu {
+  min-width: 150px; padding: 4px;
+  background: var(--surface-2); border: 1px solid var(--border-2); border-radius: var(--r-md);
+  box-shadow: var(--shadow);
+}
+.fb-rowmenu { position: absolute; right: 0; top: calc(100% + 4px); z-index: 30; }
+.fb-menu__item {
+  display: flex; align-items: center; gap: 8px; width: 100%;
+  padding: 6px 9px; border: 0; border-radius: var(--r-sm);
+  background: transparent; color: var(--text-2);
+  font-size: var(--fs-sm); text-align: left; cursor: pointer;
+}
+.fb-menu__item:hover { background: var(--hover); color: var(--text); }
+.fb-menu__item--danger { color: var(--red); }
+.fb-menu__item--danger:hover { background: var(--red-soft); color: var(--red); }
+
+/* ─── Overlay + dialog ────────────────────────────────────── */
+.fb-overlay {
+  position: fixed; inset: 0; z-index: 100;
+  display: flex; align-items: flex-start; justify-content: center;
+  padding-top: 14vh;
+  background: rgba(4, 5, 6, 0.62); backdrop-filter: blur(2px);
+}
+.fb-dialog {
+  width: 460px; max-width: calc(100vw - 40px); max-height: 78vh;
+  display: flex; flex-direction: column;
+  background: var(--surface); border: 1px solid var(--border-2); border-radius: var(--r-lg);
+  box-shadow: var(--shadow-lg);
+}
+.fb-dialog__head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 16px; border-bottom: 1px solid var(--border);
+}
+.fb-dialog__title { font-size: var(--fs-lg); font-weight: 620; }
+.fb-dialog__body { padding: 16px; overflow: auto; }
+.fb-dialog__foot { display: flex; justify-content: flex-end; gap: 10px; }
+
+/* The form's own footer row (inside the dialog body). */
+.fb-form__foot { display: flex; justify-content: flex-end; gap: 10px; margin-top: 4px; }

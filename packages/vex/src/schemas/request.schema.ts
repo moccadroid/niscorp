@@ -17,8 +17,14 @@ export const ContextSchema = z
   );
 
 export const QueryRequestSchema = z.object({
+  // The ONE cache identity. Server-minted (`fp_…`) when absent — returned in
+  // meta.cache.fingerprint, an immutable pin. Caller-chosen strings are
+  // mutable named slots: the name is yours, its content follows your request.
+  // Alone → replay-or-error. With intent/shape → hit when the stored request
+  // matches, regenerate-and-replace when it differs (409 when protected).
+  fingerprint: z.string().min(1).optional(),
   intent: z.string().optional(),
-  shape: z.unknown(),
+  shape: z.unknown().optional(),
   context: ContextSchema.default({}),
 });
 
@@ -26,7 +32,11 @@ export type QueryRequest = z.infer<typeof QueryRequestSchema>;
 
 export type CacheMeta = {
   hit: boolean;
-  key?: string;
+  // The entry's identity — minted (`fp_…`) or the caller's own name.
+  fingerprint?: string;
+  // True when this execution regenerated and REPLACED a named slot whose
+  // stored request no longer matched.
+  replaced?: boolean;
   // The intent stored with the cached query (on a hit) or the request's own intent
   // (on a miss) — descriptive only, so a caller can see what the query is for.
   intent?: string;
@@ -77,4 +87,6 @@ export type QueryErrorCode =
   | 'execution_error'
   | 'agent_failed'
   | 'cache_miss'
+  | 'fingerprint_protected'
+  | 'locked'
   | 'unsatisfiable';

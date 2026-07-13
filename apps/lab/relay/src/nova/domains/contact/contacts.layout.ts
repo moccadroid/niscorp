@@ -5,7 +5,7 @@ import type { LayoutNode } from '@niscorp/nova';
 // dotted key. Sort headers, the row `⋯` menu, skeleton + empty are the Table's.
 export const contactsLayout: LayoutNode = {
   component: 'Box',
-  props: { class: 'rl-listcard' },
+  props: {},
   children: [
     {
       component: 'Box',
@@ -31,7 +31,6 @@ export const contactsLayout: LayoutNode = {
       props: {
         rows: '$.rows',
         loading: '$.loading',
-        cols: 'rl-cols-contacts',
         rowRef: 'row',
         rowKey: 'contact_id',
         selectedId: '$.highlight_id',
@@ -50,10 +49,10 @@ export const contactsLayout: LayoutNode = {
           ],
         },
         columns: [
-          { label: 'Name', sort: 'contacts.last_name', cell: { kind: 'avatarName', key: 'name' } },
-          { label: 'Title', sort: 'contacts.title', cell: { kind: 'text', key: 'title', color: 'secondary' } },
-          { label: 'Company', sort: 'companies.name', cell: { kind: 'badge', key: 'company.name' } },
-          { label: 'Email', sort: 'contacts.email', cell: { kind: 'text', key: 'email', mono: true, size: 'sm', color: 'dim' } },
+          { label: 'Name', sort: 'contacts.last_name', w: 1.4, cell: { kind: 'avatarName', key: 'name' } },
+          { label: 'Title', sort: 'contacts.title', w: 1, hideNarrow: true, cell: { kind: 'text', key: 'title', color: 'secondary' } },
+          { label: 'Company', sort: 'companies.name', w: 1.2, cell: { kind: 'badge', key: 'company.name' } },
+          { label: 'Email', sort: 'contacts.email', w: 1.4, hideNarrow: true, cell: { kind: 'text', key: 'email', mono: true, size: 'sm', color: 'dim' } },
         ],
       },
     },

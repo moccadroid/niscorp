@@ -39,6 +39,10 @@ export type {
 // Composition (fragment merge)
 export { composeAction } from './compose';
 
+// Static wiring audit (self-contained definitions — generated actions)
+export { auditAction, collectChannels } from './audit';
+export type { AuditCatalogEntry, AuditOptions, AuditResult, ChannelUsage } from './audit';
+
 // Types — public + internal runtime types are both exported here so
 // the shell (which holds the full runtime) can import them; the
 // package root only re-exports the narrow public type.

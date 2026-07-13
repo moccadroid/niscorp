@@ -1,25 +1,21 @@
-import type { ZodType } from 'zod';
+import { type ZodType } from 'zod';
 import type {
   Message, ContentPart, Tool, SignalOptions, Capabilities,
-  SignalResult, SignalMeta, StreamEvent, StepStreamEvent, StreamOptions,
-  ProviderAdapter, ProviderRequest, ProviderResponse,
-  StepRequest, StepResult, StepToolCall, StepInputMessage, CountInput,
+  SignalResult, StreamEvent, StepStreamEvent, StreamOptions,
+  ProviderAdapter, ProviderRequest, ProviderResponse, Rejection,
+  StepRequest, StepResult, StepToolCall, CountInput,
   EmbedOptions,
 } from './types';
 import type { SignalConfig, CustomProviderConfig } from './config';
 import { SignalError, ErrorCode } from './errors';
 import { providerRegistry, resolveApiKey } from './registry';
-import { createOpenAICompatibleAdapter } from './providers/openai-compatible.adapter';
-import { createAnthropicAdapter } from './providers/anthropic.adapter';
-import { createGoogleAdapter } from './providers/google.adapter';
-import { selectStructuredOutputStrategy, applyStructuredOutput } from './strategy/structured-output';
-import { selectToolCallingStrategy, toolsToProviderFormat } from './strategy/tool-calling';
-import { runNativeToolLoop } from './tools/tool-loop';
-import { runUnifiedSchemaLoop } from './strategy/unified-schema';
-import { validateAndRetry } from './validation/retry';
-import { executeStream } from './stream/execute-stream';
+import { createOpenAICompatibleAdapter } from './adapters/openai-compatible.adapter';
+import { createAnthropicAdapter } from './adapters/anthropic.adapter';
+import { createGoogleAdapter } from './adapters/google.adapter';
 import { executeStepStream } from './stream/execute-step-stream';
-import { asOutput } from './output-trust';
+import { runComplete, runStream } from './run';
+import { resolveWireStrategies, responseStrategies, recoverRejection, type WireStrategy } from './wire/strategies';
+import { routeResponse, routeRejection } from './wire/router';
 
 // ═══════════════════════════════════════════════════════════
 // Signal Type (public interface)
@@ -43,6 +39,12 @@ export type Signal<T = string> = {
   complete: (input: string | ContentPart[]) => Promise<SignalResult<T>>;
   stream: (input: string | ContentPart[], options?: StreamOptions) => AsyncIterable<StreamEvent<T>>;
 
+  // describe(): what this client resolves to — provider, model,
+  // effective capabilities. Never hits the network and never throws
+  // for missing API keys. Orchestrators (cortex) use it to pick
+  // output strategies; previews use it to explain themselves.
+  describe: () => SignalDescription;
+
   // ─── Low-level primitives ─────────────────────────────────
   // step(): one model call, no auto tool execution. The caller
   // owns the loop. Used by @niscorp/cortex which runs its own
@@ -64,6 +66,13 @@ export type Signal<T = string> = {
     (input: string, options?: EmbedOptions): Promise<number[]>;
     (input: string[], options?: EmbedOptions): Promise<number[][]>;
   };
+};
+
+// What a Signal client resolves to, without touching the network.
+export type SignalDescription = {
+  provider: string;              // registry name, or the custom baseUrl
+  model: string | undefined;     // undefined only for custom providers with no model set
+  capabilities: Capabilities;
 };
 
 // ═══════════════════════════════════════════════════════════
@@ -94,11 +103,25 @@ const resolveProvider = (config: SignalConfig): ResolvedProvider => {
   return { model, apiKey, baseUrl: custom.baseUrl, adapterType: custom.adapter ?? 'openai-compatible' };
 };
 
+const FALLBACK_CAPABILITIES: Capabilities = {
+  nativeTools: false,
+  nativeJsonSchema: false,
+  nativeJsonMode: false,
+  toolsWithStructuredOutput: false,
+  validatesToolArgs: false,
+  manglesNestedToolArgs: false,
+  multimodal: false,
+  supportsEmbedding: false,
+};
+
 const resolveCapabilities = (config: SignalConfig): Capabilities => {
-  const defaults: Capabilities = typeof config.provider === 'string'
-    ? providerRegistry[config.provider]?.capabilities ?? { nativeTools: false, nativeJsonSchema: false, nativeJsonMode: false, multimodal: false, supportsEmbedding: false }
-    : { nativeTools: false, nativeJsonSchema: false, nativeJsonMode: false, multimodal: false, supportsEmbedding: false };
-  return { ...defaults, ...config.capabilities };
+  if (typeof config.provider === 'string') {
+    const defaults = providerRegistry[config.provider]?.capabilities ?? FALLBACK_CAPABILITIES;
+    return { ...defaults, ...config.capabilities };
+  }
+  // Custom providers may declare capabilities on the provider config;
+  // instance-level .capabilities() overrides still win.
+  return { ...FALLBACK_CAPABILITIES, ...config.provider.capabilities, ...config.capabilities };
 };
 
 const createAdapter = async (resolved: ResolvedProvider, client: unknown): Promise<ProviderAdapter> => {
@@ -127,172 +150,47 @@ const buildMessages = (config: SignalConfig, input: string | ContentPart[]): Mes
 };
 
 // ═══════════════════════════════════════════════════════════
-// Internal: build meta from execution results
-// ═══════════════════════════════════════════════════════════
-
-const buildMeta = (
-  model: string,
-  usage: { inputTokens: number; outputTokens: number; totalTokens: number },
-  durationMs: number,
-  toolCalls: SignalMeta['toolCalls'],
-  providerRaw: unknown[],
-  providerErrors: SignalMeta['provider']['errors'],
-  retries: number = 0,
-): SignalMeta => ({
-  model,
-  usage,
-  durationMs,
-  retries,
-  toolCalls,
-  provider: {
-    raw: providerRaw.length === 1 ? providerRaw[0] : providerRaw,
-    errors: providerErrors,
-  },
-});
-
-// ═══════════════════════════════════════════════════════════
-// Internal: aggregate usage from multiple responses
-// ═══════════════════════════════════════════════════════════
-
-const aggregateUsage = (responses: ProviderResponse[]): { inputTokens: number; outputTokens: number; totalTokens: number } =>
-  responses.reduce(
-    (acc, r) => ({
-      inputTokens: acc.inputTokens + r.usage.inputTokens,
-      outputTokens: acc.outputTokens + r.usage.outputTokens,
-      totalTokens: acc.totalTokens + r.usage.totalTokens,
-    }),
-    { inputTokens: 0, outputTokens: 0, totalTokens: 0 },
-  );
-
-// ═══════════════════════════════════════════════════════════
-// Internal: parse and validate response content against schema
-// ═══════════════════════════════════════════════════════════
-
-const parseResponse = <T>(content: string, schema: ZodType | undefined): T => {
-  if (!schema || !content) return asOutput<T>(content);
-
-  let json: unknown;
-  try {
-    json = JSON.parse(content);
-  } catch {
-    throw new SignalError(
-      'Response is not valid JSON',
-      ErrorCode.VALIDATION_FAILED,
-      { content: content.slice(0, 200) },
-    );
-  }
-
-  const result = schema.safeParse(json);
-  if (result.success) return result.data as T;
-
-  throw new SignalError(
-    'Response failed schema validation',
-    ErrorCode.VALIDATION_FAILED,
-    {
-      issues: result.error.issues.map((i) => ({ path: i.path.join('.'), message: i.message })),
-      content: content.slice(0, 200),
-    },
-  );
-};
-
-// ═══════════════════════════════════════════════════════════
-// Internal: execute simple completion (no schema, no tools)
-// ═══════════════════════════════════════════════════════════
-
-const executeSimple = async <T>(
-  adapter: ProviderAdapter,
-  model: string,
-  messages: Message[],
-  options: SignalOptions | undefined,
-  start: number,
-): Promise<SignalResult<T>> => {
-  const response = await adapter.chat({ model, messages, options });
-  return {
-    response: asOutput<T>(response.content),
-    history: [...messages, { role: 'assistant', content: response.content }],
-    meta: buildMeta(model, response.usage, Date.now() - start, [], [response.raw], []),
-  };
-};
-
-// ═══════════════════════════════════════════════════════════
-// Internal: execute structured output (schema, no tools)
-// ═══════════════════════════════════════════════════════════
-
-const executeStructured = async <T>(
-  adapter: ProviderAdapter,
-  model: string,
-  messages: Message[],
-  schema: ZodType,
-  capabilities: Capabilities,
-  retries: number,
-  options: SignalOptions | undefined,
-  onRetry: ((error: Error, attempt: number) => void) | undefined,
-  start: number,
-): Promise<SignalResult<T>> => {
-  const strategy = selectStructuredOutputStrategy(capabilities);
-  const request = applyStructuredOutput({ model, messages, options }, schema, strategy);
-
-  const result = await validateAndRetry<T>({ adapter, request, schema, retries, onRetry });
-  const usage = aggregateUsage(result.responses);
-
-  return {
-    response: result.parsed,
-    history: [...messages, { role: 'assistant', content: result.content }],
-    meta: buildMeta(model, usage, Date.now() - start, [], result.responses.map((r) => r.raw), [], result.retryCount),
-  };
-};
-
-// ═══════════════════════════════════════════════════════════
-// Internal: execute with tools
-// ═══════════════════════════════════════════════════════════
-
-const executeWithTools = async <T>(
-  adapter: ProviderAdapter,
-  model: string,
-  messages: Message[],
-  tools: Tool[],
-  schema: ZodType | undefined,
-  capabilities: Capabilities,
-  retries: number,
-  options: SignalOptions | undefined,
-  onToolCall: ((name: string, args: unknown) => void) | undefined,
-  start: number,
-): Promise<SignalResult<T>> => {
-  const toolStrategy = selectToolCallingStrategy(capabilities);
-  const canUseNativeTools = toolStrategy === 'native' && !schema;
-
-  if (canUseNativeTools) {
-    const request: ProviderRequest = { model, messages, tools: toolsToProviderFormat(tools), options };
-    const result = await runNativeToolLoop(request, { adapter, tools, maxIterations: 10, onToolCall });
-
-    return {
-      response: parseResponse<T>(result.content, schema),
-      history: result.messages,
-      meta: buildMeta(model, result.usage, Date.now() - start, result.toolCalls, result.providerResponses, result.errors),
-    };
-  }
-
-  // Unified schema strategy
-  const result = await runUnifiedSchemaLoop(
-    { model, messages, options },
-    { adapter, tools, maxIterations: 10, outputSchema: schema, useJsonSchema: capabilities.nativeJsonSchema, retries, onToolCall },
-  );
-
-  return {
-    response: parseResponse<T>(result.content, schema),
-    history: result.messages,
-    meta: buildMeta(model, result.usage, Date.now() - start, result.toolCalls, result.providerResponses, result.errors),
-  };
-};
-
-// ═══════════════════════════════════════════════════════════
 // createSignal — factory function
 // ═══════════════════════════════════════════════════════════
+
+// Build a recovered StepResult from a provider rejection: the routed
+// view of the attempt the 400 carried. toolCalls is populated when the
+// rejection routes back to a declared tool, so transcripts pair the
+// call with its eventual tool message exactly like an accepted turn.
+const recoveredStepResult = (
+  recovered: { strategy: string; rejection: Rejection },
+  routed: ReturnType<typeof routeRejection>,
+  raw: unknown,
+): StepResult => ({
+  content: '',
+  toolCalls: routed.outcome.kind === 'tool_calls' ? routed.outcome.calls : [],
+  usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 },
+  finishReason: 'error_recovered',
+  raw,
+  outcome: routed.outcome,
+  wire: {
+    ...routed.wire,
+    recovered: {
+      strategy: recovered.strategy,
+      ...(recovered.rejection.name !== undefined && { name: recovered.rejection.name }),
+      truncated: recovered.rejection.truncated,
+    },
+  },
+});
 
 const createSignalFromConfig = <T = string>(config: SignalConfig): Signal<T> => {
   // Adapter is lazily created and cached per provider config
   let cachedAdapter: ProviderAdapter | undefined;
   let cachedAdapterKey: string | undefined;
+
+  // Provider wire strategies — data from the registry entry (or the
+  // custom provider config), resolved once. Unknown ids throw here,
+  // at construction, not mid-run.
+  const wireStrategies: WireStrategy[] = resolveWireStrategies(
+    typeof config.provider === 'string'
+      ? providerRegistry[config.provider]?.wire ?? []
+      : config.provider.wire ?? [],
+  );
 
   const getAdapter = async (): Promise<ProviderAdapter> => {
     const resolved = resolveProvider(config);
@@ -305,6 +203,124 @@ const createSignalFromConfig = <T = string>(config: SignalConfig): Signal<T> => 
 
   const fork = <U = T>(override: Partial<SignalConfig>): Signal<U> =>
     createSignalFromConfig<U>({ ...config, ...override });
+
+  // ─── step / stepStream — the ONE execution core ────────────
+  // Everything above (complete/stream) is a wrapper over these, so the
+  // wire layer serves every entry point identically.
+
+  const step = async (request: StepRequest): Promise<StepResult> => {
+    const adapter = await getAdapter();
+    const resolved = resolveProvider(config);
+    const messages = request.messages.slice() as Message[];
+    const providerTools = request.tools && request.tools.length > 0
+      ? request.tools.map((tool) => ({
+          type: 'function' as const,
+          function: {
+            name: tool.name,
+            description: tool.description,
+            parameters: tool.parameters,
+          },
+        }))
+      : undefined;
+    const providerRequest: ProviderRequest = {
+      model: resolved.model,
+      messages,
+      ...(providerTools && { tools: providerTools }),
+      ...(request.toolChoice !== undefined && { toolChoice: request.toolChoice }),
+      ...(request.responseFormat !== undefined && { responseFormat: request.responseFormat }),
+      ...(request.options !== undefined && { options: request.options }),
+    };
+    const declared = new Set((request.tools ?? []).map((tool) => tool.name));
+    let response: ProviderResponse;
+    try {
+      response = await adapter.chat(providerRequest);
+    } catch (error) {
+      // The wire layer: provider rejections that carry the model's
+      // attempt are recovered by a registry-selected strategy and
+      // ROUTED like any response. No strategy claims it → rethrow.
+      const recovered = recoverRejection(wireStrategies, error);
+      if (!recovered) throw error;
+      const routed = routeRejection(recovered.rejection, {
+        declared,
+        ...(request.output && { accept: request.output.accept }),
+        ...(request.output?.outputTool !== undefined && { outputTool: request.output.outputTool }),
+        responseStrategies: responseStrategies(wireStrategies),
+      });
+      return recoveredStepResult(recovered, routed, error);
+    }
+    const toolCalls: StepToolCall[] = (response.toolCalls ?? []).map((call) => {
+      let parsed: unknown = call.args;
+      if (typeof call.args === 'string') {
+        try {
+          parsed = JSON.parse(call.args);
+        } catch {
+          // Leave args as the raw string if it isn't valid JSON.
+          parsed = call.args;
+        }
+      }
+      return { id: call.id, name: call.name, args: parsed };
+    });
+    const result: StepResult = {
+      content: response.content,
+      toolCalls,
+      usage: response.usage,
+      finishReason: response.finishReason,
+      raw: response.raw,
+    };
+    if (!request.output) return result;
+    const routed = routeResponse({
+      content: result.content,
+      toolCalls: result.toolCalls,
+      declared,
+      accept: request.output.accept,
+      ...(request.output.outputTool !== undefined && { outputTool: request.output.outputTool }),
+      responseStrategies: responseStrategies(wireStrategies),
+    });
+    return { ...result, outcome: routed.outcome, wire: routed.wire };
+  };
+
+  const stepStream = (request: StepRequest, streamOptions?: StreamOptions): AsyncIterable<StepStreamEvent> => {
+    const run = async function* (): AsyncGenerator<StepStreamEvent> {
+      const adapter = await getAdapter();
+      const resolved = resolveProvider(config);
+      const declared = new Set((request.tools ?? []).map((tool) => tool.name));
+      try {
+        for await (const event of executeStepStream({
+          adapter,
+          model: resolved.model,
+          request,
+          ...(streamOptions && { streamOptions }),
+        })) {
+          if (event.type === 'done' && request.output) {
+            const routed = routeResponse({
+              content: event.result.content,
+              toolCalls: event.result.toolCalls,
+              declared,
+              accept: request.output.accept,
+              ...(request.output.outputTool !== undefined && { outputTool: request.output.outputTool }),
+              responseStrategies: responseStrategies(wireStrategies),
+            });
+            yield { type: 'done', result: { ...event.result, outcome: routed.outcome, wire: routed.wire } };
+            continue;
+          }
+          yield event;
+        }
+      } catch (error) {
+        // Rejections surface at stream creation OR mid-iteration (the
+        // 400 lands on the first chunk read) — recover both here.
+        const recovered = recoverRejection(wireStrategies, error);
+        if (!recovered) throw error;
+        const routed = routeRejection(recovered.rejection, {
+          declared,
+          ...(request.output && { accept: request.output.accept }),
+          ...(request.output?.outputTool !== undefined && { outputTool: request.output.outputTool }),
+          responseStrategies: responseStrategies(wireStrategies),
+        });
+        yield { type: 'done', result: recoveredStepResult(recovered, routed, error) };
+      }
+    };
+    return run();
+  };
 
   return {
     // Builder methods
@@ -320,114 +336,55 @@ const createSignalFromConfig = <T = string>(config: SignalConfig): Signal<T> => 
     onRetry: (handler) => fork({ onRetry: handler }),
     onToolCall: (handler) => fork({ onToolCall: handler }),
 
-    // Execution
-    complete: async (input): Promise<SignalResult<T>> => {
-      const start = Date.now();
-      const adapter = await getAdapter();
-      const resolved = resolveProvider(config);
-      const messages = buildMessages(config, input);
-      const capabilities = resolveCapabilities(config);
-      const retries = config.retries ?? 2;
-
-      const { schema, tools } = config;
-
-      if (!schema && !tools?.length) {
-        return executeSimple<T>(adapter, resolved.model, messages, config.options, start);
+    describe: (): SignalDescription => {
+      if (typeof config.provider === 'string') {
+        const entry = providerRegistry[config.provider];
+        return {
+          provider: config.provider,
+          model: config.model ?? entry?.defaultModel,
+          capabilities: resolveCapabilities(config),
+        };
       }
-
-      if (schema && !tools?.length) {
-        return executeStructured<T>(adapter, resolved.model, messages, schema, capabilities, retries, config.options, config.onRetry, start);
-      }
-
-      if (tools?.length) {
-        return executeWithTools<T>(adapter, resolved.model, messages, tools, schema, capabilities, retries, config.options, config.onToolCall, start);
-      }
-
-      return executeSimple<T>(adapter, resolved.model, messages, config.options, start);
+      return {
+        provider: config.provider.baseUrl,
+        model: config.model ?? config.provider.model,
+        capabilities: resolveCapabilities(config),
+      };
     },
 
-    stream: (input, streamOptions) => {
-      const run = async function* (): AsyncGenerator<StreamEvent<T>> {
-        const adapter = await getAdapter();
-        const resolved = resolveProvider(config);
-        const messages = buildMessages(config, input);
-        const capabilities = resolveCapabilities(config);
-        const retries = config.retries ?? 2;
-
-        yield* executeStream<T>({
-          adapter,
-          model: resolved.model,
-          messages,
+    // Execution — thin wrappers over the step core (src/complete.ts).
+    complete: async (input): Promise<SignalResult<T>> =>
+      runComplete<T>(
+        {
+          messages: buildMessages(config, input),
           schema: config.schema,
           tools: config.tools,
-          capabilities,
-          retries,
+          retries: config.retries ?? 2,
+          options: config.options,
+          onRetry: config.onRetry,
+          onToolCall: config.onToolCall,
+        },
+        { stepStream, model: resolveProvider(config).model, capabilities: resolveCapabilities(config) },
+      ),
+
+    stream: (input, streamOptions) =>
+      runStream<T>(
+        {
+          messages: buildMessages(config, input),
+          schema: config.schema,
+          tools: config.tools,
+          retries: config.retries ?? 2,
           options: config.options,
           streamOptions,
           onRetry: config.onRetry,
           onToolCall: config.onToolCall,
-        });
-      };
-      return run();
-    },
+        },
+        { stepStream, model: resolveProvider(config).model, capabilities: resolveCapabilities(config) },
+      ),
 
-    // ─── Low-level: single adapter call, no tool execution ───
-    step: async (request: StepRequest): Promise<StepResult> => {
-      const adapter = await getAdapter();
-      const resolved = resolveProvider(config);
-      const messages = request.messages.slice() as Message[];
-      const providerTools = request.tools && request.tools.length > 0
-        ? request.tools.map((tool) => ({
-            type: 'function' as const,
-            function: {
-              name: tool.name,
-              description: tool.description,
-              parameters: tool.parameters,
-            },
-          }))
-        : undefined;
-      const providerRequest: ProviderRequest = {
-        model: resolved.model,
-        messages,
-        ...(providerTools && { tools: providerTools }),
-        ...(request.options !== undefined && { options: request.options }),
-      };
-      const response: ProviderResponse = await adapter.chat(providerRequest);
-      const toolCalls: StepToolCall[] = (response.toolCalls ?? []).map((call) => {
-        let parsed: unknown = call.args;
-        if (typeof call.args === 'string') {
-          try {
-            parsed = JSON.parse(call.args);
-          } catch {
-            // Leave args as the raw string if it isn't valid JSON.
-            parsed = call.args;
-          }
-        }
-        return { id: call.id, name: call.name, args: parsed };
-      });
-      return {
-        content: response.content,
-        toolCalls,
-        usage: response.usage,
-        finishReason: response.finishReason,
-        raw: response.raw,
-      };
-    },
-
-    // ─── Low-level: streaming variant of step() ──────────────
-    stepStream: (request: StepRequest, streamOptions) => {
-      const run = async function* (): AsyncGenerator<StepStreamEvent> {
-        const adapter = await getAdapter();
-        const resolved = resolveProvider(config);
-        yield* executeStepStream({
-          adapter,
-          model: resolved.model,
-          request,
-          ...(streamOptions && { streamOptions }),
-        });
-      };
-      return run();
-    },
+    // ─── Low-level primitives — the execution core itself ────
+    step,
+    stepStream,
 
     // ─── Embedding ────────────────────────────────────────────
     embed: (async (input: string | string[], options?: EmbedOptions): Promise<number[] | number[][]> => {

@@ -17,7 +17,10 @@ export type IfDirective = z.infer<typeof IfDirectiveSchema>;
 export const ResolvableSchema = z
   .unknown()
   .describe(
-    'Any value. Strings support {{}} templates and bare $-paths. Objects may be '
-      + 'directives like {$if,$then,$else}. Arrays and nested objects are walked '
-      + 'recursively. Everything else is literal.',
+    'Any value. Strings support {{}} templates and bare $-paths. The data ROOT is '
+      + '"$." — a data key is ALWAYS "$.key" ("{{$.rows.length}} found", "$.loading"); '
+      + '"$key" without the dot is INVALID. Loop variables (a `for` directive\'s `as`) '
+      + 'are "$<name>.field" ("{{$row.title}}"). Objects may be directives like '
+      + '{$if,$then,$else}. Arrays and nested objects are walked recursively. '
+      + 'Everything else is literal.',
   );

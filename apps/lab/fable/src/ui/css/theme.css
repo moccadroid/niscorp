@@ -1,0 +1,89 @@
+/* ═══════════════════════════════════════════════════════════
+   Fable design tokens — quiet dark, teal accent.
+   Near-black canvas, hairline borders, tight type. Everything
+   else in the kit reads from these vars.
+   ═══════════════════════════════════════════════════════════ */
+
+:root {
+  color-scheme: dark;
+
+  /* Surfaces — a shallow elevation ramp, not flat. */
+  --bg:            #0a0b0c;
+  --bg-sunken:     #0c0e0f;
+  --surface:       #101214;
+  --surface-2:     #15181a;
+  --hover:         #1a1e21;
+  --selected:      #1f2427;
+
+  /* Lines — hairline, slightly cool. */
+  --border:        #1e2224;
+  --border-2:      #282d30;
+  --border-strong: #363c40;
+
+  /* Text. */
+  --text:          #eceff0;
+  --text-2:        #b3babd;
+  --text-dim:      #879094;
+  --text-mute:     #5e6669;
+
+  /* Accent — teal. */
+  --accent:        #1fb98c;
+  --accent-hover:  #37cfa2;
+  --accent-press:  #17a179;
+  --accent-fg:     #04110c;
+  --accent-soft:   rgba(31, 185, 140, 0.14);
+  --accent-line:   rgba(31, 185, 140, 0.42);
+
+  /* Status. */
+  --green:   #3fb98a;  --green-soft:  rgba(63, 185, 138, 0.15);
+  --amber:   #e0b341;  --amber-soft:  rgba(224, 179, 65, 0.15);
+  --red:     #ff6a5f;  --red-soft:    rgba(255, 106, 95, 0.15);
+  --blue:    #4aa3ff;  --blue-soft:   rgba(74, 163, 255, 0.15);
+  --slate:   #8b93a6;  --slate-soft:  rgba(139, 147, 166, 0.14);
+
+  /* Radii. */
+  --r-sm: 7px;
+  --r-md: 9px;
+  --r-lg: 13px;
+
+  /* Shadows. */
+  --shadow:    0 2px 6px rgba(0, 0, 0, 0.35), 0 8px 28px -8px rgba(0, 0, 0, 0.55);
+  --shadow-lg: 0 8px 40px -8px rgba(0, 0, 0, 0.7);
+
+  /* Type. */
+  --font: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --fs-xs: 11px;
+  --fs-sm: 12.5px;
+  --fs-md: 13.5px;
+  --fs-lg: 15px;
+  --fs-xl: 19px;
+  --fs-2xl: 24px;
+
+  /* Motion. */
+  --ease: cubic-bezier(0.32, 0.72, 0, 1);
+  --t-fast: 110ms;
+}
+
+* { box-sizing: border-box; }
+
+html, body, #root { height: 100%; margin: 0; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font);
+  font-size: var(--fs-md);
+  line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+::selection { background: var(--accent-soft); }
+
+/* Scrollbars — thin, unobtrusive. */
+* { scrollbar-width: thin; scrollbar-color: var(--border-2) transparent; }
+*::-webkit-scrollbar { width: 9px; height: 9px; }
+*::-webkit-scrollbar-thumb { background: var(--border-2); border-radius: 999px; border: 2px solid transparent; background-clip: content-box; }
+*::-webkit-scrollbar-thumb:hover { background: var(--border-strong); background-clip: content-box; }
+
+button { font-family: inherit; }

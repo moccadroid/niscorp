@@ -1,11 +1,11 @@
 import { companiesList, companyDelete } from '@relay/api/companies';
 
 // Prisms for the companies list — each is a full Vex request body, attached to an
-// endpoint's `request`. (Query → { shape, context }; write → { mutation, context }.)
+// endpoint's `request`. (Query → { fingerprint, context }; write → { mutation, context }.)
 
 // List companies (search + sort).
 export const listCompaniesPrism = {
-  shape: { $const: companiesList.shape },
+  fingerprint: companiesList.fingerprint,
   context: {
     q: { $join: { parts: ['%', { $ref: '$.search' }, '%'], sep: '' } },
     sortBy: { $ref: '$.sortBy' },

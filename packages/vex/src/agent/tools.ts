@@ -1,6 +1,5 @@
 import { z } from 'zod';
 import { defineTool } from '@niscorp/cortex';
-import type { ToolContext } from '@niscorp/cortex';
 import { QuerySchema } from '../schemas/query.schema.js';
 import { discoverEntities } from '../scope/discover.js';
 import { applyScope } from '../scope/apply.js';
@@ -50,9 +49,15 @@ const DescribeFieldInputSchema = z.object({
 });
 export type DescribeFieldInput = z.infer<typeof DescribeFieldInputSchema>;
 
-const TestQueryInputSchema = z.object({
-  dsl: QuerySchema.describe('The DSL query to validate and test'),
-});
+// The draft query ITSELF at the root — no `dsl` wrapper. Models
+// naturally pass the query object directly, and a wrapper mismatch is
+// fatal on providers (Groq) that validate tool args SERVER-SIDE.
+// Deliberately permissive on the wire: the real validation is this
+// tool's own QuerySchema.safeParse, which returns errors the model can
+// read and fix — that feedback loop is the tool's entire purpose.
+const TestQueryInputSchema = z
+  .record(z.string(), z.unknown())
+  .describe('Your draft DSL query — the query object itself (from/fields/…), NOT wrapped in any field.');
 export type TestQueryInput = z.infer<typeof TestQueryInputSchema>;
 
 const CannotSatisfyInputSchema = z.object({
@@ -96,17 +101,14 @@ const buildSimpleQuery = (sql: string): CompiledQuery => ({
 const executeRaw = (adapter: DatabaseAdapter, sql: string): Promise<Row[]> =>
   adapter.execute(buildSimpleQuery(sql), []);
 
-const buildSyntheticParams = (compiled: CompiledQuery): BoundParams =>
-  compiled.paramSlots.map(slot => {
-    switch (slot.type) {
-      case 'string': return '';
-      case 'number': return 0;
-      case 'boolean': return false;
-      case 'string[]': return [''];
-      case 'number[]': return [0];
-      default: return '';
-    }
-  });
+// Synthetic params bind NULL: comparisons against a column of ANY type are
+// valid SQL with NULL (Postgres infers the type from the column side), so
+// testQuery checks executability without guessing values. Typed guesses
+// were a trap — '' bound against a date/uuid column is a cast ERROR, which
+// made the agent conclude the DSL "does not support" date-context
+// comparisons and negative-cache a perfectly satisfiable request.
+export const buildSyntheticParams = (compiled: CompiledQuery): BoundParams =>
+  compiled.paramSlots.map(() => null);
 
 const DEFAULT_ANALYSIS_CONFIG: AnalysisConfig = {
   maxNestingDepth: 2,
@@ -234,13 +236,15 @@ export const createQueryTools = (deps: QueryToolDeps): ReturnType<typeof defineT
   const testQueryTool = defineTool({
     id: 'testQuery',
     name: 'testQuery',
-    description: 'Validates a DSL query, compiles it to SQL, and executes it with synthetic parameters (LIMIT 5, statement timeout). Returns rows, SQL, warnings, and errors.',
+    description:
+      'Validates a DSL query, compiles it to SQL, and executes it with synthetic parameters (LIMIT 5, statement timeout). ' +
+      'Pass the query object DIRECTLY as the arguments. Returns rows, SQL, warnings, and errors.',
     input: TestQueryInputSchema,
     execute: async (input: TestQueryInput): Promise<TestQueryResult> => {
       const schema = deps.getSchema();
       if (!schema) return { rows: [], sql: '', warnings: [], errors: ['Schema not available'] };
 
-      const parseResult = QuerySchema.safeParse(input.dsl);
+      const parseResult = QuerySchema.safeParse(input);
       if (!parseResult.success) {
         const validationErrors = parseResult.error.issues.map(
           issue => `${issue.path.join('.')}: ${issue.message}`,
@@ -293,15 +297,15 @@ export const createQueryTools = (deps: QueryToolDeps): ReturnType<typeof defineT
     },
   });
 
+  // The caller (createQueryDsl) watches for this tool's observation on
+  // the run's event stream and aborts the run with the reason — the
+  // v2 replacement for the v1 bus-emit + abort-rule pair.
   const cannotSatisfyTool = defineTool({
     id: 'cannotSatisfy',
     name: 'cannotSatisfy',
-    description: 'Signal that the natural language request cannot be satisfied by the available schema. This will abort the agent run.',
+    description: 'Signal that the natural language request cannot be satisfied by the available schema. This ends the run.',
     input: CannotSatisfyInputSchema,
-    execute: (input: CannotSatisfyInput, context: ToolContext) => {
-      context.bus.emit('vex.unsatisfiable', { reason: input.reason });
-      return { acknowledged: true };
-    },
+    execute: (input: CannotSatisfyInput) => ({ acknowledged: true, reason: input.reason }),
   });
 
   return [

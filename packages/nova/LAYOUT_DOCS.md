@@ -37,7 +37,7 @@ const nodes = renderLayout(layout, data, {
 
 `nodes` is a `RenderNode[]` tree. Hand it to the React adapter (`<RenderTree nodes={nodes} />`) and it renders.
 
-## Five node kinds
+## Six node kinds
 
 A `LayoutNode` is one of:
 
@@ -47,11 +47,12 @@ A `LayoutNode` is one of:
 | **Conditional** | Renders one of two branches based on a condition |
 | **Loop** | Iterates an array and renders the body for each item |
 | **LayoutRef** | Inlines another layout from the layout store |
+| **Slot** | A placeholder a fragment-merge fills with the composing action's layout |
 | **Primitive** | A bare string/number/boolean — rendered as text |
 
 Plus arrays of any of the above (treated as a fragment).
 
-That's it. Five things. Everything you write is a tree of those.
+That's it. Six things. Everything you write is a tree of those.
 
 ---
 
@@ -213,6 +214,20 @@ store.set('user-card', {
 
 - The referenced layout sees the **current scope** at the call site. Inside a loop, a `LayoutRef` reads from the loop variable just like an inline layout would.
 - If the ref doesn't resolve, the renderer throws `LayoutRefNotFoundError`. In lax mode it's caught and replaced with an error RenderNode; in strict mode it propagates.
+
+---
+
+## Slots
+
+A placeholder that a fragment-merge fills.
+
+```ts
+{ slot: 'body' }
+```
+
+Only meaningful inside an `ActionFragment`'s layout: when a fragment is composed with an action (a push/replace `with: [...]`), the fragment's `{ slot: 'body' }` node is replaced by the composing action's own layout. An unfilled slot renders nothing. See `ACTION_DOCS.md` for fragments.
+
+(The shell's canvas layouts use registered slot *components* — `CanvasSlot` / `ActionSlot` — which are ordinary component nodes, not this node kind.)
 
 ---
 
@@ -414,15 +429,16 @@ If a component carries a static `.meta` property, `registerAll` picks it up auto
 
 ### The default component set
 
-`@niscorp/nova/components/react` ships five headless React components:
+`@niscorp/nova/components/react` ships seven headless React components:
 
 - **`Stack`** — flex container with `direction`, `gap`, `align`, `justify`, `padding`, `wrap`
 - **`Text`** — typography element with `as`, `size`, `weight`, `color`
 - **`Input`** — text input bound via `model`
 - **`Button`** — clickable button that dispatches `ui:click` with its `ref`
 - **`Box`** — generic styling container
+- **`CanvasSlot`** / **`ActionSlot`** — shell-aware slots used inside shell/canvas layouts; only usable under a `<NovaShellProvider>` (see `REACT_DOCS.md`)
 
-Use `registerNovaReactComponents(registry)` to install all five at once.
+Use `registerNovaReactComponents(registry)` to install all seven at once.
 
 ---
 
@@ -470,6 +486,9 @@ In **strict mode** (`strict: true` on the render context) these throw. In **lax 
 
 // LayoutRef
 { ref: string }
+
+// Slot (inside an ActionFragment's layout)
+{ slot: string }
 
 // Primitive
 'string' | 123 | true | false | null

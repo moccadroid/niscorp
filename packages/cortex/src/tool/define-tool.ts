@@ -1,55 +1,60 @@
 // ═══════════════════════════════════════════════════════════
-// defineTool — declare a tool the runtime can register
+// defineTool — declare a tool the loop can execute
 // ═══════════════════════════════════════════════════════════
 //
 // The serializable config fields are Zod-validated at definition
 // time. Non-serializable fields (input schema, execute function)
 // are separate parameters that carry live objects.
-//
-// A ToolDefinition is the result of defineTool. It carries the
-// validated config plus a stable .toolId for the registry.
 
 import type { ZodType } from 'zod';
 import {
   ToolConfigSchema,
   type ToolConfigInput,
   type ToolConfigParsed,
-  type ToolRiskLevel,
 } from '../schemas/tool-config.schema';
-import type { Bus } from '../types';
+import type { CortexEvent } from '../events/types';
 
 export type ToolContext = {
-  workflowId: string;
+  runId: string;
   agentId: string;
+  agentPath: ReadonlyArray<string>;
   signal: AbortSignal;
-  bus: Bus;
+  // Forward a child run's events into this run's stream — pass it as
+  // the child's RunOptions.onEvent so it subscribes BEFORE the child's
+  // run-start fires. asTool does this; a delegate agent's whole tree
+  // becomes visible on the parent.
+  forward: (event: CortexEvent) => void;
 };
 
 // ───────────────────────────────────────────────────────────
 // Public types
 // ───────────────────────────────────────────────────────────
 
-// The full config including non-serializable fields. This is what
-// users pass to defineTool(). The serializable subset is validated
-// by ToolConfigSchema; the rest is attached as-is.
 export type ToolConfig<TInput = unknown, TOutput = unknown> = ToolConfigInput & {
   input: ZodType<TInput>;
   output?: ZodType<TOutput>;
+  // The tool's OWN usage knowledge — how and when to use it, beyond the
+  // one-line wire `description`. Assembled into a TOOL GUIDES context
+  // section on every run that carries the tool, so the knowledge travels
+  // WITH the tool: add the tool, its guide arrives; change it, every
+  // agent updates; remove it, the guide leaves. Agents never hand-copy
+  // tool usage into their instructions. A string[] joins as lines; a
+  // function defers construction (e.g. composing a library's exported
+  // guide).
+  guide?: string | string[] | (() => string | string[]);
   execute: (input: TInput, context: ToolContext) => Promise<TOutput> | TOutput;
 };
 
-// ToolDefinition is what the registry stores. The `execute` signature
-// is widened to `(input: unknown) => unknown` so a definition with
-// concrete types is assignable to the generic form (function params
-// are contravariant). defineTool wraps the user's typed execute at
-// registration time, so the widened form is never actually called
-// with an unvalidated input in practice — the tool loop validates
-// against the Zod schema before invoking it.
+// ToolDefinition is what the loop (and manifold catalog) stores. The
+// `execute` signature is widened to accept `unknown` — defineTool
+// wraps the user's typed execute so the widened form always
+// re-validates through the Zod schema before delegating.
 export type ToolDefinition = {
   readonly toolId: string;
   readonly config: ToolConfigParsed & {
     input: ZodType;
     output?: ZodType;
+    guide?: string | string[] | (() => string | string[]);
     execute: (input: unknown, context: ToolContext) => unknown;
   };
 };
@@ -61,13 +66,11 @@ export type ToolDefinition = {
 export const defineTool = <TInput, TOutput>(
   config: ToolConfig<TInput, TOutput>,
 ): ToolDefinition => {
-  // Validate the serializable fields against the Zod schema.
-  const { input, output, execute, ...serializable } = config;
+  const { input, output, guide, execute, ...serializable } = config;
   const parsed = ToolConfigSchema.parse(serializable);
 
-  // The wrapper re-parses input through the user's Zod schema before
-  // delegating to their typed execute function. This gives us a proper
-  // `TInput` without resorting to `as`, and means tools are always
+  // Re-parse through the user's Zod schema before delegating to their
+  // typed execute — a proper TInput without `as`, and tools are always
   // invoked with validated input regardless of what the caller passes.
   const wrappedExecute = (rawInput: unknown, context: ToolContext): unknown => {
     const validated = input.parse(rawInput);
@@ -80,6 +83,7 @@ export const defineTool = <TInput, TOutput>(
       ...parsed,
       input,
       ...(output !== undefined && { output }),
+      ...(guide !== undefined && { guide }),
       execute: wrappedExecute,
     },
   };

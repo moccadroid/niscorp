@@ -8,7 +8,9 @@
     "build": "tsc -b && vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
-    "smoke": "tsx src/dev/smoke.ts"
+    "smoke": "tsx src/dev/smoke.ts",
+    "harness": "tsx src/dev/harness-check.ts",
+    "architect": "tsx src/dev/architect-check.ts"
   },
   "dependencies": {
     "@electric-sql/pglite": "^0.5.1",

@@ -115,7 +115,10 @@ export {
   ActionDefinitionSchema,
   ActionFragmentSchema,
   composeAction,
+  auditAction,
+  collectChannels,
 } from './action';
+export type { AuditCatalogEntry, AuditOptions, AuditResult, ChannelUsage } from './action';
 
 export type {
   Mutation,

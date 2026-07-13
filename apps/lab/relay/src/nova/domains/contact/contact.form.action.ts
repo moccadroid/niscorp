@@ -19,7 +19,7 @@ export const contactFormAction: ActionDefinition = {
   },
   layout: contactFormLayout,
   endpoints: {
-    loadCompanies: { url: '/api/companies/vex?cache=use', method: 'POST', request: companyOptionsPrism, response: resultPrism, target: 'companyOptions' },
+    loadCompanies: { url: '/api/companies/vex', method: 'POST', request: companyOptionsPrism, response: resultPrism, target: 'companyOptions' },
     // One write — `contact.upsert` desugars to insert (id empty) or update (id set).
     save:          { url: '/api/contacts/vex',            method: 'POST', request: upsertContactPrism, response: resultPrism, target: 'saved' },
   },

@@ -27,8 +27,7 @@ export const contactFormLayout: LayoutNode = {
     },
     // The form's own footer — buttons here, handled by the action's triggers.
     {
-      component: 'Row',
-      props: { class: 'rl-form__foot' },
+      component: 'FormFoot',
       children: [
         { component: 'Button', ref: 'cancel', props: { variant: 'default' }, children: 'Cancel' },
         { component: 'Button', ref: 'confirm', props: { variant: 'primary' }, children: '$.confirmLabel' },

@@ -85,6 +85,34 @@ export const Text: NovaComponent<z.infer<typeof TextProps>> = ({
 );
 Text.meta = { description: 'Inline text with size/weight/color.', propsSchema: TextProps };
 
+// ─── Stat ──────────────────────────────────────────────────
+// A metric card. Semantics in, appearance owned by .rl-stat CSS — the
+// ONE sanctioned way to show a number prominently, so screens never
+// hand-style Text into a KPI.
+const StatProps = z
+  .object({
+    label: z.string().describe('What the number is, e.g. "Overdue tasks".'),
+    delta: z.string().optional().describe('Small change annotation shown under the value, e.g. "+12%".'),
+    trend: z.enum(['up', 'down']).optional().describe('Colors the delta (up = green, down = red).'),
+  })
+  .strict();
+
+export const Stat: NovaComponent<z.infer<typeof StatProps>> = ({ label, delta, trend, children }) => (
+  <div className="rl-stat">
+    <div className="rl-stat__label">{label}</div>
+    <div className="rl-stat__value">{children}</div>
+    {delta !== undefined && (
+      <div className={cx('rl-stat__delta', trend === 'up' && 'rl-stat__delta--up', trend === 'down' && 'rl-stat__delta--down')}>
+        {delta}
+      </div>
+    )}
+  </div>
+);
+Stat.meta = {
+  description: 'A metric: the value is `children` (bind it), `label` says what it is. Use this for every KPI/number — never hand-style Text into one.',
+  propsSchema: StatProps,
+};
+
 // ─── Badge ─────────────────────────────────────────────────
 const BadgeProps = z
   .object({

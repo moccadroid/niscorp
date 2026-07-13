@@ -4,6 +4,7 @@ import { money, dateText } from '@relay/lib/format.prism';
 // A deal's activity feed — `activity_id`/owner aliased; the mapping formats the
 // date as `when` and derives a colour `tone` per type.
 export const activitiesByDeal: CacheEntry = {
+  fingerprint: 'activities/byDeal',
   intent: "A deal's recent activity (calls, emails, meetings, notes)",
   shape: [{ activity_id: '', type: '', subject: '', owner: '', when: '', tone: '' }],
   dsl: {
@@ -60,6 +61,7 @@ const toneByType = (r: { $var: string }): unknown => ({
 // A contact's recent activity. Shape carries `body` (a note preview) so it stays
 // distinct from `activitiesByDeal`/`activitiesByCompany` in the shape-keyed cache.
 export const activitiesByContact: CacheEntry = {
+  fingerprint: 'activities/byContact',
   intent: "A contact's recent activity (calls, emails, meetings, notes)",
   shape: [{ activity_id: '', type: '', subject: '', body: '', owner: '', when: '', tone: '' }],
   dsl: {
@@ -96,6 +98,7 @@ export const activitiesByContact: CacheEntry = {
 // A deal's line items — `line_item_id`/product aliased; `line` (qty × price) is a
 // DSL compute, money-formatted (with unit price) in the mapping.
 export const dealLineItems: CacheEntry = {
+  fingerprint: 'activities/lineItems',
   intent: "A deal's line items with product, quantity and line total",
   shape: [{ line_item_id: '', product: '', quantity: 0, unit_price: '', line_total: '' }],
   dsl: {

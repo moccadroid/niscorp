@@ -25,7 +25,7 @@ export type RunView = {
   rows?: unknown[];
   warnings?: string[];
   cacheHit?: boolean;
-  cacheKey?: string;
+  fingerprint?: string;
   scopeClause?: string;
   timing?: { agentMs?: number; executionMs?: number; mappingMs?: number; totalMs?: number };
   error?: string;

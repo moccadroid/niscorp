@@ -1,0 +1,15 @@
+{
+  "extends": "../../../tsconfig.json",
+  "compilerOptions": {
+    "jsx": "react-jsx",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "noEmit": true,
+    "lib": ["DOM", "DOM.Iterable", "ES2022"],
+    "types": ["vite/client"],
+    "baseUrl": ".",
+    "paths": { "@fable/*": ["src/*"] }
+  },
+  "include": ["src", "vite.config.ts"],
+  "exclude": ["src/dev"]
+}

@@ -8,7 +8,7 @@ import { confirmDeleteLayout } from './confirm-delete.layout';
 // run the write. Cancel / ✕ just pop.
 export const confirmDeleteAction: ActionDefinition = {
   id: 'confirm-delete',
-  data: { label: 'this record', message: 'This can’t be undone.', panelClass: 'rl-dialog--narrow' },
+  data: { label: 'this record', message: 'This can’t be undone.', panelSize: 'narrow' },
   layout: confirmDeleteLayout,
   triggers: [
     { event: 'ui:click', ref: 'close', do: [{ pop: true }] },

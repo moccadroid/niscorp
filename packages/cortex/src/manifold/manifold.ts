@@ -1,184 +1,138 @@
 // ═══════════════════════════════════════════════════════════
-// Manifold factory — thin wiring layer
+// The manifold — a catalog, defaults, and the run tap
 // ═══════════════════════════════════════════════════════════
 //
-// Creates the subsystems, wires them together, returns the
-// Manifold object. All substantial logic lives in focused modules:
-//   - execution-handler.ts — the bus subscription that runs agents
-//   - preview.ts           — previewContext (no LLM, direct pipeline)
-//   - rule-handler.ts      — rule evaluation after observations
-//   - types.ts             — public type definitions
+// Per DESIGN.md §8. Not a lifecycle, not an event substrate, not a
+// second execution path: agent.run() standalone and manifold.run()
+// are the same function — the manifold merges its defaults and taps
+// the handle. Libraries (vex, prism, nova) export agents; apps
+// register them here and compose them (asTool) into orchestrators.
 
-import type { Result } from '../types';
-import type { ContextProducer } from '../context/types';
-import type { CortexError } from '../errors/cortex.errors';
-import type { Manifold, ManifoldConfig, ExecuteOptions } from './types';
-import type { ExecuteFailedPayload, ExecuteCompletedPayload } from '../topics';
-import type { WorkflowContext } from './workflow-context';
-import { createBus } from './bus';
-import { createRegistry } from './registry';
-import { createLedger, DEFAULT_BUDGET } from './ledger';
-import { createMemoryStateStore } from '../store/memory-state.store';
-import { createMemoryEventLog } from '../store/memory-event.log';
-import { newWorkflowId, newCorrelationId } from '../utils/id';
-import { throwCortex, err } from '../errors/cortex.errors';
-import { createRulesEngine, createEffectRegistry } from '../rules';
-import { CortexTopics } from '../topics';
-import { registerExecutionHandler } from './execution-handler';
-import { previewContext as previewContextImpl } from './preview';
-import { registerRuleHandler } from './rule-handler';
+import type { Envelope, SignalClient } from '../types';
+import type { RunInput } from '../context/assemble';
+import type { ToolGate } from '../gates/types';
+import type { ToolDefinition } from '../tool/define-tool';
+import type { RunHandle } from '../agent/run';
+import type { ResolvedPreview } from '../agent/preview';
+import { throwConfig } from '../errors/cortex.errors';
+import { trustErased } from '../utils/trust';
+import { buildAgentTool } from './as-tool';
+import type { ErasedAgent, ErasedRunOptions, RunTap } from './types';
 
-const DEFAULT_PACK_BUDGET_TOKENS = 32_000;
-
-// ───────────────────────────────────────────────────────────
-// Factory
-// ───────────────────────────────────────────────────────────
-
-export const createManifold = (config: ManifoldConfig = {}): Manifold => {
-  const registry = createRegistry();
-  const bus = createBus(config.bus ?? {});
-  const ledger = createLedger({ defaultBudget: config.defaultBudget });
-  const stateStore = config.stateStore ?? createMemoryStateStore();
-  const eventLog = config.eventLog ?? createMemoryEventLog();
-  const tokenMode = config.tokenEstimation ?? 'fuzzy';
-  const packBudget = config.defaultPackBudget ?? DEFAULT_PACK_BUDGET_TOKENS;
-  const hooks = config.hooks ?? {};
-
-  // ─── Rules engine ───────────────────────────────────────
-  const effectRegistry = createEffectRegistry();
-  const rulesEngine = createRulesEngine(bus, effectRegistry);
-
-  // ─── Per-workflow runtime state ─────────────────────────
-  const workflows = new Map<string, WorkflowContext>();
-
-  // The inject producer reads injections from the active workflow.
-  const ruleInjectProducer: ContextProducer = {
-    id: 'cortex.rule-inject',
-    priority: 85,
-    build: (ctx) => {
-      const wf = workflows.get(ctx.workflowId);
-      if (!wf || wf.injections.length === 0) return [];
-      return wf.injections.map((msg) => ({
-        role: 'system' as const,
-        content: msg,
-        source: 'cortex.rule-inject',
-        tags: ['rule', 'inject'],
-      }));
-    },
-  };
-  registry.addProducer(ruleInjectProducer);
-
-  // ─── Tee bus → event log ──────────────────────────────
-  const teeUnsub = bus.on('#', async (event) => {
-    try { await eventLog.append(event); } catch (e) { hooks.onError?.(e, {}); }
-  });
-
-  // ─── Execution + rule handlers ────────────────────────
-  let started = false;
-  let draining = false;
-  const handlerState = { inFlight: 0 };
-
-  registerExecutionHandler(
-    { registry, bus, ledger, stateStore, config, hooks, tokenMode, packBudget, workflows },
-    handlerState,
-  );
-  registerRuleHandler(bus, rulesEngine, workflows);
-
-  // ─── execute: dispatch + waitFor ──────────────────────
-
-  const execute = async <T>(
-    agentId: string,
-    input: unknown,
-    options: ExecuteOptions = {},
-  ): Promise<Result<T>> => {
-    const correlationId = newCorrelationId();
-    const workflowId = options.workflowId ?? newWorkflowId();
-
-    const isCompletionOrFailure = (e: { topic: string; meta: { correlationId: string } }): boolean =>
-      e.meta.correlationId === correlationId &&
-      (e.topic === CortexTopics.executeCompleted || e.topic === CortexTopics.executeFailed);
-
-    const completionPromise = bus.waitFor(CortexTopics.executePattern, {
-      filter: isCompletionOrFailure,
-      // The run's wall-clock deadline. Honors the configured budget (so a
-      // consumer can grant a long-running agent more than the 60s default);
-      // falls back to DEFAULT_BUDGET when unset.
-      timeoutMs: config.defaultBudget?.maxDurationMs ?? DEFAULT_BUDGET.maxDurationMs,
-      ...(options.signal && { signal: options.signal }),
-    });
-
-    bus.emit(
-      CortexTopics.executeRequested,
-      {
-        agentId,
-        input,
-        workflowId,
-        ...(options.signal && { abort: options.signal }),
-        ...(options.stream && { stream: options.stream }),
-      },
-      { correlationId, workflowId },
-    );
-
-    const completion = await completionPromise;
-
-    if (completion.topic === CortexTopics.executeFailed) {
-      const payload = completion.payload as ExecuteFailedPayload;
-      return err(payload.error);
-    }
-
-    const payload = completion.payload as ExecuteCompletedPayload;
-    return payload.result as Result<T>;
-  };
-
-  // ─── Lifecycle ────────────────────────────────────────
-
-  const start = async (): Promise<void> => {
-    if (started) return;
-    started = true;
-  };
-
-  const stop = async (): Promise<void> => {
-    if (!started) return;
-    teeUnsub();
-    started = false;
-  };
-
-  const drain = async (): Promise<void> => {
-    if (draining) return;
-    draining = true;
-    while (handlerState.inFlight > 0) {
-      await new Promise<void>((resolve) => setTimeout(resolve, 5));
-    }
-    await stop();
-  };
-
-  // Soft warning for exact token mode.
-  if (config.tokenEstimation === 'exact') {
-    bus.emit(
-      CortexTopics.warning,
-      { message: 'tokenEstimation: "exact" not yet implemented. Falling back to fuzzy.' },
-      { correlationId: 'init' },
-    );
-  }
-
-  const previewDeps = { registry, ledger, stateStore, config, tokenMode, packBudget };
-
-  return {
-    registerAgent: (agent) => registry.registerAgent(agent),
-    registerTool: (tool) => registry.registerTool(tool),
-    addProducer: (producer, scope) => registry.addProducer(producer, scope),
-    registerRule: (rule) => rulesEngine.register(rule),
-    registerEffect: (name, handler) => effectRegistry.register(name, handler),
-    bus,
-    getState: (workflowId, key) => stateStore.get(workflowId, key),
-    setState: (workflowId, key, value) => stateStore.set(workflowId, key, value),
-    execute,
-    previewContext: (agentId, input, options) => previewContextImpl(previewDeps, agentId, input, options),
-    start,
-    stop,
-    drain,
-    _internal: { registry, ledger, stateStore, eventLog, config, rulesEngine, effectRegistry, workflows },
-  };
+export type ManifoldConfig = {
+  // Fallback model for agents without their own binding.
+  llm?: SignalClient;
+  // Gates appended to every run (e.g. the app's UI approval gate).
+  gates?: ReadonlyArray<ToolGate<unknown>>;
+  // Tap: called with every handle created through manifold.run().
+  onRun?: RunTap;
 };
 
-export const _runtimeThrow = throwCortex;
+// Anything registrable: agent definitions and tool definitions match
+// structurally; the manifold discriminates at runtime.
+export type Registrable = { agentId: string } | { toolId: string };
+
+export type ManifoldAsToolOptions = {
+  id?: string;
+  description?: string;
+  llm?: SignalClient;
+  timeoutMs?: number;
+  deps?: unknown;
+  select?: (output: Envelope<unknown>) => unknown;
+};
+
+export type Manifold = {
+  register: (...definitions: ReadonlyArray<Registrable>) => void;
+  run: <TData = unknown>(agentId: string, input: RunInput, options?: ErasedRunOptions) => RunHandle<TData>;
+  preview: (agentId: string, input: RunInput, options?: ErasedRunOptions) => Promise<ResolvedPreview>;
+  asTool: (agentId: string, options?: ManifoldAsToolOptions) => ToolDefinition;
+  agent: (agentId: string) => ErasedAgent;
+  tool: (toolId: string) => ToolDefinition;
+  agents: () => ReadonlyArray<ErasedAgent>;
+  tools: () => ReadonlyArray<ToolDefinition>;
+};
+
+const DEFAULT_AGENT_TOOL_TIMEOUT_MS = 300_000;
+
+export const createManifold = (config: ManifoldConfig = {}): Manifold => {
+  const agents = new Map<string, ErasedAgent>();
+  const tools = new Map<string, ToolDefinition>();
+
+  const requireAgent = (agentId: string): ErasedAgent => {
+    const agent = agents.get(agentId);
+    if (!agent) throwConfig(`agent "${agentId}" is not registered on this manifold`);
+    return agent;
+  };
+
+  const mergedOptions = (agent: ErasedAgent, options: ErasedRunOptions | undefined): ErasedRunOptions => {
+    const llm = options?.llm ?? agent.config.llm ?? config.llm;
+    const gates = [...(config.gates ?? []), ...(options?.gates ?? [])];
+    return {
+      ...options,
+      ...(llm && { llm }),
+      ...(gates.length > 0 && { gates }),
+    };
+  };
+
+  const run = <TData = unknown>(
+    agentId: string,
+    input: RunInput,
+    options?: ErasedRunOptions,
+  ): RunHandle<TData> => {
+    const agent = requireAgent(agentId);
+    const handle = agent.run(input, mergedOptions(agent, options));
+    config.onRun?.(handle);
+    return trustErased<RunHandle<TData>>(handle);
+  };
+
+  return {
+    register: (...definitions): void => {
+      for (const definition of definitions) {
+        if ('agentId' in definition) {
+          if (agents.has(definition.agentId)) throwConfig(`duplicate agent id "${definition.agentId}"`);
+          agents.set(definition.agentId, trustErased<ErasedAgent>(definition));
+          continue;
+        }
+        if (tools.has(definition.toolId)) throwConfig(`duplicate tool id "${definition.toolId}"`);
+        tools.set(definition.toolId, trustErased<ToolDefinition>(definition));
+      }
+    },
+
+    run,
+
+    preview: (agentId, input, options) => {
+      const agent = requireAgent(agentId);
+      return agent.preview(input, mergedOptions(agent, options));
+    },
+
+    asTool: (agentId, options): ToolDefinition => {
+      const agent = requireAgent(agentId);
+      return buildAgentTool<unknown>({
+        id: options?.id ?? agent.agentId,
+        description:
+          options?.description ?? agent.config.description ?? `Delegate the task to agent "${agent.agentId}".`,
+        timeoutMs: options?.timeoutMs ?? DEFAULT_AGENT_TOOL_TIMEOUT_MS,
+        ...(options?.select && { select: options.select }),
+        start: (input, context) => {
+          const handle = run(agent.agentId, input, {
+            ...(options?.deps !== undefined && { deps: options.deps }),
+            ...(options?.llm && { llm: options.llm }),
+            signal: context.signal,
+            agentPath: context.agentPath,
+            onEvent: context.onEvent,
+          });
+          return handle;
+        },
+      });
+    },
+
+    agent: requireAgent,
+    tool: (toolId): ToolDefinition => {
+      const tool = tools.get(toolId);
+      if (!tool) throwConfig(`tool "${toolId}" is not registered on this manifold`);
+      return tool;
+    },
+    agents: () => [...agents.values()],
+    tools: () => [...tools.values()],
+  };
+};

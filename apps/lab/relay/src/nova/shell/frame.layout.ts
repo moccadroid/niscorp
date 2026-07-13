@@ -17,11 +17,11 @@ export const frameLayout: LayoutNode = {
         { component: 'CanvasSlot', props: { canvasId: 'sidebar' } },
         {
           component: 'Stack',
-          // `min-height/width: 0` (rl-min0) lets the `main` region below shrink to
-          // the space LEFT by the fixed topbar — so content scrolls inside `main`
-          // instead of the whole column overflowing 100vh and scrolling the topbar
-          // off-screen. (A wide board also scrolls horizontally for the same reason.)
-          props: { grow: true, h: '100%', class: 'rl-min0' },
+          // `shrink` lets the `main` region below shrink to the space LEFT by
+          // the fixed topbar — so content scrolls inside `main` instead of the
+          // whole column overflowing 100vh and scrolling the topbar off-screen.
+          // (A wide board also scrolls horizontally for the same reason.)
+          props: { grow: true, h: '100%', shrink: true },
           children: [
             { component: 'CanvasSlot', props: { canvasId: 'topbar' } },
             { ref: 'main' },

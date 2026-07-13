@@ -1,0 +1,72 @@
+/* App frame + the handful of keyframes the kit primitives reference.
+   All palette values flow through the --m-* custom properties that the
+   Surface primitive sets; components read them with fallbacks. */
+
+.app-frame {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: #fdf9f4;
+}
+
+.app-frame > main {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(84, 70, 104, 0.28);
+  backdrop-filter: blur(3px);
+  display: grid;
+  place-items: center;
+  z-index: 40;
+  animation: m-fade-in 160ms ease-out;
+}
+
+.backdrop > .modal-slot {
+  min-width: 340px;
+  max-width: 460px;
+  width: 90vw;
+  animation: m-pop 220ms cubic-bezier(0.2, 0.9, 0.3, 1.2) both;
+}
+
+.m-hover {
+  transition: transform 180ms ease, box-shadow 180ms ease;
+}
+.m-hover:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 18px rgba(90, 80, 110, 0.1);
+}
+
+.m-doodle {
+  transition: transform 180ms ease, filter 300ms ease;
+}
+button.m-doodle:hover {
+  transform: scale(1.08) rotate(-2deg);
+}
+
+@keyframes m-fade-in {
+  from { opacity: 0; }
+}
+
+@keyframes m-fade-up {
+  from { opacity: 0; transform: translateY(6px); }
+}
+
+@keyframes m-pop {
+  from { opacity: 0; transform: scale(0.85); }
+}
+
+@keyframes m-sway {
+  0%, 100% { transform: rotate(-2.5deg); }
+  50% { transform: rotate(2.5deg); }
+}
+
+@keyframes m-confetti {
+  from { opacity: 1; transform: translate(0, 0) rotate(0deg); }
+  to { opacity: 0; transform: translate(var(--cx), var(--cy)) rotate(var(--cr)); }
+}

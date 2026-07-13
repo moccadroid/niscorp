@@ -4,6 +4,7 @@ import type { Mutation } from '@relay/vex/mutations';
 // Companies list — `company_id` aliased so the array shape is distinct; the rows
 // already match the shape, so no mapping.
 export const companiesList: CacheEntry = {
+  fingerprint: 'companies/list',
   intent: 'List all companies with industry and size',
   shape: [{ company_id: '', name: '', domain: '', industry: '', size: '' }],
   dsl: {
@@ -24,6 +25,7 @@ export const companiesList: CacheEntry = {
 // One company by id — an object shape, so Vex maps the single row. The aliased
 // row already matches the shape, so the mapping is identity over that one row.
 export const companyById: CacheEntry = {
+  fingerprint: 'companies/byId',
   intent: 'Load one company by id',
   shape: { company_id: '', name: '', domain: '', industry: '', size: '' },
   dsl: {

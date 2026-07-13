@@ -1,42 +1,69 @@
 // Headless data-layer harness: boots the real PGlite + Vex runtime in Node and
-// runs every cache entry straight through the engine, printing the cache result,
-// the SQL Vex compiled, and the shaped output. Run with `pnpm --filter relay
-// smoke`. Excluded from the app typecheck (src/dev).
-//
-// Proves: the seeded cache serves every entry (HIT, no LLM), the SQL is
-// genuinely synthesized, list mappings come back as arrays, by-id details /
-// aggregates as single objects (whole-set Prism).
+// runs every read the way the APP runs it — each check evaluates the screen's
+// own prism (the same seam the shell's transform socket evaluates) against
+// screen state, sends the resulting `{ fingerprint, context }` through the
+// engine, and asserts the replay: cache HIT on the intended fingerprint, no
+// missing context, the right envelope, and rows where the seed guarantees
+// them. Run with `pnpm --filter relay smoke`. Excluded from the app typecheck
+// (src/dev).
+import { evaluate } from '@niscorp/prism';
+import type { QueryRequest } from '@niscorp/vex';
 import type { CacheEntry } from '@relay/api';
-import { getVexRuntime, CURRENT_USER_ID } from '@relay/vex/runtime';
+import { getVexRuntime, CURRENT_USER_ID, CURRENT_DATE } from '@relay/vex/runtime';
 import { contactsList, contactById, contactsByCompany } from '@relay/api/contacts';
 import { companiesList, companyById } from '@relay/api/companies';
 import { dealsList, dealsByOwner, dealById, dealsByCompany, dealsBoard, dealsOpenByStage, dealsForecast, dealsByStatus, dealsByStage } from '@relay/api/deals';
-import { tasksMine, tasksByDeal, tasksOpenCount } from '@relay/api/tasks';
+import { tasksMine, tasksOverdue, tasksByDeal, tasksOpenCount } from '@relay/api/tasks';
 import { activitiesByDeal, dealLineItems } from '@relay/api/activities';
 import { actionsSearch } from '@relay/api/actions';
+import { sidebarCounts } from '@relay/api/counts';
+import { listContactsPrism } from '@relay/nova/domains/contact/contacts.prism';
+import { contactByIdPrism } from '@relay/nova/domains/contact/contact.prism';
+import { listCompaniesPrism } from '@relay/nova/domains/company/companies.prism';
+import { companyByIdPrism, companyContactsPrism, companyDealsPrism } from '@relay/nova/domains/company/company.prism';
+import { listDealsPrism, boardStagesPrism, boardDealsPrism, boardSummaryPrism } from '@relay/nova/domains/deal/deals.prism';
+import { dealByIdPrism, dealActivitiesPrism, dealLineItemsPrism, dealTasksPrism } from '@relay/nova/domains/deal/deal.prism';
+import { listTasksPrism } from '@relay/nova/domains/task/tasks.prism';
+import { homeOpenPrism, homeWonPrism, homeTasksPrism, homeStagesPrism } from '@relay/nova/surfaces/home/home.prism';
+import { sidebarCountsPrism } from '@relay/nova/chrome/sidebar.prism';
+import { topbarSearchPrism } from '@relay/nova/chrome/topbar.prism';
 
-const checks: { def: CacheEntry; ctx?: Record<string, unknown> }[] = [
-  { def: contactsList, ctx: { search: '%' } },
-  { def: companiesList, ctx: { search: '%' } },
-  { def: dealsList, ctx: { search: '%' } },
-  { def: dealsByOwner, ctx: { ownerId: CURRENT_USER_ID, search: '%' } },
-  { def: dealsBoard },
-  { def: dealsOpenByStage },
-  { def: dealsForecast },
-  { def: dealsByStage },
-  { def: companyById, ctx: { id: 'cmp_001' } },
-  { def: contactById, ctx: { id: 'con_001' } },
-  { def: dealById, ctx: { id: 'deal_001' } },
-  { def: contactsByCompany, ctx: { companyId: 'cmp_001' } },
-  { def: dealsByCompany, ctx: { companyId: 'cmp_001' } },
-  { def: activitiesByDeal, ctx: { id: 'deal_001' } },
-  { def: dealLineItems, ctx: { id: 'deal_001' } },
-  { def: tasksByDeal, ctx: { id: 'deal_001' } },
-  { def: tasksMine, ctx: { userId: CURRENT_USER_ID, search: '%' } },
-  { def: dealsByStatus, ctx: { status: 'open' } },
-  { def: dealsByStatus, ctx: { status: 'won' } },
-  { def: tasksOpenCount },
-  { def: actionsSearch, ctx: { search: '%new%' } },
+type Check = {
+  def: CacheEntry; // the entry the prism must resolve to
+  prism: unknown; // the screen's request seam
+  state?: Record<string, unknown>; // screen state beyond the ambient defaults
+  mayBeEmpty?: boolean; // the seed doesn't guarantee rows for this read
+};
+
+// Screen state mirrors what the shell provides: action-data defaults
+// (`search: ''`, sort defaults, tab scopes, opened ids) plus the ambient
+// context the transform socket folds into every source (`userId`, `today`).
+// Prism `$ref` is strict, so every key a list prism references must be here —
+// exactly as the action's `data` guarantees in the app.
+const checks: Check[] = [
+  { def: contactsList, prism: listContactsPrism, state: { sortBy: 'contacts.last_name', sortDir: 'asc' } },
+  { def: companiesList, prism: listCompaniesPrism, state: { sortBy: 'companies.name', sortDir: 'asc' } },
+  { def: dealsList, prism: listDealsPrism, state: { ownerId: '', sortBy: 'deals.created_at', sortDir: 'desc' } },
+  { def: dealsByOwner, prism: listDealsPrism, state: { ownerId: 'me', sortBy: 'deals.created_at', sortDir: 'desc' } },
+  { def: dealsBoard, prism: boardDealsPrism },
+  { def: dealsOpenByStage, prism: boardStagesPrism },
+  { def: dealsForecast, prism: boardSummaryPrism },
+  { def: dealsByStage, prism: homeStagesPrism },
+  { def: companyById, prism: companyByIdPrism, state: { id: 'cmp_001' } },
+  { def: contactById, prism: contactByIdPrism, state: { id: 'con_001' } },
+  { def: dealById, prism: dealByIdPrism, state: { id: 'deal_001' } },
+  { def: contactsByCompany, prism: companyContactsPrism, state: { id: 'cmp_001' } },
+  { def: dealsByCompany, prism: companyDealsPrism, state: { id: 'cmp_001' } },
+  { def: activitiesByDeal, prism: dealActivitiesPrism, state: { id: 'deal_001' } },
+  { def: dealLineItems, prism: dealLineItemsPrism, state: { id: 'deal_001' }, mayBeEmpty: true },
+  { def: tasksByDeal, prism: dealTasksPrism, state: { id: 'deal_001' }, mayBeEmpty: true },
+  { def: tasksMine, prism: listTasksPrism, state: { scope: 'open', sortBy: 'tasks.due_date', sortDir: 'asc' } },
+  { def: tasksOverdue, prism: listTasksPrism, state: { scope: 'overdue', sortBy: 'tasks.due_date', sortDir: 'asc' } },
+  { def: dealsByStatus, prism: homeOpenPrism },
+  { def: dealsByStatus, prism: homeWonPrism },
+  { def: tasksOpenCount, prism: homeTasksPrism },
+  { def: sidebarCounts, prism: sidebarCountsPrism },
+  { def: actionsSearch, prism: topbarSearchPrism, state: { search: 'new' } },
 ];
 
 const describe = (r: unknown): string =>
@@ -44,20 +71,42 @@ const describe = (r: unknown): string =>
 
 const main = async (): Promise<void> => {
   const rt = await getVexRuntime();
+  let failures = 0;
+
   for (const c of checks) {
+    const source = { search: '', userId: CURRENT_USER_ID, today: CURRENT_DATE, ...c.state };
+    const request = evaluate(c.prism, source) as QueryRequest;
     const sql = rt.engine.compile(c.def.dsl).sql;
-    const res = await rt.engine.execute({ intent: c.def.intent, shape: c.def.shape, context: c.ctx ?? {} }, { cache: 'use' });
+    const res = await rt.engine.execute(request, { scope: { userId: CURRENT_USER_ID } });
+
+    // The assertions that keep this harness honest: the prism resolved to the
+    // intended entry, the replay was warm, every SQL parameter was bound, the
+    // envelope matches the entry's shape, and seeded reads actually return data.
+    const problems: string[] = [];
+    if (res.meta.cache.hit !== true) problems.push('cache MISS');
+    if (res.meta.cache.fingerprint !== c.def.fingerprint) {
+      problems.push(`fingerprint "${res.meta.cache.fingerprint ?? '—'}" ≠ "${c.def.fingerprint}"`);
+    }
+    const missing = res.meta.missingContext ?? [];
+    if (missing.length > 0) problems.push(`missing context: ${missing.join(', ')}`);
+    if (Array.isArray(c.def.shape) !== Array.isArray(res.result)) problems.push('envelope mismatch (array vs single)');
+    if (Array.isArray(res.result) && res.result.length === 0 && c.mayBeEmpty !== true) problems.push('0 rows from a seeded read');
+
+    const ok = problems.length === 0;
+    if (!ok) failures += 1;
     const sample = Array.isArray(res.result) ? (res.result[0] ?? null) : res.result;
-    console.log(`\n=== ${c.def.intent} ===`);
-    console.log(`cache: ${res.meta.cache.hit ? 'HIT' : 'MISS'} · ${describe(res.result)} · prismIr: ${c.def.mapping !== undefined ? 'yes' : 'no'}`);
-    console.log(`SQL:   ${sql}`);
-    console.log(`out:   ${JSON.stringify(sample)}`);
+    console.log(`\n${ok ? '[pass]' : '[FAIL]'} ${c.def.fingerprint} — ${c.def.intent ?? ''}`);
+    if (!ok) console.log(`  ✗ ${problems.join(' · ')}`);
+    console.log(`  ${describe(res.result)} · prismIr: ${c.def.mapping !== undefined ? 'yes' : 'no'}`);
+    console.log(`  SQL: ${sql}`);
+    console.log(`  out: ${JSON.stringify(sample)}`);
   }
+
+  console.log(failures === 0 ? `\nOK — ${checks.length} reads replayed through their screen prisms.` : `\nFAIL — ${failures} of ${checks.length} checks.`);
+  process.exit(failures === 0 ? 0 : 1);
 };
 
-main()
-  .then(() => process.exit(0))
-  .catch((e: unknown) => {
-    console.error('SMOKE FAILED:', e);
-    process.exit(1);
-  });
+main().catch((e: unknown) => {
+  console.error('SMOKE FAILED:', e);
+  process.exit(1);
+});

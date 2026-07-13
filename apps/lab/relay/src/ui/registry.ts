@@ -1,29 +1,49 @@
 import { createComponentRegistry } from '@niscorp/nova';
 import { CanvasSlot, ActionSlot } from '@niscorp/nova/components/react';
 import type { NovaComponent } from '@niscorp/nova/react';
-import { Box, Stack, Row, Grid, Popover } from './components/layout';
-import { Text, Badge, Avatar, Icon } from './components/display';
+import { Box, Stack, Row, Grid, Popover, PopoverPanel } from './components/layout';
+import { Text, Badge, Avatar, Icon, Stat } from './components/display';
 import { Button, NavItem, LinkRow, Tabs, MenuItem, SortHeader } from './components/controls';
 import { Spinner, Skeleton } from './components/feedback';
 import { Input, Select, Textarea, Checkbox, Switch } from './components/forms';
 import { Overlay } from './components/overlay';
 import { Table } from './components/table';
-import { Draggable, DropZone } from './components/dnd';
+import { KanbanCard, KanbanCards } from './components/dnd';
+import {
+  ActivityDot,
+  Aside,
+  AssistantDock,
+  Dialog,
+  DialogBody,
+  DialogFoot,
+  DialogHead,
+  DialogTitle,
+  FormFoot,
+  KanbanBoard,
+  KanbanColumn,
+  KanbanHead,
+  PanelClose,
+  Progress,
+} from './components/chrome';
 import { StackChip } from './components/stack-chip';
 import { RayTrace } from './components/ray-trace';
 import { RayView } from './components/ray-view';
 
 // The Relay primitive vocabulary — every component a Nova layout can name.
+// Layouts control components ONLY through semantic props; every kit CSS class
+// is applied inside a component that owns it.
 const RELAY_PRIMITIVES = {
   Box,
   Stack,
   Row,
   Grid,
   Popover,
+  PopoverPanel,
   Text,
   Badge,
   Avatar,
   Icon,
+  Stat,
   Button,
   NavItem,
   LinkRow,
@@ -39,8 +59,22 @@ const RELAY_PRIMITIVES = {
   Switch,
   Overlay,
   Table,
-  Draggable,
-  DropZone,
+  Dialog,
+  DialogHead,
+  DialogTitle,
+  DialogBody,
+  DialogFoot,
+  PanelClose,
+  FormFoot,
+  Aside,
+  AssistantDock,
+  Progress,
+  ActivityDot,
+  KanbanBoard,
+  KanbanColumn,
+  KanbanHead,
+  KanbanCards,
+  KanbanCard,
   StackChip,
   RayTrace,
   RayView,

@@ -16,7 +16,7 @@ export const contactsAction: ActionDefinition = {
   data: { search: '', rows: [], loading: true, highlight_id: '', menuOpenId: '', sortBy: 'contacts.last_name', sortDir: 'asc', pendingDeleteId: '', pendingDeleteLabel: '' },
   layout: contactsLayout,
   endpoints: {
-    load:   { url: '/api/contacts/vex?cache=use', method: 'POST', request: listContactsPrism, response: resultPrism, target: 'rows' },
+    load:   { url: '/api/contacts/vex', method: 'POST', request: listContactsPrism, response: resultPrism, target: 'rows' },
     remove: { url: '/api/contacts/vex',           method: 'POST', request: deleteContactPrism },
   },
   // On resume (a drilled record popped back to the list) clear the row highlight —

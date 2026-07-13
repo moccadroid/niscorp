@@ -8,24 +8,29 @@ import { companiesInputSchema } from '@relay/nova/domains/company/companies.acti
 import { companyInputSchema } from '@relay/nova/domains/company/company.action';
 import { companyFormInputSchema } from '@relay/nova/domains/company/company.form.action';
 import { tasksInputSchema } from '@relay/nova/domains/task/tasks.action';
+import { taskFormInputSchema } from '@relay/nova/domains/task/task.form.action';
 import { homeInputSchema } from '@relay/nova/surfaces/home/home.action';
 import { settingsInputSchema } from '@relay/nova/surfaces/settings/settings.action';
 
 // ═══════════════════════════════════════════════════════════
 // Ray's vocabulary — what it may open, and what it may build views with.
 //
-// CATALOG: the actions Ray can place + a one-line description of each. The input
-// schema is JSON Schema OWNED BY THE ACTION — each `.action.ts` authors it in zod
-// and exports the converted schema; here we only curate the openable set + the
-// descriptions, so the schema can never drift from the action's real inputs.
-// CATALOG_IDS gates which ids Ray may open.
+// The catalog is LIVE: preloaded with the hand-authored screens below, and
+// every action built at runtime registers into it (build_action does), so
+// Ray, the architect, and the audit all reference one current set. The
+// input schema is JSON Schema OWNED BY THE ACTION — each `.action.ts`
+// authors it in zod and exports the converted schema, so it can never
+// drift from the action's real inputs. Future: this loads from a DB/API —
+// MCP-for-actions; the read surface (catalogEntries/catalogIds) is already
+// the seam.
 //
 // VIZ_COMPONENTS: the display primitives Ray may use when it builds a layout.
 // ═══════════════════════════════════════════════════════════
 
 export type CatalogEntry = { id: string; description: string; input: Record<string, unknown> };
 
-export const CATALOG: CatalogEntry[] = [
+// The preload — hand-authored screens.
+const SEED: CatalogEntry[] = [
   // screens
   { id: 'home', description: 'Dashboard.', input: homeInputSchema },
   { id: 'deals', description: 'Deals — table or pipeline board.', input: dealsInputSchema },
@@ -41,24 +46,34 @@ export const CATALOG: CatalogEntry[] = [
   { id: 'deal.form', description: 'Form to create or edit a deal; the user submits it.', input: dealFormInputSchema },
   { id: 'contact.form', description: 'Form to create or edit a contact; the user submits it.', input: contactFormInputSchema },
   { id: 'company.form', description: 'Form to create or edit a company; the user submits it.', input: companyFormInputSchema },
+  { id: 'task.form', description: 'Form to create or edit a task; the user submits it.', input: taskFormInputSchema },
 ];
 
-export const CATALOG_IDS = new Set(CATALOG.map((c) => c.id));
+const LIVE: CatalogEntry[] = [...SEED];
+const IDS = new Set(LIVE.map((entry) => entry.id));
+
+export const catalogEntries = (): ReadonlyArray<CatalogEntry> => LIVE;
+export const catalogIds = (): ReadonlySet<string> => IDS;
+
+// Runtime registration — a built action becomes openable/pushable the moment
+// it exists. Replaces by id, so an edited screen updates its entry.
+export const registerCatalogEntry = (entry: CatalogEntry): void => {
+  const index = LIVE.findIndex((candidate) => candidate.id === entry.id);
+  if (index >= 0) LIVE[index] = entry;
+  else LIVE.push(entry);
+  IDS.add(entry.id);
+};
 
 // The components Ray may use when it builds a layout — curated to display/layout
 // primitives (nav/chrome/form components are left out).
 export const VIZ_COMPONENTS = ['Box', 'Stack', 'Row', 'Grid', 'Text', 'Badge', 'Avatar', 'Icon', 'Table'];
 
 // Presentational props stripped from the layout agent's palette — it can't set a
-// background, a class, a border, spacing, or a size, so every component renders in
-// its default relay style. (Semantic props like a Badge's tone stay.)
-export const VIZ_OMIT_PROPS = ['bg', 'class', 'border', 'radius', 'glow', 'pad', 'px', 'py', 'width', 'h'];
+// background, a border, spacing, or a size, so every component renders in its
+// default relay style. (Semantic props like a Badge's tone stay. Class props no
+// longer exist anywhere — kit classes are applied inside the components.)
+export const VIZ_OMIT_PROPS = ['bg', 'border', 'radius', 'glow', 'pad', 'px', 'py', 'width', 'h'];
 
-// House style handed to the layout agent, so its output is consistent and plain.
-export const LAYOUT_STYLE = [
-  'Relay house style — keep it plain and minimal:',
-  '- Use components in their default styling. Never fake a container or a background.',
-  '- A single value (a KPI) is a Stack: a large Text for the number, then a small Text label beneath. No box, no background.',
-  '- A list of records is a Table.',
-  '- Use the fewest components that convey the data.',
-].join('\n');
+// The house style for generated layouts lives in knowledge.ts (styleGuide) —
+// one source for the architect AND visualize; the duplicate that used to sit
+// here had already drifted from the architect's copy.

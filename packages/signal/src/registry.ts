@@ -11,6 +11,10 @@ export type ProviderEntry = {
   defaultModel: string;
   capabilities: Capabilities;
   adapter: 'openai-compatible' | 'anthropic' | 'google';
+  // Wire strategies (src/wire/strategies.ts) — provider-specific
+  // recovery/normalization, selected by id. The default repair ladder
+  // runs everywhere; this list is only what is true of THIS provider.
+  wire?: string[];
 };
 
 export const providerRegistry: Record<string, ProviderEntry> = {
@@ -20,13 +24,26 @@ export const providerRegistry: Record<string, ProviderEntry> = {
     envKey: 'GROQ_API_KEY',
     defaultModel: 'openai/gpt-oss-120b',
     capabilities: {
-      nativeTools: false,
+      // Groq does native tool calling (gpt-oss et al.) — but rejects
+      // response_format combined with tools in one request, and
+      // validates tool args server-side (tool_use_failed 400s).
+      nativeTools: true,
       nativeJsonSchema: false,
       nativeJsonMode: true,
+      toolsWithStructuredOutput: false,
+      validatesToolArgs: true,
+      // Observed 2026-07: gpt-oss-120b stringifies nested arrays inside
+      // tool-call args ("children": "[{\"component\":...") while emitting
+      // the same JSON cleanly as content. Structured payloads must ride
+      // the content channel on this provider.
+      manglesNestedToolArgs: true,
       multimodal: false,
       supportsEmbedding: false,
     },
     adapter: 'openai-compatible',
+    // tool_use_failed / json_validate_failed 400s carry the model's
+    // attempt in failed_generation — recover and route it.
+    wire: ['failed-generation'],
   },
   openai: {
     id: 'openai',
@@ -37,10 +54,16 @@ export const providerRegistry: Record<string, ProviderEntry> = {
       nativeTools: true,
       nativeJsonSchema: true,
       nativeJsonMode: true,
+      toolsWithStructuredOutput: true,
+      validatesToolArgs: false,
+      manglesNestedToolArgs: false,
       multimodal: true,
       supportsEmbedding: true,
     },
     adapter: 'openai-compatible',
+    // 4o-era models occasionally emit JSONL where one value was asked
+    // for; the acceptance gate decides, so this can never misfire.
+    wire: ['jsonl-lines'],
   },
   openrouter: {
     id: 'openrouter',
@@ -51,6 +74,11 @@ export const providerRegistry: Record<string, ProviderEntry> = {
       nativeTools: true,
       nativeJsonSchema: true,
       nativeJsonMode: true,
+      // Model-dependent through the proxy; default pessimistic. Override
+      // via .capabilities() when the routed model supports the combo.
+      toolsWithStructuredOutput: false,
+      validatesToolArgs: false,
+      manglesNestedToolArgs: false,
       multimodal: true,
       supportsEmbedding: false,
     },
@@ -65,6 +93,9 @@ export const providerRegistry: Record<string, ProviderEntry> = {
       nativeTools: true,
       nativeJsonSchema: false,
       nativeJsonMode: true,
+      toolsWithStructuredOutput: false,
+      validatesToolArgs: false,
+      manglesNestedToolArgs: false,
       multimodal: true,
       supportsEmbedding: false,
     },
@@ -79,6 +110,9 @@ export const providerRegistry: Record<string, ProviderEntry> = {
       nativeTools: true,
       nativeJsonSchema: false,
       nativeJsonMode: true,
+      toolsWithStructuredOutput: false,
+      validatesToolArgs: false,
+      manglesNestedToolArgs: false,
       multimodal: true,
       supportsEmbedding: false,
     },

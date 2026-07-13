@@ -6,6 +6,6 @@ import { dealsByCompany } from '@relay/api/deals';
 // deals. Each prism is a full Vex query body, attached to an endpoint's `request`.
 // (No company-level activity feed: every activity is logged against a deal or
 // contact; the company's "activity" is just its deals' feeds.)
-export const companyByIdPrism = { shape: { $const: companyById.shape }, context: { id: { $ref: '$.id' } } };
-export const companyContactsPrism = { shape: { $const: contactsByCompany.shape }, context: { companyId: { $ref: '$.id' } } };
-export const companyDealsPrism = { shape: { $const: dealsByCompany.shape }, context: { companyId: { $ref: '$.id' } } };
+export const companyByIdPrism = { fingerprint: companyById.fingerprint, context: { id: { $ref: '$.id' } } };
+export const companyContactsPrism = { fingerprint: contactsByCompany.fingerprint, context: { companyId: { $ref: '$.id' } } };
+export const companyDealsPrism = { fingerprint: dealsByCompany.fingerprint, context: { companyId: { $ref: '$.id' } } };

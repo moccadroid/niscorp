@@ -17,7 +17,26 @@ import type { CompiledIr } from '@niscorp/prism';
 
 type CacheEntryMeta = {
   createdAt: number;
+  /**
+   * Touch-on-read timestamp. Lifetime is usage: a GC sweep evicts
+   * entries unused for a configured window; protected entries never
+   * sweep. Replaces the provisional/permanent distinction entirely.
+   */
+  lastUsedAt?: number;
   expiresAt?: number;
+  /**
+   * Protected entries refuse replacement: a fingerprint request whose
+   * intent/shape differ from the stored ones errors instead of
+   * regenerating. Written ONLY by the seed path and an explicit PATCH —
+   * never by query execution.
+   */
+  protected?: boolean;
+  /**
+   * Identity of the request that produced this entry (intent + normalized
+   * shape + context key names). A fingerprint request with a matching
+   * hash is a hit; a differing one regenerates (or 409s when protected).
+   */
+  requestHash?: string;
   /**
    * Fingerprint of the database schema at write time. When it no longer
    * matches the current schema, the entry is stale (its DSL may
@@ -25,9 +44,8 @@ type CacheEntryMeta = {
    */
   schemaFingerprint?: string;
   /**
-   * The originating request's intent and shape, stored for inspection /
-   * a future management UI. NOT part of any cache key — positives are
-   * keyed by shape hash, negatives by full-request hash.
+   * The originating request's intent and shape — descriptive metadata
+   * for inspection and the GET overview. Never part of identity.
    */
   intent?: string;
   shape?: unknown;
@@ -66,5 +84,3 @@ export type CacheBackend = {
   init?: () => Promise<void>;
   entries?: () => Promise<Array<{ key: string; entry: CacheEntry }>>;
 };
-
-export type CacheMode = 'use' | 'refresh' | 'bypass' | 'only';

@@ -9,6 +9,7 @@ import { dateText } from '@relay/lib/format.prism';
 // due constraint, so tasks without a due date still show. `due_date` is kept RAW
 // (so a row's ⋯ → Edit seeds the date input) alongside `due_date_display`.
 export const tasksMine: CacheEntry = {
+  fingerprint: 'tasks/mine',
   intent: 'List my tasks (open / done / all via a done range) ordered by due date',
   shape: [{ task_id: '', title: '', due_date: '', due_date_display: '', created_at: '', done: false, deal_id: '' }],
   dsl: {
@@ -46,6 +47,7 @@ export const tasksMine: CacheEntry = {
 // own read (the due cutoff can't be a no-op in `tasksMine`); the const `overdue`
 // key both flags the rows and keeps the shape distinct in the cache.
 export const tasksOverdue: CacheEntry = {
+  fingerprint: 'tasks/overdue',
   intent: 'List my overdue open tasks (due before today)',
   shape: [{ task_id: '', title: '', due_date: '', due_date_display: '', created_at: '', done: false, deal_id: '', overdue: true }],
   dsl: {
@@ -83,6 +85,7 @@ export const tasksOverdue: CacheEntry = {
 // A contact's open tasks, earliest due first. Shape carries `deal_id` so it
 // stays distinct from `tasksByDeal` in the shape-keyed cache.
 export const tasksByContact: CacheEntry = {
+  fingerprint: 'tasks/byContact',
   intent: "A contact's open tasks ordered by due date",
   shape: [{ task_id: '', title: '', due_date: '', done: false, deal_id: '' }],
   dsl: {
@@ -109,6 +112,7 @@ export const tasksByContact: CacheEntry = {
 
 // A deal's tasks (open + done), earliest due first.
 export const tasksByDeal: CacheEntry = {
+  fingerprint: 'tasks/byDeal',
   intent: "A deal's tasks ordered by due date",
   shape: [{ task_id: '', title: '', due_date: '', done: false }],
   dsl: {
@@ -135,6 +139,7 @@ export const tasksByDeal: CacheEntry = {
 // Count of open tasks (a dashboard KPI) — one aggregated row → an object. The
 // row already matches the shape, so the mapping is identity over that row.
 export const tasksOpenCount: CacheEntry = {
+  fingerprint: 'tasks/openCount',
   intent: 'Count of open tasks',
   shape: { done: false, count: 0 },
   dsl: {

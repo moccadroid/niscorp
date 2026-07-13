@@ -51,8 +51,7 @@ export const companyFormLayout: LayoutNode = {
     // The form's own footer — its buttons live here, in its layout, handled by
     // its action's `cancel`/`confirm` triggers. Renders on every canvas.
     {
-      component: 'Row',
-      props: { class: 'rl-form__foot' },
+      component: 'FormFoot',
       children: [
         { component: 'Button', ref: 'cancel', props: { variant: 'default' }, children: 'Cancel' },
         { component: 'Button', ref: 'confirm', props: { variant: 'primary' }, children: '$.confirmLabel' },

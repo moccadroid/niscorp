@@ -1,891 +1,674 @@
 # `@niscorp/cortex` — design
 
-Cortex is the orchestration substrate for the `@niscorp` stack. This
-document is the *why* behind the architecture: what the primitives are,
-what trade-offs produced them, and where the known soft spots live.
+Cortex is the agent runtime of the `@niscorp` stack. It runs typed,
+tool-using agents on top of [`@niscorp/signal`](../signal) (model
+calls), [`@niscorp/solid`](../solid) (partial-JSON streaming), and
+`zod` (validation). This document is the *why*; usage lives in
+[`README.md`](./README.md). Style rules live in
+[`niscorp/STYLE_GUIDE.md`](../../STYLE_GUIDE.md) — no `any`, no `as`,
+no `!`, no `enum`, no classes; arrow-const exports with explicit
+return types; kebab-case files with role suffixes; named exports only.
 
-The *how* lives in [`README.md`](./README.md). Style rules live in
-[`niscorp/STYLE_GUIDE.md`](../../STYLE_GUIDE.md) — no `any`, no `as`, no
-`!`, no `enum`, no classes; arrow-const exports with explicit return
-types; kebab-case files with role suffixes; named exports only.
-
----
-
-## 1. The big idea
-
-Cortex does five things and nothing else:
-
-1. **Agent execution.** `defineAgent` declares an LLM-backed function in
-   one of three modes (`text`, `structured`, `plan`).
-2. **Context engineering.** A pipeline of *producers* assembles what the
-   model sees on every call. Producers are pure functions over runtime
-   state, optionally stateful via bus subscriptions, optionally
-   compressing.
-3. **Plan execution.** Plan-mode agents emit an `ActionPlan`; the
-   runtime executes the nodes under policy gates and budget enforcement
-   inside a bounded tick loop.
-4. **Declarative steering.** Stateful producers and a JSON rules engine
-   observe bus events and shape what happens next — `inject` context,
-   `abort` a run, `deny` a tool call, `call` a named effect handler.
-5. **Event-based substrate.** Every state change emits an event on the
-   bus. Sync APIs (`execute`, `runAgentStandalone`) are convenience
-   sugar that dispatch a request event and await a completion event.
-
-**Anti-goals.** No HTTP. No UI. No database. No LLM client (Signal
-handles that). No MCP mounting. No framework coupling. Streaming is
-opt-in via `{ stream: true }` on `manifold.execute` — see §12.
-
-**Two peer dependencies and nothing else:**
-[`@niscorp/signal`](../signal) and `zod`.
+This is the second design. The first (see git history) built an
+event-bus substrate, a producer pipeline, a JSON rules engine, and a
+plan-mode interpreter. A full architecture review (2026-07) found:
+every real consumer used only `defineAgent` + `defineTool` +
+`runAgentStandalone`; structured mode never sent the output schema to
+the model; the context prefix was re-templated every iteration
+(cache-hostile); the rules engine and stateful producers were broken
+in ways no consumer had hit because no consumer used them. v2 keeps
+what earned its place — typed tools, gating, observations,
+cross-library agents, context-from-functions, preview — and rebuilds
+the execution core around the pattern the field converged on: one
+tool loop with a typed exit.
 
 ---
 
-## 2. Architectural layers
+## 1. What cortex does
 
-```
-┌────────────────────────────────────────────────────────────────┐
-│                          Manifold                              │
-│ Registry · Bus · Ledger · State Store · Event Log · Lifecycle  │
-└────────────────────────────────────────────────────────────────┘
-                ↑                  ↑                ↑
-        ┌───────┴────────┐  ┌──────┴───────┐  ┌─────┴────────┐
-        │     Rules      │  │    Agents    │  │     Tools    │
-        │   defineRule   │  │  defineAgent │  │  defineTool  │
-        │ + producers    │  │  (3 modes)   │  │  (Zod input) │
-        └───────┬────────┘  └──────┬───────┘  └──────────────┘
-                │                  │
-                ↓                  ↓
-        ┌──────────────────────────────────────────────┐
-        │             Context Pipeline                 │
-        │  Producers → Build → Score → Pack → Send     │
-        │  (the most important subsystem in Cortex)    │
-        └──────────────────┬───────────────────────────┘
-                           ↓
-        ┌──────────────────────────────────────────────┐
-        │              Cortex Tool Loop                │
-        │  signal.step() → toolCalls → gate (w/         │
-        │  confirmation) → execute → observe →         │
-        │  re-pack context → … → final output          │
-        └──────────────────┬───────────────────────────┘
-                           ↓
-        ┌──────────────────────────────────────────────┐
-        │     Output Parser (per execution mode)       │
-        │  text       → string                         │
-        │  structured → schema-validated typed value   │
-        │             → retry-on-failure loop          │
-        │  plan       → ActionPlan → Plan Executor     │
-        └──────────────────┬───────────────────────────┘
-                           ↓
-        ┌──────────────────────────────────────────────┐
-        │         Plan Executor (plan mode only)       │
-        │  Depth-first · gate per step · observe ·     │
-        │  bounded ticks · emits events through bus    │
-        └──────────────────────────────────────────────┘
-```
+1. **Agents.** `defineAgent<TData, TDeps>` — configuration, not a
+   class. Typed output, typed per-invocation deps.
+2. **One loop.** model → tools → model. Bounded, gated, observed. The
+   only execution path; there is no second mode.
+3. **The envelope.** Every agent returns structured data. Terminating
+   the loop is itself a tool call (`respond`).
+4. **Context.** Functions of typed deps build the prefix once per
+   run. The transcript is append-only after that.
+5. **Gates.** Code hooks before and after every tool call. Approvals
+   suspend the run; suspended runs are serializable.
+6. **Events.** Every run is a typed event stream. Observability *is*
+   the stream.
+7. **Manifold.** A catalog of agents and tools with shared defaults
+   and a run tap. Libraries (vex, prism, nova) export agents; apps
+   compose them; agents consume each other as tools.
 
-Everything funnels through the context pipeline. Every tool runs
-through the Cortex-owned tool loop. Every state change emits an event
-on the bus. Sync APIs dispatch + await.
+**Anti-goals.** No HTTP, no UI, no database, no LLM SDK (signal), no
+JSON-parsing of streams (solid), no event-bus substrate, no
+declarative rules DSL, no plan interpreter (§14), no conversation
+persistence (callers own history).
+
+**Peers:** `@niscorp/signal`, `@niscorp/solid`, `zod`.
 
 ---
 
-## 3. The event-based substrate
+## 2. The envelope
 
-This is the foundational decision and shapes everything else, so it
-goes first.
-
-### 3.1 Why event-based
-
-Sync APIs are easy to write and easy to debug — until you want to
-observe what's happening, at which point you bolt a bus on top and end
-up with two execution paths that drift apart. Telemetry events become
-"for monitoring" and sync calls "for real work" and the two end up in
-different states. Steering can't see what direct calls do. Tests pass
-for one path and fail for the other.
-
-Event-based as substrate inverts this. Every action dispatches an
-event, every state change emits an event, every consumer (UI, rules,
-telemetry, debugging tools, the caller awaiting a result) subscribes to
-the same stream. Sync becomes a *view* over events, not a *parallel
-path* alongside them.
+Every agent returns the same shape. There is no text mode.
 
 ```ts
-// Conceptually, sync execute is just:
-const execute = async (agentId, input) => {
-  const runId = manifold.bus.emit(CortexTopics.executeRequested, { agentId, input, workflowId });
-  const completion = await manifold.bus.waitFor(CortexTopics.executeCompleted.topic, {
-    filter: (e) => e.meta.workflowId === workflowId,
-  });
-  return completion.payload.result;
+type Envelope<TData> = {
+  response?: string;   // human-facing text
+  data: TData;         // schema-typed payload (undefined for pure chat agents)
+  reasoning?: string;  // model-authored: WHY it did what it did
 };
 ```
 
-The implementation short-circuits through the registry for in-process
-specialists as a performance optimization, but the *contract* is
-event-based and the events fire regardless.
-
-### 3.2 What this requires from the bus
-
-The bus is more than `emit + on`:
-
-- **Wildcard subscriptions** — `on('cortex.tool.*', handler)`.
-- **Correlation IDs** — every event carries a `correlationId`; child
-  events inherit. This stitches a workflow's events together for replay
-  and debugging.
-- **`waitFor(pattern, options)`** — block until an event matching a
-  pattern fires, with optional timeout, filter, and abort signal.
-- **Backpressure-free fanout** — handlers run in registration order;
-  errors in handlers don't crash the bus; slow handlers don't block
-  the dispatcher.
-- **Replay-friendly** — events append to the event log on emit. The
-  event log is pluggable; in-memory by default.
-
-### 3.3 Preferred mode
-
-**The preferred way to interact with Cortex is via the bus.** The
-showroom's demos lead with event-based usage. The sync API is
-documented as convenience sugar over the event substrate, not as a
-separate mode. Consumers who want the alive-as-fuck experience
-subscribe directly to topics; consumers who want to call a function
-and await a result get sugar that does exactly that on top of the same
-substrate.
-
-### 3.4 Reserved topic taxonomy
-
-Cortex emits these system topics. User code may subscribe to any of
-them and may emit any topic that does **not** begin with `cortex.`.
-Each system topic has a typed payload via `CortexTopics` (see
-`topics.ts`).
-
-| Topic | When | Payload |
-|---|---|---|
-| `cortex.execute.requested` | A top-level `execute` is dispatched | `{ agentId, input, workflowId, abort? }` |
-| `cortex.execute.completed` | A dispatched execute settles | `{ result, workflowId }` |
-| `cortex.execute.failed` | A dispatched execute failed | `{ error, workflowId }` |
-| `cortex.workflow.started` | A workflow begins | `{ workflowId, agentId, input }` |
-| `cortex.workflow.ended` | A workflow completes (success or failure) | `{ workflowId, result?, error?, ledger? }` |
-| `cortex.tick.started` / `.ended` | A plan-mode tick begins / ends | `{ workflowId, tick }` |
-| `cortex.agent.invoked` / `.completed` | An agent call begins / ends | `{ agentId, input }` / `{ agentId, output }` |
-| `cortex.agent.retry` | Output validation failed; model is being re-prompted | `{ agentId, workflowId, attempt, nextAttempt, rawContent, error }` |
-| `cortex.tool.called` / `.observed` | A tool call begins / ends | `Observation` |
-| `cortex.observation.recorded` | Any step observation lands | `Observation` |
-| `cortex.plan.produced` | A plan-mode agent emits a plan | `{ workflowId, agentId, plan }` |
-| `cortex.plan.gated` | A plan node is checked by the policy gate | (opaque) |
-| `cortex.policy.confirmation.requested` | A high-risk tool call awaits human approval | `{ workflowId, toolId, input }` |
-| `cortex.policy.confirmation.approved` / `.denied` | Human response landed | `{ toolId }` |
-| `cortex.rule.evaluated` | A rule was evaluated | `{ result, accumulators }` |
-| `cortex.rule.fired` | A rule matched and its effect is about to be applied | `{ ruleId, effect, accumulators }` |
-| `cortex.context.built` | A context pipeline run completes | (opaque) |
-| `cortex.error` / `cortex.warning` | Error / warning surfaces | `CortexError` / `{ message }` |
-
-Producers, rules, and user code that need finer-grained signals emit
-topics under their own namespaces.
-
----
-
-## 4. Agent execution
-
-### 4.1 The three modes
-
-| Mode | Output | Used by |
-|---|---|---|
-| `text` | `string` | Free-form responses, summaries, chat |
-| `structured` | `T` (Zod-validated, with retry-on-failure) | Vex query agent, Vex mapping agent, Nova layout agent, classifiers, extractors |
-| `plan` | `ActionPlan` (validated) | Directors, orchestrators, multi-step workflows |
-
-Agents are stateless functions. State lives in the manifold (workflow
-state, ledger, event log) or in producers (per-workflow producer
-state). There is no agent instance with hidden state.
-
-### 4.2 `defineAgent`
-
-The serializable part of the config (`id`, `name`, `description`,
-`instructions`, `outputMode`, `model`, `tools`, `policy`,
-`maxToolIterations`, `maxTicks`, `maxOutputRetries`) is Zod-validated at
-definition time. Non-serializable fields (`outputSchema`, `context`) are
-attached as live objects.
-
-Structured mode without `outputSchema` **throws at definition time**.
-Plan mode ignores `outputSchema` (it's always `ActionPlanSchema`). Text
-mode ignores any schema.
-
-### 4.3 Standalone vs manifold
-
-There is exactly one execution path. Standalone is a degenerate
-manifold.
-
-`runAgentStandalone` builds a micro-manifold (registry of one,
-in-memory bus that nobody outside has subscribed to, in-memory ledger
-that gets discarded after the run, default context spec, no
-persistence). The same `executeAgent` function handles both standalone
-and full-manifold execution. The micro-manifold is built and torn down
-per call.
-
-This means **every agent any package exports is a Cortex agent.** Vex
-exports `queryAgent` and `mappingAgent`. Prism exports `mappingAgent`.
-Nova exports `layoutAgent`. They all run on Cortex via
-`runAgentStandalone` for one-shot use, or by registering them with a
-real manifold for orchestrated use. There is no second framework, no
-fork, no maintenance burden of multiple equivalent agents.
-
-### 4.4 Retry on output validation failure
-
-Structured-mode agents that return malformed output are re-prompted up
-to `maxOutputRetries` times (default 2). The failed content and the
-Zod failure are fed back into the next call as additional context.
-Each retry emits `cortex.agent.retry` so UIs can show attempts inline.
-When retries exhaust, the workflow fails with
-`output_validation_failed`.
-
-### 4.5 The agent run context
-
-While an agent runs it has access to a `RunContext`: `workflowId`,
-`agentId`, `tick`, `signal` (abort), `bus`, `ledger`, `emit`. Tools
-receive a `ToolContext` derived from this; producers receive a
-`BuildContext` exposing read-only views.
-
----
-
-## 5. Context engineering — the producer model
-
-This is the heart of the package. The single most important section to
-get right.
-
-### 5.1 Why a producer model
-
-An early draft treated context as a section template (system, tools,
-history, observations, truncate from the bottom). That is templating,
-not engineering. Looking at how the field actually does this:
-
-- **Microsoft Agent Framework** has a Context Provider API: pluggable
-  components with `invoking()` / `invoked()` hooks, each with their own
-  token budget, composing as a pipeline.
-- **LangChain/LangGraph** uses typed state objects with node-level
-  fine-grained access.
-- **Mastra** has memory processors (MessageHistory, SemanticRecall,
-  WorkingMemory) — each a stage in a pipeline.
-- **Vercel AI SDK** has `prepareStep`, a per-step mutation callback.
-- **Manus team** emphasizes: stable prefix for KV-cache, mask tools
-  instead of removing them, treat context as append-only, recite goals
-  to fight lost-in-the-middle, preserve failed actions in context.
-
-Cortex's `ContextProducer` is closest to the Microsoft model —
-pluggable, lifecycle-aware, budgeted, composable — with three
-additions: producers can subscribe to bus events (turning them into
-live steering primitives), producers can be inspected via a preview
-API, and producers can opt into LLM-based compression.
-
-### 5.2 The primitive
-
-A `ContextProducer` has an `id`, a `priority` (0 most evictable, 100
-pinned), optional `subscribes` topics + `onEvent` for statefulness,
-optional `maxTokens` budget, a `build` function that returns content
-chunks, and an optional `compress` function. Producer state is
-private, scoped per-workflow, lives in the manifold's state store.
-When a producer subscribes, the runtime attaches it to the bus on
-workflow start and detaches on workflow end.
-
-### 5.3 The pipeline
-
-The pipeline runs every time an agent is about to be invoked. No
-caching across ticks in v1 — fresh build every time, simple and
-correct:
-
-```
-1. Gather:    Collect all producers attached to this agent (per-agent
-              spec + manifold-global). Order by priority descending.
-2. Build:     Call build() on each. Producers with subscribes have
-              already been accumulating state via onEvent.
-3. Estimate:  Fill in token counts (via signal.count() in exact mode;
-              ~4 chars/token heuristic in fuzzy mode).
-4. Compress:  For each producer with maxTokens (or whose chunks
-              exceed the global budget), call compress(). Default:
-              tail truncation.
-5. Pack:      Sort by priority, evict lowest-priority chunks until
-              under global budget. Pinned chunks (priority=100) never
-              evict.
-6. Assemble:  Convert chunks to provider-format messages. Send to model.
-```
-
-### 5.4 `previewContext` — the killer debugging API
-
-`manifold.previewContext(agentId, input)` runs steps 1–5 and returns
-the resolved chunks with sources, token counts, and eviction
-decisions, *without* sending anything to a model. This is
-non-negotiable — debugging context issues without it is hell, and it
-costs nothing to implement once the pipeline exists.
-
-### 5.5 Built-in producers
-
-| Producer | Default priority | Purpose |
-|---|---|---|
-| `systemProducer(prompt)` | 100 (pinned) | The agent's system prompt |
-| `actionContractProducer()` | 100 (pinned) | Plan-mode only: ActionPlan rules and allowed kinds |
-| `inputProducer()` | 100 (pinned) | The current invocation's input as a user message |
-| `toolsProducer({ filter, format })` | 90 | Registry-aware tool list, filtered by policy |
-| `agentsProducer({ filter })` | 80 | Available delegate agents (for plan-mode `ask_agent`) |
-| `budgetProducer()` | 70 | Remaining tokens/cost/ticks — helps the model self-regulate |
-| `recitationProducer({ goalKey })` | 60 | Per Manus: re-injects the active goal/todo to fight drift |
-| `historyProducer({ window, compress })` | 50 | Conversation history with bounded window |
-| `observationsProducer({ window, format })` | 40 | Recent step observations from the current workflow |
-
-**Default specs** (applied when an agent doesn't override `context`):
-
-- `text` / `structured` mode: `[system, tools, history, input]`
-- `plan` mode: `[system, actionContract, tools, agents, budget, history, observations, input]`
-
-### 5.6 Compression
-
-Two compressors ship:
-
-| Compressor | Cost | When to use |
-|---|---|---|
-| `truncateCompressor` | Free | Default. Drop lowest-priority chunks until under cap. |
-| `createSummarizeCompressor({ llm, model })` | One LLM call | History layers in long workflows. |
-
-Compression is opt-in at the producer level. The runtime warns in dev
-mode when a producer with no compressor consistently exceeds budget.
-LLM-based compression cost flows into the parent run's ledger,
-surfaced via `previewContext` so it's visible.
-
-Budget enforcement is in **tokens**, not dollars. Providers don't
-expose pricing programmatically and the same token count costs 100×
-more on a frontier model than a 20B OSS model. Optional dollar
-accounting lands as a user-supplied per-model price map feeding the
-ledger.
-
-### 5.7 KV-cache stability (the Manus lesson)
-
-The pipeline must produce a stable prefix for cache hits:
-
-- Pinned producers (priority 100) come first, in deterministic order.
-- Producer outputs must be deterministic for the same `BuildContext`.
-  No `Date.now()` in chunk content. No random IDs.
-- v1 accepts cache misses when tool lists change. A future iteration
-  explores logit masking via Signal (`tool_choice` constraints) instead
-  of removing tools from the list.
-
-### 5.8 Token estimation
-
-Two modes, configurable per manifold:
-
-- **`fuzzy`** (default): heuristic (~4 characters per token, plus ~4
-  tokens per-message overhead). Fast, good enough to answer "am I at
-  10k or 100k?" for budget decisions.
-- **`exact`**: delegates to `signal.count(model, content)`. Currently
-  falls back to fuzzy internally in Signal; once a real tokenizer
-  lands upstream, exact-mode propagates everywhere Cortex asks.
-
-The heuristic is roughly correct for English text and roughly wrong
-for code, structured JSON, and non-Latin scripts. Acceptable for
-budget enforcement (the purpose is "don't blow past the cap"), less
-acceptable for dollar-accurate cost estimation.
-
-### 5.9 Pipeline caching (future work)
-
-The pipeline rebuilds fresh on every iteration. Simple and correct —
-no stale-context bugs — but redundant for producers whose output
-doesn't change. Future optimization: volatility tags (`stable` for
-`system`/`actionContract`/`tools`/`agents`/`input`; `volatile` for
-`observations`/`budget`/`history`). The pipeline caches stable
-producers on first build and skips `build()` on subsequent
-iterations. Not yet implemented — profile first.
-
----
-
-## 6. The Cortex tool loop
-
-### 6.1 Why Cortex owns the tool loop
-
-Signal could own it; it used to. Cortex takes it back because:
-
-1. Per-call **policy gating** — a tool can be denied mid-loop without
-   aborting the whole agent run.
-2. Per-call **ledger attribution** — exact accounting of which tool
-   burned which tokens.
-3. **Context injection between calls** — a low-budget warning, a
-   freshly-retrieved fact, a rule's hint can land between iterations.
-4. **Per-call observation** — debugging, replay, future streaming.
-5. **Tool result mutation** — scope-filter, cache-substitute, redact.
-6. **Abort mid-loop** — a rule's `abort` decision lands cleanly.
-
-Signal narrows to: model call, provider routing, fallback strategy,
-raw tool-call output. Tool *orchestration* lives in Cortex.
-
-### 6.2 The loop
-
-```
-loop while iterations < maxToolIterations:
-  pack   = contextPipeline.build(agent, runContext)
-  result = signal.step({ model, messages: pack, tools: registryTools })
-
-  if result.toolCalls empty:
-    return parseOutput(result.content, agent.outputMode)
-
-  for call in result.toolCalls:
-    gate = policy.check(call, runContext)
-
-    if gate == 'confirmation_required':
-      emit(confirmationRequested, { toolId, input })
-      outcome = waitFor(confirmation.approved|denied, timeout)
-      if denied or timeout: append observation with denial; continue
-
-    if not gate.allowed:
-      append observation with gate reason; continue
-
-    obs = await registry.executeTool(call, toolContext)
-    append observation; emit(toolObserved, obs)
-
-  // re-pack context with new observations and loop
-```
-
-### 6.3 Bounds
-
-- **Inner (tool loop)**: `maxToolIterations`, default 10. Per-agent
-  call. Counts model→tool→model round-trips during a single agent
-  invocation.
-- **Outer (tick loop)**: `maxTicks`, default 20. Per-workflow. Each
-  director plan execution = 1 tick. Plan-mode only.
-- **Plan depth**: `maxPlanDepth`, default 2.
-
-These do not share a budget. Inner is constrained per-call; outer
-counts how many times a director gets to think.
-
----
-
-## 7. Plans and the plan executor
-
-### 7.1 ActionPlan schema
+Why one shape:
+
+- **Text AND data in one turn.** A chat agent can answer in prose and
+  hand over a Nova screen in the same response. This is the common
+  case for complex assistants, not an edge case.
+- **One termination rule, one streaming path, one thing to test.** A
+  chat agent is an envelope agent with `data: undefined`; a
+  classifier is one with `response` omitted.
+- **`reasoning`** is the model's own short justification. It is
+  distinct from provider reasoning *tokens* (GLM, gpt-oss), which are
+  runtime telemetry and surface as `model-delta` events with
+  `channel: 'reasoning'` — never in the envelope.
+- **`meta` is not a model field.** Usage, timing, resolved strategy,
+  attempt counts, provider metadata — all authored by cortex + signal
+  and reported on the run result and events. Models do not
+  self-report metadata; self-reported metadata is noise.
 
 ```ts
-ActionPlanSchema = z.array(PlanNodeSchema);
-PlanNodeSchema = discriminatedUnion('kind', [
-  AskAgentNodeSchema,   // { kind: 'ask_agent', agentId, input }
-  UseToolNodeSchema,    // { kind: 'use_tool', toolId, input }
-  TellTopicNodeSchema,  // { kind: 'tell_topic', topic, payload }
-  WaitNodeSchema,       // { kind: 'wait', topic, timeoutMs? }
-  ParallelNodeSchema,   // { kind: 'parallel', branches: Node[] }
-  ReflectNodeSchema,    // { kind: 'reflect', note }
-  FinalNodeSchema,      // { kind: 'final', result }
-]);
+type RunResult<TData> =
+  | { ok: true; output: Envelope<TData>; meta: RunMeta }
+  | { ok: false; error: CortexError; meta: RunMeta };
+
+type RunMeta = {
+  usage: Usage;              // aggregated; per-step usage rides on events
+  strategy: OutputStrategy;  // what actually ran
+  steps: number;
+  outputRetries: number;
+  elapsedMs: number;
+};
 ```
-
-Each node carries optional metadata: `idempotencyKey`, `timeoutMs`,
-`priority`, `tags`. Every field has `.describe()` for LLM consumption
-— schemas double as documentation.
-
-### 7.2 Plan-mode execution = the tick loop
-
-Calling `manifold.execute(planAgent, input)`:
-
-1. Build context pack via the pipeline.
-2. Call agent (which runs the Cortex tool loop).
-3. Parse output as `ActionPlan`. Validate depth.
-4. Execute plan nodes depth-first. Each node:
-   - Policy gate checks the node.
-   - Execute (`use_tool`, `ask_agent`, etc.) — for `ask_agent`,
-     dispatch via the bus and await the response.
-   - Observation recorded; `cortex.observation.recorded` emitted.
-5. If the plan ends in `final`, return result; emit
-   `cortex.workflow.ended`.
-6. If not, increment tick counter, go back to step 1.
-7. If `maxTicks` exceeded, abort with `ticks_exceeded`.
-
-A plan-mode agent **is** a director. There is no separate director
-type.
-
-### 7.3 `ask_agent` is sync sugar over the bus
-
-Behind the scenes, `ask_agent` dispatches
-`cortex.execute.requested` and awaits `cortex.execute.completed`. For
-in-process specialists the implementation short-circuits through the
-registry as a performance optimization, but the contract remains
-event-based and the events fire either way.
-
-### 7.4 `tell_topic` and `wait`
-
-Async coordination uses `tell_topic` to publish and `wait` (in a
-parallel block or alone) to block until a matching event fires. Both
-ride directly on the bus. Useful for cross-workflow coordination,
-human-in-the-loop pauses, and any "fire and eventually receive"
-pattern.
 
 ---
 
-## 8. Steering — rules and producers, not state machines
+## 3. Output strategies
 
-**Agents are the freedom; rules and producers are the gravity.** They
-constrain and steer a free agent swarm. They are not orchestration
-wiring.
+How the envelope travels from model to runtime. The output is ALWAYS
+the JSON envelope; a strategy only picks the TRANSPORT — which channel
+carries its bytes. Three transports, one config field, `auto` default:
 
-### 8.1 Stateful context producers (the 80% case)
+| Strategy | Transport | Termination | Schema reaches model via |
+|---|---|---|---|
+| `respond` (default) | tool-call arguments (synthetic `respond` tool) | the `respond` call, OR an emitted envelope on the content channel | tool params (small schemas) or prompt docs (large) |
+| `native` | content channel under provider grammar (`response_format: json_schema`) | a content turn with no tool calls | provider grammar |
+| `emit` | content channel; the model's completion IS the envelope | a content turn with no tool calls | prompt docs |
 
-A `ContextProducer` with `subscribes` is, by definition, a live
-steering primitive. It listens to bus events, accumulates state, and
-shapes future context for the agent. Most steering looks like this:
-watch events, sometimes add a chunk, no state machine, no effect DSL.
+Zod validates the envelope in **every** strategy. Providers enforce
+at most syntax; cortex enforces the contract.
 
-### 8.2 Declarative rules (the 80% case with no code)
+### 3.1 `respond` — the default
 
-Rules are JSON `watch` + `rules` pairs:
+Cortex registers one synthetic tool per run:
+
+- **Params, auto-detailed.** If the serialized `data` schema is
+  strict-compatible (no recursion, no open records, no refinements)
+  and small (≤ ~8 KB serialized), it is inlined into the tool params.
+  Otherwise params are loose (`data: object, see OUTPUT SCHEMA in the
+  system prompt`) and the schema documentation is injected into
+  context (§3.4). This is what makes Prism's `NodeSchema` and Nova's
+  `ActionDefinitionSchema` work: a ~60-way recursive union cannot be
+  provider-enforced anywhere — the schema was always going to live in
+  the prompt; the strategy only decides the delivery channel of the
+  answer.
+- **Permissive params on hard-validating providers.** When the
+  provider validates tool args server-side and 400s the request on a
+  mismatch (Groq's `tool_use_failed`; signal capability
+  `validatesToolArgs`), the wire params name the envelope fields but
+  constrain nothing (`{ response: {}, data: {}, reasoning: {} }`).
+  A server 400 destroys exactly the attempts the client-side decode/
+  repair ladder saves (a stringified `data` is repairable); with
+  permissive params the attempt arrives and gets repaired or a
+  specific correction. The contract rides the respond description +
+  the schema doc; validation is always client-side anyway.
+- **Emit is a legal exit (respond-or-finish).** A turn with no tool
+  calls is first parsed (fence-tolerant) and validated as the
+  envelope; a valid one finishes the run exactly like a `respond`
+  call. Some models (gpt-oss on Groq) are unreliable tool-call
+  finishers but emit clean JSON — both doors lead to the same
+  validated envelope. Only a turn with no valid envelope in it is an
+  error.
+- **The unwrap rung.** Models regularly produce the PAYLOAD instead
+  of the envelope around it — especially when the payload has its
+  own `data`-named field (a Nova action) colliding with the
+  envelope's. When the output is not a plausible envelope but
+  validates cleanly against the data schema, it is accepted as
+  `{ data: <raw> }`. Envelope-first precedence; safe only because
+  real data schemas are strict and discriminating — a correct
+  answer is never failed for missing its coat.
+- **Validation feedback in-loop.** Invalid `respond` args produce a
+  tool error result carrying the Zod issues; the model retries the
+  call. One extra step, transcript intact, tools still warm — never a
+  full re-run.
+- **`respond` must be called alone.** If it appears alongside other
+  tool calls in one turn, it receives an error result and the other
+  calls execute normally.
+- **Termination without a result** (model stops on prose that is not
+  an envelope) is a protocol violation: cortex appends a correction
+  offering both exits (call `respond`, or emit ONLY the envelope) and
+  continues, bounded by the `outputRetries` stop condition. Per-agent
+  hardening: `output.forceTool: true` sets `toolChoice: 'required'`
+  so every turn must be a tool call and `respond` is the only exit —
+  opt-in, because some models get tool-happy under `required`.
+- **Groq-safe.** No `response_format` in any request, so tools and
+  structured output never conflict. gpt-oss-120b runs this at full
+  speed.
+
+### 3.2 `native`
+
+`auto` picks it only when the provider capability
+`toolsWithStructuredOutput` is true (or the agent has no tools) AND
+the envelope schema passes the strict-compatibility walk. Small
+extractors and classifiers on OpenAI-class providers land here and
+get grammar-level enforcement for free.
+
+### 3.3 `emit`
+
+The envelope travels on the content channel: the model's final
+completion IS the envelope, as raw JSON — no tool call, no provider
+grammar. First-class, not degraded: same envelope, same Zod
+validation, same correction retries (appended messages, bounded by
+`outputRetries`), same solid streaming via content deltas.
+Fence-tolerant parse. It exists because tool-call arguments are a
+LOSSIER channel on some models — gpt-oss on Groq stringifies nested
+arrays inside function args while emitting the identical JSON cleanly
+as content — and because some models compose very large payloads
+better as a completion than as function args. `auto` resolves to it
+when the provider capability `manglesNestedToolArgs` is true (Groq);
+explicit `respond`/`native` choices are still honored.
+`output.forceTool` cannot combine with emit — the final turn must be
+a content-only message.
+
+### 3.4 Schema documentation
+
+`schemaDoc(schema)` renders a Zod schema as prompt documentation —
+single-sourced from the same schema Zod validates against, so docs
+and validation cannot drift. When `respond` resolves to loose or
+permissive params (or strategy is `emit`), cortex injects
+`OUTPUT SCHEMA:\n…` as the
+last system chunk automatically. Agents that hand-author a full DSL
+guide (the architect pattern) disable it with `output.doc: 'off'` or
+replace it with a string.
+
+---
+
+## 4. The loop
+
+```
+prefix   = assemble(context fns, input)          — once, at run start
+messages = [...prefix]                           — append-only from here on
+
+step:
+  stopWhen checks (steps, tokens, duration, outputRetries)
+  prepareStep hook → activeTools mask, toolChoice, injected messages, llm swap
+  signal.stepStream({ messages, tools, responseFormat? })
+    → model-delta events (text + reasoning channels)
+    → tool-call-delta events → output-delta / output-partial for respond args
+  for each tool call, in order:
+    tool gates (allow / deny / ask)               — BEFORE execution
+    execute (Zod-validated input, timeout)
+    onToolResult hooks (replace / redact / truncate)
+    append tool result message; emit tool-end observation
+  respond call → validate envelope → end (or error result + continue)
+```
+
+Rules the loop lives by:
+
+- **Append-only transcript.** The prefix is built once and never
+  re-templated. Rule injections, corrections, and budget nudges are
+  *appended* messages. This is the KV-cache lesson: on the models we
+  run, cached input is ~10× cheaper than uncached, and v1 paid the
+  uncached price on every iteration.
+- **Tool calls execute sequentially, in model order.** Deterministic
+  gating and event order beat latency here; parallel execution is a
+  future knob (§15).
+- **Tool failures are observations, not exceptions.** A failed or
+  denied call becomes an error result the model sees and reacts to.
+  The run only fails on structural conditions (stop limits, model
+  call failure, abort, retries exhausted).
+- **The model sees `tool.name`; `tool.id` is the policy identity.**
+  Descriptors carry the name (prompts say "call `query`"); the loop
+  resolves incoming calls by name OR id; gates, observations and
+  traces always carry the canonical id. Both namespaces must be
+  collision-free per run, and nothing may claim `respond`. (v1 sent
+  ids on the wire while documenting names — a prompt-literal model
+  exposed the lie.)
+- **Streaming is not a mode.** The loop always consumes
+  `signal.stepStream`; `await run.result` is the opt-out. There is no
+  `stream: true` bifurcation to test twice.
+
+Bounds are `stopWhen` predicates — one vocabulary instead of v1's
+maxToolIterations / maxTicks / maxDurationMs / budget tangle:
 
 ```ts
-defineRule({
-  id: 'tool-rate-limit',
-  watch: { toolCalls: { event: 'cortex.tool.observed', aggregate: 'count' } },
-  rules: [
-    { when: { $gte: ['$watch.toolCalls', 5] }, then: { abort: 'hard limit' } },
-    { when: { $gte: ['$watch.toolCalls', 3] }, then: { inject: '⚠ finalize now' } },
-  ],
+stopWhen: [stepCount(20), tokens(100_000), duration('5m'), outputRetries(3)]
+```
+
+Defaults: `stepCount(20)`, `outputRetries(3)`. No default duration or
+token cap — v1's 60-second default was overridden at every call site,
+which is what a wrong default looks like.
+
+---
+
+## 5. Context — producers
+
+The v1 producer insight was right — context comes from PRODUCERS,
+and how a producer constructs its content is irrelevant. v1 failed on
+machinery (priorities, state, no per-invocation data); the machinery
+is deleted, the concept and the name stay:
+
+```ts
+// What enters context: one system chunk, several (a producer can emit a
+// GROUP — each string its own system message), or raw messages.
+type ContextEntry = string | string[] | Message[];
+
+// What makes one. Always a function — the name says so. Annotate shared
+// definitions `satisfies Producer` so what a thing is stays obvious at
+// the definition site while the value keeps its narrow callable type.
+type Producer<TDeps = undefined> =
+  (ctx: ProducerArgs<TDeps>) => ContextEntry | Promise<ContextEntry>;
+
+type ProducerArgs<TDeps> = { deps: TDeps; input: RunInput; agent: AgentInfo };
+
+// defineAgent
+context?: ReadonlyArray<ContextEntry | Producer<TDeps>>;
+```
+
+**The principle: context is owned by whoever owns the knowledge, and
+composed by spreading.** An agent owns its identity (`instructions`).
+A LIBRARY owns its contract and exports it as a producer (vex's
+`vexGuide()`, prism's schema). An APP owns its ambient facts and
+exports its shared set (`[...appProducers(), …]` — the same list
+attached to every agent, so "one agent knew today, the other didn't"
+cannot happen). A TOOL owns its own usage knowledge (below). Nothing
+is ever hand-summarized into a prompt on behalf of another owner —
+that is how knowledge drifts.
+
+- Strings and string returns become system messages; `Message[]`
+  returns give full control. Order is the array — placement IS the
+  array position ("today first" = put it first). No priorities, no
+  eviction, no compressors, no token modes, no producer state.
+- `instructions` is sugar for the first producer. It exists once.
+- **`RunOptions.producers`** appends per-run producers after the
+  agent's own — an app attaches shared knowledge to ANY agent without
+  editing its definition.
+- **Tools bring their own guides.** `defineTool({ guide })` carries
+  the tool's usage knowledge (a string or a deferred `() => string`,
+  e.g. composing a library's exported guide). The run assembles one
+  TOOL GUIDES section from the ACTIVE tools — add a tool and its
+  guide arrives, change it and every agent updates, remove it and the
+  guide leaves. Instructions never describe tools.
+- Prefix order: instructions → agent producers → run producers →
+  tool guides → schema doc → finish protocol → input. The finish
+  protocol is ONE cortex-owned chunk stating how the run ends under
+  the RESOLVED transport (call `respond` / emit the envelope / reply
+  under grammar) — agents never author finish lines; they cannot know
+  which transport resolution picked.
+- Producers run **once, at run start**, to build the prefix. Dynamic
+  steering mid-run belongs to `prepareStep` (append a note, mask
+  tools, force a tool choice, swap the model) — the 20% case as one
+  hook instead of a rules engine.
+- `input` is `string | Message[] | unknown` (non-message values are
+  JSON-stringified into the user turn). Multi-turn history is
+  caller-owned and arrives as `Message[]` — ray's transcript becomes
+  the supported path instead of a workaround.
+- Compaction (summarize-when-near-limit) is a future single hook on
+  the transcript (§15), not a v1 pipeline.
+
+**Preview survives, better.** `agent.preview(input, { deps })`
+returns the exact assembled messages, the resolved tool list
+(including `respond` and its actual params), the resolved strategy,
+and a token estimate — no model call. Anything you can't explain in
+the preview, the model can't either.
+
+---
+
+## 6. Gates and hooks
+
+All steering is plain typed functions in arrays, composed in order.
+Declarative config is sugar that compiles into the same arrays —
+never a parallel engine.
+
+```ts
+type ToolGate<TDeps> = (call: ToolCallInfo, ctx: RunCtx<TDeps>) =>
+  | { allow: true; args?: unknown }     // optionally rewrite args
+  | { deny: string }                    // model sees a tool error
+  | { ask: { reason: string } }         // suspend for approval
+  | Promise<…>;
+
+type ToolResultHook<TDeps> = (obs: ToolObservation, ctx: RunCtx<TDeps>) =>
+  { result?: unknown } | void | Promise<…>;   // replace / redact / truncate
+
+type PrepareStep<TDeps> = (s: StepInfo<TDeps>) =>
+  { activeTools?: string[]; toolChoice?: ToolChoice; inject?: Message[]; llm?: SignalClient } | void;
+
+type StopCondition = (s: RunProgress) => boolean;
+```
+
+- **Gates run before execution.** A deny reaches the model as a tool
+  error; the run continues. (v1 evaluated rules after the observation
+  — a rule could never stop the call that tripped it.)
+- **Policy sugar** covers the declarative 80%:
+
+  ```ts
+  policy: {
+    tools: { allow, deny, requireApproval, maxRiskLevel },
+    approvalTimeoutMs,   // optional; no timeout by default
+  }
+  ```
+
+  compiles to one built-in gate. Anything the sugar can't express is
+  a function.
+- **Approvals suspend the run.** `ask` emits `approval-required`
+  with a stable id; the pending call blocks (tools are sequential, so
+  one pending approval at a time). `run.approve(id, { args? })` —
+  approve, optionally with edited args — or `run.deny(id, reason)`.
+  `run.snapshot()` serializes the suspended run (messages, pending
+  call, usage); `resumeRun(agent, snapshot, opts)` restores it — so
+  approvals survive reloads and restarts.
+- **Output validation** closes the generate→verify loop in-run:
+
+  ```ts
+  output: {
+    schema: ActionAgentOutputSchema,
+    validate: async (out) => ok ? { ok: true } : { retry: issues },  // async, can do I/O
+  }
+  ```
+
+  A failed validator feeds back like a failed Zod parse — correction
+  in the same run, tools still warm. (This replaces the architect's
+  hand-rolled verify-once harness bolt-on.)
+
+What hooks deliberately can't do: react to *other* runs (cross-run
+choreography is app code around `manifold.onRun`), mutate past
+transcript (append-only is load-bearing), veto text mid-generation
+(validation happens at boundaries: tool call, step end, output). If
+remotely-configured steering is ever needed, it lands as a compiler
+from a config shape *to* a gate function — on top, not underneath.
+
+---
+
+## 7. Events and observability
+
+Every run exposes one ordered, typed stream. No global bus.
+
+```ts
+const run = agent.run(input, { deps });
+for await (const e of run.events) { … }
+const result = await run.result;
+```
+
+| Event | Payload | Notes |
+|---|---|---|
+| `run-start` | `{ input }` | |
+| `step-start` | `{ step }` | |
+| `model-delta` | `{ text, channel: 'text' \| 'reasoning' }` | provider reasoning tokens land here |
+| `tool-start` | `{ call }` | before gates + execution — drives live UIs |
+| `tool-end` | `{ observation }` | typed union incl. denials; no casting |
+| `approval-required` | `{ id, toolId, args, reason }` | run suspends |
+| `output-delta` | `{ text }` | raw envelope JSON fragments |
+| `output-partial` | `{ output }` | solid-parsed partial envelope |
+| `retry` | `{ kind: 'output' \| 'termination' \| 'provider', attempt, issues }` | consumers reset partial state; `issues` carries the evidence (Zod issues, the rejected attempt, or the stray text) |
+| `run-end` | `{ result, meta }` | |
+
+Every event carries `{ runId, agentPath, seq, ts }`. When an agent
+runs inside another (`asTool`), the child's events forward into the
+parent stream with the extended `agentPath` — one subscription sees
+the whole tree. Per-step usage rides on step events and aggregates
+into `RunMeta.usage`; that is the whole ledger.
+
+Process-level watching is the manifold's tap: `onRun(run => …)` hands
+you every run created through it. That is the one legitimate job the
+v1 bus had, kept, without the bus. (Precedent: AutoGen v0.4 built the
+bus-first agent substrate; Microsoft retired it within a year for
+plain awaited runs with typed-edge composition.)
+
+---
+
+## 8. The manifold
+
+A catalog, defaults, and the tap. Not a lifecycle, not a substrate,
+not an execution path.
+
+```ts
+const manifold = createManifold({
+  llm: groq120b,                    // default model
+  gates: [uiApprovalGate],          // shared gates
+  onRun: (run) => trace.attach(run),
 });
+
+manifold.register(vexQueryAgent, novaLayoutAgent, queryTool);
+
+const run = manifold.run('action.builder', { intent }, { deps: env });
+const asToolDef = manifold.asTool('vex.query', { description });
 ```
 
-Shape:
-
-- **`watch`** — named accumulators that subscribe to a bus topic and
-  aggregate (`count`, `sum`, `latest` by dot-path).
-- **`rules`** — ordered `{ when, then }` entries, evaluated after each
-  observation. First match wins.
-- **Conditions** — Prism-style discriminated operators (`$eq`, `$neq`,
-  `$gt`, `$gte`, `$lt`, `$lte`, `$and`, `$or`, `$not`). `$watch.<name>`
-  references an accumulator; anything else is a literal.
-- **Effects** — `{ inject: 'system note' }` (next context build includes
-  it), `{ abort: 'reason' }` (workflow fails cleanly), `{ deny:
-  'reason' }` (current tool call is denied), `{ call: 'handler-name' }`
-  (invoke a named effect handler — escape hatch).
-
-Rules are registered via `manifold.registerRule(rule)` or the
-`rules` option on `runAgentStandalone`. Named `call`-effect handlers
-register via `manifold.registerEffect(name, handler)`.
-
-### 8.3 Why declarative, not hook-based
-
-An early draft exposed an imperative hook system (`beforePlan`,
-`afterStep`, `beforeToolCall`, ...) as an escape hatch alongside
-stateful producers. We dropped it before shipping. Reasons:
-
-- Rules cover every steering case we actually hit in the showroom
-  (rate-limits, escalation warnings, budget caps, tool denials,
-  compound conditions, research-desk pacing).
-- Hooks tempted users into writing state machines — exactly what we
-  said Cortex wasn't. Rules force the steering to be *declarative*:
-  watch, compare, fire one of four effects, done.
-- The `call` effect is a narrow, named escape hatch — easier to audit
-  than arbitrary `beforeStep(ctx)` functions.
-
-If a hook-based escape hatch turns out to be needed later, it lands as
-a small addition alongside rules, not instead of them.
+- `agent.run()` standalone and `manifold.run()` are the same
+  function; the manifold merges defaults. There is no
+  `runAgentStandalone`.
+- Agents may bind their own `llm`; the manifold's is the fallback.
+  (The architect's GLM-reasoning / Groq-support split becomes
+  configuration.)
+- `asTool(agent, { description?, select? })` wraps an agent as an
+  ordinary `ToolDefinition`. Default result mapping: envelope `data`
+  if present, else `response`; `select` overrides. Child events
+  forward (§7).
+- Duplicate ids throw at registration. Registration is a Map insert;
+  there is no `start`/`stop`/`drain`.
 
 ---
 
-## 9. Memory — future research area
+## 9. Errors
 
-There is no `MemoryStore` implementation in v1 and no exported
-interface yet. When memory matters in a real workflow it will show up
-as a custom `ContextProducer` that pulls from a pluggable store and
-formats however is appropriate. Agents will **not** call memory
-directly via tool calls. Memory access is a context-engineering
-problem, not a tool problem.
+Same two principles as v1, smaller taxonomy:
 
-The contract, when it lands:
-
-```ts
-type MemoryStore = {
-  get:    (workflowId: string, key: string) => Promise<unknown>;
-  set:    (workflowId: string, key: string, value: unknown) => Promise<void>;
-  delete: (workflowId: string, key: string) => Promise<void>;
-  list:   (workflowId: string, prefix?: string) => Promise<string[]>;
-};
-```
-
-This is the design's main concession to "we know we don't know yet."
-
----
-
-## 10. The manifold
-
-The central coordinator. One `createManifold({ llm })` per process for
-multi-turn / orchestrated work. For one-shot execution,
-`runAgentStandalone` builds and tears down a micro-manifold
-internally.
-
-```ts
-type Manifold = {
-  registerAgent:    (agent) => Unsubscribe;
-  registerTool:     (tool) => Unsubscribe;
-  registerRule:     (rule) => Unsubscribe;
-  registerEffect:   (name, handler) => Unsubscribe;
-  addProducer:      (producer, scope?) => Unsubscribe;
-
-  bus: Bus;
-
-  getState: (workflowId, key) => Promise<unknown>;
-  setState: (workflowId, key, value) => Promise<void>;
-
-  execute:        <T>(agentId, input, options?) => Promise<Result<T>>;
-  previewContext: (agentId, input) => Promise<ResolvedContext>;
-
-  start: () => Promise<void>;
-  stop:  () => Promise<void>;
-  drain: () => Promise<void>;
-};
-```
-
-Errors from `execute` surface as `Result<T>`, not thrown exceptions,
-except for programmer errors (see §11).
-
----
-
-## 11. Error model
-
-Small, deliberate taxonomy. Principles:
-
-1. **Programmer errors throw.** Calling `execute` with an unregistered
-   agent, registering two tools with the same id, building a
-   structured-mode agent without a schema — these throw immediately.
-   They are bugs.
-2. **Runtime conditions return.** Tool execution failed, gate denied a
-   step, budget exceeded, plan invalid, validation retries exhausted —
-   these surface as `Result<T>` with a `CortexError`.
-3. **Observations carry errors, not exceptions.** A failed tool call
-   inside an agent run produces an observation with an `error` field.
-   The agent sees it and decides what to do. The runtime does not
-   abort the workflow on a single tool failure.
-4. **Abort propagates cleanly.** A rule's `abort` effect, an external
-   `AbortSignal`, or `maxTicks` exceeded all produce
-   `{ ok: false, error }` with a structured error. Drain semantics
-   ensure in-flight work settles before `stop` resolves.
-5. **Bus handlers never crash the bus.** Errors in handlers are
-   caught, logged, and surfaced via the `cortex.error` topic. Other
-   handlers continue.
+1. **Programmer errors throw** at definition/registration time:
+   duplicate ids, malformed configs.
+2. **Runtime conditions return** as `Result` (§2). Tool failures are
+   observations (§4), not run failures.
 
 ```ts
 type CortexError = {
-  code: ErrorCode;
+  code: 'model_call_failed' | 'output_invalid' | 'stopped' | 'aborted' | 'unknown';
+  stop?: 'steps' | 'tokens' | 'duration' | 'output_retries' | 'custom';   // when code === 'stopped'
   message: string;
-  workflowId?: string;
-  agentId?: string;
+  runId: string;
+  agentPath: ReadonlyArray<string>;
   cause?: unknown;
 };
-
-type ErrorCode =
-  | 'agent_not_registered' | 'tool_not_registered'
-  | 'invalid_plan'         | 'plan_depth_exceeded'
-  | 'ticks_exceeded'       | 'tool_iterations_exceeded'
-  | 'duration_exceeded'    | 'budget_exceeded'
-  | 'gate_denied'          | 'tool_execution_failed'
-  | 'output_validation_failed' | 'model_call_failed'
-  | 'aborted'              | 'timeout'
-  | 'unknown';
 ```
 
-`ErrorCode` is a union literal type, not an enum. Custom error classes
-aren't used — the style guide forbids classes, and `CortexError` is a
-plain typed object.
+An approval timeout is NOT an error code: it denies the pending call
+(an observation the model reacts to) and the run continues — same
+principle as every other tool denial.
 
 ---
 
-## 12. Streaming
+## 10. Streaming
 
-`manifold.execute(id, input, { stream: true })` switches the tool
-loop from `signal.step()` to `signal.stream()` per iteration,
-emitting `cortex.llm.delta` on the bus as text arrives. The return
-type is unchanged — streaming is a side effect, not a return shape.
-
-Tools, gates, ledger, observations, and rules are unaffected: the
-tool loop still owns all of them. Structured-mode validation retries
-stay at the agent level and fire `cortex.agent.retry` as before;
-streaming consumers subscribe to that to reset partial-output state
-between attempts.
-
-`stream` is a field on `WorkflowContext` alongside `policy`, `abort`,
-and `injections`. The tool loop reads it live on each iteration.
+Always on (§4). Solid is a peer dependency and powers
+`output-partial`: `respond` arg deltas (or content deltas under
+`native`/`emit`) stream through solid's partial parser into
+progressively-typed envelopes — a chat `response` string streams
+token-ish while it forms inside the JSON, and a Nova screen in `data`
+becomes renderable before the run ends. The `retry` event resets
+partial-output state, same contract as v1's `cortex.agent.retry`.
 
 ---
 
-## 13. Source layout
+## 11. Public API surface
+
+```ts
+// definition
+defineAgent<TData, TDeps>(config): AgentDefinition<TData, TDeps>
+defineTool(config): ToolDefinition                     // v1 shape, kept
+schemaDoc(schema, opts?): string
+
+// execution
+agent.run(input, { deps, llm?, tools?, gates?, onToolResult?, onEvent?, signal? }): RunHandle<TData>
+//   tools: per-run tools whose execute closes over per-invocation
+//   dependencies (vex builds its query tools around the caller's
+//   adapter + schema); appended to the agent's static tools.
+agent.preview(input, { deps }): ResolvedPreview
+resumeRun(agent, snapshot, opts): RunHandle<TData>
+
+// RunHandle
+run.events: AsyncIterable<CortexEvent>
+run.result: Promise<RunResult<TData>>
+run.approve(id, { args? }) / run.deny(id, reason?)
+run.snapshot(): RunSnapshot
+run.abort(reason?)
+
+// composition
+createManifold({ llm, gates?, onRun? }): Manifold
+manifold.register / run / asTool / preview
+
+// stop conditions
+stepCount(n), tokens(n), duration(ms | '5m'), outputRetries(n)
+```
+
+`defineAgent` config:
+
+```ts
+{
+  id, description,
+  llm?,                       // per-agent binding; manifold/run option is fallback
+  instructions,               // string | (ctx) => string — sugar for the first producer
+  context?: Producer<TDeps>[],   // compose shared sets by spreading: [...appProducers(), …]
+  tools?: ToolDefinition[],   // definitions, not id strings; each may carry its own `guide`
+  output?: {
+    schema?: ZodType<TData>,          // omitted → pure chat agent (data: undefined)
+    response?: 'required' | 'optional',  // default: required without schema, optional with
+    strategy?: 'auto' | 'respond' | 'native' | 'emit',   // default 'auto'
+    forceTool?: boolean,              // toolChoice:'required' hardening
+    doc?: 'auto' | 'off' | string,    // schema docs injection, default 'auto'
+    validate?: (out) => { ok: true } | { retry: string } | Promise<…>,
+  },
+  toolGates?, onToolResult?, prepareStep?, stopWhen?, policy?,
+}
+```
+
+---
+
+## 12. Signal changes this design requires
+
+1. **`stepStream` emits `tool-call-delta`** — `{ index, id?, name?,
+   argsText }` fragments as function args stream. The SSE chunks
+   already contain them; the adapter currently drops them. This is
+   the enabler for `respond`-strategy streaming and solid, and is
+   built first.
+2. **`StepRequest.responseFormat`** passthrough (json_schema /
+   json_object) for the `native` strategy.
+3. **Capabilities truth.** Groq `nativeTools: true` (stale since the
+   registry was written; ray proves it daily). New capability:
+   `toolsWithStructuredOutput: boolean` — encodes the
+   can't-combine-format-and-tools constraint that shaped §3.
+4. Later, not blocking: signal's own `complete()` tool loop can slim
+   once cortex is the loop owner; real tokenizer behind `count()`.
+
+---
+
+## 13. What v2 deletes from v1
+
+| Deleted | Why |
+|---|---|
+| Event bus, topics, wildcard matching, typed-topic | substrate carried no load; per-run event streams + `onRun` cover the real uses |
+| Rules engine (watch/when/then, accumulators, effects) | underpowered (counter thresholds), broken (global un-reset state, dead `call`, `deny`-all-forever, duplicating `inject`), post-hoc by construction; gates + `prepareStep` replace it |
+| Plan mode: ActionPlan schema, plan executor, node handlers, tick loop | ~830 lines duplicating what the tool loop does, fed by fragile text parse; delegation is `asTool`; revisit as a todo/recitation tool if ever needed (§15) |
+| Producer pipeline: priorities, eviction, compressors, token modes, producer state, stores | fought its consumers (no deps param), features unreachable or fake (`exact` mode ≡ fuzzy, per-producer compress unreachable, stateful producers had no read path) |
+| Manifold lifecycle (`start`/`stop`/`drain`), ledger object, state store, event log | decorative or folded into run meta/events |
+| `runAgentStandalone` | `agent.run()` is the standalone path |
+| Full-loop validation retries | in-loop corrections (§3.1) |
+
+---
+
+## 14. Plan mode, revisited later — the record
+
+v1 bet on model-emitted ActionPlans executed by a runtime. The field
+data: BabyAGI (the pattern's origin) is archived; AutoGPT pivoted
+away; every mainstream SDK (OpenAI Agents, Vercel, Pydantic AI,
+Mastra) ships a native tool loop with code-first composition; the
+survivors of "planning" are recitation todo-lists the model itself
+maintains in-loop (Manus todo.md, Claude Code TodoWrite). If explicit
+planning returns to cortex it returns as that: a small todo tool plus
+a context entry, on top of the loop — not an interpreter under it.
+
+---
+
+## 15. Future work (known, deferred)
+
+- **Compaction** — one hook: summarize the transcript when a token
+  threshold nears, keep the prefix stable. Field-standard; not needed
+  for current workloads.
+- **Parallel tool execution** — opt-in per agent once gate/event
+  ordering under concurrency is specified.
+- **Durable run store** — `snapshot()` already serializes; a store
+  interface + replay is additive.
+- **Declarative gate config** — a compiler from config to gate
+  functions, if remote-configured steering is ever needed.
+- **Exact token counting** — behind `signal.count()` when a real
+  tokenizer lands.
+- **`respond` vs `emit` A/B** on the big-DSL agents (prism mapping,
+  nova layout, architect) — they start on `respond`; flip per-agent
+  only if measured quality says so.
+
+---
+
+## 16. Source layout
 
 ```
 src/
-├── index.ts                       # public API
-├── types.ts                       # shared core types
-├── topics.ts                      # typed system topics (CortexTopics)
+├── index.ts                      # public API
+├── types.ts                      # shared core types
 │
-├── schemas/                       # Zod source-of-truth schemas
-│   ├── action-plan.schema.ts
+├── schemas/
+│   ├── envelope.schema.ts        # Envelope<TData> factory
 │   ├── agent-config.schema.ts
-│   ├── tool-config.schema.ts
-│   ├── observation.schema.ts
-│   ├── policy.schema.ts
-│   └── content-chunk.schema.ts
+│   └── tool-config.schema.ts
 │
-├── manifold/                      # registry, bus, ledger, lifecycle
-│   ├── manifold.ts
-│   ├── registry.ts
-│   ├── bus.ts
-│   ├── ledger.ts
-│   ├── preview.ts                 # previewContext
-│   ├── workflow-context.ts
-│   ├── execution-handler.ts       # execute-request → bus dispatch
-│   └── rule-handler.ts            # observation → rules.evaluate → effect
-│
-├── agent/                         # defineAgent, execute, retry, standalone
+├── agent/
 │   ├── define-agent.ts
-│   ├── execute.ts
-│   ├── output-parser.ts
-│   ├── raw-invocation.ts
-│   ├── retry.ts                   # validation-retry loop
-│   └── standalone.ts
+│   ├── run.ts                    # RunHandle, resumeRun
+│   └── preview.ts
 │
-├── context/                       # the producer pipeline
-│   ├── pipeline.ts
-│   ├── defaults.ts                # per-mode default producer lists
-│   ├── messages.ts
-│   ├── tokens.ts                  # fuzzy/exact counters
-│   ├── producer-state.ts
-│   ├── producers/                 # system, tools, input, history, …
-│   └── compressors/               # truncate, summarize
+├── loop/
+│   ├── loop.ts                   # the loop (§4) — all three transports
+│   ├── strategy-resolve.ts       # auto resolution + strict-compat walk
+│   ├── respond-tool.ts           # synthetic respond descriptor + corrections
+│   └── partials.ts               # solid partial-output tracking
 │
-├── tool-loop/                     # the inner tool iteration
+├── context/
+│   ├── assemble.ts
+│   └── schema-doc.ts
 │
-├── runtime/                       # plan execution + policy gate
-│   ├── plan-executor.ts
-│   ├── gate.ts
-│   └── node-handlers/             # one file per plan node kind
+├── gates/
+│   ├── types.ts
+│   ├── policy.ts                 # sugar → built-in gate
+│   └── approval.ts               # suspend / approve / deny / snapshot
 │
-├── rules/                         # declarative rules engine
-│   ├── define-rule.ts
-│   ├── engine.ts
-│   ├── accumulator.ts
-│   ├── condition.ts
-│   ├── effects.ts
-│   └── rule.schema.ts
+├── events/
+│   ├── types.ts                  # CortexEvent vocabulary
+│   └── stream.ts                 # per-run emitter + forwarding
 │
-├── llm/                           # SignalClient contract
-├── store/                         # memory state store + event log
-├── errors/                        # CortexError, ErrorCode
-└── utils/                         # id, wildcard, typed-topic
+├── manifold/
+│   ├── manifold.ts
+│   └── as-tool.ts
+│
+├── tool/define-tool.ts
+├── errors/cortex.errors.ts
+└── utils/
 ```
-
-File names follow [`STYLE_GUIDE.md`](../../STYLE_GUIDE.md) §File
-Naming. Schemas use `.schema.ts`, producers use `.producer.ts`,
-compressors use `.compressor.ts`, stores use `.store.ts`. Primary
-implementation files (`manifold.ts`, `pipeline.ts`, `engine.ts`) skip
-the role suffix when the role is obvious.
-
----
-
-## 14. Open questions
-
-Not blocking. Things we know we don't know yet.
-
-1. **Producer-as-steering unification.** The framing collapses two
-   genuinely-different things (passive context shaping, active runtime
-   steering) into one primitive. If it produces footguns in practice,
-   we revisit — the rules engine is a separate primitive that absorbs
-   most active steering.
-
-2. **Compression cost surprise.** A producer that opts into LLM-based
-   summarization can suddenly spend tokens. Surfaced in
-   `previewContext` and dev-mode warnings. If it bites in practice,
-   add hard caps.
-
-3. **KV-cache stability vs dynamic tool lists.** Adding/removing tools
-   mid-workflow invalidates the cache. v1 accepts this and measures.
-   Future: logit masking via Signal's `tool_choice`.
-
-4. **Memory.** Still a future research area. When the real memory plan
-   lands, it slots in cleanly as a `ContextProducer` plus a
-   `MemoryStore` implementation. If it doesn't slot in cleanly, the
-   abstraction is wrong.
-
-5. **Cross-tick context determinism.** The tool loop rebuilds context
-   between iterations. Correct but cache-hostile. If hot-loop
-   performance suffers, add producer-level caching with explicit
-   invalidation tags.
-
-6. **Rule ordering across multiple registered rules.** Within one rule
-   definition, first match wins. Across rules registered on the same
-   manifold, evaluation order is registration order; a future
-   iteration may introduce explicit priorities.
-
-7. **Hook-based escape hatch.** Not shipped — rules cover the real
-   cases. If a case appears that rules genuinely can't express (and
-   isn't just a missing accumulator type or condition operator), a
-   narrow hook system lands alongside rules.
-
-8. **Streaming.** Reserved API shape, not implemented. Lands when the
-   partial-JSON library is properly designed.
-
----
-
-## 15. Glossary
-
-- **ActionPlan** — Discriminated-union output of plan-mode agents.
-  Tree of `use_tool | ask_agent | tell_topic | wait | parallel |
-  reflect | final` nodes. Executed by the plan executor under policy
-  gates and budget enforcement.
-- **Agent** — A `defineAgent`-defined function from input to typed
-  output. Three modes: `text`, `structured`, `plan`. Stateless.
-- **Bus** — The event substrate. Wildcard pub/sub with `emit`, `on`,
-  `waitFor`, `dispatch`. Source of truth.
-- **BuildContext** — The runtime state visible to a producer when it
-  builds its chunks. Read-only.
-- **Compressor** — A function that shrinks a producer's output to fit a
-  budget. `truncateCompressor` (default, free) or the summarizer (LLM,
-  opt-in).
-- **ContentChunk** — A single piece of content destined for the model.
-  Has role, content, tokens, priority, source. Producers emit these.
-- **ContextProducer** — Pluggable component that contributes content
-  chunks to an agent's context. Optionally stateful via bus
-  subscriptions.
-- **Cortex tool loop** — Cortex-owned iteration: model call → tool
-  calls → gate (with confirmation) → execute → re-pack context → next
-  call.
-- **Director** — Informal term for a plan-mode agent. Not a separate
-  type.
-- **Effect** — A rule's action: `inject`, `abort`, `deny`, or `call`.
-- **Manifold** — Central coordinator: registry, bus, ledger, state
-  store, event log.
-- **Micro-manifold** — Ephemeral one-shot manifold built by
-  `runAgentStandalone`.
-- **Observation** — Structured record of a step's execution: kind,
-  duration, result/error, depth, tick. Fed back to the agent as
-  context next tick.
-- **Pipeline (context)** — gather → build → estimate → compress → pack.
-  Runs every time an agent is invoked.
-- **Plan executor** — Depth-first executor for ActionPlans. Runs each
-  node under the policy gate and emits observations.
-- **`previewContext`** — Debugging API: returns the resolved chunks an
-  agent would see, without sending to the model.
-- **Producer** — Short for ContextProducer.
-- **Result<T>** — Fallible-API contract: `{ ok: true, data } | { ok:
-  false, error }`.
-- **Rule** — A `defineRule` JSON definition: `watch` accumulators +
-  ordered `when → then` entries with effect actions.
-- **RunContext** — The runtime "this" available during an agent
-  invocation.
-- **Steering** — What rules and stateful producers do. The opposite of
-  orchestration: agents stay free, the system bends the field they
-  operate in.
-- **Tick** — One iteration of a plan-mode agent's outer loop.
-- **Tick loop** — The outer loop in plan-mode execution. Part of the
-  runtime, not a separate primitive.
-- **Tool loop** — The inner iteration during a single agent
-  invocation. Bounded by `maxToolIterations`.
-- **`waitFor`** — Bus primitive that blocks until a matching event
-  fires. The basis of every sync API.
-- **Workflow** — One top-level `execute` call and everything it
-  transitively triggers. Specialists called via `ask_agent` share the
-  parent's `workflowId`.
-
----
-
-## Sources consulted
-
-- [Microsoft Agent Framework Context Provider API](https://medium.com/microsoftazure/context-engineering-with-microsoft-agent-frameworks-context-provider-api-dcf083daa8be)
-- [LangChain Context Engineering blog](https://blog.langchain.com/context-engineering-for-agents/)
-- [LangChain Context Engineering docs](https://docs.langchain.com/oss/python/langchain/context-engineering)
-- [Mastra Agent Memory docs](https://mastra.ai/docs/agents/agent-memory)
-- [Vercel AI SDK Loop Control / prepareStep](https://ai-sdk.dev/docs/agents/loop-control)
-- [Manus blog: Context Engineering Lessons from Production](https://manus.im/blog/Context-Engineering-for-AI-Agents-Lessons-from-Building-Manus)

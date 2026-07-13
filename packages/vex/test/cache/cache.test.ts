@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { normalizeShape, computeShapeHash, computeSchemaFingerprint, computeRequestHash } from '../../src/cache/hash.js';
+import { normalizeShape, mintFingerprint, computeSchemaFingerprint, computeRequestHash } from '../../src/cache/hash.js';
 import type { DatabaseSchema } from '../../src/schemas/database.schema.js';
 import { createMemoryCache } from '../../src/cache/memory.js';
 import type { OkCacheEntry } from '../../src/cache/cache.types.js';
@@ -66,46 +66,18 @@ describe('normalizeShape', () => {
 });
 
 // ───────────────────────────────────────────────────────────────
-// computeShapeHash
+// mintFingerprint — shape hashes are no longer keys; identity is a
+// minted pin or a caller-chosen name.
 // ───────────────────────────────────────────────────────────────
 
-describe('computeShapeHash', () => {
-  it('same shape, different values produce the same hash', () => {
-    const hash1 = computeShapeHash({ id: 1, name: 'Alice' });
-    const hash2 = computeShapeHash({ id: 999, name: 'Bob' });
-    expect(hash1).toBe(hash2);
+describe('mintFingerprint', () => {
+  it('mints fp_-prefixed identifiers', () => {
+    expect(mintFingerprint()).toMatch(/^fp_[a-f0-9]{16}$/);
   });
 
-  it('different shapes produce different hashes', () => {
-    const hash1 = computeShapeHash({ id: 1 });
-    const hash2 = computeShapeHash({ id: 1, name: 'Alice' });
-    expect(hash1).not.toBe(hash2);
-  });
-
-  it('[{ id: "", name: "" }] and [{ id: "abc", name: "hello" }] produce the same hash', () => {
-    const hash1 = computeShapeHash([{ id: '', name: '' }]);
-    const hash2 = computeShapeHash([{ id: 'abc', name: 'hello' }]);
-    expect(hash1).toBe(hash2);
-  });
-
-  it('[{ id: "" }] and [{ id: "", name: "" }] produce different hashes', () => {
-    const hash1 = computeShapeHash([{ id: '' }]);
-    const hash2 = computeShapeHash([{ id: '', name: '' }]);
-    expect(hash1).not.toBe(hash2);
-  });
-
-  it('is deterministic: same input produces the same hash every time', () => {
-    const input = { users: [{ id: 1, name: 'test', active: true }] };
-    const hash1 = computeShapeHash(input);
-    const hash2 = computeShapeHash(input);
-    const hash3 = computeShapeHash(input);
-    expect(hash1).toBe(hash2);
-    expect(hash2).toBe(hash3);
-  });
-
-  it('produces a hex string', () => {
-    const hash = computeShapeHash({ id: 1 });
-    expect(hash).toMatch(/^[a-f0-9]{64}$/);
+  it('mints unique identifiers', () => {
+    const minted = new Set(Array.from({ length: 100 }, () => mintFingerprint()));
+    expect(minted.size).toBe(100);
   });
 });
 

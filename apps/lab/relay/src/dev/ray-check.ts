@@ -3,7 +3,8 @@
 // makes, invoked directly. Run: pnpm --filter relay exec tsx src/dev/ray-check.ts
 import { shell } from '../nova/shell';
 import { getVexRuntime } from '../vex/runtime';
-import { makeTools, buildContext } from '../ray';
+import { makeTools } from '../ray/tools';
+import { buildContext } from '../ray/context';
 import type { ToolContext } from '@niscorp/cortex';
 
 const settle = (ms = 260): Promise<void> => new Promise((r) => setTimeout(r, ms));
@@ -19,8 +20,19 @@ const activeData = (canvas: string): Record<string, unknown> => {
 const main = async (): Promise<void> => {
   await getVexRuntime();
   const checks: [string, boolean][] = [];
-  const ctx = { workflowId: 't', agentId: 'ray', signal: new AbortController().signal, bus: {} } as unknown as ToolContext;
-  const [stackTool, queryTool] = makeTools(shell);
+  // A real v2 ToolContext — no bus, no casts.
+  const ctx: ToolContext = {
+    runId: 'check',
+    agentId: 'ray',
+    agentPath: ['ray'],
+    signal: new AbortController().signal,
+    forward: () => undefined,
+  };
+  const [stackTool, queryTool] = makeTools(shell, {});
+  if (stackTool === undefined || queryTool === undefined) {
+    console.error('makeTools returned fewer tools than expected');
+    process.exit(1);
+  }
 
   // Context reflects the real screen + lists the catalog.
   const c0 = buildContext(shell);
@@ -34,12 +46,13 @@ const main = async (): Promise<void> => {
 
   // find_records(company) → resolve a name to {id,label}.
   const found = (await queryTool.config.execute({ entity: 'company', match: 'a' }, ctx)) as { id: unknown; label: unknown }[];
-  checks.push([`find_records company returns {id,label} (got ${found.length})`, Array.isArray(found) && found.length > 0 && typeof found[0].id === 'string' && typeof found[0].label === 'string']);
+  const first = found[0];
+  checks.push([`find_records company returns {id,label} (got ${found.length})`, Array.isArray(found) && first !== undefined && typeof first.id === 'string' && typeof first.label === 'string']);
 
   // push that company onto the rail.
-  await stackTool.config.execute({ canvas: 'aside', op: 'push', action: 'company', input: { id: found[0].id } }, ctx);
+  await stackTool.config.execute({ canvas: 'aside', op: 'push', action: 'company', input: { id: first?.id } }, ctx);
   await settle(320);
-  checks.push([`push company in aside (got ${String(activeId('aside'))})`, activeId('aside') === 'company' && activeData('aside')['id'] === found[0].id]);
+  checks.push([`push company in aside (got ${String(activeId('aside'))})`, activeId('aside') === 'company' && activeData('aside')['id'] === first?.id]);
 
   // pop the rail back to empty.
   await stackTool.config.execute({ canvas: 'aside', op: 'clear' }, ctx);
@@ -55,8 +68,7 @@ const main = async (): Promise<void> => {
   await settle(220);
   checks.push([`push deal.form on modal (got ${String(activeId('modal'))})`, activeId('modal') === 'deal.form' && activeData('modal')['title'] === 'Ray Test Deal']);
 
-  // push(companies, main, {sortBy}) → list opens pre-sorted (the catalog now
-  // exposes sortBy/sortDir on the lists, not just deals).
+  // push(companies, main, {sortBy}) → list opens pre-sorted.
   await stackTool.config.execute({ canvas: 'main', op: 'push', action: 'companies', input: { sortBy: 'companies.size', sortDir: 'asc' } }, ctx);
   await settle(320);
   checks.push([`push companies sorted by size (got sortBy=${String(activeData('main')['sortBy'])})`, activeId('main') === 'companies' && activeData('main')['sortBy'] === 'companies.size']);

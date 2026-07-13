@@ -4,7 +4,7 @@ import { actionsSearch } from '@relay/api/actions';
 // results once you type; otherwise the typed text becomes a `%q%` ILIKE pattern.
 // A full Vex query body, attached to the endpoint's `request`.
 export const topbarSearchPrism = {
-  shape: { $const: actionsSearch.shape },
+  fingerprint: actionsSearch.fingerprint,
   context: {
     q: { $case: { branches: [{ when: { $ref: '$.search' }, then: { $join: { parts: ['%', { $ref: '$.search' }, '%'], sep: '' } } }], else: ' ' } },
   },

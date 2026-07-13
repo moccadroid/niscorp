@@ -13,10 +13,10 @@ export const homeAction: ActionDefinition = {
   layout: homeLayout,
   // Each KPI + the by-stage table is its own read into a top-level slot.
   endpoints: {
-    loadOpen:   { url: '/api/deals/vex?cache=use', method: 'POST', request: homeOpenPrism,   response: resultPrism, target: 'open' },
-    loadWon:    { url: '/api/deals/vex?cache=use', method: 'POST', request: homeWonPrism,    response: resultPrism, target: 'won' },
-    loadTasks:  { url: '/api/tasks/vex?cache=use', method: 'POST', request: homeTasksPrism,  response: resultPrism, target: 'tasks' },
-    loadStages: { url: '/api/deals/vex?cache=use', method: 'POST', request: homeStagesPrism, response: resultPrism, target: 'stages' },
+    loadOpen:   { url: '/api/deals/vex', method: 'POST', request: homeOpenPrism,   response: resultPrism, target: 'open' },
+    loadWon:    { url: '/api/deals/vex', method: 'POST', request: homeWonPrism,    response: resultPrism, target: 'won' },
+    loadTasks:  { url: '/api/tasks/vex', method: 'POST', request: homeTasksPrism,  response: resultPrism, target: 'tasks' },
+    loadStages: { url: '/api/deals/vex', method: 'POST', request: homeStagesPrism, response: resultPrism, target: 'stages' },
   },
   lifecycle: { mount: [{ call: 'loadOpen', onSuccess: [{ set: 'loading', value: false }] }, { call: 'loadWon' }, { call: 'loadTasks' }, { call: 'loadStages' }] },
   // From the dashboard, + New quick-adds a deal (the form defaults to create).

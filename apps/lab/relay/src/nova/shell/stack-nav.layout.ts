@@ -25,8 +25,8 @@ const content: LayoutNode = {
 export const asideStackLayout: LayoutNode = {
   if: '$.active',
   then: {
-    component: 'Box',
-    props: { h: '100%', class: 'rl-stack' },
+    component: 'Stack',
+    props: { h: '100%', gap: 14 },
     children: [chip, content],
   },
   else: '',
@@ -34,7 +34,7 @@ export const asideStackLayout: LayoutNode = {
 
 // The main canvas: always mounted; the chip shows itself only when drilled.
 export const mainStackLayout: LayoutNode = {
-  component: 'Box',
-  props: { h: '100%', class: 'rl-stack' },
+  component: 'Stack',
+  props: { h: '100%', gap: 14 },
   children: [chip, content],
 };

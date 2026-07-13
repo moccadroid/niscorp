@@ -1,102 +1,81 @@
-# Cortex — build plan (internal)
+# Cortex v2 — build plan (internal)
 
-**Audience:** us. Not shipped, not linked from the showroom, not
-published. Lives in the repo so the phased plan and reality-contact
-criteria don't get lost. Keep this file out of the showroom `docs`
-array in `apps/showroom/src/modules/cortex/index.ts`.
-
-Everything in this file is project-process content. External-readable
-rationale belongs in `DESIGN.md`. End-user instructions belong in
+**Audience:** us. Not shipped, not linked from the showroom. Rationale
+lives in [`DESIGN.md`](./DESIGN.md); end-user instructions belong in
 `README.md`.
 
----
+## Verification (2026-07-10)
 
-## Phased build plan
+Cleanup + install + full `pnpm -r build && typecheck && test` ran green:
+0 typecheck errors, 1,305 tests passing across solid/signal/cortex/prism/
+nova/vex/loom, relay + showroom build. `ray-check` (headless, no LLM)
+passes end-to-end. Still pending, keys needed: `architect-check` and the
+manual showroom demo gallery — every LLM interaction needs a live pass.
 
-Each phase ends with something usable.
+## Status
 
-### Phase A — Substrate (unblocks Vex and Prism agents) — **done**
+- [x] **S0 Signal** — `stepStream` emits `tool_call_delta`; `StepRequest.responseFormat`
+      + `toolChoice: 'required'` wired through adapter; capabilities truthed
+      (Groq `nativeTools: true`, new `toolsWithStructuredOutput`); custom-provider
+      capabilities respected; `describe()` added (provider/model/caps, no network);
+      tests extended (step-stream deltas + passthrough, registry).
+- [x] **S1 Gut** — v1 subsystems queued for deletion in `V2_CLEANUP.sh`
+      (bus/topics, rules, plan mode, producers/compressors/tokens, stores,
+      ledger/registry/lifecycle, tool-loop, llm shim, old tests).
+- [x] **S2 Core types** — envelope (+ hand-rolled validation, typed end-to-end),
+      `RunResult`/`RunMeta`/`CortexError`, `CortexEvent` vocabulary,
+      `ToolObservation` union. Trust boundary consolidated in `utils/trust.ts`.
+- [x] **S3 Context** — `ContextEntry` with typed deps, `assembleContext`,
+      `inputMessages` (string | Message[] | JSON), `schemaDoc`, `preview`.
+- [x] **S4 Loop + respond** — always-streaming loop, append-only transcript,
+      sequential gated calls, respond synthesis (full/loose params + auto
+      schema-doc injection), in-loop corrections (validation, termination,
+      respond-alone), `output.validate`, `stopWhen` built-ins.
+- [x] **S5 Gates/approvals** — gate chain with arg rewrite, policy sugar,
+      approval suspend (register-before-emit, abort-aware), approve-with-edits,
+      timeout→denial, `snapshot()`/`resumeRun` with JSON round-trip.
+- [x] **S6 Events + solid** — per-run channel (listeners + buffered
+      AsyncIterable), child-event forwarding, `output-delta`/`output-partial`
+      via solid (best-effort, retry-reset).
+- [x] **S7 Strategies** — `native` (response_format, capability+compat gated),
+      `emit` (fence-tolerant, opt-in), `auto` resolution + strict-compat walk.
+- [x] **S8 Manifold** — catalog + defaults + `onRun` tap, `asTool` (typed and
+      erased) with envelope→result mapping and nested agentPath.
+- [x] **Tests** — envelope, strategy-resolve, define, loop, gates, approval
+      (incl. snapshot/resume), streaming (respond args + text strategy),
+      composition (manifold, asTool, forwarding), channel. Scripted
+      `SignalClient` stub in `test/helpers/stub-signal.ts`.
+- [x] **S9 vex** — deps kill the per-request agent rebuild; `cannotSatisfy`
+      via event-watch + abort (rules/producers deleted); per-run `tools`.
+- [x] **S9 prism/nova** — payload IS the Config/LayoutNode (envelope
+      `reasoning` replaces the wrapper); hand-embedded schemas removed
+      (auto `schemaDoc`).
+- [x] **S9 relay** — ray: transcript as `Message[]` input, shell via deps,
+      event-driven trace (trace.ts rewritten, no tool wrapping), Traced
+      envelope as an `onToolResult` hook, query/visualize behind a
+      `dataTools` flag; architect: harness verification moved INTO the run
+      (`output.validate`), env via deps, `map` kept but not handed to the
+      builder, event trace lines; both dev checks updated to v2.
+- [x] **S9 showroom** — rebuilt as a compact v2 module (the old one demoed
+      deleted subsystems): a shared RunPanel (event timeline + streamed
+      `output-partial` + approval buttons + result/meta) driving six
+      stories — chat envelope, structured extraction, preview (keyless),
+      tool loop, gates+approval, asTool nesting. Keys come from
+      Signal → Settings; demos are a manual gallery (need a live model).
+- [x] **S10 docs** — README rewritten (external, v2 surface); DESIGN synced
+      with implementation (error codes, per-run tools/hooks, timeout→denial);
+      vex DOCS updated; signal DESIGN registry table updated.
+- [ ] **S10 scratch canary** — `examples/scratch.ts` never existed on disk;
+      write a v2 canary (chat, extractor, tool agent, big-DSL agent,
+      approval flow, streaming) once live keys are at hand.
 
-- Schemas: `ActionPlanSchema` (deferred validation), `AgentConfigSchema`, `ToolConfigSchema`, `ObservationSchema`, `ContentChunkSchema`. All with `.describe()`.
-- Manifold skeleton: registry, bus (wildcard subs, `waitFor`, `dispatch`, correlation ids), in-memory ledger, in-memory state store, in-memory event log, lifecycle (`start`/`stop`/`drain`).
-- `defineTool`, `defineAgent` for `text` and `structured` modes.
-- Context pipeline: types, gather/build/estimate/compress/pack, `previewContext`.
-- Built-in producers: `system`, `tools`, `input`, `history`, `budget`.
-- `truncate` compressor.
-- Token estimation: fuzzy mode by default. Exact mode hooked up to `signal.count()`.
-- Cortex tool loop on top of `signal.step()`.
-- Agent execution path (single function, used by both standalone and manifold).
-- `runAgentStandalone` helper.
-- Error model implemented end-to-end.
+## Open follow-ups (post-verification)
 
-**Reality contact:** scratch agent + Vex query agent + Prism mapping agent in the showroom, running against a real model.
-
-### Phase B — Planning — **done**
-
-- ActionPlan plan-mode in `defineAgent`.
-- Plan executor: depth-first, gate per node, observation per step.
-- Tick loop integrated into plan-mode execution.
-- `ask_agent` (sync sugar over the bus, with in-process short-circuit for specialists).
-- `tell_topic` + `wait` + `parallel`.
-- Policy gate: tool allow/deny, risk levels, budget enforcement.
-- Built-in producers: `actionContract`, `agents`, `observations`.
-
-**Reality contact:** multi-agent director demo in the showroom.
-
-### Phase C — Steering — **done (shape changed)**
-
-Originally scoped as: stateful context producers via `subscribes` + a hook-based interceptor system (`beforePlan`, `afterStep`, …) + `defineBehavior` convenience.
-
-What shipped: stateful producers (as designed) **and a declarative rules engine** (`defineRule`, conditions, accumulators, effects) in place of the hook-based system. `defineBehavior` was not built — the rules DSL covered the real cases without it.
-
-- Stateful producers via `subscribes` + `onEvent`.
-- Rules engine: accumulators (`count` / `sum` / `latest`), condition DSL (`$eq`/`$gte`/`$and`/...), effects (`inject` / `abort` / `deny` / `call`).
-- Named effect registry (`call` effect escape hatch).
-- Async confirmation flow (bus-driven: `cortex.policy.confirmation.requested` / `approved` / `denied`).
-- Output-validation retry loop with `cortex.agent.retry` event for observability.
-- `recitation` producer (Manus pattern).
-- `summarize` compressor (opt-in, with configurable small/fast model).
-
-**Reality contact:** rate-limit, support-escalation, fact-budget, db-compound, multi-rule, research-desk, quick-research stories; approve/deny confirmation stories.
-
-### Phase D — Production hardening — **next**
-
-Goal: deployable.
-
-- Durable `StateStore` and `EventLog` adapters (Postgres reference implementation).
-- Drain semantics polished.
-- Metrics hooks (`onObservation`, `onWorkflowEnd`).
-- KV-cache stability optimizations: explore logit masking via Signal `tool_choice`.
-- `signal.count()` exact-mode integration polish with a real tokenizer.
-- Optional dollar accounting via user-supplied per-model price maps.
-- Streaming API (the reserved shape from `DESIGN.md` §13) — only after the partial-JSON library has landed.
-- `MemoryStore` interface export + reference implementations (deferred from v1; worth revisiting now that the rest is stable).
-
----
-
-## How we know we're on the right track
-
-Three layers of signal. Need all three.
-
-### Layer 1 — Tests (correctness)
-
-Catches "the code does what the design says." Cortex is unusually testable because most of it is pure functions. The pipeline and the tool loop carry the bulk of the test suite. Standalone-vs-manifold parity tests validate the "one execution path" claim.
-
-### Layer 2 — Integration with the rest of the stack (fit)
-
-Catches "the abstractions are wrong." If defining the Vex query agent in `@niscorp/vex/agent` requires Cortex changes, that's a design signal. Resolve every "I wish Cortex did X" explicitly: either Cortex really should do X, or Vex is approaching the problem wrong, or the abstraction is at the wrong level. Write the resolutions down.
-
-### Layer 3 — The showroom and a real model (truth)
-
-Catches "the design works in theory but not under contact with a live LLM." **This must happen at the end of every phase, not at the end of the project.** If a phase's showroom test doesn't work reliably against a real model, that phase is not done, regardless of how green the unit tests are.
-
-The scratch canary (`examples/scratch.ts`) is the five-minute recurring check: trivial agent, six scenarios (text, structured, tool, Prism mapping, plan mode, multi-agent delegation). Every change to Cortex re-runs it. If it breaks or feels worse, stop and investigate.
-
----
-
-## Notes for future-us
-
-- If `defineBehavior` comes back, it's a convenience that bundles rules + producers with shared state. Nothing more.
-- `MemoryStore` as a `ContextProducer` + pluggable store is the right shape. Don't build a parallel memory subsystem.
-- Before adding new bus topics, extend the typed taxonomy in `topics.ts` — don't leave topics as free-form strings with `unknown` payloads.
-- Phased plan lives HERE, not in `DESIGN.md`. If the plan changes, update this file.
+- `respond` vs `emit` A/B on the big-DSL agents (prism mapping, nova
+  layout, architect) — record the outcome in DESIGN §15.
+- `output.forceTool` (`toolChoice: 'required'`) — measure on Groq 120b
+  before making it a default anywhere.
+- Solid partial-tracking on the recursive wire schemas — if solid's
+  kind-checks fight the big unions, partials silently stop (by design);
+  check whether `output-partial` fires for the architect.
+- Showroom v2 demo module (above).

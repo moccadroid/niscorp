@@ -125,14 +125,11 @@ describe('hono adapter', () => {
       expect(body['error']).toBeDefined();
     });
 
-    it('reads cache mode from query param', async () => {
-      const res = await app.request('/api/users/vex?cache=only', {
+    it('replaying an unknown fingerprint is a cache miss', async () => {
+      const res = await app.request('/api/users/vex', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          shape: [{ id: '', name: '' }],
-          context: {},
-        }),
+        body: JSON.stringify({ fingerprint: 'nope/nothing' }),
       });
       const body = await res.json() as Record<string, unknown>;
       expect(body['error']).toBe('cache_miss');

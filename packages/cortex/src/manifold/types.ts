@@ -1,68 +1,42 @@
 // ═══════════════════════════════════════════════════════════
-// Manifold types — public surface
+// Erased agent shapes — how the manifold stores heterogeneity
 // ═══════════════════════════════════════════════════════════
+//
+// The manifold holds agents of many <TData, TDeps> in one Map, so
+// it stores them through an erased structural view. Conversion in
+// and out goes through utils/trust.ts (the documented boundary);
+// callers of manifold.run() re-name the type they expect.
 
-import type { AgentDefinition } from '../agent/define-agent';
+import type { SignalClient, Unsubscribe } from '../types';
+import type { CortexEvent } from '../events/types';
+import type { RunInput } from '../context/assemble';
+import type { ToolGate } from '../gates/types';
 import type { ToolDefinition } from '../tool/define-tool';
-import type { Bus, Result, Unsubscribe } from '../types';
-import type { ContextProducer, ResolvedContext } from '../context/types';
-import type { SignalClient } from '../llm/signal-client';
-import type { TokenEstimationMode } from '../context/tokens';
-import type { ContextSpec } from '../context/types';
-import type { RegisteredRule, RulesEngine, EffectHandler, EffectRegistry } from '../rules';
-import type { StateStore, EventLog } from '../store/types';
-import type { Registry } from './registry';
-import type { Ledger, LedgerBudget } from './ledger';
-import type { WorkflowContext } from './workflow-context';
-import type { CreateBusOptions } from './bus';
+import type { RunHandle } from '../agent/run';
+import type { ResolvedPreview } from '../agent/preview';
 
-export type ManifoldHooks = {
-  onWorkflowStart?: (workflowId: string) => void;
-  onWorkflowEnd?: (workflowId: string, result: unknown) => void;
-  onError?: (error: unknown, context: { workflowId?: string; agentId?: string }) => void;
-};
-
-export type ManifoldConfig = {
+export type ErasedRunOptions = {
+  deps?: unknown;
   llm?: SignalClient;
-  stateStore?: StateStore;
-  eventLog?: EventLog;
-  defaultContextSpec?: ContextSpec;
-  defaultBudget?: Partial<LedgerBudget>;
-  defaultPackBudget?: number;
-  tokenEstimation?: TokenEstimationMode;
-  compressorModel?: string;
-  hooks?: ManifoldHooks;
-  bus?: CreateBusOptions;
-};
-
-export type ExecuteOptions = {
-  workflowId?: string;
+  tools?: ReadonlyArray<ToolDefinition>;
+  gates?: ReadonlyArray<ToolGate<unknown>>;
   signal?: AbortSignal;
-  stream?: boolean;
+  onEvent?: (event: CortexEvent) => void;
+  agentPath?: ReadonlyArray<string>;
 };
 
-export type Manifold = {
-  registerAgent: (agent: AgentDefinition) => Unsubscribe;
-  registerTool: (tool: ToolDefinition) => Unsubscribe;
-  addProducer: (producer: ContextProducer, scope?: { agentId?: string }) => Unsubscribe;
-  registerRule: (rule: RegisteredRule) => Unsubscribe;
-  registerEffect: (name: string, handler: EffectHandler) => void;
-  bus: Bus;
-  getState: (workflowId: string, key: string) => Promise<unknown>;
-  setState: (workflowId: string, key: string, value: unknown) => Promise<void>;
-  execute: <T>(agentId: string, input: unknown, options?: ExecuteOptions) => Promise<Result<T>>;
-  previewContext: (agentId: string, input: unknown, options?: ExecuteOptions) => Promise<ResolvedContext>;
-  start: () => Promise<void>;
-  stop: () => Promise<void>;
-  drain: () => Promise<void>;
-  readonly _internal: {
-    registry: Registry;
-    ledger: Ledger;
-    stateStore: StateStore;
-    eventLog: EventLog;
-    config: ManifoldConfig;
-    rulesEngine: RulesEngine;
-    effectRegistry: EffectRegistry;
-    workflows: ReadonlyMap<string, WorkflowContext>;
+export type ErasedAgent<TData = unknown> = {
+  agentId: string;
+  config: {
+    description?: string;
+    llm?: SignalClient;
   };
+  run: (input: RunInput, options?: ErasedRunOptions) => RunHandle<TData>;
+  preview: (input: RunInput, options?: ErasedRunOptions) => Promise<ResolvedPreview>;
+};
+
+export type RunTap = (run: RunHandle<unknown>) => void;
+
+export type ManifoldEventSource = {
+  onEvent: (listener: (event: CortexEvent) => void) => Unsubscribe;
 };

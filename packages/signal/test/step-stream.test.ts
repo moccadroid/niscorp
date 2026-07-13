@@ -148,6 +148,74 @@ describe('stepStream — tool calls', () => {
 });
 
 // ═══════════════════════════════════════════════════════════
+// Tool-call deltas — argument fragments surface incrementally
+// ═══════════════════════════════════════════════════════════
+
+describe('stepStream — tool_call_delta events', () => {
+  it('yields one tool_call_delta per adapter fragment, in order', async () => {
+    const adapter = createMockAdapter([
+      { type: 'tool_call', index: 0, id: 'call_1', name: 'respond' },
+      { type: 'tool_call', index: 0, argsFragment: '{"data":' },
+      { type: 'tool_call', index: 0, argsFragment: '{"answer":42}}' },
+      { type: 'finish', finishReason: 'tool_calls' },
+    ]);
+
+    const events = await collect(executeStepStream({
+      adapter,
+      model: 'test',
+      request: { messages: [{ role: 'user', content: 'go' }] },
+    }));
+
+    const deltas = events.filter((e) => e.type === 'tool_call_delta');
+    expect(deltas).toEqual([
+      { type: 'tool_call_delta', index: 0, id: 'call_1', name: 'respond', argsText: '' },
+      { type: 'tool_call_delta', index: 0, argsText: '{"data":' },
+      { type: 'tool_call_delta', index: 0, argsText: '{"answer":42}}' },
+    ]);
+
+    // Concatenated fragments equal the assembled args on done.
+    const joined = deltas
+      .map((d) => (d.type === 'tool_call_delta' ? d.argsText : ''))
+      .join('');
+    const done = events[events.length - 1];
+    expect(done.type).toBe('done');
+    if (done.type === 'done') {
+      expect(done.result.toolCalls[0]?.args).toEqual(JSON.parse(joined));
+    }
+  });
+
+  it('passes toolChoice and responseFormat through to the provider request', async () => {
+    let seen: { toolChoice?: unknown; responseFormat?: unknown } = {};
+    const adapter: ProviderAdapter = {
+      id: 'mock',
+      chat: async () => ({
+        content: '',
+        usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 },
+        finishReason: 'stop',
+        raw: null,
+      }),
+      chatStream: async function* (request) {
+        seen = { toolChoice: request.toolChoice, responseFormat: request.responseFormat };
+        yield { type: 'finish', finishReason: 'stop' };
+      },
+    };
+
+    await collect(executeStepStream({
+      adapter,
+      model: 'test',
+      request: {
+        messages: [{ role: 'user', content: 'go' }],
+        toolChoice: 'required',
+        responseFormat: { type: 'json_object' },
+      },
+    }));
+
+    expect(seen.toolChoice).toBe('required');
+    expect(seen.responseFormat).toEqual({ type: 'json_object' });
+  });
+});
+
+// ═══════════════════════════════════════════════════════════
 // Abort — stream terminates without a done event
 // ═══════════════════════════════════════════════════════════
 

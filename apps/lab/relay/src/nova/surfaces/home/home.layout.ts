@@ -78,7 +78,7 @@ export const homeLayout: LayoutNode = {
           { component: 'Box', props: { px: 18, py: 14, border: 'bottom' }, children: { component: 'Text', props: { weight: 600 }, children: 'Pipeline by stage' } },
           {
             component: 'Grid',
-            props: { template: '2fr 1fr 1fr', align: 'center', border: 'bottom' },
+            props: { weights: [2, 1, 1], align: 'center', border: 'bottom' },
             children: [
               { component: 'Box', props: { px: 18, py: 11 }, children: { component: 'Text', props: { size: 'xs', weight: 600, color: 'mute', upper: true }, children: 'Stage' } },
               { component: 'Box', props: { px: 18, py: 11 }, children: { component: 'Text', props: { size: 'xs', weight: 600, color: 'mute', upper: true }, children: 'Deals' } },
@@ -91,7 +91,7 @@ export const homeLayout: LayoutNode = {
             key: 'name',
             do: {
               component: 'Grid',
-              props: { template: '2fr 1fr 1fr', align: 'center', hover: true, border: 'bottom' },
+              props: { weights: [2, 1, 1], align: 'center', hover: true, border: 'bottom' },
               children: [
                 { component: 'Box', props: { px: 18, py: 12 }, children: { component: 'Text', props: { weight: 500 }, children: '$.s.name' } },
                 { component: 'Box', props: { px: 18, py: 12 }, children: { component: 'Text', props: { color: 'secondary' }, children: '$.s.count' } },

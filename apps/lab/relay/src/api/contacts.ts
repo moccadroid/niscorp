@@ -6,6 +6,7 @@ import type { Mutation } from '@relay/vex/mutations';
 // carried (not shown in the table) so a row's ⋯ → Edit can seed the form without
 // a second read. The mapping builds the shape explicitly and nests the company.
 export const contactsList: CacheEntry = {
+  fingerprint: 'contacts/list',
   intent: 'List all contacts with the company each belongs to',
   shape: [{ contact_id: '', name: '', title: '', email: '', phone: '', company: { company_id: '', name: '' } }],
   dsl: {
@@ -52,6 +53,7 @@ export const contactsList: CacheEntry = {
 // One contact by id — an object shape, so Vex maps the single row: the mapping
 // reads `$.result.field` (no index). Reused by the deal modal.
 export const contactById: CacheEntry = {
+  fingerprint: 'contacts/byId',
   intent: 'Load one contact by id, with the company nested',
   shape: { contact_id: '', name: '', title: '', email: '', phone: '', company: { company_id: '', name: '' } },
   dsl: {
@@ -81,6 +83,7 @@ export const contactById: CacheEntry = {
 // A company's contacts — flat, all keys aliased/computed to the shape, so the
 // rows ARE the shape: no mapping.
 export const contactsByCompany: CacheEntry = {
+  fingerprint: 'contacts/byCompany',
   intent: "List a company's contacts",
   shape: [{ contact_id: '', name: '', title: '', email: '' }],
   dsl: {

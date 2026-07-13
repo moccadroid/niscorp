@@ -1,5 +1,5 @@
 import type { ScopePolicy, ScopeValues } from './scope/scope.types.js';
-import type { CacheBackend, CacheMode } from './cache/cache.types.js';
+import type { CacheBackend } from './cache/cache.types.js';
 import type { DatabaseAdapter, CompiledQuery, Row } from './adapters/adapter.types.js';
 import type { DatabaseSchema } from './schemas/database.schema.js';
 import type { Query } from './schemas/query.schema.js';
@@ -58,6 +58,8 @@ export type QueryEngine = {
 
 export type ExecuteOptions = {
   scope?: ScopeValues;
-  cache?: CacheMode;
   entities?: string[];
+  // Replay-only posture (production): any request that would need
+  // generation fails with 'locked' instead of running the agent.
+  locked?: boolean;
 };

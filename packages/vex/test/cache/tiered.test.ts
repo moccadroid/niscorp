@@ -1,7 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { createTieredCache } from '../../src/cache/tiered.js';
 import { createMemoryCache } from '../../src/cache/memory.js';
-import { computeShapeHash } from '../../src/cache/hash.js';
 import type { CacheEntry, OkCacheEntry } from '../../src/cache/cache.types.js';
 
 const okEntry = (overrides: Partial<OkCacheEntry> = {}): OkCacheEntry => ({
@@ -83,19 +82,17 @@ describe('createTieredCache', () => {
     expect(await l1.get('a')).toBeDefined();
   });
 
-  it("warmup 'partial' preloads only the listed shapes", async () => {
+  it("warmup 'partial' preloads only the listed fingerprints", async () => {
     const l1 = createMemoryCache();
     const l2 = createMemoryCache();
-    const shapeA = [{ id: '', name: '' }];
-    const shapeB = [{ total: 0 }];
-    await l2.set(computeShapeHash(shapeA), okEntry());
-    await l2.set(computeShapeHash(shapeB), okEntry());
+    await l2.set('deals/table', okEntry());
+    await l2.set('home/pipeline', okEntry());
 
-    const cache = createTieredCache({ l1, l2, warmup: { mode: 'partial', shapes: [shapeA] } });
+    const cache = createTieredCache({ l1, l2, warmup: { mode: 'partial', fingerprints: ['deals/table'] } });
     await cache.init();
 
-    expect(await l1.get(computeShapeHash(shapeA))).toBeDefined();
-    expect(await l1.get(computeShapeHash(shapeB))).toBeUndefined();
+    expect(await l1.get('deals/table')).toBeDefined();
+    expect(await l1.get('home/pipeline')).toBeUndefined();
   });
 
   it('evicts invalid L2 entries from BOTH tiers on promote and reports via onError', async () => {

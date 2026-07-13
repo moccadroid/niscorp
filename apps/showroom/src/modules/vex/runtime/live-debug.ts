@@ -43,36 +43,50 @@ type StepRes = Awaited<ReturnType<SignalClient['step']>>;
 const asText = (content: unknown): string =>
   typeof content === 'string' ? content : JSON.stringify(content);
 
-// Wrap a SignalClient so its `step` calls are recorded when a
-// recording is active. stream/count pass through untouched.
+// Wrap a SignalClient so its round trips are recorded when a recording
+// is active. Cortex v2 always streams, so stepStream records too (from
+// the aggregated `done` result); count/describe pass through untouched.
 export const wrapForDebug = (llm: SignalClient, label: string): SignalClient => {
   let iteration = 0;
+
+  const record = (request: StepReq, res: StepRes, ms: number): void => {
+    if (current === undefined) return;
+    iteration += 1;
+    current.push({
+      iteration,
+      label,
+      tools: (request.tools ?? []).map((t) => t.name),
+      sentMessages: request.messages.map((m) => {
+        const text = asText(m.content);
+        return { role: m.role, chars: text.length, preview: text.slice(0, 4000) };
+      }),
+      responseContent: res.content,
+      toolCalls: res.toolCalls.map((tc) => ({ name: tc.name, args: tc.args })),
+      finishReason: res.finishReason,
+      tokens: res.usage.totalTokens,
+      ms,
+      raw: res.raw,
+    });
+  };
+
   return {
     step: async (request: StepReq): Promise<StepRes> => {
-      iteration += 1;
       const t0 = performance.now();
       const res = await llm.step(request);
-      const ms = Math.round(performance.now() - t0);
-      if (current !== undefined) {
-        current.push({
-          iteration,
-          label,
-          tools: (request.tools ?? []).map((t) => t.name),
-          sentMessages: request.messages.map((m) => {
-            const text = asText(m.content);
-            return { role: m.role, chars: text.length, preview: text.slice(0, 4000) };
-          }),
-          responseContent: res.content,
-          toolCalls: res.toolCalls.map((tc) => ({ name: tc.name, args: tc.args })),
-          finishReason: res.finishReason,
-          tokens: res.usage.totalTokens,
-          ms,
-          raw: res.raw,
-        });
-      }
+      record(request, res, Math.round(performance.now() - t0));
       return res;
     },
-    stepStream: llm.stepStream.bind(llm),
+    stepStream: (request, options) => {
+      const t0 = performance.now();
+      const inner = llm.stepStream(request, options);
+      return (async function* () {
+        for await (const event of inner) {
+          if (event.type === 'done') record(request, event.result, Math.round(performance.now() - t0));
+          yield event;
+        }
+      })();
+    },
     count: llm.count.bind(llm),
+    describe: llm.describe.bind(llm),
   };
 };

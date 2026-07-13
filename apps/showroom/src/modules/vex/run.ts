@@ -1,4 +1,3 @@
-import { computeShapeHash } from '@niscorp/vex';
 import type { VexEvent, Query, ScopeValues } from '@niscorp/vex';
 import { compile } from '@niscorp/prism';
 import { deepEqual } from '@showroom/lib/deep-equal';
@@ -18,10 +17,12 @@ const IDENTITY_MAPPING = { $ref: '$.result' };
 // Two execution shapes:
 //  - 'compile' scenarios call engine.compile directly (analyzer demos
 //    that are meant to be rejected before SQL exists).
-//  - 'execute' scenarios run the cached pipeline. Canned (no key):
-//    if the shape isn't already warm with this DSL we seed it (that's
-//    the "generation" the LLM would do) and run a HIT; re-runs reuse
-//    it. Live: cache:'refresh' forces a real LLM generation.
+//  - 'execute' scenarios run the cached pipeline under a named
+//    fingerprint per scenario. Canned (no key): if the slot isn't
+//    already warm with this DSL we seed it (that's the "generation"
+//    the LLM would do) and replay it — a HIT; re-runs reuse it.
+//    Live: the slot is deleted first, so the request genuinely
+//    regenerates through the LLM and re-fills the name.
 // ═══════════════════════════════════════════════════════════
 
 export type ParamMeta = { type: string; kind: 'context' | 'scope' | 'semantic' };
@@ -35,10 +36,10 @@ export type RunOutcome = {
   warnings: string[];
   params: Record<string, ParamMeta>;
   missingContext?: string[];
-  cacheHit: boolean; // logical: was this shape already warm with this DSL?
+  cacheHit: boolean; // logical: was this fingerprint already warm with this DSL?
   generated: boolean; // did this run (re)create the DSL?
   live: boolean; // did a real LLM generation run?
-  cacheKey?: string;
+  fingerprint?: string;
   timing: { agentMs?: number; executionMs?: number; mappingMs?: number; totalMs?: number };
   events: VexEvent[];
 };
@@ -119,8 +120,9 @@ export const runScenario = async (
     }
 
     // ─── Execute path ───────────────────────────────────────────
-    const request = { intent: scenario.intent, shape: scenario.shape, context: opts.context };
-    const key = computeShapeHash(scenario.shape);
+    // Each scenario owns a named slot; canned runs replay it, live
+    // runs regenerate it.
+    const fingerprint = `vex-demo/${scenario.id}`;
 
     let cacheHit = false;
     let generated = false;
@@ -128,15 +130,21 @@ export const runScenario = async (
 
     try {
       if (opts.live) {
-        // Force a genuine LLM generation + cache write.
+        // Force a genuine LLM generation + cache write: clear the slot,
+        // then send the full request under the same name — an unknown
+        // fingerprint with intent + shape generates and fills it.
         live = true;
         generated = true;
-        const res = await runtime.engine.execute(request, { scope: opts.scope, cache: 'refresh' });
+        await runtime.engine.cache.delete(fingerprint);
+        const res = await runtime.engine.execute(
+          { fingerprint, intent: scenario.intent, shape: scenario.shape, context: opts.context },
+          { scope: opts.scope },
+        );
         return toOutcome(res, events, scenario, { cacheHit, generated, live });
       }
 
-      // Canned: is the shape already warm with this exact DSL?
-      const existing = await runtime.engine.cache.get(key);
+      // Canned: is the slot already warm with this exact DSL?
+      const existing = await runtime.engine.cache.get(fingerprint);
       const warm = existing?.kind === 'ok' && deepEqual(existing.dsl, scenario.dsl);
       if (warm) {
         cacheHit = true;
@@ -145,18 +153,25 @@ export const runScenario = async (
         // the canned demo needs no key. This is the "generation" step.
         // Crucially we also seed a precomputed Prism IR (identity, or a
         // real nested reshape) so the engine maps rows WITHOUT calling
-        // the LLM — keeping canned mode genuinely zero-cost.
+        // the LLM — keeping canned mode genuinely zero-cost. The stored
+        // shape drives the array-vs-single envelope on replay.
         generated = true;
         const prismIr = await compile(scenario.mapping ?? IDENTITY_MAPPING);
-        await runtime.engine.cache.set(key, {
+        await runtime.engine.cache.set(fingerprint, {
           kind: 'ok',
           dsl: scenario.dsl,
           prismIr,
+          intent: scenario.intent,
+          shape: scenario.shape,
           schemaFingerprint: runtime.fingerprint,
           createdAt: Date.now(),
         });
       }
-      const res = await runtime.engine.execute(request, { scope: opts.scope, cache: 'use' });
+      // Replay by fingerprint alone — the exact call an app would make.
+      const res = await runtime.engine.execute(
+        { fingerprint, context: opts.context },
+        { scope: opts.scope },
+      );
       return toOutcome(res, events, scenario, { cacheHit, generated, live });
     } catch (err) {
       console.error('[vex] run failed', err);
@@ -170,7 +185,7 @@ export const runScenario = async (
         cacheHit,
         generated,
         live,
-        cacheKey: key,
+        fingerprint,
         timing: {},
         events,
       };
@@ -206,7 +221,7 @@ const toOutcome = (
   cacheHit: flags.cacheHit,
   generated: flags.generated,
   live: flags.live,
-  cacheKey: res.meta.cache.key,
+  fingerprint: res.meta.cache.fingerprint,
   timing: { ...res.meta.timing, totalMs: lastTotal(events) },
   events,
 });

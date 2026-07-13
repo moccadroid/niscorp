@@ -16,16 +16,16 @@ export const contactAction: ActionDefinition = {
   id: 'contact',
   // Stack-nav label — the chip + its depth menu read `instance.title`.
   title: '{{$.record.name}}',
-  data: { id: '', record: {}, deals: [], tasks: [], activity: [], loading: true, toggleId: '', toggleDone: false, panelClass: 'rl-dialog--wide' },
+  data: { id: '', record: {}, deals: [], tasks: [], activity: [], loading: true, toggleId: '', toggleDone: false, panelSize: 'wide' },
   layout: contactLayout,
   // Four reads, each into a top-level slot: the record, plus the contact's deals, open
   // tasks and recent activity — the same section structure as the company profile
   // and the deal workspace.
   endpoints: {
-    load:         { url: '/api/contacts/vex?cache=use', method: 'POST', request: contactByIdPrism,    response: resultPrism, target: 'record' },
-    loadDeals:    { url: '/api/contacts/vex?cache=use', method: 'POST', request: contactDealsPrism,   response: resultPrism, target: 'deals' },
-    loadTasks:    { url: '/api/contacts/vex?cache=use', method: 'POST', request: contactTasksPrism,   response: resultPrism, target: 'tasks' },
-    loadActivity: { url: '/api/contacts/vex?cache=use', method: 'POST', request: contactActivityPrism, response: resultPrism, target: 'activity' },
+    load:         { url: '/api/contacts/vex', method: 'POST', request: contactByIdPrism,    response: resultPrism, target: 'record' },
+    loadDeals:    { url: '/api/contacts/vex', method: 'POST', request: contactDealsPrism,   response: resultPrism, target: 'deals' },
+    loadTasks:    { url: '/api/contacts/vex', method: 'POST', request: contactTasksPrism,   response: resultPrism, target: 'tasks' },
+    loadActivity: { url: '/api/contacts/vex', method: 'POST', request: contactActivityPrism, response: resultPrism, target: 'activity' },
     setDone:      { url: '/api/tasks/vex',              method: 'POST', request: setDoneTaskPrism },
   },
   lifecycle: { mount: [{ call: 'load', onSuccess: [{ set: 'loading', value: false }] }, { call: 'loadDeals' }, { call: 'loadTasks' }, { call: 'loadActivity' }] },

@@ -406,7 +406,7 @@ export const VexView: FC<{ scenario: VexScenario }> = ({ scenario }) => {
       rows: result.rows,
       warnings: result.warnings,
       cacheHit: result.cacheHit,
-      cacheKey: result.cacheKey,
+      fingerprint: result.fingerprint,
       scopeClause: scenario.scopeKey ? scopeClauseText(result.dsl, scenario.scopeKey) : undefined,
       timing: result.timing,
       error: result.error,

@@ -5,6 +5,7 @@ import type { CacheEntry } from './index';
 // they cross-join into a single row { contacts, companies, deals, tasks }. The
 // object shape makes Vex map that one row; the mapping returns it as-is.
 export const sidebarCounts: CacheEntry = {
+  fingerprint: 'counts/sidebar',
   intent: 'Sidebar nav badge counts — contacts, companies, deals, my open tasks',
   shape: { contacts: 0, companies: 0, deals: 0, tasks: 0 },
   dsl: {

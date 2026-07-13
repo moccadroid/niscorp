@@ -1,5 +1,5 @@
 import type { Shell } from '@niscorp/nova';
-import { CATALOG } from './catalog';
+import { catalogEntries } from './catalog';
 
 // The per-turn context: what's on each canvas right now (SCREEN) + what Ray can
 // open (ACTIONS, with serialized input schemas). SCREEN is the REAL data — for
@@ -27,7 +27,7 @@ export const buildContext = (shell: Shell): string => {
     screen.push(`    data: ${data}`);
   }
 
-  const actions = CATALOG.map(
+  const actions = catalogEntries().map(
     (c) => `  ${c.id} — ${c.description}\n    input: ${JSON.stringify(c.input)}`,
   ).join('\n');
 

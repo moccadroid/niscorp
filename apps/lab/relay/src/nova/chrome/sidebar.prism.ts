@@ -4,4 +4,4 @@ import { sidebarCounts } from '@relay/api/counts';
 // row { contacts, companies, deals, tasks }. One request fills all four slots;
 // the layout binds each directly. `userId` scopes the "my open tasks" count. A
 // full Vex query body, attached to the endpoint's `request`.
-export const sidebarCountsPrism = { shape: { $const: sidebarCounts.shape }, context: { userId: { $ref: '$.userId' } } };
+export const sidebarCountsPrism = { fingerprint: sidebarCounts.fingerprint, context: { userId: { $ref: '$.userId' } } };

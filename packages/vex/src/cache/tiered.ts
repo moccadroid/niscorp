@@ -1,6 +1,5 @@
 import type { CacheBackend, CacheEntry } from './cache.types.js';
 import { validateEntry } from './validate.js';
-import { computeShapeHash } from './hash.js';
 import { fireAndForget } from './util.js';
 
 // ═══════════════════════════════════════════════════════════════
@@ -28,8 +27,8 @@ export type WarmupMode =
   | 'full'
   /** Don't preload; L1 fills on demand via get→promote. Bounded memory. */
   | 'lazy'
-  /** Preload only these shapes (by shape hash); lazy-fill the rest. */
-  | { mode: 'partial'; shapes: unknown[] };
+  /** Preload only these fingerprints; lazy-fill the rest. */
+  | { mode: 'partial'; fingerprints: string[] };
 
 export type TieredCacheConfig = {
   /** Fast, volatile tier (e.g. createMemoryCache()). */
@@ -73,8 +72,7 @@ export const createTieredCache = (config: TieredCacheConfig): TieredCache => {
     if (warmup === 'lazy') return;
 
     if (typeof warmup === 'object' && warmup.mode === 'partial') {
-      for (const shape of warmup.shapes) {
-        const key = computeShapeHash(shape);
+      for (const key of warmup.fingerprints) {
         const entry = await l2.get(key);
         if (entry !== undefined) await promote(key, entry);
       }

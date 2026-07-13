@@ -239,11 +239,6 @@
 .rl-aside { display: flex; flex-direction: column; width: min(560px, 46vw); height: 100%; border-left: 1px solid var(--border); }
 .rl-aside:empty { display: none; }
 
-/* Per-canvas stack: a column with the (optional) nav bar on top and the active
-   action filling the rest. The action's scroll + padding live in the stack
-   layout's content box, so every canvas pads its content identically. */
-.rl-stack { display: flex; flex-direction: column; }
-
 /* The stack context chip — per-canvas nav above the active screen. A back button
    labelled with the parent (truncated), plus a depth pill that opens a menu to
    jump to any ancestor. Self-hides at depth < 1, so a base screen shows none. */
@@ -367,14 +362,8 @@
 .rl-page { flex: 1; overflow-y: auto; padding: 22px 24px; }
 .rl-page__inner { max-width: 1280px; margin: 0 auto; }
 
-/* A flex child that must be allowed to shrink below its content so an inner
-   overflow:auto scrolls (and a wide board scrolls horizontally) instead of
-   pushing the page past 100vh. */
-.rl-min0 { min-width: 0; min-height: 0; }
-
 .rl-grid { display: grid; gap: 14px; }
 .rl-row { display: flex; align-items: center; gap: 10px; }
-.rl-stack { display: flex; flex-direction: column; gap: 14px; }
 
 /* ─── Kanban ───────────────────────────────────────────── */
 .rl-kanban { display: flex; gap: 12px; align-items: flex-start; overflow-x: auto; padding-bottom: 10px; }
@@ -409,8 +398,12 @@
 .rl-rowselected, .rl-rowselected.rl-rowhover:hover { background: var(--accent-soft); box-shadow: inset 2px 0 0 var(--accent); }
 
 /* ─── Table primitive ──────────────────────────────────── */
-/* The grid columns come from a `rl-cols-*` class (below); these add the row
-   chrome. Head/row are grid rows (the cols class sets display:grid). */
+/* The Table derives its grid from its column props and is its own container
+   query context: wide/narrow templates arrive as CSS custom properties set by
+   the component, and columns flagged hideNarrow get .rl-tbl__hide. No layout
+   ever names a class — the responsive behavior is entirely the component's. */
+.rl-tbl { container-type: inline-size; }
+.rl-tbl__grid { display: grid; grid-template-columns: var(--rl-tbl-wide); }
 .rl-tbl__head, .rl-tbl__row { align-items: center; border-bottom: 1px solid var(--border); }
 .rl-tbl__row { cursor: pointer; }
 .rl-tbl__hcell { padding: 11px 18px; min-width: 0; }
@@ -419,35 +412,11 @@
 .rl-tbl__menu { display: flex; justify-content: center; padding: 8px; }
 .rl-tbl__skel { padding: 15px 18px; border-bottom: 1px solid var(--border); }
 .rl-tbl__empty { padding: 44px 24px; text-align: center; font-size: var(--fs-sm); color: var(--text-mute); }
-
-/* ─── Responsive list tables ───────────────────────────── */
-/* A list card is a query container, so its table reflows to the width actually
-   available — wide on the full page, narrow inside a quickview or on a phone.
-   The columns live here (a Grid `class:` instead of an inline `template:`) so a
-   `@container` query can drop the secondary ones when space is tight. The same
-   nth-child indices apply to the header Grid and every row Grid, so they align. */
-.rl-listcard { container-type: inline-size; }
-
-/* Each ends with an `auto` column for the row `⋯` kebab. */
-.rl-cols-contacts  { display: grid; grid-template-columns: 1.4fr 1fr 1.2fr 1.4fr auto; }
-.rl-cols-companies { display: grid; grid-template-columns: 1.4fr 1fr 1fr 1.2fr auto; }
-.rl-cols-deals     { display: grid; grid-template-columns: 2fr 1.5fr 1.2fr 1fr 0.9fr 1fr auto; }
-.rl-cols-tasks     { display: grid; grid-template-columns: auto 2fr 1fr 1fr auto; }
-.rl-tbl__check     { width: 16px; height: 16px; cursor: pointer; accent-color: var(--brand); }
+.rl-tbl__check { width: 16px; height: 16px; cursor: pointer; accent-color: var(--brand); }
 
 @container (max-width: 600px) {
-  /* Contacts → Name + Company + ⋯ (drop Title, Email). */
-  .rl-cols-contacts  { grid-template-columns: minmax(0, 1fr) auto auto; }
-  .rl-cols-contacts  > :nth-child(2), .rl-cols-contacts  > :nth-child(4) { display: none; }
-  /* Companies → Company + Industry + ⋯ (drop Size, Domain). */
-  .rl-cols-companies { grid-template-columns: minmax(0, 1fr) auto auto; }
-  .rl-cols-companies > :nth-child(3), .rl-cols-companies > :nth-child(4) { display: none; }
-  /* Deals → Deal + Value + Status + ⋯ (drop Company, Stage, Created). */
-  .rl-cols-deals     { grid-template-columns: minmax(0, 1fr) auto auto auto; }
-  .rl-cols-deals     > :nth-child(2), .rl-cols-deals > :nth-child(3), .rl-cols-deals > :nth-child(6) { display: none; }
-  /* Tasks → ✓ + Task + Due + ⋯ (drop Created). */
-  .rl-cols-tasks     { grid-template-columns: auto minmax(0, 1fr) auto auto; }
-  .rl-cols-tasks     > :nth-child(4) { display: none; }
+  .rl-tbl__grid { grid-template-columns: var(--rl-tbl-narrow); }
+  .rl-tbl__grid > .rl-tbl__hide { display: none; }
 }
 
 /* Cross-link affordances. LinkRow: a clickable nav row that hover-highlights

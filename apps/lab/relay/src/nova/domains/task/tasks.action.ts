@@ -28,7 +28,7 @@ export const tasksAction: ActionDefinition = {
   },
   layout: tasksLayout,
   endpoints: {
-    load:    { url: '/api/tasks/vex?cache=use', method: 'POST', request: listTasksPrism,   response: resultPrism, target: 'rows' },
+    load:    { url: '/api/tasks/vex', method: 'POST', request: listTasksPrism,   response: resultPrism, target: 'rows' },
     setDone: { url: '/api/tasks/vex',           method: 'POST', request: setDoneTaskPrism },
     remove:  { url: '/api/tasks/vex',           method: 'POST', request: deleteTaskPrism },
   },

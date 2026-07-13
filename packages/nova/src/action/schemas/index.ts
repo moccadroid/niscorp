@@ -25,6 +25,12 @@ export const ActionDefinitionSchema = z
       .optional()
       .describe('Either a layout id stored in the layout store, or an inline LayoutNode.'),
     data: z.record(z.string(), z.unknown()).optional().describe('Static default data merged with input on mount.'),
+    input: z
+      .record(z.string(), z.unknown())
+      .optional()
+      .describe(
+        'JSON Schema of the data keys an opener may seed when loading this action — its public, openable-input contract (author in Zod, convert with z.toJSONSchema). Fields must be a subset of `data`. Descriptive only: the runtime does not validate loads against it.',
+      ),
     triggers: z.array(TriggerConfigSchema).optional().describe('Event/message triggers.'),
     endpoints: z
       .record(z.string(), EndpointConfigSchema)

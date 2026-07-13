@@ -18,7 +18,7 @@ registerNovaReactComponents(registry);
 const layoutStore = createLayoutStore();
 
 const shell = createShell({
-  canvases: ['main'],
+  canvases: [{ id: 'main' }],
   registry,
   layoutStore,
   actions: {
@@ -41,14 +41,25 @@ shell.push('main', 'menu');
 ```ts
 type ShellConfig = {
   // Required
-  canvases: string[];                    // canvas ids — defines the universe of named canvases
-  registry: ComponentRegistry;           // shared component registry for all actions
-  layoutStore: LayoutStore;              // shared layout store for all actions
+  canvases: CanvasConfig[];              // the canvases the shell hosts (see below)
   actions: Record<string, ActionDefinition>;  // every action the shell knows about
+
+  // Layout of the shell itself
+  canvasLayout?: LayoutNode | string;    // how the shell arranges its canvases; when omitted,
+                                         // canvases render in a single flex row in declaration order
+
+  // Registry / layouts (both built fresh when omitted)
+  registry?: ComponentRegistry;          // shared component registry for all actions
+  components?: Record<string, RegistrationInput>;  // convenience: registerAll'd onto the registry
+  layoutStore?: LayoutStore;             // shared layout store for all actions
+
+  // Fragments
+  fragments?: Record<string, ActionFragment>;  // partial actions composed via a push/replace `with: [...]`
 
   // Optional integrations
   fetch?: FetchFn;                       // fetch implementation for endpoint calls
-  transform?: TransformFn;               // optional response transformer (Prism etc.)
+  transform?: TransformFn;               // evaluator for endpoint `request`/`response` configs (Prism etc.)
+  functions?: Record<string, FunctionHandler>;  // handlers for `{ fn: '<name>' }` endpoints
 
   // Telemetry / observability
   telemetry?: ShellTelemetry;            // onStateChange, onDataChange callbacks
@@ -67,15 +78,29 @@ type ShellConfig = {
 
 ### `canvases`
 
-The list of named canvases the shell hosts. A canvas is a stack of action instances; the topmost is the active one. You name your canvases by purpose:
+The canvases the shell hosts. A canvas is a stack of action instances; the topmost is the active one. Each entry is a `CanvasConfig`:
 
 ```ts
-canvases: ['main']                              // single-pane app
-canvases: ['nav', 'content']                    // sidebar + main pane
-canvases: ['main', 'modal', 'toast']            // app + overlays
+type CanvasConfig = {
+  id: string;                            // arbitrary name, by purpose
+  actionLayout?: LayoutNode | string;    // how this canvas arranges its instances; when omitted,
+                                         // only the top-of-stack (card-deck) action renders.
+                                         // Scope available to resolvables: { instances, active, count }
+  initial?: CanvasInitialSeed | CanvasInitialSeed[];  // pre-populate the stack on shell creation
+};
+
+// A seed is an action id, or an object with input and fragment composition —
+// equivalent to calling shell.push(canvasId, ...) after createShell returns.
+type CanvasInitialSeed = string | { action: string; input?: Record<string, unknown>; with?: string[] };
 ```
 
-The names are arbitrary strings. The shell tracks each canvas independently — pushing on `main` doesn't affect `modal`.
+```ts
+canvases: [{ id: 'main' }]                                       // single-pane app
+canvases: [{ id: 'nav' }, { id: 'content' }]                     // sidebar + main pane
+canvases: [{ id: 'main', initial: 'home' }, { id: 'modal' }]     // app + overlay, home pre-pushed
+```
+
+The shell tracks each canvas independently — pushing on `main` doesn't affect `modal`.
 
 ### `actions`
 
@@ -85,11 +110,15 @@ Actions can `{push: {action: 'someId'}}` other actions — but only ones that ex
 
 ### `registry` and `layoutStore`
 
-These are **shared** across every action in the shell. All actions read components from the same registry and layout refs from the same store. Pass them in once at shell construction.
+These are **shared** across every action in the shell. All actions read components from the same registry and layout refs from the same store. Both are optional — createShell builds fresh empty ones when omitted, and exposes whichever ended up in use as `shell.registry` / `shell.layoutStore`. A `components` map, if provided, is `registerAll`'d onto the registry either way.
 
-### `fetch` and `transform`
+### `fragments`
 
-These are dependency injection points. Endpoint calls use `fetch`. Response shaping uses `transform` (typically a Prism transform). Default `fetch` is the global `fetch` if available; default `transform` is none (the response goes through unchanged).
+Reusable partial actions (`ActionFragment`s), keyed by id, referenceable from a push/replace effect's `with: [...]`. More can be added at runtime via `shell.registerFragment`.
+
+### `fetch`, `transform`, and `functions`
+
+These are dependency injection points. HTTP endpoint calls use `fetch`. Endpoint `request`/`response` configs run through `transform` — an opaque `(config, source) => unknown` evaluator nova never interprets (the host typically wires Prism's `evaluate`); declaring a `request`/`response` without one is a hard error. `{ fn: '<name>' }` endpoints resolve their handler from `functions`. Default `fetch` is the global `fetch` if available; there is no default `transform` or `functions`.
 
 ### `telemetry`
 
@@ -119,17 +148,35 @@ A single function that receives every `NovaError` produced anywhere in the shell
 ```ts
 type Shell = {
   readonly id: string;
+  readonly registry: ComponentRegistry;    // what the shell was created with (or built)
+  readonly layoutStore: LayoutStore;
 
   // Canvas operations
-  push: (canvasId: string, actionId: string, input?: object) => string;
+  push: (canvasId: string, actionId: string, input?: object, fragments?: string[]) => string;
   pop: (canvasId: string) => void;
-  replace: (canvasId: string, actionId: string, input?: object) => string;
+  popTo: (canvasId: string, instanceId: string) => void;
+  replace: (canvasId: string, actionId: string, input?: object, fragments?: string[]) => string;
   clear: (canvasId: string) => void;
+
+  // Runtime registration
+  registerAction: (definition: ActionDefinition) => void;
+  registerFragment: (fragment: ActionFragment) => void;
+
+  // Canvas set / layout mutation
+  addCanvas: (config: CanvasConfig) => void;
+  removeCanvas: (canvasId: string) => void;
+  setCanvasLayout: (layout: LayoutNode | string) => void;
+  setLayout: (refId: string, layout: LayoutNode) => void;   // hot-swap a LayoutRef target
 
   // State queries
   getCanvasState: (canvasId: string) => CanvasState;
   getRuntime: (instanceId: string) => PublicActionRuntime | undefined;
   getState: () => StateSnapshot;
+
+  // Render-tree access (canvas/shell layouts)
+  getShellRenderTree: () => RenderNode[];
+  getCanvasRenderTree: (canvasId: string) => RenderNode[];
+  flattenRenderTree: (tree: RenderNode[]) => RenderNode[];
 
   // Event/message dispatch
   dispatch: (event: NovaEvent) => void;
@@ -146,19 +193,20 @@ type Shell = {
 
 ### Canvas operations
 
-#### `push(canvasId, actionId, input?)`
+#### `push(canvasId, actionId, input?, fragments?)`
 
 Mount a fresh instance of an action on top of a canvas. Suspends the previous top (its `suspend` lifecycle hook fires). Returns the new instance id.
 
 ```ts
 const instanceId = shell.push('main', 'editor', { fileId: 'f_42' });
+shell.push('overlay', 'confirm', { id: 'u_42' }, ['modal-frame']);   // composed with a fragment
 ```
 
-The optional `input` is merged into the action's `data` before mount. Use it to seed the new instance with parameters from the caller.
+The optional `input` is merged into the action's `data` before mount. The optional `fragments` names `ActionFragment`s to compose the action with before instantiation — same as a push effect's `with: [...]`.
 
 #### `pop(canvasId)`
 
-Unmount the top of a canvas. The unmounted action's `unmount` lifecycle hook fires. The new top (if any) resumes — its `resume` lifecycle hook fires.
+Unmount the top of a canvas. The unmounted action's `unmount` lifecycle hook fires. The new top (if any) resumes — its `mount` hook re-runs to refresh its data, then its `resume` hook fires.
 
 ```ts
 shell.pop('main');
@@ -166,7 +214,15 @@ shell.pop('main');
 
 If the canvas is empty, this is a no-op.
 
-#### `replace(canvasId, actionId, input?)`
+#### `popTo(canvasId, instanceId)`
+
+Pop a canvas down to a given instance — everything above it unmounts, in stack order. A no-op if the instance isn't in the stack. This is what stack-nav chrome (a breadcrumb, a tab) uses to jump straight to an ancestor.
+
+```ts
+shell.popTo('main', instanceId);
+```
+
+#### `replace(canvasId, actionId, input?, fragments?)`
 
 Replace the top of a canvas with a new action instance. The replaced action unmounts; the new one mounts. The action below stays unaffected.
 
@@ -183,6 +239,33 @@ Unmount every action on a canvas. Each unmount runs `unmount` lifecycle hooks in
 ```ts
 shell.clear('main');
 ```
+
+### Runtime registration and canvas mutation
+
+The shell starts from `createShell`'s `actions` / `fragments` / `canvases` / `canvasLayout` and can change all four live:
+
+```ts
+shell.registerAction(definition);        // add (or replace) an action definition
+shell.registerFragment(fragment);        // add a fragment for `with: [...]`
+shell.addCanvas({ id: 'aside', initial: 'inspector' });  // appends + seeds; no-op if the id exists
+shell.removeCanvas('aside');             // unmounts its instances, then drops it
+shell.setCanvasLayout(layout);           // swap how the shell arranges its canvases
+shell.setLayout('region-a', layout);     // swap what a LayoutRef placeholder resolves to
+```
+
+`setLayout` is the hot-swap hook for dynamic region layouts: a canvasLayout embeds `{ ref: id }` placeholders, and this replaces what one resolves to — the frame/chrome stays intact.
+
+### Render-tree access
+
+For non-React consumers (evaluators, exporters, tests):
+
+```ts
+shell.getShellRenderTree();              // the canvasLayout rendered against { canvases }
+shell.getCanvasRenderTree('main');       // a canvas's actionLayout rendered against { instances, active, count }
+shell.flattenRenderTree(tree);           // expand CanvasSlot/ActionSlot markers into resolved content
+```
+
+React consumers render trees through component boundaries instead — see `REACT_DOCS.md`.
 
 ### State queries
 
@@ -287,10 +370,7 @@ Always dispose shells you create — they hold references to runtimes which hold
 ### Sidebar + content
 
 ```ts
-canvases: ['nav', 'content']
-
-shell.push('nav', 'navigator');
-shell.push('content', 'welcome');
+canvases: [{ id: 'nav', initial: 'navigator' }, { id: 'content', initial: 'welcome' }]
 
 // Inside the navigator action:
 triggers: [
@@ -304,12 +384,12 @@ Clicking nav buttons swaps the content canvas without affecting the nav canvas. 
 ### Modal overlays
 
 ```ts
-canvases: ['main', 'modal']
-
-shell.push('main', 'home');
+canvases: [{ id: 'main', initial: 'home' }, { id: 'modal' }]
 
 // From the home action:
 { push: { action: 'confirm-delete', canvas: 'modal' } }
+// Optionally composed with reusable modal chrome:
+{ push: { action: 'confirm-delete', canvas: 'modal', with: ['modal-frame'] } }
 
 // From inside the confirm-delete action:
 { pop: true }   // pops on the action's current canvas, which is 'modal'
@@ -354,10 +434,10 @@ Each action instance lives in one of four states:
 
 - **`initializing`** — between `push()` and the moment the mount lifecycle hook completes.
 - **`active`** — the topmost instance on a canvas. Triggers attached, render reflects current data.
-- **`suspended`** — another action is on top. Triggers stay attached, but the runtime's abort signal prevents in-flight async work from completing during this state.
+- **`suspended`** — another action is on top. Triggers stay attached but do not fire (a suspended action reacts to nothing), and the runtime's abort signal prevents in-flight async work from completing during this state.
 - **`unmounted`** — terminal. The runtime is disposed; `getRuntime` returns `undefined`.
 
-Lifecycle hooks fire on each transition: `mount` (init→active), `suspend` (active→suspended), `resume` (suspended→active), `unmount` (any→unmounted).
+Lifecycle hooks fire on each transition: `mount` (init→active), `suspend` (active→suspended), `mount` again then `resume` (suspended→active — the re-run of `mount` refreshes the data a backgrounded action ignored), `unmount` (any→unmounted).
 
 ---
 
@@ -397,27 +477,45 @@ Plus all action-level errors (from `ACTION_DOCS.md`) and layout-level errors (fr
 
 ```ts
 const shell = createShell({
-  canvases: string[],
-  registry: ComponentRegistry,
-  layoutStore: LayoutStore,
+  canvases: CanvasConfig[],                // { id, actionLayout?, initial? }
   actions: Record<string, ActionDefinition>,
+  canvasLayout?: LayoutNode | string,
+  registry?: ComponentRegistry,            // built fresh when omitted
+  components?: Record<string, RegistrationInput>,
+  layoutStore?: LayoutStore,               // built fresh when omitted
+  fragments?: Record<string, ActionFragment>,
   fetch?: FetchFn,
   transform?: TransformFn,
+  functions?: Record<string, FunctionHandler>,
   telemetry?: { onStateChange?, onDataChange? },
   strict?: boolean,
   onError?: (error) => void,
 });
 
 // Canvas ops
-shell.push(canvasId, actionId, input?);    // → instanceId
+shell.push(canvasId, actionId, input?, fragments?);    // → instanceId
 shell.pop(canvasId);
-shell.replace(canvasId, actionId, input?); // → instanceId
+shell.popTo(canvasId, instanceId);
+shell.replace(canvasId, actionId, input?, fragments?); // → instanceId
 shell.clear(canvasId);
+
+// Runtime registration / canvas mutation
+shell.registerAction(definition);
+shell.registerFragment(fragment);
+shell.addCanvas(config);
+shell.removeCanvas(canvasId);
+shell.setCanvasLayout(layout);
+shell.setLayout(refId, layout);
 
 // State
 shell.getCanvasState(canvasId);            // → CanvasState
 shell.getRuntime(instanceId);              // → PublicActionRuntime | undefined
 shell.getState();                          // → StateSnapshot
+
+// Render trees (non-React consumers)
+shell.getShellRenderTree();                // → RenderNode[]
+shell.getCanvasRenderTree(canvasId);       // → RenderNode[]
+shell.flattenRenderTree(tree);             // → RenderNode[]
 
 // Events / messages
 shell.dispatch({ type, ref?, ... });

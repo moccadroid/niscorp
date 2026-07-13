@@ -8,7 +8,7 @@ import type { LayoutNode } from '@niscorp/nova';
 // layouts the `deals` action renders (see deals.layout.ts).
 export const dealsTableLayout: LayoutNode = {
   component: 'Box',
-  props: { class: 'rl-listcard' },
+  props: {},
   children: [
     {
       component: 'Box',
@@ -51,7 +51,6 @@ export const dealsTableLayout: LayoutNode = {
       props: {
         rows: '$.rows',
         loading: '$.loading',
-        cols: 'rl-cols-deals',
         rowRef: 'row',
         rowKey: 'deal_id',
         selectedId: '$.highlight_id',
@@ -70,12 +69,12 @@ export const dealsTableLayout: LayoutNode = {
           ],
         },
         columns: [
-          { label: 'Deal', sort: 'deals.title', cell: { kind: 'primary', key: 'title', icon: 'target', sub: '{owner} · closes {close_date_display}' } },
-          { label: 'Company', sort: 'companies.name', cell: { kind: 'text', key: 'company', color: 'secondary' } },
-          { label: 'Stage', sort: 'stages.name', cell: { kind: 'badge', key: 'stage', tone: 'blue' } },
-          { label: 'Value', sort: 'deals.value', cell: { kind: 'text', key: 'value_display', mono: true, weight: 540 } },
-          { label: 'Status', sort: 'deals.status', cell: { kind: 'badge', key: 'status', toneMap: { won: 'green', lost: 'red', _: 'blue' }, dot: true } },
-          { label: 'Created', sort: 'deals.created_at', cell: { kind: 'text', key: 'created_at', color: 'secondary' } },
+          { label: 'Deal', sort: 'deals.title', w: 2, cell: { kind: 'primary', key: 'title', icon: 'target', sub: '{owner} · closes {close_date_display}' } },
+          { label: 'Company', sort: 'companies.name', w: 1.5, hideNarrow: true, cell: { kind: 'text', key: 'company', color: 'secondary' } },
+          { label: 'Stage', sort: 'stages.name', w: 1.2, hideNarrow: true, cell: { kind: 'badge', key: 'stage', tone: 'blue' } },
+          { label: 'Value', sort: 'deals.value', w: 1, cell: { kind: 'text', key: 'value_display', mono: true, weight: 540 } },
+          { label: 'Status', sort: 'deals.status', w: 0.9, cell: { kind: 'badge', key: 'status', toneMap: { won: 'green', lost: 'red', _: 'blue' }, dot: true } },
+          { label: 'Created', sort: 'deals.created_at', w: 1, hideNarrow: true, cell: { kind: 'text', key: 'created_at', color: 'secondary' } },
         ],
       },
     },

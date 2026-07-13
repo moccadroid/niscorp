@@ -7,11 +7,11 @@ import { contactById } from '@relay/api/contacts';
 // full Vex request body, attached to an endpoint's `request`. The primary contact
 // keys off `$.record.primary_contact_id`, so its endpoint runs after the record
 // loads (see the action's mount sequence).
-export const dealByIdPrism = { shape: { $const: dealById.shape }, context: { id: { $ref: '$.id' } } };
-export const dealActivitiesPrism = { shape: { $const: activitiesByDeal.shape }, context: { id: { $ref: '$.id' } } };
-export const dealLineItemsPrism = { shape: { $const: dealLineItems.shape }, context: { id: { $ref: '$.id' } } };
-export const dealTasksPrism = { shape: { $const: tasksByDeal.shape }, context: { id: { $ref: '$.id' } } };
-export const dealContactPrism = { shape: { $const: contactById.shape }, context: { id: { $ref: '$.record.primary_contact_id' } } };
+export const dealByIdPrism = { fingerprint: dealById.fingerprint, context: { id: { $ref: '$.id' } } };
+export const dealActivitiesPrism = { fingerprint: activitiesByDeal.fingerprint, context: { id: { $ref: '$.id' } } };
+export const dealLineItemsPrism = { fingerprint: dealLineItems.fingerprint, context: { id: { $ref: '$.id' } } };
+export const dealTasksPrism = { fingerprint: tasksByDeal.fingerprint, context: { id: { $ref: '$.id' } } };
+export const dealContactPrism = { fingerprint: contactById.fingerprint, context: { id: { $ref: '$.record.primary_contact_id' } } };
 
 // Won/lost writes only need the open deal's id.
 export const markWonPrism = {

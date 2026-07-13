@@ -5,7 +5,7 @@ import type { QueryRequest, QueryResponse } from '../schemas/request.schema.js';
 import type { CompiledQuery } from '../adapters/adapter.types.js';
 import type { TestResult, AnalysisConfig } from './engine.types.js';
 import type { ScopeValues } from '../scope/scope.types.js';
-import type { CacheBackend, CacheMode, CacheEntry } from '../cache/cache.types.js';
+import type { CacheBackend, CacheEntry, OkCacheEntry } from '../cache/cache.types.js';
 import { z } from 'zod';
 import { QueryRequestSchema } from '../schemas/request.schema.js';
 import { QuerySchema } from '../schemas/query.schema.js';
@@ -15,8 +15,8 @@ import { resolve } from './resolver.js';
 import { analyze } from './analyzer.js';
 import { executeQuery, buildContextContract, findMissingContext } from './executor.js';
 import { createMemoryCache } from '../cache/memory.js';
-import { computeShapeHash, computeSchemaFingerprint, computeRequestHash } from '../cache/hash.js';
-import { isEntryFresh } from '../cache/util.js';
+import { computeSchemaFingerprint, computeRequestHash, mintFingerprint } from '../cache/hash.js';
+import { isEntryFresh, fireAndForget } from '../cache/util.js';
 import { buildValidationContext } from '../utils/context.js';
 import { VexError } from '../errors.js';
 import type { CompiledIr, JsonObject, JsonValue } from '@niscorp/prism';
@@ -174,9 +174,22 @@ export const createQueryEngine = (engineConfig: QueryEngineConfig): QueryEngine 
     }
   };
 
-  // ─── Cache read ────────────────────────────────────────────
+  // ─── Cache resolution (fingerprint identity) ───────────────
 
-  type CacheRead = { dsl?: Query; cachedIr?: CompiledIr; intent?: string; hit: boolean };
+  type Resolution = {
+    fingerprint: string;
+    // Present on a hit — the stored artifact.
+    dsl?: Query;
+    cachedIr?: CompiledIr;
+    intent?: string;
+    // The stored shape — drives the array-vs-single mapping envelope on
+    // fingerprint-only replays (the request carries no shape then).
+    shape?: unknown;
+    hit: boolean;
+    // A named slot existed but its stored request differed — this run
+    // regenerates and REPLACES it.
+    replaced: boolean;
+  };
 
   // Fresh = not past TTL and written against the current schema. A
   // non-fresh entry is evicted here, then treated as a miss.
@@ -186,32 +199,51 @@ export const createQueryEngine = (engineConfig: QueryEngineConfig): QueryEngine 
     return false;
   };
 
-  // Positive cache is shape-keyed; negative cache is request-keyed (a
-  // hit there short-circuits a known-impossible request). Throws for
-  // cache-only misses.
-  const readFromCache = async (
-    shapeHash: string,
-    negKey: string,
-    cacheMode: CacheMode,
-  ): Promise<CacheRead> => {
-    if (cacheMode !== 'use' && cacheMode !== 'only') return { hit: false };
+  // Lifetime = usage: every hit stamps lastUsedAt (off the hot path) so
+  // a GC sweep can evict entries that stopped being replayed.
+  const touch = (key: string, entry: CacheEntry): void => {
+    fireAndForget(cache.set(key, { ...entry, lastUsedAt: Date.now() }));
+  };
 
-    const positive = await cache.get(shapeHash);
-    if (positive?.kind === 'ok' && freshOrEvict(positive, shapeHash)) {
-      return { dsl: positive.dsl, cachedIr: positive.prismIr, intent: positive.intent, hit: true };
+  const resolveFingerprint = async (
+    validRequest: QueryRequest,
+    hasRequest: boolean,
+    requestHash: string | undefined,
+  ): Promise<Resolution> => {
+    const fp = validRequest.fingerprint;
+    if (fp === undefined) {
+      // Explore: always a fresh generation under a minted, immutable pin.
+      return { fingerprint: mintFingerprint(), hit: false, replaced: false };
     }
 
-    const negative = await cache.get(negKey);
-    if (negative?.kind === 'unsatisfiable' && freshOrEvict(negative, negKey)) {
-      emit({ type: 'query.cache', hit: true });
-      emit({ type: 'query.error', code: 'unsatisfiable', message: negative.reason });
-      throw new VexError('unsatisfiable', negative.reason);
+    const entry = await cache.get(fp);
+    if (entry?.kind === 'ok' && freshOrEvict(entry, fp)) {
+      if (!hasRequest || entry.requestHash === requestHash) {
+        touch(fp, entry);
+        return {
+          fingerprint: fp,
+          dsl: entry.dsl,
+          ...(entry.prismIr !== undefined ? { cachedIr: entry.prismIr } : {}),
+          ...(entry.intent !== undefined ? { intent: entry.intent } : {}),
+          ...(entry.shape !== undefined ? { shape: entry.shape } : {}),
+          hit: true,
+          replaced: false,
+        };
+      }
+      if (entry.protected === true) {
+        throw new VexError(
+          'fingerprint_protected',
+          `Fingerprint "${fp}" is protected and this request no longer matches its stored one. Replay it with the fingerprint alone, or use a new name.`,
+        );
+      }
+      // The name is the caller's; its content follows the caller's request.
+      return { fingerprint: fp, hit: false, replaced: true };
     }
 
-    if (cacheMode === 'only') {
-      throw new VexError('cache_miss', 'No cached query for this shape and cache mode is "only"');
+    if (!hasRequest) {
+      throw new VexError('cache_miss', `Unknown fingerprint "${fp}" — pass intent + shape to (re)generate it.`);
     }
-    return { hit: false };
+    return { fingerprint: fp, hit: false, replaced: false };
   };
 
   // ─── DSL generation (single-flight + negative caching) ─────
@@ -220,7 +252,6 @@ export const createQueryEngine = (engineConfig: QueryEngineConfig): QueryEngine 
     validRequest: QueryRequest,
     requestHash: string,
     negKey: string,
-    cacheMode: CacheMode,
     entities: string[] | undefined,
   ): Promise<Query> => {
     if (generateDsl === undefined) {
@@ -238,7 +269,7 @@ export const createQueryEngine = (engineConfig: QueryEngineConfig): QueryEngine 
       } catch (err) {
         // Cache a negative result so a known-impossible request doesn't
         // re-run the agent. TTL'd — a schema change may make it possible.
-        if (err instanceof VexError && err.code === 'unsatisfiable' && cacheMode !== 'bypass') {
+        if (err instanceof VexError && err.code === 'unsatisfiable') {
           const now = Date.now();
           await cache.set(negKey, {
             kind: 'unsatisfiable',
@@ -254,11 +285,8 @@ export const createQueryEngine = (engineConfig: QueryEngineConfig): QueryEngine 
       }
     };
 
-    // Single-flight the default 'use' path so a burst of identical
-    // requests triggers one generation. 'refresh'/'bypass' are explicit
-    // "don't share cache state" intents and generate independently.
-    if (cacheMode !== 'use') return generate();
-
+    // Single-flight: a burst of identical requests (same request
+    // identity) triggers one generation, not N.
     const existing = inFlight.get(requestHash);
     if (existing !== undefined) return existing;
 
@@ -329,25 +357,44 @@ export const createQueryEngine = (engineConfig: QueryEngineConfig): QueryEngine 
     }
 
     const validRequest = parsed.data;
-    const cacheMode: CacheMode = options?.cache ?? 'use';
     const scopeValues = options?.scope;
     const t0 = Date.now();
 
-    const shapeHash = computeShapeHash(validRequest.shape);
-    const requestHash = computeRequestHash(validRequest);
-    const negKey = `neg:${requestHash}`;
-    emit({ type: 'query.start', intent: validRequest.intent, shape: validRequest.shape, cache: cacheMode, hash: shapeHash, entities: options?.entities });
+    const hasRequest = validRequest.shape !== undefined && validRequest.shape !== null;
+    if (validRequest.fingerprint === undefined && !hasRequest) {
+      throw new VexError('invalid_request', 'Pass a fingerprint (replay) or intent + shape (generate) — or both (named slot).');
+    }
+    const requestHash = hasRequest ? computeRequestHash(validRequest) : undefined;
+    const negKey = requestHash !== undefined ? `neg:${requestHash}` : undefined;
+    emit({
+      type: 'query.start',
+      intent: validRequest.intent,
+      shape: validRequest.shape,
+      fingerprint: validRequest.fingerprint,
+      entities: options?.entities,
+    });
 
-    // Cache read (may short-circuit on a negative hit or cache-only miss).
-    const cached = await readFromCache(shapeHash, negKey, cacheMode);
-    emit({ type: 'query.cache', hit: cached.hit });
+    // Resolve identity: replay a pin/name, or decide to generate.
+    const cached = await resolveFingerprint(validRequest, hasRequest, requestHash);
+    emit({ type: 'query.cache', hit: cached.hit, fingerprint: cached.fingerprint, replaced: cached.replaced });
 
-    // Generate on miss.
+    // Generate on miss (consulting the negative cache first).
     let dsl = cached.dsl;
     let agentMs: number | undefined;
     if (dsl === undefined) {
+      if (options?.locked === true) {
+        throw new VexError('locked', 'This endpoint is replay-only — unknown or changed fingerprints cannot generate here.');
+      }
+      if (requestHash === undefined || negKey === undefined) {
+        throw new VexError('invalid_request', 'Generation needs intent + shape.');
+      }
+      const negative = await cache.get(negKey);
+      if (negative?.kind === 'unsatisfiable' && freshOrEvict(negative, negKey)) {
+        emit({ type: 'query.error', code: 'unsatisfiable', message: negative.reason });
+        throw new VexError('unsatisfiable', negative.reason);
+      }
       const agentStart = Date.now();
-      dsl = await generateMissingDsl(validRequest, requestHash, negKey, cacheMode, options?.entities);
+      dsl = await generateMissingDsl(validRequest, requestHash, negKey, options?.entities);
       agentMs = Date.now() - agentStart;
       emit({ type: 'query.dsl', dsl, agentMs });
     }
@@ -366,7 +413,12 @@ export const createQueryEngine = (engineConfig: QueryEngineConfig): QueryEngine 
       return {
         result: [],
         meta: {
-          cache: { hit: cached.hit, key: shapeHash, intent: cached.intent ?? validRequest.intent },
+          cache: {
+            hit: cached.hit,
+            fingerprint: cached.fingerprint,
+            intent: cached.intent ?? validRequest.intent,
+            ...(cached.replaced ? { replaced: true } : {}),
+          },
           context: buildContextContract(compiled),
           warnings: warnings.length > 0 ? warnings : undefined,
           missingContext: missingKeys,
@@ -374,22 +426,29 @@ export const createQueryEngine = (engineConfig: QueryEngineConfig): QueryEngine 
       };
     }
 
-    // Execute SQL + map rows to the requested shape.
+    // Execute SQL + map rows to the requested shape. A fingerprint-only
+    // replay carries no shape — the stored one drives the envelope.
+    const effectiveRequest = hasRequest ? validRequest : { ...validRequest, shape: cached.shape };
     const { result, executionMs, mappingMs, mappedIr } = await executeAndMap(
-      compiled, validRequest, cached.cachedIr, context, scope,
+      compiled, effectiveRequest, cached.cachedIr, context, scope,
     );
 
-    // Cache DSL + mapping IR (positive, shape-keyed).
-    if (!cached.hit && cacheMode !== 'bypass') {
-      await cache.set(shapeHash, {
+    // Store the artifact under its fingerprint. Runtime writes are never
+    // protected — that bit belongs to seeds and explicit PATCHes only.
+    if (!cached.hit) {
+      const now = Date.now();
+      const entry: OkCacheEntry = {
         kind: 'ok',
         dsl,
-        prismIr: mappedIr,
-        createdAt: Date.now(),
+        ...(mappedIr !== undefined ? { prismIr: mappedIr } : {}),
+        createdAt: now,
+        lastUsedAt: now,
+        ...(requestHash !== undefined ? { requestHash } : {}),
         ...(validRequest.intent !== undefined ? { intent: validRequest.intent } : {}),
         shape: validRequest.shape,
         ...(cachedFingerprint !== undefined ? { schemaFingerprint: cachedFingerprint } : {}),
-      });
+      };
+      await cache.set(cached.fingerprint, entry);
     }
 
     emit({ type: 'query.done', totalMs: Date.now() - t0 });
@@ -397,7 +456,12 @@ export const createQueryEngine = (engineConfig: QueryEngineConfig): QueryEngine 
     return {
       result,
       meta: {
-        cache: { hit: cached.hit, key: shapeHash, intent: cached.intent ?? validRequest.intent },
+        cache: {
+          hit: cached.hit,
+          fingerprint: cached.fingerprint,
+          intent: cached.intent ?? validRequest.intent,
+          ...(cached.replaced ? { replaced: true } : {}),
+        },
         context: buildContextContract(compiled),
         timing: {
           ...(agentMs !== undefined ? { agentMs } : {}),

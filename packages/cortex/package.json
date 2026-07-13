@@ -1,7 +1,7 @@
 {
   "name": "@niscorp/cortex",
-  "version": "0.1.0",
-  "description": "Agentic orchestration runtime — agents, tools, behaviors, plans",
+  "version": "0.2.0",
+  "description": "Agent runtime — one tool loop, typed envelopes, gates, streamed events",
   "license": "MIT",
   "type": "module",
   "sideEffects": false,
@@ -19,10 +19,11 @@
     "build": "tsup",
     "dev": "tsup --watch",
     "test": "vitest run",
-    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.examples.json"
+    "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
     "@niscorp/signal": "workspace:*",
+    "@niscorp/solid": "workspace:*",
     "@types/node": "^22.10.2",
     "tsup": "^8.5.1",
     "tsx": "^4.19.2",
@@ -31,6 +32,7 @@
   },
   "peerDependencies": {
     "@niscorp/signal": "workspace:*",
+    "@niscorp/solid": "workspace:*",
     "zod": "^4.3.6"
   }
 }

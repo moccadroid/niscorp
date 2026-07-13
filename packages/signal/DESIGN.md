@@ -1,193 +1,106 @@
 # Signal — Design Document
 
-Architecture, design decisions, and trade-offs behind `@niscorp/signal`. For usage documentation, see [DOCS.md](./DOCS.md).
+Architecture, design decisions, and trade-offs behind `@niscorp/signal`.
+For usage documentation, see [DOCS.md](./DOCS.md).
+
+One sentence: **what comes out conforms to the schema that went in, on
+every provider — or you get a typed failure with evidence.**
 
 ---
 
-## Architecture
+## The layer map
 
 ```
-User Code
-    ↓
-createSignal('groq', options?)     → immutable config bag
-    .model(...)                    → new config bag
-    .schema(zodSchema)             → new config bag (generic changes)
-    .tools([...])                  → new config bag
-    ↓
-    .complete('user message')      → execute (returns Promise<SignalResult>)
-    .stream('user message')        → stream  (returns AsyncIterable<StreamEvent>)
-    .step({ messages, tools })     → one adapter call  (returns Promise<StepResult>)
-    .stepStream({ messages, tools}) → streaming step  (returns AsyncIterable<StepStreamEvent>)
-    ↓
-Strategy Layer (picks approach based on capabilities)
-    ↓
-Provider Adapter (translates to provider API)
-    ↓ chat()                       ↓ chatStream()
-    ↓ Promise<ProviderResponse>    ↓ AsyncIterable<ProviderStreamDelta>
-HTTP (via dynamically imported SDK)
+types.ts       the public contract (incl. StepOutcome / Rejection / WireReport)
+registry.ts    provider DATA: baseUrl, capabilities, adapter id, wire strategy ids
+adapters/      byte movers, one per WIRE PROTOCOL (not per vendor) — throw-and-wrap, zero policy
+wire/          RESPONSE side: repair.ts (mechanisms) → router.ts (classify) → strategies/ (provider quirks)
+transport/     REQUEST side: resolve.ts (respond | native | emit) + protocol.ts (ALL prompt prose)
+signal.ts      the client: step/stepStream = the ONE execution core, builders, embed, count
+run.ts         complete()/stream(): one loop over step — runStream is the core, runComplete drains it
 ```
 
-### Immutable Builder
+The seam rule: **wire is the response side, transport is the request
+side, and everything between them is `step()`.** A change touching both
+sides is two changes.
 
-Every builder method creates a new config object via spread. The factory closure captures the config. `complete()` reads the captured config and executes. No mutable state on the returned object.
+## Placement rules (decided once, checkable in review)
 
-The adapter is lazily created and cached in the closure — keyed by provider+baseUrl+apiKey so forking with a different API key creates a new adapter.
+- A vendor is a **registry row**. Adapters exist per wire protocol;
+  Groq = the openai-compatible adapter + registry data (capabilities,
+  wire strategy ids). Never write a vendor adapter that duplicates a
+  protocol.
+- A provider pathology is a **wire strategy**: one file under
+  `wire/strategies/`, fixtures from the real error/response body, id
+  listed on the provider's registry entry. Two hooks: `error` (recover
+  a `Rejection` from a thrown provider error — Groq `failed_generation`)
+  and `response` (contribute candidate texts — 4o JSONL). Adding a
+  quirk changes nothing else.
+- A pure byte/value transform is a **repair mechanism** in
+  `wire/repair.ts` (extract, escape repair, jsonish decode, truncation
+  close). Mechanisms never validate and never know a provider; the
+  router composes them.
+- Prompt prose exists in **exactly one file**: `transport/protocol.ts`
+  (finish protocols, corrections, the bare-schema prompt, the exit-tool
+  description). Prompt text anywhere else in signal is a review failure.
+- Public contract types live in `types.ts`; module-internal types live
+  beside their code. No floating type files.
 
-### Strategy Layer
+## Invariants
 
-Two decisions are made based on provider capabilities:
+- **Request immutability.** The request shape (tools, toolChoice,
+  responseFormat) never changes during a run. All adaptation is
+  response-side. (Learned twice — mid-run tool masking and toolChoice
+  pinning both confuse models. Never again.)
+- **Repairs are rescue-only.** A repaired candidate counts ONLY when it
+  passes the caller's acceptance schema; otherwise the original bytes
+  and the original error stand. This is why the ladder safely runs on
+  every response of every provider.
+- **The router owns classification.** A response is `tool_calls`
+  (declared tool), `output` (anything whose repaired value passes the
+  acceptance gate — exit-tool args and pseudo-tool args included), or
+  `failed` with evidence (+ `attempted` when a parsed candidate existed
+  but failed the gate; + `truncated` when bytes end mid-structure).
+  Callers switch on the outcome; they never parse strings.
+- **Rejections are arrivals.** A provider 400 that carries the model's
+  attempt is recovered by an error-hook strategy and routed
+  identically: a rejected call to a declared tool IS a tool call; a
+  rejected pseudo-call carrying valid output IS output.
+- **Transport resolution is pure.** `resolveTransport(spec,
+  capabilities)` — previews resolve exactly like runs. `auto` → emit on
+  arg-mangling providers (`manglesNestedToolArgs`), native when grammar
+  and tools combine, respond otherwise. Explicit choices are honored.
+  Permissive respond params on hard-validating providers
+  (`validatesToolArgs`) never advertise a field the contract lacks.
 
-**Structured output strategy:**
-1. `nativeJsonSchema` → provider's `response_format: json_schema`
-2. `nativeJsonMode` → provider's `response_format: json_object` + schema in system prompt
-3. Neither → schema in system prompt only, parse JSON from response
+## Design decisions (carried from v1 where still true)
 
-**Tool calling strategy:**
-1. `nativeTools` (and no schema conflict) → provider's native tool calling
-2. Otherwise → unified schema: tools embedded in system prompt, discriminated union response (`_action: "call" | "respond"`)
+1. **Factory function, not class.** Plain object from a closure.
+2. **Immutable builder via spread.** Each method forks the config bag.
+3. **String provider names**; registry supplies URLs, env keys,
+   capability defaults; object config for custom endpoints.
+4. **Capabilities drive behavior, not provider identity.** No
+   "if groq then X" outside the registry row.
+5. **Zod is the source of truth.** Provider grammar is a compliance
+   hint; the acceptance schema gates what actually counts.
+6. **Zero hard dependencies.** SDKs load dynamically; browsers inject a
+   client instead.
+7. **History is external.** `complete()` returns full history; callers
+   thread it back.
+8. **`step()`/`stepStream()` are the primitives; `complete()`/`stream()`
+   are wrappers over them.** One pipeline: orchestrators (cortex) and
+   the convenience API ride the same wire layer, the same routing, the
+   same recovery. Streaming is a delivery mode, never a second system.
+9. **Streaming validation is end-of-stream**; mid-stream structural
+   parsing is `@niscorp/solid`'s job in the consumer.
 
-Zod validates the final result regardless of strategy. Provider-side schemas are compliance hints.
+## Known debt
 
-### Unified Schema Strategy
-
-For providers that can't do native tools + structured output simultaneously (Groq):
-
-1. Tool descriptions injected into system prompt with usage instructions
-2. Response format is a discriminated union: `{ _action: "call", tool, args }` or `{ _action: "respond", ...userSchema }`
-3. On `_action: "call"` → validate args with tool's Zod schema, execute, send result back, loop
-4. On `_action: "respond"` → strip framework fields, validate against output schema
-5. On invalid JSON / invalid `_action` → send correction message, retry up to `retries` times
-
-The `_action` underscore prefix avoids collision with user schema fields.
-
-### Embedding
-
-`embed()` converts text to dense vectors via the provider's `/v1/embeddings` endpoint. Same builder pattern, different execution method:
-
-```typescript
-const embedder = createSignal('openai').model('text-embedding-3-small');
-const vector = await embedder.embed('search query');                    // number[]
-const vectors = await embedder.embed(['text a', 'text b']);            // number[][]
-const small = await embedder.embed('text', { dimensions: 256 });       // truncated
-```
-
-Embedding is a separate concern from chat — different models, different API endpoint, different use case. Use a separate Signal client for embedding. The `supportsEmbedding` capability in the registry indicates which providers support it (currently: OpenAI only).
-
-The adapter's `embed()` method is optional. Calling `embed()` on a provider without support throws. The embed function is lazy-loaded — the SDK instance for embeddings is created only on first call.
-
-### Provider Adapters
-
-Three adapters cover all providers:
-
-- **openai-compatible** — OpenAI, Groq, OpenRouter, any OpenAI-compat endpoint. Supports `chat`, `chatStream`, and `embed`.
-- **anthropic** (stub) — Anthropic Messages API
-- **google** (stub) — Google Gemini API
-
-Adapters are thin: translate Signal's message format to the provider's, call the API, normalize the response. Error recovery (Groq's `failed_generation`) lives in the adapter.
-
-### SDK Loading
-
-Zero hard dependencies. The openai SDK is dynamically imported at runtime. If the user hasn't installed it, they get a clear error message. The user can also pass a pre-configured client instance to skip SDK loading entirely.
-
----
-
-## Provider Registry
-
-Known providers are registered with defaults:
-
-```
-'groq'       → api.groq.com       GROQ_API_KEY       openai-compatible  nativeTools:false  nativeJsonSchema:false  embedding:false
-'openai'     → api.openai.com     OPENAI_API_KEY      openai-compatible  nativeTools:true   nativeJsonSchema:true   embedding:true
-'openrouter' → openrouter.ai      OPENROUTER_API_KEY  openai-compatible  nativeTools:true   nativeJsonSchema:true   embedding:false
-'anthropic'  → api.anthropic.com  ANTHROPIC_API_KEY   anthropic          nativeTools:true   nativeJsonSchema:false  embedding:false
-'google'     → googleapis.com     GOOGLE_API_KEY      google             nativeTools:true   nativeJsonSchema:false  embedding:false
-```
-
-The user can override any capability via `.capabilities()`.
-
-> OpenRouter can proxy some embedding models, but coverage is model-dependent, so the registry defaults it to `false`. Override via `.capabilities({ supportsEmbedding: true })` if your chosen model supports it.
-
----
-
-## Validation & Retry
-
-When a schema is set, responses are validated with Zod's `safeParse`. On failure:
-
-1. The Zod error details are formatted and sent back to the model as a correction message
-2. The model gets another chance to produce valid output
-3. Repeats up to `retries` times (default: 2)
-4. After exhausting retries, throws `SignalError` with `E_VALIDATION_FAILED` and the last Zod issues
-
-This works because LLMs usually produce almost-correct JSON that fails on one field. Feeding the specific error back fixes it 90%+ of the time.
-
----
-
-## File Structure
-
-```
-src/
-├── index.ts                           # Public API
-├── signal.ts                          # Factory + immutable builder + complete + stream
-├── types.ts                           # Message, SignalResult, StreamEvent, etc.
-├── config.ts                          # SignalConfig type
-├── errors.ts                          # SignalError + error codes
-├── registry.ts                        # Known provider registry
-├── strategy/
-│   ├── structured-output.ts           # Schema strategy selection
-│   ├── tool-calling.ts                # Tool strategy selection
-│   └── unified-schema.ts             # Unified schema builder + loop
-├── stream/
-│   └── execute-stream.ts             # Streaming execution: text, tools, schema retry
-├── providers/
-│   ├── openai-compatible.adapter.ts   # OpenAI/Groq/OpenRouter adapter (chat + chatStream)
-│   ├── anthropic.adapter.ts           # Stub
-│   └── google.adapter.ts             # Stub
-├── tools/
-│   ├── define-tool.ts                 # defineTool factory
-│   └── tool-loop.ts                   # Native tool execution loop (non-streaming)
-├── validation/
-│   └── retry.ts                       # Zod validation + retry with correction (non-streaming)
-└── utils/
-    └── sdk-loader.ts                  # Dynamic SDK import
-```
-
----
-
-## Dependencies
-
-- `zod` (peer, ^4.0.0) — Schema validation, JSON Schema generation
-- Provider SDKs dynamically imported (zero bundled)
-
----
-
-## Design Decisions
-
-1. **Factory function, not class.** Signal returns a plain object from a closure. No `this`, no `new`, no prototype chain. Aligns with the style guide ("no classes unless genuinely needed").
-
-2. **Immutable builder via spread.** Each method returns `createSignalFromConfig({ ...config, [field]: value })`. Cheap, forkable, no mutation, no clearing.
-
-3. **`complete()` takes one argument.** The user message. Everything else is configured on the instance. No optional parameter chains.
-
-4. **String provider names.** `'groq'` is the common path. Registry handles base URLs, env vars, capability defaults. Object config for custom endpoints.
-
-5. **Capabilities drive strategy, not provider identity.** Signal doesn't hardcode "if Groq then do X". It checks capabilities and picks the right strategy.
-
-6. **Unified schema for tool calling.** When native tools aren't available, tools are embedded in the system prompt and the response is a discriminated union. Battle-tested pattern.
-
-7. **Zero hard dependencies.** SDKs are dynamically imported. The user installs what they need.
-
-8. **Zod is the source of truth.** Provider-side JSON Schema is a compliance hint. Zod validates the actual response. Retries feed Zod errors back to the model.
-
-9. **History is external.** Signal doesn't track conversation state. `complete()` returns full history. The caller threads it back via `.history()`.
-
-10. **Hooks, not middleware.** `onRetry` and `onToolCall` cover observability without middleware complexity.
-
-11. **`parseResponse` throws, never swallows.** If the response doesn't match the schema after the tool/unified loop, it's a `SignalError`. The caller always gets either a valid typed result or an explicit error.
-
-12. **`stream()` is an async generator that mirrors `complete()`'s contract.** Same strategy selection, same tool loop shape, same Zod validation at end-of-stream, same retry-with-correction. The only differences: text deltas are yielded as they arrive, tool calls are assembled from chunked deltas, and a `retry` event tells the consumer to reset downstream state (e.g. a `@niscorp/solid` stream) before the next attempt.
-
-13. **Streaming validation is end-of-stream, not mid-stream.** Signal validates the complete response buffer after the SSE closes. Mid-stream structural validation is `@niscorp/solid`'s job — the consumer pipes `text` deltas into solid, which kind-checks at value-open. Signal doesn't know about solid; solid doesn't know about signal. The consumer is the glue.
-
-14. **`AbortSignal` for external cancellation.** `stream(input, { signal })` checks the signal between deltas. `for await + break` also works (iterator `return()` closes the underlying SSE). Both paths are clean and composable.
-
-15. **`step()` and `stepStream()` are the low-level primitives.** `complete()`/`stream()` run the full pipeline (schema retries, native tool execution); `step()`/`stepStream()` make exactly one adapter call and return what the model said — tool calls as data, no auto execution, no schema validation, no retries. They exist for orchestrators like `@niscorp/cortex` that own their own tool loop and need per-call attribution, gating, and observation. `stepStream()` is the streaming variant: yields `{type:'text'}` deltas as text arrives, then one `{type:'done', result}` with the aggregated `StepResult` — same shape as `step()`'s return. Keeping the two pairs symmetric (`complete`/`stream`, `step`/`stepStream`) means streaming is never a special case of the API, only of delivery.
+- `adapters/anthropic.adapter.ts` and `google.adapter.ts` are stubs
+  that throw while the registry advertises both providers — either the
+  entries go or the adapters get built.
+- The provider SPI types (`ProviderAdapter`, `ProviderRequest`,
+  `ProviderStreamDelta`) live in `types.ts`; they belong beside
+  `adapters/`.
+- `step`/`stepStream` share ~30 lines of routing glue in signal.ts.
+- `count()` is a chars/4 heuristic.

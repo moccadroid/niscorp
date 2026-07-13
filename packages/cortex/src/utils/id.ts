@@ -14,7 +14,5 @@ const randomId = (): string => {
   return `id_${Date.now().toString(36)}_${Math.floor(Math.random() * 1e9).toString(36)}`;
 };
 
-export const newWorkflowId = (): string => `wf_${randomId()}`;
-export const newCorrelationId = (): string => `cor_${randomId()}`;
 export const newRunId = (): string => `run_${randomId()}`;
-export const newEventId = (): string => `evt_${randomId()}`;
+export const newApprovalId = (): string => `apr_${randomId()}`;

@@ -6,6 +6,7 @@ import { money, dateText } from '@relay/lib/format.prism';
 // no `name` collisions); the mapping builds each shape field and formats
 // value/close-date.
 export const dealsList: CacheEntry = {
+  fingerprint: 'deals/list',
   intent: 'List all deals with company, stage, owner, value and dates for the deals table',
   shape: [{ deal_id: '', title: '', company: '', company_id: '', stage: '', stage_id: '', owner: '', value: 0, value_display: '', status: '', close_date: '', close_date_display: '', created_at: '', primary_contact_id: '' }],
   dsl: {
@@ -58,6 +59,7 @@ export const dealsList: CacheEntry = {
 // shape DISTINCT from `dealsList` (so the shape-keyed cache doesn't conflate
 // them) and records whose deals these are.
 export const dealsByOwner: CacheEntry = {
+  fingerprint: 'deals/byOwner',
   intent: "List a user's deals with company, stage, value and dates",
   shape: [{ deal_id: '', title: '', company: '', company_id: '', stage: '', stage_id: '', owner: '', owner_id: '', value: 0, value_display: '', status: '', close_date: '', close_date_display: '', created_at: '', primary_contact_id: '' }],
   dsl: {
@@ -117,6 +119,7 @@ export const dealsByOwner: CacheEntry = {
 // seeds the raw ones (so a numeric/date input round-trips). `stage_id` (raw) is
 // here too, so the edit Stage select pre-selects.
 export const dealById: CacheEntry = {
+  fingerprint: 'deals/byId',
   intent: 'Load one deal by id — company, stage, owner, win-% and primary contact id',
   shape: { deal_id: '', title: '', company: '', company_id: '', stage: '', stage_id: '', owner: '', owner_id: '', value: 0, value_display: '', status: '', close_date: '', close_date_display: '', prob: 0, primary_contact_id: '' },
   dsl: {
@@ -160,6 +163,7 @@ export const dealById: CacheEntry = {
 
 // A company's open deals with stage — raw value + money-formatted display.
 export const dealsByCompany: CacheEntry = {
+  fingerprint: 'deals/byCompany',
   intent: "List a company's open deals with stage",
   shape: [{ deal_id: '', title: '', value: 0, value_display: '', stage: '' }],
   dsl: {
@@ -190,6 +194,7 @@ export const dealsByCompany: CacheEntry = {
 // colours the badge by status (won=green, lost=red, open=blue); the `status`/
 // `tone` keys also keep the shape distinct from `dealsByCompany` in the cache.
 export const dealsByContact: CacheEntry = {
+  fingerprint: 'deals/byContact',
   intent: "List a contact's deals (any status) where they are the primary contact",
   shape: [{ deal_id: '', title: '', value: 0, value_display: '', stage: '', status: '', tone: '' }],
   dsl: {
@@ -226,6 +231,7 @@ export const dealsByContact: CacheEntry = {
 
 // Open deals for the board cards.
 export const dealsBoard: CacheEntry = {
+  fingerprint: 'deals/board',
   intent: 'List open deals with company, owner, stage, value and close date for the pipeline board',
   shape: [{ deal_id: '', company: '', owner: '', stage: '', value: 0, value_display: '', close_date: '' }],
   dsl: {
@@ -261,6 +267,7 @@ export const dealsBoard: CacheEntry = {
 
 // Open deals per stage — count, total value, win-%, colour tone, in stage order.
 export const dealsOpenByStage: CacheEntry = {
+  fingerprint: 'deals/openByStage',
   intent: 'Open deals per pipeline stage — count, total value, win %, in stage order',
   shape: [{ stage: '', stage_id: '', count: 0, value: '', prob: 0, tone: '' }],
   dsl: {
@@ -302,6 +309,7 @@ export const dealsOpenByStage: CacheEntry = {
 // weighted sum is /100 in the formatter (a unit scale, not aggregation). One
 // aggregated row → an object shape.
 export const dealsForecast: CacheEntry = {
+  fingerprint: 'deals/forecast',
   intent: 'Open pipeline total and weighted forecast',
   shape: { total: '', weighted: '' },
   dsl: {
@@ -321,6 +329,7 @@ export const dealsForecast: CacheEntry = {
 // Total value + count of deals for ONE status (via $context.status) — one
 // aggregated row → an object. The dashboard runs it for open and won.
 export const dealsByStatus: CacheEntry = {
+  fingerprint: 'deals/byStatus',
   intent: 'Total value and count of deals for a given status',
   shape: { status: '', value: '', count: 0 },
   dsl: {
@@ -339,6 +348,7 @@ export const dealsByStatus: CacheEntry = {
 
 // Count + total value per stage (the home dashboard table).
 export const dealsByStage: CacheEntry = {
+  fingerprint: 'deals/byStage',
   intent: 'Count and total deal value grouped by stage',
   shape: [{ name: '', count: 0, value: '' }],
   dsl: {
@@ -365,6 +375,7 @@ export const dealsByStage: CacheEntry = {
 // apart (a shared `{ value, label }` would collide on one entry — the Stage
 // dropdown would show companies). The Select reads them via valueKey/labelKey.
 export const companyOptions: CacheEntry = {
+  fingerprint: 'deals/companyOptions',
   intent: 'Companies as id/name options for a picker',
   shape: [{ company_id: '', name: '' }],
   dsl: {
@@ -376,6 +387,7 @@ export const companyOptions: CacheEntry = {
 };
 
 export const stageOptions: CacheEntry = {
+  fingerprint: 'deals/stageOptions',
   intent: 'In-progress pipeline stages as id/name options, in order (excludes the terminal Closed Won/Lost — those are reached by marking a deal won/lost, not by picking the stage; an open deal in a terminal stage would have no board column)',
   shape: [{ stage_id: '', name: '' }],
   dsl: {
@@ -387,6 +399,7 @@ export const stageOptions: CacheEntry = {
 };
 
 export const contactOptions: CacheEntry = {
+  fingerprint: 'deals/contactOptions',
   intent: 'Contacts as id/name options for a picker',
   shape: [{ contact_id: '', name: '' }],
   dsl: {

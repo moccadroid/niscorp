@@ -38,10 +38,13 @@ pure and LLM-free: discover entities → apply scope → resolve to columns/join
 analyze → compile to parameterized SQL → bind → execute. You can run this whole
 path with no model and no network beyond the database.
 
-**Shape caching.** The first request for a given shape generates and caches the
-DSL (and any result mapping). Every later request with the same shape skips
-generation entirely and re-runs only the deterministic path — so scope and
-context stay current while LLM cost drops to zero.
+**Fingerprint caching.** Every generation is cached under a **fingerprint** —
+server-minted (`fp_…`, returned in `meta.cache.fingerprint`) or caller-chosen
+(a name like `deals/list`). Replaying a fingerprint skips generation entirely
+and re-runs only the deterministic path — so scope and context stay current
+while LLM cost drops to zero. A minted fingerprint is an immutable pin; a
+named one is a mutable slot whose content follows your request. Design and
+rationale: [DESIGN.md](./DESIGN.md) **Cache v2 — fingerprints**.
 
 **Scope is separate from context.** `context` is caller data, visible to the
 agent and referenced via `{ $context: "key" }`. `scope` is server-side access
@@ -156,10 +159,14 @@ type QueryEngineConfig = {
 ```typescript
 type ExecuteOptions = {
   scope?: ScopeValues;        // { [key]: value } for $scope references
-  cache?: CacheMode;          // 'use' (default) | 'refresh' | 'bypass' | 'only'
   entities?: string[];        // restrict generation to this entity subset for this call
+  locked?: boolean;           // replay-only: unknown/changed fingerprints throw `locked` instead of generating
 };
 ```
+
+There is no cache mode — the request body itself expresses
+replay/generate/replace semantics via its `fingerprint` field (see the
+request contract below).
 
 Scope filters are injected only when **both** a `scope` policy is configured and
 `options.scope` values are provided.
@@ -172,15 +179,26 @@ Scope filters are injected only when **both** a `scope` policy is configured and
 
 ```typescript
 type QueryRequest = {
-  intent?: string;                      // natural language (drives the agent)
-  shape: unknown;                        // example of the desired output structure
+  fingerprint?: string;                  // the cache identity (see postures below)
+  intent?: string;                       // natural language (drives the agent)
+  shape?: unknown;                       // example of the desired output structure
   context?: Record<string, unknown>;     // runtime values for { $context } refs; reserved `sortBy`/`sortDir` drive ORDER BY (default {})
 };
 ```
 
 The request is Zod-validated; `execute` throws `invalid_request` on failure.
-`shape` is required in practice — the framework handlers reject a missing shape
-with a 400.
+It must carry a `fingerprint`, a `shape`, or both — the three postures:
+
+1. **Explore** — `{ intent, shape, context }`: generate, cache, mint a
+   fingerprint (`fp_…`, returned in `meta.cache.fingerprint`).
+2. **Replay** — `{ fingerprint, context }`: serve the stored entry; never
+   generates. Unknown fingerprint → `cache_miss`. Context values may vary per
+   call (they are runtime data, not identity).
+3. **Own a slot** — `{ fingerprint, intent, shape, context }`: hit when the
+   stored request matches (intent + normalized shape + context key names),
+   regenerate and REPLACE the slot when it differs
+   (`meta.cache.replaced: true`) — unless the entry is `protected` → throws
+   `fingerprint_protected`.
 
 The **shape** is an example, not a schema: use empty strings, zeros, and
 booleans as type markers. `[{ id: '', total: 0 }]` means "an array of objects
@@ -190,7 +208,8 @@ The shape also picks the result envelope: an **array** shape maps over the whole
 row set (the mapping sees `$.result` as the rows array — a `$map`/identity); a
 **non-array** shape maps the single (first) row (the mapping sees `$.result` as
 that row, so a detail reads `$.result.field`). So the mapping — not Vex — owns
-the output: array, single object, or scalar.
+the output: array, single object, or scalar. On a fingerprint-only replay the
+entry's STORED shape drives this — the caller sends none.
 
 ### Response
 
@@ -198,7 +217,12 @@ the output: array, single object, or scalar.
 type QueryResponse = {
   result: JsonValue;                     // the mapping's output (array / object / scalar); raw Row[] if no mapping
   meta: {
-    cache: { hit: boolean; key?: string };       // key is the shape hash
+    cache: {
+      hit: boolean;
+      fingerprint?: string;   // the entry's identity — minted or your name
+      replaced?: boolean;     // true when a named slot was regenerated + replaced
+      intent?: string;        // the stored intent (descriptive only)
+    };
     context: Record<string, {                      // the resolved parameter contract
       type: 'string' | 'number' | 'boolean' | 'string[]' | 'number[]';
       kind: 'context' | 'scope' | 'semantic';
@@ -506,40 +530,43 @@ provided.
 
 ## Caching
 
-### Cache modes (`options.cache`)
+### Fingerprints — the one identity
 
-| Mode | Read cache | Generate on miss | Write cache |
-|------|-----------|------------------|-------------|
-| `use` (default) | yes | yes | yes |
-| `refresh` | no | yes | yes (overwrite) |
-| `bypass` | no | yes | no |
-| `only` | yes | no — throws `cache_miss` on miss | no |
+The positive cache is keyed by the request's `fingerprint` (see the request
+contract above). There are no cache modes — the body's posture says
+everything:
 
-`use` also enables single-flight: concurrent identical misses collapse to one
-generation. `refresh`/`bypass` opt out.
+- **No fingerprint** → generate, cache, mint (`fp_…`). The mint is an
+  immutable pin: embed it and replay that exact generation forever.
+- **Fingerprint alone** → replay-or-`cache_miss`. Never generates. Context
+  values may vary per call — sorting and parameterized reloads are legal
+  against one cached DSL.
+- **Fingerprint + request** → a named slot: hit when the stored request
+  matches, regenerate-and-replace when it differs; `protected` entries throw
+  `fingerprint_protected` instead of being replaced.
 
-### How keys work
+Concurrent identical generations collapse to one (single-flight, keyed by the
+request hash).
 
-- **Positive cache** is keyed by **shape hash** — the shape with values replaced
-  by type tokens, keys sorted, arrays collapsed to first-element shape, then
-  SHA-256. Same shape, different values → same key. (`meta.cache.key`.)
-- **Negative cache** ("unsatisfiable") is keyed by **request hash** — intent +
-  shape + the *names* of context keys (values excluded). A `cannotSatisfy`
-  result is cached here with a TTL (`config.unsatisfiableTtlMs`, default 5 min)
-  so an impossible request isn't re-run until it expires.
-- Every entry stores a **schema fingerprint**. After a schema change the
-  fingerprint no longer matches and the entry is treated as a miss and evicted —
-  its cached DSL might reference columns that changed.
+### Lifetime and protection
 
-> **Give each distinct query a distinct shape.** Because the key is the shape —
-> not the intent or DSL — two *different* queries whose shapes are identical
-> collide on one cache entry: the last one written wins, and the other silently
-> serves the wrong DSL (returns 0 / wrong rows though its SQL looks right). This
-> is by design — the shape *is* the question. The classic trap is a list query
-> `[{ id, … }]` and a load-one-by-id query that returns the same fields. The
-> convention: name the by-id record's own key `<entity>_id` (map the SQL `id` to
-> it via the prism mapping) so its shape can never match the list's `{ id, … }`.
-> No filler columns needed.
+- Every replay stamps `lastUsedAt`; `sweepCache(cache, { maxIdleMs })` evicts
+  entries idle past the limit, skipping protected ones. Alive = used.
+- `protected: true` is written only by a seed path or an explicit
+  `handleFingerprintPatch` — never by a runtime query.
+- `ExecuteOptions.locked` (and `VexHandlerConfig.locked`) makes an engine call
+  or endpoint replay-only: asking it to generate throws `locked`.
+
+### Supporting hashes
+
+- **Request hash** — intent + normalized shape + the *names* of context keys
+  (values excluded). Stored with named slots (the match/replace test) and the
+  key of the **negative cache**: a `cannotSatisfy` result is cached with a TTL
+  (`config.unsatisfiableTtlMs`, default 5 min) so an impossible request isn't
+  re-run until it expires.
+- Every entry stores a **schema fingerprint**. After a schema change it no
+  longer matches and the entry is treated as a miss and evicted — its cached
+  DSL might reference columns that changed.
 
 ### Backends
 
@@ -579,7 +606,7 @@ synchronously and L2 fire-and-forget.
 const cache = createTieredCache({
   l1: createMemoryCache(),
   l2: createPostgresCache({ pool }),
-  warmup: 'full',          // 'full' (default) | 'lazy' | { mode: 'partial', shapes: [...] }
+  warmup: 'full',          // 'full' (default) | 'lazy' | { mode: 'partial', fingerprints: [...] }
   onError: (err) => console.error(err),
 });
 await cache.init();        // runs L2/L1 init + warm-up
@@ -588,9 +615,9 @@ const engine = createQueryEngine({ adapter, cache });
 ```
 
 Warm-up modes: `full` loads all of L2 into L1 at startup; `lazy` fills L1 on
-demand; `partial` preloads only the listed shapes (by example shape) and lazy-
-fills the rest. The tiered cache is single-instance: separate processes keep
-separate L1s.
+demand; `partial` preloads only the listed fingerprints and lazy-fills the
+rest. The tiered cache is single-instance: separate processes keep separate
+L1s.
 
 ---
 
@@ -636,11 +663,10 @@ await engine.introspect();
   `vexQueryDslAgent`.
 - `createShapeMapper(llm)` builds the `mapToShape` hook by running Prism's
   `mappingAgent`. The `@niscorp/vex/agent` subpath also exports `vexQueryDslAgent`
-  itself, plus the building blocks (`createQueryTools`, `queryRules`,
-  `createQueryProducers`) for customizing tools or rules.
+  itself plus `createQueryTools` for customizing the tool set.
 
-The reference query agent (`vexQueryDslAgent`, id `vex.query`) is a
-structured-output Cortex agent over `QuerySchema` with six tools and two rules:
+The reference query agent (`vexQueryDslAgent`, id `vex.query`) is a Cortex
+agent whose envelope payload is a `QuerySchema` query, with six tools:
 
 | Tool | Input | Purpose |
 |------|-------|---------|
@@ -649,11 +675,23 @@ structured-output Cortex agent over `QuerySchema` with six tools and two rules:
 | `getDistinctValues` | `{ entity, field, limit? }` | Field cardinality (default 20) |
 | `describeField` | `{ entity, field }` | type, nullable, cardinality, null count, min/max |
 | `testQuery` | `{ dsl }` | Validate + compile + execute with synthetic params (LIMIT 5) |
-| `cannotSatisfy` | `{ reason }` | Declare the request impossible (aborts the run) |
+| `cannotSatisfy` | `{ reason }` | Declare the request impossible (`createQueryDsl` aborts the run and throws `unsatisfiable`) |
 
-Rules: a tool-call limiter (nudge to finalize at 8, abort at 10) and an abort on
-`cannotSatisfy`. All data-touching tools respect the scope policy. (If you build
-your own generator, none of this applies — only the `Query` you return matters.)
+Bounds: `stepCount(20)` + `outputRetries(3)` stop conditions on the agent. All
+data-touching tools respect the scope policy. (If you build your own generator,
+none of this applies — only the `Query` you return matters.)
+
+`testQuery` executes drafts with **NULL synthetic params** — valid SQL against
+a column of any type (Postgres infers from the column side), so a draft is
+judged on executability, never on a guessed value's cast.
+
+### `vexGuide()` — the exported agent-facing contract
+
+Any agent that reads or embeds Vex endpoints should inject `vexGuide()` (a
+string): the three request postures, fingerprint semantics, per-call context
+values, reserved `sortBy`/`sortDir`, the response envelope, and discovery.
+Attach it as a cortex tool `guide` or context producer. Apps never hand-write
+their own Vex explanation — that is how docs drift.
 
 ---
 
@@ -697,17 +735,26 @@ app.all('/api/orders/vex', vex({
 ### The endpoints
 
 - **`GET`** → discovery JSON: `vex` protocol version, description, the filtered
-  entities (fields, relations, row counts), the request body contract, the
-  `cache` query-param options, and the full DSL JSON Schema. A client or agent
-  can read this to learn how to query the resource.
-- **`POST`** → runs a query. Body is the `QueryRequest`; the `?cache=` query
-  param selects the cache mode (`use`/`refresh`/`bypass`/`only`); scope comes
-  from `getScope`. Returns `{ status, body }` mapped to the HTTP response —
-  `VexError`s become 400 with `{ error, message, details }`, unexpected errors
-  become 500.
+  entities (fields, relations, row counts), the request body contract (the
+  three fingerprint postures), the protection summary (`protection:
+  "all"|"some"|"none"`, `locked`), the fingerprint overview (`[{ fingerprint,
+  protected, schemaFresh, intent, lastUsedAt }]`), and the full DSL JSON
+  Schema. A client or agent can read this to learn how to query the resource —
+  and whether a named query already covers its need.
+- **`POST`** → runs a query. Body is the `QueryRequest` (fingerprint replay,
+  generation, or named slot); scope comes from `getScope`. Returns `{ status,
+  body }` mapped to the HTTP response — unknown fingerprint → 404
+  `cache_miss`, protected mismatch → 409 `fingerprint_protected`, locked → 403,
+  other `VexError`s → 400 with `{ error, message, details }`, unexpected
+  errors → 500.
+- **`PATCH`** with `{ fingerprint, protected }` → flip the protection bit.
+  **`DELETE`** with `{ fingerprint }` → evict (unprotected only). Fingerprints
+  ride the body — names contain `/`.
 
-Under the hood both call the framework-agnostic `handleDiscovery` /
-`handleQuery` from `handler.ts`, which you can use directly with any framework.
+Under the hood all of these call the framework-agnostic `handleDiscovery` /
+`handleQuery` / `handleFingerprintPatch` / `handleFingerprintDelete` from
+`handler.ts`, which you can use directly with any framework. A handler config
+with `locked: true` makes the whole endpoint replay-only.
 
 ---
 
@@ -721,8 +768,8 @@ import type { VexEvent } from '@niscorp/vex';
 
 const onEvent = (e: VexEvent) => {
   switch (e.type) {
-    case 'query.start':  /* intent, shape, cache, hash, entities */ break;
-    case 'query.cache':  /* hit */ break;
+    case 'query.start':  /* intent, shape, fingerprint, entities */ break;
+    case 'query.cache':  /* hit, fingerprint, replaced */ break;
     case 'query.dsl':    /* dsl, agentMs */ break;
     case 'query.sql':    /* sql, warnings */ break;
     case 'query.rows':   /* count, executionMs */ break;

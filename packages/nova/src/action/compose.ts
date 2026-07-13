@@ -21,7 +21,8 @@ import type {
 //   - triggers:  concat — fragment triggers first, then the action's.
 //   - endpoints: merge, action wins on a name clash.
 //   - lifecycle: per-hook concat — fragment steps run before the action's.
-//   - id/name/description: the action's. The result is a plain ActionDefinition.
+//   - id/name/description/title/input: the action's (fragments have no say).
+//     The result is a plain ActionDefinition.
 // ═══════════════════════════════════════════════════════════
 
 const HOOKS = ['mount', 'unmount', 'suspend', 'resume'] as const;
@@ -74,6 +75,8 @@ export const composeAction = (
     id: action.id,
     ...(action.name === undefined ? {} : { name: action.name }),
     ...(action.description === undefined ? {} : { description: action.description }),
+    ...(action.title === undefined ? {} : { title: action.title }),
+    ...(action.input === undefined ? {} : { input: action.input }),
     ...(layout === undefined ? {} : { layout }),
     ...(Object.keys(data).length > 0 ? { data } : {}),
     ...(triggers.length > 0 ? { triggers } : {}),

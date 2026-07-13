@@ -1,0 +1,35 @@
+{
+  "name": "fable",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit",
+    "check:boot": "tsx src/dev/boot-check.ts",
+    "check:write": "tsx src/dev/write-check.ts",
+    "check:form": "tsx src/dev/form-check.ts",
+    "check": "tsx src/dev/boot-check.ts && tsx src/dev/write-check.ts && tsx src/dev/form-check.ts"
+  },
+  "dependencies": {
+    "@electric-sql/pglite": "^0.5.1",
+    "@niscorp/nova": "workspace:^",
+    "@niscorp/prism": "workspace:^",
+    "@niscorp/vex": "workspace:^",
+    "@noble/hashes": "^2.2.0",
+    "lucide-react": "^1.18.0",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.0",
+    "@vitejs/plugin-react": "^5.0.4",
+    "tsx": "^4.22.4",
+    "typescript": "^6.0.2",
+    "vite": "^7.1.12"
+  }
+}

@@ -14,15 +14,15 @@ export const dealAction: ActionDefinition = {
   id: 'deal',
   // Stack-nav label — the chip + its depth menu read `instance.title`.
   title: '{{$.record.title}}',
-  // `panelClass` is the card width used when this record is shown on the modal
+  // `panelSize` is the card width used when this record is shown on the modal
   // canvas via the `panel` fragment; ignored on the main/aside canvases.
-  data: { id: '', record: {}, activities: [], lineItems: [], tasks: [], contact: {}, loading: true, toggleId: '', toggleDone: false, panelClass: 'rl-dialog--wide' },
+  data: { id: '', record: {}, activities: [], lineItems: [], tasks: [], contact: {}, loading: true, toggleId: '', toggleDone: false, panelSize: 'wide' },
   endpoints: {
-    loadRecord:     { url: '/api/deals/vex?cache=use', method: 'POST', request: dealByIdPrism,      response: resultPrism, target: 'record' },
-    loadActivities: { url: '/api/deals/vex?cache=use', method: 'POST', request: dealActivitiesPrism, response: resultPrism, target: 'activities' },
-    loadLineItems:  { url: '/api/deals/vex?cache=use', method: 'POST', request: dealLineItemsPrism, response: resultPrism, target: 'lineItems' },
-    loadTasks:      { url: '/api/deals/vex?cache=use', method: 'POST', request: dealTasksPrism,     response: resultPrism, target: 'tasks' },
-    loadContact:    { url: '/api/deals/vex?cache=use', method: 'POST', request: dealContactPrism,   response: resultPrism, target: 'contact' },
+    loadRecord:     { url: '/api/deals/vex', method: 'POST', request: dealByIdPrism,      response: resultPrism, target: 'record' },
+    loadActivities: { url: '/api/deals/vex', method: 'POST', request: dealActivitiesPrism, response: resultPrism, target: 'activities' },
+    loadLineItems:  { url: '/api/deals/vex', method: 'POST', request: dealLineItemsPrism, response: resultPrism, target: 'lineItems' },
+    loadTasks:      { url: '/api/deals/vex', method: 'POST', request: dealTasksPrism,     response: resultPrism, target: 'tasks' },
+    loadContact:    { url: '/api/deals/vex', method: 'POST', request: dealContactPrism,   response: resultPrism, target: 'contact' },
     markWon:        { url: '/api/deals/vex',           method: 'POST', request: markWonPrism },
     markLost:       { url: '/api/deals/vex',           method: 'POST', request: markLostPrism },
     setDone:        { url: '/api/tasks/vex',           method: 'POST', request: setDoneTaskPrism },

@@ -36,14 +36,17 @@ export const normalizeShape = (shape: unknown): unknown => {
 };
 
 // ───────────────────────────────────────────────────────────────
-// Hashing
+// Fingerprints
+//
+// The ONE cache identity. Minted (`fp_…`) when a request arrives
+// without one — an immutable pin the caller can embed and replay.
+// Caller-chosen strings are mutable named slots. Shape hashes are no
+// longer keys anywhere; normalizeShape survives only inside
+// computeRequestHash (request-identity comparison).
 // ───────────────────────────────────────────────────────────────
 
-export const computeShapeHash = (shape: unknown): string => {
-  const normalized = normalizeShape(shape);
-  const json = JSON.stringify(normalized);
-  return createHash('sha256').update(json).digest('hex');
-};
+export const mintFingerprint = (): string =>
+  `fp_${createHash('sha256').update(`${Date.now()}:${Math.random()}`).digest('hex').slice(0, 16)}`;
 
 // ───────────────────────────────────────────────────────────────
 // Schema fingerprint
@@ -76,7 +79,7 @@ export const computeShapeHash = (shape: unknown): string => {
 
 export const computeRequestHash = (request: {
   intent?: string;
-  shape: unknown;
+  shape?: unknown;
   context?: Record<string, unknown>;
 }): string => {
   const identity = {

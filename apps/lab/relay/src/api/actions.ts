@@ -3,6 +3,7 @@ import type { CacheEntry } from './index';
 // The command-palette search — `action_id` aliased; the rows already match the
 // shape, so no mapping.
 export const actionsSearch: CacheEntry = {
+  fingerprint: 'actions/search',
   intent: 'Search the action catalog by name or description',
   shape: [{ action_id: '', name: '', description: '', kind: '' }],
   dsl: {

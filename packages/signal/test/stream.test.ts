@@ -1,305 +1,166 @@
 import { describe, it, expect, vi } from 'vitest';
 import { z } from 'zod';
-import type { ProviderAdapter, ProviderStreamDelta, StreamEvent } from '../src/types';
-import { executeStream } from '../src/stream/execute-stream';
+import { runStream, runComplete, type RunDeps } from '../src/run';
+import type { Capabilities, Message, StepResult, StepStreamEvent, StreamEvent, Tool } from '../src/types';
+import { routeResponse } from '../src/wire/router';
 
-// ═══════════════════════════════════════════════════════════
-// Mock adapter — returns canned stream deltas
-// ═══════════════════════════════════════════════════════════
+// The high-level loop's behavioral spec — text deltas, tool execution,
+// schema retries, done/error events — driven through a scripted step
+// core that routes exactly like production (same router).
 
-const createMockAdapter = (
-  deltas: ProviderStreamDelta[][],
-): ProviderAdapter => {
-  let callIndex = 0;
+const CAPS: Capabilities = {
+  nativeTools: true,
+  nativeJsonSchema: false,
+  nativeJsonMode: true,
+  toolsWithStructuredOutput: false,
+  validatesToolArgs: false,
+  manglesNestedToolArgs: false,
+  multimodal: false,
+  supportsEmbedding: false,
+};
+
+type Turn = { text?: string[]; toolCalls?: Array<{ id: string; name: string; args: unknown }> };
+
+const scripted = (turns: Turn[]): RunDeps => {
+  let cursor = 0;
   return {
-    id: 'mock',
-    chat: async () => ({ content: '', usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 }, finishReason: 'stop', raw: null }),
-    chatStream: async function* () {
-      const batch = deltas[callIndex] ?? [];
-      callIndex++;
-      for (const d of batch) yield d;
+    model: 'stub-model',
+    capabilities: CAPS,
+    stepStream: (request) => {
+      const turn = turns[cursor];
+      cursor += 1;
+      if (!turn) throw new Error(`script exhausted after ${turns.length} turn(s)`);
+      return (async function* (): AsyncGenerator<StepStreamEvent> {
+        for (const chunk of turn.text ?? []) yield { type: 'text', text: chunk };
+        const base: StepResult = {
+          content: (turn.text ?? []).join(''),
+          toolCalls: (turn.toolCalls ?? []).map((call) => ({ ...call })),
+          usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 },
+          finishReason: (turn.toolCalls?.length ?? 0) > 0 ? 'tool_calls' : 'stop',
+          raw: null,
+        };
+        if (!request.output) {
+          yield { type: 'done', result: base };
+          return;
+        }
+        const routed = routeResponse({
+          content: base.content,
+          toolCalls: base.toolCalls,
+          declared: new Set((request.tools ?? []).map((tool) => tool.name)),
+          accept: request.output.accept,
+          responseStrategies: [],
+        });
+        yield { type: 'done', result: { ...base, outcome: routed.outcome, wire: routed.wire } };
+      })();
     },
   };
 };
 
-const collect = async <T>(iter: AsyncIterable<StreamEvent<T>>): Promise<StreamEvent<T>[]> => {
-  const events: StreamEvent<T>[] = [];
-  for await (const ev of iter) events.push(ev);
-  return events;
+const USER: Message[] = [{ role: 'user', content: 'go' }];
+
+const collect = async <T>(events: AsyncIterable<StreamEvent<T>>): Promise<StreamEvent<T>[]> => {
+  const out: StreamEvent<T>[] = [];
+  for await (const event of events) out.push(event);
+  return out;
 };
 
-const CAPS = { nativeTools: false, nativeJsonSchema: false, nativeJsonMode: false, multimodal: false };
+describe('runStream', () => {
+  it('yields text deltas and a done event with history', async () => {
+    const deps = scripted([{ text: ['Hel', 'lo'] }]);
+    const events = await collect(runStream<string>({ messages: USER, retries: 2 }, deps));
 
-// ═══════════════════════════════════════════════════════════
-// Simple text streaming (no schema, no tools)
-// ═══════════════════════════════════════════════════════════
-
-describe('stream — simple text', () => {
-  it('yields text deltas and a done event', async () => {
-    const adapter = createMockAdapter([[
-      { type: 'text', text: 'Hello' },
-      { type: 'text', text: ' world' },
-      { type: 'usage', inputTokens: 10, outputTokens: 5, totalTokens: 15 },
-      { type: 'finish', finishReason: 'stop' },
-    ]]);
-
-    const events = await collect(executeStream({
-      adapter, model: 'test', messages: [{ role: 'user', content: 'hi' }],
-      capabilities: CAPS, retries: 0,
-    }));
-
-    expect(events[0]).toEqual({ type: 'text', text: 'Hello' });
-    expect(events[1]).toEqual({ type: 'text', text: ' world' });
-
-    const done = events.find((e) => e.type === 'done');
-    expect(done).toBeDefined();
-    expect(done!.type === 'done' && done!.response).toBe('Hello world');
-    expect(done!.type === 'done' && done!.meta.usage.totalTokens).toBe(15);
-  });
-
-  it('includes history in done event', async () => {
-    const adapter = createMockAdapter([[
-      { type: 'text', text: 'reply' },
-      { type: 'finish', finishReason: 'stop' },
-    ]]);
-
-    const events = await collect(executeStream({
-      adapter, model: 'test',
-      messages: [{ role: 'system', content: 'sys' }, { role: 'user', content: 'hi' }],
-      capabilities: CAPS, retries: 0,
-    }));
-
-    const done = events.find((e) => e.type === 'done');
-    expect(done!.type === 'done' && done!.history).toHaveLength(3);
-    expect(done!.type === 'done' && done!.history[2]).toEqual({ role: 'assistant', content: 'reply' });
-  });
-});
-
-// ═══════════════════════════════════════════════════════════
-// Schema validation + auto-retry
-// ═══════════════════════════════════════════════════════════
-
-describe('stream — schema validation', () => {
-  const TestSchema = z.object({ name: z.string(), count: z.number() });
-
-  it('yields done with parsed response when valid', async () => {
-    const json = '{"name":"ok","count":42}';
-    const adapter = createMockAdapter([[
-      { type: 'text', text: json },
-      { type: 'finish', finishReason: 'stop' },
-    ]]);
-
-    const events = await collect(executeStream<z.infer<typeof TestSchema>>({
-      adapter, model: 'test',
-      messages: [{ role: 'user', content: 'go' }],
-      schema: TestSchema, capabilities: CAPS, retries: 0,
-    }));
-
-    const done = events.find((e) => e.type === 'done');
-    expect(done!.type === 'done' && done!.response).toEqual({ name: 'ok', count: 42 });
-  });
-
-  it('emits retry event and re-streams on validation failure', async () => {
-    const badJson = '{"name":"ok","count":"bad"}';
-    const goodJson = '{"name":"ok","count":42}';
-    const adapter = createMockAdapter([
-      [{ type: 'text', text: badJson }, { type: 'finish', finishReason: 'stop' }],
-      [{ type: 'text', text: goodJson }, { type: 'finish', finishReason: 'stop' }],
-    ]);
-
-    const events = await collect(executeStream<z.infer<typeof TestSchema>>({
-      adapter, model: 'test',
-      messages: [{ role: 'user', content: 'go' }],
-      schema: TestSchema, capabilities: CAPS, retries: 2,
-    }));
-
-    expect(events.some((e) => e.type === 'retry')).toBe(true);
-    const retry = events.find((e) => e.type === 'retry');
-    expect(retry!.type === 'retry' && retry!.attempt).toBe(1);
-
-    const done = events.find((e) => e.type === 'done');
-    expect(done!.type === 'done' && done!.response).toEqual({ name: 'ok', count: 42 });
-  });
-
-  it('emits error when retries exhausted', async () => {
-    const badJson = '{"name":"ok","count":"bad"}';
-    const adapter = createMockAdapter([
-      [{ type: 'text', text: badJson }, { type: 'finish', finishReason: 'stop' }],
-    ]);
-
-    const events = await collect(executeStream<z.infer<typeof TestSchema>>({
-      adapter, model: 'test',
-      messages: [{ role: 'user', content: 'go' }],
-      schema: TestSchema, capabilities: CAPS, retries: 0,
-    }));
-
-    const error = events.find((e) => e.type === 'error');
-    expect(error).toBeDefined();
-    expect(error!.type === 'error' && error!.recovered).toBe(false);
-  });
-
-  it('calls onRetry callback', async () => {
-    const badJson = '{"name":"ok","count":"bad"}';
-    const goodJson = '{"name":"ok","count":42}';
-    const onRetry = vi.fn();
-    const adapter = createMockAdapter([
-      [{ type: 'text', text: badJson }, { type: 'finish', finishReason: 'stop' }],
-      [{ type: 'text', text: goodJson }, { type: 'finish', finishReason: 'stop' }],
-    ]);
-
-    await collect(executeStream<z.infer<typeof TestSchema>>({
-      adapter, model: 'test',
-      messages: [{ role: 'user', content: 'go' }],
-      schema: TestSchema, capabilities: CAPS, retries: 2,
-      onRetry,
-    }));
-
-    expect(onRetry).toHaveBeenCalledOnce();
-    expect(onRetry).toHaveBeenCalledWith(expect.any(Error), 1);
-  });
-});
-
-// ═══════════════════════════════════════════════════════════
-// Tool streaming
-// ═══════════════════════════════════════════════════════════
-
-describe('stream — tool calls', () => {
-  const searchTool = {
-    name: 'search',
-    description: 'search the web',
-    inputSchema: z.object({ query: z.string() }),
-    execute: async (input: { query: string }) => ({ results: [`result for ${input.query}`] }),
-  };
-
-  it('assembles tool call deltas, executes, and re-streams', async () => {
-    const adapter = createMockAdapter([
-      // First stream: tool call
-      [
-        { type: 'tool_call', index: 0, id: 'call_1', name: 'search' },
-        { type: 'tool_call', index: 0, argsFragment: '{"que' },
-        { type: 'tool_call', index: 0, argsFragment: 'ry":"test"}' },
-        { type: 'finish', finishReason: 'tool_calls' },
-      ],
-      // Second stream: final response after tool result
-      [
-        { type: 'text', text: 'Found it!' },
-        { type: 'finish', finishReason: 'stop' },
-      ],
-    ]);
-
-    const events = await collect(executeStream({
-      adapter, model: 'test',
-      messages: [{ role: 'user', content: 'search' }],
-      tools: [searchTool],
-      capabilities: { ...CAPS, nativeTools: true },
-      retries: 0,
-    }));
-
-    expect(events.some((e) => e.type === 'tool_start' && e.name === 'search')).toBe(true);
-    expect(events.some((e) => e.type === 'tool_end' && e.name === 'search')).toBe(true);
-    expect(events.some((e) => e.type === 'text' && e.text === 'Found it!')).toBe(true);
-
-    const done = events.find((e) => e.type === 'done');
-    expect(done).toBeDefined();
-    expect(done!.type === 'done' && done!.response).toBe('Found it!');
-    expect(done!.type === 'done' && done!.meta.toolCalls).toHaveLength(1);
-    expect(done!.type === 'done' && done!.meta.toolCalls[0]?.name).toBe('search');
-  });
-
-  it('calls onToolCall callback', async () => {
-    const onToolCall = vi.fn();
-    const adapter = createMockAdapter([
-      [
-        { type: 'tool_call', index: 0, id: 'call_1', name: 'search' },
-        { type: 'tool_call', index: 0, argsFragment: '{"query":"x"}' },
-        { type: 'finish', finishReason: 'tool_calls' },
-      ],
-      [{ type: 'text', text: 'done' }, { type: 'finish', finishReason: 'stop' }],
-    ]);
-
-    await collect(executeStream({
-      adapter, model: 'test',
-      messages: [{ role: 'user', content: 'go' }],
-      tools: [searchTool],
-      capabilities: { ...CAPS, nativeTools: true },
-      retries: 0,
-      onToolCall,
-    }));
-
-    expect(onToolCall).toHaveBeenCalledWith('search', { query: 'x' });
-  });
-});
-
-// ═══════════════════════════════════════════════════════════
-// Abort signal
-// ═══════════════════════════════════════════════════════════
-
-describe('stream — abort', () => {
-  it('stops streaming when abort signal fires', async () => {
-    const controller = new AbortController();
-
-    const adapter = createMockAdapter([[
-      { type: 'text', text: 'start' },
-      { type: 'text', text: ' more' },
-      { type: 'text', text: ' end' },
-      { type: 'finish', finishReason: 'stop' },
-    ]]);
-
-    // Abort after first delta
-    let count = 0;
-    const events: StreamEvent<string>[] = [];
-    for await (const ev of executeStream<string>({
-      adapter, model: 'test',
-      messages: [{ role: 'user', content: 'go' }],
-      capabilities: CAPS, retries: 0,
-      streamOptions: { signal: controller.signal },
-    })) {
-      events.push(ev);
-      count++;
-      if (count === 1) controller.abort();
+    const texts = events.flatMap((event) => (event.type === 'text' ? [event.text] : []));
+    expect(texts).toEqual(['Hel', 'lo']);
+    const done = events.at(-1);
+    expect(done?.type).toBe('done');
+    if (done?.type === 'done') {
+      expect(done.response).toBe('Hello');
+      expect(done.history.at(-1)).toEqual({ role: 'assistant', content: 'Hello' });
+      expect(done.meta.usage.totalTokens).toBe(15);
     }
+  });
 
-    expect(events.some((e) => e.type === 'error')).toBe(true);
-    expect(events.some((e) => e.type === 'done')).toBe(false);
+  it('yields done with the parsed response when a schema validates', async () => {
+    const Schema = z.object({ answer: z.number() });
+    const deps = scripted([{ text: ['{"answer": 7}'] }]);
+    const events = await collect(runStream<{ answer: number }>({ messages: USER, schema: Schema, retries: 2 }, deps));
+    const done = events.at(-1);
+    expect(done?.type === 'done' && done.response).toEqual({ answer: 7 });
+  });
+
+  it('emits retry, corrects in-run, and re-streams on validation failure', async () => {
+    const Schema = z.object({ answer: z.number() });
+    const onRetry = vi.fn();
+    const deps = scripted([{ text: ['{"answer": "seven"}'] }, { text: ['{"answer": 7}'] }]);
+    const events = await collect(
+      runStream<{ answer: number }>({ messages: USER, schema: Schema, retries: 2, onRetry }, deps),
+    );
+
+    expect(events.some((event) => event.type === 'retry' && event.attempt === 1)).toBe(true);
+    expect(onRetry).toHaveBeenCalledTimes(1);
+    const done = events.at(-1);
+    expect(done?.type === 'done' && done.response).toEqual({ answer: 7 });
+    // The correction rode the transcript, not a re-run.
+    if (done?.type === 'done') {
+      expect(
+        done.history.some(
+          (message) => message.role === 'system' && typeof message.content === 'string' && message.content.includes('invalid'),
+        ),
+      ).toBe(true);
+    }
+  });
+
+  it('emits error (not done) when retries are exhausted', async () => {
+    const Schema = z.object({ answer: z.number() });
+    const deps = scripted([{ text: ['nope'] }, { text: ['still nope'] }]);
+    const events = await collect(runStream<{ answer: number }>({ messages: USER, schema: Schema, retries: 1 }, deps));
+    const last = events.at(-1);
+    expect(last?.type).toBe('error');
+    expect(events.some((event) => event.type === 'done')).toBe(false);
+  });
+
+  it('executes tools between turns with tool_start/tool_end and records', async () => {
+    const add: Tool = {
+      name: 'add',
+      description: 'adds',
+      inputSchema: z.object({ a: z.number(), b: z.number() }),
+      execute: (input) => {
+        const { a, b } = input as { a: number; b: number };
+        return a + b;
+      },
+    };
+    const onToolCall = vi.fn();
+    const deps = scripted([
+      { toolCalls: [{ id: 'c1', name: 'add', args: { a: 2, b: 3 } }] },
+      { text: ['5 it is'] },
+    ]);
+    const events = await collect(runStream<string>({ messages: USER, tools: [add], retries: 2, onToolCall }, deps));
+
+    expect(events.some((event) => event.type === 'tool_start' && event.name === 'add')).toBe(true);
+    expect(events.some((event) => event.type === 'tool_end' && event.result === 5)).toBe(true);
+    expect(onToolCall).toHaveBeenCalledWith('add', { a: 2, b: 3 });
+    const done = events.at(-1);
+    expect(done?.type === 'done' && done.meta.toolCalls[0]?.result).toBe(5);
+  });
+
+  it('throws when tools are requested on a provider without native tool calling', async () => {
+    const noTools = { ...scripted([]), capabilities: { ...CAPS, nativeTools: false } };
+    const tool: Tool = { name: 't', description: 'd', inputSchema: z.object({}), execute: () => 'x' };
+    await expect(collect(runStream({ messages: USER, tools: [tool], retries: 0 }, noTools))).rejects.toThrow(/native tool/);
   });
 });
 
-// ═══════════════════════════════════════════════════════════
-// Usage accumulation
-// ═══════════════════════════════════════════════════════════
+describe('runComplete', () => {
+  it('drains the stream and returns the result', async () => {
+    const deps = scripted([{ text: ['plain'] }]);
+    const result = await runComplete<string>({ messages: USER, retries: 2 }, deps);
+    expect(result.response).toBe('plain');
+    expect(result.meta.retries).toBe(0);
+  });
 
-describe('stream — usage', () => {
-  it('accumulates usage across tool calls', async () => {
-    const tool = {
-      name: 'noop',
-      description: 'noop',
-      inputSchema: z.object({}),
-      execute: async () => 'ok',
-    };
-
-    const adapter = createMockAdapter([
-      [
-        { type: 'tool_call', index: 0, id: 'c1', name: 'noop' },
-        { type: 'tool_call', index: 0, argsFragment: '{}' },
-        { type: 'usage', inputTokens: 10, outputTokens: 5, totalTokens: 15 },
-        { type: 'finish', finishReason: 'tool_calls' },
-      ],
-      [
-        { type: 'text', text: 'done' },
-        { type: 'usage', inputTokens: 20, outputTokens: 10, totalTokens: 30 },
-        { type: 'finish', finishReason: 'stop' },
-      ],
-    ]);
-
-    const events = await collect(executeStream({
-      adapter, model: 'test',
-      messages: [{ role: 'user', content: 'go' }],
-      tools: [tool],
-      capabilities: { ...CAPS, nativeTools: true },
-      retries: 0,
-    }));
-
-    const done = events.find((e) => e.type === 'done');
-    expect(done!.type === 'done' && done!.meta.usage.totalTokens).toBe(45);
+  it('throws the validation error when retries are exhausted', async () => {
+    const Schema = z.object({ answer: z.number() });
+    const deps = scripted([{ text: ['nope'] }]);
+    await expect(runComplete({ messages: USER, schema: Schema, retries: 0 }, deps)).rejects.toThrow(/schema validation/);
   });
 });
