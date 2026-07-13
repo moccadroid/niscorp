@@ -2,6 +2,9 @@ import { createShell } from '@niscorp/nova';
 import { evaluate } from '@niscorp/prism';
 import { buildRegistry } from '../../ui';
 import { vexFetch } from '../../vex/http';
+import { traceFetch } from '../../nova-devtools/core/trace-fetch';
+import { devtoolsFunctions } from '../../nova-devtools/core/fns';
+import { installNovaDevtools } from '../../nova-devtools/core/install';
 import { CURRENT_USER_ID, CURRENT_DATE } from '@relay/vex/runtime';
 import { frameLayout } from './frame.layout';
 import { mainSplitLayout } from './main-split.layout';
@@ -63,6 +66,10 @@ export const shell = createShell({
       return true;
     },
     'ray.storageSize': async () => storageEstimate(),
+    // Nova-devtools fns — the dock/inspector actions' `fn:` endpoints (pull the
+    // trace buffer, snapshot the shell, audit the registry, describe an
+    // instance). Genuinely local functions, same category as Ray's.
+    ...devtoolsFunctions,
   },
   registry: buildRegistry(),
   // The injected Prism evaluator runs endpoint `request`/`response` transforms
@@ -79,13 +86,20 @@ export const shell = createShell({
         : source) as Parameters<typeof evaluate>[1],
     ),
   // In-browser Vex-as-HTTP: `/vex` URLs hit the in-process engine via Vex's own
-  // handler; everything else is a real fetch.
-  fetch: vexFetch,
+  // handler; everything else is a real fetch. `traceFetch` tees each call into
+  // the devtools timeline while the devtools flag is on; off-flag it's a
+  // passthrough.
+  fetch: traceFetch(vexFetch),
 });
 
 // Let Ray's tools/run reach this shell (registered into it, so they can't import
 // it — see ray/bridge.ts).
 bindShell(shell);
+
+// Nova-devtools: registers the dock/inspector actions, adds the `devtools`
+// canvas, attaches the telemetry taps, and syncs the canvas with the debug
+// flag (Cmd/Ctrl+Shift+D). Same bridge pattern as Ray.
+installNovaDevtools(shell);
 
 // Seed the targets of the frame's LayoutRefs. `main` → the master/detail split;
 // `modal` → a bare overlay slot (empty until a modal action is pushed). These

@@ -1,0 +1,84 @@
+/* nova-devtools — adapter-side styles only. The dock/inspector INTERIORS are
+   Nova layouts rendered with the host registry's primitives (relay-themed);
+   these rules cover just the framework-glue shells: the chip anchor, the
+   fixed dock container, the DevtoolsPanel chrome, and the JsonTree primitive.
+   Everything floats — no layout footprint. */
+
+/* ── the per-instance chip anchor ───────────────────────────── */
+
+.nd-anchor {
+  position: relative;
+  height: 0;
+  z-index: 500;
+}
+.nd-anchor--pinned {
+  position: fixed;
+  top: 10px;
+  right: 10px;
+  height: auto;
+  z-index: 500;
+}
+
+/* the chip itself is the registry's Button — float it into the top-right
+   corner and give it an unmistakably-debug look on any app palette */
+.nd-anchor .rl-btn {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  border: 1px solid #3b4753;
+  border-radius: 999px;
+  background: #10161d;
+  color: #8fd3a7;
+  font: 600 10px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+  padding: 2px 8px;
+  opacity: 0.75;
+  white-space: nowrap;
+}
+.nd-anchor .rl-btn:hover { opacity: 1; }
+.nd-anchor--pinned .rl-btn { position: static; }
+
+/* ── the dock container + panel chrome ──────────────────────── */
+
+.nd-dock {
+  position: fixed;
+  bottom: 12px;
+  right: 12px;
+  z-index: 530;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+.nd-panel {
+  width: min(460px, calc(100vw - 32px));
+  max-height: min(72vh, 720px);
+  /* a bounded flex column, so a layout's `Box { grow, scroll }` body scrolls
+     under a fixed header (tabs / fragment title) instead of the whole panel */
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: #10161d;
+  border: 1px solid #3b4753;
+  border-radius: 8px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
+  color: #cdd6df;
+  padding: 10px;
+  font-size: 12px;
+}
+
+/* ── json tree primitive ────────────────────────────────────── */
+
+.nd-json { padding-left: 0; font: 400 11px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; }
+.nd-json .nd-json { padding-left: 14px; }
+.nd-json > summary { cursor: pointer; list-style: none; user-select: none; }
+.nd-json > summary::before { content: '▸ '; color: #55636f; }
+.nd-json[open] > summary::before { content: '▾ '; }
+.nd-json--leaf { padding-left: 14px; }
+.nd-json__key { color: #a1c9e8; }
+.nd-json__key::after { content: ':'; color: #55636f; }
+.nd-json__preview { color: #7d8b99; }
+.nd-json__more { color: #7d8b99; padding-left: 14px; }
+.nd-json__leaf--string { color: #8fd3a7; }
+.nd-json__leaf--number { color: #d3b58f; }
+.nd-json__leaf--boolean { color: #c9a1e8; }
+.nd-json__leaf--null, .nd-json__leaf--undefined { color: #7d8b99; font-style: italic; }
