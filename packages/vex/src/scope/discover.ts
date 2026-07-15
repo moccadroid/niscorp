@@ -167,12 +167,20 @@ const collectFromAggregate = (expr: AggregateExpression, out: Set<string>): void
 // ───────────────────────────────────────────────────────────────
 
 const collectFromQuery = (dsl: Query, out: Set<string>): void => {
+  // A subquery source introduces an ALIAS (`{ as: 'c', query }`): a derived
+  // relation, not a table. References to the alias at this level (`c.n`) are
+  // not entities — the subquery's REAL tables are collected (and scoped) by
+  // the recursion. Everything referenced at this level lands in `local`
+  // first, and aliases are subtracted before merging into `out`.
+  const aliases = new Set<string>();
+  const local = new Set<string>();
+
   // from
   for (const source of dsl.from) {
     if (typeof source === 'string') {
       out.add(source);
     } else {
-      // subquery: recurse
+      aliases.add(source.as);
       collectFromQuery(source.query, out);
     }
   }
@@ -180,12 +188,12 @@ const collectFromQuery = (dsl: Query, out: Set<string>): void => {
   // fields (optional; an entry may be a bare path or { field, as })
   for (const ref of dsl.fields ?? []) {
     const entity = extractEntityFromPath(typeof ref === 'string' ? ref : ref.field);
-    if (entity !== undefined) out.add(entity);
+    if (entity !== undefined) local.add(entity);
   }
 
   // filter
   if (dsl.filter !== undefined) {
-    collectFromFilter(dsl.filter, out);
+    collectFromFilter(dsl.filter, local);
   }
 
   // compute
@@ -193,7 +201,7 @@ const collectFromQuery = (dsl: Query, out: Set<string>): void => {
     for (const key of Object.keys(dsl.compute)) {
       const expr = dsl.compute[key];
       if (expr !== undefined) {
-        collectFromCompute(expr, out);
+        collectFromCompute(expr, local);
       }
     }
   }
@@ -203,7 +211,7 @@ const collectFromQuery = (dsl: Query, out: Set<string>): void => {
     for (const key of Object.keys(dsl.aggregate)) {
       const expr = dsl.aggregate[key];
       if (expr !== undefined) {
-        collectFromAggregate(expr, out);
+        collectFromAggregate(expr, local);
       }
     }
   }
@@ -212,7 +220,7 @@ const collectFromQuery = (dsl: Query, out: Set<string>): void => {
   if (dsl.groupBy !== undefined) {
     for (const path of dsl.groupBy) {
       const entity = extractEntityFromPath(path);
-      if (entity !== undefined) out.add(entity);
+      if (entity !== undefined) local.add(entity);
     }
   }
 
@@ -220,8 +228,12 @@ const collectFromQuery = (dsl: Query, out: Set<string>): void => {
   if (dsl.sort !== undefined) {
     for (const entry of dsl.sort) {
       const entity = extractEntityFromPath(entry.field);
-      if (entity !== undefined) out.add(entity);
+      if (entity !== undefined) local.add(entity);
     }
+  }
+
+  for (const entity of local) {
+    if (!aliases.has(entity)) out.add(entity);
   }
 };
 

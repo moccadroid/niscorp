@@ -2,7 +2,6 @@ import { z } from 'zod';
 import type { ActionDefinition } from '@niscorp/nova';
 import { companyFormLayout } from './company.form.layout';
 import { upsertCompanyPrism } from './company.form.prism';
-import { resultPrism } from '@relay/nova/shared/result.prism';
 
 // The company form — create AND edit in one action. The `save` endpoint is the
 // `company.upsert` mutation, which desugars to insert (no `id`) or update (`id`
@@ -10,7 +9,7 @@ import { resultPrism } from '@relay/nova/shared/result.prism';
 // form never picks a write. No pickers, so no mount lifecycle. On success it
 // announces `companies-changed`, opens the saved company, and pops.
 export const companyFormAction: ActionDefinition = {
-  id: 'company.form',
+  id: 'crm.company.form',
   data: {
     modalTitle: 'New company',
     confirmLabel: 'Create',
@@ -20,7 +19,7 @@ export const companyFormAction: ActionDefinition = {
   // One write: the `upsert` mutation desugars to insert (id empty) or update
   // (id set) — the form never picks. The header comment's create/edit split lives
   // in the mutation now, not here.
-  endpoints: { save: { url: '/api/companies/vex', method: 'POST', request: upsertCompanyPrism, response: resultPrism, target: 'saved' } },
+  endpoints: { save: { url: '/api/companies/vex', method: 'POST', request: upsertCompanyPrism, target: 'saved' } },
   triggers: [
     { event: 'ui:click', ref: 'cancel', do: [{ pop: true }] },
     {

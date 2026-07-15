@@ -39,6 +39,7 @@ import {
   ArrowUp,
   ArrowDown,
   Sparkles,
+  LogOut,
   type LucideIcon,
 } from 'lucide-react';
 import { cx } from '../lib/cx';
@@ -215,6 +216,7 @@ const ICONS: Record<string, LucideIcon> = {
   'arrow-up': ArrowUp,
   'arrow-down': ArrowDown,
   sparkles: Sparkles,
+  'log-out': LogOut,
 };
 
 const IconProps = z.object({ name: z.string(), size: z.number().optional() }).strict();

@@ -2,7 +2,7 @@
 // reactive query: the search box filters in place, and the All/Mine tabs swap
 // the backing query (deals.list ↔ deals.byOwner) — all by re-running `browse`,
 // no Nova changes.
-import { shell } from '../nova/shell';
+import { shell } from './check-shell';
 import { getVexRuntime } from '../vex/runtime';
 
 const settle = (ms = 160): Promise<void> => new Promise((r) => setTimeout(r, ms));
@@ -42,7 +42,7 @@ const main = async (): Promise<void> => {
   // Navigate to Deals (sidebar nav).
   shell.dispatch({ type: 'ui:click', ref: 'nav-deals' });
   await settle(300);
-  checks.push([`deals screen mounted (got ${String(mainAction())})`, mainAction() === 'deals']);
+  checks.push([`deals screen mounted (got ${String(mainAction())})`, mainAction() === 'crm.deals']);
   checks.push([`all deals loaded (got ${rows().length})`, rows().length === 120]);
 
   // Search box filters in place.
@@ -107,7 +107,7 @@ const main = async (): Promise<void> => {
   // "Open" item (carrying the row) drills into the deal workspace on `main`.
   shell.dispatch({ type: 'ui:click', ref: 'row-open', payload: firstRow });
   await settle(160);
-  checks.push([`"Open" drills into the deal workspace (got ${String(mainAction())})`, mainAction() === 'deal']);
+  checks.push([`"Open" drills into the deal workspace (got ${String(mainAction())})`, mainAction() === 'crm.deal.view']);
 
   let ok = true;
   for (const [label, pass] of checks) {

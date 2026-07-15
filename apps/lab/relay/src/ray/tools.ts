@@ -5,7 +5,8 @@ import { evaluate } from '@niscorp/prism';
 import { vexGuide } from '@niscorp/vex';
 import type { QueryRequest } from '@niscorp/vex';
 import { layoutAgent, paletteFromRegistry } from '@niscorp/nova/agent';
-import { getVexRuntime, CURRENT_USER_ID, CURRENT_DATE } from '@relay/vex/runtime';
+import { getVexRuntime, todayStr } from '@relay/vex/runtime';
+import { identity } from '@relay/auth';
 import { listContactsPrism } from '@relay/nova/domains/contact';
 import { listCompaniesPrism } from '@relay/nova/domains/company';
 import { listDealsPrism } from '@relay/nova/domains/deal';
@@ -127,8 +128,8 @@ export const makeTools = (
         sortBy: cfg.sortBy,
         sortDir: 'asc',
         ownerId: '',
-        userId: CURRENT_USER_ID,
-        today: CURRENT_DATE,
+        userId: identity()?.userId ?? 'anonymous',
+        today: todayStr(),
       }) as QueryRequest;
       const rt = await getVexRuntime();
       const res = await rt.engine.execute(request);
@@ -183,7 +184,7 @@ export const makeTools = (
             ...(fingerprint !== undefined ? { fingerprint } : {}),
             context: (context ?? {}) as Record<string, unknown>,
           },
-          { scope: { userId: CURRENT_USER_ID } },
+          { scope: { userId: identity()?.userId ?? 'anonymous' } },
         );
         // Stash for `visualize` (so the rows don't round-trip through the model).
         turn.lastResult = {

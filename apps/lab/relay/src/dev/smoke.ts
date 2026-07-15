@@ -9,7 +9,11 @@
 import { evaluate } from '@niscorp/prism';
 import type { QueryRequest } from '@niscorp/vex';
 import type { CacheEntry } from '@relay/api';
-import { getVexRuntime, CURRENT_USER_ID, CURRENT_DATE } from '@relay/vex/runtime';
+import { getVexRuntime, todayStr } from '@relay/vex/runtime';
+
+// The user the replays run as — smoke drives the ENGINE directly with an
+// explicit scope (the app derives its scope from the session token).
+const CURRENT_USER = 'usr_001';
 import { contactsList, contactById, contactsByCompany } from '@relay/api/contacts';
 import { companiesList, companyById } from '@relay/api/companies';
 import { dealsList, dealsByOwner, dealById, dealsByCompany, dealsBoard, dealsOpenByStage, dealsForecast, dealsByStatus, dealsByStage } from '@relay/api/deals';
@@ -21,10 +25,9 @@ import { listContactsPrism } from '@relay/nova/domains/contact/contacts.prism';
 import { contactByIdPrism } from '@relay/nova/domains/contact/contact.prism';
 import { listCompaniesPrism } from '@relay/nova/domains/company/companies.prism';
 import { companyByIdPrism, companyContactsPrism, companyDealsPrism } from '@relay/nova/domains/company/company.prism';
-import { listDealsPrism, boardStagesPrism, boardDealsPrism, boardSummaryPrism } from '@relay/nova/domains/deal/deals.prism';
+import { listDealsPrism } from '@relay/nova/domains/deal/deals.prism';
 import { dealByIdPrism, dealActivitiesPrism, dealLineItemsPrism, dealTasksPrism } from '@relay/nova/domains/deal/deal.prism';
 import { listTasksPrism } from '@relay/nova/domains/task/tasks.prism';
-import { homeOpenPrism, homeWonPrism, homeTasksPrism, homeStagesPrism } from '@relay/nova/surfaces/home/home.prism';
 import { sidebarCountsPrism } from '@relay/nova/chrome/sidebar.prism';
 import { topbarSearchPrism } from '@relay/nova/chrome/topbar.prism';
 
@@ -45,10 +48,11 @@ const checks: Check[] = [
   { def: companiesList, prism: listCompaniesPrism, state: { sortBy: 'companies.name', sortDir: 'asc' } },
   { def: dealsList, prism: listDealsPrism, state: { ownerId: '', sortBy: 'deals.created_at', sortDir: 'desc' } },
   { def: dealsByOwner, prism: listDealsPrism, state: { ownerId: 'me', sortBy: 'deals.created_at', sortDir: 'desc' } },
-  { def: dealsBoard, prism: boardDealsPrism },
-  { def: dealsOpenByStage, prism: boardStagesPrism },
-  { def: dealsForecast, prism: boardSummaryPrism },
-  { def: dealsByStage, prism: homeStagesPrism },
+  // Static replays — plain JSON bodies in the actions (no seam), mirrored here.
+  { def: dealsBoard, prism: { fingerprint: dealsBoard.fingerprint, context: {} } },
+  { def: dealsOpenByStage, prism: { fingerprint: dealsOpenByStage.fingerprint, context: {} } },
+  { def: dealsForecast, prism: { fingerprint: dealsForecast.fingerprint, context: {} } },
+  { def: dealsByStage, prism: { fingerprint: dealsByStage.fingerprint, context: {} } },
   { def: companyById, prism: companyByIdPrism, state: { id: 'cmp_001' } },
   { def: contactById, prism: contactByIdPrism, state: { id: 'con_001' } },
   { def: dealById, prism: dealByIdPrism, state: { id: 'deal_001' } },
@@ -59,9 +63,9 @@ const checks: Check[] = [
   { def: tasksByDeal, prism: dealTasksPrism, state: { id: 'deal_001' }, mayBeEmpty: true },
   { def: tasksMine, prism: listTasksPrism, state: { scope: 'open', sortBy: 'tasks.due_date', sortDir: 'asc' } },
   { def: tasksOverdue, prism: listTasksPrism, state: { scope: 'overdue', sortBy: 'tasks.due_date', sortDir: 'asc' } },
-  { def: dealsByStatus, prism: homeOpenPrism },
-  { def: dealsByStatus, prism: homeWonPrism },
-  { def: tasksOpenCount, prism: homeTasksPrism },
+  { def: dealsByStatus, prism: { fingerprint: dealsByStatus.fingerprint, context: { status: 'open' } } },
+  { def: dealsByStatus, prism: { fingerprint: dealsByStatus.fingerprint, context: { status: 'won' } } },
+  { def: tasksOpenCount, prism: { fingerprint: tasksOpenCount.fingerprint, context: {} } },
   { def: sidebarCounts, prism: sidebarCountsPrism },
   { def: actionsSearch, prism: topbarSearchPrism, state: { search: 'new' } },
 ];
@@ -74,10 +78,10 @@ const main = async (): Promise<void> => {
   let failures = 0;
 
   for (const c of checks) {
-    const source = { search: '', userId: CURRENT_USER_ID, today: CURRENT_DATE, ...c.state };
+    const source = { search: '', userId: CURRENT_USER, today: todayStr(), ...c.state };
     const request = evaluate(c.prism, source) as QueryRequest;
     const sql = rt.engine.compile(c.def.dsl).sql;
-    const res = await rt.engine.execute(request, { scope: { userId: CURRENT_USER_ID } });
+    const res = await rt.engine.execute(request, { scope: { userId: CURRENT_USER } });
 
     // The assertions that keep this harness honest: the prism resolved to the
     // intended entry, the replay was warm, every SQL parameter was bound, the

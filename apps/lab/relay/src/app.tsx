@@ -1,22 +1,36 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { NovaShell } from '@niscorp/nova/react';
-import { shell } from './nova/shell';
+import type { Shell } from '@niscorp/nova';
+import { buildShell } from './nova/shell';
+import { identity, subscribe, type Identity } from './auth';
 import { installRouter } from './ui/router';
 import { devtoolsSlotWrapper, NovaDevtoolsRoot } from './nova-devtools';
 
-// Relay is a Nova shell. Everything visible — sidebar, topbar, every screen —
-// is an action on a canvas, composed from primitives. React only mounts it.
-// `devtoolsSlotWrapper` is `relaySlotWrapper` (the panel/screen transitions at
-// the ActionSlot seam) with the flag-gated debug chip composed in;
-// `NovaDevtoolsRoot` hosts the `devtools` canvas (the dock/inspector are Nova
-// actions — see nova-devtools/); `installRouter` is a thin edge adapter that
-// mirrors the shell's nav into the address bar — Nova stays URL-agnostic.
+// Relay is a Nova shell, built PER PRINCIPAL: the charter resolves the
+// signed-in identity to a catalog and buildShell constructs the shell from
+// exactly those definitions. Signing in/out rebuilds it (the key remount).
+// React only mounts the result.
+
+// One live shell per principal, cached outside React so StrictMode's double
+// render can't build twice; switching principals disposes the old shell.
+let cached: { key: string; shell: Shell } | null = null;
+const shellFor = (who: Identity | null): Shell => {
+  const key = who?.userId ?? 'anon';
+  if (cached !== null && cached.key === key) return cached.shell;
+  cached?.shell.dispose();
+  cached = { key, shell: buildShell(who) };
+  return cached.shell;
+};
+
 const Relay = () => {
-  useEffect(() => installRouter(shell), []);
+  const [who, setWho] = useState(identity);
+  useEffect(() => subscribe(() => setWho(identity())), []);
+  const shell = shellFor(who);
+  useEffect(() => installRouter(shell), [shell]);
   return (
     <>
-      <NovaShell shell={shell} slotWrapper={devtoolsSlotWrapper} />
-      <NovaDevtoolsRoot shell={shell} />
+      <NovaShell key={who?.userId ?? 'anon'} shell={shell} slotWrapper={devtoolsSlotWrapper} />
+      <NovaDevtoolsRoot key={`dt-${who?.userId ?? 'anon'}`} shell={shell} />
     </>
   );
 };

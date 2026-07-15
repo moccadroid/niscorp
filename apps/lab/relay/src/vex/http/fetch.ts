@@ -1,5 +1,6 @@
 import { handleQuery, handleDiscovery, handleFingerprintPatch, handleFingerprintDelete } from '@niscorp/vex';
-import { getVexRuntime, CURRENT_USER_ID } from '../runtime';
+import { getVexRuntime } from '../runtime';
+import { identity } from '../../auth';
 import { resourceEntities } from './resources';
 import { handleMutation } from '../mutations';
 import { scopePolicy } from '../scope';
@@ -49,7 +50,9 @@ export const vexFetch = async (url: string, init?: Init): Promise<Resp> => {
   const parsed = new URL(url, 'http://relay.local');
   const entities = resourceEntities(parsed.pathname);
   const { engine, db } = await getVexRuntime();
-  const scope = { userId: CURRENT_USER_ID };
+  // Scope comes from the session TOKEN, per request — never client-supplied,
+  // never a constant. Anonymous requests scope to a user that owns nothing.
+  const scope = { userId: identity()?.userId ?? 'anonymous' };
   const method = (init?.method ?? 'GET').toUpperCase();
 
   if (method === 'GET') {
@@ -69,18 +72,36 @@ export const vexFetch = async (url: string, init?: Init): Promise<Resp> => {
   }
 
   // Fingerprint management: `{ fingerprint, protected? }` in the body (names
-  // contain '/', so they don't travel in the path).
+  // contain '/', so they don't travel in the path). Locked: refused (403).
   if (method === 'PATCH' || method === 'DELETE') {
     const b = (body ?? {}) as { fingerprint?: unknown; protected?: boolean };
     if (typeof b.fingerprint !== 'string' || b.fingerprint === '') {
       return wrap(400, { error: 'invalid_request', message: 'Body must carry a `fingerprint`.' });
     }
     const res = method === 'PATCH'
-      ? await handleFingerprintPatch({ engine }, b.fingerprint, { protected: b.protected })
-      : await handleFingerprintDelete({ engine }, b.fingerprint);
+      ? await handleFingerprintPatch({ engine, locked: true }, b.fingerprint, { protected: b.protected })
+      : await handleFingerprintDelete({ engine, locked: true }, b.fingerprint);
     return wrap(res.status, res.body);
   }
 
-  const res = await handleQuery({ engine, entities }, body, scope);
+  // The human surface is replay-only: `locked: true` means an unknown or
+  // drifted fingerprint gets 400 `locked` — every read every action makes
+  // must replay from the protected seeds. Ray's `query` tool and the
+  // architect keep their own generative engine path; the split is the
+  // posture, not an accident.
+  const res = await handleQuery({ engine, entities, locked: true }, body, scope);
   return wrap(res.status, res.body);
+};
+
+// Vex replies `{ result, meta }`. Endpoints want the data; the devtools
+// trace wants the envelope — so this unwrap composes OUTSIDE the trace tee
+// (`unwrapResult(traceFetch(vexFetch))`): the timeline records the full
+// reply, actions receive `result` itself, and no endpoint needs a
+// `response` prism to lift it.
+export const unwrapResult = (inner: typeof vexFetch): typeof vexFetch => async (url, init) => {
+  const res = await inner(url, init);
+  if (!isVex(url) || !res.ok) return res;
+  const body = (await res.json()) as Record<string, unknown> | null;
+  if (body === null || typeof body !== 'object' || !('result' in body)) return wrap(res.status, body);
+  return wrap(res.status, body['result']);
 };

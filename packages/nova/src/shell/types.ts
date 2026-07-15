@@ -137,6 +137,12 @@ export type Shell = {
   // shell starts from createShell's `actions`; this adds (or replaces) one.
   registerAction: (definition: ActionDefinition) => void;
 
+  // Remove a definition and unmount its live instances — revocation
+  // semantics: a removed action is gone, not zombie-running. Unknown ids are
+  // a no-op; fragments and other definitions' instances are untouched; if a
+  // canvas's top instance is removed, the instance beneath resumes.
+  removeAction: (actionId: string) => void;
+
   // Register an ActionFragment at runtime, referenceable from a push/replace
   // `with: [...]`. The shell starts from createShell's `fragments`.
   registerFragment: (fragment: ActionFragment) => void;

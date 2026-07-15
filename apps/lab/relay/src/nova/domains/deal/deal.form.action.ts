@@ -1,8 +1,8 @@
 import { z } from 'zod';
 import type { ActionDefinition } from '@niscorp/nova';
 import { dealFormLayout } from './deal.form.layout';
-import { companyOptionsPrism, stageOptionsPrism, contactOptionsPrism, upsertDealPrism } from './deal.form.prism';
-import { resultPrism } from '@relay/nova/shared/result.prism';
+import { upsertDealPrism } from './deal.form.prism';
+import { companyOptions, stageOptions, contactOptions } from '@relay/api/deals';
 
 // The deal form — create AND edit in one action. The single `save` endpoint is
 // the `deal.upsert` mutation, which desugars to insert (no `id`) or update (`id`
@@ -11,7 +11,7 @@ import { resultPrism } from '@relay/nova/shared/result.prism';
 // `deals-changed` and opens the saved deal. Pushed `with: ['modal']`, so the modal
 // fragment supplies the chrome and reads `$.modalTitle` / `$.confirmLabel`.
 export const dealFormAction: ActionDefinition = {
-  id: 'deal.form',
+  id: 'crm.deal.form',
   data: {
     modalTitle: 'New deal',
     confirmLabel: 'Create',
@@ -20,11 +20,12 @@ export const dealFormAction: ActionDefinition = {
   },
   layout: dealFormLayout,
   endpoints: {
-    loadCompanies: { url: '/api/companies/vex', method: 'POST', request: companyOptionsPrism, response: resultPrism, target: 'companyOptions' },
-    loadStages:    { url: '/api/deals/vex',     method: 'POST', request: stageOptionsPrism,   response: resultPrism, target: 'stageOptions' },
-    loadContacts:  { url: '/api/contacts/vex',  method: 'POST', request: contactOptionsPrism, response: resultPrism, target: 'contactOptions' },
+    // Picker reads take no caller input — plain JSON replays, no prism seam.
+    loadCompanies: { url: '/api/companies/vex', method: 'POST', request: { fingerprint: companyOptions.fingerprint, context: {} }, target: 'companyOptions' },
+    loadStages:    { url: '/api/deals/vex',     method: 'POST', request: { fingerprint: stageOptions.fingerprint, context: {} }, target: 'stageOptions' },
+    loadContacts:  { url: '/api/contacts/vex',  method: 'POST', request: { fingerprint: contactOptions.fingerprint, context: {} }, target: 'contactOptions' },
     // One write — `deal.upsert` desugars to insert (id empty) or update (id set).
-    save:          { url: '/api/deals/vex',               method: 'POST', request: upsertDealPrism,    response: resultPrism, target: 'saved' },
+    save:          { url: '/api/deals/vex',               method: 'POST', request: upsertDealPrism, target: 'saved' },
   },
   lifecycle: { mount: [{ call: 'loadCompanies' }, { call: 'loadStages' }, { call: 'loadContacts' }] },
   triggers: [

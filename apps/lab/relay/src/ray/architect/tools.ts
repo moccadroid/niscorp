@@ -2,7 +2,8 @@ import { z } from 'zod';
 import { defineTool, type SignalClient, type ToolDefinition } from '@niscorp/cortex';
 import { mappingAgent, MappingAgentInputSchema } from '@niscorp/prism/agent';
 import { vexGuide } from '@niscorp/vex';
-import { getVexRuntime, CURRENT_USER_ID } from '../../vex/runtime';
+import { getVexRuntime } from '../../vex/runtime';
+import { identity } from '../../auth';
 import { runAction } from './harness';
 
 // ═══════════════════════════════════════════════════════════
@@ -155,7 +156,7 @@ export const makeArchitectTools = (supportLlm: SignalClient): ArchitectTools => 
           ...(shape !== undefined && { shape }),
           context: ctx,
         },
-        { scope: { userId: CURRENT_USER_ID } },
+        { scope: { userId: identity()?.userId ?? 'anonymous' } },
       );
       // The proven query's cache identity. The result stays QUERY-shaped
       // (rows + fingerprint) — assembling the endpoint is the agent's job,

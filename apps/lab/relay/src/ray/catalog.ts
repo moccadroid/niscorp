@@ -33,20 +33,20 @@ export type CatalogEntry = { id: string; description: string; input: Record<stri
 const SEED: CatalogEntry[] = [
   // screens
   { id: 'home', description: 'Dashboard.', input: homeInputSchema },
-  { id: 'deals', description: 'Deals — table or pipeline board.', input: dealsInputSchema },
-  { id: 'contacts', description: 'Contacts list.', input: contactsInputSchema },
-  { id: 'companies', description: 'Companies list.', input: companiesInputSchema },
-  { id: 'tasks', description: 'Tasks.', input: tasksInputSchema },
+  { id: 'crm.deals', description: 'Deals — table or pipeline board.', input: dealsInputSchema },
+  { id: 'crm.contacts', description: 'Contacts list.', input: contactsInputSchema },
+  { id: 'crm.companies', description: 'Companies list.', input: companiesInputSchema },
+  { id: 'tasks.manage', description: 'Tasks.', input: tasksInputSchema },
   { id: 'settings', description: 'Workspace settings.', input: settingsInputSchema },
   // records
-  { id: 'deal', description: 'A deal.', input: dealInputSchema },
-  { id: 'contact', description: 'A contact.', input: contactInputSchema },
-  { id: 'company', description: 'A company.', input: companyInputSchema },
+  { id: 'crm.deal.view', description: 'A deal.', input: dealInputSchema },
+  { id: 'crm.contact.view', description: 'A contact.', input: contactInputSchema },
+  { id: 'crm.company.view', description: 'A company.', input: companyInputSchema },
   // forms (the user reviews and submits)
-  { id: 'deal.form', description: 'Form to create or edit a deal; the user submits it.', input: dealFormInputSchema },
-  { id: 'contact.form', description: 'Form to create or edit a contact; the user submits it.', input: contactFormInputSchema },
-  { id: 'company.form', description: 'Form to create or edit a company; the user submits it.', input: companyFormInputSchema },
-  { id: 'task.form', description: 'Form to create or edit a task; the user submits it.', input: taskFormInputSchema },
+  { id: 'crm.deal.form', description: 'Form to create or edit a deal; the user submits it.', input: dealFormInputSchema },
+  { id: 'crm.contact.form', description: 'Form to create or edit a contact; the user submits it.', input: contactFormInputSchema },
+  { id: 'crm.company.form', description: 'Form to create or edit a company; the user submits it.', input: companyFormInputSchema },
+  { id: 'tasks.form', description: 'Form to create or edit a task; the user submits it.', input: taskFormInputSchema },
 ];
 
 const LIVE: CatalogEntry[] = [...SEED];

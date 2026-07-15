@@ -2,22 +2,21 @@ import { z } from 'zod';
 import type { ActionDefinition } from '@niscorp/nova';
 import { companyLayout } from './company.layout';
 import { companyByIdPrism, companyContactsPrism, companyDealsPrism } from './company.prism';
-import { resultPrism } from '@relay/nova/shared/result.prism';
 
 // Pushed onto the `detail` canvas with `input: { id }`. On mount, `loadCompany`
 // fills `$.view` with the company record + its people + open deals. Close pops;
 // a `nav` message self-closes. `open-contact` / `open-deal` swap the detail to
 // that record — cross-linking by id.
 export const companyAction: ActionDefinition = {
-  id: 'company',
+  id: 'crm.company.view',
   // Stack-nav label — the chip + its depth menu read `instance.title`.
   title: '{{$.record.name}}',
   data: { id: '', record: {}, contacts: [], deals: [], loading: true, panelSize: 'wide' },
   layout: companyLayout,
   endpoints: {
-    loadRecord:   { url: '/api/companies/vex', method: 'POST', request: companyByIdPrism,     response: resultPrism, target: 'record' },
-    loadContacts: { url: '/api/companies/vex', method: 'POST', request: companyContactsPrism, response: resultPrism, target: 'contacts' },
-    loadDeals:    { url: '/api/companies/vex', method: 'POST', request: companyDealsPrism,    response: resultPrism, target: 'deals' },
+    loadRecord:   { url: '/api/companies/vex', method: 'POST', request: companyByIdPrism, target: 'record' },
+    loadContacts: { url: '/api/companies/vex', method: 'POST', request: companyContactsPrism, target: 'contacts' },
+    loadDeals:    { url: '/api/companies/vex', method: 'POST', request: companyDealsPrism, target: 'deals' },
   },
   lifecycle: { mount: [{ call: 'loadRecord', onSuccess: [{ set: 'loading', value: false }] }, { call: 'loadContacts' }, { call: 'loadDeals' }] },
   // Cross-links switch `main` (+ emit `screen-*`) and THEN swap the panel. The
@@ -36,7 +35,7 @@ export const companyAction: ActionDefinition = {
       do: [
         {
           push: {
-            action: 'company.form',
+            action: 'crm.company.form',
             canvas: 'modal',
             with: ['modal'],
             input: { modalTitle: 'Edit company', confirmLabel: 'Save', id: '$.record.company_id', name: '$.record.name', domain: '$.record.domain', industry: '$.record.industry', size: '$.record.size' },
@@ -46,8 +45,8 @@ export const companyAction: ActionDefinition = {
     },
     { message: 'companies-changed', do: [{ call: 'loadRecord' }] },
     // Cross-links push onto THIS canvas (the stack); Back returns to this company.
-    { event: 'ui:click', ref: 'open-contact', do: [{ push: { action: 'contact', input: { id: '@event.payload' } } }] },
-    { event: 'ui:click', ref: 'open-deal', do: [{ push: { action: 'deal', input: { id: '@event.payload' } } }] },
+    { event: 'ui:click', ref: 'open-contact', do: [{ push: { action: 'crm.contact.view', input: { id: '@event.payload' } } }] },
+    { event: 'ui:click', ref: 'open-deal', do: [{ push: { action: 'crm.deal.view', input: { id: '@event.payload' } } }] },
   ],
 };
 

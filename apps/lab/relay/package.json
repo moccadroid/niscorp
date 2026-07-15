@@ -10,7 +10,10 @@
     "typecheck": "tsc --noEmit",
     "smoke": "tsx src/dev/smoke.ts",
     "harness": "tsx src/dev/harness-check.ts",
-    "architect": "tsx src/dev/architect-check.ts"
+    "architect": "tsx src/dev/architect-check.ts",
+    "charter": "tsx src/dev/charter-check.ts",
+    "rls": "tsx src/dev/rls-check.ts",
+    "locked": "tsx src/dev/locked-check.ts"
   },
   "dependencies": {
     "@electric-sql/pglite": "^0.5.1",

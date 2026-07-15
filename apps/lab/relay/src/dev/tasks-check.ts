@@ -2,7 +2,7 @@
 // matches the deals table: in-place search + sortable column headers (Vex's
 // reserved sortBy/sortDir → ORDER BY, same cached query). The body is the
 // reusable Table primitive. Run: pnpm --filter relay exec tsx src/dev/tasks-check.ts
-import { shell } from '../nova/shell';
+import { shell } from './check-shell';
 import { getVexRuntime } from '../vex/runtime';
 
 const settle = (ms = 200): Promise<void> => new Promise((r) => setTimeout(r, ms));
@@ -36,7 +36,7 @@ const main = async (): Promise<void> => {
 
   shell.dispatch({ type: 'ui:click', ref: 'nav-tasks' });
   await settle(320);
-  checks.push([`tasks screen mounted (got ${String(mainAction())})`, mainAction() === 'tasks']);
+  checks.push([`tasks screen mounted (got ${String(mainAction())})`, mainAction() === 'tasks.manage']);
   const all = rows().length;
   checks.push([`my open tasks loaded (got ${all})`, all > 0]);
   checks.push([`body is one Table node (got ${countComponent('Table')})`, countComponent('Table') === 1]);

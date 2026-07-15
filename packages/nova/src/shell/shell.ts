@@ -144,6 +144,28 @@ export const createShell = (config: ShellConfig): Shell => {
     actions[definition.id] = definition;
   };
 
+  // Remove a definition and unmount its live instances (revocation: a
+  // removed action is gone, not zombie-running). Other instances keep their
+  // stack positions; when a canvas's top was removed, the new top resumes.
+  // Unknown ids are a no-op; fragments are untouched.
+  const removeAction = (actionId: string): void => {
+    guard();
+    if (actions[actionId] === undefined) return;
+    delete actions[actionId];
+    let changed = false;
+    for (const [, canvas] of canvases) {
+      if (!canvas.stack.some((inst) => inst.definitionId === actionId)) continue;
+      const previousTop = canvas.peek();
+      for (const inst of canvas.clearStack()) {
+        if (inst.definitionId === actionId) ops.unmountInstance(inst.id);
+        else canvas.pushInstance(inst);
+      }
+      if (canvas.peek() !== previousTop) ops.resumeTop(canvas);
+      changed = true;
+    }
+    if (changed) fireState();
+  };
+
   const getFragment = (fragmentId: string): ActionFragment => {
     const frag = fragments[fragmentId];
     if (frag === undefined) throw new UnknownFragmentError(`Unknown fragment: ${fragmentId}`, { fragmentId });
@@ -438,6 +460,7 @@ export const createShell = (config: ShellConfig): Shell => {
     replace,
     clear,
     registerAction,
+    removeAction,
     registerFragment,
     addCanvas,
     removeCanvas,

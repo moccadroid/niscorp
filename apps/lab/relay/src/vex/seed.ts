@@ -4,10 +4,14 @@
 //
 // "Coherent" means the relationships hold: contacts belong to real
 // companies, deals reference real contacts, activities and tasks hang off
-// real deals, and the timeline clusters around "today" (2026-06-13) so
-// overdue/today/upcoming tasks and recent activity all look real.
+// real deals, and the timeline clusters around the REAL current date at
+// seed time, so overdue/today/upcoming tasks and recent activity all look
+// real on any day the app boots.
 
-const TODAY = new Date('2026-06-13T12:00:00.000Z');
+// Noon UTC of the current date — every seeded date is an offset from this,
+// so the whole dataset shifts with the clock and stays deterministic
+// relative to it.
+const TODAY = new Date(`${new Date().toISOString().slice(0, 10)}T12:00:00.000Z`);
 
 // ─── PRNG (mulberry32) ───────────────────────────────────────
 const makeRng = (seed: number) => () => {
@@ -264,7 +268,10 @@ export const buildSeedSql = (): string => {
     );
   }
 
-  // Tasks — a believable mix of overdue / today / upcoming, biased to me.
+  // Tasks — a believable mix of overdue / today / upcoming. Assignees spread
+  // deterministically across the three sign-in principals (60% alex, 25%
+  // jordan, 15% sam): task reads are assignee-scoped (see vex/scope.ts), so
+  // every principal signs in to a real, different task list.
   const taskCount = 150;
   for (let i = 0; i < taskCount; i++) {
     const bucket = rng();
@@ -274,6 +281,7 @@ export const buildSeedSql = (): string => {
     // Most tasks that hang off a deal also belong to that deal's primary contact,
     // so a contact's profile shows its open to-dos (not just the deal's).
     const taskContact = d.contact !== null && chance(0.7) ? d.contact : null;
+    const assignee = i % 20 < 12 ? me : i % 20 < 17 ? users[1]!.id : users[2]!.id;
     sql.push(
       insert(
         'tasks',
@@ -284,7 +292,7 @@ export const buildSeedSql = (): string => {
             pick(TASK),
             due,
             done,
-            chance(0.45) ? me : pick(userIds),
+            assignee,
             taskContact,
             d.company,
             d.id,
@@ -321,18 +329,18 @@ export const buildSeedSql = (): string => {
       ['id', 'name', 'description', 'scope', 'kind', 'definition'],
       [
         ['home', 'Home', 'Go to the dashboard', 'crm', 'screen', '{}'],
-        ['tasks', 'My tasks', 'Your open tasks', 'crm', 'screen', '{}'],
-        ['contacts', 'Contacts', 'Browse all people', 'crm', 'screen', '{}'],
-        ['companies', 'Companies', 'Browse all accounts', 'crm', 'screen', '{}'],
-        ['deals', 'Deals', 'Browse all deals as a table', 'crm', 'screen', '{}'],
+        ['tasks.manage', 'My tasks', 'Your open tasks', 'crm', 'screen', '{}'],
+        ['crm.contacts', 'Contacts', 'Browse all people', 'crm', 'screen', '{}'],
+        ['crm.companies', 'Companies', 'Browse all accounts', 'crm', 'screen', '{}'],
+        ['crm.deals', 'Deals', 'Browse all deals as a table', 'crm', 'screen', '{}'],
         // Pipeline (the deals board view) is reachable via the sidebar; it returns
         // to the search catalog in Phase 6, when a row carries a full invocation
         // descriptor (action + `$.view`) instead of just an id.
         ['settings', 'Settings', 'Workspace preferences', 'crm', 'screen', '{}'],
-        ['contact.form', 'New contact', 'Add a person to the workspace', 'crm', 'create', '{}'],
-        ['company.form', 'New company', 'Add a company or account', 'crm', 'create', '{}'],
-        ['deal.form', 'New deal', 'Start tracking a new opportunity', 'crm', 'create', '{}'],
-        ['task.form', 'New task', 'Add a to-do for yourself', 'crm', 'create', '{}'],
+        ['crm.contact.form', 'New contact', 'Add a person to the workspace', 'crm', 'create', '{}'],
+        ['crm.company.form', 'New company', 'Add a company or account', 'crm', 'create', '{}'],
+        ['crm.deal.form', 'New deal', 'Start tracking a new opportunity', 'crm', 'create', '{}'],
+        ['tasks.form', 'New task', 'Add a to-do for yourself', 'crm', 'create', '{}'],
       ],
     ),
   );

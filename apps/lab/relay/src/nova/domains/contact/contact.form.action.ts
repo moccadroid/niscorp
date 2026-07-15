@@ -1,9 +1,8 @@
 import { z } from 'zod';
 import type { ActionDefinition } from '@niscorp/nova';
 import { contactFormLayout } from './contact.form.layout';
-import { companyOptionsPrism } from '../deal/deal.form.prism';
+import { companyOptions } from '@relay/api/deals';
 import { upsertContactPrism } from './contact.form.prism';
-import { resultPrism } from '@relay/nova/shared/result.prism';
 
 // The contact form — create AND edit in one action. The `save` endpoint is the
 // `contact.upsert` mutation, which desugars to insert (no `id`) or update (`id`
@@ -11,7 +10,7 @@ import { resultPrism } from '@relay/nova/shared/result.prism';
 // loads the company picker (shared `options.companies` read). On success it
 // announces `contacts-changed`, opens the saved contact, and pops.
 export const contactFormAction: ActionDefinition = {
-  id: 'contact.form',
+  id: 'crm.contact.form',
   data: {
     modalTitle: 'New contact',
     confirmLabel: 'Create',
@@ -19,9 +18,9 @@ export const contactFormAction: ActionDefinition = {
   },
   layout: contactFormLayout,
   endpoints: {
-    loadCompanies: { url: '/api/companies/vex', method: 'POST', request: companyOptionsPrism, response: resultPrism, target: 'companyOptions' },
+    loadCompanies: { url: '/api/companies/vex', method: 'POST', request: { fingerprint: companyOptions.fingerprint, context: {} }, target: 'companyOptions' },
     // One write — `contact.upsert` desugars to insert (id empty) or update (id set).
-    save:          { url: '/api/contacts/vex',            method: 'POST', request: upsertContactPrism, response: resultPrism, target: 'saved' },
+    save:          { url: '/api/contacts/vex',            method: 'POST', request: upsertContactPrism, target: 'saved' },
   },
   lifecycle: { mount: [{ call: 'loadCompanies' }] },
   triggers: [

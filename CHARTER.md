@@ -39,9 +39,8 @@ receives — *is* their application. Nothing outside it is reachable, renderable
 or invokable.
 
 **One gate for humans and agents.** The same resolved catalog feeds the human's
-shell, the agent's tool policy (Cortex `policyGate`), the server-function
-allowlist, and an MCP tool listing. One document governs every kind of
-principal.
+shell, the agent's tool policy (Cortex `policyGate`), and the
+server-function gate. One document governs every kind of principal.
 
 **Reviewable closure.** Because actions and charters are both data, "what can
 this role reach" is a computation, not an audit project. The audit machinery
@@ -74,7 +73,7 @@ small.
 ## The grammar
 
 A charter maps **role names** to selections. A role is either a bare list of
-globs (the common case) or an object with at most five keys.
+globs (the common case) or an object with at most four keys.
 
 ```json
 {
@@ -86,7 +85,7 @@ globs (the common case) or an object with at most five keys.
 
   "ray":     { "extends": ["sales"],  "without": ["agent-unsafe"] },
 
-  "agent-unsafe": { "assignable": false, "allow": ["*.form", "*.delete", "finance.*"] }
+  "agent-unsafe": { "allow": ["*.form", "*.delete", "finance.*"] }
 }
 ```
 
@@ -97,12 +96,6 @@ inline or by reference:
 |---|---|---|
 | **add** | `allow` | `extends` |
 | **subtract** | `deny` | `without` |
-
-Plus one safety catch:
-
-- `assignable: false` — this role exists only to be referenced (`extends` /
-  `without`); the assignment layer must refuse to assign it to a principal.
-  Default `true`.
 
 Sugar: a bare array is `{ "allow": [...] }`.
 
@@ -147,11 +140,9 @@ Everything downstream consumes the resolved id set, never the charter itself:
 1. **The shell catalog** — the definitions served to (or registered in) a
    principal's shell.
 2. **Cortex tool policy** — the agent's action surface via `policyGate`.
-3. **The fn allowlist** — derived as the closure of the catalog's endpoints;
-   server functions reachable by no granted action do not execute.
-4. **The MCP listing** — external agents see the catalog as tools, under the
-   same grants.
-5. **The verifier** — reports, diffs, and assertions (below).
+3. **The fn gate** — server functions are endpoints (`/fns/<name>`); a fn
+   reachable through no granted action's endpoints does not execute.
+4. **The verifier** — reports, diffs, and assertions (below).
 
 ---
 
@@ -247,7 +238,7 @@ require simulating precedence in your head.
 **8. An agent narrower than its human**
 
 ```json
-"agent-unsafe": { "assignable": false, "allow": ["*.form", "*.delete", "finance.*", "settings.*"] },
+"agent-unsafe": { "allow": ["*.form", "*.delete", "finance.*", "settings.*"] },
 "ray":          { "extends": ["sales"], "without": ["agent-unsafe"] }
 ```
 
@@ -257,7 +248,7 @@ AI-governance story is one line of the same grammar that does everything else.
 **9. Plans, tiers, entitlements**
 
 ```json
-"pro-only":  { "assignable": false, "allow": ["reports.*", "api.*", "automations.*"] },
+"pro-only":  { "allow": ["reports.*", "api.*", "automations.*"] },
 "free-seat": { "extends": ["sales"], "without": ["pro-only"] },
 "pro-seat":  { "extends": ["sales"] }
 ```
@@ -350,8 +341,11 @@ human approves that line, governance worked.
 **F2 — Subtractive roles are loaded guns if assigned.**
 `agent-unsafe` is a *positive* list that only subtracts because `without` uses
 it that way. Accidentally assign it and the principal receives every form and
-all of finance. *Resolution:* `assignable: false`, plus a lint — "role is
-referenced only in `without` but is assignable."
+all of finance. *Resolution:* no grammar. Assignment gets the same guard as
+publishing (case 12): the assignment diff renders in concrete actions —
+"assigning `agent-unsafe` to usr_017 → gains `*.form`, `*.delete`,
+`finance.*`" — and the verifier lints any role that is referenced in `without`
+and also assigned. A human approves that diff.
 
 **F3 — A typo'd deny fails silent, and silent means unprotected.**
 `"deny": ["crm.deal.delte"]` matches nothing, forever. *Resolution:*
@@ -361,15 +355,16 @@ asymmetric linting — a dead **allow** is a warning; a dead **deny** is an
 **F4 — `crm` vs `crm.*`.** Solved by convention: ids are leaves, namespaces
 are never actions. Verifier enforces.
 
-**F5 — Orphan actions.** An action matched by no assignable role is deployed
+**F5 — Orphan actions.** An action matched by no role is deployed
 but unreachable — deny-by-default working, but usually a mistake. Verifier
 reports orphans at publish.
 
 **F6 — The charter can escalate itself.** Whoever holds `charter.edit` can
-grant themselves root. The stack's own primitives answer this better than
-special cases: charter edits are actions (audited, Vex-logged), the edit
-action ships composed with an approval fragment, and one assertion pins the
-meta-loop: only `root` may match `charter.*`.
+grant themselves root. The runtime gate is the charter itself: nobody holds
+`charter.*` unless the charter grants it, and edits execute as
+server-authoritative actions — audited, Vex-logged, composed with an approval
+fragment where wanted. The assertion pinning the meta-loop (only `root` may
+match `charter.*`) is CI lint: a tripwire, not the enforcement.
 
 **F7 — Tenant overlays.** Per-tenant roles layer on a base charter with one
 rule: overlays may add roles and extend base roles, **never redefine a base
@@ -391,7 +386,7 @@ opinions:
 - resolves every role at boot / in CI — *if it boots, it's coherent*
 - **dead deny = error**, dead allow = warning, orphan actions reported
 - flags re-allows of an ancestor's deny (F1)
-- flags assignable subtractive roles (F2)
+- flags roles referenced in `without` that are also assigned (F2)
 - enforces id conventions (leaves only) and overlay rules (no shadowing)
 - checks `assert` invariants (case 17, F6)
 - runs the reachability closure per role (nav targets, channels) and reports
@@ -422,40 +417,45 @@ For every temptation, the forwarding address:
 | Cross-role invariants | Verifier `assert` |
 | Version pinning | Artifact library pointers |
 | Tags / metadata predicates | The id namespace |
+| Grant-time shaping (`apply` a patch in a selector) | Refused — mint a variant id (ring 2) |
 
 The charter maps names to selections of actions. Everything else has a home
 that already exists.
 
 ---
 
+## Settled
+
+Decided in review (2026-07-15):
+
+- **No `assignable`.** The grammar is exactly the 2×2 plus the bare-array
+  sugar. `without` and `extends` share one namespace; assigning a subtractive
+  role is guarded by the assignment diff and a verifier lint (F2), not by
+  grammar.
+- **The charter never shapes.** Grant-time patching (`{ "allow": "crm.*",
+  "apply": "readonly" }`) is refused permanently. A variant is a distinct id
+  minted in the library.
+- **Assertions are lint.** The `assert` list is CI tooling, not a security
+  boundary; the runtime gate is the charter itself (F6).
+- **Server functions are endpoints** (`/fns/<name>`), gated by catalog
+  closure like every other endpoint.
+
 ## Open questions
 
 Argue here.
 
-1. **`without` and `extends` share one namespace.** Symmetric and simple, but
-   it is what makes F2 possible — a subtractive set *is* a role. The
-   alternative (a separate top-level `lists` section) kills F2 structurally
-   but adds a concept and breaks the 2×2. Current position: symmetry +
-   `assignable: false`. Is that the right trade?
-
-2. **Glob semantics.** Single `*`, matches across dots, nothing else. Is
+1. **Glob semantics.** Single `*`, matches across dots, nothing else. Is
    there a real case that forces segment-aware matching — and if so, is the
    answer richer globs or better ids?
 
-3. **Principal-specific roles (case 10).** Roles named after users work, but
+2. **Principal-specific roles (case 10).** Roles named after users work, but
    should the charter *encourage* them, or should per-user exceptions be
    assignment-level to keep the charter role-shaped?
 
-4. **The assertion grammar** (case 17, F6). Deliberately sketched, not
+3. **The assertion grammar** (case 17, F6). Deliberately sketched, not
    designed. It lives in verifier config, not the charter — but it wants the
    same discipline: a minimal set of assertion forms and no more. What is
    that set?
 
-5. **Where does the resolved catalog get *shaped*?** This document assumes
-   variants are pre-authored/derived ids. The rejected alternative — a
-   selector that applies a patch (`{ "allow": "crm.*", "apply": "readonly" }`)
-   — is the single most likely growth pressure. Hold the line, or design the
-   joint now?
-
-6. **Naming.** The auth document is a *charter*. The server this all lives in
+4. **Naming.** The auth document is a *charter*. The server this all lives in
    still has no name. (Shelved, not forgotten.)

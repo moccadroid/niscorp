@@ -1,8 +1,8 @@
 import { z } from 'zod';
 import type { ActionDefinition } from '@niscorp/nova';
 import { dealsLayout } from './deals.layout';
-import { listDealsPrism, boardStagesPrism, boardDealsPrism, boardSummaryPrism, moveDealPrism, deleteDealPrism } from './deals.prism';
-import { resultPrism } from '@relay/nova/shared/result.prism';
+import { listDealsPrism, moveDealPrism, deleteDealPrism } from './deals.prism';
+import { dealsBoard, dealsOpenByStage, dealsForecast } from '@relay/api/deals';
 
 // The deals collection — ONE action, two layouts (`$.view`: 'table' | 'board').
 // Navigation sets the initial view (sidebar Deals → table, Pipeline → board; the
@@ -11,7 +11,7 @@ import { resultPrism } from '@relay/nova/shared/result.prism';
 // inactive layout simply isn't rendered. The table view's reads/triggers and the
 // board view's reads/triggers coexist here; `deals-changed` refreshes both.
 export const dealsAction: ActionDefinition = {
-  id: 'deals',
+  id: 'crm.deals',
   title: 'Deals',
   data: {
     view: 'table',
@@ -27,11 +27,12 @@ export const dealsAction: ActionDefinition = {
   },
   layout: dealsLayout,
   endpoints: {
-    load:        { url: '/api/deals/vex', method: 'POST', request: listDealsPrism,    response: resultPrism, target: 'rows' },
+    load:        { url: '/api/deals/vex', method: 'POST', request: listDealsPrism, target: 'rows' },
     remove:      { url: '/api/deals/vex',           method: 'POST', request: deleteDealPrism },
-    loadStages:  { url: '/api/deals/vex', method: 'POST', request: boardStagesPrism,  response: resultPrism, target: 'stages' },
-    loadDeals:   { url: '/api/deals/vex', method: 'POST', request: boardDealsPrism,   response: resultPrism, target: 'deals' },
-    loadSummary: { url: '/api/deals/vex', method: 'POST', request: boardSummaryPrism, response: resultPrism, target: 'summary' },
+    // Board reads take no caller input — plain JSON replays, no prism seam.
+    loadStages:  { url: '/api/deals/vex', method: 'POST', request: { fingerprint: dealsOpenByStage.fingerprint, context: {} }, target: 'stages' },
+    loadDeals:   { url: '/api/deals/vex', method: 'POST', request: { fingerprint: dealsBoard.fingerprint, context: {} }, target: 'deals' },
+    loadSummary: { url: '/api/deals/vex', method: 'POST', request: { fingerprint: dealsForecast.fingerprint, context: {} }, target: 'summary' },
     move:        { url: '/api/deals/vex',           method: 'POST', request: moveDealPrism },
   },
   lifecycle: {
@@ -50,11 +51,11 @@ export const dealsAction: ActionDefinition = {
     { event: 'ui:model', ref: 'search', do: [{ set: 'search', value: '@event.payload' }, { call: 'load' }] },
     { event: 'ui:click', ref: 'sort', do: [{ set: 'sortBy', value: '@event.payload.sortBy' }, { set: 'sortDir', value: '@event.payload.sortDir' }, { call: 'load' }] },
     { event: 'ui:click', ref: 'tab', do: [{ set: 'ownerId', value: '@event.payload' }, { call: 'load' }] },
-    { event: 'ui:click', ref: 'row', do: [{ set: 'highlight_id', value: '@event.payload' }, { push: { action: 'deal', input: { id: '@event.payload' } } }] },
+    { event: 'ui:click', ref: 'row', do: [{ set: 'highlight_id', value: '@event.payload' }, { push: { action: 'crm.deal.view', input: { id: '@event.payload' } } }] },
     { message: 'deselect', do: [{ set: 'highlight_id', value: '' }] },
     { event: 'ui:click', ref: 'menu-open', do: [{ set: 'menuOpenId', value: '@event.payload' }] },
     { event: 'ui:click', ref: 'menu-close', do: [{ set: 'menuOpenId', value: '' }] },
-    { event: 'ui:click', ref: 'row-open', do: [{ set: 'highlight_id', value: '@event.payload.deal_id' }, { push: { action: 'deal', input: { id: '@event.payload.deal_id' } } }, { set: 'menuOpenId', value: '' }] },
+    { event: 'ui:click', ref: 'row-open', do: [{ set: 'highlight_id', value: '@event.payload.deal_id' }, { push: { action: 'crm.deal.view', input: { id: '@event.payload.deal_id' } } }, { set: 'menuOpenId', value: '' }] },
     // Edit opens the deal form seeded from the row: the seeded `id` makes the
     // `upsert` write an update, the rest seeds the record's fields.
     {
@@ -62,7 +63,7 @@ export const dealsAction: ActionDefinition = {
       ref: 'row-edit',
       do: [
         { set: 'menuOpenId', value: '' },
-        { push: { action: 'deal.form', canvas: 'modal', with: ['modal'], input: { modalTitle: 'Edit deal', confirmLabel: 'Save', id: '@event.payload.deal_id', title: '@event.payload.title', company: '@event.payload.company_id', stage: '@event.payload.stage_id', contact: '@event.payload.primary_contact_id', value: '@event.payload.value', close_date: '@event.payload.close_date' } } },
+        { push: { action: 'crm.deal.form', canvas: 'modal', with: ['modal'], input: { modalTitle: 'Edit deal', confirmLabel: 'Save', id: '@event.payload.deal_id', title: '@event.payload.title', company: '@event.payload.company_id', stage: '@event.payload.stage_id', contact: '@event.payload.primary_contact_id', value: '@event.payload.value', close_date: '@event.payload.close_date' } } },
       ],
     },
     {
@@ -77,7 +78,7 @@ export const dealsAction: ActionDefinition = {
     },
     { message: 'confirm-delete', do: [{ call: 'remove', onSuccess: [{ emit: { channel: 'deals-changed' } }, { set: 'pendingDeleteId', value: '' }] }] },
     // ── board view ──
-    { event: 'ui:click', ref: 'card', do: [{ push: { action: 'deal', input: { id: '@event.payload' } } }] },
+    { event: 'ui:click', ref: 'card', do: [{ push: { action: 'crm.deal.view', input: { id: '@event.payload' } } }] },
     {
       event: 'ui:drop',
       ref: 'move-deal',
@@ -90,7 +91,7 @@ export const dealsAction: ActionDefinition = {
     // ── shared ──
     // The topbar's + New (and the Pipeline view) open the deal form bare — no
     // `id`, so the `upsert` write inserts.
-    { message: 'new', do: [{ push: { action: 'deal.form', canvas: 'modal', with: ['modal'] } }] },
+    { message: 'new', do: [{ push: { action: 'crm.deal.form', canvas: 'modal', with: ['modal'] } }] },
     // A deal changed elsewhere → refresh BOTH views' data.
     { message: 'deals-changed', do: [{ call: 'load' }, { call: 'loadStages' }, { call: 'loadDeals' }, { call: 'loadSummary' }] },
   ],

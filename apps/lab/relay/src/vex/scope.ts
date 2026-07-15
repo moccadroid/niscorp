@@ -1,26 +1,40 @@
 import type { ScopePolicy } from '@niscorp/vex';
 
-// Server-side, LLM-invisible access control. Two roles per table (see the Vex
-// scope docs): `match` = RLS WHERE/pin, `set` = identity stamp on INSERT. Both
-// are applied by the engine AFTER the DSL is authored, so a generated/injected
-// mutation can't forge them.
+// Server-side, LLM-invisible access control — ring 3, the unforgeable floor.
+// Applied by the engine AFTER the DSL is authored, so a generated/injected
+// request can't reference, forge, or omit it. `default: 'deny'` makes every
+// entity an explicit decision: an unlisted entity does not read or write.
 //
-// v1 is single-user with open reads (`default: 'allow'`, no `read` rules → every
-// query runs unfiltered). The one rule we carry is a WRITE `set`: every created
-// row is stamped with its creator. owner_id / assignee_id are server-set from
-// the signed-in user — never client-supplied. When Relay grows tenants/roles,
-// add `read`/`write` `match` rules here (e.g. account_id) and reads + writes get
-// scoped with no change to the views, actions, or mutation entries.
-//
-// Note: "my deals" / "my tasks" filter by the current user via a `$context` ref
-// in the query itself, NOT scope — context is "a subset I'm allowed to see
-// anyway"; scope is the hard, unforgeable boundary.
+// The demo policy: CRM records are team-shared (read-open, creator-stamped
+// writes); tasks are personal (reads AND mutations pinned to the assignee —
+// the ring-3 mechanism proof, not a privacy measure; team-visible is the
+// one-line flip to `read: []`). `$context.userId` filters in queries remain
+// view intent — this policy is the floor under them.
 export const scopePolicy: ScopePolicy = {
-  default: 'allow',
+  default: 'deny',
   entities: {
-    contacts: { write: [{ set: 'owner_id', to: 'userId' }] },
-    companies: { write: [{ set: 'owner_id', to: 'userId' }] },
-    deals: { write: [{ set: 'owner_id', to: 'userId' }] },
-    tasks: { write: [{ set: 'assignee_id', to: 'userId' }] },
+    // Reference data — read-open, nothing writes it.
+    users: { read: [] },
+    pipelines: { read: [] },
+    stages: { read: [] },
+    products: { read: [] },
+    deal_products: { read: [] },
+    lists: { read: [] },
+    list_members: { read: [] },
+    actions: { read: [] },
+    // Team-shared CRM records — read-open, creator stamped on INSERT.
+    companies: { read: [], write: [{ set: 'owner_id', to: 'userId' }] },
+    contacts: { read: [], write: [{ set: 'owner_id', to: 'userId' }] },
+    deals: { read: [], write: [{ set: 'owner_id', to: 'userId' }] },
+    activities: { read: [] },
+    // Personal — reads filtered and mutations pinned to the assignee; the
+    // assignee is stamped server-side on INSERT, never client-supplied.
+    tasks: {
+      read: [{ match: 'assignee_id', to: 'userId' }],
+      write: [
+        { set: 'assignee_id', to: 'userId' },
+        { match: 'assignee_id', to: 'userId' },
+      ],
+    },
   },
 };

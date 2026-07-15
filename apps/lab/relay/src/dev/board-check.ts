@@ -2,7 +2,7 @@
 // cards, a card click opens the deal detail, and a card "drop" fires the new
 // `ui:drop` event into the `moveDeal` seam (honest no-op — board reloads
 // unchanged). No grouping code: the layout groups cards into columns by stage.
-import { shell } from '../nova/shell';
+import { shell } from './check-shell';
 import { getVexRuntime } from '../vex/runtime';
 
 const settle = (ms = 200): Promise<void> => new Promise((r) => setTimeout(r, ms));
@@ -30,7 +30,7 @@ const main = async (): Promise<void> => {
   shell.dispatch({ type: 'ui:click', ref: 'nav-pipeline' });
   await settle(320);
   // The board is now the `deals` action in board view (one action, two layouts).
-  checks.push([`pipeline board mounted (got ${String(mainAction())} view=${String(mainData()?.['view'])})`, mainAction() === 'deals' && mainData()?.['view'] === 'board']);
+  checks.push([`pipeline board mounted (got ${String(mainAction())} view=${String(mainData()?.['view'])})`, mainAction() === 'crm.deals' && mainData()?.['view'] === 'board']);
   const stages = board().stages ?? [];
   const deals = board().deals ?? [];
   checks.push([`columns loaded (got ${stages.length})`, stages.length > 0]);
@@ -51,13 +51,13 @@ const main = async (): Promise<void> => {
   const mr = active !== undefined ? shell.getRuntime(active.id) : undefined;
   const view = (mr?.getData() ?? {}) as Record<string, unknown>;
   const rec = (view['record'] ?? {}) as Record<string, unknown>;
-  checks.push([`card drills into the deal workspace (got ${String(mr?.definition.id)})`, mr?.definition.id === 'deal']);
+  checks.push([`card drills into the deal workspace (got ${String(mr?.definition.id)})`, mr?.definition.id === 'crm.deal.view']);
   checks.push([`deal loaded (${String(rec['title'])}, prob ${String(rec['prob'])})`, rec['deal_id'] === firstDeal && rec['prob'] !== undefined]);
   checks.push([`workspace has the activity feed (got ${(view['activities'] as unknown[] | undefined)?.length ?? 0})`, Array.isArray(view['activities']) && (view['activities'] as unknown[]).length > 0]);
   // The chip's Back pops the deal off main and returns to the board.
   shell.pop('main');
   await settle(80);
-  checks.push([`Back returns to the board (got ${String(mainAction())})`, mainAction() === 'deals']);
+  checks.push([`Back returns to the board (got ${String(mainAction())})`, mainAction() === 'crm.deals']);
 
   // A drop fires ui:drop → `deal.moveStage` persists, the board reloads, and the
   // card lands in the target column (the DropZone carries the real stage_id).

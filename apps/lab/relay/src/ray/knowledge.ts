@@ -13,16 +13,17 @@
 import type { Producer } from '@niscorp/cortex';
 import { collectChannels } from '@niscorp/nova';
 import { getConfigJsonSchema } from '@niscorp/prism';
-import { CURRENT_DATE } from '../vex/runtime';
+import { todayStr } from '../vex/runtime';
 import { ACTIONS } from '../nova/shell/actions';
 
-// The app's "now" — the seed's fixed reference date, never the wall clock.
+// The app's "now" — the real current date; the seed generates its data
+// relative to the same day.
 export const today = ((): string =>
-  `Today's date is ${CURRENT_DATE}. The demo data clusters around this FIXED reference date — resolve date-relative requests ("overdue", "due this week") against it, never the wall clock.`) satisfies Producer;
+  `Today's date is ${todayStr()}. The demo data is generated relative to this date — resolve date-relative requests ("overdue", "due this week") against it.`) satisfies Producer;
 
 // What the endpoint evaluator folds into every request source.
 export const ambientContext = ((): string =>
-  'Ambient request context: when an endpoint request is evaluated, $.userId (the signed-in user) and $.today (the reference date) are folded into the source — request bindings may reference them directly (e.g. a date comparison binds { "$ref": "$.today" }).') satisfies Producer;
+  'Ambient request context: when an endpoint request is evaluated, $.userId (the signed-in user) and $.today (the current date) are folded into the source — request bindings may reference them directly (e.g. a date comparison binds { "$ref": "$.today" }).') satisfies Producer;
 
 // House style for GENERATED layouts — one source for the architect and the
 // visualize tool's layout runs. POLICY: the one legitimately authored

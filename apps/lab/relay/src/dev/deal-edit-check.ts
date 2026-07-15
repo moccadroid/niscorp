@@ -4,7 +4,7 @@
 // form carries an id), and asserts the record re-read reflects the new value AS A
 // NUMBER and the new stage. Run:
 //   pnpm --filter relay exec tsx src/dev/deal-edit-check.ts
-import { shell } from '../nova/shell';
+import { shell } from './check-shell';
 import { getVexRuntime } from '../vex/runtime';
 
 const settle = (ms = 220): Promise<void> => new Promise((r) => setTimeout(r, ms));
@@ -32,7 +32,7 @@ const main = async (): Promise<void> => {
   await settle(320);
   shell.dispatch({ type: 'ui:click', ref: 'card', payload: deal.id });
   await settle(300);
-  checks.push([`deal workspace drilled on main (got ${String(mainId())})`, mainId() === 'deal']);
+  checks.push([`deal workspace drilled on main (got ${String(mainId())})`, mainId() === 'crm.deal.view']);
   const rec = mainData()['record'] as Record<string, unknown>;
   checks.push([`record value is a number (got ${typeof rec?.['value']} ${String(rec?.['value'])})`, typeof rec?.['value'] === 'number']);
   checks.push([`record carries the raw stage_id (got ${String(rec?.['stage_id'])})`, rec?.['stage_id'] === deal.stage_id]);
@@ -42,7 +42,7 @@ const main = async (): Promise<void> => {
   // upsert decides insert/update by that id).
   shell.dispatch({ type: 'ui:click', ref: 'edit' });
   await settle(300);
-  checks.push([`Edit opens the deal form (got ${String(modalId())})`, modalId() === 'deal.form']);
+  checks.push([`Edit opens the deal form (got ${String(modalId())})`, modalId() === 'crm.deal.form']);
   checks.push([`form is in edit mode (seeded id=${String(modalData()['id'])})`, modalData()['id'] === deal.id]);
   const seeded = modalData();
   checks.push([`form seeded value as a number (got ${typeof seeded['value']} ${String(seeded['value'])})`, typeof seeded['value'] === 'number' && seeded['value'] === rec['value']]);
@@ -56,7 +56,7 @@ const main = async (): Promise<void> => {
   // Save pops the form (modal empties); the drilled deal on main re-reads via
   // `deals-changed` (suspended → resumed → mount), so it's current underneath.
   checks.push([`save closes the form (modal empty: ${String(shell.getCanvasState('modal').active === undefined)})`, shell.getCanvasState('modal').active === undefined]);
-  checks.push([`the deal workspace is still on main (got ${String(mainId())})`, mainId() === 'deal']);
+  checks.push([`the deal workspace is still on main (got ${String(mainId())})`, mainId() === 'crm.deal.view']);
 
   // The DB row reflects the edit, value still numeric.
   const after = (await rt.db.query('SELECT value, stage_id FROM deals WHERE id = $1', [deal.id])).rows[0] as { value: unknown; stage_id: string };

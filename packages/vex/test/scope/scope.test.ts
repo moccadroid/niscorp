@@ -191,7 +191,10 @@ describe('discoverEntities', () => {
     };
     const entities = discoverEntities(dsl);
     expect(entities.has('orders')).toBe(true);
-    expect(entities.has('sub')).toBe(true);
+    // The alias is a derived relation, not a table — it must NOT surface as
+    // an entity (under default-deny it would be undeniable-to-list). The
+    // subquery's real table is what gets scoped.
+    expect(entities.has('sub')).toBe(false);
   });
 
   it('ignores non-entity strings (no dot)', () => {
@@ -351,5 +354,54 @@ describe('applyScope', () => {
     };
     applyScope(original, new Set(['users']), policy);
     expect(original).toEqual(originalCopy);
+  });
+});
+
+// ───────────────────────────────────────────────────────────────
+// Subquery aliases are derived relations, not entities
+// ───────────────────────────────────────────────────────────────
+
+describe('discoverEntities — subquery aliases', () => {
+  // The sidebar-counts shape: per-table COUNT(*) subqueries cross-joined,
+  // outer fields referencing the ALIASES (c.n / t.n). The aliases must not
+  // surface as entities; the inner real tables must.
+  const counts: Query = {
+    from: [
+      { as: 'c', query: { from: ['contacts'], aggregate: { n: { count: '*' } } } },
+      { as: 't', query: { from: ['tasks'], aggregate: { n: { count: '*' } }, filter: { eq: ['tasks.done', false] } } },
+    ],
+    fields: ['c.n', 't.n'],
+  };
+
+  it('collects inner tables, not the aliases', () => {
+    const entities = discoverEntities(counts);
+    expect(entities.has('contacts')).toBe(true);
+    expect(entities.has('tasks')).toBe(true);
+    expect(entities.has('c')).toBe(false);
+    expect(entities.has('t')).toBe(false);
+  });
+
+  it('an alias reference survives default-deny scope; the inner table is still scoped', () => {
+    const policy: ScopePolicy = {
+      default: 'deny',
+      entities: {
+        contacts: { read: [] },
+        tasks: { read: [{ match: 'assignee_id', to: 'userId' }] },
+      },
+    };
+    const scoped = applyScope(counts, discoverEntities(counts), policy);
+    // The tasks subquery gained the RLS filter; nothing threw on 'c'/'t'.
+    const taskSource = scoped.from[1];
+    if (typeof taskSource === 'string') throw new Error('expected subquery source');
+    expect(JSON.stringify(taskSource.query.filter)).toContain('assignee_id');
+  });
+
+  it('still denies a real unlisted entity at the same level as an alias', () => {
+    const mixed: Query = {
+      from: ['orders', { as: 'c', query: { from: ['contacts'], aggregate: { n: { count: '*' } } } }],
+      fields: ['orders.id', 'c.n'],
+    };
+    const policy: ScopePolicy = { default: 'deny', entities: { contacts: { read: [] } } };
+    expect(() => applyScope(mixed, discoverEntities(mixed), policy)).toThrow(VexScopeError);
   });
 });

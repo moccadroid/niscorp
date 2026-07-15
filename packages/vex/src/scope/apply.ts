@@ -57,17 +57,21 @@ const readFiltersFor = (entity: string, rule: ScopeEntityRule | undefined, def: 
 // Public API
 // ───────────────────────────────────────────────────────────────
 
-export const applyScope = (dsl: Query, entities: Set<string>, policy: ScopePolicy): Query => {
-  const scopeFilters: Filter[] = [];
-  for (const entity of entities) {
-    scopeFilters.push(...readFiltersFor(entity, policy.entities[entity], policy.default));
-  }
-
-  // Recurse into subquery sources.
+// RLS filters attach at the query level whose `from` actually lists the
+// table — a `tasks` rule lands inside the subquery that reads tasks, never
+// on an outer query that only sees the subquery's alias.
+const applyScopeLevel = (dsl: Query, policy: ScopePolicy): Query => {
   const newFrom = dsl.from.map((source) => {
     if (typeof source === 'string') return source;
-    return { as: source.as, query: applyScope(source.query, entities, policy) };
+    return { as: source.as, query: applyScopeLevel(source.query, policy) };
   });
+
+  const scopeFilters: Filter[] = [];
+  for (const source of dsl.from) {
+    if (typeof source === 'string') {
+      scopeFilters.push(...readFiltersFor(source, policy.entities[source], policy.default));
+    }
+  }
 
   const mergedFilter = andMerge(dsl.filter, scopeFilters);
 
@@ -76,4 +80,15 @@ export const applyScope = (dsl: Query, entities: Set<string>, policy: ScopePolic
     from: newFrom,
     ...(mergedFilter !== undefined ? { filter: mergedFilter } : {}),
   };
+};
+
+export const applyScope = (dsl: Query, entities: Set<string>, policy: ScopePolicy): Query => {
+  // Access check over every entity discovered in the WHOLE tree — a denied
+  // entity anywhere denies the query, wherever it hides. The returned
+  // filters are discarded here; filters attach per level below.
+  for (const entity of entities) {
+    readFiltersFor(entity, policy.entities[entity], policy.default);
+  }
+
+  return applyScopeLevel(dsl, policy);
 };

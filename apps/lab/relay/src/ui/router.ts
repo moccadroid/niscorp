@@ -47,7 +47,20 @@ export const installRouter = (shell: Shell): (() => void) => {
       const viewChanged = route?.view !== undefined && root?.view !== route.view;
       if (root?.action !== screen || viewChanged) {
         shell.clear('main');
-        shell.push('main', screen, route?.view !== undefined ? { view: route.view } : undefined);
+        // The shell only holds the principal's catalog — a deep link to an
+        // ungranted screen throws UnknownActionError. Fall back down the
+        // chain: home, then the lock screen; a bare canvas is the floor.
+        for (const candidate of [screen, 'home', 'auth.login']) {
+          try {
+            shell.push('main', candidate, candidate === screen && route?.view !== undefined ? { view: route.view } : undefined);
+            if (candidate === screen) shell.publish(route?.channel ?? `screen-${screen}`);
+            else if (candidate === 'home') shell.publish('screen-home');
+            return;
+          } catch {
+            /* not granted — try the next */
+          }
+        }
+        return;
       }
       shell.publish(route?.channel ?? `screen-${screen}`);
     } finally {

@@ -3,7 +3,6 @@ import type { ActionDefinition } from '@niscorp/nova';
 import { contactLayout } from './contact.layout';
 import { contactByIdPrism, contactDealsPrism, contactTasksPrism, contactActivityPrism } from './contact.prism';
 import { setDoneTaskPrism } from '../task/tasks.prism';
-import { resultPrism } from '@relay/nova/shared/result.prism';
 
 // Pushed onto the `detail` canvas with `input: { id }` (from a contacts row, a
 // company's people list, or a deep URL). On mount it loads the contact by id
@@ -13,7 +12,7 @@ import { resultPrism } from '@relay/nova/shared/result.prism';
 // swaps the detail. Order matters: replacing the `detail` pops THIS action and
 // aborts the rest of the trigger, so the self-canvas replace must come LAST.
 export const contactAction: ActionDefinition = {
-  id: 'contact',
+  id: 'crm.contact.view',
   // Stack-nav label — the chip + its depth menu read `instance.title`.
   title: '{{$.record.name}}',
   data: { id: '', record: {}, deals: [], tasks: [], activity: [], loading: true, toggleId: '', toggleDone: false, panelSize: 'wide' },
@@ -22,10 +21,10 @@ export const contactAction: ActionDefinition = {
   // tasks and recent activity — the same section structure as the company profile
   // and the deal workspace.
   endpoints: {
-    load:         { url: '/api/contacts/vex', method: 'POST', request: contactByIdPrism,    response: resultPrism, target: 'record' },
-    loadDeals:    { url: '/api/contacts/vex', method: 'POST', request: contactDealsPrism,   response: resultPrism, target: 'deals' },
-    loadTasks:    { url: '/api/contacts/vex', method: 'POST', request: contactTasksPrism,   response: resultPrism, target: 'tasks' },
-    loadActivity: { url: '/api/contacts/vex', method: 'POST', request: contactActivityPrism, response: resultPrism, target: 'activity' },
+    load:         { url: '/api/contacts/vex', method: 'POST', request: contactByIdPrism, target: 'record' },
+    loadDeals:    { url: '/api/contacts/vex', method: 'POST', request: contactDealsPrism, target: 'deals' },
+    loadTasks:    { url: '/api/contacts/vex', method: 'POST', request: contactTasksPrism, target: 'tasks' },
+    loadActivity: { url: '/api/contacts/vex', method: 'POST', request: contactActivityPrism, target: 'activity' },
     setDone:      { url: '/api/tasks/vex',              method: 'POST', request: setDoneTaskPrism },
   },
   lifecycle: { mount: [{ call: 'load', onSuccess: [{ set: 'loading', value: false }] }, { call: 'loadDeals' }, { call: 'loadTasks' }, { call: 'loadActivity' }] },
@@ -43,7 +42,7 @@ export const contactAction: ActionDefinition = {
       do: [
         {
           push: {
-            action: 'contact.form',
+            action: 'crm.contact.form',
             canvas: 'modal',
             with: ['modal'],
             input: { modalTitle: 'Edit contact', confirmLabel: 'Save', id: '$.record.contact_id', name: '$.record.name', email: '$.record.email', phone: '$.record.phone', title: '$.record.title', company: '$.record.company.company_id' },
@@ -58,8 +57,8 @@ export const contactAction: ActionDefinition = {
     { message: 'tasks-changed', do: [{ call: 'loadTasks' }] },
     // Cross-links push onto THIS canvas (the stack), so the current record stays
     // beneath and Back returns to it — `main` is untouched.
-    { event: 'ui:click', ref: 'open-deal', do: [{ push: { action: 'deal', input: { id: '@event.payload' } } }] },
-    { event: 'ui:click', ref: 'open-company', do: [{ push: { action: 'company', input: { id: '@event.payload' } } }] },
+    { event: 'ui:click', ref: 'open-deal', do: [{ push: { action: 'crm.deal.view', input: { id: '@event.payload' } } }] },
+    { event: 'ui:click', ref: 'open-company', do: [{ push: { action: 'crm.company.view', input: { id: '@event.payload' } } }] },
   ],
 };
 

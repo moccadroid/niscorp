@@ -5,7 +5,7 @@
 // input prism bridges form → columns, plus DB-defaulted id and the closed-grammar
 // gates. Run: pnpm --filter relay exec tsx src/dev/mutation-check.ts
 import { evaluate } from '@niscorp/prism';
-import { shell } from '../nova/shell';
+import { shell } from './check-shell';
 import { getVexRuntime } from '../vex/runtime';
 import { executeMutation, MutationDefinitionSchema } from '../vex/mutations';
 import { scopePolicy } from '../vex/scope';

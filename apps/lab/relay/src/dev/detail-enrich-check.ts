@@ -3,7 +3,7 @@
 // the RIGHT rows (a shape-cache collision would silently serve another query's
 // plan) by cross-checking the loaded slots against PGlite. Run:
 //   pnpm --filter relay exec tsx src/dev/detail-enrich-check.ts
-import { shell } from '../nova/shell';
+import { shell } from './check-shell';
 import { getVexRuntime } from '../vex/runtime';
 
 const settle = (ms = 300): Promise<void> => new Promise((r) => setTimeout(r, ms));
@@ -13,6 +13,10 @@ const detailRt = (): ReturnType<typeof shell.getRuntime> => {
 };
 const view = (): Record<string, unknown> => ((detailRt()?.getData() ?? {}) as Record<string, unknown>);
 const openContact = async (id: string): Promise<void> => {
+  // Only the ACTIVE action reacts — a suspended list ignores events. Walk
+  // Back to the list first, exactly like a user would.
+  while (shell.getCanvasState('main').stack.length > 1) shell.pop('main');
+  await settle(120);
   shell.dispatch({ type: 'ui:click', ref: 'row', payload: id });
   await settle(340);
 };
@@ -35,7 +39,7 @@ const main = async (): Promise<void> => {
   // ── Activity slot: the contact with the most activity ──
   const cAct = await one(`SELECT contact_id AS id FROM activities WHERE contact_id IS NOT NULL GROUP BY contact_id ORDER BY count(*) DESC LIMIT 1`);
   await openContact(cAct!);
-  checks.push([`contact opened on main (got ${String(detailRt()?.definition.id)})`, detailRt()?.definition.id === 'contact']);
+  checks.push([`contact opened on main (got ${String(detailRt()?.definition.id)})`, detailRt()?.definition.id === 'crm.contact.view']);
   const acts = (view()['activity'] ?? []) as Record<string, unknown>[];
   const dbActs = await count('SELECT count(*)::int AS n FROM activities WHERE contact_id=$1', [cAct]);
   checks.push([`activity matches the DB (${acts.length} = min(${dbActs},12)) and is non-empty`, acts.length === Math.min(dbActs, 12) && acts.length > 0]);
@@ -46,7 +50,7 @@ const main = async (): Promise<void> => {
   const aDeals = (view()['deals'] ?? []) as unknown[];
   const aTasks = (view()['tasks'] ?? []) as unknown[];
   checks.push([`its deals slot (any status) equals the DB and is non-empty — the activity's source is visible`, aDeals.length === (await count('SELECT count(*)::int AS n FROM deals WHERE primary_contact_id=$1', [cAct])) && aDeals.length > 0]);
-  checks.push([`its tasks slot equals the DB`, aTasks.length === (await count('SELECT count(*)::int AS n FROM tasks WHERE contact_id=$1 AND done=false', [cAct]))]);
+  checks.push([`its tasks slot equals the DB`, aTasks.length === (await count("SELECT count(*)::int AS n FROM tasks WHERE contact_id=$1 AND done=false AND assignee_id='usr_001'", [cAct]))]);
 
   // ── Deals slot: the contact who is primary on the most deals (any status) ──
   const cDeal = await one(`SELECT primary_contact_id AS id FROM deals WHERE primary_contact_id IS NOT NULL GROUP BY primary_contact_id ORDER BY count(*) DESC LIMIT 1`);
@@ -69,10 +73,10 @@ const main = async (): Promise<void> => {
   checks.push([`contact panel renders with no error nodes (${errs.join('; ') || 'none'})`, errs.length === 0]);
 
   // ── Tasks slot: the contact with the most open tasks ──
-  const cTask = await one(`SELECT contact_id AS id FROM tasks WHERE contact_id IS NOT NULL AND done=false GROUP BY contact_id ORDER BY count(*) DESC LIMIT 1`);
+  const cTask = await one(`SELECT contact_id AS id FROM tasks WHERE contact_id IS NOT NULL AND done=false AND assignee_id='usr_001' GROUP BY contact_id ORDER BY count(*) DESC LIMIT 1`);
   await openContact(cTask!);
   const tasks = (view()['tasks'] ?? []) as Record<string, unknown>[];
-  const dbTasks = await count('SELECT count(*)::int AS n FROM tasks WHERE contact_id=$1 AND done=false', [cTask]);
+  const dbTasks = await count("SELECT count(*)::int AS n FROM tasks WHERE contact_id=$1 AND done=false AND assignee_id='usr_001'", [cTask]);
   checks.push([`open tasks match the DB (${tasks.length} = min(${dbTasks},20)) and is non-empty`, tasks.length === Math.min(dbTasks, 20) && tasks.length > 0]);
 
   // ── Company profile: People + Open deals (no activity feed — activity lives on
@@ -82,7 +86,7 @@ const main = async (): Promise<void> => {
   await settle(320);
   shell.dispatch({ type: 'ui:click', ref: 'row', payload: company });
   await settle(340);
-  checks.push([`company opened on main (got ${String(detailRt()?.definition.id)})`, detailRt()?.definition.id === 'company']);
+  checks.push([`company opened on main (got ${String(detailRt()?.definition.id)})`, detailRt()?.definition.id === 'crm.company.view']);
   const coDeals = (view()['deals'] ?? []) as Record<string, unknown>[];
   const dbCoDeals = await count("SELECT count(*)::int AS n FROM deals WHERE company_id=$1 AND status='open'", [company]);
   checks.push([`company open deals match the DB (${coDeals.length} = ${dbCoDeals})`, coDeals.length === dbCoDeals && coDeals.length > 0]);

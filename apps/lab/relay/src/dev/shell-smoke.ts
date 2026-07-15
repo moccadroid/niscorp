@@ -8,7 +8,8 @@
 //     fragment chrome (Overlay + .rl-dialog) wrapped around the action's form
 //     (Inputs + Selects), and a fragment id can't be pushed as an action.
 // Run with `pnpm --filter relay shell-smoke`.
-import { shell, ACTIONS } from '../nova/shell';
+import { shell } from './check-shell';
+import { ACTIONS } from '../nova/shell';
 
 type Node = { type?: string; name?: string; message?: string; children?: unknown };
 
@@ -64,7 +65,7 @@ const main = async () => {
 
   // Push the form `with: ['modal']` — the fragment wraps it in dialog chrome.
   // company.form exercises the modal fragment wrapping a form's inputs.
-  shell.push('modal', 'company.form', undefined, ['modal']);
+  shell.push('modal', 'crm.company.form', undefined, ['modal']);
   await new Promise((r) => setTimeout(r, 0));
 
   const modal = inspect(shell.flattenRenderTree(shell.getCanvasRenderTree('modal')));

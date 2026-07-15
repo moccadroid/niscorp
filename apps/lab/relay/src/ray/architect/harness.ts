@@ -3,7 +3,8 @@ import { flattenSchemaIssues } from '@niscorp/cortex';
 import { evaluate } from '@niscorp/prism';
 import { buildRegistry } from '../../ui';
 import { vexFetch } from '../../vex/http';
-import { CURRENT_USER_ID, CURRENT_DATE } from '../../vex/runtime';
+import { todayStr } from '../../vex/runtime';
+import { identity } from '../../auth';
 import { catalogEntries } from '../catalog';
 import { knownChannels } from '../knowledge';
 
@@ -44,7 +45,7 @@ const transform = (config: unknown, source: unknown): unknown =>
   evaluate(
     config as Parameters<typeof evaluate>[0],
     (source !== null && typeof source === 'object' && !Array.isArray(source)
-      ? { ...(source as Record<string, unknown>), userId: CURRENT_USER_ID, today: CURRENT_DATE }
+      ? { ...(source as Record<string, unknown>), userId: identity()?.userId ?? 'anonymous', today: todayStr() }
       : source) as Parameters<typeof evaluate>[1],
   );
 

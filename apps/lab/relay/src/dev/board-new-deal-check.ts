@@ -3,7 +3,7 @@
 // engine (open, real company/stage/owner), announce `deals-changed` (the board
 // listens), then re-read its cards + columns and assert the new deal is there and
 // lands in a column. Run: pnpm --filter relay exec tsx src/dev/board-new-deal-check.ts
-import { shell } from '../nova/shell';
+import { shell } from './check-shell';
 import { getVexRuntime } from '../vex/runtime';
 import { executeMutation } from '../vex/mutations';
 import { scopePolicy } from '../vex/scope';

@@ -8,7 +8,7 @@
 // Run: pnpm --filter relay exec tsx src/dev/devtools-check.ts
 import { auditAction } from '@niscorp/nova';
 import type { ActionDefinition, PublicActionRuntime, RenderNode } from '@niscorp/nova';
-import { shell } from '../nova/shell';
+import { shell } from './check-shell';
 import { getVexRuntime } from '../vex/runtime';
 import { classifyIssue } from '../nova-devtools/core/audit-classify';
 import { setDevtoolsEnabled } from '../nova-devtools/core/flag';
@@ -162,7 +162,7 @@ const main = async (): Promise<void> => {
   await settle();
   checks.push(['off again: devtools canvas cleared', shell.getCanvasState('devtools').stack.length === 0]);
   checks.push(['off again: trace buffer frozen', devtoolsLog.entries().length === frozen]);
-  checks.push(['off again: navigation still works', shell.getCanvasState('main').active?.definitionId === 'contacts']);
+  checks.push(['off again: navigation still works', shell.getCanvasState('main').active?.definitionId === 'crm.contacts']);
 
   let ok = true;
   for (const [label, pass] of checks) {

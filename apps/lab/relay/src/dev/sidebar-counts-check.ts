@@ -3,7 +3,7 @@
 //    `$.counts.*` with scalar numbers,
 //  - the NavItem `count` prop, bound to `$.counts.*`, resolves to that number
 //    and renders with no validation error.
-import { shell } from '../nova/shell';
+import { shell } from './check-shell';
 import { getVexRuntime } from '../vex/runtime';
 
 const settle = (ms = 80): Promise<void> => new Promise((r) => setTimeout(r, ms));

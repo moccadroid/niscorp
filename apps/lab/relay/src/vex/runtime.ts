@@ -89,12 +89,8 @@ export const getVexRuntime = (): Promise<VexRuntime> => {
   return runtimePromise;
 };
 
-// The signed-in demo user. v1 is single-identity; this is the value that
-// feeds $context.userId for "my …" queries and, later, the scope seam.
-export const CURRENT_USER_ID = 'usr_001';
-
-// "Now" for the app, as a date. The seed is deterministic around a FIXED
-// reference (see seed.ts `TODAY`), so date-relative reads (overdue tasks) must
-// compare against that same day, not the wall clock. Keep this in sync with the
-// seed's reference date. The reader injects it as `$.today`.
-export const CURRENT_DATE = '2026-06-13';
+// "Now" for the app, as a date (YYYY-MM-DD), computed per call — never a
+// frozen constant. The seed generates its dataset relative to the same day
+// (see seed.ts `TODAY`), so overdue/today/upcoming stay coherent with the
+// wall clock. Injected into request sources as `$.today`.
+export const todayStr = (): string => new Date().toISOString().slice(0, 10);

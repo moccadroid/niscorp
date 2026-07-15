@@ -3,7 +3,7 @@
 //  - a screen opens as a QUICKVIEW on the modal canvas (not a main navigation),
 //  - the quickview's Open-fullscreen navigates main to that action carrying its
 //    already-loaded data.
-import { shell } from '../nova/shell';
+import { shell } from './check-shell';
 import { getVexRuntime } from '../vex/runtime';
 
 const settle = (ms = 120): Promise<void> => new Promise((r) => setTimeout(r, ms));
@@ -41,13 +41,13 @@ const main = async (): Promise<void> => {
   await search('deals');
   await enter();
   const qv = actionOf('modal');
-  checks.push([`screen opens as a quickview on the modal (got ${String(qv)})`, qv === 'deals']);
+  checks.push([`screen opens as a quickview on the modal (got ${String(qv)})`, qv === 'crm.deals']);
   checks.push([`quickview loaded its rows (got ${rows('modal').length})`, rows('modal').length > 0]);
 
   // Open fullscreen → main shows the action, carrying the rows.
   shell.dispatch({ type: 'ui:click', ref: 'fullscreen' });
   await settle();
-  checks.push([`fullscreen navigates main (got ${String(actionOf('main'))})`, actionOf('main') === 'deals']);
+  checks.push([`fullscreen navigates main (got ${String(actionOf('main'))})`, actionOf('main') === 'crm.deals']);
   checks.push([`fullscreen carried the rows (got ${rows('main').length})`, rows('main').length > 0]);
 
   let ok = true;

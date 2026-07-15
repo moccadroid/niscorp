@@ -2,7 +2,6 @@ import { z } from 'zod';
 import type { ActionDefinition } from '@niscorp/nova';
 import { tasksLayout } from './tasks.layout';
 import { listTasksPrism, setDoneTaskPrism, deleteTaskPrism } from './tasks.prism';
-import { resultPrism } from '@relay/nova/shared/result.prism';
 
 // The tasks screen — now a full management surface. `tasks.mine` is scoped by
 // the `$.scope` tab (Open / Overdue / Done / All); search (`$.search`) and the table's
@@ -11,7 +10,7 @@ import { resultPrism } from '@relay/nova/shared/result.prism';
 // then removes). Every write announces `tasks-changed` so this list, the deal
 // modal, the contact panel and the sidebar badge all re-read.
 export const tasksAction: ActionDefinition = {
-  id: 'tasks',
+  id: 'tasks.manage',
   title: 'Tasks',
   data: {
     search: '',
@@ -28,7 +27,7 @@ export const tasksAction: ActionDefinition = {
   },
   layout: tasksLayout,
   endpoints: {
-    load:    { url: '/api/tasks/vex', method: 'POST', request: listTasksPrism,   response: resultPrism, target: 'rows' },
+    load:    { url: '/api/tasks/vex', method: 'POST', request: listTasksPrism, target: 'rows' },
     setDone: { url: '/api/tasks/vex',           method: 'POST', request: setDoneTaskPrism },
     remove:  { url: '/api/tasks/vex',           method: 'POST', request: deleteTaskPrism },
   },
@@ -42,7 +41,7 @@ export const tasksAction: ActionDefinition = {
     // { id, done }; on success announce the change so every list re-reads.
     { event: 'ui:click', ref: 'toggle', do: [{ set: 'toggleId', value: '@event.payload.id' }, { set: 'toggleDone', value: '@event.payload.done' }, { call: 'setDone', onSuccess: [{ emit: { channel: 'tasks-changed' } }] }] },
     // `new` (the topbar's + New) opens the task form in create mode.
-    { message: 'new', do: [{ push: { action: 'task.form', canvas: 'modal', with: ['modal'] } }] },
+    { message: 'new', do: [{ push: { action: 'tasks.form', canvas: 'modal', with: ['modal'] } }] },
     // A create/complete/edit/delete anywhere → re-read.
     { message: 'tasks-changed', do: [{ call: 'load' }] },
     // Row ⋯ menu. Items carry the whole row (the Table passes it). Edit opens the
@@ -54,7 +53,7 @@ export const tasksAction: ActionDefinition = {
       ref: 'row-edit',
       do: [
         { set: 'menuOpenId', value: '' },
-        { push: { action: 'task.form', canvas: 'modal', with: ['modal'], input: { modalTitle: 'Edit task', confirmLabel: 'Save', id: '@event.payload.task_id', title: '@event.payload.title', due: '@event.payload.due_date' } } },
+        { push: { action: 'tasks.form', canvas: 'modal', with: ['modal'], input: { modalTitle: 'Edit task', confirmLabel: 'Save', id: '@event.payload.task_id', title: '@event.payload.title', due: '@event.payload.due_date' } } },
       ],
     },
     {

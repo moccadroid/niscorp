@@ -2,7 +2,8 @@
 // stubs a minimal window (history + location + popstate) so the in-memory router
 // runs headlessly, then drives the shell via nav clicks and asserts the address
 // bar follows. Run: pnpm --filter relay exec tsx src/dev/router-check.ts
-import { shell } from '../nova/shell';
+import { shellAs } from './check-shell';
+const shell = shellAs('sam');
 import { getVexRuntime } from '../vex/runtime';
 import { installRouter } from '../ui/router';
 

@@ -3,7 +3,7 @@
 // passes the whole row to menu items), opens the edit form / confirm dialog, and
 // proves the writes land in PGlite and the lists re-read. Run:
 //   pnpm --filter relay exec tsx src/dev/row-actions-check.ts
-import { shell } from '../nova/shell';
+import { shell } from './check-shell';
 import { getVexRuntime } from '../vex/runtime';
 
 const settle = (ms = 220): Promise<void> => new Promise((r) => setTimeout(r, ms));
@@ -29,7 +29,7 @@ const main = async (): Promise<void> => {
   const c0 = rows().find((r) => String(r['phone'] ?? '') !== '') ?? rows()[0];
   shell.dispatch({ type: 'ui:click', ref: 'row-edit', payload: c0 });
   await settle(260);
-  checks.push([`contact Edit opens the form (got ${String(modalId())})`, modalId() === 'contact.form']);
+  checks.push([`contact Edit opens the form (got ${String(modalId())})`, modalId() === 'crm.contact.form']);
   const cf = modalData();
   checks.push([`form seeded id/name/phone/company from the row`, cf['id'] === c0['contact_id'] && cf['name'] === c0['name'] && cf['phone'] === c0['phone'] && cf['company'] === (c0['company'] as Record<string, unknown>)['company_id']]);
   shell.dispatch({ type: 'ui:click', ref: 'cancel' });
@@ -56,7 +56,7 @@ const main = async (): Promise<void> => {
   const d0 = rows().find((r) => typeof r['value'] === 'number') ?? rows()[0];
   shell.dispatch({ type: 'ui:click', ref: 'row-edit', payload: d0 });
   await settle(260);
-  checks.push([`deal Edit opens the form (got ${String(modalId())})`, modalId() === 'deal.form']);
+  checks.push([`deal Edit opens the form (got ${String(modalId())})`, modalId() === 'crm.deal.form']);
   const df = modalData();
   checks.push([`deal form seeded value as a number + stage_id + raw close_date`, typeof df['value'] === 'number' && df['value'] === d0['value'] && df['stage'] === d0['stage_id'] && df['close_date'] === d0['close_date'] && df['company'] === d0['company_id']]);
   shell.dispatch({ type: 'ui:click', ref: 'cancel' });

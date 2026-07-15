@@ -1,7 +1,6 @@
 import type { ActionDefinition } from '@niscorp/nova';
 import { topbarLayout } from './topbar.layout';
 import { topbarSearchPrism } from './topbar.prism';
-import { resultPrism } from '@relay/nova/shared/result.prism';
 
 // The topbar shows the active screen title and hosts the action search.
 //
@@ -14,10 +13,10 @@ import { resultPrism } from '@relay/nova/shared/result.prism';
 // escape). Nothing navigates the main canvas from here — that's the quickview's
 // fullscreen button. Push/replace resolve their `action` from `$.chosen_id`.
 export const topbarAction: ActionDefinition = {
-  id: 'topbar',
+  id: 'chrome.topbar',
   data: { title: 'Home', search: '', results: [], highlight: 0, chosen_id: '', chosen_kind: '', chosen_name: '' },
   layout: topbarLayout,
-  endpoints: { search: { url: '/api/vex', method: 'POST', request: topbarSearchPrism, response: resultPrism, target: 'results' } },
+  endpoints: { search: { url: '/api/vex', method: 'POST', request: topbarSearchPrism, target: 'results' } },
   triggers: [
     { event: 'ui:model', ref: 'search', do: [{ set: 'search', value: '@event.payload' }, { call: 'search', onSuccess: [{ set: 'highlight', value: 0 }] }] },
     { event: 'ui:key', ref: 'search', key: 'ArrowDown', do: [{ increment: 'highlight' }] },

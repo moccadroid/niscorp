@@ -1,117 +1,134 @@
-import { createShell } from '@niscorp/nova';
+import { createShell, type Shell } from '@niscorp/nova';
 import { evaluate } from '@niscorp/prism';
 import { buildRegistry } from '../../ui';
-import { vexFetch } from '../../vex/http';
+import { vexFetch, unwrapResult } from '../../vex/http';
 import { traceFetch } from '../../nova-devtools/core/trace-fetch';
 import { devtoolsFunctions } from '../../nova-devtools/core/fns';
 import { installNovaDevtools } from '../../nova-devtools/core/install';
-import { CURRENT_USER_ID, CURRENT_DATE } from '@relay/vex/runtime';
+import { todayStr } from '@relay/vex/runtime';
+import { authFunctions, type Identity } from '../../auth';
+import { CHARTER, ASSIGNMENTS, rolesOf, resolvePrincipal, verifyCharter } from '../../charter';
 import { frameLayout } from './frame.layout';
 import { mainSplitLayout } from './main-split.layout';
 import { mainStackLayout, asideStackLayout } from './stack-nav.layout';
 import { keysLoad, keysSave } from '../../llm/keys';
 import { rayRun, raySetKey, rayLoad, rayNewSession, raySwitchSession, bindShell, getDebug, setDebug, clearAll, storageEstimate } from '../../ray';
-import { ACTIONS } from './actions';
+import { ACTIONS, CATALOG_DEFINITIONS } from './actions';
 import { modalFragment } from '../fragments/modal.fragment';
 import { quickviewFragment } from '../fragments/quickview.fragment';
 import { panelFragment } from '../fragments/panel.fragment';
 import { dockFragment } from '../fragments/dock.fragment';
 
-export { ACTIONS } from './actions';
+export { ACTIONS, CATALOG_DEFINITIONS } from './actions';
 
-// The Relay shell. The `frameLayout` is fixed chrome that places sidebar /
-// topbar and leaves `main` + `modal` as LayoutRefs. `aside` and `modal` start
-// empty (their CanvasSlots render nothing until something is pushed). Everything
-// visible is an action; React only mounts <NovaShell> against this.
-export const shell = createShell({
-  canvases: [
-    { id: 'sidebar', initial: 'sidebar' },
-    { id: 'topbar', initial: 'topbar' },
-    // main + aside get the per-canvas stack nav (back + breadcrumb trail);
-    // modal stays a single card (chrome from the panel/modal fragment).
-    { id: 'main', initial: 'home', actionLayout: mainStackLayout },
-    { id: 'aside', actionLayout: asideStackLayout },
-    { id: 'modal' },
-  ],
-  canvasLayout: frameLayout,
-  actions: ACTIONS,
-  // Reusable partial actions, composed into a concrete action at a push `with`.
-  // `modal` wraps a pushed action in dialog chrome (see modal.fragment.ts).
-  fragments: { modal: modalFragment, quickview: quickviewFragment, panel: panelFragment, dock: dockFragment },
-  // The shell assembly: both reads AND writes are declarative HTTP endpoints now
-  // (each screen's `.prism.ts` seam is imported into its action as the endpoint's
-  // `request`, served by `vexFetch` → Vex's resource handler). The only `fn`s left
-  // are Ray's — genuinely local functions, not data access.
-  functions: {
-    // Ray — the assistant agent, exposed as plain Nova functions the chat surface
-    // calls. `ray.run` runs the Cortex agent; `ray.setKey` stores the Groq key.
-    'ray.run': rayRun,
-    'ray.setKey': raySetKey,
-    // The API-keys modal (keys.action.ts): load current keys, save both.
-    'keys.load': keysLoad,
-    'keys.save': keysSave,
-    'ray.load': rayLoad,
-    'ray.newSession': rayNewSession,
-    'ray.switch': raySwitchSession,
-    // Ray's debug toggle (browser-local). getDebug → the switch's initial state;
-    // setDebug persists a change. run.ts reads the same flag to capture a trace.
-    'ray.getDebug': async () => getDebug(),
-    'ray.setDebug': async (d) => {
-      setDebug(Boolean((d as { rayDebug?: unknown }).rayDebug));
-      return getDebug();
+// The Relay shell, built PER PRINCIPAL. The charter resolves the signed-in
+// identity's roles to a catalog; only those definitions reach createShell —
+// an ungranted action is not hidden, it does not exist (a push throws
+// UnknownActionError). Signing in or out rebuilds the shell (app.tsx); the
+// anonymous principal's whole application is `auth.login`, the lock screen.
+export class CharterBootError extends Error {}
+
+const pick = (ids: ReadonlySet<string>): Record<string, (typeof ACTIONS)[string]> =>
+  Object.fromEntries(Object.entries(ACTIONS).filter(([id]) => ids.has(id)));
+
+export const buildShell = (who: Identity | null): Shell => {
+  // Boot refusal: an incoherent charter never serves a catalog.
+  const report = verifyCharter(CHARTER, CATALOG_DEFINITIONS, ASSIGNMENTS);
+  if (report.errors.length > 0) {
+    throw new CharterBootError(`Charter is incoherent:\n${report.errors.map((e) => `  ${e.rule}: ${e.detail}`).join('\n')}`);
+  }
+
+  const roles = rolesOf(who?.userId ?? null);
+  const ids = resolvePrincipal(CHARTER, Object.keys(CATALOG_DEFINITIONS), roles);
+  const userId = who?.userId ?? 'anonymous';
+
+  // The sidebar renders only granted screens — boot input, not a variant.
+  const nav = {
+    home: ids.has('home'),
+    tasks: ids.has('tasks.manage'),
+    pipeline: ids.has('crm.deals'),
+    contacts: ids.has('crm.contacts'),
+    companies: ids.has('crm.companies'),
+    deals: ids.has('crm.deals'),
+    settings: ids.has('settings'),
+  };
+  const user = { name: who?.name ?? '', roles: roles.join(' · ') };
+
+  const shell = createShell({
+    canvases: [
+      // Chrome mounts only when granted; `main` boots to home, or to the lock
+      // screen when home isn't in the catalog (the anonymous principal).
+      { id: 'sidebar', ...(ids.has('chrome.sidebar') ? { initial: { action: 'chrome.sidebar', input: { nav, user } } } : {}) },
+      { id: 'topbar', ...(ids.has('chrome.topbar') ? { initial: 'chrome.topbar' } : {}) },
+      {
+        id: 'main',
+        actionLayout: mainStackLayout,
+        ...(ids.has('home') ? { initial: 'home' } : ids.has('auth.login') ? { initial: 'auth.login' } : {}),
+      },
+      { id: 'aside', actionLayout: asideStackLayout },
+      { id: 'modal' },
+    ],
+    canvasLayout: frameLayout,
+    actions: pick(ids),
+    // Reusable partial actions, composed into a concrete action at a push `with`.
+    fragments: { modal: modalFragment, quickview: quickviewFragment, panel: panelFragment, dock: dockFragment },
+    // Reads AND writes are declarative HTTP endpoints; the only `fn`s are
+    // Ray's, the devtools', and sign-in (genuinely local, not data access).
+    functions: {
+      'ray.run': rayRun,
+      'ray.setKey': raySetKey,
+      'keys.load': keysLoad,
+      'keys.save': keysSave,
+      'ray.load': rayLoad,
+      'ray.newSession': rayNewSession,
+      'ray.switch': raySwitchSession,
+      'ray.getDebug': async () => getDebug(),
+      'ray.setDebug': async (d) => {
+        setDebug(Boolean((d as { rayDebug?: unknown }).rayDebug));
+        return getDebug();
+      },
+      'ray.clearSessions': async () => {
+        clearAll();
+        return true;
+      },
+      'ray.storageSize': async () => storageEstimate(),
+      // Sign-in — username → fake magic link → token (see src/auth).
+      ...authFunctions,
+      ...devtoolsFunctions,
     },
-    // Clear every saved chat session; report Ray's localStorage footprint.
-    'ray.clearSessions': async () => {
-      clearAll();
-      return true;
-    },
-    'ray.storageSize': async () => storageEstimate(),
-    // Nova-devtools fns — the dock/inspector actions' `fn:` endpoints (pull the
-    // trace buffer, snapshot the shell, audit the registry, describe an
-    // instance). Genuinely local functions, same category as Ray's.
-    ...devtoolsFunctions,
-  },
-  registry: buildRegistry(),
-  // The injected Prism evaluator runs endpoint `request`/`response` transforms
-  // (request over the action data; response over the reply wrapped as
-  // `{ result: <reply> }`). Endpoint-only — never touches an action's own data.
-  // We fold in the signed-in user (`$.userId`) and the app's "today" (`$.today`)
-  // as ambient context so read prisms resolve them — exactly what the old `query`
-  // reader injected. Harmless on the `{ result }` response source.
-  transform: (config, source) =>
-    evaluate(
-      config as Parameters<typeof evaluate>[0],
-      (source !== null && typeof source === 'object' && !Array.isArray(source)
-        ? { ...(source as Record<string, unknown>), userId: CURRENT_USER_ID, today: CURRENT_DATE }
-        : source) as Parameters<typeof evaluate>[1],
-    ),
-  // In-browser Vex-as-HTTP: `/vex` URLs hit the in-process engine via Vex's own
-  // handler; everything else is a real fetch. `traceFetch` tees each call into
-  // the devtools timeline while the devtools flag is on; off-flag it's a
-  // passthrough.
-  fetch: traceFetch(vexFetch),
-});
+    registry: buildRegistry(),
+    // The injected Prism evaluator runs endpoint `request`/`response`
+    // transforms. `$.userId` comes from the TOKEN the shell was built for and
+    // `$.today` from the wall clock — folded in as ambient context, never
+    // authorable by a request.
+    transform: (config, source) =>
+      evaluate(
+        config as Parameters<typeof evaluate>[0],
+        (source !== null && typeof source === 'object' && !Array.isArray(source)
+          ? { ...(source as Record<string, unknown>), userId, today: todayStr() }
+          : source) as Parameters<typeof evaluate>[1],
+      ),
+    // Unwrap sits OUTSIDE the trace tee: the timeline sees vex's full
+    // `{ result, meta }` envelope; actions receive `result` itself.
+    fetch: unwrapResult(traceFetch(vexFetch)),
+  });
 
-// Let Ray's tools/run reach this shell (registered into it, so they can't import
-// it — see ray/bridge.ts).
-bindShell(shell);
+  // Ray's tools/run reach the current shell through the bridge.
+  bindShell(shell);
 
-// Nova-devtools: registers the dock/inspector actions, adds the `devtools`
-// canvas, attaches the telemetry taps, and syncs the canvas with the debug
-// flag (Cmd/Ctrl+Shift+D). Same bridge pattern as Ray.
-installNovaDevtools(shell);
+  // Devtools are charter-granted like everything else (`dev` role) — the
+  // install registers their actions, so it runs only when granted.
+  if (ids.has('devtools.dock')) installNovaDevtools(shell);
 
-// Seed the targets of the frame's LayoutRefs. `main` → the master/detail split;
-// `modal` → a bare overlay slot (empty until a modal action is pushed). These
-// are what the LLM/agent hot-swaps later via shell.setLayout(ref, …).
-shell.layoutStore.set('main', mainSplitLayout);
-shell.layoutStore.set('modal', { component: 'CanvasSlot', props: { canvasId: 'modal' } });
+  // Seed the targets of the frame's LayoutRefs.
+  shell.layoutStore.set('main', mainSplitLayout);
+  shell.layoutStore.set('modal', { component: 'CanvasSlot', props: { canvasId: 'modal' } });
 
-// Dev only: this shell is built once, here. Vite HMR can't rebuild a module
-// singleton, so edits to the canvasLayout / actions / layouts would otherwise
-// render against a STALE shell (the "padding shows for a second then reverts"
-// bug). Force a clean full reload whenever this module — or anything it
-// imports (every layout and action) — changes.
+  return shell;
+};
+
+// Dev only: Vite HMR can't rebuild shells already handed to React — force a
+// clean reload when this module (or anything it imports) changes.
 if (import.meta.hot) {
   import.meta.hot.accept(() => {
     window.location.reload();

@@ -1,4 +1,4 @@
-import { dealsList, dealsByOwner, dealsBoard, dealsOpenByStage, dealsForecast, dealMoveStage, dealDelete } from '@relay/api/deals';
+import { dealsList, dealsByOwner, dealMoveStage, dealDelete } from '@relay/api/deals';
 
 // Read/write seams for the deals collection — each a full Vex request body,
 // attached to an endpoint's `request`. (Query → { fingerprint, context }; write →
@@ -8,9 +8,8 @@ import { dealsList, dealsByOwner, dealsBoard, dealsOpenByStage, dealsForecast, d
 // current user (My-deals tab, resolved to the injected `$.userId`); any other
 // value → that owner (a cross-link). When set, the seam switches to the
 // `dealsByOwner` fingerprint (the cache entry Vex replays).
-//
-// Board (`board*` prisms): three reads into top-level slots (`stages`/`deals`/`summary`) — the stage columns, the
-// cards, and the forecast bar (one aggregated object). None take caller input.
+// (The board's three reads take no caller input — they're plain JSON bodies
+// in deals.action.ts, not seams.)
 export const listDealsPrism = {
   fingerprint: {
     $case: {
@@ -25,10 +24,6 @@ export const listDealsPrism = {
     sortDir: { $ref: '$.sortDir' },
   },
 };
-
-export const boardStagesPrism = { fingerprint: dealsOpenByStage.fingerprint, context: {} };
-export const boardDealsPrism = { fingerprint: dealsBoard.fingerprint, context: {} };
-export const boardSummaryPrism = { fingerprint: dealsForecast.fingerprint, context: {} };
 
 // Move write: the board drag-drop stashes the move flat (`moveId`/`moveStage`);
 // map it to the `deal.moveStage` columns.
