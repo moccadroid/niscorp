@@ -370,6 +370,13 @@ Staging (each step shippable):
 2. **Extract the policy engine** (charter resolution + verifier) as its own
    library; nova grows its guard hook (`removeAction` already landed in
    step 1).
+   *Amended 2026-07-16: no physical extraction yet — the engine stays
+   relay-local, treated as a library in place (zero foreign imports is the
+   bar). The charter→vex compiler dissolves instead of choosing a dependency
+   direction: vex natively accepts grant strings in its own verb-leaf dialect
+   (which mirrors its phases) and exports the leaves, so neither library ever
+   imports the other; the app wiring composes them — the same shape nova
+   already uses (buildShell filters by resolved ids, no charter import).*
 3. **First server binary** — hono + session adapter + vex host (scoped,
    locked) + `/catalog` + the socket as specified in §3; the shell runs
    server-side and relay's client becomes a canvas terminal.
@@ -408,6 +415,31 @@ Decided in review (2026-07-15):
   before any other event from the same canvas.
 - **Auth is a token.** The server consumes a session token and nothing else;
   no username/password. Magic link login is the default strategy.
+
+Decided 2026-07-16 (runtime + transport, for step 3):
+
+- **Hono is the HTTP layer.** Zero dependencies, web-standard
+  Request/Response, and the same code runs on Node, Bun, Deno and workers —
+  the server stays runtime-portable. Vex already ships the hono adapter.
+  Hono deliberately does not own the socket, and it doubles as the escape
+  hatch for classic API routing when an app genuinely needs a route.
+- **The socket transport is a seam; the protocol is ours.** RFC 6455
+  plumbing is never hand-written. A transport interface of a handful of
+  functions (upgrade, send, close, message/close events) with two
+  implementations: `ws` on Node (the transport's one dependency — itself
+  dependency-free), Bun's native websocket server on Bun (zero dependencies;
+  it embeds uWebSockets). Everything above the seam — the canvas-id
+  envelope, resend-on-reconnect, the typing rules — is nisc's own message
+  layer, identical on both.
+- **Node first; Bun is a planned flip, not a fork.** Dev and the first
+  binary run Node: PGlite — the entire dev/proof database — has open WASM
+  crashes on Bun 1.3.x, and durable session shells are exactly the
+  long-running workload Bun's stability reports still flag. The seam + hono
+  keep the flip a config change. Revisit at step 5: Bun's native topic
+  pub/sub maps directly onto shared canvases and fingerprint subscriptions.
+- **`create nisc` scaffolds the runtime choice** — `server → node | bun` is
+  a template flag, never a code fork; one server package runs on either side
+  of the seam.
 
 ## 10. Open questions
 
