@@ -7,7 +7,7 @@
 import { evaluate } from '@niscorp/prism';
 import { shell } from './check-shell';
 import { getVexRuntime } from '../vex/runtime';
-import { executeMutation, MutationDefinitionSchema } from '../vex/mutations';
+import { executeMutation, MutationDefinitionSchema } from '@niscorp/vex';
 import { scopePolicy } from '../vex/scope';
 import { companyUpsert } from '@relay/api/companies';
 import { contactUpsert } from '@relay/api/contacts';
@@ -36,7 +36,7 @@ const main = async (): Promise<void> => {
 
   // ── Engine: a direct upsert with NO id desugars to insert — proves the DB write
   // + RETURNING + scope + id default.
-  const inserted = await executeMutation(rt.db, companyUpsert, {
+  const inserted = await executeMutation(rt.db, companyUpsert.mutation, {
     context: { name: 'Probe Inc', domain: 'probe.io', industry: 'finance', size: '1-10' },
     scope: { userId: 'usr_001' },
     policy: scopePolicy,
@@ -74,12 +74,12 @@ const main = async (): Promise<void> => {
     company: '',
     relationship: 'lead',
   }) as { context: Record<string, unknown> }).context;
-  const contactRow = (await executeMutation(rt.db, contactUpsert, { context: ctx, scope: { userId: 'usr_001' }, policy: scopePolicy, schema }))[0] ?? {};
+  const contactRow = (await executeMutation(rt.db, contactUpsert.mutation, { context: ctx, scope: { userId: 'usr_001' }, policy: scopePolicy, schema }))[0] ?? {};
   checks.push([`prism splits "Ada Lovelace" → first/last (${String(contactRow['first_name'])}/${String(contactRow['last_name'])})`, contactRow['first_name'] === 'Ada' && contactRow['last_name'] === 'Lovelace']);
   checks.push(['form-only "relationship" (no column) never reaches the row', !('relationship' in contactRow)]);
 
   // ── Update: the SAME upsert WITH an id desugars to update — edits by id.
-  const edited = (await executeMutation(rt.db, contactUpsert, {
+  const edited = (await executeMutation(rt.db, contactUpsert.mutation, {
     context: { id: contactRow['id'], first_name: 'Augusta', last_name: 'King', email: 'augusta@x.io', phone: '', title: 'Countess', company_id: null },
     scope: { userId: 'usr_001' }, policy: scopePolicy, schema,
   }))[0] ?? {};
@@ -88,7 +88,7 @@ const main = async (): Promise<void> => {
   // ── Deal create: real FK ids (company + stage), owner stamped, status defaults.
   const co = (await rt.db.query('SELECT id FROM companies LIMIT 1')).rows[0] as { id: string };
   const stg = (await rt.db.query("SELECT id FROM stages WHERE name='Lead' LIMIT 1")).rows[0] as { id: string };
-  const newDeal = (await executeMutation(rt.db, dealUpsert, {
+  const newDeal = (await executeMutation(rt.db, dealUpsert.mutation, {
     context: { title: 'Engine Deal', company_id: co.id, stage_id: stg.id, primary_contact_id: null, value: 1000, close_date: null },
     scope: { userId: 'usr_001' }, policy: scopePolicy, schema,
   }))[0] ?? {};

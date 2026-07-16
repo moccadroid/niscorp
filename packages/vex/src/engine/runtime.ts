@@ -217,6 +217,12 @@ export const createQueryEngine = (engineConfig: QueryEngineConfig): QueryEngine 
     }
 
     const entry = await cache.get(fp);
+    if (entry?.kind === 'mutation') {
+      throw new VexError(
+        'invalid_request',
+        `Fingerprint "${fp}" names a mutation — the query engine cannot execute writes. Replay it through the vex endpoint.`,
+      );
+    }
     if (entry?.kind === 'ok' && freshOrEvict(entry, fp)) {
       if (!hasRequest || entry.requestHash === requestHash) {
         touch(fp, entry);

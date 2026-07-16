@@ -15,10 +15,10 @@ export const dealContactPrism = { fingerprint: contactById.fingerprint, context:
 
 // Won/lost writes only need the open deal's id.
 export const markWonPrism = {
-  mutation: { $const: dealMarkWon },
+  fingerprint: dealMarkWon.fingerprint,
   context: { deal_id: { $ref: '$.record.deal_id' } },
 };
 export const markLostPrism = {
-  mutation: { $const: dealMarkLost },
+  fingerprint: dealMarkLost.fingerprint,
   context: { deal_id: { $ref: '$.record.deal_id' } },
 };

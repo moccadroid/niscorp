@@ -7,6 +7,6 @@ import { companyUpsert } from '@relay/api/companies';
 const fields = { name: { $ref: '$.name' }, domain: { $ref: '$.domain' }, industry: { $ref: '$.industry' }, size: { $ref: '$.size' } };
 
 export const upsertCompanyPrism = {
-  mutation: { $const: companyUpsert },
+  fingerprint: companyUpsert.fingerprint,
   context: { ...fields, id: { $ref: '$.id' } },
 };

@@ -1,4 +1,5 @@
 import { QuerySchema } from '../schemas/query.schema.js';
+import { MutationDefinitionSchema } from '../mutations/schema.js';
 import type { CacheEntry } from './cache.types.js';
 
 // ───────────────────────────────────────────────────────────────
@@ -52,6 +53,11 @@ export const validateEntry = (entry: CacheEntry): string | null => {
       return 'invalid prismIr: not a CompiledIr structure';
     }
     return null;
+  }
+
+  if (entry.kind === 'mutation') {
+    const parsed = MutationDefinitionSchema.safeParse(entry.mutation);
+    return parsed.success ? null : `invalid mutation: ${parsed.error.message}`;
   }
 
   return `unknown cache entry kind: ${String((entry as { kind: unknown }).kind)}`;

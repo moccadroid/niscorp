@@ -11,7 +11,7 @@ const emptyToNull = (path: string) => ({ $case: { branches: [{ when: { $ref: pat
 // desugars by `id` — update sets title+due (its `columns`), insert adds the
 // `insert`-only `deal_id`, so editing can't re-link or wipe the task's deal.
 export const upsertTaskPrism = {
-  mutation: { $const: taskUpsert },
+  fingerprint: taskUpsert.fingerprint,
   context: {
     title: { $ref: '$.title' },
     due_date: emptyToNull('$.due'),

@@ -18,6 +18,6 @@ const fields = {
 };
 
 export const upsertContactPrism = {
-  mutation: { $const: contactUpsert },
+  fingerprint: contactUpsert.fingerprint,
   context: { ...fields, id: { $ref: '$.id' } },
 };

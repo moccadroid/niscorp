@@ -28,12 +28,12 @@ export const listDealsPrism = {
 // Move write: the board drag-drop stashes the move flat (`moveId`/`moveStage`);
 // map it to the `deal.moveStage` columns.
 export const moveDealPrism = {
-  mutation: { $const: dealMoveStage },
+  fingerprint: dealMoveStage.fingerprint,
   context: { deal_id: { $ref: '$.moveId' }, stage_id: { $ref: '$.moveStage' } },
 };
 
 // Delete the pending deal (id stashed in `$.pendingDeleteId` by the ⋯ → Delete).
 export const deleteDealPrism = {
-  mutation: { $const: dealDelete },
+  fingerprint: dealDelete.fingerprint,
   context: { id: { $ref: '$.pendingDeleteId' } },
 };

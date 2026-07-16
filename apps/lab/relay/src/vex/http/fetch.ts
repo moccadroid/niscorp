@@ -2,7 +2,6 @@ import { handleQuery, handleDiscovery, handleFingerprintPatch, handleFingerprint
 import { getVexRuntime } from '../runtime';
 import { identity } from '../../auth';
 import { resourceEntities } from './resources';
-import { handleMutation } from '../mutations';
 import { scopePolicy } from '../scope';
 
 // ═══════════════════════════════════════════════════════════
@@ -62,15 +61,6 @@ export const vexFetch = async (url: string, init?: Init): Promise<Resp> => {
 
   const body: unknown = init?.body !== undefined ? JSON.parse(init.body) : {};
 
-  // A write is self-describing: a `{ mutation, context }` body. Scope is injected
-  // here (never client-supplied); the engine stamps identity + applies RLS.
-  if (body !== null && typeof body === 'object' && 'mutation' in body) {
-    const schema = engine.getSchema();
-    if (schema === undefined) return wrap(500, { error: 'no_schema', message: 'Vex schema not introspected' });
-    const res = await handleMutation({ db, schema, policy: scopePolicy }, body, scope);
-    return wrap(res.status, res.body);
-  }
-
   // Fingerprint management: `{ fingerprint, protected? }` in the body (names
   // contain '/', so they don't travel in the path). Locked: refused (403).
   if (method === 'PATCH' || method === 'DELETE') {
@@ -84,12 +74,16 @@ export const vexFetch = async (url: string, init?: Init): Promise<Resp> => {
     return wrap(res.status, res.body);
   }
 
-  // The human surface is replay-only: `locked: true` means an unknown or
-  // drifted fingerprint gets 400 `locked` — every read every action makes
-  // must replay from the protected seeds. Ray's `query` tool and the
+  // ONE wire shape — `{ fingerprint, context }` — for reads AND writes; the
+  // entry's kind picks the pipeline. The human surface is replay-only:
+  // `locked: true` means an unknown or drifted read gets 400 `locked`, and
+  // writes are replay-only ALWAYS (a mutation def never travels — an inline
+  // `{ mutation }` body is not a request shape at all). Scope is injected
+  // here (never client-supplied); the write path stamps identity + applies
+  // RLS through the same policy reads use. Ray's `query` tool and the
   // architect keep their own generative engine path; the split is the
   // posture, not an accident.
-  const res = await handleQuery({ engine, entities, locked: true }, body, scope);
+  const res = await handleQuery({ engine, entities, locked: true, mutations: { client: db, policy: scopePolicy } }, body, scope);
   return wrap(res.status, res.body);
 };
 

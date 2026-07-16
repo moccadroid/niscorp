@@ -1,5 +1,5 @@
 import type { CacheEntry } from './index';
-import type { Mutation } from '@relay/vex/mutations';
+import type { MutationEntry } from './index';
 import { dateText } from '@relay/lib/format.prism';
 
 // My tasks, scoped by the toolbar tab. ONE shape / ONE cached plan serves Open,
@@ -156,31 +156,43 @@ export const tasksOpenCount: CacheEntry = {
 // `id`/`created_at` default in the DB on create; `assignee_id` is scope-stamped,
 // never the DSL. `deal_id` is `insert`-only — a task's deal is set at creation
 // (a deal's "Add task") and NOT re-linked on edit, so it can't be wiped.
-export const taskUpsert: Mutation = {
-  op: 'upsert',
-  table: 'tasks',
-  key: 'id',
-  columns: {
-    title: { $context: 'title' },
-    due_date: { $context: 'due_date' },
-  },
-  insert: {
-    deal_id: { $context: 'deal_id' },
+export const taskUpsert: MutationEntry = {
+  fingerprint: 'tasks/upsert',
+  intent: 'Create a task, or edit one by id (a task keeps its deal on edit)',
+  mutation: {
+    op: 'upsert',
+    table: 'tasks',
+    key: 'id',
+    columns: {
+      title: { $context: 'title' },
+      due_date: { $context: 'due_date' },
+    },
+    insert: {
+      deal_id: { $context: 'deal_id' },
+    },
   },
 };
 
 // Flip a task's done flag — the inline checkbox on every task list. `done` is the
 // new value (true on the Open/overdue lists, false to reopen on the Done list).
-export const taskSetDone: Mutation = {
-  op: 'update',
-  table: 'tasks',
-  set: { done: { $context: 'done' } },
-  where: { eq: ['tasks.id', { $context: 'id' }] },
+export const taskSetDone: MutationEntry = {
+  fingerprint: 'tasks/setDone',
+  intent: "Flip a task's done flag",
+  mutation: {
+    op: 'update',
+    table: 'tasks',
+    set: { done: { $context: 'done' } },
+    where: { eq: ['tasks.id', { $context: 'id' }] },
+  },
 };
 
 // Delete a task by id (the row ⋯ → Delete, behind the shared confirm).
-export const taskDelete: Mutation = {
-  op: 'delete',
-  table: 'tasks',
-  where: { eq: ['tasks.id', { $context: 'id' }] },
+export const taskDelete: MutationEntry = {
+  fingerprint: 'tasks/delete',
+  intent: 'Delete a task by id',
+  mutation: {
+    op: 'delete',
+    table: 'tasks',
+    where: { eq: ['tasks.id', { $context: 'id' }] },
+  },
 };

@@ -1,5 +1,5 @@
 import type { CacheEntry } from './index';
-import type { Mutation } from '@relay/vex/mutations';
+import type { MutationEntry } from './index';
 import { money, dateText } from '@relay/lib/format.prism';
 
 // The deals table. Joined names + the id are aliased in the DSL (distinct shape,
@@ -415,51 +415,71 @@ export const contactOptions: CacheEntry = {
 // ids (the form's id-bearing selects). `upsert` keys on `id`. `owner_id` is scope-stamped on
 // insert; `status`/`currency`/`id` default in the DB on create. The input prism
 // coerces empty value→0 and empty FK/date→null.
-export const dealUpsert: Mutation = {
-  op: 'upsert',
-  table: 'deals',
-  key: 'id',
-  columns: {
-    title: { $context: 'title' },
-    company_id: { $context: 'company_id' },
-    stage_id: { $context: 'stage_id' },
-    primary_contact_id: { $context: 'primary_contact_id' },
-    value: { $context: 'value' },
-    close_date: { $context: 'close_date' },
+export const dealUpsert: MutationEntry = {
+  fingerprint: 'deals/upsert',
+  intent: 'Create a deal, or edit one by id',
+  mutation: {
+    op: 'upsert',
+    table: 'deals',
+    key: 'id',
+    columns: {
+      title: { $context: 'title' },
+      company_id: { $context: 'company_id' },
+      stage_id: { $context: 'stage_id' },
+      primary_contact_id: { $context: 'primary_contact_id' },
+      value: { $context: 'value' },
+      close_date: { $context: 'close_date' },
+    },
   },
 };
 
 // ── Writes ──────────────────────────────────────────────────
 // Move a deal to a stage (the board's drag-drop). `stage_id` + `deal_id` arrive
 // via the board's mutation input prism.
-export const dealMoveStage: Mutation = {
-  op: 'update',
-  table: 'deals',
-  set: { stage_id: { $context: 'stage_id' } },
-  where: { eq: ['deals.id', { $context: 'deal_id' }] },
+export const dealMoveStage: MutationEntry = {
+  fingerprint: 'deals/moveStage',
+  intent: "Move a deal to a pipeline stage (the board's drag-drop)",
+  mutation: {
+    op: 'update',
+    table: 'deals',
+    set: { stage_id: { $context: 'stage_id' } },
+    where: { eq: ['deals.id', { $context: 'deal_id' }] },
+  },
 };
 
 // Close a deal won / lost — the status is a literal per endpoint; only `deal_id`
 // comes from context (the open deal).
-export const dealMarkWon: Mutation = {
-  op: 'update',
-  table: 'deals',
-  set: { status: 'won' },
-  where: { eq: ['deals.id', { $context: 'deal_id' }] },
+export const dealMarkWon: MutationEntry = {
+  fingerprint: 'deals/markWon',
+  intent: 'Close a deal as won',
+  mutation: {
+    op: 'update',
+    table: 'deals',
+    set: { status: 'won' },
+    where: { eq: ['deals.id', { $context: 'deal_id' }] },
+  },
 };
 
-export const dealMarkLost: Mutation = {
-  op: 'update',
-  table: 'deals',
-  set: { status: 'lost' },
-  where: { eq: ['deals.id', { $context: 'deal_id' }] },
+export const dealMarkLost: MutationEntry = {
+  fingerprint: 'deals/markLost',
+  intent: 'Close a deal as lost',
+  mutation: {
+    op: 'update',
+    table: 'deals',
+    set: { status: 'lost' },
+    where: { eq: ['deals.id', { $context: 'deal_id' }] },
+  },
 };
 
 // Delete a deal by id (the row ⋯ → Delete, behind a confirm). The schema CASCADEs
 // the deal's line items (deal_products) and SET NULLs activities/tasks that point
 // at it, so the delete never FK-fails.
-export const dealDelete: Mutation = {
-  op: 'delete',
-  table: 'deals',
-  where: { eq: ['deals.id', { $context: 'id' }] },
+export const dealDelete: MutationEntry = {
+  fingerprint: 'deals/delete',
+  intent: 'Delete a deal by id (cascades its line items)',
+  mutation: {
+    op: 'delete',
+    table: 'deals',
+    where: { eq: ['deals.id', { $context: 'id' }] },
+  },
 };

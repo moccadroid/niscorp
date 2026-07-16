@@ -1,5 +1,5 @@
 import type { CacheEntry } from './index';
-import type { Mutation } from '@relay/vex/mutations';
+import type { MutationEntry } from './index';
 
 // Companies list — `company_id` aliased so the array shape is distinct; the rows
 // already match the shape, so no mapping.
@@ -42,15 +42,19 @@ export const companyById: CacheEntry = {
 // insert (the engine desugars it to update/insert). `owner_id` is NOT here —
 // identity is stamped by the engine from the scope policy on the insert branch;
 // `id`/`created_at` default in the DB on create.
-export const companyUpsert: Mutation = {
-  op: 'upsert',
-  table: 'companies',
-  key: 'id',
-  columns: {
-    name: { $context: 'name' },
-    domain: { $context: 'domain' },
-    industry: { $context: 'industry' },
-    size: { $context: 'size' },
+export const companyUpsert: MutationEntry = {
+  fingerprint: 'companies/upsert',
+  intent: 'Create a company, or edit one by id',
+  mutation: {
+    op: 'upsert',
+    table: 'companies',
+    key: 'id',
+    columns: {
+      name: { $context: 'name' },
+      domain: { $context: 'domain' },
+      industry: { $context: 'industry' },
+      size: { $context: 'size' },
+    },
   },
 };
 
@@ -58,8 +62,12 @@ export const companyUpsert: Mutation = {
 // CASCADEs the company's contacts and deals (and, through them, line items) so
 // nothing is orphaned behind an INNER join; activities/tasks SET NULL their
 // company reference. Destructive — the confirm spells that out.
-export const companyDelete: Mutation = {
-  op: 'delete',
-  table: 'companies',
-  where: { eq: ['companies.id', { $context: 'id' }] },
+export const companyDelete: MutationEntry = {
+  fingerprint: 'companies/delete',
+  intent: 'Delete a company by id (cascades its contacts and deals)',
+  mutation: {
+    op: 'delete',
+    table: 'companies',
+    where: { eq: ['companies.id', { $context: 'id' }] },
+  },
 };

@@ -1,5 +1,6 @@
 import type { Query } from '../schemas/query.schema.js';
 import type { CompiledIr } from '@niscorp/prism';
+import type { MutationDefinition } from '../mutations/schema.js';
 
 // ───────────────────────────────────────────────────────────────
 // Cache entries
@@ -7,6 +8,10 @@ import type { CompiledIr } from '@niscorp/prism';
 // Discriminated on `kind`:
 //   - 'ok'            — a successful shape→DSL synthesis (+ optional
 //                       Prism mapping IR). The happy path.
+//   - 'mutation'      — a WRITE artifact: a dev-authored mutation def
+//                       replayed by fingerprint. Never generated; enters
+//                       only through the seed path (and is normally
+//                       protected). Replay-only under any posture.
 //   - 'unsatisfiable' — a negative result: the agent decided this
 //                       shape/intent cannot be satisfied. Cached so we
 //                       don't re-run the agent on a known-impossible
@@ -62,7 +67,12 @@ export type UnsatisfiableCacheEntry = CacheEntryMeta & {
   reason: string;
 };
 
-export type CacheEntry = OkCacheEntry | UnsatisfiableCacheEntry;
+export type MutationCacheEntry = CacheEntryMeta & {
+  kind: 'mutation';
+  mutation: MutationDefinition;
+};
+
+export type CacheEntry = OkCacheEntry | UnsatisfiableCacheEntry | MutationCacheEntry;
 
 // ───────────────────────────────────────────────────────────────
 // Backend interface

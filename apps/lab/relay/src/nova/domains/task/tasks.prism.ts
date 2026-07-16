@@ -42,12 +42,12 @@ export const listTasksPrism = {
 // (tasks screen, deal modal, contact panel) — they all use this convention, so
 // deal.action and contact.action import this prism directly.
 export const setDoneTaskPrism = {
-  mutation: { $const: taskSetDone },
+  fingerprint: taskSetDone.fingerprint,
   context: { id: { $ref: '$.toggleId' }, done: { $ref: '$.toggleDone' } },
 };
 
 // Delete the pending task (id stashed in `$.pendingDeleteId` by the ⋯ → Delete).
 export const deleteTaskPrism = {
-  mutation: { $const: taskDelete },
+  fingerprint: taskDelete.fingerprint,
   context: { id: { $ref: '$.pendingDeleteId' } },
 };

@@ -38,6 +38,13 @@ export { validateEntry } from './cache/validate.js';
 export { normalizeShape, computeRequestHash, computeSchemaFingerprint, mintFingerprint } from './cache/hash.js';
 export { sweepCache } from './cache/util.js';
 
+// ─── Mutations ───────────────────────────────────────────────
+// The write pipeline: a closed grammar, engine-applied scope, and replay-only
+// execution — mutations are `kind: 'mutation'` cache entries invoked by
+// fingerprint; there is no generation path (dev-authored seeds only).
+export { MutationSchema, MutationDefinitionSchema, executeMutation, collectMutationContext, collectQueryContext, mutationEffect, requiredContextKeys, lintMutation } from './mutations/index.js';
+export type { Mutation, MutationDefinition, CoreMutation, ResolvedMutation, MutationClient, MutationTx, MutationContext, ContextField, ContextSignature, MutationEffect } from './mutations/index.js';
+
 // ─── Utils ───────────────────────────────────────────────────
 export { buildValidationContext, resolveParams } from './utils/context.js';
 
@@ -63,7 +70,7 @@ export type { QueryRequest, QueryResponse, QueryErrorResponse, QueryErrorCode, C
 export type { DatabaseAdapter, AdapterCapabilities, CompiledQuery, ParamSlot, BoundParams, Row, IntrospectOptions } from './adapters/adapter.types.js';
 export type { PostgresAdapterConfig, PgPool } from './adapters/postgres/index.js';
 export type { ScopePolicy, ScopeEntityRule, ScopeRule, ScopeMatch, ScopeSet, ScopeValues } from './scope/scope.types.js';
-export type { CacheBackend, CacheEntry, OkCacheEntry, UnsatisfiableCacheEntry } from './cache/cache.types.js';
+export type { CacheBackend, CacheEntry, OkCacheEntry, UnsatisfiableCacheEntry, MutationCacheEntry } from './cache/cache.types.js';
 export type { PostgresCacheConfig, PostgresCache } from './cache/postgres.js';
 export type { TieredCacheConfig, TieredCache, WarmupMode } from './cache/tiered.js';
 export type { ResolvedQuery, ResolvedSource, ResolvedField, ResolvedJoin, ResolvedFilter, ResolvedSemantic, AnalysisResult, AnalysisConfig, TestResult } from './engine/engine.types.js';

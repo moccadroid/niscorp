@@ -18,6 +18,6 @@ export const listContactsPrism = {
 
 // Delete the pending contact (id stashed in `$.pendingDeleteId` by the ⋯ → Delete).
 export const deleteContactPrism = {
-  mutation: { $const: contactDelete },
+  fingerprint: contactDelete.fingerprint,
   context: { id: { $ref: '$.pendingDeleteId' } },
 };

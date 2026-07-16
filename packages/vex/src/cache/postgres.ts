@@ -1,6 +1,7 @@
 import type { PgPool } from '../adapters/postgres/introspect.js';
 import type { Query } from '../schemas/query.schema.js';
 import type { CompiledIr } from '@niscorp/prism';
+import type { MutationDefinition } from '../mutations/schema.js';
 import type { CacheBackend, CacheEntry } from './cache.types.js';
 import { validateEntry } from './validate.js';
 import { fireAndForget } from './util.js';
@@ -71,6 +72,11 @@ const rowToEntry = (row: Record<string, unknown>): CacheEntry => {
 
   if (row['kind'] === 'unsatisfiable') {
     return { kind: 'unsatisfiable', reason: String(row['reason'] ?? ''), ...meta };
+  }
+  // A mutation entry stores its def in the same jsonb slot a query's DSL
+  // uses — one column, discriminated by `kind`.
+  if (row['kind'] === 'mutation') {
+    return { kind: 'mutation', mutation: row['dsl'] as MutationDefinition, ...meta };
   }
   return {
     kind: 'ok',
@@ -150,7 +156,7 @@ export const createPostgresCache = (config: PostgresCacheConfig): PostgresCache 
     }
 
     const isOk = entry.kind === 'ok';
-    const dsl = isOk ? JSON.stringify(entry.dsl) : null;
+    const dsl = isOk ? JSON.stringify(entry.dsl) : entry.kind === 'mutation' ? JSON.stringify(entry.mutation) : null;
     const prismIr = isOk && entry.prismIr !== undefined ? JSON.stringify(entry.prismIr) : null;
     const reason = entry.kind === 'unsatisfiable' ? entry.reason : null;
     const intent = entry.intent ?? null;

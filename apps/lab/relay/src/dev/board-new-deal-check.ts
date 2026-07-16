@@ -5,7 +5,7 @@
 // lands in a column. Run: pnpm --filter relay exec tsx src/dev/board-new-deal-check.ts
 import { shell } from './check-shell';
 import { getVexRuntime } from '../vex/runtime';
-import { executeMutation } from '../vex/mutations';
+import { executeMutation } from '@niscorp/vex';
 import { scopePolicy } from '../vex/scope';
 import { dealUpsert } from '@relay/api/deals';
 
@@ -39,7 +39,7 @@ const main = async (): Promise<void> => {
   // A real company + the 'Lead' stage (which already has open deals → a column).
   const co = (await rt.db.query('SELECT id, name FROM companies LIMIT 1')).rows[0] as { id: string; name: string };
   const stg = (await rt.db.query("SELECT id, name FROM stages WHERE name='Lead' LIMIT 1")).rows[0] as { id: string; name: string };
-  const created = (await executeMutation(rt.db, dealUpsert, {
+  const created = (await executeMutation(rt.db, dealUpsert.mutation, {
     context: { title: 'Board Repro Deal', company_id: co.id, stage_id: stg.id, primary_contact_id: null, value: 4242, close_date: null },
     scope: { userId: 'usr_001' }, policy: scopePolicy, schema,
   }))[0] ?? {};

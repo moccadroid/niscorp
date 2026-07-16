@@ -1,6 +1,6 @@
-import type { OkCacheEntry } from '@niscorp/vex';
+import type { OkCacheEntry, MutationDefinition } from '@niscorp/vex';
+import { lintMutation } from '@niscorp/vex';
 import { compile } from '@niscorp/prism';
-import type { MutationDefinition } from '@relay/vex/mutations';
 import { contactsList, contactById, contactsByCompany, contactUpsert, contactDelete } from './contacts';
 import { companiesList, companyById, companyUpsert, companyDelete } from './companies';
 import { dealsList, dealsByOwner, dealById, dealsByCompany, dealsByContact, dealsBoard, dealsOpenByStage, dealsForecast, dealsByStatus, dealsByStage, companyOptions, stageOptions, contactOptions, dealUpsert, dealMoveStage, dealMarkWon, dealMarkLost, dealDelete } from './deals';
@@ -29,6 +29,16 @@ import { sidebarCounts } from './counts';
 export type CacheEntry = Pick<OkCacheEntry, 'shape' | 'dsl' | 'intent'> & {
   fingerprint: string;
   mapping?: unknown;
+};
+
+// A write entry is the same idea, `kind: 'mutation'`: the def lives in the
+// cache under a NAMED fingerprint and the wire replays `{ fingerprint,
+// context }` — the def itself never travels. Seams reference
+// `<entry>.fingerprint`; checks reach the raw def via `<entry>.mutation`.
+export type MutationEntry = {
+  fingerprint: string;
+  intent: string;
+  mutation: MutationDefinition;
 };
 
 export const ENTRIES: CacheEntry[] = [
@@ -62,6 +72,24 @@ export const ENTRIES: CacheEntry[] = [
   sidebarCounts,
 ];
 
+// Writes are cache entries too — `kind: 'mutation'`, replayed by fingerprint,
+// never sent inline. The engine lives in @niscorp/vex; this list is the
+// human-readable source of the seeded write API.
+export const MUTATION_ENTRIES: MutationEntry[] = [
+  contactUpsert,
+  contactDelete,
+  companyUpsert,
+  companyDelete,
+  taskUpsert,
+  taskSetDone,
+  taskDelete,
+  dealUpsert,
+  dealMoveStage,
+  dealMarkWon,
+  dealMarkLost,
+  dealDelete,
+];
+
 // Compile every entry's mapping → prism_ir and emit the cache seed: one INSERT
 // per entry into `vex_cache` (the exact columns Vex's own backend writes), keyed
 // by the entry's fingerprint and marked `protected` (a mismatching request can
@@ -84,27 +112,20 @@ export const buildCacheSeed = async (): Promise<string> => {
         `ON CONFLICT (key) DO NOTHING;`,
     );
   }
+  // Mutations ride the same table: the def in the dsl slot, discriminated by
+  // kind. The authoring lint runs HERE — an unkeyed update/delete never
+  // reaches the seed ("if it boots, it's coherent" for writes).
+  for (const m of MUTATION_ENTRIES) {
+    const issues = lintMutation(m.mutation);
+    if (issues.length > 0) {
+      throw new Error(`Mutation seed "${m.fingerprint}" fails the authoring lint:\n  ${issues.join('\n  ')}`);
+    }
+    stmts.push(
+      `INSERT INTO vex_cache (key, kind, intent, dsl, created_at, protected) VALUES (` +
+        `$j$${m.fingerprint}$j$, 'mutation', $j$${m.intent}$j$, ` +
+        `$j$${JSON.stringify(m.mutation)}$j$::jsonb, now(), true) ` +
+        `ON CONFLICT (key) DO NOTHING;`,
+    );
+  }
   return stmts.join('\n');
-};
-
-// ═══════════════════════════════════════════════════════════
-// Writes. A mutation endpoint is the write counterpart of a cache entry: the
-// same declarative shape (op/table/values/where over `$context`/`$scope`),
-// minus the read-only bits (intent/shape/dsl/mapping). The engine lives in
-// `vex/mutations`; here we only name the endpoints an action can call by `fn`.
-// ═══════════════════════════════════════════════════════════
-
-export const MUTATIONS: Record<string, MutationDefinition> = {
-  'contact.upsert': contactUpsert,
-  'contact.delete': contactDelete,
-  'company.upsert': companyUpsert,
-  'company.delete': companyDelete,
-  'task.upsert': taskUpsert,
-  'task.setDone': taskSetDone,
-  'task.delete': taskDelete,
-  'deal.upsert': dealUpsert,
-  'deal.moveStage': dealMoveStage,
-  'deal.markWon': dealMarkWon,
-  'deal.markLost': dealMarkLost,
-  'deal.delete': dealDelete,
 };

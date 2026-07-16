@@ -1,11 +1,15 @@
 import { z } from 'zod';
 import type { QueryEngine } from './types.js';
-import type { ScopeValues } from './scope/scope.types.js';
+import type { ScopePolicy, ScopeValues } from './scope/scope.types.js';
 import type { DatabaseSchema, EntitySchema } from './schemas/database.schema.js';
 import { QueryRequestSchema } from './schemas/request.schema.js';
 import { QuerySchema } from './schemas/query.schema.js';
 import { isEntryFresh } from './cache/util.js';
 import { computeSchemaFingerprint } from './cache/hash.js';
+import { executeMutation } from './mutations/engine.js';
+import type { MutationClient } from './mutations/engine.js';
+import { collectMutationContext, collectQueryContext, mutationEffect } from './mutations/signature.js';
+import type { ContextSignature, MutationEffect } from './mutations/signature.js';
 import { VexError } from './errors.js';
 
 // ═══════════════════════════════════════════════════════════════
@@ -17,16 +21,31 @@ export type VexHandlerConfig = {
   entities?: string[];
   // Replay-only posture (production): requests needing generation fail
   // with 'locked'; fingerprint management (PATCH/DELETE) is refused too.
+  // Mutation replay is unaffected — writes are ALWAYS replay-only.
   locked?: boolean;
+  // Enables replay of `kind: 'mutation'` cache entries. The client is
+  // structural (PGlite, a pg wrapper, a test double); the policy is the
+  // same ScopePolicy reads use, its `write` rules applied by the engine.
+  mutations?: {
+    client: MutationClient;
+    policy: ScopePolicy;
+  };
 };
 
 export type DiscoveryFingerprint = {
   fingerprint: string;
+  kind: 'query' | 'mutation';
   protected: boolean;
   schemaFresh: boolean;
   intent?: string;
   createdAt: number;
   lastUsedAt?: number;
+  // The derived input contract: every `$context` key the stored def binds,
+  // typed from the schema by its position. Computed, never authored.
+  context?: ContextSignature;
+  // Reads: the stored result shape. Mutations: what the write changes.
+  shape?: unknown;
+  effect?: MutationEffect[];
 };
 
 export type DiscoveryResponse = {
@@ -85,14 +104,27 @@ const listFingerprints = async (engine: QueryEngine): Promise<DiscoveryFingerpri
   const current = schema !== undefined ? computeSchemaFingerprint(schema) : undefined;
   const rows = await engine.cache.entries();
   return rows
-    .filter(({ key, entry }) => entry.kind === 'ok' && !key.startsWith('neg:'))
+    .filter(({ key, entry }) => (entry.kind === 'ok' || entry.kind === 'mutation') && !key.startsWith('neg:'))
     .map(({ key, entry }) => ({
       fingerprint: key,
+      kind: entry.kind === 'mutation' ? ('mutation' as const) : ('query' as const),
       protected: entry.protected === true,
       schemaFresh: isEntryFresh(entry, current),
       ...(entry.intent !== undefined ? { intent: entry.intent } : {}),
       createdAt: entry.createdAt,
       ...(entry.lastUsedAt !== undefined ? { lastUsedAt: entry.lastUsedAt } : {}),
+      // The derived contract — what to pass, straight from the stored def.
+      ...(entry.kind === 'ok'
+        ? {
+            context: collectQueryContext(entry.dsl, schema),
+            ...(entry.shape !== undefined ? { shape: entry.shape } : {}),
+          }
+        : entry.kind === 'mutation'
+          ? {
+              context: collectMutationContext(entry.mutation, schema),
+              effect: mutationEffect(entry.mutation),
+            }
+          : {}),
     }));
 };
 
@@ -195,6 +227,34 @@ export const handleQuery = async (
   }
 
   try {
+    // ONE wire shape: `{ fingerprint, context }`. The entry's kind decides
+    // the pipeline — a mutation fingerprint replays the write path; anything
+    // else is the read path (which owns misses, generation, and locked).
+    if (parsed.data.fingerprint !== undefined) {
+      const entry = await engine.cache.get(parsed.data.fingerprint);
+      if (entry !== undefined && entry.kind === 'mutation') {
+        if (config.mutations === undefined) {
+          return {
+            status: 500,
+            body: { error: 'execution_error', message: 'This endpoint serves no mutations — handler has no mutation client configured.' },
+          };
+        }
+        const schema = engine.getSchema();
+        if (schema === undefined) {
+          return { status: 500, body: { error: 'execution_error', message: 'Vex schema not introspected.' } };
+        }
+        const rows = await executeMutation(config.mutations.client, entry.mutation, {
+          context: parsed.data.context,
+          scope,
+          policy: config.mutations.policy,
+          schema,
+        });
+        // A single statement returns its one affected row; a batch returns
+        // the array — the same `{ result }` envelope a query reply uses.
+        return { status: 200, body: { result: rows.length === 1 ? rows[0] : rows } };
+      }
+    }
+
     const response = await engine.execute(parsed.data, {
       scope,
       entities: config.entities,
@@ -240,7 +300,7 @@ export const handleFingerprintPatch = async (
     return { status: 403, body: { error: 'locked', message: 'This endpoint is locked — fingerprints cannot be managed here.' } };
   }
   const entry = await config.engine.cache.get(fingerprint);
-  if (entry === undefined || entry.kind !== 'ok') {
+  if (entry === undefined || (entry.kind !== 'ok' && entry.kind !== 'mutation')) {
     return { status: 404, body: { error: 'cache_miss', message: `Unknown fingerprint "${fingerprint}"` } };
   }
   if (typeof patch.protected !== 'boolean') {

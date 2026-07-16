@@ -1,5 +1,5 @@
 import type { CacheEntry } from './index';
-import type { Mutation } from '@relay/vex/mutations';
+import type { MutationEntry } from './index';
 
 // Contacts list — `contact_id` and the company name are aliased in the DSL (so
 // the array shape is distinct and the joined name doesn't collide). `phone` is
@@ -104,25 +104,33 @@ export const contactsByCompany: CacheEntry = {
 // Create-or-edit a contact. `upsert` keys on `id` — present → update that row,
 // absent → insert. `owner_id` is stamped by scope on the insert branch (not
 // reassigned on edit); `id`/`created_at` default in the DB on create.
-export const contactUpsert: Mutation = {
-  op: 'upsert',
-  table: 'contacts',
-  key: 'id',
-  columns: {
-    first_name: { $context: 'first_name' },
-    last_name: { $context: 'last_name' },
-    email: { $context: 'email' },
-    phone: { $context: 'phone' },
-    title: { $context: 'title' },
-    company_id: { $context: 'company_id' },
+export const contactUpsert: MutationEntry = {
+  fingerprint: 'contacts/upsert',
+  intent: 'Create a contact, or edit one by id',
+  mutation: {
+    op: 'upsert',
+    table: 'contacts',
+    key: 'id',
+    columns: {
+      first_name: { $context: 'first_name' },
+      last_name: { $context: 'last_name' },
+      email: { $context: 'email' },
+      phone: { $context: 'phone' },
+      title: { $context: 'title' },
+      company_id: { $context: 'company_id' },
+    },
   },
 };
 
 // Delete a contact by id (the row ⋯ → Delete, behind a confirm). The schema's
 // FKs SET NULL the soft references (a deal's primary contact, activities, tasks)
 // and CASCADE owned rows (list memberships), so the delete never FK-fails.
-export const contactDelete: Mutation = {
-  op: 'delete',
-  table: 'contacts',
-  where: { eq: ['contacts.id', { $context: 'id' }] },
+export const contactDelete: MutationEntry = {
+  fingerprint: 'contacts/delete',
+  intent: 'Delete a contact by id',
+  mutation: {
+    op: 'delete',
+    table: 'contacts',
+    where: { eq: ['contacts.id', { $context: 'id' }] },
+  },
 };
