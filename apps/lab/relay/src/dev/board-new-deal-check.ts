@@ -6,7 +6,7 @@
 import { shell } from './check-shell';
 import { getVexRuntime } from '../vex/runtime';
 import { executeMutation } from '@niscorp/vex';
-import { scopePolicy } from '../vex/scope';
+import { systemPolicy } from '../charter/session-policy';
 import { dealUpsert } from '@relay/api/deals';
 
 const settle = (ms = 250): Promise<void> => new Promise((r) => setTimeout(r, ms));
@@ -41,7 +41,7 @@ const main = async (): Promise<void> => {
   const stg = (await rt.db.query("SELECT id, name FROM stages WHERE name='Lead' LIMIT 1")).rows[0] as { id: string; name: string };
   const created = (await executeMutation(rt.db, dealUpsert.mutation, {
     context: { title: 'Board Repro Deal', company_id: co.id, stage_id: stg.id, primary_contact_id: null, value: 4242, close_date: null },
-    scope: { userId: 'usr_001' }, policy: scopePolicy, schema,
+    scope: { userId: 'usr_001' }, policy: systemPolicy, schema,
   }))[0] ?? {};
   console.log(`created deal ${String(created['id']).slice(0, 8)}… status=${String(created['status'])} stage=${stg.name} company=${co.name}`);
 

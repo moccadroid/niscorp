@@ -7,7 +7,7 @@ import type { QueryEngine } from '@niscorp/vex';
 import { DDL } from './schema';
 import { buildSeedSql } from './seed';
 import { createPglitePool, RAW_DATE_PARSERS } from './pool';
-import { scopePolicy } from './scope';
+import { systemPolicy } from '../charter/session-policy';
 import { createQueryDsl, createShapeMapper } from '@niscorp/vex/agent';
 import type { SignalClient } from '@niscorp/cortex';
 import { getKey, createGroqClient } from '../llm/groq';
@@ -68,13 +68,13 @@ const boot = async (): Promise<VexRuntime> => {
 
   const engine = createQueryEngine({
     adapter,
-    scope: scopePolicy,
+    scope: systemPolicy,
     cache,
     // Vex's reference agents — the query agent (intent + shape → DSL) and Prism's
     // mapping agent (rows → shape) — each handed an LLM rebuilt per call. The
     // engine passes the live schema; only a cache miss invokes them.
     generateDsl: (request, schema) =>
-      createQueryDsl({ adapter, llm: buildLlm(), scopePolicy, schema, queryJsonSchema: dslJsonSchema })(request, schema),
+      createQueryDsl({ adapter, llm: buildLlm(), scopePolicy: systemPolicy, schema, queryJsonSchema: dslJsonSchema })(request, schema),
     mapToShape: (rows, shape) => createShapeMapper(buildLlm())(rows, shape),
   });
   await engine.introspect();

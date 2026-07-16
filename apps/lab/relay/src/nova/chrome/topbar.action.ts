@@ -14,7 +14,7 @@ import { topbarSearchPrism } from './topbar.prism';
 // fullscreen button. Push/replace resolve their `action` from `$.chosen_id`.
 export const topbarAction: ActionDefinition = {
   id: 'chrome.topbar',
-  data: { title: 'Home', search: '', results: [], highlight: 0, chosen_id: '', chosen_kind: '', chosen_name: '' },
+  data: { title: 'Home', search: '', results: [], highlight: 0, chosen_id: '', chosen_kind: '', chosen_name: '', allowedIds: [] },
   layout: topbarLayout,
   endpoints: { search: { url: '/api/vex', method: 'POST', request: topbarSearchPrism, target: 'results' } },
   triggers: [

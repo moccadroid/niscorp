@@ -3,8 +3,12 @@
 // passes the whole row to menu items), opens the edit form / confirm dialog, and
 // proves the writes land in PGlite and the lists re-read. Run:
 //   pnpm --filter relay exec tsx src/dev/row-actions-check.ts
-import { shell } from './check-shell';
+import { shellAs } from './check-shell';
 import { getVexRuntime } from '../vex/runtime';
+
+// Deleting shared CRM records is the admin's verb now — walk as sam (admin),
+// the same flows sales can no longer complete.
+const shell = shellAs('sam');
 
 const settle = (ms = 220): Promise<void> => new Promise((r) => setTimeout(r, ms));
 const mainData = (): Record<string, unknown> => {

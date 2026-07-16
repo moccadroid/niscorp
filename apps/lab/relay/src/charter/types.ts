@@ -1,15 +1,29 @@
-// The charter grammar — CHARTER.md, verbatim. A role is either a bare list
-// of globs (sugar for { allow }) or an object with at most four keys: the
-// complete 2×2 of add/subtract × inline/by-reference. Arrays contain only
-// plain strings; there are no sigils, no precedence rules, no conditions.
+// The charter grammar. A role grants across one or more SECTIONS, each a
+// selection in that section's own universe of ids — the engine is universe-
+// blind, so a section is just "which universe do these globs resolve in".
+// `actions` selects Nova action ids; `data` selects `table.verb` capabilities
+// (the vex-policy universe). Adding a section is adding a universe + a
+// compiler, never new grammar.
+export type Section = 'actions' | 'data';
+
+// Within a section: a bare glob list (sugar for { allow }) or add/subtract.
+// Same 2×2 atoms as the role level, one universe down.
+export type Selection = string[] | { allow?: string[]; deny?: string[] };
+
+// A role: role-level composition (`extends`/`without` reference whole roles
+// and compose EACH section), plus a selection per section. Sugar keeps the
+// common case terse: a bare array is an actions-only role, and top-level
+// `allow`/`deny` are the `actions` section (so a role that only grants
+// actions never needs to name the section).
 export type RoleDef =
   | string[]
   | {
-      allow?: string[];
       extends?: string[];
-      deny?: string[];
       without?: string[];
+      allow?: string[]; // sugar → actions.allow
+      deny?: string[]; // sugar → actions.deny
+      actions?: Selection;
+      data?: Selection;
     };
 
-// A charter maps role names to selections of actions.
 export type Charter = Record<string, RoleDef>;

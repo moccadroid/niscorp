@@ -14,6 +14,8 @@ import { getVexRuntime, todayStr } from '@relay/vex/runtime';
 // The user the replays run as — smoke drives the ENGINE directly with an
 // explicit scope (the app derives its scope from the session token).
 const CURRENT_USER = 'usr_001';
+import { CHARTER, rolesOf, resolvePrincipal } from '@relay/charter';
+import { CATALOG_DEFINITIONS } from '@relay/nova/shell/actions';
 import { contactsList, contactById, contactsByCompany } from '@relay/api/contacts';
 import { companiesList, companyById } from '@relay/api/companies';
 import { dealsList, dealsByOwner, dealById, dealsByCompany, dealsBoard, dealsOpenByStage, dealsForecast, dealsByStatus, dealsByStage } from '@relay/api/deals';
@@ -67,7 +69,9 @@ const checks: Check[] = [
   { def: dealsByStatus, prism: { fingerprint: dealsByStatus.fingerprint, context: { status: 'won' } } },
   { def: tasksOpenCount, prism: { fingerprint: tasksOpenCount.fingerprint, context: {} } },
   { def: sidebarCounts, prism: sidebarCountsPrism },
-  { def: actionsSearch, prism: topbarSearchPrism, state: { search: 'new' } },
+  // `allowedIds` is what the shell seeds into the topbar at boot — the
+  // principal's resolved charter grant, derived here the same way.
+  { def: actionsSearch, prism: topbarSearchPrism, state: { search: 'new', allowedIds: [...resolvePrincipal(CHARTER, Object.keys(CATALOG_DEFINITIONS), rolesOf(CURRENT_USER))] } },
 ];
 
 const describe = (r: unknown): string =>

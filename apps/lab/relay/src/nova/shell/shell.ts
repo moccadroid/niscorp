@@ -8,6 +8,7 @@ import { installNovaDevtools } from '../../nova-devtools/core/install';
 import { todayStr } from '@relay/vex/runtime';
 import { authFunctions, type Identity } from '../../auth';
 import { CHARTER, ASSIGNMENTS, rolesOf, resolvePrincipal, verifyCharter } from '../../charter';
+import { TABLES } from '../../vex/scope';
 import { frameLayout } from './frame.layout';
 import { mainSplitLayout } from './main-split.layout';
 import { mainStackLayout, asideStackLayout } from './stack-nav.layout';
@@ -33,7 +34,7 @@ const pick = (ids: ReadonlySet<string>): Record<string, (typeof ACTIONS)[string]
 
 export const buildShell = (who: Identity | null): Shell => {
   // Boot refusal: an incoherent charter never serves a catalog.
-  const report = verifyCharter(CHARTER, CATALOG_DEFINITIONS, ASSIGNMENTS);
+  const report = verifyCharter(CHARTER, CATALOG_DEFINITIONS, TABLES, ASSIGNMENTS);
   if (report.errors.length > 0) {
     throw new CharterBootError(`Charter is incoherent:\n${report.errors.map((e) => `  ${e.rule}: ${e.detail}`).join('\n')}`);
   }
@@ -59,7 +60,9 @@ export const buildShell = (who: Identity | null): Shell => {
       // Chrome mounts only when granted; `main` boots to home, or to the lock
       // screen when home isn't in the catalog (the anonymous principal).
       { id: 'sidebar', ...(ids.has('chrome.sidebar') ? { initial: { action: 'chrome.sidebar', input: { nav, user } } } : {}) },
-      { id: 'topbar', ...(ids.has('chrome.topbar') ? { initial: 'chrome.topbar' } : {}) },
+      // The palette shows the granted catalog, not the whole actions table —
+      // the resolved action ids are handed in as the search's allow-list.
+      { id: 'topbar', ...(ids.has('chrome.topbar') ? { initial: { action: 'chrome.topbar', input: { allowedIds: [...ids] } } } : {}) },
       {
         id: 'main',
         actionLayout: mainStackLayout,

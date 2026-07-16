@@ -5,7 +5,7 @@
 import { evaluate } from '@niscorp/prism';
 import type { QueryRequest } from '@niscorp/vex';
 import { getVexRuntime, todayStr } from '@relay/vex/runtime';
-import { scopePolicy } from '@relay/vex/scope';
+import { systemPolicy } from '../charter/session-policy';
 import { executeMutation } from '@niscorp/vex';
 import { taskUpsert, taskSetDone, taskDelete } from '@relay/api/tasks';
 import { listTasksPrism } from '@relay/nova/domains/task/tasks.prism';
@@ -44,7 +44,7 @@ const run = async (): Promise<void> => {
   await executeMutation(rt.db, taskUpsert.mutation, {
     context: { id: '', title: 'RLS probe', due_date: null, deal_id: null },
     scope: { userId: 'usr_002' },
-    policy: scopePolicy,
+    policy: systemPolicy,
     schema,
   });
   const probe = await q(`SELECT assignee_id FROM tasks WHERE title = 'RLS probe'`);
@@ -53,23 +53,26 @@ const run = async (): Promise<void> => {
   // ── UPDATE/DELETE are pinned: another principal's task is untouchable ──
   const target = [...alex][0]!;
   const doneBefore = (await q('SELECT done FROM tasks WHERE id = $1', [target]))[0]?.['done'];
-  await executeMutation(rt.db, taskSetDone.mutation, { context: { id: target, done: !(doneBefore as boolean) }, scope: { userId: 'usr_002' }, policy: scopePolicy, schema });
+  await executeMutation(rt.db, taskSetDone.mutation, { context: { id: target, done: !(doneBefore as boolean) }, scope: { userId: 'usr_002' }, policy: systemPolicy, schema });
   const doneAfterSpoof = (await q('SELECT done FROM tasks WHERE id = $1', [target]))[0]?.['done'];
   checks.push(["jordan cannot flip alex's task (done unchanged)", doneAfterSpoof === doneBefore]);
-  await executeMutation(rt.db, taskDelete.mutation, { context: { id: target }, scope: { userId: 'usr_002' }, policy: scopePolicy, schema });
+  await executeMutation(rt.db, taskDelete.mutation, { context: { id: target }, scope: { userId: 'usr_002' }, policy: systemPolicy, schema });
   const stillThere = await q('SELECT id FROM tasks WHERE id = $1', [target]);
   checks.push(["jordan cannot delete alex's task", stillThere.length === 1]);
-  await executeMutation(rt.db, taskSetDone.mutation, { context: { id: target, done: !(doneBefore as boolean) }, scope: { userId: 'usr_001' }, policy: scopePolicy, schema });
+  await executeMutation(rt.db, taskSetDone.mutation, { context: { id: target, done: !(doneBefore as boolean) }, scope: { userId: 'usr_001' }, policy: systemPolicy, schema });
   const doneAfterOwn = (await q('SELECT done FROM tasks WHERE id = $1', [target]))[0]?.['done'];
   checks.push(['alex flips his own task fine', doneAfterOwn === !(doneBefore as boolean)]);
 
-  // ── default deny: an entity with no write rule refuses writes outright ──
+  // ── default deny, on the DEPLOYED floor: the charter's `system` role
+  //    grants no pipelines write phase, so even the trusted path's own
+  //    policy refuses the write. This is the ACL layer biting through vex's
+  //    default-deny — not a synthetic policy, the one the engine runs on. ──
   let deniedCode = '';
   try {
     await executeMutation(rt.db, { op: 'delete', table: 'pipelines', where: { eq: ['pipelines.id', { $context: 'id' }] } } as never, {
       context: { id: 'pipe_001' },
       scope: { userId: 'usr_001' },
-      policy: scopePolicy,
+      policy: systemPolicy,
       schema,
     });
   } catch (e) {

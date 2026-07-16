@@ -2,7 +2,7 @@ import { handleQuery, handleDiscovery, handleFingerprintPatch, handleFingerprint
 import { getVexRuntime } from '../runtime';
 import { identity } from '../../auth';
 import { resourceEntities } from './resources';
-import { scopePolicy } from '../scope';
+import { policyForPrincipal } from '../../charter/session-policy';
 
 // ═══════════════════════════════════════════════════════════
 // Vex-as-HTTP, in the browser.
@@ -49,11 +49,19 @@ export const vexFetch = async (url: string, init?: Init): Promise<Resp> => {
   const parsed = new URL(url, 'http://relay.local');
   const entities = resourceEntities(parsed.pathname);
   const { engine, db } = await getVexRuntime();
-  // Scope comes from the session TOKEN, per request — never client-supplied,
-  // never a constant. Anonymous requests scope to a user that owns nothing.
-  const scope = { userId: identity()?.userId ?? 'anonymous' };
+  const who = identity();
+  // Scope VALUES come from the session token, per request — never
+  // client-supplied. The scope POLICY is the principal's charter-compiled
+  // one: which read/write phases exist for THEM (untrusted surface). An
+  // ungranted phase is absent → vex's default-deny refuses it.
+  const scope = { userId: who?.userId ?? 'anonymous' };
+  const policy = policyForPrincipal(who?.userId ?? null);
   const method = (init?.method ?? 'GET').toUpperCase();
 
+  // Discovery is served UNGOVERNED — catalog metadata (fingerprints, shapes,
+  // intents, mutation signatures) goes to any principal, anonymous included.
+  // Known and deferred, not an oversight: filtering discovery per principal
+  // is the app server's job (the served catalog), not this client proof's.
   if (method === 'GET') {
     const body = await handleDiscovery({ engine, entities });
     return wrap(200, body);
@@ -78,12 +86,16 @@ export const vexFetch = async (url: string, init?: Init): Promise<Resp> => {
   // entry's kind picks the pipeline. The human surface is replay-only:
   // `locked: true` means an unknown or drifted read gets 400 `locked`, and
   // writes are replay-only ALWAYS (a mutation def never travels — an inline
-  // `{ mutation }` body is not a request shape at all). Scope is injected
-  // here (never client-supplied); the write path stamps identity + applies
-  // RLS through the same policy reads use. Ray's `query` tool and the
-  // architect keep their own generative engine path; the split is the
-  // posture, not an accident.
-  const res = await handleQuery({ engine, entities, locked: true, mutations: { client: db, policy: scopePolicy } }, body, scope);
+  // `{ mutation }` body is not a request shape at all). The principal's
+  // compiled policy governs BOTH sides: reads via `scopePolicy`, writes via
+  // `mutations.policy` — same policy, so a viewer (no write phase) has their
+  // mark-won refused as `scope_denied`. Ray's `query` tool and the architect
+  // keep their own generative engine path on the engine's full default.
+  const res = await handleQuery(
+    { engine, entities, locked: true, scopePolicy: policy, mutations: { client: db, policy } },
+    body,
+    scope,
+  );
   return wrap(res.status, res.body);
 };
 

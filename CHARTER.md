@@ -56,17 +56,27 @@ compromised:
 
 | Ring | Question | Enforced by |
 |---|---|---|
-| 1 — existence | Which actions are in your universe? | The charter → served catalog |
+| 1 — existence | Which actions are in your universe? | The charter (`actions`) → served catalog |
 | 2 — shape | What does *your variant* of an action do? | Authored/derived variants (patches, Prism redaction, fragments) |
-| 3 — data | Which rows/columns can any of it touch? | Vex scope policy, locked fingerprints, closed mutation grammar |
+| 3 — data | Which **verbs** on which entity? / Which **rows/columns**? | ACL: the charter (`data`) → a compiled Vex ScopePolicy. RLS: the policy's own row rules, locked fingerprints, closed mutation grammar |
 
-Ring 3 is the unforgeable floor and already exists in Vex: server-injected
-scope, identity stamping, replay-only endpoints, a mutation grammar that
-rejects `$scope` injection and blanket writes at parse time. A fully malicious
-client that fabricates its own definitions still cannot cross ring 3.
+Ring 3 has two halves that this stack keeps apart. **ACL** — *may you write
+deals at all* — is a verb question, and it is the charter's: the `data`
+section resolves to a set of `table.verb` grants that **compile to a Vex
+`ScopePolicy`** (which read/write phases exist for you). **RLS** — *which
+rows* — is what a granted phase then does (`match`/`set` rules), and the
+charter never touches it. Vex is the unforgeable floor either way: an
+ungranted phase is simply absent from your policy, and Vex's own default-deny
+refuses it; server-injected scope, identity stamping, replay-only endpoints,
+and a mutation grammar that rejects `$scope` and blanket writes stand under
+it. A malicious client that fabricates its own definitions still cannot cross
+Vex.
 
-The charter never does ring 2 or ring 3 work. That boundary is what keeps it
-small.
+The charter does ring-1 existence and the ring-3 **verb** decision; it never
+does ring-2 shaping or ring-3 **row** work. And it never *enforces* — it
+**compiles**: each consumer (the shell, Vex) enforces its own native contract
+in its own language, and the charter speaks that language at the boundary
+(see **Compilers**). That boundary is what keeps it small.
 
 ---
 
@@ -101,6 +111,44 @@ Sugar: a bare array is `{ "allow": [...] }`.
 
 That is the entire grammar. Arrays contain only plain strings. There are no
 sigils, no precedence rules, no conditions, no nesting beyond role references.
+
+### Sections — one grammar, many universes
+
+A role grants across one or more **sections**, each the same 2×2 atoms
+resolving in that section's own **universe** of ids. The engine is
+*universe-blind* — it globs over opaque strings and never learns what a string
+means — so a section is just "which universe do these globs resolve in":
+
+- **`actions`** — Nova action ids (`crm.deal.view`). The universe is the
+  action library. This is the default: a bare array, or top-level
+  `allow`/`deny`, *is* the actions section (the examples above and the corpus
+  below are all actions-only roles).
+- **`data`** — `table.verb` capabilities. The verb leaves mirror vex's
+  phases: `read`, plus the three write ops under the `write` *namespace* —
+  `deals.read`, `deals.write.insert`, `deals.write.update`,
+  `deals.write.delete`. `write` itself is never an atom (leaves-only, as
+  everywhere); **the umbrella is a glob** — `deals.write.*` grants every
+  write, `*.write.delete` denies deletes across the board. The universe is
+  derived from the schema, never authored ("the id hierarchy is the
+  taxonomy", applied to verbs).
+
+```json
+{
+  "viewer": { "extends": ["member"], "actions": ["crm.*.view", "crm.*s"], "data": ["*.read"] },
+  "sales":  { "extends": ["viewer"], "actions": ["crm.*", "tasks.*"], "data": ["deals.write.insert", "deals.write.update", "tasks.write.*"] },
+  "admin":  { "extends": ["sales"], "data": ["deals.write.delete"] },
+  "intern": { "extends": ["sales"], "data": { "deny": ["*.write.delete"] } }
+}
+```
+
+Delete is the scary verb, and it is just a leaf: sales edits deals all day
+and cannot delete one; the admin's compiled policy is the only one where the
+phase exists.
+
+`extends`/`without` compose **every** section at once. Resolution, deny-wins,
+and the verifier all run per section against the right universe — one matcher,
+one resolver, one set of lints, reused. Adding a governed surface is adding a
+universe and a compiler, never new grammar.
 
 ### Resolution
 
@@ -139,10 +187,56 @@ Everything downstream consumes the resolved id set, never the charter itself:
 
 1. **The shell catalog** — the definitions served to (or registered in) a
    principal's shell.
-2. **Cortex tool policy** — the agent's action surface via `policyGate`.
-3. **The fn gate** — server functions are endpoints (`/fns/<name>`); a fn
+2. **Vex** — the compiled `ScopePolicy` (the `data` section) governing reads
+   and writes.
+3. **Cortex tool policy** — the agent's action surface via `policyGate`.
+4. **The fn gate** — server functions are endpoints (`/fns/<name>`); a fn
    reachable through no granted action's endpoints does not execute.
-4. **The verifier** — reports, diffs, and assertions (below).
+5. **The verifier** — reports, diffs, and assertions (below).
+
+---
+
+## Compilers — charter speaks each consumer's language
+
+The charter never enforces; it **compiles**. Each governed library keeps its
+own native, self-sufficient contract, enforced by its own machinery — Nova
+has the action map (an absent id throws `UnknownActionError`), Vex has
+`ScopePolicy` (an absent phase is default-denied), Cortex has `ToolPolicy`.
+None of them imports the charter or knows it exists. The charter is the
+compiler that emits *per-principal instances* of those contracts, one
+emitter per target:
+
+| section | emits | consumer |
+|---|---|---|
+| `actions` | a filtered action map | Nova's shell |
+| `data` | a `ScopePolicy` (which phases exist) | Vex's adapter |
+| (future) | a `ToolPolicy` | Cortex's `policyGate` |
+| (future) | a served layout choice | Nova |
+
+The dependency arrow points **one way**: the charter imports its targets'
+types (`ScopePolicy` from Vex, `ActionDefinition` from Nova) in order to emit
+them; the targets import nothing. This keeps the libraries pure and
+standalone — Vex without a charter is a hand-authored `ScopePolicy`, Nova is a
+hand-authored action map — and it makes grafting policy onto something new
+additive: a new section, a new compiler, one property on the target. The test
+for whether a thing is charter-governable is exactly this stack's house rule:
+**it is configured by declarative data, and absence means denial.**
+
+The `data` → `ScopePolicy` compiler is the exemplar and the reason it's
+trivial: a Vex policy already fuses two things — which *phases* an entity has
+(read/write present or absent — ACL, which the charter now owns) and what a
+phase *does* (its `match`/`set` rules — row behavior, static and app-owned).
+So `resolved data grants → which phases exist`, `behaviors table → what a
+phase does`, and a granted phase carries its behaviors (or none). The
+viewer's mark-won dies because their compiled policy has no `deals` write
+phase — not a gate anyone added, one the charter never emitted.
+
+The trusted path is a charter artifact too: the engine's *default* policy —
+what direct callers (dev checks, Ray's query tool, the architect) run under —
+compiles from a `system` role in the same document, never assigned to a
+human. There is no policy in the app the charter does not own; even the
+engine's own floor is a resolved, verified, diffable grant, and a verb the
+`system` role lacks dies for the engine exactly as it does for a viewer.
 
 ---
 
@@ -408,7 +502,7 @@ For every temptation, the forwarding address:
 
 | Temptation | Home |
 |---|---|
-| Row filtering ("only my deals") | Vex scope policy (ring 3) |
+| Row filtering ("only my deals") | The Vex policy's own `match` rules — a *behavior* of a phase the `data` section granted, not the charter |
 | Column shaping ("no margin field") | Patched variant + Prism redaction (ring 2) |
 | Approval / confirmation flows | Fragments composed onto the action (ring 2) |
 | Time-boxed / conditional access | Assignment rows (a table) |
@@ -419,7 +513,9 @@ For every temptation, the forwarding address:
 | Tags / metadata predicates | The id namespace |
 | Grant-time shaping (`apply` a patch in a selector) | Refused — mint a variant id (ring 2) |
 
-The charter maps names to selections of actions. Everything else has a home
+The charter maps names to selections — of actions, and of `table.verb` data
+capabilities. It decides *whether the verb exists in your world*; everything
+about *which rows*, *which columns*, or *what a variant looks like* has a home
 that already exists.
 
 ---

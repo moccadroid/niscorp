@@ -72,7 +72,9 @@ export const dealLayout: LayoutNode = {
               },
               // ── Action surface. Edit re-opens the form (stage included, so a
               // move is an edit); Add task opens the task form; Won/Lost close
-              // the deal. Each persists and re-reads. ──
+              // the deal. Each persists and re-reads. One layout for every
+              // principal — a verb the principal doesn't hold dies in vex;
+              // per-role shapes are ring-2 served variants, not conditionals. ──
               {
                 component: 'Row',
                 props: { gap: 8, wrap: true },

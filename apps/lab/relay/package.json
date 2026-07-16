@@ -12,6 +12,7 @@
     "harness": "tsx src/dev/harness-check.ts",
     "architect": "tsx src/dev/architect-check.ts",
     "charter": "tsx src/dev/charter-check.ts",
+    "acl": "tsx src/dev/acl-check.ts",
     "rls": "tsx src/dev/rls-check.ts",
     "locked": "tsx src/dev/locked-check.ts"
   },
