@@ -2,14 +2,18 @@ import { Hono } from 'hono';
 import type { Context } from 'hono';
 import type { QueryEngine } from '../../types.js';
 import type { ScopeValues } from '../../scope/scope.types.js';
+import type { VexHandlerConfig } from '../../handler.js';
 import { handleDiscovery, handleQuery, handleFingerprintPatch, handleFingerprintDelete } from '../../handler.js';
 
 export type VexHonoConfig = {
   engine: QueryEngine;
   entities?: string[];
   // Replay-only posture: no generation, no fingerprint management.
+  // (Writes are unaffected — mutation replay is always replay-only.)
   locked?: boolean;
   getScope?: (c: Context) => Promise<ScopeValues> | ScopeValues;
+  // Enables replay of `kind: 'mutation'` cache entries on this endpoint.
+  mutations?: VexHandlerConfig['mutations'];
 };
 
 // Fingerprints may contain '/' (named slots like "deals/table"), so
@@ -26,6 +30,7 @@ export const vex = (config: VexHonoConfig): Hono => {
     engine: config.engine,
     entities: config.entities,
     ...(config.locked === true ? { locked: true } : {}),
+    ...(config.mutations !== undefined ? { mutations: config.mutations } : {}),
   };
 
   app.get('/', async (c) => c.json(await handleDiscovery(handlerConfig)));

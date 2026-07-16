@@ -1,5 +1,6 @@
 import type { QueryEngine } from '../../types.js';
 import type { ScopeValues } from '../../scope/scope.types.js';
+import type { VexHandlerConfig } from '../../handler.js';
 import { handleDiscovery, handleQuery, handleFingerprintPatch, handleFingerprintDelete } from '../../handler.js';
 
 // Minimal structural types — Express.Request/Response satisfy these
@@ -20,8 +21,11 @@ export type VexExpressConfig<TReq extends VexExpressRequest = VexExpressRequest>
   engine: QueryEngine;
   entities?: string[];
   // Replay-only posture: no generation, no fingerprint management.
+  // (Writes are unaffected — mutation replay is always replay-only.)
   locked?: boolean;
   getScope?: (req: TReq) => Promise<ScopeValues> | ScopeValues;
+  // Enables replay of `kind: 'mutation'` cache entries on this endpoint.
+  mutations?: VexHandlerConfig['mutations'];
 };
 
 // Fingerprints may contain '/' (named slots like "deals/table"), so
@@ -39,6 +43,7 @@ export const vex = <TReq extends VexExpressRequest = VexExpressRequest>(
     engine: config.engine,
     entities: config.entities,
     ...(config.locked === true ? { locked: true } : {}),
+    ...(config.mutations !== undefined ? { mutations: config.mutations } : {}),
   };
 
   return async (req: TReq, res: VexExpressResponse): Promise<void> => {

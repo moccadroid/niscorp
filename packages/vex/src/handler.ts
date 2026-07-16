@@ -4,7 +4,7 @@ import type { ScopePolicy, ScopeValues } from './scope/scope.types.js';
 import type { DatabaseSchema, EntitySchema } from './schemas/database.schema.js';
 import { QueryRequestSchema } from './schemas/request.schema.js';
 import { QuerySchema } from './schemas/query.schema.js';
-import { isEntryFresh } from './cache/util.js';
+import { isEntryFresh, fireAndForget } from './cache/util.js';
 import { computeSchemaFingerprint } from './cache/hash.js';
 import { executeMutation } from './mutations/engine.js';
 import type { MutationClient } from './mutations/engine.js';
@@ -249,6 +249,9 @@ export const handleQuery = async (
           policy: config.mutations.policy,
           schema,
         });
+        // Lifetime = usage, for writes exactly as for reads: stamp
+        // lastUsedAt (off the hot path) so the GC sweep sees replays.
+        fireAndForget(engine.cache.set(parsed.data.fingerprint, { ...entry, lastUsedAt: Date.now() }));
         // A single statement returns its one affected row; a batch returns
         // the array — the same `{ result }` envelope a query reply uses.
         return { status: 200, body: { result: rows.length === 1 ? rows[0] : rows } };
