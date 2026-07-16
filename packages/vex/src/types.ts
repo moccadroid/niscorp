@@ -62,4 +62,10 @@ export type ExecuteOptions = {
   // Replay-only posture (production): any request that would need
   // generation fails with 'locked' instead of running the agent.
   locked?: boolean;
+  // Per-request scope policy — overrides the engine's default for THIS
+  // execution. The read-side symmetry of a per-call mutation policy: a
+  // host that resolves a policy per principal (e.g. compiled from an ACL
+  // layer) passes it here so reads enforce that principal's phases, not a
+  // single static engine policy. Omitted → the engine's configured policy.
+  scopePolicy?: ScopePolicy;
 };

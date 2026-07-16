@@ -47,12 +47,17 @@ const assertWritableColumns = (m: ResolvedMutation, schema: DatabaseSchema): voi
 };
 
 // ─── Scope — applied by the ENGINE, never authored in the DSL ──
-// The same `ScopePolicy` reads use, its `write` rules applied AFTER the entry
-// is parsed — so identity/tenant binding can't be touched by a stored or
-// injected mutation. A `set` stamps a column on insert (identity safety). A
-// `match` pins its column on insert and ANDs a filter into update/delete
-// WHERE (the RLS boundary). Absent `write` (or unlisted table) falls to
-// `default`: deny throws, allow leaves the mutation ungoverned.
+// The same `ScopePolicy` reads use, its write-phase rules applied AFTER the
+// entry is parsed — so identity/tenant binding can't be touched by a stored
+// or injected mutation. `write` is the UMBRELLA phase (grants + rules for
+// insert/update/delete); the specific phases refine it — an op is allowed
+// iff its specific phase or `write` exists, and its rules are the umbrella's
+// plus the specific's. Mechanics: a `set` writes its column from scope on
+// each column-writing op (insert values, update set) — delete writes no
+// columns, so it is structurally exempt, not special-cased. A `match` pins
+// its column on insert and ANDs a filter into update/delete WHERE (the RLS
+// boundary). No applicable phase (or unlisted table) falls to `default`:
+// deny throws, allow leaves the mutation ungoverned.
 const scopeMutation = (m: CoreMutation, policy: ScopePolicy): ResolvedMutation => {
   const rule = policy.entities[m.table];
   if (rule === undefined) {
@@ -61,16 +66,18 @@ const scopeMutation = (m: CoreMutation, policy: ScopePolicy): ResolvedMutation =
   }
   if ('public' in rule) return m;
   if ('deny' in rule) throw new VexScopeError(m.table, `Writes to "${m.table}" are denied by scope policy.`);
-  if (rule.write === undefined) {
-    if (policy.default === 'deny') throw new VexScopeError(m.table, `Writes to "${m.table}" are not allowed by scope policy (default: deny).`);
+  const specific = m.op === 'insert' ? rule.insert : m.op === 'update' ? rule.update : rule.delete;
+  if (rule.write === undefined && specific === undefined) {
+    if (policy.default === 'deny') throw new VexScopeError(m.table, `"${m.op}" on "${m.table}" is not allowed by scope policy (default: deny).`);
     return m;
   }
 
   let scoped: ResolvedMutation = m;
-  for (const r of rule.write) {
+  for (const r of [...(rule.write ?? []), ...(specific ?? [])]) {
     if ('set' in r) {
-      // Identity stamp — insert only.
+      // The column is written from scope on insert AND update alike.
       if (scoped.op === 'insert') scoped = { ...scoped, values: { ...scoped.values, [r.set]: { $scope: r.to } } };
+      else if (scoped.op === 'update') scoped = { ...scoped, set: { ...scoped.set, [r.set]: { $scope: r.to } } };
     } else if (scoped.op === 'insert') {
       // RLS boundary on insert — pin the column to the scope value.
       scoped = { ...scoped, values: { ...scoped.values, [r.match]: { $scope: r.to } } };

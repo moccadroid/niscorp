@@ -115,6 +115,18 @@ describe('scopeMutation via executeMutation', () => {
     expect(calls[0]!.params).toContain('Probe Inc');
   });
 
+  it('sets the column on UPDATE too — write means every write', async () => {
+    const { client, calls } = fakeClient();
+    await executeMutation(client, { op: 'update', table: 'companies', set: { name: { $context: 'name' } }, where: { eq: ['companies.id', { $context: 'id' }] } }, {
+      context: { name: 'Renamed Inc', id: 'c_1' },
+      scope: { userId: 'usr_1' },
+      policy,
+      schema,
+    });
+    expect(calls[0]!.sql).toMatch(/SET .*owner_id\s*=/);
+    expect(calls[0]!.params).toContain('usr_1');
+  });
+
   it('pins update/delete WHERE to the scope match rule', async () => {
     const { client, calls } = fakeClient();
     await executeMutation(client, { op: 'delete', table: 'tasks', where: { eq: ['tasks.id', { $context: 'id' }] } }, {
@@ -132,6 +144,63 @@ describe('scopeMutation via executeMutation', () => {
     await expect(
       executeMutation(client, { op: 'insert', table: 'stages', values: { name: 'x' } }, { context: {}, scope: {}, policy, schema }),
     ).rejects.toThrow(VexScopeError);
+  });
+});
+
+// ─── Specific write phases (write is the umbrella) ─────────────
+
+describe('specific write phases', () => {
+  const phased: ScopePolicy = {
+    default: 'deny',
+    entities: {
+      // insert-only: create allowed (with its rules), update/delete are not
+      companies: { insert: [{ set: 'owner_id', to: 'userId' }] },
+      // umbrella + specific: umbrella rules apply to every op, the specific
+      // phase's stack on top for that op
+      tasks: {
+        write: [{ set: 'assignee_id', to: 'userId' }],
+        update: [{ match: 'assignee_id', to: 'userId' }],
+      },
+    },
+  };
+
+  it('an insert-only phase allows insert and applies its rules', async () => {
+    const { client, calls } = fakeClient();
+    await executeMutation(client, { op: 'insert', table: 'companies', values: { name: { $context: 'name' } } }, {
+      context: { name: 'Probe' }, scope: { userId: 'usr_1' }, policy: phased, schema,
+    });
+    expect(calls[0]!.sql).toContain('owner_id');
+    expect(calls[0]!.params).toContain('usr_1');
+  });
+
+  it('an insert-only phase denies update and delete', async () => {
+    const { client } = fakeClient();
+    const opts = { context: { id: 'c_1', name: 'x' }, scope: { userId: 'usr_1' }, policy: phased, schema };
+    await expect(
+      executeMutation(client, { op: 'update', table: 'companies', set: { name: { $context: 'name' } }, where: { eq: ['companies.id', { $context: 'id' }] } }, opts),
+    ).rejects.toThrow(VexScopeError);
+    await expect(
+      executeMutation(client, { op: 'delete', table: 'companies', where: { eq: ['companies.id', { $context: 'id' }] } }, opts),
+    ).rejects.toThrow(VexScopeError);
+  });
+
+  it("umbrella rules and the specific phase's stack on update", async () => {
+    const { client, calls } = fakeClient();
+    await executeMutation(client, { op: 'update', table: 'tasks', set: { done: { $context: 'done' } }, where: { eq: ['tasks.id', { $context: 'id' }] } }, {
+      context: { id: 't_1', done: true }, scope: { userId: 'usr_1' }, policy: phased, schema,
+    });
+    // umbrella `set` lands in SET, specific `match` lands in WHERE
+    expect(calls[0]!.sql).toMatch(/SET .*assignee_id\s*=/);
+    expect(calls[0]!.sql).toMatch(/WHERE .*assignee_id\s*=/);
+  });
+
+  it('the umbrella alone still grants every op', async () => {
+    const { client } = fakeClient();
+    await expect(
+      executeMutation(client, { op: 'delete', table: 'tasks', where: { eq: ['tasks.id', { $context: 'id' }] } }, {
+        context: { id: 't_1' }, scope: { userId: 'usr_1' }, policy: phased, schema,
+      }),
+    ).resolves.toBeDefined();
   });
 });
 

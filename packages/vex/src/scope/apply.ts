@@ -1,17 +1,20 @@
 import type { Query } from '../schemas/query.schema.js';
 import type { Filter } from '../schemas/filter.schema.js';
 import type { ScopePolicy, ScopeEntityRule } from './scope.types.js';
+import { VexError } from '../errors.js';
 
 // ───────────────────────────────────────────────────────────────
 // Error
 // ───────────────────────────────────────────────────────────────
 
-export class VexScopeError extends Error {
-  readonly code = 'scope_denied' as const;
+// A scope denial IS a VexError (code 'scope_denied') so the HTTP layer maps
+// it to a 400 like every other request error — a denied read or write is the
+// caller's problem, not a 500. `entity` is kept for callers that inspect it.
+export class VexScopeError extends VexError {
   readonly entity: string;
 
   constructor(entity: string, message: string) {
-    super(message);
+    super('scope_denied', message);
     this.name = 'VexScopeError';
     this.entity = entity;
   }

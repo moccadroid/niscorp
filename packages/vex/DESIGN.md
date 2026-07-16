@@ -167,7 +167,8 @@ extra filter clauses.
 
 - **resolver** (`resolve`) turns the scoped DSL into a `ResolvedQuery`: field
   paths → table aliases + columns, FK-based join discovery between entity
-  sources (subquery sources are not FK-joined — the compiler cross-joins them,
+  sources (a nullable FK resolves to a LEFT join so a null FK never drops the
+  referencing row; subquery sources are not FK-joined — the compiler cross-joins them,
   and the outer query can reference their field/compute/aggregate outputs),
   subquery recursion.
 - **analyzer** (`analyze`) validates the resolved query and returns
@@ -362,7 +363,7 @@ The pipeline: validate (closed grammar — `$scope` unauthorable, update/delete
 require a WHERE) → desugar (upsert → insert/update by key presence) →
 require context (a write never executes with holes; the `missing_context`
 error carries the FULL derived signature) → scope (the same `ScopePolicy`
-reads use: `set` stamps identity on insert, `match` pins rows) → column
+reads use: `set` writes identity on insert and update, `match` pins rows) → column
 check against the introspected schema → compile (through the read
 pipeline's own `compileFilter`/`compileFieldOrValue`/`resolveParams`, so
 values bind as SQL parameters exactly like reads) → execute. Batches run in

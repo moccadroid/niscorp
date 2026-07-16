@@ -24,6 +24,10 @@ export type ResolvedJoin = {
   toAlias: string;
   toColumn: string;
   toTable: string;
+  // 'left' when the referencing FK column is nullable: a null FK must never
+  // drop the referencing row from the read. Non-nullable FKs compile to an
+  // inner JOIN (equivalent — the column can't be null).
+  kind: 'inner' | 'left';
 };
 
 export type ResolvedFilter = {

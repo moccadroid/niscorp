@@ -82,15 +82,16 @@ export const compileQuery = (resolved: ResolvedQuery): CompiledQuery => {
   for (const join of resolved.joins) {
     const joinSource = resolved.sources.find((s) => s.alias === join.toAlias);
     if (joinSource !== undefined) {
+      const keyword = join.kind === 'left' ? 'LEFT JOIN' : 'JOIN';
       if (joinSource.subquery !== undefined) {
         const subSql = compileQuery(joinSource.subquery);
         mergeSubqueryParams(subSql, paramSlots, paramCounter);
         sqlParts.push(
-          `JOIN (${subSql.sql}) AS ${join.toAlias} ON ${join.fromAlias}.${join.fromColumn} = ${join.toAlias}.${join.toColumn}`,
+          `${keyword} (${subSql.sql}) AS ${join.toAlias} ON ${join.fromAlias}.${join.fromColumn} = ${join.toAlias}.${join.toColumn}`,
         );
       } else {
         sqlParts.push(
-          `JOIN ${join.toTable} AS ${join.toAlias} ON ${join.fromAlias}.${join.fromColumn} = ${join.toAlias}.${join.toColumn}`,
+          `${keyword} ${join.toTable} AS ${join.toAlias} ON ${join.fromAlias}.${join.fromColumn} = ${join.toAlias}.${join.toColumn}`,
         );
       }
     }

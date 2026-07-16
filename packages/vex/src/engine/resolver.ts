@@ -134,20 +134,25 @@ const findJoinBetween = (
   fromAlias: string,
   toAlias: string,
 ): ResolvedJoin | undefined => {
-  // Check if fromEntity has a relation pointing to toEntity
+  // Check if fromEntity has a relation pointing to toEntity. The FK column
+  // lives on the referencing side — when it is nullable, the join is LEFT so
+  // a null FK never silently drops the referencing row.
   for (const rel of fromEntity.relations) {
     if (rel.entity === toEntity.name) {
+      const fkNullable = fromEntity.fields.find((f) => f.name === rel.localField)?.nullable === true;
       return {
         fromAlias,
         fromColumn: rel.localField,
         toAlias,
         toColumn: rel.foreignField,
         toTable: toEntity.table,
+        kind: fkNullable ? 'left' : 'inner',
       };
     }
   }
 
-  // Check reverse: toEntity has a relation pointing to fromEntity
+  // Check reverse: toEntity has a relation pointing to fromEntity — a
+  // one-to-many expansion (rows multiply per child), inner by design.
   for (const rel of toEntity.relations) {
     if (rel.entity === fromEntity.name) {
       return {
@@ -156,6 +161,7 @@ const findJoinBetween = (
         toAlias,
         toColumn: rel.localField,
         toTable: toEntity.table,
+        kind: 'inner',
       };
     }
   }

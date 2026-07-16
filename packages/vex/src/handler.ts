@@ -23,6 +23,11 @@ export type VexHandlerConfig = {
   // with 'locked'; fingerprint management (PATCH/DELETE) is refused too.
   // Mutation replay is unaffected — writes are ALWAYS replay-only.
   locked?: boolean;
+  // Per-request read policy — overrides the engine default for reads on
+  // this request (the read-side twin of `mutations.policy`). A host that
+  // resolves a policy per principal passes the SAME policy here and in
+  // `mutations.policy`, so reads and writes enforce one principal's phases.
+  scopePolicy?: ScopePolicy;
   // Enables replay of `kind: 'mutation'` cache entries. The client is
   // structural (PGlite, a pg wrapper, a test double); the policy is the
   // same ScopePolicy reads use, its `write` rules applied by the engine.
@@ -262,6 +267,7 @@ export const handleQuery = async (
       scope,
       entities: config.entities,
       ...(config.locked === true ? { locked: true } : {}),
+      ...(config.scopePolicy !== undefined ? { scopePolicy: config.scopePolicy } : {}),
     });
     return { status: 200, body: response };
   } catch (err) {

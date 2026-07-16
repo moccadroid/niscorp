@@ -430,7 +430,11 @@ outer query as `alias.field` — every selected field (under its `as`, if
 aliased) plus every `compute`/`aggregate` alias.
 
 **Joins.** String entity sources are joined automatically by foreign key; a
-source with no FK path to the others is an error. Subquery sources are **never**
+source with no FK path to the others is an error. A **nullable** FK compiles to
+a `LEFT JOIN` — a null FK never silently drops the referencing row from the
+read (the joined fields come back null); a non-nullable FK stays an inner
+`JOIN` (equivalent — the column can't be null). Reverse one-to-many joins are
+inner by design (rows multiply per child). Subquery sources are **never**
 FK-joined — any beyond the first are `CROSS JOIN`ed. That makes a row of
 independent aggregates expressible: cross-join N single-row `COUNT(*)`
 subqueries and select each one's count, and you get one row with N counts in a
@@ -476,8 +480,9 @@ dodge, or forge it. Two roles, named for the SQL they produce:
 
 - **`match`** (RLS) — the row's column must equal a scope value. A `WHERE` filter
   on read/update/delete; on insert the column is pinned to that value.
-- **`set`** (identity) — on insert the engine fills the column from a scope value
-  (a stamp). Insert-only.
+- **`set`** (identity) — the engine writes the column from a scope value on every
+  column-writing mutation: insert values and update set alike (`write` means every
+  write; delete writes no columns, so it is structurally exempt).
 
 ```typescript
 type ScopePolicy = {
@@ -489,12 +494,15 @@ type ScopeEntityRule =
   | { public: true }                          // fully open
   | { deny: true }                            // fully closed
   | {
-      read?:  ScopeMatch[];                   // SELECT WHERE (match only)
-      write?: (ScopeMatch | ScopeSet)[];      // UPDATE/DELETE WHERE + INSERT pin (match); INSERT stamp (set)
+      read?:   ScopeMatch[];                  // SELECT WHERE (match only)
+      write?:  (ScopeMatch | ScopeSet)[];     // UMBRELLA — grants + rules for insert/update/delete
+      insert?: (ScopeMatch | ScopeSet)[];     // specific: just INSERT, rules stack on write's
+      update?: (ScopeMatch | ScopeSet)[];     // specific: just UPDATE, rules stack on write's
+      delete?: ScopeMatch[];                  // specific: just DELETE (match only — nothing to set)
     };
 
 type ScopeMatch = { match: string; to: string };  // row.<match> = scope[to]
-type ScopeSet   = { set:   string; to: string };   // INSERT row.<set> := scope[to]
+type ScopeSet   = { set:   string; to: string };   // INSERT/UPDATE row.<set> := scope[to]
 ```
 
 Example:
@@ -521,9 +529,13 @@ Behavior:
 - `default` covers a discovered entity with no rule *and* a listed entity with no
   matching phase: `'deny'` throws `VexScopeError` (`scope_denied`), `'allow'`
   passes through unfiltered. `{ public: true }` passes; `{ deny: true }` throws.
-- The **`write`** rules are the contract for a mutation executor (the query engine
-  is read-only): `match` filters update/delete and pins the column on insert; `set`
-  stamps the column on insert. Applied server-side, never authored in the mutation
+- The write phases are the contract for a mutation executor (the query engine
+  is read-only). **`write`** is the umbrella: its presence grants insert, update
+  and delete, and its rules apply to all of them. **`insert`**/**`update`**/**`delete`**
+  are specific phases: each grants just its op, its rules stacking on the
+  umbrella's (`delete` is match-only — nothing to set). Rule mechanics: `match`
+  filters update/delete and pins the column on insert; `set` writes the column
+  on insert AND update. Applied server-side, never authored in the mutation
   — so identity/ownership can't be forged.
 - A missing `$scope` key surfaces via `meta.missingContext` (empty-but-valid), not
   a thrown error.
@@ -575,8 +587,8 @@ POST { "fingerprint": "tasks/setDone", "context": { "id": "task_1", "done": true
 The pipeline per statement: parse → desugar → **require context** (a write
 never executes with holes — missing keys are a hard 400 `missing_context`
 whose `details.expected` carries the FULL derived signature) → scope (the
-same `ScopePolicy` reads use: `write` `set` rules stamp identity on insert,
-`match` rules pin rows) → column check against the introspected schema →
+same `ScopePolicy` reads use: `write` `set` rules write identity on insert
+and update, `match` rules pin rows) → column check against the introspected schema →
 compile (parameterized, via the read pipeline's own operators) → execute
 with `RETURNING *`.
 
@@ -589,6 +601,12 @@ handleQuery({ engine, locked: true, mutations: { client: db, policy } }, body, s
 `client` is structural (`MutationClient` — PGlite, a pg wrapper, a test
 double). `locked` does not affect writes: they are replay-only under every
 posture. Direct library use: `executeMutation(client, def, { context, scope, policy, schema })`.
+
+A host that resolves a policy **per principal** (e.g. compiled from an ACL
+layer) passes it per request: `VexHandlerConfig.scopePolicy` overrides the
+engine's configured read policy for that request (`ExecuteOptions.scopePolicy`
+at the library level), and the same policy goes in `mutations.policy` — one
+policy, both sides of the wire. Omitted, the engine default applies.
 
 ### Derived context signatures
 

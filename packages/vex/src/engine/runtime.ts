@@ -4,7 +4,7 @@ import type { Query } from '../schemas/query.schema.js';
 import type { QueryRequest, QueryResponse } from '../schemas/request.schema.js';
 import type { CompiledQuery } from '../adapters/adapter.types.js';
 import type { TestResult, AnalysisConfig } from './engine.types.js';
-import type { ScopeValues } from '../scope/scope.types.js';
+import type { ScopeValues, ScopePolicy } from '../scope/scope.types.js';
 import type { CacheBackend, CacheEntry, OkCacheEntry } from '../cache/cache.types.js';
 import { z } from 'zod';
 import { QueryRequestSchema } from '../schemas/request.schema.js';
@@ -107,7 +107,7 @@ export const createQueryEngine = (engineConfig: QueryEngineConfig): QueryEngine 
     return cachedSchema;
   };
 
-  const runPipeline = (dsl: Query, scopeValues?: ScopeValues): PipelineResult => {
+  const runPipeline = (dsl: Query, scopeValues?: ScopeValues, policyOverride?: ScopePolicy): PipelineResult => {
     const schema = ensureSchema();
 
     // Apply limit constraints
@@ -121,10 +121,12 @@ export const createQueryEngine = (engineConfig: QueryEngineConfig): QueryEngine 
     // Discover entities
     const entities = discoverEntities(processedDsl);
 
-    // Apply scope
+    // Apply scope — a per-request policy (from ExecuteOptions) overrides the
+    // engine's configured default for this run.
+    const activePolicy = policyOverride ?? scopePolicy;
     let scopedDsl = processedDsl;
-    if (scopePolicy !== undefined && scopeValues !== undefined) {
-      scopedDsl = applyScope(processedDsl, entities, scopePolicy);
+    if (activePolicy !== undefined && scopeValues !== undefined) {
+      scopedDsl = applyScope(processedDsl, entities, activePolicy);
     }
 
     // Resolve
@@ -407,7 +409,7 @@ export const createQueryEngine = (engineConfig: QueryEngineConfig): QueryEngine 
 
     // Run the pipeline. `sortBy`/`sortDir` from context override the literal
     // `sort` for this run (the cached `dsl` keeps its default — see cache.set below).
-    const { compiled, warnings } = runPipeline(applySortContext(dsl, validRequest.context), scopeValues);
+    const { compiled, warnings } = runPipeline(applySortContext(dsl, validRequest.context), scopeValues, options?.scopePolicy);
     emit({ type: 'query.sql', sql: compiled.sql, warnings });
 
     // Check for missing context

@@ -564,6 +564,20 @@ describe('Compiler', () => {
     expect(compiled.sql).toContain('JOIN customers AS c1');
     expect(compiled.sql).toContain('ON');
     expect(compiled.sql).toContain('customer_id');
+    // Non-nullable FK → inner join (a null can't occur, LEFT would be noise).
+    expect(compiled.sql).not.toContain('LEFT JOIN');
+  });
+
+  it('compiles a LEFT JOIN when the referencing FK column is nullable', () => {
+    // A null FK must never silently drop the referencing row from a read.
+    const nullableFk = createTestSchema();
+    const orders = nullableFk.entities.find((e) => e.name === 'orders');
+    const fk = orders?.fields.find((f) => f.name === 'customer_id');
+    if (fk === undefined) throw new Error('fixture drift: orders.customer_id missing');
+    fk.nullable = true;
+    const resolved = resolve({ from: ['orders', 'customers'], fields: ['orders.id', 'customers.name'] }, nullableFk);
+    const compiled = compileQuery(resolved);
+    expect(compiled.sql).toContain('LEFT JOIN customers AS c1');
   });
 
   it('compiles WHERE clause from filter', () => {
