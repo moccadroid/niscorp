@@ -345,6 +345,38 @@ fingerprint freshness/eviction, backends and tiering, `validateEntry`.
   `/api/query` is `locked` (replay-only); showroom's demos own
   `vex-demo/<id>` slots (canned = seed + replay, live = delete + regenerate).
 
+### Mutations (write pipeline)
+
+Writes are first-class but deliberately NARROWER than reads. The asymmetry is
+the design: a bad generated query shows wrong data, a bad generated write
+destroys it — so mutations have **no generation path at all**. A mutation is
+a dev-authored artifact that enters through the seed path, lives in the cache
+as a `kind: 'mutation'` entry (the def in the same jsonb slot a query's DSL
+uses), and is invoked by fingerprint. The def never travels: an inline
+`{ mutation }` body is not a request shape, and the wire is ONE shape for
+both kinds — `POST { fingerprint, context }`, dispatched by the entry's kind.
+Replay-only holds under every posture (`locked` only ever governed query
+generation); the query engine refuses a mutation fingerprint explicitly.
+
+The pipeline: validate (closed grammar — `$scope` unauthorable, update/delete
+require a WHERE) → desugar (upsert → insert/update by key presence) →
+require context (a write never executes with holes; the `missing_context`
+error carries the FULL derived signature) → scope (the same `ScopePolicy`
+reads use: `set` stamps identity on insert, `match` pins rows) → column
+check against the introspected schema → compile (through the read
+pipeline's own `compileFilter`/`compileFieldOrValue`/`resolveParams`, so
+values bind as SQL parameters exactly like reads) → execute. Batches run in
+one transaction; the client is structural (`MutationClient` — PGlite, a pg
+wrapper, a test double), so the core imports no driver.
+
+**Derived context signatures** close the discoverability loop for both
+kinds: a `$context` ref sits at a position whose column the schema types, so
+"what do I pass this fingerprint" is computed from the stored def — never
+authored, never stale. Discovery lists every entry with kind, intent, the
+typed context contract, and shape (reads) or effect (`{op, table, columns}`,
+writes). An authoring lint (`lintMutation`) refuses un-keyed update/delete
+defs at seed time.
+
 ### LLM integration (decoupled)
 
 The engine takes two optional hooks:
@@ -442,8 +474,14 @@ src/
     express/index.ts             vex() Express handler (@niscorp/vex/express)
     index.ts                     adapter barrel
 
+  mutations/
+    schema.ts                    MutationSchema (closed grammar), MutationDefinitionSchema
+    engine.ts                    executeMutation — desugar/scope/validate/compile/execute
+    signature.ts                 collectMutationContext, collectQueryContext, mutationEffect, lintMutation
+    index.ts                     Barrel
+
   cache/
-    cache.types.ts               CacheBackend, CacheEntry (ok | unsatisfiable), CacheMode
+    cache.types.ts               CacheBackend, CacheEntry (ok | mutation | unsatisfiable)
     hash.ts                      computeShapeHash, computeRequestHash, computeSchemaFingerprint
     memory.ts                    createMemoryCache (L1)
     postgres.ts                  createPostgresCache (L2, durable)
@@ -524,10 +562,23 @@ Only `zod` is mandatory. Everything else is pulled in only by the path you use.
    resource (`GET` → entities + contract + DSL JSON Schema) lets a client — or
    another agent — learn how to query it without out-of-band documentation.
 
+9. **Writes are replay-only, one wire shape with reads.** Mutations are
+   dev-authored cache entries (`kind: 'mutation'`) invoked by fingerprint;
+   the def never travels and no generation path exists. The client-facing
+   API is uniformly `{ fingerprint, context }` — the entry's kind picks the
+   pipeline. Context signatures are DERIVED from the stored def (typed from
+   the schema by position), so the input contract can't drift.
+
 ---
 
 ## Deferred
 
+- Dynamic mutation generation — icebox, on purpose. If it ever returns, it
+  feeds the existing pipeline (author → validate → seed) behind an effect
+  contract and an approval step; nothing shipped today gets replaced.
+- Mutation transactions with cross-statement refs (`$returned.id` — the
+  create-parent-then-children case). Batches are atomic today but cannot
+  reference earlier statements' results.
 - MySQL / SQLite adapters — the interface is ready; implementation on demand.
 - Multi-level field paths — addable in the resolver without DSL changes.
 - ~~Intent-aware positive caching~~ — superseded: collisions did bite, and the

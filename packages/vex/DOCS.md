@@ -14,6 +14,7 @@ In-depth usage guide for `@niscorp/vex`. For the high-level pitch see
 - [Engine methods](#engine-methods)
 - [The DSL](#the-dsl)
 - [Scope policies](#scope-policies)
+- [Mutations](#mutations)
 - [Caching](#caching)
 - [Wiring the LLM agents](#wiring-the-llm-agents)
 - [Framework adapters](#framework-adapters)
@@ -50,6 +51,12 @@ rationale: [DESIGN.md](./DESIGN.md) **Cache v2 — fingerprints**.
 agent and referenced via `{ $context: "key" }`. `scope` is server-side access
 control, invisible to the agent, injected as filters via `{ $scope: "key" }`.
 They are passed through different channels and must never be conflated.
+
+**Writes are replay-only, same wire.** A mutation is a dev-authored cache
+entry (`kind: 'mutation'`) invoked exactly like a read replay —
+`{ fingerprint, context }` — and the entry's kind picks the pipeline. The
+def never travels and no generation path exists for writes. See
+[Mutations](#mutations).
 
 **Reserved sort keys.** `sortBy` (an `entity.field`) and `sortDir` (`asc`/`desc`)
 are reserved keys in `context`: the engine reads them straight into the `ORDER BY`
@@ -528,6 +535,84 @@ provided.
 
 ---
 
+## Mutations
+
+Writes are first-class and deliberately narrower than reads: **no generation
+path exists.** A mutation is authored by a developer, seeded into the cache
+as a `kind: 'mutation'` entry under a named fingerprint (normally
+`protected`), and replayed over the same wire shape reads use. An inline
+`{ mutation }` body is not a request shape at all.
+
+### The grammar
+
+Four ops, closed and strict. Values are literals or `{ $context: "key" }` —
+**never `$scope`** (identity is engine-injected, unforgeable) and never a
+field path. `update`/`delete` REQUIRE a `where` (a real vex `Filter`).
+
+```ts
+{ op: 'insert', table: 'tasks', values: { title: { $context: 'title' } } }
+{ op: 'update', table: 'tasks', set: { done: { $context: 'done' } },
+  where: { eq: ['tasks.id', { $context: 'id' }] } }
+{ op: 'delete', table: 'tasks', where: { eq: ['tasks.id', { $context: 'id' }] } }
+// sugar — insert-or-update keyed on `key`; `insert` columns apply on create only
+{ op: 'upsert', table: 'tasks', key: 'id',
+  columns: { title: { $context: 'title' } },
+  insert: { deal_id: { $context: 'deal_id' } } }
+```
+
+An array of ops is a batch and runs in ONE transaction (the client must
+expose `transaction`; a batch on a non-transactional client is refused).
+
+### Replay
+
+The handler dispatches by the entry's kind — one wire shape:
+
+```
+POST { "fingerprint": "tasks/setDone", "context": { "id": "task_1", "done": true } }
+→ 200 { "result": <affected row — or rows for a batch/bulk write> }
+```
+
+The pipeline per statement: parse → desugar → **require context** (a write
+never executes with holes — missing keys are a hard 400 `missing_context`
+whose `details.expected` carries the FULL derived signature) → scope (the
+same `ScopePolicy` reads use: `write` `set` rules stamp identity on insert,
+`match` rules pin rows) → column check against the introspected schema →
+compile (parameterized, via the read pipeline's own operators) → execute
+with `RETURNING *`.
+
+Enable replay on a handler by configuring the client and policy:
+
+```ts
+handleQuery({ engine, locked: true, mutations: { client: db, policy } }, body, scope);
+```
+
+`client` is structural (`MutationClient` — PGlite, a pg wrapper, a test
+double). `locked` does not affect writes: they are replay-only under every
+posture. Direct library use: `executeMutation(client, def, { context, scope, policy, schema })`.
+
+### Derived context signatures
+
+The input contract of ANY entry — read or write — is computed from its
+stored def: each `{ $context }` ref sits at a position whose column the
+schema types. Discovery lists it per fingerprint (`context`, plus `shape`
+for reads / `effect` = `{ op, table, columns }` for writes), and the
+`missing_context` error teaches it. Nothing is authored; nothing drifts.
+
+```ts
+collectMutationContext(def, schema);  // { id: { type: 'string', column: 'tasks.id', note: 'upsert key — …' }, … }
+collectQueryContext(dsl, schema);     // same idea over a query's filter/compute/subqueries
+mutationEffect(def);                  // [{ op: 'update', table: 'tasks', columns: ['done'] }]
+```
+
+### Authoring lint
+
+`lintMutation(def)` flags an `update`/`delete` whose WHERE binds no
+`$context` — such a write is not caller-bounded (its only row limit is the
+scope policy). Run it in your seed path so an unkeyed write never ships:
+loud at boot, never at runtime.
+
+---
+
 ## Caching
 
 ### Fingerprints — the one identity
@@ -738,13 +823,18 @@ app.all('/api/orders/vex', vex({
   entities (fields, relations, row counts), the request body contract (the
   three fingerprint postures), the protection summary (`protection:
   "all"|"some"|"none"`, `locked`), the fingerprint overview (`[{ fingerprint,
-  protected, schemaFresh, intent, lastUsedAt }]`), and the full DSL JSON
-  Schema. A client or agent can read this to learn how to query the resource —
-  and whether a named query already covers its need.
-- **`POST`** → runs a query. Body is the `QueryRequest` (fingerprint replay,
-  generation, or named slot); scope comes from `getScope`. Returns `{ status,
-  body }` mapped to the HTTP response — unknown fingerprint → 404
-  `cache_miss`, protected mismatch → 409 `fingerprint_protected`, locked → 403,
+  kind, protected, schemaFresh, intent, context, shape|effect, lastUsedAt }]`
+  — `context` is the derived, typed input signature; `effect` summarizes a
+  write), and the full DSL JSON Schema. A client or agent can read this to
+  learn how to call the resource — and exactly what each fingerprint takes.
+- **`POST`** → runs a query OR replays a write, one body shape. A
+  `fingerprint` naming a `kind: 'mutation'` entry dispatches to the write
+  pipeline (when `mutations` is configured); anything else is the read path
+  (fingerprint replay, generation, or named slot); scope comes from
+  `getScope`. Returns `{ status, body }` mapped to the HTTP response —
+  unknown fingerprint → 404 `cache_miss`, protected mismatch → 409
+  `fingerprint_protected`, locked → 403, a write with missing context → 400
+  `missing_context` with the full derived signature in `details.expected`,
   other `VexError`s → 400 with `{ error, message, details }`, unexpected
   errors → 500.
 - **`PATCH`** with `{ fingerprint, protected }` → flip the protection bit.
@@ -815,7 +905,7 @@ try {
 | `invalid_dsl` | The analyzer rejected the resolved query (cartesian product, nesting, etc.) |
 | `missing_scope` | A required scope value was absent (reserved) |
 | `scope_denied` | An entity is denied by the scope policy (`VexScopeError`) |
-| `missing_context` | A required context value was absent (reserved; normally surfaced via `meta.missingContext`) |
+| `missing_context` | A required context value was absent. Reads surface it softly via `meta.missingContext`; a WRITE hard-400s with the full derived signature in `details.expected` |
 | `execution_error` | Schema not loaded, or a database/runtime failure |
 | `agent_failed` | No `generateDsl` hook and no cached DSL for the shape |
 | `cache_miss` | Cache mode `only` and nothing cached |
