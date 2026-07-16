@@ -1,7 +1,9 @@
+import { handleQuery, lintMutation } from '@niscorp/vex';
 import type { VexEvent, Query, ScopeValues } from '@niscorp/vex';
 import { compile } from '@niscorp/prism';
 import { deepEqual } from '@showroom/lib/deep-equal';
 import type { VexRuntime } from './runtime/boot';
+import { mutationPolicy } from './runtime/scope';
 import type { VexScenario } from './scenarios';
 
 // Identity Prism transform. The engine runs the mapping once over the whole
@@ -30,7 +32,11 @@ export type ParamMeta = { type: string; kind: 'context' | 'scope' | 'semantic' }
 export type RunOutcome = {
   ok: boolean;
   error?: string;
-  dsl: Query;
+  // The wire error code + status ('mutate' mode refusals — scope_denied,
+  // missing_context, invalid_request), straight from the handler.
+  errorCode?: string;
+  status?: number;
+  dsl?: Query; // absent on 'mutate' — a mutation definition is not a DSL
   sql?: string;
   rows: unknown[];
   warnings: string[];
@@ -59,7 +65,7 @@ const messageOf = (err: unknown): string => {
 
 // The DSL actually used — the LLM-generated one in live mode (from the
 // query.dsl event), else the scenario's own DSL.
-const dslFromEvents = (events: VexEvent[], fallback: Query): Query => {
+const dslFromEvents = (events: VexEvent[], fallback?: Query): Query | undefined => {
   for (const e of events) if (e.type === 'query.dsl') return e.dsl as Query;
   return fallback;
 };
@@ -85,13 +91,106 @@ export const runScenario = async (
   });
 
   try {
+    // ─── Mutate path — the write pipeline, through the REAL wire ──
+    // The definition is seeded under the scenario's fingerprint (what an
+    // app does at boot — linted, never generated), then the request goes
+    // through handleQuery exactly as HTTP would deliver it: one wire
+    // shape, { fingerprint, context }; the entry's kind picks the write
+    // pipeline; refusals come back as genuine statuses.
+    if (scenario.mode === 'mutate') {
+      const fingerprint = `vex-demo/${scenario.id}`;
+      let cacheHit = false;
+      let generated = false;
+      try {
+        if (scenario.mutation !== undefined) {
+          const issues = lintMutation(scenario.mutation);
+          if (issues.length > 0) throw new Error(`seed refused: ${issues.join('; ')}`);
+          const existing = await runtime.engine.cache.get(fingerprint);
+          const warm = existing?.kind === 'mutation' && deepEqual(existing.mutation, scenario.mutation);
+          if (warm) {
+            cacheHit = true;
+          } else {
+            generated = true; // "seeded" — writes are never LLM-generated
+            await runtime.engine.cache.set(fingerprint, {
+              kind: 'mutation',
+              mutation: scenario.mutation,
+              intent: scenario.intent,
+              shape: scenario.shape,
+              schemaFingerprint: runtime.fingerprint,
+              createdAt: Date.now(),
+            });
+          }
+        }
+        const body = scenario.body ?? { fingerprint, context: opts.context };
+        const started = performance.now();
+        const res = await handleQuery(
+          { engine: runtime.engine, mutations: { client: runtime.db, policy: mutationPolicy } },
+          body,
+          opts.scope ?? {},
+        );
+        const executionMs = performance.now() - started;
+        const resBody = res.body as Record<string, unknown>;
+        if (res.status !== 200) {
+          return {
+            ok: false,
+            error: `${res.status} ${String(resBody.error)} — ${String(resBody.message)}`,
+            errorCode: String(resBody.error),
+            status: res.status,
+            rows: [],
+            warnings: [],
+            params: {},
+            cacheHit,
+            generated,
+            live: false,
+            fingerprint,
+            timing: {},
+            events,
+          };
+        }
+        const result = resBody.result;
+        return {
+          ok: true,
+          status: res.status,
+          rows: Array.isArray(result) ? result : [result],
+          warnings: [],
+          params: {},
+          cacheHit,
+          generated,
+          live: false,
+          fingerprint,
+          timing: { executionMs, totalMs: executionMs },
+          events,
+        };
+      } catch (err) {
+        return {
+          ok: false,
+          error: messageOf(err),
+          rows: [],
+          warnings: [],
+          params: {},
+          cacheHit,
+          generated,
+          live: false,
+          fingerprint,
+          timing: {},
+          events,
+        };
+      }
+    }
+
+    // ─── Read modes — execute/compile carry a DSL by construction ──
+    const readDsl = scenario.dsl;
+    if (readDsl === undefined) {
+      return { ok: false, error: `scenario "${scenario.id}" has no DSL`, rows: [], warnings: [], params: {}, cacheHit: false, generated: false, live: false, timing: {}, events };
+    }
+
     // ─── Analyzer demo: compile only, expect possible rejection ──
     if (scenario.mode === 'compile') {
       try {
-        const compiled = runtime.engine.compile(scenario.dsl, opts.scope);
+        const compiled = runtime.engine.compile(readDsl, opts.scope);
         return {
           ok: true,
-          dsl: scenario.dsl,
+          dsl: readDsl,
           sql: compiled.sql,
           rows: [],
           warnings: [],
@@ -106,7 +205,7 @@ export const runScenario = async (
         return {
           ok: false,
           error: messageOf(err),
-          dsl: scenario.dsl,
+          dsl: readDsl,
           rows: [],
           warnings: [],
           params: {},
@@ -145,7 +244,7 @@ export const runScenario = async (
 
       // Canned: is the slot already warm with this exact DSL?
       const existing = await runtime.engine.cache.get(fingerprint);
-      const warm = existing?.kind === 'ok' && deepEqual(existing.dsl, scenario.dsl);
+      const warm = existing?.kind === 'ok' && deepEqual(existing.dsl, readDsl);
       if (warm) {
         cacheHit = true;
       } else {
@@ -159,7 +258,7 @@ export const runScenario = async (
         const prismIr = await compile(scenario.mapping ?? IDENTITY_MAPPING);
         await runtime.engine.cache.set(fingerprint, {
           kind: 'ok',
-          dsl: scenario.dsl,
+          dsl: readDsl,
           prismIr,
           intent: scenario.intent,
           shape: scenario.shape,
@@ -178,7 +277,7 @@ export const runScenario = async (
       return {
         ok: false,
         error: messageOf(err),
-        dsl: dslFromEvents(events, scenario.dsl),
+        dsl: dslFromEvents(events, readDsl),
         rows: [],
         warnings: [],
         params: {},

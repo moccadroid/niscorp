@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type FC, type ReactNode } from 'react';
 import { useVexBoot, useVexRunSetter } from './runtime-context';
 import { runScenario, type RunOutcome } from './run';
-import { scopePolicy } from './runtime/scope';
+import { scopePolicy, mutationPolicy } from './runtime/scope';
 import { hasGenerationKey } from './runtime/live';
 import { availableProviders, getLiveConfig, setLiveConfig, PROVIDER_MODELS } from './runtime/live-config';
 import { startRecording, stopRecording } from './runtime/live-debug';
@@ -60,6 +60,7 @@ type Facts = {
   mappingMs?: number;
   totalMs?: number;
   error?: string;
+  errorCode?: string; // wire error code ('mutate' refusals) — picks the failed stage
 };
 
 type StageStatus = 'done' | 'active' | 'skipped' | 'warn' | 'error' | 'idle';
@@ -81,9 +82,32 @@ const STAGES_COMPILE: StageDef[] = [
   { label: 'Analyze', panel: 'error' },
   { label: 'Compile SQL', panel: 'sql' },
 ];
+// The write pipeline: replay the seeded definition → satisfy its derived
+// context signature → pass the write phases → execute with RETURNING.
+const STAGES_MUTATE: StageDef[] = [
+  { label: 'Intent' },
+  { label: 'Replay', panel: 'mutation' },
+  { label: 'Context' },
+  { label: 'Scope', panel: 'scope' },
+  { label: 'Execute', panel: 'result' },
+];
 
 const stageDefs = (scenario: VexScenario): StageDef[] =>
-  scenario.mode === 'compile' ? STAGES_COMPILE : STAGES_EXECUTE;
+  scenario.mode === 'compile' ? STAGES_COMPILE : scenario.mode === 'mutate' ? STAGES_MUTATE : STAGES_EXECUTE;
+
+// Which mutate stage a wire refusal belongs to — everything after it was
+// never reached.
+const MUTATE_FAIL_STAGE: Record<string, string> = {
+  invalid_request: 'Replay',
+  missing_context: 'Context',
+  scope_denied: 'Scope',
+};
+const MUTATE_FAIL_DETAIL: Record<string, string> = {
+  Replay: 'not a request shape',
+  Context: 'hole — refused',
+  Scope: 'no phase — denied',
+  Execute: 'failed',
+};
 
 // Map an event to how many stages should now be "reached" (the chase
 // target). Indices follow STAGES_EXECUTE.
@@ -115,6 +139,23 @@ const applyEvent = (f: Facts, e: VexEvent): Facts => {
 // Per-stage detail text + final (passed-frontier) status, sourced from
 // live facts so it's correct mid-run.
 const stageInfo = (scenario: VexScenario, label: string, f: Facts): { detail: string; status: StageStatus } => {
+  if (scenario.mode === 'mutate') {
+    const failedAt = f.error !== undefined ? (MUTATE_FAIL_STAGE[f.errorCode ?? ''] ?? 'Execute') : undefined;
+    if (failedAt !== undefined) {
+      const order = STAGES_MUTATE.map((s) => s.label);
+      const fi = order.indexOf(failedAt);
+      const li = order.indexOf(label);
+      if (li > fi) return { detail: 'never reached', status: 'skipped' };
+      if (li === fi) return { detail: MUTATE_FAIL_DETAIL[label] ?? 'failed', status: 'error' };
+    }
+    switch (label) {
+      case 'Intent': return { detail: 'parsed', status: 'done' };
+      case 'Replay': return { detail: 'seeded def · replay-only', status: 'done' };
+      case 'Context': return { detail: 'signature satisfied', status: 'done' };
+      case 'Scope': return f.scoped ? { detail: 'stamp + pin', status: 'done' } : { detail: 'phase granted', status: 'done' };
+      case 'Execute': return { detail: f.rowCount !== undefined ? `${f.rowCount} row${f.rowCount === 1 ? '' : 's'} · ${ms(f.executionMs)}` : 'running…', status: 'done' };
+    }
+  }
   if (scenario.mode === 'compile') {
     switch (label) {
       case 'Intent': return { detail: 'parsed', status: 'done' };
@@ -190,14 +231,23 @@ const RowsTable: FC<{ rows: unknown[] }> = ({ rows }) => {
   );
 };
 
-const CacheBadge: FC<{ outcome: RunOutcome }> = ({ outcome }) => {
+const CacheBadge: FC<{ outcome: RunOutcome; mutate?: boolean }> = ({ outcome, mutate }) => {
   const hit = outcome.cacheHit;
   const c = hit ? STATUS_COLOR.done : STATUS_COLOR.active;
-  const label = hit ? 'CACHE HIT · DSL reused · 0 LLM calls' : outcome.live ? `GENERATED LIVE · ${ms(outcome.timing.agentMs)}` : 'DSL CACHED · zero LLM';
+  const label = mutate
+    ? hit
+      ? 'REPLAYED · seeded definition · 0 LLM'
+      : 'SEEDED + REPLAYED · 0 LLM'
+    : hit
+      ? 'CACHE HIT · DSL reused · 0 LLM calls'
+      : outcome.live
+        ? `GENERATED LIVE · ${ms(outcome.timing.agentMs)}`
+        : 'DSL CACHED · zero LLM';
   return <span style={{ fontSize: 11, fontWeight: 700, color: c.fg, background: c.bg, border: `1px solid ${c.border}`, padding: '3px 8px', borderRadius: 999, animation: 'vexPop 0.3s ease both' }}>{label}</span>;
 };
 
-const scopeClauseText = (dsl: Query, scopeKey: string): string | undefined => {
+const scopeClauseText = (dsl: Query | undefined, scopeKey: string): string | undefined => {
+  if (dsl === undefined) return undefined;
   for (const src of dsl.from) {
     if (typeof src !== 'string') continue;
     const rule = scopePolicy.entities[src];
@@ -207,6 +257,32 @@ const scopeClauseText = (dsl: Query, scopeKey: string): string | undefined => {
     }
   }
   return undefined;
+};
+
+// The write phases for the mutated table — rendered from the SAME policy
+// object the handler enforces, so the panel can't drift from the truth.
+const writeRulesText = (scenario: VexScenario): string => {
+  const m = scenario.mutation;
+  if (m === undefined || Array.isArray(m)) return '';
+  const rule = mutationPolicy.entities[m.table];
+  const lines: string[] = [`table: ${m.table} · op: ${m.op} · default: ${mutationPolicy.default}`];
+  if (rule === undefined || 'deny' in rule || 'public' in rule) {
+    lines.push(`entity rule: ${JSON.stringify(rule ?? '(unlisted)')}`);
+    return lines.join('\n');
+  }
+  const fmt = (rules: readonly ({ set: string; to: string } | { match: string; to: string })[] | undefined): string =>
+    rules === undefined
+      ? 'ABSENT — no phase, no verb'
+      : rules.length === 0
+        ? 'granted (no row rules)'
+        : rules.map((r) => ('set' in r ? `set ${r.set} ← $scope.${r.to}` : `match ${r.match} = $scope.${r.to}`)).join('  +  ');
+  if (rule.write !== undefined) lines.push(`write (umbrella): ${fmt(rule.write)}`);
+  else {
+    lines.push(`insert: ${fmt(rule.insert)}`);
+    lines.push(`update: ${fmt(rule.update)}`);
+    lines.push(`delete: ${fmt(rule.delete)}`);
+  }
+  return lines.join('\n');
 };
 
 const Select: FC<{ label: string; value: string; options: { value: string; label: string }[]; onChange: (v: string) => void; disabled?: boolean }> = ({ label, value, options, onChange, disabled }) => (
@@ -380,15 +456,16 @@ export const VexView: FC<{ scenario: VexScenario }> = ({ scenario }) => {
       cacheHit: result.cacheHit,
       live: result.live,
       error: result.error,
+      errorCode: result.errorCode,
       warnings: result.warnings,
       rowCount: result.rows.length,
       ...result.timing,
     }));
     resolved = true;
-    // On success (or a compile-mode rejection, whose error is the point)
-    // sweep through every stage. On an execute-mode error, stop where the
-    // run actually got — the next stage is rendered as the failure.
-    if (result.error === undefined || scenario.mode === 'compile') {
+    // On success (or a compile/mutate rejection, whose error IS the point —
+    // stageInfo marks the stage the wire refused at) sweep through every
+    // stage. On an execute-mode error, stop where the run actually got.
+    if (result.error === undefined || scenario.mode !== 'execute') {
       targetRef.current = stageCount;
     }
     await chasePromise;
@@ -453,8 +530,8 @@ export const VexView: FC<{ scenario: VexScenario }> = ({ scenario }) => {
       </div>
 
       {/* Pipeline */}
-      <Panel title="Pipeline" right={finished && outcome?.ok ? <CacheBadge outcome={outcome} /> : undefined}>
-        <StageStrip scenario={scenario} facts={facts} frontier={frontier} finished={finished} errored={finished && outcome?.error !== undefined && scenario.mode !== 'compile'} focused={focused} started={started} onPick={setFocused} />
+      <Panel title="Pipeline" right={finished && outcome?.ok ? <CacheBadge outcome={outcome} mutate={scenario.mode === 'mutate'} /> : undefined}>
+        <StageStrip scenario={scenario} facts={facts} frontier={frontier} finished={finished} errored={finished && outcome?.error !== undefined && scenario.mode === 'execute'} focused={focused} started={started} onPick={setFocused} />
         {!started && (
           <div style={{ fontSize: 13, color: C.muted, marginTop: 12 }}>Press <strong>Run</strong> to execute the pipeline against the in-browser Postgres. Stages light up live as data flows; click any stage to focus its output.</div>
         )}
@@ -467,14 +544,26 @@ export const VexView: FC<{ scenario: VexScenario }> = ({ scenario }) => {
         </Panel>
       )}
 
+      {panelReached('mutation') && scenario.mode === 'mutate' && (
+        <Panel id="p-mutation" title={scenario.mutation !== undefined ? 'Seeded mutation — the definition never travels; the wire carries { fingerprint, context }' : 'Wire body — not a request shape'} focused={focused === 'mutation'}>
+          <Code>{JSON.stringify(scenario.mutation ?? scenario.body, null, 2)}</Code>
+        </Panel>
+      )}
+
       {panelReached('scope') && scopeClause !== undefined && (
         <Panel id="p-scope" title="Scope — injected server-side (LLM never sees it)" focused={focused === 'scope'}>
           <Code>{`AND ${scopeClause}\n   → ${scenario.scopeKey} = ${accountLabelMaybe(String(scope[scenario.scopeKey as string]))}`}</Code>
         </Panel>
       )}
 
+      {panelReached('scope') && scenario.mode === 'mutate' && scenario.mutation !== undefined && (
+        <Panel id="p-scope-write" title="Write phases — whether a verb EXISTS is the policy's call; rules are engine-applied" focused={focused === 'scope'}>
+          <Code>{writeRulesText(scenario)}</Code>
+        </Panel>
+      )}
+
       {outcome?.error !== undefined && finished ? (
-        <Panel id="p-error" title={scenario.mode === 'compile' ? 'Analyzer — rejected before SQL' : 'Error'} focused={focused === 'error'}>
+        <Panel id="p-error" title={scenario.mode === 'compile' ? 'Analyzer — rejected before SQL' : scenario.mode === 'mutate' ? `Refused at the wire${outcome.status !== undefined ? ` — ${outcome.status}` : ''}` : 'Error'} focused={focused === 'error'}>
           <Code variant="error">{outcome.error}</Code>
         </Panel>
       ) : (
@@ -498,8 +587,8 @@ export const VexView: FC<{ scenario: VexScenario }> = ({ scenario }) => {
               )}
             </Panel>
           )}
-          {panelReached('result') && scenario.mode === 'execute' && outcome !== undefined && (
-            <Panel id="p-result" title="Result" focused={focused === 'result'} right={<span style={{ fontSize: 11, color: C.muted }}>{outcome.rows.length} rows · {ms(outcome.timing.totalMs)}</span>}>
+          {panelReached('result') && scenario.mode !== 'compile' && outcome !== undefined && (
+            <Panel id="p-result" title={scenario.mode === 'mutate' ? 'Result — RETURNING *' : 'Result'} focused={focused === 'result'} right={<span style={{ fontSize: 11, color: C.muted }}>{outcome.rows.length} rows · {ms(outcome.timing.totalMs)}</span>}>
               <RowsTable rows={outcome.rows} />
             </Panel>
           )}

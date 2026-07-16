@@ -30,6 +30,13 @@ const accountUuid = (i: number): string => uuid('ac000000', i);
 // demos switch between these.
 export const ACCOUNTS: readonly string[] = [accountUuid(0), accountUuid(1), accountUuid(2)];
 
+// Stable rows the mutation demos target (ids are deterministic, so the
+// scenarios can name them). DEMO_ORDER belongs to ACCOUNTS[0] — the pin
+// demo flips the account switcher against it.
+export const DEMO_CUSTOMER_ID = customerUuid(0); // Alice Johnson
+export const DEMO_PRODUCT_ID = productUuid(0); // iPhone 16 Pro
+export const DEMO_ORDER_ID = orderUuid(0); // Account A's order
+
 const sql = (s: string): string => s.replace(/'/g, "''");
 
 // ─── DDL ─────────────────────────────────────────────────────
@@ -69,7 +76,7 @@ CREATE TABLE IF NOT EXISTS products (
 );
 
 CREATE TABLE IF NOT EXISTS orders (
-  id          UUID PRIMARY KEY,
+  id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   customer_id UUID NOT NULL REFERENCES customers(id),
   status      TEXT NOT NULL DEFAULT 'pending',
   total       NUMERIC NOT NULL DEFAULT 0,

@@ -44,6 +44,16 @@ const Wrap: FC<{ children: ReactNode }> = ({ children }) => (
 
 const DslTab: FC<{ scenario: VexScenario }> = ({ scenario }) => {
   const view = useVexRunView();
+  if (scenario.mode === 'mutate') {
+    return (
+      <Wrap>
+        <div style={labelStyle}>{scenario.mutation !== undefined ? 'Mutation definition (seeded server-side — never travels)' : 'Wire body (refused — not a request shape)'}</div>
+        {pre(JSON.stringify(scenario.mutation ?? scenario.body, null, 2))}
+        <div style={labelStyle}>Wire request (the only shape writes accept)</div>
+        {pre(JSON.stringify(scenario.body ?? { fingerprint: `vex-demo/${scenario.id}`, context: scenario.context ?? {} }, null, 2))}
+      </Wrap>
+    );
+  }
   const dsl = view?.scenarioId === scenario.id ? view.dsl : scenario.dsl;
   return (
     <Wrap>
@@ -63,7 +73,9 @@ const SqlTab: FC<{ scenario: VexScenario }> = ({ scenario }) => {
       <div style={labelStyle}>Compiled SQL</div>
       {live?.error !== undefined
         ? pre(live.error, true)
-        : pre(live?.sql ?? 'Run the story to compile SQL.')}
+        : scenario.mode === 'mutate'
+          ? pre('Writes compile inside the mutation engine — a parameterized\nINSERT / UPDATE / DELETE … RETURNING *, through the same\noperator compiler reads use. Scope rules land as stamped\ncolumns (set) and AND-merged WHERE filters (match).')
+          : pre(live?.sql ?? 'Run the story to compile SQL.')}
       {live?.scopeClause !== undefined && (
         <>
           <div style={labelStyle}>Injected scope filter</div>

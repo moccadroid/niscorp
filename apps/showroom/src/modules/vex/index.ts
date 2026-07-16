@@ -8,6 +8,7 @@ import {
   KIND_SHAPE,
   KIND_SEARCH,
   KIND_SCOPE,
+  KIND_MUTATIONS,
   KIND_SAFETY,
   KIND_CACHING,
 } from './scenarios';
@@ -28,6 +29,7 @@ const KIND_ORDER: readonly string[] = [
   KIND_SHAPE,
   KIND_SEARCH,
   KIND_SCOPE,
+  KIND_MUTATIONS,
   KIND_SAFETY,
   KIND_CACHING,
 ];
@@ -38,6 +40,7 @@ const KIND_LABELS: Record<string, string> = {
   [KIND_SHAPE]: 'Shaping',
   [KIND_SEARCH]: 'Search',
   [KIND_SCOPE]: 'Scope',
+  [KIND_MUTATIONS]: 'Mutations',
   [KIND_SAFETY]: 'Safety',
   [KIND_CACHING]: 'Caching',
 };

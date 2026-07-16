@@ -1,5 +1,5 @@
-import type { Query, ScopeValues } from '@niscorp/vex';
-import { ACCOUNTS } from './runtime/seed-data';
+import type { Query, ScopeValues, MutationDefinition } from '@niscorp/vex';
+import { ACCOUNTS, DEMO_CUSTOMER_ID, DEMO_PRODUCT_ID, DEMO_ORDER_ID } from './runtime/seed-data';
 
 // ═══════════════════════════════════════════════════════════
 // Canned scenarios — each is a real request (intent + shape) plus
@@ -17,7 +17,12 @@ export type ScenarioMode =
   | 'execute'
   // Call engine.compile directly — used for analyzer demos where the
   // query is meant to be rejected before any SQL runs.
-  | 'compile';
+  | 'compile'
+  // Seed a `kind: 'mutation'` entry and drive the request through the
+  // REAL wire dispatch (handleQuery): one wire shape, { fingerprint,
+  // context } — the entry's kind picks the write pipeline. Writes are
+  // replay-only, so there is no live/LLM variant to toggle.
+  | 'mutate';
 
 export type EditableContext = {
   key: string;
@@ -34,7 +39,15 @@ export type VexScenario = {
   mode: ScenarioMode;
   intent: string;
   shape: unknown;
-  dsl: Query;
+  // The read DSL (execute/compile modes). Absent on 'mutate' — a mutation
+  // definition is a different artifact and it NEVER travels.
+  dsl?: Query;
+  // The mutation definition seeded under this scenario's fingerprint
+  // ('mutate' mode). What an app seeds at boot; the wire never carries it.
+  mutation?: MutationDefinition;
+  // Raw wire-body override ('mutate' mode): POST exactly this instead of
+  // { fingerprint, context } — used to demo the shapes the wire REFUSES.
+  body?: unknown;
   context?: Record<string, unknown>;
   // When set, the run uses scope and the visualizer shows an account
   // switcher bound to this scope key.
@@ -56,8 +69,20 @@ export const KIND_DSL = 'dsl';
 export const KIND_SHAPE = 'shape';
 export const KIND_SEARCH = 'search';
 export const KIND_SCOPE = 'scope';
+export const KIND_MUTATIONS = 'mutations';
 export const KIND_SAFETY = 'safety';
 export const KIND_CACHING = 'caching';
+
+// The one mutation definition two scenarios share: the create demo replays
+// it whole; the missing-context demo replays it with a hole.
+const ORDER_CREATE: MutationDefinition = {
+  op: 'insert',
+  table: 'orders',
+  values: {
+    customer_id: { $context: 'customer_id' },
+    total: { $context: 'total' },
+  },
+};
 
 export const scenarios: readonly VexScenario[] = [
   // ─── Basics ────────────────────────────────────────────────
@@ -497,5 +522,112 @@ export const scenarios: readonly VexScenario[] = [
     editable: [
       { key: 'status', label: 'Status', options: ['active', 'inactive', 'suspended'] },
     ],
+  },
+
+  // ─── Mutations ─────────────────────────────────────────────
+  // Writes are REPLAY-ONLY: definitions are seeded server-side (an app
+  // seeds them at boot; here the scenario seeds on first run) and are
+  // NEVER generated and NEVER travel. The wire carries the same shape a
+  // read replay does — { fingerprint, context } — and the entry's kind
+  // picks the write pipeline. These run through the real handler, so the
+  // refusal demos show genuine wire statuses.
+  {
+    id: 'mutation-create',
+    name: 'Create (replay-only)',
+    description:
+      'An INSERT as a seeded definition. The wire carries only { fingerprint, context } — the same shape as a read replay. The DB defaults the id; the tenant column is stamped from scope by the policy (`set`, server-side), never client-supplied. RETURNING * is the result.',
+    kind: KIND_MUTATIONS,
+    mode: 'mutate',
+    intent: 'Create an order for Alice',
+    shape: { id: '', customer_id: '', status: '', total: 0, account_id: '' },
+    mutation: ORDER_CREATE,
+    context: { customer_id: DEMO_CUSTOMER_ID, total: '129.99' },
+    editable: [{ key: 'total', label: 'Total', options: ['129.99', '49.50', '2499.00'] }],
+    scopeKey: 'accountId',
+    scope: { accountId: ACCOUNTS[0] },
+    note: 'Switch the account and re-run: the stamped account_id follows the scope — the definition, the context, and the wire body never change.',
+  },
+  {
+    id: 'mutation-update',
+    name: 'Update by key',
+    description:
+      'A plain UPDATE, caller-bounded by a $context key. Context values are SQL parameters exactly as in reads: re-run with a different price — same fingerprint, new value. (Products carry the `write` UMBRELLA phase with no row rules; a form-shaped app would use the `upsert` sugar — id present desugars to this.)',
+    kind: KIND_MUTATIONS,
+    mode: 'mutate',
+    intent: 'Change the price of the iPhone 16 Pro',
+    shape: { id: '', name: '', price: 0 },
+    mutation: {
+      op: 'update',
+      table: 'products',
+      set: { price: { $context: 'price' } },
+      where: { eq: ['products.id', { $context: 'id' }] },
+    },
+    context: { id: DEMO_PRODUCT_ID, price: '899.00' },
+    editable: [{ key: 'price', label: 'Price', options: ['899.00', '1099.00', '749.50'] }],
+  },
+  {
+    id: 'mutation-pin',
+    name: 'Pinned to your rows',
+    description:
+      "The order belongs to Account A. The update phase carries a `match` rule, so the engine ANDs `account_id = $scope` into the WHERE — as Account A the row returns updated; as Account B it returns 0 rows. Not an error: the row simply isn't yours to touch.",
+    kind: KIND_MUTATIONS,
+    mode: 'mutate',
+    intent: "Mark Account A's order shipped",
+    shape: { id: '', status: '', account_id: '' },
+    mutation: {
+      op: 'update',
+      table: 'orders',
+      set: { status: { $context: 'status' } },
+      where: { eq: ['orders.id', { $context: 'id' }] },
+    },
+    context: { id: DEMO_ORDER_ID, status: 'shipped' },
+    editable: [{ key: 'status', label: 'Status', options: ['shipped', 'delivered', 'processing'] }],
+    scopeKey: 'accountId',
+    scope: { accountId: ACCOUNTS[0] },
+  },
+  {
+    id: 'mutation-denied',
+    name: 'No phase, no verb',
+    description:
+      'The policy grants orders `insert` and `update` as SPECIFIC phases; `delete` has no phase and the policy defaults to deny — for this caller the verb does not exist. The wire answers 400 scope_denied. Deny-by-absence: nobody wrote a delete rule, so there is nothing to get past.',
+    kind: KIND_MUTATIONS,
+    mode: 'mutate',
+    intent: 'Delete an order',
+    shape: {},
+    mutation: {
+      op: 'delete',
+      table: 'orders',
+      where: { eq: ['orders.id', { $context: 'id' }] },
+    },
+    context: { id: DEMO_ORDER_ID },
+    scopeKey: 'accountId',
+    scope: { accountId: ACCOUNTS[0] },
+  },
+  {
+    id: 'mutation-missing-context',
+    name: 'Writes never run with holes',
+    description:
+      "The same create definition, replayed WITHOUT `total`. A read with missing context runs and warns (meta.missingContext); a write refuses outright — 400 missing_context, carrying the definition's full derived signature (every $context key, computed from the definition itself, never authored).",
+    kind: KIND_MUTATIONS,
+    mode: 'mutate',
+    intent: 'Create an order — but forget the total',
+    shape: {},
+    mutation: ORDER_CREATE,
+    context: { customer_id: DEMO_CUSTOMER_ID },
+    scopeKey: 'accountId',
+    scope: { accountId: ACCOUNTS[0] },
+  },
+  {
+    id: 'mutation-inline-refused',
+    name: 'Definitions never travel',
+    description:
+      'A client POSTs a well-formed mutation definition inline. It is not a request shape at all — the wire knows exactly two write-relevant forms, and { mutation } is neither. 400 invalid_request, before any engine work. This is the replay-only posture: what is not seeded does not exist.',
+    kind: KIND_MUTATIONS,
+    mode: 'mutate',
+    intent: 'Smuggle a mutation definition through the wire',
+    shape: {},
+    body: {
+      mutation: { op: 'delete', table: 'orders', where: { eq: ['orders.id', 'anything'] } },
+    },
   },
 ];

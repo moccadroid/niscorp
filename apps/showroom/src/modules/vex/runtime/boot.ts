@@ -8,7 +8,7 @@ import {
   createMemoryCache,
   computeSchemaFingerprint,
 } from '@niscorp/vex';
-import type { QueryEngine, DatabaseSchema, VexEvent } from '@niscorp/vex';
+import type { QueryEngine, DatabaseSchema, VexEvent, MutationClient } from '@niscorp/vex';
 import { DDL, buildSeedSql } from './seed-data';
 import { createPglitePool } from './pool';
 import { scopePolicy } from './scope';
@@ -29,6 +29,8 @@ export type VexRuntime = {
   schema: DatabaseSchema;
   dslJsonSchema: object;
   fingerprint: string;
+  /** The mutation client (PGlite, structurally) — what `mutations.client` takes. */
+  db: MutationClient;
   /** Subscribe to the live pipeline event stream. Returns an unsubscribe fn. */
   subscribe: (listener: VexEventListener) => () => void;
 };
@@ -74,6 +76,7 @@ const boot = async (): Promise<VexRuntime> => {
     schema,
     dslJsonSchema,
     fingerprint,
+    db,
     subscribe: (listener) => {
       listeners.add(listener);
       return () => {

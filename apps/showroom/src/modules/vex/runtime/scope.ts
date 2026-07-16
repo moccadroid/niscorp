@@ -7,12 +7,36 @@ import type { ScopePolicy } from '@niscorp/vex';
 //
 // At query time the engine AND-merges
 //   { eq: ["orders.account_id", { $scope: "accountId" }] }
-// into the generated DSL — only when options.scope provides accountId. The
-// `read` block carries the row-level `match`; a `write` block (set/match) would
-// govern mutations, but the showroom only demos reads.
+// into the generated DSL — only when options.scope provides accountId.
 export const scopePolicy: ScopePolicy = {
   default: 'allow',
   entities: {
     orders: { read: [{ match: 'account_id', to: 'accountId' }] },
+  },
+};
+
+// The write side — the SAME ScopePolicy grammar, handed to the handler as
+// `mutations.policy`. Deliberately `default: 'deny'`: a write phase a table
+// doesn't have is a verb that doesn't exist (the read policy above stays
+// `allow` so the read stories run unfiltered).
+//
+//   - `write`  is the UMBRELLA phase: present = insert/update/delete all
+//     granted, its rules applying to each. `products` uses it, rule-free.
+//   - `insert`/`update`/`delete` are SPECIFIC phases: each grants just its
+//     op. `orders` grants insert + update — every write stamps the tenant
+//     column from scope (`set`, applied on insert AND update) and update is
+//     pinned to your own rows (`match`). `delete` is absent ON PURPOSE:
+//     no phase, no verb — the deny-by-absence demo.
+export const mutationPolicy: ScopePolicy = {
+  default: 'deny',
+  entities: {
+    products: { write: [] },
+    orders: {
+      insert: [{ set: 'account_id', to: 'accountId' }],
+      update: [
+        { set: 'account_id', to: 'accountId' },
+        { match: 'account_id', to: 'accountId' },
+      ],
+    },
   },
 };
