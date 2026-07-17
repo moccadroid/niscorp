@@ -1,17 +1,19 @@
-import { auditAction, collectChannels, type ActionDefinition, type AuditCatalogEntry } from '@niscorp/nova';
 import type { Charter, Section } from './types';
 import { matchAll } from './glob';
-import { CharterError, normalizeRole, resolveRole, dataUniverse } from './resolve';
+import { CharterError, normalizeRole, resolveRole } from './resolve';
 
 // ═══════════════════════════════════════════════════════════
 // The verifier — the other half of the charter (CHARTER.md). The grammar
 // stays small; the opinions live here. Boot/CI runs it and refuses an
 // incoherent charter: "if it boots, it's coherent."
 //
-// Every check runs PER SECTION against that section's universe (the engine is
-// universe-blind, so the verifier feeds it the right universe). Severities
-// are asymmetric on purpose: a dead DENY is an error (a typo'd deny fails
-// silent, and silent means unprotected); a dead allow is a warning.
+// Every check runs PER SECTION against that section's universe. Like the
+// resolver, the verifier is universe-blind: every universe is HANDED IN
+// (the atoms are each governed target's own dialect — nova action ids, vex
+// verb leaves), and the per-role closure audit is an injected hook (nova
+// exports one), so this module imports nothing. Severities are asymmetric
+// on purpose: a dead DENY is an error (a typo'd deny fails silent, and
+// silent means unprotected); a dead allow is a warning.
 // ═══════════════════════════════════════════════════════════
 
 export type VerifyIssue = { level: 'error' | 'warning'; rule: string; detail: string };
@@ -20,20 +22,19 @@ export type RoleClosure = { role: string; actions: string[]; data: string[]; iss
 
 export type VerifyReport = { errors: VerifyIssue[]; warnings: VerifyIssue[]; perRole: RoleClosure[] };
 
-// Closure keeps only cross-ACTION wiring: catalog misses and channel
-// mismatches. Layout/data lints belong to the devtools audit, and dynamic
-// template targets ("{{$.chosen_id}}") are unknowable statically.
-const closureIssue = (issue: string): boolean =>
-  !issue.includes('{{') && (issue.includes('not in the catalog') || issue.includes('channel'));
+// The per-role closure audit: given a role's granted action ids, report the
+// cross-action wiring problems inside that closure (targets that aren't in
+// it, channels nobody serves). The consumer that OWNS actions provides it —
+// nova exports `auditClosure(definitions)`.
+export type ClosureAuditor = (grantedIds: readonly string[]) => string[];
 
 export const verifyCharter = (
   charter: Charter,
-  definitions: Record<string, ActionDefinition>,
-  tables: readonly string[],
+  universes: { actions: readonly string[]; data: readonly string[] },
   assignments: Record<string, readonly string[]> = {},
+  closure?: ClosureAuditor,
 ): VerifyReport => {
-  const actionUniverse = Object.keys(definitions);
-  const universes: Record<Section, readonly string[]> = { actions: actionUniverse, data: dataUniverse(tables) };
+  const actionUniverse = universes.actions;
   const sections: Section[] = ['actions', 'data'];
 
   const errors: VerifyIssue[] = [];
@@ -140,15 +141,7 @@ export const verifyCharter = (
   for (const role of Object.keys(charter)) {
     const actions = [...(resolved.actions.get(role) ?? [])].sort();
     const data = [...(resolved.data.get(role) ?? [])].sort();
-    const grantedDefs = actions.map((id) => definitions[id]).filter((d): d is ActionDefinition => d !== undefined);
-    const catalog: AuditCatalogEntry[] = grantedDefs.map((d) => ({ id: d.id, ...(d.input !== undefined ? { input: d.input } : {}) }));
-    const channels = [...new Set(grantedDefs.flatMap((d) => {
-      const usage = collectChannels(d);
-      return [...usage.emits, ...usage.listens];
-    }))];
-    const issues = grantedDefs.flatMap((d) =>
-      auditAction(d, { catalog, channels }).issues.filter(closureIssue).map((issue) => `${d.id}: ${issue}`),
-    );
+    const issues = closure?.(actions) ?? [];
     perRole.push({ role, actions, data, issues });
   }
 

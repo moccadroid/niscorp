@@ -22,17 +22,11 @@ export class CharterError extends Error {
   }
 }
 
-// The verb leaves a `data` grant can carry — mirroring vex's phases: `read`,
-// and the three specific write ops under the `write` NAMESPACE. `write` is
-// never an atom (leaves-only, like everywhere else); the umbrella is a glob —
-// `deals.write.*` grants all three, `*.write.delete` denies deletes anywhere.
-// "The id hierarchy is the taxonomy", applied to verbs.
-export const DATA_VERBS = ['read', 'write.insert', 'write.update', 'write.delete'] as const;
-
-// The data universe = every table × every verb leaf, derived from the
-// schema's table list — nobody authors these strings.
-export const dataUniverse = (tables: readonly string[]): string[] =>
-  tables.flatMap((t) => DATA_VERBS.map((v) => `${t}.${v}`));
+// NOTE deliberately absent: the engine never MANUFACTURES a universe — it is
+// always handed one. The data universe's atoms are the governed target's own
+// dialect (vex exports `SCOPE_VERBS` and `scopeGrants(tables)`); the app
+// wiring derives it and passes it in. That keeps this module free of any
+// foreign import, in either direction.
 
 const asSelection = (s: Selection | undefined): { allow: string[]; deny: string[] } =>
   s === undefined ? { allow: [], deny: [] } : Array.isArray(s) ? { allow: s, deny: [] } : { allow: s.allow ?? [], deny: s.deny ?? [] };
