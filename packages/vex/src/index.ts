@@ -29,6 +29,12 @@ export { QueryRequestSchema } from './schemas/request.schema.js';
 // ─── Scope ───────────────────────────────────────────────────
 export { discoverEntities } from './scope/discover.js';
 export { applyScope, VexScopeError } from './scope/apply.js';
+// Grants — a ScopePolicy described as strings (`<table>.<verb>` over
+// SCOPE_VERBS), so a policy layer above (a charter, a role system) hands
+// vex a flat string set and gets the native contract back — no imports
+// in either direction.
+export { SCOPE_VERBS, scopeGrants, createScopePolicy } from './scope/grants.js';
+export type { ScopeBehaviors } from './scope/grants.js';
 
 // ─── Cache ───────────────────────────────────────────────────
 export { createMemoryCache } from './cache/memory.js';
@@ -37,6 +43,10 @@ export { createTieredCache } from './cache/tiered.js';
 export { validateEntry } from './cache/validate.js';
 export { normalizeShape, computeRequestHash, computeSchemaFingerprint, mintFingerprint } from './cache/hash.js';
 export { sweepCache } from './cache/util.js';
+// Seeding — authored entries -> protected cache rows (the API surface under
+// the locked posture). The machinery apps used to hand-roll.
+export { seedCache } from './cache/seed.js';
+export type { SeedEntry, SeedMutation } from './cache/seed.js';
 
 // ─── Mutations ───────────────────────────────────────────────
 // The write pipeline: a closed grammar, engine-applied scope, and replay-only

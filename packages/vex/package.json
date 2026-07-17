@@ -1,7 +1,7 @@
 {
   "name": "@niscorp/vex",
   "version": "0.1.0",
-  "description": "Declarative query synthesis — intent to SQL with caching and scope policies",
+  "description": "Declarative query synthesis \u2014 intent to SQL with caching and scope policies",
   "license": "MIT",
   "type": "module",
   "sideEffects": false,
@@ -23,6 +23,11 @@
     "./express": {
       "types": "./dist/adapters/express/index.d.ts",
       "import": "./dist/adapters/express/index.js"
+    },
+    "./pglite": {
+      "types": "./dist/adapters/pglite/index.d.ts",
+      "import": "./dist/adapters/pglite/index.js",
+      "require": "./dist/adapters/pglite/index.cjs"
     }
   },
   "files": [

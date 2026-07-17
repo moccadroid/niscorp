@@ -10,6 +10,8 @@ import { executeMutation } from './mutations/engine.js';
 import type { MutationClient } from './mutations/engine.js';
 import { collectMutationContext, collectQueryContext, mutationEffect } from './mutations/signature.js';
 import type { ContextSignature, MutationEffect } from './mutations/signature.js';
+import type { CacheEntry } from './cache/cache.types.js';
+import type { Query } from './schemas/query.schema.js';
 import { VexError } from './errors.js';
 
 // ═══════════════════════════════════════════════════════════════
@@ -103,13 +105,61 @@ const filterSchema = (schema: DatabaseSchema | undefined, entities?: string[]): 
   return schema.entities.filter(e => entities.includes(e.name));
 };
 
-const listFingerprints = async (engine: QueryEngine): Promise<DiscoveryFingerprint[]> => {
+// ─── Visibility under a policy — discovery advertises only what the
+// policy can touch. These mirror the ENFORCEMENT semantics (applyScope /
+// scopeMutation) as pure predicates: a phase exists, is public, or falls
+// to the default. Enforcement still runs on every request; this only
+// keeps the catalog honest per principal. ───────────────────────
+const canReadTable = (policy: ScopePolicy, table: string): boolean => {
+  const rule = policy.entities[table];
+  if (rule === undefined) return policy.default === 'allow';
+  if ('public' in rule) return true;
+  if ('deny' in rule) return false;
+  return rule.read !== undefined || policy.default === 'allow';
+};
+
+const canWriteTable = (policy: ScopePolicy, table: string, op: string): boolean => {
+  const rule = policy.entities[table];
+  if (rule === undefined) return policy.default === 'allow';
+  if ('public' in rule) return true;
+  if ('deny' in rule) return false;
+  if (rule.write !== undefined || policy.default === 'allow') return true;
+  if (op === 'insert') return rule.insert !== undefined;
+  if (op === 'update') return rule.update !== undefined;
+  if (op === 'delete') return rule.delete !== undefined;
+  // upsert desugars to insert or update per call — advertise if either exists
+  if (op === 'upsert') return rule.insert !== undefined || rule.update !== undefined;
+  return false;
+};
+
+// Every table a read touches — string sources, recursing into subquery
+// sources (`{ as, query }`).
+const collectTables = (dsl: Query): string[] => {
+  const out: string[] = [];
+  const walk = (q: Query): void => {
+    for (const src of q.from) {
+      if (typeof src === 'string') out.push(src);
+      else walk(src.query);
+    }
+  };
+  walk(dsl);
+  return out;
+};
+
+const entryVisible = (policy: ScopePolicy, entry: CacheEntry): boolean => {
+  if (entry.kind === 'ok') return collectTables(entry.dsl).every((t) => canReadTable(policy, t));
+  if (entry.kind === 'mutation') return mutationEffect(entry.mutation).every((e) => canWriteTable(policy, e.table, e.op));
+  return false;
+};
+
+const listFingerprints = async (engine: QueryEngine, policy?: ScopePolicy): Promise<DiscoveryFingerprint[]> => {
   if (engine.cache.entries === undefined) return [];
   const schema = engine.getSchema();
   const current = schema !== undefined ? computeSchemaFingerprint(schema) : undefined;
   const rows = await engine.cache.entries();
   return rows
     .filter(({ key, entry }) => (entry.kind === 'ok' || entry.kind === 'mutation') && !key.startsWith('neg:'))
+    .filter(({ entry }) => policy === undefined || entryVisible(policy, entry))
     .map(({ key, entry }) => ({
       fingerprint: key,
       kind: entry.kind === 'mutation' ? ('mutation' as const) : ('query' as const),
@@ -134,9 +184,14 @@ const listFingerprints = async (engine: QueryEngine): Promise<DiscoveryFingerpri
 };
 
 export const handleDiscovery = async (config: VexHandlerConfig): Promise<DiscoveryResponse> => {
-  const { engine, entities: entityFilter } = config;
-  const filtered = filterSchema(engine.getSchema(), entityFilter);
-  const fingerprints = await listFingerprints(engine);
+  const { engine, entities: entityFilter, scopePolicy } = config;
+  // Under a scopePolicy, discovery is per-principal: entities and entries
+  // the policy cannot touch are not advertised (what you can't reach
+  // doesn't exist for you — deny by absence, in the catalog too).
+  const filtered = filterSchema(engine.getSchema(), entityFilter).filter(
+    (e) => scopePolicy === undefined || canReadTable(scopePolicy, e.name),
+  );
+  const fingerprints = await listFingerprints(engine, scopePolicy);
   const protectedCount = fingerprints.filter((f) => f.protected).length;
 
   return {

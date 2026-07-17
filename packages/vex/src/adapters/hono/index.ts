@@ -1,19 +1,32 @@
 import { Hono } from 'hono';
-import type { Context } from 'hono';
+import type { Context, Env } from 'hono';
 import type { QueryEngine } from '../../types.js';
-import type { ScopeValues } from '../../scope/scope.types.js';
-import type { VexHandlerConfig } from '../../handler.js';
+import type { ScopePolicy, ScopeValues } from '../../scope/scope.types.js';
+import type { MutationClient } from '../../mutations/engine.js';
 import { handleDiscovery, handleQuery, handleFingerprintPatch, handleFingerprintDelete } from '../../handler.js';
 
-export type VexHonoConfig = {
+// Generic over the hono Env so a host that mounts this under its own app
+// (with typed context variables — e.g. the resolved principal) reads them
+// in `getScope`/`getPolicy` without casts.
+export type VexHonoConfig<E extends Env = Env> = {
   engine: QueryEngine;
   entities?: string[];
   // Replay-only posture: no generation, no fingerprint management.
   // (Writes are unaffected — mutation replay is always replay-only.)
   locked?: boolean;
-  getScope?: (c: Context) => Promise<ScopeValues> | ScopeValues;
+  getScope?: (c: Context<E>) => Promise<ScopeValues> | ScopeValues;
+  // Per-request ScopePolicy — a host that resolves policy per principal
+  // (e.g. compiled from an ACL layer at login) returns it here; it governs
+  // reads, mutation replay AND discovery on this endpoint. Absent (or
+  // returning undefined), the engine default and `mutations.policy` apply.
+  getPolicy?: (c: Context<E>) => Promise<ScopePolicy | undefined> | ScopePolicy | undefined;
   // Enables replay of `kind: 'mutation'` cache entries on this endpoint.
-  mutations?: VexHandlerConfig['mutations'];
+  // `policy` is the static fallback when `getPolicy` is absent; at least
+  // one of the two must supply a policy for writes to run.
+  mutations?: {
+    client: MutationClient;
+    policy?: ScopePolicy;
+  };
 };
 
 // Fingerprints may contain '/' (named slots like "deals/table"), so
@@ -24,21 +37,37 @@ const fingerprintFromBody = (body: unknown): string | undefined => {
   return typeof fp === 'string' && fp.length > 0 ? fp : undefined;
 };
 
-export const vex = (config: VexHonoConfig): Hono => {
-  const app = new Hono();
+export const vex = <E extends Env = Env>(config: VexHonoConfig<E>): Hono<E> => {
+  const app = new Hono<E>();
+  // The per-request policy (when configured) overrides everything policy-
+  // shaped: reads (scopePolicy), writes (mutations.policy) and discovery.
+  const requestConfig = async (c: Context<E>) => {
+    const policy = config.getPolicy ? await config.getPolicy(c) : undefined;
+    const mutationPolicy = policy ?? config.mutations?.policy;
+    return {
+      engine: config.engine,
+      entities: config.entities,
+      ...(config.locked === true ? { locked: true } : {}),
+      ...(policy !== undefined ? { scopePolicy: policy } : {}),
+      ...(config.mutations !== undefined && mutationPolicy !== undefined
+        ? { mutations: { client: config.mutations.client, policy: mutationPolicy } }
+        : {}),
+    };
+  };
+  // Fingerprint management carries no per-request policy — it is refused
+  // under `locked` and is an operator surface, not a principal one.
   const handlerConfig = {
     engine: config.engine,
     entities: config.entities,
     ...(config.locked === true ? { locked: true } : {}),
-    ...(config.mutations !== undefined ? { mutations: config.mutations } : {}),
   };
 
-  app.get('/', async (c) => c.json(await handleDiscovery(handlerConfig)));
+  app.get('/', async (c) => c.json(await handleDiscovery(await requestConfig(c))));
 
   app.post('/', async (c) => {
     const scope = config.getScope ? await config.getScope(c) : {};
     const body: unknown = await c.req.json();
-    const result = await handleQuery(handlerConfig, body, scope);
+    const result = await handleQuery(await requestConfig(c), body, scope);
     return c.json(result.body, result.status as 200);
   });
 
