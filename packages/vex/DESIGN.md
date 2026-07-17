@@ -4,8 +4,8 @@
 
 Intent-based data access. A caller describes *what* data they need and the
 *shape* they want it in. Vex synthesizes a query, executes it, and reshapes the
-result to match. Because it caches by shape, repeated access patterns cost zero
-LLM calls after the first.
+result to match. Because it caches each generation under a fingerprint, replaying that
+fingerprint costs zero LLM calls.
 
 **One sentence:** ask for data in English, get it in any shape, from any database.
 
@@ -102,7 +102,7 @@ execute.
                        └────────────────┬─────────────────────┘
                                         ↓
                        ┌──────────────────────────────────────┐
-                       │  Cache write (positive, shape-keyed)  │
+                       │  Cache write (by fingerprint)         │
                        │  DSL + Prism IR + schema fingerprint  │
                        └────────────────┬─────────────────────┘
                                         ↓
@@ -535,10 +535,12 @@ Only `zod` is mandatory. Everything else is pulled in only by the path you use.
    swap in their own generator. The bundled Cortex agents are a reference, not a
    requirement.
 
-3. **Shape-based caching, intent excluded from the key.** The output shape is
-   what determines the DSL and the mapping; the same shape reuses both. Intent
-   is captured for inspection and for the *negative* key (where it does matter),
-   but two requests that want the same shape should share work.
+3. **Fingerprint identity, minted or named.** The output shape still
+   determines the DSL and the mapping — but the cache *key* is a fingerprint,
+   not the shape. A first request mints one (`fp_…`); a caller may instead own
+   a named slot. Shape-hashing collided (two intents, one shape, one slot) and
+   left every entry anonymous; a fingerprint makes a generation an addressable,
+   replayable artifact — pin it, replay it, roll it back. (See *Cache v2*.)
 
 4. **Scope injected server-side, after generation.** If the model could see
    scope filters it could be talked out of them. Injecting them as ordinary

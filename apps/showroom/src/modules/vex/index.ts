@@ -42,7 +42,7 @@ const KIND_LABELS: Record<string, string> = {
   [KIND_SCOPE]: 'Scope',
   [KIND_MUTATIONS]: 'Mutations',
   [KIND_SAFETY]: 'Safety',
-  [KIND_CACHING]: 'Caching',
+  [KIND_CACHING]: 'Fingerprints',
 };
 
 export const vexModule: LibraryModule = {

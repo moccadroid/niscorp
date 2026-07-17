@@ -56,6 +56,10 @@ export type VexScenario = {
   // Context keys the visualizer exposes as editable controls (drives
   // the "same fingerprint, different values → cache HIT" demo).
   editable?: EditableContext[];
+  // Replay-only endpoint ('execute'): canned replays the seeded fingerprint
+  // (works, zero LLM); toggling Live attempts ad-hoc generation and is
+  // REFUSED with `locked` — the "seed it, then lock it" story.
+  locked?: boolean;
   // Optional Prism mapping config (applied per row as the engine wraps
   // each row in { result: row }). Present only when the requested shape
   // genuinely differs from the SQL rows — e.g. nesting. Compiled to IR
@@ -505,9 +509,9 @@ export const scenarios: readonly VexScenario[] = [
   // ─── Caching ───────────────────────────────────────────────
   {
     id: 'fingerprint-replay',
-    name: 'Same fingerprint, zero cost',
+    name: 'The published endpoint',
     description:
-      'The cache is keyed by fingerprint; context values are runtime data, not identity. Change the status and re-run: same fingerprint → cache HIT → the DSL is reused, no LLM call, only the deterministic pipeline runs again with the new value.',
+      'This is how an app ships a read: the DSL is generated ONCE and seeded under a name; the wire then carries only { fingerprint, context }. The fingerprint IS the API — context values are runtime data, not identity. Change the status and re-run: same fingerprint → HIT → the DSL replays, no LLM, only the deterministic pipeline runs again with the new value.',
     kind: KIND_CACHING,
     mode: 'execute',
     intent: 'Customers with a given status',
@@ -521,6 +525,28 @@ export const scenarios: readonly VexScenario[] = [
     },
     editable: [
       { key: 'status', label: 'Status', options: ['active', 'inactive', 'suspended'] },
+    ],
+  },
+  {
+    id: 'locked-endpoint',
+    name: 'Then lock it',
+    description:
+      'A locked endpoint is replay-only. CANNED replays the seeded fingerprint — your published API, zero LLM. Toggle LIVE (ad-hoc generation) and the wire refuses it: `locked`. That is the production posture — seed your reads, lock the endpoint, and only fingerprints get through; keep one unlocked endpoint elsewhere for genuine queries.',
+    kind: KIND_CACHING,
+    mode: 'execute',
+    locked: true,
+    intent: 'Products whose name matches a term',
+    shape: [{ name: '', price: 0 }],
+    context: { term: '%o%' },
+    dsl: {
+      from: ['products'],
+      fields: ['products.name', 'products.price'],
+      filter: { ilike: ['products.name', { $context: 'term' }] },
+      sort: [{ field: 'products.name', dir: 'asc' }],
+      limit: 20,
+    },
+    editable: [
+      { key: 'term', label: 'Name contains', options: ['%o%', '%pro%', '%phone%'] },
     ],
   },
 

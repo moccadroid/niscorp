@@ -235,9 +235,11 @@ export const runScenario = async (
         live = true;
         generated = true;
         await runtime.engine.cache.delete(fingerprint);
+        // A locked endpoint refuses ad-hoc generation: the deleted (unknown)
+        // fingerprint + intent/shape under `locked` throws `locked`.
         const res = await runtime.engine.execute(
           { fingerprint, intent: scenario.intent, shape: scenario.shape, context: opts.context },
-          { scope: opts.scope },
+          { scope: opts.scope, ...(scenario.locked === true ? { locked: true } : {}) },
         );
         return toOutcome(res, events, scenario, { cacheHit, generated, live });
       }
