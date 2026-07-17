@@ -1,5 +1,5 @@
 import { createComponentRegistry } from '@niscorp/nova';
-import { CanvasSlot, ActionSlot } from '@niscorp/nova/components/react';
+import { CanvasSlot, ActionSlot } from '@niscorp/nova/react/components';
 import type { NovaComponent } from '@niscorp/nova/react';
 import { Box, Stack, Row, Popover } from './components/layout';
 import { Text, Badge, Icon } from './components/display';

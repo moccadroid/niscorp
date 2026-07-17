@@ -1,8 +1,7 @@
-import { useState, useSyncExternalStore } from 'react';
+import { useState } from 'react';
 import { z } from 'zod';
 import type { NovaComponent } from '@niscorp/nova/react';
-import { traceStore, type TraceStep } from '../../ray/trace';
-import { getDebug } from '../../ray/settings';
+import { type TraceStep } from '@relay/server/functions/ray/trace';
 
 // RayTrace — shows the tools Ray is calling. Two modes:
 //   • live=true   → subscribes to the in-flight run; each call appears the moment
@@ -14,6 +13,7 @@ const RayTraceProps = z
   .object({
     steps: z.array(z.unknown()).optional().describe("A finished message's recorded tool calls."),
     live: z.boolean().optional().describe('Subscribe to the in-flight run and stream steps live.'),
+    debug: z.boolean().optional().describe('Show the expandable JSON detail per step (the server-side per-user preference).'),
     ms: z.number().optional().describe('Total run duration for a finished message.'),
   })
   .strict();
@@ -123,15 +123,17 @@ export const RayTrace: NovaComponent<z.infer<typeof RayTraceProps>> = ({
   steps,
   live,
   ms,
+  debug,
 }: z.infer<typeof RayTraceProps>) => {
-  // Hooks run unconditionally; the live snapshot is ignored in static mode.
-  const snap = useSyncExternalStore(traceStore.subscribe, traceStore.snapshot, traceStore.snapshot);
   const [collapsed, setCollapsed] = useState(false);
-  const data: TraceStep[] = live === true ? snap.steps : ((steps as TraceStep[] | undefined) ?? []);
+  // Live mode shows the header only — the run happens server-side; its
+  // steps arrive with the reply. (Streaming them mid-run is a later socket
+  // slice.)
+  const data: TraceStep[] = live === true ? [] : ((steps as TraceStep[] | undefined) ?? []);
 
   if (live !== true && data.length === 0) return null;
 
-  const debug = getDebug();
+  const showDetail = debug === true;
   const head = live === true ? 'Ray is thinking…' : ms !== undefined ? `Ray thought for ${fmtDuration(ms)}` : `Ray · ${data.length} steps`;
 
   return (
@@ -140,7 +142,7 @@ export const RayTrace: NovaComponent<z.infer<typeof RayTraceProps>> = ({
         <span style={C.headChev(!collapsed)}>▸</span>
         {head}
       </button>
-      {!collapsed && data.map((s, i) => <Step key={i} s={s} debug={debug} />)}
+      {!collapsed && data.map((s, i) => <Step key={i} s={s} debug={showDetail} />)}
     </div>
   );
 };

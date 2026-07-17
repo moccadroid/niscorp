@@ -1,10 +1,12 @@
-// Role walk — the charter proof, headlessly. The anonymous lock screen, the
-// REAL magic-link flow driven through the login action's own triggers, then
-// one shell per principal: catalog-filtered chrome, deny-by-nonexistence at
-// push time, devtools only for the dev role.
+// Role walk — one moss, one token per principal, a different application
+// each: catalog-filtered chrome, deny-by-nonexistence at push time, one
+// durable shell per principal. (The magic-link CLIENT flow lives in the
+// terminal's login island now — auth is client-side by design; the walk
+// starts where the server does: at the token.)
 import { UnknownActionError } from '@niscorp/nova';
-import { buildShell } from '../nova/shell';
-import { identity, signIn, signOut, mintToken } from '../auth';
+import type { Shell } from '@niscorp/nova';
+import { boot } from '../server/boot';
+import { mintToken, userByUsername } from '../server/users';
 
 const settle = (ms = 300): Promise<void> => new Promise((r) => setTimeout(r, ms));
 const checks: [string, boolean][] = [];
@@ -18,54 +20,49 @@ const denied = (fn: () => unknown): boolean => {
 };
 
 const run = async (): Promise<void> => {
-  signOut();
+  const { server, runtime } = await boot();
+  const shells = server.shells;
+  if (shells === undefined) throw new Error('no shell host');
 
-  // ── anonymous: the one-action application ──
-  const anon = buildShell(null);
+  const as = (username: string): Shell => {
+    const token = mintToken(username);
+    if (token === null) throw new Error(`unknown user ${username}`);
+    return shells.session(token, userByUsername(username)?.id ?? null).shell;
+  };
+
+  // ── anonymous: their application IS the lock screen (the charter's
+  // `public` grant; the main canvas's candidate list mounts the first
+  // action a principal holds) — chrome mounts nothing ──
+  const anon = shells.session(null, null).shell;
   await settle();
-  checks.push(['anonymous main boots to the lock screen', anon.getCanvasState('main').active?.definitionId === 'auth.login']);
-  checks.push(['anonymous chrome is empty', anon.getCanvasState('sidebar').stack.length === 0 && anon.getCanvasState('topbar').stack.length === 0]);
+  checks.push(['anonymous mounts exactly the lock screen', anon.getCanvasState('main').active?.definitionId === 'auth.login' && anon.getCanvasState('sidebar').stack.length === 0]);
   checks.push(['anonymous cannot push a screen', denied(() => anon.push('main', 'crm.deals'))]);
 
-  // ── the real magic-link flow, through the action's own triggers ──
-  anon.push('main', 'auth.login', { username: 'jordan' });
-  await settle();
-  anon.dispatch({ type: 'ui:click', ref: 'send' });
-  await settle();
-  checks.push(['send reveals the fake magic link', anon.getCanvasState('main').active?.data['stage'] === 'sent']);
-  anon.dispatch({ type: 'ui:click', ref: 'open-link' });
-  await settle();
-  checks.push([`redeem mints the token — identity is jordan/usr_002 (got ${String(identity()?.userId)})`, identity()?.userId === 'usr_002']);
-
   // ── jordan = viewer: lists + views, nothing else ──
-  const viewer = buildShell(identity());
+  const viewer = as('jordan');
   await settle();
-  const nav = viewer.getCanvasState('sidebar').active?.data['nav'] as Record<string, boolean>;
-  checks.push(['viewer sidebar hides tasks + settings, shows records', nav['tasks'] === false && nav['settings'] === false && nav['contacts'] === true]);
+  const sidebarId = viewer.getCanvasState('sidebar').active?.id;
+  const nav = (sidebarId !== undefined ? viewer.getRuntime(sidebarId)?.getData()['nav'] : undefined) as Record<string, boolean> | undefined;
+  checks.push(['viewer sidebar hides tasks + settings, shows records', nav?.['tasks'] === false && nav?.['settings'] === false && nav?.['contacts'] === true]);
   checks.push(['viewer opens the contacts list', !denied(() => viewer.push('main', 'crm.contacts'))]);
   checks.push(['viewer cannot open the contact form — deny-by-nonexistence', denied(() => viewer.push('modal', 'crm.contact.form'))]);
-  checks.push(['viewer has no devtools', denied(() => viewer.push('devtools', 'devtools.dock'))]);
 
-  // ── sam = admin: settings yes; admin does NOT imply devtools ──
-  const samToken = mintToken('sam');
-  if (samToken === null) throw new Error('cannot mint sam');
-  signIn(samToken);
-  const admin = buildShell(identity());
+  // ── sam = admin: settings yes ──
+  const admin = as('sam');
   await settle();
   checks.push(['admin opens settings', !denied(() => admin.push('main', 'settings'))]);
-  checks.push(['admin does not imply devtools', denied(() => admin.push('devtools', 'devtools.dock'))]);
 
-  // ── alex = sales + dev: devtools installed, settings absent ──
-  const alexToken = mintToken('alex');
-  if (alexToken === null) throw new Error('cannot mint alex');
-  signIn(alexToken);
-  const sales = buildShell(identity());
+  // ── alex = sales: forms yes, settings absent ──
+  const sales = as('alex');
   await settle();
-  checks.push(['alex (dev) has the devtools registered', !denied(() => sales.push('devtools', 'devtools.dock'))]);
+  checks.push(['alex opens the deal form', !denied(() => sales.push('modal', 'crm.deal.form', {}, ['modal']))]);
   checks.push(['alex (sales) has no settings', denied(() => sales.push('main', 'settings'))]);
 
-  signOut();
-  checks.push(['sign-out returns to anonymous', identity() === null]);
+  // ── durable: same principal, same shell; different principals differ ──
+  checks.push(['one durable shell per principal', as('jordan') === viewer && as('alex') === sales]);
+  checks.push(['different principals, different shells', viewer !== sales && sales !== admin]);
+
+  await runtime.db.close();
 
   let failed = 0;
   for (const [label, ok] of checks) {

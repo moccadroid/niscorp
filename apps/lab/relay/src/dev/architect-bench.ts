@@ -11,8 +11,9 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { CortexEvent } from '@niscorp/cortex';
-import { createGroqClient } from '@relay/llm/groq';
-import { runActionArchitect, runAction, type BuildResult } from '@relay/ray/architect';
+import { createGroqClient } from '@relay/server/llm/groq';
+import { runActionArchitect, runAction, type BuildResult } from '@relay/server/functions/ray/architect';
+import { devRayContext } from './engine';
 
 type PromptCase = { id: string; intent: string };
 
@@ -73,7 +74,7 @@ const collectStats = (events: CortexEvent[], result: BuildResult, ms: number, lo
 // actually holds — the "is this a real screen" number.
 const loadedTargets = async (result: BuildResult): Promise<string[]> => {
   if (!result.ok) return [];
-  const check = await runAction(result.action);
+  const check = await runAction(devRayContext(), result.action);
   const endpoints = result.action.endpoints ?? {};
   return Object.values(endpoints)
     .map((endpoint) => ('target' in endpoint ? endpoint.target : undefined))
@@ -98,10 +99,10 @@ const statsLine = (label: string, stats: RunStats): string =>
 // becomes a measured verdict per section instead of a vibe. This is the
 // evidence that decides whether full-re-emit editing survives or
 // section-scoped merging replaces it.
-const editProbe = async (llm: Parameters<typeof runActionArchitect>[0], outDir: string): Promise<void> => {
+const editProbe = async (llm: Parameters<typeof runActionArchitect>[1], outDir: string): Promise<void> => {
   const buildIntent = PROMPTS.find((prompt) => prompt.id === 'list')?.intent ?? '';
   console.log(`\n═══ edit-drift ═══\n${buildIntent}`);
-  const build = await runActionArchitect(llm, llm, buildIntent, {});
+  const build = await runActionArchitect(devRayContext(), llm, llm, buildIntent, {});
   if (!build.ok) {
     console.log(`  base build failed (${build.error}) — probe skipped`);
     return;
@@ -111,6 +112,7 @@ const editProbe = async (llm: Parameters<typeof runActionArchitect>[0], outDir: 
 
   const t0 = Date.now();
   const edited = await runActionArchitect(
+    devRayContext(),
     llm,
     llm,
     'Change ONLY the row click: clicking a row must open the company FORM (company.form) seeded with the clicked company id, instead of the company detail. Everything else stays exactly as it is.',
@@ -161,7 +163,7 @@ const main = async (): Promise<void> => {
     for (const agent of agents) {
       const events: CortexEvent[] = [];
       const t0 = Date.now();
-      const result = await agent.run(llm, llm, prompt.intent, { onEvent: (event) => events.push(event) });
+      const result = await agent.run(devRayContext(), llm, llm, prompt.intent, { onEvent: (event) => events.push(event) });
       const ms = Date.now() - t0;
       const loaded = await loadedTargets(result);
       const stats = collectStats(events, result, ms, loaded);

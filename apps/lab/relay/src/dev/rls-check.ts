@@ -4,11 +4,12 @@
 // ground truth is raw SQL against the same PGlite.
 import { evaluate } from '@niscorp/prism';
 import type { QueryRequest } from '@niscorp/vex';
-import { getVexRuntime, todayStr } from '@relay/vex/runtime';
-import { systemPolicy } from '../charter/session-policy';
+import { getVexRuntime } from '@relay/dev/engine';
+import { todayStr } from '@relay/app/data/date';
+import { systemPolicy } from './engine';
 import { executeMutation } from '@niscorp/vex';
-import { taskUpsert, taskSetDone, taskDelete } from '@relay/api/tasks';
-import { listTasksPrism } from '@relay/nova/domains/task/tasks.prism';
+import { taskUpsert, taskSetDone, taskDelete } from '@relay/app/data/api/tasks';
+import { listTasksPrism } from '@relay/app/actions/domains/task/tasks.prism';
 
 const checks: [string, boolean][] = [];
 

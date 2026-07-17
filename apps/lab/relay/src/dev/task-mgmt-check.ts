@@ -3,8 +3,8 @@
 // the row ⋯ menu edits (task.update) and deletes (task.delete behind the confirm),
 // and a deal's task completes from the workspace. Run:
 //   pnpm --filter relay exec tsx src/dev/task-mgmt-check.ts
-import { shell } from './check-shell';
-import { getVexRuntime, todayStr } from '../vex/runtime';
+import { shell, runtime } from './check-shell';
+import { todayStr } from '@relay/app/data/date';
 
 const settle = (ms = 240): Promise<void> => new Promise((r) => setTimeout(r, ms));
 const mainData = (): Record<string, unknown> => {
@@ -24,9 +24,8 @@ const modalId = (): string | undefined => modalRt()?.definition.id;
 const modalData = (): Record<string, unknown> => (modalRt()?.getData() ?? {}) as Record<string, unknown>;
 
 const main = async (): Promise<void> => {
-  const rt = await getVexRuntime();
   const checks: [string, boolean][] = [];
-  const count = async (sql: string, p: unknown[] = []): Promise<number> => ((await rt.db.query(sql, p)).rows[0] as { n: number }).n;
+  const count = async (sql: string, p: unknown[] = []): Promise<number> => ((await runtime.db.query(sql, p)).rows[0] as { n: number }).n;
   const me = "assignee_id='usr_001'";
   const tab = async (scope: string): Promise<void> => {
     shell.dispatch({ type: 'ui:click', ref: 'tab', payload: scope });
@@ -87,7 +86,7 @@ const main = async (): Promise<void> => {
   checks.push([`task deleted from PGlite`, (await count('SELECT count(*)::int n FROM tasks WHERE id=$1', [dId])) === 0]);
 
   // ── Complete a deal's task from the workspace ──
-  const dealWithTask = (await rt.db.query("SELECT deal_id, id AS task_id FROM tasks WHERE done=false AND deal_id IS NOT NULL LIMIT 1")).rows[0] as { deal_id: string; task_id: string };
+  const dealWithTask = (await runtime.db.query("SELECT deal_id, id AS task_id FROM tasks WHERE done=false AND deal_id IS NOT NULL LIMIT 1")).rows[0] as { deal_id: string; task_id: string };
   shell.dispatch({ type: 'ui:click', ref: 'nav-pipeline' });
   await settle(320);
   shell.dispatch({ type: 'ui:click', ref: 'card', payload: dealWithTask.deal_id });

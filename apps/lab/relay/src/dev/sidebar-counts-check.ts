@@ -3,8 +3,7 @@
 //    `$.counts.*` with scalar numbers,
 //  - the NavItem `count` prop, bound to `$.counts.*`, resolves to that number
 //    and renders with no validation error.
-import { shell } from './check-shell';
-import { getVexRuntime } from '../vex/runtime';
+import { shell, runtime } from './check-shell';
 
 const settle = (ms = 80): Promise<void> => new Promise((r) => setTimeout(r, ms));
 const sidebarData = (): Record<string, unknown> | undefined => {
@@ -29,10 +28,9 @@ const collect = (tree: unknown): { errors: string[]; navCounts: unknown[] } => {
 };
 
 const main = async (): Promise<void> => {
-  const rt = await getVexRuntime();
   // The tasks badge is "my open tasks" (assignee = the demo user, not done) — read
   // the live DB figure so this stays correct as the seed evolves.
-  const myTasks = ((await rt.db.query("SELECT count(*)::int AS n FROM tasks WHERE assignee_id='usr_001' AND done=false")).rows[0] as { n: number }).n;
+  const myTasks = ((await runtime.db.query("SELECT count(*)::int AS n FROM tasks WHERE assignee_id='usr_001' AND done=false")).rows[0] as { n: number }).n;
   // Wait for the mount lifecycle (the four COUNT(*) reads) to populate counts —
   // each slot is a scalar number; the layout binds it directly.
   let counts: Record<string, unknown> = {};

@@ -3,7 +3,7 @@
 // The mapping is WHOLE-SET now (a `$map` over `$.result`), so feed an array.
 // Run: pnpm --filter relay exec tsx src/dev/prism-check.ts
 import { evaluate } from '@niscorp/prism';
-import { dealsByCompany } from '@relay/api/deals';
+import { dealsByCompany } from '@relay/app/data/api/deals';
 
 const mapping = dealsByCompany.mapping as Parameters<typeof evaluate>[0];
 const cases: Array<[number, string]> = [

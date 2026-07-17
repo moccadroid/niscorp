@@ -2,8 +2,7 @@
 // reactive query: the search box filters in place, and the All/Mine tabs swap
 // the backing query (deals.list ↔ deals.byOwner) — all by re-running `browse`,
 // no Nova changes.
-import { shell } from './check-shell';
-import { getVexRuntime } from '../vex/runtime';
+import { shell, runtime } from './check-shell';
 
 const settle = (ms = 160): Promise<void> => new Promise((r) => setTimeout(r, ms));
 const active = (): { id: string } | undefined => shell.getCanvasState('main').active;
@@ -36,7 +35,6 @@ const modalAction = (): string | undefined => {
 };
 
 const main = async (): Promise<void> => {
-  await getVexRuntime();
   const checks: [string, boolean][] = [];
 
   // Navigate to Deals (sidebar nav).

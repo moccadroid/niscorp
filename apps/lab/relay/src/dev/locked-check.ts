@@ -3,23 +3,19 @@
 // shape gets 400 `locked`; fingerprint management gets 403; the closed
 // mutation grammar still writes. Drives vexFetch itself — the exact surface
 // the shell's endpoints hit.
-import { ENTRIES, MUTATION_ENTRIES } from '@relay/api';
-import { taskUpsert, taskSetDone } from '@relay/api/tasks';
-import { vexFetch } from '@relay/vex/http';
-import { identity, signIn, mintToken } from '../auth';
+import { ENTRIES, MUTATION_ENTRIES } from '@relay/app/data/api';
+import { taskUpsert, taskSetDone } from '@relay/app/data/api/tasks';
+import { wire, login } from './check-shell';
 
 const checks: [string, boolean][] = [];
 
 const post = async (body: unknown, method = 'POST'): Promise<{ status: number; body: Record<string, unknown> }> => {
-  const res = await vexFetch('/api/vex', { method, body: JSON.stringify(body) });
+  const res = await wire('/api/vex', { method, body: JSON.stringify(body) });
   return { status: res.status, body: (await res.json()) as Record<string, unknown> };
 };
 
 const run = async (): Promise<void> => {
-  const token = mintToken('alex');
-  if (token === null) throw new Error('cannot mint alex');
-  signIn(token);
-  if (identity() === null) throw new Error('no identity');
+  login('alex'); // binds the wire's Bearer to alex's session
 
   // ── every protected seed replays under lock ──
   let replayed = 0;

@@ -7,13 +7,13 @@
 // Run: pnpm --filter relay exec tsx src/dev/mutation-check.ts
 import { evaluate } from '@niscorp/prism';
 import { shell } from './check-shell';
-import { getVexRuntime } from '../vex/runtime';
+import { getVexRuntime } from './engine';
 import { executeMutation, MutationDefinitionSchema } from '@niscorp/vex';
-import { systemPolicy } from '../charter/session-policy';
-import { companyUpsert } from '@relay/api/companies';
-import { contactUpsert } from '@relay/api/contacts';
-import { dealUpsert } from '@relay/api/deals';
-import { upsertContactPrism } from '../nova/domains/contact/contact.form.prism';
+import { systemPolicy } from './engine';
+import { companyUpsert } from '@relay/app/data/api/companies';
+import { contactUpsert } from '@relay/app/data/api/contacts';
+import { dealUpsert } from '@relay/app/data/api/deals';
+import { upsertContactPrism } from '@relay/app/actions/domains/contact/contact.form.prism';
 
 const settle = (ms = 150): Promise<void> => new Promise((r) => setTimeout(r, ms));
 const mainData = (): Record<string, unknown> | undefined => {

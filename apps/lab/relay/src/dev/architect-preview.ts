@@ -10,11 +10,12 @@
 // resolves the strategy the browser run would (emit on Groq).
 import type { SignalClient } from '@niscorp/cortex';
 import { providerRegistry } from '@niscorp/signal';
-import { createGroqClient, GROQ_MODEL } from '@relay/llm/groq';
-import { architectAgent } from '@relay/ray/architect/architect.agent';
-import { validatorAgent } from '@relay/ray/architect/validator.agent';
-import { editingGuide } from '@relay/ray/architect/producers';
-import { makeArchitectTools } from '@relay/ray/architect/tools';
+import { createGroqClient, GROQ_MODEL } from '@relay/server/llm/groq';
+import { makeArchitectAgent } from '@relay/server/functions/ray/architect/architect.agent';
+import { devRayContext } from './engine';
+import { validatorAgent } from '@relay/server/functions/ray/architect/validator.agent';
+import { editingGuide } from '@relay/server/functions/ray/architect/producers';
+import { makeArchitectTools } from '@relay/server/functions/ray/architect/tools';
 
 const DEFAULT_INTENT =
   'A searchable table of all companies showing name, industry and size. Typing in the search box filters the list; clicking a row opens that company.';
@@ -43,7 +44,9 @@ const main = async (): Promise<void> => {
 
   const key = process.env['GROQ_API_KEY'];
   const llm = key !== undefined && key !== '' ? createGroqClient(key) : describeOnlyGroq();
-  const tools = makeArchitectTools(llm);
+  const ray = devRayContext();
+  const architectAgent = makeArchitectAgent(ray);
+  const tools = makeArchitectTools(llm, ray);
 
   const preview =
     which === 'validator'

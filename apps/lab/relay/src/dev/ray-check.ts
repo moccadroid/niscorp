@@ -2,9 +2,9 @@
 // shell and the context really reflects it — the same calls the Cortex agent
 // makes, invoked directly. Run: pnpm --filter relay exec tsx src/dev/ray-check.ts
 import { shell } from './check-shell';
-import { getVexRuntime } from '../vex/runtime';
-import { makeTools } from '../ray/tools';
-import { buildContext } from '../ray/context';
+import { getVexRuntime, systemPolicy } from './engine';
+import { makeTools } from '@relay/server/functions/ray/tools';
+import { buildContext } from '@relay/server/functions/ray/context';
 import type { ToolContext } from '@niscorp/cortex';
 
 const settle = (ms = 260): Promise<void> => new Promise((r) => setTimeout(r, ms));
@@ -28,7 +28,7 @@ const main = async (): Promise<void> => {
     signal: new AbortController().signal,
     forward: () => undefined,
   };
-  const [stackTool, queryTool] = makeTools(shell, {});
+  const [stackTool, queryTool] = makeTools({ shell, userId: 'usr_001', policy: systemPolicy, engine: getVexRuntime }, {});
   if (stackTool === undefined || queryTool === undefined) {
     console.error('makeTools returned fewer tools than expected');
     process.exit(1);

@@ -3,8 +3,7 @@
 // the RIGHT rows (a shape-cache collision would silently serve another query's
 // plan) by cross-checking the loaded slots against PGlite. Run:
 //   pnpm --filter relay exec tsx src/dev/detail-enrich-check.ts
-import { shell } from './check-shell';
-import { getVexRuntime } from '../vex/runtime';
+import { shell, runtime } from './check-shell';
 
 const settle = (ms = 300): Promise<void> => new Promise((r) => setTimeout(r, ms));
 const detailRt = (): ReturnType<typeof shell.getRuntime> => {
@@ -22,10 +21,9 @@ const openContact = async (id: string): Promise<void> => {
 };
 
 const main = async (): Promise<void> => {
-  const rt = await getVexRuntime();
   const checks: [string, boolean][] = [];
-  const one = async (sql: string): Promise<string | undefined> => ((await rt.db.query(sql)).rows[0] as { id: string } | undefined)?.id;
-  const count = async (sql: string, p: unknown[]): Promise<number> => ((await rt.db.query(sql, p)).rows[0] as { n: number }).n;
+  const one = async (sql: string): Promise<string | undefined> => ((await runtime.db.query(sql)).rows[0] as { id: string } | undefined)?.id;
+  const count = async (sql: string, p: unknown[]): Promise<number> => ((await runtime.db.query(sql, p)).rows[0] as { n: number }).n;
 
   // Invariant: a contact's activity is its REAL deal touchpoints — every activity
   // with a contact is on a deal where that contact is the primary (not a random

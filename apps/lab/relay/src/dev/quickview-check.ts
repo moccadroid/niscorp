@@ -3,8 +3,7 @@
 //  - a screen opens as a QUICKVIEW on the modal canvas (not a main navigation),
 //  - the quickview's Open-fullscreen navigates main to that action carrying its
 //    already-loaded data.
-import { shell } from './check-shell';
-import { getVexRuntime } from '../vex/runtime';
+import { shell, runtime } from './check-shell';
 
 const settle = (ms = 120): Promise<void> => new Promise((r) => setTimeout(r, ms));
 const dataOf = (canvas: string): Record<string, unknown> | undefined => {
@@ -26,7 +25,6 @@ const enter = async (): Promise<void> => {
 const rows = (canvas: string): unknown[] => (dataOf(canvas)?.['rows'] ?? []) as unknown[];
 
 const main = async (): Promise<void> => {
-  await getVexRuntime();
   const checks: [string, boolean][] = [];
 
   // Create → form modal.

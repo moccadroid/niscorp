@@ -1,13 +1,11 @@
 // Repro: does a freshly created OPEN deal appear on the Kanban board?
-// Navigate to the board, snapshot its cards, insert a deal via the real mutation
-// engine (open, real company/stage/owner), announce `deals-changed` (the board
-// listens), then re-read its cards + columns and assert the new deal is there and
-// lands in a column. Run: pnpm --filter relay exec tsx src/dev/board-new-deal-check.ts
-import { shell } from './check-shell';
-import { getVexRuntime } from '../vex/runtime';
-import { executeMutation } from '@niscorp/vex';
-import { systemPolicy } from '../charter/session-policy';
-import { dealUpsert } from '@relay/api/deals';
+// Navigate to the board, snapshot its cards, create a deal over the WIRE
+// (the same fingerprint replay the deal form sends, as alex), announce
+// `deals-changed` (the board listens), then re-read its cards + columns and
+// assert the new deal is there and lands in a column.
+// Run: pnpm --filter relay exec tsx src/dev/board-new-deal-check.ts
+import { shell, wire, runtime } from './check-shell';
+import { dealUpsert } from '@relay/app/data/api/deals';
 
 const settle = (ms = 250): Promise<void> => new Promise((r) => setTimeout(r, ms));
 const mainData = (): Record<string, unknown> | undefined => {
@@ -22,12 +20,6 @@ const modalData = (): Record<string, unknown> | undefined => {
 };
 
 const main = async (): Promise<void> => {
-  const rt = await getVexRuntime();
-  const schema = rt.engine.getSchema();
-  if (schema === undefined) {
-    console.log('FAIL — Vex schema not introspected.');
-    process.exit(1);
-  }
   const checks: [string, boolean][] = [];
 
   shell.dispatch({ type: 'ui:click', ref: 'nav-pipeline' });
@@ -37,12 +29,17 @@ const main = async (): Promise<void> => {
   console.log(`board: ${before.length} cards, ${colsBefore.length} columns: ${colsBefore.map((c) => `${String(c['stage'])}×${String(c['count'])}`).join(', ')}`);
 
   // A real company + the 'Lead' stage (which already has open deals → a column).
-  const co = (await rt.db.query('SELECT id, name FROM companies LIMIT 1')).rows[0] as { id: string; name: string };
-  const stg = (await rt.db.query("SELECT id, name FROM stages WHERE name='Lead' LIMIT 1")).rows[0] as { id: string; name: string };
-  const created = (await executeMutation(rt.db, dealUpsert.mutation, {
-    context: { title: 'Board Repro Deal', company_id: co.id, stage_id: stg.id, primary_contact_id: null, value: 4242, close_date: null },
-    scope: { userId: 'usr_001' }, policy: systemPolicy, schema,
-  }))[0] ?? {};
+  const co = (await runtime.db.query('SELECT id, name FROM companies LIMIT 1')).rows[0] as { id: string; name: string };
+  const stg = (await runtime.db.query("SELECT id, name FROM stages WHERE name='Lead' LIMIT 1")).rows[0] as { id: string; name: string };
+  const res = await wire('/api/deals/vex', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      fingerprint: dealUpsert.fingerprint,
+      context: { title: 'Board Repro Deal', company_id: co.id, stage_id: stg.id, primary_contact_id: null, value: 4242, close_date: null },
+    }),
+  });
+  const created = ((await res.json()) as { result?: Record<string, unknown> }).result ?? {};
   console.log(`created deal ${String(created['id']).slice(0, 8)}… status=${String(created['status'])} stage=${stg.name} company=${co.name}`);
 
   // Announce the change the way the deal form does on create; the board re-reads.

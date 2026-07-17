@@ -2,8 +2,7 @@
 // cards, a card click opens the deal detail, and a card "drop" fires the new
 // `ui:drop` event into the `moveDeal` seam (honest no-op — board reloads
 // unchanged). No grouping code: the layout groups cards into columns by stage.
-import { shell } from './check-shell';
-import { getVexRuntime } from '../vex/runtime';
+import { shell, runtime } from './check-shell';
 
 const settle = (ms = 200): Promise<void> => new Promise((r) => setTimeout(r, ms));
 const mainOf = (): { id: string } | undefined => shell.getCanvasState('main').active;
@@ -23,7 +22,6 @@ const modalRt = (): ReturnType<typeof shell.getRuntime> => {
 };
 
 const main = async (): Promise<void> => {
-  await getVexRuntime();
   const checks: [string, boolean][] = [];
 
   // Navigate to the pipeline board (sidebar nav).

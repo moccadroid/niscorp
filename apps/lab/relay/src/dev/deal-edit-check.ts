@@ -4,8 +4,7 @@
 // form carries an id), and asserts the record re-read reflects the new value AS A
 // NUMBER and the new stage. Run:
 //   pnpm --filter relay exec tsx src/dev/deal-edit-check.ts
-import { shell } from './check-shell';
-import { getVexRuntime } from '../vex/runtime';
+import { shell, runtime } from './check-shell';
 
 const settle = (ms = 220): Promise<void> => new Promise((r) => setTimeout(r, ms));
 const rtOf = (canvas: string): ReturnType<typeof shell.getRuntime> => {
@@ -20,12 +19,11 @@ const modalId = (): string | undefined => modalRt()?.definition.id;
 const modalData = (): Record<string, unknown> => (modalRt()?.getData() ?? {}) as Record<string, unknown>;
 
 const main = async (): Promise<void> => {
-  const rt = await getVexRuntime();
   const checks: [string, boolean][] = [];
 
-  const deal = (await rt.db.query("SELECT id, stage_id, value FROM deals WHERE status='open' LIMIT 1")).rows[0] as { id: string; stage_id: string; value: unknown };
+  const deal = (await runtime.db.query("SELECT id, stage_id, value FROM deals WHERE status='open' LIMIT 1")).rows[0] as { id: string; stage_id: string; value: unknown };
   // A different in-progress stage to move it to.
-  const otherStage = (await rt.db.query("SELECT id, name FROM stages WHERE win_probability > 0 AND win_probability < 100 AND id <> $1 ORDER BY position LIMIT 1", [deal.stage_id])).rows[0] as { id: string; name: string };
+  const otherStage = (await runtime.db.query("SELECT id, name FROM stages WHERE win_probability > 0 AND win_probability < 100 AND id <> $1 ORDER BY position LIMIT 1", [deal.stage_id])).rows[0] as { id: string; name: string };
 
   // Open the deal workspace.
   shell.dispatch({ type: 'ui:click', ref: 'nav-pipeline' });
@@ -59,7 +57,7 @@ const main = async (): Promise<void> => {
   checks.push([`the deal workspace is still on main (got ${String(mainId())})`, mainId() === 'crm.deal.view']);
 
   // The DB row reflects the edit, value still numeric.
-  const after = (await rt.db.query('SELECT value, stage_id FROM deals WHERE id = $1', [deal.id])).rows[0] as { value: unknown; stage_id: string };
+  const after = (await runtime.db.query('SELECT value, stage_id FROM deals WHERE id = $1', [deal.id])).rows[0] as { value: unknown; stage_id: string };
   checks.push([`DB value updated to the new number (got ${typeof after.value} ${String(after.value)})`, Number(after.value) === newValue]);
   checks.push([`DB stage moved (got ${after.stage_id})`, after.stage_id === otherStage.id]);
 

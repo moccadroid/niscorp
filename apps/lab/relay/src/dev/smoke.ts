@@ -8,30 +8,32 @@
 // (src/dev).
 import { evaluate } from '@niscorp/prism';
 import type { QueryRequest } from '@niscorp/vex';
-import type { CacheEntry } from '@relay/api';
-import { getVexRuntime, todayStr } from '@relay/vex/runtime';
+import type { CacheEntry } from '@relay/app/data/api';
+import { getVexRuntime } from '@relay/dev/engine';
+import { todayStr } from '@relay/app/data/date';
 
 // The user the replays run as — smoke drives the ENGINE directly with an
 // explicit scope (the app derives its scope from the session token).
 const CURRENT_USER = 'usr_001';
-import { CHARTER, rolesOf, resolvePrincipal } from '@relay/charter';
-import { CATALOG_DEFINITIONS } from '@relay/nova/shell/actions';
-import { contactsList, contactById, contactsByCompany } from '@relay/api/contacts';
-import { companiesList, companyById } from '@relay/api/companies';
-import { dealsList, dealsByOwner, dealById, dealsByCompany, dealsBoard, dealsOpenByStage, dealsForecast, dealsByStatus, dealsByStage } from '@relay/api/deals';
-import { tasksMine, tasksOverdue, tasksByDeal, tasksOpenCount } from '@relay/api/tasks';
-import { activitiesByDeal, dealLineItems } from '@relay/api/activities';
-import { actionsSearch } from '@relay/api/actions';
-import { sidebarCounts } from '@relay/api/counts';
-import { listContactsPrism } from '@relay/nova/domains/contact/contacts.prism';
-import { contactByIdPrism } from '@relay/nova/domains/contact/contact.prism';
-import { listCompaniesPrism } from '@relay/nova/domains/company/companies.prism';
-import { companyByIdPrism, companyContactsPrism, companyDealsPrism } from '@relay/nova/domains/company/company.prism';
-import { listDealsPrism } from '@relay/nova/domains/deal/deals.prism';
-import { dealByIdPrism, dealActivitiesPrism, dealLineItemsPrism, dealTasksPrism } from '@relay/nova/domains/deal/deal.prism';
-import { listTasksPrism } from '@relay/nova/domains/task/tasks.prism';
-import { sidebarCountsPrism } from '@relay/nova/chrome/sidebar.prism';
-import { topbarSearchPrism } from '@relay/nova/chrome/topbar.prism';
+import { CHARTER, ASSIGNMENTS } from '@relay/app/charter';
+import { resolvePrincipal } from '@niscorp/charter';
+import { CATALOG_DEFINITIONS } from '@relay/app/actions/catalog';
+import { contactsList, contactById, contactsByCompany } from '@relay/app/data/api/contacts';
+import { companiesList, companyById } from '@relay/app/data/api/companies';
+import { dealsList, dealsByOwner, dealById, dealsByCompany, dealsBoard, dealsOpenByStage, dealsForecast, dealsByStatus, dealsByStage } from '@relay/app/data/api/deals';
+import { tasksMine, tasksOverdue, tasksByDeal, tasksOpenCount } from '@relay/app/data/api/tasks';
+import { activitiesByDeal, dealLineItems } from '@relay/app/data/api/activities';
+import { actionsSearch } from '@relay/app/data/api/actions';
+import { sidebarCounts } from '@relay/app/data/api/counts';
+import { listContactsPrism } from '@relay/app/actions/domains/contact/contacts.prism';
+import { contactByIdPrism } from '@relay/app/actions/domains/contact/contact.prism';
+import { listCompaniesPrism } from '@relay/app/actions/domains/company/companies.prism';
+import { companyByIdPrism, companyContactsPrism, companyDealsPrism } from '@relay/app/actions/domains/company/company.prism';
+import { listDealsPrism } from '@relay/app/actions/domains/deal/deals.prism';
+import { dealByIdPrism, dealActivitiesPrism, dealLineItemsPrism, dealTasksPrism } from '@relay/app/actions/domains/deal/deal.prism';
+import { listTasksPrism } from '@relay/app/actions/domains/task/tasks.prism';
+import { sidebarCountsPrism } from '@relay/app/actions/chrome/sidebar.prism';
+import { topbarSearchPrism } from '@relay/app/actions/chrome/topbar.prism';
 
 type Check = {
   def: CacheEntry; // the entry the prism must resolve to
@@ -71,7 +73,7 @@ const checks: Check[] = [
   { def: sidebarCounts, prism: sidebarCountsPrism },
   // `allowedIds` is what the shell seeds into the topbar at boot — the
   // principal's resolved charter grant, derived here the same way.
-  { def: actionsSearch, prism: topbarSearchPrism, state: { search: 'new', allowedIds: [...resolvePrincipal(CHARTER, Object.keys(CATALOG_DEFINITIONS), rolesOf(CURRENT_USER))] } },
+  { def: actionsSearch, prism: topbarSearchPrism, state: { search: 'new', allowedIds: [...resolvePrincipal(CHARTER, Object.keys(CATALOG_DEFINITIONS), [...(ASSIGNMENTS[CURRENT_USER] ?? ['public'])])] } },
 ];
 
 const describe = (r: unknown): string =>

@@ -2,8 +2,7 @@
 // matches the deals table: in-place search + sortable column headers (Vex's
 // reserved sortBy/sortDir → ORDER BY, same cached query). The body is the
 // reusable Table primitive. Run: pnpm --filter relay exec tsx src/dev/tasks-check.ts
-import { shell } from './check-shell';
-import { getVexRuntime } from '../vex/runtime';
+import { shell, runtime } from './check-shell';
 
 const settle = (ms = 200): Promise<void> => new Promise((r) => setTimeout(r, ms));
 const active = (): { id: string } | undefined => shell.getCanvasState('main').active;
@@ -31,7 +30,6 @@ const countComponent = (name: string): number => {
 };
 
 const main = async (): Promise<void> => {
-  await getVexRuntime();
   const checks: [string, boolean][] = [];
 
   shell.dispatch({ type: 'ui:click', ref: 'nav-tasks' });

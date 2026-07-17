@@ -2,8 +2,7 @@
 // root, a row drills (push), a cross-link drills deeper, a breadcrumb click jumps
 // back (popTo), and Back pops one. Suspended actions under the top no-op, so only
 // the active record reacts. Run: pnpm --filter relay exec tsx src/dev/nav-check.ts
-import { shell } from './check-shell';
-import { getVexRuntime } from '../vex/runtime';
+import { shell, runtime } from './check-shell';
 
 const settle = (ms = 90): Promise<void> => new Promise((r) => setTimeout(r, ms));
 const stack = () => shell.getCanvasState('main').stack;
@@ -14,7 +13,6 @@ const activeId = (): string | undefined => {
 };
 
 const main = async (): Promise<void> => {
-  await getVexRuntime();
   const checks: [string, unknown, unknown][] = [];
 
   // Sidebar resets main to the Contacts screen (root).
@@ -32,14 +30,14 @@ const main = async (): Promise<void> => {
   await settle();
   checks.push(['cross-link drills into the company', activeId(), 'crm.company.view'], ['depth 3', depth(), 3]);
 
-  // The stack chip jumps back to the contact (popTo its instance) — the chip
-  // calls shell.popTo directly, exactly as the StackChip component does on click.
+  // Jump back to the contact via the shell's own popTo. (The stack chip is
+  // display-only until wire navigation is ruled — see stack-chip.tsx.)
   const contactInstance = stack()[1]?.id ?? '';
   shell.popTo('main', contactInstance);
   await settle();
   checks.push(['breadcrumb jumps back to the contact', activeId(), 'crm.contact.view'], ['popped to depth 2', depth(), 2]);
 
-  // The chip's Back pops one → the contacts list root.
+  // Back pops one → the contacts list root.
   shell.pop('main');
   await settle();
   checks.push(['Back returns to the contacts list', activeId(), 'crm.contacts'], ['depth 1 again', depth(), 1]);

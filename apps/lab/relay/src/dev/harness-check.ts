@@ -4,17 +4,18 @@
 // caught. Its first job is to characterize an action we ALREADY trust (`deals`).
 // Run: pnpm --filter relay exec tsx src/dev/harness-check.ts
 import type { ActionDefinition } from '@niscorp/nova';
-import { getVexRuntime } from '../vex/runtime';
-import { runAction } from '../ray/architect/harness';
-import { dealsAction } from '../nova/domains/deal';
+import { getVexRuntime, devRayContext } from './engine';
+import { runAction } from '@relay/server/functions/ray/architect/harness';
+import { dealsAction } from '@relay/app/actions/domains/deal';
 
 const main = async (): Promise<void> => {
   await getVexRuntime(); // boot PGlite + the prewarmed cache once
+  const ray = devRayContext();
   const checks: [string, boolean][] = [];
 
   // 1. Characterize the real `deals` action: mount loads every prewarmed read,
   //    it renders without error, nothing throws.
-  const deals = await runAction(dealsAction);
+  const deals = await runAction(ray, dealsAction);
   const rows = deals.data['rows'];
   checks.push([`deals runs clean (ok=${deals.ok}, issues=${deals.issues.length})`, deals.ok]);
   checks.push([`deals loaded rows (got ${Array.isArray(rows) ? rows.length : 'none'})`, Array.isArray(rows) && rows.length > 0]);
@@ -28,12 +29,12 @@ const main = async (): Promise<void> => {
     endpoints: { load: dealsAction.endpoints!['load']! },
     lifecycle: { mount: [{ call: 'load' }] },
   };
-  const probe = await runAction(dataOnly);
+  const probe = await runAction(ray, dataOnly);
   const probed = probe.data['rows'];
   checks.push([`data-only probe loads the read (ok=${probe.ok}, rows=${Array.isArray(probed) ? probed.length : 'none'})`, probe.ok && Array.isArray(probed) && probed.length > 0]);
 
   // 3. The gate: a schema-invalid definition is rejected with issues, not run.
-  const bad = await runAction({ id: 123, endpoints: 'nope' });
+  const bad = await runAction(ray, { id: 123, endpoints: 'nope' });
   checks.push([`schema-invalid def is gated (ok=${bad.ok}, issues=${bad.issues.length})`, !bad.ok && bad.issues.length > 0]);
 
   let ok = true;
