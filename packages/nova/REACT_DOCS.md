@@ -22,7 +22,7 @@ pnpm add @niscorp/nova
 ```tsx
 import { createShell, createComponentRegistry, createLayoutStore } from '@niscorp/nova';
 import { NovaShellProvider, useCanvas, useRenderTree, RenderTree } from '@niscorp/nova/react';
-import { registerNovaReactComponents } from '@niscorp/nova/components/react';
+import { registerNovaReactComponents } from '@niscorp/nova/react/components';
 import { useEffect, useState } from 'react';
 
 const counter = {
@@ -298,10 +298,10 @@ registry.registerAll({ MyButton });
 
 ### The default component set
 
-`@niscorp/nova/components/react` ships seven components and a registration helper:
+`@niscorp/nova/react/components` ships seven components and a registration helper:
 
 ```ts
-import { registerNovaReactComponents } from '@niscorp/nova/components/react';
+import { registerNovaReactComponents } from '@niscorp/nova/react/components';
 
 const registry = createComponentRegistry();
 registerNovaReactComponents(registry);

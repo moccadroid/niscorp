@@ -8,7 +8,7 @@ import {
   InputPropsSchema,
   ButtonPropsSchema,
   BoxPropsSchema,
-} from '../../../src/components/react';
+} from '../../../src/react/components';
 
 describe('registerNovaReactComponents', () => {
   it('registers all five built-in components', () => {

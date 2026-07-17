@@ -29,6 +29,7 @@ export {
   ShellDisposedError,
   LifecycleError,
   createIdFactory,
+  scopeDispatch,
 } from './shared';
 
 export type {
@@ -77,6 +78,9 @@ export {
   fillSlots,
   createLayoutStore,
   createComponentRegistry,
+  renderNodeKey,
+  NOVA_MODEL_PROP,
+  NOVA_REF_PROP,
 } from './layout';
 
 export type {
@@ -99,6 +103,8 @@ export type {
   EventMeta,
   LayoutStore,
   RenderOptions,
+  RenderOnError,
+  ModelBindingDescriptor,
 } from './layout';
 
 // ═══════════════════════════════════════════════════════════
@@ -172,4 +178,5 @@ export type {
   ShellStateChangeHandler,
   ShellDataChangeEvent,
   ShellDataChangeHandler,
+  ShellCanvasChangeHandler,
 } from './shell';

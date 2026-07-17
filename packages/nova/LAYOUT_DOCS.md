@@ -10,7 +10,7 @@ This guide is for **authoring** layouts. For the architecture (why it's JSON, ho
 
 ```ts
 import { renderLayout, createComponentRegistry, createLayoutStore } from '@niscorp/nova';
-import { registerNovaReactComponents } from '@niscorp/nova/components/react';
+import { registerNovaReactComponents } from '@niscorp/nova/react/components';
 
 const registry = createComponentRegistry();
 registerNovaReactComponents(registry);
@@ -329,7 +329,7 @@ Set `model: '<path>'` on a component to wire it for two-way data binding. The re
 }
 ```
 
-The `Input` component built into `@niscorp/nova/components/react` already dispatches `ui:model` on change, so this just works. To wire your own component, see `REACT_DOCS.md`.
+The `Input` component built into `@niscorp/nova/react/components` already dispatches `ui:model` on change, so this just works. To wire your own component, see `REACT_DOCS.md`.
 
 ### Loop case
 
@@ -429,7 +429,7 @@ If a component carries a static `.meta` property, `registerAll` picks it up auto
 
 ### The default component set
 
-`@niscorp/nova/components/react` ships seven headless React components:
+`@niscorp/nova/react/components` ships seven headless React components:
 
 - **`Stack`** — flex container with `direction`, `gap`, `align`, `justify`, `padding`, `wrap`
 - **`Text`** — typography element with `as`, `size`, `weight`, `color`

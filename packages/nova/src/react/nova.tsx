@@ -10,7 +10,7 @@ import {
   type RenderOnError,
 } from '@layout';
 import type { Shell } from '@shell';
-import { registerNovaReactComponents } from '../components/react';
+import { registerNovaReactComponents } from './components';
 import type { SlotWrapper } from './context';
 import { NovaRenderProvider, NovaShellProvider } from './provider';
 import { RenderTree } from './render-tree';

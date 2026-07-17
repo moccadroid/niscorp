@@ -19,6 +19,7 @@ export type {
   StateChangeHandler as ShellStateChangeHandler,
   DataChangeEvent as ShellDataChangeEvent,
   DataChangeHandler as ShellDataChangeHandler,
+  CanvasChangeHandler as ShellCanvasChangeHandler,
 } from './types';
 
 export { createShell } from './shell';

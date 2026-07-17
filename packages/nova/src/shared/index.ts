@@ -68,7 +68,7 @@ export type {
 // ═══════════════════════════════════════════════════════════
 // Event bus
 // ═══════════════════════════════════════════════════════════
-export { NovaEventSchema, createEventBus } from './event-bus';
+export { NovaEventSchema, createEventBus, scopeDispatch } from './event-bus';
 export type { NovaEvent, EventBus, EventHandler, EventMatcher } from './event-bus';
 
 // ═══════════════════════════════════════════════════════════

@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from 'vitest';
 import { render } from '@testing-library/react';
-import { Text, TextPropsSchema } from '../../../src/components/react';
+import { Text, TextPropsSchema } from '../../../src/react/components';
 import { createHarness } from './helpers';
 
 describe('Text', () => {

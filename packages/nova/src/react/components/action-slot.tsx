@@ -1,5 +1,6 @@
 import { useContext, useMemo } from 'react';
 import { z } from 'zod';
+import { scopeDispatch } from '@shared/event-bus';
 import { RenderTree, useRenderTree, useShell, useSlotWrapper } from '@react';
 import type { NovaComponent, NovaComponentProps, NovaRenderContextValue } from '@react';
 import { NovaRenderContext } from '@react/context';
@@ -35,16 +36,13 @@ export const ActionSlot: NovaComponent<ActionSlotProps> = ({
   const shell = useShell();
   const hasInstance = instanceId !== undefined && instanceId !== '';
 
-  // Scope dispatch to THIS instance: every UI event dispatched from within its
-  // rendered subtree gets stamped with `origin: instanceId`, so the runtime
-  // delivers it to this instance's own triggers only (two instances of the same
-  // action on different canvases no longer both react to one click). An event
-  // that already carries an origin (a re-dispatch) keeps it.
+  // Scope dispatch to THIS instance so the runtime delivers UI events from
+  // its rendered subtree to this instance's own triggers only. The stamping
+  // rule itself is core semantics — see scopeDispatch.
   const ctx = useContext(NovaRenderContext);
   const scoped = useMemo<NovaRenderContextValue | undefined>(() => {
     if (ctx === undefined || instanceId === undefined || instanceId === '') return ctx;
-    const base = ctx.dispatch;
-    return { ...ctx, dispatch: (e) => base(e.origin === undefined ? { ...e, origin: instanceId } : e) };
+    return { ...ctx, dispatch: scopeDispatch(ctx.dispatch, instanceId) };
   }, [ctx, instanceId]);
 
   // No app-supplied wrapper → original behavior, plus the scoped dispatch.

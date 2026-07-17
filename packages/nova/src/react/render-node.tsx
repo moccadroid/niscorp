@@ -1,5 +1,5 @@
 import { Fragment, createElement, useContext, type FC } from 'react';
-import type { RenderNode } from '@layout';
+import { NOVA_MODEL_PROP, NOVA_REF_PROP, type RenderNode } from '@layout';
 import { NovaRenderContext } from './context';
 import { ErrorMarker } from './error-marker';
 import { RenderTree } from './render-tree';
@@ -33,10 +33,10 @@ export const RenderNodeView: FC<RenderNodeViewProps> = ({ node }) => {
   const Component = entry.component;
   const props: Record<string, unknown> = { ...node.props };
   if (node.model !== undefined) {
-    props['novaModel'] = { ref: node.model.ref, path: node.model.path };
+    props[NOVA_MODEL_PROP] = { ref: node.model.ref, path: node.model.path };
   }
   if (node.ref !== undefined) {
-    props['novaRef'] = node.ref;
+    props[NOVA_REF_PROP] = node.ref;
   }
   return createElement(
     Component,

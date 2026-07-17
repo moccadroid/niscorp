@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
 import { createComponentRegistry } from '@layout';
 import type { NovaComponent } from '@react';
-import { registerNovaReactComponents } from '../../../src/components/react';
+import { registerNovaReactComponents } from '../../../src/react/components';
 
 describe('component meta introspection', () => {
   it('every registered component exposes a queryable description and Zod props schema', () => {

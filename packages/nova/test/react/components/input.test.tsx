@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
-import { Input, InputPropsSchema } from '../../../src/components/react';
+import { Input, InputPropsSchema } from '../../../src/react/components';
 import { createHarness } from './helpers';
 
 describe('Input', () => {

@@ -1,5 +1,5 @@
 // ═══════════════════════════════════════════════════════════
-// @niscorp/nova/components/react
+// @niscorp/nova/react/components
 //
 // Headless React component set for Nova layouts. All five
 // components carry static `.meta` (description + Zod props

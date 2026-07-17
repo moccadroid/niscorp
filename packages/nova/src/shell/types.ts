@@ -67,6 +67,7 @@ export type DataChangeEvent = {
 
 export type StateChangeHandler = (snapshot: StateSnapshot) => void;
 export type DataChangeHandler = (change: DataChangeEvent) => void;
+export type CanvasChangeHandler = (state: CanvasState) => void;
 
 // ═══════════════════════════════════════════════════════════
 // Shell config + interface
@@ -186,6 +187,12 @@ export type Shell = {
 
   onStateChange: (handler: StateChangeHandler) => Unsubscribe;
   onDataChange: (handler: DataChangeHandler) => Unsubscribe;
+
+  // Subscribe to ONE canvas. Fires with the new CanvasState only when the
+  // canvas meaningfully changed: stack length, item ids/statuses, or the
+  // active instance. The shell owns this equality — adapters subscribe
+  // without encoding what "changed" means.
+  onCanvasChange: (canvasId: string, handler: CanvasChangeHandler) => Unsubscribe;
 
   dispose: () => void;
 };

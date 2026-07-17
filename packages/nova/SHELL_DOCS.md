@@ -10,7 +10,7 @@ If layouts are the "what" and actions are the "behavior," the shell is the "wher
 
 ```ts
 import { createShell, createComponentRegistry, createLayoutStore } from '@niscorp/nova';
-import { registerNovaReactComponents } from '@niscorp/nova/components/react';
+import { registerNovaReactComponents } from '@niscorp/nova/react/components';
 import { menuAction, settingsAction, profileAction } from './actions';
 
 const registry = createComponentRegistry();
@@ -185,6 +185,7 @@ type Shell = {
   // Telemetry subscriptions
   onStateChange: (handler) => Unsubscribe;
   onDataChange: (handler) => Unsubscribe;
+  onCanvasChange: (canvasId, handler) => Unsubscribe;
 
   // Lifecycle
   dispose: () => void;
@@ -349,6 +350,16 @@ off();
 ```
 
 The React adapter uses these internally; app code can use them to drive logging, persistence, devtools, etc.
+
+#### `onCanvasChange(canvasId, handler)`
+
+Subscribes to one canvas. Fires with the new `CanvasState` only when the canvas meaningfully changed — stack length, item ids/statuses, or the active instance. The shell owns this equality check, so subscribers (adapters included) never encode what "changed" means.
+
+```ts
+const off = shell.onCanvasChange('main', (state) => {
+  console.log('main active:', state.active?.id);
+});
+```
 
 ### `dispose()`
 

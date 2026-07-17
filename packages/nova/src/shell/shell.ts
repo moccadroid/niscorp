@@ -25,6 +25,7 @@ import { createRuntimeRegistry } from './runtime-registry';
 import { createRuntimeFactory, snapshotCanvas, validateActions, validateFragments } from './shell-internals';
 import { createTelemetry } from './telemetry';
 import type {
+  CanvasChangeHandler,
   CanvasConfig,
   CanvasState,
   DataChangeHandler,
@@ -383,6 +384,31 @@ export const createShell = (config: ShellConfig): Shell => {
   const onStateChange = (h: StateChangeHandler): Unsubscribe => telemetry.onStateChange(h);
   const onDataChange = (h: DataChangeHandler): Unsubscribe => telemetry.onDataChange(h);
 
+  // The shell's definition of "this canvas changed": stack length, item
+  // ids/statuses, or the active instance. Snapshot objects are rebuilt on
+  // every state change, so identity can't be used.
+  const sameCanvasState = (a: CanvasState, b: CanvasState): boolean => {
+    if (a.stack.length !== b.stack.length) return false;
+    if (a.active?.id !== b.active?.id) return false;
+    for (let i = 0; i < a.stack.length; i += 1) {
+      const aItem = a.stack[i];
+      const bItem = b.stack[i];
+      if (aItem === undefined || bItem === undefined) return false;
+      if (aItem.id !== bItem.id || aItem.status !== bItem.status) return false;
+    }
+    return true;
+  };
+
+  const onCanvasChange = (canvasId: string, handler: CanvasChangeHandler): Unsubscribe => {
+    let prev = getCanvasState(canvasId);
+    return telemetry.onStateChange(() => {
+      const next = getCanvasState(canvasId);
+      if (sameCanvasState(prev, next)) return;
+      prev = next;
+      handler(next);
+    });
+  };
+
   const getState = (): StateSnapshot => {
     const out: Record<string, CanvasState> = {};
     for (const [cid, c] of canvases) out[cid] = snapshotCanvas(c);
@@ -476,6 +502,7 @@ export const createShell = (config: ShellConfig): Shell => {
     publish,
     onStateChange,
     onDataChange,
+    onCanvasChange,
     dispose,
   };
   rememberShellRegistry(shell, registry);

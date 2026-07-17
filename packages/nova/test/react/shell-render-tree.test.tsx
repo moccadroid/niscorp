@@ -6,7 +6,7 @@ import { createComponentRegistry, createLayoutStore } from '@layout';
 import { createShell } from '@shell';
 import type { NovaComponent } from '@react';
 import { NovaShellProvider, RenderTree, useShellRenderTree } from '@react';
-import { registerNovaReactComponents } from '../../src/components/react';
+import { registerNovaReactComponents } from '../../src/react/components';
 
 const Host = () => {
   const tree = useShellRenderTree();

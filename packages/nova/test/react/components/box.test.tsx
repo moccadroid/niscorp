@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from 'vitest';
 import { render } from '@testing-library/react';
-import { Box, BoxPropsSchema } from '../../../src/components/react';
+import { Box, BoxPropsSchema } from '../../../src/react/components';
 import { createHarness } from './helpers';
 
 describe('Box', () => {

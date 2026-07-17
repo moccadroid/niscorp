@@ -60,6 +60,9 @@ export type { RenderOptions } from './renderer';
 // Compose (fragment slot-fill)
 export { fillSlots } from './compose';
 
+// Adapter helpers (see ADAPTER.md)
+export { renderNodeKey, NOVA_MODEL_PROP, NOVA_REF_PROP } from './adapter';
+
 // Store
 export { createLayoutStore } from './store';
 

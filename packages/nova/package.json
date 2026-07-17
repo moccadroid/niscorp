@@ -14,9 +14,9 @@
       "import": { "types": "./dist/react/index.d.ts", "default": "./dist/react/index.js" },
       "require": { "types": "./dist/react/index.d.cts", "default": "./dist/react/index.cjs" }
     },
-    "./components/react": {
-      "import": { "types": "./dist/components/react.d.ts", "default": "./dist/components/react.js" },
-      "require": { "types": "./dist/components/react.d.cts", "default": "./dist/components/react.cjs" }
+    "./react/components": {
+      "import": { "types": "./dist/react/components/index.d.ts", "default": "./dist/react/components/index.js" },
+      "require": { "types": "./dist/react/components/index.d.cts", "default": "./dist/react/components/index.cjs" }
     },
     "./agent": {
       "import": { "types": "./dist/agent/index.d.ts", "default": "./dist/agent/index.js" },
