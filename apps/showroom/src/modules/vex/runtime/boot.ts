@@ -10,7 +10,7 @@ import {
 } from '@niscorp/vex';
 import type { QueryEngine, DatabaseSchema, VexEvent, MutationClient } from '@niscorp/vex';
 import { DDL, buildSeedSql } from './seed-data';
-import { createPglitePool } from './pool';
+import { createPglitePool } from '@niscorp/vex/pglite';
 import { scopePolicy } from './scope';
 import { embed } from './embed';
 import { makeGenerateDsl, makeMapToShape } from './live';

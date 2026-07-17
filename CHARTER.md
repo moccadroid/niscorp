@@ -202,34 +202,38 @@ The charter never enforces; it **compiles**. Each governed library keeps its
 own native, self-sufficient contract, enforced by its own machinery — Nova
 has the action map (an absent id throws `UnknownActionError`), Vex has
 `ScopePolicy` (an absent phase is default-denied), Cortex has `ToolPolicy`.
-None of them imports the charter or knows it exists. The charter is the
-compiler that emits *per-principal instances* of those contracts, one
-emitter per target:
+None of them imports the charter or knows it exists.
 
-| section | emits | consumer |
-|---|---|---|
-| `actions` | a filtered action map | Nova's shell |
-| `data` | a `ScopePolicy` (which phases exist) | Vex's adapter |
-| (future) | a `ToolPolicy` | Cortex's `policyGate` |
-| (future) | a served layout choice | Nova |
+And the charter imports none of *them* — there is no dependency in either
+direction (decided 2026-07-16; "no dependencies beats optional"). The
+charter's output is **string sets**; each governed target exports its own
+*grants → native contract* intake, in its own string dialect, and the app
+wiring (later the server's catalog service) composes the two:
 
-The dependency arrow points **one way**: the charter imports its targets'
-types (`ScopePolicy` from Vex, `ActionDefinition` from Nova) in order to emit
-them; the targets import nothing. This keeps the libraries pure and
-standalone — Vex without a charter is a hand-authored `ScopePolicy`, Nova is a
-hand-authored action map — and it makes grafting policy onto something new
-additive: a new section, a new compiler, one property on the target. The test
-for whether a thing is charter-governable is exactly this stack's house rule:
-**it is configured by declarative data, and absence means denial.**
+| section | dialect (owned by the target) | intake | consumer |
+|---|---|---|---|
+| `actions` | action ids | the action map, filtered by ids | Nova's shell |
+| `data` | `SCOPE_VERBS` leaves (`deals.write.insert`) | `scopePolicyFor(grants, behaviors)` | Vex |
+| (future) | tool names | a `ToolPolicy` constructor | Cortex's `policyGate` |
+| (future) | — | a served layout choice | Nova |
 
-The `data` → `ScopePolicy` compiler is the exemplar and the reason it's
-trivial: a Vex policy already fuses two things — which *phases* an entity has
-(read/write present or absent — ACL, which the charter now owns) and what a
-phase *does* (its `match`/`set` rules — row behavior, static and app-owned).
-So `resolved data grants → which phases exist`, `behaviors table → what a
-phase does`, and a granted phase carries its behaviors (or none). The
-viewer's mark-won dies because their compiled policy has no `deals` write
-phase — not a gate anyone added, one the charter never emitted.
+Each side stays pure and standalone: the charter is a string-set engine that
+is always *handed* a universe and never manufactures one; Vex without a
+charter is a hand-authored `ScopePolicy` (or `scopePolicyFor` over any flat
+grant list); Nova is a hand-authored action map. Grafting policy onto
+something new is additive — the target exports its dialect and intake, the
+app passes the universe in. The test for whether a thing is
+charter-governable is exactly this stack's house rule: **it is configured by
+declarative data, and absence means denial.**
+
+The `data` intake is the exemplar and the reason it's trivial: a Vex policy
+already fuses two things — which *phases* an entity has (present or absent —
+ACL, which the charter now owns) and what a phase *does* (its `match`/`set`
+rules — row behavior, static and app-owned). So `resolved data grants →
+which phases exist`, `behaviors table → what a phase does`, and a granted
+phase carries its behaviors (or none). The viewer's mark-won dies because
+their compiled policy has no `deals` write phase — not a gate anyone added,
+one the charter never emitted.
 
 The trusted path is a charter artifact too: the engine's *default* policy —
 what direct callers (dev checks, Ray's query tool, the architect) run under —

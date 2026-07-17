@@ -12,6 +12,7 @@
   "dependencies": {
     "@electric-sql/pglite": "^0.5.1",
     "@electric-sql/pglite-pgvector": "^0.0.2",
+    "@niscorp/charter": "workspace:^",
     "@niscorp/cortex": "workspace:*",
     "@niscorp/loom": "workspace:^",
     "@niscorp/nova": "workspace:*",

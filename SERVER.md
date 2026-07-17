@@ -44,6 +44,12 @@ all built or specified, all currently homeless:
    *every functionality flows through an endpoint* — and fns are endpoints,
    named and server-deployed (`/fns/<name>`), so functionality ships without
    shipping frontend. Nothing registers or executes them server-side.
+   *(Partly stood down 2026-07-17: the `fn:` escape hatch runs server-side —
+   the manifest's `functions(session)` seam builds in-process functions per
+   session, closing over the durable shell, the caller's compiled policy and
+   the environment; Ray lives there, keys in `.env`. The `/fns` HOST — the
+   canonical home for side-effect-free, independently deployable
+   computation — is still pending.)*
 
 5. **The projection model is specified and unbuilt.** PRODUCTS_2.md:
    per-identity projections held in the DB, "written to the DB and pushed to
@@ -231,6 +237,8 @@ application:
 ```
 → { canvas, event }    // a NovaEvent, verbatim
 ← { canvas, render }   // the canvas's RenderNode tree, verbatim
+← { frame }            // the shell's canvas ARRANGEMENT — a served layout
+                       // of CanvasSlot markers; the terminal authors nothing
 ```
 
 - **Handshake.** Session token → find-or-rehydrate the session's shell →
@@ -248,6 +256,24 @@ application:
   No acks, no replay after reconnect — a replayed intention against a
   changed screen is worse than a lost one; the human acts again, as with
   any failed request.
+- **The instance boundary.** Flattened trees carry `OriginScope` nodes
+  (one per action instance, from `flattenRenderTree`); the terminal stamps
+  `origin` on every event dispatched from inside one. Without this the
+  boundary dies at serialization and every remote event is delivered
+  globally — two instances sharing a `ref` would both fire.
+- **Empty canvas.** A canvas whose layout renders no visible content is
+  sent as `[]` — terminals collapse chrome (the aside rail) on tree length
+  alone, knowing nothing about node shapes.
+- **Session lifecycle.** Both ends are shell lifecycle on reserved
+  channels, never app fns wired to a terminal. GRANT: login is the
+  anonymous principal's application (the charter's `public` grant; a
+  canvas's candidate-list `initial` mounts the first action the principal
+  holds) — the redeem fn publishes the minted token on `session.grant`, the
+  host sends `{ type: 'session', token }` down and the terminal reconnects
+  authenticated. REVOKE: the app emits on `session.signout`, the host
+  closes every connection of the principal (4403) and evicts the shell.
+  Close codes: 4401 invalid token, 4403 signed out — on 4403 the terminal
+  clears its token and reconnects anonymous (back to the lock screen).
 - **Typing.** Three rules: the terminal never overwrites the value of the
   focused input (bound inputs are identified by `model.path`); `ui:model`
   events debounce; pending model values flush before any other event from
@@ -390,6 +416,8 @@ Staging (each step shippable):
    degrade formalized behind the same canvas contract.
 6. **Then, and only then, name it** — after showroom, relay, and at least one
    external app run on it, it will have earned whatever it's called.
+   *Named early instead: **moss** (2026-07-17, `packages/moss`,
+   `@niscorp/moss`) — it grows over everything.*
 
 ## 9. Settled
 

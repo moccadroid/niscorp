@@ -124,12 +124,18 @@ importers:
       '@electric-sql/pglite-pgvector':
         specifier: ^0.0.2
         version: 0.0.2(@electric-sql/pglite@0.5.1)
+      '@niscorp/charter':
+        specifier: workspace:^
+        version: link:../../../packages/charter
       '@niscorp/cortex':
         specifier: workspace:^
         version: link:../../../packages/cortex
       '@niscorp/loom':
         specifier: workspace:^
         version: link:../../../packages/loom
+      '@niscorp/moss':
+        specifier: workspace:^
+        version: link:../../../packages/moss
       '@niscorp/nova':
         specifier: workspace:^
         version: link:../../../packages/nova
@@ -150,7 +156,7 @@ importers:
         version: 1.18.0(react@19.2.4)
       openai:
         specifier: ^6.33.0
-        version: 6.33.0(ws@8.20.0)(zod@4.3.6)
+        version: 6.33.0(ws@8.21.1)(zod@4.3.6)
       react:
         specifier: ^19.2.4
         version: 19.2.4
@@ -161,6 +167,9 @@ importers:
         specifier: ^4.3.6
         version: 4.3.6
     devDependencies:
+      '@hono/node-server':
+        specifier: ^2.0.4
+        version: 2.0.4(hono@4.12.23)
       '@types/react':
         specifier: ^19.2.14
         version: 19.2.14
@@ -188,6 +197,9 @@ importers:
       '@electric-sql/pglite-pgvector':
         specifier: ^0.0.2
         version: 0.0.2(@electric-sql/pglite@0.5.1)
+      '@niscorp/charter':
+        specifier: workspace:^
+        version: link:../../packages/charter
       '@niscorp/cortex':
         specifier: workspace:*
         version: link:../../packages/cortex
@@ -214,7 +226,7 @@ importers:
         version: 2.2.0
       openai:
         specifier: ^6.33.0
-        version: 6.33.0(ws@8.20.0)(zod@4.3.6)
+        version: 6.33.0(ws@8.21.1)(zod@4.3.6)
       prismjs:
         specifier: ^1.30.0
         version: 1.30.0
@@ -255,6 +267,18 @@ importers:
       vite:
         specifier: ^7.1.12
         version: 7.3.2(@types/node@26.1.1)(lightningcss@1.32.0)(tsx@4.23.0)
+
+  packages/charter:
+    devDependencies:
+      tsup:
+        specifier: ^8.5.1
+        version: 8.5.1(postcss@8.5.8)(tsx@4.23.0)(typescript@6.0.2)
+      typescript:
+        specifier: ^6.0.2
+        version: 6.0.2
+      vitest:
+        specifier: ^4.1.2
+        version: 4.1.2(@types/node@26.1.1)(jsdom@25.0.1)(vite@8.0.3(@emnapi/core@1.9.2)(@emnapi/runtime@1.9.2)(@types/node@26.1.1)(esbuild@0.27.7)(tsx@4.23.0))
 
   packages/cortex:
     devDependencies:
@@ -319,6 +343,46 @@ importers:
         specifier: ^4.3.6
         version: 4.3.6
 
+  packages/moss:
+    dependencies:
+      '@hono/node-server':
+        specifier: ^2.0.4
+        version: 2.0.4(hono@4.12.23)
+      '@niscorp/charter':
+        specifier: workspace:^
+        version: link:../charter
+      '@niscorp/nova':
+        specifier: workspace:^
+        version: link:../nova
+      '@niscorp/prism':
+        specifier: workspace:^
+        version: link:../prism
+      '@niscorp/vex':
+        specifier: workspace:^
+        version: link:../vex
+      hono:
+        specifier: ^4.12.23
+        version: 4.12.23
+      ws:
+        specifier: ^8.21.1
+        version: 8.21.1
+    devDependencies:
+      '@types/node':
+        specifier: ^26.1.1
+        version: 26.1.1
+      '@types/ws':
+        specifier: ^8.18.1
+        version: 8.18.1
+      tsup:
+        specifier: ^8.5.1
+        version: 8.5.1(postcss@8.5.8)(tsx@4.23.0)(typescript@6.0.2)
+      typescript:
+        specifier: ^6.0.2
+        version: 6.0.2
+      vitest:
+        specifier: ^4.1.2
+        version: 4.1.2(@types/node@26.1.1)(jsdom@25.0.1)(vite@8.0.3(@emnapi/core@1.9.2)(@emnapi/runtime@1.9.2)(@types/node@26.1.1)(esbuild@0.27.7)(tsx@4.23.0))
+
   packages/nova:
     devDependencies:
       '@niscorp/cortex':
@@ -381,7 +445,7 @@ importers:
         version: 17.4.0
       openai:
         specifier: ^6.33.0
-        version: 6.33.0(ws@8.20.0)(zod@4.3.6)
+        version: 6.33.0(ws@8.21.1)(zod@4.3.6)
       tsup:
         specifier: ^8.5.1
         version: 8.5.1(postcss@8.5.8)(tsx@4.23.0)(typescript@6.0.2)
@@ -1274,8 +1338,12 @@ packages:
   '@types/unist@3.0.3':
     resolution: {integrity: sha512-ko/gIFJRv177XgZsZcBwnqJN5x/Gien8qNOn0D5bQU/zAzVf9Zt3BlcUiLqhV9y4ARk0GbT3tnUiPNgnTXzc/Q==}
 
+  '@types/ws@8.18.1':
+    resolution: {integrity: sha512-ThVF6DCVhA8kUGy+aazFQ4kXQ7E1Ty7A3ypFOe0IcJV8O/M511G99AW24irKrW56Wt44yG9+ij8FaqoBGkuBXg==}
+
   '@ungap/structured-clone@1.3.0':
     resolution: {integrity: sha512-WmoN8qaIAo7WTYWbAZuG8PYEhn5fkz7dZrqTBZ7dtt//lL2Gwms1IcnQ5yHqjDfX8Ft5j4YzDM23f87zBfDe9g==}
+    deprecated: Potential CWE-502 - Update to 1.3.1 or higher
 
   '@vitejs/plugin-react@5.2.0':
     resolution: {integrity: sha512-YmKkfhOAi3wsB1PhJq5Scj3GXMn3WvtQ/JC0xoopuHoXSdmtdStOpFrYaT1kie2YgFBcIe64ROzMYRjCrYOdYw==}
@@ -2503,6 +2571,18 @@ packages:
       utf-8-validate:
         optional: true
 
+  ws@8.21.1:
+    resolution: {integrity: sha512-+0NTnW77fFN/DjQi6k/Sq/Yvk4Sgajw7urW8V+asjXnRgDs9gyGkdb7EzgfhA4goXsRIZKE28fzIXBHEzhuiWw==}
+    engines: {node: '>=10.0.0'}
+    peerDependencies:
+      bufferutil: ^4.0.1
+      utf-8-validate: '>=5.0.2'
+    peerDependenciesMeta:
+      bufferutil:
+        optional: true
+      utf-8-validate:
+        optional: true
+
   xml-name-validator@5.0.0:
     resolution: {integrity: sha512-EvGK8EJ3DhaHfbRlETOWAS5pO9MZITeauHKJyb8wyajUfQUenkIg2MvLDTZ4T/TgIcm3HU0TFBgWWboAZ30UHg==}
     engines: {node: '>=18'}
@@ -3139,6 +3219,10 @@ snapshots:
   '@types/unist@2.0.11': {}
 
   '@types/unist@3.0.3': {}
+
+  '@types/ws@8.18.1':
+    dependencies:
+      '@types/node': 25.9.1
 
   '@ungap/structured-clone@1.3.0': {}
 
@@ -4107,9 +4191,9 @@ snapshots:
 
   obug@2.1.1: {}
 
-  openai@6.33.0(ws@8.20.0)(zod@4.3.6):
+  openai@6.33.0(ws@8.21.1)(zod@4.3.6):
     optionalDependencies:
-      ws: 8.20.0
+      ws: 8.21.1
       zod: 4.3.6
 
   parse-entities@4.0.2:
@@ -4827,6 +4911,8 @@ snapshots:
       stackback: 0.0.2
 
   ws@8.20.0: {}
+
+  ws@8.21.1: {}
 
   xml-name-validator@5.0.0: {}
 
