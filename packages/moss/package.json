@@ -1,0 +1,51 @@
+{
+  "name": "@niscorp/moss",
+  "version": "0.1.0",
+  "description": "moss \u2014 the nisc app server: serves existence (catalog, scoped vex, the socket), derived from artifacts",
+  "license": "MIT",
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    },
+    "./node": {
+      "types": "./dist/node.d.ts",
+      "import": "./dist/node.js",
+      "require": "./dist/node.cjs"
+    },
+    "./client": {
+      "types": "./dist/client.d.ts",
+      "import": "./dist/client.js",
+      "require": "./dist/client.cjs"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@hono/node-server": "^2.0.4",
+    "@niscorp/charter": "workspace:^",
+    "@niscorp/nova": "workspace:^",
+    "@niscorp/prism": "workspace:^",
+    "@niscorp/vex": "workspace:^",
+    "hono": "^4.12.23",
+    "ws": "^8.21.1"
+  },
+  "devDependencies": {
+    "@types/node": "^26.1.1",
+    "@types/ws": "^8.18.1",
+    "tsup": "^8.5.1",
+    "typescript": "^6.0.2",
+    "vitest": "^4.1.2"
+  }
+}
