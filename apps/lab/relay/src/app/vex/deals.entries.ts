@@ -1,6 +1,6 @@
 import type { CacheEntry } from './index';
 import type { MutationEntry } from './index';
-import { money, dateText } from '@relay/app/data/format.prism';
+import { money, dateText } from '@relay/app/prisms/format.prism';
 
 // The deals table. Joined names + the id are aliased in the DSL (distinct shape,
 // no `name` collisions); the mapping builds each shape field and formats

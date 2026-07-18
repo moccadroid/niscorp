@@ -2,7 +2,7 @@ import { z } from 'zod';
 import type { ActionDefinition } from '@niscorp/nova';
 import { dealFormLayout } from './deal.form.layout';
 import { upsertDealPrism } from './deal.form.prism';
-import { companyOptions, stageOptions, contactOptions } from '@relay/app/data/api/deals';
+import { companyOptions, stageOptions, contactOptions } from '@relay/app/vex/deals.entries';
 
 // The deal form — create AND edit in one action. The single `save` endpoint is
 // the `deal.upsert` mutation, which desugars to insert (no `id`) or update (`id`

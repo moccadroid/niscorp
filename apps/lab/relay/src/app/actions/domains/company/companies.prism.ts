@@ -1,4 +1,4 @@
-import { companiesList, companyDelete } from '@relay/app/data/api/companies';
+import { companiesList, companyDelete } from '@relay/app/vex/companies.entries';
 
 // Prisms for the companies list — each is a full Vex request body, attached to an
 // endpoint's `request`. (Query → { fingerprint, context }; write → { mutation, context }.)

@@ -13,8 +13,8 @@
 import type { Producer } from '@niscorp/cortex';
 import { collectChannels } from '@niscorp/nova';
 import { getConfigJsonSchema } from '@niscorp/prism';
-import { todayStr } from '@relay/app/data/date';
-import { ACTIONS } from '@relay/app/actions/catalog';
+import { todayStr } from '@relay/lib/date';
+import { ACTIONS } from '@relay/app/action-catalog';
 
 // The app's "now" — the real current date; the seed generates its data
 // relative to the same day.

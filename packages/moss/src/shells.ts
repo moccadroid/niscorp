@@ -1,5 +1,5 @@
 import { createShell, createComponentRegistry, CANVAS_SLOT_NAME, ACTION_SLOT_NAME } from '@niscorp/nova';
-import type { Shell, CanvasConfig, FetchFn, RenderNode } from '@niscorp/nova';
+import type { Shell, CanvasConfig, FetchFn, LayoutNode, RenderNode } from '@niscorp/nova';
 import { evaluate } from '@niscorp/prism';
 import type { ScopePolicy } from '@niscorp/vex';
 import type { NiscApp } from './app';
@@ -30,6 +30,9 @@ import type { Connection, ServerMessage } from './socket';
 export type ShellHostContext = {
   app: NiscApp;
   catalog: (principal: string | null) => Catalog;
+  // Ring-2 bindings: action id → the granted variant's layout (empty map =
+  // every action serves its base layout).
+  variants: (principal: string | null) => ReadonlyMap<string, LayoutNode>;
   roles: (principal: string | null) => readonly string[];
   // The internal wire: the server's own fetch, authorized as the session.
   wire: (token: string | null) => FetchFn;
@@ -80,6 +83,7 @@ export const createShellHost = (ctx: ShellHostContext): ShellHost => {
   // the app's, so the walk can't find them.
   const componentNames = new Set<string>([CANVAS_SLOT_NAME, ACTION_SLOT_NAME]);
   collectComponents(ctx.app.actions, componentNames);
+  collectComponents(ctx.app.layouts ?? {}, componentNames);
   collectComponents(shellManifest.canvases, componentNames);
   collectComponents(shellManifest.layout ?? {}, componentNames);
   collectComponents(shellManifest.fragments ?? {}, componentNames);
@@ -126,6 +130,7 @@ export const createShellHost = (ctx: ShellHostContext): ShellHost => {
   const build = (token: string | null, principal: string | null): Live => {
     const { ids } = ctx.catalog(principal);
     const granted = new Set(ids);
+    const bindings = ctx.variants(principal);
     const inputs = shellManifest.inputs?.({ principal, actions: ids, roles: ctx.roles(principal) }) ?? {};
 
     // Canvases are data; mounting is derivation: of the declared seed (or
@@ -197,7 +202,18 @@ export const createShellHost = (ctx: ShellHostContext): ShellHost => {
       registry,
       canvases,
       ...(shellManifest.layout !== undefined ? { canvasLayout: shellManifest.layout } : {}),
-      actions: Object.fromEntries(Object.entries(ctx.app.actions).filter(([id]) => granted.has(id))),
+      // Ring 1 then ring 2: an ungranted action doesn't exist; a granted one
+      // carries the principal's variant layout when they hold one — the swap
+      // happens on the definition, before the shell exists, so everything
+      // downstream (render, serialize, the wire) is already per-principal.
+      actions: Object.fromEntries(
+        Object.entries(ctx.app.actions)
+          .filter(([id]) => granted.has(id))
+          .map(([id, definition]) => {
+            const layout = bindings.get(id);
+            return [id, layout === undefined ? definition : { ...definition, layout }];
+          }),
+      ),
       ...(shellManifest.fragments !== undefined ? { fragments: shellManifest.fragments } : {}),
       // The same seam the client shell used: prism evaluates endpoint
       // request/response transforms; `$.userId` and `$.today` are ambient,

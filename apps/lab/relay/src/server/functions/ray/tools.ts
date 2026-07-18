@@ -7,7 +7,7 @@ import type { QueryRequest } from '@niscorp/vex';
 import { layoutAgent, paletteFromRegistry } from '@niscorp/nova/agent';
 import { buildRegistry } from '@relay/ui';
 import type { RayContext } from './engine';
-import { todayStr } from '@relay/app/data/date';
+import { todayStr } from '@relay/lib/date';
 import { listContactsPrism } from '@relay/app/actions/domains/contact';
 import { listCompaniesPrism } from '@relay/app/actions/domains/company';
 import { listDealsPrism } from '@relay/app/actions/domains/deal';

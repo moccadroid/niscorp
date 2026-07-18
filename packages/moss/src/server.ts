@@ -7,8 +7,9 @@ import type { NiscApp } from './app';
 import type { NiscRuntime } from './runtime';
 import { devSession } from './runtime';
 import { createDataLayer } from './data';
-import { resolveCatalog, resolvePolicy } from './principal';
+import { resolveCatalog, resolvePolicy, resolveVariants, verifyVariants } from './principal';
 import type { Catalog } from './principal';
+import type { LayoutNode } from '@niscorp/nova';
 import { createSocket } from './socket';
 import type { SocketAccept } from './socket';
 import { createShellHost } from './shells';
@@ -43,15 +44,22 @@ export const createServer = async (app: NiscApp, runtime: NiscRuntime): Promise<
   const data = await createDataLayer(runtime, app.entries ?? []);
 
   // ── Refuse to start incoherent (§2.5) — the charter engine verifies,
-  // nova audits each role's closure.
+  // nova audits each role's closure (over effective definitions: granted
+  // variants substituted).
   const report = verifyCharter(
     app.charter,
-    { actions: Object.keys(app.actions), data: data.grants },
+    { actions: Object.keys(app.actions), data: data.grants, layouts: Object.keys(app.layouts ?? {}) },
     app.assignments,
-    auditClosure(app.actions),
+    auditClosure(app.actions, app.layouts),
   );
   if (report.errors.length > 0) {
     throw new Error(`Charter is incoherent — refusing to serve:\n${report.errors.map((e) => `  ${e.rule}: ${e.detail}`).join('\n')}`);
+  }
+  // Ring-2 coherence: variants reference shipped actions, one variant per
+  // action per wearable combination. Same posture, second gate.
+  const variantErrors = verifyVariants(app);
+  if (variantErrors.length > 0) {
+    throw new Error(`Layout variants are incoherent — refusing to serve:\n${variantErrors.map((e) => `  ${e}`).join('\n')}`);
   }
 
   // ── Per-principal resolutions, computed at first sight (login) and
@@ -70,6 +78,14 @@ export const createServer = async (app: NiscApp, runtime: NiscRuntime): Promise<
     if (hit !== undefined) return hit;
     const resolved = resolveCatalog(app, principal);
     catalogs.set(principal, resolved);
+    return resolved;
+  };
+  const variantBindings = new Map<string | null, ReadonlyMap<string, LayoutNode>>();
+  const variants = (principal: string | null): ReadonlyMap<string, LayoutNode> => {
+    const hit = variantBindings.get(principal);
+    if (hit !== undefined) return hit;
+    const resolved = resolveVariants(app, principal);
+    variantBindings.set(principal, resolved);
     return resolved;
   };
 
@@ -134,6 +150,7 @@ export const createServer = async (app: NiscApp, runtime: NiscRuntime): Promise<
     ? createShellHost({
         app,
         catalog,
+        variants,
         roles: (principal) => resolveRoles(app, principal),
         runtime,
         policy,

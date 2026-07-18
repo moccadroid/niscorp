@@ -5,7 +5,7 @@
 // assert the new deal is there and lands in a column.
 // Run: pnpm --filter relay exec tsx src/dev/board-new-deal-check.ts
 import { shell, wire, runtime } from './check-shell';
-import { dealUpsert } from '@relay/app/data/api/deals';
+import { dealUpsert } from '@relay/app/vex/deals.entries';
 
 const settle = (ms = 250): Promise<void> => new Promise((r) => setTimeout(r, ms));
 const mainData = (): Record<string, unknown> | undefined => {

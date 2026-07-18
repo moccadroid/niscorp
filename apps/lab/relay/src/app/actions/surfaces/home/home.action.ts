@@ -1,8 +1,8 @@
 import { z } from 'zod';
 import type { ActionDefinition } from '@niscorp/nova';
 import { homeLayout } from './home.layout';
-import { dealsByStatus, dealsByStage } from '@relay/app/data/api/deals';
-import { tasksOpenCount } from '@relay/app/data/api/tasks';
+import { dealsByStatus, dealsByStage } from '@relay/app/vex/deals.entries';
+import { tasksOpenCount } from '@relay/app/vex/tasks.entries';
 
 // On mount, loads the dashboard aggregates via the `loadHome` function into
 // `$.dash`, then clears `loading`.

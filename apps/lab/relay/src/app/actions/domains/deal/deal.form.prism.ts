@@ -1,4 +1,4 @@
-import { dealUpsert } from '@relay/app/data/api/deals';
+import { dealUpsert } from '@relay/app/vex/deals.entries';
 
 // The deal form's write seam. (The three picker reads take no caller input —
 // they're plain JSON bodies in the action files, not seams.)

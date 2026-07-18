@@ -3,8 +3,8 @@
 // shape gets 400 `locked`; fingerprint management gets 403; the closed
 // mutation grammar still writes. Drives vexFetch itself — the exact surface
 // the shell's endpoints hit.
-import { ENTRIES, MUTATION_ENTRIES } from '@relay/app/data/api';
-import { taskUpsert, taskSetDone } from '@relay/app/data/api/tasks';
+import { ENTRIES, MUTATION_ENTRIES } from '@relay/app/vex';
+import { taskUpsert, taskSetDone } from '@relay/app/vex/tasks.entries';
 import { wire, login } from './check-shell';
 
 const checks: [string, boolean][] = [];

@@ -1,9 +1,9 @@
 import { createScopePolicy, scopeGrants, seedCache } from '@niscorp/vex';
-import { ENTRIES, MUTATION_ENTRIES } from '@relay/app/data/api';
+import { ENTRIES, MUTATION_ENTRIES } from '@relay/app/vex';
 import { resolvePrincipal } from '@niscorp/charter';
 import { CHARTER } from '@relay/app/charter';
-import { scopeBehaviors } from '@relay/app/data/behaviors';
-import { TABLES } from '@relay/app/data/schema';
+import { scopeBehaviors } from '@relay/app/vex/behaviors';
+import { TABLES } from '@relay/db/schema';
 import { devRuntime } from '../server/runtime';
 import type { Shell } from '@niscorp/nova';
 import { rayEngine } from '@relay/server/functions/ray/engine';

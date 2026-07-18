@@ -10,9 +10,9 @@ import { shell } from './check-shell';
 import { getVexRuntime } from './engine';
 import { executeMutation, MutationDefinitionSchema } from '@niscorp/vex';
 import { systemPolicy } from './engine';
-import { companyUpsert } from '@relay/app/data/api/companies';
-import { contactUpsert } from '@relay/app/data/api/contacts';
-import { dealUpsert } from '@relay/app/data/api/deals';
+import { companyUpsert } from '@relay/app/vex/companies.entries';
+import { contactUpsert } from '@relay/app/vex/contacts.entries';
+import { dealUpsert } from '@relay/app/vex/deals.entries';
 import { upsertContactPrism } from '@relay/app/actions/domains/contact/contact.form.prism';
 
 const settle = (ms = 150): Promise<void> => new Promise((r) => setTimeout(r, ms));

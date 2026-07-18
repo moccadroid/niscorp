@@ -1,16 +1,17 @@
 import { defineApp } from '@niscorp/moss';
 import { CHARTER } from './charter/charter';
 import { ASSIGNMENTS } from './charter/assignments';
-import { CATALOG_DEFINITIONS } from '@relay/app/actions/catalog';
-import { ENTRIES, MUTATION_ENTRIES } from '@relay/app/data/api';
-import { scopeBehaviors } from '@relay/app/data/behaviors';
-import { RESOURCES } from '@relay/app/data/resources';
-import { mainStackLayout, asideStackLayout } from '@relay/app/actions/stack-nav.layout';
-import { frameLayout } from '@relay/app/actions/frame.layout';
-import { modalFragment } from '@relay/app/actions/fragments/modal.fragment';
-import { quickviewFragment } from '@relay/app/actions/fragments/quickview.fragment';
-import { panelFragment } from '@relay/app/actions/fragments/panel.fragment';
-import { dockFragment } from '@relay/app/actions/fragments/dock.fragment';
+import { CATALOG_DEFINITIONS } from '@relay/app/action-catalog';
+import { ENTRIES, MUTATION_ENTRIES } from '@relay/app/vex';
+import { scopeBehaviors } from '@relay/app/vex/behaviors';
+import { RESOURCES } from '@relay/app/vex/resources';
+import { mainStackLayout, asideStackLayout } from '@relay/app/shell/stack-nav.layout';
+import { frameLayout } from '@relay/app/shell/frame.layout';
+import { LAYOUT_VARIANTS } from '@relay/app/layout-variants';
+import { modalFragment } from '@relay/app/shell/fragments/modal.fragment';
+import { quickviewFragment } from '@relay/app/shell/fragments/quickview.fragment';
+import { panelFragment } from '@relay/app/shell/fragments/panel.fragment';
+import { dockFragment } from '@relay/app/shell/fragments/dock.fragment';
 import { USERS } from '@relay/server/users';
 import { authFunctions } from '@relay/server/functions/auth';
 import { rayFunctions } from '@relay/server/functions/ray';
@@ -28,6 +29,9 @@ export const relay = defineApp({
   charter: CHARTER,
   assignments: ASSIGNMENTS,
   actions: CATALOG_DEFINITIONS,
+  // Ring 2: layout variants by minted id — the charter's `layouts` section
+  // selects who holds which; everyone else gets the base on the definition.
+  layouts: LAYOUT_VARIANTS,
   entries: [...ENTRIES, ...MUTATION_ENTRIES],
   behaviors: scopeBehaviors,
   resources: RESOURCES,

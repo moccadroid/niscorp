@@ -1,4 +1,4 @@
-import { contactsList, contactDelete } from '@relay/app/data/api/contacts';
+import { contactsList, contactDelete } from '@relay/app/vex/contacts.entries';
 
 // Read/write seams for the contacts list — each a full Vex request body, attached
 // to an endpoint's `request`. (Query → { fingerprint, context }; write → { mutation,

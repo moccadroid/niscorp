@@ -56,6 +56,19 @@ describe('resolution', () => {
     expect(() => resolveRole({ a: { extends: ['b'] }, b: { extends: ['a'] } }, gids, 'a', 'actions')).toThrow(CharterError);
     expect(() => resolveRole(G, gids, 'ghost', 'actions')).toThrow(CharterError);
   });
+
+  it('the layouts section resolves in its own universe; a bare array grants none', () => {
+    const L: Charter = {
+      viewer: { actions: ['a.*'], layouts: ['a.one.basic'] },
+      sales: { extends: ['viewer'], layouts: { deny: ['a.one.basic'] } },
+      bare: ['a.*'],
+    };
+    const variants = ['a.one.basic', 'a.two.compact'];
+    expect(sorted(resolveRole(L, variants, 'viewer', 'layouts'))).toEqual(['a.one.basic']);
+    // extends composes every section — a child sheds an inherited variant by denying it
+    expect(sorted(resolveRole(L, variants, 'sales', 'layouts'))).toEqual([]);
+    expect(sorted(resolveRole(L, variants, 'bare', 'layouts'))).toEqual([]);
+  });
 });
 
 describe('verifier', () => {
@@ -99,5 +112,34 @@ describe('verifier', () => {
     expect(seen.length).toBe(2);
     const all = report.perRole.find((p) => p.role === 'all');
     expect(all?.issues).toEqual(['b.one: dangles']);
+  });
+
+  it('the layouts universe is verified only when handed in', () => {
+    const charter: Charter = { r: { actions: ['a.*'], layouts: ['a.one.basic'] }, all: ['*'] };
+    // No layouts universe → the section is inert: no dead-allow for it.
+    const without = verifyCharter(charter, universes(gids));
+    expect(without.warnings.some((w) => w.detail.includes('layouts'))).toBe(false);
+    // Handed in → dead denies are errors, orphans are warnings, per-role sets carry it.
+    const withU = verifyCharter(
+      { r: { actions: ['a.*'], layouts: { allow: ['a.one.basic'], deny: ['zz.*'] } }, all: ['*'] },
+      { ...universes(gids), layouts: ['a.one.basic', 'a.two.compact'] },
+    );
+    expect(withU.errors.some((e) => e.rule === 'dead-deny' && e.detail.includes('layouts'))).toBe(true);
+    expect(withU.warnings.some((w) => w.rule === 'orphan' && w.detail.includes('a.two.compact'))).toBe(true);
+    expect(withU.perRole.find((p) => p.role === 'r')?.layouts).toEqual(['a.one.basic']);
+  });
+
+  it('the closure auditor receives each role\'s granted variant ids', () => {
+    const seen: Array<readonly string[] | undefined> = [];
+    verifyCharter(
+      { r: { actions: ['a.*'], layouts: ['a.one.basic'] } },
+      { ...universes(gids), layouts: ['a.one.basic'] },
+      {},
+      (_ids, layoutIds) => {
+        seen.push(layoutIds);
+        return [];
+      },
+    );
+    expect(seen).toEqual([['a.one.basic']]);
   });
 });

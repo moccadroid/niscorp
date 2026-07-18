@@ -4,7 +4,7 @@
 // and a deal's task completes from the workspace. Run:
 //   pnpm --filter relay exec tsx src/dev/task-mgmt-check.ts
 import { shell, runtime } from './check-shell';
-import { todayStr } from '@relay/app/data/date';
+import { todayStr } from '@relay/lib/date';
 
 const settle = (ms = 240): Promise<void> => new Promise((r) => setTimeout(r, ms));
 const mainData = (): Record<string, unknown> => {

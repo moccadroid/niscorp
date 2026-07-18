@@ -1,4 +1,4 @@
-import { companyUpsert } from '@relay/app/data/api/companies';
+import { companyUpsert } from '@relay/app/vex/companies.entries';
 
 // Create-or-edit a company → a full Vex write body, attached to the form's `save`
 // request. `id` always flows through: the mutation desugars to insert (id empty)

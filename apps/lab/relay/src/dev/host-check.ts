@@ -113,6 +113,18 @@ const main = async (): Promise<void> => {
   await jordan.until(() => jordan.frame('sidebar') !== '', "jordan's frames");
   checks.push(["jordan's sidebar omits tasks (ungranted — a different application)", !jordan.frame('sidebar').includes('nav-tasks')]);
 
+  // ── ring 2: SAME action id, a different SERVED layout. The base is the
+  // floor (no New, no assistant); alex (sales) holds chrome.topbar.full so
+  // the write-path chrome exists in his tree; jordan (viewer) is served the
+  // floor. Nothing on the wire says why: the terminal renders what it is
+  // served ──
+  await alex.until(() => alex.frame('topbar') !== '', "alex's topbar");
+  await jordan.until(() => jordan.frame('topbar') !== '', "jordan's topbar");
+  checks.push(["alex's topbar carries the New button (the granted full variant)", alex.frame('topbar').includes('New')]);
+  checks.push(["jordan's topbar has NO New button (the floor — same action, base layout)", !jordan.frame('topbar').includes('New')]);
+  checks.push(["jordan's topbar still searches (the shared piece is in both shapes)", jordan.frame('topbar').includes('Search actions')]);
+  checks.push(["the assistant is variant chrome too (alex has it, jordan does not)", !jordan.frame('topbar').includes('assistant') && alex.frame('topbar').includes('assistant')]);
+
   // ── no visible content = an empty tree: the collapsed aside rail is []
   // over the wire, so the terminal collapses chrome on length alone ──
   checks.push(['the empty aside canvas arrives as [] (no phantom rail)', alex.frame('aside') === '[]']);

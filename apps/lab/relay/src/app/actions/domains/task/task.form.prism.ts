@@ -1,4 +1,4 @@
-import { taskUpsert } from '@relay/app/data/api/tasks';
+import { taskUpsert } from '@relay/app/vex/tasks.entries';
 
 // Write seam for the task form — a full Vex write body, attached to the form's
 // `save` request. The form's "Due date" (`due`) becomes the `due_date` column,

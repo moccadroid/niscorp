@@ -11,10 +11,29 @@ import type { NiscRuntime } from './runtime';
 // assignment table until that exists.
 // ═══════════════════════════════════════════════════════════════
 
+// Ring 2, as data: a layout VARIANT reshapes ONE action's layout for the
+// principals whose charter grants the variant id (the `layouts` section).
+// The reference direction is variant → action — an action never lists its
+// variants, so minting one is additive. Holding no variant of an action
+// means the base (the layout on the definition); holding two is incoherence
+// the server refuses at boot. A variant changes ONLY the layout — different
+// behavior (triggers, endpoints, data, input) is a different action id.
+//
+// Direction: the base is the FLOOR — the least-privileged holder's shape.
+// Variants ENRICH upward and are granted like any other capability, so
+// `extends` composes them correctly and a forgotten grant fails closed
+// (under-serves visibly). A variant that reduces is authored backwards: it
+// forces deny-it-back in every richer role, and a forgotten deny
+// over-serves silently.
+export type LayoutVariant = { action: string; layout: LayoutNode };
+
 export type NiscApp = {
   charter: Charter;
   assignments: Record<string, readonly string[]>;
   actions: Record<string, ActionDefinition>;
+  // layout variants by variant id — the `layouts` universe the charter
+  // selects over (ring 2; `actions` is ring 1, `data` is ring 3)
+  layouts?: Record<string, LayoutVariant>;
   behaviors?: ScopeBehaviors;
   // the prewarmed API surface — every read and write the app serves, as
   // authored entries; seeded into the cache at boot (idempotent, protected).

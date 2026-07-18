@@ -42,7 +42,7 @@ if (report.errors.length > 0) throw new Error('charter is incoherent');
 
 ## What it is
 
-- **Universe-blind.** `resolvePrincipal(charter, universe, roles, section)` runs the same resolution against any universe. `actions` selects Nova action ids; `data` selects `table.verb` capabilities (the vex-policy dialect). Adding a governed domain is adding a universe, never new grammar.
+- **Universe-blind.** `resolvePrincipal(charter, universe, roles, section)` runs the same resolution against any universe. `actions` selects Nova action ids; `data` selects `table.verb` capabilities (the vex-policy dialect); `layouts` selects layout-variant ids (ring 2 — moss's dialect: which variant of an action's layout a principal is served). Adding a governed domain is adding a universe, never new grammar.
 - **A small algebra.** `resolved(role) = (∪ extends ∪ match(allow)) − match(deny) − ∪ without`. Order-independent, deny wins within a role, denies don't inherit. Roles compose whole roles; each section resolves independently.
 - **One glob rule.** `*` matches any run of characters including dots — `crm.*` matches `crm.deal.form`. No `**`, no braces, no regex. When a pattern can't be expressed, the fix is a better id.
 - **A verifier that refuses.** `verifyCharter` runs the opinions the grammar deliberately omits: a dead deny is an **error** (a typo'd deny fails silent, and silent means unprotected); a dead allow is a warning; ambiguous selections, namespace-as-action, orphan actions, re-allowed ancestor denies all surface. "If it boots, it's coherent."

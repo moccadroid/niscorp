@@ -1,7 +1,7 @@
-import { dealById, dealMarkWon, dealMarkLost } from '@relay/app/data/api/deals';
-import { activitiesByDeal, dealLineItems } from '@relay/app/data/api/activities';
-import { tasksByDeal } from '@relay/app/data/api/tasks';
-import { contactById } from '@relay/app/data/api/contacts';
+import { dealById, dealMarkWon, dealMarkLost } from '@relay/app/vex/deals.entries';
+import { activitiesByDeal, dealLineItems } from '@relay/app/vex/activities.entries';
+import { tasksByDeal } from '@relay/app/vex/tasks.entries';
+import { contactById } from '@relay/app/vex/contacts.entries';
 
 // The deal workspace — several reads, each into a top-level slot. Each prism is a
 // full Vex request body, attached to an endpoint's `request`. The primary contact

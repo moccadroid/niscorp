@@ -3,9 +3,9 @@ import { flattenSchemaIssues } from '@niscorp/cortex';
 import { evaluate } from '@niscorp/prism';
 import { buildRegistry } from '@relay/ui';
 import { handleQuery, handleDiscovery } from '@niscorp/vex';
-import { resourceEntities } from '@relay/app/data/resources';
+import { resourceEntities } from '@relay/app/vex/resources';
 import type { RayContext } from '../engine';
-import { todayStr } from '@relay/app/data/date';
+import { todayStr } from '@relay/lib/date';
 import { catalogEntries } from '../catalog';
 import { knownChannels } from '../knowledge';
 

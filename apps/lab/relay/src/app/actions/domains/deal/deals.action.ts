@@ -2,7 +2,7 @@ import { z } from 'zod';
 import type { ActionDefinition } from '@niscorp/nova';
 import { dealsLayout } from './deals.layout';
 import { listDealsPrism, moveDealPrism, deleteDealPrism } from './deals.prism';
-import { dealsBoard, dealsOpenByStage, dealsForecast } from '@relay/app/data/api/deals';
+import { dealsBoard, dealsOpenByStage, dealsForecast } from '@relay/app/vex/deals.entries';
 
 // The deals collection — ONE action, two layouts (`$.view`: 'table' | 'board').
 // Navigation sets the initial view (sidebar Deals → table, Pipeline → board; the

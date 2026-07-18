@@ -1,6 +1,6 @@
-import { companyById } from '@relay/app/data/api/companies';
-import { contactsByCompany } from '@relay/app/data/api/contacts';
-import { dealsByCompany } from '@relay/app/data/api/deals';
+import { companyById } from '@relay/app/vex/companies.entries';
+import { contactsByCompany } from '@relay/app/vex/contacts.entries';
+import { dealsByCompany } from '@relay/app/vex/deals.entries';
 
 // The company profile is three reads into top-level slots — record, people, open
 // deals. Each prism is a full Vex query body, attached to an endpoint's `request`.

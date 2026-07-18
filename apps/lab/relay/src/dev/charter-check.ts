@@ -5,15 +5,17 @@
 // report — printing the per-role closure. A viewer's dangling Edit targets
 // are EXPECTED findings (shown, not hidden), not failures.
 import { resolveRole, resolvePrincipal, verifyCharter } from '@niscorp/charter';
-import { auditClosure } from '@niscorp/moss';
+import { auditClosure, verifyVariants } from '@niscorp/moss';
 import { scopeGrants, createScopePolicy } from '@niscorp/vex';
 import { CHARTER, ASSIGNMENTS } from '@relay/app/charter';
-import { CATALOG_DEFINITIONS } from '@relay/app/actions/catalog';
-import { scopeBehaviors } from '@relay/app/data/behaviors';
-import { TABLES } from '@relay/app/data/schema';
+import { CATALOG_DEFINITIONS } from '@relay/app/action-catalog';
+import { LAYOUT_VARIANTS } from '@relay/app/layout-variants';
+import { scopeBehaviors } from '@relay/app/vex/behaviors';
+import { TABLES } from '@relay/db/schema';
 
 const ids = Object.keys(CATALOG_DEFINITIONS);
 const dataU = scopeGrants(TABLES);
+const layoutU = Object.keys(LAYOUT_VARIANTS);
 const checks: [string, boolean][] = [];
 const eq = (a: readonly string[], b: readonly string[]): boolean => a.length === b.length && a.every((x, i) => x === b[i]);
 const resolvedActions = (name: string): string[] => [...resolveRole(CHARTER, ids, name, 'actions')].sort();
@@ -68,8 +70,21 @@ checks.push(["admin's deals entity gains the delete phase", Array.isArray(phases
 checks.push(["tasks read carries the assignee filter (a granted behavior)", phases(viewerPolicy, 'tasks')?.read?.length === 1]);
 checks.push(["sales's tasks phases carry the umbrella behaviors (insert: set+match; delete: match only)", phases(salesPolicy, 'tasks')?.insert?.length === 2 && phases(salesPolicy, 'tasks')?.delete?.length === 1]);
 
+// ── the exact resolved LAYOUT sets — ring 2, a third universe. The base
+//    is the FLOOR; variants enrich upward as grants, so `extends` composes
+//    them like every other capability — no deny-it-back anywhere ──
+const resolvedLayouts = (name: string): string[] => [...resolveRole(CHARTER, layoutU, name, 'layouts')].sort();
+checks.push(['viewer holds no variant — the floor is not an id (ring 2)', resolvedLayouts('viewer').length === 0]);
+checks.push(['sales holds the full topbar (the write-path chrome rides with the write grants)', eq(resolvedLayouts('sales'), ['chrome.topbar.full'])]);
+checks.push(['admin inherits it through extends (variants compose like capabilities)', eq(resolvedLayouts('admin'), ['chrome.topbar.full'])]);
+checks.push(['member and public hold no variants', resolvedLayouts('member').length === 0 && resolvedLayouts('public').length === 0]);
+checks.push([
+  'ring-2 documents are coherent (every variant reshapes a shipped action; one variant per action per wearer)',
+  verifyVariants({ charter: CHARTER, assignments: ASSIGNMENTS, actions: CATALOG_DEFINITIONS, layouts: LAYOUT_VARIANTS }).length === 0,
+]);
+
 // ── relay's charter is coherent — same verify the shell and server boot on ──
-const report = verifyCharter(CHARTER, { actions: ids, data: dataU }, ASSIGNMENTS, auditClosure(CATALOG_DEFINITIONS));
+const report = verifyCharter(CHARTER, { actions: ids, data: dataU, layouts: layoutU }, ASSIGNMENTS, auditClosure(CATALOG_DEFINITIONS, LAYOUT_VARIANTS));
 checks.push([`relay charter: zero errors (got ${report.errors.length})`, report.errors.length === 0]);
 checks.push([`relay charter: zero warnings (got ${report.warnings.length})`, report.warnings.length === 0]);
 

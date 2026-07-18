@@ -1,4 +1,4 @@
-import { contactUpsert } from '@relay/app/data/api/contacts';
+import { contactUpsert } from '@relay/app/vex/contacts.entries';
 
 // Write seam for the contact form — a full Vex write body, attached to the form's
 // `save` request. The form collects a single "Name"; the table has first_name /

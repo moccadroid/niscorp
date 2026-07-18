@@ -1,6 +1,6 @@
 import { auditAction, collectChannels } from '@niscorp/nova';
 import type { ActionDefinition, FunctionHandler } from '@niscorp/nova';
-import { ACTIONS } from '@relay/app/actions/catalog';
+import { ACTIONS } from '@relay/app/action-catalog';
 import { getDevtoolsShell } from './bridge';
 import { classifyIssue } from './audit-classify';
 import type { IssueClass } from './audit-classify';

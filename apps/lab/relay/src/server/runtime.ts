@@ -4,8 +4,8 @@ import { pg_trgm } from '@electric-sql/pglite/contrib/pg_trgm';
 import { fuzzystrmatch } from '@electric-sql/pglite/contrib/fuzzystrmatch';
 import { createPostgresCache } from '@niscorp/vex';
 import type { NiscRuntime } from '@niscorp/moss';
-import { DDL } from '@relay/app/data/schema';
-import { buildSeedSql } from '@relay/app/data/seed';
+import { DDL } from '@relay/db/schema';
+import { buildSeedSql } from '@relay/db/seed';
 import { createPglitePool, RAW_DATE_PARSERS } from '@niscorp/vex/pglite';
 
 // ═══════════════════════════════════════════════════════════

@@ -1,4 +1,4 @@
-import { tasksMine, tasksOverdue, taskSetDone, taskDelete } from '@relay/app/data/api/tasks';
+import { tasksMine, tasksOverdue, taskSetDone, taskDelete } from '@relay/app/vex/tasks.entries';
 
 // Read/write seams for the tasks collection — each a full Vex request body,
 // attached to an endpoint's `request`. (Query → { fingerprint, context }; write →

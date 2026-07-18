@@ -9,7 +9,7 @@
 //     (Inputs + Selects), and a fragment id can't be pushed as an action.
 // Run with `pnpm --filter relay shell-smoke`.
 import { shell } from './check-shell';
-import { ACTIONS } from '@relay/app/actions';
+import { ACTIONS } from '@relay/app/action-catalog';
 
 type Node = { type?: string; name?: string; message?: string; children?: unknown };
 

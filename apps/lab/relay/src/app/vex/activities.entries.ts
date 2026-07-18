@@ -1,5 +1,5 @@
 import type { CacheEntry } from './index';
-import { money, dateText } from '@relay/app/data/format.prism';
+import { money, dateText } from '@relay/app/prisms/format.prism';
 
 // A deal's activity feed — `activity_id`/owner aliased; the mapping formats the
 // date as `when` and derives a colour `tone` per type.

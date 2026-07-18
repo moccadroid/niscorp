@@ -1,4 +1,4 @@
-import { sidebarCounts } from '@relay/app/data/api/counts';
+import { sidebarCounts } from '@relay/app/vex/counts.entries';
 
 // The nav badges are one COUNT(*)-per-table read, cross-joined into a single
 // row { contacts, companies, deals, tasks }. One request fills all four slots;

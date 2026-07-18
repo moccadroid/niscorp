@@ -12,6 +12,7 @@
     "harness": "tsx src/dev/harness-check.ts",
     "architect": "tsx src/dev/architect-check.ts",
     "charter": "tsx src/dev/charter-check.ts",
+    "artifacts": "tsx src/dev/artifacts-check.ts",
     "server": "tsx src/dev/server-check.ts",
     "socket": "tsx src/dev/socket-check.ts",
     "host": "tsx src/dev/host-check.ts",

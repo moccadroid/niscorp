@@ -18,24 +18,34 @@ import { CharterError, normalizeRole, resolveRole } from './resolve';
 
 export type VerifyIssue = { level: 'error' | 'warning'; rule: string; detail: string };
 
-export type RoleClosure = { role: string; actions: string[]; data: string[]; issues: string[] };
+export type RoleClosure = { role: string; actions: string[]; data: string[]; layouts: string[]; issues: string[] };
 
 export type VerifyReport = { errors: VerifyIssue[]; warnings: VerifyIssue[]; perRole: RoleClosure[] };
 
-// The per-role closure audit: given a role's granted action ids, report the
+// The per-role closure audit: given a role's granted action ids (and, when
+// the app governs layouts, its granted layout-variant ids), report the
 // cross-action wiring problems inside that closure (targets that aren't in
 // it, channels nobody serves). The consumer that OWNS actions provides it —
-// nova exports `auditClosure(definitions)`.
-export type ClosureAuditor = (grantedIds: readonly string[]) => string[];
+// moss builds one from nova's audit, substituting granted variants so the
+// closure sees each role's EFFECTIVE definitions.
+export type ClosureAuditor = (grantedIds: readonly string[], layoutIds?: readonly string[]) => string[];
 
 export const verifyCharter = (
   charter: Charter,
-  universes: { actions: readonly string[]; data: readonly string[] },
+  universes: { actions: readonly string[]; data: readonly string[]; layouts?: readonly string[] },
   assignments: Record<string, readonly string[]> = {},
   closure?: ClosureAuditor,
 ): VerifyReport => {
   const actionUniverse = universes.actions;
-  const sections: Section[] = ['actions', 'data'];
+  // The layouts section is verified only when the composer governs layouts
+  // (hands a universe in) — absent, a charter's `layouts` keys are inert
+  // here exactly as they are in resolution against an empty universe.
+  const sections: Section[] = universes.layouts === undefined ? ['actions', 'data'] : ['actions', 'data', 'layouts'];
+  const universeOf: Record<Section, readonly string[]> = {
+    actions: universes.actions,
+    data: universes.data,
+    layouts: universes.layouts ?? [],
+  };
 
   const errors: VerifyIssue[] = [];
   const warnings: VerifyIssue[] = [];
@@ -43,27 +53,32 @@ export const verifyCharter = (
 
   // Resolve every role in every section up front (also surfaces cycles /
   // unknown references, per section).
-  const resolved: Record<Section, Map<string, ReadonlySet<string>>> = { actions: new Map(), data: new Map() };
+  const resolved: Record<Section, Map<string, ReadonlySet<string>>> = { actions: new Map(), data: new Map(), layouts: new Map() };
   for (const section of sections) {
     const memo = new Map<string, ReadonlySet<string>>();
     for (const role of Object.keys(charter)) {
       try {
-        resolved[section].set(role, resolveRole(charter, universes[section], role, section, memo));
+        resolved[section].set(role, resolveRole(charter, universeOf[section], role, section, memo));
       } catch (e) {
         errors.push({ level: 'error', rule: 'resolution', detail: `${section}: ${e instanceof CharterError ? e.message : String(e)}` });
       }
     }
   }
 
-  // ── ids are leaves; namespaces are never actions ──
-  for (const a of actionUniverse) {
-    for (const b of actionUniverse) {
-      if (b.startsWith(`${a}.`)) {
-        errors.push({ level: 'error', rule: 'leaves-only', detail: `id "${a}" is a namespace of "${b}" — namespaces are never actions` });
-        break;
+  // ── ids are leaves; namespaces are never actions. Same rule inside the
+  //    layouts universe — a variant id is never a namespace of another ──
+  const leavesOnly = (universe: readonly string[], kind: string): void => {
+    for (const a of universe) {
+      for (const b of universe) {
+        if (b.startsWith(`${a}.`)) {
+          errors.push({ level: 'error', rule: 'leaves-only', detail: `id "${a}" is a namespace of "${b}" — namespaces are never ${kind}` });
+          break;
+        }
       }
     }
-  }
+  };
+  leavesOnly(actionUniverse, 'actions');
+  if (universes.layouts !== undefined) leavesOnly(universes.layouts, 'variants');
 
   // ── one selection per section: top-level allow/deny (the actions sugar)
   //    AND an `actions` key on the same role means resolution silently drops
@@ -80,25 +95,30 @@ export const verifyCharter = (
     for (const [role, def] of Object.entries(charter)) {
       const { allow, deny } = normalizeRole(def, section);
       for (const glob of deny) {
-        if (matchAll([glob], universes[section]).size === 0) {
+        if (matchAll([glob], universeOf[section]).size === 0) {
           errors.push({ level: 'error', rule: 'dead-deny', detail: `role "${role}" denies "${glob}" (${section}) which matches nothing — silent means unprotected` });
         }
       }
       for (const glob of allow) {
-        if (matchAll([glob], universes[section]).size === 0) {
+        if (matchAll([glob], universeOf[section]).size === 0) {
           warnings.push({ level: 'warning', rule: 'dead-allow', detail: `role "${role}" allows "${glob}" (${section}) which matches nothing` });
         }
       }
     }
   }
 
-  // ── orphan actions: matched by no role at all (actions only; an ungranted
-  //    data phase is simply denied, not a mistake) ──
-  const reachableActions = new Set<string>();
-  for (const set of resolved.actions.values()) for (const id of set) reachableActions.add(id);
-  for (const id of actionUniverse) {
-    if (!reachableActions.has(id)) warnings.push({ level: 'warning', rule: 'orphan', detail: `action "${id}" is granted by no role — deployed but unreachable` });
-  }
+  // ── orphans: matched by no role at all. Actions and layout variants share
+  //    the rule — both are deployed-but-unreachable artifacts. An ungranted
+  //    data phase is simply denied, not a mistake ──
+  const orphans = (section: Section, kind: string): void => {
+    const reachable = new Set<string>();
+    for (const set of resolved[section].values()) for (const id of set) reachable.add(id);
+    for (const id of universeOf[section]) {
+      if (!reachable.has(id)) warnings.push({ level: 'warning', rule: 'orphan', detail: `${kind} "${id}" is granted by no role — deployed but unreachable` });
+    }
+  };
+  orphans('actions', 'action');
+  if (universes.layouts !== undefined) orphans('layouts', 'layout variant');
 
   // ── re-allow of an ancestor's deny (F1), per section ──
   const ancestorDenied = (role: string, section: Section, seen: Set<string> = new Set()): Set<string> => {
@@ -109,7 +129,7 @@ export const verifyCharter = (
     for (const parent of normalizeRole(def, section).extends) {
       const parentDef = charter[parent];
       if (parentDef === undefined) continue;
-      for (const id of matchAll(normalizeRole(parentDef, section).deny, universes[section])) out.add(id);
+      for (const id of matchAll(normalizeRole(parentDef, section).deny, universeOf[section])) out.add(id);
       for (const id of ancestorDenied(parent, section, seen)) out.add(id);
     }
     return out;
@@ -137,12 +157,14 @@ export const verifyCharter = (
     }
   }
 
-  // ── per-role closure: the action-catalog audit (cross-action wiring) ──
+  // ── per-role closure: the action-catalog audit (cross-action wiring),
+  //    fed the role's granted variants so it audits EFFECTIVE definitions ──
   for (const role of Object.keys(charter)) {
     const actions = [...(resolved.actions.get(role) ?? [])].sort();
     const data = [...(resolved.data.get(role) ?? [])].sort();
-    const issues = closure?.(actions) ?? [];
-    perRole.push({ role, actions, data, issues });
+    const layouts = [...(resolved.layouts.get(role) ?? [])].sort();
+    const issues = closure?.(actions, layouts) ?? [];
+    perRole.push({ role, actions, data, layouts, issues });
   }
 
   return { errors, warnings, perRole };

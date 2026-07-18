@@ -1,7 +1,7 @@
-import { contactById } from '@relay/app/data/api/contacts';
-import { dealsByContact } from '@relay/app/data/api/deals';
-import { tasksByContact } from '@relay/app/data/api/tasks';
-import { activitiesByContact } from '@relay/app/data/api/activities';
+import { contactById } from '@relay/app/vex/contacts.entries';
+import { dealsByContact } from '@relay/app/vex/deals.entries';
+import { tasksByContact } from '@relay/app/vex/tasks.entries';
+import { activitiesByContact } from '@relay/app/vex/activities.entries';
 
 // The contact profile is four reads into top-level slots — the record, plus the
 // related deals / tasks / activity that make the panel as rich as the company

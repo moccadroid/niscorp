@@ -25,6 +25,7 @@ const policy: ScopePolicy = { default: 'deny', entities: {} };
 const ctx: ShellHostContext = {
   app,
   catalog: () => ({ ids: ['counter'], hash: 'h' }),
+  variants: () => new Map(),
   roles: () => ['public'],
   wire: () => async () => ({ ok: true, status: 200, json: async () => ({}), text: async () => '{}' }),
   runtime: {} as ShellHostContext['runtime'],
@@ -65,5 +66,40 @@ describe('shells — the shell host', () => {
     const host = createShellHost({ ...ctx, catalog: () => ({ ids: [], hash: 'h' }) });
     const session = host.session('t', 'usr_1');
     expect(session.shell.getState().canvases['main']?.active).toBeUndefined();
+  });
+
+  it('a held variant replaces the definition layout; behavior is untouched (ring 2)', async () => {
+    // The base renders "base"; the variant renders "variant". Same action id,
+    // same triggers — the substitution happens on the definition at build.
+    const withLayouts = {
+      ...app,
+      actions: { counter: { ...counter, layout: { component: 'Text', children: 'base' } } },
+      layouts: { 'counter.basic': { action: 'counter', layout: { component: 'Text', children: 'variant' } } },
+    } as unknown as NiscApp;
+    const rendered = (principal: string, held: boolean): string => {
+      const host = createShellHost({
+        ...ctx,
+        app: withLayouts,
+        variants: () => (held ? new Map([['counter', { component: 'Text', children: 'variant' }]]) : new Map()),
+      });
+      return JSON.stringify(host.session('t', principal).shell.flattenRenderTree(host.session('t', principal).shell.getCanvasRenderTree('main')));
+    };
+    expect(rendered('usr_base', false)).toContain('base');
+    expect(rendered('usr_base', false)).not.toContain('variant');
+    expect(rendered('usr_held', true)).toContain('variant');
+    expect(rendered('usr_held', true)).not.toContain('"base"');
+
+    // Behavior survives the swap: the variant principal's click still bumps.
+    const host = createShellHost({
+      ...ctx,
+      app: withLayouts,
+      variants: () => new Map([['counter', { component: 'Text', children: 'variant' }]]),
+    });
+    const session = host.session('t', 'usr_bump');
+    await tick();
+    const active = session.shell.getState().canvases['main']?.active;
+    session.dispatch('main', { type: 'ui:click', ref: 'bump' });
+    await tick();
+    expect(session.shell.getRuntime(active!.id)?.getData()['n']).toBe(1);
   });
 });

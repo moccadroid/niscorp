@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import type { ActionDefinition } from '@niscorp/nova';
 import { contactFormLayout } from './contact.form.layout';
-import { companyOptions } from '@relay/app/data/api/deals';
+import { companyOptions } from '@relay/app/vex/deals.entries';
 import { upsertContactPrism } from './contact.form.prism';
 
 // The contact form — create AND edit in one action. The `save` endpoint is the

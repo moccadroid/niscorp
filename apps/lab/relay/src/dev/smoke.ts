@@ -8,23 +8,23 @@
 // (src/dev).
 import { evaluate } from '@niscorp/prism';
 import type { QueryRequest } from '@niscorp/vex';
-import type { CacheEntry } from '@relay/app/data/api';
+import type { CacheEntry } from '@relay/app/vex';
 import { getVexRuntime } from '@relay/dev/engine';
-import { todayStr } from '@relay/app/data/date';
+import { todayStr } from '@relay/lib/date';
 
 // The user the replays run as — smoke drives the ENGINE directly with an
 // explicit scope (the app derives its scope from the session token).
 const CURRENT_USER = 'usr_001';
 import { CHARTER, ASSIGNMENTS } from '@relay/app/charter';
 import { resolvePrincipal } from '@niscorp/charter';
-import { CATALOG_DEFINITIONS } from '@relay/app/actions/catalog';
-import { contactsList, contactById, contactsByCompany } from '@relay/app/data/api/contacts';
-import { companiesList, companyById } from '@relay/app/data/api/companies';
-import { dealsList, dealsByOwner, dealById, dealsByCompany, dealsBoard, dealsOpenByStage, dealsForecast, dealsByStatus, dealsByStage } from '@relay/app/data/api/deals';
-import { tasksMine, tasksOverdue, tasksByDeal, tasksOpenCount } from '@relay/app/data/api/tasks';
-import { activitiesByDeal, dealLineItems } from '@relay/app/data/api/activities';
-import { actionsSearch } from '@relay/app/data/api/actions';
-import { sidebarCounts } from '@relay/app/data/api/counts';
+import { CATALOG_DEFINITIONS } from '@relay/app/action-catalog';
+import { contactsList, contactById, contactsByCompany } from '@relay/app/vex/contacts.entries';
+import { companiesList, companyById } from '@relay/app/vex/companies.entries';
+import { dealsList, dealsByOwner, dealById, dealsByCompany, dealsBoard, dealsOpenByStage, dealsForecast, dealsByStatus, dealsByStage } from '@relay/app/vex/deals.entries';
+import { tasksMine, tasksOverdue, tasksByDeal, tasksOpenCount } from '@relay/app/vex/tasks.entries';
+import { activitiesByDeal, dealLineItems } from '@relay/app/vex/activities.entries';
+import { actionsSearch } from '@relay/app/vex/actions.entries';
+import { sidebarCounts } from '@relay/app/vex/counts.entries';
 import { listContactsPrism } from '@relay/app/actions/domains/contact/contacts.prism';
 import { contactByIdPrism } from '@relay/app/actions/domains/contact/contact.prism';
 import { listCompaniesPrism } from '@relay/app/actions/domains/company/companies.prism';

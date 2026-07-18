@@ -15,11 +15,16 @@ export const CHARTER: Charter = {
     actions: ['crm.contacts', 'crm.companies', 'crm.deals', 'crm.*.view'],
     // Read everything — reference data and CRM records alike. No write phase
     // exists in a viewer's compiled policy, so vex refuses every mutation.
+    // No layout variant either: the base topbar IS the viewer's shape (the
+    // floor) — variants enrich upward, never reduce.
     data: ['*.read'],
   },
   sales: {
     extends: ['viewer'],
     actions: ['crm.*', 'tasks.*', 'assistant'],
+    // Ring 2: the full topbar (New + assistant) rides with the write grants
+    // — a capability like any other, so admin inherits it through extends.
+    layouts: ['chrome.topbar.full'],
     // Inherits `*.read` from viewer; adds create + edit on the CRM entities
     // and the full write namespace on tasks (personal rows, pinned to the
     // assignee). CRM delete is deliberately ABSENT — deleting shared records

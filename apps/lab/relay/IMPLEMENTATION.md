@@ -112,6 +112,14 @@ while building, now part of the record:
    (ring 2, out of scope). The charter check's closure report lists every
    such dangling target per role, so the mismatch is documented, not
    silent.
+   *Amended 2026-07-18: ring 2 landed as SERVED variants — the charter grew
+   a `layouts` section over minted variant ids (`src/app/actions/variants.ts`),
+   and moss substitutes the granted variant's layout on the definition at
+   shell build. Direction doctrine: the base layout is the FLOOR (the
+   topbar's base has no New and no assistant); `chrome.topbar.full` enriches
+   it and is granted to sales, inherited by admin — variants enrich upward
+   as grants, never reduce, so no deny-it-back exists anywhere. The row-menu
+   Edits above remain unshaped by choice; the mechanism now exists.*
 9. **Prisms narrow to their real use cases** (§10): external-API response
    transforms and mutation/request payloads that derive from state. Static
    seams are deleted in favor of plain JSON bodies. Audit done 2026-07-15;
@@ -468,6 +476,9 @@ One commit per phase; relay runs after every phase.
 - No Ray charter integration — returns when the app server is up.
 - No ring-2 shaping: no per-role variants, no hiding buttons whose targets
   are denied (the closure report names them instead).
+  *Amended 2026-07-18: no longer true — ring 2 exists (charter `layouts`
+  section + moss variant substitution); the topbar is the proof: the base
+  is the viewer's floor, `chrome.topbar.full` is granted to sales.*
 - No charter editing UI, no assignment persistence — `charter.ts` and
   `assignments.ts` are checked-in constants standing in for library rows.
 - No guard hook in nova (staging step 2); only `removeAction` lands.

@@ -1,4 +1,4 @@
-import { dealsList, dealsByOwner, dealMoveStage, dealDelete } from '@relay/app/data/api/deals';
+import { dealsList, dealsByOwner, dealMoveStage, dealDelete } from '@relay/app/vex/deals.entries';
 
 // Read/write seams for the deals collection — each a full Vex request body,
 // attached to an endpoint's `request`. (Query → { fingerprint, context }; write →

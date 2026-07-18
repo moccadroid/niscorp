@@ -1,6 +1,6 @@
 import type { CacheEntry } from './index';
 import type { MutationEntry } from './index';
-import { dateText } from '@relay/app/data/format.prism';
+import { dateText } from '@relay/app/prisms/format.prism';
 
 // My tasks, scoped by the toolbar tab. ONE shape / ONE cached plan serves Open,
 // Done and All via a `done` RANGE in context: PG orders booleans (false < true),

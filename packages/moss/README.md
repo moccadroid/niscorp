@@ -28,6 +28,9 @@ const app = defineApp({
   charter,        // the policy document (resolved per principal)
   assignments,    // principal → roles
   actions,        // the ActionDefinitions the app ships
+  layouts,        // ring 2: layout variants by minted id — { action, layout },
+                  // substituted per principal at shell build. The base is the
+                  // floor; variants enrich upward as grants, never reduce
   entries,        // the prewarmed vex cache — the API surface, as data
   behaviors,      // row-level scope semantics the charter can't express
   resources,      // entity subgraphs → /api/<name>/vex

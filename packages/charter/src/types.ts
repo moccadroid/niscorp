@@ -2,9 +2,11 @@
 // selection in that section's own universe of ids — the engine is universe-
 // blind, so a section is just "which universe do these globs resolve in".
 // `actions` selects Nova action ids; `data` selects `table.verb` capabilities
-// (the vex-policy universe). Adding a section is adding a universe + a
-// compiler, never new grammar.
-export type Section = 'actions' | 'data';
+// (the vex-policy universe); `layouts` selects layout-variant ids (ring 2 —
+// which VARIANT of an action's layout a principal holds; holding none means
+// the base). Adding a section is adding a universe + a compiler, never new
+// grammar.
+export type Section = 'actions' | 'data' | 'layouts';
 
 // Within a section: a bare glob list (sugar for { allow }) or add/subtract.
 // Same 2×2 atoms as the role level, one universe down.
@@ -24,6 +26,7 @@ export type RoleDef =
       deny?: string[]; // sugar → actions.deny
       actions?: Selection;
       data?: Selection;
+      layouts?: Selection;
     };
 
 export type Charter = Record<string, RoleDef>;

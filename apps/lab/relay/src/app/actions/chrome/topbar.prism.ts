@@ -1,4 +1,4 @@
-import { actionsSearch } from '@relay/app/data/api/actions';
+import { actionsSearch } from '@relay/app/vex/actions.entries';
 
 // An empty box matches nothing (a sentinel pattern), so the palette only shows
 // results once you type; otherwise the typed text becomes a `%q%` ILIKE pattern.

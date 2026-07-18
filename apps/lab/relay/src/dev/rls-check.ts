@@ -5,10 +5,10 @@
 import { evaluate } from '@niscorp/prism';
 import type { QueryRequest } from '@niscorp/vex';
 import { getVexRuntime } from '@relay/dev/engine';
-import { todayStr } from '@relay/app/data/date';
+import { todayStr } from '@relay/lib/date';
 import { systemPolicy } from './engine';
 import { executeMutation } from '@niscorp/vex';
-import { taskUpsert, taskSetDone, taskDelete } from '@relay/app/data/api/tasks';
+import { taskUpsert, taskSetDone, taskDelete } from '@relay/app/vex/tasks.entries';
 import { listTasksPrism } from '@relay/app/actions/domains/task/tasks.prism';
 
 const checks: [string, boolean][] = [];

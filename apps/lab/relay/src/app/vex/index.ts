@@ -1,11 +1,11 @@
 import type { SeedEntry, SeedMutation } from '@niscorp/vex';
-import { contactsList, contactById, contactsByCompany, contactUpsert, contactDelete } from './contacts';
-import { companiesList, companyById, companyUpsert, companyDelete } from './companies';
-import { dealsList, dealsByOwner, dealById, dealsByCompany, dealsByContact, dealsBoard, dealsOpenByStage, dealsForecast, dealsByStatus, dealsByStage, companyOptions, stageOptions, contactOptions, dealUpsert, dealMoveStage, dealMarkWon, dealMarkLost, dealDelete } from './deals';
-import { tasksMine, tasksOverdue, tasksByDeal, tasksByContact, tasksOpenCount, taskUpsert, taskSetDone, taskDelete } from './tasks';
-import { activitiesByDeal, activitiesByContact, dealLineItems } from './activities';
-import { actionsSearch } from './actions';
-import { sidebarCounts } from './counts';
+import { contactsList, contactById, contactsByCompany, contactUpsert, contactDelete } from './contacts.entries';
+import { companiesList, companyById, companyUpsert, companyDelete } from './companies.entries';
+import { dealsList, dealsByOwner, dealById, dealsByCompany, dealsByContact, dealsBoard, dealsOpenByStage, dealsForecast, dealsByStatus, dealsByStage, companyOptions, stageOptions, contactOptions, dealUpsert, dealMoveStage, dealMarkWon, dealMarkLost, dealDelete } from './deals.entries';
+import { tasksMine, tasksOverdue, tasksByDeal, tasksByContact, tasksOpenCount, taskUpsert, taskSetDone, taskDelete } from './tasks.entries';
+import { activitiesByDeal, activitiesByContact, dealLineItems } from './activities.entries';
+import { actionsSearch } from './actions.entries';
+import { sidebarCounts } from './counts.entries';
 
 // ═══════════════════════════════════════════════════════════
 // The data API = the description of Vex's PREWARMED CACHE.
