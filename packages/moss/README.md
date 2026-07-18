@@ -4,7 +4,7 @@ The nisc application server. A principal logs in, a charter resolves, and what a
 
 Moss does not host code and guard it. It serves *existence*: a resolved catalog **is** the application. The warehouse kiosk granted two actions is not a locked-down app; it is a two-action app. There is nothing else to render, invoke, or attack.
 
-> Early stages. The data/policy plane, the socket, per-principal server shells, and the in-process function seam are built and tested; the fn *host* (`/fns`), the projection model, and scale-out are specified and pending. See [DESIGN.md](DESIGN.md) and the repo's `SERVER.md` for the full ladder.
+> Early stages. The data/policy plane, the socket, per-principal server shells, ring-2 served layout variants, and the in-process function seam are built and tested; the fn *host* (`/fns`), the artifact library, the projection model, and scale-out are specified and pending. See [DESIGN.md](DESIGN.md) for the thesis and the unbuilt ladder.
 
 ## Install
 

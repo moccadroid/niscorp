@@ -19,6 +19,7 @@ type NiscApp = {
   charter: Charter;                                   // resolved per principal
   assignments: Record<string, readonly string[]>;     // principal → roles
   actions: Record<string, ActionDefinition>;          // the app's actions
+  layouts?: Record<string, LayoutVariant>;            // ring 2: variant id → { action, layout }
   behaviors?: ScopeBehaviors;                          // row-level scope semantics
   entries?: readonly (SeedEntry | SeedMutation)[];     // the prewarmed API surface
   resources?: Record<string, readonly string[] | { entities: readonly string[] }>;
@@ -30,6 +31,11 @@ type NiscApp = {
 Every field is an artifact (authored data) except `functions`, which is the code
 escape hatch. Absent `shell`, the app serves data only (no server shells). Absent
 `functions`, `fn:` endpoints fail loudly.
+
+A `LayoutVariant` is `{ action: string; layout: LayoutNode }` — ring 2: the
+charter's `layouts` section selects who holds which variant id, and moss
+substitutes the granted variant's layout onto the definition at shell build. The
+base is the floor; variants enrich upward as grants.
 
 #### `ShellManifest`
 
@@ -104,11 +110,17 @@ mount it, extend it, or hand it to a listener.
   this principal reads and writes under.
 - `resolveCatalog(app, principal): Catalog` — `{ ids, hash }`, granted action ids
   sorted, with a content-hash version token (equal hash, equal application).
+- `resolveVariants(app, principal): ReadonlyMap<string, LayoutNode>` — action id →
+  the granted variant's layout (ring 2; empty map = every action serves its base).
+- `verifyVariants(app): string[]` — the ring-2 boot gate: every variant reshapes a
+  shipped action, and no wearable role combination holds two variants of one
+  action. Non-empty = refuse to boot.
 - `createDataLayer(runtime, entries?): Promise<DataLayer>` — `{ engine, schema,
   grants }`, stood up from what's present.
 - `createShellHost(ctx): ShellHost` — the durable per-principal shell host.
-- `auditClosure(definitions): ClosureAuditor` — nova's action audit as the
-  charter's injected closure hook (cross-action wiring breaks only).
+- `auditClosure(definitions, variants?): ClosureAuditor` — nova's action audit as
+  the charter's injected closure hook (cross-action wiring breaks only), over each
+  role's effective definitions (granted variants substituted).
 
 ### The socket protocol
 

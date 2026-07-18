@@ -45,10 +45,12 @@ Within a section: a bare glob list (sugar for `{ allow }`) or explicit
 ### `Section`
 
 ```typescript
-type Section = 'actions' | 'data';
+type Section = 'actions' | 'data' | 'layouts';
 ```
 
-Which universe a selection resolves in.
+Which universe a selection resolves in. `actions` selects Nova action ids,
+`data` selects `table.verb` capabilities, `layouts` selects layout-variant ids
+(ring 2 — moss's dialect).
 
 ---
 
@@ -105,8 +107,11 @@ catches these and reports them as `resolution` errors rather than throwing.
 Run every coherence check against both universes. Call at boot/CI; refuse to
 serve if `report.errors` is non-empty.
 
-- `universes: { actions: readonly string[]; data: readonly string[] }` — the id
-  sets each section resolves against, handed in by the composer.
+- `universes: { actions: readonly string[]; data: readonly string[]; layouts?: readonly string[] }`
+  — the id sets each section resolves against, handed in by the composer. The
+  `layouts` universe is optional: absent, the section is inert (a charter's
+  `layouts` keys resolve against nothing and are not verified); handed in, its
+  dead-deny/dead-allow/orphan/leaves-only checks run like any other section.
 - `assignments?: Record<string, readonly string[]>` — `principal → roles`, used
   by the `subtractive-assigned` check.
 - `closure?: ClosureAuditor` — the injected per-role cross-action audit.
@@ -114,12 +119,14 @@ serve if `report.errors` is non-empty.
 ### `ClosureAuditor`
 
 ```typescript
-type ClosureAuditor = (grantedIds: readonly string[]) => string[];
+type ClosureAuditor = (grantedIds: readonly string[], layoutIds?: readonly string[]) => string[];
 ```
 
-Given a role's resolved action ids, return the cross-action wiring problems
-inside that closure. Supplied by the consumer that owns actions (Nova exports
-`auditClosure(definitions)`; moss wraps it).
+Given a role's resolved action ids (and, when the app governs layouts, its
+granted variant ids), return the cross-action wiring problems inside that
+closure. Supplied by the consumer that owns actions (Nova exports
+`auditClosure(definitions)`; moss wraps it and substitutes granted variants so
+the audit sees each role's effective definitions).
 
 ### `VerifyReport`
 
@@ -131,7 +138,7 @@ type VerifyReport = {
 };
 
 type VerifyIssue = { level: 'error' | 'warning'; rule: string; detail: string };
-type RoleClosure = { role: string; actions: string[]; data: string[]; issues: string[] };
+type RoleClosure = { role: string; actions: string[]; data: string[]; layouts: string[]; issues: string[] };
 ```
 
 ### The checks
