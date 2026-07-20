@@ -3,7 +3,7 @@ import { StrictMode, type FC } from 'react';
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, screen, fireEvent, cleanup } from '@testing-library/react';
 import { z, type ZodType } from 'zod';
-import type { NovaComponent } from '@niscorp/nova/react';
+import type { NovaComponent } from '@niscorp/nova/adapters/react';
 import { LoomEditor } from '../../src/react/index.js';
 import { Roles } from '../../src/index.js';
 

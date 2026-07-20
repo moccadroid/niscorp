@@ -1,6 +1,6 @@
 import { useEffect, useRef, type CSSProperties, type ReactNode } from 'react';
 import { z } from 'zod';
-import { useNovaDispatch, type NovaComponent } from '@niscorp/nova/react';
+import { useNovaDispatch, type NovaComponent } from '@niscorp/nova/adapters/react';
 import { ALIGN, JUSTIFY, LINE, border, dim } from '../lib/tokens';
 
 // Layout primitives — Box, Stack, Row, Popover. Thin styled divs that turn

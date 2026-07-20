@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import type { ReactNode } from 'react';
-import { useNovaDispatch } from '@niscorp/nova/react';
-import type { NovaComponent } from '@niscorp/nova/react';
+import { useNovaDispatch } from '@niscorp/nova/adapters/react';
+import type { NovaComponent } from '@niscorp/nova/adapters/react';
 
 // ═══════════════════════════════════════════════════════════
 // Doodle — a pastel glyph: a plant drawn by `kind`, in one of

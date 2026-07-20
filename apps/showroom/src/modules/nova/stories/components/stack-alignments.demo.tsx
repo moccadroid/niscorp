@@ -1,5 +1,5 @@
 import type { LayoutNode } from '@niscorp/nova';
-import { Nova } from '@niscorp/nova/react';
+import { Nova } from '@niscorp/nova/adapters/react';
 
 // Every align × justify combination on a row Stack. Build the
 // layout programmatically to cover the full matrix.

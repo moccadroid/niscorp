@@ -1,5 +1,5 @@
 import { createShell, type ActionDefinition } from '@niscorp/nova';
-import { Nova } from '@niscorp/nova/react';
+import { Nova } from '@niscorp/nova/adapters/react';
 
 // `toggle` flips a boolean in place. Paired with `if/then/else` the
 // same click swaps the visible subtree between the two branches.

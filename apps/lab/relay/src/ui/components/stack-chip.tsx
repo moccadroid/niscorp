@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { z } from 'zod';
-import { type NovaComponent } from '@niscorp/nova/react';
+import { type NovaComponent } from '@niscorp/nova/adapters/react';
 import type { ActionInstance } from '@niscorp/nova';
 import { cx } from '../lib/cx';
 import { Icon } from './display';

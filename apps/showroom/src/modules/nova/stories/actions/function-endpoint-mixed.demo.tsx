@@ -4,7 +4,7 @@ import {
   type FetchFn,
   type FunctionHandler,
 } from '@niscorp/nova';
-import { Nova } from '@niscorp/nova/react';
+import { Nova } from '@niscorp/nova/adapters/react';
 
 // HTTP and function endpoints coexist in the same `endpoints` map.
 // `call` dispatches either, picked by the descriptor shape (`url` vs

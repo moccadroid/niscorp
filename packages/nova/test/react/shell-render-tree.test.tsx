@@ -6,7 +6,7 @@ import { createComponentRegistry, createLayoutStore } from '@layout';
 import { createShell } from '@shell';
 import type { NovaComponent } from '@react';
 import { NovaShellProvider, RenderTree, useShellRenderTree } from '@react';
-import { registerNovaReactComponents } from '../../src/react/components';
+import { registerNovaReactComponents } from '../../src/adapters/react/components';
 
 const Host = () => {
   const tree = useShellRenderTree();
@@ -124,8 +124,15 @@ describe('Shell render tree — slot-driven rendering', () => {
     const flat = shell.flattenRenderTree(shell.getShellRenderTree());
     const json = JSON.stringify(flat);
     expect(json).toContain('"HELLO"');
+    // CanvasSlot resolves away; the ActionSlot marker SURVIVES, carrying the
+    // instance identity so a remote renderer can key reconciliation by
+    // instance and an app slotWrapper can wrap each one.
     expect(json).not.toContain('CanvasSlot');
-    expect(json).not.toContain('ActionSlot');
+    expect(json).toContain('ActionSlot');
+    const instanceId = shell.getCanvasState('main').active?.id;
+    expect(json).toContain(`"instanceId":"${instanceId}"`);
+    expect(json).toContain('"definitionId":"a"');
+    expect(json).toContain('"canvasId":"main"');
 
     shell.dispose();
   });

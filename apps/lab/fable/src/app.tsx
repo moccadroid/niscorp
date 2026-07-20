@@ -1,4 +1,4 @@
-import { NovaShell } from '@niscorp/nova/react';
+import { NovaShell } from '@niscorp/nova/adapters/react';
 import { shell } from './nova/shell';
 
 // Fable is a Nova shell. Everything visible — topbar, the list, the form —

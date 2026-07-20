@@ -1,5 +1,5 @@
 import type { LayoutNode } from '@niscorp/nova';
-import { Nova } from '@niscorp/nova/react';
+import { Nova } from '@niscorp/nova/adapters/react';
 
 // `if / then / else` layout nodes. The branch is picked at render
 // time based on the truthiness of the `if` expression. Flip

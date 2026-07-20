@@ -2,7 +2,7 @@ import type { CSSProperties } from 'react';
 import { z } from 'zod';
 import { Roles } from '@niscorp/loom';
 import { LoomEditor, type LoomEditorPlugin } from '@niscorp/loom/react';
-import { useNovaDispatch, type NovaComponent } from '@niscorp/nova/react';
+import { useNovaDispatch, type NovaComponent } from '@niscorp/nova/adapters/react';
 
 // The resolver seam: one compiled definition (see the Definition tab),
 // rendered through two different widget kits. The compiler only ever emits

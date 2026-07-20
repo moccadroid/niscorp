@@ -9,6 +9,7 @@ import { applyMutations } from '../mutations';
 import type { EndpointConfig, Mutation, Step } from '../schemas';
 import { LifecycleError, UnknownFunctionError, type LifecycleHook, type NovaError } from '@shared/errors';
 import type {
+  EndpointEventInit,
   FetchFn,
   FunctionHandler,
   NavigateHandler,
@@ -17,6 +18,11 @@ import type {
   TransformFn,
 } from '../types';
 import { callEndpoint } from './endpoints';
+
+// Wall-clock for endpoint durations. `performance` is present in node, the
+// browser, and jsdom; `Date.now` is the universal fallback.
+const now = (): number =>
+  typeof performance !== 'undefined' && typeof performance.now === 'function' ? performance.now() : Date.now();
 
 export type StepContext = {
   dataStore: DataStore;
@@ -27,6 +33,9 @@ export type StepContext = {
   fetch?: FetchFn;
   transform?: TransformFn;
   onNavigate?: NavigateHandler;
+  // Reports a completed `call` step upward (the runtime stamps instance/canvas
+  // and forwards to telemetry). Aborted calls are not reported.
+  onEndpoint?: (event: EndpointEventInit) => void;
   extras: ExtraScopes;
   strict: boolean;
   onError: OnErrorHandler;
@@ -150,6 +159,7 @@ const runCall = async (
       return;
     }
   }
+  const t0 = now();
   const result = await callEndpoint({
     endpoint,
     data: ctx.dataStore.get(),
@@ -160,6 +170,16 @@ const runCall = async (
   });
   if (ctx.signal.aborted) return;
   if (!result.ok && result.error.aborted === true) return;
+  // Telemetry: the call completed (ok or error, not aborted) — report it. The
+  // endpoint's kind is structural: `fn` in the config means an in-process
+  // function endpoint, otherwise an HTTP one.
+  ctx.onEndpoint?.({
+    name: callName,
+    kind: 'fn' in endpoint ? 'fn' : 'http',
+    ok: result.ok,
+    status: result.ok ? result.status : result.error.status,
+    ms: now() - t0,
+  });
   if (result.ok) {
     writeTarget(ctx.dataStore, endpoint.target, result.data);
     if (onSuccess) await executeSteps(onSuccess, ctx);

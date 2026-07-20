@@ -1,5 +1,5 @@
 import { createRoot } from 'react-dom/client';
-import { NovaShellProvider, RenderTree, useCanvas, useRenderTree } from '@niscorp/nova/react';
+import { NovaShellProvider, RenderTree, useCanvas, useRenderTree } from '@niscorp/nova/adapters/react';
 import { getApp } from './boot';
 import './ui/styles.css';
 

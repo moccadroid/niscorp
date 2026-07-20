@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { NovaComponent } from '@niscorp/nova/react';
+import type { NovaComponent } from '@niscorp/nova/adapters/react';
 
 // ─── Skeleton ──────────────────────────────────────────────
 const SkeletonProps = z

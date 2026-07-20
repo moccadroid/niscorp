@@ -1,5 +1,5 @@
 import type { FC, ReactNode } from 'react';
-import type { NovaComponent, NovaModelBinding } from '@niscorp/nova/react';
+import type { NovaComponent, NovaModelBinding } from '@niscorp/nova/adapters/react';
 import { useModelWrite } from '@react/hooks/model';
 import { JsonEditor } from '@react/kit';
 import { isRecord } from '@compile/parse';

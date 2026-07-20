@@ -1,3 +1,4 @@
+import type { EndpointEvent, EndpointHandler } from '../action';
 import type { Unsubscribe } from '../shared/common';
 import type {
   DataChangeEvent,
@@ -10,8 +11,10 @@ import type {
 export type Telemetry = {
   fireStateChange: (snapshot: StateSnapshot) => void;
   fireDataChange: (change: DataChangeEvent) => void;
+  fireEndpoint: (event: EndpointEvent) => void;
   onStateChange: (handler: StateChangeHandler) => Unsubscribe;
   onDataChange: (handler: DataChangeHandler) => Unsubscribe;
+  onEndpoint: (handler: EndpointHandler) => Unsubscribe;
   clear: () => void;
 };
 
@@ -27,6 +30,7 @@ const safeCall = <T>(fn: ((arg: T) => void) | undefined, arg: T): void => {
 export const createTelemetry = (config: ShellTelemetry | undefined): Telemetry => {
   const stateSubscribers: StateChangeHandler[] = [];
   const dataSubscribers: DataChangeHandler[] = [];
+  const endpointSubscribers: EndpointHandler[] = [];
 
   const fireStateChange = (snapshot: StateSnapshot): void => {
     safeCall(config?.onStateChange, snapshot);
@@ -36,6 +40,11 @@ export const createTelemetry = (config: ShellTelemetry | undefined): Telemetry =
   const fireDataChange = (change: DataChangeEvent): void => {
     safeCall(config?.onDataChange, change);
     for (const handler of dataSubscribers.slice()) safeCall(handler, change);
+  };
+
+  const fireEndpoint = (event: EndpointEvent): void => {
+    safeCall(config?.onEndpoint, event);
+    for (const handler of endpointSubscribers.slice()) safeCall(handler, event);
   };
 
   const onStateChange = (handler: StateChangeHandler): Unsubscribe => {
@@ -54,10 +63,19 @@ export const createTelemetry = (config: ShellTelemetry | undefined): Telemetry =
     };
   };
 
+  const onEndpoint = (handler: EndpointHandler): Unsubscribe => {
+    endpointSubscribers.push(handler);
+    return (): void => {
+      const idx = endpointSubscribers.indexOf(handler);
+      if (idx >= 0) endpointSubscribers.splice(idx, 1);
+    };
+  };
+
   const clear = (): void => {
     stateSubscribers.length = 0;
     dataSubscribers.length = 0;
+    endpointSubscribers.length = 0;
   };
 
-  return { fireStateChange, fireDataChange, onStateChange, onDataChange, clear };
+  return { fireStateChange, fireDataChange, fireEndpoint, onStateChange, onDataChange, onEndpoint, clear };
 };

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type CSSProperties, type FC } from 'react';
-import type { NovaComponent } from '@niscorp/nova/react';
+import type { NovaComponent } from '@niscorp/nova/adapters/react';
 import type { Query, VexRunResult } from '../index.js';
 
 // The preview component: re-runs the query whenever it changes, debounced, with a

@@ -7,20 +7,84 @@
   "sideEffects": false,
   "exports": {
     ".": {
-      "import": { "types": "./dist/index.d.ts", "default": "./dist/index.js" },
-      "require": { "types": "./dist/index.d.cts", "default": "./dist/index.cjs" }
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
     },
-    "./react": {
-      "import": { "types": "./dist/react/index.d.ts", "default": "./dist/react/index.js" },
-      "require": { "types": "./dist/react/index.d.cts", "default": "./dist/react/index.cjs" }
+    "./adapters/react": {
+      "import": {
+        "types": "./dist/adapters/react/index.d.ts",
+        "default": "./dist/adapters/react/index.js"
+      },
+      "require": {
+        "types": "./dist/adapters/react/index.d.cts",
+        "default": "./dist/adapters/react/index.cjs"
+      }
     },
-    "./react/components": {
-      "import": { "types": "./dist/react/components/index.d.ts", "default": "./dist/react/components/index.js" },
-      "require": { "types": "./dist/react/components/index.d.cts", "default": "./dist/react/components/index.cjs" }
+    "./adapters/react/components": {
+      "import": {
+        "types": "./dist/adapters/react/components/index.d.ts",
+        "default": "./dist/adapters/react/components/index.js"
+      },
+      "require": {
+        "types": "./dist/adapters/react/components/index.d.cts",
+        "default": "./dist/adapters/react/components/index.cjs"
+      }
+    },
+    "./adapters/dom": {
+      "import": {
+        "types": "./dist/adapters/dom/index.d.ts",
+        "default": "./dist/adapters/dom/index.js"
+      },
+      "require": {
+        "types": "./dist/adapters/dom/index.d.cts",
+        "default": "./dist/adapters/dom/index.cjs"
+      }
+    },
+    "./adapters/dom/components": {
+      "import": {
+        "types": "./dist/adapters/dom/components/index.d.ts",
+        "default": "./dist/adapters/dom/components/index.js"
+      },
+      "require": {
+        "types": "./dist/adapters/dom/components/index.d.cts",
+        "default": "./dist/adapters/dom/components/index.cjs"
+      }
     },
     "./agent": {
-      "import": { "types": "./dist/agent/index.d.ts", "default": "./dist/agent/index.js" },
-      "require": { "types": "./dist/agent/index.d.cts", "default": "./dist/agent/index.cjs" }
+      "import": {
+        "types": "./dist/agent/index.d.ts",
+        "default": "./dist/agent/index.js"
+      },
+      "require": {
+        "types": "./dist/agent/index.d.cts",
+        "default": "./dist/agent/index.cjs"
+      }
+    },
+    "./reflect": {
+      "import": {
+        "types": "./dist/reflect/index.d.ts",
+        "default": "./dist/reflect/index.js"
+      },
+      "require": {
+        "types": "./dist/reflect/index.d.cts",
+        "default": "./dist/reflect/index.cjs"
+      }
+    },
+    "./devtools": {
+      "import": {
+        "types": "./dist/devtools/index.d.ts",
+        "default": "./dist/devtools/index.js"
+      },
+      "require": {
+        "types": "./dist/devtools/index.d.cts",
+        "default": "./dist/devtools/index.cjs"
+      }
     }
   },
   "files": [

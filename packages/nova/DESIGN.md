@@ -2,7 +2,7 @@
 
 Declarative, framework-agnostic UI runtime. JSON layouts, action lifecycles,
 shell orchestration. The core is pure TypeScript with zero framework
-dependencies. A future framework adapter (React, Vue, etc.) consumes the
+dependencies. Framework adapters (React, plain DOM) consume the
 `RenderNode[]` output.
 
 This document describes the package as it actually exists today. Anything
@@ -12,8 +12,8 @@ not implemented is called out as **Future work**.
 
 ## Architecture
 
-Four areas, one package. Each area imports across boundaries via the path
-aliases `@shared`, `@layout`, `@action`, `@shell`. Local imports stay
+Four core areas, one package. Each area imports across boundaries via the
+path aliases `@shared`, `@layout`, `@action`, `@shell`. Local imports stay
 relative.
 
 ```
@@ -38,6 +38,19 @@ The `shared/` module is the only one any other area imports from. Layout,
 action, and shell never import from each other transitively except via
 `@layout` / `@action` / `@shell` aliases at well-defined seams (the shell
 wires everything together at construction time).
+
+Around the core sit four subpath areas:
+
+- **`adapters/`** — framework bindings (`react/`, `dom/`), each with its own
+  export subpath. Adapters import only the core public surface; core never
+  imports an adapter. See [ADAPTER.md](ADAPTER.md).
+- **`reflect/`** — read-only introspection (`@niscorp/nova/reflect`): layout
+  walks, shell snapshots, the action graph, audit classification. Imports
+  `@action`/`@shell`/`@layout`; pure and framework-free.
+- **`devtools/`** — the shell inspector (`@niscorp/nova/devtools`), built as
+  plain ActionDefinitions plus fns over `reflect/`.
+- **`agent/`** — cortex agents owned by nova (`@niscorp/nova/agent`);
+  importing the subpath is what pulls in the optional cortex peer.
 
 ---
 
@@ -298,7 +311,12 @@ The user's entry point. Splits responsibilities across small files:
   owns the canvas map.
 - **`runtime-registry.ts`** — instance-id → runtime map with subscribe
   hooks for telemetry.
-- **`telemetry.ts`** — state-change and data-change subscriber lists.
+- **`telemetry.ts`** — state-change, data-change, and endpoint subscriber
+  lists. Endpoint events (`EndpointEvent`: name, `fn`/`http`, ok, status,
+  ms, stamped with instance and canvas) are reported by `runCall` at the
+  `callEndpoint` seam — the one point every call passes through, so a
+  server shell whose actions are all `fn:` is observed exactly like an
+  HTTP one. Aborted calls are not reported.
 - **`navigation.ts`** — converts `NavigationEffect` (from inside an
   action's steps) into `push`/`pop`/`replace` calls on the shell.
 - **`lifecycle-ops.ts`** — `unmountInstance`, `suspendTop`, `resumeTop`
@@ -321,14 +339,28 @@ createShell(config: ShellConfig): Shell
 ```
 push(canvasId, actionId, input?, fragments?): string
 pop(canvasId): void
+popTo(canvasId, instanceId): void
 replace(canvasId, actionId, input?, fragments?): string
 clear(canvasId): void
 registerAction(definition): void
+removeAction(actionId): void
 registerFragment(fragment): void
+addCanvas(config): void
+removeCanvas(canvasId): void
+setCanvasLayout(layout): void
+setLayout(refId, layout): void
 getCanvasState(canvasId): CanvasState
 getRuntime(instanceId): PublicActionRuntime | undefined
+getState(): StateSnapshot
+getShellRenderTree(): RenderNode[]
+getCanvasRenderTree(canvasId): RenderNode[]
+flattenRenderTree(tree): RenderNode[]
+dispatch(event): void
+publish(channel, payload?): void
 onStateChange(handler): Unsubscribe
 onDataChange(handler): Unsubscribe
+onEndpoint(handler): Unsubscribe
+onCanvasChange(canvasId, handler): Unsubscribe
 dispose(): void
 ```
 
@@ -442,9 +474,12 @@ The following are explicitly **not implemented** and have no design
 yet beyond a placeholder:
 
 - ~~**React adapter.**~~ **Implemented.** See "React adapter" below.
-- **Headless component primitives.** No built-in components.
-- **Wire protocol.** No serialization format for shipping definitions
-  across processes.
+- ~~**Headless component primitives.**~~ **Implemented.** Reference kits
+  ship at `/adapters/react/components` and `/adapters/dom/components`.
+- **Wire protocol.** No serialization format for shipping *definitions*
+  across processes. Serving rendered trees over a socket is moss's job;
+  nova ships the surface it targets (`RenderApi`, ActionSlot-preserving
+  `flattenRenderTree`).
 - **Schema versioning.** Breaking changes in 0.x are unversioned.
 - **LLM tooling / JSON Schema generation / catalog.** Excluded by
   design — nova is a runtime, not a generator.
@@ -453,8 +488,8 @@ yet beyond a placeholder:
 
 ## React adapter
 
-The React adapter lives under `src/react/` and ships at the
-`@niscorp/nova/react` subpath. It is a thin layer over the
+The React adapter lives under `src/adapters/react/` and ships at the
+`@niscorp/nova/adapters/react` subpath. It is a thin layer over the
 framework-agnostic core — no shell logic lives in React, and React is a
 peer (optional) dependency of the core package.
 
@@ -515,7 +550,7 @@ exposes a single seam: an optional `slotWrapper` component, threaded through
 Deliberate boundaries:
 
 - **Adapter-only, never core.** `slotWrapper` is a React component — it lives
-  in `src/react`, not in `ShellConfig` or any schema. The core stays
+  in `src/adapters/react`, not in `ShellConfig` or any schema. The core stays
   serializable data + a state machine; a future Vue adapter would expose its
   own equivalent. Nothing here touches `LayoutNode`, so a model-authored (or
   DB-stored) layout never carries animation/gate concerns.
@@ -580,3 +615,53 @@ changes and reference inequality after a real data or stack change.
   returns a serializable value; only the `subscribe` side needs a
   no-op for the server path).
 - React Server Components: not tested. Hooks are client-only.
+
+---
+
+## Serving trees: `RenderApi` and flattening
+
+A remote renderer (a moss terminal) never holds a shell; it is handed a
+`RenderApi` — `frame()`, `canvasTree(canvasId)`, `dispatch(canvasId, event)`,
+`publish(channel, payload?)`. One shape shared by the DOM adapter, the React
+terminal target, and moss's conductor, aliased rather than redeclared, so a
+renderer written against one host drops onto another. Origin stamping is the
+host's job, not the renderer's.
+
+`flattenRenderTree` resolves `CanvasSlot` markers away but keeps the
+`ActionSlot` marker: a component node with
+`props: { instanceId, canvasId, definitionId }`, `key: instanceId`, children
+= the instance's rendered tree. Deliberate: a served tree must still carry
+instance identity, so a remote renderer can key by instance (a swap remounts
+— no stale DOM state crossing instances, enter animations fire) and a
+terminal-side slot wrapper has a seam. Identity only, never the definition —
+wire weight.
+
+## DOM adapter
+
+`src/adapters/dom/` (`@niscorp/nova/adapters/dom`) renders a served tree to
+vanilla DOM against a `RenderApi`: events wired by convention (`ref` →
+`ui:click`, `model` → `ui:model`/`ui:key`), `debounce` honoured, focus and
+caret captured/restored across full rebuilds (ADAPTER.md §6). Its components
+kit (`/adapters/dom/components`: `defaultRegistry`, `fallback`,
+`DEFAULT_CSS`, `ROOT_CLASS`) is the batteries-included reference set. It
+exists as the proof that a terminal needs no framework — and as the second
+adapter that keeps the adapter contract honest.
+
+## Reflect and devtools
+
+`reflect/` formalizes the walks moss and app devtools kept re-deriving.
+Everything in nova is closed, validated data — definitions, layouts, the
+live shell — so introspection can be complete, a thing no code-based UI
+framework offers. Structural walkers (`walkNodes`, `componentsOf`, `refsOf`,
+`loopVarsOf`), shell state (`snapshotShell`, `describeInstance`), the action
+adjacency (`actionGraph`), and audit triage (`classifyAudit`,
+`auditCatalog`). Pure, framework-free, read-only.
+
+`devtools/` is the consumer proof: the dock and inspector are plain
+ActionDefinitions over generic primitives (Panel, JsonTree), so they render
+in any terminal. `createDevtoolsFunctions` builds the `devtools.*` fns per
+session — a closure over that session's shell, no module globals, so
+introspection is per-session-correct under moss. The endpoint timeline is a
+capped ring buffer fed by `shell.onEndpoint` (notify-then-pull: the fn is
+the pull), and the devtools canvas excludes itself so the inspector never
+observes its own traffic.

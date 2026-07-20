@@ -1,5 +1,5 @@
 import type { LayoutNode } from '@niscorp/nova';
-import { Nova } from '@niscorp/nova/react';
+import { Nova } from '@niscorp/nova/adapters/react';
 
 // Raw `$.foo.bar` paths as Text children. At render time the
 // renderer resolves each path against the data tree and swaps

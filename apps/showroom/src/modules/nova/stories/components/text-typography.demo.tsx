@@ -1,5 +1,5 @@
 import type { LayoutNode } from '@niscorp/nova';
-import { Nova } from '@niscorp/nova/react';
+import { Nova } from '@niscorp/nova/adapters/react';
 
 // Exhaustive Text matrix: every size × weight combination, and
 // every supported `as` value.

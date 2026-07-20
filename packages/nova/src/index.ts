@@ -171,6 +171,7 @@ export type {
   CanvasConfig,
   CanvasInitialSeed,
   CanvasState,
+  RenderApi,
   Shell,
   ShellConfig,
   ShellTelemetry,

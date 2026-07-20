@@ -1,4 +1,4 @@
-import type { NovaModelBinding } from '@niscorp/nova/react';
+import type { NovaModelBinding } from '@niscorp/nova/adapters/react';
 
 // Props a custom-widget render receives from the compiler: the field's current
 // value (auto-derived from the bound model) and the model binding to write back

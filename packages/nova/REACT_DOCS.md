@@ -1,6 +1,6 @@
 # React Adapter — Author Guide
 
-How to use nova in a React app. The React adapter is a separate subpath: `@niscorp/nova/react`. The core (`@niscorp/nova`) is framework-agnostic and never imports React. The adapter is the glue that turns nova's `RenderNode[]` output into actual React elements.
+How to use nova in a React app. The React adapter is a separate subpath: `@niscorp/nova/adapters/react`. The core (`@niscorp/nova`) is framework-agnostic and never imports React. The adapter is the glue that turns nova's `RenderNode[]` output into actual React elements.
 
 This guide is for **using** nova in React. For nova's framework-agnostic core, see `LAYOUT_DOCS.md`, `ACTION_DOCS.md`, and `SHELL_DOCS.md`.
 
@@ -13,7 +13,7 @@ pnpm add @niscorp/nova
 # React + react-dom are peer deps; you almost certainly already have them.
 ```
 
-`@niscorp/nova/react` is the same package, accessed via the subpath export. No separate install.
+`@niscorp/nova/adapters/react` is the same package, accessed via the subpath export. No separate install.
 
 ---
 
@@ -21,8 +21,8 @@ pnpm add @niscorp/nova
 
 ```tsx
 import { createShell, createComponentRegistry, createLayoutStore } from '@niscorp/nova';
-import { NovaShellProvider, useCanvas, useRenderTree, RenderTree } from '@niscorp/nova/react';
-import { registerNovaReactComponents } from '@niscorp/nova/react/components';
+import { NovaShellProvider, useCanvas, useRenderTree, RenderTree } from '@niscorp/nova/adapters/react';
+import { registerNovaReactComponents } from '@niscorp/nova/adapters/react/components';
 import { useEffect, useState } from 'react';
 
 const counter = {
@@ -180,6 +180,15 @@ const tree = useRenderTree(activeId);
 return <RenderTree nodes={tree} />;
 ```
 
+### `useShellRenderTree()` / `useCanvasRenderTree(canvasId)`
+
+Return the live `RenderNode[]` for the shell's canvasLayout, or for one canvas's actionLayout. Re-compute on shell state change; the result is referentially stable while nothing changed. `useCanvasRenderTree(undefined)` returns a stable empty array. These are what `CanvasSlot`-style chrome uses; most apps render through `CanvasSlot`/`ActionSlot` components instead.
+
+```tsx
+const frame = useShellRenderTree();
+const canvasTree = useCanvasRenderTree('main');
+```
+
 ### `useNovaDispatch()` / `useNovaPublish()`
 
 Inside a registered component, call these to send events back to the shell. They read from the render context, not the shell context, so they work in both `NovaShellProvider` and `NovaRenderProvider` modes.
@@ -224,7 +233,7 @@ That's the entire React-side rendering pipeline. Everything else is the componen
 A component for the React adapter is a React function component typed as `NovaComponent<P>`:
 
 ```tsx
-import type { NovaComponent } from '@niscorp/nova/react';
+import type { NovaComponent } from '@niscorp/nova/adapters/react';
 import { z } from 'zod';
 
 const MyButtonPropsSchema = z.object({
@@ -298,15 +307,17 @@ registry.registerAll({ MyButton });
 
 ### The default component set
 
-`@niscorp/nova/react/components` ships seven components and a registration helper:
+`@niscorp/nova/adapters/react/components` ships nine components and a registration helper:
 
 ```ts
-import { registerNovaReactComponents } from '@niscorp/nova/react/components';
+import { registerNovaReactComponents } from '@niscorp/nova/adapters/react/components';
 
 const registry = createComponentRegistry();
 registerNovaReactComponents(registry);
-// Now Stack, Text, Input, Button, Box, CanvasSlot, ActionSlot are all registered.
+// Now Stack, Text, Input, Button, Box, Panel, JsonTree, CanvasSlot, ActionSlot are all registered.
 ```
+
+`Input` is remote-safe: while focused it holds a local draft the incoming tree never overwrites, and a `debounce` prop (ms) coalesces `ui:model` dispatches, flushing on blur. See ADAPTER.md §6.
 
 `CanvasSlot` and `ActionSlot` are shell-aware: they pull state from the React shell context and must only be used inside a `<NovaShellProvider>` (they are what shell/canvas layouts use to paint their regions).
 
@@ -335,7 +346,7 @@ Nova renders **every action instance's content** through it, at the `ActionSlot`
 ### The contract
 
 ```tsx
-import type { SlotWrapper } from '@niscorp/nova/react';
+import type { SlotWrapper } from '@niscorp/nova/adapters/react';
 
 const MySlotWrapper: SlotWrapper = ({ canvasId, instanceId, action, children }) => {
   // Decide what to render for this slot.
@@ -403,7 +414,7 @@ Both examples above ship as runnable demos in the showroom under **Slot wrappers
 The renderer can produce error nodes when in lax mode (the default). The React adapter renders them via the `ErrorMarker` component:
 
 ```tsx
-import { ErrorMarker } from '@niscorp/nova/react';
+import { ErrorMarker } from '@niscorp/nova/adapters/react';
 ```
 
 You don't usually need to use this directly — `<RenderTree>` handles error nodes internally. The output is a `<span data-nova-error="CODE">...</span>` element you can style with CSS.
@@ -411,7 +422,7 @@ You don't usually need to use this directly — `<RenderTree>` handles error nod
 For React-level errors (a buggy component throwing during render), use `<NovaErrorBoundary>`:
 
 ```tsx
-import { NovaErrorBoundary } from '@niscorp/nova/react';
+import { NovaErrorBoundary } from '@niscorp/nova/adapters/react';
 
 <NovaErrorBoundary fallback={<div>Something broke.</div>}>
   <CanvasView canvasId="main" />
@@ -493,6 +504,8 @@ useCanvas(canvasId)           // → CanvasState (subscribes to canvas)
 useActionData(instanceId)     // → data | undefined
 useActionStatus(instanceId)   // → ActionStatus | undefined
 useRenderTree(instanceId)     // → RenderNode[]
+useShellRenderTree()          // → RenderNode[] (the canvasLayout)
+useCanvasRenderTree(canvasId) // → RenderNode[] (one canvas's actionLayout)
 useNovaDispatch()             // → (event) => void
 useNovaPublish()              // → (channel, payload?) => void
 useNovaRegistry()             // → ComponentRegistry

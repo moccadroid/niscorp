@@ -1,4 +1,4 @@
-import { useNovaDispatch, type NovaModelBinding } from '@niscorp/nova/react';
+import { useNovaDispatch, type NovaModelBinding } from '@niscorp/nova/adapters/react';
 
 // Returns a function that writes a new value to the field's bound path, through
 // the same `ui:model` pipeline the built-in controls use. A control or a plugin

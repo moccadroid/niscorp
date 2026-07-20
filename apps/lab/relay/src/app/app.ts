@@ -12,6 +12,7 @@ import { modalFragment } from '@relay/app/shell/fragments/modal.fragment';
 import { quickviewFragment } from '@relay/app/shell/fragments/quickview.fragment';
 import { panelFragment } from '@relay/app/shell/fragments/panel.fragment';
 import { dockFragment } from '@relay/app/shell/fragments/dock.fragment';
+import { createDevtoolsFunctions, DEVTOOLS_CANVAS } from '@niscorp/nova/devtools';
 import { USERS } from '@relay/server/users';
 import { authFunctions } from '@relay/server/functions/auth';
 import { rayFunctions } from '@relay/server/functions/ray';
@@ -35,9 +36,14 @@ export const relay = defineApp({
   entries: [...ENTRIES, ...MUTATION_ENTRIES],
   behaviors: scopeBehaviors,
   resources: RESOURCES,
-  // The `fn:` escape hatch, server-side: Ray + the magic-link pair. Built
-  // per session — handlers close over the session's shell and policy.
-  functions: (session) => ({ ...rayFunctions(session), ...authFunctions(session) }),
+  // The `fn:` escape hatch, server-side: Ray, the magic-link pair, and nova's
+  // devtools fns (reflect over THIS session's shell — per-session-correct).
+  // Built per session; handlers close over the session's shell and policy.
+  functions: (session) => ({
+    ...rayFunctions(session),
+    ...authFunctions(session),
+    ...createDevtoolsFunctions({ shell: () => session.shell, definitions: CATALOG_DEFINITIONS }),
+  }),
   shell: {
     // Canvases are data; mounting is the server's derivation — an initial
     // the principal doesn't hold simply doesn't mount (anonymous gets no
@@ -50,6 +56,11 @@ export const relay = defineApp({
       { id: 'main', actionLayout: mainStackLayout, initial: ['home', 'auth.login'] },
       { id: 'aside', actionLayout: asideStackLayout },
       { id: 'modal' },
+      // nova devtools: an empty canvas until the Settings → Developer toggle
+      // mounts the dock (via `devtools.setEnabled`). The dock is granted only
+      // to `dev`, so the toggle (a ring-2 dev variant of Settings) and the
+      // push both no-op for anyone else.
+      { id: DEVTOOLS_CANVAS },
     ],
     // The frame — the canvas arrangement, served to terminals as data.
     layout: frameLayout,

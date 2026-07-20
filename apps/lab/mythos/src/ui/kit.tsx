@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import type { ChangeEvent, CSSProperties } from 'react';
 import { z } from 'zod';
-import { useNovaDispatch } from '@niscorp/nova/react';
-import type { NovaComponent } from '@niscorp/nova/react';
+import { useNovaDispatch } from '@niscorp/nova/adapters/react';
+import type { NovaComponent } from '@niscorp/nova/adapters/react';
 
 // ═══════════════════════════════════════════════════════════
 // The kit: domain-blind primitives. Props in, events out —

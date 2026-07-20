@@ -1,5 +1,5 @@
 import { createLayoutStore, type LayoutNode } from '@niscorp/nova';
-import { Nova } from '@niscorp/nova/react';
+import { Nova } from '@niscorp/nova/adapters/react';
 
 // Reusable layouts live in the layout store, keyed by name. A
 // `{ ref: 'user-card' }` node resolves to that template at render

@@ -12,8 +12,7 @@ import { dealsAction, dealAction, dealFormAction } from '@relay/app/actions/doma
 import { contactsAction, contactAction, contactFormAction } from '@relay/app/actions/domains/contact';
 import { companiesAction, companyAction, companyFormAction } from '@relay/app/actions/domains/company';
 import { tasksAction, taskFormAction } from '@relay/app/actions/domains/task';
-import { dockAction } from '@relay/dev/devtools/actions/dock.action';
-import { inspectAction } from '@relay/dev/devtools/actions/inspect.action';
+import { devtoolsActions } from '@niscorp/nova/devtools';
 
 // Every screen the shell can show, by id. Each is a literal, serializable
 // ActionDefinition (layout included) — DB-ready. A separate module (not
@@ -39,11 +38,11 @@ export const ACTIONS: Record<string, ActionDefinition> = Object.fromEntries(
 );
 
 // The full definition universe the charter resolves against: the app actions
-// plus the devtools pair (registered by installNovaDevtools only when the
-// principal wears `dev`). Separate from ACTIONS so agent knowledge keeps
-// deriving from the app surface alone.
+// plus nova's own devtools (granted only to the `dev` role). Pure nova — the
+// dock reads the shell through nova/reflect and renders in any terminal.
+// Separate from ACTIONS so agent knowledge keeps deriving from the app surface
+// alone.
 export const CATALOG_DEFINITIONS: Record<string, ActionDefinition> = {
   ...ACTIONS,
-  [dockAction.id]: dockAction,
-  [inspectAction.id]: inspectAction,
+  ...devtoolsActions,
 };

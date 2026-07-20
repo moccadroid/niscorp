@@ -1,5 +1,5 @@
 import { createShell, type ActionDefinition } from '@niscorp/nova';
-import { Nova } from '@niscorp/nova/react';
+import { Nova } from '@niscorp/nova/adapters/react';
 
 // The `mount` hook fires once when the action starts. Two ops run:
 // `set mounted: true` and `push events: "mount"`. The view reads

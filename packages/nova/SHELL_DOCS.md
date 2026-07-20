@@ -10,7 +10,7 @@ If layouts are the "what" and actions are the "behavior," the shell is the "wher
 
 ```ts
 import { createShell, createComponentRegistry, createLayoutStore } from '@niscorp/nova';
-import { registerNovaReactComponents } from '@niscorp/nova/react/components';
+import { registerNovaReactComponents } from '@niscorp/nova/adapters/react/components';
 import { menuAction, settingsAction, profileAction } from './actions';
 
 const registry = createComponentRegistry();
@@ -62,7 +62,7 @@ type ShellConfig = {
   functions?: Record<string, FunctionHandler>;  // handlers for `{ fn: '<name>' }` endpoints
 
   // Telemetry / observability
-  telemetry?: ShellTelemetry;            // onStateChange, onDataChange callbacks
+  telemetry?: ShellTelemetry;            // onStateChange, onDataChange, onEndpoint callbacks
   onError?: (error: NovaError) => void;  // single error handler for the whole shell
 
   // Strictness
@@ -126,10 +126,13 @@ These are dependency injection points. HTTP endpoint calls use `fetch`. Endpoint
 telemetry: {
   onStateChange: (snapshot) => { /* whole-shell snapshot */ },
   onDataChange: (event)    => { /* per-instance data update */ },
+  onEndpoint: (event)      => { /* per-endpoint-call outcome */ },
 }
 ```
 
-Both fire whenever the shell's state changes. The React adapter uses these via `useSyncExternalStore` to drive re-renders. You can also use them directly to log, persist, or sync state externally.
+The first two fire whenever the shell's state changes. The React adapter uses these via `useSyncExternalStore` to drive re-renders. You can also use them directly to log, persist, or sync state externally.
+
+`onEndpoint` fires once per completed endpoint call — `fn:` and HTTP alike — with an `EndpointEvent`: `{ name, kind: 'fn' | 'http', ok, status, ms, instanceId, canvasId }` (`status` is 0 for fn calls; aborted calls are not reported). This is the observability seam devtools' timeline reads.
 
 ### `strict`
 
@@ -160,6 +163,7 @@ type Shell = {
 
   // Runtime registration
   registerAction: (definition: ActionDefinition) => void;
+  removeAction: (actionId: string) => void;   // revocation: unmounts live instances
   registerFragment: (fragment: ActionFragment) => void;
 
   // Canvas set / layout mutation
@@ -185,6 +189,7 @@ type Shell = {
   // Telemetry subscriptions
   onStateChange: (handler) => Unsubscribe;
   onDataChange: (handler) => Unsubscribe;
+  onEndpoint: (handler) => Unsubscribe;
   onCanvasChange: (canvasId, handler) => Unsubscribe;
 
   // Lifecycle
@@ -247,6 +252,7 @@ The shell starts from `createShell`'s `actions` / `fragments` / `canvases` / `ca
 
 ```ts
 shell.registerAction(definition);        // add (or replace) an action definition
+shell.removeAction(actionId);            // revocation: unmounts live instances, drops the definition
 shell.registerFragment(fragment);        // add a fragment for `with: [...]`
 shell.addCanvas({ id: 'aside', initial: 'inspector' });  // appends + seeds; no-op if the id exists
 shell.removeCanvas('aside');             // unmounts its instances, then drops it
@@ -263,8 +269,10 @@ For non-React consumers (evaluators, exporters, tests):
 ```ts
 shell.getShellRenderTree();              // the canvasLayout rendered against { canvases }
 shell.getCanvasRenderTree('main');       // a canvas's actionLayout rendered against { instances, active, count }
-shell.flattenRenderTree(tree);           // expand CanvasSlot/ActionSlot markers into resolved content
+shell.flattenRenderTree(tree);           // materialise a tree: CanvasSlot resolves away, ActionSlot survives
 ```
+
+`flattenRenderTree` resolves `CanvasSlot` markers into their canvas trees, but the `ActionSlot` marker survives: a component node with `props: { instanceId, canvasId, definitionId }`, `key: instanceId`, and the instance's rendered tree as children. Served (remote) trees keep instance identity this way — a renderer keys by instance so a swap remounts, and a terminal-side slot wrapper has its seam.
 
 React consumers render trees through component boundaries instead — see `REACT_DOCS.md`.
 
@@ -350,6 +358,10 @@ off();
 ```
 
 The React adapter uses these internally; app code can use them to drive logging, persistence, devtools, etc.
+
+#### `onEndpoint(handler)`
+
+Fires once per completed endpoint call any action makes — `fn:` and HTTP alike — with `{ name, kind, ok, status, ms, instanceId, canvasId }` (`status` 0 for fn; aborted calls not reported). Returns an `Unsubscribe`. Devtools' endpoint timeline is built on this.
 
 #### `onCanvasChange(canvasId, handler)`
 
@@ -498,7 +510,7 @@ const shell = createShell({
   fetch?: FetchFn,
   transform?: TransformFn,
   functions?: Record<string, FunctionHandler>,
-  telemetry?: { onStateChange?, onDataChange? },
+  telemetry?: { onStateChange?, onDataChange?, onEndpoint? },
   strict?: boolean,
   onError?: (error) => void,
 });
@@ -512,6 +524,7 @@ shell.clear(canvasId);
 
 // Runtime registration / canvas mutation
 shell.registerAction(definition);
+shell.removeAction(actionId);
 shell.registerFragment(fragment);
 shell.addCanvas(config);
 shell.removeCanvas(canvasId);
@@ -535,6 +548,7 @@ shell.publish(channel, payload?);
 // Telemetry
 shell.onStateChange(handler);              // → Unsubscribe
 shell.onDataChange(handler);               // → Unsubscribe
+shell.onEndpoint(handler);                 // → Unsubscribe
 
 // Teardown
 shell.dispose();

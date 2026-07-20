@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from 'vitest';
 import { render } from '@testing-library/react';
-import { Stack, StackPropsSchema } from '../../../src/react/components';
+import { Stack, StackPropsSchema } from '../../../src/adapters/react/components';
 import { createHarness } from './helpers';
 
 describe('Stack', () => {

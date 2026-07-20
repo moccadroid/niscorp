@@ -199,6 +199,26 @@ export const settingsLayout: LayoutNode = {
           },
         ],
       },
+      // ─── Developer ─────────────────────────────────────────
+      {
+        component: 'Box',
+        props: { bg: 'surface', border: true, radius: 13 },
+        children: [
+          { component: 'Box', props: { px: 18, py: 14, border: 'bottom' }, children: { component: 'Text', props: { weight: 600 }, children: 'Developer' } },
+          {
+            component: 'Box',
+            props: { px: 18, py: 14 },
+            children: {
+              component: 'Row',
+              props: { justify: 'between', align: 'center' },
+              children: [
+                { component: 'Stack', props: { gap: 2 }, children: [{ component: 'Text', props: { weight: 500 }, children: 'Developer tools' }, { component: 'Text', props: { size: 'sm', color: 'mute' }, children: 'Show the nova devtools dock — shell tree, audit, endpoint timeline' }] },
+                { component: 'Switch', ref: 'devtools-toggle', model: '$.devtools' },
+              ],
+            },
+          },
+        ],
+      },
     ],
   },
 };

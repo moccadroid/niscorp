@@ -1,4 +1,5 @@
 import { createShell, createComponentRegistry, CANVAS_SLOT_NAME, ACTION_SLOT_NAME } from '@niscorp/nova';
+import { componentsOf } from '@niscorp/nova/reflect';
 import type { Shell, CanvasConfig, FetchFn, LayoutNode, RenderNode } from '@niscorp/nova';
 import { evaluate } from '@niscorp/prism';
 import type { ScopePolicy } from '@niscorp/vex';
@@ -58,35 +59,22 @@ export type ShellHost = {
 
 const today = (): string => new Date().toISOString().slice(0, 10);
 
-// Every component NAME the app's layouts mention, walked mechanically —
-// nova's registry holds opaque components (generic, unknown), so the
-// server registers name-only stubs: the render pipeline validates names
-// and serializes trees; actual components live in the terminal. Derivation
-// over configuration: no component list is ever authored.
-const collectComponents = (node: unknown, out: Set<string>): void => {
-  if (Array.isArray(node)) {
-    for (const item of node) collectComponents(item, out);
-    return;
-  }
-  if (node === null || typeof node !== 'object') return;
-  const record = node as Record<string, unknown>;
-  if (typeof record['component'] === 'string') out.add(record['component']);
-  for (const value of Object.values(record)) collectComponents(value, out);
-};
-
 export const createShellHost = (ctx: ShellHostContext): ShellHost => {
   const manifest = ctx.app.shell;
   if (manifest === undefined) throw new Error('createShellHost: the app manifest has no `shell`.');
   const shellManifest = manifest;
 
-  // nova's own slot markers first — they come from default layouts, not
-  // the app's, so the walk can't find them.
+  // Every component NAME the app's layouts mention — nova's registry holds
+  // opaque components (generic, unknown), so the server registers name-only
+  // stubs: the render pipeline validates names and serializes trees; actual
+  // components live in the terminal. `componentsOf` (nova/reflect) is the one
+  // walk; no component list is ever authored. nova's own slot markers come
+  // from default layouts, not the app's, so the walk can't find them — seed
+  // them first.
   const componentNames = new Set<string>([CANVAS_SLOT_NAME, ACTION_SLOT_NAME]);
-  collectComponents(ctx.app.actions, componentNames);
-  collectComponents(ctx.app.layouts ?? {}, componentNames);
-  collectComponents(shellManifest.canvases, componentNames);
-  collectComponents(shellManifest.layout ?? {}, componentNames);
-  collectComponents(shellManifest.fragments ?? {}, componentNames);
+  for (const source of [ctx.app.actions, ctx.app.layouts ?? {}, shellManifest.canvases, shellManifest.layout ?? {}, shellManifest.fragments ?? {}]) {
+    for (const name of componentsOf(source)) componentNames.add(name);
+  }
   // Declared contracts register even when no authored layout mentions them
   // (generated layouts may name them; the palette must see them).
   const contracts = shellManifest.components ?? {};
@@ -107,11 +95,13 @@ export const createShellHost = (ctx: ShellHostContext): ShellHost => {
   // No visible content = empty tree over the wire. A canvas whose layout
   // renders to nothing but empty text / empty wrappers (the collapsed aside
   // rail) is sent as [] — so a terminal can collapse chrome on `length`
-  // alone, knowing nothing about node shapes.
+  // alone, knowing nothing about node shapes. An ActionSlot marker is a
+  // BOUNDARY, not content — visibility is decided by what's inside it.
   const hasVisibleContent = (nodes: RenderNode[]): boolean =>
     nodes.some((node) => {
       if (node.type === 'text') return node.value !== '';
       if (node.type === 'fragment') return hasVisibleContent(node.children);
+      if (node.type === 'component' && node.name === 'ActionSlot') return hasVisibleContent(node.children);
       return true;
     });
 

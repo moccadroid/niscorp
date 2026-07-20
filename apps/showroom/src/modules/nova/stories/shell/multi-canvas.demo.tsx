@@ -1,5 +1,5 @@
 import { createShell, type ActionDefinition } from '@niscorp/nova';
-import { Nova } from '@niscorp/nova/react';
+import { Nova } from '@niscorp/nova/adapters/react';
 
 // Two canvases side by side. The nav canvas drives the content
 // canvas: each button fires a `replace` targeted at `content`,

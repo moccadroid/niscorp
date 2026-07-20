@@ -5,12 +5,15 @@ layouts and effects.
 
 **Status:** `0.x.x` — pre-1.0, breaking changes expected.
 
-Framework adapter: `@niscorp/nova/react` ships a React adapter with
-`<NovaRenderProvider>`, `<NovaShellProvider>`, `<RenderTree>`, and hooks
-(`useShell`, `useShellState`, `useCanvas`, `useRenderTree`,
-`useActionData`, `useActionStatus`, `useNovaDispatch`, `useNovaPublish`).
-Components are decoupled from the shell — they receive only the
-layout's `props` plus `children` / `novaModel`, and emit events via
+Framework adapters live under `adapters/`. `@niscorp/nova/adapters/react`
+ships the React adapter with `<NovaRenderProvider>`, `<NovaShellProvider>`,
+`<RenderTree>`, and hooks (`useShell`, `useShellState`, `useCanvas`,
+`useRenderTree`, `useShellRenderTree`, `useCanvasRenderTree`,
+`useActionData`, `useActionStatus`, `useNovaDispatch`, `useNovaPublish`,
+`useNovaRegistry`). `@niscorp/nova/adapters/dom` ships a plain-DOM adapter
+(`createDomView`) for framework-free hosts — it renders a served tree against
+core's `RenderApi`. Components are decoupled from the shell — they receive
+only the layout's `props` plus `children` / `novaModel`, and emit events via
 context hooks.
 
 An optional `slotWrapper` prop wraps every action instance's content at
@@ -49,12 +52,16 @@ Explicitly out of scope right now:
 - **No LLM features.** No prompt scaffolding, no plan generation.
 - **No JSON Schema generation / catalog.** Use `z.toJSONSchema()` on
   the exported Zod schemas if you need JSON Schema externally.
-- **No built-in components.** The component registry is empty by default.
+- **No mandatory components.** The component registry is empty by
+  default; opt-in reference kits ship at the adapter subpaths
+  (`/adapters/react/components`, `/adapters/dom/components`).
 - **No SSR yet.** Nova hooks don't pass a `getServerSnapshot` to
   `useSyncExternalStore`, so calling them during server rendering throws.
   See the React compatibility section below.
 - **No wire protocol.** Definitions are in-process objects, not a
-  serialization format.
+  serialization format. The wire lives in moss; nova ships the render
+  surface a remote terminal targets (`RenderApi`, flattened trees that
+  keep `ActionSlot` identity).
 
 ---
 
@@ -268,6 +275,23 @@ can perform their own final async work (e.g. telemetry flush).
 
 ---
 
+## Reflection and devtools
+
+- **`@niscorp/nova/reflect`** — read-only introspection over definitions
+  and live shells; pure and framework-free. `walkNodes` / `componentsOf` /
+  `refsOf` / `loopVarsOf` (layout walks), `snapshotShell` /
+  `describeInstance` (running state), `actionGraph` (emit/message wiring),
+  `classifyAudit` / `auditCatalog` (closure-audit triage).
+- **`@niscorp/nova/devtools`** — a shell inspector built as pure nova:
+  `devtoolsActions` (`devtools.dock`, `devtools.inspect` — plain
+  ActionDefinitions over generic primitives), `DEVTOOLS_CANVAS`, and
+  `createDevtoolsFunctions` serving the `devtools.*` fns (the endpoint
+  timeline is a ring buffer fed by `shell.onEndpoint`). An app opts in by
+  granting `devtools.*` to a dev role, adding the canvas plus a frame
+  slot, and spreading the fns into its `functions(session)`.
+
+---
+
 ## Building / dev
 
 ```bash
@@ -285,7 +309,4 @@ expected.
 ## Future work
 
 - SSR support for the React adapter (`getServerSnapshot` on each hook)
-- Headless component primitives shipped with the package
-- Wire protocol for shipping action / layout definitions across
-  processes
 - Schema versioning for non-breaking 1.x evolution

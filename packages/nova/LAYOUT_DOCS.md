@@ -10,7 +10,7 @@ This guide is for **authoring** layouts. For the architecture (why it's JSON, ho
 
 ```ts
 import { renderLayout, createComponentRegistry, createLayoutStore } from '@niscorp/nova';
-import { registerNovaReactComponents } from '@niscorp/nova/react/components';
+import { registerNovaReactComponents } from '@niscorp/nova/adapters/react/components';
 
 const registry = createComponentRegistry();
 registerNovaReactComponents(registry);
@@ -329,7 +329,7 @@ Set `model: '<path>'` on a component to wire it for two-way data binding. The re
 }
 ```
 
-The `Input` component built into `@niscorp/nova/react/components` already dispatches `ui:model` on change, so this just works. To wire your own component, see `REACT_DOCS.md`.
+The `Input` component built into `@niscorp/nova/adapters/react/components` already dispatches `ui:model` on change, so this just works. To wire your own component, see `REACT_DOCS.md`.
 
 ### Loop case
 
@@ -429,16 +429,18 @@ If a component carries a static `.meta` property, `registerAll` picks it up auto
 
 ### The default component set
 
-`@niscorp/nova/react/components` ships seven headless React components:
+`@niscorp/nova/adapters/react/components` ships nine headless React components:
 
 - **`Stack`** — flex container with `direction`, `gap`, `align`, `justify`, `padding`, `wrap`
 - **`Text`** — typography element with `as`, `size`, `weight`, `color`
-- **`Input`** — text input bound via `model`
+- **`Input`** — text input bound via `model`; holds a local draft while focused and honours a `debounce` prop (ms) on `ui:model` dispatches
 - **`Button`** — clickable button that dispatches `ui:click` with its `ref`
 - **`Box`** — generic styling container
+- **`Panel`** — titled container with optional `backRef`/`closeRef` header buttons
+- **`JsonTree`** — collapsible JSON viewer (devtools' introspection primitive)
 - **`CanvasSlot`** / **`ActionSlot`** — shell-aware slots used inside shell/canvas layouts; only usable under a `<NovaShellProvider>` (see `REACT_DOCS.md`)
 
-Use `registerNovaReactComponents(registry)` to install all seven at once.
+Use `registerNovaReactComponents(registry)` to install all nine at once.
 
 ---
 

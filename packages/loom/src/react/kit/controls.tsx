@@ -1,4 +1,4 @@
-import type { NovaComponent } from '@niscorp/nova/react';
+import type { NovaComponent } from '@niscorp/nova/adapters/react';
 import { useModelWrite } from '../hooks/model.js';
 import { inputStyle } from './shared.js';
 import { JsonEditor } from './json-editor.js';

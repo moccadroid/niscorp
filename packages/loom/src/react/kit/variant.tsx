@@ -1,5 +1,5 @@
 import { createContext, useContext, type CSSProperties } from 'react';
-import type { NovaComponent } from '@niscorp/nova/react';
+import type { NovaComponent } from '@niscorp/nova/adapters/react';
 import { isRecord } from '@compile/parse';
 import type { Pattern } from '@compile/types';
 import { useModelWrite } from '../hooks/model.js';

@@ -1,5 +1,5 @@
 import { createShell, type ActionDefinition } from '@niscorp/nova';
-import { Nova } from '@niscorp/nova/react';
+import { Nova } from '@niscorp/nova/adapters/react';
 
 // An action with a data store and two triggers. Click Increment /
 // Decrement — the trigger fires the `increment`/`decrement` op on

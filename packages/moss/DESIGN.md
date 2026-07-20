@@ -70,7 +70,11 @@ Nova's core is headless and its interchange is serializable (`RenderNode[]`
 down, `NovaEvent` up), so the shell executes server-side and the client is a
 canvas terminal: a registry, a socket, a renderer. State is authoritative — the
 LiveView move, but streaming semantic trees, so the terminal is tiny and
-swappable (React, Svelte, native, TUI).
+swappable (React, Svelte, native, TUI). The terminal ships in moss
+(`./terminal` plus render targets), and swappable is literal: `mountTerminal`
+hot-swaps targets over one wire, the session and current trees surviving the
+swap. The DOM target is the proof the terminal is trivial — nova's DOM adapter
+and default kit, zero framework, zero config.
 
 The cost is the round trip, and two rules cover the one interaction that cannot
 wait for it: the terminal never overwrites the value of the focused input when a
@@ -97,7 +101,8 @@ The organizing principle: an app hands over **artifacts** and an
   compiled vex scope policy, and the granted layout variants (ring 2). Pure;
   memoized because the documents are static per process.
 - The **component registry** on the server is name-only stubs, derived by
-  walking the manifest's layouts (variants included) — the actual components
+  walking the manifest's layouts (variants included, nova/reflect's
+  `componentsOf` — the walk is shared, not re-derived) — the actual components
   live in the terminal.
 - **Coherence is refused, not documented.** `createServer` runs `verifyCharter`
   (with nova's closure audit injected over effective definitions) and
@@ -131,10 +136,11 @@ RFC 6455 plumbing lives with each runtime's entry (`ws` on Node in `./node`,
 Bun-native later). One connection per client carries every canvas — ten open
 canvases are ten canvas ids on one pipe.
 
-**Down:** `hello` (the resolved catalog on connect), `frame` (the canvas
-arrangement — a served layout of `CanvasSlot` markers), `render` (a canvas's
-tree), `session` (a login grant), `error`. **Up:** `event` (a canvas-tagged
-`NovaEvent`), `publish` (a channel message).
+**Down:** `hello` (the resolved catalog on connect), `catalog` (declared for
+catalog pushes — not yet sent; terminals know it and ignore it), `frame` (the
+canvas arrangement — a served layout of `CanvasSlot` markers), `render` (a
+canvas's tree), `session` (a login grant), `error`. **Up:** `event` (a
+canvas-tagged `NovaEvent`), `publish` (a channel message).
 
 Operational shape, all falling out of "the message is state, not history":
 
@@ -147,6 +153,9 @@ Operational shape, all falling out of "the message is state, not history":
 - **Durability.** The projection (once built) is the durable thing; the shell is
   a warm cache rebuilt from definitions + projection. Evicting an idle shell and
   restarting the process are both safe — shells rehydrate on the next connection.
+- **Emptiness.** A canvas whose layout renders no visible content is served as
+  `[]`, so a terminal collapses chrome on `length` alone. An `ActionSlot` is a
+  boundary, not content — visibility is decided by what's inside it.
 
 Two design points worth naming:
 
@@ -161,7 +170,10 @@ Two design points worth naming:
   grants (the token goes down every connection as a `session` message; the
   terminals reconnect authenticated); a sign-out function revokes (every
   connection closes `4403`, the durable shell is evicted). The app calls
-  capabilities; it never knows where the session machinery lives.
+  capabilities; it never knows where the session machinery lives. On the wire,
+  `4401` (stale token) and `4403` (sign-out) are the same recovery, not a
+  retry: drop the token, reconnect anonymous — retrying with a stale token
+  would loop forever.
 
 ## Server shells
 

@@ -1,5 +1,5 @@
 import type { NovaEvent, RenderNode } from '@niscorp/nova';
-import { CLOSE_SIGNED_OUT } from './socket';
+import { CLOSE_INVALID_TOKEN, CLOSE_SIGNED_OUT } from './socket';
 
 // ═══════════════════════════════════════════════════════════════
 // The wire — moss's protocol client, the other end of ./socket. Plain
@@ -63,6 +63,10 @@ export const createWire = (config: WireConfig = {}): Wire => {
   let snapshot: WireSnapshot = EMPTY;
   let socket: WebSocket | null = null;
   let retry: number | undefined;
+  // Consecutive failed connects — resets to 0 the moment one opens. Drives the
+  // reconnect backoff so a dead server is polled ever more slowly, not every
+  // second forever.
+  let attempts = 0;
   let disposed = false;
   const listeners = new Set<() => void>();
   const publishSnapshot = (next: WireSnapshot): void => {
@@ -81,27 +85,62 @@ export const createWire = (config: WireConfig = {}): Wire => {
     const query = token === null ? '' : `?token=${encodeURIComponent(token)}`;
     const ws = new WebSocket(`${url()}${query}`);
     socket = ws;
+    // A connection that opens is a healthy connection: forget the backoff.
+    ws.onopen = () => {
+      attempts = 0;
+    };
     ws.onmessage = (e) => {
-      const message = JSON.parse(String(e.data)) as { type: string; canvas?: string; tree?: RenderNode[]; token?: string };
-      if (message.type === 'render' && message.canvas !== undefined && message.tree !== undefined) {
-        publishSnapshot({ ...snapshot, trees: new Map(snapshot.trees).set(message.canvas, message.tree) });
-      } else if (message.type === 'frame' && message.tree !== undefined) {
-        publishSnapshot({ ...snapshot, frame: message.tree });
-      } else if (message.type === 'session' && typeof message.token === 'string') {
+      const data = JSON.parse(String(e.data)) as {
+        type: string;
+        canvas?: string;
+        tree?: RenderNode[];
+        token?: string;
+        code?: string;
+        message?: string;
+      };
+      if (data.type === 'render' && data.canvas !== undefined && data.tree !== undefined) {
+        publishSnapshot({ ...snapshot, trees: new Map(snapshot.trees).set(data.canvas, data.tree) });
+      } else if (data.type === 'frame' && data.tree !== undefined) {
+        publishSnapshot({ ...snapshot, frame: data.tree });
+      } else if (data.type === 'session' && typeof data.token === 'string') {
         // Login redeemed server-side: become that principal.
-        become(message.token);
+        become(data.token);
+      } else if (data.type === 'error') {
+        // Diagnostics, not authority — surfaced, never swallowed: a wire that
+        // silently stops updating is the worst thing to debug. (invalid_token
+        // rides the 4401 close below, not this path.)
+        console.warn(`[moss/wire] server error${data.code !== undefined ? ` (${data.code})` : ''}: ${data.message ?? ''}`);
+      } else if (data.type !== 'hello' && data.type !== 'catalog') {
+        // hello/catalog are known and deliberately ignored (the terminal is
+        // grant-blind — it renders what it is served, never what it may do);
+        // anything else is protocol drift worth a shout.
+        console.warn(`[moss/wire] unhandled server message: ${data.type}`);
       }
     };
     // The socket is ephemeral, the shell is durable: reconnect re-sends
-    // current state. The one deliberate close is SIGNED_OUT — drop the
-    // token and become anonymous (the served lock screen).
+    // current state. Two application close codes are recoveries, not retries —
+    // SIGNED_OUT (a deliberate revoke) and INVALID_TOKEN (the stored token went
+    // stale; retrying WITH it would loop forever) both drop the token and
+    // reconnect anonymous (the served lock screen). Every other close backs off
+    // and retries carrying the current token.
     ws.onclose = (e) => {
-      if (e.code === CLOSE_SIGNED_OUT) {
+      if (e.code === CLOSE_SIGNED_OUT || e.code === CLOSE_INVALID_TOKEN) {
         become(null);
         return;
       }
-      if (!disposed) retry = window.setTimeout(connect, 1000);
+      if (!disposed) scheduleReconnect();
     };
+  };
+
+  // Exponential backoff with jitter, capped: a dead server is polled ever more
+  // slowly (never faster than ~½s, never slower than the cap), and the jitter
+  // spreads a thundering herd of terminals reconnecting on the same outage.
+  const RECONNECT_CAP_MS = 30_000;
+  const scheduleReconnect = (): void => {
+    const ceiling = Math.min(RECONNECT_CAP_MS, 1000 * 2 ** attempts);
+    attempts += 1;
+    const delay = ceiling / 2 + Math.random() * (ceiling / 2);
+    retry = window.setTimeout(connect, delay);
   };
 
   // A different principal — possibly none — is a different application:
@@ -110,6 +149,7 @@ export const createWire = (config: WireConfig = {}): Wire => {
     writeToken(next);
     token = next;
     window.clearTimeout(retry);
+    attempts = 0; // a new principal is a fresh session — start backoff clean
     publishSnapshot(EMPTY);
     const old = socket;
     socket = null;

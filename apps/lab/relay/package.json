@@ -16,9 +16,11 @@
     "server": "tsx src/dev/server-check.ts",
     "socket": "tsx src/dev/socket-check.ts",
     "host": "tsx src/dev/host-check.ts",
+    "dom-terminal": "tsx src/dev/dom-terminal-check.ts",
     "serve": "tsx src/server/serve.ts",
     "rls": "tsx src/dev/rls-check.ts",
-    "locked": "tsx src/dev/locked-check.ts"
+    "locked": "tsx src/dev/locked-check.ts",
+    "swap": "tsx src/dev/swap-check.ts"
   },
   "dependencies": {
     "@electric-sql/pglite": "^0.5.1",
@@ -43,6 +45,7 @@
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.0",
     "@vitejs/plugin-react": "^5.0.4",
+    "jsdom": "^25.0.1",
     "tsx": "^4.22.4",
     "typescript": "^6.0.2",
     "vite": "^7.1.12"

@@ -1,5 +1,5 @@
 import type { CSSProperties, FC } from 'react';
-import type { NovaComponent } from '@niscorp/nova/react';
+import type { NovaComponent } from '@niscorp/nova/adapters/react';
 import { ConfigSchema, evaluateSafe, type JsonObject } from '@niscorp/prism';
 
 // The preview component: applies the edited config to the sample input and shows

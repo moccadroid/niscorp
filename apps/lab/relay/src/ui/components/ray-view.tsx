@@ -1,6 +1,6 @@
 import { z } from 'zod';
-import { Nova, useNovaRegistry } from '@niscorp/nova/react';
-import type { NovaComponent } from '@niscorp/nova/react';
+import { Nova, useNovaRegistry } from '@niscorp/nova/adapters/react';
+import type { NovaComponent } from '@niscorp/nova/adapters/react';
 import type { LayoutNode } from '@niscorp/nova';
 
 // RayView — renders a Ray-generated Nova layout against its data, inside the chat.

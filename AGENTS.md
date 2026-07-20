@@ -54,7 +54,7 @@ Pick per need; every piece works standalone. Nova is the only mandatory one for 
 | Package | Use it for | Don't use it for |
 |---|---|---|
 | `nova` | the UI: shells, canvases, actions, layouts, fragments | — |
-| `moss` | the app server: `defineApp` manifest + runtime → data layer, per-principal policy and catalogs, server shells, the socket | client-degrade apps — they wire their own shell |
+| `moss` | the app server: `defineApp` manifest + runtime → data layer, per-principal policy and catalogs, server shells, the socket, and the canvas terminal (`/terminal` + render targets) | client-degrade apps — they wire their own shell |
 | `charter` | the policy document: roles → glob selections over the app's universes, resolved per principal, verified at boot | enforcement — the governed target enforces |
 | `prism` | every transform: shaping, formatting, branching | anything a schema or layout expresses directly |
 | `vex` | query and mutation endpoints: `{ fingerprint, context }` → rows or effects (see "Using Vex") | writes outside its closed mutation grammar |

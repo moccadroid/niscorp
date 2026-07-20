@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { z } from 'zod';
-import type { NovaComponent } from '@niscorp/nova/react';
+import type { NovaComponent } from '@niscorp/nova/adapters/react';
 import { type TraceStep } from '@relay/server/functions/ray/trace';
 
 // RayTrace — shows the tools Ray is calling. Two modes:

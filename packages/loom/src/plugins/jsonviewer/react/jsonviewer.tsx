@@ -1,5 +1,5 @@
 import type { CSSProperties } from 'react';
-import type { NovaComponent } from '@niscorp/nova/react';
+import type { NovaComponent } from '@niscorp/nova/adapters/react';
 
 // The jsonviewer's view component: a read-only JSON pane with a title. The plugin
 // binds `value` to the editor's live documents and registers this under JSONVIEWER.

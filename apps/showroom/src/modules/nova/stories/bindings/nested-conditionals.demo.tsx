@@ -1,5 +1,5 @@
 import type { LayoutNode } from '@niscorp/nova';
-import { Nova } from '@niscorp/nova/react';
+import { Nova } from '@niscorp/nova/adapters/react';
 
 // Two layers of `if/then/else`. Outer branch: is there a user?
 // Inner (when yes): is that user an admin? Three total render

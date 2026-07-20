@@ -1,5 +1,5 @@
 import type { LayoutNode } from '@niscorp/nova';
-import { Nova } from '@niscorp/nova/react';
+import { Nova } from '@niscorp/nova/adapters/react';
 
 // `for` / `as` / `do` iterates a collection and emits one subtree per
 // item. Each iteration binds `$user` to the current element, so the

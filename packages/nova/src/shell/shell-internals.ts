@@ -2,6 +2,7 @@ import type {
   ActionDefinition,
   ActionFragment,
   ActionRuntime,
+  EndpointHandler,
   FunctionHandler,
   NavigationEffect,
   OnErrorHandler,
@@ -76,6 +77,7 @@ export type RuntimeFactoryDeps = {
   onError?: OnErrorHandler;
   instanceIdFn: IdFactory;
   onNavigate: (canvasId: string, effect: NavigationEffect) => void;
+  onEndpoint?: EndpointHandler;
 };
 
 export const createRuntimeFactory = (deps: RuntimeFactoryDeps) => (
@@ -95,6 +97,7 @@ export const createRuntimeFactory = (deps: RuntimeFactoryDeps) => (
     ...(deps.fetch === undefined ? {} : { fetch: deps.fetch }),
     ...(deps.functions === undefined ? {} : { functions: deps.functions }),
     onNavigate: (effect) => deps.onNavigate(canvasId, effect),
+    ...(deps.onEndpoint === undefined ? {} : { onEndpoint: deps.onEndpoint }),
     strict: deps.strict,
     ...(deps.onError === undefined ? {} : { onError: deps.onError }),
     instanceIdFn: deps.instanceIdFn,

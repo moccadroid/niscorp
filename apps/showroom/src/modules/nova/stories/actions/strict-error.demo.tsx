@@ -1,5 +1,5 @@
 import { createShell, type ActionDefinition } from '@niscorp/nova';
-import { Nova } from '@niscorp/nova/react';
+import { Nova } from '@niscorp/nova/adapters/react';
 
 // Lax-mode error handling: the layout references a `Nonexistent`
 // component that isn't in the registry. The renderer emits an error

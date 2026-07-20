@@ -1,6 +1,6 @@
 import { useState, type FC } from 'react';
 import type { ZodType } from 'zod';
-import type { NovaComponent } from '@niscorp/nova/react';
+import type { NovaComponent } from '@niscorp/nova/adapters/react';
 import { LoomEditor } from '@niscorp/loom/react';
 import { JsonViewer } from '@showroom/chrome/json-viewer';
 import { DemoPanel } from './demo-panel';

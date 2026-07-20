@@ -1,5 +1,5 @@
 import type { LayoutNode } from '@niscorp/nova';
-import { Nova } from '@niscorp/nova/react';
+import { Nova } from '@niscorp/nova/adapters/react';
 
 // Nested `for` loops with shadowing scope variables. The outer loop
 // binds `$user`; the inner loop — running over `$user.posts` — binds

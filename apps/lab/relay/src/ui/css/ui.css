@@ -444,3 +444,17 @@
    no reflow. (Animating a slot's footprint is a separate, deferred problem.) */
 @keyframes rl-fade-in { from { opacity: 0; transform: translateY(3px); } }
 .rl-fade-in { animation: rl-fade-in 180ms cubic-bezier(0.2, 0.7, 0.2, 1); }
+
+/* ─── Devtools chip ────────────────────────────────────── */
+/* The slotWrapper's per-instance ⚙ (devtools on only): hover-revealed in the
+   instance's top-right corner; a click opens the instance in the dock. */
+.rl-slotwrap { position: relative; }
+.rl-devchip {
+  position: absolute; top: 4px; right: 4px; z-index: 30;
+  width: 22px; height: 22px; border-radius: 6px;
+  border: 1px solid var(--border); background: var(--surface-2); color: var(--text-dim);
+  font-size: 12px; line-height: 1; cursor: pointer;
+  opacity: 0; transition: opacity 120ms;
+}
+.rl-slotwrap:hover > .rl-devchip { opacity: 1; }
+.rl-devchip:hover { color: var(--text); background: var(--hover); }

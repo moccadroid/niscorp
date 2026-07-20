@@ -1,5 +1,5 @@
 import type { CSSProperties } from 'react';
-import type { NovaComponent } from '@niscorp/nova/react';
+import type { NovaComponent } from '@niscorp/nova/adapters/react';
 
 // The layout + field shells: the group heading and the per-field wrapper
 // (label / description / required marker / error) around one control.

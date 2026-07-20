@@ -26,6 +26,10 @@ export const settingsAction: ActionDefinition = {
     rayDebug: false,
     // Estimated server storage this principal's chat history uses.
     rayStorage: '',
+    // Devtools on/off — reflects whether the dock is mounted on its canvas.
+    // Only rendered in the ring-2 dev variant of this screen; the endpoints are
+    // no-ops for a non-dev (who doesn't hold the dock).
+    devtools: false,
   },
   layout: settingsLayout,
   endpoints: {
@@ -33,10 +37,14 @@ export const settingsAction: ActionDefinition = {
     saveDebug: { fn: 'ray.setDebug' },
     storageSize: { fn: 'ray.storageSize', target: 'rayStorage' },
     clearSessions: { fn: 'ray.clearSessions' },
+    dtState: { fn: 'devtools.enabled', target: 'devtools' },
+    dtSet: { fn: 'devtools.setEnabled' },
   },
-  lifecycle: { mount: [{ call: 'loadDebug' }, { call: 'storageSize' }] },
+  lifecycle: { mount: [{ call: 'loadDebug' }, { call: 'storageSize' }, { call: 'dtState' }] },
   triggers: [
     { event: 'ui:model', ref: 'ray-debug', do: [{ set: 'rayDebug', value: '@event.payload' }, { call: 'saveDebug' }] },
+    // Developer tools: flip the dock on its canvas (mount/unmount via the fn).
+    { event: 'ui:model', ref: 'devtools-toggle', do: [{ set: 'devtools', value: '@event.payload' }, { call: 'dtSet' }] },
     // Clear chat sessions → confirm in the shared dialog → wipe → refresh the size.
     {
       event: 'ui:click',

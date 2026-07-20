@@ -1,5 +1,5 @@
 import { createShell, type ActionDefinition } from '@niscorp/nova';
-import { Nova } from '@niscorp/nova/react';
+import { Nova } from '@niscorp/nova/adapters/react';
 
 // Two-way `model` binding on Input. Keystrokes write through to
 // `$.name`; the greeting Text reads the same path via `{{$.name}}`,

@@ -1,6 +1,6 @@
 import { type ReactNode, useState } from 'react';
 import { z } from 'zod';
-import { useNovaDispatch, type NovaComponent } from '@niscorp/nova/react';
+import { useNovaDispatch, type NovaComponent } from '@niscorp/nova/adapters/react';
 import { cx } from '../lib/cx';
 
 // Kanban drag-and-drop. The browser drag mechanics stay here; only the

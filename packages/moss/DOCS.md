@@ -1,7 +1,9 @@
 # Moss — API Reference
 
-Three entry points: `@niscorp/moss` (the server), `@niscorp/moss/node` (the Node
-listener), `@niscorp/moss/client` (the wire). API is pre-1.0 and moves.
+Six entry points: `@niscorp/moss` (the server), `@niscorp/moss/node` (the Node
+listener), `@niscorp/moss/client` (the wire), `@niscorp/moss/terminal` (the
+terminal), `@niscorp/moss/terminal/react` and `@niscorp/moss/terminal/dom` (the
+render targets). API is pre-1.0 and moves.
 
 ## `@niscorp/moss`
 
@@ -92,8 +94,8 @@ both ends together; nothing else touches token mechanics.
 #### `createServer(app, runtime): Promise<MossServer>`
 
 Stands up the data layer, **refuses to boot** on an incoherent charter
-(`verifyCharter` + nova's closure audit), memoizes per-principal policy and
-catalogs, mounts the vex surfaces and `/catalog`, and — when the manifest
+(`verifyCharter` + nova's closure audit), memoizes per-principal policy,
+catalogs, and ring-2 variant bindings, mounts the vex surfaces and `/catalog`, and — when the manifest
 declares a shell — the shell host behind the socket. Returns a Hono app extended
 with `{ socket, shells? }`.
 
@@ -118,6 +120,10 @@ mount it, extend it, or hand it to a listener.
 - `createDataLayer(runtime, entries?): Promise<DataLayer>` — `{ engine, schema,
   grants }`, stood up from what's present.
 - `createShellHost(ctx): ShellHost` — the durable per-principal shell host.
+- `ShellSession` — what `ShellHost.session(token, principal)` returns:
+  `{ shell, attach, detach, dispatch, publish }`. The living nova `Shell`, for
+  in-process hosts (dev checks, embedded tools) that drive it directly;
+  remote clients ride `attach`/`dispatch`.
 - `auditClosure(definitions, variants?): ClosureAuditor` — nova's action audit as
   the charter's injected closure hook (cross-action wiring breaks only), over each
   role's effective definitions (granted variants substituted).
@@ -130,10 +136,16 @@ mount it, extend it, or hand it to a listener.
 - `ServerMessage` — `hello | catalog | frame | render | session | error`.
 - `ClientMessage` — `event | publish`.
 - `CLOSE_INVALID_TOKEN = 4401`, `CLOSE_SIGNED_OUT = 4403`.
+- A canvas whose layout renders no visible content is served as an empty
+  tree (`[]`), so a terminal collapses chrome on `length` alone. An
+  `ActionSlot` is a boundary, not content — visibility is decided by what's
+  inside it.
 
 ## `@niscorp/moss/node`
 
-- `serve(server, options)` — listen; wires HTTP + the socket in one process.
+- `serve(app, runtime & { port? }): Promise<MossServer>` — boots and listens:
+  `createServer` runs inside (boot refusal included), then HTTP + the socket
+  in one process. `port` defaults to 8787.
 - `attachSocket(httpServer, accept, path?)` — embed the socket on an existing
   server (raw `ws`, `noServer`, path-matched — coexists with vite HMR). `path`
   defaults to `/socket`.
@@ -145,9 +157,69 @@ mount it, extend it, or hand it to a listener.
 - `Wire` — `{ subscribe, snapshot, dispatch(canvas, event), publish, dispose }`.
   `snapshot()` is `{ frame, trees }`. Hand it to a renderer.
 
+Reconnect is exponential backoff with jitter, capped at 30s, reset when a
+connection opens and on any principal change (a session grant or a close-code
+recovery starts the backoff clean). Two close codes are recoveries, not retries: `4403`
+(signed out) and `4401` (invalid token) both drop the stored token and
+reconnect anonymous — retrying with a stale token would loop forever. Server
+`error` frames and unknown message types are `console.warn`ed; `hello` and
+`catalog` are deliberately ignored (the terminal is grant-blind).
+
 ```typescript
 import { createWire } from '@niscorp/moss/client';
 const wire = createWire();                 // connects; token from localStorage
 wire.subscribe(() => render(wire.snapshot()));
 wire.dispatch('main', { type: 'ui:click', ref: 'save' });
 ```
+
+## `@niscorp/moss/terminal`
+
+The terminal: the wire plus a **render target**. Framework-blind — targets live
+in the subpaths.
+
+- `createTerminal({ root, target, wire }): { destroy }` — the conductor: one
+  target, one wire. Subscribes the target's `update` to the wire and routes
+  events back.
+- `mountTerminal(root, config): { swap, destroy }` — the switcher: hot-swaps
+  render targets over ONE wire, so the socket, session, and current trees
+  survive the swap. `config = { targets, swapKey?, initial?, wire?, url? }` —
+  targets by name, cycled in insertion order; `swapKey` (e.g.
+  `"ctrl+shift+y"`) binds the hotkey, and `swap` is returned for a host's own
+  control. Omit `wire` and the terminal makes (and owns) one; `url` seeds it.
+- `TerminalApi` — what a target renders against: nova core's `RenderApi`
+  (`frame`, `canvasTree`, `dispatch`, `publish`), aliased not redeclared — the
+  DOM adapter, the React adapter, and the conductor share one contract. A
+  target never touches the wire directly.
+- `Target` — `(root, api) => TerminalMount` where `TerminalMount = { update,
+  destroy }`. Renders once on mount; the conductor calls `update` on every
+  wire change.
+
+```typescript
+import { mountTerminal } from '@niscorp/moss/terminal';
+import { reactTarget } from '@niscorp/moss/terminal/react';
+import { domTarget } from '@niscorp/moss/terminal/dom';
+
+mountTerminal(document.getElementById('root')!, {
+  targets: { react: reactTarget({ registry, slotWrapper }), dom: domTarget() },
+  swapKey: 'ctrl+shift+y',
+});
+```
+
+## `@niscorp/moss/terminal/react`
+
+Requires the optional `react`/`react-dom` peers.
+
+- `reactTarget({ registry, slotWrapper? }): Target` — the app's component
+  registry bound to the wire via nova's React adapter. Registers wire-backed
+  `CanvasSlot` and `ActionSlot` (the terminal has no shell for nova's
+  shell-backed ones).
+- `TerminalSlotWrapper` — an app component wrapping each action instance at
+  the `ActionSlot` boundary; the terminal twin of nova's client-shell
+  SlotWrapper. Served trees carry identity only, so the props are
+  `{ canvasId, instanceId, definitionId }` — `definitionId`, not `action`.
+
+## `@niscorp/moss/terminal/dom`
+
+- `domTarget({ registry? }): Target` — nova's DOM adapter plus nova's default
+  component kit, stylesheet injected once per document. Zero framework, zero
+  config; pass a registry to restyle.

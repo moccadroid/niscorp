@@ -28,5 +28,9 @@ export const frameLayout: LayoutNode = {
       ],
     },
     { component: 'CanvasSlot', props: { canvasId: 'modal' } },
+    // nova devtools — the served devtools canvas, floated in a fixed corner by
+    // the anchor. Empty (renders nothing) unless the principal holds the pill
+    // (ring 1 — the `dev` role); the pill opens the dock. Pure nova inside.
+    { component: 'DevtoolsAnchor', children: { component: 'CanvasSlot', props: { canvasId: 'devtools' } } },
   ],
 };

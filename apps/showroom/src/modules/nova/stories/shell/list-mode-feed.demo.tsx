@@ -1,5 +1,5 @@
 import { createShell, type ActionDefinition, type LayoutNode } from '@niscorp/nova';
-import { Nova } from '@niscorp/nova/react';
+import { Nova } from '@niscorp/nova/adapters/react';
 
 // Two authored layouts on one shell:
 // 1. `canvasLayout` — controls bar on top, feed below.

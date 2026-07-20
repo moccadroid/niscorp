@@ -1,7 +1,7 @@
 import { type ReactNode } from 'react';
 import { z } from 'zod';
 import { createShell, type ActionDefinition, type ActionFragment } from '@niscorp/nova';
-import { Nova, useNovaDispatch, type NovaComponent } from '@niscorp/nova/react';
+import { Nova, useNovaDispatch, type NovaComponent } from '@niscorp/nova/adapters/react';
 
 // HOW MODALS WORK IN NOVA. A modal isn't a special concept — it's an ordinary
 // action pushed onto a dedicated `modal` canvas, composed `with: ['modal']`. The

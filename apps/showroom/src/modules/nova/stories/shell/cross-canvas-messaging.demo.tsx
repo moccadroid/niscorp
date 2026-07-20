@@ -1,5 +1,5 @@
 import { createShell, type ActionDefinition } from '@niscorp/nova';
-import { Nova } from '@niscorp/nova/react';
+import { Nova } from '@niscorp/nova/adapters/react';
 
 // Two canvases that don't share data — they talk via the shell's
 // message bus instead. Producer emits on the `cart-updated`

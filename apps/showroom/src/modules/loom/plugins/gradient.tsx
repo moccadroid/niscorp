@@ -2,7 +2,7 @@ import type { CSSProperties } from 'react';
 import { z } from 'zod';
 import { mountView } from '@niscorp/loom';
 import { useModelWrite, type LoomEditorPlugin, type FieldContext } from '@niscorp/loom/react';
-import type { NovaComponent } from '@niscorp/nova/react';
+import type { NovaComponent } from '@niscorp/nova/adapters/react';
 
 // gradient is an example Loom plugin. It edits a gradient (a name, an angle, a
 // list of colours) and previews it. A complete plugin in one file: a document

@@ -1,5 +1,5 @@
 import type { LayoutNode } from '@niscorp/nova';
-import { Nova } from '@niscorp/nova/react';
+import { Nova } from '@niscorp/nova/adapters/react';
 
 // `{{…}}` template interpolation inside Text children. Literal
 // copy and `{{$.path}}` placeholders mix on the same line;

@@ -1,5 +1,5 @@
 import type { LayoutNode } from '@niscorp/nova';
-import { Nova } from '@niscorp/nova/react';
+import { Nova } from '@niscorp/nova/adapters/react';
 
 // Empty-collection pattern: an `if` guards the `for` loop so an
 // empty array shows a gray placeholder instead of a blank space.

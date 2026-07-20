@@ -1,7 +1,7 @@
 import { type ReactNode, useEffect, useRef, useState } from 'react';
 import { z } from 'zod';
 import { Check } from 'lucide-react';
-import { useNovaDispatch, type NovaComponent } from '@niscorp/nova/react';
+import { useNovaDispatch, type NovaComponent } from '@niscorp/nova/adapters/react';
 import { Icon } from './display';
 
 // Form inputs — Input, Select, Textarea, Checkbox. Each is two-way bound via a

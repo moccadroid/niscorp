@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from 'vitest';
 import { fireEvent, render } from '@testing-library/react';
-import { Button, ButtonPropsSchema } from '../../../src/react/components';
+import { Button, ButtonPropsSchema } from '../../../src/adapters/react/components';
 import { createHarness } from './helpers';
 
 describe('Button', () => {

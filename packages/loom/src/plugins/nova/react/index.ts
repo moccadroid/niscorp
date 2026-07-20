@@ -1,4 +1,4 @@
-import type { NovaComponent } from '@niscorp/nova/react';
+import type { NovaComponent } from '@niscorp/nova/adapters/react';
 import type { LoomEditorPlugin } from '@react';
 import { novaPlugin, PREVIEW, type NovaComponentShape } from '../index.js';
 import { makePreview } from './preview.js';

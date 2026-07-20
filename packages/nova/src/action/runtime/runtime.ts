@@ -64,6 +64,12 @@ export const createActionRuntime = (config: ActionRuntimeConfig): ActionRuntime 
     ...(config.fetch === undefined ? {} : { fetch: config.fetch }),
     ...(config.transform === undefined ? {} : { transform: config.transform }),
     ...(config.onNavigate === undefined ? {} : { onNavigate: config.onNavigate }),
+    // Stamp the call event with this instance's identity before it flows up to
+    // the shell's telemetry — `runCall` only knows the endpoint, the runtime
+    // knows who made it.
+    ...(config.onEndpoint === undefined
+      ? {}
+      : { onEndpoint: (event) => config.onEndpoint!({ ...event, instanceId: instance.id, canvasId: instance.canvasId }) }),
     extras: {},
     strict,
     onError,

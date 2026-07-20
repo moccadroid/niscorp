@@ -1,5 +1,5 @@
 import type { LayoutNode } from '@niscorp/nova';
-import { Nova } from '@niscorp/nova/react';
+import { Nova } from '@niscorp/nova/adapters/react';
 
 // Nonexistent paths resolve to empty strings inside templates —
 // the layout still renders cleanly even when the data is partial.

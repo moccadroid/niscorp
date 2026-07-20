@@ -3,7 +3,7 @@ import {
   type ActionDefinition,
   type FunctionHandler,
 } from '@niscorp/nova';
-import { Nova } from '@niscorp/nova/react';
+import { Nova } from '@niscorp/nova/adapters/react';
 
 // An endpoint whose transport is a local function instead of HTTP.
 // `call: 'compute'` dispatches through the same runtime path as an HTTP

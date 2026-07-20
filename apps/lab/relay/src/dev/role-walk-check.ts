@@ -43,20 +43,21 @@ const run = async (): Promise<void> => {
   await settle();
   const sidebarId = viewer.getCanvasState('sidebar').active?.id;
   const nav = (sidebarId !== undefined ? viewer.getRuntime(sidebarId)?.getData()['nav'] : undefined) as Record<string, boolean> | undefined;
-  checks.push(['viewer sidebar hides tasks + settings, shows records', nav?.['tasks'] === false && nav?.['settings'] === false && nav?.['contacts'] === true]);
+  checks.push(['viewer sidebar hides tasks, shows settings + records', nav?.['tasks'] === false && nav?.['settings'] === true && nav?.['contacts'] === true]);
   checks.push(['viewer opens the contacts list', !denied(() => viewer.push('main', 'crm.contacts'))]);
+  checks.push(['viewer opens settings — a member-floor action, everyone has it', !denied(() => viewer.push('main', 'settings'))]);
   checks.push(['viewer cannot open the contact form — deny-by-nonexistence', denied(() => viewer.push('modal', 'crm.contact.form'))]);
 
-  // ── sam = admin: settings yes ──
+  // ── sam = admin: the delete tier is its distinction now (settings is universal) ──
   const admin = as('sam');
   await settle();
-  checks.push(['admin opens settings', !denied(() => admin.push('main', 'settings'))]);
+  checks.push(['admin opens settings (like everyone)', !denied(() => admin.push('main', 'settings'))]);
 
-  // ── alex = sales: forms yes, settings absent ──
+  // ── alex = sales: forms yes, and settings too (member floor) ──
   const sales = as('alex');
   await settle();
   checks.push(['alex opens the deal form', !denied(() => sales.push('modal', 'crm.deal.form', {}, ['modal']))]);
-  checks.push(['alex (sales) has no settings', denied(() => sales.push('main', 'settings'))]);
+  checks.push(['alex (sales) opens settings too (member floor)', !denied(() => sales.push('main', 'settings'))]);
 
   // ── durable: same principal, same shell; different principals differ ──
   checks.push(['one durable shell per principal', as('jordan') === viewer && as('alex') === sales]);

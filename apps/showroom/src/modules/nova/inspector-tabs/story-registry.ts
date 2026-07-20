@@ -6,8 +6,8 @@ import {
   type LayoutStore,
   type RenderNode,
 } from '@niscorp/nova';
-import type { NovaComponent } from '@niscorp/nova/react';
-import { registerNovaReactComponents } from '@niscorp/nova/react/components';
+import type { NovaComponent } from '@niscorp/nova/adapters/react';
+import { registerNovaReactComponents } from '@niscorp/nova/adapters/react/components';
 import type { NovaStory } from '@showroom/modules/nova/story-types';
 
 // Resolve the component registry the inspector should introspect for

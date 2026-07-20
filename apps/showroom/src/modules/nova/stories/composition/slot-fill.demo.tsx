@@ -1,5 +1,5 @@
 import { createShell, type ActionDefinition, type ActionFragment } from '@niscorp/nova';
-import { Nova } from '@niscorp/nova/react';
+import { Nova } from '@niscorp/nova/adapters/react';
 
 // THE CORE IDEA. A fragment is chrome with a hole in it: `{ slot: 'body' }`.
 // Composing an action `with: ['framed']` drops the action's own layout into that

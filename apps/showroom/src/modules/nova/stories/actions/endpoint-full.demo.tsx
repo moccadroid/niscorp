@@ -3,7 +3,7 @@ import {
   type ActionDefinition,
   type FetchFn,
 } from '@niscorp/nova';
-import { Nova } from '@niscorp/nova/react';
+import { Nova } from '@niscorp/nova/adapters/react';
 import { evaluate } from '@niscorp/prism';
 
 // Full endpoint surface: templated URL, headers, and a `request` transform

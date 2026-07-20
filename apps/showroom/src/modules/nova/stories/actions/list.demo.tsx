@@ -1,5 +1,5 @@
 import { createShell, type ActionDefinition } from '@niscorp/nova';
-import { Nova } from '@niscorp/nova/react';
+import { Nova } from '@niscorp/nova/adapters/react';
 
 // `push` appends to an array in the data store. The `for` loop below
 // reads the same array, so a push immediately grows the rendered list

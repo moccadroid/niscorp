@@ -1,5 +1,5 @@
 import { createShell, type ActionDefinition } from '@niscorp/nova';
-import { Nova } from '@niscorp/nova/react';
+import { Nova } from '@niscorp/nova/adapters/react';
 
 // A three-step wizard. Each Next `replace`s the current action
 // with the next one — the stack depth stays at 2. A `summary`

@@ -1,5 +1,5 @@
 import type { CSSProperties } from 'react';
-import type { NovaComponent } from '@niscorp/nova/react';
+import type { NovaComponent } from '@niscorp/nova/adapters/react';
 
 // The validation plugin's view component: a read-only JSON pane with a title. The
 // plugin binds `value` to the editor's validation problems and registers this

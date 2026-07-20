@@ -1,5 +1,5 @@
 import { createShell, type ActionDefinition, type LayoutNode } from '@niscorp/nova';
-import { Nova, type SlotWrapper } from '@niscorp/nova/react';
+import { Nova, type SlotWrapper } from '@niscorp/nova/adapters/react';
 
 // `slotWrapper` — the one pluggable seam for wrapping an action instance's
 // content as it mounts/unmounts. Nova owns no animation logic: it hands the

@@ -1,5 +1,5 @@
 import { createShell, type ActionDefinition, type LayoutNode } from '@niscorp/nova';
-import { Nova } from '@niscorp/nova/react';
+import { Nova } from '@niscorp/nova/adapters/react';
 
 // The same list-mode trick as the activity feed, but with
 // direction: 'row' and wrap: true. One prop change turns a

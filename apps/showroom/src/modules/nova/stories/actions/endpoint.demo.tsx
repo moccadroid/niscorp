@@ -3,7 +3,7 @@ import {
   type ActionDefinition,
   type FetchFn,
 } from '@niscorp/nova';
-import { Nova } from '@niscorp/nova/react';
+import { Nova } from '@niscorp/nova/adapters/react';
 
 // A mocked network call. The real code path is the same: a `call`
 // op dispatches an endpoint, Nova awaits the response, and writes

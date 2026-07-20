@@ -1,5 +1,5 @@
 import { createShell, type ActionDefinition } from '@niscorp/nova';
-import { Nova } from '@niscorp/nova/react';
+import { Nova } from '@niscorp/nova/adapters/react';
 
 // `{ set, from }` copies one path into another — no literal value.
 // Increment snapshots `current` into `previous` *then* bumps

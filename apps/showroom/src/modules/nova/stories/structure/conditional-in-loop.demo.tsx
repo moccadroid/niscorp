@@ -1,5 +1,5 @@
 import type { LayoutNode } from '@niscorp/nova';
-import { Nova } from '@niscorp/nova/react';
+import { Nova } from '@niscorp/nova/adapters/react';
 
 // Two conditional flavors, both scoped to `$item` inside a loop:
 // 1. Inline `{$if,$then,$else}` on the Box `background` prop —

@@ -1,5 +1,5 @@
 import type { LayoutNode } from '@niscorp/nova';
-import { Nova } from '@niscorp/nova/react';
+import { Nova } from '@niscorp/nova/adapters/react';
 
 // A composite profile card using every primitive — Box, Stack,
 // Text, Button, Input. Nothing reactive, just layout composition.

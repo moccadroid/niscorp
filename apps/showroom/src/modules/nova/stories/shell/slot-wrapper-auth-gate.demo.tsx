@@ -1,6 +1,6 @@
 import { createContext, useContext, useState } from 'react';
 import { createShell, type ActionDefinition, type LayoutNode } from '@niscorp/nova';
-import { Nova, type SlotWrapper } from '@niscorp/nova/react';
+import { Nova, type SlotWrapper } from '@niscorp/nova/adapters/react';
 
 // The SAME `slotWrapper` seam, used as a feature/auth gate instead of animation.
 // Nova hands the wrapper the ActionDefinition; the wrapper decides — entirely

@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { NovaComponent } from '@niscorp/nova/react';
+import type { NovaComponent } from '@niscorp/nova/adapters/react';
 
 // Loading primitives — Spinner, Skeleton. Styling lives in ui.css.
 

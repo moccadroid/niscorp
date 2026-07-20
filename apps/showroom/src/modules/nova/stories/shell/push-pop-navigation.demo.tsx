@@ -1,5 +1,5 @@
 import { createShell, type ActionDefinition } from '@niscorp/nova';
-import { Nova } from '@niscorp/nova/react';
+import { Nova } from '@niscorp/nova/adapters/react';
 
 // A menu with three buttons, each pushing a screen onto the canvas.
 // Every screen has a Back button that pops. The canvas stack grows

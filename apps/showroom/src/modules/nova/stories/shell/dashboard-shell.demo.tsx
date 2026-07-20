@@ -1,5 +1,5 @@
 import { createShell, type ActionDefinition, type LayoutNode } from '@niscorp/nova';
-import { Nova } from '@niscorp/nova/react';
+import { Nova } from '@niscorp/nova/adapters/react';
 
 // The shell's `canvasLayout` is a NESTED LayoutNode: an outer
 // column (topbar + body) and an inner row (two boxed panels).

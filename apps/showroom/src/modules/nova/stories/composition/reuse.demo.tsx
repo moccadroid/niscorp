@@ -1,5 +1,5 @@
 import { createShell, type ActionDefinition, type ActionFragment } from '@niscorp/nova';
-import { Nova } from '@niscorp/nova/react';
+import { Nova } from '@niscorp/nova/adapters/react';
 
 // ONE FRAGMENT, MANY ACTIONS. The whole point of composition: define the chrome
 // once, reuse it everywhere. Three different stat actions are each seeded

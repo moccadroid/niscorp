@@ -1,5 +1,5 @@
 import type { LayoutNode } from '@niscorp/nova';
-import { Nova } from '@niscorp/nova/react';
+import { Nova } from '@niscorp/nova/adapters/react';
 
 // Three colored Boxes side-by-side. `direction: row`, `gap: 16`,
 // `padding: 24`, `align: center` — the simplest horizontal layout.

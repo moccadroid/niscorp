@@ -1,6 +1,6 @@
 import { type ReactNode } from 'react';
 import { z } from 'zod';
-import { useNovaDispatch, type NovaComponent } from '@niscorp/nova/react';
+import { useNovaDispatch, type NovaComponent } from '@niscorp/nova/adapters/react';
 
 // The one genuinely-CSS part of a modal: a fixed, dimmed backdrop that centers
 // its children. Everything else — the card, header, title, ✕, footer buttons,

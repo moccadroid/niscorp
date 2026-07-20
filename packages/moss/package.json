@@ -1,7 +1,7 @@
 {
   "name": "@niscorp/moss",
   "version": "0.1.0",
-  "description": "moss \u2014 the nisc app server: serves existence (catalog, scoped vex, the socket), derived from artifacts",
+  "description": "moss — the nisc app server: serves existence (catalog, scoped vex, the socket), derived from artifacts",
   "license": "MIT",
   "type": "module",
   "sideEffects": false,
@@ -20,6 +20,21 @@
       "types": "./dist/client.d.ts",
       "import": "./dist/client.js",
       "require": "./dist/client.cjs"
+    },
+    "./terminal": {
+      "types": "./dist/terminal/index.d.ts",
+      "import": "./dist/terminal/index.js",
+      "require": "./dist/terminal/index.cjs"
+    },
+    "./terminal/react": {
+      "types": "./dist/terminal/react/index.d.ts",
+      "import": "./dist/terminal/react/index.js",
+      "require": "./dist/terminal/react/index.cjs"
+    },
+    "./terminal/dom": {
+      "types": "./dist/terminal/dom/index.d.ts",
+      "import": "./dist/terminal/dom/index.js",
+      "require": "./dist/terminal/dom/index.cjs"
     }
   },
   "files": [
@@ -41,9 +56,25 @@
     "hono": "^4.12.23",
     "ws": "^8.21.1"
   },
+  "peerDependencies": {
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4"
+  },
+  "peerDependenciesMeta": {
+    "react": {
+      "optional": true
+    },
+    "react-dom": {
+      "optional": true
+    }
+  },
   "devDependencies": {
     "@types/node": "^26.1.1",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
     "@types/ws": "^8.18.1",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4",
     "tsup": "^8.5.1",
     "typescript": "^6.0.2",
     "vitest": "^4.1.2"

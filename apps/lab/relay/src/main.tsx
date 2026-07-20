@@ -1,16 +1,33 @@
-import { StrictMode } from 'react';
-import { createRoot } from 'react-dom/client';
 import { createWire } from '@niscorp/moss/client';
-import { Terminal } from './ui/terminal';
+import { mountTerminal } from '@niscorp/moss/terminal';
+import { reactTarget } from '@niscorp/moss/terminal/react';
+import { domTarget } from '@niscorp/moss/terminal/dom';
+import { buildRegistry } from './ui/registry';
+import { createSlotWrapper } from './ui/slot-wrapper';
 import './ui/css/theme.css';
 import './ui/css/ui.css';
 
-// Relay's browser entry: mount the terminal on moss's wire. That's it —
-// the renderer lives in ui/terminal.tsx, everything else is served.
+// Relay's entire browser: its design-system registry + slotWrapper, handed to
+// moss's terminal. The wire, the mount, the render targets, and the live-swap
+// hotkey are all moss's — relay owns only its kit. `react` is relay's real
+// styled UI; `dom` is moss's zero-config plain-DOM terminal. Ctrl+Shift+Y
+// swaps them live, over ONE wire (created here, injected — the slotWrapper
+// closes over it for the devtools chip), so the session survives the switch.
+// (Not Ctrl+Shift+T — that reopens the last closed tab, uninterceptable.)
 const root = document.getElementById('root');
 if (root === null) throw new Error('No root element');
-createRoot(root).render(
-  <StrictMode>
-    <Terminal wire={createWire()} />
-  </StrictMode>,
-);
+
+const wire = createWire();
+const terminal = mountTerminal(root, {
+  targets: {
+    react: reactTarget({ registry: buildRegistry(), slotWrapper: createSlotWrapper(wire) }),
+    dom: domTarget(),
+  },
+  swapKey: 'ctrl+shift+y',
+  wire,
+});
+
+// Dev convenience: also expose the swap on the console, so the render target
+// can be flipped even if the hotkey combo is intercepted by the browser.
+Object.assign(window, { swapTerminal: terminal.swap });
+console.info('[relay] render-target swap: press Ctrl+Shift+Y, or run swapTerminal() in the console.');

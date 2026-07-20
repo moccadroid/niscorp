@@ -1,5 +1,5 @@
 import { createShell, type ActionDefinition, type ActionFragment } from '@niscorp/nova';
-import { Nova } from '@niscorp/nova/react';
+import { Nova } from '@niscorp/nova/adapters/react';
 
 // STACKING. `with` takes a list. The fragments fold in array order, each wrapping
 // the result so far — so the LAST listed ends up OUTERMOST. Here `with: ['inner',

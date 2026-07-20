@@ -2,6 +2,7 @@ import type {
   ActionDefinition,
   ActionFragment,
   ActionInstance,
+  EndpointHandler,
   FetchFn,
   FunctionHandler,
   OnErrorHandler,
@@ -52,6 +53,28 @@ export type CanvasState = {
 };
 
 // ═══════════════════════════════════════════════════════════
+// Render surface — the pull+sink contract a REMOTE renderer paints
+// against. Core owns it so every adapter (dom, react, a TUI) and every
+// transport (moss's socket wire, an in-process shell bridge) speaks one
+// shape: read the frame and per-canvas trees, send events tagged by canvas,
+// publish channel messages. A renderer never touches a shell or a socket
+// directly — it is handed one of these. (The local, shell-backed path uses
+// the shell subscriptions in ADAPTER.md §3; this is its remote twin.)
+// ═══════════════════════════════════════════════════════════
+
+export type RenderApi = {
+  // the frame: the canvas ARRANGEMENT — a tree whose CanvasSlot markers
+  // resolve against the per-canvas trees
+  frame: () => RenderNode[];
+  // the current render tree for one canvas ([] when nothing is mounted)
+  canvasTree: (canvasId: string) => RenderNode[];
+  // an event from inside a canvas, tagged with the canvas it came from —
+  // origin stamping is the host's job, not the renderer's
+  dispatch: (canvasId: string, event: NovaEvent) => void;
+  publish: (channel: string, payload?: unknown) => void;
+};
+
+// ═══════════════════════════════════════════════════════════
 // Telemetry
 // ═══════════════════════════════════════════════════════════
 
@@ -76,6 +99,7 @@ export type CanvasChangeHandler = (state: CanvasState) => void;
 export type ShellTelemetry = {
   onStateChange?: StateChangeHandler;
   onDataChange?: DataChangeHandler;
+  onEndpoint?: EndpointHandler;
 };
 
 export type ShellConfig = {
@@ -176,10 +200,14 @@ export type Shell = {
   // layout recurse into per-instance rendering.
   getCanvasRenderTree: (canvasId: string) => RenderNode[];
 
-  // Expand slot markers (CanvasSlot / ActionSlot) in a render tree into
-  // their fully resolved content. Used by non-React consumers
-  // (evaluators, exporters, tests) that need a materialised tree.
-  // React consumers render trees through component boundaries instead.
+  // Materialise a render tree: CanvasSlot markers resolve away into their
+  // canvas trees; the ActionSlot marker SURVIVES as a component node with
+  // identity props ({ instanceId, canvasId, definitionId }, key: instanceId)
+  // and the instance's rendered tree as children — a served tree keeps
+  // instance identity so a remote renderer can key by instance and a
+  // terminal-side slot wrapper has a seam. Used by non-React consumers
+  // (moss, evaluators, exporters, tests); React consumers render trees
+  // through component boundaries instead.
   flattenRenderTree: (tree: RenderNode[]) => RenderNode[];
 
   dispatch: (event: NovaEvent) => void;
@@ -187,6 +215,11 @@ export type Shell = {
 
   onStateChange: (handler: StateChangeHandler) => Unsubscribe;
   onDataChange: (handler: DataChangeHandler) => Unsubscribe;
+
+  // Subscribe to every endpoint call the shell's actions make — `fn:` and HTTP
+  // alike — with its outcome (ok/status) and duration. The observability seam
+  // devtools' timeline reads.
+  onEndpoint: (handler: EndpointHandler) => Unsubscribe;
 
   // Subscribe to ONE canvas. Fires with the new CanvasState only when the
   // canvas meaningfully changed: stack length, item ids/statuses, or the

@@ -1,5 +1,5 @@
 import type { LayoutNode } from '@niscorp/nova';
-import { Nova } from '@niscorp/nova/react';
+import { Nova } from '@niscorp/nova/adapters/react';
 
 // Inputs with one-way `value` bindings via `{{…}}` templates. No
 // `model`, so typing doesn't write back to the data. The last

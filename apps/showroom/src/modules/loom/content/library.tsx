@@ -1,6 +1,6 @@
 import type { CSSProperties } from 'react';
 import { z } from 'zod';
-import type { NovaComponent } from '@niscorp/nova/react';
+import type { NovaComponent } from '@niscorp/nova/adapters/react';
 import type { NovaManifestEntry } from '@niscorp/loom/plugins/nova/react';
 
 // The content library — a tiny Nova component set, passed to the Nova plugin as

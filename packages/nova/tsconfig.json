@@ -13,8 +13,8 @@
       "@layout/*": ["./src/layout/*"],
       "@shell": ["./src/shell"],
       "@shell/*": ["./src/shell/*"],
-      "@react": ["./src/react"],
-      "@react/*": ["./src/react/*"]
+      "@react": ["./src/adapters/react"],
+      "@react/*": ["./src/adapters/react/*"]
     }
   },
   "include": ["src"]

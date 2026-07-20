@@ -70,6 +70,28 @@ export type NavigationEffect = PushEffect | PopEffect | ReplaceEffect | PopToEff
 export type NavigateHandler = (effect: NavigationEffect) => void;
 
 // ═══════════════════════════════════════════════════════════
+// Endpoint telemetry — a `call` step reports its outcome upward the same way
+// a navigation does (via a shell-provided handler), so the shell can route it
+// to telemetry. Covers BOTH endpoint kinds (`http` via fetch, `fn` in-process):
+// the observation point is `callEndpoint`, not the fetch, so a server-shell app
+// whose endpoints are all `fn:` is fully seen. `status` is the HTTP status, or 0
+// for a function endpoint; `ms` is the call's wall-clock duration.
+// ═══════════════════════════════════════════════════════════
+
+export type EndpointEvent = {
+  name: string;
+  kind: 'fn' | 'http';
+  ok: boolean;
+  status: number;
+  ms: number;
+  instanceId: string;
+  canvasId: string;
+};
+// What `runCall` knows at the call site — the runtime stamps instance/canvas.
+export type EndpointEventInit = Omit<EndpointEvent, 'instanceId' | 'canvasId'>;
+export type EndpointHandler = (event: EndpointEvent) => void;
+
+// ═══════════════════════════════════════════════════════════
 // Runtime config + interface
 // ═══════════════════════════════════════════════════════════
 
@@ -89,6 +111,7 @@ export type ActionRuntimeConfig = {
   fetch?: FetchFn;
   functions?: Record<string, FunctionHandler>;
   onNavigate?: NavigateHandler;
+  onEndpoint?: EndpointHandler;
   strict?: boolean;
   onError?: OnErrorHandler;
 };

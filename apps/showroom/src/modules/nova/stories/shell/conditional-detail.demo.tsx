@@ -1,5 +1,5 @@
 import { createShell, type ActionDefinition, type LayoutNode } from '@niscorp/nova';
-import { Nova } from '@niscorp/nova/react';
+import { Nova } from '@niscorp/nova/adapters/react';
 
 // The shell's own canvasLayout is a LayoutNode — the same tree
 // language used inside actions. Here it's a row of two panels,

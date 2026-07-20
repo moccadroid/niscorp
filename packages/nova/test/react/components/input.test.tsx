@@ -1,10 +1,12 @@
 // @vitest-environment jsdom
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
-import { Input, InputPropsSchema } from '../../../src/react/components';
+import { Input, InputPropsSchema } from '../../../src/adapters/react/components';
 import { createHarness } from './helpers';
 
 describe('Input', () => {
+  afterEach(() => vi.useRealTimers());
+
   it('renders an input with the given type, placeholder and value', () => {
     const { Wrapper } = createHarness();
     render(
@@ -31,6 +33,54 @@ describe('Input', () => {
     if (el === null) return;
     fireEvent.change(el, { target: { value: 'ada' } });
     expect(dispatch).toHaveBeenCalledWith({ type: 'ui:model', ref: 'form', payload: 'ada' });
+  });
+
+  it('coalesces keystrokes and dispatches once when debounce is set', () => {
+    vi.useFakeTimers();
+    const { Wrapper, dispatch } = createHarness();
+    render(
+      <Wrapper>
+        <Input value="" debounce={200} novaModel={{ ref: 'form', path: 'name' }} />
+      </Wrapper>,
+    );
+    const el = document.querySelector('input');
+    if (el === null) throw new Error('no input');
+    fireEvent.focus(el);
+    fireEvent.change(el, { target: { value: 'a' } });
+    fireEvent.change(el, { target: { value: 'ab' } });
+    fireEvent.change(el, { target: { value: 'abc' } });
+    expect(dispatch).not.toHaveBeenCalled(); // still inside the window
+    vi.advanceTimersByTime(200);
+    expect(dispatch).toHaveBeenCalledTimes(1);
+    expect(dispatch).toHaveBeenCalledWith({ type: 'ui:model', ref: 'form', payload: 'abc' });
+  });
+
+  it('keeps the in-progress value while focused, ignoring a stale server echo', () => {
+    const { Wrapper } = createHarness();
+    const { rerender } = render(
+      <Wrapper>
+        <Input value="" novaModel={{ ref: 'form', path: 'name' }} />
+      </Wrapper>,
+    );
+    const el = document.querySelector('input') as HTMLInputElement | null;
+    if (el === null) throw new Error('no input');
+    fireEvent.focus(el);
+    fireEvent.change(el, { target: { value: 'help' } });
+    // a stale tree arrives mid-type (echo of an earlier keystroke) — must not clobber
+    rerender(
+      <Wrapper>
+        <Input value="h" novaModel={{ ref: 'form', path: 'name' }} />
+      </Wrapper>,
+    );
+    expect(el.value).toBe('help');
+    // once blurred, the authoritative server value takes over again
+    fireEvent.blur(el);
+    rerender(
+      <Wrapper>
+        <Input value="saved" novaModel={{ ref: 'form', path: 'name' }} />
+      </Wrapper>,
+    );
+    expect(el.value).toBe('saved');
   });
 
   it('does nothing on change when not bound to a model', () => {

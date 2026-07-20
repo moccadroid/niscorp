@@ -13,7 +13,7 @@ export default defineConfig({
       '@action': r('./src/action'),
       '@layout': r('./src/layout'),
       '@shell': r('./src/shell'),
-      '@react': r('./src/react'),
+      '@react': r('./src/adapters/react'),
     },
   },
 });

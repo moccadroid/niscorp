@@ -4,10 +4,10 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
 // ═══════════════════════════════════════════════════════════
-// Adapter boundary — core must stay framework-free. Everything
-// React lives under src/react/; nothing outside it may import
-// react or reach into the adapter. This replaces what a package
-// boundary would enforce. See ADAPTER.md.
+// Adapter boundary — core must stay framework-free. Every React
+// binding lives under src/adapters/react/; nothing outside it may
+// import react or reach into the adapter. This replaces what a
+// package boundary would enforce. See ADAPTER.md.
 // ═══════════════════════════════════════════════════════════
 
 const SRC = fileURLToPath(new URL('../../src', import.meta.url));
@@ -27,12 +27,14 @@ const FORBIDDEN = [
   /import\s*\(\s*['"](?:react|@react|\.{1,2}\/react)/,
 ];
 
+const ADAPTER = join('adapters', 'react');
+
 describe('adapter boundary', () => {
-  it('core (everything outside src/react) never imports react or the adapter', () => {
+  it('core (everything outside src/adapters/react) never imports react or the adapter', () => {
     const violations: string[] = [];
     for (const file of sourceFiles(SRC)) {
       const rel = relative(SRC, file);
-      if (rel === 'react' || rel.startsWith(`react${sep}`)) continue;
+      if (rel === ADAPTER || rel.startsWith(`${ADAPTER}${sep}`)) continue;
       const content = readFileSync(file, 'utf8');
       for (const pattern of FORBIDDEN) {
         if (pattern.test(content)) violations.push(`${rel}: ${String(pattern)}`);

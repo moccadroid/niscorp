@@ -1,7 +1,7 @@
 import { useEffect, useState, type FC } from 'react';
 import type { ZodType } from 'zod';
 import type { ComponentRegistry, LayoutNode } from '@niscorp/nova';
-import { NovaShell, type NovaComponent } from '@niscorp/nova/react';
+import { NovaShell, type NovaComponent } from '@niscorp/nova/adapters/react';
 import { createLoomEditor, type LoomArtifact, type LoomEditor as LoomEditorApi } from '@editor/editor';
 import type { FieldContext } from '@compile/types';
 import { createLoomRegistry } from '../kit/index.js';

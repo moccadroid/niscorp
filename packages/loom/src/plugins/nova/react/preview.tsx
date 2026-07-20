@@ -1,6 +1,6 @@
 import type { CSSProperties, FC } from 'react';
 import type { LayoutNode } from '@niscorp/nova';
-import { Nova, type NovaComponent } from '@niscorp/nova/react';
+import { Nova, type NovaComponent } from '@niscorp/nova/adapters/react';
 import { isRecord } from '@compile/parse';
 
 // The preview component: receives the live documents and renders `layout` against

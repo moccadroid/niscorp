@@ -1,6 +1,6 @@
 import { type CSSProperties, type ReactNode, useEffect, useRef } from 'react';
 import { z } from 'zod';
-import { useNovaDispatch, type NovaComponent } from '@niscorp/nova/react';
+import { useNovaDispatch, type NovaComponent } from '@niscorp/nova/adapters/react';
 import { cx } from '../lib/cx';
 import { Text, Badge, Avatar, Icon } from './display';
 import { Button, SortHeader, MenuItem } from './controls';

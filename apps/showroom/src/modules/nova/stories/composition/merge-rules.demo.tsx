@@ -1,5 +1,5 @@
 import { createShell, type ActionDefinition, type ActionFragment } from '@niscorp/nova';
-import { Nova } from '@niscorp/nova/react';
+import { Nova } from '@niscorp/nova/adapters/react';
 
 // MERGE RULES. Composition isn't just layout — `data` and `triggers` merge too.
 //   data:     { ...fragment, ...action }  → the action wins on conflict.

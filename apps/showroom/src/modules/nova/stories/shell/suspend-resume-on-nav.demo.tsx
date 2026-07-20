@@ -1,5 +1,5 @@
 import { createShell, type ActionDefinition } from '@niscorp/nova';
-import { Nova } from '@niscorp/nova/react';
+import { Nova } from '@niscorp/nova/adapters/react';
 
 // All four lifecycle hooks on a single action. Each hook pushes its
 // own name onto an events log, so the log doubles as a live trace.

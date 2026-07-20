@@ -22,17 +22,19 @@ const resolvedActions = (name: string): string[] => [...resolveRole(CHARTER, ids
 const resolvedData = (name: string): string[] => [...resolveRole(CHARTER, dataU, name, 'data')].sort();
 
 // ── the exact resolved ACTION sets ──
-const MEMBER = ['chrome.sidebar', 'chrome.topbar', 'confirm-delete', 'home', 'placeholder'].sort();
+const MEMBER = ['chrome.sidebar', 'chrome.topbar', 'confirm-delete', 'home', 'placeholder', 'settings'].sort();
 const VIEWER = [...MEMBER, 'crm.companies', 'crm.company.view', 'crm.contact.view', 'crm.contacts', 'crm.deal.view', 'crm.deals'].sort();
 const SALES = [...VIEWER, 'assistant', 'crm.company.form', 'crm.contact.form', 'crm.deal.form', 'tasks.form', 'tasks.manage'].sort();
-const ADMIN = [...SALES, 'settings'].sort();
+// Admin adds no actions of its own — settings is now a member-floor action, so
+// admin's action set equals sales'. Its distinction is purely the data delete tier.
+const ADMIN = [...SALES].sort();
 
 checks.push(['public = the lock screen alone', eq(resolvedActions('public'), ['auth.login'])]);
-checks.push([`member = chrome + home + placeholder + confirm-delete (${MEMBER.length})`, eq(resolvedActions('member'), MEMBER)]);
+checks.push([`member = chrome + home + placeholder + confirm-delete + settings (${MEMBER.length})`, eq(resolvedActions('member'), MEMBER)]);
 checks.push([`viewer actions = member + lists + views (${VIEWER.length})`, eq(resolvedActions('viewer'), VIEWER)]);
 checks.push([`sales actions = viewer + forms + tasks + assistant (${SALES.length})`, eq(resolvedActions('sales'), SALES)]);
-checks.push([`admin actions = sales + settings (${ADMIN.length})`, eq(resolvedActions('admin'), ADMIN)]);
-checks.push(['dev = the devtools pair', eq(resolvedActions('dev'), ['devtools.dock', 'devtools.inspect'])]);
+checks.push([`admin actions = sales (settings is a member-floor action now) (${ADMIN.length})`, eq(resolvedActions('admin'), ADMIN)]);
+checks.push(['dev = nova devtools (the dock + the inspector it pushes)', eq(resolvedActions('dev'), ['devtools.dock', 'devtools.inspect'])]);
 const USR1_EXPECTED = new Set([...SALES, ...resolvedActions('dev')]).size;
 checks.push([`usr_001 (sales + dev) = the union of both closures (${USR1_EXPECTED})`, resolvePrincipal(CHARTER, ids, [...ASSIGNMENTS['usr_001']!], 'actions').size === USR1_EXPECTED]);
 checks.push(['admin does NOT imply devtools', !resolveRole(CHARTER, ids, 'admin', 'actions').has('devtools.dock')]);

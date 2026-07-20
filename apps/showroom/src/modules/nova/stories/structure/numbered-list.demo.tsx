@@ -1,5 +1,5 @@
 import type { LayoutNode } from '@niscorp/nova';
-import { Nova } from '@niscorp/nova/react';
+import { Nova } from '@niscorp/nova/adapters/react';
 
 // `$index` is an implicit scope variable inside every `for` loop.
 // Mixing `{{$index}}` with `{{$item.name}}` in a single Text yields

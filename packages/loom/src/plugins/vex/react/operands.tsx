@@ -1,6 +1,6 @@
 import type { CSSProperties, FC } from 'react';
 import type { NormalizedType } from '@niscorp/vex';
-import type { NovaComponent, NovaModelBinding } from '@niscorp/nova/react';
+import type { NovaComponent, NovaModelBinding } from '@niscorp/nova/adapters/react';
 import { useModelWrite } from '@react/hooks/model';
 import type { Catalog } from '../widgets.js';
 import { useScopedColumns } from './columns.js';

@@ -1,5 +1,5 @@
 import { createComponentRegistry, type ComponentRegistry } from '@niscorp/nova';
-import type { NovaComponent } from '@niscorp/nova/react';
+import type { NovaComponent } from '@niscorp/nova/adapters/react';
 import { Roles } from '@compile/roles';
 import { LOOM_COLUMN } from '@editor/default.layout';
 import { LoomGroup, LoomField } from './fields.js';

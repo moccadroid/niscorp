@@ -1,4 +1,4 @@
-import type { NovaComponent } from '@niscorp/nova/react';
+import type { NovaComponent } from '@niscorp/nova/adapters/react';
 import type { LoomEditorPlugin } from '@react/editor/loom-editor';
 import { vexPlugin, type VexPluginConfig } from '../index.js';
 import { PREVIEW } from '../preview.layout.js';

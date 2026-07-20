@@ -1,6 +1,7 @@
 import { createComponentRegistry } from '@niscorp/nova';
-import { CanvasSlot, ActionSlot } from '@niscorp/nova/react/components';
-import type { NovaComponent } from '@niscorp/nova/react';
+import { CanvasSlot, ActionSlot } from '@niscorp/nova/adapters/react/components';
+import type { NovaComponent } from '@niscorp/nova/adapters/react';
+import { Panel, JsonTree } from './components/introspect';
 import { Box, Stack, Row, Grid, Popover, PopoverPanel } from './components/layout';
 import { Text, Badge, Avatar, Icon, Stat } from './components/display';
 import { Button, NavItem, LinkRow, Tabs, MenuItem, SortHeader } from './components/controls';
@@ -28,6 +29,7 @@ import {
 import { StackChip } from './components/stack-chip';
 import { RayTrace } from './components/ray-trace';
 import { RayView } from './components/ray-view';
+import { DevtoolsAnchor } from './components/devtools-anchor';
 
 // The Relay primitive vocabulary — every component a Nova layout can name.
 // Layouts control components ONLY through semantic props; every kit CSS class
@@ -78,6 +80,10 @@ const RELAY_PRIMITIVES = {
   StackChip,
   RayTrace,
   RayView,
+  DevtoolsAnchor,
+  // relay-styled introspection primitives (the devtools dock renders these)
+  Panel,
+  JsonTree,
 } as unknown as Record<string, NovaComponent>;
 
 // The component registry the shell renders against. CanvasSlot / ActionSlot are

@@ -1,4 +1,4 @@
-import type { ActionDefinition, ActionFragment, ActionInstance, ActionRuntime, PublicActionRuntime } from '../action';
+import type { ActionDefinition, ActionFragment, ActionInstance, ActionRuntime, EndpointHandler, PublicActionRuntime } from '../action';
 // Note: ActionRuntime is used as the internal runtime type returned by spawn/registry.
 import { composeAction } from '../action';
 import { createScopeChain, resolve } from '../shared/bindings';
@@ -217,6 +217,9 @@ export const createShell = (config: ShellConfig): Shell => {
     ...(config.onError === undefined ? {} : { onError: config.onError }),
     instanceIdFn,
     onNavigate: (cid, effect) => navigationHandler(cid, effect),
+    // Every endpoint call an action makes flows to telemetry — the shell's one
+    // observability surface (state, data, and now endpoints all land here).
+    onEndpoint: (event) => telemetry.fireEndpoint(event),
   });
 
   const spawn = (
@@ -383,6 +386,7 @@ export const createShell = (config: ShellConfig): Shell => {
   const getRuntime = (iid: string): PublicActionRuntime | undefined => registry.get(iid);
   const onStateChange = (h: StateChangeHandler): Unsubscribe => telemetry.onStateChange(h);
   const onDataChange = (h: DataChangeHandler): Unsubscribe => telemetry.onDataChange(h);
+  const onEndpoint = (h: EndpointHandler): Unsubscribe => telemetry.onEndpoint(h);
 
   // The shell's definition of "this canvas changed": stack length, item
   // ids/statuses, or the active instance. Snapshot objects are rebuilt on
@@ -502,6 +506,7 @@ export const createShell = (config: ShellConfig): Shell => {
     publish,
     onStateChange,
     onDataChange,
+    onEndpoint,
     onCanvasChange,
     dispose,
   };

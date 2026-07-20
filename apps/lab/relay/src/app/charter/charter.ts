@@ -9,7 +9,10 @@ import type { Charter } from '@niscorp/charter';
 // Agent roles (ray, agent-unsafe) return when the app server is up.
 export const CHARTER: Charter = {
   public: ['auth.login'],
-  member: ['chrome.*', 'home', 'placeholder', 'confirm-delete'],
+  // The authenticated floor — every logged-in principal. `settings` is personal
+  // (profile, notifications, Ray prefs), so it lives here: everyone manages
+  // their own, not just admins.
+  member: ['chrome.*', 'home', 'placeholder', 'confirm-delete', 'settings'],
   viewer: {
     extends: ['member'],
     actions: ['crm.contacts', 'crm.companies', 'crm.deals', 'crm.*.view'],
@@ -38,8 +41,9 @@ export const CHARTER: Charter = {
   },
   admin: {
     extends: ['sales'],
-    actions: ['settings'],
-    // The delete tier: shared CRM records die only by an admin's hand.
+    // Admin adds no actions of its own now (settings moved to the floor) — its
+    // whole distinction is the delete tier: shared CRM records die only by an
+    // admin's hand.
     data: ['deals.write.delete', 'contacts.write.delete', 'companies.write.delete'],
   },
   dev: ['devtools.*'],

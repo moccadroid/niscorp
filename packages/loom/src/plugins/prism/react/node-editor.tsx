@@ -1,5 +1,5 @@
 import { useState, type CSSProperties, type FC, type ReactNode } from 'react';
-import type { NovaComponent } from '@niscorp/nova/react';
+import type { NovaComponent } from '@niscorp/nova/adapters/react';
 import { NodeSchema } from '@niscorp/prism';
 import { parse, buildDocument } from '@compile/parse';
 import type { Field, Variant } from '@compile/types';
