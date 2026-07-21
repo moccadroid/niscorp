@@ -42,16 +42,53 @@ const server = await serve(app, { pool, db, port: 3000 });
 // boot refusal here (createServer runs inside serve); HTTP + ws in one
 ```
 
-The client is a **canvas terminal**, and moss ships it: `./client` is the wire (a plain-TS protocol client: token slot, reconnect, session lifecycle), `./terminal` is the conductor and the hot-swap switcher, and `./terminal/react` / `./terminal/dom` are render targets — nova's React adapter (`@niscorp/nova/adapters/react`) with the app's registry, or nova's DOM adapter with its default kit, zero config. Framework-shaped code lives only in the target subpaths, never in moss core.
+## The client is a terminal — any terminal
+
+moss serves the application: per-principal trees down the socket, events
+up. What paints them is a **render target**, and targets are interchangeable
+over one wire:
+
+- **`terminal/react`** — the browser, with the app's styled component kit
+- **`terminal/dom`** — the browser, zero framework, nova's reference kit
+- **`terminal/tty`** — a REPL in a real terminal: frames print as text,
+  numbers act (`6` clicks, words fill the input)
+- **`terminal/ink`** — a full-screen TUI: same numbers, live focus, color
+
+One wire, one session, one server. Sign in from the REPL and the TUI is
+already signed in — the token file is the terminal's localStorage. The
+server never learns which target rendered the frame; policy, layouts, and
+data are decided per principal, never per client.
+
+```
+── main ────────────────────────────────
+Sign in to Relay
+[1] ⟨alex, jordan or sam⟩
+[2] (Send magic link)
+› alex
+› 2
+Magic link sent to alex@relay.app. The email is faked — the link is right here:
+[1] (Open magic link)
+```
+
+Under the hood: `./client` is the wire (a plain-TS protocol client: token
+slot, reconnect, session lifecycle — host-shaped pieces injected as a
+`WireEnv`, browser by default, `./client/node` for a plain process);
+`./terminal` is the conductor and the hot-swap switcher; targets close over
+their own surface (a DOM root, a stdio pair), so the contract is
+surface-blind. Framework-shaped code lives only in the target subpaths,
+never in moss core.
 
 ## Subpaths
 
 - **`@niscorp/moss`** — the server: `defineApp`, `createServer`, the resolution and shell-host internals, the socket protocol types.
 - **`@niscorp/moss/node`** — the Node listener: `serve` + `attachSocket` (raw `ws`). Bun swaps this file, never the app.
-- **`@niscorp/moss/client`** — the wire: `createWire()`, the browser end of the socket. Plain TypeScript, zero React.
-- **`@niscorp/moss/terminal`** — the terminal: `createTerminal` (one target, one wire) and `mountTerminal` (hot-swaps render targets on a hotkey over one wire; the session survives the swap). Framework-blind.
-- **`@niscorp/moss/terminal/react`** — the React render target: `reactTarget({ registry, slotWrapper? })` binds the app's component registry to the wire via nova's React adapter.
-- **`@niscorp/moss/terminal/dom`** — the plain-DOM render target: `domTarget()` renders with nova's DOM adapter and default kit. Zero framework, zero config.
+- **`@niscorp/moss/client`** — the wire: `createWire()`, the app end of the socket. Plain TypeScript, zero React, zero globals — the host comes in as a `WireEnv` (default: `browserEnv()`, localStorage + location).
+- **`@niscorp/moss/client/node`** — the Node host env: `nodeEnv({ url, tokenFile? })` runs the same wire on a plain Node (or Bun) process — token in a file, the runtime's WHATWG WebSocket.
+- **`@niscorp/moss/terminal`** — the terminal: `createTerminal` (one target, one wire) and `mountTerminal` (hot-swaps render targets on a hotkey over one wire; the session survives the swap). Framework-blind, surface-blind.
+- **`@niscorp/moss/terminal/react`** — the React render target: `reactTarget({ root, registry, slotWrapper? })` binds the app's component registry to the wire via nova's React adapter.
+- **`@niscorp/moss/terminal/dom`** — the plain-DOM render target: `domTarget({ root })` renders with nova's DOM adapter and default kit. Zero framework.
+- **`@niscorp/moss/terminal/tty`** — the line-terminal render target: `ttyTarget({ input, output })` runs the app as a REPL in a real terminal — served frames print as text with numbered markers, typing acts on them (numbers tap, words fill), and the same events ride the wire. Zero framework, zero DOM.
+- **`@niscorp/moss/terminal/ink`** — the full-screen terminal render target: `inkTarget()` runs the app as a TUI — nova's Ink kit on the React adapter's walker. Same `[n]` addressing as the REPL (typed digits click/flip/focus), plus Tab/arrows and live typing. ESM-only, like ink.
 
 ## What it serves
 

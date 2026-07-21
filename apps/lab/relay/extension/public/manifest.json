@@ -1,0 +1,17 @@
+{
+  "manifest_version": 3,
+  "name": "Relay",
+  "version": "0.1.0",
+  "description": "Relay — the nisc exemplar CRM, docked in a side panel and a DevTools tab. Served trees in, events out; the server can't tell this from a browser tab.",
+  "action": {
+    "default_title": "Open Relay"
+  },
+  "side_panel": {
+    "default_path": "panel.html"
+  },
+  "devtools_page": "devtools.html",
+  "background": {
+    "service_worker": "background.js"
+  },
+  "permissions": ["sidePanel"]
+}

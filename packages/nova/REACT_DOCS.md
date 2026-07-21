@@ -117,6 +117,12 @@ Props:
 - **`registry`** — the component registry
 - **`dispatch`** — function to receive events from components
 - **`publish`** — function to receive message bus publishes from components
+- **`fallback?`** — renderer for unregistered component names; omit for
+  strict `COMPONENT_NOT_FOUND` markers
+- **`textWrapper?`** / **`errorMarker?`** — host-specific leaf renderers.
+  The defaults render a text node as a bare string and an error node as a
+  `<span>`; a react host that is not the DOM (ink) supplies both — bare
+  strings and DOM tags crash it. Browser consumers omit them.
 - **`children`** — the React subtree
 
 This is what the showroom uses for layout-only stories that don't need a shell.
@@ -494,7 +500,7 @@ const SomeReactComponent = () => {
 ```tsx
 // Providers (all accept an optional slotWrapper)
 <NovaShellProvider shell registry slotWrapper?>...</NovaShellProvider>
-<NovaRenderProvider registry dispatch publish slotWrapper?>...</NovaRenderProvider>
+<NovaRenderProvider registry dispatch publish slotWrapper? fallback? textWrapper? errorMarker?>...</NovaRenderProvider>
 <Nova.Shell shell slotWrapper? />
 
 // Hooks

@@ -475,7 +475,8 @@ yet beyond a placeholder:
 
 - ~~**React adapter.**~~ **Implemented.** See "React adapter" below.
 - ~~**Headless component primitives.**~~ **Implemented.** Reference kits
-  ship at `/adapters/react/components` and `/adapters/dom/components`.
+  ship at `/adapters/react/components`, `/adapters/dom/components`,
+  `/adapters/tty/components`, and `/adapters/ink`.
 - **Wire protocol.** No serialization format for shipping *definitions*
   across processes. Serving rendered trees over a socket is moss's job;
   nova ships the surface it targets (`RenderApi`, ActionSlot-preserving
@@ -644,8 +645,24 @@ vanilla DOM against a `RenderApi`: events wired by convention (`ref` →
 caret captured/restored across full rebuilds (ADAPTER.md §6). Its components
 kit (`/adapters/dom/components`: `defaultRegistry`, `fallback`,
 `DEFAULT_CSS`, `ROOT_CLASS`) is the batteries-included reference set. It
-exists as the proof that a terminal needs no framework — and as the second
-adapter that keeps the adapter contract honest.
+exists as the proof that a terminal needs no framework — and as the adapter
+sibling that keeps the adapter contract honest.
+
+## Terminal adapters
+
+`src/adapters/tty/` renders a served tree to plain text: `createTtyView` is
+a pure `RenderApi` → `{ text, interactives }` — no framework, no I/O, no
+node builtins. The walker applies the event conventions itself (`ref` →
+a numbered `[n]` marker registered as a click, `model` → model/toggle by
+value type), so the interactives table is a complete, ordered action space
+a host maps commands (or an agent's tool calls) onto. `src/adapters/ink/`
+is the full-screen sibling: an Ink component kit riding the REACT walker
+(the walker is renderer-agnostic — zero react-dom), with the same `[n]`
+markers resolved through `CanvasMarkersContext` — the host computes the
+numbering by running the TTY walker over the same trees, so both terminals
+agree on what `[7]` is. Marker identity is the click payload for
+click-kinds (a list's rows share one ref) and sibling order for
+model-kinds. See TERMINAL_DOCS.md.
 
 ## Reflect and devtools
 

@@ -55,7 +55,7 @@ const bareWire: Wire = {
   publish: () => undefined,
   dispose: () => undefined,
 };
-const phase1 = mountTerminal(div(), { wire: bareWire, swapKey: 'ctrl+shift+y', targets: { a: fake('a'), b: fake('b') } });
+const phase1 = mountTerminal({ wire: bareWire, swapKey: 'ctrl+shift+y', targets: { a: fake('a'), b: fake('b') } });
 press('y', { ctrl: true, shift: true });
 checks.push(['the hotkey fires and cycles the target', log.join(',') === 'mount:a,destroy:a,mount:b']);
 const n = log.length;
@@ -80,10 +80,10 @@ const contentWire: Wire = {
   dispose: () => undefined,
 };
 const root = div();
-mountTerminal(root, {
+mountTerminal({
   wire: contentWire,
   swapKey: 'ctrl+shift+y',
-  targets: { react: reactTarget({ registry: createComponentRegistry() }), dom: domTarget() },
+  targets: { react: reactTarget({ root, registry: createComponentRegistry() }), dom: domTarget({ root }) },
 });
 
 await tick();

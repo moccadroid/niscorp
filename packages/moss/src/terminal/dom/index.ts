@@ -6,10 +6,10 @@ import type { Target } from '../index';
 
 // ═══════════════════════════════════════════════════════════
 // @niscorp/moss/terminal/dom — the plain-DOM render target: the conductor's
-// wire, nova's DOM adapter, and nova's default reference kit. Zero framework,
-// zero config — the lightest terminal, and the proof that the terminal is
-// trivial and the intelligence is server-side. Pass your own `registry` to
-// restyle; omit it for the batteries.
+// wire, nova's DOM adapter, and nova's default reference kit. Zero framework
+// — the lightest terminal, and the proof that the terminal is trivial and
+// the intelligence is server-side. Bring a `root`; pass your own `registry`
+// to restyle, omit it for the batteries.
 // ═══════════════════════════════════════════════════════════
 
 // One stylesheet per document (a page may host more than one root, and a swap
@@ -24,7 +24,8 @@ const injectCss = (doc: Document): void => {
   styled.add(doc);
 };
 
-export const domTarget = (config: { registry?: ComponentRegistry<DomComponent> } = {}): Target => (root, api) => {
+export const domTarget = (config: { root: HTMLElement; registry?: ComponentRegistry<DomComponent> }): Target => (api) => {
+  const { root } = config;
   injectCss(root.ownerDocument);
   root.classList.add(ROOT_CLASS);
   const registry = config.registry ?? defaultRegistry();

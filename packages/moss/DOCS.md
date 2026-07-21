@@ -152,10 +152,20 @@ mount it, extend it, or hand it to a listener.
 
 ## `@niscorp/moss/client`
 
-- `createWire(config?): Wire` — the browser end of the socket. `config = { url?,
-  tokenKey? }`. Plain TypeScript, no React.
-- `Wire` — `{ subscribe, snapshot, dispatch(canvas, event), publish, dispose }`.
-  `snapshot()` is `{ frame, trees }`. Hand it to a renderer.
+- `createWire(config?): Wire` — the app end of the socket. `config = { url?,
+  env? }`. Plain TypeScript, no React, no globals — everything host-shaped
+  comes in as a `WireEnv`.
+- `WireEnv` — the host seam: `{ tokens: { load, save, clear }, socket(url),
+  defaultUrl() }`. The socket API is WHATWG-standard in every host (browser,
+  Node ≥22, Bun); an env only constructs it.
+- `browserEnv({ tokenKey? }?): WireEnv` — the default host: token in
+  localStorage (`nisc.token`), url derived from `window.location`, the
+  page's WebSocket.
+- `Wire` — `{ subscribe, snapshot, status, dispatch(canvas, event), publish,
+  dispose }`. `snapshot()` is `{ frame, trees }`; `status()` is
+  `'connecting' | 'open' | 'closed'` and changes notify subscribers like
+  snapshot changes do (a renderer must be able to tell a dead socket from an
+  empty app). Hand it to a renderer.
 
 Reconnect is exponential backoff with jitter, capped at 30s, reset when a
 connection opens and on any principal change (a session grant or a close-code
@@ -167,9 +177,22 @@ reconnect anonymous — retrying with a stale token would loop forever. Server
 
 ```typescript
 import { createWire } from '@niscorp/moss/client';
-const wire = createWire();                 // connects; token from localStorage
+const wire = createWire();                 // browser host; token from localStorage
 wire.subscribe(() => render(wire.snapshot()));
 wire.dispatch('main', { type: 'ui:click', ref: 'save' });
+```
+
+## `@niscorp/moss/client/node`
+
+- `nodeEnv({ url, tokenFile? }): WireEnv` — the wire on a plain Node (or Bun)
+  process: token in a file (default `~/.moss/token`), the runtime's WHATWG
+  WebSocket, `url` explicit (a process has no location to derive one from).
+  Its own entry so node builtins never enter a browser bundle.
+
+```typescript
+import { createWire } from '@niscorp/moss/client';
+import { nodeEnv } from '@niscorp/moss/client/node';
+const wire = createWire({ env: nodeEnv({ url: 'ws://127.0.0.1:8787/socket' }) });
 ```
 
 ## `@niscorp/moss/terminal`
@@ -177,10 +200,10 @@ wire.dispatch('main', { type: 'ui:click', ref: 'save' });
 The terminal: the wire plus a **render target**. Framework-blind — targets live
 in the subpaths.
 
-- `createTerminal({ root, target, wire }): { destroy }` — the conductor: one
+- `createTerminal({ target, wire }): { destroy }` — the conductor: one
   target, one wire. Subscribes the target's `update` to the wire and routes
   events back.
-- `mountTerminal(root, config): { swap, destroy }` — the switcher: hot-swaps
+- `mountTerminal(config): { swap, destroy }` — the switcher: hot-swaps
   render targets over ONE wire, so the socket, session, and current trees
   survive the swap. `config = { targets, swapKey?, initial?, wire?, url? }` —
   targets by name, cycled in insertion order; `swapKey` (e.g.
@@ -190,17 +213,20 @@ in the subpaths.
   (`frame`, `canvasTree`, `dispatch`, `publish`), aliased not redeclared — the
   DOM adapter, the React adapter, and the conductor share one contract. A
   target never touches the wire directly.
-- `Target` — `(root, api) => TerminalMount` where `TerminalMount = { update,
-  destroy }`. Renders once on mount; the conductor calls `update` on every
-  wire change.
+- `Target` — `(api) => TerminalMount` where `TerminalMount = { update,
+  destroy }`. The render surface (a DOM root, a stdio pair) is construction
+  config on the concrete target, never part of the contract — the conductor
+  is surface-blind and runs anywhere the wire does. Renders once on mount;
+  the conductor calls `update` on every wire change.
 
 ```typescript
 import { mountTerminal } from '@niscorp/moss/terminal';
 import { reactTarget } from '@niscorp/moss/terminal/react';
 import { domTarget } from '@niscorp/moss/terminal/dom';
 
-mountTerminal(document.getElementById('root')!, {
-  targets: { react: reactTarget({ registry, slotWrapper }), dom: domTarget() },
+const root = document.getElementById('root')!;
+mountTerminal({
+  targets: { react: reactTarget({ root, registry, slotWrapper }), dom: domTarget({ root }) },
   swapKey: 'ctrl+shift+y',
 });
 ```
@@ -209,10 +235,14 @@ mountTerminal(document.getElementById('root')!, {
 
 Requires the optional `react`/`react-dom` peers.
 
-- `reactTarget({ registry, slotWrapper? }): Target` — the app's component
-  registry bound to the wire via nova's React adapter. Registers wire-backed
-  `CanvasSlot` and `ActionSlot` (the terminal has no shell for nova's
-  shell-backed ones).
+- `reactTarget({ root, registry, slotWrapper? }): Target` — the app's
+  component registry bound to the wire via nova's React adapter, rendered
+  into `root`. Registers wire-backed `CanvasSlot` and `ActionSlot` (the
+  terminal has no shell for nova's shell-backed ones).
+- `registerWireSlots(registry, { slotWrapper?, fallback?, textWrapper?,
+  errorMarker?, canvasProvider? })` + `TerminalApiContext` — the wire-backed
+  slots themselves, shared by every react-shaped target (`terminal/ink`
+  imports them); a custom react-shaped target starts here.
 - `TerminalSlotWrapper` — an app component wrapping each action instance at
   the `ActionSlot` boundary; the terminal twin of nova's client-shell
   SlotWrapper. Served trees carry identity only, so the props are
@@ -220,6 +250,60 @@ Requires the optional `react`/`react-dom` peers.
 
 ## `@niscorp/moss/terminal/dom`
 
-- `domTarget({ registry? }): Target` — nova's DOM adapter plus nova's default
-  component kit, stylesheet injected once per document. Zero framework, zero
-  config; pass a registry to restyle.
+- `domTarget({ root, registry? }): Target` — nova's DOM adapter plus nova's
+  default component kit rendered into `root`, stylesheet injected once per
+  document. Zero framework; pass a registry to restyle.
+
+## `@niscorp/moss/terminal/tty`
+
+- `ttyTarget({ input, output, registry?, fallback?, onQuit?, status?,
+  debounceMs?, prompt? }): Target` — the line-terminal target: a REPL over
+  the wire. Pass `status: wire.status` and the REPL reports connection
+  transitions (`… connecting`, `✓ connected`, `× connection lost — retrying`)
+  — once per real transition, never the backoff flap.
+  nova's TTY adapter renders each served frame to text with numbered `[n]`
+  markers; commands map onto them with the same event vocabulary every other
+  target dispatches. Runs on any Readable/Writable pair — a real TTY, a
+  test's PassThrough, a pipe. `onQuit` fires on `quit`/EOF (the host owns
+  the wire and the process); `debounceMs` (default 80) coalesces a burst of
+  wire updates into one repaint.
+
+Typing IS the input scheme — numbers act, words fill: a bare number taps
+`[n]` (click a button or row, flip a toggle, focus an input — the next line
+typed is the focused input's value, verbatim; an empty line cancels), and
+bare words go straight into the only input on screen. Explicit forms
+(`click/set/toggle/key <n> …`) plus `refs`, `show`, `publish <ch> [json]`,
+`help`, `quit`. All of it is target policy — the wire sees ordinary events.
+
+```typescript
+import { createWire } from '@niscorp/moss/client';
+import { nodeEnv } from '@niscorp/moss/client/node';
+import { createTerminal } from '@niscorp/moss/terminal';
+import { ttyTarget } from '@niscorp/moss/terminal/tty';
+
+const wire = createWire({ env: nodeEnv({ url: 'ws://127.0.0.1:8787/socket' }) });
+createTerminal({ target: ttyTarget({ input: process.stdin, output: process.stdout }), wire });
+```
+
+## `@niscorp/moss/terminal/ink`
+
+- `inkTarget({ registry?, slotWrapper?, stdin?, stdout?, status?, onQuit? }):
+  Target` — the full-screen terminal target: nova's Ink kit
+  (`@niscorp/nova/adapters/ink`) on the React adapter's walker, mounted with
+  ink's renderer. Interaction is the TTY REPL's numbered addressing plus
+  live focus: every interactive shows a `[n]` marker (the numbering is the
+  TTY walker run over the same served trees — `[7]` is the same thing in
+  the REPL and the TUI), and typed digits act on it — buttons and rows
+  click, toggles flip, an input takes focus and typing types (a focused
+  input claims digits as text; multi-digit numbers accumulate for a beat,
+  unambiguous ones act at once). Tab/Shift+Tab and ↑/↓ still walk the focus
+  ring; Enter activates; Ctrl+C leaves (`onQuit` fires). Inputs are
+  draft-preserving and `debounce`-honoring (ADAPTER.md §6). `status:
+  wire.status` renders a dim connection line while the socket is not open.
+  The wire-backed slots are shared with `terminal/react` — same seam,
+  different renderer. ESM-only, like ink.
+
+```typescript
+import { inkTarget } from '@niscorp/moss/terminal/ink';
+createTerminal({ target: inkTarget({ status: wire.status }), wire });
+```

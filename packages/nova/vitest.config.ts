@@ -14,6 +14,7 @@ export default defineConfig({
       '@layout': r('./src/layout'),
       '@shell': r('./src/shell'),
       '@react': r('./src/adapters/react'),
+      '@niscorp/nova/adapters/react': r('./src/adapters/react'),
     },
   },
 });

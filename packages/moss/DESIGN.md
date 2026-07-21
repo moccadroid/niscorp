@@ -70,8 +70,9 @@ Nova's core is headless and its interchange is serializable (`RenderNode[]`
 down, `NovaEvent` up), so the shell executes server-side and the client is a
 canvas terminal: a registry, a socket, a renderer. State is authoritative — the
 LiveView move, but streaming semantic trees, so the terminal is tiny and
-swappable (React, Svelte, native, TUI). The terminal ships in moss
-(`./terminal` plus render targets), and swappable is literal: `mountTerminal`
+swappable — four targets ship: the app's React kit (`terminal/react`),
+nova's plain-DOM kit (`terminal/dom`), a line REPL (`terminal/tty`), and a
+full-screen TUI (`terminal/ink`). Swappable is literal: `mountTerminal`
 hot-swaps targets over one wire, the session and current trees surviving the
 swap. The DOM target is the proof the terminal is trivial — nova's DOM adapter
 and default kit, zero framework, zero config.

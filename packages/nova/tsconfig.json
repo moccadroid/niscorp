@@ -14,7 +14,8 @@
       "@shell": ["./src/shell"],
       "@shell/*": ["./src/shell/*"],
       "@react": ["./src/adapters/react"],
-      "@react/*": ["./src/adapters/react/*"]
+      "@react/*": ["./src/adapters/react/*"],
+      "@niscorp/nova/adapters/react": ["./src/adapters/react"]
     }
   },
   "include": ["src"]

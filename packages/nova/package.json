@@ -56,6 +56,30 @@
         "default": "./dist/adapters/dom/components/index.cjs"
       }
     },
+    "./adapters/ink": {
+      "types": "./dist/adapters/ink/index.d.ts",
+      "import": "./dist/adapters/ink/index.js"
+    },
+    "./adapters/tty": {
+      "import": {
+        "types": "./dist/adapters/tty/index.d.ts",
+        "default": "./dist/adapters/tty/index.js"
+      },
+      "require": {
+        "types": "./dist/adapters/tty/index.d.cts",
+        "default": "./dist/adapters/tty/index.cjs"
+      }
+    },
+    "./adapters/tty/components": {
+      "import": {
+        "types": "./dist/adapters/tty/components/index.d.ts",
+        "default": "./dist/adapters/tty/components/index.js"
+      },
+      "require": {
+        "types": "./dist/adapters/tty/components/index.d.cts",
+        "default": "./dist/adapters/tty/components/index.cjs"
+      }
+    },
     "./agent": {
       "import": {
         "types": "./dist/agent/index.d.ts",
@@ -91,7 +115,7 @@
     "dist"
   ],
   "scripts": {
-    "build": "tsup",
+    "build": "node -e \"fs.rmSync('dist',{recursive:true,force:true})\" && tsup",
     "dev": "tsup --watch",
     "test": "vitest run",
     "typecheck": "tsc --noEmit"
@@ -101,6 +125,9 @@
     "@testing-library/react": "^16.1.0",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.0",
+    "ink": "^7.1.1",
+    "ink-testing-library": "^4.0.0",
+    "ink-text-input": "^6.0.0",
     "jsdom": "^25.0.1",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
@@ -110,11 +137,19 @@
   },
   "peerDependencies": {
     "@niscorp/cortex": "workspace:*",
+    "ink": "^7.1.1",
+    "ink-text-input": "^6.0.0",
     "react": "^19.2.4",
     "zod": "^4.3.6"
   },
   "peerDependenciesMeta": {
     "@niscorp/cortex": {
+      "optional": true
+    },
+    "ink": {
+      "optional": true
+    },
+    "ink-text-input": {
       "optional": true
     },
     "react": {

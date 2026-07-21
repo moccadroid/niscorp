@@ -4,18 +4,22 @@
 // default kit) drives a jsdom DOM over the real wire; we assert relay content
 // appears as DOM and that clicking a nav dispatches → the server re-renders →
 // the deals list arrives. Same server as host-check; a different terminal.
+import { mkdtempSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { JSDOM } from 'jsdom';
 import { serve } from '@hono/node-server';
 import { attachSocket } from '@niscorp/moss/node';
 import { createWire } from '@niscorp/moss/client';
+import { nodeEnv } from '@niscorp/moss/client/node';
 import { createTerminal } from '@niscorp/moss/terminal';
 import { domTarget } from '@niscorp/moss/terminal/dom';
 import { boot } from '../server/boot';
 import { mintToken } from '../server/users';
 
-// A DOM for nova/dom and the wire to run against — node keeps its global
-// WebSocket (the wire uses it); jsdom supplies document + the element classes
-// `instanceof` needs, and localStorage for the token.
+// A DOM for nova/dom to render into — jsdom supplies document + the element
+// classes `instanceof` needs. The wire itself is host-free: it runs on
+// `nodeEnv` (token file + Node's own WebSocket), the way a TTY terminal will.
 const dom = new JSDOM('<!doctype html><html><head></head><body><div id="root"></div></body></html>', { url: 'http://localhost/' });
 const { window } = dom;
 Object.assign(globalThis, {
@@ -48,15 +52,16 @@ const main = async (): Promise<void> => {
   const address = httpServer.address();
   if (address === null || typeof address === 'string') throw new Error('no port');
 
-  // Authenticate as alex (sales + dev) — the token rides localStorage, the way
-  // a browser holds it; the wire reads it on connect.
+  // Authenticate as alex (sales + dev) — the token rides the env's token
+  // file, the way a TTY process holds it; the wire reads it on connect.
   const token = mintToken('alex');
   if (token === null) throw new Error('no alex user');
-  window.localStorage.setItem('nisc.token', token);
+  const tokenFile = join(mkdtempSync(join(tmpdir(), 'relay-dom-terminal-')), 'token');
+  writeFileSync(tokenFile, token, 'utf8');
 
-  const wire = createWire({ url: `ws://127.0.0.1:${address.port}/socket` });
+  const wire = createWire({ env: nodeEnv({ url: `ws://127.0.0.1:${address.port}/socket`, tokenFile }) });
   const root = window.document.getElementById('root')!;
-  const terminal = createTerminal({ root, target: domTarget(), wire });
+  const terminal = createTerminal({ target: domTarget({ root }), wire });
 
   const text = (): string => root.textContent ?? '';
   const has = (sel: string): boolean => root.querySelector(sel) !== null;

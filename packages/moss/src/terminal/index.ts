@@ -24,21 +24,25 @@ export type TerminalApi = RenderApi;
 // A mounted target: re-render on demand, tear down on swap.
 export type TerminalMount = { update: () => void; destroy: () => void };
 
-// A render target: paint the api onto a root, return the mount handle. It
-// renders once on mount; the conductor calls `update` on every wire change.
-export type Target = (root: HTMLElement, api: TerminalApi) => TerminalMount;
+// A render target: paint the api onto the target's own surface, return the
+// mount handle. The surface — a DOM root, a stdio pair — is construction
+// config on the concrete target (`reactTarget({ root, … })`, `domTarget({
+// root })`), never part of this contract: the conductor stays surface-blind
+// and runs anywhere the wire does. A target renders once on mount; the
+// conductor calls `update` on every wire change.
+export type Target = (api: TerminalApi) => TerminalMount;
 
 // The conductor: one target, one wire. Subscribes the target's `update` to
 // the wire and routes events back. Nothing framework-shaped.
-export const createTerminal = (config: { root: HTMLElement; target: Target; wire: Wire }): { destroy: () => void } => {
-  const { root, target, wire } = config;
+export const createTerminal = (config: { target: Target; wire: Wire }): { destroy: () => void } => {
+  const { target, wire } = config;
   const api: TerminalApi = {
     frame: () => wire.snapshot().frame,
     canvasTree: (id) => wire.snapshot().trees.get(id) ?? [],
     dispatch: (id, event) => wire.dispatch(id, event),
     publish: (channel, payload) => wire.publish(channel, payload),
   };
-  const mount = target(root, api);
+  const mount = target(api);
   const unsubscribe = wire.subscribe(mount.update);
   return {
     destroy: () => {
@@ -66,7 +70,7 @@ export type MountTerminalConfig = {
 // session, and current trees survive the swap. The hotkey is the one legit
 // piece of imperative client chrome — a render target is not app state, so
 // it is not a nova action; it lives here, in the terminal.
-export const mountTerminal = (root: HTMLElement, config: MountTerminalConfig): { swap: () => void; destroy: () => void } => {
+export const mountTerminal = (config: MountTerminalConfig): { swap: () => void; destroy: () => void } => {
   const keys = Object.keys(config.targets);
   if (keys.length === 0) throw new Error('mountTerminal: at least one target is required');
 
@@ -82,12 +86,12 @@ export const mountTerminal = (root: HTMLElement, config: MountTerminalConfig): {
 
   const start = config.initial === undefined ? 0 : keys.indexOf(config.initial);
   let index = start < 0 ? 0 : start;
-  let active = createTerminal({ root, target: targetAt(index), wire });
+  let active = createTerminal({ target: targetAt(index), wire });
 
   const swap = (): void => {
     active.destroy();
     index = (index + 1) % keys.length;
-    active = createTerminal({ root, target: targetAt(index), wire });
+    active = createTerminal({ target: targetAt(index), wire });
   };
 
   const disposeHotkey = config.swapKey === undefined ? undefined : onHotkey(config.swapKey, swap);

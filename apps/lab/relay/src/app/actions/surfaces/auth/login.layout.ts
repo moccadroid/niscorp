@@ -9,7 +9,9 @@ const form: LayoutNode = {
   props: { gap: 13 },
   children: [
     { component: 'Input', model: '$.username', ref: 'username', props: { label: 'Username', placeholder: 'alex, jordan or sam' } },
-    { if: '$.error', then: { component: 'Text', props: { size: 'sm', color: 'secondary' }, children: '{{$.error}}' } },
+    // errorTarget stores the endpoint's { status, message, data } — render the
+    // message, not the object (String(object) is "[object Object]" everywhere).
+    { if: '$.error', then: { component: 'Text', props: { size: 'sm', color: 'secondary' }, children: '{{$.error.message}}' } },
     { component: 'Button', ref: 'send', props: { variant: 'primary' }, children: 'Send magic link' },
   ],
 };

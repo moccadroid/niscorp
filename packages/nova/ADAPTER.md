@@ -3,10 +3,24 @@
 Nova's core is framework-free. It renders layout trees into `RenderNode[]`
 and owns all state, events, and subscriptions. An adapter binds that to a UI
 framework. Adapters live under `src/adapters/`, one folder per framework with
-its own export subpath. Two reference implementations ship: the React adapter
-(`@niscorp/nova/adapters/react`) and the plain-DOM adapter
-(`@niscorp/nova/adapters/dom`, `createDomView` — no framework at all). A Vue
-or Svelte adapter is a sibling folder, built the same way.
+its own export subpath. Four reference implementations ship: the React
+adapter (`@niscorp/nova/adapters/react`), the plain-DOM adapter
+(`@niscorp/nova/adapters/dom`, `createDomView` — no framework at all), the
+line-terminal adapter (`@niscorp/nova/adapters/tty`, `createTtyView` — a
+pure render to `{ text, interactives }`; the host maps commands onto the
+numbered interactives), and the full-screen terminal kit
+(`@niscorp/nova/adapters/ink` — an Ink component vocabulary riding the React
+adapter's walker; Tab cycles focus, Enter activates). A Vue or Svelte
+adapter is a sibling folder, built the same way.
+
+A react-shaped host that is not the DOM threads three optional seams through
+`NovaRenderProvider`: `fallback` (unregistered names render their children
+instead of an error marker), `textWrapper` (ink forbids bare strings outside
+`<Text>`; the DOM renders them raw), and `errorMarker` (the default is a
+`<span>`, which crashes a non-DOM renderer). Browser consumers omit all
+three. A `ref`'d node rendered by a permissive fallback must still be
+actionable — the TTY walker marks refs universally, so a kit-level fallback
+(ink's) carries the focus + click convention itself.
 
 An adapter imports only from `@niscorp/nova`'s public surface (plus its own
 framework). Core never imports from an adapter.
@@ -126,3 +140,9 @@ These belong to *every* adapter because they are artifacts of the transport, not
 of taste — unlike styling, hover, or animation, which *should* differ per kit.
 The line is exactly that: an adapter shares nova's treatment of the round trip
 and nothing about how pixels look.
+
+A line renderer discharges both trivially: the TTY adapter has no focused
+input (a `set <n> <text>` command is one atomic, complete value, so there is
+no in-progress draft for an echo to clobber) and therefore nothing for
+`debounce` to coalesce. The obligations bind any adapter that *does* hold
+live input focus — a full-screen TUI included.

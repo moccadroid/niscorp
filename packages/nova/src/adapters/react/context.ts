@@ -1,4 +1,4 @@
-import { createContext, type FC, type ReactNode } from 'react';
+import { createContext, type ComponentType, type FC, type ReactNode } from 'react';
 import type { ActionDefinition } from '@action';
 import type { ComponentRegistry } from '@layout';
 import type { Shell } from '@shell';
@@ -33,6 +33,17 @@ export type NovaRenderContextValue = {
   dispatch: NovaDispatch;
   publish: NovaPublish;
   slotWrapper?: SlotWrapper;
+  // used when a component name is unregistered — a permissive renderer (a
+  // terminal on a reference kit) supplies one so unknown primitives render
+  // their children instead of an error marker; strict consumers omit it.
+  // Same seam as the DOM and TTY adapters' `fallback`.
+  fallback?: NovaComponent;
+  // host-specific leaf renderers. The DOM host renders a text node as a bare
+  // string and an error node as a <span> — both crash a non-DOM react host
+  // (ink requires every string inside <Text>). A host that isn't the DOM
+  // supplies its own wrappers; browser consumers omit both.
+  textWrapper?: ComponentType<{ children?: ReactNode }>;
+  errorMarker?: ComponentType<{ code: string; message: string }>;
 };
 
 export const NovaRenderContext = createContext<NovaRenderContextValue | undefined>(undefined);

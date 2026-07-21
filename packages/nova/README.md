@@ -5,16 +5,33 @@ layouts and effects.
 
 **Status:** `0.x.x` — pre-1.0, breaking changes expected.
 
-Framework adapters live under `adapters/`. `@niscorp/nova/adapters/react`
-ships the React adapter with `<NovaRenderProvider>`, `<NovaShellProvider>`,
-`<RenderTree>`, and hooks (`useShell`, `useShellState`, `useCanvas`,
-`useRenderTree`, `useShellRenderTree`, `useCanvasRenderTree`,
-`useActionData`, `useActionStatus`, `useNovaDispatch`, `useNovaPublish`,
-`useNovaRegistry`). `@niscorp/nova/adapters/dom` ships a plain-DOM adapter
-(`createDomView`) for framework-free hosts — it renders a served tree against
-core's `RenderApi`. Components are decoupled from the shell — they receive
-only the layout's `props` plus `children` / `novaModel`, and emit events via
-context hooks.
+## One tree, four renderers
+
+Nova core renders layouts to plain `RenderNode[]` — no framework, no DOM,
+no terminal. What consumes that tree is an adapter, and four ship here:
+
+| adapter          | surface                   | interaction                                                |
+| ---------------- | ------------------------- | ---------------------------------------------------------- |
+| `adapters/react` | browser, your styled kit  | pointer + keyboard                                         |
+| `adapters/dom`   | browser, zero framework   | pointer + keyboard                                         |
+| `adapters/tty`   | any terminal, line REPL   | every interactive carries a `[n]` marker — type the number |
+| `adapters/ink`   | any terminal, full-screen | the same `[n]` markers, plus focus and live typing         |
+
+Same trees down, same `ui:click` / `ui:model` / `ui:key` events up — an app
+renders in all four without changing a line, and a served host (see
+`@niscorp/moss`) cannot tell them apart. The TTY numbering is computed once
+and shared: `[7]` is the same interactive in the REPL and the TUI.
+
+An adapter is a walker plus a component kit of ~15 domain-blind primitives.
+[ADAPTER.md](ADAPTER.md) is the whole contract; the terminal adapters' APIs
+are in [TERMINAL_DOCS.md](TERMINAL_DOCS.md); a Vue, Svelte, or react-native
+adapter is a sibling folder.
+
+Components are decoupled from the shell — they receive only the layout's
+`props` plus `children` / `novaModel`, and emit events via context hooks.
+The React adapter additionally ships `<NovaRenderProvider>`,
+`<NovaShellProvider>`, `<RenderTree>`, and the shell hooks; see
+`REACT_DOCS.md`.
 
 An optional `slotWrapper` prop wraps every action instance's content at
 its mount/unmount seam — one pluggable point for animation, auth / feature
@@ -54,7 +71,8 @@ Explicitly out of scope right now:
   the exported Zod schemas if you need JSON Schema externally.
 - **No mandatory components.** The component registry is empty by
   default; opt-in reference kits ship at the adapter subpaths
-  (`/adapters/react/components`, `/adapters/dom/components`).
+  (`/adapters/react/components`, `/adapters/dom/components`,
+  `/adapters/tty/components`, `/adapters/ink`).
 - **No SSR yet.** Nova hooks don't pass a `getServerSnapshot` to
   `useSyncExternalStore`, so calling them during server rendering throws.
   See the React compatibility section below.

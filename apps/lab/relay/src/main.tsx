@@ -18,10 +18,10 @@ const root = document.getElementById('root');
 if (root === null) throw new Error('No root element');
 
 const wire = createWire();
-const terminal = mountTerminal(root, {
+const terminal = mountTerminal({
   targets: {
-    react: reactTarget({ registry: buildRegistry(), slotWrapper: createSlotWrapper(wire) }),
-    dom: domTarget(),
+    react: reactTarget({ root, registry: buildRegistry(), slotWrapper: createSlotWrapper(wire) }),
+    dom: domTarget({ root }),
   },
   swapKey: 'ctrl+shift+y',
   wire,

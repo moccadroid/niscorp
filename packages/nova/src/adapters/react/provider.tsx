@@ -1,4 +1,4 @@
-import { useMemo, type FC, type ReactNode } from 'react';
+import { useMemo, type ComponentType, type FC, type ReactNode } from 'react';
 import type { ComponentRegistry } from '@layout';
 import type { Shell } from '@shell';
 import {
@@ -26,6 +26,12 @@ export type NovaRenderProviderProps = {
   dispatch?: NovaDispatch;
   publish?: NovaPublish;
   slotWrapper?: SlotWrapper;
+  // renderer for unregistered component names; omit for strict error markers
+  fallback?: NovaComponent;
+  // host-specific leaf renderers (see NovaRenderContextValue) — a non-DOM
+  // react host (ink) supplies both; browser consumers omit them
+  textWrapper?: ComponentType<{ children?: ReactNode }>;
+  errorMarker?: ComponentType<{ code: string; message: string }>;
   children?: ReactNode;
 };
 
@@ -34,11 +40,14 @@ export const NovaRenderProvider: FC<NovaRenderProviderProps> = ({
   dispatch = noopDispatch,
   publish = noopPublish,
   slotWrapper,
+  fallback,
+  textWrapper,
+  errorMarker,
   children,
 }) => {
   const value = useMemo<NovaRenderContextValue>(
-    () => ({ registry, dispatch, publish, slotWrapper }),
-    [registry, dispatch, publish, slotWrapper],
+    () => ({ registry, dispatch, publish, slotWrapper, fallback, textWrapper, errorMarker }),
+    [registry, dispatch, publish, slotWrapper, fallback, textWrapper, errorMarker],
   );
   return <NovaRenderContext.Provider value={value}>{children}</NovaRenderContext.Provider>;
 };
