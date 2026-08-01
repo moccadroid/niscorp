@@ -53,6 +53,59 @@ export const snapshotShell = (shell: Shell, exclude: readonly string[] = []): Sh
   return { canvases, layouts: shell.layoutStore.list(), components: shell.registry.list() };
 };
 
+// ─── the shell as text ─────────────────────────────────────
+// What a model is shown when it has to reason about a screen. Same tree as
+// snapshotShell, rendered flat with each card's live data.
+//
+// Long arrays collapse to a head and a count: an agent looking at the same
+// screen many times a shift cannot pay for forty rows each time, and a person
+// reading a board of forty does not hold forty either.
+
+export type DescribeShellOptions = {
+  // Canvases to render. Default: all of them.
+  only?: readonly string[];
+  // Marks an instance in the output. An agent whose answer is the complete state
+  // of its own canvases has to tell its cards from the person's.
+  mark?: (instanceId: string) => string | undefined;
+  // Array length past which values collapse. 0 disables collapsing.
+  collapseOver?: number;
+  head?: number;
+  // Last pass over each card's data before it is written. A caller that knows
+  // which fields are for rendering rather than reading — tones, formatted
+  // stamps — drops them here instead of paying for them.
+  clean?: (data: Record<string, unknown>) => Record<string, unknown>;
+};
+
+const compact = (value: unknown, over: number, head: number): unknown => {
+  if (Array.isArray(value)) {
+    return over === 0 || value.length <= over ? value.map((item) => compact(item, over, head)) : [...value.slice(0, head).map((item) => compact(item, over, head)), `…${value.length - head} more`];
+  }
+  if (value === null || typeof value !== 'object') return value;
+  const out: Record<string, unknown> = {};
+  for (const [key, inner] of Object.entries(value as Record<string, unknown>)) out[key] = compact(inner, over, head);
+  return out;
+};
+
+export const describeShell = (shell: Shell, options: DescribeShellOptions = {}): string => {
+  const { only, mark, collapseOver = 5, head = 3, clean } = options;
+  const lines: string[] = [];
+  for (const [canvasId, canvas] of Object.entries(shell.getState().canvases)) {
+    if (only !== undefined && !only.includes(canvasId)) continue;
+    if (canvas.active === undefined) {
+      lines.push(`  ${canvasId}: (empty)`);
+      continue;
+    }
+    lines.push(`  ${canvasId}: ${canvas.stack.map((item, index) => `${item.definitionId}${index === canvas.stack.length - 1 ? '*' : ''}`).join(' › ')}`);
+    for (const item of canvas.stack) {
+      const runtime = shell.getRuntime(item.id);
+      const note = mark?.(item.id);
+      const data = runtime === undefined ? undefined : (clean ?? ((value: Record<string, unknown>) => value))(runtime.getData());
+      lines.push(`    ${item.definitionId}${note === undefined ? '' : ` ${note}`} data: ${data === undefined ? '{}' : JSON.stringify(compact(data, collapseOver, head))}`);
+    }
+  }
+  return lines.join('\n');
+};
+
 export type InstanceModel = {
   id: string;
   instanceId: string;

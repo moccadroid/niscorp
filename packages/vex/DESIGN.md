@@ -542,10 +542,70 @@ Only `zod` is mandatory. Everything else is pulled in only by the path you use.
    left every entry anonymous; a fingerprint makes a generation an addressable,
    replayable artifact — pin it, replay it, roll it back. (See *Cache v2*.)
 
-4. **Scope injected server-side, after generation.** If the model could see
-   scope filters it could be talked out of them. Injecting them as ordinary
-   filter clauses bound to `$scope` values, after the DSL is fixed, makes them
-   unforgeable.
+4. **Scope injected server-side, after RESOLUTION.** If the model could see
+   scope filters it could be talked out of them. Binding them to `$scope`
+   values after the DSL is fixed makes them unforgeable.
+
+   Scope answers two questions and they run at different stages, which is the
+   correction to an earlier version that ran both at once:
+
+   - **May this caller touch this table?** — `checkScope`, over entity names,
+     before resolution. Needs no schema and no aliases.
+   - **Where does the row rule go?** — `scopeResolved`, after resolution,
+     because the answer depends on HOW the table is reached.
+
+   That second stage exists because merging row rules into the DSL's `filter`
+   compiles them to WHERE, and **a WHERE predicate on a left-joined table is a
+   LEFT JOIN demoted to an INNER one.** A driving row whose optional FK is null
+   gets null-padded columns, `null = $tenant` is null rather than true, and the
+   row disappears. No error, no warning, a shorter list — and invisible until
+   the data actually contains a null FK, which in one consumer took months.
+   The resolver had already gone to the trouble of inferring `left` for exactly
+   this reason; the scope layer was undoing it two steps later.
+
+   Row rules for left-joined tables now go in that join's `ON` clause. The
+   boundary is unchanged — another tenant's row still cannot contribute
+   columns — it simply no longer annihilates the row that had none.
+
+   A consequence worth having on its own: scope writes nothing into the
+   authored `Query`. The document integrations ship over the wire carries no
+   engine-trusted field, so there is no key to strip at intake and no forgery
+   surface to remember.
+
+10. **`exists` shadows SQL rather than inventing a vocabulary.** Correlated
+    subqueries were the one thing the filter grammar could not express, so
+    "issues nobody was sent to" and "rooms nobody is in" became two round trips
+    each — a read returning a flat array of ids, then a `notIn` against it.
+    That is fine at three dozen rows, wrong at three thousand, and racy in
+    between.
+
+    `{ exists: { from, filter } }` is the same `{ from, filter }` a query
+    already is, and nothing more: no fields, no sort, no limit. EXISTS asks
+    whether a row is there, so anything shaping output would be noise — and
+    refusing it is what keeps this an operator rather than an invitation to
+    nest arbitrary SQL. The correlation needs no new syntax at all, because a
+    dotted string on either side of a comparison is already a field path:
+
+    ```json
+    { "exists": { "from": ["tasks"],
+                  "filter": { "eq": ["tasks.issue_id", "issues.id"] } } }
+    ```
+
+    `not` composes for NOT EXISTS. Whoever knows SQL writes this on the first
+    try, which was the entire design constraint.
+
+    Two implementation notes that are load-bearing. It compiles **inline**,
+    into the parent's own parameter counter — the other subquery path compiles
+    independently and renumbers afterwards, which is how two parameterised
+    subqueries came to collide on `$1`; there is nothing to renumber if nothing
+    was numbered apart. And its inner aliases come from the **shared** alias
+    counter, so an `exists` over the same table as the outer query cannot take
+    the same alias and silently correlate a table with itself.
+
+    Scope recurses into it. Access-checking the inner table is not enough: an
+    EXISTS returns a boolean, but a boolean about somebody else's rows is still
+    an answer about somebody else's rows, and an uncorrelated `exists` over a
+    scoped table would otherwise report whether ANY tenant had one.
 
 5. **Negative caching with a TTL.** An "impossible" request is expensive to
    re-discover every time, so a `cannotSatisfy` result is cached — but TTL'd and

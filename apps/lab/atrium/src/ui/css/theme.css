@@ -1,0 +1,85 @@
+/* Atrium's palette. Warm, light, printed-on-paper — a good hotel's collateral,
+   not an operations console. Staff surfaces use the SAME tokens at tighter
+   spacing; nothing here goes dark.
+
+   `--accent` is re-declared per property by the frame (sage for The Lumen, clay
+   for Casa Marisol). Branding is a served variant, exactly like a capability. */
+
+:root {
+  --ground: #faf8f4;
+  --surface: #ffffff;
+  --surface-sunk: #f4f1ea;
+  --ink: #1f1d1a;
+  --ink-soft: #4a4640;
+  --ink-mute: #837d72;
+  --ink-faint: #a9a294;
+  --line: #e8e2d6;
+  --line-soft: #f0ebe1;
+
+  --accent: #4a6152;
+  --accent-soft: #eaefea;
+  --accent-ink: #3a4d41;
+
+  /* The assistant's palette. One actor, luminous greens, used by nothing
+     else. Two rules keep it from biting on the warm paper ground: every hue
+     stays on the YELLOW side of green (a cyan-leaning green clashes with a
+     warm ground and reads as a rendering mistake), and the three pastels sit
+     at matched lightness so no single one pops out of the set. The jade is
+     the comet's head alone. */
+  --assist: #3f9b72; /* jade */
+  --assist-a: #aee3c0; /* celadon */
+  --assist-b: #cdeccb; /* pale spring */
+  --assist-c: #8fd1ae; /* eucalyptus */
+
+  --warn: #9a6b2f;
+  --warn-soft: #fbf3e6;
+  --alert: #9c4a3c;
+  --alert-soft: #fbeeeb;
+  --good: #4a6152;
+  --good-soft: #eaefea;
+
+  --radius: 14px;
+  --radius-sm: 9px;
+  --shadow: 0 1px 2px rgba(31, 29, 26, 0.04), 0 8px 24px -12px rgba(31, 29, 26, 0.14);
+  --shadow-lift: 0 2px 4px rgba(31, 29, 26, 0.05), 0 18px 40px -18px rgba(31, 29, 26, 0.22);
+
+  --serif: 'Iowan Old Style', 'Palatino Linotype', Palatino, Georgia, 'Times New Roman', serif;
+  --sans: ui-sans-serif, -apple-system, 'Segoe UI', Inter, Roboto, 'Helvetica Neue', sans-serif;
+  --mono: ui-monospace, 'SF Mono', 'Cascadia Mono', Menlo, monospace;
+}
+
+/* Per-property accents. The frame sets data-accent from the resolved stay, so
+   the same layout renders in either house's colour without a fork. */
+[data-accent='sage'] {
+  --accent: #4a6152;
+  --accent-soft: #eaefea;
+  --accent-ink: #3a4d41;
+}
+
+[data-accent='clay'] {
+  --accent: #a5644a;
+  --accent-soft: #f7ede8;
+  --accent-ink: #83503b;
+}
+
+html,
+body {
+  background: var(--ground);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 15px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+  color: inherit;
+}

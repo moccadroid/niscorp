@@ -203,6 +203,33 @@ they see what the caller sees); keys are `.env`. This is deliberately the *side-
 effect-ful, session-bound* half. The canonical, side-effect-free function — an
 independently deployable endpoint under `/fns` — is specified and pending.
 
+## Model runs
+
+An agent lives behind the function seam, so the app server is the one place that
+sees every model call a session makes. The manifest declares a `runs` sink;
+`session.recordRun` stamps `at`, `principal` and `shellId` and hands over a
+`RunRecord` — which agent, which model, what it cost, and the whole exchange as
+`RunTurn[]`: every message out, every tool call with its arguments, every result
+back.
+
+`RunTurn` is deliberately moss's own shape. Moss depends on neither an LLM client
+nor an agent framework, and a client's message union leaking into the app server
+would make one provider's idea of a turn the contract. The caller flattens
+whatever it ran into this, once, at the seam that knows both sides. Arguments stay
+a string because providers send them JSON-encoded, and re-encoding a parse is how
+a malformed call stops looking malformed in the record.
+
+Nothing is aggregated, and there is no cost in currency: per-model price tables
+rot, tokens are the honest unit, and `provider` + `model` let pricing be layered on
+later. Per person, per model, per agent and per day are group-bys over the rows.
+
+**No default sink.** A bounded in-memory array would answer "the last few minutes,
+gone on restart", which is not a question anyone asks about an agent's behaviour.
+Unset means unrecorded, which is at least honest. The session rides along so a sink
+can persist through the CALLER's own governed wire rather than a privileged one —
+a record that could be written on another principal's behalf would be worth
+nothing.
+
 ## What it refuses to be
 
 | Temptation | Refusal |

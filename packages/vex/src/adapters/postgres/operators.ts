@@ -4,6 +4,7 @@ import type { AggregateExpression } from '../../schemas/aggregate.schema.js';
 import type { FieldOrValue } from '../../schemas/value.schema.js';
 import type { ParamSlot } from '../adapter.types.js';
 import type { FieldSchema } from '../../schemas/database.schema.js';
+import type { ResolvedExists } from '../../engine/engine.types.js';
 import { RESERVED_CONTEXT_KEYS } from '../../schemas/request.schema.js';
 import { VexError } from '../../errors.js';
 
@@ -28,6 +29,10 @@ type CompilationContext = {
   aliasMap: Map<string, string>;
   paramSlots: ParamSlot[];
   paramCounter: { value: number };
+  // Every `exists` in this query's filter, resolved. Keyed by the node, because
+  // the compiler walks the raw filter tree and needs to find the resolution for
+  // the node in front of it.
+  existsMap?: Map<object, ResolvedExists>;
 };
 
 // ═══════════════════════════════════════════════════════════════
@@ -118,6 +123,43 @@ export const compileFilter = (
   filter: Filter,
   ctx: CompilationContext,
 ): string => {
+  // EXISTS compiles INLINE, into the parent's own parameter counter and slot
+  // list. That is deliberate: the other subquery path compiles independently
+  // and then tries to renumber, which is how two parameterised subqueries came
+  // to collide on $1. There is nothing to renumber if nothing was numbered
+  // separately.
+  //
+  // `SELECT 1` because EXISTS asks whether a row is there, not what is in it.
+  if ('exists' in filter) {
+    const resolved = ctx.existsMap?.get(filter.exists);
+    if (resolved === undefined) throw new VexError('invalid_dsl', 'An "exists" filter was not resolved. It must appear in a query\'s own filter.');
+
+    const inner: CompilationContext = {
+      ...ctx,
+      resolvedPaths: resolved.filter?.resolvedPaths ?? ctx.resolvedPaths,
+      // The inner map LAYERS OVER the outer one, so an inner path resolves to
+      // the inner alias and an outer path — the correlation — still resolves.
+      aliasMap: new Map([...ctx.aliasMap, ...resolved.aliasMap]),
+    };
+
+    const parts: string[] = ['SELECT 1'];
+    const first = resolved.sources[0];
+    if (first?.table !== undefined) parts.push(`FROM ${first.table} AS ${first.alias}`);
+    for (const join of resolved.joins) {
+      const source = resolved.sources.find((s) => s.alias === join.toAlias);
+      if (source?.table === undefined) continue;
+      const keyword = join.kind === 'left' ? 'LEFT JOIN' : 'JOIN';
+      const conditions = [
+        `${join.fromAlias}.${join.fromColumn} = ${join.toAlias}.${join.toColumn}`,
+        ...(join.on ?? []).map((extra) => compileFilter(extra.original, inner)),
+      ];
+      parts.push(`${keyword} ${source.table} AS ${join.toAlias} ON ${conditions.join(' AND ')}`);
+    }
+    if (resolved.filter !== undefined) parts.push(`WHERE ${compileFilter(resolved.filter.original, inner)}`);
+
+    return `EXISTS (${parts.join(' ')})`;
+  }
+
   if ('eq' in filter) return compileComparisonFilter('=', filter.eq, ctx);
   if ('neq' in filter) return compileComparisonFilter('<>', filter.neq, ctx);
   if ('gt' in filter) return compileComparisonFilter('>', filter.gt, ctx);

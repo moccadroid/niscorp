@@ -22,7 +22,12 @@ export type EnvelopeSpec<TData> = {
 };
 
 const RESPONSE_DESCRIPTION = 'Human-facing text answer. Plain prose, no JSON.';
-const REASONING_DESCRIPTION = 'Short model-authored note: WHY you did what you did.';
+// Forward, not backward — because the field now LEADS the envelope. It used to
+// trail `data`, where the only honest description was "why you did what you
+// did", and a note that can only justify a finished decision is worth little to
+// the model and nothing to the answer. Written first, it is the decision being
+// made rather than defended.
+const REASONING_DESCRIPTION = 'Short model-authored note, written FIRST: what you are about to do and why. It comes before your answer, so use it to decide rather than to justify.';
 const LOOSE_DATA_DESCRIPTION =
   'The final answer payload. MUST validate against the OUTPUT SCHEMA documented in the system prompt.';
 
@@ -33,21 +38,32 @@ const LOOSE_DATA_DESCRIPTION =
 // Models say null: every optional model-facing field accepts null and
 // treats it as absent (.nullish(), never bare .optional()). A required
 // response stays strict — null there IS a missing reply.
+// KEY ORDER IS LOAD-BEARING, and it is the reason `reasoning` comes first.
+//
+// A model emits an object in the order it is declared, so a field placed after
+// `data` is written after the answer it exists to explain. That is post-hoc
+// justification — it cannot change what it follows, and consumers rightly
+// treated it as latency and told models to omit it. Declared FIRST, writing it
+// conditions everything after: the model names what it is doing before it does
+// it, which is the cheapest quality lever a structured-output agent has.
+//
+// Validation reads by key and `KNOWN_KEYS` is a Set, so nothing downstream
+// notices. Only generation order changes.
 export const envelopeWireSchema = (spec: { schema?: ZodType; responseMode: ResponseMode }): ZodType => {
   const response = spec.responseMode === 'required'
     ? z.string().describe(RESPONSE_DESCRIPTION)
     : z.string().nullish().describe(RESPONSE_DESCRIPTION);
   if (spec.schema) {
     return z.object({
+      reasoning: z.string().nullish().describe(REASONING_DESCRIPTION),
       response,
       data: spec.schema,
-      reasoning: z.string().nullish().describe(REASONING_DESCRIPTION),
     });
   }
   // Pure chat agents: no data key on the wire at all.
   return z.object({
-    response,
     reasoning: z.string().nullish().describe(REASONING_DESCRIPTION),
+    response,
   });
 };
 
@@ -60,18 +76,18 @@ export const envelopeLooseWireSchema = (spec: { hasData: boolean; responseMode: 
     : z.string().nullish().describe(RESPONSE_DESCRIPTION);
   if (spec.hasData) {
     return z.object({
+      reasoning: z.string().nullish().describe(REASONING_DESCRIPTION),
       response,
       // A typed union, not z.unknown(): an empty {} schema gives the
       // model zero type signal and invites stringified payloads.
       data: z
         .union([z.record(z.string(), z.unknown()), z.array(z.unknown())])
         .describe(LOOSE_DATA_DESCRIPTION),
-      reasoning: z.string().nullish().describe(REASONING_DESCRIPTION),
     });
   }
   return z.object({
-    response,
     reasoning: z.string().nullish().describe(REASONING_DESCRIPTION),
+    response,
   });
 };
 

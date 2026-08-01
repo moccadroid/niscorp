@@ -202,9 +202,14 @@ const wireRun = <TData, TDeps>(wiring: Wiring<TData, TDeps>): RunHandle<TData> =
           input,
           agent: { id: config.id, ...(config.description !== undefined && { description: config.description }) },
         };
-        // Prefix order: instructions → the agent's context (array order IS
-        // placement) → per-run producers → tool guides (each tool's own
-        // usage knowledge) → schema doc → finish protocol → the input.
+        // Prefix order: instructions → tool guides (each tool's own usage
+        // knowledge) → schema doc → finish protocol → the agent's context
+        // (array order IS placement) → per-run producers → the input.
+        //
+        // The three middle blocks are FIXED for the life of an agent, so they
+        // sit ahead of the producers, which are not. A provider's prefix cache
+        // stops at the first byte that changed: with them behind a producer that
+        // renders live state, they were re-read on every single run.
         const items: ReadonlyArray<ContextEntry | Producer<TDeps>> = [
           config.instructions,
           ...(config.context ?? []),
@@ -219,11 +224,16 @@ const wireRun = <TData, TDeps>(wiring: Wiring<TData, TDeps>): RunHandle<TData> =
         // The finish protocol is the TRANSPORT's chunk — signal authored
         // it for whatever resolution picked; cortex injects it verbatim.
         const finishMessage: Message = { role: 'system', content: resolved.finishProtocol };
+        // `instructions` is the first context message and stays first — it is
+        // the agent's identity, and a provider that special-cases a leading
+        // system turn should still see it there.
+        const [identity, ...rest] = contextMessages;
         state.messages = [
-          ...contextMessages,
+          ...(identity ? [identity] : []),
           ...toolGuidesMessage(tools),
           ...docMessage,
           finishMessage,
+          ...rest,
           ...inputMessages(input),
         ];
       }

@@ -3,7 +3,7 @@ import { componentsOf } from '@niscorp/nova/reflect';
 import type { Shell, CanvasConfig, FetchFn, LayoutNode, RenderNode } from '@niscorp/nova';
 import { evaluate } from '@niscorp/prism';
 import type { ScopePolicy } from '@niscorp/vex';
-import type { NiscApp } from './app';
+import type { FunctionSession, NiscApp } from './app';
 import type { NiscRuntime } from './runtime';
 import type { Catalog } from './principal';
 import { CLOSE_SIGNED_OUT } from './socket';
@@ -55,6 +55,13 @@ export type ShellSession = {
 
 export type ShellHost = {
   session: (token: string | null, principal: string | null) => ShellSession;
+  // Artifacts changed (the app mutated its `actions`, the server dropped its
+  // memos): every LIVING durable shell adopts its freshly-resolved granted
+  // definitions in place — nova's registerAction adds or replaces, mounted
+  // instances keep their state, and new actions become pushable without a
+  // rebuild. Ring 1 is re-applied per principal; ring 2 substitutes exactly
+  // as at build.
+  adopt: () => void;
 };
 
 const today = (): string => new Date().toISOString().slice(0, 10);
@@ -155,8 +162,7 @@ export const createShellHost = (ctx: ShellHostContext): ShellHost => {
     // creation (a function that somehow runs before then fails loudly).
     let built: Shell | undefined;
     let liveRef: Live | undefined;
-    const functions =
-      ctx.app.functions?.({
+    const session: FunctionSession = {
         principal,
         roles: ctx.roles(principal),
         wire,
@@ -186,7 +192,19 @@ export const createShellHost = (ctx: ShellHostContext): ShellHost => {
             if (principal !== null) liveRef.shell.dispose();
           });
         },
-      }) ?? {};
+        // The session's own fields are stamped here so a caller cannot get them
+        // wrong, and the shell id is read lazily — a run cannot happen before
+        // the shell exists, but this object is built before it does.
+        recordRun: (run) => {
+          if (ctx.app.runs === undefined) return;
+          ctx.app.runs({ ...run, at: Date.now(), principal, shellId: built?.id ?? '' }, session);
+        },
+    };
+
+    // Endpoints first, then the non-endpoints. Both get the same session; only
+    // the first produces handlers.
+    const functions = ctx.app.functions?.(session) ?? {};
+    ctx.app.onSession?.(session);
 
     const shell = createShell({
       registry,
@@ -222,6 +240,38 @@ export const createShellHost = (ctx: ShellHostContext): ShellHost => {
 
     const live: Live = { shell, connections: new Set(), sent: new Map(), flushing: false, ended: false };
     liveRef = live;
+
+    // Per-principal canvas SEEDING — the instance twin of `inputs`. The app
+    // derives which actions to push where (usually from resolved rows over
+    // the session's own wire), moss pushes them in order: ring 1 filters
+    // exactly as `initial` does, an unknown action or canvas skips rather
+    // than kills the session, and seeds landing after attach simply render —
+    // the same progressive path every later push takes.
+    const declaredSeeds = shellManifest.seeds?.({ principal, actions: ids, roles: ctx.roles(principal), wire });
+    if (declaredSeeds !== undefined) {
+      void Promise.resolve(declaredSeeds)
+        .then((byCanvas) => {
+          if (live.ended) return;
+          for (const [canvasId, seeds] of Object.entries(byCanvas ?? {})) {
+            for (const seed of seeds) {
+              const action = typeof seed === 'string' ? seed : seed.action;
+              if (!granted.has(action)) continue;
+              const input = typeof seed === 'string' ? undefined : seed.input;
+              const withFragments = typeof seed === 'string' ? undefined : seed.with;
+              try {
+                shell.push(canvasId, action, input, withFragments);
+              } catch {
+                // an unknown canvas or definition is a skipped seed, not a
+                // dead session
+              }
+            }
+          }
+        })
+        .catch(() => {
+          // a failed derivation seeds nothing — the canvas stays empty and
+          // the rest of the shell is untouched
+        });
+    }
 
     // Any state or data change → re-render, send what changed, to every
     // attached connection. Microtask-coalesced, with one trailing pass a
@@ -292,6 +342,18 @@ export const createShellHost = (ctx: ShellHostContext): ShellHost => {
       const live = build(token, principal);
       durable.set(principal, live);
       return sessionOn(live, false);
+    },
+    adopt: () => {
+      for (const [principal, live] of durable) {
+        if (live.ended) continue;
+        const granted = new Set(ctx.catalog(principal).ids);
+        const bindings = ctx.variants(principal);
+        for (const [id, definition] of Object.entries(ctx.app.actions)) {
+          if (!granted.has(id)) continue;
+          const layout = bindings.get(id);
+          live.shell.registerAction(layout === undefined ? definition : { ...definition, layout });
+        }
+      }
     },
   };
 };

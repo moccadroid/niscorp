@@ -219,7 +219,7 @@ Use this in a "Cancel" or "Start over" handler.
 
 ## Effects
 
-Effects can be async and may reach outside the action's data store. There are seven: `call`, `emit`, and the navigation effects `push`, `pop`, `replace`, `popTo`, `resetTo`.
+Effects can be async and may reach outside the action's data store. There are ten: `call`, `emit`, `reload`, and the navigation effects `push`, `pop`, `replace`, `popTo`, `resetTo`, `removeInstance`, `removeSelf`.
 
 ### `call`
 
@@ -289,6 +289,16 @@ Stack-navigation effects.
 ```
 
 `popTo` unmounts everything above the given instance (a no-op if it isn't in the stack) — what a breadcrumb fires. `resetTo` clears the whole stack and pushes one new root — what a screen-level nav fires so drilling into a record doesn't leave a stale stack beneath the new screen.
+
+### `reload`
+
+```ts
+{ reload: true }   // re-run THIS instance's mount hook
+```
+
+Re-reads the firing instance in place: same instance, same data object, no navigation. It re-runs whatever the action does on `mount`, which is the only definition of "current" the action itself has — a caller never names endpoints.
+
+It exists for `mode: 'list'` canvases. A stack canvas suspends what it covers and `resume` already re-runs `mount`, so a revealed action is never stale; a list suspends nothing, so a card mounted once and opened much later would answer with the data it loaded then. `{ reload: true }` is what "opening it" means there. Harmless on an action with no `mount` hook.
 
 ---
 
@@ -528,6 +538,9 @@ type Step = Mutation | Effect;
 { replace: { action: string, canvas?: string, input?: object, with?: string[] } }
 { popTo: { canvas?: string, instance: string } }
 { resetTo: { action: string, canvas?: string, input?: object, with?: string[] } }
+{ removeInstance: { canvas?: string, instance: string } }
+{ removeSelf: true }
+{ reload: true }
 
 // Endpoints (EndpointConfig = HTTP | Function)
 { url: string, method: string, headers?: object, request?: unknown, response?: unknown, target?: string, errorTarget?: string }

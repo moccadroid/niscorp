@@ -29,6 +29,7 @@ import type {
   CanvasConfig,
   CanvasState,
   DataChangeHandler,
+  PushOptions,
   Shell,
   ShellConfig,
   StateChangeHandler,
@@ -80,17 +81,30 @@ export const createShell = (config: ShellConfig): Shell => {
     config.onError(lifecycleErr);
   };
 
+  // WHO PUT THIS HERE. A caller that pushes with an `origin` can ask later
+  // whether an instance is still one of its own — the question any server-driven
+  // or agent-driven layout must answer before it closes something, and one
+  // nobody can answer by inspecting the screen. Dropped with the instance.
+  const origins = new Map<string, string>();
+
   const ops = createLifecycleOps({
     registry,
     telemetry,
     onLifecycleError: handleLifecycleRejection,
+    onUnmount: (instanceId) => origins.delete(instanceId),
   });
 
   const canvases = new Map<string, Canvas>();
   const actionLayouts = new Map<string, LayoutNode | string>();
+  // Canvases declared `mode: 'list'` keep EVERY instance live and visible at
+  // once (a tray of cards), instead of the default stack where only the top is
+  // active and the rest are suspended. Two behaviours follow: push does not
+  // suspend the previous top, and removing a card does not resume another.
+  const listCanvases = new Set<string>();
   for (const cfg of config.canvases) {
     canvases.set(cfg.id, createCanvas(cfg.id));
     if (cfg.actionLayout !== undefined) actionLayouts.set(cfg.id, cfg.actionLayout);
+    if (cfg.mode === 'list') listCanvases.add(cfg.id);
   }
 
   // Mutable so addCanvas / removeCanvas / setCanvasLayout can change the rendered
@@ -203,6 +217,7 @@ export const createShell = (config: ShellConfig): Shell => {
     replace: (cid, aid, input, frags) => replace(cid, aid, input, frags),
     clear: (cid) => clear(cid),
     popTo: (cid, iid) => popTo(cid, iid),
+    removeInstance: (cid, iid) => removeInstance(cid, iid),
   });
 
   const buildRuntime = createRuntimeFactory({
@@ -242,15 +257,39 @@ export const createShell = (config: ShellConfig): Shell => {
     actionId: string,
     input?: Record<string, unknown>,
     fragmentIds?: string[],
+    options?: PushOptions,
   ): string => {
     guard();
     const canvas = getCanvas(canvasId);
     const definition = resolveDefinition(actionId, fragmentIds);
-    ops.suspendTop(canvas);
+    // A list canvas keeps its existing cards live; only a stack suspends the top.
+    if (!listCanvases.has(canvasId)) ops.suspendTop(canvas);
     const runtime = spawn(canvasId, definition, input);
     canvas.pushInstance(runtime.instance);
+    if (options?.origin !== undefined) origins.set(runtime.instance.id, options.origin);
     fireState();
     return runtime.instance.id;
+  };
+
+  // Remove ONE instance anywhere in a canvas's stack. On a list canvas this is
+  // a card dismissing itself (its X fires `removeSelf`); on a stack, removing
+  // the top resumes the one beneath, like `pop`. A no-op if the instance is not
+  // in the canvas (a stale close can't clear the wrong card).
+  const removeInstance = (canvasId: string, instanceId: string): void => {
+    if (disposed) return;
+    guardNoPendingStrictError();
+    const canvas = canvases.get(canvasId);
+    if (canvas === undefined) return;
+    if (!canvas.stack.some((i) => i.id === instanceId)) return;
+    const previousTop = canvas.peek();
+    for (const inst of canvas.clearStack()) {
+      if (inst.id === instanceId) ops.unmountInstance(inst.id);
+      else canvas.pushInstance(inst);
+    }
+    // Stack canvases resume a newly-exposed top; list canvases never suspended,
+    // so there is nothing to resume.
+    if (!listCanvases.has(canvasId) && canvas.peek() !== previousTop) ops.resumeTop(canvas);
+    fireState();
   };
 
   const pop = (canvasId: string): void => {
@@ -485,8 +524,10 @@ export const createShell = (config: ShellConfig): Shell => {
     registry: componentRegistry,
     layoutStore,
     push,
+    originOf: (instanceId) => origins.get(instanceId),
     pop,
     popTo,
+    removeInstance,
     replace,
     clear,
     registerAction,

@@ -28,7 +28,7 @@ export { QueryRequestSchema } from './schemas/request.schema.js';
 
 // ─── Scope ───────────────────────────────────────────────────
 export { discoverEntities } from './scope/discover.js';
-export { applyScope, VexScopeError } from './scope/apply.js';
+export { checkScope, scopeResolved, applyScope, VexScopeError } from './scope/apply.js';
 // Grants — a ScopePolicy described as strings (`<table>.<verb>` over
 // SCOPE_VERBS), so a policy layer above (a charter, a role system) hands
 // vex a flat string set and gets the native contract back — no imports

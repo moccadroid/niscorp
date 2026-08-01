@@ -21,7 +21,10 @@ export type {
   DataChangeEvent as ShellDataChangeEvent,
   DataChangeHandler as ShellDataChangeHandler,
   CanvasChangeHandler as ShellCanvasChangeHandler,
+  PushOptions,
 } from './types';
 
 export { createShell } from './shell';
 export { CANVAS_SLOT_NAME, ACTION_SLOT_NAME } from './slot-names';
+export { reconcileCanvas } from './reconcile';
+export type { Desired, ReconcileOptions, ReconcileResult } from './reconcile';

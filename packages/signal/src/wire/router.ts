@@ -54,12 +54,28 @@ const failed = (evidence: string, flags: { truncated?: boolean } = {}): Routed =
 
 type Candidate = { value: unknown; rung: string };
 
-const tryParse = (text: string): { ok: true; value: unknown } | { ok: false } => {
+// The parser's own complaint, kept rather than swallowed. When nothing on the
+// ladder parses, this is the only description of what the model actually got
+// wrong, and a correction that cannot name the defect gets the same output back.
+const tryParse = (text: string): { ok: true; value: unknown } | { ok: false; why: string } => {
   try {
     return { ok: true, value: JSON.parse(text) };
-  } catch {
-    return { ok: false };
+  } catch (error) {
+    return { ok: false, why: error instanceof Error ? error.message : String(error) };
   }
+};
+
+// Why the UNTOUCHED text failed, asked only when the whole ladder came up
+// empty. It re-parses rather than remembering: a module-level note would be
+// shared by every route in flight, and two runs answering at once would report
+// each other's defect.
+//
+// The FIRST rung is the only one worth reporting. Every later rung parses text
+// this file has already altered, so its complaint describes a repair rather
+// than what the model wrote.
+const whyNotJson = (text: string): string | undefined => {
+  const direct = tryParse(text.trim());
+  return direct.ok ? undefined : direct.why;
 };
 
 function* ladder(text: string, strategies: ReadonlyArray<ResponseWireStrategy>): Generator<Candidate> {
@@ -141,7 +157,14 @@ const finishAttempt = (call: StepToolCall, request: RouteRequest): Routed | unde
 const contentEvidence = (content: string, nearMiss: string | undefined): string => {
   if (nearMiss !== undefined) return nearMiss;
   const snippet = content.trim().slice(0, 160);
-  return snippet.length > 0 ? `output is not valid JSON — it began: ${snippet}` : 'the turn produced no output';
+  if (snippet.length === 0) return 'the turn produced no output';
+  // The parser's reason first: "Expected ',' or ']' after array element at
+  // position 2057" is something a model can act on. The opening characters are
+  // not, and on their own they buy a near-identical retry.
+  const why = whyNotJson(content);
+  return why === undefined
+    ? `output is not valid JSON — it began: ${snippet}`
+    : `output is not valid JSON: ${why}. It began: ${snippet}`;
 };
 
 const contentTurn = (request: RouteRequest): Routed => {

@@ -165,7 +165,7 @@ export { getPath } from './shared';
 // ═══════════════════════════════════════════════════════════
 // Shell — top-level entry point for users
 // ═══════════════════════════════════════════════════════════
-export { createShell, CANVAS_SLOT_NAME, ACTION_SLOT_NAME } from './shell';
+export { createShell, CANVAS_SLOT_NAME, ACTION_SLOT_NAME, reconcileCanvas } from './shell';
 
 export type {
   CanvasConfig,
@@ -180,4 +180,8 @@ export type {
   ShellDataChangeEvent,
   ShellDataChangeHandler,
   ShellCanvasChangeHandler,
+  PushOptions,
+  Desired,
+  ReconcileOptions,
+  ReconcileResult,
 } from './shell';

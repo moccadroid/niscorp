@@ -76,8 +76,13 @@ describe('defineAgent', () => {
     const systems = (llm.requests[0]?.messages ?? [])
       .filter((message) => message.role === 'system')
       .map((message) => (typeof message.content === 'string' ? message.content : ''));
+    // Identity leads; the agent's own context sits AFTER the fixed blocks
+    // (tool guides, schema doc, finish protocol) so a prefix cache can hold
+    // everything that does not change between runs.
     expect(systems[0]).toBe('You are Ray.');
-    expect(systems[1]).toBe('Extra for Ray.');
+    expect(systems.at(-1)).toBe('Extra for Ray.');
+    expect(systems.some((message) => message.startsWith('FINISH PROTOCOL'))).toBe(true);
+    expect(systems.indexOf('Extra for Ray.')).toBeGreaterThan(systems.findIndex((message) => message.startsWith('FINISH PROTOCOL')));
   });
 
   it('preview shows messages, tools (incl. respond) and the resolved strategy', async () => {

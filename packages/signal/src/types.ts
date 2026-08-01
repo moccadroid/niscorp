@@ -257,10 +257,19 @@ export type StepRequest = {
 export type StepResult = {
   content: string;
   toolCalls: StepToolCall[];
+  // What the call cost, AS THE PROVIDER REPORTED IT. Zero means the provider
+  // said zero; `reported: false` means it said nothing at all, which is a
+  // different fact and must not be summed as if it were free.
+  //
+  // OpenAI-compatible streams send the usage frame after the last content
+  // chunk and are not reliable about it — the same provider that emits it
+  // twice on one call omits it on the next. A consumer that cannot tell the
+  // two apart reports an agent as costing nothing.
   usage: {
     inputTokens: number;
     outputTokens: number;
     totalTokens: number;
+    reported: boolean;
   };
   finishReason: string;
   raw: unknown;

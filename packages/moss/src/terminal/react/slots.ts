@@ -78,8 +78,26 @@ export const registerWireSlots = (registry: ComponentRegistry<NovaComponent>, op
     definitionId,
     children,
   }: TerminalSlotWrapperProps) => {
-    if (slotWrapper === undefined) return createElement(Fragment, { key: instanceId }, children);
-    return createElement(slotWrapper, { key: instanceId, instanceId, canvasId, definitionId }, children);
+    const api = useContext(TerminalApiContext);
+    const wrapped = slotWrapper === undefined ? createElement(Fragment, { key: instanceId }, children) : createElement(slotWrapper, { key: instanceId, instanceId, canvasId, definitionId }, children);
+    // Origin is decided HERE, where instance identity lives: a list canvas
+    // renders several live cards at once, and a click inside THIS boundary
+    // must reach THIS instance's triggers — the server's active-instance
+    // fallback only holds for card-deck canvases. Events that already carry
+    // an origin keep it.
+    if (api === undefined || instanceId === undefined || canvasId === undefined) return wrapped;
+    return createElement(
+      NovaRenderProvider,
+      {
+        registry,
+        dispatch: (event: NovaEvent) => api.dispatch(canvasId, event.origin === undefined ? { ...event, origin: instanceId } : event),
+        publish: (channel: string, payload?: unknown) => api.publish(channel, payload),
+        fallback,
+        textWrapper,
+        errorMarker,
+      },
+      wrapped,
+    );
   };
   registry.register('ActionSlot', ActionSlot, { description: 'An action instance boundary from the server; the app slotWrapper wraps it.' });
 };

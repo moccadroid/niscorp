@@ -5,7 +5,7 @@ import type { NovaError } from '../shared/errors';
 import type { IdFactory } from '../shared/ids';
 import type { MessageBus } from '../shared/message-bus';
 import type { ComponentRegistry, LayoutStore, RenderNode } from '../layout/types';
-import type { ActionDefinition, Mutation, PopEffect, PopToEffect, PushEffect, ReplaceEffect, ResetToEffect, Step } from './schemas';
+import type { ActionDefinition, Mutation, PopEffect, PopToEffect, PushEffect, RemoveInstanceEffect, RemoveSelfEffect, ReplaceEffect, ResetToEffect, Step } from './schemas';
 
 // ═══════════════════════════════════════════════════════════
 // Status / Instance
@@ -66,7 +66,7 @@ export type FetchResponse = {
 // Navigation effects (escape via onNavigate)
 // ═══════════════════════════════════════════════════════════
 
-export type NavigationEffect = PushEffect | PopEffect | ReplaceEffect | PopToEffect | ResetToEffect;
+export type NavigationEffect = PushEffect | PopEffect | ReplaceEffect | PopToEffect | ResetToEffect | RemoveInstanceEffect | RemoveSelfEffect;
 export type NavigateHandler = (effect: NavigationEffect) => void;
 
 // ═══════════════════════════════════════════════════════════

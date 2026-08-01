@@ -16,6 +16,7 @@ export const compileQuery = (resolved: ResolvedQuery): CompiledQuery => {
     aliasMap: resolved.aliasMap,
     paramSlots,
     paramCounter,
+    ...(resolved.existsMap !== undefined ? { existsMap: resolved.existsMap } : {}),
   };
 
   const sqlParts: string[] = [];
@@ -79,20 +80,25 @@ export const compileQuery = (resolved: ResolvedQuery): CompiledQuery => {
   }
 
   // ─── JOIN ──────────────────────────────────────────────────
+  // A join's ON clause is the FK condition plus anything scope put there. The
+  // extras only ever appear on LEFT joins, and they are the whole reason a LEFT
+  // join survives a row rule: in WHERE they would annihilate every driving row
+  // whose optional FK is null.
   for (const join of resolved.joins) {
     const joinSource = resolved.sources.find((s) => s.alias === join.toAlias);
     if (joinSource !== undefined) {
       const keyword = join.kind === 'left' ? 'LEFT JOIN' : 'JOIN';
+      const conditions = [
+        `${join.fromAlias}.${join.fromColumn} = ${join.toAlias}.${join.toColumn}`,
+        ...(join.on ?? []).map((extra) => compileFilter(extra.original, ctx)),
+      ];
+      const on = conditions.join(' AND ');
       if (joinSource.subquery !== undefined) {
         const subSql = compileQuery(joinSource.subquery);
         mergeSubqueryParams(subSql, paramSlots, paramCounter);
-        sqlParts.push(
-          `${keyword} (${subSql.sql}) AS ${join.toAlias} ON ${join.fromAlias}.${join.fromColumn} = ${join.toAlias}.${join.toColumn}`,
-        );
+        sqlParts.push(`${keyword} (${subSql.sql}) AS ${join.toAlias} ON ${on}`);
       } else {
-        sqlParts.push(
-          `${keyword} ${join.toTable} AS ${join.toAlias} ON ${join.fromAlias}.${join.fromColumn} = ${join.toAlias}.${join.toColumn}`,
-        );
+        sqlParts.push(`${keyword} ${join.toTable} AS ${join.toAlias} ON ${on}`);
       }
     }
   }

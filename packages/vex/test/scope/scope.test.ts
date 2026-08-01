@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { discoverEntities, extractEntityFromPath } from '../../src/scope/discover.js';
-import { applyScope, VexScopeError } from '../../src/scope/apply.js';
+import { applyScope, checkScope, VexScopeError } from '../../src/scope/apply.js';
 import type { Query } from '../../src/schemas/query.schema.js';
 import type { ScopePolicy } from '../../src/scope/scope.types.js';
 
@@ -285,61 +285,10 @@ describe('applyScope', () => {
     expect(result.filter).toBeUndefined();
   });
 
-  it('injects an eq filter for a read match rule', () => {
-    const policy: ScopePolicy = {
-      default: 'allow',
-      entities: { users: { read: [{ match: 'tenantId', to: 'tenant' }] } },
-    };
-    const result = applyScope(baseDsl, new Set(['users']), policy);
-    expect(result.filter).toEqual({ eq: ['users.tenantId', { $scope: 'tenant' }] });
-  });
-
-  it('AND-merges the scope filter with an existing filter', () => {
-    const dslWithFilter: Query = { ...baseDsl, filter: { eq: ['users.active', true] } };
-    const policy: ScopePolicy = {
-      default: 'allow',
-      entities: { users: { read: [{ match: 'tenantId', to: 'tenant' }] } },
-    };
-    const result = applyScope(dslWithFilter, new Set(['users']), policy);
-    expect(result.filter).toEqual({
-      and: [
-        { eq: ['users.active', true] },
-        { eq: ['users.tenantId', { $scope: 'tenant' }] },
-      ],
-    });
-  });
-
-  it('multiple read matches produce AND-combined filters', () => {
-    const policy: ScopePolicy = {
-      default: 'allow',
-      entities: { users: { read: [{ match: 'tenantId', to: 'tenant' }, { match: 'orgId', to: 'org' }] } },
-    };
-    const result = applyScope(baseDsl, new Set(['users']), policy);
-    expect(result.filter).toEqual({
-      and: [
-        { eq: ['users.tenantId', { $scope: 'tenant' }] },
-        { eq: ['users.orgId', { $scope: 'org' }] },
-      ],
-    });
-  });
-
-  it('recurses into subqueries', () => {
-    const dslWithSub: Query = {
-      from: [{ as: 'sub', query: { from: ['orders'], fields: ['orders.userId'] } }],
-      fields: ['sub.userId'],
-    };
-    const policy: ScopePolicy = {
-      default: 'allow',
-      entities: { orders: { read: [{ match: 'tenantId', to: 'tenant' }] } },
-    };
-    const result = applyScope(dslWithSub, new Set(['orders', 'sub']), policy);
-
-    const subSource = result.from[0];
-    expect(typeof subSource).toBe('object');
-    if (typeof subSource === 'object' && subSource !== null && 'query' in subSource) {
-      expect(subSource.query.filter).toEqual({ eq: ['orders.tenantId', { $scope: 'tenant' }] });
-    }
-  });
+  // Row-rule PLACEMENT is no longer a DSL concern — it needs join kinds, which
+  // only the resolver knows. Those assertions live in scope-placement.test.ts,
+  // against the compiled SQL, which is the only place the distinction between
+  // a WHERE and an ON clause is observable at all.
 
   it('does not mutate the original DSL', () => {
     const original: Query = {
@@ -389,11 +338,9 @@ describe('discoverEntities — subquery aliases', () => {
         tasks: { read: [{ match: 'assignee_id', to: 'userId' }] },
       },
     };
-    const scoped = applyScope(counts, discoverEntities(counts), policy);
-    // The tasks subquery gained the RLS filter; nothing threw on 'c'/'t'.
-    const taskSource = scoped.from[1];
-    if (typeof taskSource === 'string') throw new Error('expected subquery source');
-    expect(JSON.stringify(taskSource.query.filter)).toContain('assignee_id');
+    // Nothing throws on the aliases 'c'/'t' — they are not tables. The tasks
+    // rule itself is placed at resolution; see scope-placement.test.ts.
+    expect(() => checkScope(discoverEntities(counts), policy)).not.toThrow();
   });
 
   it('still denies a real unlisted entity at the same level as an alias', () => {

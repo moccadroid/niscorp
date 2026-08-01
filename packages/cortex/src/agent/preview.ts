@@ -98,11 +98,15 @@ export const previewAgent = async <TData, TDeps>(
       ? [{ role: 'system', content: typeof doc === 'string' && doc !== 'auto' ? doc : schemaDoc(outputSchema) }]
       : [];
   const finishMessage: Message = { role: 'system', content: resolved.finishProtocol };
+  // Identical to run.ts, and it has to be — a preview that explained a
+  // different order would be explaining a request that never goes out.
+  const [identity, ...rest] = contextMessages;
   const messages = [
-    ...contextMessages,
+    ...(identity ? [identity] : []),
     ...toolGuidesMessage(allTools),
     ...docMessage,
     finishMessage,
+    ...rest,
     ...inputMessages(input),
   ];
 

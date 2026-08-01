@@ -9,7 +9,7 @@
 //   server.ts     — boot refusal + the HTTP surfaces + the socket accept
 //   node.ts       — the Node listener + ws transport (./node subpath; Bun swaps this, never the app)
 export { defineApp } from './app';
-export type { NiscApp, ShellManifest, FunctionSession, LayoutVariant } from './app';
+export type { NiscApp, ShellManifest, FunctionSession, LayoutVariant, RunRecord, RunTurn, RunSink } from './app';
 export { devSession, mintDevToken } from './runtime';
 export type { NiscRuntime } from './runtime';
 export { createServer } from './server';

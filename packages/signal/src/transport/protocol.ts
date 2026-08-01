@@ -42,11 +42,17 @@ const NATIVE = (shape: string, note: string): string =>
 const RESPOND = (shape: string, note: string): string =>
   `FINISH PROTOCOL: To finish, call the \`respond\` tool ALONE in its own turn with the envelope ${shape} as its arguments — or reply with ONLY that JSON envelope as your entire message.${note}`;
 
+// KEY ORDER IS LOAD-BEARING. A model emits JSON in the order it is shown, so a
+// field declared after `data` is written after the answer it is supposed to
+// explain — post-hoc justification, and pure latency. `reasoning` therefore
+// comes FIRST, where writing it conditions everything that follows.
+//
+// Consumers read by key and do not care; only generation order changes.
 const envelopeShape = (spec: ProtocolSpec): string => {
-  if (!spec.hasData) return '{ "response": string, "reasoning"?: string }';
+  if (!spec.hasData) return '{ "reasoning"?: string, "response": string }';
   return spec.responseMode === 'required'
-    ? '{ "response": string, "data": <the payload>, "reasoning"?: string }'
-    : '{ "response"?: string, "data": <the payload>, "reasoning"?: string }';
+    ? '{ "reasoning"?: string, "response": string, "data": <the payload> }'
+    : '{ "reasoning"?: string, "response"?: string, "data": <the payload> }';
 };
 
 export const finishProtocol = (spec: ProtocolSpec): string => {

@@ -26,6 +26,14 @@ const collectFromFieldOrValue = (fov: FieldOrValue, out: Set<string>): void => {
 // ───────────────────────────────────────────────────────────────
 
 const collectFromFilter = (filter: Filter, out: Set<string>): void => {
+  // An EXISTS reads tables, so its tables are discovered like any other — a
+  // denied entity cannot be reached by hiding it inside a subquery.
+  if ('exists' in filter) {
+    for (const entity of filter.exists.from) out.add(entity);
+    if (filter.exists.filter !== undefined) collectFromFilter(filter.exists.filter, out);
+    return;
+  }
+
   if ('eq' in filter || 'neq' in filter || 'gt' in filter || 'gte' in filter || 'lt' in filter || 'lte' in filter) {
     const pair = ('eq' in filter) ? filter.eq
       : ('neq' in filter) ? filter.neq

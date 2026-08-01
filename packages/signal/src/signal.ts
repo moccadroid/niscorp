@@ -7,6 +7,7 @@ import type {
   EmbedOptions,
 } from './types';
 import type { SignalConfig, CustomProviderConfig } from './config';
+import { estimateUsage } from './utils/estimate-usage';
 import { SignalError, ErrorCode } from './errors';
 import { providerRegistry, resolveApiKey } from './registry';
 import { createOpenAICompatibleAdapter } from './adapters/openai-compatible.adapter';
@@ -161,10 +162,15 @@ const recoveredStepResult = (
   recovered: { strategy: string; rejection: Rejection },
   routed: ReturnType<typeof routeRejection>,
   raw: unknown,
+  sent: readonly Message[],
 ): StepResult => ({
   content: '',
   toolCalls: routed.outcome.kind === 'tool_calls' ? routed.outcome.calls : [],
-  usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 },
+  // A rejected generation costs tokens — the provider processed the request and
+  // billed for it — and the 400 body carries none. The prompt is known exactly
+  // and the model's attempt is in the rejection, so this is countable rather
+  // than lost. Marked unreported, because it is a reckoning.
+  usage: estimateUsage(sent, recovered.rejection.argsText, routed.outcome.kind === 'tool_calls' ? routed.outcome.calls : []),
   finishReason: 'error_recovered',
   raw,
   outcome: routed.outcome,
@@ -246,7 +252,7 @@ const createSignalFromConfig = <T = string>(config: SignalConfig): Signal<T> => 
         ...(request.output?.outputTool !== undefined && { outputTool: request.output.outputTool }),
         responseStrategies: responseStrategies(wireStrategies),
       });
-      return recoveredStepResult(recovered, routed, error);
+      return recoveredStepResult(recovered, routed, error, providerRequest.messages);
     }
     const toolCalls: StepToolCall[] = (response.toolCalls ?? []).map((call) => {
       let parsed: unknown = call.args;
@@ -263,7 +269,9 @@ const createSignalFromConfig = <T = string>(config: SignalConfig): Signal<T> => 
     const result: StepResult = {
       content: response.content,
       toolCalls,
-      usage: response.usage,
+      // The non-streaming body always carries usage, so a zero here is a real
+      // zero rather than a missing frame.
+      usage: { ...response.usage, reported: true },
       finishReason: response.finishReason,
       raw: response.raw,
     };
@@ -316,7 +324,7 @@ const createSignalFromConfig = <T = string>(config: SignalConfig): Signal<T> => 
           ...(request.output?.outputTool !== undefined && { outputTool: request.output.outputTool }),
           responseStrategies: responseStrategies(wireStrategies),
         });
-        yield { type: 'done', result: recoveredStepResult(recovered, routed, error) };
+        yield { type: 'done', result: recoveredStepResult(recovered, routed, error, request.messages) };
       }
     };
     return run();

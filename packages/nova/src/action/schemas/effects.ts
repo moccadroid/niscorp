@@ -39,7 +39,29 @@ export type ResetToEffect = {
   resetTo: { action: string; canvas?: string; input?: Record<string, unknown>; with?: string[] };
 };
 
-export type Effect = CallEffect | EmitEffect | PushEffect | PopEffect | ReplaceEffect | PopToEffect | ResetToEffect;
+// Remove ONE instance anywhere in a canvas's stack (not just the top). On a
+// list-mode canvas — where every card is live and visible at once — this is how
+// a card's own close button dismisses itself. `pop` removes the top; this
+// removes a named one.
+export type RemoveInstanceEffect = { removeInstance: { canvas?: string; instance: string } };
+
+// Sugar for `removeInstance` aimed at the firing instance itself: a card's X
+// says "close me" without knowing its own id. The runtime desugars it to
+// `removeInstance` with the instance's real id before it escapes.
+export type RemoveSelfEffect = { removeSelf: true };
+export type ReloadEffect = { reload: true };
+
+export type Effect =
+  | CallEffect
+  | EmitEffect
+  | PushEffect
+  | PopEffect
+  | ReplaceEffect
+  | PopToEffect
+  | ResetToEffect
+  | RemoveInstanceEffect
+  | RemoveSelfEffect
+  | ReloadEffect;
 
 export const StepSchema: z.ZodType<Step> = z.lazy(() =>
   z.union([MutationSchema, EffectSchema]).describe('A step is either a mutation or an effect.'),
@@ -157,8 +179,43 @@ const ResetToEffectSchema = z
   .strict()
   .describe('Clear a canvas and push a single new root action (escapes via onNavigate callback).');
 
+const RemoveInstanceEffectSchema = z
+  .object({
+    removeInstance: z
+      .object({
+        canvas: z.string().optional().describe('Canvas id to remove from; defaults to the current canvas.'),
+        instance: z.string().describe('Instance id to unmount and drop from the stack (no-op if absent).'),
+      })
+      .strict()
+      .describe('Remove-instance parameters.'),
+  })
+  .strict()
+  .describe('Remove one instance anywhere in a canvas stack (escapes via onNavigate callback).');
+
+const RemoveSelfEffectSchema = z
+  .object({
+    removeSelf: z.literal(true).describe('Sentinel literal — must be true. Removes the firing instance (desugars to removeInstance).'),
+  })
+  .strict()
+  .describe('Close the firing instance — the list-card X (escapes via onNavigate callback).');
+
+// Re-run the firing instance's `mount` hook — the action re-reads whatever it
+// reads, in place, keeping its identity and its data.
+//
+// The gap this fills: a stacked canvas suspends what it covers and `resume`
+// already re-runs mount, so a revealed action is never stale. A LIST canvas
+// suspends nothing — every card stays active — so a card that loaded at seed
+// time and is opened an hour later would show the hour-old answer. `reload` is
+// what "opening it" means there.
+const ReloadEffectSchema = z
+  .object({
+    reload: z.literal(true).describe('Sentinel literal — must be true. Re-runs this instance\'s mount hook.'),
+  })
+  .strict()
+  .describe('Re-read the firing instance in place — the list-card open.');
+
 export const EffectSchema: z.ZodType<Effect> = z.lazy(() =>
   z
-    .union([CallEffectSchema, EmitEffectSchema, PushEffectSchema, PopEffectSchema, ReplaceEffectSchema, PopToEffectSchema, ResetToEffectSchema])
+    .union([CallEffectSchema, EmitEffectSchema, PushEffectSchema, PopEffectSchema, ReplaceEffectSchema, PopToEffectSchema, ResetToEffectSchema, RemoveInstanceEffectSchema, RemoveSelfEffectSchema, ReloadEffectSchema])
     .describe('An effect that touches the outside world.'),
 );

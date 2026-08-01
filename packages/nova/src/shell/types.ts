@@ -35,6 +35,14 @@ export type CanvasInitialSeed =
 
 export type CanvasConfig = {
   id: string;
+  // How the canvas treats its stack. 'stack' (default) is a card deck: only the
+  // top instance is active, the rest are suspended, and the default render shows
+  // the top alone. 'list' is a tray: every instance stays LIVE and the canvas
+  // renders them all (author an `actionLayout` that loops `instances`) — pushing
+  // adds a card without suspending the others, and a card can dismiss itself with
+  // a `{ removeSelf: true }` effect. push/pop/popTo behave the same; only the
+  // suspend-and-render-top default changes.
+  mode?: 'stack' | 'list';
   // Layout describing how this canvas arranges its action instances.
   // Either an inline LayoutNode or a LayoutStore id. When omitted, the
   // canvas renders only the top-of-stack (card-deck) action.
@@ -44,6 +52,17 @@ export type CanvasConfig = {
   // or an ordered list (pushed left-to-right). Equivalent to calling
   // shell.push(canvasId, ...) after createShell returns.
   initial?: CanvasInitialSeed | CanvasInitialSeed[];
+};
+
+// The tail of `push`, named rather than positional: the head (canvas, action,
+// input, fragments) is the operation and reads well in order; anything else is
+// metadata about the call, and a fifth positional argument would only invite
+// `push(c, a, input, undefined, x)`.
+export type PushOptions = {
+  // Who is placing this. A caller that names one can ask `originOf` later
+  // whether an instance is still its own — the question any server-driven or
+  // agent-driven layout must answer before it closes something.
+  origin?: string;
 };
 
 export type CanvasState = {
@@ -149,12 +168,19 @@ export type Shell = {
 
   // `fragments` (optional) names ActionFragments to compose the action with
   // before instantiation — same as a push/replace effect's `with: [...]`.
-  push: (canvasId: string, actionId: string, input?: Record<string, unknown>, fragments?: string[]) => string;
+  push: (canvasId: string, actionId: string, input?: Record<string, unknown>, fragments?: string[], options?: PushOptions) => string;
+  // What `origin` the instance was pushed with, if any. Undefined for anything
+  // a person opened, anything seeded at build, and any push that named none.
+  originOf: (instanceId: string) => string | undefined;
   pop: (canvasId: string) => void;
   // Pop a canvas down to a given instance (unmount everything above it). A no-op
   // if the instance isn't in the stack. Lets stack-nav chrome (a breadcrumb, a
   // tab) jump straight to an ancestor via `useShell().popTo(...)`.
   popTo: (canvasId: string, instanceId: string) => void;
+  // Remove ONE instance anywhere in a canvas's stack (not just the top). On a
+  // list canvas this is a card closing itself; on a stack, removing the top
+  // resumes the one beneath. A no-op if the instance isn't in the canvas.
+  removeInstance: (canvasId: string, instanceId: string) => void;
   replace: (canvasId: string, actionId: string, input?: Record<string, unknown>, fragments?: string[]) => string;
   clear: (canvasId: string) => void;
 

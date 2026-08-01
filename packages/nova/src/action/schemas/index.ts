@@ -85,7 +85,7 @@ export type { Mutation } from '../mutations';
 
 // Re-export sibling schemas + inferred types
 export { EffectSchema, StepSchema } from './effects';
-export type { Effect, Step, CallEffect, EmitEffect, PushEffect, PopEffect, ReplaceEffect, PopToEffect, ResetToEffect } from './effects';
+export type { Effect, Step, CallEffect, EmitEffect, PushEffect, PopEffect, ReplaceEffect, PopToEffect, ResetToEffect, RemoveInstanceEffect, RemoveSelfEffect, ReloadEffect } from './effects';
 export { TriggerConfigSchema } from './triggers';
 export type { TriggerConfig } from './triggers';
 export { EndpointConfigSchema } from './endpoints';

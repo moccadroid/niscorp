@@ -342,6 +342,20 @@ in `from`.
 { or:  [f1, f2, ...] }
 { not: f }
 
+// EXISTS — is there a row over there that points back at this one?
+// The subquery is the same { from, filter } a query is, and NOTHING else:
+// no fields, no sort, no limit. EXISTS asks whether, not what.
+// The correlation is an ordinary field-to-field comparison against the
+// OUTER entity — no special syntax, because a dotted string is already a
+// field path.
+{ exists: { from: ["task"], filter: { eq: ["task.issue_id", "issue.id"] } } }
+
+// NOT EXISTS is `not` around it — "issues nobody has been sent to":
+{ not: { exists: { from: ["task"], filter: { eq: ["task.issue_id", "issue.id"] } } } }
+
+// Prefer this over fetching a list of ids and passing them back in a
+// `notIn`. Two round trips do not scale, and the set can change between them.
+
 // Semantic vector similarity (query MUST be a $context/$scope ref)
 { semantic: { field: "product.embedding", query: { $context: "search" }, minScore?: 0.7 } }
 

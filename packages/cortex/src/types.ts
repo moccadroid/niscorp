@@ -55,14 +55,19 @@ export type Usage = {
   inputTokens: number;
   outputTokens: number;
   totalTokens: number;
+  // False when ANY step of the run was counted by signal rather than reported
+  // by the provider. A run's total is then an estimate, and a consumer that
+  // sums many runs should say so rather than presenting it as measured.
+  reported: boolean;
 };
 
-export const EMPTY_USAGE: Usage = { inputTokens: 0, outputTokens: 0, totalTokens: 0 };
+export const EMPTY_USAGE: Usage = { inputTokens: 0, outputTokens: 0, totalTokens: 0, reported: true };
 
 export const addUsage = (a: Usage, b: Usage): Usage => ({
   inputTokens: a.inputTokens + b.inputTokens,
   outputTokens: a.outputTokens + b.outputTokens,
   totalTokens: a.totalTokens + b.totalTokens,
+  reported: a.reported && b.reported,
 });
 
 // The envelope's TRANSPORT. The output contract is ALWAYS the JSON

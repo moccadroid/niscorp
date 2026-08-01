@@ -40,7 +40,7 @@ export const todoFormLayout: LayoutNode = {
     }),
     {
       if: '$.error',
-      then: { component: 'Text', props: { size: 'sm', tone: 'danger' }, children: '{{$.error}}' },
+      then: { component: 'Text', props: { size: 'sm', tone: 'danger' }, children: '{{$.error.message}}' },
     },
     {
       component: 'Stack',

@@ -1,4 +1,5 @@
 import { collectInteractive } from '../agent/affordances';
+import { MUTATION_KEYS } from './grammar';
 import type { ActionDefinition } from './schemas';
 
 // ═══════════════════════════════════════════════════════════
@@ -72,10 +73,6 @@ export const collectChannels = (definition: ActionDefinition): ChannelUsage => {
 };
 
 // Mutation ops whose value is a data PATH (see action/mutations/ops). The
-// mutation `push` takes a string path; the navigation effect `push` takes an
-// object — typeof discriminates.
-const MUTATION_PATH_KEYS = ['set', 'toggle', 'increment', 'decrement', 'push', 'pop', 'removeAt', 'move', 'clear'];
-
 const firstSegment = (path: string): string => {
   const segment = path.split('.')[0];
   return segment === undefined || segment.length === 0 ? path : segment;
@@ -127,7 +124,7 @@ export const auditAction = (definition: ActionDefinition, options?: AuditOptions
       issues.push(`step calls endpoint "${call}" but endpoints has no "${call}"`);
     }
 
-    for (const key of MUTATION_PATH_KEYS) {
+    for (const key of MUTATION_KEYS) {
       const path = step[key];
       if (typeof path === 'string' && path.length > 0 && !dataKeys.has(firstSegment(path))) {
         issues.push(`step "${key}: ${path}" writes a key with no default in data`);

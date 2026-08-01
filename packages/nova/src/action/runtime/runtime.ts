@@ -12,6 +12,7 @@ import type {
   ActionRuntimeConfig,
   ActionStatus,
   DataChangeHandler,
+  NavigationEffect,
   OnErrorHandler,
   StatusChangeHandler,
   Unsubscribe,
@@ -55,6 +56,16 @@ export const createActionRuntime = (config: ActionRuntimeConfig): ActionRuntime 
     instance.data = next;
   });
 
+  // The runtime is the only place that knows THIS instance's id, so it desugars
+  // `{ removeSelf: true }` — a card's "close me" — into a `removeInstance`
+  // carrying the real id before the effect escapes upward. Every other effect
+  // passes through untouched.
+  const onNavigate =
+    config.onNavigate === undefined
+      ? undefined
+      : (effect: NavigationEffect): void =>
+          config.onNavigate!('removeSelf' in effect ? { removeInstance: { instance: instance.id } } : effect);
+
   const buildContext = (signal: AbortSignal = abortController.signal): StepContext => ({
     dataStore,
     endpoints: definition.endpoints ?? {},
@@ -63,7 +74,7 @@ export const createActionRuntime = (config: ActionRuntimeConfig): ActionRuntime 
     messageBus: config.messageBus,
     ...(config.fetch === undefined ? {} : { fetch: config.fetch }),
     ...(config.transform === undefined ? {} : { transform: config.transform }),
-    ...(config.onNavigate === undefined ? {} : { onNavigate: config.onNavigate }),
+    ...(onNavigate === undefined ? {} : { onNavigate }),
     // Stamp the call event with this instance's identity before it flows up to
     // the shell's telemetry — `runCall` only knows the endpoint, the runtime
     // knows who made it.
@@ -75,6 +86,13 @@ export const createActionRuntime = (config: ActionRuntimeConfig): ActionRuntime 
     onError,
     signal,
     suspended: instance.status === 'suspended',
+    // `reload` — re-run this instance's own mount hook. The same refresh
+    // `resume` performs, made available as a step for canvases that never
+    // suspend (a list keeps every card active, so nothing else would ever
+    // re-read one).
+    onReload: async () => {
+      await runLifecycleHook('mount', definition, buildContext);
+    },
   });
 
   const setStatus = (next: ActionStatus): void => {

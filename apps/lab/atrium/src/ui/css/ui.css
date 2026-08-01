@@ -1,0 +1,608 @@
+/* Kit classes. Every one of these is applied INSIDE the component that owns it;
+   a layout never names a class. */
+
+.at-card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+
+.at-tile {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 16px 18px;
+  text-align: left;
+  width: 100%;
+  cursor: pointer;
+  transition: box-shadow 140ms ease, transform 140ms ease, border-color 140ms ease;
+}
+
+.at-tile:hover {
+  border-color: var(--accent);
+  box-shadow: var(--shadow-lift);
+  transform: translateY(-1px);
+}
+
+.at-tile--active {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  box-shadow: var(--shadow-lift);
+}
+
+.at-tile--dark {
+  cursor: default;
+  opacity: 0.55;
+  background: var(--surface-sunk);
+  box-shadow: none;
+}
+
+.at-tile--dark:hover {
+  border-color: var(--line);
+  box-shadow: none;
+  transform: none;
+}
+
+.at-btn {
+  border-radius: 999px;
+  border: 1px solid transparent;
+  padding: 9px 18px;
+  cursor: pointer;
+  font-weight: 550;
+  letter-spacing: 0.01em;
+  transition: background 140ms ease, border-color 140ms ease, color 140ms ease;
+  white-space: nowrap;
+}
+
+.at-btn--solid {
+  background: var(--accent);
+  color: #fff;
+}
+
+.at-btn--solid:hover {
+  background: var(--accent-ink);
+}
+
+.at-btn--quiet {
+  background: transparent;
+  border-color: var(--line);
+  color: var(--ink-soft);
+}
+
+.at-btn--quiet:hover {
+  border-color: var(--ink-faint);
+  color: var(--ink);
+}
+
+.at-btn--plain {
+  background: transparent;
+  border-color: transparent;
+  color: var(--accent);
+  padding: 6px 8px;
+}
+
+.at-btn--plain:hover {
+  background: var(--accent-soft);
+}
+
+.at-btn--danger {
+  background: transparent;
+  border-color: var(--line);
+  color: var(--alert);
+}
+
+.at-btn--danger:hover {
+  background: var(--alert-soft);
+  border-color: var(--alert);
+}
+
+/* The assistant's pill — deliberately NOT the accent: action buttons are the
+   hotel's colour, the assistant is the system's. */
+.at-btn--ink {
+  background: var(--ink);
+  color: var(--ground);
+  box-shadow: var(--shadow-lift);
+}
+
+.at-btn--ink:hover {
+  background: var(--ink-soft);
+}
+
+.at-btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.at-btn--big {
+  padding: 18px 24px;
+  border-radius: var(--radius);
+  font-size: 17px;
+  width: 100%;
+}
+
+.at-nav {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 13px;
+  border-radius: 999px;
+  cursor: pointer;
+  color: var(--ink-soft);
+  background: transparent;
+  border: none;
+  white-space: nowrap;
+  transition: background 120ms ease, color 120ms ease;
+}
+
+.at-nav:hover {
+  background: var(--surface-sunk);
+  color: var(--ink);
+}
+
+.at-nav--on {
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+  font-weight: 600;
+}
+
+.at-tab {
+  padding: 6px 14px;
+  border-radius: 999px;
+  border: none;
+  background: transparent;
+  color: var(--ink-mute);
+  cursor: pointer;
+  font-weight: 500;
+}
+
+.at-tab--on {
+  background: var(--ink);
+  color: var(--ground);
+}
+
+.at-tabs {
+  display: inline-flex;
+  gap: 2px;
+  padding: 3px;
+  background: var(--surface-sunk);
+  border-radius: 999px;
+}
+
+.at-field {
+  width: 100%;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 10px 13px;
+  outline: none;
+  transition: border-color 120ms ease, box-shadow 120ms ease;
+}
+
+.at-field:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.at-field::placeholder {
+  color: var(--ink-faint);
+}
+
+.at-row {
+  transition: background 120ms ease;
+}
+
+.at-row--hover:hover {
+  background: var(--surface-sunk);
+  cursor: pointer;
+}
+
+/* The row whose record is open beside the list. A tint alone reads as hover, so
+   the edge marker is what carries it — it survives the pointer moving away. */
+.at-row--open {
+  background: var(--surface-sunk);
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+.at-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 12.5px;
+  font-weight: 550;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+}
+
+.at-bubble {
+  padding: 11px 14px;
+  border-radius: 16px;
+  max-width: 82%;
+  line-height: 1.45;
+}
+
+.at-bubble--them {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-bottom-left-radius: 5px;
+}
+
+.at-bubble--me {
+  background: var(--accent);
+  color: #fff;
+  border-bottom-right-radius: 5px;
+  margin-left: auto;
+}
+
+.at-skeleton {
+  background: linear-gradient(90deg, var(--surface-sunk) 25%, var(--line-soft) 37%, var(--surface-sunk) 63%);
+  background-size: 400% 100%;
+  animation: at-shimmer 1.3s ease infinite;
+  border-radius: var(--radius-sm);
+}
+
+@keyframes at-shimmer {
+  0% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0 50%;
+  }
+}
+
+.at-appear {
+  animation: at-appear 320ms cubic-bezier(0.2, 0.7, 0.3, 1) both;
+}
+
+/* The slotWrapper's boundary around one action instance. It carries the
+   entrance and nothing else — a flex child that may shrink, so a record in a
+   column behaves as though the div were not there. */
+.at-slot {
+  min-width: 0;
+}
+
+@keyframes at-appear {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* ── the assistant's territory ───────────────────────────────
+   Three states, all driven from the document root (written by AssistState,
+   see components/assist.tsx):
+
+     [data-assist]        the standing tint — this region is the assistant's
+                          to arrange. 'aside' tints the side column's ground,
+                          'all' the whole working row's.
+     [data-assist-think]  a run is composing: a comet runs the region's edge.
+     .at-landed           on a placed card (the `landed` fragment): one quick
+                          sheen, then nothing.
+
+   The standing mark is the region's GROUND: paper mixed with a third of the
+   pale spring, so the territory reads as a differently-painted panel rather
+   than a drawn frame. The comet (::after) is the active state: a 3px ring
+   masked to the very edge, carrying one soft arc of the palette that travels
+   the perimeter. Three pixels wide, it cannot reach a card whatever the
+   region's shape — which is what the wandering-orbs version got wrong on the
+   narrow aside. */
+
+@property --at-assist-angle {
+  syntax: '<angle>';
+  inherits: false;
+  initial-value: 0deg;
+}
+
+.at-region--columns {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+}
+.at-region--columns > * {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+.at-region--aside {
+  display: flex;
+  align-items: stretch;
+  position: relative;
+}
+.at-region--aside > * {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+@media (max-width: 899px) {
+  /* The aside stacks full-width under the work; its region follows. */
+  .at-region--aside {
+    flex: 1 1 100%;
+  }
+}
+
+:root[data-assist='aside'] .at-region--aside,
+:root[data-assist='all'] .at-region--columns {
+  background: color-mix(in srgb, var(--assist-b) 32%, var(--ground));
+}
+
+/* The comet: always composed, invisible until a run — so it FADES in over
+   the rim instead of popping with the attribute. One arc, tail in the
+   pastels, head in the base green, travelling the perimeter. */
+:root[data-assist='aside'] .at-region--aside::after,
+:root[data-assist='all'] .at-region--columns::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  padding: 3px;
+  pointer-events: none;
+  z-index: 2;
+  opacity: 0;
+  transition: opacity 400ms ease;
+  background: conic-gradient(
+    from var(--at-assist-angle),
+    transparent 0deg 220deg,
+    color-mix(in srgb, var(--assist-a) 45%, transparent) 280deg,
+    color-mix(in srgb, var(--assist-b) 70%, transparent) 322deg,
+    color-mix(in srgb, var(--assist) 85%, transparent) 348deg,
+    transparent 348.5deg 360deg
+  );
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  mask-composite: exclude;
+}
+:root[data-assist-think][data-assist='aside'] .at-region--aside::after,
+:root[data-assist-think][data-assist='all'] .at-region--columns::after {
+  opacity: 1;
+  animation: at-assist-comet 2.4s linear infinite;
+}
+
+@keyframes at-assist-comet {
+  to {
+    --at-assist-angle: 360deg;
+  }
+}
+
+/* An empty side column is still territory: keep a slim rail visible on wide
+   screens, so "available" reads before anything has arrived. */
+@media (min-width: 920px) {
+  :root[data-assist='aside'] .at-region--aside {
+    min-width: 224px;
+  }
+}
+
+/* The arrival mark — one narrow band in the assistant's greens crossing the
+   card, fast, then nothing. Rounded because it hugs the card, and the card is
+   rounded. */
+.at-landed {
+  position: relative;
+}
+.at-landed::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: var(--radius);
+  pointer-events: none;
+  background: linear-gradient(
+    100deg,
+    transparent 47%,
+    color-mix(in srgb, var(--assist-a) 55%, transparent) 48.5%,
+    color-mix(in srgb, var(--assist-b) 65%, transparent) 50%,
+    color-mix(in srgb, var(--assist-c) 55%, transparent) 51.5%,
+    transparent 53%
+  );
+  background-size: 220% 100%;
+  background-repeat: no-repeat;
+  animation: at-landed 620ms cubic-bezier(0.3, 0.6, 0.3, 1) 120ms both;
+}
+
+@keyframes at-landed {
+  from {
+    background-position: 130% 0;
+    opacity: 1;
+  }
+  to {
+    background-position: -40% 0;
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root[data-assist-think][data-assist='aside'] .at-region--aside::after,
+  :root[data-assist-think][data-assist='all'] .at-region--columns::after {
+    animation: none;
+    opacity: 0.5;
+  }
+  .at-landed::after {
+    animation: none;
+    opacity: 0;
+  }
+}
+
+.at-scroll {
+  overflow: auto;
+  min-height: 0;
+}
+
+.at-scroll::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+.at-scroll::-webkit-scrollbar-thumb {
+  background: var(--line);
+  border-radius: 999px;
+  border: 3px solid var(--ground);
+}
+
+/* ── stats: figures you read, wherever they land ─────────────
+   Density is the REGION's business, not the layout's. One variable, set per
+   region, and every action obeys wherever it lands — including actions that
+   arrived from a vendor who could not know where they would sit. */
+.at-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.at-stat__label {
+  font-size: 11.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--ink-faint);
+  font-weight: 600;
+}
+.at-stat__value {
+  font-family: var(--serif);
+  font-size: var(--stat-size, 32px);
+  line-height: 1.05;
+  color: var(--ink);
+}
+.at-stat__hint {
+  font-size: 13px;
+  color: var(--ink-mute);
+}
+
+/* ── the aside: ONE guest's workspace, beside the work ───────
+   A right-hand panel on wide screens; on narrow ones it stacks under the main
+   content instead of hiding anything off-canvas.
+
+   The GROUND, not a surface: it holds a column of cards, so it reads the way
+   the composed home reads — raised panels on a recessed strip. It is one
+   region for the whole canvas (the canvas's actionLayout renders it once), so
+   it fills the row's height and owns the single scrollbar. */
+.at-aside {
+  background: var(--ground);
+  border-left: 1px solid var(--line);
+  width: 420px;
+  flex-shrink: 0;
+  overflow: auto;
+  min-height: 0;
+  height: 100%;
+  /* A narrow column: figures are read, not admired. */
+  --stat-size: 21px;
+}
+
+/* ── the rail: narrow, glanceable, occasional ────────────────
+   Its own scroll, so reaching for a room toggle never moves the work column. */
+.at-rail {
+  background: var(--ground);
+  border-left: 1px solid var(--line);
+  width: 320px;
+  flex-shrink: 0;
+  overflow: auto;
+  min-height: 0;
+  height: 100%;
+  --stat-size: 21px;
+}
+
+@media (max-width: 1099px) {
+  .at-rail {
+    width: 100%;
+    border-left: none;
+    border-top: 1px solid var(--line);
+    height: auto;
+  }
+}
+
+@media (max-width: 899px) {
+  .at-aside {
+    width: 100%;
+    border-left: none;
+    border-top: 1px solid var(--line);
+    height: auto;
+  }
+}
+
+/* ── literal text, kept literal ───────────────────────────────
+   Recessed rather than raised: it is material to read, not a surface to act
+   on. Wraps rather than scrolling sideways — a horizontal scrollbar inside a
+   panel that already scrolls is two ways to lose your place. */
+.at-code {
+  margin: 0;
+  padding: 12px 14px;
+  background: var(--surface-sunk);
+  border: 1px solid var(--line-soft);
+  border-radius: 10px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--ink-soft);
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* ── the dock: the assistant's home ───────────────────────────
+   Sits BELOW the sheet overlay (z 40): when something is placed — by a tap or
+   by the agent — the sheet takes the screen and the dock waits behind it. */
+.at-dock {
+  position: fixed;
+  right: 14px;
+  bottom: calc(14px + env(safe-area-inset-bottom, 0px));
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+.at-dock--open {
+  left: 14px;
+}
+
+.at-dock__panel {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-lift);
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  max-height: min(70vh, 560px);
+  overflow: hidden;
+}
+
+@media (min-width: 720px) {
+  .at-dock--open {
+    left: auto;
+    width: 400px;
+  }
+}
+
+/* The other corner. Two docks share a screen here — the guest's assistant on
+   the right, our own administration on the left — so the anchor is a prop
+   rather than a second component. Two classes beat one, so these win over the
+   right-hand rules above regardless of order. */
+.at-dock--left {
+  left: 14px;
+  right: auto;
+  align-items: flex-start;
+}
+.at-dock--left.at-dock--open {
+  right: 14px;
+}
+
+@media (min-width: 720px) {
+  .at-dock--left.at-dock--open {
+    right: auto;
+    width: 400px;
+  }
+  /* A panel you WORK in, not one you talk to. It takes the screen because the
+     things in it are tables read side by side — a column of subjects and a
+     column of detail — and a narrow dock turns both into scrolling. */
+  .at-dock--wide.at-dock--open {
+    width: min(1320px, calc(100vw - 28px));
+  }
+  .at-dock--wide .at-dock__panel {
+    height: min(90vh, 960px);
+  }
+}

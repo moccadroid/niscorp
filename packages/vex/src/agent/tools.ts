@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { defineTool } from '@niscorp/cortex';
 import { QuerySchema } from '../schemas/query.schema.js';
 import { discoverEntities } from '../scope/discover.js';
-import { applyScope } from '../scope/apply.js';
+import { checkScope, scopeResolved } from '../scope/apply.js';
 import { resolve } from '../engine/resolver.js';
 import { analyze } from '../engine/analyzer.js';
 import type { Query } from '../schemas/query.schema.js';
@@ -257,12 +257,11 @@ export const createQueryTools = (deps: QueryToolDeps): ReturnType<typeof defineT
       try {
         const entities = discoverEntities(dsl);
 
-        const scopedDsl = deps.scopePolicy
-          ? applyScope(dsl, entities, deps.scopePolicy)
-          : dsl;
+        if (deps.scopePolicy) checkScope(entities, deps.scopePolicy);
 
-        const testDsl: Query = { ...scopedDsl, limit: 5 };
+        const testDsl: Query = { ...dsl, limit: 5 };
         const resolved = resolve(testDsl, schema);
+        if (deps.scopePolicy) scopeResolved(resolved, deps.scopePolicy);
         const analysis = analyze(resolved, DEFAULT_ANALYSIS_CONFIG);
 
         if (analysis.errors.length > 0) {

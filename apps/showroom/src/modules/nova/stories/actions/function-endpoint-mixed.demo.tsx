@@ -106,7 +106,7 @@ const mixedEndpoints: ActionDefinition = {
           children: {
             component: 'Text',
             props: { color: '#991b1b' },
-            children: '\u2717 {{$.error}}',
+            children: '\u2717 {{$.error.message}}',
           },
         },
       },

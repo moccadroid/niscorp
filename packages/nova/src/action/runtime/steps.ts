@@ -6,6 +6,7 @@ import { isObject } from '@shared/common';
 import type { MessageBus } from '@shared/message-bus';
 import { setPath } from '@shared/bindings/paths';
 import { applyMutations } from '../mutations';
+import { isMutationStep } from '../grammar';
 import type { EndpointConfig, Mutation, Step } from '../schemas';
 import { LifecycleError, UnknownFunctionError, type LifecycleHook, type NovaError } from '@shared/errors';
 import type {
@@ -33,6 +34,9 @@ export type StepContext = {
   fetch?: FetchFn;
   transform?: TransformFn;
   onNavigate?: NavigateHandler;
+  // Re-runs this instance's `mount` hook (the `reload` effect). Supplied by
+  // the runtime, which owns the definition and its lifecycle.
+  onReload?: () => Promise<void>;
   // Reports a completed `call` step upward (the runtime stamps instance/canvas
   // and forwards to telemetry). Aborted calls are not reported.
   onEndpoint?: (event: EndpointEventInit) => void;
@@ -84,19 +88,6 @@ const resolveMutationValues = (
   });
 };
 
-const isMutationStep = (step: Step): step is Mutation => {
-  if ('set' in step) return true;
-  if ('toggle' in step) return true;
-  if ('increment' in step) return true;
-  if ('decrement' in step) return true;
-  if ('removeAt' in step) return true;
-  if ('move' in step) return true;
-  if ('clear' in step) return true;
-  if ('reset' in step) return true;
-  if ('push' in step) return typeof step.push === 'string';
-  if ('pop' in step) return typeof step.pop === 'string';
-  return false;
-};
 
 const writeTarget = (
   dataStore: DataStore,
@@ -238,6 +229,10 @@ const resolveNavInput = (effect: NavigationEffect, ctx: StepContext): Navigation
     const chain = createScopeChain(ctx.dataStore.get());
     return { popTo: { ...effect.popTo, instance: String(resolve(effect.popTo.instance, chain, ctx.extras) ?? '') } };
   }
+  if ('removeInstance' in effect) {
+    const chain = createScopeChain(ctx.dataStore.get());
+    return { removeInstance: { ...effect.removeInstance, instance: String(resolve(effect.removeInstance.instance, chain, ctx.extras) ?? '') } };
+  }
   return effect;
 };
 
@@ -303,6 +298,24 @@ export const executeSteps = async (steps: Step[], ctx: StepContext): Promise<voi
     }
     if ('resetTo' in step) {
       navigate(resolveNavInput(step, ctx), ctx);
+      continue;
+    }
+    if ('removeInstance' in step) {
+      navigate(resolveNavInput(step, ctx), ctx);
+      continue;
+    }
+    if ('removeSelf' in step) {
+      // The runtime desugars this to removeInstance with its own id — the step
+      // carries no id to resolve.
+      navigate(step, ctx);
+      continue;
+    }
+    if ('reload' in step) {
+      // Re-read in place. The runtime supplies the handler (it owns the
+      // definition and the lifecycle); an action with no mount hook reloads to
+      // nothing, which is correct rather than an error.
+      await ctx.onReload?.();
+      if (ctx.signal.aborted) return;
       continue;
     }
   }

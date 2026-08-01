@@ -12,6 +12,9 @@ export type LifecycleOpsDeps = {
   registry: RuntimeRegistry;
   telemetry: Telemetry;
   onLifecycleError: (err: unknown) => void;
+  // Called as an instance is torn down, so per-instance bookkeeping the shell
+  // holds beside the registry (push origins) never outlives what it describes.
+  onUnmount?: (instanceId: string) => void;
 };
 
 export type LifecycleOps = {
@@ -21,7 +24,7 @@ export type LifecycleOps = {
 };
 
 export const createLifecycleOps = (deps: LifecycleOpsDeps): LifecycleOps => {
-  const { registry, onLifecycleError } = deps;
+  const { registry, onLifecycleError, onUnmount } = deps;
 
   // Track instances we've already unmounted so a redundant unmount is a
   // no-op (idempotency) — never re-fires hooks, never re-disposes.
@@ -35,6 +38,7 @@ export const createLifecycleOps = (deps: LifecycleOpsDeps): LifecycleOps => {
     runtime.unmount().catch(onLifecycleError);
     runtime.dispose();
     registry.unregister(instanceId);
+    onUnmount?.(instanceId);
   };
 
   const suspendTop = (canvas: Canvas): void => {

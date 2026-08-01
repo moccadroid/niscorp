@@ -10,7 +10,7 @@ import { z } from 'zod';
 import { QueryRequestSchema } from '../schemas/request.schema.js';
 import { QuerySchema } from '../schemas/query.schema.js';
 import { discoverEntities } from '../scope/discover.js';
-import { applyScope } from '../scope/apply.js';
+import { checkScope, scopeResolved } from '../scope/apply.js';
 import { resolve } from './resolver.js';
 import { analyze } from './analyzer.js';
 import { executeQuery, buildContextContract, findMissingContext } from './executor.js';
@@ -121,16 +121,21 @@ export const createQueryEngine = (engineConfig: QueryEngineConfig): QueryEngine 
     // Discover entities
     const entities = discoverEntities(processedDsl);
 
-    // Apply scope — a per-request policy (from ExecuteOptions) overrides the
-    // engine's configured default for this run.
+    // Scope, in two halves. A per-request policy (from ExecuteOptions)
+    // overrides the engine's configured default for this run.
+    //
+    // The ACCESS CHECK runs first, on entity names alone, so a denied table is
+    // refused before any work is done. The ROW RULES are placed AFTER
+    // resolution, because only the resolver knows which tables are left-joined
+    // and a row rule in the WHERE of a left join silently deletes rows whose
+    // optional FK is null. See scope/apply.ts.
     const activePolicy = policyOverride ?? scopePolicy;
-    let scopedDsl = processedDsl;
-    if (activePolicy !== undefined && scopeValues !== undefined) {
-      scopedDsl = applyScope(processedDsl, entities, activePolicy);
-    }
+    const scoping = activePolicy !== undefined && scopeValues !== undefined;
+    if (scoping && activePolicy !== undefined) checkScope(entities, activePolicy);
 
     // Resolve
-    const resolved = resolve(scopedDsl, schema);
+    const resolved = resolve(processedDsl, schema);
+    if (scoping && activePolicy !== undefined) scopeResolved(resolved, activePolicy);
 
     // Analyze
     const analysis = analyze(resolved, analysisConfig);

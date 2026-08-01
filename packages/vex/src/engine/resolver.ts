@@ -11,6 +11,7 @@ import type {
   ResolvedJoin,
   ResolvedFilter,
   ResolvedSemantic,
+  ResolvedExists,
 } from './engine.types.js';
 import { VexError } from '../errors.js';
 
@@ -228,6 +229,12 @@ const collectFilterPaths = (
   entityLookup: EntityLookup,
   schema: DatabaseSchema,
   resolvedPaths: Map<string, PathResolution>,
+  // Both optional so the compute/aggregate callers below need not care: an
+  // `exists` is only meaningful in a query's own filter, and passing no
+  // collector simply means one found elsewhere is ignored rather than
+  // half-resolved.
+  existsOut?: Map<object, ResolvedExists>,
+  aliasCounter?: AliasCounter,
 ): void => {
   if ('eq' in filter || 'neq' in filter || 'gt' in filter || 'gte' in filter || 'lt' in filter || 'lte' in filter) {
     const pair = ('eq' in filter) ? filter.eq
@@ -270,22 +277,81 @@ const collectFilterPaths = (
     return;
   }
 
+  // An EXISTS resolves as its own little query, and is recorded against the
+  // node so the compiler can find it again. Its sources are added to a lookup
+  // LAYERED OVER the outer one: an inner path resolves to the inner alias, and
+  // anything the inner filter mentions that the subquery does not read falls
+  // through to the outer query — which is exactly what a correlation is.
+  if ('exists' in filter) {
+    if (existsOut === undefined || aliasCounter === undefined) return;
+    const inner: EntityLookup = new Map(entityLookup);
+    const innerSources: ResolvedSource[] = [];
+    const innerEntities: Array<{ entity: EntitySchema; alias: string }> = [];
+    const innerJoins: ResolvedJoin[] = [];
+    const innerAliasMap = new Map<string, string>();
+
+    for (const name of filter.exists.from) {
+      const entity = findEntity(name, schema);
+      // The alias counter is SHARED with the outer query, so an inner `rooms`
+      // can never take the same alias as an outer one and quietly correlate a
+      // table with itself.
+      const alias = generateAlias(name, aliasCounter);
+      inner.set(name, { entity, alias });
+      innerSources.push({ alias, entity, table: entity.table });
+      innerEntities.push({ entity, alias });
+    }
+
+    for (let i = 1; i < innerEntities.length; i += 1) {
+      const curr = innerEntities[i];
+      if (curr === undefined) continue;
+      let found = false;
+      for (let j = 0; j < i; j += 1) {
+        const earlier = innerEntities[j];
+        if (earlier === undefined) continue;
+        const join = findJoinBetween(earlier.entity, curr.entity, earlier.alias, curr.alias);
+        if (join !== undefined) {
+          innerJoins.push(join);
+          found = true;
+          break;
+        }
+      }
+      if (!found) throw new VexError('invalid_dsl', `No foreign key relationship found between the entities of an "exists" and "${curr.entity.name}".`);
+    }
+
+    let innerFilter: ResolvedFilter | undefined;
+    if (filter.exists.filter !== undefined) {
+      const innerPaths = new Map<string, PathResolution>();
+      collectFilterPaths(filter.exists.filter, inner, schema, innerPaths, existsOut, aliasCounter);
+      innerFilter = { original: filter.exists.filter, resolvedPaths: innerPaths };
+      for (const [path, res] of innerPaths) {
+        // Only paths the SUBQUERY owns go in its map; the rest are the outer
+        // query's and resolve there.
+        const owner = path.slice(0, path.indexOf('.'));
+        if (filter.exists.from.includes(owner)) innerAliasMap.set(path, `${res.alias}.${res.column}`);
+        else resolvedPaths.set(path, res);
+      }
+    }
+
+    existsOut.set(filter.exists, { sources: innerSources, joins: innerJoins, filter: innerFilter, aliasMap: innerAliasMap });
+    return;
+  }
+
   if ('and' in filter) {
     for (const sub of filter.and) {
-      collectFilterPaths(sub, entityLookup, schema, resolvedPaths);
+      collectFilterPaths(sub, entityLookup, schema, resolvedPaths, existsOut, aliasCounter);
     }
     return;
   }
 
   if ('or' in filter) {
     for (const sub of filter.or) {
-      collectFilterPaths(sub, entityLookup, schema, resolvedPaths);
+      collectFilterPaths(sub, entityLookup, schema, resolvedPaths, existsOut, aliasCounter);
     }
     return;
   }
 
   if ('not' in filter) {
-    collectFilterPaths(filter.not, entityLookup, schema, resolvedPaths);
+    collectFilterPaths(filter.not, entityLookup, schema, resolvedPaths, existsOut, aliasCounter);
     return;
   }
 
@@ -464,9 +530,11 @@ export const resolve = (dsl: Query, schema: DatabaseSchema): ResolvedQuery => {
   let resolvedFilter: ResolvedFilter | undefined;
   let semantic: ResolvedSemantic | undefined;
 
+  const existsMap = new Map<object, ResolvedExists>();
+
   if (dsl.filter !== undefined) {
     const resolvedPaths = new Map<string, PathResolution>();
-    collectFilterPaths(dsl.filter, entityLookup, schema, resolvedPaths);
+    collectFilterPaths(dsl.filter, entityLookup, schema, resolvedPaths, existsMap, aliasCounter);
     resolvedFilter = { original: dsl.filter, resolvedPaths };
 
     // Also populate aliasMap with filter paths
@@ -544,6 +612,7 @@ export const resolve = (dsl: Query, schema: DatabaseSchema): ResolvedQuery => {
     limit: dsl.limit,
     distinct: dsl.distinct ?? false,
     aliasMap,
+    ...(existsMap.size > 0 ? { existsMap } : {}),
   };
 };
 

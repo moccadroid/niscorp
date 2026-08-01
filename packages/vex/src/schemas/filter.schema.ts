@@ -2,7 +2,29 @@ import { z } from 'zod';
 import { ContextRefSchema, ScopeRefSchema, FieldOrValueSchema } from './value.schema.js';
 import type { ContextRef, ScopeRef, FieldOrValue } from './value.schema.js';
 
+// EXISTS — "is there a row over there that points back at this one".
+//
+// It is the same `{ from, filter }` a query already is, and deliberately no
+// more than that: no fields, no sort, no limit, nothing to select. EXISTS asks
+// whether a row is there, so anything that shapes output would be noise the
+// planner discards, and refusing it is what keeps this an operator rather than
+// an invitation to nest arbitrary SQL.
+//
+// The CORRELATION needs no new vocabulary. A dotted string on either side of a
+// comparison is already a field path, so pointing the inner table at the outer
+// one is an ordinary `eq` between two columns:
+//
+//   { exists: { from: ['tasks'], filter: { eq: ['tasks.issue_id', 'issues.id'] } } }
+//
+// and `not` composes for NOT EXISTS. Whoever writes SQL writes this on the
+// first try, which is the entire design goal.
+export type ExistsQuery = {
+  from: string[];
+  filter?: Filter;
+};
+
 export type Filter =
+  | { exists: ExistsQuery }
   | { eq: [FieldOrValue, FieldOrValue] }
   | { neq: [FieldOrValue, FieldOrValue] }
   | { gt: [FieldOrValue, FieldOrValue] }
@@ -35,8 +57,18 @@ const collectionTarget = z
   ])
   .describe('A set of values or a reference that resolves to an array');
 
+const ExistsSchema: z.ZodType<ExistsQuery> = z.lazy(() =>
+  z
+    .object({
+      from: z.array(z.string()).min(1).describe('Entities the subquery reads. Joined by foreign key like any other from.'),
+      filter: FilterSchema.optional().describe('The correlation, and any extra condition. Reference the outer query by its own entity path: { eq: ["tasks.issue_id", "issues.id"] }.'),
+    })
+    .strict(),
+);
+
 export const FilterSchema: z.ZodType<Filter> = z.lazy(() =>
   z.union([
+    z.object({ exists: ExistsSchema }).strict().describe('EXISTS: true when the subquery matches at least one row. Wrap in `not` for NOT EXISTS.'),
     z.object({ eq: comparisonPair }).strict().describe('Equals: tests equality between two values'),
     z.object({ neq: comparisonPair }).strict().describe('Not equals'),
     z.object({ gt: comparisonPair }).strict().describe('Greater than'),

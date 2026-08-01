@@ -38,7 +38,15 @@ type Env = { Variables: { principal: string | null } };
 // runtime adapter; it's the escape hatch for classic routing, too) plus
 // the socket's accept, which the runtime's transport feeds new
 // connections (see ./node's attachSocket).
-export type MossServer = Hono<Env> & { socket: SocketAccept; shells?: ShellHost };
+export type MossServer = Hono<Env> & {
+  socket: SocketAccept;
+  shells?: ShellHost;
+  // Artifacts changed at runtime (an app that loads actions from rows and just
+  // wrote new ones): re-verify coherence, drop every per-principal memo, and
+  // have living shells adopt their re-resolved definitions. Throws on an
+  // incoherent charter/variant set — a bad publish refuses, exactly like boot.
+  refresh: () => void;
+};
 
 export const createServer = async (app: NiscApp, runtime: NiscRuntime): Promise<MossServer> => {
   const data = await createDataLayer(runtime, app.entries ?? []);
@@ -130,7 +138,10 @@ export const createServer = async (app: NiscApp, runtime: NiscRuntime): Promise<
         engine: data.engine,
         ...(entities !== undefined ? { entities: [...entities] } : {}),
         locked: true,
-        getScope: (c) => ({ userId: c.get('principal') ?? 'anonymous' }),
+        // `userId` is always the principal; the app's `scope` hook contributes
+        // whatever else a principal is (a tenant, an org). Merged server-side,
+        // unforgeable by the request — a `to:` in a behavior resolves here.
+        getScope: (c) => ({ userId: c.get('principal') ?? 'anonymous', ...(app.scope?.(c.get('principal')) ?? {}) }),
         getPolicy: (c) => policy(c.get('principal')),
         mutations: { client: runtime.db },
       }),
@@ -176,8 +187,34 @@ export const createServer = async (app: NiscApp, runtime: NiscRuntime): Promise<
       })
     : undefined;
 
+  // Artifacts changed at runtime — an app that loads actions from rows and
+  // just wrote new ones. Same gates as boot (an incoherent publish REFUSES and
+  // the process keeps serving the old resolution), then the memos drop and
+  // living shells adopt their re-resolved definitions in place: no rebuild,
+  // no lost canvas state, new actions simply become pushable.
+  const refresh = (): void => {
+    const nextReport = verifyCharter(
+      app.charter,
+      { actions: Object.keys(app.actions), data: data.grants, layouts: Object.keys(app.layouts ?? {}) },
+      app.assignments,
+      auditClosure(app.actions, app.layouts),
+    );
+    if (nextReport.errors.length > 0) {
+      throw new Error(`Refresh refused — charter incoherent over the new artifacts:\n${nextReport.errors.map((e) => `  ${e.rule}: ${e.detail}`).join('\n')}`);
+    }
+    const nextVariantErrors = verifyVariants(app);
+    if (nextVariantErrors.length > 0) {
+      throw new Error(`Refresh refused — layout variants incoherent:\n${nextVariantErrors.map((e) => `  ${e}`).join('\n')}`);
+    }
+    policies.clear();
+    catalogs.clear();
+    variantBindings.clear();
+    shells?.adopt();
+  };
+
   return Object.assign(server, {
     socket: createSocket({ session, catalog, ...(shells !== undefined ? { shells } : {}) }),
     ...(shells !== undefined ? { shells } : {}),
+    refresh,
   });
 };

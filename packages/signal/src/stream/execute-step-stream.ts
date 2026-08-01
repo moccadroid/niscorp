@@ -2,6 +2,7 @@ import type {
   Message, ProviderAdapter, ProviderRequest, ProviderStreamDelta,
   StepRequest, StepResult, StepStreamEvent, StepToolCall, StreamOptions,
 } from '../types';
+import { estimateUsage } from '../utils/estimate-usage';
 
 // ═══════════════════════════════════════════════════════════
 // executeStepStream — step-level streaming (one adapter call)
@@ -19,6 +20,7 @@ export type ExecuteStepStreamConfig = {
 };
 
 type AssembledToolCall = { id: string; name: string; args: string };
+
 
 const assembleToolCall = (
   map: Map<number, AssembledToolCall>,
@@ -67,7 +69,10 @@ export async function* executeStepStream(
   let contentBuffer = '';
   let finishReason = 'unknown';
   const assembledToolCalls = new Map<number, AssembledToolCall>();
-  let totalUsage = { inputTokens: 0, outputTokens: 0, totalTokens: 0 };
+  // REPLACED, not accumulated. Each usage frame is the running total for this
+  // call, not an increment — Groq sends the same frame twice on some calls, and
+  // adding them reports double what was spent.
+  let totalUsage = { inputTokens: 0, outputTokens: 0, totalTokens: 0, reported: false };
 
   for await (const delta of config.adapter.chatStream(providerRequest)) {
     if (abortSignal?.aborted) return;
@@ -91,9 +96,10 @@ export async function* executeStepStream(
         break;
       case 'usage':
         totalUsage = {
-          inputTokens: totalUsage.inputTokens + delta.inputTokens,
-          outputTokens: totalUsage.outputTokens + delta.outputTokens,
-          totalTokens: totalUsage.totalTokens + delta.totalTokens,
+          inputTokens: delta.inputTokens,
+          outputTokens: delta.outputTokens,
+          totalTokens: delta.totalTokens,
+          reported: true,
         };
         break;
       case 'finish':
@@ -117,7 +123,7 @@ export async function* executeStepStream(
   const result: StepResult = {
     content: contentBuffer,
     toolCalls,
-    usage: totalUsage,
+    usage: totalUsage.reported ? totalUsage : estimateUsage(providerRequest.messages, contentBuffer, toolCalls),
     finishReason,
     raw: null,
   };
