@@ -60,7 +60,7 @@ What the manifest's in-process functions close over:
 
 ```typescript
 type FunctionSession = {
-  shell: Shell;                    // the session's living, durable shell
+  shell: Shell;                    // the session's living, durable shell (a getter — a reset replaces it)
   principal: string | null;
   roles: readonly string[];
   wire: FetchFn;                   // the server's own surfaces, as this session
@@ -81,8 +81,14 @@ type NiscRuntime = {
   db: MutationClient;              // writes
   cache?: CacheBackend;            // defaults to vex's postgres cache on `pool`
   session?: (token) => string | null | Promise<string | null>;  // defaults to devSession
+  shellIdleMs?: number;            // idle shell eviction; default 30 min, `0` disables
+  sessionRevalidateMs?: number;    // live-socket re-verify; default 60s, `0` disables
 };
 ```
+
+`session` is the whole of what an app writes to give its tokens a lifetime:
+return `null` for a token that has expired or been revoked. moss never learns
+what expiry means — it only asks again, on both surfaces.
 
 #### `mintDevToken(sub, claims?) : string` / `devSession(token) : string | null`
 
@@ -120,21 +126,54 @@ mount it, extend it, or hand it to a listener.
 - `createDataLayer(runtime, entries?): Promise<DataLayer>` — `{ engine, schema,
   grants }`, stood up from what's present.
 - `createShellHost(ctx): ShellHost` — the durable per-principal shell host.
+  `ctx.idleMs` bounds how long a shell may sit unattached (default
+  `DEFAULT_IDLE_MS`, 30 minutes; `0` disables the sweep).
+- `ShellHost` — `{ session, adopt, list, reset, stop }`.
+  - `list(): ShellReport[]` — every durable shell alive right now:
+    `{ principal, connections, since, idleSince, canvases }`. moss owns the map,
+    so moss enumerates it; an app keeping its own note beside it can only drift.
+  - `reset(principal): boolean` — dispose that principal's shell and stand its
+    replacement in the same slot, carrying the attached connections across.
+    `false` = they hold no shell, which is an answer, not an error.
+  - `stop()` — stop the idle sweep (the timer is unref'd, so a plain process
+    needn't call it).
 - `ShellSession` — what `ShellHost.session(token, principal)` returns:
-  `{ shell, attach, detach, dispatch, publish }`. The living nova `Shell`, for
-  in-process hosts (dev checks, embedded tools) that drive it directly;
-  remote clients ride `attach`/`dispatch`.
+  `{ shell, attach, detach, dispatch, publish, reset }`. The living nova `Shell`,
+  for in-process hosts (dev checks, embedded tools) that drive it directly;
+  remote clients ride `attach`/`dispatch`. `shell` is a **getter** — `reset`
+  replaces the shell under a session already held, so a snapshot of the field
+  would go on addressing the disposed one.
 - `auditClosure(definitions, variants?): ClosureAuditor` — nova's action audit as
   the charter's injected closure hook (cross-action wiring breaks only), over each
   role's effective definitions (granted variants substituted).
 
 ### The socket protocol
 
-- `createSocket(ctx): SocketAccept` — `ctx = { session, catalog, shells? }`. One
-  `accept(url, connection)` per connection.
+- `createSocket(ctx): SocketAccept` — `ctx = { session, catalog, shells?,
+  revalidateMs? }`. One `accept(url, connection)` per connection; `accept.stop()`
+  ends revalidation (the timer is unref'd, so a plain process needn't call it).
+- **Identity is asked twice.** At upgrade, and then every `revalidateMs`
+  (default `DEFAULT_REVALIDATE_MS`, 60s; `0` disables) for as long as the
+  connection lives. A token that stops resolving — or starts resolving to
+  somebody else — gets an `invalid_token` error frame and a `4401` close, which
+  is the recovery the terminal already performs: drop the token, reconnect
+  anonymous, land on the served lock screen.
+  - Anonymous connections are never revalidated: nothing they hold can expire.
+  - A verifier that **throws** is a fault, not a sign-out — the connection is
+    left alone and asked again next pass, so a database blip cannot become an
+    outage. Only an explicit `null` (or a changed principal) closes.
+  - Without this the socket was the asymmetry: the HTTP surfaces re-ask on
+    every request, so an expired credential left the socket open and rendering
+    while every endpoint the server shell called came back 401 — a live
+    interface whose every load silently fails.
 - `Connection` — the transport seam: `{ send, close, onMessage, onClose }`.
 - `ServerMessage` — `hello | catalog | frame | render | session | error`.
-- `ClientMessage` — `event | publish`.
+- `ClientMessage` — `event | publish | reset`.
+- `reset` names no canvas, deliberately: it is the recovery for a session whose
+  canvases are the broken thing, so it must not travel through one. It is
+  protocol-level, not app-level — no action declares it and no charter grants
+  it — and it is answered by the frames it produces, not by an envelope of its
+  own.
 - `CLOSE_INVALID_TOKEN = 4401`, `CLOSE_SIGNED_OUT = 4403`.
 - A canvas whose layout renders no visible content is served as an empty
   tree (`[]`), so a terminal collapses chrome on `length` alone. An
@@ -162,7 +201,7 @@ mount it, extend it, or hand it to a listener.
   localStorage (`nisc.token`), url derived from `window.location`, the
   page's WebSocket.
 - `Wire` — `{ subscribe, snapshot, status, dispatch(canvas, event), publish,
-  dispose }`. `snapshot()` is `{ frame, trees }`; `status()` is
+  reset, dispose }`. `snapshot()` is `{ frame, trees }`; `status()` is
   `'connecting' | 'open' | 'closed'` and changes notify subscribers like
   snapshot changes do (a renderer must be able to tell a dead socket from an
   empty app). Hand it to a renderer.
@@ -174,6 +213,14 @@ recovery starts the backoff clean). Two close codes are recoveries, not retries:
 reconnect anonymous — retrying with a stale token would loop forever. Server
 `error` frames and unknown message types are `console.warn`ed; `hello` and
 `catalog` are deliberately ignored (the terminal is grant-blind).
+
+`reset()` is the escape from a wedged shell, and the only one that can work:
+the shell is server state keyed by principal, so dropping the token here hands
+you a throwaway anonymous shell and signing back in reattaches to the same
+wreck. On an open socket it sends `{ type: 'reset' }` and the fresh frame
+arrives on that same socket — same session, same token, nothing signed out. On
+a dead one it reconnects immediately instead of waiting out the backoff, which
+is the same recovery a layer down.
 
 ```typescript
 import { createWire } from '@niscorp/moss/client';
@@ -203,12 +250,16 @@ in the subpaths.
 - `createTerminal({ target, wire }): { destroy }` — the conductor: one
   target, one wire. Subscribes the target's `update` to the wire and routes
   events back.
-- `mountTerminal(config): { swap, destroy }` — the switcher: hot-swaps
+- `mountTerminal(config): { swap, reset, destroy }` — the switcher: hot-swaps
   render targets over ONE wire, so the socket, session, and current trees
-  survive the swap. `config = { targets, swapKey?, initial?, wire?, url? }` —
-  targets by name, cycled in insertion order; `swapKey` (e.g.
+  survive the swap. `config = { targets, swapKey?, resetKey?, initial?, wire?,
+  url? }` — targets by name, cycled in insertion order; `swapKey` (e.g.
   `"ctrl+shift+y"`) binds the hotkey, and `swap` is returned for a host's own
   control. Omit `wire` and the terminal makes (and owns) one; `url` seeds it.
+  `resetKey` binds `wire.reset()` — the escape hatch, on a keystroke because it
+  has to work when every surface on screen is dead. Both hotkeys are
+  browser-only (they listen on `window`); a TTY or Node host binds `swap` and
+  `reset` to its own control instead.
 - `TerminalApi` — what a target renders against: nova core's `RenderApi`
   (`frame`, `canvasTree`, `dispatch`, `publish`), aliased not redeclared — the
   DOM adapter, the React adapter, and the conductor share one contract. A
@@ -228,6 +279,7 @@ const root = document.getElementById('root')!;
 mountTerminal({
   targets: { react: reactTarget({ root, registry, slotWrapper }), dom: domTarget({ root }) },
   swapKey: 'ctrl+shift+y',
+  resetKey: 'ctrl+shift+u',   // ask the server for a fresh shell
 });
 ```
 

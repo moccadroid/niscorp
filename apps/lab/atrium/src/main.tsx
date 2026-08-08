@@ -24,10 +24,15 @@ const terminal = mountTerminal({
     dom: domTarget({ root }),
   },
   swapKey: 'ctrl+shift+y',
+  // The escape hatch. A shell runs on the server, keyed by principal, so a
+  // broken one is not something this page can reload its way out of —
+  // refreshing reattaches to it, and so does signing out and back in. This asks
+  // the server to throw it away and serve the screen it would serve at login.
+  resetKey: 'ctrl+shift+u',
   wire,
 });
 
-Object.assign(window, { swapTerminal: terminal.swap });
+Object.assign(window, { swapTerminal: terminal.swap, resetShell: terminal.reset });
 
 // ─── the other application on this page ──────────────────────
 //
@@ -78,6 +83,10 @@ if (adminToken !== null && adminToken !== '') {
   document.body.appendChild(adminRoot);
   mountTerminal({
     targets: { react: reactTarget({ root: adminRoot, registry: buildRegistry(), slotWrapper: atriumSlotWrapper }) },
+    // Our own tool runs on a shell too, and can wedge the same way. A separate
+    // key, because these are separate sessions on separate servers and the one
+    // you want is the one you are looking at.
+    resetKey: 'ctrl+shift+i',
     wire: createWire({
       url: import.meta.env['VITE_ADMIN_URL'] ?? 'ws://localhost:8790/socket',
       // Its own token key, so signing out of the app does not sign us out of

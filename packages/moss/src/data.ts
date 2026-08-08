@@ -3,10 +3,10 @@ import type { QueryEngine, DatabaseSchema, SeedEntry, SeedMutation } from '@nisc
 import type { NiscRuntime } from './runtime';
 
 // ═══════════════════════════════════════════════════════════════
-// The data layer stands up from what's present (SERVER.md §2.6): the
-// database's seeded vex_cache IS the API surface — nothing generates
-// here — and the grantable set is the introspected schema × vex's verb
-// leaves. No table list is ever authored.
+// The data layer stands up from what's present (DESIGN.md § Derivation
+// over configuration): the database's seeded vex_cache IS the API
+// surface — nothing generates here — and the grantable set is the
+// introspected schema × vex's verb leaves. No table list is ever authored.
 // ═══════════════════════════════════════════════════════════════
 
 export type DataLayer = {

@@ -9,8 +9,8 @@ import type { NiscRuntime } from './runtime';
 import type { SocketAccept } from './socket';
 
 // ═══════════════════════════════════════════════════════════════
-// The Node entry — runtime-specific by design (SERVER.md: the transport is
-// a seam; the Bun flip swaps this file, never the app). Two exports: the
+// The Node entry — runtime-specific by design: the transport is a seam, so
+// the Bun flip swaps this file, never the app. Two exports: the
 // websocket transport for hosts that run their own listener (the dev
 // checks, vite), and the batteries-included `serve`.
 // ═══════════════════════════════════════════════════════════════
@@ -22,7 +22,7 @@ type Upgradeable = {
 };
 
 // The `ws` half of the transport seam: RFC 6455 stays library-handled
-// (permessage-deflate on, per SERVER.md); the protocol above the seam is
+// (permessage-deflate on); the protocol above the seam is
 // nisc's own (../socket.ts) and identical on every runtime.
 export const attachSocket = (httpServer: Upgradeable, accept: SocketAccept, path = '/socket'): void => {
   const wss = new WebSocketServer({ noServer: true, perMessageDeflate: true });

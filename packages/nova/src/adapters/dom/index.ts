@@ -141,8 +141,8 @@ const renderNode = (node: RenderNode, ctx: Ctx): Node => {
   return el;
 };
 
-// The one interactive concession (SERVER.md typing rule): never overwrite the
-// value of the focused input when a new tree arrives. We rebuild fully (the
+// The one interactive concession: never overwrite the value of the focused
+// input when a new tree arrives. We rebuild fully (the
 // server is authoritative), so capture the focused ref + value + caret before,
 // and restore them after — the in-progress value wins over the server's.
 type Focus = { ref: string; value: string; start: number | null; end: number | null };

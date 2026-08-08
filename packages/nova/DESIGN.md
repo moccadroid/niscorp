@@ -536,7 +536,7 @@ That's it. Components do not receive a `shell`, an `instanceId`, an
 needs to emit, it calls `useNovaDispatch()` or `useNovaPublish()`. If a
 component needs to introspect the registry, it calls
 `useNovaRegistry()`. New props on the `NovaComponentProps` bag require
-explicit justification — see `CONTEXT.md`.
+explicit justification.
 
 ### The `slotWrapper` seam
 

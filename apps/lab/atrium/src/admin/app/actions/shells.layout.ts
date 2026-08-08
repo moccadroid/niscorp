@@ -16,10 +16,11 @@ export const shellsLayout: LayoutNode = panel(
           props: { min: 130, gap: 10 },
           children: [
             { component: 'Stat', props: { label: 'Living shells', value: '$.shells.health.shells' } },
+            { component: 'Stat', props: { label: 'Unattended', value: '$.shells.health.idle' } },
             { component: 'Stat', props: { label: 'Uptime', value: '$.shells.health.uptime' } },
           ],
         },
-        { component: 'Text', props: { size: 'xs', color: 'faint' }, children: 'Connected right now' },
+        { component: 'Text', props: { size: 'xs', color: 'faint' }, children: 'Shells the server is holding' },
         {
           component: 'Rows',
           props: {
@@ -31,7 +32,7 @@ export const shellsLayout: LayoutNode = panel(
             empty: 'Nobody is signed in.',
             columns: [
               { label: 'Principal', w: 2, cell: { kind: 'primary', key: 'name', subKey: 'who' } },
-              { label: '', w: 1, cell: { kind: 'chip', key: 'mounted', toneKey: 'tone' } },
+              { label: '', w: 1, cell: { kind: 'chip', key: 'attached', toneKey: 'tone' } },
             ],
           },
         },
@@ -59,12 +60,55 @@ export const shellsLayout: LayoutNode = panel(
             props: { gap: 12 },
             children: [
               {
-                component: 'Stack',
-                props: { gap: 2 },
+                component: 'Row',
+                props: { justify: 'between', align: 'start', gap: 12 },
                 children: [
-                  { component: 'Text', props: { serif: true, size: 'xl' }, children: '$.selected.name' },
-                  { component: 'Text', props: { size: 'sm', color: 'mute' }, children: '{{$.selected.id}} · {{$.selected.who}}' },
+                  {
+                    component: 'Stack',
+                    props: { gap: 2 },
+                    children: [
+                      { component: 'Text', props: { serif: true, size: 'xl' }, children: '$.selected.name' },
+                      { component: 'Text', props: { size: 'sm', color: 'mute' }, children: '{{$.selected.id}} · {{$.selected.who}}' },
+                      { component: 'Text', props: { size: 'xs', color: 'faint' }, children: '{{$.selected.attached}} · {{$.selected.age}}' },
+                    ],
+                  },
+                  // THE RESTART. Two presses, because it is the one control in
+                  // this tool that lands on a person: the first arms it and
+                  // says what it costs, the second does it. Nothing here is
+                  // undoable by pressing it again, so the guard is about
+                  // reaching it by accident while reading a roster.
+                  {
+                    if: '$.arming',
+                    then: {
+                      component: 'Row',
+                      props: { gap: 6, align: 'center' },
+                      children: [
+                        {
+                          component: 'Button',
+                          ref: 'restart',
+                          props: { variant: 'quiet', icon: 'arrow', disabled: '$.working', value: '$.selected' },
+                          children: { if: '$.working', then: 'Restarting…', else: 'Yes, restart it' },
+                        },
+                        { component: 'Button', ref: 'cancel', props: { variant: 'plain' }, children: 'Cancel' },
+                      ],
+                    },
+                    else: { component: 'Button', ref: 'arm', props: { variant: 'plain', icon: 'arrow' }, children: 'Restart this shell' },
+                  },
                 ],
+              },
+              {
+                if: '$.arming',
+                then: {
+                  component: 'Notice',
+                  props: { tone: 'warn', icon: 'alert', title: 'This ends what they are doing' },
+                  children: 'Their terminals stay connected and stay signed in — they land back on the screen they get at login. Anything they had navigated into is gone.',
+                },
+                else: '',
+              },
+              {
+                if: '$.done',
+                then: { component: 'Notice', props: { tone: 'good', icon: 'check', title: 'Restarted' }, children: 'A fresh shell was built and their terminals were served it.' },
+                else: '',
               },
               {
                 component: 'Stack',
@@ -85,7 +129,7 @@ export const shellsLayout: LayoutNode = panel(
               },
             ],
           },
-          else: nothingChosen('Pick a shell to see what is mounted on each of its canvases.'),
+          else: nothingChosen('Pick a shell to see what is mounted on each of its canvases — and to restart it.'),
         },
 
         { component: 'Rule', props: {} },

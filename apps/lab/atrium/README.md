@@ -196,7 +196,7 @@ named for the artifact it shows:
 | **Entries** | Every read and write the app can make. Warm-only, so this list *is* the API: what each binds, which tables it touches, what it returns, who calls it. Flags entries nothing calls, and calls with no entry. |
 | **Surface** | Every slot × every property, live or dark, with the resolver's reason. Carries our own switch: withdrawing a surface takes it off every property at once. |
 | **Capabilities** | Connector offers, property enablement, and the discovery pull with its refusal reasons. |
-| **Shells** | Living server shells, the stack on each of their canvases, and the process behind them. |
+| **Shells** | Living server shells — who holds one, how many terminals are attached to it, the stack on each of its canvases, and the process behind them. Carries the one control here that lands on a person: **restart this shell**. |
 | **Timeline** | Every endpoint the living shells called — which action, how long, whether it worked. Names and timings only; no payload of any kind is kept. |
 
 Try it with Theo signed in: Surface → The Lumen → switch off *Check in online*.
@@ -204,6 +204,14 @@ The database is correct immediately — his shell is merely stale until it reads
 again, so sign him out and back in and the card is gone. Switch it back on and
 it returns. No deploy and no restart either way. Rosa and Amara never see the
 pill: nothing they can hold authenticates to a service that is not theirs.
+
+Then try Shells → pick Theo → *Restart this shell*. His terminal stays
+connected and stays signed in, and lands back on the screen login gives him —
+no sign-out, no reload, nothing written. That is the answer to "my thing is
+broken": a shell runs on the server, keyed by principal, so a stuck one
+survives everything the person in front of it can do (reloading reattaches to
+it, and so does signing out and back in). From the terminal itself the same
+recovery is `ctrl+shift+u`.
 
 ## The four factors
 

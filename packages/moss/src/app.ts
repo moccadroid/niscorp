@@ -6,7 +6,7 @@ import type { NiscRuntime } from './runtime';
 // ═══════════════════════════════════════════════════════════════
 // The application, as data. Every field is an ARTIFACT — content someone
 // authored — never machinery: the server derives everything mechanical
-// from these plus a database (SERVER.md §2.6, derivation over
+// from these plus a database (DESIGN.md § Derivation over
 // configuration). `assignments` stands in for the artifact library's
 // assignment table until that exists.
 // ═══════════════════════════════════════════════════════════════
@@ -54,7 +54,7 @@ export type NiscApp = {
   // (a bare list, or an object carrying one — an app's resource artifacts
   // pass through unmapped). The bare /api/vex (full schema) always exists.
   resources?: Record<string, readonly string[] | { entities: readonly string[] }>;
-  // The shell, as data (SERVER.md §2.4 — the shell runs on the server):
+  // The shell, as data (DESIGN.md § The shell runs on the server):
   // canvases and fragments are artifacts; `inputs` is the app's ONE
   // derivation hook — per-principal boot input (nav flags, user chips),
   // merged over each canvas's static seed. Absent = no server shells.

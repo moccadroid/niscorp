@@ -1,4 +1,4 @@
-// Shell-host check — SERVER.md 3b.2 through a REAL websocket: the shell
+// Shell-host check — through a REAL websocket: the shell
 // runs INSIDE moss, per principal, durable; the client is nothing but a
 // socket. Render frames flow on connect and on every change; events flow
 // up and drive the same nova machinery every headless check drives; two

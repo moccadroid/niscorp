@@ -13,7 +13,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { Shell } from '@niscorp/nova';
 import { mintDevToken } from '@niscorp/moss';
-import { login, settle, topData, sql, check, report, server as atriumServer } from './world';
+import { login, settle, topData, sql, check, report, sessionFor, openFromMenu, server as atriumServer } from './world';
 import { buildAdminServer } from '@atrium/admin/service';
 import { createSeam } from '@atrium/admin/seam';
 import { ADMIN_PRINCIPAL } from '@atrium/admin/token';
@@ -391,6 +391,45 @@ const main = async (): Promise<void> => {
   check('the roster sees the guests who are signed in', theoSession !== undefined);
   check('...and the stack on each of their canvases', rowsOf(theoSession ?? {}, 'stacks').some((c) => String(c['trail']).includes('concierge')));
   check('the process reports its own figures', String(nested(shells, 'health')['actions']).includes('core'));
+  // The roster is moss's own enumeration now, not a note this app keeps, so it
+  // can answer the question a support call actually starts with.
+  check('...and whether anybody is attached to each', theoSession?.['attached'] !== undefined);
+
+  // ── RESTARTING SOMEBODY'S SHELL ────────────────────────────
+  // The scenario this exists for: a person says their screen is broken, and
+  // the shell is server state keyed by principal, so nothing they can do
+  // reaches it — reloading reattaches to it, and so does signing out and back
+  // in. This is the move from outside their session.
+  const rosaSession = sessionFor('rosa');
+  await settle(8);
+  // Put her somewhere that is not her boot screen, so "back to login" is a
+  // visible fact rather than a claim.
+  await openFromMenu(rosaSession.shell, 'desk.issue.list');
+  const wandered = rosaSession.shell;
+  check('Rosa has navigated into a surface', mounted(wandered, 'work').includes('desk.issue.list'));
+
+  // Two presses: the pane arms, then acts. Selecting her first, as a person
+  // would, because the button restarts whoever is chosen.
+  const rosaRow = rowsOf(nested(topOf(dock, 'admin'), 'shells'), 'sessions').find((s) => s['id'] === 'stf_rosa');
+  check('...and the operator can find her on the roster', rosaRow !== undefined);
+  tapAdmin(dock, 'pick', rosaRow);
+  await settle();
+  tapAdmin(dock, 'arm');
+  await settle();
+  check('the restart arms before it acts', topOf(dock, 'admin')['arming'] === true);
+  tapAdmin(dock, 'restart', rosaRow);
+  await settle(10);
+  check('...and reports it done', topOf(dock, 'admin')['done'] === true && String(nested(topOf(dock, 'admin'), 'error')['message'] ?? '') === '');
+
+  // What the restart actually did, asserted on the app's side of the seam.
+  const afterwards = rosaSession.shell;
+  check('her shell is a NEW one — the wedged one is gone', afterwards !== wandered);
+  check('...and she is back where login puts her', !mounted(afterwards, 'work').includes('desk.issue.list'));
+  check('...with her chrome rebuilt, so she is still signed in', mounted(afterwards, 'chrome')[0] === 'chrome.staff');
+  // The bound the whole design rests on: a reset can only rebuild a warm cache
+  // over the projection, so nothing a person owns is touched by pressing it.
+  const stillHers = await sql(`SELECT count(*)::int AS n FROM issues`);
+  check('...and not one row was written to do it', Number(stillHers[0]?.['n'] ?? 0) > 0);
 
   // ── the boundary ───────────────────────────────────────────
   // The tool mounts no vex and holds no policy, so there is no route on it that

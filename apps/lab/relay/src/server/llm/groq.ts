@@ -25,7 +25,7 @@ export const createGroqClient = (apiKey: string): SignalClient => {
 };
 
 // The Groq API key — server configuration (.env), never browser data. All
-// LLM calls run server-side since agents moved into moss (SERVER.md step 4).
+// LLM calls run server-side since agents moved into moss.
 export const getKey = (): string | undefined => {
   const k = process.env['GROQ_API_KEY'];
   return k === undefined || k === '' ? undefined : k;

@@ -17,19 +17,21 @@ import type { ShellHost } from './shells';
 import { resolveRoles } from './principal';
 
 // ═══════════════════════════════════════════════════════════════
-// moss — the nisc app server, SERVER.md §3, staging step 3a: the data/policy
-// plane over plain HTTP. Surfaces standing so far:
+// moss — the nisc app server: the data/policy plane over plain HTTP.
+// Surfaces standing so far:
 //
 //   /catalog              — the application, resolved for the session's principal
 //   /api/<resource>/vex   — reads and writes, locked, scoped per principal
 //   /api/vex              — the cross-resource base surface
 //
-// (The socket and /fns come with 3b and step 4.)
+// The socket stands beside them (socket.ts); `/fns` — side-effect-free
+// server functions behind plain URLs — is still unbuilt.
 //
 // The app hands over its ARTIFACTS (app.ts) and an environment
 // (runtime.ts); everything mechanical is derived — the data layer
 // (data.ts), per-principal resolutions (principal.ts) — and the server
-// refuses to boot incoherent (§2.5).
+// refuses to boot incoherent (DESIGN.md § Derivation over configuration:
+// coherence is refused, not documented).
 // ═══════════════════════════════════════════════════════════════
 
 type Env = { Variables: { principal: string | null } };
@@ -51,7 +53,7 @@ export type MossServer = Hono<Env> & {
 export const createServer = async (app: NiscApp, runtime: NiscRuntime): Promise<MossServer> => {
   const data = await createDataLayer(runtime, app.entries ?? []);
 
-  // ── Refuse to start incoherent (§2.5) — the charter engine verifies,
+  // ── Refuse to start incoherent — the charter engine verifies,
   // nova audits each role's closure (over effective definitions: granted
   // variants substituted).
   const report = verifyCharter(
@@ -165,6 +167,7 @@ export const createServer = async (app: NiscApp, runtime: NiscRuntime): Promise<
         roles: (principal) => resolveRoles(app, principal),
         runtime,
         policy,
+        ...(runtime.shellIdleMs !== undefined ? { idleMs: runtime.shellIdleMs } : {}),
         wire: (token) => async (url, init) => {
           const res = await server.request(url, {
             method: init?.method ?? 'GET',
@@ -213,7 +216,12 @@ export const createServer = async (app: NiscApp, runtime: NiscRuntime): Promise<
   };
 
   return Object.assign(server, {
-    socket: createSocket({ session, catalog, ...(shells !== undefined ? { shells } : {}) }),
+    socket: createSocket({
+      session,
+      catalog,
+      ...(shells !== undefined ? { shells } : {}),
+      ...(runtime.sessionRevalidateMs !== undefined ? { revalidateMs: runtime.sessionRevalidateMs } : {}),
+    }),
     ...(shells !== undefined ? { shells } : {}),
     refresh,
   });

@@ -3,7 +3,8 @@ import { matchAll } from './glob';
 import { CharterError, normalizeRole, resolveRole } from './resolve';
 
 // ═══════════════════════════════════════════════════════════
-// The verifier — the other half of the charter (CHARTER.md). The grammar
+// The verifier — the other half of the charter (DESIGN.md § The verifier
+// is the other half). The grammar
 // stays small; the opinions live here. Boot/CI runs it and refuses an
 // incoherent charter: "if it boots, it's coherent."
 //

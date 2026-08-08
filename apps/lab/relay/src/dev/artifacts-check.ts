@@ -4,7 +4,8 @@
 // comments" means, enforced instead of hoped: a function, a Date, an
 // undefined, a class instance anywhere in an artifact fails here — so a code
 // file cannot masquerade as an artifact, and the whole tree stays row-ready
-// for the library (SERVER.md §2.2: publishing is a write to the library).
+// for the library (moss DESIGN.md § Deployment is a data operation:
+// publishing is a write to the library).
 //
 // The manifest's two CODE fields — `functions` (server fns) and
 // `shell.inputs` (the one derivation hook) — are deliberately NOT artifacts;

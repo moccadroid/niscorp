@@ -154,6 +154,16 @@ Operational shape, all falling out of "the message is state, not history":
 - **Durability.** The projection (once built) is the durable thing; the shell is
   a warm cache rebuilt from definitions + projection. Evicting an idle shell and
   restarting the process are both safe — shells rehydrate on the next connection.
+  This is why an idle sweep can exist at all, and why `reset` costs nothing but
+  the screen someone was on.
+- **Recovery.** `reset` (up) throws a session's shell away and serves its
+  replacement. It names no canvas, because it is the recovery for a session
+  whose canvases are the broken thing; it is protocol-level, so no action
+  declares it and no charter grants it. This is not a convenience: a shell is
+  server state keyed by principal, so a wedged one survives every gesture a
+  client can make alone — reloading reattaches to it, and so does signing out
+  and back in. Without a verb the client can send, a person watching a dead
+  screen has no move left.
 - **Emptiness.** A canvas whose layout renders no visible content is served as
   `[]`, so a terminal collapses chrome on `length` alone. An `ActionSlot` is a
   boundary, not content — visibility is decided by what's inside it.
@@ -166,6 +176,16 @@ Two design points worth naming:
   never learns what an origin is — addressing translation is the host's job,
   where both vocabularies meet. This is why two instances of one action on
   different canvases don't cross-fire, with zero client-side logic.
+- **Identity is asked twice.** The HTTP surfaces re-ask the `session` verifier
+  on every request; the socket asks at upgrade and then on a timer for as long
+  as the connection lives. A verifier is the whole of what an app writes to
+  give tokens a lifetime (`null` = expired), and moss never learns what expiry
+  means — it only asks again. The socket half is not optional polish: asking
+  once left an expired credential rendering happily while every endpoint the
+  server shell called came back 401, because that wire rides the HTTP
+  middleware. A live interface whose every load silently fails is worse than a
+  lock screen. A verifier that *throws* is a fault, not a sign-out — a database
+  blip must not become an outage, so only an explicit `null` closes.
 - **Session lifecycle is capabilities, not channels.** The in-process function
   seam hands each session a `grant(token)` and a `revoke()`. A login function
   grants (the token goes down every connection as a `session` message; the
@@ -182,6 +202,29 @@ One durable nova `Shell` per authenticated principal — the socket is ephemeral
 the shell survives disconnect (reattach re-sends the current trees, and N
 attached connections receive the same frames: shared canvases are the same
 mechanism). Anonymous connections get a throwaway shell, disposed on detach.
+
+**Lifetime.** A durable shell lives until sign-out, an operator reset, or the
+idle sweep: nothing attached for `idleMs` (default 30 minutes) and it is
+disposed, rebuilt on the next connection. Only the idle clock is swept —
+deliberately no absolute cap, because that would discard the state of somebody
+who is working. There is no TTL on the session behind it; a shell going away is
+not a person being signed out.
+
+**Enumeration and reset.** `shells.list()` reports every living shell —
+principal, attached connections, age, idle time, and what is mounted on each
+canvas. `shells.reset(principal)` disposes one and stands its replacement in
+the same slot, carrying the attached connections across, so every terminal
+receives a frame and current trees exactly as on reattach. Both exist because
+the host owns the map: an app that keeps its own note beside it can only drift
+from it, and a shell nobody can enumerate is one nobody can be helped out of.
+Since everything a shell derives from is re-read at build, the replacement is
+the screen boot would serve that principal now — which is also the whole cost:
+a reset is not a repair that preserves what someone was doing.
+
+**One canvas cannot take the session down.** Rendering is guarded per canvas.
+A tree that throws holds its last good frame and its neighbours keep rendering,
+rather than killing the flush pass, escaping a microtask uncaught, and wedging
+the shell for the life of the process.
 
 The shell is built from the manifest: canvases and fragments are data; a canvas's
 `initial` may be a candidate list, and the first action the principal holds

@@ -57,6 +57,17 @@ export type MountTerminalConfig = {
   targets: Record<string, Target>;
   // e.g. "ctrl+shift+t" — the live render-target swap. Omit for no swapping.
   swapKey?: string;
+  // e.g. "ctrl+shift+r" — ask the server for a fresh shell. Omit for no key.
+  //
+  // The one control that must work when nothing else does. It sits on a
+  // keystroke for the same reason the swap does — it acts on the terminal's
+  // relationship to the server, not on anything the app models — but the
+  // reason it exists at all is stronger: a shell lives on the SERVER, keyed by
+  // principal, so a broken one survives every gesture a client can make alone.
+  // Reloading reattaches to it. Clearing the token and signing back in
+  // reattaches to it. Without a key that says "throw it away", somebody
+  // watching a dead screen has no move left.
+  resetKey?: string;
   // which target to mount first (default: the first key)
   initial?: string;
   // inject an existing wire (shared across swaps), or let the terminal make
@@ -70,7 +81,7 @@ export type MountTerminalConfig = {
 // session, and current trees survive the swap. The hotkey is the one legit
 // piece of imperative client chrome — a render target is not app state, so
 // it is not a nova action; it lives here, in the terminal.
-export const mountTerminal = (config: MountTerminalConfig): { swap: () => void; destroy: () => void } => {
+export const mountTerminal = (config: MountTerminalConfig): { swap: () => void; reset: () => void; destroy: () => void } => {
   const keys = Object.keys(config.targets);
   if (keys.length === 0) throw new Error('mountTerminal: at least one target is required');
 
@@ -94,14 +105,19 @@ export const mountTerminal = (config: MountTerminalConfig): { swap: () => void; 
     active = createTerminal({ target: targetAt(index), wire });
   };
 
-  const disposeHotkey = config.swapKey === undefined ? undefined : onHotkey(config.swapKey, swap);
+  const reset = (): void => wire.reset();
 
-  // `swap` is returned so a host can bind its own control (a button, a
-  // console call) — the hotkey is a convenience, not the only way in.
+  const disposeSwapKey = config.swapKey === undefined ? undefined : onHotkey(config.swapKey, swap);
+  const disposeResetKey = config.resetKey === undefined ? undefined : onHotkey(config.resetKey, reset);
+
+  // Both are returned so a host can bind its own control (a button, a console
+  // call) — the hotkeys are a convenience, not the only way in.
   return {
     swap,
+    reset,
     destroy: () => {
-      disposeHotkey?.();
+      disposeSwapKey?.();
+      disposeResetKey?.();
       active.destroy();
       if (ownsWire) wire.dispose();
     },

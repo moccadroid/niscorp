@@ -136,6 +136,55 @@ describe('the wire — connect + snapshot', () => {
   });
 });
 
+// ═══════════════════════════════════════════════════════════════
+// RESET — the escape from a wedged shell, and the only one that can work.
+// The shell is server state keyed by principal, so nothing done on this
+// side (drop the token, reload, sign back in) reaches it.
+// ═══════════════════════════════════════════════════════════════
+
+describe('the wire — reset', () => {
+  it('asks the server on an open socket, keeping the session and the token', () => {
+    storage.setItem('nisc.token', 'tok');
+    const wire = createWire({ url: URL, env: env() });
+    FakeSocket.last().open();
+
+    wire.reset();
+
+    expect(FakeSocket.last().envelopes()).toEqual([{ type: 'reset' }]);
+    // Not a sign-out and not a reconnect: same socket, same token.
+    expect(FakeSocket.instances).toHaveLength(1);
+    expect(storage.getItem('nisc.token')).toBe('tok');
+  });
+
+  it('on a dead socket it reconnects NOW rather than waiting out the backoff', () => {
+    storage.setItem('nisc.token', 'tok');
+    const wire = createWire({ url: URL, env: env() });
+    FakeSocket.last().open();
+    FakeSocket.last().serverClose(1006); // an ordinary drop — a retry is scheduled
+    expect(wire.status()).toBe('closed');
+    expect(FakeSocket.instances).toHaveLength(1); // still waiting on the backoff
+
+    wire.reset();
+
+    // Somebody pressing reset is telling us they are waiting now. Reattaching
+    // re-sends the current trees, so jumping the queue costs nothing — and the
+    // token rides up, because this is a recovery, not a sign-out.
+    expect(FakeSocket.instances).toHaveLength(2);
+    expect(FakeSocket.last().url).toContain('token=tok');
+    expect(wire.status()).toBe('connecting');
+  });
+
+  it('does nothing after dispose', () => {
+    const wire = createWire({ url: URL, env: env() });
+    FakeSocket.last().open();
+    wire.dispose();
+    const before = FakeSocket.last().sent.length;
+    wire.reset();
+    expect(FakeSocket.last().sent).toHaveLength(before);
+    expect(FakeSocket.instances).toHaveLength(1);
+  });
+});
+
 describe('the wire — session lifecycle (become)', () => {
   it('a session grant stores the token and reconnects authenticated, blanking the screen', () => {
     const wire = createWire({ url: URL, env: env() });

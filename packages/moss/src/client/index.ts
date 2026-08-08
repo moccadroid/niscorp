@@ -63,12 +63,20 @@ export type Wire = {
   // an event from inside a canvas, tagged with the canvas it came from
   dispatch: (canvasId: string, event: NovaEvent) => void;
   publish: (channel: string, payload?: unknown) => void;
+  // Ask the server to throw this session's shell away and serve a fresh one —
+  // the escape from a wedged shell, and the only one that can work. The shell
+  // is SERVER state keyed by principal: dropping the token here would just
+  // hand us a throwaway anonymous shell, and signing back in would reattach
+  // to the same wreck. On a dead socket this reconnects instead, which is the
+  // same recovery one layer down.
+  reset: () => void;
   dispose: () => void;
 };
 
 type ClientMessage =
   | { type: 'event'; canvas: string; event: Record<string, unknown> }
-  | { type: 'publish'; channel: string; payload?: unknown };
+  | { type: 'publish'; channel: string; payload?: unknown }
+  | { type: 'reset' };
 
 const EMPTY: WireSnapshot = { frame: [], trees: new Map() };
 
@@ -164,8 +172,11 @@ export const createWire = (config: WireConfig = {}): Wire => {
         become(data.token);
       } else if (data.type === 'error') {
         // Diagnostics, not authority — surfaced, never swallowed: a wire that
-        // silently stops updating is the worst thing to debug. (invalid_token
-        // rides the 4401 close below, not this path.)
+        // silently stops updating is the worst thing to debug. `invalid_token`
+        // arrives here too, from the server's revalidation pass, and it is
+        // worth the line: the AUTHORITY is the 4401 close that follows (see
+        // onclose), and this is the breadcrumb saying the session expired
+        // rather than the network dropping.
         console.warn(`[moss/wire] server error${data.code !== undefined ? ` (${data.code})` : ''}: ${data.message ?? ''}`);
       } else if (data.type !== 'hello' && data.type !== 'catalog') {
         // hello/catalog are known and deliberately ignored (the terminal is
@@ -232,6 +243,22 @@ export const createWire = (config: WireConfig = {}): Wire => {
     status: () => status,
     dispatch: (canvasId, event) => send({ type: 'event', canvas: canvasId, event: event as unknown as Record<string, unknown> }),
     publish: (channel, payload) => send(payload === undefined ? { type: 'publish', channel } : { type: 'publish', channel, payload }),
+    reset: () => {
+      if (disposed) return;
+      // Open: ask the server, and the fresh frame arrives on this same socket.
+      // Asked of our OWN status rather than `readyState`, because the socket
+      // is whatever the host env constructed and the status is ours.
+      if (socket !== null && status === 'open') {
+        send({ type: 'reset' });
+        return;
+      }
+      // Not open: the backoff may have us waiting half a minute for a retry,
+      // and somebody pressing reset is telling us they are waiting NOW. Jump
+      // the queue — reattaching re-sends the current trees anyway.
+      clearTimeout(retry);
+      attempts = 0;
+      connect();
+    },
     dispose: () => {
       disposed = true;
       status = 'closed'; // sync truth for late readers; no notification after dispose

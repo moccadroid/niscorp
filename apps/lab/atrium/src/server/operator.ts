@@ -2,11 +2,10 @@ import { timingSafeEqual } from 'node:crypto';
 import { verifyCharter } from '@niscorp/charter';
 import { auditClosure } from '@niscorp/moss';
 import { scopeGrants } from '@niscorp/vex';
-import type { MossServer, NiscApp, FunctionSession } from '@niscorp/moss';
+import type { MossServer, NiscApp, FunctionSession, ShellHost } from '@niscorp/moss';
 import { CHARTER, ASSIGNMENTS } from '@atrium/app/charter';
 import { TABLES } from '@atrium/db/schema';
 import { resolveStatements } from '@atrium/db/resolve';
-import { snapshotShell } from '@niscorp/nova/reflect';
 import { grantedOf } from '@atrium/server/assistant/knowledge';
 import { bundleState, lastSync, refreshServer, syncIntegrations } from '@atrium/server/bundles';
 import { userById } from '@atrium/server/users';
@@ -55,21 +54,19 @@ const keyMatches = (offered: string): boolean => {
   return timingSafeEqual(a, b);
 };
 
-// ─── the roster registry ─────────────────────────────────────
-// moss owns the living shells and exposes no enumeration, so the app keeps its
-// own note of them: the manifest's `functions(session)` runs once per session
-// build, which is exactly one call per living shell.
-//
-// The session is stored WHOLE and `session.shell` is never touched here — it
-// is a lazy getter that throws until the build finishes, and registration
-// happens mid-build. Reads below touch it, by which time it resolves.
-//
-// Best-effort by construction: a shell disposed by sign-out is dropped when a
-// read finds it dead, not when it dies. A truthful roster is `shells.list()`
-// in moss, and that is promotion work, not something to fake here.
-const living = new Map<string, FunctionSession>();
-
 // ─── the timeline ────────────────────────────────────────────
+//
+// The roster that used to live here is gone. It was a map this app kept
+// beside moss's — one note per session, because moss owned the shells and
+// enumerated nothing — and it was wrong in a way no care could fix: a shell
+// disposed by a sign-out left the map when a read next happened to notice,
+// not when it died. `shells.list()` is now moss's own enumeration of its own
+// map, so the answer cannot drift from the thing it describes. Dropping this
+// map also drops what it was quietly doing: holding every session that ever
+// connected, forever.
+//
+// What is left needs no registry. `onEndpoint` is subscribed on the living
+// shell and the closure keeps the one session it reads.
 // Every endpoint a living shell calls — `fn:` and HTTP alike — with its outcome
 // and how long it took. nova already fires this (`onEndpoint`, the observability
 // seam); nothing was listening on the server side.
@@ -94,7 +91,6 @@ const definitionOf = (session: FunctionSession, instanceId: string): string => {
 export const registerShellSession = (session: FunctionSession): void => {
   if (session.principal === null) return; // anonymous shells are ephemeral
   const principal = session.principal;
-  living.set(principal, session);
 
   // Deferred a microtask: `session.shell` throws until the build finishes, and
   // this runs mid-build. A shell that never finished is simply never watched.
@@ -118,19 +114,6 @@ export const registerShellSession = (session: FunctionSession): void => {
       /* the session never finished building — nothing to watch */
     }
   });
-};
-
-type CanvasReport = { id: string; actions: string[] };
-
-const canvasesOf = (session: FunctionSession): CanvasReport[] | null => {
-  try {
-    // nova's own read of a running shell — top of stack first.
-    return snapshotShell(session.shell)
-      .canvases.filter((canvas) => canvas.items.length > 0)
-      .map((canvas) => ({ id: canvas.id, actions: canvas.items.map((item) => item.definitionId) }));
-  } catch {
-    return null; // disposed, or built too early to ask
-  }
 };
 
 // ─── the reads ───────────────────────────────────────────────
@@ -435,40 +418,53 @@ const runsReport = async (runtime: DevRuntime): Promise<unknown> => {
   };
 };
 
-// Who is connected, and what is on their screen right now.
-const roster = (): unknown => {
-  const sessions: unknown[] = [];
-  for (const [principal, session] of [...living]) {
-    const canvases = canvasesOf(session);
-    if (canvases === null) {
-      living.delete(principal);
-      continue;
-    }
-    const user = userById(principal);
-    sessions.push({
-      principal,
-      username: user?.username ?? '',
-      name: user?.name ?? principal,
-      audience: user?.audience ?? '',
-      property: user?.propertyName ?? '',
-      canvases,
-      mounted: canvases.reduce((total, canvas) => total + canvas.actions.length, 0),
-    });
-  }
-  return { sessions };
+// Who holds a shell, and what is on their screen right now — moss's own
+// enumeration, put next to the people it names. The join is all this does: the
+// seam serves shells, and only the app knows that `usr_3` is Rosa on the desk
+// at the Meridien.
+//
+// `connections` is the fact this could not answer before and the one an
+// operator asks first, because it separates the two cases that look identical
+// from a support call: nobody is looking (the shell is warm and idle, and will
+// be swept) versus three terminals are attached and one of them is the person
+// telling you their screen is stuck.
+const roster = (shells: ShellHost | undefined): unknown => {
+  const now = Date.now();
+  return {
+    sessions: (shells?.list() ?? []).map((shell) => {
+      const user = userById(shell.principal);
+      return {
+        principal: shell.principal,
+        username: user?.username ?? '',
+        name: user?.name ?? shell.principal,
+        audience: user?.audience ?? '',
+        property: user?.propertyName ?? '',
+        canvases: shell.canvases,
+        mounted: shell.canvases.reduce((total, canvas) => total + canvas.actions.length, 0),
+        connections: shell.connections,
+        ageMs: now - shell.since,
+        idleMs: shell.idleSince === null ? 0 : now - shell.idleSince,
+      };
+    }),
+  };
 };
 
 const startedAt = Date.now();
 
-const health = async (app: NiscApp, runtime: DevRuntime): Promise<unknown> => {
+const health = async (app: NiscApp, runtime: DevRuntime, shells: ShellHost | undefined): Promise<unknown> => {
   const ids = Object.keys(app.actions);
   const entries = await runtime.pool.query('SELECT count(*)::int AS n FROM vex_cache', []);
+  const living = shells?.list() ?? [];
   return {
     startedAt,
     uptimeMs: Date.now() - startedAt,
     actions: { core: ids.filter((id) => !id.startsWith('ext.')).length, ext: ids.filter((id) => id.startsWith('ext.')).length },
     entries: { cached: Number(entries.rows[0]?.['n'] ?? 0), bundled: bundleState.entries.length },
-    shells: living.size,
+    shells: living.length,
+    // Held but unattended — the shells the idle sweep is there for. Worth its
+    // own figure: a count of shells says nothing about whether the process is
+    // holding state anybody is using.
+    idle: living.filter((shell) => shell.connections === 0).length,
     sync: lastSync,
   };
 };
@@ -518,8 +514,34 @@ export const mountOperator = (server: MossServer, runtime: DevRuntime, app: Nisc
   server.get('/operator/entries', async (c) => c.json((await entriesReport(app, runtime)) as Record<string, unknown>));
   server.get('/operator/timeline', (c) => c.json(timelineReport() as Record<string, unknown>));
   server.get('/operator/runs', async (c) => c.json((await runsReport(runtime)) as Record<string, unknown>));
-  server.get('/operator/roster', (c) => c.json(roster() as Record<string, unknown>));
-  server.get('/operator/health', async (c) => c.json((await health(app, runtime)) as Record<string, unknown>));
+  server.get('/operator/roster', (c) => c.json(roster(server.shells) as Record<string, unknown>));
+  server.get('/operator/health', async (c) => c.json((await health(app, runtime, server.shells)) as Record<string, unknown>));
+
+  // ─── the one write that touches a person's session ───────────
+  //
+  // Restart one principal's shell. Their terminals stay connected, stay signed
+  // in, and receive a fresh frame — the screen boot would serve them now, with
+  // whatever they had navigated into gone. That last part is the whole cost
+  // and it should be said plainly rather than dressed up: this is not a repair
+  // that preserves what someone was doing, it is the way to end a session that
+  // has stopped working without asking them to sign out of an interface too
+  // broken to sign out of.
+  //
+  // It writes no row and reads no data. What it can do is bounded by what a
+  // shell IS — a warm cache over the projection — so the worst outcome of
+  // firing it at the wrong person is that they see their home screen.
+  server.post('/operator/shell/reset', async (c) => {
+    const body = (await c.req.json().catch(() => ({}))) as { principal?: string };
+    if (typeof body.principal !== 'string' || body.principal === '') {
+      return c.json({ message: 'A shell reset names a principal.' }, 400);
+    }
+    if (server.shells === undefined) return c.json({ message: 'This server holds no shells.' }, 404);
+    // `false` means they hold no shell — not an error, and the honest answer to
+    // "restart Rosa's" when Rosa went home. Saying so beats a 404 that reads
+    // like the seam is missing.
+    const reset = server.shells.reset(body.principal);
+    return c.json({ principal: body.principal, reset });
+  });
 
   // Withdraw or restore a surface, estate-wide. One row, then the resolver.
   server.post('/operator/slot', async (c) => {

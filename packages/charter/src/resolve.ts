@@ -2,7 +2,8 @@ import type { Charter, RoleDef, Section, Selection } from './types';
 import { matchAll } from './glob';
 
 // Resolution is a pure function from (charter, universe, section) to a
-// concrete id set per role — CHARTER.md's algebra, verbatim, per section:
+// concrete id set per role — the algebra from DESIGN.md § The algebra,
+// verbatim, per section:
 //
 //   resolved(role) = (∪ resolved(extends) ∪ match(allow))
 //                    − match(deny)

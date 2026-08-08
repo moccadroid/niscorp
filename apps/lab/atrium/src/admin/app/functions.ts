@@ -548,23 +548,54 @@ export const adminFunctions = (session: FunctionSession, seam: Seam): Record<str
     const sync = (figures['sync'] as Record<string, unknown> | undefined) ?? {};
     const reports = Array.isArray(sync['reports']) ? (sync['reports'] as Row[]) : [];
     return {
-      sessions: rows(roster, 'sessions').map((live) => ({
-        id: str(live, 'principal'),
-        name: str(live, 'name'),
-        who: `${str(live, 'audience')}${str(live, 'property') === '' ? '' : ` · ${str(live, 'property')}`}`,
-        mounted: `${str(live, 'mounted')} mounted`,
-        tone: 'accent',
-        // A canvas is a STACK, so the trail is the stack: what is under what.
-        stacks: rows(live, 'canvases').map((canvas) => ({ id: str(canvas, 'id'), trail: list(canvas, 'actions').join(' › ') })),
-      })),
+      sessions: rows(roster, 'sessions').map((live) => {
+        const attached = Number(live['connections'] ?? 0);
+        return {
+          id: str(live, 'principal'),
+          name: str(live, 'name'),
+          who: `${str(live, 'audience')}${str(live, 'property') === '' ? '' : ` · ${str(live, 'property')}`}`,
+          mounted: `${str(live, 'mounted')} mounted`,
+          // Attached terminals is the first thing to know about a shell and the
+          // thing that separates the two cases a support call cannot: nobody is
+          // looking, versus somebody is looking at a screen that is stuck.
+          attached: attached === 0 ? `idle ${since(Number(live['idleMs'] ?? 0))}` : `${attached} attached`,
+          tone: attached === 0 ? 'neutral' : 'accent',
+          age: `built ${since(Number(live['ageMs'] ?? 0))}`,
+          // A canvas is a STACK, so the trail is the stack: what is under what.
+          stacks: rows(live, 'canvases').map((canvas) => ({ id: str(canvas, 'id'), trail: list(canvas, 'actions').join(' › ') })),
+        };
+      }),
       health: {
         uptime: `${Math.round(Number(figures['uptimeMs'] ?? 0) / 1000)}s`,
         actions: `${String(actions['core'] ?? 0)} core · ${String(actions['ext'] ?? 0)} shipped`,
         entries: `${String(entries['cached'] ?? 0)} cached · ${String(entries['bundled'] ?? 0)} from bundles`,
         shells: `${String(figures['shells'] ?? 0)}`,
+        idle: `${String(figures['idle'] ?? 0)} unattended`,
         sync: sync['at'] === 0 ? 'no pull yet' : `${reports.filter((r) => r['ok'] === true).length}/${reports.length} landed`,
       },
     };
+  },
+
+  // RESTART one person's shell — the answer to "my thing is broken".
+  //
+  // The shell is server state keyed by principal, which is exactly why nothing
+  // they can do reaches it: reloading reattaches, and signing out and back in
+  // reattaches. So the move has to be made from outside their session, and
+  // this is the outside.
+  //
+  // What it costs them is worth being exact about, because it is the reason
+  // this is a button an operator presses and not something the server does on
+  // its own: their terminals stay connected and stay signed in, and they land
+  // back on the screen they would have got at login. Whatever they had
+  // navigated into is gone.
+  'admin.resetShell': async (data) => {
+    const principal = Selected.parse(data).selected?.id ?? '';
+    if (principal === '') throw new Error('No shell chosen.');
+    const answer = (await seam.post('/operator/shell/reset', { principal })) as { reset?: boolean };
+    // A principal with no living shell is a real answer, not a failure — they
+    // may simply have disconnected between the read and the press.
+    if (answer.reset !== true) throw new Error('That principal holds no living shell now — nothing to restart.');
+    return true;
   },
 });
 

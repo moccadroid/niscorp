@@ -21,7 +21,13 @@ import { dirname, resolve } from 'node:path';
 // server, which renders as "the control silently isn't there".
 const SERVER_DIRS = /[\\/]src[\\/](app|server|db|integrations|ui)[\\/]/;
 
-type BootedServer = { fetch: (req: Request) => Response | Promise<Response>; socket: Parameters<typeof attachSocket>[1] };
+type BootedServer = {
+  fetch: (req: Request) => Response | Promise<Response>;
+  socket: Parameters<typeof attachSocket>[1];
+  // A booted server owns timers — the socket's revalidation pass, the shell
+  // host's idle sweep. A hot rebuild has to hand them back.
+  shells?: { stop: () => void };
+};
 
 const appServer = (): Plugin => ({
   name: 'atrium-app-server',
@@ -38,7 +44,14 @@ const appServer = (): Plugin => ({
     // The socket is attached ONCE with a delegating accept — every rebuild
     // swaps what it delegates to, never the upgrade handler.
     if (viteServer.httpServer !== null) {
-      attachSocket(viteServer.httpServer, async (url, connection) => (await current).server.socket(url, connection));
+      attachSocket(
+        viteServer.httpServer,
+        Object.assign(async (url: string, connection: Parameters<BootedServer['socket']>[1]) => (await current).server.socket(url, connection), {
+          // Delegated like everything else: whichever server is current owns
+          // the revalidation timer, and this handler owns none of its own.
+          stop: () => void current.then(({ server }) => server.socket.stop(), () => {}),
+        }),
+      );
     }
 
     let timer: NodeJS.Timeout | undefined;
@@ -46,9 +59,21 @@ const appServer = (): Plugin => ({
       if (!SERVER_DIRS.test(file)) return;
       clearTimeout(timer);
       timer = setTimeout(() => {
+        // The outgoing server keeps running until the new one is up (a failed
+        // rebuild must not take the dev server down with it), and is then
+        // retired — timers included. Swapping only the delegate would leak a
+        // revalidation pass and an idle sweep on every save.
+        const outgoing = current;
         current = build();
         void current.then(
           () => {
+            void outgoing.then(
+              ({ server }) => {
+                server.socket.stop();
+                server.shells?.stop();
+              },
+              () => {}, // it never booted; there is nothing to retire
+            );
             viteServer.config.logger.info('[atrium] app server re-booted', { timestamp: true });
             viteServer.ws.send({ type: 'full-reload' });
           },

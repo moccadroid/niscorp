@@ -160,7 +160,7 @@ export const runAction = async (
 
   const issues: string[] = [];
   // Ray's wire — the trusted generative island keeps an engine-direct shim
-  // (the app's data plane is moss; agents move server-side at step 4).
+  // (the app's data plane is moss; agents run server-side).
   type Init = { method?: string; headers?: Record<string, string>; body?: string };
   type Resp = { ok: boolean; status: number; json: () => Promise<unknown>; text: () => Promise<string> };
   const wrap = (status: number, body: unknown): Resp => ({

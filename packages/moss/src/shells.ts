@@ -1,5 +1,5 @@
 import { createShell, createComponentRegistry, CANVAS_SLOT_NAME, ACTION_SLOT_NAME } from '@niscorp/nova';
-import { componentsOf } from '@niscorp/nova/reflect';
+import { componentsOf, snapshotShell } from '@niscorp/nova/reflect';
 import type { Shell, CanvasConfig, FetchFn, LayoutNode, RenderNode } from '@niscorp/nova';
 import { evaluate } from '@niscorp/prism';
 import type { ScopePolicy } from '@niscorp/vex';
@@ -10,8 +10,8 @@ import { CLOSE_SIGNED_OUT } from './socket';
 import type { Connection, ServerMessage } from './socket';
 
 // ═══════════════════════════════════════════════════════════════
-// The shell host — SERVER.md §2.4: the shell runs on the server; the
-// client is a canvas terminal. One durable shell per authenticated
+// The shell host (DESIGN.md § The shell runs on the server): the shell
+// runs here, the client is a canvas terminal. One durable shell per authenticated
 // principal (the socket is ephemeral: connections attach and detach, the
 // shell survives — reattach just re-sends current trees, and N attached
 // connections receive the same frames: shared canvases are the same
@@ -26,6 +26,17 @@ import type { Connection, ServerMessage } from './socket';
 // the session, and every endpoint call rides the server's OWN surfaces
 // with the session's token — the server shell is just another
 // principal-bound client of the same wire, enforcement included.
+//
+// Because the shell is durable and keyed by PRINCIPAL, a wedged one is not
+// something a client can escape: dropping the token and reconnecting gets
+// you a throwaway anonymous shell, and signing back in hands you the same
+// wreck. Recovery is therefore a server verb, not a client gesture — hence
+// `reset`, which disposes a shell and builds its replacement from the same
+// derivation boot ran, carrying the attached connections across so every
+// terminal simply receives a fresh frame. `list` is the truthful roster
+// that makes an operator able to find the shell to reset; the idle sweep is
+// the same disposal on a timer, and safe for the reason DESIGN.md gives —
+// the projection is the durable thing, a shell is a warm cache.
 // ═══════════════════════════════════════════════════════════════
 
 export type ShellHostContext = {
@@ -41,16 +52,45 @@ export type ShellHostContext = {
   // in-process functions close over (agents read data under the policy).
   runtime: NiscRuntime;
   policy: (principal: string | null) => ScopePolicy;
+  // How long a durable shell may sit with NOTHING attached before it is
+  // disposed. Default `DEFAULT_IDLE_MS`; `0` or `Infinity` disables the sweep
+  // and shells live until sign-out or process exit. Only the idle clock is
+  // swept — there is deliberately no absolute cap, because that would discard
+  // the state of somebody who is working.
+  idleMs?: number;
 };
 
 export type ShellSession = {
   // The living nova Shell — for in-process hosts (dev checks, embedded
   // tools) that drive it directly. Remote clients ride attach/dispatch.
-  shell: Shell;
+  // A GETTER, not a field: `reset` replaces the shell under a session that
+  // callers already hold, and a snapshot taken at session time would go on
+  // addressing the disposed one.
+  readonly shell: Shell;
   attach: (connection: Connection) => void;
   detach: (connection: Connection) => void;
   dispatch: (canvas: string, event: Record<string, unknown>) => void;
   publish: (channel: string, payload?: unknown) => void;
+  // Throw this shell away and build its replacement, carrying every attached
+  // connection across. The session object stays valid; the terminals receive a
+  // fresh frame and current trees, exactly as on (re)attach.
+  reset: () => void;
+};
+
+// One living shell, as an operator needs to see it. Structural facts only —
+// who holds it, how many terminals are attached, how long it has been there,
+// and the action ids on its canvases. Naming the principal is the app's job.
+export type ShellReport = {
+  principal: string;
+  // terminals attached right now
+  connections: number;
+  // when this shell was BUILT — a reset moves it, because what stands after a
+  // reset is a new shell
+  since: number;
+  // when the last connection detached; null while one is attached
+  idleSince: number | null;
+  // canvases with anything mounted, top of stack first
+  canvases: { id: string; actions: readonly string[] }[];
 };
 
 export type ShellHost = {
@@ -62,7 +102,28 @@ export type ShellHost = {
   // rebuild. Ring 1 is re-applied per principal; ring 2 substitutes exactly
   // as at build.
   adopt: () => void;
+  // Every durable shell alive right now. The honest roster: moss owns the map,
+  // so moss is the only thing that can enumerate it without keeping a
+  // second, drifting note beside it.
+  list: () => ShellReport[];
+  // Reset one principal's durable shell. `false` if they hold none — which is
+  // not an error, it is the answer to "is Rosa's shell stuck?" when Rosa is
+  // not connected. Anonymous shells are not addressable here (they are
+  // per-connection and die on detach); a terminal resets its own via the
+  // session's `reset`.
+  reset: (principal: string) => boolean;
+  // Stop the idle sweep. For hosts that outlive their server (dev checks,
+  // embedded tools); the timer is unref'd, so a plain process needn't call it.
+  stop: () => void;
 };
+
+// A shell nobody has been attached to for half an hour is a warm cache with no
+// reader. Rebuilding costs one derivation pass on the next connect.
+export const DEFAULT_IDLE_MS = 30 * 60 * 1000;
+
+// The sweep never runs less often than this, so a short `idleMs` is honoured
+// closely and a long one doesn't cost a wakeup per minute.
+const SWEEP_EVERY_MS = 60 * 1000;
 
 const today = (): string => new Date().toISOString().slice(0, 10);
 
@@ -90,14 +151,26 @@ export const createShellHost = (ctx: ShellHostContext): ShellHost => {
   type Live = {
     shell: Shell;
     connections: Set<Connection>;
-    // last frame per canvas — only changes are sent (structural diffing is
-    // a later optimization inside the render message, per SERVER.md)
+    // last frame per canvas — only changes are sent (structural diffing
+    // inside the render message stays a later optimization)
     sent: Map<string, string>;
     flushing: boolean;
-    // set when the session ends (sign-out) — pending flush passes must not
-    // render a disposed shell
+    // set when the session ends (sign-out, reset, eviction) — pending flush
+    // passes must not render a disposed shell
     ended: boolean;
+    // built at; and when the last connection left (null while attached)
+    since: number;
+    idleSince: number | null;
   };
+
+  // The indirection `reset` needs. A session, a socket and the durable map all
+  // address a principal's shell through ONE mutable cell, so replacing the
+  // shell reaches every holder at once and nobody is left pointing at a
+  // disposed one. The token is kept beside it because a rebuild has to
+  // re-authorize the server's own wire as the same session, and it is
+  // refreshed on reattach so a rebuild uses the newest one the principal
+  // arrived with rather than the one they first appeared with.
+  type Cell = { live: Live; token: string | null; principal: string | null };
 
   // No visible content = empty tree over the wire. A canvas whose layout
   // renders to nothing but empty text / empty wrappers (the collapsed aside
@@ -122,7 +195,24 @@ export const createShellHost = (ctx: ShellHostContext): ShellHost => {
     return JSON.stringify(message);
   };
 
-  const durable = new Map<string, Live>(); // principal → the one living shell
+  // A canvas whose tree throws while rendering must not take the session with
+  // it. Unguarded, one bad tree killed the entire flush pass: every canvas
+  // after it never rendered, the throw escaped a microtask with nobody to
+  // catch it, and — because `sent` was never updated for the canvas that threw
+  // — every later pass hit the same node again. That is a shell wedged for the
+  // life of the process, and no reconnect could clear it, since reattaching a
+  // durable shell finds the same wreck. Now the failing canvas holds its last
+  // good tree, its neighbours keep rendering, and `reset` is the way out.
+  const frameOf = (live: Live, canvasId: string): string | null => {
+    try {
+      return frame(live, canvasId);
+    } catch (error) {
+      console.error(`[moss/shells] canvas "${canvasId}" failed to render — holding its last tree:`, error);
+      return null;
+    }
+  };
+
+  const durable = new Map<string, Cell>(); // principal → the one living shell
 
   const build = (token: string | null, principal: string | null): Live => {
     const { ids } = ctx.catalog(principal);
@@ -186,7 +276,10 @@ export const createShellHost = (ctx: ShellHostContext): ShellHost => {
           queueMicrotask(() => {
             if (liveRef === undefined) return;
             liveRef.ended = true;
-            if (principal !== null) durable.delete(principal);
+            // Only if the map still holds THIS shell — a reset between the
+            // sign-out and this microtask has already replaced it, and the
+            // replacement belongs to whoever caused it.
+            if (principal !== null && durable.get(principal)?.live === liveRef) durable.delete(principal);
             for (const connection of [...liveRef.connections]) connection.close(CLOSE_SIGNED_OUT, 'signed out');
             liveRef.connections.clear();
             if (principal !== null) liveRef.shell.dispose();
@@ -238,7 +331,9 @@ export const createShellHost = (ctx: ShellHostContext): ShellHost => {
     });
     built = shell;
 
-    const live: Live = { shell, connections: new Set(), sent: new Map(), flushing: false, ended: false };
+    // Born idle: a shell exists before anything attaches to it, and a shell
+    // nothing ever attaches to is exactly what the sweep should collect.
+    const live: Live = { shell, connections: new Set(), sent: new Map(), flushing: false, ended: false, since: Date.now(), idleSince: Date.now() };
     liveRef = live;
 
     // Per-principal canvas SEEDING — the instance twin of `inputs`. The app
@@ -281,8 +376,8 @@ export const createShellHost = (ctx: ShellHostContext): ShellHost => {
     const pass = (): void => {
       if (live.ended) return;
       for (const canvas of shellManifest.canvases) {
-        const next = frame(live, canvas.id);
-        if (live.sent.get(canvas.id) === next) continue;
+        const next = frameOf(live, canvas.id);
+        if (next === null || live.sent.get(canvas.id) === next) continue;
         live.sent.set(canvas.id, next);
         for (const connection of live.connections) connection.send(next);
       }
@@ -302,24 +397,67 @@ export const createShellHost = (ctx: ShellHostContext): ShellHost => {
     return live;
   };
 
-  const sessionOn = (live: Live, ephemeral: boolean): ShellSession => ({
-    shell: live.shell,
-    attach: (connection) => {
-      live.connections.add(connection);
-      // The frame first — the canvas arrangement, CanvasSlot markers the
-      // terminal resolves — then every canvas's current tree. (The frame is
-      // static per session today; a region hot-swap re-send is a later slice.)
-      connection.send(JSON.stringify({ type: 'frame', tree: live.shell.getShellRenderTree() } satisfies ServerMessage));
-      // (Re)attach re-sends current trees — no replay machinery.
-      for (const canvas of shellManifest.canvases) {
-        const next = frame(live, canvas.id);
-        live.sent.set(canvas.id, next);
-        connection.send(next);
-      }
+  // (Re)attach: the frame first — the canvas arrangement, CanvasSlot markers
+  // the terminal resolves — then every canvas's current tree, no replay
+  // machinery. Both are guarded, because the one moment a terminal MOST needs
+  // to be served is when the shell it is attaching to is the broken one: a
+  // throw here would leave the connection open with nothing on it, which is
+  // the failure that has no diagnosis.
+  const attach = (live: Live, connection: Connection): void => {
+    live.connections.add(connection);
+    live.idleSince = null;
+    let frameTree: RenderNode[] = [];
+    try {
+      frameTree = live.shell.getShellRenderTree();
+    } catch (error) {
+      console.error('[moss/shells] the shell frame failed to render — serving an empty arrangement:', error);
+    }
+    connection.send(JSON.stringify({ type: 'frame', tree: frameTree } satisfies ServerMessage));
+    for (const canvas of shellManifest.canvases) {
+      const next = frameOf(live, canvas.id);
+      if (next === null) continue;
+      live.sent.set(canvas.id, next);
+      connection.send(next);
+    }
+  };
+
+  // Dispose a shell and stand its replacement in the same cell, carrying the
+  // attached connections across. Everything a shell is derived from — the
+  // catalog, the variants, `inputs`, `seeds` — is re-read by `build`, so what
+  // comes back is the screen boot would have served this principal now. The
+  // terminals are not told anything: they receive a frame and current trees,
+  // the same two messages a reconnect brings.
+  const rebuild = (cell: Cell): void => {
+    const old = cell.live;
+    // The replacement is built BEFORE the old one is torn down. `build` runs
+    // app code — `inputs`, `functions`, `onSession` — and if that throws, a
+    // reset that had already disposed the old shell would leave the session
+    // holding nothing at all: strictly worse than the wedged shell it was
+    // called to fix. Built first, a failed reset changes nothing.
+    const next = build(cell.token, cell.principal);
+    const carried = [...old.connections];
+    old.ended = true;
+    old.connections.clear();
+    old.shell.dispose();
+    cell.live = next;
+    for (const connection of carried) attach(next, connection);
+  };
+
+  const sessionOn = (cell: Cell, ephemeral: boolean): ShellSession => ({
+    // Read through the cell, always: after a reset the shell behind this
+    // session is a different object.
+    get shell(): Shell {
+      return cell.live.shell;
     },
+    attach: (connection) => attach(cell.live, connection),
     detach: (connection) => {
+      const live = cell.live;
       live.connections.delete(connection);
-      if (ephemeral && live.connections.size === 0) live.shell.dispose();
+      if (live.connections.size > 0) return;
+      live.idleSince = Date.now();
+      if (!ephemeral) return;
+      live.ended = true;
+      live.shell.dispose();
     },
     // Transport → shell addressing: the wire tags the canvas; the canvas's
     // ACTIVE instance is the origin (only it renders interactive UI), so
@@ -327,33 +465,97 @@ export const createShellHost = (ctx: ShellHostContext): ShellHost => {
     // triggers alone. An event already carrying an origin keeps it; a
     // canvas with nothing mounted dispatches unstamped (global).
     dispatch: (canvas, event) => {
-      const active = live.shell.getState().canvases[canvas]?.active;
+      const { shell } = cell.live;
+      const active = shell.getState().canvases[canvas]?.active;
       const stamped = active !== undefined && event['origin'] === undefined ? { ...event, origin: active.id } : event;
-      live.shell.dispatch(stamped as Parameters<Shell['dispatch']>[0]);
+      shell.dispatch(stamped as Parameters<Shell['dispatch']>[0]);
     },
-    publish: (channel, payload) => live.shell.publish(channel, payload),
+    publish: (channel, payload) => cell.live.shell.publish(channel, payload),
+    reset: () => rebuild(cell),
   });
+
+  // ── the idle sweep ──
+  // A durable shell with nothing attached for `idleMs` is disposed. Safe by
+  // the same argument that makes a process restart safe (DESIGN.md § Server
+  // shells, Lifetime): the
+  // projection is durable, a shell is a warm cache, and the next connection
+  // rebuilds it from definitions. The clock is the IDLE one — a shell somebody
+  // is looking at is never collected, however old.
+  const idleMs = ctx.idleMs ?? DEFAULT_IDLE_MS;
+
+  const sweep = (): void => {
+    const now = Date.now();
+    for (const [principal, cell] of [...durable]) {
+      const live = cell.live;
+      if (live.ended) {
+        durable.delete(principal);
+        continue;
+      }
+      if (live.connections.size > 0 || live.idleSince === null) continue;
+      if (now - live.idleSince < idleMs) continue;
+      live.ended = true;
+      live.shell.dispose();
+      durable.delete(principal);
+    }
+  };
+
+  let sweeper: ReturnType<typeof setInterval> | undefined;
+  if (idleMs > 0 && Number.isFinite(idleMs)) {
+    sweeper = setInterval(sweep, Math.min(idleMs, SWEEP_EVERY_MS));
+    // The sweep must never be the reason a process stays alive.
+    (sweeper as unknown as { unref?: () => void }).unref?.();
+  }
 
   return {
     session: (token, principal) => {
-      if (principal === null) return sessionOn(build(token, principal), true);
+      if (principal === null) return sessionOn({ live: build(token, principal), token, principal }, true);
       const existing = durable.get(principal);
-      if (existing !== undefined) return sessionOn(existing, false);
-      const live = build(token, principal);
-      durable.set(principal, live);
-      return sessionOn(live, false);
+      if (existing !== undefined) {
+        existing.token = token; // a rebuild should re-authorize as the newest session
+        return sessionOn(existing, false);
+      }
+      const cell: Cell = { live: build(token, principal), token, principal };
+      durable.set(principal, cell);
+      return sessionOn(cell, false);
     },
     adopt: () => {
-      for (const [principal, live] of durable) {
-        if (live.ended) continue;
+      for (const [principal, cell] of durable) {
+        if (cell.live.ended) continue;
         const granted = new Set(ctx.catalog(principal).ids);
         const bindings = ctx.variants(principal);
         for (const [id, definition] of Object.entries(ctx.app.actions)) {
           if (!granted.has(id)) continue;
           const layout = bindings.get(id);
-          live.shell.registerAction(layout === undefined ? definition : { ...definition, layout });
+          cell.live.shell.registerAction(layout === undefined ? definition : { ...definition, layout });
         }
       }
+    },
+    list: () => {
+      const reports: ShellReport[] = [];
+      for (const [principal, cell] of durable) {
+        const live = cell.live;
+        if (live.ended) continue;
+        try {
+          // nova's own read of a running shell — top of stack first.
+          const canvases = snapshotShell(live.shell)
+            .canvases.filter((canvas) => canvas.items.length > 0)
+            .map((canvas) => ({ id: canvas.id, actions: canvas.items.map((item) => item.definitionId) }));
+          reports.push({ principal, connections: live.connections.size, since: live.since, idleSince: live.idleSince, canvases });
+        } catch {
+          // unreadable (disposed under us) — not a shell anybody can be shown
+        }
+      }
+      return reports;
+    },
+    reset: (principal) => {
+      const cell = durable.get(principal);
+      if (cell === undefined || cell.live.ended) return false;
+      rebuild(cell);
+      return true;
+    },
+    stop: () => {
+      if (sweeper !== undefined) clearInterval(sweeper);
+      sweeper = undefined;
     },
   };
 };

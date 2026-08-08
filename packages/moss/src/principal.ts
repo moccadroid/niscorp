@@ -24,7 +24,7 @@ export type Catalog = { ids: readonly string[]; hash: string };
 
 // The application, resolved for one principal — granted action ids plus
 // the version token (equal hash, equal application; pushed over the
-// socket at step 3b as the catalog-change signal).
+// socket as the catalog-change signal).
 export const resolveCatalog = (app: NiscApp, principal: string | null): Catalog => {
   const ids = [...resolvePrincipal(app.charter, Object.keys(app.actions), resolveRoles(app, principal), 'actions')].sort();
   return { ids, hash: versionToken(ids) };

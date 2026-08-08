@@ -1,4 +1,4 @@
-// Server check — SERVER.md step 3a through the wire. The app is its
+// Server check — the data/policy plane through the wire. The app is its
 // MANIFEST (src/relay.ts) plus a database; createServer derives the
 // rest — data layer from the seeded db, universe from the introspected
 // schema, boot refusal, per-principal policies and catalogs — and answers

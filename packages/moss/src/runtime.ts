@@ -13,6 +13,20 @@ export type NiscRuntime = {
   db: MutationClient;
   cache?: CacheBackend;
   session?: (token: string) => string | null | Promise<string | null>;
+  // How long a durable server shell may sit with no terminal attached before
+  // it is disposed (default: 30 minutes; `0` disables the sweep). An
+  // environment knob rather than a manifest one, because it trades memory
+  // against a rebuild on the next connect — an operational decision about a
+  // deployment, not something an application is written against.
+  shellIdleMs?: number;
+  // How often a live socket's credential is re-verified through `session`
+  // (default: 60 seconds; `0` disables it). The HTTP surfaces re-ask on every
+  // request; this is what makes the socket ask too, so a `session` that gives
+  // its tokens an expiry has that expiry mean something on a connection
+  // somebody is holding open. Costs one `session` call per authenticated
+  // connection per interval — the knob is here for a verifier that is
+  // expensive to ask.
+  sessionRevalidateMs?: number;
 };
 
 // The dev token pair — mint on the client stub, verify on the server;
