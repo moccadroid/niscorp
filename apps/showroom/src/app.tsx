@@ -38,6 +38,7 @@ const LIBRARIES: LibraryDef[] = [
   { id: 'charter', name: 'Charter', load: async () => (await import('./modules/charter')).charterModule },
   { id: 'moss', name: 'Moss', load: async () => (await import('./modules/moss')).mossModule },
   { id: 'vex', name: 'Vex', load: async () => (await import('./modules/vex')).vexModule },
+  { id: 'tide', name: 'Tide', load: async () => (await import('./modules/tide')).tideModule },
   { id: 'nova', name: 'Nova', load: async () => (await import('./modules/nova')).novaModule },
   { id: 'cortex', name: 'Cortex', load: async () => (await import('./modules/cortex')).cortexModule },
   { id: 'loom', name: 'Loom', load: async () => (await import('./modules/loom')).loomModule },

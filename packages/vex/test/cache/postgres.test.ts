@@ -24,6 +24,7 @@ type DbRow = {
   created_at: Date;
   expires_at: Date | null;
   schema_fingerprint: string | null;
+  reach: string | null;
 };
 
 const makeFakePool = () => {
@@ -39,7 +40,10 @@ const makeFakePool = () => {
         return { rows: [] };
       }
       if (sql.startsWith('INSERT INTO')) {
-        const [key, kind, intent, shape, dsl, prismIr, reason, createdAt, expiresAt, fingerprint] = v;
+        // POSITIONAL, so the order here is part of the contract with
+        // `postgres.ts` — a column inserted in the middle silently shifts every
+        // field after it, and the round-trips below are what catch that.
+        const [key, kind, intent, shape, dsl, prismIr, reach, reason, createdAt, expiresAt, fingerprint] = v;
         rows.set(key as string, {
           key: key as string,
           kind: kind as string,
@@ -51,6 +55,7 @@ const makeFakePool = () => {
           created_at: createdAt as Date,
           expires_at: (expiresAt as Date | null) ?? null,
           schema_fingerprint: (fingerprint as string | null) ?? null,
+          reach: (reach as string | null) ?? null,
         });
         return { rows: [] };
       }
@@ -114,6 +119,27 @@ describe('createPostgresCache', () => {
     const result = (await cache.get('k1')) as OkCacheEntry;
 
     expect(result.prismIr).toEqual(ir);
+  });
+
+  it('round-trips a declared reach', async () => {
+    const { pool } = makeFakePool();
+    const cache = createPostgresCache({ pool });
+    await cache.init();
+    // Dropping this on the way through would not throw — the read would just be
+    // served at the caller's own, wider reach. Silence is the whole risk.
+    await cache.set('mine', okEntry({ reach: 'personal' }));
+    const got = await cache.get('mine');
+    expect(got?.kind).toBe('ok');
+    expect(got?.kind === 'ok' ? got.reach : undefined).toBe('personal');
+  });
+
+  it('leaves an entry that declares none without one', async () => {
+    const { pool } = makeFakePool();
+    const cache = createPostgresCache({ pool });
+    await cache.init();
+    await cache.set('theirs', okEntry());
+    const got = await cache.get('theirs');
+    expect(got?.kind === 'ok' ? got.reach : 'set').toBeUndefined();
   });
 
   it('round-trips the schema fingerprint', async () => {

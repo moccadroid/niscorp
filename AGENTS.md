@@ -241,6 +241,97 @@ Stack-independent conventions:
 - **Seeds choose their clock.** A seed pins a fixed reference date or shifts with the wall clock — per what the seed is for: a regression fixture pins, a demo that must look alive today shifts. Either way the app compares against injected context (`$.today`, per request under moss) — never a wall-clock read inside a transform, query, or layout.
 - **The app is a manifest; only degrade shells are factories.** Under moss the app is `defineApp({...})` and the server builds one durable shell per principal — dev checks boot the same manifest with a dev runtime. A client-degrade app builds its shell as `createAppShell(deps)` with everything environmental injected, so checks construct the real app with real deps and nothing leaks between runs.
 
+## Failure modes worth naming
+
+Four mistakes that have each cost more than the thing they were avoiding. The
+first three share one shape — **concluding the system cannot do something without
+testing whether it can** — and each produced a workaround larger than the check
+would have been. The fourth is what happens on the way back out.
+
+### 1. Do not rationalise a limitation into a principle
+
+While adding per-role reach (`scoping`), the resolver collapsed a principal's
+roles into ONE profile and threw when two roles named different ones. That throw
+was written up as *"incoherence, not a precedence puzzle — refused, in the same
+spirit as two granted layout variants for one action."*
+
+It is not the same. Two layout variants for one action genuinely conflict — a
+screen renders one. Two roles naming different reaches is an instructor who also
+trains: staff on the roster, a member in the class. The rule existed to make the
+design self-consistent, and the domain broke it within the hour.
+
+**The tell:** a rule justified by analogy to a different rule, rather than by a
+case it would prevent. If you cannot name the bad thing it stops, it is a
+limitation wearing a principle's clothes.
+
+### 2. Test the mechanism before you blame it
+
+A charter `deny` was used to stop a grant riding up the role ladder. It appeared
+not to survive `extends`, so a table that should have been deleted was kept and
+the "limitation" was written into permanent comments as its justification.
+
+`deny` works exactly as documented — a child re-adds a denied grant, verified in
+five lines. What had actually happened: a patch script targeted the wrong role
+because line numbers shifted after an earlier edit. The fault was in the edit,
+not the engine.
+
+**The rule:** before documenting a limitation in someone else's package, write
+the smallest program that demonstrates it. If that program is hard to write, the
+limitation probably is not real.
+
+### 3. Believe the schema over the resolver
+
+The schema splits `staff` and `memberships` into two tables, with a comment
+saying why: *a person can be staff at a studio and hold a membership there too.*
+The directory above it then flattened every person to one word
+(`audienceOf(staffRole) ?? 'member'`), and `assignments` gave each person one
+role. The thing the data model deliberately kept apart, the policy layer
+collapsed — and three workarounds grew on top of the collapse: an extra scoping
+profile, a projection table, and a deny that was never needed.
+
+**The rule:** when a resolver contradicts a comment in the schema, the schema is
+usually right. It was written when somebody was thinking about the domain; the
+resolver was written when somebody was thinking about the code.
+
+### 4. Undoing a workaround moves the boundary — say where it went
+
+Deleting the three workarounds was not free, and the free-looking version would
+have been the dangerous one. `member_cards` existed so a member could see their
+plan and price without holding `subscriptions.read`; deleting it means the member
+rung holds that verb, at personal reach. Replaying the revenue fingerprint as a
+member therefore returns a *number* rather than a refusal — their own bill, not
+the studio's — where before it bounced at the verb.
+
+That is a real weakening, and it is the right trade: the same verb at two reaches
+is the whole design. But it was found by a check going red, not by the reasoning
+that authored the change. Two existing checks asserted "refused" and had to be
+rewritten to assert "not the studio's figure" — and rewriting a red assertion is
+exactly where a leak gets waved through.
+
+**The rule:** when a check fails because the design moved, do not adjust it to
+match the new behaviour. Work out what the old assertion was protecting, then
+write the assertion that protects the same thing under the new shape. Here that
+meant comparing the member's figure against the owner's rather than testing for a
+status code.
+
+**And check the ones that stayed green.** A check that asserts a *mechanism* can
+go on passing while the *consequence* it was standing in for has inverted.
+`scoping-check` asserted "an instructor who also trains reads the whole studio" —
+green, correct, and describing a screen that was showing him all 93 bookings at
+the studio under the heading "what you have booked". Widening reach turned a
+true statement about the engine into a false one about the product. After a
+change to how far somebody reaches, re-read every assertion that mentions them,
+not only the red ones.
+
+### The habit that catches all four
+
+Before building around a constraint, spend five minutes proving it exists. Every
+workaround in this list was bigger than its proof would have been, and two of
+them were built around constraints that were never there.
+
+And when you take one out, name what it was holding up. A workaround that was
+never needed still moved a boundary while it stood there.
+
 ## Layout of an app
 
 One arrangement — atrium's, the exemplar (`apps/lab/atrium`; relay is the older sibling and still worth reading for the surfaces it targets). `app/` holds **artifacts only**: every file there is pure, schema-valid JSON authored in TS (a check enforces it). Code lives outside `app/` — the environment in `db/`, helpers in `lib/`, the server glue and fns in `server/`, the component kit in `ui/`.

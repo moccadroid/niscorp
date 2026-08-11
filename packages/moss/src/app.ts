@@ -46,6 +46,49 @@ export type NiscApp = {
   // so the app supplies it. Values are injected server-side and are
   // unreferenceable by a request — the enforcement is engine-side and unforgeable.
   scope?: (principal: string | null) => Record<string, unknown>;
+  // WHICH INTEGRATIONS ARE LIVE FOR THIS PRINCIPAL'S TENANT.
+  //
+  // The charter grants `ext.desk.*` once, to every desk in the deployment. In a
+  // single-tenant app that is the whole answer. In a multi-tenant one it is a
+  // leak: one studio installing a pack would put it on every studio's front
+  // desk, and nothing would say so.
+  //
+  // Moss cannot decide this — it does not know what a tenant is, deliberately,
+  // for the same reason `scope` exists. So the app answers, with a list of
+  // integration ids, and moss drops every `ext.*` action outside it.
+  //
+  // Absent = every registered integration is live for everybody, which is right
+  // for an app with one tenant and wrong the moment there are two.
+  installedIntegrations?: (principal: string | null) => readonly string[];
+  // WHO AN INTEGRATION IS when it acts and nobody is driving.
+  //
+  // A webhook lands, a nightly sync runs: the integration presents its minted
+  // key and names who it acts for (`x-nisc-acts-for` — a tenant in most apps,
+  // and opaque to moss for the same reason `scope` is). The app answers with a
+  // principal, and from there NOTHING is special: that principal's charter
+  // rung compiles its policy, `scope` gives it its values, and the engine
+  // stamps its writes — the integration is just another client of the same
+  // closed grammar.
+  //
+  // Returning null refuses: an integration the tenant has not installed, a
+  // tenant that does not exist, an app that has no actor for unattended work.
+  // Absent = integration keys resolve to nobody and every keyed call is 403.
+  integrationActor?: (integration: string, actsFor: string) => string | null;
+  // WHERE AN INTEGRATION MAY APPEAR — the host's half of the placement
+  // contract, advertised on the discovery surface and enforced at intake.
+  //
+  // `attachable`: host action id → the offers, as {offered key: host data
+  // path} (a member detail offering `membership_id` from `$.membershipId`).
+  // Declaring an action here is declaring a seat. The KEYS are the contract —
+  // advertised on discovery, what a rider receives as input and what a
+  // preview call carries. The PATHS are the host's private wiring: how its
+  // own strip derivation and push trigger read those values off its data —
+  // a rider never sees them.
+  attachable?: Record<string, Record<string, string>>;
+  // `menuSlots`: hub action ids whose item lists accept placed integration
+  // screens. Who owns a menu is the host's question; this list is its answer,
+  // and intake refuses a placement outside it.
+  menuSlots?: readonly string[];
   // the prewarmed API surface — every read and write the app serves, as
   // authored entries; seeded into the cache at boot (idempotent, protected).
   // Optional because a database may already carry its vex_cache rows.

@@ -1,0 +1,135 @@
+/* Lyra's palette — TWO VOCABULARIES OVER ONE SCALE.
+ *
+ * The old set had six tokens (neutral/accent/calm/warm/alert/good) doing two
+ * incompatible jobs. `alert` meant "this is dangerous" on a membership badge
+ * and "this person is the owner" on a staff roster; a Competition class drew
+ * the same red as a cancelled one. Status needs FEW colours with strong
+ * meaning; identity needs MANY with none. One six-slot scale cannot be both.
+ *
+ *   HUES are identity. Ten of them, named for what they look like and nothing
+ *   else. A program, a role, a belt rank picks one. They carry no meaning, so
+ *   there is nothing to misread.
+ *
+ *   TONES are status, and there are five. They are ALIASES of five hues — so
+ *   the app has one palette, not two that drift — but they are a separate
+ *   vocabulary, and `design-check` refuses any row that colours an identity
+ *   with one.
+ *
+ * LIGHT AND DARK ARE BOTH DEFINED HERE, selected by `data-scheme` on the root.
+ * That is the second fix: a studio theme used to hand-list its own soft
+ * backgrounds and could not touch the foregrounds at all, so Sand ran the
+ * light status colours on warm paper and Charcoal ran them on near-black —
+ * and every badge in the deployment failed WCAG AA on BOTH themes (measured:
+ * 3.07:1 to 4.41:1 where 4.5 is the floor). A theme now says `scheme: dark`
+ * and inherits a set that was tuned against its own ground. Every pair below
+ * is asserted at 4.5:1 or better by `design-check`, against the badge
+ * background AND against the page.
+ *
+ * The accent is a HIGHLIGHT, not a brand fill. It marks the live thing — the
+ * primary action, the current day, the count that changed — against an
+ * otherwise near-monochrome page. Used as a background it always carries
+ * `--accent-ink` on top, because neon lime and white is unreadable and the kit
+ * should make that impossible rather than merely discouraged.
+ *
+ * No serif anywhere. One sans stack, hierarchy from size and weight.
+ */
+
+:root {
+  --ground: #ffffff;
+  --surface: #ffffff;
+  --surface-sunk: #f4f4f5;
+
+  --ink: #09090b;
+  --ink-soft: #3f3f46;
+  --ink-mute: #71717a;
+  --ink-faint: #a1a1aa;
+
+  --line: #e6e6e9;
+  --line-strong: #d4d4d8;
+
+  /* the neon */
+  --accent: #ccff00;
+  --accent-ink: #1b2400;
+  --accent-soft: #f4ffcc;
+
+  /* ── identity: ten hues, no meaning ────────────────────────
+   * Foreground is a 700-level value, its `-soft` pair a 50-level ground. A
+   * hue is legible as text on the page, as a filled pill on its own soft
+   * ground, and as a mark. Nothing here says "good" or "bad". */
+  --hue-rose: #be123c;
+  --hue-rose-soft: #fff1f2;
+  --hue-amber: #b45309;
+  --hue-amber-soft: #fffbeb;
+  --hue-lime: #4d7c0f;
+  --hue-lime-soft: #f7fee7;
+  --hue-emerald: #047857;
+  --hue-emerald-soft: #ecfdf5;
+  --hue-teal: #0f766e;
+  --hue-teal-soft: #f0fdfa;
+  --hue-sky: #0369a1;
+  --hue-sky-soft: #f0f9ff;
+  --hue-indigo: #4338ca;
+  --hue-indigo-soft: #eef2ff;
+  --hue-violet: #6d28d9;
+  --hue-violet-soft: #f5f3ff;
+  --hue-fuchsia: #a21caf;
+  --hue-fuchsia-soft: #fdf4ff;
+  --hue-stone: #57534e;
+  --hue-stone-soft: #fafaf9;
+
+  /* ── status: five tones, all meaning ───────────────────────
+   * Aliases, so a studio that retunes a hue retunes everything wearing it.
+   * The names are the OLD ones on purpose — every existing layout keeps
+   * working, and what changed is which job they are allowed to do. */
+  --calm: var(--hue-sky);
+  --calm-soft: var(--hue-sky-soft);
+  --warm: var(--hue-amber);
+  --warm-soft: var(--hue-amber-soft);
+  --alert: var(--hue-rose);
+  --alert-soft: var(--hue-rose-soft);
+  --good: var(--hue-emerald);
+  --good-soft: var(--hue-emerald-soft);
+
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+
+  --shadow-sm: 0 1px 2px rgb(9 9 11 / 0.05);
+  --shadow-md: 0 4px 16px -4px rgb(9 9 11 / 0.1);
+
+  --font: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --font-mono: ui-monospace, 'SF Mono', 'Cascadia Mono', Menlo, Consolas, monospace;
+}
+
+/* ── the dark scheme ─────────────────────────────────────────
+ *
+ * Same names, inverted construction: a 300-level foreground on a 950-level
+ * ground. A studio theme opts in with `scheme: dark` and then only has to
+ * name its own ground, ink and accent — the twenty hue tokens and the five
+ * tones come tuned. Overriding an individual hue still works and is still
+ * the studio's business. */
+:root[data-scheme='dark'] {
+  --hue-rose: #fda4af;
+  --hue-rose-soft: #4c0519;
+  --hue-amber: #fcd34d;
+  --hue-amber-soft: #451a03;
+  --hue-lime: #bef264;
+  --hue-lime-soft: #1a2e05;
+  --hue-emerald: #6ee7b7;
+  --hue-emerald-soft: #022c22;
+  --hue-teal: #5eead4;
+  --hue-teal-soft: #042f2e;
+  --hue-sky: #7dd3fc;
+  --hue-sky-soft: #082f49;
+  --hue-indigo: #a5b4fc;
+  --hue-indigo-soft: #1e1b4b;
+  --hue-violet: #c4b5fd;
+  --hue-violet-soft: #2e1065;
+  --hue-fuchsia: #f0abfc;
+  --hue-fuchsia-soft: #4a044e;
+  --hue-stone: #d6d3d1;
+  --hue-stone-soft: #292524;
+
+  --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.4);
+  --shadow-md: 0 4px 16px -4px rgb(0 0 0 / 0.6);
+}

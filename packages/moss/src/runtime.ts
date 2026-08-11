@@ -27,6 +27,17 @@ export type NiscRuntime = {
   // connection per interval — the knob is here for a verifier that is
   // expensive to ask.
   sessionRevalidateMs?: number;
+  // THE OPERATOR KEY — the whole authentication story for the seam below.
+  //
+  // Registering an integration is a PLATFORM act, not a tenant one: it points
+  // the deployment at a service and approves what that service may read. No
+  // principal should be able to do it, which means it cannot live on a
+  // principal-authenticated surface at all.
+  //
+  // Absent = the seam does not exist. Every route under it answers 404, which is
+  // also what a wrong key gets: a tool cannot tell an unset key from a bad one,
+  // and neither can anybody else.
+  operatorKey?: string;
 };
 
 // The dev token pair — mint on the client stub, verify on the server;

@@ -28,6 +28,8 @@ export type SeedEntry = {
   shape?: unknown;
   dsl: Query;
   mapping?: unknown;
+  /** The reach this read requires whatever the caller holds — see `OkCacheEntry.reach`. */
+  reach?: string;
 };
 
 // A write seed — the same idea, `kind: 'mutation'`.
@@ -35,6 +37,8 @@ export type SeedMutation = {
   fingerprint: string;
   intent?: string;
   mutation: MutationDefinition;
+  /** The reach this write requires whatever the caller holds — see `MutationCacheEntry.reach`. */
+  reach?: string;
 };
 
 export const seedCache = async (cache: CacheBackend, entries: readonly (SeedEntry | SeedMutation)[]): Promise<void> => {
@@ -50,6 +54,7 @@ export const seedCache = async (cache: CacheBackend, entries: readonly (SeedEntr
       await cache.set(entry.fingerprint, {
         kind: 'mutation',
         mutation: entry.mutation,
+        ...(entry.reach !== undefined ? { reach: entry.reach } : {}),
         ...(entry.intent !== undefined ? { intent: entry.intent } : {}),
         protected: true,
         createdAt: Date.now(),
@@ -64,6 +69,7 @@ export const seedCache = async (cache: CacheBackend, entries: readonly (SeedEntr
       kind: 'ok',
       dsl: entry.dsl,
       prismIr,
+      ...(entry.reach !== undefined ? { reach: entry.reach } : {}),
       ...(entry.intent !== undefined ? { intent: entry.intent } : {}),
       ...(entry.shape !== undefined ? { shape: entry.shape } : {}),
       protected: true,

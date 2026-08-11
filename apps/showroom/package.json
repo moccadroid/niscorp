@@ -19,6 +19,7 @@
     "@niscorp/prism": "workspace:*",
     "@niscorp/signal": "workspace:*",
     "@niscorp/solid": "workspace:*",
+    "@niscorp/tide": "workspace:*",
     "@niscorp/vex": "workspace:^",
     "@noble/hashes": "^2.2.0",
     "openai": "^6.33.0",

@@ -1,0 +1,710 @@
+/* The kit's own rules — everything a style attribute cannot express: focus
+ * rings, hover states, pseudo-elements, and the handful of resets that keep
+ * native controls from bringing their own opinions.
+ *
+ * Colour values do not appear here. Every one is a custom property, so this
+ * file survives a theme unchanged. */
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font);
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--ink);
+  background: var(--ground);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+/* One focus ring for the whole application, and it is the accent — which is
+ * also a small accessibility argument for the accent being high-contrast. */
+:where(button, input, textarea, select, a, [tabindex]):focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+/* ─── buttons ─────────────────────────────────────────────── */
+
+.ly-btn {
+  font: inherit;
+  font-weight: 500;
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  padding: 8px 14px;
+  cursor: pointer;
+  transition: background-color 0.12s ease, border-color 0.12s ease, transform 0.06s ease;
+  white-space: nowrap;
+}
+.ly-btn:active:not(:disabled) {
+  transform: translateY(0.5px);
+}
+.ly-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+.ly-btn--big {
+  padding: 12px 20px;
+  font-size: 15px;
+  border-radius: var(--radius-lg);
+}
+
+/* Primary is INK, not accent: a page with one lime button reads as a page with
+ * one thing on it, and the neon then means "look here" wherever it appears. */
+.ly-btn--solid {
+  background: var(--ink);
+  color: var(--ground);
+}
+.ly-btn--solid:hover:not(:disabled) {
+  background: var(--ink-soft);
+}
+
+.ly-btn--accent {
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+.ly-btn--accent:hover:not(:disabled) {
+  filter: brightness(0.95);
+}
+
+.ly-btn--ghost {
+  background: transparent;
+  color: var(--ink-soft);
+}
+.ly-btn--ghost:hover:not(:disabled) {
+  background: var(--surface-sunk);
+  color: var(--ink);
+}
+
+.ly-btn--outline {
+  background: var(--surface);
+  color: var(--ink);
+  border-color: var(--line-strong);
+}
+.ly-btn--outline:hover:not(:disabled) {
+  border-color: var(--ink);
+}
+
+.ly-btn--danger {
+  background: var(--alert-soft);
+  color: var(--alert);
+}
+.ly-btn--danger:hover:not(:disabled) {
+  background: var(--alert);
+  color: var(--ground);
+}
+
+/* ─── fields ──────────────────────────────────────────────── */
+
+.ly-field {
+  font: inherit;
+  width: 100%;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-md);
+  padding: 9px 12px;
+  transition: border-color 0.12s ease, box-shadow 0.12s ease;
+}
+.ly-field::placeholder {
+  color: var(--ink-faint);
+}
+.ly-field:hover:not(:disabled) {
+  border-color: var(--ink-faint);
+}
+.ly-field:focus {
+  outline: none;
+  border-color: var(--ink);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+.ly-field:disabled {
+  background: var(--surface-sunk);
+  color: var(--ink-mute);
+}
+
+/* ─── rows ────────────────────────────────────────────────── */
+
+.ly-row-item {
+  transition: background-color 0.1s ease;
+}
+.ly-row-item--clickable {
+  cursor: pointer;
+}
+.ly-row-item--clickable:hover {
+  background: var(--surface-sunk);
+}
+
+/* ─── the skeleton's shimmer ──────────────────────────────── */
+
+@keyframes ly-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.45;
+  }
+}
+.ly-skeleton {
+  background: var(--surface-sunk);
+  border-radius: var(--radius-sm);
+  animation: ly-pulse 1.4s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+@keyframes ly-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ─── how an action arrives ───────────────────────────────── */
+
+@keyframes ly-enter {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+.ly-slot {
+  animation: ly-enter 0.18s ease-out both;
+  min-width: 0;
+}
+
+/* ── the shell's furniture ──────────────────────────────────────
+ *
+ * MOBILE FIRST, and meant literally: these are the phone rules, and the two
+ * media queries below are the only places a wider screen is mentioned.
+ */
+
+/* How tall the thumb bar is. Named because two rules need the same number —
+ * the bar's own box and the inset that keeps content out from under it. */
+:root { --thumbbar: 58px; }
+
+.ly-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  background: var(--surface);
+  flex: 0 0 auto;
+  z-index: 20;
+}
+.ly-bar--top { border-bottom: 1px solid var(--line); }
+
+/* THE TAB BAR SITS WHERE A THUMB IS — which means FIXED, not merely last.
+ *
+ * The chrome is one canvas at the TOP of the frame, so a bar declared "bottom"
+ * inside it rendered second from the top: a thumb bar an inch below the status
+ * bar, which is the one place it is no use. Nothing about the arrangement was
+ * wrong — the canvas holds the whole frame, top bar and drawer included — so
+ * this is the same trade the rail already makes two hundred lines down: take it
+ * out of flow, pin it, and inset the app to make room rather than have the two
+ * fight over the same space.
+ *
+ * The home-indicator inset rides along, so it is not half-covered on a phone
+ * that has one. */
+.ly-bar--bottom {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: var(--thumbbar);
+  padding: 0 6px calc(env(safe-area-inset-bottom, 0px));
+  box-sizing: content-box;
+  border-top: 1px solid var(--line);
+  justify-content: space-around;
+}
+
+/* The room it takes, and the notch above. One value for the bar's height and
+ * the app's inset, so they cannot drift apart and leave the last row of a list
+ * under the bar forever. The top inset is unconditional because the first thing
+ * on screen is not always the tab row — a one-screen area has none, and its
+ * content would start under the status bar. */
+#root {
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-bottom: calc(var(--thumbbar) + env(safe-area-inset-bottom, 0px));
+}
+
+.ly-tab {
+  appearance: none;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: var(--ink-mute);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  padding: 4px 10px;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  min-width: 56px;
+  flex: 1 1 0;
+}
+/* A scrolling control that shows a scrollbar has admitted it does not fit. The
+ * overflow is a phone affordance, not a widget. */
+.ly-segments { scrollbar-width: none; }
+.ly-segments::-webkit-scrollbar { display: none; }
+/* It is `inline-flex`, which a column Stack stretches to full width anyway —
+ * so Calendar/List became a page-wide tray with two pills huddled at the left.
+ * A segmented control is as wide as its segments. */
+.ly-segments { align-self: flex-start; }
+.ly-subnav { align-self: stretch; }
+
+/* THE AREA'S SCREENS — navigation, and it has to LOOK like navigation.
+ *
+ * This row shipped as a segmented pill tray and read wrong immediately: a pill
+ * tray is what Current/Everyone is, so the tabs looked like a filter on the
+ * screen under them rather than the way to the two screens beside it. Same
+ * event, same component, different promise — so a different look.
+ *
+ * An underline is the one that means "section of this thing" everywhere, and
+ * the -1px pulls it onto the hairline the row sits on, which is what makes the
+ * current tab read as CONNECTED to the content below rather than pointing at
+ * it. */
+.ly-subnav { gap: 0; }
+.ly-subnav__tab {
+  flex: 0 0 auto;
+  white-space: nowrap;
+  padding: 13px 2px;
+  margin-right: 20px;
+  border-radius: 0;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--ink-mute);
+  background: none;
+}
+.ly-subnav__tab:last-child { margin-right: 0; }
+.ly-subnav__tab--on {
+  color: var(--ink);
+  font-weight: 600;
+  border-bottom-color: var(--accent);
+}
+
+.ly-tab__dot { width: 5px; height: 5px; border-radius: 999px; background: transparent; }
+/* A LABEL THAT WRAPS IS TWO LABELS. "Check in" broke across two lines and made
+ * its tab a head taller than the four beside it. */
+.ly-tab span:last-child { font-size: 11px; letter-spacing: 0.01em; white-space: nowrap; }
+.ly-tab--on { color: var(--ink); font-weight: 600; }
+.ly-tab--on .ly-tab__dot { background: var(--accent); }
+.ly-tab--on svg { color: var(--accent); }
+
+/* A form over the surface rather than instead of it.
+ *
+ * On a phone it rises from the bottom, because that is where a thumb is. On a
+ * desk it slides in from the right, because a wide screen has room beside the
+ * work rather than only under it — and covering the bottom half of a 1300px
+ * window to ask a one-line question is absurd.
+ *
+ * Same component, same canvas, same actions. Only where it sits. */
+.ly-sheet-scrim { align-items: flex-end; justify-content: center; }
+.ly-sheet {
+  position: relative;
+  background: var(--surface);
+  width: 100%;
+  max-height: 88vh;
+  overflow-y: auto;
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  box-shadow: 0 -12px 40px rgba(0, 0, 0, 0.18);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  animation: ly-sheet-up 180ms ease-out;
+}
+@keyframes ly-sheet-up {
+  from { transform: translateY(14px); opacity: 0.6; }
+  to { transform: translateY(0); opacity: 1; }
+}
+.ly-sheet__head {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 10px 8px;
+  background: var(--surface);
+}
+.ly-sheet__title { font-size: 15px; font-weight: 600; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* The circle IS the button. It was a 34px circle drawn inside a larger absolute
+ * box that the body then painted over, so only its top edge took a tap. */
+.ly-sheet__close {
+  appearance: none;
+  border: 0;
+  flex: 0 0 auto;
+  background: var(--surface-sunk);
+  color: var(--ink-mute);
+  width: 40px;
+  height: 40px;
+  border-radius: 999px;
+  font-size: 20px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+.ly-sheet__close:active { background: var(--line); }
+.ly-sheet__grip {
+  width: 38px;
+  height: 4px;
+  border-radius: 999px;
+  background: var(--line-strong);
+  margin: 10px auto 2px;
+}
+/* The sheet insets what it hosts, exactly as the surface does — so an action
+ * that pads nothing reads correctly in either. */
+.ly-sheet__body { padding: 6px 18px 24px; }
+
+/* ── wider than a phone ─────────────────────────────────────────
+ *
+ * The sheet becomes a side drawer. Same canvas, same layouts, same actions —
+ * only where they sit, which is the whole point of the arrangement living out
+ * here rather than inside the actions.
+ */
+@media (min-width: 860px) {
+  .ly-sheet-scrim { align-items: stretch; justify-content: flex-end; }
+  .ly-sheet {
+    width: min(480px, 100%);
+    max-height: none;
+    height: 100%;
+    border-radius: 0;
+    box-shadow: -12px 0 40px rgba(0, 0, 0, 0.14);
+    padding-bottom: 0;
+    animation: ly-sheet-in 180ms ease-out;
+  }
+  /* A drag grip on something that does not drag, beside a close control that
+   * does the job. It belongs to the phone shape only. */
+  .ly-sheet__grip { display: none; }
+  .ly-sheet__head { padding: 14px 14px 10px; border-bottom: 1px solid var(--line); }
+  .ly-sheet__body { padding: 14px 20px 28px; }
+}
+@keyframes ly-sheet-in {
+  from { transform: translateX(18px); opacity: 0.6; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
+/* ── the drawer ─────────────────────────────────────────────────
+ *
+ * ONE navigation surface. The previous pass had a tab bar at the bottom and a
+ * nine-item strip at the top, which is a flat nav split across two edges rather
+ * than a grouped one — the same problem wearing a different shape.
+ */
+.ly-drawer-scrim { /* geometry is inline — see layout.tsx. Cosmetics only here. */ }
+.ly-drawer {
+  padding: 14px 10px calc(20px + env(safe-area-inset-bottom, 0px));
+  box-shadow: 12px 0 40px rgba(0, 0, 0, 0.18);
+}
+.ly-drawer__group { padding: 14px 8px 4px; font-size: 11px; font-weight: 600; letter-spacing: 0.07em; text-transform: uppercase; color: var(--ink-faint); }
+.ly-drawer__link {
+  appearance: none;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 16px;
+  color: var(--ink);
+  /* A ROW, so an icon sits BESIDE its label. As a block the svg stacked above
+   * the word and every menu entry became two lines tall. */
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  width: 100%;
+  text-align: left;
+  padding: 12px 10px;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+}
+/* The glyph is quieter than the word until you are standing on it. */
+.ly-drawer__link svg { color: var(--ink-faint); flex: none; }
+.ly-drawer__link--here svg { color: var(--accent); }
+.ly-drawer__link:active { background: var(--surface-sunk); }
+
+.ly-burger {
+  appearance: none;
+  border: 0;
+  background: none;
+  padding: 8px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 40px;
+  align-items: stretch;
+}
+.ly-burger span { height: 2px; background: var(--ink); border-radius: 2px; }
+
+/* ── rows stop pretending to be a table ─────────────────────────
+ *
+ * A header row reading "Class · Day · Starts · Booked" over five columns is a
+ * spreadsheet, and a spreadsheet on a 375px screen is unreadable — which is
+ * exactly what shipped. Below 700px the header goes, and every row becomes a
+ * two-line list item: what it is on the left, the one number that matters on
+ * the right.
+ */
+@media (max-width: 699px) {
+  .ly-rows__head { display: none !important; }
+  /* No desktop floor on a phone — the rows are a list here, not a grid. */
+  .ly-rows__grid { min-width: 0 !important; }
+  .ly-row-item {
+    display: flex !important;
+    align-items: center;
+    justify-content: space-between;
+    /* So a row carrying two or three controls gives them a second line rather
+     * than squeezing the name that identifies it. */
+    flex-wrap: wrap;
+    gap: 10px;
+    padding: 9px 14px !important;
+    min-height: 44px;
+  }
+  /* The first cell is the identity and takes the room; the rest sit right,
+   * small, and wrap out of the way. */
+  .ly-row-item > * { min-width: 0; text-align: left !important; }
+  .ly-row-item > *:first-child { flex: 1 1 auto; }
+  .ly-row-item > * + * { flex: 0 0 auto; text-align: right !important; }
+  /* TWO DISPLAY CELLS, NOT THREE. The comment above promised "what it is on
+   * the left, the one number that matters on the right", and the rule under it
+   * kept three — plus a `:not(:last-child)` exemption that kept a FOURTH
+   * whenever the last column was an ordinary one.
+   *
+   * Three cells do not fit 375px: the roll printed name-and-email with a status
+   * pill, and threw the join date onto a second line, hard left, on some rows
+   * and not others. A list where the same column lands in a different place on
+   * every row is worse than one that dropped it.
+   *
+   * ACTIONS ARE STILL EXEMPT — they are the only way to do the thing, and
+   * hiding one removes the feature rather than tidying the row. They wrap to a
+   * second line instead, which is why they keep their own class. */
+  .ly-row-item > *:nth-child(n + 3):not(.ly-row-cell--action) { display: none; }
+  .ly-row-cell--action { flex: 0 0 auto; }
+}
+
+
+.ly-sheet { position: relative; }
+
+/* ── the menu, laid out by frequency ────────────────────────────
+ *
+ * The list before this had every entry at the same weight, so a reader sorted
+ * twelve items by hand every time. Group headings carry the sorting now, the
+ * current place is marked, and the two things that are not destinations — who
+ * you are, and the way out — are pinned to the ends where they belong.
+ */
+.ly-drawer { display: flex; flex-direction: column; padding: 0 0 env(safe-area-inset-bottom, 0px); }
+
+.ly-drawer__header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 20px 18px 16px;
+  border-bottom: 1px solid var(--line);
+  margin-bottom: 6px;
+}
+.ly-drawer__name { font-size: 16px; font-weight: 600; color: var(--ink); }
+.ly-drawer__sub { font-size: 12.5px; color: var(--ink-mute); }
+
+.ly-drawer__group {
+  padding: 16px 18px 5px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+.ly-drawer__link {
+  font-size: 15.5px;
+  padding: 11px 18px;
+  border-radius: 0;
+  border-left: 3px solid transparent;
+  line-height: 1.3;
+}
+/* A screen inside the open area: indented past the parent icon, one step down
+ * in size and colour. The indent is what makes the menu readable as a tree
+ * rather than a longer flat list. */
+.ly-drawer__link--sub {
+  padding-left: 46px;
+  font-size: 14px;
+  color: var(--ink-mute);
+}
+.ly-drawer__link--sub.ly-drawer__link--here { color: var(--ink); }
+
+/* Where you already are. A left edge rather than a filled row, so scanning the
+ * list is not competing with a block of colour. */
+.ly-drawer__link--here {
+  font-weight: 600;
+  color: var(--ink);
+  border-left-color: var(--accent);
+  background: var(--surface-sunk);
+}
+.ly-drawer__link--quiet { color: var(--ink-mute); font-size: 14.5px; }
+
+.ly-drawer__footer {
+  margin-top: auto;
+  border-top: 1px solid var(--line);
+  padding: 6px 0 8px;
+}
+
+/* ── the rail ───────────────────────────────────────────────────
+ *
+ * A burger hides navigation when there is no room for it. On a wide screen
+ * there is room, so the same drawer simply stays open: no scrim, no tap, and
+ * — the part that actually matters — where you ARE is on screen at all times
+ * instead of one tap away.
+ *
+ * The rail is portaled to `body` and fixed, so the app is inset to make room
+ * rather than the two fighting over the same space. */
+@media (min-width: 860px) {
+  .ly-drawer--rail {
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    width: 264px;
+    z-index: 900;
+    overflow-y: auto;
+    background: var(--surface);
+    border-right: 1px solid var(--line);
+    border-radius: 0;
+  }
+  #root { padding-left: 264px; }
+
+  /* THE THUMB BAR IS FOR THUMBS. The rail already shows every area at once and
+   * marks the open one, so a second copy pinned to the bottom of a 1400px
+   * window would be the same navigation twice — and neither would be where a
+   * mouse is. One arrangement, two shapes; the sheet makes the same trade. */
+  .ly-bar--bottom { display: none; }
+  #root { padding-bottom: 0; }
+}
+
+/* A week, as seven pills. Filled means it meets that day. */
+.ly-day {
+  appearance: none;
+  min-width: 46px;
+  padding: 9px 10px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--ink-mute);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.12s ease, border-color 0.12s ease, color 0.12s ease;
+}
+.ly-day:hover { border-color: var(--line-strong); }
+.ly-day--on {
+  background: var(--accent);
+  border-color: var(--accent);
+  /* --accent-ink, the same token the accent button uses. The first draft
+   * invented --on-accent, which does not exist, so it fell through to white on
+   * lime — unreadable, and the kind of thing a token system exists to stop. */
+  color: var(--accent-ink);
+}
+
+/* ── the fortnight, as a grid ────────────────────────────────
+ *
+ * Horizontal scroll on purpose: fourteen legible day columns do not fit a
+ * phone, and squeezing them until they do produces fourteen unreadable ones.
+ * A calendar you push sideways is how every calendar on a phone works. */
+.ly-cal {
+  display: grid;
+  grid-auto-flow: column;
+  /* A week has to FIT. 148 was tuned for a fortnight that scrolled; seven
+   * columns at 118 fit the surface, and the scroll stays for a phone. */
+  grid-auto-columns: minmax(118px, 1fr);
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 6px;
+}
+.ly-cal__wait { padding: 22px 4px; color: var(--ink-mute); }
+.ly-cal__day {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  padding: 10px;
+  min-height: 132px;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+.ly-cal__head { display: flex; align-items: baseline; gap: 6px; }
+.ly-cal__dow { font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-faint); }
+.ly-cal__num { font-size: 17px; font-weight: 600; color: var(--ink); }
+.ly-cal__none { color: var(--ink-faint); font-size: 13px; }
+.ly-cal__item {
+  appearance: none;
+  text-align: left;
+  font: inherit;
+  background: var(--surface-sunk);
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--accent);
+  border-radius: var(--radius-sm);
+  padding: 7px 8px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.ly-cal__item:hover { border-color: var(--line-strong); }
+.ly-cal__item--off { opacity: 0.5; text-decoration: line-through; }
+.ly-cal__time { font-size: 12px; font-weight: 600; color: var(--ink); }
+.ly-cal__name { font-size: 12.5px; color: var(--ink-soft); }
+.ly-cal__fill { font-size: 11px; color: var(--ink-faint); }
+
+/* ── the calendar's furniture ────────────────────────────────── */
+.ly-cal__wrap { display: flex; flex-direction: column; gap: 10px; }
+.ly-cal__bar { display: flex; align-items: center; gap: 12px; }
+.ly-cal__range { font-size: 14px; font-weight: 600; color: var(--ink); }
+.ly-cal__step {
+  appearance: none;
+  width: 38px;
+  height: 38px;
+  border-radius: 999px;
+  border: 1px solid var(--line-strong);
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+}
+.ly-cal__step:disabled { opacity: 0.35; cursor: not-allowed; }
+
+/* ── MOBILE FIRST, AND THIS TIME LITERALLY ───────────────────
+ *
+ * Seven columns squeezed onto a phone is a spreadsheet nobody can read, and
+ * that is what shipped: 118px columns, three-and-a-bit visible, the rest off
+ * the edge with no indication that swiping was a thing.
+ *
+ * A phone gets ONE DAY PER SCREEN, and it snaps — so a swipe moves exactly one
+ * day and lands square, which is how every calendar on a phone behaves. The
+ * week stepper still jumps seven at a time.
+ */
+@media (max-width: 699px) {
+  .ly-cal {
+    grid-auto-columns: 100%;
+    scroll-snap-type: x mandatory;
+    -webkit-overflow-scrolling: touch;
+    gap: 12px;
+  }
+  .ly-cal__day { scroll-snap-align: center; min-height: 200px; }
+  .ly-cal__num { font-size: 20px; }
+}

@@ -10,6 +10,8 @@ import * as deadDeny from './stories/dead-deny.demo';
 import deadDenySrc from './stories/dead-deny.demo?raw';
 import * as incoherent from './stories/incoherent.demo';
 import incoherentSrc from './stories/incoherent.demo?raw';
+import * as scoping from './stories/scoping.demo';
+import scopingSrc from './stories/scoping.demo?raw';
 import * as principal from './stories/principal.demo';
 import principalSrc from './stories/principal.demo?raw';
 
@@ -31,6 +33,15 @@ export const stories: readonly Story[] = [
     kind: 'resolve',
     Demo: deny.Demo,
     source: denySrc,
+  },
+  {
+    id: 'scoping',
+    name: 'Reach',
+    description: "Roles holding the SAME grant, reaching different distances. scoping names the profile; it is the one thing extends does not compose.",
+    category: 'Resolve',
+    kind: 'resolve',
+    Demo: scoping.Demo,
+    source: scopingSrc,
   },
   {
     id: 'universes',

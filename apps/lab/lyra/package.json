@@ -1,0 +1,35 @@
+{
+  "name": "lyra",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit",
+    "serve": "tsx src/server/serve.ts",
+    "check": "tsx src/dev/all-checks.ts"
+  },
+  "dependencies": {
+    "@electric-sql/pglite": "^0.5.1",
+    "@niscorp/charter": "workspace:^",
+    "@niscorp/moss": "workspace:^",
+    "@niscorp/nova": "workspace:^",
+    "@niscorp/prism": "workspace:^",
+    "@niscorp/tide": "workspace:^",
+    "@niscorp/vex": "workspace:^",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@hono/node-server": "^2.0.4",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^5.0.4",
+    "tsx": "^4.23.1",
+    "typescript": "^6.0.2",
+    "vite": "^7.1.12"
+  }
+}

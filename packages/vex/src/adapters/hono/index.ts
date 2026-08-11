@@ -20,6 +20,9 @@ export type VexHonoConfig<E extends Env = Env> = {
   // reads, mutation replay AND discovery on this endpoint. Absent (or
   // returning undefined), the engine default and `mutations.policy` apply.
   getPolicy?: (c: Context<E>) => Promise<ScopePolicy | undefined> | ScopePolicy | undefined;
+  // The same principal's policy at a reach an entry demands — see
+  // `OkCacheEntry.reach`. Bound per request, because the principal is.
+  getPolicyForReach?: (c: Context<E>, reach: string) => Promise<ScopePolicy | undefined> | ScopePolicy | undefined;
   // Enables replay of `kind: 'mutation'` cache entries on this endpoint.
   // `policy` is the static fallback when `getPolicy` is absent; at least
   // one of the two must supply a policy for writes to run.
@@ -49,6 +52,9 @@ export const vex = <E extends Env = Env>(config: VexHonoConfig<E>): Hono<E> => {
       entities: config.entities,
       ...(config.locked === true ? { locked: true } : {}),
       ...(policy !== undefined ? { scopePolicy: policy } : {}),
+      ...(config.getPolicyForReach !== undefined
+        ? { policyForReach: (reach: string) => config.getPolicyForReach?.(c, reach) }
+        : {}),
       ...(config.mutations !== undefined && mutationPolicy !== undefined
         ? { mutations: { client: config.mutations.client, policy: mutationPolicy } }
         : {}),

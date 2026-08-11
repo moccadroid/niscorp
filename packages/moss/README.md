@@ -32,7 +32,8 @@ const app = defineApp({
                   // substituted per principal at shell build. The base is the
                   // floor; variants enrich upward as grants, never reduce
   entries,        // the prewarmed vex cache — the API surface, as data
-  behaviors,      // row-level scope semantics the charter can't express
+  behaviors,      // row-level scope semantics; each role's `scoping` picks among them,
+                  // one policy per role, merged — a person may hold several
   resources,      // entity subgraphs → /api/<name>/vex
   shell,          // the canvas manifest (the shell runs on the server)
   functions,      // the in-process fn seam (agents, sign-in) — optional

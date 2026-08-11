@@ -1,3 +1,4 @@
+import { evaluateSafe } from '@niscorp/prism';
 import { hasKey, isArray, isObject } from '../common';
 import { getPath } from './paths';
 import type { ScopeChain } from './types';
@@ -144,6 +145,21 @@ const DIRECTIVES: Record<string, Directive> = {
     const element = arr[index];
     const field = args[2];
     return field !== undefined && isObject(element) ? element[String(field)] : element;
+  },
+  // THE WHOLE TRANSFORM GRAMMAR, BEHIND ONE EXPLICIT DOOR. The directives
+  // above stay the small binding set; a value that needs a real transformation
+  // — a join, a projection, a group — says so out loud: `{ $prism: <node> }`
+  // evaluates the node with prism against the action's ROOT data. One grammar,
+  // one evaluator, nothing ambient — a prism-shaped object OUTSIDE this
+  // wrapper stays what it always was, a plain object walked for strings.
+  //
+  // The quiet failure this replaces was worse than a crash: an unrecognised
+  // op-shaped value passed through `resolve` as structure, landed in data, and
+  // rendered as garbage three screens later. Inside the wrapper, a bad node
+  // resolves to undefined — absent, not wrong.
+  $prism: (node, chain) => {
+    const result = evaluateSafe(node.$prism as never, (chain[0] ?? {}) as never);
+    return result.ok ? result.data : undefined;
   },
 };
 

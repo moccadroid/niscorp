@@ -14,6 +14,7 @@ In-depth usage guide for `@niscorp/vex`. For the high-level pitch see
 - [Engine methods](#engine-methods)
 - [The DSL](#the-dsl)
 - [Scope policies](#scope-policies)
+- [Grants and behaviors](#grants-and-behaviors)
 - [Mutations](#mutations)
 - [Caching](#caching)
 - [Wiring the LLM agents](#wiring-the-llm-agents)
@@ -560,6 +561,122 @@ Scope is applied only when a policy is configured **and** `options.scope` is
 provided.
 
 ---
+
+
+## Grants and behaviors
+
+A `ScopePolicy` written by hand is fine for one app. A policy *layer* — a
+charter, a role system, a config file — wants to hand vex a flat set of strings
+and get vex's native contract back. That is the grant dialect.
+
+A grant is `<table>.<verb>` where the verb is one of `SCOPE_VERBS`:
+`read`, `write.insert`, `write.update`, `write.delete`. The strings are opaque to
+the layer that resolves them and native to vex, so neither imports the other.
+
+```typescript
+scopeGrants(['orders', 'users'])   // every grant those tables can carry
+createScopePolicy(grants, behaviors, scoping?) // → ScopePolicy
+```
+
+**Grants decide whether a phase exists. Behaviors decide what a granted phase
+does.** Listing a table in `behaviors` grants nothing.
+
+```typescript
+type ScopeRules = { read?: ScopeMatch[]; write?: ScopeRule[]; insert?: ScopeRule[]; update?: ScopeRule[]; delete?: ScopeMatch[] };
+
+type ScopeBehaviors = Record<string, ScopeRules | Record<string, ScopeRules>>;
+```
+
+### Scoping profiles
+
+A table carries **either** one rule set — the shape above — **or several named
+ones**, of which `default` is what an unprofiled principal gets.
+
+The problem they solve: scoping used to be a property of the *table*, so every
+role holding any grant on it got the same reach. *"The desk reads every booking;
+a member reads their own"* was unsayable, and the workaround was a second table
+carrying the tighter rule — one fact in two places, kept level by a trigger.
+
+Reach is a property of the **principal**, so it is chosen once and applies to
+every table they touch:
+
+```typescript
+const behaviors: ScopeBehaviors = {
+  bookings: {
+    default:  { read: [{ match: 'studio_id', to: 'studioId' }] },
+    personal: { read: [{ match: 'studio_id', to: 'studioId' },
+                       { match: 'membership_id', to: 'membershipId' }] },
+  },
+  // No variant: everybody reads it the same way, and a profiled principal
+  // falls back to this without needing an entry per profile.
+  class_sessions: { default: { read: [{ match: 'studio_id', to: 'studioId' }] } },
+};
+
+createScopePolicy(new Set(['bookings.read']), behaviors)             // studio-wide
+createScopePolicy(new Set(['bookings.read']), behaviors, 'personal') // + their own rows
+```
+
+The two shapes are told apart by their keys: a rule set has at least one of
+`read`/`write`/`insert`/`update`/`delete`; a named map has none of them. The plain
+shape is unchanged and still means "one reach for everyone".
+
+**It fails closed.** An unknown profile denies *everything* — not just the table
+it could not find. A mistyped profile that quietly meant "the default" would
+widen a principal to every row of every table they hold a grant on, which is the
+one failure mode a policy layer may not have. A table declaring named variants
+and no `default` likewise refuses an unprofiled principal rather than guessing
+that "no rule" is safe.
+
+`scopeProfiles(behaviors)` lists every profile name a map declares — what a
+policy layer validates its own names against.
+
+### A principal with several roles
+
+Reach belongs to the role, and a principal may hold more than one — somebody who
+teaches at a studio and trains there is staff on the roster and a member in the
+class. No single profile describes them: studio-wide on the read they do as
+staff, their own rows on the write they do as a member.
+
+So compile **one policy per role**, each with that role's own profile, and merge:
+
+```typescript
+mergeScopePolicies(
+  roles.map((role) => createScopePolicy(grantsFor(role), behaviors, profileFor(role))),
+)
+```
+
+A principal may do anything **any** of their roles permits, which is what makes
+holding two additive rather than a conflict to arbitrate.
+
+**Merge rule:** per entity and phase, the *broadest* rule set wins — fewest
+`match` rules, since every match narrows. Profiles are refinements of a default
+(`personal` is the tenant rule plus one more), so "fewest" is "widest" in
+practice. A phase only one role grants keeps that role's rules intact, which is
+what carries a member's identity stamp onto a write no other role grants.
+
+### A read that must stay narrow
+
+The merge above widens. For a read whose answer legitimately widens with the
+reader — a roster, a schedule, a members list — that is right. For one that means
+*mine* it is a leak: an instructor who also trains would open "the classes you
+have booked" and get the studio's.
+
+So the ENTRY names the reach it must be served at, and the host recompiles the
+same principal under that profile:
+
+```typescript
+{ kind: "ok", dsl: { from: ["bookings"], ... }, reach: "personal" }
+```
+
+Grants are unchanged — the union of every role the caller holds — so this can
+only narrow rows, never widen phases. A caller with no verb for the table is
+still refused.
+
+The host supplies `policyForReach(reach)` (hono: `getPolicyForReach(c, reach)`),
+because vex holds neither grants nor behaviors. **It fails closed both ways:** an
+entry declaring a reach no host can resolve is a 500, and a host returning
+`undefined` is a 403. Falling back to the caller's own reach would be silent,
+and silence is the whole risk — the read would answer, with too much.
 
 ## Mutations
 

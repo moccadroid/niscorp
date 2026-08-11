@@ -34,7 +34,8 @@ export { checkScope, scopeResolved, applyScope, VexScopeError } from './scope/ap
 // vex a flat string set and gets the native contract back — no imports
 // in either direction.
 export { SCOPE_VERBS, scopeGrants, createScopePolicy } from './scope/grants.js';
-export type { ScopeBehaviors } from './scope/grants.js';
+export type { ScopeBehaviors, NamedScopeBehaviors, ScopeRules } from './scope/grants.js';
+export { scopeProfiles, mergeScopePolicies } from './scope/grants.js';
 
 // ─── Cache ───────────────────────────────────────────────────
 export { createMemoryCache } from './cache/memory.js';

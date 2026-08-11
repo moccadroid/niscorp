@@ -120,6 +120,9 @@
     "test": "vitest run",
     "typecheck": "tsc --noEmit"
   },
+  "dependencies": {
+    "@niscorp/prism": "workspace:*"
+  },
   "devDependencies": {
     "@niscorp/cortex": "workspace:*",
     "@testing-library/react": "^16.1.0",

@@ -60,6 +60,24 @@ export type OkCacheEntry = CacheEntryMeta & {
   kind: 'ok';
   dsl: Query;
   prismIr?: CompiledIr;
+  /**
+   * THE REACH THIS READ REQUIRES, whatever the caller's roles say.
+   *
+   * Reach is normally the caller's: a scope profile named by their role, applied
+   * to every table they touch. That is right for a read whose answer legitimately
+   * widens with the reader — a roster, a schedule, a members list.
+   *
+   * It is wrong for a read that means "mine". A principal may hold several roles
+   * and the compiled policies merge to the WIDEST reach any of them grants, so an
+   * instructor who also trains at the studio reads `bookings` studio-wide — and
+   * "the classes you have booked" then answers with the whole studio's.
+   *
+   * An entry naming a reach is served at that profile instead, with the caller's
+   * own grants unchanged. It can only narrow: a read the caller holds no verb for
+   * is still refused. If the profile cannot be compiled, the read is refused
+   * rather than served wide.
+   */
+  reach?: string;
 };
 
 export type UnsatisfiableCacheEntry = CacheEntryMeta & {
@@ -70,6 +88,21 @@ export type UnsatisfiableCacheEntry = CacheEntryMeta & {
 export type MutationCacheEntry = CacheEntryMeta & {
   kind: 'mutation';
   mutation: MutationDefinition;
+  /**
+   * THE REACH THIS WRITE REQUIRES — the same word reads use, and it belongs
+   * here for a sharper reason.
+   *
+   * A read served too wide shows somebody too much. A write served too wide
+   * CHANGES somebody else's row: `me/cancel` is "cancel MY booking", and its
+   * whole safety is that the policy's update rules pin the row to the caller.
+   * Take a principal who holds two roles and the merge widens those rules to
+   * the broadest either grants — so the same fingerprint, replayed by somebody
+   * who is a member AND something else, could reach a booking that is not
+   * theirs.
+   *
+   * Declaring it here means the write is compiled at that profile whoever asks.
+   */
+  reach?: string;
 };
 
 export type CacheEntry = OkCacheEntry | UnsatisfiableCacheEntry | MutationCacheEntry;

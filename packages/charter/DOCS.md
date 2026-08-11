@@ -25,6 +25,8 @@ type RoleDef =
       deny?: string[];              // sugar → actions.deny
       actions?: Selection;          // the actions universe
       data?: Selection;             // the data universe
+      layouts?: Selection;          // the layouts universe
+      scoping?: string;             // how far this role reaches (see below)
     };
 ```
 
@@ -32,6 +34,53 @@ A bare `string[]` is an actions-only role. Top-level `allow`/`deny` are sugar
 for the `actions` section — an actions-only role never names a section. Using
 both the sugar and an explicit `actions:` on one role is an error (the verifier
 catches it).
+
+#### `scoping` — how far a role reaches
+
+A section says *which* ids a role holds. `scoping` says *how far* they reach when
+they use them — an opaque name the governed target resolves, exactly like the
+strings in every section. The charter does not know what it means; it only knows
+which role said it.
+
+```typescript
+{ member: { actions: ['me.*'], data: ['bookings.read'], scoping: 'personal' },
+  desk:   { extends: ['member'], data: ['memberships.read'] } }
+```
+
+Both roles hold `bookings.read`. The member reaches their own rows; the desk
+reaches the studio's. One grant, two reaches, decided by the rung.
+
+**`scoping` is NOT composed by `extends`, and that is deliberate.** Every section
+accumulates upward — a desk holding everything a member holds is exactly right
+for actions and data. Reach is the opposite: a desk extends a member's *screens*
+but must not extend a member's *"only my own rows"*, or the roster it exists to
+read would filter to the one person operating it. A role's reach is its own
+answer or none.
+
+**One role in, one profile out.** `resolveScoping` takes a single role, because
+reach is a property of a role and a function handed several has no answer to give.
+
+```typescript
+resolveScoping(charter, 'member')  // 'personal'
+resolveScoping(charter, 'desk')    // undefined — not inherited
+```
+
+A principal holding several roles is normal, not a conflict: somebody who teaches
+at a studio and trains there is an instructor *and* a member. Compile one policy
+per role and merge them (vex: `mergeScopePolicies`); the principal may do
+anything any of their roles permits, and each role reaches as far as its own
+profile says.
+
+```typescript
+mergeScopePolicies(
+  roles.map((role) => createScopePolicy(resolvePrincipal(charter, grants, [role], 'data'), behaviors, resolveScoping(charter, role))),
+)
+```
+
+This function used to take a list and throw when two roles named different
+profiles. That rule was not defending against anything — it was written by
+analogy to two granted layout variants for one action, which genuinely conflict
+because a screen renders one. Two reaches do not conflict; they add.
 
 ### `Selection`
 

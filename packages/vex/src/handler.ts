@@ -30,6 +30,11 @@ export type VexHandlerConfig = {
   // resolves a policy per principal passes the SAME policy here and in
   // `mutations.policy`, so reads and writes enforce one principal's phases.
   scopePolicy?: ScopePolicy;
+  // Compiles the SAME principal's policy at a named reach, for entries that
+  // declare one (`OkCacheEntry.reach`). Vex holds neither grants nor behaviors,
+  // so it cannot build this itself — the host does, and returning `undefined`
+  // refuses the read rather than serving it at the caller's own, wider reach.
+  policyForReach?: (reach: string) => Promise<ScopePolicy | undefined> | ScopePolicy | undefined;
   // Enables replay of `kind: 'mutation'` cache entries. The client is
   // structural (PGlite, a pg wrapper, a test double); the policy is the
   // same ScopePolicy reads use, its `write` rules applied by the engine.
@@ -290,8 +295,10 @@ export const handleQuery = async (
     // ONE wire shape: `{ fingerprint, context }`. The entry's kind decides
     // the pipeline — a mutation fingerprint replays the write path; anything
     // else is the read path (which owns misses, generation, and locked).
+    let entryReach: string | undefined;
     if (parsed.data.fingerprint !== undefined) {
       const entry = await engine.cache.get(parsed.data.fingerprint);
+      if (entry !== undefined && entry.kind === 'ok') entryReach = entry.reach;
       if (entry !== undefined && entry.kind === 'mutation') {
         if (config.mutations === undefined) {
           return {
@@ -303,10 +310,34 @@ export const handleQuery = async (
         if (schema === undefined) {
           return { status: 500, body: { error: 'execution_error', message: 'Vex schema not introspected.' } };
         }
+        // A WRITE MAY DEMAND A NARROWER REACH TOO, and the stakes are higher
+        // than for a read: too wide here changes somebody else's row rather
+        // than merely showing it.
+        let writePolicy = config.mutations.policy;
+        if (entry.reach !== undefined) {
+          if (config.policyForReach === undefined) {
+            return {
+              status: 500,
+              body: {
+                error: 'execution_error',
+                message: `Entry "${parsed.data.fingerprint ?? ''}" requires reach "${entry.reach}" and this handler has no policyForReach.`,
+              },
+            };
+          }
+          const narrowed = await config.policyForReach(entry.reach);
+          if (narrowed === undefined) {
+            return {
+              status: 403,
+              body: { error: 'scope_denied', message: `Reach "${entry.reach}" is not available to this principal.` },
+            };
+          }
+          writePolicy = narrowed;
+        }
+
         const rows = await executeMutation(config.mutations.client, entry.mutation, {
           context: parsed.data.context,
           scope,
-          policy: config.mutations.policy,
+          policy: writePolicy,
           schema,
         });
         // Lifetime = usage, for writes exactly as for reads: stamp
@@ -318,11 +349,41 @@ export const handleQuery = async (
       }
     }
 
+    // AN ENTRY MAY REQUIRE A NARROWER REACH THAN ITS CALLER HAS.
+    //
+    // "The classes you have booked" means the caller's own, and a principal
+    // holding two roles reaches as wide as either grants. So the entry names
+    // the profile it must be served at and the host recompiles the same grants
+    // under it — narrowing rows, never widening verbs.
+    //
+    // Fail closed: a declared reach the host cannot compile refuses the read.
+    // Serving it at the caller's own reach is the exact failure the field
+    // exists to prevent, and it would be invisible.
+    let readPolicy = config.scopePolicy;
+    if (entryReach !== undefined) {
+      if (config.policyForReach === undefined) {
+        return {
+          status: 500,
+          body: {
+            error: 'execution_error',
+            message: `Entry "${parsed.data.fingerprint ?? ''}" requires reach "${entryReach}" and this handler has no policyForReach.`,
+          },
+        };
+      }
+      readPolicy = await config.policyForReach(entryReach);
+      if (readPolicy === undefined) {
+        return {
+          status: 403,
+          body: { error: 'scope_denied', message: `Reach "${entryReach}" is not available to this principal.` },
+        };
+      }
+    }
+
     const response = await engine.execute(parsed.data, {
       scope,
       entities: config.entities,
       ...(config.locked === true ? { locked: true } : {}),
-      ...(config.scopePolicy !== undefined ? { scopePolicy: config.scopePolicy } : {}),
+      ...(readPolicy !== undefined ? { scopePolicy: readPolicy } : {}),
     });
     return { status: 200, body: response };
   } catch (err) {

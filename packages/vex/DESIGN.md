@@ -650,3 +650,62 @@ Only `zod` is mandatory. Everything else is pulled in only by the path you use.
 - Adapter-owned vector serialization — the pgvector `[...]` literal is currently
   formed in the generic binding step; a second adapter would move it behind the
   adapter.
+
+## Reach is the caller's, not the table's
+
+A `ScopePolicy` fuses two questions: which phases an entity has, and what a
+granted phase does. The second used to be answered per TABLE — one `match` rule
+per entity, applied to every caller that held any grant on it.
+
+That is right until two callers need the same grant at different distances. "The
+desk reads every booking; a member reads their own" cannot be said with one rule
+per table, and the workaround is always the same: a SECOND TABLE carrying the
+tighter rule, kept level with the first by a trigger. One fact in two places is
+a drift bug waiting for the first ordering nobody thought about.
+
+So a table may declare NAMED rule sets, and `createScopePolicy` takes the
+caller's profile:
+
+    bookings: { default:  { read: [tenant] },
+                personal: { read: [tenant, own] } }
+
+    createScopePolicy(grants, behaviors)             // studio-wide
+    createScopePolicy(grants, behaviors, 'personal') // + their own rows
+
+The profile is chosen ONCE per caller rather than per grant, because "acts for
+themselves" is a property of the caller and not of each thing they read — and
+saying it once is one place to get it wrong instead of eight. A table declaring
+no variant under a profile falls back to its `default`, which is what keeps
+shared reads (a timetable everyone sees the same way) free of per-profile
+entries.
+
+It fails closed in the direction that matters. An unknown profile denies
+everything rather than falling back: a mistyped name that quietly meant "the
+default" would widen a caller to every row of every table they hold a grant on,
+which is the one failure mode a policy layer may not have. A table that declares
+named variants and no `default` likewise refuses an unprofiled caller instead of
+guessing that "no rule" is safe.
+
+AND A CALLER IS NOT ONE ROLE. Reach belongs to a role, and people hold several —
+the instructor who trains at the studio they teach at is the ordinary case, not
+the edge. So the unit of compilation is the ROLE: one policy each, merged
+(`mergeScopePolicies`), broadest rule set winning per entity and phase. A
+principal may do anything any of their roles permits.
+
+That merge has a consequence worth stating plainly: for somebody holding both, a
+staff role's studio-wide reach WINS over a member role's personal one on the
+tables they share. Correct for the roster they are paid to read, wrong for their
+own membership card.
+
+SO REACH IS SAID TWICE, and by two different parties. The CALLER carries a floor
+— how far this principal may see, from their role. The ENTRY may carry a ceiling
+— how far this READ may see, whoever asks (`reach`). "Their own card" is a
+property of the question, not of whoever happens to be asking it, and an app that
+could only say it about people was an app that got it wrong for anybody holding
+two roles.
+
+The two compose in one direction only: an entry's reach recompiles the caller's
+OWN grants under a different profile, so it narrows rows and never widens verbs.
+A principal without the verb is refused either way. And a declared reach that
+cannot be compiled refuses the read rather than falling back — the fallback would
+be an answer with too much in it, and nothing would say so.

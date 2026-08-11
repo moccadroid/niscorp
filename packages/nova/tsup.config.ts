@@ -24,7 +24,7 @@ export default defineConfig([
     clean: false,
     treeshake: true,
     target: 'es2022',
-    external: ['react', '@niscorp/cortex'],
+    external: ['react', '@niscorp/cortex', '@niscorp/prism'],
   },
   {
     // ink is ESM-only, so this entry ships esm only (no require condition in
@@ -40,6 +40,6 @@ export default defineConfig([
     // internal `@react` alias): bundling the react adapter here would give
     // the ink entry a PRIVATE copy of NovaRenderContext, and context
     // identity breaks across dist modules. External keeps one instance.
-    external: ['react', 'ink', 'ink-text-input', '@niscorp/cortex', '@niscorp/nova/adapters/react'],
+    external: ['react', 'ink', 'ink-text-input', '@niscorp/cortex', '@niscorp/prism', '@niscorp/nova/adapters/react'],
   },
 ]);

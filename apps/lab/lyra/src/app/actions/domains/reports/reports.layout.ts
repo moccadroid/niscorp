@@ -1,0 +1,156 @@
+import type { LayoutNode } from '@niscorp/nova';
+
+// Five figures, no chart library.
+//
+// `Rows` renders every one of them, because a bar chart and a table are the
+// same data with a different mark — and a studio with eight programs does not
+// need a canvas to read them. When a chart is genuinely worth it, it becomes a
+// primitive in the kit and these specs change one word.
+export const reportsLayout: LayoutNode = {
+  component: 'Stack',
+  props: { gap: 26 },
+  children: [
+    {
+      component: 'Row',
+      props: { justify: 'between', align: 'center', wrap: true, gap: 12 },
+      children: [
+        { component: 'Hero', props: { title: 'Reports', lead: 'Where the week actually goes.' } },
+        // WHICH WEEK, THOUGH. Every figure below was all-time until now, which
+        // makes 'busiest hours' at a three-year-old studio an average of three
+        // years — a number that cannot move and so cannot be acted on.
+        {
+          component: 'Row',
+          props: { gap: 6, align: 'center' },
+          children: [
+            { component: 'Text', props: { size: 'sm', color: 'mute' }, children: '$.rangeLabel' },
+            { component: 'Button', props: { variant: 'ghost', label: '30d' }, ref: 'range-30' },
+            { component: 'Button', props: { variant: 'ghost', label: '90d' }, ref: 'range-90' },
+            { component: 'Button', props: { variant: 'ghost', label: '12m' }, ref: 'range-365' },
+          ],
+        },
+      ],
+    },
+
+    {
+      component: 'Grid',
+      props: { min: 320, gap: 18 },
+      children: [
+        {
+          component: 'Section',
+          props: { title: 'Busiest hours', subtitle: 'Check-ins by time of day — where to add a class, and where to stop paying for an empty room.' },
+          children: {
+            component: 'Card',
+            props: { flush: true },
+            children: {
+              component: 'Rows',
+              props: {
+                rows: '$.byHour',
+                loading: '$.loading',
+                rowKey: 'hour_key',
+                empty: 'No attendance recorded yet.',
+                columns: [
+                  { label: 'Hour', px: 96, cell: { kind: 'text', key: 'hour_display', color: 'ink' } },
+                  { label: 'Check-ins', w: 1, align: 'right', cell: { kind: 'number', key: 'total' } },
+                ],
+              },
+            },
+          },
+        },
+
+        {
+          component: 'Section',
+          props: { title: 'By program', subtitle: 'Six slots of one thing and one of another, to the same headcount, is a timetable problem.' },
+          children: {
+            component: 'Card',
+            props: { flush: true },
+            children: {
+              component: 'Rows',
+              props: {
+                rows: '$.byProgram',
+                loading: '$.loading',
+                rowKey: 'program_name',
+                empty: 'Nothing attended yet.',
+                columns: [
+                  { label: 'Program', w: 1, cell: { kind: 'primary', key: 'program_name', dotKey: 'tone' } },
+                  { label: 'Check-ins', px: 104, align: 'right', cell: { kind: 'number', key: 'total' } },
+                ],
+              },
+            },
+          },
+        },
+      ],
+    },
+
+    {
+      component: 'Section',
+      props: { title: 'Week by week', subtitle: 'Attendance grouped on the week each class was written into.' },
+      children: {
+        component: 'Card',
+        props: { flush: true },
+        children: {
+          component: 'Rows',
+          props: {
+            rows: '$.byWeek',
+            loading: '$.loading',
+            rowKey: 'week_key',
+            empty: 'Not enough history yet.',
+            columns: [
+              { label: 'Week', px: 140, cell: { kind: 'text', key: 'week_key', color: 'ink', mono: true } },
+              { label: 'Check-ins', w: 1, align: 'right', cell: { kind: 'number', key: 'total' } },
+            ],
+          },
+        },
+      },
+    },
+
+    {
+      component: 'Grid',
+      props: { min: 320, gap: 18 },
+      children: [
+        {
+          component: 'Section',
+          props: { title: 'The roll', subtitle: 'How the membership base splits.' },
+          children: {
+            component: 'Card',
+            props: { flush: true },
+            children: {
+              component: 'Rows',
+              props: {
+                rows: '$.byStatus',
+                loading: '$.loading',
+                rowKey: 'status',
+                empty: 'No members yet.',
+                columns: [
+                  { label: 'Status', w: 1, cell: { kind: 'text', key: 'status', color: 'ink' } },
+                  { label: 'People', px: 88, align: 'right', cell: { kind: 'number', key: 'total' } },
+                ],
+              },
+            },
+          },
+        },
+
+        {
+          component: 'Section',
+          props: { title: 'Plan uptake', subtitle: 'What people are actually on — and why a retired plan keeps its subscribers.' },
+          children: {
+            component: 'Card',
+            props: { flush: true },
+            children: {
+              component: 'Rows',
+              props: {
+                rows: '$.uptake',
+                loading: '$.loading',
+                rowKey: 'plan_name',
+                empty: 'Nobody on a plan yet.',
+                columns: [
+                  { label: 'Plan', w: 1, cell: { kind: 'primary', key: 'plan_name', subKey: 'price_display' } },
+                  { label: 'On it', px: 80, align: 'right', cell: { kind: 'number', key: 'total' } },
+                ],
+              },
+            },
+          },
+        },
+      ],
+    },
+  ],
+};

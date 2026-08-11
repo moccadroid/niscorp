@@ -277,7 +277,15 @@ export const executeSteps = async (steps: Step[], ctx: StepContext): Promise<voi
         step.emit.payload === undefined
           ? undefined
           : resolve(step.emit.payload, chain, ctx.extras);
-      ctx.messageBus.publish(channel, payload);
+      // PUBLISHED AFTER THE TURN SETTLES, not inside it. The confirm pattern
+      // emits then pops: the listener is the action UNDERNEATH, suspended
+      // while the confirm sits over it, and a suspended action reacts to
+      // nothing. Publishing synchronously delivers to it before the pop
+      // reveals it — the message is lost. A microtask lets the same turn's
+      // pop resume the listener (its status flips active synchronously) so
+      // the message lands on a live subscriber. Resolved values are captured
+      // above, so a later data change cannot alter what was announced.
+      queueMicrotask(() => ctx.messageBus.publish(channel, payload));
       continue;
     }
     if ('push' in step) {

@@ -52,7 +52,7 @@ const quoteIdent = (name: string, label: string): string => {
 };
 
 const SELECT_COLS =
-  'key, kind, intent, shape, dsl, prism_ir, reason, created_at, expires_at, schema_fingerprint, protected, last_used_at, request_hash';
+  'key, kind, intent, shape, dsl, prism_ir, reach, reason, created_at, expires_at, schema_fingerprint, protected, last_used_at, request_hash';
 
 const rowToEntry = (row: Record<string, unknown>): CacheEntry => {
   const createdAt = (row['created_at'] as Date).getTime();
@@ -76,12 +76,22 @@ const rowToEntry = (row: Record<string, unknown>): CacheEntry => {
   // A mutation entry stores its def in the same jsonb slot a query's DSL
   // uses — one column, discriminated by `kind`.
   if (row['kind'] === 'mutation') {
-    return { kind: 'mutation', mutation: row['dsl'] as MutationDefinition, ...meta };
+    return {
+      kind: 'mutation',
+      mutation: row['dsl'] as MutationDefinition,
+      ...(row['reach'] != null ? { reach: row['reach'] as string } : {}),
+      ...meta,
+    };
   }
   return {
     kind: 'ok',
     dsl: row['dsl'] as Query,
     ...(row['prism_ir'] != null ? { prismIr: row['prism_ir'] as CompiledIr } : {}),
+    // A DECLARED REACH IS PART OF THE ENTRY, so it has to survive the round
+    // trip. Dropping it here would not fail loudly — the read would simply be
+    // served at the caller's own, wider reach, which is the exact thing the
+    // field exists to prevent.
+    ...(row['reach'] != null ? { reach: row['reach'] as string } : {}),
     ...meta,
   };
 };
@@ -102,6 +112,7 @@ export const createPostgresCache = (config: PostgresCacheConfig): PostgresCache 
         shape              jsonb,
         dsl                jsonb,
         prism_ir           jsonb,
+        reach              text,
         reason             text,
         created_at         timestamptz NOT NULL DEFAULT now(),
         expires_at         timestamptz,
@@ -115,6 +126,7 @@ export const createPostgresCache = (config: PostgresCacheConfig): PostgresCache 
     await pool.query(`ALTER TABLE ${qualified} ADD COLUMN IF NOT EXISTS protected boolean NOT NULL DEFAULT false`);
     await pool.query(`ALTER TABLE ${qualified} ADD COLUMN IF NOT EXISTS last_used_at timestamptz`);
     await pool.query(`ALTER TABLE ${qualified} ADD COLUMN IF NOT EXISTS request_hash text`);
+    await pool.query(`ALTER TABLE ${qualified} ADD COLUMN IF NOT EXISTS reach text`);
   };
 
   const evict = (key: string, reason: string): void => {
@@ -167,16 +179,18 @@ export const createPostgresCache = (config: PostgresCacheConfig): PostgresCache 
     const isProtected = entry.protected === true;
     const lastUsedAt = entry.lastUsedAt !== undefined ? new Date(entry.lastUsedAt) : null;
     const requestHash = entry.requestHash ?? null;
+    const reach = entry.kind === 'unsatisfiable' ? null : (entry.reach ?? null);
 
     await pool.query(
-      `INSERT INTO ${qualified} (key, kind, intent, shape, dsl, prism_ir, reason, created_at, expires_at, schema_fingerprint, protected, last_used_at, request_hash)
-       VALUES ($1, $2, $3, $4::jsonb, $5::jsonb, $6::jsonb, $7, $8, $9, $10, $11, $12, $13)
+      `INSERT INTO ${qualified} (key, kind, intent, shape, dsl, prism_ir, reach, reason, created_at, expires_at, schema_fingerprint, protected, last_used_at, request_hash)
+       VALUES ($1, $2, $3, $4::jsonb, $5::jsonb, $6::jsonb, $7, $8, $9, $10, $11, $12, $13, $14)
        ON CONFLICT (key) DO UPDATE SET
          kind               = EXCLUDED.kind,
          intent             = EXCLUDED.intent,
          shape              = EXCLUDED.shape,
          dsl                = EXCLUDED.dsl,
          prism_ir           = EXCLUDED.prism_ir,
+         reach              = EXCLUDED.reach,
          reason             = EXCLUDED.reason,
          created_at         = EXCLUDED.created_at,
          expires_at         = EXCLUDED.expires_at,
@@ -184,7 +198,7 @@ export const createPostgresCache = (config: PostgresCacheConfig): PostgresCache 
          protected          = EXCLUDED.protected,
          last_used_at       = EXCLUDED.last_used_at,
          request_hash       = EXCLUDED.request_hash`,
-      [key, entry.kind, intent, shape, dsl, prismIr, reason, createdAt, expiresAt, fingerprint, isProtected, lastUsedAt, requestHash],
+      [key, entry.kind, intent, shape, dsl, prismIr, reach, reason, createdAt, expiresAt, fingerprint, isProtected, lastUsedAt, requestHash],
     );
   };
 

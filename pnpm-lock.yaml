@@ -137,6 +137,135 @@ importers:
         specifier: ^7.1.12
         version: 7.3.2(@types/node@26.1.1)(lightningcss@1.32.0)(tsx@4.22.4)
 
+  apps/lab/lyra:
+    dependencies:
+      '@electric-sql/pglite':
+        specifier: ^0.5.1
+        version: 0.5.1
+      '@niscorp/charter':
+        specifier: workspace:^
+        version: link:../../../packages/charter
+      '@niscorp/moss':
+        specifier: workspace:^
+        version: link:../../../packages/moss
+      '@niscorp/nova':
+        specifier: workspace:^
+        version: link:../../../packages/nova
+      '@niscorp/prism':
+        specifier: workspace:^
+        version: link:../../../packages/prism
+      '@niscorp/tide':
+        specifier: workspace:^
+        version: link:../../../packages/tide
+      '@niscorp/vex':
+        specifier: workspace:^
+        version: link:../../../packages/vex
+      react:
+        specifier: ^19.2.4
+        version: 19.2.4
+      react-dom:
+        specifier: ^19.2.4
+        version: 19.2.4(react@19.2.4)
+      zod:
+        specifier: ^4.3.6
+        version: 4.3.6
+    devDependencies:
+      '@hono/node-server':
+        specifier: ^2.0.4
+        version: 2.0.4(hono@4.12.23)
+      '@types/react':
+        specifier: ^19.2.14
+        version: 19.2.14
+      '@types/react-dom':
+        specifier: ^19.2.3
+        version: 19.2.3(@types/react@19.2.14)
+      '@vitejs/plugin-react':
+        specifier: ^5.0.4
+        version: 5.2.0(vite@7.3.2(@types/node@26.1.1)(lightningcss@1.32.0)(tsx@4.23.1))
+      tsx:
+        specifier: ^4.23.1
+        version: 4.23.1
+      typescript:
+        specifier: ^6.0.2
+        version: 6.0.2
+      vite:
+        specifier: ^7.1.12
+        version: 7.3.2(@types/node@26.1.1)(lightningcss@1.32.0)(tsx@4.23.1)
+
+  apps/lab/lyra-admin:
+    dependencies:
+      '@electric-sql/pglite':
+        specifier: ^0.5.1
+        version: 0.5.1
+      '@niscorp/charter':
+        specifier: workspace:^
+        version: link:../../../packages/charter
+      '@niscorp/moss':
+        specifier: workspace:^
+        version: link:../../../packages/moss
+      '@niscorp/nova':
+        specifier: workspace:^
+        version: link:../../../packages/nova
+      '@niscorp/vex':
+        specifier: workspace:^
+        version: link:../../../packages/vex
+      hono:
+        specifier: ^4.12.23
+        version: 4.12.23
+      react:
+        specifier: ^19.2.0
+        version: 19.2.4
+      react-dom:
+        specifier: ^19.2.0
+        version: 19.2.4(react@19.2.4)
+    devDependencies:
+      '@hono/node-server':
+        specifier: ^2.0.4
+        version: 2.0.4(hono@4.12.23)
+      '@types/node':
+        specifier: ^24.10.1
+        version: 24.13.3
+      '@types/react':
+        specifier: ^19.2.14
+        version: 19.2.14
+      '@types/react-dom':
+        specifier: ^19.2.4
+        version: 19.2.4(@types/react@19.2.14)
+      '@vitejs/plugin-react':
+        specifier: ^5.1.2
+        version: 5.2.0(vite@7.3.2(@types/node@24.13.3)(lightningcss@1.32.0)(tsx@4.23.1))
+      tsx:
+        specifier: ^4.21.1
+        version: 4.23.1
+      typescript:
+        specifier: ^6.0.2
+        version: 6.0.2
+      vite:
+        specifier: ^7.3.2
+        version: 7.3.2(@types/node@24.13.3)(lightningcss@1.32.0)(tsx@4.23.1)
+
+  apps/lab/lyra-integrations:
+    dependencies:
+      '@niscorp/nova':
+        specifier: workspace:^
+        version: link:../../../packages/nova
+      hono:
+        specifier: ^4.12.23
+        version: 4.12.23
+    devDependencies:
+      '@hono/node-server':
+        specifier: ^2.0.4
+        version: 2.0.4(hono@4.12.23)
+      '@types/node':
+        specifier: ^24.10.1
+        version: 24.13.3
+      tsx:
+        specifier: ^4.21.1
+        version: 4.23.1
+      typescript:
+        specifier: ^6.0.2
+        version: 6.0.2
+
   apps/lab/mythos:
     dependencies:
       '@electric-sql/pglite':
@@ -297,6 +426,9 @@ importers:
       '@niscorp/solid':
         specifier: workspace:*
         version: link:../../packages/solid
+      '@niscorp/tide':
+        specifier: workspace:*
+        version: link:../../packages/tide
       '@niscorp/vex':
         specifier: workspace:^
         version: link:../../packages/vex
@@ -445,6 +577,9 @@ importers:
       ws:
         specifier: ^8.21.1
         version: 8.21.1
+      zod:
+        specifier: ^4.3.6
+        version: 4.3.6
     devDependencies:
       '@types/node':
         specifier: ^26.1.1
@@ -478,6 +613,10 @@ importers:
         version: 4.1.2(@types/node@26.1.1)(jsdom@25.0.1)(vite@8.0.3(@emnapi/core@1.9.2)(@emnapi/runtime@1.9.2)(@types/node@26.1.1)(esbuild@0.27.7)(tsx@4.23.1))
 
   packages/nova:
+    dependencies:
+      '@niscorp/prism':
+        specifier: workspace:*
+        version: link:../prism
     devDependencies:
       '@niscorp/cortex':
         specifier: workspace:*
@@ -564,6 +703,21 @@ importers:
       tsup:
         specifier: ^8.5.1
         version: 8.5.1(postcss@8.5.8)(tsx@4.23.1)(typescript@6.0.2)
+      vitest:
+        specifier: ^4.1.2
+        version: 4.1.2(@types/node@26.1.1)(jsdom@25.0.1)(vite@8.0.3(@emnapi/core@1.9.2)(@emnapi/runtime@1.9.2)(@types/node@26.1.1)(esbuild@0.27.7)(tsx@4.23.1))
+      zod:
+        specifier: ^4.3.6
+        version: 4.3.6
+
+  packages/tide:
+    devDependencies:
+      tsup:
+        specifier: ^8.5.1
+        version: 8.5.1(postcss@8.5.8)(tsx@4.23.1)(typescript@6.0.2)
+      typescript:
+        specifier: ^6.0.2
+        version: 6.0.2
       vitest:
         specifier: ^4.1.2
         version: 4.1.2(@types/node@26.1.1)(jsdom@25.0.1)(vite@8.0.3(@emnapi/core@1.9.2)(@emnapi/runtime@1.9.2)(@types/node@26.1.1)(esbuild@0.27.7)(tsx@4.23.1))
@@ -1416,6 +1570,9 @@ packages:
   '@types/node@22.19.17':
     resolution: {integrity: sha512-wGdMcf+vPYM6jikpS/qhg6WiqSV/OhG+jeeHT/KlVqxYfD40iYJf9/AE1uQxVWFvU7MipKRkRv8NSHiCGgPr8Q==}
 
+  '@types/node@24.13.3':
+    resolution: {integrity: sha512-Dh8vAsV36ig5wa9OX4pXvMc9D3Veibfw2wix0CUwYODLD8nkj9UsLjASr49nPg+2eKzxhBV+v7L8pXvT4e639Q==}
+
   '@types/node@25.5.2':
     resolution: {integrity: sha512-tO4ZIRKNC+MDWV4qKVZe3Ql/woTnmHDr5JD8UI5hn2pwBrHEwOEMZK7WlNb5RKB6EoJ02gwmQS9OrjuFnZYdpg==}
 
@@ -1433,6 +1590,11 @@ packages:
 
   '@types/react-dom@19.2.3':
     resolution: {integrity: sha512-jp2L/eY6fn+KgVVQAOqYItbF0VY/YApe5Mz2F0aykSO8gx31bYCZyvSeYxCHKvzHG5eZjc+zyaS5BrBWya2+kQ==}
+    peerDependencies:
+      '@types/react': ^19.2.0
+
+  '@types/react-dom@19.2.4':
+    resolution: {integrity: sha512-Bsc+QHgp+P/F02XDzNCY9jnZNCUuLki36KT7VKrTXXLdHf+vHMNZnW1rVu5DNW/rCK+fya3DATySbLM4yhtKUw==}
     peerDependencies:
       '@types/react': ^19.2.0
 
@@ -3470,6 +3632,10 @@ snapshots:
     dependencies:
       undici-types: 6.21.0
 
+  '@types/node@24.13.3':
+    dependencies:
+      undici-types: 7.18.2
+
   '@types/node@25.5.2':
     dependencies:
       undici-types: 7.18.2
@@ -3494,6 +3660,10 @@ snapshots:
     dependencies:
       '@types/react': 19.2.14
 
+  '@types/react-dom@19.2.4(@types/react@19.2.14)':
+    dependencies:
+      '@types/react': 19.2.14
+
   '@types/react@19.2.14':
     dependencies:
       csstype: 3.2.3
@@ -3507,6 +3677,18 @@ snapshots:
       '@types/node': 25.9.1
 
   '@ungap/structured-clone@1.3.0': {}
+
+  '@vitejs/plugin-react@5.2.0(vite@7.3.2(@types/node@24.13.3)(lightningcss@1.32.0)(tsx@4.23.1))':
+    dependencies:
+      '@babel/core': 7.29.0
+      '@babel/plugin-transform-react-jsx-self': 7.27.1(@babel/core@7.29.0)
+      '@babel/plugin-transform-react-jsx-source': 7.27.1(@babel/core@7.29.0)
+      '@rolldown/pluginutils': 1.0.0-rc.3
+      '@types/babel__core': 7.20.5
+      react-refresh: 0.18.0
+      vite: 7.3.2(@types/node@24.13.3)(lightningcss@1.32.0)(tsx@4.23.1)
+    transitivePeerDependencies:
+      - supports-color
 
   '@vitejs/plugin-react@5.2.0(vite@7.3.2(@types/node@26.1.1)(lightningcss@1.32.0)(tsx@4.22.4))':
     dependencies:
@@ -5119,6 +5301,20 @@ snapshots:
     dependencies:
       '@types/unist': 3.0.3
       vfile-message: 4.0.3
+
+  vite@7.3.2(@types/node@24.13.3)(lightningcss@1.32.0)(tsx@4.23.1):
+    dependencies:
+      esbuild: 0.27.7
+      fdir: 6.5.0(picomatch@4.0.4)
+      picomatch: 4.0.4
+      postcss: 8.5.8
+      rollup: 4.60.1
+      tinyglobby: 0.2.15
+    optionalDependencies:
+      '@types/node': 24.13.3
+      fsevents: 2.3.3
+      lightningcss: 1.32.0
+      tsx: 4.23.1
 
   vite@7.3.2(@types/node@26.1.1)(lightningcss@1.32.0)(tsx@4.22.4):
     dependencies:

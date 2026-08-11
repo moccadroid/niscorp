@@ -1,0 +1,147 @@
+import { z } from 'zod';
+import { useNovaDispatch } from '@niscorp/nova/adapters/react';
+import type { NovaComponent } from '@niscorp/nova/adapters/react';
+import { cx } from '../lib/cx';
+import { markColor } from '../lib/tokens';
+
+// A TIMETABLE THAT LOOKS LIKE A TIMETABLE.
+//
+// The schedule was a list sorted by date, which answers "what is on next" and
+// nothing else. The questions a studio actually has are shaped like a grid:
+// which nights are empty, where the gaps are, whether Tuesday is doing anything
+// at all. A list cannot show a gap — an empty Tuesday is simply an absence of
+// rows, indistinguishable from the end of the data.
+//
+// So: one column per day, sessions stacked inside it, empty days visible AS
+// empty. That is the whole point of a calendar and it is why one is worth
+// having beside the list rather than instead of it.
+//
+// GROUPING HAPPENS HERE, not in the query. The read already returns the two
+// weeks sorted; turning a sorted list into columns is presentation, and a
+// second fingerprint that returned the same rows in a different shape would be
+// a second thing to keep true.
+const CalendarProps = z
+  .object({
+    sessions: z.array(z.record(z.string(), z.unknown())).optional(),
+    days: z.number().optional().describe('How many days to lay out — a week'),
+    skip: z.number().optional().describe('How many days past the first to start at, so the same read serves week one and week two'),
+    stepRef: z.string().optional().describe('Where to send a week step. The sessions use novaRef; this is a second target so one component can do both.'),
+    loading: z.boolean().optional(),
+    empty: z.string().optional(),
+  })
+  .strict();
+
+type CalendarP = Partial<z.infer<typeof CalendarProps>> & { novaRef?: string };
+
+const str = (row: Record<string, unknown>, key: string): string => {
+  const value = row[key];
+  return typeof value === 'string' ? value : typeof value === 'number' ? String(value) : '';
+};
+
+// The date arrives as an ISO day (or a timestamp), and all this needs is the
+// day part — no parsing, no timezone, no Date object. A calendar that shifts a
+// class by a day because of a timezone is worse than no calendar.
+const dayKey = (value: string): string => value.slice(0, 10);
+
+const LABEL = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+/** The day-of-week for an ISO date, computed without touching local time. */
+const weekdayOf = (iso: string): string => {
+  const [y, m, d] = iso.split('-').map((part) => Number(part));
+  if (y === undefined || m === undefined || d === undefined) return '';
+  return LABEL[new Date(Date.UTC(y, m - 1, d)).getUTCDay()] ?? '';
+};
+
+const dayNumber = (iso: string): string => String(Number(iso.slice(8, 10)));
+
+export const Calendar: NovaComponent<Partial<z.infer<typeof CalendarProps>>> = ({ sessions, days = 7, skip = 0, stepRef, loading, empty, novaRef }: CalendarP) => {
+  const dispatch = useNovaDispatch();
+  if (loading === true) return <div className="ly-cal__wait">Loading the week…</div>;
+
+  const rows = sessions ?? [];
+  // EVERY DAY IN THE RANGE, not every day that has something on it. The empty
+  // ones are the information.
+  const first = rows.length > 0 ? dayKey(str(rows[0] as Record<string, unknown>, 'held_on')) : '';
+  if (first === '') return <div className="ly-cal__wait">{empty ?? 'Nothing scheduled.'}</div>;
+
+  // A WEEK AT A TIME. Fourteen columns is a spreadsheet; seven is a week, which
+  // is the unit a studio thinks in — and it fits a screen without being pushed
+  // sideways. The read still covers a fortnight, so the second week costs a
+  // click and no request.
+  const start = new Date(new Date(`${first}T00:00:00Z`).getTime() + skip * 86_400_000);
+  const columns = Array.from({ length: days }, (_, offset) => {
+    const date = new Date(start.getTime() + offset * 86_400_000).toISOString().slice(0, 10);
+    return { date, sessions: rows.filter((row) => dayKey(str(row as Record<string, unknown>, 'held_on')) === date) };
+  });
+
+  const monthOf = (iso: string): string => new Date(`${iso}T00:00:00Z`).toLocaleDateString('en-GB', { month: 'short', timeZone: 'UTC' });
+  const firstDay = columns[0]?.date ?? '';
+  const lastDay = columns[columns.length - 1]?.date ?? '';
+  const range = firstDay === '' ? '' : `${dayNumber(firstDay)} ${monthOf(firstDay)} – ${dayNumber(lastDay)} ${monthOf(lastDay)}`;
+  const step = (by: number): void => {
+    // Bounded by the data: the last day the read returned decides how far
+    // forward the arrow goes, so it cannot step into a blank week and leave
+    // somebody wondering whether the studio closed.
+    const last = rows.length > 0 ? dayKey(str(rows[rows.length - 1] as Record<string, unknown>, 'held_on')) : first;
+    const span = Math.round((Date.parse(`${last}T00:00:00Z`) - Date.parse(`${first}T00:00:00Z`)) / 86_400_000);
+    const next = Math.min(Math.max(0, skip + by), Math.max(0, span - days + 1));
+    if (stepRef !== undefined) dispatch({ type: 'ui:click', ref: stepRef, payload: { skip: next } });
+  };
+
+  return (
+    <div className="ly-cal__wrap">
+      {/* STEP THROUGH THE WEEKS. Two buttons labelled "This week" and "Next
+        * week" is a menu of exactly two answers pretending to be navigation —
+        * it cannot express "the week after next" and never will. An arrow can.
+        */}
+      <div className="ly-cal__bar">
+        <button type="button" className="ly-cal__step" onClick={() => step(-days)} disabled={skip === 0} aria-label="Previous week">
+          ‹
+        </button>
+        <span className="ly-cal__range">{range}</span>
+        <button type="button" className="ly-cal__step" onClick={() => step(days)} aria-label="Next week">
+          ›
+        </button>
+      </div>
+      <div className="ly-cal">
+      {columns.map((column) => (
+        <div key={column.date} className="ly-cal__day">
+          <div className="ly-cal__head">
+            <span className="ly-cal__dow">{weekdayOf(column.date)}</span>
+            <span className="ly-cal__num">{dayNumber(column.date)}</span>
+          </div>
+          {column.sessions.length === 0 ? (
+            // Said out loud, because "nothing on Tuesday" is a thing a studio
+            // wants to notice rather than scroll past.
+            <div className="ly-cal__none">—</div>
+          ) : (
+            column.sessions.map((session) => {
+              const row = session as Record<string, unknown>;
+              return (
+                <button
+                  key={str(row, 'session_id')}
+                  type="button"
+                  className={cx('ly-cal__item', row['cancelled'] === true && 'ly-cal__item--off')}
+                  // RESOLVED, NOT INTERPOLATED. This spliced the row's own
+                  // string into a custom-property name — `var(--${value})` —
+                  // so a stale or mistyped value produced an invisible edge and
+                  // a status word produced a red one beside genuinely cancelled
+                  // classes. `markColor` maps a hue or a tone to a real value
+                  // and falls back to something visible.
+                  style={{ borderLeftColor: markColor(str(row, 'program_tone')) }}
+                  onClick={() => novaRef !== undefined && dispatch({ type: 'ui:click', ref: novaRef, payload: row })}
+                >
+                  <span className="ly-cal__time">{str(row, 'starts_at')}</span>
+                  <span className="ly-cal__name">{str(row, 'name')}</span>
+                  <span className="ly-cal__fill">{str(row, 'booked_display')}</span>
+                </button>
+              );
+            })
+          )}
+        </div>
+      ))}
+      </div>
+    </div>
+  );
+};
+Calendar.meta = { description: 'A week as a grid — one column per day, empty days visibly empty.', propsSchema: CalendarProps };

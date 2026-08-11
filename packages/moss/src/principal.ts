@@ -1,7 +1,8 @@
-import { createScopePolicy } from '@niscorp/vex';
+import { createScopePolicy, mergeScopePolicies } from '@niscorp/vex';
 import type { ScopePolicy } from '@niscorp/vex';
-import { resolvePrincipal } from '@niscorp/charter';
+import { resolvePrincipal, resolveScoping } from '@niscorp/charter';
 import type { LayoutNode } from '@niscorp/nova';
+import { filterInstalled } from './integrations';
 import type { NiscApp } from './app';
 
 // ═══════════════════════════════════════════════════════════════
@@ -17,8 +18,47 @@ export const resolveRoles = (app: NiscApp, principal: string | null): readonly s
 // The compiled ScopePolicy this principal reads and writes under: their
 // resolved `data` grants × the app's row behaviors. An ungranted phase is
 // absent, and vex's default-deny refuses it.
-export const resolvePolicy = (app: NiscApp, grants: readonly string[], principal: string | null): ScopePolicy =>
-  createScopePolicy(resolvePrincipal(app.charter, grants, resolveRoles(app, principal), 'data'), app.behaviors ?? {});
+export const resolvePolicy = (app: NiscApp, grants: readonly string[], principal: string | null): ScopePolicy => {
+  // ONE POLICY PER ROLE, then merged — because a principal may hold several,
+  // and reach belongs to the role rather than to the person.
+  //
+  // Compiling once for the principal assumed one role each. That holds until
+  // somebody is two things at once: an instructor who also trains is staff on
+  // the roster and a member in the class, and no single reach describes both —
+  // studio-wide on the read they do as staff, their own rows on the write they
+  // do as a member. Per role, each with its own scoping, and the union is what
+  // they may do.
+  const roles = resolveRoles(app, principal);
+  const behaviors = app.behaviors ?? {};
+  return mergeScopePolicies(
+    roles.map((role) =>
+      createScopePolicy(resolvePrincipal(app.charter, grants, [role], 'data'), behaviors, resolveScoping(app.charter, role)),
+    ),
+  );
+};
+
+// THE SAME PRINCIPAL, COMPILED AT A REACH THE READ DEMANDS.
+//
+// The merge above is a union, so a principal holding two roles reaches as wide
+// as either grants. That is right for the roster somebody is paid to read and
+// wrong for the screen that says "yours" — an instructor who also trains would
+// read every booking at the studio under "what you have booked".
+//
+// So an entry may name a profile (`OkCacheEntry.reach`) and vex asks for the
+// policy at that reach instead. GRANTS ARE UNCHANGED — the union of every role's
+// verbs, so this can only narrow rows, never widen phases. A caller with no verb
+// for the table is still refused.
+export const resolvePolicyAtReach = (
+  app: NiscApp,
+  grants: readonly string[],
+  principal: string | null,
+  reach: string,
+): ScopePolicy =>
+  createScopePolicy(
+    resolvePrincipal(app.charter, grants, resolveRoles(app, principal), 'data'),
+    app.behaviors ?? {},
+    reach,
+  );
 
 export type Catalog = { ids: readonly string[]; hash: string };
 
@@ -26,7 +66,11 @@ export type Catalog = { ids: readonly string[]; hash: string };
 // the version token (equal hash, equal application; pushed over the
 // socket as the catalog-change signal).
 export const resolveCatalog = (app: NiscApp, principal: string | null): Catalog => {
-  const ids = [...resolvePrincipal(app.charter, Object.keys(app.actions), resolveRoles(app, principal), 'actions')].sort();
+  const granted = [...resolvePrincipal(app.charter, Object.keys(app.actions), resolveRoles(app, principal), 'actions')].sort();
+  // A grant from a namespace glob is not the same as an installation. See
+  // `NiscApp.installedIntegrations`.
+  const installed = app.installedIntegrations?.(principal);
+  const ids = [...filterInstalled(granted, installed === undefined ? undefined : new Set(installed))];
   return { ids, hash: versionToken(ids) };
 };
 

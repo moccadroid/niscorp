@@ -1,0 +1,20 @@
+{
+  "name": "lyra-integrations",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "serve": "tsx src/serve.ts",
+    "typecheck": "tsc --noEmit",
+    "check": "tsx src/check.ts"
+  },
+  "dependencies": {
+    "@niscorp/nova": "workspace:^",
+    "hono": "^4.12.23"
+  },
+  "devDependencies": {
+    "@hono/node-server": "^2.0.4",
+    "tsx": "^4.21.1",
+    "typescript": "^6.0.2",
+    "@types/node": "^24.10.1"
+  }
+}

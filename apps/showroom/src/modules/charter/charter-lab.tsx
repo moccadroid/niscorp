@@ -1,6 +1,7 @@
 import { useMemo, useState, type FC } from 'react';
 import {
   resolvePrincipal,
+  resolveScoping,
   verifyCharter,
   type Charter,
   type VerifyReport,
@@ -99,6 +100,15 @@ export const CharterLab: FC<CharterLabProps> = ({ charter, actions, data = [], i
       return new Set();
     }
   }, [charter, data, worn]);
+  // Reach is a property of a ROLE, so wearing two shows two. They do not
+  // conflict and nothing here has to choose: a principal holding several roles
+  // gets one compiled policy each, merged (vex: `mergeScopePolicies`), and may
+  // do anything any of them permits.
+  const scoping = useMemo(
+    () => worn.map((role) => [role, resolveScoping(charter, role)] as const).filter(([, profile]) => profile !== undefined),
+    [charter, worn],
+  );
+
 
   const report = useMemo<VerifyReport>(
     () => verifyCharter(charter, { actions, data }, assignments),
@@ -123,6 +133,30 @@ export const CharterLab: FC<CharterLabProps> = ({ charter, actions, data = [], i
               {role}
             </button>
           ))}
+        </div>
+      </div>
+
+      {/* HOW FAR, beside WHICH. A section says which ids a role holds; `scoping`
+        * says how far they reach when they use them. Not inherited — toggle a
+        * role that extends one carrying a profile and watch this stay empty,
+        * which is the whole point: a desk extends a member's screens but not a
+        * member's "only my own rows".
+        *
+        * Wear TWO roles that each name one and both appear. There is no conflict
+        * to resolve here — one policy is compiled per role and the results are
+        * merged, so a principal may do anything any of their roles permits. */}
+      <div style={C.panel}>
+        <div style={C.head}>reach — one profile per worn role</div>
+        <div style={{ ...C.body, ...C.chips }}>
+          {scoping.length === 0 ? (
+            <span style={{ opacity: 0.55 }}>none — this principal reaches as far as each table's default</span>
+          ) : (
+            scoping.map(([role, profile]) => (
+              <span key={role} style={C.id(true)}>
+                {role} → {profile}
+              </span>
+            ))
+          )}
         </div>
       </div>
 

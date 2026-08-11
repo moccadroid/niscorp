@@ -82,6 +82,25 @@ export const resolveRole = (
 
 // A principal wears roles; a section's grant is the union of their resolved
 // sets in that section's universe.
+// The reach a ROLE was given: the profile it names, or none.
+//
+// SINGULAR ON PURPOSE. This took a list of roles and refused when two of them
+// named different profiles — "incoherence rather than a precedence puzzle,
+// refused in the same spirit as two granted layout variants for one action."
+// That analogy was wrong. Two layout variants for one action genuinely conflict,
+// because a screen renders one of them; two roles naming different reaches is
+// somebody who teaches at a studio AND trains there, which is a person, not a
+// contradiction.
+//
+// A caller who holds several roles resolves each one separately and merges the
+// results (vex: `mergeScopePolicies`). That is where "holding two roles" is
+// decided, and it belongs there — reach is a property of a role, so a function
+// handed several of them has no answer to give, only a choice to refuse.
+export const resolveScoping = (charter: Charter, role: string): string | undefined => {
+  const def = charter[role];
+  return def === undefined || Array.isArray(def) ? undefined : def.scoping;
+};
+
 export const resolvePrincipal = (
   charter: Charter,
   universe: readonly string[],

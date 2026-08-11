@@ -27,6 +27,26 @@ export type RoleDef =
       actions?: Selection;
       data?: Selection;
       layouts?: Selection;
+
+      // HOW FAR THIS ROLE REACHES — a name the governed target resolves, the
+      // same way it resolves the strings in every section above. The charter
+      // does not know what it means; it only knows which role said it.
+      //
+      // Deliberately NOT composed by `extends`, and that is the whole point.
+      // Every section accumulates upward — a desk holding everything a member
+      // holds is exactly right for actions and data. Reach is the opposite: a
+      // desk extends a member's SCREENS but must not extend a member's
+      // "only my own rows", or the roster it exists to read would filter to
+      // the one person operating it.
+      //
+      // So a role's reach is its own answer or none. Inheriting it would be
+      // silently wrong in the direction that matters.
+      //
+      // A principal wearing SEVERAL roles that each name a profile is a person,
+      // not a conflict — an instructor who trains at the studio they teach at.
+      // Resolve one role at a time and merge the compiled policies; there is
+      // nothing here for the charter to arbitrate.
+      scoping?: string;
     };
 
 export type Charter = Record<string, RoleDef>;

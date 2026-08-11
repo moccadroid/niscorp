@@ -1,0 +1,30 @@
+{
+  "name": "lyra-admin",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "admin": "tsx src/serve.ts",
+    "typecheck": "tsc --noEmit",
+    "dev": "vite"
+  },
+  "dependencies": {
+    "@electric-sql/pglite": "^0.5.1",
+    "@niscorp/charter": "workspace:^",
+    "@niscorp/moss": "workspace:^",
+    "@niscorp/nova": "workspace:^",
+    "@niscorp/vex": "workspace:^",
+    "hono": "^4.12.23",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0"
+  },
+  "devDependencies": {
+    "@hono/node-server": "^2.0.4",
+    "@types/node": "^24.10.1",
+    "tsx": "^4.21.1",
+    "typescript": "^6.0.2",
+    "vite": "^7.3.2",
+    "@vitejs/plugin-react": "^5.1.2",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.4"
+  }
+}

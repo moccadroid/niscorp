@@ -214,7 +214,7 @@ two:
 | section | dialect (owned by the target) | intake | consumer |
 |---|---|---|---|
 | `actions` | action ids | the action map, filtered by ids | Nova's shell |
-| `data` | `SCOPE_VERBS` leaves (`deals.write.insert`) | `createScopePolicy(grants, behaviors)` | Vex |
+| `data` | `SCOPE_VERBS` leaves (`deals.write.insert`) | `createScopePolicy(grants, behaviors, scoping)` | Vex |
 | `layouts` | variant ids | substitute the variant's layout on the definition | moss / Nova |
 | (future) | tool names | a `ToolPolicy` constructor | Cortex's `policyGate` |
 
@@ -232,6 +232,34 @@ behavior, static and app-owned). So `resolved data grants → which phases exist
 `behaviors table → what a phase does`. The viewer's mark-won dies because their
 compiled policy has no `deals` write phase — not a gate anyone added, one the
 charter never emitted.
+
+There is a third input, and it fills the gap that fusion left. A policy answered
+*which phases exist* (the charter's) and *what a phase does* (the behavior's) —
+but a behavior was a property of the TABLE, so every role holding any grant on
+it got the same reach. "The desk reads every booking; a member reads their own"
+was unsayable, and the workaround was a second table carrying the tighter rule:
+one fact in two places, kept level by a trigger, drifting the moment the trigger
+was wrong.
+
+Reach is a property of the ROLE, so `scoping` is a role-level name — resolved
+like every other string here, meaningless to the engine, handed to the target,
+which looks it up among the behaviors a table declares. One grant, two reaches:
+`resolved data grants → which phases exist`, `behaviors[table][scoping] → what a
+phase does, for this role`.
+
+It is the one thing `extends` does NOT compose, and that asymmetry is load-
+bearing rather than an omission. Every section accumulates upward because a desk
+holding everything a member holds is right for actions and data. Reach inverts
+it: a desk extends a member's *screens* and must not extend a member's *"only my
+own rows"*, or the roster it exists to read filters to whoever is operating it.
+A role's reach is its own answer or none.
+
+Two roles naming different profiles is a PERSON, not a contradiction — somebody
+who teaches at a studio and also trains there. So resolution is per role and the
+compiled policies merge: the principal may do anything any role permits, each at
+that role's reach. The refusal that stood here briefly ("incoherence, like two
+granted variants of one action") was an analogy standing in for a case, and the
+domain produced the counterexample within the hour.
 
 The trusted path is a charter artifact too: the engine's *default* policy — what
 direct callers (dev checks, an agent's query tool) run under — compiles from a

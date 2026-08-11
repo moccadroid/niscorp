@@ -68,7 +68,8 @@
     "@niscorp/prism": "workspace:^",
     "@niscorp/vex": "workspace:^",
     "hono": "^4.12.23",
-    "ws": "^8.21.1"
+    "ws": "^8.21.1",
+    "zod": "^4.3.6"
   },
   "peerDependencies": {
     "ink": "^7.1.1",

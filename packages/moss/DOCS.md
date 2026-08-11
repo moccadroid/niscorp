@@ -22,7 +22,7 @@ type NiscApp = {
   assignments: Record<string, readonly string[]>;     // principal → roles
   actions: Record<string, ActionDefinition>;          // the app's actions
   layouts?: Record<string, LayoutVariant>;            // ring 2: variant id → { action, layout }
-  behaviors?: ScopeBehaviors;                          // row-level scope semantics
+  behaviors?: ScopeBehaviors;                          // row-level scope semantics, per table or per profile
   entries?: readonly (SeedEntry | SeedMutation)[];     // the prewarmed API surface
   resources?: Record<string, readonly string[] | { entities: readonly string[] }>;
   shell?: ShellManifest;                              // the server shell, as data
@@ -115,7 +115,13 @@ mount it, extend it, or hand it to a listener.
 - `resolveRoles(app, principal): readonly string[]` — assignment rows; anonymous/
   unassigned wears `['public']`.
 - `resolvePolicy(app, grants, principal): ScopePolicy` — the compiled vex policy
-  this principal reads and writes under.
+  this principal reads and writes under. **One policy per role, merged** — a
+  person may hold several (an instructor who also trains here), and reach belongs
+  to the role rather than to the person. The merge is a union: broadest wins.
+- `resolvePolicyAtReach(app, grants, principal, reach): ScopePolicy` — the same
+  principal's grants recompiled under a named profile, for entries that declare
+  a `reach` (vex). Wired into the vex surfaces automatically; narrows rows,
+  never widens verbs.
 - `resolveCatalog(app, principal): Catalog` — `{ ids, hash }`, granted action ids
   sorted, with a content-hash version token (equal hash, equal application).
 - `resolveVariants(app, principal): ReadonlyMap<string, LayoutNode>` — action id →
