@@ -5,16 +5,26 @@
   "scripts": {
     "serve": "tsx src/serve.ts",
     "typecheck": "tsc --noEmit",
-    "check": "tsx src/check.ts"
+    "check": "turbo run build --filter=lyra-integrations^... && tsx src/dev/pack-check.ts",
+    "db:up": "docker compose up -d --wait",
+    "db:down": "docker compose down",
+    "db:reset": "docker compose down -v && docker compose up -d --wait && pnpm migrate",
+    "migrate": "node-pg-migrate up -m migrations -d DATABASE_URL",
+    "migrate:down": "node-pg-migrate down -m migrations -d DATABASE_URL",
+    "stripe:setup": "tsx src/setup.ts"
   },
   "dependencies": {
     "@niscorp/nova": "workspace:^",
-    "hono": "^4.12.23"
+    "hono": "^4.12.23",
+    "node-pg-migrate": "^9.0.0",
+    "pg": "^8.16.3",
+    "stripe": "^22.5.0"
   },
   "devDependencies": {
     "@hono/node-server": "^2.0.4",
+    "@types/node": "^24.10.1",
+    "@types/pg": "^8.15.4",
     "tsx": "^4.21.1",
-    "typescript": "^6.0.2",
-    "@types/node": "^24.10.1"
+    "typescript": "^6.0.2"
   }
 }

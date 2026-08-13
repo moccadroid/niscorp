@@ -9,6 +9,7 @@ import type { NotNode, AndNode, OrNode } from './ops/logic.schema';
 import type { MergeNode, CoalesceNode, CaseNode, EntriesOfNode, KeyByNode, GroupByNode } from './ops/structure.schema';
 import type { KeysNode, ValuesNode, FromEntriesNode, PickNode, OmitNode, TypeNode, LengthNode } from './ops/object.schema';
 import type { DateNode, DateAddNode, DateDiffNode } from './ops/time.schema';
+import type { LocaleDateNode, LocaleMoneyNode, LocaleNumberNode } from './ops/intl.schema';
 import type {
   SumNode, AvgNode, CountNode, MinNode, MaxNode,
   PluckNode, TakeNode, DropNode, MatchNode, FlatMapNode,
@@ -125,6 +126,14 @@ export const isLengthNode = (v: unknown): v is LengthNode => hasKey(v, '$length'
 export const isDateNode = (v: unknown): v is DateNode => hasKey(v, '$date');
 export const isDateAddNode = (v: unknown): v is DateAddNode => hasKey(v, '$dateAdd');
 export const isDateDiffNode = (v: unknown): v is DateDiffNode => hasKey(v, '$dateDiff');
+
+// ═══════════════════════════════════════════════════════════
+// Locale-aware formatting guards
+// ═══════════════════════════════════════════════════════════
+
+export const isLocaleDateNode = (v: unknown): v is LocaleDateNode => hasKey(v, '$localeDate');
+export const isLocaleMoneyNode = (v: unknown): v is LocaleMoneyNode => hasKey(v, '$localeMoney');
+export const isLocaleNumberNode = (v: unknown): v is LocaleNumberNode => hasKey(v, '$localeNumber');
 
 // ═══════════════════════════════════════════════════════════
 // Sugar op guards

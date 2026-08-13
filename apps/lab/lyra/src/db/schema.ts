@@ -1,36 +1,6 @@
-// Lyra's Postgres schema, run once against PGlite at boot.
-//
-// One deployment, many studios. Every table that holds a studio's data carries
-// `studio_id`, and that column is the tenant boundary — the scope behaviors in
-// `app/vex/behaviors.ts` pin every read and every write to the caller's studio,
-// engine-side. A query author cannot opt out of it and a request cannot forge
-// it.
-//
-// Two splits are deliberate and worth reading before the rest:
-//
-//   PERSON vs MEMBERSHIP — a person is a human (name, email). A membership is
-//   that human's relationship with one studio. v1 says one studio per account
-//   (PLAN.md), so today it is one-to-one in practice; keeping them apart is
-//   what makes "one login, two studios" a later feature rather than a rewrite.
-//
-//   TEMPLATE vs SESSION — "Tuesday 18:00 Vinyasa" is a recurring rule.
-//   "Tuesday 3 March 18:00 Vinyasa" is a bookable thing with a capacity and a
-//   roster. Conflating them makes cancelling one class, or moving it, painful
-//   forever. Sessions are generated from templates; bookings hang off sessions.
-//
-// Vex introspects this DDL to compile the authored queries, so the foreign keys
-// are load-bearing, not decoration.
-
 export const DDL = /* sql */ `
   -- ─── the look ───────────────────────────────────────────────
 
-  -- A theme is two independent axes (PLAN.md): SURFACE — a token set, applied
-  -- as CSS custom properties — and STRUCTURE — replacement layouts keyed by
-  -- action id, in "theme_layouts".
-  --
-  -- Both are partial. A theme that only sets tokens is a valid theme; so is
-  -- one that replaces three layouts and no colours. Absent either, the stock
-  -- app stands.
   CREATE TABLE themes (
     id          TEXT PRIMARY KEY,
     name        TEXT NOT NULL,
@@ -38,11 +8,6 @@ export const DDL = /* sql */ `
     created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
   );
 
-  -- One replacement layout, for one action, under one theme. The layout is a
-  -- nova LayoutNode as JSON; it is parsed against the layout schema before it
-  -- is ever stored, and checked against the registry before it is served.
-  -- If it cannot be used, the action's own default stands — per action, not
-  -- per theme (PLAN.md records why).
   CREATE TABLE theme_layouts (
     id          TEXT PRIMARY KEY,
     theme_id    TEXT NOT NULL REFERENCES themes(id),
@@ -50,6 +15,35 @@ export const DDL = /* sql */ `
     layout      JSONB NOT NULL,
     UNIQUE (theme_id, action_id)
   );
+
+  -- ─── the words ──────────────────────────────────────────────
+
+  -- WHAT THIS APPLICATION SAYS, IN A LANGUAGE. The exact twin of "themes"
+  -- above, and for the same reason: a studio's look and a studio's language
+  -- are both things a person should be able to change without a release.
+  --
+  -- Keyed on the SOURCE PHRASE, not on an invented id. The English in the
+  -- layouts stays the readable thing it is, and this table says what it reads
+  -- as elsewhere. The cost of that choice is real and lives here: one English
+  -- word with two senses ("Book" the verb, "Book" the noun) is one row and
+  -- needs two German words. "context" is the escape — a disambiguated variant
+  -- that a future $t directive names explicitly. Nothing sets it yet.
+  --
+  -- Rows, not a JSON file, because the same argument as the theme applies:
+  -- a studio that calls its members "athletes" is one UPDATE, and the words
+  -- an application uses are exactly the kind of thing whose owner is not the
+  -- person who can deploy.
+  CREATE TABLE phrases (
+    id          TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+    locale      TEXT NOT NULL CHECK (locale ~ '^[a-z]{2}(-[A-Z]{2})?$'),
+    source      TEXT NOT NULL,
+    text        TEXT NOT NULL,
+    -- Reserved: which SENSE of the source this is. NULL is "the only sense".
+    context     TEXT,
+    UNIQUE (locale, source, context)
+  );
+
+  CREATE INDEX phrases_by_locale ON phrases (locale);
 
   -- ─── the tenant ─────────────────────────────────────────────
 
@@ -61,99 +55,176 @@ export const DDL = /* sql */ `
     slug        TEXT NOT NULL UNIQUE,
     kind        TEXT NOT NULL,            -- yoga | bjj | dance | pilates | gym | ...
     timezone    TEXT NOT NULL DEFAULT 'UTC',
+    -- WHAT THIS STUDIO CHARGES IN. One currency, and the money tables point at
+    -- this pair rather than carrying an opinion of their own — see the composite
+    -- keys below. A studio that changes it has to move every price in the same
+    -- statement, which is correct: a price list half in one currency is not a
+    -- price list.
+    currency    TEXT NOT NULL DEFAULT 'EUR',
+    -- WHERE THIS STUDIO TRADES, as ISO-3166 alpha-2.
+    --
+    -- It decides more than an address: which payment methods a member is offered
+    -- (SEPA against a card), which verification a payment provider asks the
+    -- studio for, and which consumer law the contract sits under. It was a
+    -- constant in the payments pack, which is fine for one country and wrong the
+    -- first time somebody signs up from anywhere else.
+    country     TEXT NOT NULL DEFAULT 'AT' CHECK (country ~ '^[A-Z]{2}$'),
+    -- WHAT LANGUAGE THIS STUDIO READS IN, as a BCP-47 tag.
+    --
+    -- Sits beside "country" and "currency" rather than on a person, and that
+    -- is a decision worth stating: language is the more personal of the two,
+    -- but a studio is where the shared surface lives — the desk screen two
+    -- people share, the words on a member's notice. Per-person is the obvious
+    -- next move and needs only a second column and a COALESCE here.
+    --
+    -- The full tag matters. "de-AT" writes "€ 45,00" where "de-DE" writes
+    -- "45,00 €" and "de-CH" writes "EUR 45.00" — three countries, one
+    -- language, three answers, and a bare "de" would silently pick one.
+    locale      TEXT NOT NULL DEFAULT 'en-GB' CHECK (locale ~ '^[a-z]{2}(-[A-Z]{2})?$'),
     theme_id    TEXT REFERENCES themes(id),
-    created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+    -- Redundant as a constraint — "id" is already unique — and load-bearing as a
+    -- TARGET: it is what lets a plan reference (studio, currency) as a pair.
+    UNIQUE (id, currency)
   );
 
-  -- ═══════════════════════════════════════════════════════════
-  -- ONE CLOCK, AND IT BELONGS TO THE STUDIO.
-  --
-  -- There were three. Postgres CURRENT_DATE — the SERVER's day — decided what
-  -- a trigger thought "future" meant and how far ahead to generate classes. A
-  -- JS-derived value decided what a screen asked for. And tide carried its own
-  -- logical now. The first two agreed until a UTC boundary fell between them,
-  -- and then a class seeded "today" was invisible to a screen asking for today,
-  -- silently, with every check still green.
-  --
-  -- Neither of those two was ever right. A studio in Auckland has a Tuesday
-  -- that starts thirteen hours before the server's, and "tomorrow's classes"
-  -- means tomorrow THERE. The timezone column above has been the authority for
-  -- automations since tide was wired; this makes it the authority for
-  -- everything else too.
-  --
-  -- STABLE, not IMMUTABLE: it reads now(). Stable is what lets Postgres call it
-  -- once per statement, which is also what makes it safe inside a trigger — the
-  -- day cannot change halfway through generating a term of classes.
-  --
-  -- tide's logical now stays injectable, and that is not a fourth clock: it is
-  -- this one with an override, which is what lets a check march time forward
-  -- and get the answers the real thing would.
+  -- STABLE, not IMMUTABLE, because it reads now(). Stable lets Postgres call it
+  -- once per statement, which is what makes it safe inside a trigger: the day
+  -- cannot change halfway through generating a term of classes.
   CREATE FUNCTION studio_today(studio TEXT) RETURNS DATE AS $tz$
     SELECT (now() AT TIME ZONE COALESCE((SELECT timezone FROM studios WHERE id = studio), 'UTC'))::date;
   $tz$ LANGUAGE sql STABLE;
 
   -- ─── people ─────────────────────────────────────────────────
 
-  -- A human. Deliberately thin: a person is not a member and not staff, they
-  -- HAVE a membership or a staff row. Email is the login identity (magic link).
+  -- A human. Deliberately thin: a person is not a member and not staff and not
+  -- a lead — they HOLD relationships to a studio, plural and concurrent. Email
+  -- is the login identity (magic link).
   CREATE TABLE people (
-    id          TEXT PRIMARY KEY,
+    id          TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
     email       TEXT NOT NULL UNIQUE,
     name        TEXT NOT NULL,
     phone       TEXT NOT NULL DEFAULT '',
     created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
   );
 
-  -- A person's relationship with one studio. Status is the lifecycle every
-  -- membership screen reads: a trialling member and a lapsed one are the same
-  -- row at different times, never different tables.
-  CREATE TABLE memberships (
-    id          TEXT PRIMARY KEY,
-    studio_id   TEXT NOT NULL REFERENCES studios(id),
-    person_id   TEXT NOT NULL REFERENCES people(id),
-    -- AN ENQUIRY IS THIS ROW AT STAGE ZERO.
+  -- ── the anchor ──────────────────────────────────────────────
+  --
+  -- THIS HUMAN IS KNOWN TO THIS STUDIO, independent of any single engagement.
+  -- The prospect who asked yesterday, the member of nine years, the mat
+  -- supplier and the physio the desk refers to all get exactly this row —
+  -- what DIFFERS about them is derived from the relationships they hold
+  -- (subscriptions, passes, enrolments, staff, contact tags), never stored
+  -- as a category. The old schema forced every human into exactly one of
+  -- member | lead | staff | connection, which made "enquiries" a membership
+  -- that wasn't one and made the milkman unrepresentable. See standing.ts for
+  -- the derivation.
+  --
+  -- Carries what belongs to the RELATIONSHIP rather than to any product:
+  -- where they came from, when they first appeared, the studio's notes, and
+  -- the free-trial window (a trial is a courtesy the studio extends to a
+  -- PERSON — it exists before any entitlement does, which is why it cannot
+  -- live on a subscription).
+  CREATE TABLE studio_people (
+    id            TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+    studio_id     TEXT NOT NULL REFERENCES studios(id),
+    person_id     TEXT NOT NULL REFERENCES people(id),
+    source        TEXT NOT NULL DEFAULT 'walk-in' CHECK (source IN ('walk-in', 'website', 'referral', 'social', 'event', 'other')),
+    -- The day the studio first knew them — the day they asked, walked in, or
+    -- were written down. Stamped by the studio's own clock below.
+    first_seen_on DATE NOT NULL,
+    -- A trial is a DATE, not a status: NULL means none, a date means the free
+    -- window closes on its own with nothing running. See standing.ts.
+    trial_ends_on DATE,
+    notes         TEXT NOT NULL DEFAULT '',
+
+    -- ── THE RELATIONSHIP MIRRORS ─────────────────────────────
     --
-    -- There used to be a "leads" table carrying its own name, email and phone
-    -- — a second, shadow person — with a nullable person_id "set when they
-    -- become a member" that nothing ever wrote. So a prospect who joined was
-    -- typed twice, their enquiry never reached their record, and the question
-    -- the column existed for ("how many of last month's enquiries signed")
-    -- could not be answered.
+    -- Counter caches, kept by the database like every other one here
+    -- (booked_count, enrolled_count): counts and HORIZON DATES from the
+    -- entitlement tables, resynced by triggers whenever those rows move.
+    -- They exist so the roll can derive standing from the anchor row alone —
+    -- a desk may know somebody holds a live subscription without holding the
+    -- grant that reads what anybody pays, and the access model needs no new
+    -- vocabulary to say so.
     --
-    -- The comment three lines below already had the answer: a trialling member
-    -- and a lapsed one are the same row at different times. An enquiry is the
-    -- same row one step earlier. Converting is now a status change — no new
-    -- person, nothing retyped, and the enquiry stays attached to the human
-    -- forever. Relay reached the same shape from the other side: its pipeline
-    -- lives on the DEAL, never on the contact.
-    status      TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('enquired', 'trialling', 'active', 'paused', 'lapsed', 'cancelled')),
-    -- WHERE THEY CAME FROM, which is the only reason to track an enquiry at
-    -- all: a studio that cannot say which channel produced its members is
-    -- guessing where to spend. Kept after they join, so the answer survives
-    -- the conversion.
-    source      TEXT NOT NULL DEFAULT 'walk-in' CHECK (source IN ('walk-in', 'website', 'referral', 'social', 'event', 'other')),
-    -- The day the relationship started — the day they asked, for an enquiry.
-    joined_on   DATE NOT NULL,
-    ended_on    DATE,
-    notes       TEXT NOT NULL DEFAULT '',
+    -- NO CONCLUSION IS STORED. These are counts and dates, compared against
+    -- the studio's own day at read (standing.ts) — the paid_until doctrine:
+    -- a stored "is live" would be wrong for the whole of the day it lapsed;
+    -- a stored "live until the 14th" cannot rot, because which rows carry
+    -- credits changes only at writes, and writes resync.
+    active_subscriptions INTEGER NOT NULL DEFAULT 0,
+    paused_subscriptions INTEGER NOT NULL DEFAULT 0,
+    held_subscriptions   INTEGER NOT NULL DEFAULT 0,
+    held_passes          INTEGER NOT NULL DEFAULT 0,
+    held_enrolments      INTEGER NOT NULL DEFAULT 0,
+    -- The last day on which at least one pass with credits left is valid
+    -- (9999-12-31 for a pass that never expires). NULL = no credited pass.
+    pass_live_until      DATE,
+    -- The last day of the latest block they are enrolled on. NULL = none.
+    enrolled_until       DATE,
+    works_here           BOOLEAN NOT NULL DEFAULT false,
+    deals_here           BOOLEAN NOT NULL DEFAULT false,
+
+    created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
     UNIQUE (studio_id, person_id)
   );
 
+  -- One resync, called from every table a relationship lives in. Recomputes
+  -- rather than increments — "counter + 1" drifts the first time two triggers
+  -- race, and a recompute is one indexed count per column.
+  -- plpgsql rather than sql, so the body is not validated against tables the
+  -- DDL has not reached yet — it only ever RUNS after everything exists.
+  CREATE OR REPLACE FUNCTION resync_relationships(p_studio TEXT, p_person TEXT) RETURNS void AS $rel$
+  BEGIN
+    UPDATE studio_people sp SET
+      active_subscriptions = (SELECT count(*) FROM subscriptions s WHERE s.studio_id = p_studio AND s.person_id = p_person AND s.status = 'active'),
+      paused_subscriptions = (SELECT count(*) FROM subscriptions s WHERE s.studio_id = p_studio AND s.person_id = p_person AND s.status = 'paused'),
+      held_subscriptions   = (SELECT count(*) FROM subscriptions s WHERE s.studio_id = p_studio AND s.person_id = p_person),
+      held_passes          = (SELECT count(*) FROM passes p WHERE p.studio_id = p_studio AND p.person_id = p_person),
+      held_enrolments      = (SELECT count(*) FROM enrolments e WHERE e.studio_id = p_studio AND e.person_id = p_person),
+      pass_live_until      = (SELECT MAX(COALESCE(p.expires_on, DATE '9999-12-31')) FROM passes p
+                               WHERE p.studio_id = p_studio AND p.person_id = p_person
+                                 AND p.status = 'active' AND p.credits_used < p.credits_total),
+      enrolled_until       = (SELECT MAX(c.ends_on) FROM enrolments e JOIN courses c ON c.id = e.course_id
+                               WHERE e.studio_id = p_studio AND e.person_id = p_person AND e.status = 'enrolled'),
+      works_here           = EXISTS (SELECT 1 FROM staff st WHERE st.studio_id = p_studio AND st.person_id = p_person AND st.active),
+      deals_here           = EXISTS (SELECT 1 FROM connections c WHERE c.studio_id = p_studio AND c.person_id = p_person AND c.active)
+    WHERE sp.studio_id = p_studio AND sp.person_id = p_person;
+  END;
+  $rel$ LANGUAGE plpgsql;
+
+  -- The per-table shim: resync whoever the moved row belongs to (NEW and OLD,
+  -- for the day a row is ever re-pointed). A person with no anchor resyncs
+  -- nothing, which is correct — the anchor IS the relationship, and its own
+  -- INSERT trigger below picks everything up whenever it arrives.
+  CREATE OR REPLACE FUNCTION resync_relationships_row() RETURNS TRIGGER AS $relrow$
+  BEGIN
+    IF TG_OP <> 'DELETE' THEN PERFORM resync_relationships(NEW.studio_id, NEW.person_id); END IF;
+    IF TG_OP = 'DELETE' THEN
+      PERFORM resync_relationships(OLD.studio_id, OLD.person_id);
+    ELSIF TG_OP = 'UPDATE' AND (OLD.person_id <> NEW.person_id OR OLD.studio_id <> NEW.studio_id) THEN
+      PERFORM resync_relationships(OLD.studio_id, OLD.person_id);
+    END IF;
+    RETURN NULL;
+  END;
+  $relrow$ LANGUAGE plpgsql;
+
+  -- A fresh anchor computes its own mirrors, so nothing depends on which
+  -- table was written first — staff hired before they ever trained, a
+  -- returning member re-anchored after an export, a seed in any order.
+  CREATE OR REPLACE FUNCTION resync_new_anchor() RETURNS TRIGGER AS $anchor$
+  BEGIN
+    PERFORM resync_relationships(NEW.studio_id, NEW.person_id);
+    RETURN NULL;
+  END;
+  $anchor$ LANGUAGE plpgsql;
+
+  CREATE TRIGGER studio_people_resync
+    AFTER INSERT ON studio_people
+    FOR EACH ROW EXECUTE FUNCTION resync_new_anchor();
+
   -- ─── everybody else ─────────────────────────────────────────
-  --
-  -- The third verb. A studio's world is not only people who TRAIN here
-  -- (memberships) and people who WORK here (staff) — it is also the people it
-  -- DEALS with: the mat cleaner, the landlord, the physio it refers to, a
-  -- guest instructor for one seminar, the parent who pays for a child.
-  --
-  -- Those relationships are genuinely thin — a kind, a company, a note — which
-  -- is why they share one table where memberships and staff each earned their
-  -- own. If one ever grows a lifecycle, that is the signal it deserves its own
-  -- table, not a status column bolted on here.
-  --
-  -- The PERSON is still a person: same people row, same directory, same
-  -- search. That is the whole point — the milkman who later signs up is not a
-  -- new human, he is a human who gained a membership.
   CREATE TABLE connections (
     id          TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
     studio_id   TEXT NOT NULL REFERENCES studios(id),
@@ -169,93 +240,152 @@ export const DDL = /* sql */ `
   -- Who works here, and as what. A person can be staff at a studio and hold a
   -- membership there too — an instructor who also trains.
   CREATE TABLE staff (
-    id          TEXT PRIMARY KEY,
+    id          TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
     studio_id   TEXT NOT NULL REFERENCES studios(id),
     person_id   TEXT NOT NULL REFERENCES people(id),
-    -- The four the charter defines, plus the automation principal. A fifth
-    -- role here would resolve to no grants at all — the charter is the ceiling,
-    -- and this is the floor agreeing with it.
     role        TEXT NOT NULL CHECK (role IN ('owner', 'manager', 'instructor', 'desk', 'automation')),
     active      BOOLEAN NOT NULL DEFAULT true,
     UNIQUE (studio_id, person_id)
   );
 
-  -- ─── what a membership costs ────────────────────────────────
-
-  -- v1 plans are simple on purpose: one price, one interval, one allowance.
-  -- Packs and punch-cards arrive when a customer asks (PLAN.md).
-  -- "class_allowance" NULL means unlimited.
-  CREATE TABLE plans (
+  -- ─── what a studio sells ────────────────────────────────────
+  --
+  -- Studios sell more than recurring plans: a drop-in class, a ten-class pass,
+  -- a course. One table, a kind — because "what is on sale here" is one
+  -- question, and the price list that cannot say "single class €18" is not the
+  -- price list of a yoga studio. Courses stay their own dated, bounded table
+  -- (a course is an EVENT with a capacity and a roster, not a product
+  -- template); its price lives there.
+  --
+  --   recurring  a membership plan: interval, term, notice, allowance
+  --   pass       N class credits; credits = 1 IS the drop-in — no third kind
+  --
+  -- Retiring an offering keeps everyone already on it, exactly as plans always
+  -- worked: subscriptions and passes reference the offering they were SOLD on,
+  -- never the current price list.
+  CREATE TABLE offerings (
     id               TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
     studio_id        TEXT NOT NULL REFERENCES studios(id),
     name             TEXT NOT NULL,
+    kind             TEXT NOT NULL DEFAULT 'recurring' CHECK (kind IN ('recurring', 'pass')),
     price_cents      INTEGER NOT NULL CHECK (price_cents >= 0),
     currency         TEXT NOT NULL DEFAULT 'EUR',
+    -- ── recurring ──
     interval         TEXT NOT NULL DEFAULT 'month' CHECK (interval IN ('month', 'year')),
     class_allowance  INTEGER,
-    active           BOOLEAN NOT NULL DEFAULT true,
-    -- WHAT A PLAN COMMITS SOMEBODY TO, which is most of what a plan IS.
-    --
-    -- A price and an interval describe a subscription nobody is bound by, and
-    -- almost no studio sells that: "twelve months, one month's notice" and
-    -- "rolling, cancel any time" are different products at the same price, and
-    -- the difference is the entire forecast. Revenue inside a minimum term is
-    -- money the studio HAS; revenue outside one is money it hopes for.
     minimum_term_months INTEGER NOT NULL DEFAULT 0 CHECK (minimum_term_months >= 0),
     -- How long before leaving takes effect. Notice given today on 30 days ends
     -- the subscription next month, not tonight — so it is still revenue.
-    notice_days         INTEGER NOT NULL DEFAULT 0 CHECK (notice_days >= 0)
+    notice_days         INTEGER NOT NULL DEFAULT 0 CHECK (notice_days >= 0),
+    -- ── pass ──
+    -- How many classes the pack holds, and how long it lives once bought.
+    -- NULL valid_days never expires. A pass MUST say how many classes it is.
+    credits          INTEGER CHECK (credits IS NULL OR credits > 0),
+    valid_days       INTEGER CHECK (valid_days IS NULL OR valid_days > 0),
+    CHECK (kind <> 'pass' OR credits IS NOT NULL),
+    active           BOOLEAN NOT NULL DEFAULT true,
+    -- Redundant as a constraint — "id" is already unique — and load-bearing as
+    -- a TARGET: it is what lets an entitlement reference (offering, studio) as
+    -- a pair, so one studio's desk cannot sell another studio's price.
+    UNIQUE (id, studio_id),
+    -- ONE CURRENCY PER STUDIO, ENFORCED BY THE DATABASE.
+    --
+    -- Not a CHECK: a CHECK cannot see another row, so "all this studio's
+    -- offerings agree" is not expressible as one. It is a composite foreign key
+    -- instead — the pair (studio, currency) must be a pair the studio actually
+    -- is, so an offering in a currency its studio does not charge in cannot be
+    -- written at all.
+    --
+    -- This matters because "monthly_cents" is SUMMED across a studio's
+    -- subscriptions with no currency predicate. Two currencies in one studio
+    -- would not have failed; they would have quietly added together and reported
+    -- a revenue figure that was not any amount of money.
+    FOREIGN KEY (studio_id, currency) REFERENCES studios (id, currency)
   );
 
-  -- A membership on a plan, over a period. No payment rows in v1 — money is
-  -- deliberately out (PLAN.md) — but the subscription is what billing will
-  -- read when it arrives, so it exists now.
+  -- ─── what a person holds ────────────────────────────────────
+  --
+  -- A subscription is an ENTITLEMENT — a person's standing right to attend —
+  -- and it hangs off the person directly. No UNIQUE on (studio, person):
+  -- somebody can hold a subscription and buy their partner a drop-in, or lapse
+  -- and come back, and the schema no longer forbids the truth.
   CREATE TABLE subscriptions (
-    id             TEXT PRIMARY KEY,
+    id             TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
     studio_id      TEXT NOT NULL REFERENCES studios(id),
-    membership_id  TEXT NOT NULL REFERENCES memberships(id),
-    plan_id        TEXT NOT NULL REFERENCES plans(id),
+    person_id      TEXT NOT NULL REFERENCES people(id),
+    offering_id    TEXT NOT NULL REFERENCES offerings(id),
     status         TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'paused', 'cancelled')),
+    -- HOW THE MONEY MOVES, decided when the subscription starts. Access and
+    -- payment are different facts with different writers: the desk can put
+    -- somebody on a plan the studio bills offline (SEPA at the bank, cash,
+    -- invoice) with no payment processor anywhere, and a studio that connects
+    -- one later gains a second WRITER, not a different model.
+    --
+    --   manual  the studio settles the money itself — the PRIMARY path
+    --   stripe  checkout + webhooks assert the standing
+    --   comp    access with no money: the owner's kid, a staff perk
+    --   free    a genuinely free offering
+    paid_via       TEXT NOT NULL DEFAULT 'manual' CHECK (paid_via IN ('manual', 'stripe', 'comp', 'free')),
     started_on     DATE NOT NULL,
     ends_on        DATE,
 
-    -- ── THE TERMS THIS PERSON WAS SOLD, not the terms on sale today ──
-    --
-    -- A plan's price changes and the people already on it do not. Every studio
-    -- has members paying a rate that has not been offered for three years, and
-    -- a forecast that reads the CURRENT price list gets all of them wrong. NULL
-    -- means "whatever the plan says" — the common case, and the one that keeps
-    -- a price rise from needing a backfill.
+    -- ── the terms this person was sold, not the terms on sale today ──
     price_cents      INTEGER CHECK (price_cents IS NULL OR price_cents >= 0),
 
-    -- Where the minimum term ends. Stamped from the plan at sign-up, so a later
-    -- change to the plan's term does not silently re-commit somebody who
-    -- already signed. Revenue up to this date is contracted.
     committed_until  DATE,
 
-    -- When they said they were leaving. The date they actually leave is
-    -- "ends_on", derived from this plus the notice period and the commitment —
-    -- by a trigger, because four screens can end a subscription and a rule in
-    -- four places is wrong in at least one.
+    -- DERIVED FROM subscription_notices, never written directly by a screen.
+    --
+    -- It lived here as a column somebody updated, which made "may give notice"
+    -- and "may state a standing" the same grant: the charter grants table.verb
+    -- and cannot tell two updates on one table apart, so a payments integration
+    -- holding subscriptions.write.update could end somebody's membership by
+    -- giving notice on their behalf. Notice is its own table now, and its own
+    -- verb is what gates it.
     notice_given_on  DATE,
 
-    -- The normalised monthly value, in cents. A yearly plan at €1190 is not
-    -- €1190 a month, and the old figure simply EXCLUDED yearly plans from the
-    -- total — a studio selling annual memberships saw a number missing its best
-    -- customers. Maintained by trigger: the mutation grammar cannot divide.
-    monthly_cents    INTEGER NOT NULL DEFAULT 0
+    monthly_cents    INTEGER NOT NULL DEFAULT 0,
+
+    -- HOW FAR THEIR MONEY REACHES. The one fact a payment provider knows that
+    -- this app cannot derive, and the whole of what billing writes back here.
+    --
+    -- Deliberately NOT a status. "Past due" is this date compared to today, and
+    -- a status column holding it would be wrong for the whole of the day it
+    -- lapsed and wrong forever if whatever updated it were switched off — the
+    -- same argument that took "trialling" and "lapsed" out of
+    -- the old memberships.status before that table was retired for it.
+    -- Screens that care compare it; nobody stores the answer.
+    paid_until       DATE,
+
+    -- When the ROW appeared, distinct from when the subscription started:
+    -- the watched "somebody joins" moment cursors on this, and a cursor must
+    -- be monotonic — a backdated start would be invisible to it.
+    created_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
+
+    -- Stamped from the plan by the trigger below, and pinned to the studio by
+    -- the same composite key the plan uses. It is here rather than read through
+    -- the plan because "price_cents" above is an OVERRIDE — a subscription can
+    -- carry an amount the plan never had, and an amount without a currency is a
+    -- number.
+    currency         TEXT NOT NULL DEFAULT 'EUR',
+    FOREIGN KEY (studio_id, currency) REFERENCES studios (id, currency),
+    -- ONE STUDIO'S PRICE LIST, ENFORCED BY THE DATABASE. The engine stamps
+    -- studio_id from scope and the caller names an offering — this pair is
+    -- what refuses an offering from anywhere else, however the id arrived.
+    -- Found by model-check the day subscriptions/start existed: without it, a
+    -- desk could start a member on a competitor's price.
+    FOREIGN KEY (offering_id, studio_id) REFERENCES offerings (id, studio_id)
   );
 
-  -- WHAT A SUBSCRIPTION IS WORTH, AND UNTIL WHEN.
-  --
-  -- Three derived facts, one place. Each is arithmetic over a joined row, which
-  -- is exactly what a closed mutation grammar cannot say — the same reason
-  -- every counter cache here is a trigger.
   CREATE OR REPLACE FUNCTION stamp_subscription_terms() RETURNS TRIGGER AS $sub$
   DECLARE
     p RECORD;
   BEGIN
-    SELECT price_cents, interval, minimum_term_months, notice_days INTO p FROM plans WHERE id = NEW.plan_id;
+    SELECT price_cents, interval, minimum_term_months, notice_days, currency INTO p FROM offerings WHERE id = NEW.offering_id;
+
+    -- The offering's currency, always — a subscription does not get its own.
+    -- The override beside it is an AMOUNT, not a price in another currency.
+    NEW.currency := p.currency;
 
     -- Normalised to a month so intervals can be added together. Integer
     -- division rounds down by a few cents a year; a forecast is not a ledger.
@@ -264,14 +394,23 @@ export const DDL = /* sql */ `
       ELSE COALESCE(NEW.price_cents, p.price_cents)
     END;
 
+    -- A subscription starts the day it is written unless a caller with a
+    -- reason says otherwise — and the desk's mutation sends no date at all.
+    IF NEW.started_on IS NULL THEN
+      NEW.started_on := studio_today(NEW.studio_id);
+    END IF;
+
     -- Stamped once, at sign-up, and never moved by a later plan edit.
     IF NEW.committed_until IS NULL THEN
       NEW.committed_until := NEW.started_on + (p.minimum_term_months || ' months')::interval;
     END IF;
 
-    -- LEAVING IS A DATE, NOT AN EVENT. Notice runs its course, and a commitment
+    -- Leaving is a DATE, not an event: notice runs its course, and a commitment
     -- outlives notice given inside it — whichever is later is when they go.
-    IF NEW.notice_given_on IS NOT NULL THEN
+    -- Withdrawn notice clears the date, so the leaving date goes with it.
+    IF NEW.notice_given_on IS NULL THEN
+      NEW.ends_on := NULL;
+    ELSE
       NEW.ends_on := GREATEST(NEW.committed_until, NEW.notice_given_on + (p.notice_days || ' days')::interval);
     END IF;
 
@@ -280,37 +419,291 @@ export const DDL = /* sql */ `
   $sub$ LANGUAGE plpgsql;
 
   CREATE TRIGGER subscriptions_stamp_terms
-    BEFORE INSERT OR UPDATE OF plan_id, price_cents, notice_given_on, started_on ON subscriptions
+    BEFORE INSERT OR UPDATE OF offering_id, price_cents, notice_given_on, started_on ON subscriptions
     FOR EACH ROW EXECUTE FUNCTION stamp_subscription_terms();
 
-  -- A price rise reaches everybody who has NOT been given their own rate.
-  -- Somebody on a grandfathered price keeps it, which is the whole point of the
-  -- override existing.
+  -- Ending is a status change like everywhere else, and the date it happened
+  -- is the studio's, not the browser's. Only stamped when nothing better is
+  -- known: a subscription ending through notice already carries the derived
+  -- date, and this must not overwrite the trigger's arithmetic.
+  CREATE OR REPLACE FUNCTION stamp_subscription_end() RETURNS TRIGGER AS $subend$
+  BEGIN
+    IF NEW.status = 'cancelled' AND OLD.status IS DISTINCT FROM 'cancelled' AND NEW.ends_on IS NULL THEN
+      NEW.ends_on := studio_today(NEW.studio_id);
+    END IF;
+    RETURN NEW;
+  END;
+  $subend$ LANGUAGE plpgsql;
+
+  CREATE TRIGGER subscriptions_stamp_end
+    BEFORE UPDATE OF status ON subscriptions
+    FOR EACH ROW EXECUTE FUNCTION stamp_subscription_end();
+
+  -- ─── giving notice ──────────────────────────────────────────
+  --
+  -- ITS OWN TABLE, BECAUSE ITS OWN VERB IS THE ONLY THING THAT CAN GATE IT.
+  --
+  -- A charter grant is table.verb (packages/charter) — there is no per-statement
+  -- granularity — so while notice was a column on "subscriptions", any rung that
+  -- could state a billing standing could also end somebody's membership by
+  -- giving notice for them. Splitting the table splits the grant, and the fence
+  -- is drawn by the engine rather than by everyone remembering.
+  --
+  -- A LEDGER, not a flag: notice given, withdrawn, and given again is an
+  -- ordinary sequence at a front desk, and each of those is a thing that
+  -- happened on a day. Withdrawing marks the row rather than deleting it —
+  -- there is no delete verb anywhere in this app.
+  CREATE TABLE subscription_notices (
+    id              TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+    studio_id       TEXT NOT NULL REFERENCES studios(id),
+    subscription_id TEXT NOT NULL REFERENCES subscriptions(id),
+    -- WHO GAVE IT. NULL from the desk (the row's authority is the person at
+    -- the counter); pinned to the caller by scope on the member's own reach,
+    -- and then VERIFIED by the trigger against the subscription's owner — so
+    -- a member can end their own contract and can never end anybody else's,
+    -- with the fence in the database rather than in a screen.
+    person_id       TEXT REFERENCES people(id),
+    -- Stamped by the trigger below from the studio's own clock. A browser never
+    -- says what today is, and backdating notice past a commitment is precisely
+    -- the number a minimum term exists to protect.
+    given_on        DATE,
+    withdrawn       BOOLEAN NOT NULL DEFAULT false,
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+  );
+
+  CREATE FUNCTION stamp_notice() RETURNS TRIGGER AS $notice$
+  BEGIN
+    IF NEW.given_on IS NULL THEN
+      NEW.given_on := studio_today(NEW.studio_id);
+    END IF;
+    IF NEW.person_id IS NOT NULL AND NOT EXISTS (
+      SELECT 1 FROM subscriptions s WHERE s.id = NEW.subscription_id AND s.person_id = NEW.person_id
+    ) THEN
+      RAISE EXCEPTION 'That is not your subscription to give notice on.';
+    END IF;
+    RETURN NEW;
+  END;
+  $notice$ LANGUAGE plpgsql;
+
+  CREATE TRIGGER subscription_notices_stamp
+    BEFORE INSERT ON subscription_notices
+    FOR EACH ROW EXECUTE FUNCTION stamp_notice();
+
+  -- The subscription's own copy, kept true by the ledger rather than by whoever
+  -- wrote last. "Standing notice" is the newest row not withdrawn; nothing means
+  -- NULL, and the terms trigger above turns that into a leaving date or none.
+  CREATE FUNCTION apply_notice() RETURNS TRIGGER AS $applied$
+  DECLARE
+    sub TEXT := COALESCE(NEW.subscription_id, OLD.subscription_id);
+  BEGIN
+    UPDATE subscriptions s
+       SET notice_given_on = (
+             SELECT n.given_on FROM subscription_notices n
+              WHERE n.subscription_id = sub AND NOT n.withdrawn
+              ORDER BY n.given_on DESC, n.created_at DESC
+              LIMIT 1)
+     WHERE s.id = sub;
+    RETURN NULL;
+  END;
+  $applied$ LANGUAGE plpgsql;
+
+  CREATE TRIGGER subscription_notices_apply
+    AFTER INSERT OR UPDATE ON subscription_notices
+    FOR EACH ROW EXECUTE FUNCTION apply_notice();
+
+  -- ─── pausing ────────────────────────────────────────────────
+  --
+  -- A LEDGER, its own table, for the same reason notice is: a charter grant is
+  -- table.verb, and "may freeze their own training" must not be the grant that
+  -- states billing standings or records payments. The subscription's status is
+  -- DERIVED from the open pause by the trigger below, never written by the
+  -- screen that asked.
+  --
+  -- PAUSE EXTENDS THE TERM (Decision D4): a paused month does not count toward
+  -- the minimum — committed_until moves out by the pause's length when it
+  -- ends. Otherwise pause is an escape hatch from a contract: freeze months
+  -- three to twelve and pay for two.
+  CREATE TABLE subscription_pauses (
+    id              TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+    studio_id       TEXT NOT NULL REFERENCES studios(id),
+    subscription_id TEXT NOT NULL REFERENCES subscriptions(id),
+    -- Same fence as a notice: NULL from the desk, pinned to the caller on the
+    -- member's reach, verified against the subscription's owner either way.
+    person_id       TEXT REFERENCES people(id),
+    paused_on       DATE,
+    -- The screen may only say "resume" (the flag); the date is the studio
+    -- clock's, stamped below — the split every date in this schema keeps.
+    resumed         BOOLEAN NOT NULL DEFAULT false,
+    resumed_on      DATE,
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+  );
+
+  CREATE FUNCTION stamp_pause() RETURNS TRIGGER AS $pausestamp$
+  BEGIN
+    IF NEW.paused_on IS NULL THEN
+      NEW.paused_on := studio_today(NEW.studio_id);
+    END IF;
+    IF NEW.person_id IS NOT NULL AND NOT EXISTS (
+      SELECT 1 FROM subscriptions s WHERE s.id = NEW.subscription_id AND s.person_id = NEW.person_id
+    ) THEN
+      RAISE EXCEPTION 'That is not your subscription to pause.';
+    END IF;
+    -- One open pause at a time: a second freeze while frozen is a no-op
+    -- worth refusing in words rather than a ledger that double-counts.
+    IF TG_OP = 'INSERT' AND EXISTS (
+      SELECT 1 FROM subscription_pauses p WHERE p.subscription_id = NEW.subscription_id AND NOT p.resumed
+    ) THEN
+      RAISE EXCEPTION 'Already paused.';
+    END IF;
+    IF NEW.resumed AND NEW.resumed_on IS NULL THEN
+      NEW.resumed_on := studio_today(NEW.studio_id);
+    END IF;
+    RETURN NEW;
+  END;
+  $pausestamp$ LANGUAGE plpgsql;
+
+  CREATE TRIGGER subscription_pauses_stamp
+    BEFORE INSERT OR UPDATE OF resumed ON subscription_pauses
+    FOR EACH ROW EXECUTE FUNCTION stamp_pause();
+
+  -- The ledger drives the subscription: an open pause is what "paused" IS,
+  -- and closing one moves the commitment out by exactly the days frozen —
+  -- the D4 arithmetic, in the one place every screen has to agree with.
+  CREATE FUNCTION apply_pause() RETURNS TRIGGER AS $applypause$
+  DECLARE
+    frozen_days INTEGER;
+    n_days INTEGER;
+  BEGIN
+    IF NOT NEW.resumed THEN
+      UPDATE subscriptions s SET status = 'paused' WHERE s.id = NEW.subscription_id AND s.status = 'active';
+    ELSE
+      frozen_days := GREATEST(NEW.resumed_on - NEW.paused_on, 0);
+      SELECT o.notice_days INTO n_days FROM subscriptions s JOIN offerings o ON o.id = s.offering_id WHERE s.id = NEW.subscription_id;
+      UPDATE subscriptions s
+         SET status = 'active',
+             committed_until = CASE WHEN s.committed_until IS NULL THEN NULL ELSE s.committed_until + frozen_days END,
+             -- The leaving date keeps the same rule the terms trigger states:
+             -- a commitment outlives notice given inside it.
+             ends_on = CASE
+               WHEN s.notice_given_on IS NULL THEN s.ends_on
+               ELSE GREATEST(COALESCE(s.committed_until + frozen_days, s.notice_given_on + n_days), s.notice_given_on + n_days)
+             END
+       WHERE s.id = NEW.subscription_id AND s.status = 'paused';
+    END IF;
+    RETURN NULL;
+  END;
+  $applypause$ LANGUAGE plpgsql;
+
+  CREATE TRIGGER subscription_pauses_apply
+    AFTER INSERT OR UPDATE OF resumed ON subscription_pauses
+    FOR EACH ROW EXECUTE FUNCTION apply_pause();
+
   CREATE OR REPLACE FUNCTION resync_subscription_value() RETURNS TRIGGER AS $planval$
   BEGIN
     UPDATE subscriptions s
        SET monthly_cents = CASE WHEN NEW.interval = 'year' THEN NEW.price_cents / 12 ELSE NEW.price_cents END
-     WHERE s.plan_id = NEW.id AND s.price_cents IS NULL;
+     WHERE s.offering_id = NEW.id AND s.price_cents IS NULL;
     RETURN NULL;
   END;
   $planval$ LANGUAGE plpgsql;
 
-  CREATE TRIGGER plans_resync_value
-    AFTER UPDATE OF price_cents, interval ON plans
+  CREATE TRIGGER offerings_resync_value
+    AFTER UPDATE OF price_cents, interval ON offerings
     FOR EACH ROW EXECUTE FUNCTION resync_subscription_value();
 
   CREATE INDEX subscriptions_forecast ON subscriptions (studio_id, status, ends_on);
 
+  -- ─── passes ─────────────────────────────────────────────────
+  --
+  -- The other entitlement: N class credits, decremented as they are used.
+  -- A drop-in is a pass with credits_total = 1 — the degenerate case, not a
+  -- third table — which keeps "buy classes" one code path however many come
+  -- in the pack.
+  --
+  -- "expired" is NOT a stored status: it is expires_on compared to the
+  -- studio's day, derived at read like every other lapse in this schema — a
+  -- stored one would be wrong for the whole of the day it lapsed and wrong
+  -- forever if whatever updated it were switched off. "used_up" IS stored,
+  -- because it is a fact the decrement trigger makes true in the same
+  -- transaction that makes it so.
+  CREATE TABLE passes (
+    id            TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+    studio_id     TEXT NOT NULL REFERENCES studios(id),
+    person_id     TEXT NOT NULL REFERENCES people(id),
+    offering_id   TEXT NOT NULL REFERENCES offerings(id),
+    credits_total INTEGER NOT NULL CHECK (credits_total > 0),
+    credits_used  INTEGER NOT NULL DEFAULT 0 CHECK (credits_used >= 0),
+    CHECK (credits_used <= credits_total),
+    paid_via      TEXT NOT NULL DEFAULT 'manual' CHECK (paid_via IN ('manual', 'stripe', 'comp', 'free')),
+    purchased_on  DATE NOT NULL,
+    expires_on    DATE,
+    status        TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'used_up', 'refunded')),
+    created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+    -- The same pair rule subscriptions carry: a pass is sold off THIS studio's
+    -- price list, whatever id the caller named.
+    FOREIGN KEY (offering_id, studio_id) REFERENCES offerings (id, studio_id)
+  );
+
+  -- Stamped like every other date here: the studio's clock, and the expiry
+  -- copied from the offering's validity window at the moment of sale — the
+  -- terms they were SOLD, not the terms on sale later.
+  CREATE OR REPLACE FUNCTION stamp_pass_terms() RETURNS TRIGGER AS $pass$
+  DECLARE
+    o RECORD;
+  BEGIN
+    SELECT credits, valid_days INTO o FROM offerings WHERE id = NEW.offering_id;
+    IF NEW.purchased_on IS NULL THEN
+      NEW.purchased_on := studio_today(NEW.studio_id);
+    END IF;
+    IF NEW.credits_total IS NULL THEN
+      NEW.credits_total := COALESCE(o.credits, 1);
+    END IF;
+    IF NEW.expires_on IS NULL AND o.valid_days IS NOT NULL THEN
+      NEW.expires_on := NEW.purchased_on + o.valid_days;
+    END IF;
+    RETURN NEW;
+  END;
+  $pass$ LANGUAGE plpgsql;
+
+  CREATE TRIGGER passes_stamp_terms
+    BEFORE INSERT ON passes
+    FOR EACH ROW EXECUTE FUNCTION stamp_pass_terms();
+
+  -- ATTENDING is what spends a credit — a booking is a promise, and promises
+  -- are cancelled. A check-in by somebody whose attendance no subscription
+  -- covers draws down their oldest live pass, and the same transaction that
+  -- spends the last credit marks the pass used up.
+  CREATE OR REPLACE FUNCTION spend_pass_credit() RETURNS TRIGGER AS $spend$
+  DECLARE
+    covered BOOLEAN;
+    p RECORD;
+  BEGIN
+    SELECT EXISTS (
+      SELECT 1 FROM subscriptions s
+       WHERE s.person_id = NEW.person_id AND s.studio_id = NEW.studio_id AND s.status = 'active'
+    ) INTO covered;
+    IF covered THEN RETURN NULL; END IF;
+
+    SELECT id, credits_total, credits_used INTO p FROM passes
+     WHERE person_id = NEW.person_id AND studio_id = NEW.studio_id
+       AND status = 'active'
+       AND credits_used < credits_total
+       AND (expires_on IS NULL OR expires_on >= studio_today(NEW.studio_id))
+     ORDER BY purchased_on ASC, created_at ASC
+     LIMIT 1;
+    IF p.id IS NULL THEN RETURN NULL; END IF;
+
+    UPDATE passes
+       SET credits_used = p.credits_used + 1,
+           status = CASE WHEN p.credits_used + 1 >= p.credits_total THEN 'used_up' ELSE status END
+     WHERE id = p.id;
+    RETURN NULL;
+  END;
+  $spend$ LANGUAGE plpgsql;
+  -- The trigger itself is created beside check_ins, below — the table this
+  -- function watches does not exist yet at this point in the DDL.
+
   -- ─── which integrations a studio has bought ─────────────────
-  --
-  -- REGISTRATION IS PLATFORM-LEVEL; INSTALLATION IS NOT. Pointing the platform
-  -- at a service and approving what it may read is ours. Turning one on for a
-  -- studio is the studio's, and it is this row.
-  --
-  -- Without it the charter's 'ext.desk.*' would put every integration on every
-  -- studio's front desk the moment one studio bought it: the glob is granted
-  -- once, per audience, for the whole deployment. Moss asks the app which are
-  -- live for a principal's tenant and drops the rest from the catalog.
   CREATE TABLE studio_integrations (
     studio_id       TEXT NOT NULL REFERENCES studios(id),
     integration_id  TEXT NOT NULL,
@@ -321,53 +714,16 @@ export const DDL = /* sql */ `
 
   -- ─── what happens at the studio ─────────────────────────────
 
-  -- A stream of practice: "Adult BJJ", "Vinyasa Flow", "Beginner Ballet".
-  -- Programs are how a studio describes itself, and later how a discipline
-  -- pack (belts, gradings) attaches to only the programs that want it.
   CREATE TABLE programs (
     id          TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
     studio_id   TEXT NOT NULL REFERENCES studios(id),
     name        TEXT NOT NULL,
     blurb       TEXT NOT NULL DEFAULT '',
-    -- A HUE name, never a hex and never a status word. The kit resolves exactly
-    -- these; anything else renders as the fallback, which looks like a theming
-    -- bug rather than the data error it is.
-    --
-    -- This constraint used to list the STATUS palette — accent, calm, warm,
-    -- alert, good, neutral — so the database itself agreed that a class type
-    -- could be an emergency. A stream is an identity; the ten names below are
-    -- colours and nothing else.
     colour      TEXT NOT NULL DEFAULT 'indigo' CHECK (colour IN ('rose', 'amber', 'lime', 'emerald', 'teal', 'sky', 'indigo', 'violet', 'fuchsia', 'stone')),
     active      BOOLEAN NOT NULL DEFAULT true
   );
 
   -- ─── a course ───────────────────────────────────────────────
-  --
-  -- A PROGRAM IS A TAXONOMY. A COURSE IS A DATED THING YOU CAN JOIN.
-  --
-  -- That distinction is the one this schema got wrong first, and the tell was
-  -- prose: "Six weeks, from nothing. Runs every term." sat in a program's blurb,
-  -- where an app cannot read it, a member cannot book it, and nothing keeps it
-  -- true when the dates change. A blurb is for a human; a fact belongs in a
-  -- column.
-  --
-  -- So: "Vinyasa Flow" is a program — a name, a colour, a stream that runs
-  -- indefinitely. "Foundations, six weeks from 14 September, twelve places" is a
-  -- COURSE. Dance schools, kids' classes and beginner blocks sell mostly this
-  -- shape, so it is not an edge case dressed up as one.
-  --
-  -- What makes it different from an ongoing class, and why it needs its own
-  -- table rather than a flag:
-  --
-  --   CAPACITY IS ON THE COURSE, not on each session. Twelve places means
-  --   twelve people for the whole block, not twelve per Tuesday.
-  --
-  --   YOU ENROL ONCE and hold a place in every session. Booking a six-week
-  --   course the way a drop-in class is booked would be six taps and no cohort.
-  --
-  --   IT HAS A PRICE OF ITS OWN. Not charged in v1 — money is deliberately out
-  --   (PLAN.md) — but the column exists so a block sale has somewhere to land
-  --   rather than being retrofitted through every screen later.
   CREATE TABLE courses (
     id             TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
     studio_id      TEXT NOT NULL REFERENCES studios(id),
@@ -378,35 +734,25 @@ export const DDL = /* sql */ `
     ends_on        DATE NOT NULL,
     capacity       INTEGER NOT NULL DEFAULT 12,
     price_cents    INTEGER NOT NULL DEFAULT 0,
+    -- A block has a price, so a block has a currency — the same pair rule as a
+    -- plan. Every table holding money names what the money is, so no read has to
+    -- infer it from a constraint holding somewhere else.
+    currency       TEXT NOT NULL DEFAULT 'EUR',
     active         BOOLEAN NOT NULL DEFAULT true,
 
-    -- A counter cache, for the same reason class_sessions has one: vex INNER-
-    -- joins non-nullable keys, so a courses × enrolments join drops every
-    -- course nobody has joined yet — precisely the one still being sold.
-    enrolled_count INTEGER NOT NULL DEFAULT 0
+    enrolled_count INTEGER NOT NULL DEFAULT 0,
+    FOREIGN KEY (studio_id, currency) REFERENCES studios (id, currency)
   );
 
-  -- The recurring rule. "weekday" is 0=Sunday..6=Saturday, "starts_at" a local
-  -- clock time; the studio's timezone turns the pair into a real moment.
-  --
-  -- A slot with no "starts_on"/"ends_on" recurs indefinitely — an ongoing
-  -- class. A slot carrying both recurs only between them, which is what a
-  -- course's weeks are. ONE recurrence concept, bounded or not, so a course did
-  -- not need a second generator and a second kind of session.
   CREATE TABLE class_templates (
     id             TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
     studio_id      TEXT NOT NULL REFERENCES studios(id),
     program_id     TEXT NOT NULL REFERENCES programs(id),
     name           TEXT NOT NULL,
     weekday        INTEGER NOT NULL CHECK (weekday BETWEEN 0 AND 6),
-    -- 'HH:MM', 24-hour, enforced.
-    --
-    -- The type is still TEXT and that is a deliberate stop rather than an
-    -- oversight: TIME is the correct type, but vex selects columns without
-    -- casting, so a TIME would reach every screen as '18:00:00' and prism has
-    -- no substring to trim it back. The value of the change is that a time is
-    -- always a valid time and sorts correctly — and a format constraint buys
-    -- exactly that, today, without a formatting cascade through fourteen reads.
+    -- TEXT rather than TIME because vex selects columns without casting, so a
+    -- TIME reaches every screen as '18:00:00'. The CHECK is what buys what TIME
+    -- would: always valid, and zero-padded so it sorts in clock order.
     starts_at      TEXT NOT NULL CHECK (starts_at ~ '^([01][0-9]|2[0-3]):[0-5][0-9]$'),
     duration_mins  INTEGER NOT NULL DEFAULT 60 CHECK (duration_mins > 0),
     capacity       INTEGER NOT NULL DEFAULT 20 CHECK (capacity >= 0),
@@ -416,44 +762,21 @@ export const DDL = /* sql */ `
     starts_on      DATE,
     ends_on        DATE,
 
-    -- The block this slot belongs to, if any. Nullable because most slots are
-    -- ordinary weekly classes belonging to nothing — and nullable is also what
-    -- lets vex LEFT-join it, so a timetable read does not drop every class that
-    -- is not part of a course.
     course_id      TEXT REFERENCES courses(id),
 
-    -- The teacher's NAME, denormalised, and the reason is a join vex cannot
-    -- make: "instructor_id" is nullable so staff LEFT-joins, but
-    -- "staff.person_id" is NOT NULL so people INNER-joins to staff, and the
-    -- chain drops every slot with nobody assigned — precisely the row a manager
-    -- is hunting for.
-    --
-    -- Joining it afterwards in a transform was the other candidate, and it does
-    -- not work either: a trigger's "set" step resolves bindings but does not
-    -- evaluate Prism ops, so the expression reached the browser unevaluated.
-    -- The name therefore lives next to the row, kept true by a trigger.
+    -- Denormalised, because it is a join vex cannot make: instructor_id is
+    -- nullable so staff LEFT-joins, but staff.person_id is NOT NULL so people
+    -- INNER-joins, and the chain drops every slot with nobody assigned.
     instructor_name TEXT NOT NULL DEFAULT 'Unassigned',
 
     active         BOOLEAN NOT NULL DEFAULT true
   );
 
-  -- One dated occurrence — the thing a person actually books. Generated from a
-  -- template, but standalone once it exists: cancelling Tuesday does not touch
-  -- the rule, and a one-off workshop has no template at all.
-  --
-  -- "held_on" + "starts_at" are stored split so the day is groupable without
-  -- date functions (vex has none — PLAN.md), and "week_key"/"hour_key" are
-  -- denormalised buckets for the same reason: reporting groups on a column.
-  -- A dated, bookable class.
-  --
-  -- "template_id" is NULLABLE, and that is what makes a ONE-OFF possible: a
-  -- workshop, a masterclass, a Saturday intensive is simply a session with no
-  -- recurring rule behind it. The model has always allowed it; for a long time
-  -- nothing could create one, which is a missing screen rather than a missing
-  -- concept.
   CREATE TABLE class_sessions (
     id             TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
     studio_id      TEXT NOT NULL REFERENCES studios(id),
+    -- NULLABLE, and that is what makes a one-off possible: a workshop is a
+    -- session with no recurring rule behind it.
     template_id    TEXT REFERENCES class_templates(id),
     program_id     TEXT NOT NULL REFERENCES programs(id),
     name           TEXT NOT NULL,
@@ -466,88 +789,53 @@ export const DDL = /* sql */ `
     week_key       TEXT NOT NULL,          -- '2026-W32', for grouping
     hour_key       INTEGER NOT NULL,       -- 0..23, for peak-hour reporting
 
-    -- How many places are taken. A COUNTER CACHE, and the reason is a real
-    -- constraint rather than a preference: vex infers joins from foreign keys
-    -- and only LEFT-joins nullable ones, so a sessions × bookings join is
-    -- INNER and drops every class nobody has booked yet. An empty class is
-    -- precisely the one an owner needs to see on Monday morning, so the count
-    -- comes off the session row instead of a join.
-    --
-    -- Maintained by a TRIGGER, not by the writers. The mutation grammar sets
-    -- literals and "$context" values, so "booked_count = booked_count + 1" is
-    -- not expressible in it — which turned out to be the useful constraint. A
-    -- counter every writer has to remember to move is a counter that drifts
-    -- the first time somebody adds a fourth way to book; the database owns it,
-    -- so it cannot be forgotten and cannot race.
+    -- A counter cache, because vex only LEFT-joins nullable foreign keys: a
+    -- sessions x bookings join is INNER and drops every class nobody has booked.
+    -- Maintained by TRIGGER — "booked_count + 1" is not expressible in the
+    -- mutation grammar, and a counter its writers maintain drifts.
     booked_count   INTEGER NOT NULL DEFAULT 0
   );
 
-  -- A member's place in a session. Cancelled bookings stay as rows: "who
-  -- dropped out" is a question every studio owner asks, and deleting the
-  -- evidence answers it with silence.
+  -- A booking belongs to a PERSON at a studio. It used to belong to a
+  -- membership, which meant a drop-in — somebody with no membership at all —
+  -- could not hold a seat. Who may book is a question for grants and standing,
+  -- not for a foreign key.
   CREATE TABLE bookings (
     id             TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
     studio_id      TEXT NOT NULL REFERENCES studios(id),
     session_id     TEXT NOT NULL REFERENCES class_sessions(id),
-    membership_id  TEXT NOT NULL REFERENCES memberships(id),
+    person_id      TEXT NOT NULL REFERENCES people(id),
     status         TEXT NOT NULL DEFAULT 'booked' CHECK (status IN ('booked', 'cancelled', 'waitlisted')),
     booked_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
 
-    -- Did they turn up. A second counter cache, for the same reason as
-    -- "booked_count": vex only LEFT-joins nullable foreign keys, so a roster
-    -- read joined to check_ins would be INNER and drop every booking nobody
-    -- attended — precisely the rows a front desk is looking at, because those
-    -- are the people it still has to check in.
-    --
-    -- MAINTENANCE CONTRACT: the check-in mutation writes the check_in and sets
-    -- this in one transaction. "seed-check" recomputes and compares.
+    -- Same reason as booked_count: a roster joined to check_ins would be INNER
+    -- and drop every booking nobody attended — the people a desk has yet to
+    -- check in. The check-in mutation writes both in one transaction.
     attended       BOOLEAN NOT NULL DEFAULT false,
 
-    UNIQUE (session_id, membership_id)
+    UNIQUE (session_id, person_id)
   );
 
-  -- Turning up. Separate from a booking on purpose: people attend without
-  -- booking (walk-ins) and book without attending (no-shows), and a studio
-  -- that cannot see the difference cannot see its own retention problem.
   CREATE TABLE check_ins (
-    -- Generated by the DATABASE. The mutation grammar sets literals and
-    --  values only, so a write cannot mint an id and cannot read one
-    -- back — which is why an id a client invents is the alternative, and a
-    -- client-invented primary key is a collision waiting for two front desks.
     id             TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
     studio_id      TEXT NOT NULL REFERENCES studios(id),
-    membership_id  TEXT NOT NULL REFERENCES memberships(id),
+    person_id      TEXT NOT NULL REFERENCES people(id),
     session_id     TEXT REFERENCES class_sessions(id),
-    -- The clock lives in the DATABASE, not in the write. A check-in carries
-    -- who and which class; WHEN is not a parameter, so it cannot be forged,
-    -- back-dated, or disagree with the defaults on the columns beside it —
-    -- the same one-clock rule the seed follows (see db/sql.ts).
+    -- The clock lives in the database, not the write: a check-in carries who and
+    -- which class, so WHEN cannot be forged or back-dated.
     happened_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
     held_on        DATE NOT NULL,
     hour_key       INTEGER NOT NULL DEFAULT EXTRACT(HOUR FROM now()),
     method         TEXT NOT NULL DEFAULT 'desk' CHECK (method IN ('desk', 'kiosk', 'app'))
   );
 
-  -- ─── invariants the database owns ───────────────────────────
-  --
-  -- Two things live here rather than in the application, and both are here for
-  -- the same reason: the closed mutation grammar cannot express them, and that
-  -- is a better answer than an escape hatch.
-  --
-  -- A counter cache maintained by its writers drifts the first time somebody
-  -- adds a fourth way to book. A capacity check performed by reading first and
-  -- writing second is a race with a queue of people at the door. Both belong
-  -- next to the rows.
+  -- Attendance is what spends a pass credit — see spend_pass_credit() above.
+  CREATE TRIGGER check_ins_spend_pass
+    AFTER INSERT ON check_ins
+    FOR EACH ROW EXECUTE FUNCTION spend_pass_credit();
 
-  -- The booked figure, recomputed from the bookings themselves. Every path in
-  -- and out of a booking moves it, including ones nobody has written yet.
-  -- The grouping buckets, derived when a session is written by hand.
-  --
-  -- "generate_sessions" computes these for every class it makes; a one-off
-  -- inserted through a form has nobody to compute them, and they are NOT NULL
-  -- because every report groups on them (vex has no date functions). Derived
-  -- here so a hand-written session is indistinguishable from a generated one
-  -- everywhere downstream.
+  -- ─── invariants the database owns ───────────────────────────
+
   CREATE OR REPLACE FUNCTION derive_session_buckets() RETURNS TRIGGER AS $buk$
   BEGIN
     IF NEW.week_key IS NULL OR NEW.week_key = '' THEN
@@ -577,36 +865,12 @@ export const DDL = /* sql */ `
     AFTER INSERT OR UPDATE OR DELETE ON bookings
     FOR EACH ROW EXECUTE FUNCTION sync_booked_count();
 
-  -- TAKING A PLACE — every rule about it, on the table that holds places.
-  --
-  -- These lived on "member_bookings", the parallel table a member used to write
-  -- through, so they guarded the member's path and nothing else. That table is
-  -- gone (reach is the rung's now), and the rules came here — which is where
-  -- they belonged, because each is true of a booking however it was made.
-  --
-  -- Two of them changed meaning by moving, both for the better:
-  --
-  --   FULL IS A QUEUE, NOT A REFUSAL, and now for the desk as well. Turning
-  --   somebody away throws away the one fact a studio most wants — that demand
-  --   exceeded the room — and makes them check back by hand. Only the member's
-  --   path waitlisted before; a desk booking into a full class got an exception.
-  --
-  --   BOOKING SOMETHING BOOKED BEFORE reuses the row instead of hitting the
-  --   unique index. Also both paths now: a desk re-adding somebody who cancelled
-  --   last week used to be shown a constraint name.
   CREATE FUNCTION enforce_capacity() RETURNS TRIGGER AS $cap$
   DECLARE
     taken    INTEGER;
     room     INTEGER;
     existing RECORD;
   BEGIN
-    -- THE CLASS HAS TO BE THIS STUDIO'S.
-    --
-    -- A booking names a session and carries a studio, and nothing in the column
-    -- types makes those agree — two foreign keys, each valid alone. The engine
-    -- stamps the studio from the caller's scope, so a request naming another
-    -- studio's session produced a row pointing at a class that studio does not
-    -- teach. The deleted mirror caught this for members only.
     IF NOT EXISTS (SELECT 1 FROM class_sessions cs WHERE cs.id = NEW.session_id AND cs.studio_id = NEW.studio_id) THEN
       RAISE EXCEPTION 'That class is not on this studio''s timetable.';
     END IF;
@@ -618,18 +882,8 @@ export const DDL = /* sql */ `
 
     IF TG_OP = 'INSERT' THEN
       SELECT id, status INTO existing FROM bookings
-       WHERE session_id = NEW.session_id AND membership_id = NEW.membership_id;
+       WHERE session_id = NEW.session_id AND person_id = NEW.person_id;
       IF FOUND THEN
-        -- ALREADY HOLDING IT IS NOT AN ERROR, it is nothing to do.
-        --
-        -- This raised, which made a double tap a 500 and — worse — made the
-        -- course fan-out fail wholesale the moment one of its sessions was
-        -- already booked, taking the whole enrolment with it. The upsert it
-        -- uses could never reach its ON CONFLICT clause, because a BEFORE
-        -- trigger had already thrown.
-        --
-        -- Idempotent is the honest answer: the row they wanted exists, the
-        -- screen shows it booked, and nothing needs saying.
         IF existing.status = 'booked' THEN
           RETURN NULL;
         END IF;
@@ -653,18 +907,6 @@ export const DDL = /* sql */ `
     BEFORE INSERT OR UPDATE ON bookings
     FOR EACH ROW EXECUTE FUNCTION enforce_capacity();
 
-  -- Dated classes follow their rule. Adding a Tuesday slot puts Tuesdays on
-  -- the timetable; moving it to Wednesday moves the ones nobody has booked yet.
-  --
-  -- Here for the same reason as the others: generating a term of sessions is a
-  -- bulk insert over a date series, which a closed mutation grammar cannot say
-  -- and should not learn to. The rule is the authored thing; the occurrences
-  -- are derived from it, and derivation belongs next to the rows.
-  --
-  -- FUTURE and UNBOOKED only. A class somebody has booked into is a commitment,
-  -- and a manager who moves a slot has not thereby cancelled next Tuesday on
-  -- eleven people — those sessions stay, and the desk can cancel them one at a
-  -- time if that is what was meant.
   CREATE FUNCTION generate_sessions() RETURNS TRIGGER AS $gen$
   BEGIN
     DELETE FROM class_sessions s
@@ -682,20 +924,6 @@ export const DDL = /* sql */ `
         'scheduled',
         to_char(gs.d, 'IYYY"-W"IW'),
         split_part(NEW.starts_at, ':', 1)::int
-      -- BOUNDED RECURRENCE. A slot with no dates runs forever, which is what an
-      -- ongoing class is; a slot with dates runs between them, which is what a
-      -- course is. One concept, one generator — the alternative was a second
-      -- kind of schedule object with its own copy of all of this.
-      --
-      -- The rolling window is 28 days for an OPEN-ENDED slot, so an ongoing
-      -- class keeps four weeks of calendar ahead of it and no more.
-      --
-      -- A BOUNDED one is generated IN FULL, and the difference matters. A block
-      -- is finite and somebody enrols on the whole of it: "six Mondays from
-      -- November" has to show six Mondays the moment it exists, not two of them
-      -- because the rolling horizon happens to end in three weeks. A course
-      -- created for next term generated NOTHING under the old rule — the
-      -- classes would have appeared, silently, weeks later.
       FROM generate_series(
         GREATEST(studio_today(NEW.studio_id) + 1, COALESCE(NEW.starts_on, studio_today(NEW.studio_id) + 1)),
         COALESCE(NEW.ends_on, studio_today(NEW.studio_id) + 28),
@@ -741,86 +969,23 @@ export const DDL = /* sql */ `
     AFTER INSERT OR UPDATE ON class_templates
     FOR EACH ROW EXECUTE FUNCTION generate_sessions();
 
-  -- WHEN A MEMBERSHIP ENDED, on the studio's own clock.
-  --
-  -- The cancel mutation cannot carry this: the mutation grammar takes context
-  -- only, so a caller-supplied date is the only shape it can express — and a
-  -- cancellation dated by whichever machine made the request is permanently
-  -- wrong for a studio across a UTC boundary. A read that is a day out corrects
-  -- itself; a write that is a day out is wrong in the record forever.
-  --
-  -- BEFORE, so it lands in the same row write rather than a second one.
-  CREATE OR REPLACE FUNCTION stamp_membership_end() RETURNS TRIGGER AS $ended$
-  BEGIN
-    IF NEW.status = 'cancelled' AND OLD.status IS DISTINCT FROM 'cancelled' THEN
-      NEW.ended_on := studio_today(NEW.studio_id);
-    END IF;
-    -- Coming BACK clears it. A reactivated membership still carrying an end date
-    -- is a row that contradicts itself.
-    IF NEW.status <> 'cancelled' AND OLD.status = 'cancelled' THEN
-      NEW.ended_on := NULL;
-    END IF;
-    RETURN NEW;
-  END;
-  $ended$ LANGUAGE plpgsql;
-
-  CREATE TRIGGER memberships_stamp_end
-    BEFORE UPDATE OF status ON memberships
-    FOR EACH ROW EXECUTE FUNCTION stamp_membership_end();
-
-
-
-  -- ═══════════════════════════════════════════════════════════
-  -- THE PARALLEL TABLES ARE GONE.
-  --
-  -- "member_cards", "member_bookings" and "member_enrolments" lived here: three
-  -- tables holding facts three other tables already held, kept level by five
-  -- triggers. They existed for one reason — a behavior was a property of the
-  -- TABLE, so granting a member "bookings.read" granted them every booking at
-  -- the studio, and the only way to say "their own" was a second table with a
-  -- tighter rule attached.
-  --
-  -- Reach is a property of the RUNG now (charter: "scoping"), so the member
-  -- reads the real tables, filtered. Every bug this area produced was a drift
-  -- bug — a projection that did not exist, a mirror that INNER-joined, a
-  -- fan-out that left stale rows — and none of them is expressible any more,
-  -- because there is nothing left to drift from.
-  --
-  -- What the tables carried that the real ones do not: denormalised class and
-  -- program names, so a phone did not join. That is three indexed joins now.
-  --
-  -- "member_cards" outlived the other two by a turn, on a second belief that was
-  -- also wrong: that granting a member "subscriptions.read" handed it to every
-  -- staff rung, because "member" was the base of the ladder. It was the LADDER
-  -- that was wrong. A member is a relationship somebody has with the studio, not
-  -- the least anybody can be, so it stands beside the staff roles now on a
-  -- shared "base" rung, and a person who is both simply holds both. Nothing
-  -- travels upward, and the card is the join it always was.
-  -- ═══════════════════════════════════════════════════════════
-
   -- ─── joining a course ───────────────────────────────────────
   --
-  -- ONE ROW, and the sessions follow. That is the whole difference between a
-  -- course and six weeks of drop-in classes: a member says yes once, and the
-  -- cohort is a fact rather than a coincidence of six separate bookings.
-  --
-  -- Cancelling an enrolment releases the whole block. Leaving the bookings
-  -- behind would keep the seats occupied by somebody who has left, and the
-  -- studio would find out by counting chairs.
+  -- The third entitlement: a seat in a dated, bounded block. Held by the
+  -- person — a course full of beginners is mostly people who are not members.
   CREATE TABLE enrolments (
     id             TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
     studio_id      TEXT NOT NULL REFERENCES studios(id),
     course_id      TEXT NOT NULL REFERENCES courses(id),
-    membership_id  TEXT NOT NULL REFERENCES memberships(id),
     person_id      TEXT NOT NULL REFERENCES people(id),
+    paid_via       TEXT NOT NULL DEFAULT 'manual' CHECK (paid_via IN ('manual', 'stripe', 'comp', 'free')),
     status         TEXT NOT NULL DEFAULT 'enrolled' CHECK (status IN ('enrolled', 'withdrawn')),
     enrolled_on    DATE NOT NULL,
-    UNIQUE (course_id, membership_id)
+    UNIQUE (course_id, person_id)
   );
 
-  -- The counter cache, kept by the database for the same reason every other one
-  -- here is: a closed mutation grammar cannot say "enrolled_count + 1", which
-  -- turned out to be the useful constraint.
+  -- The counter cache, kept by the database like every other one here: a closed
+  -- mutation grammar cannot say "enrolled_count + 1".
   CREATE OR REPLACE FUNCTION sync_enrolled_count() RETURNS TRIGGER AS $ec$
   BEGIN
     UPDATE courses c
@@ -830,38 +995,18 @@ export const DDL = /* sql */ `
   END;
   $ec$ LANGUAGE plpgsql;
 
-  -- The person is DERIVED from the membership, never sent.
-  --
-  -- A desk enrolling somebody names the membership it is looking at; the human
-  -- behind it is a fact the database already holds. Passing both would mean a
-  -- request could pair one member's membership with another's person id, and
-  -- the row would be a quiet lie about who is on the course.
-  CREATE OR REPLACE FUNCTION derive_enrolment_person() RETURNS TRIGGER AS $dep$
+  -- Coming back to a block they once withdrew from is the SAME seat: the row
+  -- is reused rather than duplicated, and enrolling twice is refused in words
+  -- a desk can read out loud.
+  CREATE OR REPLACE FUNCTION dedupe_enrolment() RETURNS TRIGGER AS $dep$
   BEGIN
-    IF NEW.person_id IS NULL OR NEW.person_id = '' THEN
-      SELECT person_id INTO NEW.person_id FROM memberships WHERE id = NEW.membership_id;
-    END IF;
-    IF NEW.person_id IS NULL THEN
-      RAISE EXCEPTION 'That membership does not exist here.';
-    END IF;
-
-    -- Enrolling somebody who is already on the block.
-    --
-    -- The unique constraint would catch it, but "duplicate key value violates
-    -- unique constraint enrolments_course_id_membership_id_key" is not a
-    -- sentence to put in front of somebody at a counter. The rule is the
-    -- database's; the wording is ours. Re-enrolling somebody who WITHDREW is a
-    -- real thing a desk does, so that one reinstates rather than refuses.
-    IF EXISTS (SELECT 1 FROM enrolments WHERE course_id = NEW.course_id AND membership_id = NEW.membership_id AND status = 'enrolled') THEN
+    IF EXISTS (SELECT 1 FROM enrolments WHERE course_id = NEW.course_id AND person_id = NEW.person_id AND status = 'enrolled') THEN
       RAISE EXCEPTION 'They are already on that course.';
     END IF;
 
-    IF EXISTS (SELECT 1 FROM enrolments WHERE course_id = NEW.course_id AND membership_id = NEW.membership_id) THEN
+    IF EXISTS (SELECT 1 FROM enrolments WHERE course_id = NEW.course_id AND person_id = NEW.person_id) THEN
       UPDATE enrolments SET status = 'enrolled'
-       WHERE course_id = NEW.course_id AND membership_id = NEW.membership_id;
-      -- Returning NULL from a BEFORE trigger skips the insert, so the row is
-      -- reused rather than duplicated — and the AFTER triggers on that UPDATE
-      -- re-book the block and move the counter.
+       WHERE course_id = NEW.course_id AND person_id = NEW.person_id;
       RETURN NULL;
     END IF;
 
@@ -869,26 +1014,19 @@ export const DDL = /* sql */ `
   END;
   $dep$ LANGUAGE plpgsql;
 
-  CREATE TRIGGER enrolments_derive_person
+  CREATE TRIGGER enrolments_dedupe
     BEFORE INSERT ON enrolments
-    FOR EACH ROW EXECUTE FUNCTION derive_enrolment_person();
+    FOR EACH ROW EXECUTE FUNCTION dedupe_enrolment();
 
   CREATE TRIGGER enrolments_sync_count
     AFTER INSERT OR UPDATE OR DELETE ON enrolments
     FOR EACH ROW EXECUTE FUNCTION sync_enrolled_count();
 
-  -- Capacity is the COURSE's, not each session's. Twelve places means twelve
-  -- people for the block, and the check belongs here for the same reason the
-  -- session one does: two people enrolling at once must not both find room.
   CREATE OR REPLACE FUNCTION enforce_course_capacity() RETURNS TRIGGER AS $ecap$
   DECLARE
     v_cap  INTEGER;
     v_have INTEGER;
   BEGIN
-    -- THE COURSE HAS TO BE THIS STUDIO'S, and open. Same argument as the one
-    -- on bookings: two foreign keys that the types never make agree, and the
-    -- studio is stamped from scope rather than sent. The deleted mirror table
-    -- carried this for the member's path only.
     IF NOT EXISTS (SELECT 1 FROM courses c WHERE c.id = NEW.course_id AND c.studio_id = NEW.studio_id AND c.active) THEN
       RAISE EXCEPTION 'That course is not open at this studio.';
     END IF;
@@ -907,34 +1045,20 @@ export const DDL = /* sql */ `
     BEFORE INSERT OR UPDATE ON enrolments
     FOR EACH ROW EXECUTE FUNCTION enforce_course_capacity();
 
-  -- THE FAN-OUT. Enrolling books every session the course's slots generated;
-  -- withdrawing cancels them again.
-  --
-  -- Booked as ordinary rows in "bookings", so the desk's roster, the session
-  -- capacity check and the counter cache all work with no idea a course exists.
-  -- A course is a way of making bookings, not a second kind of attendance.
   CREATE OR REPLACE FUNCTION fan_out_enrolment() RETURNS TRIGGER AS $fan$
   BEGIN
     IF NEW.status = 'enrolled' THEN
-      INSERT INTO bookings (studio_id, session_id, membership_id, status)
-      SELECT NEW.studio_id, cs.id, NEW.membership_id, 'booked'
+      INSERT INTO bookings (studio_id, session_id, person_id, status)
+      SELECT NEW.studio_id, cs.id, NEW.person_id, 'booked'
         FROM class_sessions cs
         JOIN class_templates ct ON ct.id = cs.template_id
        WHERE ct.course_id = NEW.course_id
          AND cs.status = 'scheduled'
          AND cs.held_on >= studio_today(NEW.studio_id)
-      -- DO UPDATE, not DO NOTHING.
-      --
-      -- A row already exists in two cases: the member booked that class on
-      -- their own, and — the one that made this a bug — they were on the block
-      -- before, withdrew, and are being put back. "DO NOTHING" left every one
-      -- of those bookings CANCELLED, so re-enrolling gave somebody a place on
-      -- the course and a seat at none of its classes. Setting the status is
-      -- right for both cases: enrolled means booked.
-      ON CONFLICT (session_id, membership_id) DO UPDATE SET status = 'booked';
+      ON CONFLICT (session_id, person_id) DO UPDATE SET status = 'booked';
     ELSE
       UPDATE bookings b SET status = 'cancelled'
-       WHERE b.membership_id = NEW.membership_id
+       WHERE b.person_id = NEW.person_id
          AND b.session_id IN (
            SELECT cs.id FROM class_sessions cs
              JOIN class_templates ct ON ct.id = cs.template_id
@@ -979,156 +1103,229 @@ export const DDL = /* sql */ `
     AFTER UPDATE ON bookings
     FOR EACH ROW EXECUTE FUNCTION promote_from_waitlist();
 
+  -- ─── the vocabulary an automation is built from ─────────────
+  --
+  -- THE PRESENTATION HALF OF A CODE CONSTANT, PROJECTED AS ROWS.
+  --
+  -- A moment's behaviour cannot live here: its "watch" anchor and its
+  -- "context" are functions, and code stays their only home. What CAN live
+  -- here is everything a screen says about it — the phrase, the blurb,
+  -- whether the number means anything — and putting that in rows is what
+  -- lets an ordinary vex entry compose a card's whole sentence in its
+  -- mapping, instead of a function fetching rows and captioning them in JS.
+  -- The projection is refreshed at boot from the shipped constants, the way
+  -- the directory is (see the seed's "vocabulary" block).
+  --
+  -- The FOREIGN KEYS are the second reason. "moment" and "effect" were free
+  -- text, so a row could name a pairing no release has and nothing objected
+  -- until a card rendered "This pairing is not in this version". The
+  -- database refuses it now.
+  CREATE TABLE automation_moments (
+    id         TEXT PRIMARY KEY,
+    phrase     TEXT NOT NULL,
+    blurb      TEXT NOT NULL,
+    -- Written (a fact wakes it) rather than clocked. A watched row has no
+    -- hour, and one claiming an hour it ignores would be lying.
+    watched    BOOLEAN NOT NULL DEFAULT false,
+    days_label TEXT NOT NULL DEFAULT '',
+    sort       INTEGER NOT NULL DEFAULT 0
+  );
+
+  CREATE TABLE automation_effects (
+    id            TEXT PRIMARY KEY,
+    phrase        TEXT NOT NULL,
+    blurb         TEXT NOT NULL,
+    subject_label TEXT NOT NULL DEFAULT '',
+    body_label    TEXT NOT NULL DEFAULT '',
+    message_hint  TEXT NOT NULL DEFAULT '',
+    sort          INTEGER NOT NULL DEFAULT 0
+  );
+
+  -- Nobody builds an automation from an empty form — they recognise a
+  -- problem they have. A recipe is a pre-filled pairing, and it is a row for
+  -- the same reason the moments are: so the screen that offers it can be a
+  -- query, and "does this studio already run it" can be a join rather than a
+  -- map built in a function.
+  CREATE TABLE automation_recipes (
+    id      TEXT PRIMARY KEY,
+    title   TEXT NOT NULL,
+    why     TEXT NOT NULL,
+    icon    TEXT NOT NULL DEFAULT '',
+    moment  TEXT NOT NULL REFERENCES automation_moments(id),
+    effect  TEXT NOT NULL REFERENCES automation_effects(id),
+    run_at  TEXT NOT NULL DEFAULT '09:00',
+    days    INTEGER NOT NULL DEFAULT 7,
+    subject TEXT NOT NULL DEFAULT '',
+    body    TEXT NOT NULL DEFAULT '',
+    sort    INTEGER NOT NULL DEFAULT 0
+  );
+
   -- ─── the automations themselves ─────────────────────────────
-  --
-  -- A REFLEX IS AN ARTIFACT, so it is a row. It was a TypeScript constant,
-  -- which meant a studio could look at its automations, preview them and pause
-  -- them — and could not create one, change when it runs, or see what it does.
-  -- Three verbs missing out of five, because the thing itself was code.
-  --
-  -- What a studio authors is NOT a reflex. Nobody is writing a vex fingerprint
-  -- and a prism template into a form, and letting them would hand a browser the
-  -- ability to name any statement in the app. So the application ships a small
-  -- set of SHAPES — "lapse trials", "remind about tomorrow", "send a digest" —
-  -- and a row picks one and sets its knobs. The dangerous half stays authored;
-  -- the half a studio actually wants to change becomes data.
-  --
-  -- That is the artifact-layer pattern in miniature, and the reason this table
-  -- is worth reading before that lands: a template id plus typed parameters,
-  -- rather than a blob nobody can validate.
   CREATE TABLE automations (
     id           TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
     studio_id    TEXT NOT NULL REFERENCES studios(id),
-    -- WHO AND WHAT, SEPARATELY.
-    --
-    -- This was one column, "template", naming a shipped pair — and three pairs
-    -- was the entire vocabulary. The studio could change WHEN one ran and
-    -- nothing else, which is three cron jobs with a toggle rather than an
-    -- automation system.
-    --
-    -- The two halves were never coupled: every shape already consisted of a
-    -- SELECT (who it acts on) and an EFFECT (what it does to them), frozen
-    -- together at build time by me. Splitting the column splits the decision.
-    --
-    -- The safety property is unchanged and that is the point: both columns are
-    -- checked against registries the application ships, so a row still cannot
-    -- name a statement this version does not have. It can only COMBINE the
-    -- ones it does — which is how "warn people before their trial lapses"
-    -- becomes expressible without a single new fingerprint.
-    audience     TEXT NOT NULL,
-    effect       TEXT NOT NULL,
+    moment       TEXT NOT NULL REFERENCES automation_moments(id),
+    effect       TEXT NOT NULL REFERENCES automation_effects(id),
     enabled      BOOLEAN NOT NULL DEFAULT true,
-    -- The knobs. Typed columns rather than JSON, so a form can bind them and
-    -- the database can refuse nonsense. Which of them a given row USES is
-    -- decided by its pairing, and the form asks for exactly those.
-    run_at       TEXT NOT NULL DEFAULT '03:00',
-    trial_days   INTEGER NOT NULL DEFAULT 14,
-    -- What a message says, when the effect is one. Authored by the studio,
-    -- because the wording of a message to their members is theirs — it is the
-    -- one part of an automation that is obviously data and was hardcoded.
+    run_at       TEXT NOT NULL DEFAULT '09:00',
+    days         INTEGER NOT NULL DEFAULT 7,
+    -- Authored by the studio, because the wording of a message to their own
+    -- members is theirs.
     subject      TEXT NOT NULL DEFAULT '',
     body         TEXT NOT NULL DEFAULT '',
+    -- HOW IT LAST RAN, mirrored from the engine's own ledger by a trigger
+    -- (see wireRunMirror in boot.ts) — the counter-cache this schema uses for
+    -- booked seats and the anchor's relationships. The card needs one line
+    -- per automation and the ledger is keyed by a COMPOSED reflex id, which
+    -- is a join no declared foreign key can carry; recomputing it is what
+    -- the trigger is for, and reading it is then an ordinary column.
+    last_run_state  TEXT NOT NULL DEFAULT '',
+    last_run_done   INTEGER NOT NULL DEFAULT 0,
+    last_run_failed INTEGER NOT NULL DEFAULT 0,
     created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
-    -- One pairing per studio per window. Two rows differing only in trial_days
-    -- is a real thing to want (warn at seven days, lapse at fourteen) and those
-    -- differ by EFFECT, so this constraint does not stand in the way.
-    UNIQUE (studio_id, audience, effect)
+    -- One pairing per studio. Two rows over the same moment doing different
+    -- things differ by effect, so this does not stand in the way.
+    UNIQUE (studio_id, moment, effect)
   );
 
-  -- ─── what an automation has to say ──────────────────────────
+  -- ─── the studio being told things ───────────────────────────
   --
-  -- There is no email in this application, and adding one to make automations
-  -- interesting would have meant testing a mail provider instead of testing
-  -- the automations. So a reflex that would send something writes a row here,
-  -- and delivery becomes somebody else's later problem.
+  -- A NOTIFICATION is "the studio was told something". A TASK is a
+  -- notification that needs action — it has a due date and can be ticked
+  -- done. One table, actionable-ness a property, because "what has the studio
+  -- been told" is one question and filing it in two places made half of it
+  -- unfindable.
   --
-  -- Which is the honest shape anyway: a message you can query, retry and show
-  -- an operator beats one that exists only in a provider's logs.
+  -- An insert here also FANS OUT over the per-principal socket to the
+  -- studio's connected staff (app.ts onMutation) — a toast and a bell, with
+  -- no navigation. This table is the archive that push reads from and the
+  -- pull list for whoever was not connected.
   CREATE TABLE notifications (
     id          TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
     studio_id   TEXT NOT NULL REFERENCES studios(id),
     person_id   TEXT REFERENCES people(id),
-    kind        TEXT NOT NULL,
+    -- What to do and why, in the studio's own words — the automation supplies
+    -- the sentence, with the row's facts filled in.
+    title       TEXT NOT NULL,
+    detail      TEXT NOT NULL DEFAULT '',
+    -- Set = a task ("call Ruben about the failed payment"). NULL = an FYI
+    -- ("payment failed") that nobody has to tick off.
+    due_on      DATE DEFAULT CURRENT_DATE,
+    done        BOOLEAN NOT NULL DEFAULT false,
+    -- Read vs unread — what the bell badge counts. Set for the whole studio
+    -- when somebody opens the Notices screen: a six-person studio shares one
+    -- inbox, and one person reading it IS the studio being told. The flag is
+    -- what a screen may write; WHEN is the database's to say (trigger below) —
+    -- the same split every other date here keeps.
+    seen        BOOLEAN NOT NULL DEFAULT false,
+    seen_at     TIMESTAMPTZ,
+    source      TEXT NOT NULL DEFAULT '',
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE (studio_id, source, person_id, due_on)
+  );
+
+  CREATE OR REPLACE FUNCTION stamp_notification_seen() RETURNS TRIGGER AS $seen$
+  BEGIN
+    IF NEW.seen AND NOT OLD.seen THEN
+      NEW.seen_at := now();
+    END IF;
+    RETURN NEW;
+  END;
+  $seen$ LANGUAGE plpgsql;
+
+  CREATE TRIGGER notifications_stamp_seen
+    BEFORE UPDATE OF seen ON notifications
+    FOR EACH ROW EXECUTE FUNCTION stamp_notification_seen();
+
+  CREATE TABLE outbox (
+    id          TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+    studio_id   TEXT NOT NULL REFERENCES studios(id),
+    person_id   TEXT REFERENCES people(id),
+    channel     TEXT NOT NULL DEFAULT 'email' CHECK (channel IN ('email', 'sms')),
+    to_address  TEXT NOT NULL DEFAULT '',
     subject     TEXT NOT NULL,
     body        TEXT NOT NULL DEFAULT '',
+    -- 'queued' is where every row lives today, because nothing delivers. The
+    -- other two exist so the shape does not change when something does.
+    state       TEXT NOT NULL DEFAULT 'queued' CHECK (state IN ('queued', 'sent', 'failed')),
+    source      TEXT NOT NULL DEFAULT '',
     created_on  DATE NOT NULL DEFAULT CURRENT_DATE,
     created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
   );
 
   -- ─── indexes the reads actually use ─────────────────────────
 
-  CREATE INDEX notifications_studio ON notifications (studio_id, created_on);
+  CREATE INDEX notifications_open ON notifications (studio_id, done, due_on);
+  CREATE INDEX notifications_unseen ON notifications (studio_id, seen_at);
+  CREATE INDEX outbox_studio   ON outbox (studio_id, created_on);
 
-  CREATE INDEX memberships_studio  ON memberships (studio_id, status);
+  -- ── the mirror resyncs ──────────────────────────────────────
+  -- Created here, once every table they watch exists. Anything that moves a
+  -- relationship row — a start, an assert, a pause applying, a credit spent,
+  -- a withdrawal, a hire, a tag — lands on the same recompute.
+  CREATE TRIGGER subscriptions_resync_relationships
+    AFTER INSERT OR UPDATE OR DELETE ON subscriptions
+    FOR EACH ROW EXECUTE FUNCTION resync_relationships_row();
+  CREATE TRIGGER passes_resync_relationships
+    AFTER INSERT OR UPDATE OR DELETE ON passes
+    FOR EACH ROW EXECUTE FUNCTION resync_relationships_row();
+  CREATE TRIGGER enrolments_resync_relationships
+    AFTER INSERT OR UPDATE OR DELETE ON enrolments
+    FOR EACH ROW EXECUTE FUNCTION resync_relationships_row();
+  CREATE TRIGGER staff_resync_relationships
+    AFTER INSERT OR UPDATE OR DELETE ON staff
+    FOR EACH ROW EXECUTE FUNCTION resync_relationships_row();
+  CREATE TRIGGER connections_resync_relationships
+    AFTER INSERT OR UPDATE OR DELETE ON connections
+    FOR EACH ROW EXECUTE FUNCTION resync_relationships_row();
+
+  -- A course whose dates move drags every enrolled person's horizon with it.
+  CREATE OR REPLACE FUNCTION resync_course_cohort() RETURNS TRIGGER AS $cohort$
+  DECLARE
+    who RECORD;
+  BEGIN
+    FOR who IN SELECT e.studio_id, e.person_id FROM enrolments e WHERE e.course_id = NEW.id LOOP
+      PERFORM resync_relationships(who.studio_id, who.person_id);
+    END LOOP;
+    RETURN NULL;
+  END;
+  $cohort$ LANGUAGE plpgsql;
+
+  CREATE TRIGGER courses_resync_cohort
+    AFTER UPDATE OF ends_on ON courses
+    FOR EACH ROW EXECUTE FUNCTION resync_course_cohort();
+
+  CREATE INDEX studio_people_studio ON studio_people (studio_id);
+  CREATE INDEX studio_people_person ON studio_people (person_id);
   CREATE INDEX sessions_studio_day ON class_sessions (studio_id, held_on);
   CREATE INDEX bookings_session    ON bookings (session_id, status);
   CREATE INDEX check_ins_studio    ON check_ins (studio_id, held_on);
 
-  -- THE FOREIGN KEYS THE APP ACTUALLY FILTERS ON.
-  --
-  -- Postgres indexes a primary key and a unique constraint; it does NOT index
-  -- the referencing side of a foreign key. Every one of these is a column a
-  -- screen filters or joins on every time it loads, and at seed scale a
-  -- sequential scan over four hundred rows hides it completely.
-  --
-  -- They also matter for DELETE: without them, removing a parent row scans the
-  -- whole child table to check the constraint.
-  -- The member's own reads run through these now: their bookings, their
-  -- enrolments, their subscription. They were the projections' indexes.
-  CREATE INDEX bookings_membership    ON bookings (membership_id, status);
-  CREATE INDEX check_ins_membership   ON check_ins (membership_id, held_on);
-  CREATE INDEX subscriptions_member   ON subscriptions (membership_id, status);
+  CREATE INDEX bookings_person        ON bookings (person_id, status);
+  CREATE INDEX check_ins_person       ON check_ins (person_id, held_on);
+  CREATE INDEX subscriptions_person   ON subscriptions (person_id, status);
+  CREATE INDEX passes_person          ON passes (person_id, status);
   CREATE INDEX templates_studio       ON class_templates (studio_id, active);
   CREATE INDEX templates_course       ON class_templates (course_id);
   CREATE INDEX sessions_template      ON class_sessions (template_id, held_on);
   CREATE INDEX enrolments_course      ON enrolments (course_id, status);
-  CREATE INDEX enrolments_membership  ON enrolments (membership_id, status);
+  CREATE INDEX enrolments_person      ON enrolments (person_id, status);
   CREATE INDEX courses_studio         ON courses (studio_id, active);
-  CREATE INDEX plans_studio           ON plans (studio_id, active);
+  CREATE INDEX offerings_studio       ON offerings (studio_id, active);
   CREATE INDEX staff_studio           ON staff (studio_id, active);
   CREATE INDEX automations_studio     ON automations (studio_id);
 
-  -- ═══════════════════════════════════════════════════════════
-  -- EVERY DATE A STUDIO STAMPS, ON THE STUDIO'S CLOCK.
-  --
-  -- Last in the file because a trigger needs its table, and these span four of
-  -- them. Found by a date rolling over: the assertions comparing a stamped date
-  -- against studio_today had agreed for months and stopped at midnight UTC.
-  -- ═══════════════════════════════════════════════════════════
-  -- memberships.joined_on IS THE STUDIO'S DATE, not the server's.
-  --
-  -- A DEFAULT of CURRENT_DATE is the server's clock, and this app already decided
-  -- that a studio owns its day: a gym in Kiritimati and one in Niue are on
-  -- different dates at the same instant, and studio_today is what every read
-  -- and every generator uses. This column was still on the other clock, which
-  -- was invisible for exactly as long as the two agreed.
-  --
-  -- A column default cannot see a sibling column, so it is a trigger. An
-  -- explicit value survives: only a NULL is filled, which is what lets a seed
-  -- and a backfill say when something really happened.
-  CREATE OR REPLACE FUNCTION stamp_memberships_joined_on() RETURNS TRIGGER AS $stampmemberships$
+  CREATE OR REPLACE FUNCTION stamp_first_seen() RETURNS TRIGGER AS $stampknown$
   BEGIN
-    IF NEW.joined_on IS NULL THEN NEW.joined_on := studio_today(NEW.studio_id); END IF;
+    IF NEW.first_seen_on IS NULL THEN NEW.first_seen_on := studio_today(NEW.studio_id); END IF;
     RETURN NEW;
   END;
-  $stampmemberships$ LANGUAGE plpgsql;
+  $stampknown$ LANGUAGE plpgsql;
 
-  CREATE TRIGGER memberships_stamp_joined_on
-    BEFORE INSERT ON memberships
-    FOR EACH ROW EXECUTE FUNCTION stamp_memberships_joined_on();
+  CREATE TRIGGER studio_people_stamp_first_seen
+    BEFORE INSERT ON studio_people
+    FOR EACH ROW EXECUTE FUNCTION stamp_first_seen();
 
-
-  -- check_ins.held_on IS THE STUDIO'S DATE, not the server's.
-  --
-  -- A DEFAULT of CURRENT_DATE is the server's clock, and this app already decided
-  -- that a studio owns its day: a gym in Kiritimati and one in Niue are on
-  -- different dates at the same instant, and studio_today is what every read
-  -- and every generator uses. This column was still on the other clock, which
-  -- was invisible for exactly as long as the two agreed.
-  --
-  -- A column default cannot see a sibling column, so it is a trigger. An
-  -- explicit value survives: only a NULL is filled, which is what lets a seed
-  -- and a backfill say when something really happened.
   CREATE OR REPLACE FUNCTION stamp_check_ins_held_on() RETURNS TRIGGER AS $stampcheck_ins$
   BEGIN
     IF NEW.held_on IS NULL THEN NEW.held_on := studio_today(NEW.studio_id); END IF;
@@ -1140,18 +1337,6 @@ export const DDL = /* sql */ `
     BEFORE INSERT ON check_ins
     FOR EACH ROW EXECUTE FUNCTION stamp_check_ins_held_on();
 
-
-  -- enrolments.enrolled_on IS THE STUDIO'S DATE, not the server's.
-  --
-  -- A DEFAULT of CURRENT_DATE is the server's clock, and this app already decided
-  -- that a studio owns its day: a gym in Kiritimati and one in Niue are on
-  -- different dates at the same instant, and studio_today is what every read
-  -- and every generator uses. This column was still on the other clock, which
-  -- was invisible for exactly as long as the two agreed.
-  --
-  -- A column default cannot see a sibling column, so it is a trigger. An
-  -- explicit value survives: only a NULL is filled, which is what lets a seed
-  -- and a backfill say when something really happened.
   CREATE OR REPLACE FUNCTION stamp_enrolments_enrolled_on() RETURNS TRIGGER AS $stampenrolments$
   BEGIN
     IF NEW.enrolled_on IS NULL THEN NEW.enrolled_on := studio_today(NEW.studio_id); END IF;

@@ -1,69 +1,120 @@
 import { z } from 'zod';
 import type { ActionDefinition } from '@niscorp/nova';
 import { automationsLayout } from './automations.layout';
-import { automationCreate, automationUpdate, notificationsRecent } from '@lyra/app/vex/tide.entries';
+import { automationRecipes, automationsList, outboxRecent } from '@lyra/app/vex/tide.entries';
 
-// The messages ARE ordinary rows, so they are an ordinary vex read. Only the
-// ledger goes through `fn:`, and only because it lives in a memory store —
-// see server/functions/automations.ts.
-const notificationsPrism = { fingerprint: notificationsRecent.fingerprint, context: {} };
-const createPrism = {
-  fingerprint: automationCreate.fingerprint,
-  context: { template: { $ref: '$.template' }, runAt: { $ref: '$.runAt' }, trialDays: { $ref: '$.trialDays' } },
-};
-const updatePrism = {
-  fingerprint: automationUpdate.fingerprint,
-  context: { automationId: { $ref: '$.automationId' }, runAt: { $ref: '$.runAt' }, trialDays: { $ref: '$.trialDays' }, enabled: { $ref: '$.enabled' } },
-};
+const outboxPrism = { fingerprint: outboxRecent.fingerprint, context: {} };
+// Both screens are QUERIES now. The cards, their sentences, their state words
+// and how each one last ran all come out of one entry, scoped by the engine —
+// the two hand-written SELECTs and the JS that captioned them are gone.
+const listPrism = { fingerprint: automationsList.fingerprint, context: {} };
+const recipesPrism = { fingerprint: automationRecipes.fingerprint, context: {} };
 
-// AUTOMATIONS, VISIBLE.
-//
-// Manager and up. An automation changes memberships overnight, so who may see
-// and pause one is the same question as who may set a price.
-//
-// `studioId` is seeded from the session (see app.ts `inputs`) and passed to
-// every fn, which uses it to filter reflex ids. That is the one boundary in
-// this application not enforced by the engine — the ledger is not in the
-// database the engine guards — so it is checked in one place and asserted.
 export const automationsAction: ActionDefinition = {
   id: 'automations.list',
   title: 'Automations',
   data: {
     reflexes: [],
-    notifications: [],
+    recipes: [],
+    outbox: [],
     loading: true,
+    // Recipes first for a studio with nothing set up; the manifest flips it to
+    // Running for one that already has some.
+    view: 'recipes',
+    views: [
+      { value: 'recipes', label: 'Recipes', showRecipes: true, showRunning: false, showOutbox: false },
+      { value: 'running', label: 'Running', showRecipes: false, showRunning: true, showOutbox: true },
+    ],
+    showRecipes: true,
+    showRunning: false,
+    showOutbox: false,
+    runningHint: 'Preview one before you trust it.',
     reflexId: '',
     previewOpen: false,
     previewName: '',
     previewSummary: '',
+    previewHint: '',
     previewUnits: [],
+    previewAnyone: false,
     previewResult: {},
     armOn: true,
+    armId: '',
     error: '',
     notice: '',
   },
   layout: automationsLayout,
   endpoints: {
-    load: { fn: 'automations.overview', target: 'reflexes', errorTarget: 'error' },
-    messages: { url: '/api/automation/vex', method: 'POST', request: notificationsPrism, target: 'notifications' },
+    load: { url: '/api/studio/vex', method: 'POST', request: listPrism, target: 'reflexes', errorTarget: 'error' },
+    recipes: { url: '/api/studio/vex', method: 'POST', request: recipesPrism, target: 'recipes', errorTarget: 'error' },
+    outbox: { url: '/api/automation/vex', method: 'POST', request: outboxPrism, target: 'outbox' },
     preview: { fn: 'automations.preview', target: 'previewResult', errorTarget: 'error' },
     run: { fn: 'automations.run', errorTarget: 'error' },
-    setArm: { fn: 'automations.arm', errorTarget: 'error' },
-    create: { url: '/api/automation/vex', method: 'POST', request: createPrism, errorTarget: 'error' },
-    update: { url: '/api/automation/vex', method: 'POST', request: updatePrism, errorTarget: 'error' },
-    // Rows changed, so the loaded reflexes are stale. Re-reading them is what
-    // makes an edit take effect with no release and no restart — the whole
-    // reason a reflex is a row.
-    reload: { fn: 'automations.reload' },
+    // A vex write like any other; the reflex reload rides the app's
+    // `automations` reaction, so nothing here remembers to poke one.
+    setArm: {
+      url: '/api/studio/vex',
+      method: 'POST',
+      request: { fingerprint: 'automations/arm', context: { automationId: { $ref: '$.armId' }, enabled: { $ref: '$.armOn' } } },
+      errorTarget: 'error',
+    },
   },
   lifecycle: {
-    // The list stopped fetching the picklist when there stopped being one:
-    // the vocabularies belong to the FORM, which is what asks about them.
-    mount: [{ call: 'messages' }, { call: 'load', onSuccess: [{ set: 'loading', value: false }] }],
+    mount: [
+      { call: 'recipes' },
+      { call: 'outbox' },
+      { call: 'load', onSuccess: [{ set: 'loading', value: false }] },
+    ],
   },
   triggers: [
-    // OPEN THE FORM, do not become it. See plans.form.ts.
-    { event: 'ui:click', ref: 'add', do: [{ push: { action: 'automations.form', canvas: 'sheet', with: ['sheet'], input: { heading: 'Add an automation' } } }] },
+    // The two faces. The option carries which panels it shows, so one trigger
+    // serves both and the layout's guards are plain values.
+    {
+      event: 'ui:click',
+      ref: 'view',
+      do: [
+        { set: 'view', value: '@event.payload.value' },
+        { set: 'showRecipes', value: '@event.payload.showRecipes' },
+        { set: 'showRunning', value: '@event.payload.showRunning' },
+        { set: 'showOutbox', value: '@event.payload.showOutbox' },
+      ],
+    },
+
+    {
+      event: 'ui:click',
+      ref: 'useRecipe',
+      do: [
+        {
+          push: {
+            action: 'automations.form',
+            canvas: 'sheet',
+            with: ['sheet'],
+            input: {
+              heading: '@event.payload.heading',
+              automationId: '@event.payload.automation_id',
+              moment: '@event.payload.moment',
+              effect: '@event.payload.effect',
+              runAt: '@event.payload.run_at',
+              days: '@event.payload.days',
+              subject: '@event.payload.subject',
+              body: '@event.payload.body',
+              momentPhrase: '@event.payload.moment_phrase',
+              momentBlurb: '@event.payload.moment_blurb',
+              effectPhrase: '@event.payload.effect_phrase',
+              effectBlurb: '@event.payload.effect_blurb',
+              watched: '@event.payload.watched',
+              usesDays: '@event.payload.uses_days',
+              daysLabel: '@event.payload.days_label',
+              usesMessage: '@event.payload.uses_message',
+              subjectLabel: '@event.payload.subject_label',
+              bodyLabel: '@event.payload.body_label',
+              messageHint: '@event.payload.message_hint',
+            },
+          },
+        },
+      ],
+    },
+
+    { event: 'ui:click', ref: 'add', do: [{ push: { action: 'automations.form', canvas: 'sheet', with: ['sheet'], input: { heading: 'Build an automation' } } }] },
     {
       event: 'ui:click',
       ref: 'edit',
@@ -76,24 +127,31 @@ export const automationsAction: ActionDefinition = {
             input: {
               heading: 'Change an automation',
               automationId: '@event.payload.automation_id',
-              audience: '@event.payload.audience',
+              moment: '@event.payload.moment',
               effect: '@event.payload.effect',
               subject: '@event.payload.subject',
               body: '@event.payload.body',
               runAt: '@event.payload.run_at',
-              trialDays: '@event.payload.trial_days',
+              days: '@event.payload.days',
               enabled: '@event.payload.enabled',
+              momentPhrase: '@event.payload.moment_phrase',
+              momentBlurb: '@event.payload.moment_blurb',
+              effectPhrase: '@event.payload.effect_phrase',
+              effectBlurb: '@event.payload.effect_blurb',
+              watched: '@event.payload.watched',
+              usesDays: '@event.payload.uses_days',
+              daysLabel: '@event.payload.days_label',
+              usesMessage: '@event.payload.uses_message',
+              subjectLabel: '@event.payload.subject_label',
+              bodyLabel: '@event.payload.body_label',
+              messageHint: '@event.payload.message_hint',
             },
           },
         },
       ],
     },
-    // The form announces; this reloads all three views of the same fact — what
-    // is set up, what tide holds, and what it has done.
-    // RELOAD then re-read: a new row is not an automation until tide holds it,
-    // and the list now shows the difference ('Not loaded') rather than claiming
-    // everything configured is armed.
-    { message: 'automations-changed', do: [{ call: 'reload' }, { call: 'load' }] },
+    { message: 'automations-changed', do: [{ call: 'load' }, { call: 'recipes' }] },
+
     {
       event: 'ui:click',
       ref: 'preview',
@@ -101,13 +159,15 @@ export const automationsAction: ActionDefinition = {
         { set: 'error', value: '' },
         { set: 'notice', value: '' },
         { set: 'reflexId', value: '@event.payload.reflex_id' },
-        { set: 'previewName', value: '@event.payload.intent' },
+        { set: 'previewName', value: '@event.payload.name' },
         {
           call: 'preview',
           onSuccess: [
             { set: 'previewOpen', value: true },
             { set: 'previewSummary', value: '$.previewResult.summary' },
+            { set: 'previewHint', value: '$.previewResult.hint' },
             { set: 'previewUnits', value: '$.previewResult.units' },
+            { set: 'previewAnyone', value: '$.previewResult.anyone' },
           ],
         },
       ],
@@ -121,7 +181,7 @@ export const automationsAction: ActionDefinition = {
         { set: 'reflexId', value: '@event.payload.reflex_id' },
         {
           call: 'run',
-          onSuccess: [{ set: 'notice', value: 'Ran it. Anything it did is below.' }, { call: 'load' }, { call: 'messages' }],
+          onSuccess: [{ set: 'notice', value: 'Ran it. Anything it produced is on the follow-up list or in the outbox.' }, { call: 'load' }, { call: 'outbox' }],
         },
       ],
     },
@@ -130,12 +190,12 @@ export const automationsAction: ActionDefinition = {
     {
       event: 'ui:click',
       ref: 'pause',
-      do: [{ set: 'reflexId', value: '@event.payload.reflex_id' }, { set: 'armOn', value: false }, { call: 'setArm', onSuccess: [{ set: 'notice', value: 'Paused. The clock will not fire it; you still can.' }, { call: 'load' }] }],
+      do: [{ set: 'armId', value: '@event.payload.automation_id' }, { set: 'armOn', value: false }, { call: 'setArm', onSuccess: [{ set: 'notice', value: 'Paused. It will not fire on its own; you still can.' }, { call: 'load' }] }],
     },
     {
       event: 'ui:click',
       ref: 'arm',
-      do: [{ set: 'reflexId', value: '@event.payload.reflex_id' }, { set: 'armOn', value: true }, { call: 'setArm', onSuccess: [{ set: 'notice', value: 'Armed.' }, { call: 'load' }] }],
+      do: [{ set: 'armId', value: '@event.payload.automation_id' }, { set: 'armOn', value: true }, { call: 'setArm', onSuccess: [{ set: 'notice', value: 'Armed.' }, { call: 'load' }] }],
     },
   ],
 };

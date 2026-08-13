@@ -3,9 +3,10 @@ import { studioCurrent, membersActiveCount, checkInsTodayCount } from './studio.
 import { revenueAtRisk, revenueCommitted, revenueExpected, revenueLeaving } from './forecast.entries';
 import { sessionsToday, sessionsUpcoming, programsList } from './schedule.entries';
 import { sessionAttending, sessionDetail } from './session.entries';
-import { membersList, membersMatching, memberById, plansList } from './member.entries';
-import { memberEnd, memberReactivate, memberUpdate } from './member.mutations';
-import { studioSetTheme, themeCurrent, themesList } from './theme.entries';
+import { peopleList, peopleCount, personById, offeringsList, offeringOptions, offeringsOnSale } from './member.entries';
+import { personAnchorUpdate } from './member.mutations';
+import { subscriptionAssert, subscriptionBillable, subscriptionForMember, subscriptionGiveNotice, subscriptionWithdrawNotice, subscriptionStart, subscriptionRecordPayment, subscriptionEnd, subscriptionPause, subscriptionResume, myMembership, passSell, passesForPerson } from './subscription.entries';
+import { localeCurrent, studioSetLocale, studioSetTheme, themeCurrent, themesList } from './theme.entries';
 import { bookableForSession, bookingCancel, bookingCreate, checkInMark, rosterForSession, walkInsToday } from './desk.entries';
 import {
   programCreate,
@@ -15,37 +16,24 @@ import {
   teachersList,
   templateById,
   templateCreate,
-  templateRestore,
-  templateRetire,
+  templatesCreateEach,
+  templateSetActive,
   templateUpdate,
   templatesList,
   eventCreate,
 } from './timetable.entries';
-import { staffById, staffCreate, staffDeactivate, staffList, staffReactivate, staffSetRole } from './staff.entries';
-import { bookClass, cancelMyBooking, myBookedSessions, myBookings, myCard } from './me.entries';
-import { attendedOnDay, membersLapsedAway, bookingsToday, enrolmentsStarting, membershipsEnded, membershipsPaused, subscriptionsEnding, automationCreate, automationUpdate, automationsList, bookingsOnDay, joinedRecently, lapseTrial, notificationsRecent, notify, trialsDue, waitingForASeat } from './tide.entries';
-import { courseCreate, courseRestore, courseRetire, courseRoster, courseUpdate, coursesList, enrolMember, enrolmentsForMember, joinCourse, leaveCourse, myEnrolments, withdrawMember } from './course.entries';
-import { membershipCreate, personByEmail, personCreate } from './intake.entries';
-import { leadSetStatus, leadsBySource, leadsList } from './lead.entries';
-import { addonInstall, addonReenable, addonUninstall, addonsInstalled, addonsList } from './addon.entries';
-import { attendanceByHour, attendanceByProgram, attendanceByWeek, membersByStatus, planCreate, planRestore, planRetire, planUpdate, planUptake } from './reports.entries';
+import { staffById, staffCreate, staffEnroll, staffList, staffSetActive, staffSetRole } from './staff.entries';
+import { bookClass, cancelMyBooking, myBookedSessions, myBookings, myCard, myPasses } from './me.entries';
+import { enquiredPerson, membersLapsedAway, automationArm, automationCreate, automationUpdate, automationsList, automationRecipes, automationRuns, bookingsOnDay, joinedSubscription, followUpsOpen, notificationsUnseen, notificationsMarkSeen, outboxRecent, closeFollowUp, notify, queueMessage, trialsDue } from './tide.entries';
+import { courseCreate, courseSetActive, courseRoster, courseUpdate, coursesList, enrolMember, enrolmentsForMember, joinCourse, leaveCourse, myEnrolments, withdrawMember } from './course.entries';
+import { studioPersonCreate, peopleEnroll, personByEmail, personCreate } from './intake.entries';
+import { addonInstall, addonUninstall, addonsInstalled, addonsList } from './addon.entries';
+import { attendanceByHour, attendanceByProgram, attendanceByWeek, membersByStatus, offeringCreate, offeringSetActive, offeringUpdate, planUptake } from './reports.entries';
 
-// THE APP'S ENTIRE API SURFACE, in one list.
-//
-// Warm-only: these are seeded into vex_cache at boot, served locked and
-// replay-only, and no LLM hooks are wired (D3). An unknown fingerprint is a 500
-// rather than a silent generate — enforced twice, by the lock and by the
-// absence of a generator.
-//
-// Which means this file is the honest answer to "what can this application ask
-// the database". Not "what could it" — what it does. Adding a read is adding a
-// line here, and a screen that wants something not on this list has to say so
-// out loud.
 export type CacheEntry = SeedEntry;
 export type MutationEntry = SeedMutation;
 
 export const ENTRIES: CacheEntry[] = [
-  // the studio and its headline figures
   studioCurrent,
   membersActiveCount,
   checkInsTodayCount,
@@ -53,119 +41,115 @@ export const ENTRIES: CacheEntry[] = [
   revenueCommitted,
   revenueLeaving,
   revenueAtRisk,
-  // the timetable, as classes happen
   sessionsToday,
-  // one class, and who is in it
   sessionDetail,
   sessionAttending,
   sessionsUpcoming,
   programsList,
-  // the roll
   addonsList,
   addonsInstalled,
-  leadsList,
-  leadsBySource,
-  membersList,
-  membersMatching,
-  memberById,
-  plansList,
-  // the look
+  // The roll, lensed: the lens is a context value, not a fingerprint.
+  peopleList,
+  peopleCount,
+  personById,
+  offeringsList,
+  offeringOptions,
+  offeringsOnSale,
   themeCurrent,
   themesList,
-  // the front desk
+  localeCurrent,
   rosterForSession,
   walkInsToday,
   bookableForSession,
-  // the timetable, as rules
   templatesList,
   templateById,
   teachersList,
-  // who works here
   staffList,
   staffById,
   myCard,
+  myPasses,
+  myMembership,
   myBookings,
   myBookedSessions,
   coursesList,
   courseRoster,
   enrolmentsForMember,
   myEnrolments,
+  passesForPerson,
   trialsDue,
+  automationRuns,
   bookingsOnDay,
-  notificationsRecent,
+  followUpsOpen,
+  notificationsUnseen,
+  outboxRecent,
   automationsList,
-  joinedRecently,
-  attendedOnDay,
-  waitingForASeat,
-  bookingsToday,
-  subscriptionsEnding,
-  membershipsEnded,
-  enrolmentsStarting,
-  membershipsPaused,
+  automationRecipes,
+  joinedSubscription,
+  enquiredPerson,
   membersLapsedAway,
-  // signing somebody up
   personByEmail,
-  // the view from above — every one grouped on a denormalised bucket
   attendanceByHour,
   attendanceByWeek,
   attendanceByProgram,
   membersByStatus,
   planUptake,
+  subscriptionForMember,
+  subscriptionBillable,
 ];
 
 // Every write the app can make. Replay-only forever: never generated, linted at
 // seed, and the statement lives server-side where a request cannot see it.
 export const MUTATION_ENTRIES: MutationEntry[] = [
-  // enquiries
-  leadSetStatus,
   addonInstall,
-  addonReenable,
   addonUninstall,
-  // the roll
-  memberUpdate,
-  memberEnd,
-  memberReactivate,
-  // the look
+  personAnchorUpdate,
+  subscriptionStart,
+  subscriptionRecordPayment,
+  subscriptionEnd,
+  passSell,
+  subscriptionGiveNotice,
+  subscriptionPause,
+  subscriptionResume,
+  subscriptionWithdrawNotice,
+  subscriptionAssert,
   studioSetTheme,
-  // the front desk
+  studioSetLocale,
   checkInMark,
   bookingCreate,
   bookingCancel,
-  // the timetable
   templateCreate,
+  templatesCreateEach,
   templateUpdate,
-  templateRetire,
-  templateRestore,
+  templateSetActive,
   sessionCancel,
   sessionRestore,
   programCreate,
   programUpdate,
-  // who works here — the only writes that change what somebody else may do
   bookClass,
   cancelMyBooking,
-  lapseTrial,
   notify,
+  closeFollowUp,
+  notificationsMarkSeen,
+  queueMessage,
   automationCreate,
   automationUpdate,
+  automationArm,
   courseCreate,
   courseUpdate,
-  courseRetire,
-  courseRestore,
+  courseSetActive,
   joinCourse,
   leaveCourse,
   eventCreate,
   enrolMember,
   withdrawMember,
   staffCreate,
+  staffEnroll,
   staffSetRole,
-  staffDeactivate,
-  staffReactivate,
-  // signing somebody up — see intake.entries.ts for why these are two
+  staffSetActive,
   personCreate,
-  membershipCreate,
-  // what the studio sells
-  planCreate,
-  planUpdate,
-  planRetire,
-  planRestore,
+  studioPersonCreate,
+  peopleEnroll,
+  offeringCreate,
+  offeringUpdate,
+  offeringSetActive,
 ];

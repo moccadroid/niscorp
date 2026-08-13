@@ -7,18 +7,6 @@ import { staffDeactivatePrism, staffListPrism, staffReactivatePrism, staffSetRol
 // resolve to nothing — the charter is the ceiling, not this list.
 const ROLE_LABELS: Record<string, string> = { owner: 'Owner', manager: 'Manager', instructor: 'Instructor', desk: 'Front desk' };
 
-// WHO WORKS HERE, AND WHAT THEY MAY DO.
-//
-// The most consequential screen in the application, and the shortest. Changing
-// a role here writes one word to one column; moss re-resolves the charter for
-// that principal and their living shell adopts — a different nav, different
-// surfaces, different data verbs, without anybody signing out.
-//
-// What it CANNOT do is worth as much as what it can. The options are the roles
-// the charter defines; a role that is not in the charter resolves to nothing,
-// and a role that is resolves to exactly what the charter already said. This
-// screen cannot invent a permission, escalate one, or grant something nobody
-// wrote down.
 export const staffListAction: ActionDefinition = {
   id: 'staff.list',
   title: 'Staff',
@@ -32,8 +20,6 @@ export const staffListAction: ActionDefinition = {
     pendingPersonId: '',
     // What the confirmation is about, held as data so the sentence is written
     // once in the layout rather than assembled in three places.
-    // The four the charter defines. A fifth here would resolve to nothing —
-    // the charter is the ceiling, not this list.
     roleOptions: [
       { value: 'owner', label: 'Owner' },
       { value: 'manager', label: 'Manager' },
@@ -43,19 +29,21 @@ export const staffListAction: ActionDefinition = {
     error: '',
     notice: '',
     search: '',
-    // Hiring.
+    // Empty means "the order the entry was written with". The engine reads
+    // these two straight into the ORDER BY — no second fingerprint per column.
+    sortBy: '',
+    sortDir: 'asc',
   },
   layout: staffLayout,
   endpoints: {
     load: { url: '/api/staff/vex', method: 'POST', request: staffListPrism, target: 'staff' },
     setRole: { url: '/api/staff/vex', method: 'POST', request: staffSetRolePrism, errorTarget: 'error' },
-    // The other half of the write: re-read the directory, rebuild the
-    // assignment map, and have moss re-resolve the charter for every living
-    // shell. Without it the row changes and nobody's application does.
-    refresh: { fn: 'staff.refresh' },
-    // Hiring needs a person as well as a staff row, and nothing can link the
-    // two without an id — the same limit that made signing a member up a fn.
-    create: { fn: 'staff.create', errorTarget: 'error' },
+    // A role change alters what the server derives AND what one person's
+    // living shell was seeded with — `world.refresh` re-derives, and resets
+    // the shell named by `pendingPersonId`. Hiring itself is `staff/enroll`
+    // in the form; it stopped being a function the day the write grammar
+    // learned ON CONFLICT and $lookup.
+    refresh: { fn: 'world.refresh' },
     deactivate: { url: '/api/staff/vex', method: 'POST', request: staffDeactivatePrism, errorTarget: 'error' },
     reactivate: { url: '/api/staff/vex', method: 'POST', request: staffReactivatePrism, errorTarget: 'error' },
   },
@@ -63,6 +51,11 @@ export const staffListAction: ActionDefinition = {
   triggers: [
     // Typing IS the interaction — no search button, same as the roll.
     { event: 'ui:model', ref: 'search', do: [{ set: 'search', value: '@event.payload' }, { call: 'load' }] },
+
+    // A header click is a re-read, not a client-side shuffle: the database
+    // owns the order, so the page you are looking at is the sorted one rather
+    // than the first fifty rows rearranged.
+    { event: 'ui:click', ref: 'sort', do: [{ set: 'sortBy', value: '@event.payload.key' }, { set: 'sortDir', value: '@event.payload.dir' }, { call: 'load' }] },
 
     // OPEN THE FORM, do not become it. See plans.form.ts.
     { event: 'ui:click', ref: 'add', do: [{ set: 'error', value: '' }, { set: 'notice', value: '' }, { push: { action: 'staff.form', canvas: 'sheet', with: ['sheet'] } }] },
@@ -73,12 +66,8 @@ export const staffListAction: ActionDefinition = {
       do: [{ call: 'refresh' }, { call: 'load' }, { set: 'notice', value: 'Added. They can sign in with that address now.' }],
     },
 
-    // One ref per role, because a role change is a different decision per role
-    // and the trigger grammar has no conditional. Four small triggers beat one
-    // that has to work out what was meant.
-    // ONE trigger for the whole roster, because the picker carries its row
-    // back with the choice. Four refs used to be needed only because four
-    // buttons could not say which person they belonged to.
+    // One trigger for the whole roster: the picker carries its row back with the
+    // choice, so nothing has to work out which person a button belonged to.
     {
       event: 'ui:click',
       ref: 'role',
@@ -106,10 +95,6 @@ export const staffListAction: ActionDefinition = {
       ],
     },
 
-
-    // The write, once somebody has said yes. A MESSAGE, not a click — the
-    // confirmation is a different action on a different canvas and the two
-    // never reference each other.
     {
       message: 'role-confirmed',
       do: [

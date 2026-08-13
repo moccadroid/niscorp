@@ -1,7 +1,8 @@
 import { defineApp } from '@niscorp/moss';
 import type { NiscApp } from '@niscorp/moss';
+import { DEFAULT_PHRASE_KEYS } from '@niscorp/nova/i18n';
 import { CHARTER } from './charter/charter';
-import { areasFor, landingFor } from './nav/sections';
+import { AREAS, areasFor, landingFor } from './nav/sections';
 import { CATALOG_DEFINITIONS } from './action-catalog';
 import { frameLayout } from './shell/frame.layout';
 import { sheetFragment } from './shell/sheet.fragment';
@@ -9,64 +10,80 @@ import { ENTRIES, MUTATION_ENTRIES } from './vex';
 import { scopeBehaviors } from './vex/behaviors';
 import { RESOURCES } from './vex/resources';
 import { authFunctions } from '@lyra/server/functions/auth';
-import { staffFunctions } from '@lyra/server/functions/staff';
-import { memberFunctions, staffIntakeFunctions } from '@lyra/server/functions/members';
+import { worldFunctions } from '@lyra/server/functions/world';
 import { automationFunctions } from '@lyra/server/functions/automations';
 import { navFunctions } from '@lyra/server/functions/nav';
-import { courseFunctions } from '@lyra/server/functions/courses';
-
-// ═══════════════════════════════════════════════════════════
-// Lyra, the application, as data.
-//
-// Everything here is an authored artifact — the policy document, the action
-// definitions, the shell's canvases. The server derives the rest from these
-// plus a database.
-//
-// The two things this file DERIVES are `scope` and `inputs`, and both are
-// derivations of one fact: which studio a principal belongs to. That is why a
-// browser never sends a studio id — the shell runs on the server and already
-// knows, and the engine enforces it whether or not any layout cooperates.
-// ═══════════════════════════════════════════════════════════
+import { loadDirectory } from '@lyra/server/users';
 
 export type ServerDeps = {
-  // Late-bound: the manifest is built BEFORE the server exists, and the ACL
-  // refresh needs the server. A getter closes that circle without a mutable
-  // module-level reference.
   pool: import('@niscorp/vex').PgPool;
+  // Late-bound: the manifest is built before the server exists, and the ACL
+  // refresh needs the server. A getter closes that circle.
   server: () => import('@niscorp/moss').MossServer;
-  // Late-bound for the same reason: tide is created after the server, because
-  // its seams call the server's own vex surface.
+  // Late-bound too — tide's seams call the server's own vex surface.
   tide: () => import('@niscorp/tide').Tide;
+  // The driver around it: the waking intake the bridge mints through, and
+  // the verb the automations screen fires.
+  driver: () => import('@niscorp/moss').TideDriver;
+  // Re-read the automation rows into tide. Late-bound like everything else
+  // here; the `automations` reaction is its only caller.
+  reloadAutomations: () => Promise<number>;
 };
 
 export type Directory = {
-  person: (principal: string | null) => { id: string; name: string; studioId: string; studioName: string; audience: string; membershipId: string | null } | undefined;
-  everyone: () => { id: string; name: string; email: string; studioName: string; audience: string; membershipId: string | null }[];
+  person: (principal: string | null) => { id: string; name: string; studioId: string; studioName: string; audience: string; studioPersonId: string | null } | undefined;
+  everyone: () => { id: string; name: string; email: string; studioId: string; studioName: string; audience: string; studioPersonId: string | null }[];
   themeFor: (studioId: string) => { name: string; tokens: Record<string, string> };
   /** Integration ids installed for this principal's studio. */
   installedFor: (principal: string | null) => readonly string[];
   /** The principal an integration acts as at a studio — null refuses. */
   integrationActor: (integration: string, studioId: string) => string | null;
   /** Every role a person holds — staff, member, or both. */
-  rolesOf: (person: { audience: string; membershipId: string | null }) => readonly string[];
+  rolesOf: (person: { audience: string; studioPersonId: string | null }) => readonly string[];
   /** The studio's own day, as YYYY-MM-DD. The database computes the same value in `studio_today()`. */
   todayFor: (studioId: string) => string;
   /** How far ahead a read looks, on the same clock. */
   horizonFor: (studioId: string) => string;
+  /** Where a studio trades, ISO-3166 alpha-2 — decides payment methods and which law applies. */
+  countryFor: (studioId: string) => string;
+  /** What language a studio reads in, BCP-47 — decides its words AND its number
+   *  and date formatting. The two travel together on purpose: `de-AT` picks
+   *  German wording and Austrian money, and splitting them is how a screen ends
+   *  up German with American dates. */
+  localeFor: (studioId: string) => string;
+  /** The words for a language, source phrase → translation. */
+  phrasesFor: (locale: string) => Readonly<Record<string, string>>;
+  /** Which languages this deployment holds words for — the switcher's options. */
+  localesFor: () => readonly string[];
+  /** "Guten Morgen, Maren" — the fixed half from the book, the name after it. */
+  greetingFor: (name: string, studioId: string) => string;
 };
 
 const ROLE_LABEL: Record<string, string> = { owner: 'Owner', manager: 'Manager', instructor: 'Instructor', desk: 'Front desk', member: 'Member', automation: 'Automation', integration: 'Integration' };
 
-// Assignments are a FUNCTION of the directory, not an authored document.
+// WHICH RUNG A PACK ACTS ON, derived from the actor's own id.
 //
-// `NiscApp.assignments` is a manifest field today, and for a platform holding
-// hundreds of studios it cannot stay one — every person is an assignment, and
-// people arrive at the speed of sign-ups rather than the speed of releases.
-// Deriving them here keeps the shape honest while making the pressure visible:
-// this is the first thing that moves to rows when the artifact layer lands.
+// An integration actor is `ig_<integration>@<studio>` — the id names the pack,
+// so the rung can too. A pack with a rung of its own gets it; everything else
+// shares `integration`, which holds almost nothing.
+//
+// This is what keeps a payments pack's grants away from a rank tracker. Without
+// it every installed pack is the same principal shape, and widening the shared
+// rung for one of them widens it for all of them.
+const integrationRung = (actorId: string): string | undefined => {
+  if (!actorId.startsWith('ig_')) return undefined;
+  const pack = actorId.slice('ig_'.length).split('@')[0] ?? '';
+  return pack !== '' && CHARTER[pack] !== undefined ? pack : 'integration';
+};
+
+// Derived rather than authored: people arrive at the speed of sign-ups, not
+// releases. First thing that moves to rows when the artifact layer lands.
 const assignmentsFrom = (directory: Directory): Record<string, readonly string[]> => {
   const assignments: Record<string, readonly string[]> = {};
-  for (const person of directory.everyone()) assignments[person.id] = directory.rolesOf(person);
+  for (const person of directory.everyone()) {
+    const rung = integrationRung(person.id);
+    assignments[person.id] = rung === undefined ? directory.rolesOf(person) : [rung];
+  }
   return assignments;
 };
 
@@ -77,87 +94,188 @@ export const buildLyra = (directory: Directory, deps: ServerDeps): NiscApp => {
     assignments,
     actions: CATALOG_DEFINITIONS,
 
-    // The prewarmed API surface — every read the app serves, seeded into the
-    // cache at boot, protected and replay-only. `behaviors` compiles into each
-    // principal's ScopePolicy; `resources` names which tables travel together.
     entries: [...ENTRIES, ...MUTATION_ENTRIES],
     behaviors: scopeBehaviors,
     resources: RESOURCES,
 
-    // What a principal IS beyond its id. moss always injects `{ userId }`; this
-    // adds `studioId`, and that single value is what makes the tenant behaviors
-    // enforce a real boundary. The mapping is application knowledge, which is
-    // exactly why moss asks for it rather than assuming a shape.
     // A grant from `ext.*` is deployment-wide; an installation is not. Moss
     // drops every integration action outside this list.
     installedIntegrations: (principal) => directory.installedFor(principal),
-    // Who an integration IS when its key acts and nobody is driving. The
-    // directory answers (an actor exists exactly as long as the install does);
-    // what lands here is the assignment, because assignments are a function of
-    // the directory (see `assignmentsFrom`) and an actor that appeared when a
-    // studio installed mid-process registers itself the same way, at first use.
+    // An actor exists exactly as long as the install does, so one appearing
+    // mid-process registers its assignment at first use.
     integrationActor: (integration, actsFor) => {
       const actor = directory.integrationActor(integration, actsFor);
       if (actor !== null && app.assignments[actor] === undefined) {
-        (app.assignments as Record<string, readonly string[]>)[actor] = ['integration'];
+        // The same derivation the snapshot uses, so an actor that appears
+        // mid-process lands on the rung its pack would have had at boot — a
+        // second spelling here is how `stripe` would quietly become
+        // `integration` for exactly the installs nobody restarted for.
+        (app.assignments as Record<string, readonly string[]>)[actor] = [integrationRung(actor) ?? 'integration'];
       }
       return actor;
     },
 
-    // WHERE INTEGRATIONS MAY APPEAR — lyra's half of the placement contract.
-    //
-    // The member detail offers a seat: a rider gets the membership on screen
-    // and the person's name, and the detail's own trigger is what binds them
-    // at push time (people.layouts.ts). Two hubs accept placed screens — the
-    // desk's People and the member's own area. Nothing else is on offer, so a
-    // bundle claiming anywhere else is refused at intake with a sentence.
-    // Offered key → where it lives on the host's data. The keys are the
-    // contract; the paths are ours, read by the strip derivation and mirrored
-    // by the detail's push trigger.
-    attachable: { 'people.detail': { membership_id: 'membershipId', person_name: 'member.person_name' } },
-    menuSlots: ['hub.people', 'hub.me'],
+    attachable: { 'people.detail': { person_id: 'personId', person_name: 'member.person_name' } },
+    // A pack may place a screen into these and nowhere else — intake refuses a
+    // placement naming anything absent here. `hub.money` is offered because a
+    // payments pack has somewhere to belong that is not somebody's roster.
+    menuSlots: ['hub.people', 'hub.me', 'hub.money'],
+    // The same ids, in the words this studio's own navigation uses — so the
+    // approval card and the store tile say "under Money" rather than
+    // "under hub.money". Derived from the nav rather than typed twice.
+    placementNames: { ...Object.fromEntries(AREAS.map((area) => [area.id, area.label])), 'people.detail': 'a member’s record' },
     scope: (principal) => {
       const studioId = directory.person(principal)?.studioId ?? '';
-      // TODAY IS SCOPE, exactly like the studio. See users.ts for why: it is
-      // the studio's clock, it is engine-injected, and it cannot be forged or
-      // forgotten. Entries that mean "today" filter on it directly and take no
-      // date from the caller at all.
-      // BOTH ENDS OF THE WINDOW, or neither. The lower bound came from scope
-      // and the upper was computed by the caller from a different clock, so a
-      // fortnight query could be a day long or short at the far end — half a
-      // fix, which is the kind that survives review and fails in production.
-      // `membershipId` is what lets a row rule say "their own booking". It is
-      // NULL for staff who do not train, and that is correct: the rule that
-      // uses it only exists on the member rung.
+      const person = directory.person(principal);
       return {
         studioId,
-        membershipId: directory.person(principal)?.membershipId ?? '',
+        // Set only for people the studio KNOWS (the anchor row) — staff-only
+        // principals and integration actors get '', which is what a pack's
+        // "only somebody the studio knows can pay" check keys on.
+        personId: person?.studioPersonId !== null && person !== undefined ? person.id : '',
+        // Travels in the assertion, so an installed pack learns where a studio
+        // trades without asking it and without a country ever being sent by a
+        // browser. The payments pack held this as a constant until now.
+        country: directory.countryFor(studioId),
+        // Travels in the assertion for the same reason `country` does, and is
+        // read by every vex mapping that renders a date or an amount
+        // (`prisms/format.prism.ts`). Engine-side, so a browser cannot ask to
+        // be shown a different studio's money in its own language.
+        locale: directory.localeFor(studioId),
         today: directory.todayFor(studioId),
         horizon: directory.horizonFor(studioId),
+        automationActor: studioId === '' ? '' : `automation@${studioId}`,
       };
     },
 
-    // The `fn:` seam, server-side: endpoints an action can call, built once per
-    // session so handlers close over the shell and the session's own wire.
-    // Only auth lives here — everything else the app does is a vex entry, and a
-    // function that could have been a query is a discipline break.
-    functions: (session) => ({ ...authFunctions(session), ...memberFunctions(session), ...staffIntakeFunctions(session), ...staffFunctions(session, { pool: deps.pool, app, server: deps.server }), ...automationFunctions(session, { tide: deps.tide, pool: deps.pool }), ...navFunctions(session, { app, directory, pool: deps.pool, server: deps.server }), ...courseFunctions(session) }),
+    // THE WORDS EACH SHELL WEARS. moss applies these in one pass over the
+    // rendered frame, so nothing below this line — no action, no layout, no
+    // component — knows a second language exists.
+    //
+    // Anonymous principals get the login screen in the source language. That
+    // is a real gap and a deliberate one: who is reading is not known until
+    // they sign in, and guessing from an Accept-Language header would mean the
+    // one screen in the app whose language is a guess. See the design doc.
+    phrases: (principal) => {
+      const person = directory.person(principal);
+      return person === undefined ? undefined : directory.phrasesFor(directory.localeFor(person.studioId));
+    },
+    // THIS APP'S DISPLAY-FIELD CONVENTION, declared once.
+    //
+    // Every read that manufactures a word for a screen writes it to a
+    // `*_display` field (`status_display`, `term_display`, `paid_via_display`)
+    // — a convention the vex entries already followed for their own reasons.
+    // Naming it here is what makes the closed-set vocabulary a query invents
+    // translatable without listing forty field names, and without the pass
+    // ever touching a person's name or a plan's title.
+    // Four keys added to nova's default prose props, each for a place this app
+    // renders words that arrive as ROW DATA rather than as layout literals:
+    //   role     — the identity card shows a role LABEL ("Front desk"), not an id
+    //   phrase   — the automation vocabulary tables (`somebody joins`)
+    //   why      — a recipe card's body
+    //   sentence — a recipe card's subtitle, composed from moment + effect
+    //
+    // Deliberately NOT added: anything a form is about to SAVE. A recipe's
+    // email subject and body reach the screen as `Input` values, and `value` is
+    // not a prose key — translating one would show German and save English.
+    // That line is the difference between chrome and content: this pass owns
+    // the words the application says, never the words a studio wrote.
+    phraseKeys: {
+      props: [...DEFAULT_PHRASE_KEYS.props, 'role', 'phrase', 'why', 'sentence'],
+      suffixes: ['_display'],
+    },
+
+    // WRITES THIS APP REACTS TO, declared by table — moss routes the write
+    // observer here, row-less, and nothing below ever string-matches a
+    // fingerprint to find out what happened.
+    reactions: [
+      // A notification landing means "the studio was told something" — a
+      // pack's grading, a dunning outcome, an automation's note — so it fans
+      // out to the studio's connected STAFF over the socket their shells
+      // already run: the chrome hears 'notified', bumps the bell, re-reads
+      // the count. Whoever holds no live shell hears nothing and reads the
+      // rows later; the insert is the durable fact, the push only the news.
+      //
+      // Staff only, and only the rungs that hold the Notices screen — a
+      // member's shell has no bell, and an instructor's rung cannot read
+      // the table.
+      {
+        table: 'notifications',
+        op: 'insert',
+        run: ({ scope }, { deliver }) => {
+          const studioId = String(scope['studioId'] ?? '');
+          if (studioId === '') return;
+          for (const person of directory.everyone()) {
+            if (person.studioId !== studioId) continue;
+            if (person.audience !== 'owner' && person.audience !== 'manager' && person.audience !== 'desk') continue;
+            deliver(person.id, 'notified');
+          }
+        },
+      },
+      // An add-on landing or leaving changes what the directory derives —
+      // installed integrations, catalogs, actor rungs. The resync rides the
+      // WRITE, whoever caused it (the store screen, a pack, a check),
+      // instead of every caller remembering to poke a function afterwards.
+      {
+        table: 'studio_integrations',
+        run: () => {
+          void (async () => {
+            await loadDirectory(deps.pool);
+            deps.server().refresh();
+          })();
+        },
+      },
+      // An automation row changing means the loaded reflexes are stale —
+      // re-reading is the whole point of them being rows: no release, no
+      // restart, and no screen remembering to poke a reload afterwards.
+      {
+        table: 'automations',
+        run: () => {
+          void deps.reloadAutomations().catch((err: unknown) => console.error('[lyra:automations]', err));
+        },
+      },
+    ],
+
+    // The write-fact bridge: every committed write becomes tide facts,
+    // stamped with the identity the write's own scope names — the same
+    // `automation@<studioId>` the studio's reflexes run as, so a fact can
+    // wake this studio's automations and nobody else's. A write with no
+    // studio (an operator surface) names no identity and mints nothing.
+    facts: {
+      // The DRIVER, not bare tide: a minted fact wakes the engine. Boot-
+      // window writes land before it stands up; no driver, no facts —
+      // seeding is not an event stream.
+      tide: () => {
+        try {
+          return deps.driver();
+        } catch {
+          return undefined;
+        }
+      },
+      identity: (scope) => {
+        const as = String(scope['automationActor'] ?? '');
+        return as === '' ? undefined : as;
+      },
+      // Chain headers are believed from the automation rungs and nobody
+      // else: a forged depth could park an innocent chain, and the robots
+      // are the only principals whose writes ARE chain hops.
+      chain: (scope, hints) => (directory.person(String(scope['userId'] ?? ''))?.audience === 'automation' ? hints : undefined),
+    },
+
+    // `world.refresh` re-derives assignments with the SAME `assignmentsFrom`
+    // boot uses — injected, so a refresh cannot disagree with a restart. (Its
+    // predecessor rebuilt from `[audience]` alone, and an instructor who also
+    // trains lost their member role until the next boot.)
+    functions: (session) => ({ ...authFunctions(session), ...worldFunctions(session, { pool: deps.pool, app, server: deps.server, assignments: () => assignmentsFrom(directory), studioOf: (principal) => directory.person(principal)?.studioId ?? '' }), ...automationFunctions(session, { tide: deps.tide, driver: deps.driver, pool: deps.pool, server: deps.server }), ...navFunctions(session, { app, directory, pool: deps.pool }) }),
 
     shell: {
-      // Every canvas names an explicit `actionLayout` with an `ActionSlot`, and
-      // that is not decoration. The slot marker survives flattening and carries
-      // the instance id, which is what a terminal stamps as an event's `origin`
-      // — and nova delivers an event only to the instance the origin names.
-      //
-      // Left to the default top-of-stack render there is no marker, so a click
-      // in a browser sends an origin that matches nothing and the whole
-      // application is silently inert. Headless checks do not catch it: they
-      // call `shell.dispatch` directly and never travel the wire.
+      // Every canvas needs an explicit `actionLayout` with an `ActionSlot`: the
+      // marker carries the instance id a terminal stamps as an event's `origin`,
+      // and without it a browser click matches nothing. Headless checks dispatch
+      // directly and never catch this — see shell-check.
       canvases: [
-        // A CANDIDATE list: the first id the principal actually holds mounts.
-        // Staff boot the staff bar, members the member bar, anonymous holds
-        // neither and gets no chrome at all — nothing branches, and an
-        // ungranted candidate simply is not there.
+        // Candidate lists: the first id the principal actually holds mounts.
+        // Nothing branches, and an ungranted candidate is simply absent.
         {
           id: 'chrome',
           initial: ['chrome.staff', 'chrome.member'],
@@ -165,12 +283,8 @@ export const buildLyra = (directory: Directory, deps: ServerDeps): NiscApp => {
         },
         {
           id: 'main',
-          // A CANDIDATE list, in privilege order: the first landing surface the
-          // principal actually holds mounts. An owner gets the overview, the
-          // desk gets theirs, an instructor and a member get the day. Nobody
-          // chooses, nothing branches, and an ungranted candidate is simply
-          // absent — which is why an instructor's shell never even issues the
-          // revenue request.
+          // In privilege order — which is why an instructor's shell never even
+          // issues the revenue request.
           initial: ['home.overview', 'home.desk', 'home.classes', 'home.member', 'auth.login'],
           actionLayout: {
             if: '$.active',
@@ -179,17 +293,12 @@ export const buildLyra = (directory: Directory, deps: ServerDeps): NiscApp => {
           },
         },
         {
-          // THE SHEET. Empty until something is pushed here, and an empty
-          // canvas renders nothing — so the cost of having it is zero on every
-          // screen that does not use it.
+          // Empty until something is pushed, and an empty canvas renders
+          // nothing — so it costs nothing on screens that do not use it.
           id: 'sheet',
           initial: [],
           actionLayout: {
             if: '$.active',
-            // `$.count` and `$.active.title` come from the canvas scope, so the sheet
-            // knows how deep the stack is without any action telling it — which is
-            // what lets the affordance be a Back rather than a Close when there is
-            // something underneath.
             then: {
               component: 'Sheet',
               props: { open: true, depth: '$.count', title: '$.active.title' },
@@ -202,95 +311,31 @@ export const buildLyra = (directory: Directory, deps: ServerDeps): NiscApp => {
       ],
       layout: frameLayout,
 
-      // THE SHEET RULE, as an artifact rather than a habit.
-      //
-      // Composed into anything pushed with `with: ['sheet']`: it supplies the
-      // escape every overlay must have, so no action can land here and strand
-      // somebody. See shell/sheet.fragment.ts.
+      // Composed into anything pushed with `with: ['sheet']` — supplies the
+      // escape every overlay must have. See shell/sheet.fragment.ts.
       fragments: { sheet: sheetFragment },
 
-      // Per-principal boot input — the app's one derivation hook. A principal
-      // becomes a studio, a name, a role and a palette here, once, on the
-      // server. Everything downstream reads those from action data, and a
-      // terminal has no way to author them.
+      // Per-principal boot input, resolved once on the server. Everything
+      // downstream reads these from action data; a terminal cannot author them.
       inputs: ({ principal, actions: granted }): Record<string, Record<string, unknown>> => {
         const person = directory.person(principal);
 
-        // Which landing surface THIS principal has, resolved from ring 1 — the
-        // same candidate order the canvas uses. The nav bar needs it because
-        // `resetTo` names an action, and the action differs per role; a layout
-        // that chose between three ids would be a layout branching on
-        // capability, which is the thing rule 11 forbids.
-        //
-        // Derived on the server from what the charter already resolved, so it
-        // is not a second source of truth — it is the same one, read.
         const homeId = ['home.overview', 'home.desk', 'home.classes', 'home.member'].find((id) => granted.includes(id)) ?? '';
 
-        // The nav, as rows — filtered to what this principal actually holds.
-        //
-        // It has to be data. A hand-authored bar offered an instructor a
-        // "Members" button they do not hold, which mounted nothing and looked
-        // broken; and a layout that hid it would be a layout branching on
-        // capability (rule 11). Deriving it here from the resolved catalog is
-        // ring 1 doing the work, and a nav item that exists is one that leads
-        // somewhere by construction.
-        //
-        // `resetTo` resolves its `action`, so one ref serves every item and the
-        // payload carries the target — which is what makes a looped nav
-        // possible at all.
-        const trains = person !== undefined && person.membershipId !== null;
+        const trains = person !== undefined && person.studioPersonId !== null;
         const MEMBER_ONLY = new Set(['hub.me']);
 
-        // ── THE MENU: SIX AREAS, AND IT STOPS THERE ─────────────
-        //
-        // Read `nav/sections.ts` for why these six. What matters here is that
-        // this list does not grow when features do: a new screen joins an AREA,
-        // and its siblings become the tab row above it. The flat menu this
-        // replaced gained an entry per feature and was already twelve long.
-        //
-        // Home is not an area — it is where you land and its action differs per
-        // rung, so it comes from `homeId` and appears in no table.
-        // What a studio bought never adds a menu entry: a pack's screens are
-        // PLACED into these areas by its bundle, folded in by `nav.context`.
-        //
-        // AN AREA POINTS AT ITS FIRST SCREEN, not at a page about itself.
-        //
-        // `action` used to be the hub id and the hub was a screen listing
-        // links — a tap that taught nothing. There is no hub now: tapping
-        // People opens the roll, and the roll's siblings are the tab row above
-        // it. `landingFor` picks the first screen the principal actually
-        // holds, so an instructor and an owner can share an area and land
-        // somewhere different inside it without anything branching.
         const offered = areasFor(granted).filter((area) => trains || !MEMBER_ONLY.has(area.id));
         const areas = offered.map((area) => ({ action: landingFor(area), areaId: area.id, label: area.label, icon: area.icon ?? '' }));
 
-        // WHAT A THUMB CAN REACH. Five is the ceiling on a phone and the fifth
-        // slot is More, so four destinations — the ones this rung wants most,
-        // in the order the day runs. Everything else is still one tap away
-        // behind More, which opens the same drawer the desktop rail is.
-        //
-        // HOME TAKES THE FIRST SLOT. It is the only destination everybody has
-        // and the one people return to between tasks; leaving it behind More
-        // would put the most-tapped screen two taps deep. It lights by its own
-        // action, because it is its own area of one.
         const home = { action: homeId, areaId: homeId, label: 'Today', icon: 'home' };
         const primaryAreas = [home, ...areas].slice(0, 4);
 
-
-        // Anonymous: the login page needs the cast to offer. Nothing else is
-        // seeded, because nothing else exists for this principal.
         if (person === undefined) {
           return {
             main: {
-              // The automation and integration principals are NOT offered.
-              //
-              // They are people as far as the directory is concerned — that is
-              // what puts them under the charter — and automations turned up on
-              // the demo sign-in list labelled "Member", which is wrong twice:
-              // an automation is not a member, and nobody should be able to
-              // sign in as one. A principal that never logs in should not be on
-              // the one screen whose whole job is logging in — and an
-              // integration's actor never logs in either; it presents a key.
+              // Automations and integration actors never log in, so they are not
+              // on the one screen whose whole job is logging in.
               people: directory
                 .everyone()
                 .filter((p) => p.audience !== 'automation' && p.audience !== 'integration')
@@ -300,8 +345,12 @@ export const buildLyra = (directory: Directory, deps: ServerDeps): NiscApp => {
         }
 
         const theme = directory.themeFor(person.studioId);
-        const hour = new Date().getHours();
-        const greeting = `Good ${hour < 12 ? 'morning' : hour < 18 ? 'afternoon' : 'evening'}, ${person.name.split(' ')[0] ?? person.name}`;
+
+        // The opening paint's greeting. `nav.identity` recomputes it on mount
+        // with the SAME composer (server/phrases.ts) — two spellings of one
+        // sentence is how a screen greets somebody in German on load and in
+        // English a tick later.
+        const greeting = directory.greetingFor(person.name, person.studioId);
 
         return {
           chrome: {
@@ -309,13 +358,11 @@ export const buildLyra = (directory: Directory, deps: ServerDeps): NiscApp => {
             personName: person.name,
             roleLabel: ROLE_LABEL[person.audience] ?? 'Member',
             homeId,
-            // Home is not in a group; it is where you land.
             home,
             areas,
             primaryAreas,
-            // WHERE YOU ARE at boot, seeded so the first paint is already
-            // right. `nav.context` confirms it on mount and owns it after —
-            // this is the opening value, not a second source of truth.
+            // Opening value only, so the first paint is right. `nav.context`
+            // confirms it on mount and owns it after.
             currentArea: homeId,
             currentLeaf: homeId,
             themeTokens: theme.tokens,
@@ -324,7 +371,6 @@ export const buildLyra = (directory: Directory, deps: ServerDeps): NiscApp => {
           // `studioId` is seeded, not sent: the settings write names the row it
           // touches, and a browser has no way to author which row that is.
           main: { studioId: person.studioId, studioName: person.studioName, personName: person.name, greeting },
-
         };
       },
     },

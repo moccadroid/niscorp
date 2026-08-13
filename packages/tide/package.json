@@ -11,10 +11,10 @@
       "import": "./dist/index.js",
       "require": "./dist/index.cjs"
     },
-    "./postgres": {
-      "types": "./dist/store/postgres.d.ts",
-      "import": "./dist/store/postgres.js",
-      "require": "./dist/store/postgres.cjs"
+    "./testing": {
+      "types": "./dist/testing.d.ts",
+      "import": "./dist/testing.js",
+      "require": "./dist/testing.cjs"
     }
   },
   "files": [

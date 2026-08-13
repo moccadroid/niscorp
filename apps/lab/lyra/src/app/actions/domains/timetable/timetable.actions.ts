@@ -10,8 +10,7 @@ import {
   teachersPrism,
   templateByIdPrism,
   templateCreatePrism,
-  templateRestorePrism,
-  templateRetirePrism,
+  templateSetActivePrism,
   templateUpdatePrism,
   templatesPrism,
   eventCreatePrism,
@@ -35,13 +34,13 @@ export const timetableListAction: ActionDefinition = {
     templates: [],
     loading: true,
     pendingTemplateId: '',
+    pendingActive: false,
     error: '',
   },
   layout: timetableListLayout,
   endpoints: {
     load: { url: '/api/schedule/vex', method: 'POST', request: templatesPrism, target: 'templates' },
-    retire: { url: '/api/schedule/vex', method: 'POST', request: templateRetirePrism, errorTarget: 'error' },
-    restore: { url: '/api/schedule/vex', method: 'POST', request: templateRestorePrism, errorTarget: 'error' },
+    setActive: { url: '/api/schedule/vex', method: 'POST', request: templateSetActivePrism, errorTarget: 'error' },
   },
   lifecycle: {
     mount: [{ call: 'load', onSuccess: [{ set: 'loading', value: false }] }],
@@ -52,24 +51,22 @@ export const timetableListAction: ActionDefinition = {
   triggers: [
     { event: 'ui:click', ref: 'add', do: [{ push: { action: 'timetable.form', canvas: 'sheet', with: ['sheet'], input: { templateId: '', heading: 'Add a class' } } }] },
     { event: 'ui:click', ref: 'addEvent', do: [{ push: { action: 'timetable.event', canvas: 'sheet', with: ['sheet'], input: { heading: 'Add a one-off' } } }] },
-    // A COURSE IS ADDED FROM HERE TOO. It is the same kind of thing with an end
-    // date and a price, so it belongs behind a button on this screen rather
-    // than behind a different screen entirely.
+    // A course is the same kind of thing with an end date and a price, so it
+    // belongs behind a button here rather than on a screen of its own.
     { event: 'ui:click', ref: 'addCourse', do: [{ push: { action: 'courses.form', canvas: 'sheet', with: ['sheet'], input: { heading: 'Add a course' } } }] },
-    // Who is on a block. Only course rows offer it.
     { event: 'ui:click', ref: 'roster', do: [{ push: { action: 'courses.roster', canvas: 'sheet', with: ['sheet'], input: { courseId: '@event.payload.course_id', courseName: '@event.payload.name' } } }] },
     { message: 'courses-changed', do: [{ call: 'load' }] },
     { event: 'ui:click', ref: 'edit', do: [{ push: { action: 'timetable.form', canvas: 'sheet', with: ['sheet'], input: { templateId: '@event.payload.template_id', heading: 'Edit class' } } }] },
+    // Two controls, one write. The menu item that fired says which way it
+    // means, and `pendingActive` carries that into the request.
     {
       event: 'ui:click',
       ref: 'retire',
       do: [
         { set: 'error', value: '' },
         { set: 'pendingTemplateId', value: '@event.payload.template_id' },
-        // `sessions-changed` because retiring a slot removes future classes —
-        // the trigger does that, and every surface showing a timetable needs
-        // to hear it.
-        { call: 'retire', onSuccess: [{ call: 'load' }, { emit: { channel: 'sessions-changed' } }] },
+        { set: 'pendingActive', value: false },
+        { call: 'setActive', onSuccess: [{ call: 'load' }, { emit: { channel: 'sessions-changed' } }] },
       ],
     },
     {
@@ -78,7 +75,8 @@ export const timetableListAction: ActionDefinition = {
       do: [
         { set: 'error', value: '' },
         { set: 'pendingTemplateId', value: '@event.payload.template_id' },
-        { call: 'restore', onSuccess: [{ call: 'load' }, { emit: { channel: 'sessions-changed' } }] },
+        { set: 'pendingActive', value: true },
+        { call: 'setActive', onSuccess: [{ call: 'load' }, { emit: { channel: 'sessions-changed' } }] },
       ],
     },
     { message: 'sessions-changed', do: [{ call: 'load' }] },
@@ -88,14 +86,9 @@ export const timetableListAction: ActionDefinition = {
 export const timetableListInputSchema = z.toJSONSchema(z.object({}));
 
 // ── the slot form ────────────────────────────────────────────
-//
-// One form, create and edit. Loaded bare it creates; loaded with a template id
-// it edits — the working pattern, and the reason there is no "new class" screen
-// separate from this one.
 export const timetableFormAction: ActionDefinition = {
   id: 'timetable.form',
-  // The SHEET renders this, so it has to be the real heading. It said "Class"
-  // while the body said "Add a class" — the same thing titled twice, differently.
+  // The sheet renders this, so it has to be the real heading.
   title: '$.heading',
   data: {
     heading: 'Add a class',
@@ -128,13 +121,6 @@ export const timetableFormAction: ActionDefinition = {
   },
   lifecycle: {
     mount: [
-      // Options first — a Select whose options arrive after its value has
-      // nothing to show for it.
-      // The reads hand back option shapes already, and the Select supplies its
-      // own "Unassigned" entry. A trigger's `set` resolves bindings but does
-      // NOT evaluate Prism ops, so mapping rows into `{ value, label }` here
-      // would send the expression itself to the browser — where the component
-      // throws on it and takes the page down with it.
       { call: 'programs' },
       { call: 'teachers' },
       // Then the record, when there is one. Loaded bare, `templateId` is empty
@@ -154,10 +140,6 @@ export const timetableFormAction: ActionDefinition = {
     ],
   },
   triggers: [
-    // Create and update are different statements and the trigger grammar has no
-    // conditional, so they are different refs — and the layout shows whichever
-    // one applies. Branching on the template id is branching on ordinary DATA,
-    // which is fine: rule 11 forbids branching on ROLES, not on values.
     {
       event: 'ui:click',
       ref: 'save',
@@ -204,8 +186,8 @@ export const programsAction: ActionDefinition = {
   },
   lifecycle: { mount: [{ call: 'load', onSuccess: [{ set: 'loading', value: false }] }] },
   triggers: [
-    // OPEN THE FORM, do not become it. Same move as the plan list: the screen
-    // stopped holding a draft program and now seeds one into the sheet.
+    // Open the form, do not become it: the screen holds no draft, it seeds one
+    // into the sheet.
     { event: 'ui:click', ref: 'add', do: [{ push: { action: 'programs.form', canvas: 'sheet', with: ['sheet'], input: { heading: 'Add a class type' } } }] },
     {
       event: 'ui:click',
@@ -227,7 +209,6 @@ export const programsAction: ActionDefinition = {
         },
       ],
     },
-    // The form announces; this listens.
     { message: 'sessions-changed', do: [{ call: 'load' }] },
   ],
 };
@@ -235,17 +216,6 @@ export const programsAction: ActionDefinition = {
 export const programsInputSchema = z.toJSONSchema(z.object({}));
 
 // ── a one-off ────────────────────────────────────────────────
-//
-// Its own action rather than a mode on the slot form, for the same reason the
-// roll and the sign-up are separate: they are different things to be looking
-// at. A weekly rule has a weekday and no date; a one-off has a date and no
-// weekday, and one form carrying both would spend its life explaining which
-// half to ignore.
-//
-// This is the only write in the application that makes a `class_sessions` row
-// directly. Everywhere else they are derived from a template by a trigger —
-// which is why `template_id` being nullable was already the whole feature, and
-// this is only the screen that was missing.
 export const eventFormAction: ActionDefinition = {
   id: 'timetable.event',
   title: '$.heading',

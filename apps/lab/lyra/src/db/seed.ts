@@ -1,45 +1,88 @@
-// Lyra's demo dataset — two studios that could not look less alike.
-//
-// The pair is the point. Lumen is a yoga studio: calm, morning-heavy, a few
-// large classes. North Rock is a BJJ gym: evening-heavy, more sessions, smaller
-// rooms, a competition team. They run the same deployment, the same actions and
-// the same charter, and when the theming step lands they will not look remotely
-// like the same product. Everything a check needs to prove tenancy — that
-// Lumen's owner cannot see one North Rock member — lives in this file.
-//
-// Authored above, generated below. The named people and the weekly grid are
-// written by hand because they are read; the term's worth of sessions, bookings
-// and attendance is generated in SQL because nobody reads four hundred rows,
-// they only need to be there, be plausible, and be identical every boot.
-
 import { at, day, insert, raw, type Val } from './sql';
+import { EFFECTS, MOMENTS } from '@lyra/app/reflexes/compose';
+import { RECIPES } from '@lyra/app/reflexes/recipes';
+import { GERMAN } from './phrases.de';
 
 export const LUMEN = 'st_lumen';
 export const NORTHROCK = 'st_northrock';
 
+// ─── the vocabulary, projected ───────────────────────────────
+//
+// PROJECTED FROM THE SHIPPED CONSTANTS, never typed twice. A moment's
+// behaviour is code — its `watch` anchor and its `context` are functions —
+// but everything a SCREEN says about it is presentation, and presentation
+// belongs in rows where a vex entry can join it and compose a sentence on
+// the way out. This is the same move `themes` made, for the same reason.
+//
+// It is generated here rather than upserted at boot because this is where
+// rows come from: the database is rebuilt from this file every start, so
+// there is exactly one moment in the lifecycle where the projection could
+// drift, and it does not exist.
+const vocabulary = [
+  insert(
+    'automation_moments',
+    ['id', 'phrase', 'blurb', 'watched', 'days_label', 'sort'],
+    MOMENTS.map((moment, index) => [moment.id, moment.label, moment.blurb, moment.watch !== undefined, moment.daysLabel ?? '', index]),
+  ),
+  insert(
+    'automation_effects',
+    ['id', 'phrase', 'blurb', 'subject_label', 'body_label', 'message_hint', 'sort'],
+    EFFECTS.map((effect, index) => [
+      effect.id,
+      effect.label,
+      effect.blurb,
+      effect.words?.subject ?? '',
+      effect.words?.body ?? '',
+      effect.words?.hint ?? '',
+      index,
+    ]),
+  ),
+  insert(
+    'automation_recipes',
+    ['id', 'title', 'why', 'icon', 'moment', 'effect', 'run_at', 'days', 'subject', 'body', 'sort'],
+    RECIPES.map((recipe, index) => [
+      recipe.id,
+      recipe.title,
+      recipe.why,
+      recipe.icon,
+      recipe.moment,
+      recipe.effect,
+      recipe.run_at,
+      recipe.days,
+      recipe.subject,
+      recipe.body,
+      index,
+    ]),
+  ),
+].join('\n');
+
 // ─── the studios ─────────────────────────────────────────────
 
+// TWO STUDIOS IN VIENNA READING DIFFERENT LANGUAGES. Not a contrivance — it is
+// the demo's whole point for i18n: one deployment, one set of actions, one set
+// of rows, and two shells whose every word and every amount differ. Anything
+// that leaks between them is a bug the seed makes visible.
 const studios = insert(
   'studios',
-  ['id', 'name', 'slug', 'kind', 'timezone', 'theme_id'],
+  ['id', 'name', 'slug', 'kind', 'timezone', 'locale', 'theme_id'],
   [
-    [LUMEN, 'Lumen Yoga', 'lumen', 'yoga', 'Europe/Vienna', 'th_sand'],
-    [NORTHROCK, 'North Rock BJJ', 'northrock', 'bjj', 'Europe/Vienna', 'th_charcoal'],
+    [LUMEN, 'Lumen Yoga', 'lumen', 'yoga', 'Europe/Vienna', 'de-AT', 'th_sand'],
+    [NORTHROCK, 'North Rock BJJ', 'northrock', 'bjj', 'Europe/Vienna', 'en-GB', 'th_charcoal'],
   ],
 );
 
+// ─── the words ───────────────────────────────────────────────
+//
+// Keyed `de`: Vienna and Hamburg read the same sentences. What differs is the
+// money and the dates, and `Intl` derives that from the studio's full tag —
+// so Lumen's `de-AT` gets these words and Austrian formatting from one row set.
+const phrases = insert(
+  'phrases',
+  ['locale', 'source', 'text'],
+  Object.entries(GERMAN).map(([source, text]) => ['de', source, text]),
+);
+
 // ─── the looks ───────────────────────────────────────────────
-//
-// A theme is a token set, held as a row. Nothing else in the application
-// changes when a studio wears one — no layout, no component, no query — because
-// every colour in the kit already resolves through a custom property.
-//
-// Two studios, two looks, one deployment. That is the product claim, and this
-// is the whole of what makes it true on the surface axis.
-//
-// A studio with `theme_id` NULL gets `{}`, which IS the stock palette — the
-// path for "this studio never customised anything" is the same path as
-// everything else, not a special case.
 const themes = insert(
   'themes',
   ['id', 'name', 'tokens'],
@@ -68,9 +111,6 @@ const themes = insert(
     [
       'th_charcoal',
       'Charcoal',
-      // Hard and dark, with the neon turned up — the accent reads as a light
-      // source on a dark ground rather than a highlighter on paper. What a
-      // fight gym would pick.
       JSON.stringify({
         ground: '#0c0c0d',
         surface: '#151517',
@@ -84,11 +124,6 @@ const themes = insert(
         accent: '#ccff00',
         'accent-ink': '#0c0c0d',
         'accent-soft': '#232a05',
-        // ONE WORD INSTEAD OF FOUR HAND-MIXED BACKGROUNDS. This used to list
-        // `calm-soft`, `warm-soft`, `alert-soft` and `good-soft` and could not
-        // touch the foregrounds at all — so every badge sat at the light
-        // theme's 700-level ink on a dark tint and failed contrast. `scheme`
-        // swaps the whole tuned set, hues included.
         scheme: 'dark',
         'radius-lg': '10px',
       }),
@@ -97,10 +132,6 @@ const themes = insert(
 );
 
 // ─── people ──────────────────────────────────────────────────
-//
-// Email is the login identity: a magic link is the only way in, so the address
-// is the account. Two studios, no shared humans — v1 is one studio per account
-// (PLAN.md), and the seed does not quietly contradict the decision.
 
 type Person = { id: string; email: string; name: string; phone: string };
 
@@ -126,21 +157,11 @@ const NORTHROCK_PEOPLE: Person[] = [
   { id: 'p_luca', email: 'luca.stein@example.com', name: 'Luca Stein', phone: '+43 660 4005' },
 ];
 
-// The automations are people too, as far as identity is concerned — that is
-// the point. No magic link will ever be sent to these addresses; the address
-// exists because the directory is keyed on people, and an automation that
-// resolved through some other path would be an automation the charter does not
-// govern.
 const ROBOTS: Person[] = [
   { id: 'p_auto_lumen', email: 'automation@lumen.studio', name: 'Lumen automations', phone: '' },
   { id: 'p_auto_northrock', email: 'automation@northrock.gym', name: 'North Rock automations', phone: '' },
 ];
 
-// PROSPECTS AND OUTSIDERS ARE PEOPLE, and that is the whole change. They used
-// to be rows in a `leads` table with their own name/email/phone — a second
-// class of human who could never become the first without being retyped.
-// Their relationship to a studio is a membership at stage zero, or a
-// connection; who they ARE is a row here, like everybody else.
 const PROSPECTS: Person[] = [
   { id: 'p_priya', email: 'priya.anand@example.com', name: 'Priya Anand', phone: '+43 660 5001' },
   { id: 'p_tomv', email: 'tom.vogel@example.com', name: 'Tom Vogel', phone: '+43 660 5002' },
@@ -164,12 +185,6 @@ const people = insert(
 );
 
 // ─── who works where ─────────────────────────────────────────
-//
-// Maren owns Lumen and teaches; Ines runs the desk; Tobias teaches only. Dario
-// owns North Rock and coaches; Kaya coaches and manages. An instructor who also
-// trains holds BOTH a staff row and a membership — which is the case the
-// "am I staff or a member" branch would get wrong if the data model had one
-// table instead of two.
 
 const staff = insert(
   'staff',
@@ -181,105 +196,87 @@ const staff = insert(
     ['sf_dario', NORTHROCK, 'p_dario', 'owner', true],
     ['sf_kaya', NORTHROCK, 'p_kaya', 'manager', true],
 
-    // THE AUTOMATION PRINCIPAL, one per studio.
-    //
-    // A reflex is not a script with database access; it is somebody with a
-    // charter role. Giving each studio's automations a staff row means they
-    // arrive at the vex surface exactly as a person does — resolved through the
-    // directory, scoped by `scope()`, refused by the same compiled policy.
-    //
-    // The consequence worth stating: Lumen's nightly job physically cannot
-    // touch a North Rock row, and nothing in the automation code is what makes
-    // that true. It is the same boundary a front desk stands behind.
-    //
-    // They hold no membership, so they never appear on a roll, and the
-    // `automation` rung grants no actions at all — there is no shell to build.
     ['sf_auto_lumen', LUMEN, 'p_auto_lumen', 'automation', true],
     ['sf_auto_northrock', NORTHROCK, 'p_auto_northrock', 'automation', true],
   ],
 );
 
-// ─── memberships ─────────────────────────────────────────────
+// ─── the anchor: everyone each studio knows ──────────────────
 //
-// Every status in the lifecycle appears at least once, because a screen that
-// has only ever seen `active` is a screen nobody tested. Tobias and Kaya are
-// staff who also train.
-
-const memberships = insert(
-  'memberships',
-  ['id', 'studio_id', 'person_id', 'status', 'source', 'joined_on', 'ended_on', 'notes'],
+// One row per (studio, human). What each of them IS — member, prospect, pass
+// holder, contact — is never written here: it derives from the entitlements
+// and tags seeded further down. See standing.ts.
+const studioPeople = insert(
+  'studio_people',
+  ['id', 'studio_id', 'person_id', 'source', 'first_seen_on', 'trial_ends_on', 'notes'],
   [
-    ['mb_ava', LUMEN, 'p_ava', 'active', 'referral', day(-420, LUMEN), null, ''],
-    ['mb_jonas', LUMEN, 'p_jonas', 'active', 'website', day(-180, LUMEN), null, ''],
-    ['mb_lena', LUMEN, 'p_lena', 'trialling', 'event', day(-9, LUMEN), null, 'Two-week trial, came from the Saturday open class.'],
-    ['mb_mira', LUMEN, 'p_mira', 'paused', 'walk-in', day(-300, LUMEN), null, 'Paused until her shoulder clears — back in March.'],
-    ['mb_felix', LUMEN, 'p_felix', 'lapsed', 'social', day(-600, LUMEN), day(-40, LUMEN), 'Card expired, no reply to two emails.'],
-    ['mb_sofia', LUMEN, 'p_sofia', 'active', 'website', day(-75, LUMEN), null, ''],
-    ['mb_tobias', LUMEN, 'p_tobias', 'active', 'other', day(-500, LUMEN), null, 'Teaches Wednesday and Friday.'],
-    ['mb_omar', NORTHROCK, 'p_omar', 'active', 'referral', day(-800, NORTHROCK), null, 'Competition team.'],
-    ['mb_nina', NORTHROCK, 'p_nina', 'active', 'walk-in', day(-210, NORTHROCK), null, ''],
-    ['mb_ruben', NORTHROCK, 'p_ruben', 'active', 'website', day(-95, NORTHROCK), null, ''],
-    ['mb_hana', NORTHROCK, 'p_hana', 'trialling', 'event', day(-4, NORTHROCK), null, 'First week. Zero grappling experience — flag for the fundamentals class.'],
-    ['mb_luca', NORTHROCK, 'p_luca', 'cancelled', 'referral', day(-700, NORTHROCK), day(-120, NORTHROCK), 'Moved to Graz.'],
-    ['mb_kaya', NORTHROCK, 'p_kaya', 'active', 'other', day(-900, NORTHROCK), null, ''],
+    ['sp_ava', LUMEN, 'p_ava', 'referral', day(-420, LUMEN), null, ''],
+    ['sp_jonas', LUMEN, 'p_jonas', 'website', day(-180, LUMEN), null, ''],
+    // A live trial BESIDE a subscription: the desk's question during the window
+    // is "will she stay", so trialling outranks active until it closes.
+    ['sp_lena', LUMEN, 'p_lena', 'event', day(-9, LUMEN), day(4, LUMEN), 'Two-week trial, came from the Saturday open class.'],
+    ['sp_mira', LUMEN, 'p_mira', 'walk-in', day(-300, LUMEN), null, 'Paused until her shoulder clears — back in March.'],
+    ['sp_felix', LUMEN, 'p_felix', 'social', day(-600, LUMEN), day(-586, LUMEN), 'Trialled, never signed. No reply to two emails.'],
+    ['sp_sofia', LUMEN, 'p_sofia', 'website', day(-75, LUMEN), null, ''],
+    ['sp_tobias', LUMEN, 'p_tobias', 'other', day(-500, LUMEN), null, 'Teaches Wednesday and Friday.'],
+    ['sp_omar', NORTHROCK, 'p_omar', 'referral', day(-800, NORTHROCK), null, 'Competition team.'],
+    ['sp_nina', NORTHROCK, 'p_nina', 'walk-in', day(-210, NORTHROCK), null, ''],
+    ['sp_ruben', NORTHROCK, 'p_ruben', 'website', day(-95, NORTHROCK), null, ''],
+    // Trial closed yesterday and NO entitlement behind it — the person to talk
+    // to today, derived as trial-over rather than stored by a job.
+    ['sp_hana', NORTHROCK, 'p_hana', 'event', day(-22, NORTHROCK), day(-1, NORTHROCK), 'Trial ran out yesterday. Ask her about a plan.'],
+    ['sp_luca', NORTHROCK, 'p_luca', 'referral', day(-700, NORTHROCK), null, 'Moved to Graz.'],
+    ['sp_kaya', NORTHROCK, 'p_kaya', 'other', day(-900, NORTHROCK), null, ''],
+
+    // ── prospects: known, no entitlement yet ──
+    ['sp_priya', LUMEN, 'p_priya', 'website', day(-2, LUMEN), null, 'Asked about beginner classes on a weekday evening.'],
+    // Tom Vogel: the canonical self-service subject. A live trial a week out
+    // and NOTHING else — a fresh human standing exactly at the plan-choice
+    // cliff. See docs/plans/lyra-model-overhaul.md Part 8; his arc is the test.
+    ['sp_tomv', LUMEN, 'p_tomv', 'referral', day(-9, LUMEN), day(7, LUMEN), 'Ava sent him. Rang Tuesday, wants to try Yin.'],
+    ['sp_ida', LUMEN, 'p_ida', 'walk-in', day(-4, LUMEN), null, 'Came in off the street. Booked into Saturday.'],
+    // Lost is a relationship that produced nothing — the same anchor row,
+    // holding only its history. Not a fourth kind of person.
+    ['sp_rafi', LUMEN, 'p_rafi', 'social', day(-40, LUMEN), null, 'Price. Went to the studio on Hauptstrasse.'],
+    ['sp_mila', NORTHROCK, 'p_mila', 'event', day(-1, NORTHROCK), null, 'Open mat day. Wants the fundamentals block.'],
+
+    // ── the people a studio only DEALS with ──
+    // The milkman case: an anchor row plus a contact tag, no entitlement ever.
+    // He resolves as a principal now — the old directory dropped him entirely.
+    ['sp_bo', LUMEN, 'p_bo', 'other', day(-370, LUMEN), null, ''],
+    ['sp_gretel_l', LUMEN, 'p_gretel', 'other', day(-500, LUMEN), null, ''],
+    ['sp_gretel_n', NORTHROCK, 'p_gretel', 'other', day(-450, NORTHROCK), null, ''],
+    ['sp_wim', NORTHROCK, 'p_wim', 'other', day(-30, NORTHROCK), null, ''],
   ],
 );
 
-// ─── plans ───────────────────────────────────────────────────
+// ─── offerings ───────────────────────────────────────────────
 
-// The terms are DELIBERATELY UNEVEN. A seed where every plan is rolling with no
-// notice makes a forecast that ignores both look correct — which is how the old
-// figure survived while silently excluding annual members altogether.
-const plans = insert(
-  'plans',
-  ['id', 'studio_id', 'name', 'price_cents', 'currency', 'interval', 'class_allowance', 'active', 'minimum_term_months', 'notice_days'],
+// The terms are deliberately UNEVEN: a seed where every plan is rolling with no
+// notice makes a forecast that ignores both look correct. The pass rows are
+// what the old model could not say at all — €18, one class, not a member.
+const offerings = insert(
+  'offerings',
+  ['id', 'studio_id', 'name', 'kind', 'price_cents', 'currency', 'interval', 'class_allowance', 'active', 'minimum_term_months', 'notice_days', 'credits', 'valid_days'],
   [
     // Rolling, a month's notice — the commonest shape.
-    ['pl_lumen_unlimited', LUMEN, 'Unlimited', 11900, 'EUR', 'month', null, true, 0, 30],
+    ['pl_lumen_unlimited', LUMEN, 'Unlimited', 'recurring', 11900, 'EUR', 'month', null, true, 0, 30, null, null],
     // Cancel any time: the plan a studio sells to hesitant people.
-    ['pl_lumen_eight', LUMEN, 'Eight a month', 8900, 'EUR', 'month', 8, true, 0, 0],
-    // Twelve months up front. Its monthly value is a twelfth of the price, and
-    // it was missing from every revenue figure until now.
-    ['pl_lumen_year', LUMEN, 'Unlimited, yearly', 119000, 'EUR', 'year', null, true, 12, 0],
+    ['pl_lumen_eight', LUMEN, 'Eight a month', 'recurring', 8900, 'EUR', 'month', 8, true, 0, 0, null, null],
+    // Twelve months up front, so its monthly value is a twelfth of the price.
+    ['pl_lumen_year', LUMEN, 'Unlimited, yearly', 'recurring', 119000, 'EUR', 'year', null, true, 12, 0, null, null],
     // Six-month commitment, two months' notice — the gym-contract shape.
-    ['pl_nr_unlimited', NORTHROCK, 'Full mat', 13500, 'EUR', 'month', null, true, 6, 60],
-    ['pl_nr_twice', NORTHROCK, 'Twice a week', 9500, 'EUR', 'month', 8, true, 3, 30],
-  ],
-);
+    ['pl_nr_unlimited', NORTHROCK, 'Full mat', 'recurring', 13500, 'EUR', 'month', null, true, 6, 60, null, null],
+    ['pl_nr_twice', NORTHROCK, 'Twice a week', 'recurring', 9500, 'EUR', 'month', 8, true, 3, 30, null, null],
 
-// `price_cents` NULL means "whatever the plan says", which is almost everybody.
-// `notice_given_on` set means somebody is on their way out — and the date they
-// actually go is derived by the trigger, not written here.
-// ─── enquiries ───────────────────────────────────────────────
-//
-// PEOPLE, WITH A MEMBERSHIP AT STAGE ZERO. These were a `leads` table carrying
-// its own name, email and phone — a second copy of a human that could never
-// become the first one without being retyped. They are people now, and their
-// enquiry is the same row every member has, one status earlier.
-//
-// Ida is the payoff: she asked in person and booked a trial. The day she
-// signs, ONE WORD CHANGES. Nothing is created, nothing is copied, and her
-// source survives to answer "which channel produced this member".
-const enquiries = insert(
-  'memberships',
-  ['id', 'studio_id', 'person_id', 'status', 'source', 'joined_on', 'ended_on', 'notes'],
-  [
-    ['mb_priya', LUMEN, 'p_priya', 'enquired', 'website', day(-2, LUMEN), null, 'Asked about beginner classes on a weekday evening.'],
-    ['mb_tomv', LUMEN, 'p_tomv', 'enquired', 'referral', day(-9, LUMEN), null, 'Ava sent him. Rang Tuesday, wants to try Yin.'],
-    ['mb_ida', LUMEN, 'p_ida', 'enquired', 'walk-in', day(-4, LUMEN), null, 'Came in off the street. Booked into Saturday.'],
-    // Lost is an ENDED relationship, not a fourth kind of person — the same
-    // shape as a member who cancelled, which is the point of folding these
-    // together rather than giving prospects their own lifecycle.
-    ['mb_rafi', LUMEN, 'p_rafi', 'cancelled', 'social', day(-40, LUMEN), day(-38, LUMEN), 'Price. Went to the studio on Hauptstrasse.'],
-    ['mb_mila', NORTHROCK, 'p_mila', 'enquired', 'event', day(-1, NORTHROCK), null, 'Open mat day. Wants the fundamentals block.'],
+    // A drop-in IS a pass with one credit — no third kind, no special case.
+    ['of_lumen_dropin', LUMEN, 'Single class', 'pass', 1800, 'EUR', 'month', null, true, 0, 0, 1, null],
+    ['of_lumen_ten', LUMEN, 'Ten classes', 'pass', 15500, 'EUR', 'month', null, true, 0, 0, 10, 180],
+    ['of_nr_dropin', NORTHROCK, 'Open mat drop-in', 'pass', 1500, 'EUR', 'month', null, true, 0, 0, 1, null],
   ],
 );
 
 // ─── everybody else ──────────────────────────────────────────
-//
-// Gretel is the case worth seeding: the same physio known to BOTH studios, one
-// person row, two connections. Under the old shape she would have been two
-// unrelated strings in two tables that never met.
 const connections = insert(
   'connections',
   ['studio_id', 'person_id', 'kind', 'company', 'notes'],
@@ -293,40 +290,58 @@ const connections = insert(
 
 const subscriptions = insert(
   'subscriptions',
-  ['id', 'studio_id', 'membership_id', 'plan_id', 'status', 'started_on', 'ends_on', 'price_cents', 'notice_given_on'],
+  ['id', 'studio_id', 'person_id', 'offering_id', 'status', 'started_on', 'ends_on', 'price_cents'],
   [
-    // A GRANDFATHERED RATE. Ava joined before the last price rise and pays €99
-    // on a plan that now sells for €119. A forecast reading the price list
-    // overstates her by €20 a month, every month, silently.
-    ['sub_ava', LUMEN, 'mb_ava', 'pl_lumen_unlimited', 'active', day(-420, LUMEN), null, 9900, null],
-    ['sub_jonas', LUMEN, 'mb_jonas', 'pl_lumen_eight', 'active', day(-180, LUMEN), null, null, null],
-    ['sub_lena', LUMEN, 'mb_lena', 'pl_lumen_eight', 'active', day(-9, LUMEN), null, null, null],
-    ['sub_mira', LUMEN, 'mb_mira', 'pl_lumen_unlimited', 'paused', day(-300, LUMEN), null, null, null],
+    // A grandfathered rate: she pays €99 on a plan that now sells for €119, so
+    // a forecast reading the price list overstates her by €20 every month.
+    ['sub_ava', LUMEN, 'p_ava', 'pl_lumen_unlimited', 'active', day(-420, LUMEN), null, 9900],
+    ['sub_jonas', LUMEN, 'p_jonas', 'pl_lumen_eight', 'active', day(-180, LUMEN), null, null],
+    ['sub_lena', LUMEN, 'p_lena', 'pl_lumen_eight', 'active', day(-9, LUMEN), null, null],
+    ['sub_mira', LUMEN, 'p_mira', 'pl_lumen_unlimited', 'paused', day(-300, LUMEN), null, null],
     // On the annual plan, so worth €99.16 a month rather than €1190 — and inside
     // a twelve-month commitment, so that money is contracted rather than hoped for.
-    ['sub_sofia', LUMEN, 'mb_sofia', 'pl_lumen_year', 'active', day(-75, LUMEN), null, null, null],
-    // LEAVING. Notice given a week ago on a 30-day plan, so the studio keeps his
-    // €119 for another three weeks and then does not. Revenue at risk is the
-    // number a forecast exists to show.
-    ['sub_tobias', LUMEN, 'mb_tobias', 'pl_lumen_unlimited', 'active', day(-500, LUMEN), null, null, day(-7, LUMEN)],
-    ['sub_omar', NORTHROCK, 'mb_omar', 'pl_nr_unlimited', 'active', day(-800, NORTHROCK), null, null, null],
-    ['sub_nina', NORTHROCK, 'mb_nina', 'pl_nr_unlimited', 'active', day(-210, NORTHROCK), null, null, null],
+    ['sub_sofia', LUMEN, 'p_sofia', 'pl_lumen_year', 'active', day(-75, LUMEN), null, null],
+    // Leaving: notice a week ago on a 30-day plan, so the studio keeps his €119
+    // for another three weeks and then does not.
+    ['sub_tobias', LUMEN, 'p_tobias', 'pl_lumen_unlimited', 'active', day(-500, LUMEN), null, null],
+    ['sub_omar', NORTHROCK, 'p_omar', 'pl_nr_unlimited', 'active', day(-800, NORTHROCK), null, null],
+    ['sub_nina', NORTHROCK, 'p_nina', 'pl_nr_unlimited', 'active', day(-210, NORTHROCK), null, null],
     // Signed six weeks ago on a three-month term: still committed.
-    ['sub_ruben', NORTHROCK, 'mb_ruben', 'pl_nr_twice', 'active', day(-95, NORTHROCK), null, null, null],
-    ['sub_hana', NORTHROCK, 'mb_hana', 'pl_nr_twice', 'active', day(-4, NORTHROCK), null, null, null],
-    ['sub_kaya', NORTHROCK, 'mb_kaya', 'pl_nr_unlimited', 'active', day(-900, NORTHROCK), null, null, null],
+    ['sub_ruben', NORTHROCK, 'p_ruben', 'pl_nr_twice', 'active', day(-95, NORTHROCK), null, null],
+    ['sub_kaya', NORTHROCK, 'p_kaya', 'pl_nr_unlimited', 'active', day(-900, NORTHROCK), null, null],
+    // Luca left: a CANCELLED subscription is what "past member" derives from.
+    // His leaving date comes from the notice ledger below, like everybody's.
+    ['sub_luca', NORTHROCK, 'p_luca', 'pl_nr_unlimited', 'cancelled', day(-700, NORTHROCK), null, null],
   ],
 );
 
+// ─── passes ──────────────────────────────────────────────────
+
+// Ida walked in off the street and bought a single class for Saturday — the
+// backbone of a yoga studio's trade, and the person the old schema literally
+// could not represent without lying about a membership.
+const passes = insert(
+  'passes',
+  ['id', 'studio_id', 'person_id', 'offering_id', 'credits_total', 'paid_via', 'purchased_on'],
+  [['pass_ida', LUMEN, 'p_ida', 'of_lumen_dropin', 1, 'manual', day(-4, LUMEN)]],
+);
+
 // ─── programs ────────────────────────────────────────────────
-//
-// `colour` is a HUE name from the kit's identity scale, never a hex and never a
-// status word. Competition used to be 'alert' — the same red as a failed
-// payment — which drew a red edge in the calendar beside genuinely cancelled
-// classes. A stream is an identity; it says nothing about how anything is going.
-// `colour` is a TOKEN name, never a hex. A program that carried `#7C3AED` would
-// be a colour decision living in the database, invisible to the theme — and the
-// first thing to break when a studio changes its palette.
+
+// Tobias is leaving. The notice is a ROW now, not a column somebody set: the
+// ledger derives `subscriptions.notice_given_on`, and the terms trigger derives
+// the day he actually goes from that. Seeding the column directly would leave a
+// leaving date nothing backed — and a withdrawal with nothing to withdraw.
+// Luca's notice is history: given five months ago, run out, the subscription
+// cancelled — which is what his "Left" standing derives from.
+const notices = insert(
+  'subscription_notices',
+  ['studio_id', 'subscription_id', 'given_on'],
+  [
+    [LUMEN, 'sub_tobias', day(-7, LUMEN)],
+    [NORTHROCK, 'sub_luca', day(-150, NORTHROCK)],
+  ],
+);
 
 const programs = insert(
   'programs',
@@ -343,20 +358,8 @@ const programs = insert(
 );
 
 // ─── the weekly grid ─────────────────────────────────────────
-//
-// weekday: 0 = Sunday. Lumen's week is morning-heavy and thin; North Rock's is
-// evening-heavy and dense. That asymmetry is deliberate — a schedule view that
-// looks right for one and wrong for the other is a view that hardcoded a shape.
 
 // ─── the blocks ──────────────────────────────────────────────
-//
-// What a program is NOT. "Foundations" is a stream that runs indefinitely;
-// "Foundations — autumn block, six weeks from the 11th, twelve places" is a
-// course. Both studios sell one, because both kinds of business do: the yoga
-// studio runs beginner blocks, the gym runs an intake course.
-//
-// Dated deliberately relative to today, so the demo always has a block that is
-// open and running rather than one that expired the week the seed was written.
 const courses = insert(
   'courses',
   ['id', 'studio_id', 'program_id', 'name', 'blurb', 'starts_on', 'ends_on', 'capacity', 'price_cents'],
@@ -388,12 +391,6 @@ const templates = insert(
   ],
 );
 
-// The course slots. Same table, same generator — a course's weeks ARE a weekly
-// rule that happens to stop, which is the whole reason `courses` did not need a
-// second kind of schedule.
-//
-// `generate_sessions` fires on these inserts and bounds itself by the dates, so
-// the block's classes appear on the calendar without anything else running.
 const courseTemplates = insert(
   'class_templates',
   ['id', 'studio_id', 'program_id', 'course_id', 'name', 'weekday', 'starts_at', 'duration_mins', 'capacity', 'instructor_id', 'starts_on', 'ends_on', 'active'],
@@ -404,15 +401,6 @@ const courseTemplates = insert(
 );
 
 // ─── generated: a term of sessions ───────────────────────────
-//
-// Every template, every matching weekday, eight weeks back and three forward.
-// The history is long on purpose: peak-hour and trend reporting has nothing to
-// say about a fortnight, and a demo whose charts are three bars wide sells
-// nothing.
-// Done in SQL rather than in node so the sessions land on the same clock as
-// the studio clock and the column defaults — see `sql.ts` for why that is not a
-// detail. `week_key` and `hour_key` are denormalised here because vex has no
-// date functions and reporting groups on a column (PLAN.md).
 const sessions = /* sql */ `
   INSERT INTO class_sessions
     (id, studio_id, template_id, program_id, name, held_on, starts_at, duration_mins, capacity, instructor_id, status, week_key, hour_key)
@@ -427,10 +415,6 @@ const sessions = /* sql */ `
   CROSS JOIN generate_series(studio_today(t.studio_id) - 56, studio_today(t.studio_id) + 21, '1 day'::interval) AS gs(d)
   WHERE t.active
     AND EXTRACT(DOW FROM gs.d) = t.weekday
-    -- Bounded slots keep their bounds here too. Backfilling eight weeks of
-    -- history for a course that starts on Friday would put classes on the
-    -- calendar from before the block was sold — and the demo would show a
-    -- six-week course with fourteen weeks of sessions.
     AND (t.starts_on IS NULL OR gs.d >= t.starts_on)
     AND (t.ends_on IS NULL OR gs.d <= t.ends_on)
   ON CONFLICT (id) DO NOTHING;
@@ -446,53 +430,38 @@ const cancellation = /* sql */ `
 `;
 
 // ─── generated: bookings and attendance ──────────────────────
-//
-// Deterministic, not random: the md5 of (membership, session) decides, so the
-// same rows appear on every boot and a check asserting a count means something.
-// Only active-ish memberships book, only past sessions get attendance, and the
-// show rate is deliberately short of 100% — a studio that cannot see its
-// no-shows cannot see its retention problem.
+// Whoever holds a live subscription books — the entitlement, not a category,
+// is what puts somebody in class.
 const bookings = /* sql */ `
-  INSERT INTO bookings (id, studio_id, session_id, membership_id, status, booked_at)
+  INSERT INTO bookings (id, studio_id, session_id, person_id, status, booked_at)
   SELECT
-    'bk_' || substr(md5(m.id || s.id), 1, 16),
-    s.studio_id, s.id, m.id,
+    'bk_' || substr(md5(m.person_id || s.id), 1, 16),
+    s.studio_id, s.id, m.person_id,
     'booked',
     (s.held_on - 3)::timestamptz + interval '11 hours'
   FROM class_sessions s
-  JOIN memberships m ON m.studio_id = s.studio_id
-  WHERE m.status IN ('active', 'trialling')
-    AND s.status = 'scheduled'
+  JOIN (SELECT DISTINCT studio_id, person_id FROM subscriptions WHERE status = 'active') m
+    ON m.studio_id = s.studio_id
+  WHERE s.status = 'scheduled'
     AND s.held_on BETWEEN studio_today(s.studio_id) - 56 AND studio_today(s.studio_id) + 7
-    AND ((('x' || substr(md5(m.id || s.id), 1, 7))::bit(28)::int) % 100) < 34;
+    AND ((('x' || substr(md5(m.person_id || s.id), 1, 7))::bit(28)::int) % 100) < 34;
 `;
 
-// A CLASS TODAY, GUARANTEED.
-//
-// The desk's whole screen is "who is arriving right now", and the check that
-// covers it needs a session today with somebody booked into it. That was left
-// to the weekly grid happening to teach on whatever weekday the check ran —
-// which held until a Sunday, when Lumen teaches nothing and the assertion
-// read "none — the seed shifted".
-//
-// An invariant a check depends on belongs in the seed, not in the calendar's
-// good manners. This is a one-off — a session with no template behind it, the
-// same shape a workshop has — so it exists on any day of the week.
 const todayClass = /* sql */ `
   INSERT INTO class_sessions (id, studio_id, program_id, name, held_on, starts_at, duration_mins, capacity, instructor_id, status, week_key, hour_key)
   SELECT 'cs_today_lumen', 'st_lumen', 'pr_vinyasa', 'Open Practice', studio_today('${LUMEN}'), '12:00', 60, 12, NULL, 'scheduled',
          to_char(studio_today('${LUMEN}'), 'IYYY"-W"IW'), 12
   WHERE NOT EXISTS (SELECT 1 FROM class_sessions WHERE id = 'cs_today_lumen');
 
-  INSERT INTO bookings (id, studio_id, session_id, membership_id, status, booked_at)
-  SELECT 'bk_today_ava', 'st_lumen', 'cs_today_lumen', 'mb_ava', 'booked', now()
+  INSERT INTO bookings (id, studio_id, session_id, person_id, status, booked_at)
+  SELECT 'bk_today_ava', 'st_lumen', 'cs_today_lumen', 'p_ava', 'booked', now()
   WHERE NOT EXISTS (SELECT 1 FROM bookings WHERE id = 'bk_today_ava');
 `;
 const checkIns = /* sql */ `
-  INSERT INTO check_ins (id, studio_id, membership_id, session_id, happened_at, held_on, hour_key, method)
+  INSERT INTO check_ins (id, studio_id, person_id, session_id, happened_at, held_on, hour_key, method)
   SELECT
     'ci_' || substr(md5('att' || b.id), 1, 16),
-    b.studio_id, b.membership_id, b.session_id,
+    b.studio_id, b.person_id, b.session_id,
     s.held_on::timestamptz + (s.starts_at || ':00')::time - interval '6 minutes',
     s.held_on,
     s.hour_key,
@@ -504,80 +473,79 @@ const checkIns = /* sql */ `
 `;
 
 // ─── one authored beat ───────────────────────────────────────
-//
-// Hana walked in on Tuesday with no booking and no experience. A walk-in check
-// -in with no session is the case the "attendance means a booking" shortcut
-// gets wrong, so it is in the seed from the first day rather than found later.
 const walkIn = insert(
   'check_ins',
-  ['id', 'studio_id', 'membership_id', 'session_id', 'happened_at', 'held_on', 'hour_key', 'method'],
-  [['ci_hana_walkin', NORTHROCK, 'mb_hana', null, at(-2, 17, 9, NORTHROCK), day(-2, NORTHROCK), 17, 'desk']],
+  ['id', 'studio_id', 'person_id', 'session_id', 'happened_at', 'held_on', 'hour_key', 'method'],
+  [['ci_hana_walkin', NORTHROCK, 'p_hana', null, at(-2, 17, 9, NORTHROCK), day(-2, NORTHROCK), 17, 'desk']],
 );
 
-// The counter caches, computed once the bookings and check-ins exist. From here
-// on it is the writes' job to keep them true (see schema.ts).
-// booked_count needs no backfill — the trigger maintained it as the bookings
-// landed. Kept as a no-op comment rather than a redundant UPDATE, because a
-// backfill that runs anyway is a backfill nobody notices has stopped working.
 const bookedCounts = '';
 
 const attendance = /* sql */ `
   UPDATE bookings b
-  SET attended = EXISTS (SELECT 1 FROM check_ins c WHERE c.session_id = b.session_id AND c.membership_id = b.membership_id);
+  SET attended = EXISTS (SELECT 1 FROM check_ins c WHERE c.session_id = b.session_id AND c.person_id = b.person_id);
 `;
 
-// A member with classes already in their diary, so the member-facing screens
-// have something to show on the first look.
-//
-// Written straight into `bookings` — which is the only table now. It used to go
-// through `member_bookings` so the mirror trigger would create the operational
-// row, back when a member's bookings lived in two places at once.
-//
-// Chosen by query rather than by id: the two soonest future sessions Ava is
-// not already booked into, so this survives the calendar moving.
 const memberDiary = /* sql */ `
-  INSERT INTO bookings (studio_id, session_id, membership_id)
-  SELECT '${LUMEN}', cs.id, 'mb_ava'
+  INSERT INTO bookings (studio_id, session_id, person_id)
+  SELECT '${LUMEN}', cs.id, 'p_ava'
   FROM class_sessions cs
   WHERE cs.studio_id = '${LUMEN}'
     AND cs.held_on > studio_today(cs.studio_id)
-    AND NOT EXISTS (SELECT 1 FROM bookings b WHERE b.session_id = cs.id AND b.membership_id = 'mb_ava')
+    AND NOT EXISTS (SELECT 1 FROM bookings b WHERE b.session_id = cs.id AND b.person_id = 'p_ava')
   ORDER BY cs.held_on ASC, cs.starts_at ASC
   LIMIT 2;
 `;
 
-// One member already in the block, so the course screens have a cohort and the
-// fan-out is exercised on every boot. Written as an ENROLMENT, not as six
-// bookings — the trigger makes the bookings, which is the whole claim.
 const enrolments = /* sql */ `
-  INSERT INTO enrolments (studio_id, course_id, membership_id, person_id)
-  VALUES ('st_lumen', 'co_lumen_found', 'mb_jonas', 'p_jonas');
+  INSERT INTO enrolments (studio_id, course_id, person_id)
+  VALUES ('st_lumen', 'co_lumen_found', 'p_jonas');
 `;
 
-// The automations each studio starts with. Rows now, so the screen can create,
-// change and remove them — which it could not do while they were constants.
-// The automations each studio starts with — as COMPOSITIONS now, not as
-// templates. Note the third Lumen row: warn people a week before their trial
-// lapses. It needed no new fingerprint; it was two things that already existed
-// and could not be said together.
 const automations = insert(
   'automations',
-  ['id', 'studio_id', 'audience', 'effect', 'run_at', 'trial_days', 'subject', 'body'],
+  ['id', 'studio_id', 'moment', 'effect', 'run_at', 'days', 'subject', 'body'],
+  // FIVE ROWS, ONE PER MOMENT, and every one of them is checked end to end in
+  // `tide-check`: fired against this data, and asserted on who it reached and
+  // what it said. There were seven, and one of them — `au_rock_trial`, on
+  // `trial.ended` — selected nobody on any day of this dataset, so it had
+  // never sent anything and nothing would have noticed.
   [
-    ['au_lumen_lapse', LUMEN, 'trials.ending', 'trial.lapse', '03:00', 14, '', ''],
-    ['au_lumen_remind', LUMEN, 'classes.tomorrow', 'message', '18:00', 14, 'See you tomorrow', 'You are booked in.'],
-    ['au_lumen_warn', LUMEN, 'trials.ending', 'message', '09:00', 7, 'Your trial is nearly up', 'Come and talk to us about a plan — we would love to keep you.'],
-    ['au_rock_lapse', NORTHROCK, 'trials.ending', 'trial.lapse', '04:00', 21, '', ''],
-    ['au_rock_remind', NORTHROCK, 'classes.tomorrow', 'message', '17:00', 21, 'Training tomorrow', 'See you on the mat.'],
+    // WATCHED. Fires within a minute of somebody signing, which is the whole
+    // reason "somebody joins" is worth automating rather than reading off a
+    // list — and, since overlap no longer governs distinct events, it greets
+    // all three people who join during an intro night rather than the first.
+    ['au_lumen_welcome', LUMEN, 'member.joined', 'email', '09:00', 7, 'Welcome to Lumen', 'We are glad you are here. Come a few minutes early to your first class and somebody will show you around.'],
+    // WATCHED. The other minute that decays: somebody asked, and is waiting.
+    ['au_lumen_enquiry', LUMEN, 'enquiry.recorded', 'email', '09:00', 7, 'Thanks for getting in touch', 'Thanks for asking about training with us. Come in any time this week and try a class — no charge, no commitment.'],
+    // SCHEDULED, with a window: the trial conversation before it closes rather
+    // than after somebody notices it did.
+    // Three days, not seven, and the number is load-bearing for the check: the
+    // seeded trial has four days left, so this selects NOBODY today and Lena
+    // once the window opens. A window that cannot be observed closing is a
+    // number nobody has tested.
+    ['au_lumen_trial', LUMEN, 'trial.ending', 'email', '09:00', 3, 'Your trial is nearly up', 'We would love to keep you on the mat — come and talk to us about a plan.'],
+    // SCHEDULED, the money one. Still paying, stopped coming.
+    ['au_lumen_quiet', LUMEN, 'member.quiet', 'email', '08:00', 7, 'We have missed you', 'It has been a while. Nothing has changed and your place is still here.'],
+    // SCHEDULED, and the fan-out shape: one message per BOOKING, so forty
+    // reminders retry independently rather than as one batch that half-fails.
+    ['au_lumen_remind', LUMEN, 'class.tomorrow', 'email', '18:00', 7, 'See you tomorrow', 'You are booked in.'],
+
+    // North Rock runs its own, differently worded — two studios, one
+    // deployment, and neither can see the other's ledger.
+    //
+    // The welcome is here ON PURPOSE and not as decoration: both studios now
+    // poll the same table with the same question, which is the arrangement
+    // that used to have a competitor's automation email your member. The
+    // check asserts it does not.
+    ['au_rock_welcome', NORTHROCK, 'member.joined', 'email', '09:00', 7, 'Welcome to North Rock', 'First week matters more than the next ten. Come early and somebody will pair you up.'],
+    ['au_rock_class', NORTHROCK, 'class.tomorrow', 'email', '17:00', 7, 'Training tomorrow', 'See you on the mat.'],
   ],
 );
 
 export const buildSeedSql = (): string =>
-  [themes, studios, people, staff, memberships, plans, subscriptions, programs, courses, templates, courseTemplates, sessions, cancellation, bookings, bookedCounts, checkIns, walkIn, todayClass, attendance, memberDiary, enrolments, automations, enquiries, connections].join('\n');
+  [vocabulary, themes, phrases, studios, people, staff, studioPeople, offerings, subscriptions, passes, notices, programs, courses, templates, courseTemplates, sessions, cancellation, bookings, bookedCounts, checkIns, walkIn, todayClass, attendance, memberDiary, enrolments, automations, connections].join('\n');
 
-// The seeded directory, for `inputs` and `scope` — who exists, and where.
-// Boot reads this back out of the database rather than trusting this file
-// (see server/users.ts); it is exported for the checks, which need names.
 export const CAST = {
   lumen: { studio: LUMEN, owner: 'maren@lumen.studio', desk: 'ines@lumen.studio', instructor: 'tobias@lumen.studio', member: 'ava.klein@example.com' },
   northrock: { studio: NORTHROCK, owner: 'dario@northrock.gym', manager: 'kaya@northrock.gym', member: 'omar.haddad@example.com' },

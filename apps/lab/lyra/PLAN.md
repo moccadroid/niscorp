@@ -100,6 +100,41 @@ Settled in design, ahead of implementation:
   custom properties. This is already rule 2, and it is what makes the CSS axis free.
 - **Two independent axes:** structure (which layout) and surface (which token set).
 
+## Language — the mechanism
+
+Built. The full design record, including the options rejected and where to pick
+it back up, is **[`/docs/I18N.md`](../../../docs/I18N.md)** — this is the summary.
+
+- **Words are rows**, the twin of themes: `phrases (locale, source, text)` plus
+  `studios.locale`. A studio's language and a studio's look are the same kind of
+  fact — its owner's, and no deploy's.
+- **Keyed on the English source phrase**, not on invented ids, so the layouts stay
+  the readable English they already are. The cost is that one word with two senses
+  is one row; `phrases.context` is the reserved escape and is not used yet.
+- **Four channels, because no single one covers everything.** (1) A late pass over
+  the rendered tree, applied inside moss (`@niscorp/nova/i18n`). (2) `Intl`-backed
+  prism ops for dates and money — unbounded cardinality, so no dictionary can ever
+  hold them. (3) Strings the app composes itself, looked up from the same book in
+  TypeScript. (4) Seeded content, deliberately left alone: translating what a form
+  is about to save would display German and save English.
+- **Nova stays language-blind**, exactly as it is surface-blind. It holds no
+  dictionary; the host injects one, the same way it injects the transform evaluator.
+- **Proseness is decided by the KEY, never the value.** The app declares which keys
+  carry prose (`phraseKeys`), including the `*_display` suffix its vex entries
+  already used. This is what stops a member called "Pass" being renamed.
+- **Words are per language; formatting is per region.** One `de` book serves
+  `de-AT`, `de-DE` and `de-CH`; `Intl` supplies the rest from the full tag. Vienna
+  writes `€ 45,00`, Hamburg `45,00 €`, Zürich `EUR 45.00`.
+- **Locale sits on the studio**, beside `currency` and `country`. Per-person is one
+  column and a `COALESCE` away and is the obvious next move.
+- **Switching rebuilds the shell**, because `inputs` composed the greeting and the
+  nav in the old language. The write is an ordinary scoped mutation; the rebuild is
+  its consequence (`world.relanguage`).
+
+Fixed on the way: lyra rendered `€45` and `Fri 14 Mar` for an Austrian studio.
+That was a live bug independent of translation, and it is why the `Intl` ops
+landed first.
+
 ## Solved: member-facing personal reads — and how the answer changed
 
 A member holds their own card, their own bookings, and the writes that book and
@@ -179,11 +214,38 @@ swapping the source is one seam.
 
 ### Where it stands
 
-Twenty-two check suites, all green, all end-to-end through the real shell rather than
+Thirty-five check suites, all green, all end-to-end through the real shell rather than
 against the database. Every surface below has been clicked in a browser as well —
 twice now a bug has passed every headless check and only shown up on a real click
 (`ActionSlot` origin stamping; `set` not evaluating Prism ops), so the browser
 pass is not optional.
+
+**Two of those suites are why that sentence is now smaller than it was.** Both
+bugs lived in the same blind spot: thirty-three suites asserted the render
+TREE — the engine's output, the kit's input — and nothing had ever run the kit.
+A check drove the app by writing the event itself (`dispatch({ ref: 'open',
+payload: { person_id } })`) while the component that decides that payload in the
+product, `Rows`, sending the whole row, was never in the picture. Both halves of
+the contract, same hand, same file, agreeing by construction.
+
+- **`render-check`** mounts the real trees for real principals through the real
+  registry into a real DOM (jsdom, `src/dev/surface.ts`) and asks what the tree
+  cannot: is what the server sent on the screen? Every word, every cell a column
+  spec names — the roster bug's exact shape — the rail and the thumb bar, the
+  empty and loading states, and the loop closed: a click on a real row, the event
+  the KIT emitted, fed back to the shell, and the sheet that comes back with the
+  form seeded.
+- **`click-check`** walks the catalog, renders every control a list draws,
+  clicks it, and asserts the payload satisfies the paths that action's own
+  trigger reads — 111 of them across 32 controls, plus the shapes the kit
+  invents rather than forwards (`{ next }`, cents from a decimal, a debounce
+  flushed on blur). It boots no database and carries its falsifiable fixture:
+  `row[rowKey]` instead of the row fails the sweep.
+
+What they still cannot see is anything with a size: an overlap, a tap target, a
+bar pinned to the wrong corner. jsdom has no layout engine, and every pixel bug
+in `layout.tsx`'s comments was found by looking. That class is the browser pass,
+and it stays.
 
 | Surface | Reads | Writes |
 | --- | --- | --- |
@@ -329,28 +391,76 @@ chrome rather than the window.
 Depth is unchanged and still the sheet's job, where `$.count` already decides
 between a back arrow and a close.
 
-## The person model: three tables, three verbs
+## Automations: rules out, moments in
 
-`memberships` — they **train** here. `staff` — they **work** here.
-`connections` — they **deal** with here (the mat cleaner, the landlord, the
-physio, a guest coach, a parent who pays).
+The five that shipped were two bad ideas twice each. **Mark the trial lapsed**
+was a business rule wearing an automation costume — a trial is over when its
+window is over, so storing that and having a job come along at 04:00 to make it
+true meant the database was wrong for most of every day, and a studio that
+paused the job had a table that never became true at all. **Leave them a
+message** wrote a `notifications` row that exactly one read returned, on a
+screen only an owner opens: an effect with no observer is a no-op with a ledger
+entry, and it is most of why the whole feature read as vague.
 
-**An enquiry is a membership at stage zero.** The old `leads` table carried its
-own name, email and phone — a second, shadow human — with a nullable
-`person_id` "set when they become a member" that nothing ever wrote; and the
-conversion pushed the intake form with input keys the form did not have, so it
-opened **blank** and the desk retyped into a second person record with no link
-back. `status: 'enquired'` plus a `source` column replaced all of it: joining
-is a status change, `intake-check` asserts it writes **no new person and no new
-membership**, and the source survives to answer the question the dead column
-existed for. The schema's own sentence had it all along — *a trialling member
-and a lapsed one are the same row at different times*. Relay agrees from the
-other direction: its pipeline lives on the **deal**, never on the contact.
+The test, worth applying to the next thing somebody wants to automate: **if
+turning the job off would make the DATA wrong, it is a rule.** Automations are
+for what a database cannot do — telling somebody.
 
-`connections` stays thin on purpose — a kind, a company, a note. If one ever
-grows a lifecycle, that is the signal it deserves its own table, not a status
-column bolted on. The seed proves the payoff case: one physio, known to both
-studios, two connection rows, one human.
+- **Standing is derived.** `memberships.status` holds four values and every one
+  is a decision a human made. `trial_ends_on` is the rule; On trial / Trial over
+  / Active are computed in SQL against `$scope: 'today'`
+  (`app/vex/standing.ts`) — right at every instant, in one place so six reads
+  cannot come to disagree about who is allowed on the mat.
+- **Moments, not audiences.** Three are WATCHED — tide's poll trigger on a
+  60-second heartbeat, which is exactly the "host with no write choke point"
+  case poll was designed for — so *somebody joins* is answered in a minute
+  rather than at four in the morning. Ten are scheduled. The sentence reads
+  moment-first: "When somebody joins, add it to the desk's list."
+- **Effects that produce something somebody reads.** A follow-up on the desk's
+  list (the one that makes this real for a six-person studio — not a robot
+  emailing members, a list saying who to talk to today), a queued outbox
+  message that says *Not sent* because nothing delivers, a tag.
+  `memberships.write.update` is gone from the automation rung entirely: nothing
+  unattended can move somebody's standing with the studio.
+- **Recipes, not a blank builder.** Eight, named after problems rather than
+  after a vocabulary. A recipe is an ordinary row with the fields filled in.
+- **No pairing matrix.** Every effect takes a person and every moment yields
+  one — so `appliesTo`, and the class of bug where changing the moment dropped
+  the chosen effect out of the picker while the model still held it, are gone by
+  construction rather than by a hand-kept list.
+
+Parked deliberately: bundle-declared effects, and packs subscribing to the fact
+stream (a Mailchimp audience is a continuous mirror, not an effect fired once).
+Email stays an honest placeholder until that lands.
+
+## The person model — SUPERSEDED by [lyra-model-overhaul.md](../../../docs/plans/lyra-model-overhaul.md)
+
+This section described the model this app **used to have**: a person forced
+into exactly one of `memberships` / `staff` / `connections`, with an enquiry
+as "a membership at stage zero". That model was replaced wholesale — see
+`docs/plans/lyra-model-overhaul.md` for the argument and the full specification. The shape
+now:
+
+- **`studio_people` is the anchor**: one row per (studio, human) — the
+  prospect, the member of nine years, the mat supplier and the physio all get
+  exactly this row. It carries the relationship's own facts (source,
+  first_seen, notes, the trial window) and NO category.
+- **What a person IS derives from what they HOLD** — subscriptions, passes,
+  enrolments, staff rows, contact tags — computed per read on the studio's
+  own day (`standing.ts`, EXISTS inside a computed CASE). "Enquiries" died as
+  a word; a prospect is a lens on the People roll.
+- **`offerings` generalises `plans`** (kind: recurring | pass; a drop-in is a
+  one-credit pass), and **access is decoupled from payment**: every
+  entitlement carries `paid_via` (manual | stripe | comp | free), the desk
+  sells and records money with no processor anywhere, and Stripe is one
+  writer among equals, keyed on the subscription it asserts about.
+- **`connections` survives as the contact tags** hanging off the anchor —
+  still thin, still a kind + company + note. The physio known to both studios
+  is still two rows, one human — and she resolves as a principal now.
+
+The conversion story `intake-check` asserts also inverted: joining is a
+**subscription starting on the same anchor** — still no new person, no
+retype, and the source still survives.
 
 ## Deployment: what is public and what is not
 
@@ -375,7 +485,7 @@ The deployment half is a rule, and it will rot if nobody writes it down:
 ## Deliberately not in v1
 
 Payments and Stripe (now planned — below) · automations and scheduled work (see
-`/automation-requirements.md`) · email and SMS · POS and inventory · rank and belt
+`docs/archive/automation-requirements.md`) · email and SMS · POS and inventory · rank and belt
 tracking (a good later test of the theming and bundle story as a discipline pack) ·
 the public marketing site and its SSR adapter · native mobile · door access.
 

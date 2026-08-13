@@ -42,8 +42,8 @@ const appServer = (): Plugin => ({
     let current: Promise<{ listener: ReturnType<typeof getRequestListener>; server: BootedServer }>;
 
     const build = async (): Promise<{ listener: ReturnType<typeof getRequestListener>; server: BootedServer }> => {
-      const mod = (await viteServer.ssrLoadModule('/src/server/boot.ts')) as { boot: () => Promise<{ server: BootedServer }> };
-      const { server } = await mod.boot();
+      const mod = (await viteServer.ssrLoadModule('/src/server/boot.ts')) as { bootDevServer: () => Promise<{ server: BootedServer }> };
+      const { server } = await mod.bootDevServer();
       return { listener: getRequestListener(server.fetch), server };
     };
     current = build();

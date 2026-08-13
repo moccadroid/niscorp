@@ -12,11 +12,23 @@ import type { IntrospectOptions } from '../adapter.types.js';
 // PgPool type (no dependency on `pg` package)
 // ═══════════════════════════════════════════════════════════════
 
+export type PgQuery = (
+  text: string,
+  values?: unknown[],
+) => Promise<{ rows: Record<string, unknown>[]; fields?: Array<{ name: string; dataTypeID: number }> }>;
+
 export type PgPool = {
-  query: (
-    text: string,
-    values?: unknown[],
-  ) => Promise<{ rows: Record<string, unknown>[]; fields?: Array<{ name: string; dataTypeID: number }> }>;
+  query: PgQuery;
+  // Several statements land together or not at all.
+  //
+  // This was missing, and it was not a gap in a future feature: vex's own
+  // `executeMutation` throws "Batch mutations require a transactional client"
+  // whenever a mutation entry is an ARRAY, and no adapter in the repo
+  // supplied one — so every batch write failed at runtime with a message
+  // about a client nobody could construct. Optional because a pool that
+  // genuinely cannot transact should say so by omission rather than by
+  // pretending and breaking atomicity quietly.
+  transaction?: <T>(fn: (tx: { query: PgQuery }) => Promise<T>) => Promise<T>;
 };
 
 // ═══════════════════════════════════════════════════════════════
@@ -383,12 +395,12 @@ export const introspectPostgres = async (
   }
 
   // ─── Build entities ────────────────────────────────────────
-  const filteredTables = options?.entities !== undefined
-    ? tablesResult.rows.filter((row) => {
-        const name = row['table_name'] as string;
-        return options.entities?.includes(name) ?? false;
-      })
-    : tablesResult.rows;
+  const filteredTables = tablesResult.rows.filter((row) => {
+    const name = row['table_name'] as string;
+    if (options?.entities !== undefined && !options.entities.includes(name)) return false;
+    if (options?.exclude !== undefined && options.exclude.includes(name)) return false;
+    return true;
+  });
 
   const entities: EntitySchema[] = filteredTables.map((row) => {
     const tableName = row['table_name'] as string;

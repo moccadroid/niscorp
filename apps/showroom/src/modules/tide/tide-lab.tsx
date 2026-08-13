@@ -4,7 +4,7 @@ import { createMemoryStore, createTide } from '@niscorp/tide';
 import type {
   EffectRegistry,
   Fact,
-  Firing,
+  Run,
   ReflexInput,
   Row,
   SelectFn,
@@ -16,10 +16,15 @@ import type {
 // The Tide Lab — the surface every tide story drives.
 //
 // Tide reads no wall clock: the only time it knows is the `now`
-// handed to tick(). That is a correctness property (checks
+// handed to advance(). That is a correctness property (checks
 // advance time instead of sleeping) and it is also why this lab
 // can exist at all — the clock is a control, and a month of
 // scheduled automation runs in the time it takes to click.
+//
+// This lab IS a driver, hand-rolled: it advances to quiescence
+// on every change, and shows what `nextDue` says it should wake
+// for next. Under moss that is `createTideDriver`; the shape is
+// the same, and the point is that pacing belongs to the host.
 //
 // Everything here is real: the real engine, the real memory
 // store, real Prism templates. Only the effects are stand-ins,
@@ -141,7 +146,7 @@ const C = {
 const stamp = (ms: number): string => new Date(ms).toISOString().slice(0, 16).replace('T', ' ');
 const clock = (ms: number): string => new Date(ms).toISOString().slice(11, 16);
 
-const firingTone = (state: Firing['state']): 'ok' | 'warn' | 'bad' | 'idle' =>
+const runTone = (state: Run['state']): 'ok' | 'warn' | 'bad' | 'idle' =>
   state === 'settled' ? 'ok' : state === 'skipped' ? 'warn' : 'idle';
 
 const taskTone = (state: Task['state']): 'ok' | 'warn' | 'bad' | 'idle' =>
@@ -161,9 +166,10 @@ export const TideLab: FC<TideLabProps> = ({
   note,
 }) => {
   const [now, setNow] = useState(start);
-  const [ticks, setTicks] = useState(0);
+  const [stepCount, setStepCount] = useState(0);
+  const [due, setDue] = useState<number | undefined>(undefined);
   const [sent, setSent] = useState<readonly Sent[]>([]);
-  const [firings, setFirings] = useState<readonly Firing[]>([]);
+  const [runs, setRuns] = useState<readonly Run[]>([]);
   const [tasks, setTasks] = useState<readonly Task[]>([]);
   const [facts, setFacts] = useState<readonly Fact[]>([]);
   const [preview, setPreview] = useState<string | undefined>(undefined);
@@ -205,7 +211,7 @@ export const TideLab: FC<TideLabProps> = ({
   );
 
   const refresh = useCallback(async (tide: Tide) => {
-    setFirings(await tide.ledger.firings({ limit: 40 }));
+    setRuns(await tide.ledger.runs({ limit: 40 }));
     setTasks(await tide.ledger.tasks({ limit: 60 }));
     setFacts(await tide.ledger.facts({ limit: 40 }));
     setSent([...sentRef.current]);
@@ -227,7 +233,8 @@ export const TideLab: FC<TideLabProps> = ({
     tideRef.current = tide;
     nowRef.current = start;
     setNow(start);
-    setTicks(0);
+    setStepCount(0);
+    setDue(undefined);
     setPreview(undefined);
     await refresh(tide);
     setReady(true);
@@ -237,9 +244,10 @@ export const TideLab: FC<TideLabProps> = ({
     void boot();
   }, [boot]);
 
-  // Advance = move the clock, then tick until the tick reports no work. A real
-  // host does the same thing with a nudge after each commit; the periodic tick
-  // is the guarantee, the nudge is only latency.
+  // Move the clock, then advance until a step reports no work — a chain walks
+  // one committed hop per step, so draining is what makes it arrive. This is
+  // exactly what a host's driver does on every ingest; `nextDue` below is what
+  // it sleeps until when there is nothing left to drain.
   const advance = useCallback(
     async (ms: number, settle: boolean) => {
       const tide = tideRef.current;
@@ -249,13 +257,14 @@ export const TideLab: FC<TideLabProps> = ({
       setNow(next);
       let passes = 0;
       for (let pass = 0; pass < (settle ? 8 : 1); pass += 1) {
-        const report = await tide.tick({ now: next, limit: 200 });
+        const report = await tide.advance({ now: next, limit: 200 });
         passes += 1;
         const worked =
-          report.materialized + report.factsMatched + report.tasksCreated + report.executed + report.firingsSettled > 0;
+          report.materialized + report.factsMatched + report.tasksCreated + report.executed + report.runsSettled > 0;
         if (!worked) break;
       }
-      setTicks((count) => count + passes);
+      setStepCount((count) => count + passes);
+      setDue(await tide.nextDue(next));
       await refresh(tide);
     },
     [refresh],
@@ -295,12 +304,14 @@ export const TideLab: FC<TideLabProps> = ({
           </button>
         ))}
         <button style={C.btn(true)} onClick={() => void advance(0, false)}>
-          one tick
+          one step
         </button>
         <button style={C.btn()} onClick={() => void boot()}>
           reset
         </button>
-        <span style={{ ...C.mono, opacity: 0.45 }}>{ticks} ticks</span>
+        <span style={{ ...C.mono, opacity: 0.45 }}>
+          {stepCount} {stepCount === 1 ? 'step' : 'steps'} · next due {due === undefined ? 'nothing scheduled' : `${stamp(due)}Z`}
+        </span>
       </div>
 
       {(push !== undefined || previewOf !== undefined) && (
@@ -354,22 +365,22 @@ export const TideLab: FC<TideLabProps> = ({
       <div style={C.cols}>
         <div style={C.panel}>
           <div style={C.head}>
-            <span>firings</span>
-            <span>{firings.length}</span>
+            <span>runs</span>
+            <span>{runs.length}</span>
           </div>
           <div style={C.body}>
-            {firings.length === 0 && <div style={C.empty}>no firing yet.</div>}
-            {[...firings].reverse().map((firing) => (
-              <div key={firing.id} style={C.rowLine}>
-                <span style={C.tag(firingTone(firing.state))}>{firing.state}</span>
-                <span style={C.mono}>{firing.reflexId}</span>
-                <span style={{ ...C.mono, opacity: 0.5 }}>{firing.occurrence ?? firing.cause}</span>
-                {firing.total > 0 && (
+            {runs.length === 0 && <div style={C.empty}>no run yet.</div>}
+            {[...runs].reverse().map((run) => (
+              <div key={run.id} style={C.rowLine}>
+                <span style={C.tag(runTone(run.state))}>{run.state}</span>
+                <span style={C.mono}>{run.reflexId}</span>
+                <span style={{ ...C.mono, opacity: 0.5 }}>{run.occurrence ?? run.cause}</span>
+                {run.total > 0 && (
                   <span style={{ ...C.mono, opacity: 0.6 }}>
-                    {firing.done}✓ {firing.failed > 0 ? `${firing.failed}✗ ` : ''}/{firing.total}
+                    {run.done}✓ {run.failed > 0 ? `${run.failed}✗ ` : ''}/{run.total}
                   </span>
                 )}
-                {firing.note !== undefined && <span style={{ fontSize: 11, opacity: 0.5 }}>{firing.note}</span>}
+                {run.note !== undefined && <span style={{ fontSize: 11, opacity: 0.5 }}>{run.note}</span>}
               </div>
             ))}
           </div>

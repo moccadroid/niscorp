@@ -39,6 +39,10 @@ export type { KeysNode, ValuesNode, FromEntriesNode, PickNode, OmitNode, TypeNod
 export { DateNodeSchema, DateAddNodeSchema, DateDiffNodeSchema } from './ops/time.schema';
 export type { DateNode, DateAddNode, DateDiffNode } from './ops/time.schema';
 
+// Locale-aware formatting op schemas + types
+export { LocaleDateNodeSchema, LocaleMoneyNodeSchema, LocaleNumberNodeSchema, IntlDateOptionsSchema } from './ops/intl.schema';
+export type { LocaleDateNode, LocaleMoneyNode, LocaleNumberNode, IntlDateOptions } from './ops/intl.schema';
+
 // Sugar op schemas + types
 export { SumNodeSchema, AvgNodeSchema, CountNodeSchema, MinNodeSchema, MaxNodeSchema, PluckNodeSchema, TakeNodeSchema, DropNodeSchema, MatchNodeSchema, FlatMapNodeSchema } from './ops/sugar.schema';
 export type { SumNode, AvgNode, CountNode, MinNode, MaxNode, PluckNode, TakeNode, DropNode, MatchNode, FlatMapNode } from './ops/sugar.schema';

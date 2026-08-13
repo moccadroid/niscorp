@@ -1,4 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
+import { applyDelta, frameHash } from '../src/delta';
+import type { DeltaOp } from '../src/delta';
 import { createShellHost } from '../src/shells';
 import type { ShellHostContext } from '../src/shells';
 import type { NiscApp } from '../src/app';
@@ -329,6 +331,169 @@ const twoCanvas = {
   actions: { counter: { ...counter, layout: { component: 'Text', children: '$.n' } } },
   shell: { canvases: [{ id: 'left', initial: 'counter' }, { id: 'right', initial: 'counter' }] },
 } as unknown as NiscApp;
+
+// ═══════════════════════════════════════════════════════════════
+// FRAME DELTAS — the same frame, described against the last one. The
+// invariant under test is not "smaller": it is that a terminal applying a
+// delta lands on EXACTLY the bytes a terminal receiving whole frames got.
+// ═══════════════════════════════════════════════════════════════
+
+// A tree big enough that one changed number is a small part of it — the
+// shape the delta layer exists for. Anything smaller is dominated by the
+// ops' own JSON and is correctly sent whole.
+const wide = {
+  ...app,
+  actions: {
+    counter: {
+      ...counter,
+      layout: [
+        ...Array.from({ length: 40 }, (_, i) => ({ component: 'Text', children: `a steady row of chrome that never changes, number ${i}` })),
+        { component: 'Text', children: '$.n' },
+      ],
+    },
+  },
+} as unknown as NiscApp;
+
+// Records the TEXT, not the parsed object — a delta is against bytes, so a
+// test that only sees parsed objects cannot check the thing that matters.
+const textConnection = (): Connection & { texts: string[] } => {
+  const texts: string[] = [];
+  return { texts, send: (text) => void texts.push(text), close: () => {}, onMessage: () => {}, onClose: () => {} };
+};
+
+const lastOfType = (texts: string[], type: string): Record<string, unknown> | undefined =>
+  texts.map((t) => JSON.parse(t) as Record<string, unknown>).filter((m) => m['type'] === type).at(-1);
+
+describe('shells — frame deltas', () => {
+  it('a delta rebuilds the exact frame a whole-frame terminal was sent', async () => {
+    const host = createShellHost({ ...ctx, app: wide, delta: true });
+    const session = host.session('t', 'usr_1');
+    const asked = textConnection();
+    const silent = textConnection();
+    session.attach(asked, { delta: true });
+    session.attach(silent);
+    await tick();
+
+    // The baseline both ends agree on: the last whole render each was served.
+    const base = asked.texts.filter((t) => (JSON.parse(t) as { type: string }).type === 'render').at(-1);
+    expect(base).toBeDefined();
+    asked.texts.length = 0;
+    silent.texts.length = 0;
+
+    session.dispatch('main', { type: 'ui:click', ref: 'bump' });
+    await tick();
+
+    const delta = lastOfType(asked.texts, 'render-delta');
+    expect(delta).toBeDefined();
+    // The connection that never asked is untouched by any of this.
+    const whole = silent.texts.filter((t) => (JSON.parse(t) as { type: string }).type === 'render').at(-1);
+    expect(whole).toBeDefined();
+    expect(lastOfType(silent.texts, 'render-delta')).toBeUndefined();
+
+    const rebuilt = applyDelta(base!, delta!['ops'] as DeltaOp[]);
+    expect(rebuilt).toBe(whole);
+    expect(delta!['hash']).toBe(frameHash(whole!));
+    expect(delta!['canvas']).toBe('main');
+    // And it is worth sending — the whole reason the encode runs.
+    expect(JSON.stringify(delta).length).toBeLessThan(whole!.length * 0.6);
+  });
+
+  it('deltas chain — each one is written against the last frame, not the first', async () => {
+    const host = createShellHost({ ...ctx, app: wide, delta: true });
+    const session = host.session('t', 'usr_1');
+    const asked = textConnection();
+    session.attach(asked, { delta: true });
+    await tick();
+
+    let held = asked.texts.filter((t) => (JSON.parse(t) as { type: string }).type === 'render').at(-1)!;
+    for (let i = 0; i < 4; i += 1) {
+      asked.texts.length = 0;
+      session.dispatch('main', { type: 'ui:click', ref: 'bump' });
+      await tick();
+      const delta = lastOfType(asked.texts, 'render-delta');
+      expect(delta).toBeDefined();
+      held = applyDelta(held, delta!['ops'] as DeltaOp[]);
+      expect(frameHash(held)).toBe(delta!['hash']);
+    }
+    expect((JSON.parse(held) as { tree: unknown[] }).tree).toEqual(
+      (session.shell.flattenRenderTree(session.shell.getCanvasRenderTree('main')) as unknown[]),
+    );
+  });
+
+  it('off by default — a terminal that asks is still served whole frames', async () => {
+    const host = createShellHost({ ...ctx, app: wide });
+    const session = host.session('t', 'usr_1');
+    const asked = textConnection();
+    session.attach(asked, { delta: true });
+    await tick();
+    asked.texts.length = 0;
+
+    session.dispatch('main', { type: 'ui:click', ref: 'bump' });
+    await tick();
+    expect(lastOfType(asked.texts, 'render-delta')).toBeUndefined();
+    expect(lastOfType(asked.texts, 'render')).toBeDefined();
+  });
+
+  it('resync serves whole frames without touching the shell', async () => {
+    const host = createShellHost({ ...ctx, app: wide, delta: true });
+    const session = host.session('t', 'usr_1');
+    const asked = textConnection();
+    session.attach(asked, { delta: true });
+    await tick();
+    const shell = session.shell;
+    asked.texts.length = 0;
+
+    session.resync(asked);
+    expect(lastOfType(asked.texts, 'frame')).toBeDefined();
+    expect(lastOfType(asked.texts, 'render')).toBeDefined();
+    expect(lastOfType(asked.texts, 'render-delta')).toBeUndefined();
+    // Not a reset: same shell, same state, nothing rebuilt.
+    expect(session.shell).toBe(shell);
+
+    // And it is level again — the next change is a delta against what resync
+    // just handed over.
+    const base = asked.texts.filter((t) => (JSON.parse(t) as { type: string }).type === 'render').at(-1)!;
+    asked.texts.length = 0;
+    session.dispatch('main', { type: 'ui:click', ref: 'bump' });
+    await tick();
+    const delta = lastOfType(asked.texts, 'render-delta');
+    expect(delta).toBeDefined();
+    expect(frameHash(applyDelta(base, delta!['ops'] as DeltaOp[]))).toBe(delta!['hash']);
+  });
+
+  it('a reset carries the capability across — the replacement still deltas', async () => {
+    const host = createShellHost({ ...ctx, app: wide, delta: true });
+    const session = host.session('t', 'usr_1');
+    const asked = textConnection();
+    session.attach(asked, { delta: true });
+    await tick();
+
+    session.reset();
+    await tick();
+    const base = asked.texts.filter((t) => (JSON.parse(t) as { type: string }).type === 'render').at(-1)!;
+    asked.texts.length = 0;
+
+    session.dispatch('main', { type: 'ui:click', ref: 'bump' });
+    await tick();
+    const delta = lastOfType(asked.texts, 'render-delta');
+    expect(delta).toBeDefined();
+    expect(frameHash(applyDelta(base, delta!['ops'] as DeltaOp[]))).toBe(delta!['hash']);
+  });
+
+  it('a detached connection is forgotten by both sets', async () => {
+    const host = createShellHost({ ...ctx, app: wide, delta: true });
+    const session = host.session('t', 'usr_1');
+    const asked = textConnection();
+    session.attach(asked, { delta: true });
+    await tick();
+    session.detach(asked);
+    asked.texts.length = 0;
+
+    session.dispatch('main', { type: 'ui:click', ref: 'bump' });
+    await tick();
+    expect(asked.texts).toEqual([]);
+  });
+});
 
 describe('shells — a canvas that fails to render', () => {
   it('does not stop its neighbours, on attach or on any later pass', async () => {

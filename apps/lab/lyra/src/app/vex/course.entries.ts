@@ -1,19 +1,8 @@
 import type { CacheEntry, MutationEntry } from './index';
 import { dateText, priceText } from '@lyra/app/prisms/format.prism';
 
-// COURSES — the dated thing a program is not.
-//
-// A program is a taxonomy: "Vinyasa Flow", a stream that runs indefinitely,
-// carrying a name and a colour. A course is a block somebody joins: it starts,
-// it ends, it holds a fixed number of people, and it has a price. The first
-// version of this schema had only the first, so the second kept turning up in
-// blurbs — "six weeks, runs every term" — where no query can reach it.
-
 const row = (name: string) => ({ $get: { from: { $var: 'r' }, path: [name] } });
 
-// What a studio is running. Places left is computed here rather than in a
-// layout, because a layout that did arithmetic would be a layout making a
-// decision about what "full" means.
 export const coursesList: CacheEntry = {
   fingerprint: 'courses/list',
   intent: 'The courses this studio runs, with how full each one is',
@@ -29,6 +18,7 @@ export const coursesList: CacheEntry = {
       'courses.capacity',
       'courses.enrolled_count',
       'courses.price_cents',
+      'courses.currency',
       'courses.active',
       'courses.program_id',
       { field: 'programs.name', as: 'program_name' },
@@ -47,16 +37,13 @@ export const coursesList: CacheEntry = {
         program_name: row('program_name'),
         program_id: row('program_id'),
         tone: row('tone'),
-        // Both halves, as everywhere: the raw columns so an edit form can
-        // prefill from the row it was clicked on, the display strings so no
-        // layout has to know what a cent or a date is.
         starts_on: row('starts_on'),
         ends_on: row('ends_on'),
         capacity: row('capacity'),
         price_cents: row('price_cents'),
         active: row('active'),
         dates_display: { $join: { parts: [dateText(row('starts_on')), ' – ', dateText(row('ends_on'))], sep: '' } },
-        price_display: priceText(row('price_cents')),
+        price_display: priceText(row('price_cents'), row('currency')),
         places_display: { $join: { parts: [row('enrolled_count'), ' of ', row('capacity')], sep: '' } },
         full: { $gte: [row('enrolled_count'), row('capacity')] },
       },
@@ -71,7 +58,7 @@ export const courseRoster: CacheEntry = {
   intent: 'Who is enrolled on one of this studio’s courses',
   shape: [{ enrolment_id: '', person_name: '', email: '', status: '', enrolled_display: '' }],
   dsl: {
-    from: ['enrolments', 'memberships', 'people'],
+    from: ['enrolments', 'people'],
     fields: [
       { field: 'enrolments.id', as: 'enrolment_id' },
       'enrolments.status',
@@ -143,24 +130,14 @@ export const courseUpdate: MutationEntry = {
 
 // Closed, never deleted — people are enrolled on it, and a studio asking "how
 // did the autumn block go" needs the row to answer.
-export const courseRetire: MutationEntry = {
-  fingerprint: 'courses/retire',
-  intent: 'Stop offering a course, keeping everybody on it',
+// One verb, the flag as its argument — see `templates/set-active`.
+export const courseSetActive: MutationEntry = {
+  fingerprint: 'courses/set-active',
+  intent: 'Stop offering a course, or offer it again — everybody on it stays either way',
   mutation: {
     op: 'update',
     table: 'courses',
-    set: { active: false },
-    where: { eq: ['courses.id', { $context: 'courseId' }] },
-  },
-};
-
-export const courseRestore: MutationEntry = {
-  fingerprint: 'courses/restore',
-  intent: 'Offer a course again',
-  mutation: {
-    op: 'update',
-    table: 'courses',
-    set: { active: true },
+    set: { active: { $context: 'active' } },
     where: { eq: ['courses.id', { $context: 'courseId' }] },
   },
 };
@@ -204,14 +181,14 @@ export const myEnrolments: CacheEntry = {
   },
 };
 
-// ONE client value. `membership_id` and `studio_id` come from scope; the
-// membership, the course name and its dates are derived in the trigger.
+// ONE client value. `person_id` and `studio_id` come from scope — "enrol
+// somebody else" is not a request this grammar can phrase.
 export const joinCourse: MutationEntry = {
   fingerprint: 'me/join-course',
   // Personal whoever asks — see `me/cancel`.
   reach: 'personal',
   intent: 'Join a course',
-  // One value; the membership and the studio are the rung's.
+  // One value; the person and the studio are the rung's.
   mutation: {
     op: 'insert',
     table: 'enrolments',
@@ -233,15 +210,10 @@ export const leaveCourse: MutationEntry = {
 };
 
 // ─── the desk's side ─────────────────────────────────────────
-//
-// A front desk enrols somebody at the counter, the same way it books a class.
-// It works from the MEMBERSHIP it is looking at; the person is derived in the
-// database (see `derive_enrolment_person`), so a request cannot pair one
-// member's membership with another's name.
 
 export const enrolmentsForMember: CacheEntry = {
   fingerprint: 'enrolments/for-member',
-  intent: 'Which courses one membership at this studio is on',
+  intent: 'Which courses one person at this studio is on',
   shape: [{ enrolment_id: '', course_id: '', course_name: '', dates_display: '', enrolled_display: '' }],
   dsl: {
     from: ['enrolments', 'courses'],
@@ -255,7 +227,7 @@ export const enrolmentsForMember: CacheEntry = {
     ],
     filter: {
       and: [
-        { eq: ['enrolments.membership_id', { $context: 'membershipId' }] },
+        { eq: ['enrolments.person_id', { $context: 'personId' }] },
         { eq: ['enrolments.status', 'enrolled'] },
       ],
     },
@@ -276,16 +248,13 @@ export const enrolmentsForMember: CacheEntry = {
   },
 };
 
-// TWO client values, and neither is a person: the course, and the membership
-// already on screen. `studio_id` is stamped by the engine and `membership_id` is
-// derived by the database, so there is no field here naming a human.
 export const enrolMember: MutationEntry = {
   fingerprint: 'enrolments/create',
-  intent: 'Put a member on a course from the desk',
+  intent: 'Put a person on a course from the desk',
   mutation: {
     op: 'insert',
     table: 'enrolments',
-    values: { course_id: { $context: 'courseId' }, membership_id: { $context: 'membershipId' } },
+    values: { course_id: { $context: 'courseId' }, person_id: { $context: 'personId' } },
   },
 };
 

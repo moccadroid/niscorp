@@ -1,11 +1,5 @@
 import type { LayoutNode } from '@niscorp/nova';
 
-// The owner's one settings surface: what this studio looks like.
-//
-// Applying a theme is a row write, and the screen it changes is the one you are
-// standing on — the chrome hears `theme-changed` and re-reads, so the palette
-// swaps under you without a reload. That is the demo, and it is also just how
-// the app works.
 export const studioSettingsLayout: LayoutNode = {
   component: 'Stack',
   props: { gap: 24 },
@@ -14,10 +8,6 @@ export const studioSettingsLayout: LayoutNode = {
 
     { if: '$.error', then: { component: 'Notice', props: { tone: 'alert', message: '$.error' } }, else: '' },
 
-    // Which one is on, said once above the list rather than marked per row.
-    // Computing "is this the current one" per row would need the studio's
-    // theme inside the theme list — a join that returns exactly one row —
-    // and a layout comparing two values is a layout making a decision.
     {
       component: 'Row',
       props: { gap: 8, align: 'center' },
@@ -51,6 +41,36 @@ export const studioSettingsLayout: LayoutNode = {
       // NO INTERNAL REFERENCES IN PRODUCT COPY. This said 'see PLAN.md' — a
       // file the person reading it cannot open and has never heard of.
       children: 'Colours for now. Studio-specific layouts are coming.',
+    },
+
+    // ── the language ────────────────────────────────────────
+    {
+      component: 'Card',
+      props: { pad: 18 },
+      children: {
+        component: 'Stack',
+        props: { gap: 12 },
+        children: [
+          { component: 'Text', props: { size: 'lg', weight: 'semi' }, children: 'Language' },
+          {
+            component: 'Select',
+            props: {
+              label: 'What this studio reads in',
+              hint: 'Applies to everyone here, and changes how dates and prices are written.',
+              value: '$.currentLocale',
+              options: '$.languages',
+            },
+            ref: 'language',
+          },
+          // The screen is about to be rebuilt underneath this instance, so the
+          // only honest thing left to say is that it is happening.
+          {
+            if: '$.switching',
+            then: { component: 'Notice', props: { tone: 'calm', message: 'Switching language — one moment.' } },
+            else: '',
+          },
+        ],
+      },
     },
   ],
 };

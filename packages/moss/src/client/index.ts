@@ -1,5 +1,7 @@
 import type { NovaEvent, RenderNode } from '@niscorp/nova';
 import { CLOSE_INVALID_TOKEN, CLOSE_SIGNED_OUT } from '../socket';
+import { applyDelta, frameHash } from '../delta';
+import type { DeltaOp } from '../delta';
 
 // ═══════════════════════════════════════════════════════════════
 // The wire — moss's protocol client, the other end of ../socket. Plain
@@ -39,6 +41,13 @@ export type WireConfig = {
   url?: string;
   // The host environment; default: `browserEnv()`.
   env?: WireEnv;
+  // Accept canvas frames as DELTAS against the last frame received (default:
+  // off). Both ends have to want it: this tells the server the terminal can
+  // rebuild them, and the server sends them only if `runtime.shellFrameDelta`
+  // is on and the delta is decisively smaller. Nothing else about the terminal
+  // changes — the snapshot it renders is identical either way. See DOCS.md
+  // § Frame deltas.
+  delta?: boolean;
 };
 
 export type WireSnapshot = {
@@ -76,6 +85,7 @@ export type Wire = {
 type ClientMessage =
   | { type: 'event'; canvas: string; event: Record<string, unknown> }
   | { type: 'publish'; channel: string; payload?: unknown }
+  | { type: 'resync' }
   | { type: 'reset' };
 
 const EMPTY: WireSnapshot = { frame: [], trees: new Map() };
@@ -143,11 +153,22 @@ export const createWire = (config: WireConfig = {}): Wire => {
 
   const url = (): string => config.url ?? env.defaultUrl();
 
+  const send = (message: ClientMessage): void => socket?.send(JSON.stringify(message));
+
+  // The last `render` message TEXT per canvas — the base a delta is written
+  // against, byte for byte as the server holds it. Only populated when deltas
+  // are on; cleared on every connect, because attaching serves whole frames and
+  // a base carried across a reconnect is a base the server never assumed.
+  const bases = new Map<string, string>();
+
   const connect = (): void => {
     if (disposed) return;
     setStatus('connecting');
-    const query = token === null ? '' : `?token=${encodeURIComponent(token)}`;
-    const ws = env.socket(`${url()}${query}`);
+    bases.clear();
+    const params: string[] = [];
+    if (token !== null) params.push(`token=${encodeURIComponent(token)}`);
+    if (config.delta === true) params.push('delta=1');
+    const ws = env.socket(`${url()}${params.length > 0 ? `?${params.join('&')}` : ''}`);
     socket = ws;
     // A connection that opens is a healthy connection: forget the backoff.
     ws.onopen = () => {
@@ -155,16 +176,45 @@ export const createWire = (config: WireConfig = {}): Wire => {
       setStatus('open');
     };
     ws.onmessage = (e) => {
-      const data = JSON.parse(String(e.data)) as {
+      const text = String(e.data);
+      const data = JSON.parse(text) as {
         type: string;
         canvas?: string;
         tree?: RenderNode[];
+        ops?: DeltaOp[];
+        hash?: number;
         token?: string;
         code?: string;
         message?: string;
       };
       if (data.type === 'render' && data.canvas !== undefined && data.tree !== undefined) {
+        if (config.delta === true) bases.set(data.canvas, text);
         publishSnapshot({ ...snapshot, trees: new Map(snapshot.trees).set(data.canvas, data.tree) });
+      } else if (data.type === 'render-delta' && data.canvas !== undefined && data.ops !== undefined && data.hash !== undefined) {
+        // Rebuild, then PROVE it. Anything short of the server's own checksum
+        // and we would be rendering a frame nobody authored — so every failure
+        // here takes the one exit that always works: ask for whole frames.
+        // Never a thrown error and never a partial apply; a terminal that goes
+        // blank on a bad delta is worse than one that costs a round trip.
+        const base = bases.get(data.canvas);
+        let rebuilt: string | null = null;
+        if (base !== undefined) {
+          try {
+            const candidate = applyDelta(base, data.ops);
+            rebuilt = frameHash(candidate) === data.hash ? candidate : null;
+          } catch {
+            rebuilt = null;
+          }
+        }
+        if (rebuilt === null) {
+          console.warn(`[moss/wire] canvas "${data.canvas}": delta did not rebuild the server's frame — resyncing.`);
+          bases.delete(data.canvas);
+          send({ type: 'resync' });
+          return;
+        }
+        const frame = JSON.parse(rebuilt) as { canvas: string; tree: RenderNode[] };
+        bases.set(data.canvas, rebuilt);
+        publishSnapshot({ ...snapshot, trees: new Map(snapshot.trees).set(data.canvas, frame.tree) });
       } else if (data.type === 'frame' && data.tree !== undefined) {
         publishSnapshot({ ...snapshot, frame: data.tree });
       } else if (data.type === 'session' && typeof data.token === 'string') {
@@ -231,8 +281,6 @@ export const createWire = (config: WireConfig = {}): Wire => {
   };
 
   connect();
-
-  const send = (message: ClientMessage): void => socket?.send(JSON.stringify(message));
 
   return {
     subscribe: (listener) => {

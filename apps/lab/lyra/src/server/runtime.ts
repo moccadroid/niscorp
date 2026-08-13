@@ -5,12 +5,6 @@ import type { NiscRuntime } from '@niscorp/moss';
 import { DDL } from '@lyra/db/schema';
 import { buildSeedSql } from '@lyra/db/seed';
 
-// The dev ENVIRONMENT (D2) — a NiscRuntime over PGlite: schema, demo rows, and
-// nothing else. The API surface is declared once in the manifest's `entries`
-// and seeded into vex_cache by whoever stands up an engine over this runtime.
-//
-// Swapping this for Cloud SQL is one object: `PgPool` is `{ query(text, values) }`
-// and nothing above this file knows which implementation answered.
 export type DevRuntime = NiscRuntime & { db: PGlite };
 
 export const devRuntime = async (): Promise<DevRuntime> => {
@@ -18,15 +12,25 @@ export const devRuntime = async (): Promise<DevRuntime> => {
   await db.exec(DDL);
   await db.exec(buildSeedSql());
 
-  // App queries get raw date strings (Prism formats them); the cache keeps
-  // Dates, because it calls getTime() on its own timestamps. One database,
-  // two pools.
   const cache = createPostgresCache({ pool: createPglitePool(db) });
   await cache.init();
 
-  // THE OPERATOR KEY, from the environment on both sides of the seam. Absent
-  // and the seam does not exist — which is the right default for a lab, and the
-  // right default for a deployment that has not decided who administers it.
   const operatorKey = process.env['OPERATOR_KEY'] ?? '';
-  return { db, pool: createPglitePool(db, RAW_DATE_PARSERS), cache, ...(operatorKey === '' ? {} : { operatorKey }) };
+
+  // A FIXED SIGNING SEED, dev only. Lyra's database is in-memory and replayed on
+  // every boot, so without this the assertion keypair is fresh each restart —
+  // and the payments pack, a SEPARATE process holding lyra's old public key,
+  // starts answering "who are you?" to every call until somebody re-copies the
+  // new one. Set `LYRA_SIGNING_SEED` (32 bytes base64) and the public half stays
+  // put across restarts, so the pack's env stays valid. Unset in production,
+  // where the ephemeral key is the right default (assert.ts).
+  const signingSeed = process.env['LYRA_SIGNING_SEED'] ?? '';
+
+  return {
+    db,
+    pool: createPglitePool(db, RAW_DATE_PARSERS),
+    cache,
+    ...(operatorKey === '' ? {} : { operatorKey }),
+    ...(signingSeed === '' ? {} : { signingSeed }),
+  };
 };

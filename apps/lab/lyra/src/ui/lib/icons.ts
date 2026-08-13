@@ -1,20 +1,3 @@
-// THE ICON VOCABULARY — names, not paths.
-//
-// Rule 2 applies to shapes exactly as it applies to colours: a layout names a
-// TOKEN and the kit decides what it looks like. An `icon: 'people'` in an
-// action survives a redraw of every glyph in this file; an inline `<svg>` in a
-// layout would be a picture welded into a document, unthemeable and
-// unreplaceable, and a studio's layout override could ship anything at all.
-//
-// Before this file the application had NO icons — the only glyphs anywhere
-// were a hardcoded `×`, `←`, `‹`, `›`, `—` and three `<span>`s stacked into a
-// hamburger. That is most of why every screen read as a wall of grey text: a
-// menu of eight words, a table of words, buttons of words.
-//
-// One geometry, so a row of them looks like a set rather than a collection:
-// 24×24 box, stroke only, `currentColor`, round caps and joins, 1.75 weight.
-// Nothing here is filled and nothing carries its own colour — an icon is ink,
-// and it takes the colour of whatever it sits in.
 export const ICON_PATHS: Record<string, string> = {
   // ── navigation ────────────────────────────────────────────
   today: 'M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M18.4 5.6L17 7M7 17l-1.4 1.4M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8z',

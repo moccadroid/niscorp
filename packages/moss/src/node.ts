@@ -22,10 +22,16 @@ type Upgradeable = {
 };
 
 // The `ws` half of the transport seam: RFC 6455 stays library-handled
-// (permessage-deflate on); the protocol above the seam is
-// nisc's own (../socket.ts) and identical on every runtime.
-export const attachSocket = (httpServer: Upgradeable, accept: SocketAccept, path = '/socket'): void => {
-  const wss = new WebSocketServer({ noServer: true, perMessageDeflate: true });
+// (permessage-deflate on by default — see `runtime.socketCompression`); the
+// protocol above the seam is nisc's own (../socket.ts) and identical on every
+// runtime.
+export const attachSocket = (
+  httpServer: Upgradeable,
+  accept: SocketAccept,
+  path = '/socket',
+  options?: { compression?: boolean | Record<string, unknown> },
+): void => {
+  const wss = new WebSocketServer({ noServer: true, perMessageDeflate: options?.compression ?? true });
   httpServer.on('upgrade', (req, socket, head) => {
     const url = req.url ?? '/';
     // Not ours: leave it for whichever other listener owns it (vite's HMR
@@ -46,7 +52,7 @@ export const serve = async (app: NiscApp, runtime: NiscRuntime & { port?: number
   const server = await createServer(app, runtime);
   const port = runtime.port ?? 8787;
   const httpServer = listen({ fetch: server.fetch, port });
-  attachSocket(httpServer, server.socket);
+  attachSocket(httpServer, server.socket, '/socket', { ...(runtime.socketCompression !== undefined ? { compression: runtime.socketCompression } : {}) });
   console.log(`moss serving http://localhost:${port}`);
   console.log(`surfaces: GET /catalog · GET|POST /api/vex · GET|POST /api/<resource>/vex · ws://localhost:${port}/socket`);
   return server;

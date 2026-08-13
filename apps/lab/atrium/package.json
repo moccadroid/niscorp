@@ -11,7 +11,7 @@
     "serve": "tsx src/server/serve.ts",
     "integrations": "tsx watch src/integrations/serve.ts",
     "admin": "tsx watch src/admin/serve.ts",
-    "check": "tsx src/dev/all-checks.ts"
+    "check": "turbo run build --filter=atrium^... && tsx src/dev/all-checks.ts"
   },
   "dependencies": {
     "@electric-sql/pglite": "^0.5.1",

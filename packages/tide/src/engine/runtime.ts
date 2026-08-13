@@ -1,5 +1,5 @@
 import type { Reflex } from '../schemas';
-import type { EffectRegistry, Row, SelectFn, TideEvent, TideStoreLike, TransformFn } from '../types';
+import type { EffectRegistry, Row, SelectFn, TideEvent, TideStore, TransformFn } from '../types';
 
 export type LoadedReflex = {
   reflex: Reflex;
@@ -12,13 +12,15 @@ export type LoadedReflex = {
 };
 
 export type EngineDeps = {
-  store: TideStoreLike;
+  store: TideStore;
   transform: TransformFn;
   select?: SelectFn;
   effectsFor: (as: string | undefined) => EffectRegistry;
   actorFor: (as: string | undefined) => unknown;
   maxChainDepth: number;
   maxFanOut: number;
+  // How long a claim is good for. Expiry is the reclaim; there is no reaper.
+  leaseMs: number;
   emit: (event: TideEvent) => void;
   reflexes: () => readonly LoadedReflex[];
   find: (id: string) => LoadedReflex | undefined;

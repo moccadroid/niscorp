@@ -6,39 +6,14 @@ const page = (children: LayoutNode | LayoutNode[]): LayoutNode => ({
   children,
 });
 
-// THE GRID — the rules, not the dated classes.
-//
-// A manager edits this and the timetable follows: adding a Tuesday slot puts
-// Tuesdays on the calendar, moving it to Wednesday moves the ones nobody has
-// booked. That derivation is a database trigger (schema.ts), so this screen
-// only ever writes one row and never has to think about occurrences.
+// The grid — the RULES, not the dated classes. A manager edits one row and the
+// calendar follows, because the derivation is a database trigger (schema.ts).
 export const timetableListLayout: LayoutNode = page([
   {
     component: 'Row',
     props: { justify: 'between', align: 'center', wrap: true, gap: 12 },
     children: [
-      // Titled for the nav item that reaches it.
-      //
-      // This screen and the calendar were BOTH called "Timetable", and the
-      // read-only one owned the nav item with that name — so the obvious place
-      // to go and change the timetable was the one screen that cannot, and the
-      // editable grid sat behind a nav item called "Classes" wearing the other
-      // one's title. Two screens, one name, and the wrong one on the door.
-      // ONE SCREEN FOR EVERYTHING THAT RUNS.
-      //
-      // "Weekly plan" and "Courses" were two screens over the same table with
-      // different filters, which is what made them read as unrelated ideas and
-      // produced the fair question "what ARE courses and programs?".
-      //
-      // They are one list. A row either repeats forever or runs between two
-      // dates for a price — the Runs column says which, and that is the entire
-      // difference between them.
       { component: 'Hero', props: { title: 'Classes', lead: 'Everything this studio runs. A class repeats every week; a course runs between two dates for a price. The calendar is generated from both.' } },
-      // THREE WAYS TO ADD, AND THEY WRAP. Unwrapped they ran 376px wide on a
-      // 327px column: "Add a one-off" hung off the right edge and the whole
-      // page grew a sideways scrollbar. Every row of controls that can hold
-      // three needs this — the parent's `between` wraps now, but a nested row
-      // is its own line and has to say so itself.
       {
         component: 'Row',
         props: { gap: 8, wrap: true },
@@ -65,30 +40,18 @@ export const timetableListLayout: LayoutNode = page([
         onRowRef: 'edit',
         empty: 'No classes yet.',
         emptyHint: 'Add the first weekly slot and the calendar fills itself.',
-        // GROUPED BY WHAT IT RUNS AS — which is what deleted the widest
-        // column. "Every week" appeared in eight of nine rows: a value that
-        // repeats in nine rows out of ten is not a column, it is a heading.
-        // The dated blocks gather under their own.
+        // Grouped by what it runs as, which is what deletes the widest column:
+        // a value repeating in nine rows out of ten is a heading, not a column.
         groupKey: 'runs_display',
-        // TEN COLUMNS TO SIX, and the horizontal scrollbar with them. The old
-        // spec computed to 1208px against a 1280 viewport with the rail open,
-        // and a phone silently hid FOUR of its columns — teacher, seats, on
-        // it, state — because everything past the third display column is
-        // `display: none` below the breakpoint. A column that vanishes is not
-        // a narrow column, it is an absent feature.
-        //
-        // What went, and why:
-        //   Runs   → the group heading above.
-        //   On it  → blank in eight of nine rows; it is a cohort count, and a
-        //            cohort has a roster screen that says it properly.
-        //   Who / Retire / Restore → one overflow. Three of ten columns were
-        //            buttons, and on a phone the row became a button bar with
-        //            the name squeezed between them.
         columns: [
-          { label: 'Class', w: 2, sortable: 'name', cell: { kind: 'primary', key: 'name', subKey: 'program_name', dotKey: 'program_tone' } },
+          // Deliberately NOT sortable, unlike Staff and Pricing: this list is
+          // grouped by `runs_display`, and a caller-supplied ORDER BY replaces
+          // the entry's whole sort — so the grouping would stop being
+          // contiguous and the same heading would repeat down the page.
+          // Grouping owns this list's order; the two cannot both have it.
+          { label: 'Class', w: 2, cell: { kind: 'primary', key: 'name', subKey: 'program_name', dotKey: 'program_tone' } },
           { label: 'When', px: 116, cell: { kind: 'primary', key: 'weekday_display', subKey: 'starts_at' } },
-          // A FACE, NOT A STRING. Eight rows of grey names read as texture;
-          // an avatar makes "who teaches Monday" something you see.
+          // A face, not a string: eight rows of grey names read as texture.
           { label: 'Teacher', px: 148, cell: { kind: 'avatar', key: 'instructor_name' } },
           { label: 'Seats', px: 68, align: 'right', cell: { kind: 'number', key: 'capacity' } },
           { label: 'State', px: 88, cell: { kind: 'badge', key: 'state_label', toneKey: 'state_tone' } },
@@ -118,10 +81,8 @@ export const timetableFormLayout: LayoutNode = {
   props: { gap: 16 },
   children: [
     { if: '$.error', then: { component: 'Notice', props: { tone: 'alert', message: '$.error' } }, else: '' },
-    // EVERY SHEET FORM OPENS THE SAME WAY: one line saying what this makes,
-    // then the fields, then one button. Three forms that each looked different
-    // was three people's guesses at the same problem, and two of them were
-    // titled twice because they still carried a page's Hero.
+    // Every sheet form opens the same way: one line saying what this makes, then
+    // the fields, then one button. No Hero — the sheet supplies the title.
     { component: 'Text', props: { size: 'sm', color: 'mute' }, children: 'A weekly slot that repeats forever. The calendar fills itself in from it.' },
     { component: 'Input', props: { label: 'Class name', placeholder: 'Morning Flow' }, ref: 'name', model: '$.name' },
     {

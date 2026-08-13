@@ -67,39 +67,29 @@ export const SignalTriggerSchema = z
   .object({ fact: z.object({ signal: z.string().describe('The named intake — a webhook, an inbound SMS.') }).strict() })
   .strict();
 
-export const FiringTriggerSchema = z
+export const RunTriggerSchema = z
   .object({
     fact: z
-      .object({ firing: z.string().describe('A reflex id — fires when THAT reflex\'s firing settles. Fan-in and dependency.') })
+      .object({ run: z.string().describe('A reflex id — fires when THAT reflex\'s run settles. Fan-in and dependency.') })
       .strict(),
   })
   .strict();
 
-// A poll is a fact SOURCE for hosts with no write choke point: run the
-// selection, diff against the stored cursor, mint write facts for the
-// delta. The polling reflex subscribes to its own `entity` implicitly —
-// and so may anyone else, which is the whole reason the delta becomes
-// facts rather than private state.
-export const PollTriggerSchema = z
-  .object({
-    poll: z
-      .object({
-        everyMs: z.number().int().positive().describe('How often to re-run the selection and diff the watermark.'),
-        entity: z.string().describe('The entity minted facts are attributed to. Other reflexes may watch it too.'),
-        cursor: z.string().describe('The row field that advances monotonically — the watermark reads this.'),
-      })
-      .strict(),
-  })
-  .strict();
-
+// There is NO poll trigger, and the absence is a decision. Polls existed
+// for hosts with no write choke point — run a selection, diff a cursor,
+// mint write facts for the delta. In this stack the host's DAL IS the
+// choke point: every application write becomes a fact at the vex bridge,
+// so a poll could only ever re-discover what was already pushed, one
+// interval late. An external source with no choke point enters through an
+// importer that ingests write facts at the door — the same shape, without
+// a reflex secretly re-querying.
 export const ManualTriggerSchema = z.object({ manual: z.object({}).strict() }).strict();
 
 export const TriggerSchema = z.union([
   ClockTriggerSchema,
   WriteTriggerSchema,
   SignalTriggerSchema,
-  FiringTriggerSchema,
-  PollTriggerSchema,
+  RunTriggerSchema,
   ManualTriggerSchema,
 ]);
 
@@ -117,12 +107,9 @@ export const clockOf = (trigger: Trigger): Clock | undefined => ('clock' in trig
 
 export const isRecurring = (clock: Clock): clock is ClockRecurring => 'every' in clock;
 
-export const pollOf = (trigger: Trigger): { everyMs: number; entity: string; cursor: string } | undefined =>
-  'poll' in trigger ? trigger.poll : undefined;
-
 export const factOf = (
   trigger: Trigger,
-): { entity?: string; op?: Op; signal?: string; firing?: string } | undefined =>
+): { entity?: string; op?: Op; signal?: string; run?: string } | undefined =>
   'fact' in trigger ? trigger.fact : undefined;
 
 export const isManual = (trigger: Trigger): boolean => 'manual' in trigger;

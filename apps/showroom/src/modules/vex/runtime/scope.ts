@@ -38,5 +38,16 @@ export const mutationPolicy: ScopePolicy = {
         { match: 'account_id', to: 'accountId' },
       ],
     },
+    // The onConflict demos. `customers` grants insert AND update because its
+    // create-or-fetch entry declares DO UPDATE — an update by another name,
+    // gated like one (insert alone would refuse it). `product_tags` is
+    // insert-only: its entry uses DO NOTHING, which needs no update grant.
+    customers: { insert: [], update: [] },
+    product_tags: { insert: [] },
+    // A $lookup READS its table under THIS policy — `tags` needs a read
+    // phase here or the tag-by-name lookup is refused (default: deny).
+    tags: { read: [] },
+    // The insertEach demo.
+    order_items: { insert: [] },
   },
 };

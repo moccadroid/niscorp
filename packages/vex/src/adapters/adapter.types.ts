@@ -10,7 +10,9 @@ export type CompiledQuery = {
 export type ParamSlot = {
   key: string;
   kind: 'context' | 'scope' | 'semantic';
-  type: 'string' | 'number' | 'boolean' | 'string[]' | 'number[]';
+  // `json` binds as a JSON string (insertEach items) — the mutation engine
+  // stringifies it so drivers don't turn a JS array into an ARRAY literal.
+  type: 'string' | 'number' | 'boolean' | 'string[]' | 'number[]' | 'json';
   dimensions?: number;
 };
 
@@ -24,7 +26,15 @@ export type BoundParams = unknown[];
 export type Row = Record<string, unknown>;
 
 export type IntrospectOptions = {
+  // Only these tables. An allow-list, so a host that knows its surface can
+  // name it exactly.
   entities?: string[];
+  // Everything BUT these. The shape a host wants when it does not author a
+  // table list on principle but does own some tables that are not
+  // application data — an engine's own bookkeeping, a migration journal.
+  // Without it those tables introspect into the grantable set and become
+  // strings somebody can be granted `.read` on.
+  exclude?: string[];
   schema?: string;
 };
 

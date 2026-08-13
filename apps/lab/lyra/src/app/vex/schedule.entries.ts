@@ -1,10 +1,6 @@
 import type { CacheEntry } from './index';
 import { dayText, fillText, fillTone, sessionStateText } from '@lyra/app/prisms/format.prism';
 
-// The timetable. Sessions are read straight — no join to bookings, because the
-// booked figure lives on the session row (schema.ts explains why), which also
-// means an empty class renders like any other instead of vanishing.
-
 const row = (name: string) => ({ $get: { from: { $var: 's' }, path: [name] } });
 
 // Every session today, in the order they happen. `today` arrives as injected
@@ -25,9 +21,6 @@ export const sessionsToday: CacheEntry = {
       { field: 'programs.name', as: 'program_name' },
       { field: 'programs.colour', as: 'program_tone' },
     ],
-    // THE STUDIO'S DAY, from scope. Not a date the caller sends — a caller that
-    // supplies 'today' can supply any day, and a caller computing it from its own
-    // clock disagrees with the database at a UTC boundary. Both were true here.
     filter: { eq: ['class_sessions.held_on', { $scope: 'today' }] },
     sort: [{ field: 'class_sessions.starts_at', dir: 'asc' }],
   },
@@ -109,13 +102,6 @@ export const programsList: CacheEntry = {
     filter: { eq: ['programs.active', true] },
     sort: [{ field: 'programs.name', dir: 'asc' }],
   },
-  // Rows carry their own OPTION shape.
-  //
-  // A trigger's `set` resolves bindings but does not evaluate Prism ops, so
-  // mapping rows into `{ value, label }` inside an action does not work — the
-  // expression reaches the browser unevaluated and the component throws. The
-  // mapping belongs on the way OUT of vex, which is where every other shaping
-  // decision in this app already lives.
   mapping: {
     $map: {
       over: { $ref: '$.result' },

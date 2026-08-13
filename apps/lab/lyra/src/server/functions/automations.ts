@@ -2,207 +2,149 @@ import type { FunctionHandler } from '@niscorp/nova';
 import type { Tide } from '@niscorp/tide';
 import type { FunctionSession } from '@niscorp/moss';
 import { personById } from '../users';
-import { reloadReflexes } from '../boot';
-import { AUDIENCES, EFFECTS, audienceById, effectById, nameOf, pairs, reflexIdFor } from '@lyra/app/reflexes/compose';
+import { effectById, momentById, nameOf, reflexIdFor, selectionFor } from '@lyra/app/reflexes/compose';
+import { askAsAutomation } from '../tide';
+import { evaluate } from '@niscorp/prism';
+import { RECIPES } from '@lyra/app/reflexes/recipes';
 
-// THE OPERATOR'S WINDOW ONTO THE AUTOMATIONS.
-//
-// These are `fn:` endpoints rather than vex entries, and the reason is a
-// property of the store rather than a preference: tide's ledger lives in a
-// MEMORY store, so there are no tables for vex to introspect and no rows for a
-// fingerprint to name. Swap in `createPostgresStore` and every screen below
-// becomes an ordinary read over ordinary rows — which is what tide's design
-// says a moss host should do, and the reason `arm`, `fire` and `preview` are
-// worth building as UI at all.
-//
-// Recorded as the one place in this application where a `fn:` reads instead of
-// writes. It is not a discipline break so much as a thing the discipline
-// cannot reach yet, and the fix is a store, not a rewrite.
-//
-// TENANCY. Every handler takes the caller's studio and filters reflex ids on
-// it — the ids are prefixed `<studioId>:`, which is what the reflex templates
-// mint. This is the one boundary in Lyra NOT enforced by the engine, because
-// the ledger is not in the database the engine guards. It is therefore checked
-// here, in one place, and asserted in `automations-check`. When the ledger
-// becomes rows, this function disappears and the behaviors take over.
-type Deps = { tide: () => Tide };
+type Deps = { tide: () => Tide; driver: () => import('@niscorp/moss').TideDriver; server: () => import('@niscorp/moss').MossServer };
 
 const mine = (studioId: string, reflexId: string): boolean => reflexId.startsWith(`${studioId}:`);
 
 export const automationFunctions = (session: FunctionSession, deps: Deps & { pool: import('@niscorp/vex').PgPool }): Record<string, FunctionHandler> => {
-  // THE STUDIO COMES FROM THE SESSION, never from the request.
-  //
-  // An earlier draft took it from the action data, which would have been both
-  // forgeable and broken: `inputs` seeds only the boot-mounted action, so a
-  // navigated-to screen would have carried an empty string. Reading the
-  // principal here is the same derivation `scope()` does for the engine.
   const studioOf = (): string => personById(session.principal)?.studioId ?? '';
 
+  // WHICH MOMENT THIS AUTOMATION IS, asked of the moment rather than of the
+  // engine. Whether a thing runs on a write or on a clock is a property of
+  // the MOMENT — `watch` is right there on it — and reading it back off the
+  // loaded reflex's trigger asks a second source the same question, one that
+  // is also empty for a beat after a reload.
+  //
+  // The reflex id IS `<studioId>:<automationId>`, read backwards.
+  const momentOf = async (studioId: string, reflexId: string) => {
+    const result = await deps.pool.query('SELECT moment FROM automations WHERE id = $1 AND studio_id = $2', [reflexId.slice(studioId.length + 1), studioId]);
+    return momentById(String((result.rows[0] as { moment?: unknown } | undefined)?.moment ?? ''));
+  };
+
   return {
-    // What this studio's automations are, and how they last ran.
-  'automations.overview': async (data) => {
-    const studioId = studioOf();
-    if (studioId === '') throw new Error('No studio.');
-    const tide = deps.tide();
-
-    const firings = await tide.ledger.firings({ limit: 200 });
-    const ours = firings.filter((f) => mine(studioId, f.reflexId));
-
-    // One row per reflex, newest firing folded in. The operator's question is
-    // "is this working", which is a question about the LAST run rather than a
-    // list of every run — the history hangs off the row when they ask for it.
-    // ONE LIST, NOT TWO.
-    //
-    // This screen showed the same automations twice: a "Set up" table of rows
-    // (what is configured) above a "What it does" table of reflexes (what is
-    // loaded and how it last ran). Two tables, the same three automations, and
-    // the controls split between them — you changed the schedule in the top
-    // one and paused in the bottom one, with nothing saying so.
-    //
-    // They were never two things. A row IS the automation and a reflex is that
-    // row loaded; the split was an artefact of two data sources, which is a
-    // reason for ONE JOIN and not for two tables. Joined on the template,
-    // because that is what the row names and what the reflex id ends with.
-    const configured = await deps.pool.query(
-      'SELECT id, audience, effect, run_at, trial_days, subject, body, enabled FROM automations WHERE studio_id = $1 ORDER BY run_at',
-      [studioId],
-    );
-
-    const reflexes = (configured.rows as { id: string; audience: string; effect: string; run_at: string; trial_days: number; subject: string; body: string; enabled: boolean }[]).map((row) => {
-      const reflexId = reflexIdFor(studioId, row);
-      const reflex = tide.reflexes().find((r) => r.id === reflexId);
-      const last = ours.find((f) => f.reflexId === reflexId);
-      const state = last === undefined ? '' : String((last as { state?: unknown }).state ?? '');
-      const stats = (last as { stats?: { done?: number; failed?: number; total?: number } } | undefined)?.stats;
-      // THE NAME IS COMPOSED, not stored. It is what this row DOES — the
-      // effect and the audience in the operator's language — so it stays true
-      // when either half is changed and there is no name column to go stale.
-      const audience = audienceById(row.audience);
-      const effect = effectById(row.effect);
-      const armed = reflex !== undefined && reflex.enabled !== false && row.enabled;
-      return {
-        automation_id: row.id,
-        reflex_id: reflexId,
-        audience: row.audience,
-        effect: row.effect,
-        name: nameOf(row),
-        // ONE short sentence. The row already says what it does in its name;
-        // this says what that MEANS. Concatenating both halves' blurbs made a
-        // four-line cell that nobody reads — the long version belongs in the
-        // form, where you are deciding, not in a table you are scanning.
-        intent: effect === undefined || audience === undefined ? 'This pairing is not in this version.' : effect.blurb,
-        run_at: row.run_at,
-        run_display: `Runs at ${row.run_at}`,
-        trial_days: row.trial_days,
-        subject: row.subject,
-        body: row.body,
-        uses_trial_days: audience?.usesTrialDays === true,
-        uses_message: effect?.usesMessage === true,
-        enabled: armed,
-        // Loaded but not armed, and configured but not loaded, are different
-        // problems. Saying "Armed" for both hides the second one entirely.
-        state_label: reflex === undefined ? 'Not loaded' : armed ? 'Armed' : 'Paused',
-        state_tone: reflex === undefined ? 'warm' : armed ? 'good' : 'neutral',
-        pause_label: armed ? 'Pause' : 'Arm',
-        last_outcome: last === undefined ? 'Never run' : state === 'settled' ? `${stats?.done ?? 0} done` : state,
-        last_tone: last === undefined ? 'neutral' : state === 'settled' ? 'good' : state === 'skipped' ? 'warm' : 'calm',
-        failed: Number(stats?.failed ?? 0),
-      };
-    });
-
-    // The ARRAY, not a wrapper: the endpoint targets `reflexes`, and returning
-    // an object would set that key to a box containing the rows.
-    return reflexes;
-  },
-
-  // A DRY RUN, which is the whole reason an operator can be trusted with this
-  // screen. It runs the real pipeline against real data and stubs exactly one
-  // function — the effect executor — so "what would tonight do" is answerable
-  // without doing it.
   'automations.preview': async (data) => {
     const studioId = studioOf();
     const reflexId = String(data['reflexId'] ?? '');
     if (!mine(studioId, reflexId)) throw new Error('That automation is not yours.');
+    // A watched automation fires per write, anchored to the row that caused
+    // it — with no write there is nothing to rehearse, and pretending would
+    // mean answering a different question than the one it runs on.
+    if ((await momentOf(studioId, reflexId))?.watch !== undefined) {
+      return {
+        summary: 'Runs as it happens — the moment its write lands, anchored to the person it concerns. The card shows how it last ran.',
+        anyone: false,
+        hint: '',
+        units: [],
+      };
+    }
     const report = await deps.tide().preview(reflexId, { now: Date.now() });
-    const units = report.units.map((u) => ({ unit: String((u as { unit?: unknown }).unit ?? '') }));
+
+    const text = (value: unknown): string => (typeof value === 'string' ? value : '');
+    const units = report.units.map((u) => {
+      const input = (u.input ?? {}) as Record<string, unknown>;
+      const row = ((u.env as Record<string, unknown> | undefined)?.['row'] ?? {}) as Record<string, unknown>;
+      const who = text(row['person_name']) || text(input['toAddress']) || u.unit;
+      return {
+        unit: u.unit,
+        who,
+        to: text(row['email']) || text(input['toAddress']),
+        subject: text(input['subject']) || text(input['title']) || text(input['tag']),
+        body: text(input['body']) || text(input['detail']),
+        // A pack's effect answers for itself; empty for a shipped one, where the
+        // input above already says everything.
+        note: typeof u.render === 'string' ? u.render : '',
+        error: u.error ?? '',
+      };
+    });
+
+    const n = report.selected;
     return {
-      summary: report.selected === 0 ? 'Nothing is due right now.' : `Would act on ${report.selected}, as ${report.cause}.`,
+      summary: n === 0 ? 'Nobody is due right now — nothing would go out.' : n === 1 ? 'One person is due. This is what they would get:' : `${n} people are due. This is what they would get:`,
+      anyone: n > 0,
+      hint: n === 0 ? 'Come back when somebody is due, or change the window.' : '',
       units,
     };
   },
 
-  // Running it now. Works on a disarmed reflex — arming gates triggers, not
-  // people — which is what makes this safe to hand somebody: they can pause a
-  // misbehaving automation and still run it by hand once they have looked.
   'automations.run': async (data) => {
     const studioId = studioOf();
     const reflexId = String(data['reflexId'] ?? '');
     if (!mine(studioId, reflexId)) throw new Error('That automation is not yours.');
-    const tide = deps.tide();
-    const now = Date.now();
-    await tide.fire(reflexId, { now, by: String(data['by'] ?? 'operator') });
-    // A chain advances one hop per tick, so a few passes let the digest that
-    // watches this firing land before the screen re-reads.
-    for (let i = 0; i < 4; i += 1) await tide.tick({ now: now + i });
+    if ((await momentOf(studioId, reflexId))?.watch !== undefined) {
+      throw new Error('This one runs by itself — the moment its write lands. There is nothing to run by hand.');
+    }
+    const driver = deps.driver();
+    await driver.fire(reflexId, { now: Date.now(), by: String(data['by'] ?? 'operator') });
+    // Join the drain: quiescence includes the whole chain (the digest that
+    // watches this firing lands too), so the screen re-reads a settled world.
+    await driver.wake();
     return { ran: true };
   },
 
-  // The catalog a studio picks from. Shipped shapes, not free text — a row
-  // naming anything else is refused at load.
-  // THE TWO VOCABULARIES. A form asks who, then what — and the second list is
-  // filtered by the first, because not every pairing is meaningful: marking a
-  // trial lapsed needs a membership, so it cannot follow an audience of
-  // bookings. Offering it anyway would let somebody build a combination that
-  // selects nothing, forever, silently.
-  'automations.audiences': async () => AUDIENCES.map((a) => ({ value: a.id, label: a.label })),
-
-  'automations.effects': async (data) => {
-    const audienceId = String(data['audience'] ?? '');
-    return EFFECTS.filter((e) => e.appliesTo.includes(audienceId)).map((e) => ({ value: e.id, label: e.label }));
-  },
-
-  // WHAT THIS PAIRING ACTUALLY TAKES.
+  // WHO THIS WOULD REACH, WHILE YOU ARE STILL TYPING.
   //
-  // The form used to show every knob for every automation, so picking a digest
-  // still asked for a trial window. Which knobs exist is a property of the
-  // PAIRING — the audience decides whether there is a window, the effect
-  // decides whether there are words — and the form asks for exactly those.
-  'automations.shape': async (data) => {
-    const audience = audienceById(String(data['audience'] ?? ''));
-    const effect = effectById(String(data['effect'] ?? ''));
-    if (audience === undefined || effect === undefined) return { usesTrialDays: false, usesMessage: false, intent: '', valid: false };
-    // RESOLVE THE EFFECT, do not just judge it.
-    //
-    // Changing the audience re-filters the effect list, and the previously
-    // chosen effect can drop out of it — the select then DISPLAYED the only
-    // remaining option while the model still held the old one, so the form said
-    // 'that combination is not available' about a combination nobody had
-    // chosen and the picker was showing something else. A list and a value that
-    // disagree is worse than either being wrong.
-    //
-    // So this returns the effect that actually applies, and the caller sets it.
-    const resolved = pairs(audience.id, effect.id) ? effect : EFFECTS.find((e) => e.appliesTo.includes(audience.id));
-    if (resolved === undefined) return { usesTrialDays: audience.usesTrialDays, usesMessage: false, effect: '', intent: 'Nothing this version ships can act on that group yet.', valid: false };
-    return {
-      usesTrialDays: audience.usesTrialDays,
-      usesMessage: resolved.usesMessage,
-      effect: resolved.id,
-      intent: `${resolved.blurb} ${audience.blurb}`,
-      valid: true,
-    };
-  },
-
-  // Rows changed, so the loaded reflexes are stale. Re-reading is the whole
-  // point of them being rows: no release, no restart.
-  'automations.reload': async () => ({ loaded: await reloadReflexes(deps.pool, deps.tide()) }),
-
-  'automations.arm': async (data) => {
+  // The builder could compose and save an automation that reached nobody, and
+  // two ways of doing it had both shipped: one whose selection matched no row
+  // on any day of the year, and three whose selections the automation
+  // principal is not granted to read at all — refused on every run, with the
+  // refusal visible nowhere but a parked task.
+  //
+  // This runs the REAL selection, as the REAL principal, through the same
+  // `selectionFor` the reflex uses. A grant that is missing shows up here as a
+  // sentence in the form rather than as silence in production.
+  'automations.audience': async (data) => {
     const studioId = studioOf();
-    const reflexId = String(data['reflexId'] ?? '');
-    if (!mine(studioId, reflexId)) throw new Error('That automation is not yours.');
-    const on = data['armOn'] === true;
-    const tide = deps.tide();
-    return { enabled: on ? tide.arm(reflexId) : !tide.disarm(reflexId) };
+    const moment = momentById(String(data['moment'] ?? ''));
+    if (studioId === '' || moment === undefined) return { known: false, tone: 'neutral', summary: '', names: '' };
+
+    // A watched moment has no "due now" set to count — it fires per write,
+    // anchored to the row that caused it, and its anchor refs only resolve
+    // when a fact is in scope. "As it happens" is the honest answer; the
+    // grant rehearsal below still runs for the clock moments, whose
+    // selections are exactly what the reflex will ask.
+    if (moment.watch !== undefined) {
+      return { known: true, tone: 'good', summary: `Runs as it happens — every time ${moment.label}.`, names: '' };
+    }
+
+    const row = { id: '', moment: moment.id, effect: '', enabled: true, run_at: '09:00', days: Number(data['days'] ?? 7) || 7, subject: '', body: '' };
+    const query = selectionFor(moment, row);
+    // The context carries prism templates over `$.now` — the same ones tide
+    // evaluates at fire time, evaluated here with the same evaluator so the
+    // rehearsal cannot answer a different question from the automation.
+    const context = evaluate(query.context as never, { now: Date.now() } as never) as Record<string, unknown>;
+
+    try {
+      const body = await askAsAutomation(deps.server(), studioId, query.fingerprint, context);
+      const rows = body !== null && typeof body === 'object' && 'result' in body ? (body as { result: unknown }).result : body;
+      const people = Array.isArray(rows) ? (rows as Record<string, unknown>[]) : [];
+      const named = people.map((r) => String(r['person_name'] ?? '')).filter((name) => name !== '');
+      return {
+        known: true,
+        tone: people.length === 0 ? 'warm' : 'good',
+        summary:
+          people.length === 0
+            ? 'Nobody matches this right now. It will still run — but check the number before you rely on it.'
+            : people.length === 1
+              ? 'One person matches this right now.'
+              : `${people.length} people match this right now.`,
+        names: named.slice(0, 4).join(', ') + (named.length > 4 ? ` and ${named.length - 4} more` : ''),
+      };
+    } catch (error) {
+      // A REFUSAL IS THE ANSWER, not an error to swallow. This is the exact
+      // shape three shipped moments were in, and the form now says so.
+      return {
+        known: true,
+        tone: 'alert',
+        summary: 'This automation cannot run: it reads something the studio’s automations are not allowed to see.',
+        names: String(error instanceof Error ? error.message : error).slice(0, 160),
+      };
+    }
   },
+
   };
 };

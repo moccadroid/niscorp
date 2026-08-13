@@ -229,10 +229,11 @@ const collectFilterPaths = (
   entityLookup: EntityLookup,
   schema: DatabaseSchema,
   resolvedPaths: Map<string, PathResolution>,
-  // Both optional so the compute/aggregate callers below need not care: an
-  // `exists` is only meaningful in a query's own filter, and passing no
-  // collector simply means one found elsewhere is ignored rather than
-  // half-resolved.
+  // Both optional for a caller that structurally cannot meet an `exists`
+  // (aggregate arguments). The filter path AND the compute-case path pass
+  // them, so an exists resolves identically wherever a condition may sit —
+  // which is what lets a derived standing ask "do they hold a subscription?"
+  // from inside a computed CASE.
   existsOut?: Map<object, ResolvedExists>,
   aliasCounter?: AliasCounter,
 ): void => {
@@ -547,11 +548,15 @@ export const resolve = (dsl: Query, schema: DatabaseSchema): ResolvedQuery => {
   }
 
   // ─── Resolve computes ──────────────────────────────────────
+  // The exists collector is the same map the filter fills: a computed CASE
+  // whose condition is an EXISTS (how a derived standing asks "do they hold a
+  // subscription?") resolves into the one flat map that scope placement and
+  // the compiler both walk, so an exists behaves identically wherever it sits.
   const computes: Array<{ name: string; expression: ComputeExpression }> = [];
   if (dsl.compute !== undefined) {
     for (const [name, expr] of Object.entries(dsl.compute)) {
       if (expr !== undefined) {
-        resolveComputePaths(expr, entityLookup, schema, aliasMap);
+        resolveComputePaths(expr, entityLookup, schema, aliasMap, existsMap, aliasCounter);
         computes.push({ name, expression: expr });
       }
     }
@@ -625,6 +630,8 @@ const resolveComputePaths = (
   entityLookup: EntityLookup,
   schema: DatabaseSchema,
   aliasMap: Map<string, string>,
+  existsOut?: Map<object, ResolvedExists>,
+  aliasCounter?: AliasCounter,
 ): void => {
   const resolveFieldOrValue = (fov: FieldOrValue): void => {
     if (typeof fov === 'string' && isFieldPath(fov)) {
@@ -657,9 +664,10 @@ const resolveComputePaths = (
 
   if ('case' in expr) {
     for (const when of expr.case.when) {
-      // Resolve field paths inside the condition filter
+      // Resolve field paths inside the condition filter — WITH the exists
+      // collector, so a condition may be an EXISTS like any filter may.
       const resolvedPaths = new Map<string, PathResolution>();
-      collectFilterPaths(when.condition, entityLookup, schema, resolvedPaths);
+      collectFilterPaths(when.condition, entityLookup, schema, resolvedPaths, existsOut, aliasCounter);
       for (const [path, res] of resolvedPaths) {
         aliasMap.set(path, `${res.alias}.${res.column}`);
       }

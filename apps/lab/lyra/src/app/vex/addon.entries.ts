@@ -1,17 +1,5 @@
 import type { CacheEntry, MutationEntry } from './index';
 
-// WHAT A STUDIO HAS BOUGHT.
-//
-// Registration is a PLATFORM act — pointing the deployment at a service and
-// approving what it may read — and it lives behind the operator seam, keyed,
-// with no principal. This is the other half: a studio turning one on. That is a
-// tenant decision made by somebody signed in, so it lives here, under the
-// charter, where it can be attributed to a person.
-//
-// The catalogue side of it (`integrations`) is a table moss owns, so this read
-// joins across a boundary the app does not otherwise cross. That is fine and
-// deliberate: the app is allowed to know what is on sale.
-
 const row = (name: string) => ({ $get: { from: { $var: 'a' }, path: [name] } });
 
 export const addonsList: CacheEntry = {
@@ -34,7 +22,7 @@ export const addonsList: CacheEntry = {
       as: 'a',
       body: {
         integration_id: row('id'),
-        // The id-or-title fallback happens in `addons.stitch`, in plain code —
+        // The id-or-title fallback happens in the store's stitch derivation —
         // a bundle that shipped no meta still gets a tile named by its id.
         title: row('title'),
         tagline: row('tagline'),
@@ -46,13 +34,6 @@ export const addonsList: CacheEntry = {
   },
 };
 
-// WHICH ONES THIS STUDIO HOLDS, as its own read rather than a join.
-//
-// `integrations` is not scoped by studio — it is the deployment's catalogue, the
-// same rows for everybody. `studio_integrations` IS scoped, by the tenant rule
-// like every other table here. Joining them in one query would put an unscoped
-// table and a scoped one in the same FROM and make the answer depend on which
-// rule won; two reads keep each one's boundary its own.
 export const addonsInstalled: CacheEntry = {
   fingerprint: 'addons/installed',
   intent: 'Integrations this studio has turned on',
@@ -66,44 +47,32 @@ export const addonsInstalled: CacheEntry = {
 
 // ── the two writes ───────────────────────────────────────────
 //
-// `studio_id` is stamped from scope, so "install it for somebody else's studio"
-// is not a request the grammar can phrase.
+// Install used to be THREE fingerprints choreographed by a server function:
+// re-enable (no-op when absent), read the installed list, insert only if
+// still missing. ON CONFLICT is that whole dance as one atomic statement —
+// fresh install inserts, a previously removed one flips back on, and there
+// is no state it starts from that it gets wrong. The tenant column is scope-
+// pinned into both the insert AND the conflict target, so the row it can
+// revive is only ever this studio's own.
 
 export const addonInstall: MutationEntry = {
   fingerprint: 'addons/install',
-  intent: 'Turn an integration on for this studio',
+  intent: 'Turn an integration on for this studio — fresh, or back on after a removal',
   mutation: {
     op: 'insert',
     table: 'studio_integrations',
     values: { integration_id: { $context: 'integrationId' }, enabled: true },
+    onConflict: { target: ['studio_id', 'integration_id'], set: { enabled: true } },
   },
 };
 
 export const addonUninstall: MutationEntry = {
   fingerprint: 'addons/uninstall',
   intent: 'Turn an integration off for this studio',
-  // An UPDATE rather than a delete: what a studio bought and stopped paying for
-  // is a fact worth keeping, and the integration's own records survive either
-  // way — so re-installing restores what was there.
   mutation: {
     op: 'update',
     table: 'studio_integrations',
     set: { enabled: false },
-    where: { eq: ['studio_integrations.integration_id', { $context: 'integrationId' }] },
-  },
-};
-
-// The other half of the toggle uninstall creates. Install is an INSERT and the
-// row uninstall leaves behind keeps the primary key — so installing a second
-// time needs this UPDATE instead, and `addons.apply` (the fn) is what decides
-// which of the two the moment calls for. The grammar cannot branch; the fn can.
-export const addonReenable: MutationEntry = {
-  fingerprint: 'addons/reenable',
-  intent: 'Turn a previously uninstalled integration back on',
-  mutation: {
-    op: 'update',
-    table: 'studio_integrations',
-    set: { enabled: true },
     where: { eq: ['studio_integrations.integration_id', { $context: 'integrationId' }] },
   },
 };

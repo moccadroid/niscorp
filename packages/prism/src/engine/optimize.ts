@@ -11,6 +11,7 @@ import {
   isMergeNode, isCoalesceNode, isCaseNode, isEntriesOfNode, isKeyByNode, isGroupByNode,
   isKeysNode, isValuesNode, isFromEntriesNode, isPickNode, isOmitNode, isTypeNode, isLengthNode,
   isDateNode, isDateAddNode, isDateDiffNode,
+  isLocaleDateNode, isLocaleMoneyNode, isLocaleNumberNode,
 } from '../schemas/guards';
 
 import { opRef, opConst, opVar, opGet, opWith } from '../ops/core.ops';
@@ -22,6 +23,7 @@ import { opNot, opAnd, opOr } from '../ops/logic.ops';
 import { opMerge, opCoalesce, opCase, opEntriesOf, opKeyBy, opGroupBy } from '../ops/structure.ops';
 import { opKeys, opValues, opFromEntries, opPick, opOmit, opType, opLength } from '../ops/object.ops';
 import { opDate, opDateAdd, opDateDiff } from '../ops/time.ops';
+import { opLocaleDate, opLocaleMoney, opLocaleNumber } from '../ops/intl.ops';
 
 // ═══════════════════════════════════════════════════════════
 // Compile-time optimizer
@@ -165,6 +167,10 @@ const resolveHandler = (node: Record<string, unknown>): OpHandler | undefined =>
   if (isDateNode(node)) return eraseOp(opDate);
   if (isDateAddNode(node)) return eraseOp(opDateAdd);
   if (isDateDiffNode(node)) return eraseOp(opDateDiff);
+  // Locale-aware formatting ops
+  if (isLocaleDateNode(node)) return eraseOp(opLocaleDate);
+  if (isLocaleMoneyNode(node)) return eraseOp(opLocaleMoney);
+  if (isLocaleNumberNode(node)) return eraseOp(opLocaleNumber);
   return undefined;
 };
 

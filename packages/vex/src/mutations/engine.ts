@@ -8,7 +8,7 @@ import { VexScopeError } from '../scope/apply.js';
 import { VexError } from '../errors.js';
 import { resolveParams } from '../utils/context.js';
 import { MutationDefinitionSchema } from './schema.js';
-import type { Mutation, MutationDefinition, CoreMutation, ResolvedMutation } from './schema.js';
+import type { Mutation, MutationDefinition, CoreMutation, ResolvedMutation, ResolvedOnConflict, MutationValue, LookupValue, ItemRef } from './schema.js';
 import { collectMutationContext, requiredContextKeys } from './signature.js';
 
 // ═══════════════════════════════════════════════════════════════
@@ -29,6 +29,25 @@ export type MutationClient = MutationTx & {
   transaction?: <T>(fn: (tx: MutationTx) => Promise<T>) => Promise<T>;
 };
 
+// ─── Value guards ──────────────────────────────────────────────
+const isLookup = (v: unknown): v is LookupValue =>
+  v !== null && typeof v === 'object' && !Array.isArray(v) && '$lookup' in v;
+const isItemRef = (v: unknown): v is ItemRef =>
+  v !== null && typeof v === 'object' && !Array.isArray(v) && '$item' in v;
+
+const collectLookups = (m: ResolvedMutation): LookupValue['$lookup'][] => {
+  const out: LookupValue['$lookup'][] = [];
+  const scan = (cols: Record<string, unknown> | undefined): void => {
+    for (const v of Object.values(cols ?? {})) if (isLookup(v)) out.push(v.$lookup);
+  };
+  if (m.op === 'insert' || m.op === 'insertEach') {
+    scan(m.values);
+    scan(m.onConflict?.set);
+  }
+  if (m.op === 'update') scan(m.set);
+  return out;
+};
+
 // ─── Schema validation (anti-hallucination) ────────────────────
 // The engine already introspected for reads; reject an unknown table or a
 // written column not in it. A misauthored `contats` / `naem` fails closed,
@@ -36,13 +55,47 @@ export type MutationClient = MutationTx & {
 const findEntity = (table: string, schema: DatabaseSchema) =>
   schema.entities.find((e) => e.table === table || e.name === table);
 
+// An ON CONFLICT whose target names no unique constraint never arrests
+// anything — the insert would simply throw on the real constraint, or worse,
+// never conflict at all. The schema knows the unique column sets (PK +
+// introspected unique indexes), so a mismatched target is an AUTHORING error,
+// caught before any SQL runs, with the real options in the message.
+const assertConflictTarget = (table: string, target: string[], entity: { fields: { name: string; primaryKey: boolean }[]; indexes: { fields: string[]; unique: boolean }[] }): void => {
+  const uniqueSets = [
+    entity.fields.filter((f) => f.primaryKey).map((f) => f.name),
+    ...entity.indexes.filter((i) => i.unique).map((i) => [...i.fields]),
+  ].filter((s) => s.length > 0);
+  if (uniqueSets.length === 0) return; // the schema carries no uniqueness info — nothing to check against
+  const want = new Set(target);
+  const ok = uniqueSets.some((s) => s.length === want.size && s.every((c) => want.has(c)));
+  if (!ok) {
+    throw new VexError(
+      'invalid_dsl',
+      `onConflict target (${target.join(', ')}) does not match a unique constraint on "${table}". Unique column sets: ${uniqueSets.map((s) => `(${s.join(', ')})`).join(' ')}.`,
+    );
+  }
+};
+
 const assertWritableColumns = (m: ResolvedMutation, schema: DatabaseSchema): void => {
   const entity = findEntity(m.table, schema);
   if (entity === undefined) throw new VexError('invalid_dsl', `Unknown table "${m.table}".`);
   const known = new Set(entity.fields.map((f) => f.name));
-  const cols = m.op === 'insert' ? Object.keys(m.values) : m.op === 'update' ? Object.keys(m.set) : [];
+  const cols = m.op === 'insert' || m.op === 'insertEach' ? Object.keys(m.values) : m.op === 'update' ? Object.keys(m.set) : [];
   for (const c of cols) {
     if (!known.has(c)) throw new VexError('invalid_dsl', `Unknown column "${m.table}.${c}".`);
+  }
+  // A lookup reads a real table and column, or fails closed like any other
+  // misauthored name.
+  for (const l of collectLookups(m)) {
+    const le = findEntity(l.from, schema);
+    if (le === undefined) throw new VexError('invalid_dsl', `Unknown table "${l.from}" in $lookup.`);
+    if (!le.fields.some((f) => f.name === l.field)) throw new VexError('invalid_dsl', `Unknown column "${l.from}.${l.field}" in $lookup.`);
+  }
+  if ((m.op === 'insert' || m.op === 'insertEach') && m.onConflict !== undefined) {
+    for (const c of [...m.onConflict.target, ...Object.keys(m.onConflict.set ?? {})]) {
+      if (!known.has(c)) throw new VexError('invalid_dsl', `Unknown column "${m.table}.${c}" in onConflict.`);
+    }
+    assertConflictTarget(m.table, m.onConflict.target, entity);
   }
 };
 
@@ -58,35 +111,137 @@ const assertWritableColumns = (m: ResolvedMutation, schema: DatabaseSchema): voi
 // its column on insert and ANDs a filter into update/delete WHERE (the RLS
 // boundary). No applicable phase (or unlisted table) falls to `default`:
 // deny throws, allow leaves the mutation ungoverned.
-const scopeMutation = (m: CoreMutation, policy: ScopePolicy): ResolvedMutation => {
-  const rule = policy.entities[m.table];
+// A `$lookup` READS its table, so the read-phase rules of THAT table apply —
+// a mutation entry is never a read-scope bypass. Match rules AND into the
+// lookup's WHERE; a table the principal cannot read refuses the whole write.
+const readMatchesFor = (table: string, policy: ScopePolicy): { match: string; to: string }[] => {
+  const rule = policy.entities[table];
   if (rule === undefined) {
-    if (policy.default === 'deny') throw new VexScopeError(m.table, `Writes to "${m.table}" are not allowed by scope policy (default: deny).`);
-    return m;
+    if (policy.default === 'deny') throw new VexScopeError(table, `A $lookup reads "${table}", which is not allowed by scope policy (default: deny).`);
+    return [];
   }
-  if ('public' in rule) return m;
-  if ('deny' in rule) throw new VexScopeError(m.table, `Writes to "${m.table}" are denied by scope policy.`);
-  const specific = m.op === 'insert' ? rule.insert : m.op === 'update' ? rule.update : rule.delete;
+  if ('public' in rule) return [];
+  if ('deny' in rule) throw new VexScopeError(table, `A $lookup reads "${table}", which is denied by scope policy.`);
+  if (rule.read === undefined) {
+    if (policy.default === 'deny') throw new VexScopeError(table, `A $lookup reads "${table}", which this principal has no read grant for.`);
+    return [];
+  }
+  return rule.read;
+};
+
+const scopeLookups = <V extends MutationValue | ItemRef>(cols: Record<string, V>, policy: ScopePolicy): Record<string, V> => {
+  const out: Record<string, V> = {};
+  for (const [k, v] of Object.entries(cols)) {
+    if (!isLookup(v)) {
+      out[k] = v;
+      continue;
+    }
+    let where: Filter = v.$lookup.where;
+    for (const r of readMatchesFor(v.$lookup.from, policy)) {
+      where = { and: [where, { eq: [`${v.$lookup.from}.${r.match}`, { $scope: r.to }] }] };
+    }
+    // A scoped lookup is still a lookup — the transform is type-preserving.
+    out[k] = { $lookup: { ...v.$lookup, where } } as V;
+  }
+  return out;
+};
+
+// The gate every write passes: throws when denied, returns `undefined` when
+// the table is ungoverned (public / default allow), else the entity rule and
+// the applicable phase rules (umbrella + specific).
+type WriteGate = { rule: Extract<ScopePolicy['entities'][string], { read?: unknown }>; rules: readonly ({ set: string; to: string } | { match: string; to: string })[] };
+
+const writeGate = (table: string, op: 'insert' | 'update' | 'delete', policy: ScopePolicy): WriteGate | undefined => {
+  const rule = policy.entities[table];
+  if (rule === undefined) {
+    if (policy.default === 'deny') throw new VexScopeError(table, `Writes to "${table}" are not allowed by scope policy (default: deny).`);
+    return undefined;
+  }
+  if ('public' in rule) return undefined;
+  if ('deny' in rule) throw new VexScopeError(table, `Writes to "${table}" are denied by scope policy.`);
+  const specific = op === 'insert' ? rule.insert : op === 'update' ? rule.update : rule.delete;
   if (rule.write === undefined && specific === undefined) {
-    if (policy.default === 'deny') throw new VexScopeError(m.table, `"${m.op}" on "${m.table}" is not allowed by scope policy (default: deny).`);
-    return m;
+    if (policy.default === 'deny') throw new VexScopeError(table, `"${op}" on "${table}" is not allowed by scope policy (default: deny).`);
+    return undefined;
+  }
+  return { rule, rules: [...(rule.write ?? []), ...(specific ?? [])] };
+};
+
+// The shared insert-shaped half: lookups scoped, insert rules applied to the
+// values, and the ON CONFLICT half gated and governed as the UPDATE it is.
+// `set` rules stamp identity into the DO UPDATE SET; `match` rules whose
+// column the conflict target already pins are inherently satisfied (the
+// inserted, scope-pinned value must equal the existing row's for a conflict
+// to arise at all); any other `match` becomes a WHERE on the DO UPDATE half —
+// the RLS boundary again.
+const scopeInsertParts = <V extends MutationValue | ItemRef>(
+  table: string,
+  rawValues: Record<string, V>,
+  rawConflict: ResolvedOnConflict | undefined,
+  policy: ScopePolicy,
+): { values: Record<string, V | { $scope: string }>; conflict: ResolvedOnConflict | undefined } => {
+  let values: Record<string, V | { $scope: string }> = scopeLookups(rawValues, policy);
+  let conflict: ResolvedOnConflict | undefined =
+    rawConflict === undefined || rawConflict.set === undefined ? rawConflict : { ...rawConflict, set: scopeLookups(rawConflict.set, policy) };
+
+  const gate = writeGate(table, 'insert', policy);
+  if (gate === undefined) return { values, conflict };
+
+  for (const r of gate.rules) {
+    // A `set` writes identity; a `match` pins the RLS boundary — on an
+    // INSERT both land in the values.
+    values = { ...values, ['set' in r ? r.set : r.match]: { $scope: r.to } };
   }
 
-  let scoped: ResolvedMutation = m;
-  for (const r of [...(rule.write ?? []), ...(specific ?? [])]) {
-    if ('set' in r) {
-      // The column is written from scope on insert AND update alike.
-      if (scoped.op === 'insert') scoped = { ...scoped, values: { ...scoped.values, [r.set]: { $scope: r.to } } };
-      else if (scoped.op === 'update') scoped = { ...scoped, set: { ...scoped.set, [r.set]: { $scope: r.to } } };
-    } else if (scoped.op === 'insert') {
-      // RLS boundary on insert — pin the column to the scope value.
-      scoped = { ...scoped, values: { ...scoped.values, [r.match]: { $scope: r.to } } };
-    } else {
-      // RLS boundary on update/delete — AND the scope filter into WHERE.
-      scoped = { ...scoped, where: { and: [scoped.where, { eq: [`${m.table}.${r.match}`, { $scope: r.to }] }] } };
+  if (conflict?.set !== undefined) {
+    if (gate.rule.write === undefined && gate.rule.update === undefined) {
+      throw new VexScopeError(table, `onConflict on "${table}" declares DO UPDATE, but this principal has no update grant.`);
+    }
+    for (const r of [...(gate.rule.write ?? []), ...(gate.rule.update ?? [])]) {
+      if ('set' in r) {
+        conflict = { ...conflict, set: { ...(conflict.set ?? {}), [r.set]: { $scope: r.to } } };
+      } else if (!conflict.target.includes(r.match)) {
+        const boundary: Filter = { eq: [`${table}.${r.match}`, { $scope: r.to }] };
+        conflict = { ...conflict, where: conflict.where === undefined ? boundary : { and: [conflict.where, boundary] } };
+      }
     }
   }
-  return scoped;
+
+  return { values, conflict };
+};
+
+const scopeMutation = (m: CoreMutation, policy: ScopePolicy): ResolvedMutation => {
+  if (m.op === 'insert') {
+    const { values, conflict } = scopeInsertParts(m.table, m.values, m.onConflict, policy);
+    return { op: 'insert', table: m.table, values, ...(conflict === undefined ? {} : { onConflict: conflict }) };
+  }
+  if (m.op === 'insertEach') {
+    const { values, conflict } = scopeInsertParts(m.table, m.values, m.onConflict, policy);
+    return { op: 'insertEach', table: m.table, items: m.items, values, ...(conflict === undefined ? {} : { onConflict: conflict }) };
+  }
+  if (m.op === 'update') {
+    let set: Record<string, MutationValue> = scopeLookups(m.set, policy);
+    let where: Filter = m.where;
+    const gate = writeGate(m.table, 'update', policy);
+    if (gate !== undefined) {
+      for (const r of gate.rules) {
+        // The column is written from scope on insert AND update alike.
+        if ('set' in r) set = { ...set, [r.set]: { $scope: r.to } };
+        // RLS boundary on update — AND the scope filter into WHERE.
+        else where = { and: [where, { eq: [`${m.table}.${r.match}`, { $scope: r.to }] }] };
+      }
+    }
+    return { op: 'update', table: m.table, set, where };
+  }
+  // delete — writes no columns, so `set` rules are structurally exempt.
+  let where: Filter = m.where;
+  const gate = writeGate(m.table, 'delete', policy);
+  if (gate !== undefined) {
+    for (const r of gate.rules) {
+      if ('match' in r) where = { and: [where, { eq: [`${m.table}.${r.match}`, { $scope: r.to }] }] };
+    }
+  }
+  return { op: 'delete', table: m.table, where };
 };
 
 // ─── Compile (reuses the read pipeline's SQL + param machinery) ─
@@ -119,16 +274,75 @@ const indexFilterFields = (filter: Filter, aliasMap: Map<string, string>): void 
   }
 };
 
-const compileMutation = (m: ResolvedMutation): Compiled => {
+// A value that may be a `$lookup` compiles to a scalar subquery INLINE, into
+// the parent's own parameter counter and slot list — the same no-renumbering
+// rule EXISTS follows on the read side.
+const compileValue = (v: MutationValue, ctx: CompilationContext): string => {
+  if (isLookup(v)) {
+    indexFilterFields(v.$lookup.where, ctx.aliasMap);
+    const where = compileFilter(v.$lookup.where, ctx);
+    return `(SELECT ${v.$lookup.field} FROM ${v.$lookup.from} WHERE ${where})`;
+  }
+  return compileFieldOrValue(v, ctx);
+};
+
+const compileConflict = (m: { table: string; onConflict?: ResolvedOnConflict }, ctx: CompilationContext): string => {
+  const c = m.onConflict;
+  if (c === undefined) return '';
+  if (c.set === undefined) return ` ON CONFLICT (${c.target.join(', ')}) DO NOTHING`;
+  const sets = Object.entries(c.set).map(([col, v]) => `${col} = ${compileValue(v, ctx)}`);
+  let where = '';
+  if (c.where !== undefined) {
+    indexFilterFields(c.where, ctx.aliasMap);
+    where = ` WHERE ${compileFilter(c.where, ctx)}`;
+  }
+  return ` ON CONFLICT (${c.target.join(', ')}) DO UPDATE SET ${sets.join(', ')}${where}`;
+};
+
+// jsonb `->>` yields text; the cast restores the column's type so the INSERT
+// binds like any other. `json` columns keep `->` (stays jsonb, no cast).
+const ITEM_CAST: Record<string, string> = {
+  number: 'numeric',
+  boolean: 'boolean',
+  date: 'date',
+  timestamp: 'timestamptz',
+  uuid: 'uuid',
+};
+
+const escapeItemKey = (s: string): string => s.replace(/'/g, "''");
+
+const compileMutation = (m: ResolvedMutation, schema: DatabaseSchema): Compiled => {
   const ctx = newCtx();
   if (m.op === 'insert') {
     const entries = Object.entries(m.values);
     const cols = entries.map(([c]) => c);
-    const vals = entries.map(([, v]) => compileFieldOrValue(v, ctx));
-    return { sql: `INSERT INTO ${m.table} (${cols.join(', ')}) VALUES (${vals.join(', ')}) RETURNING *`, slots: ctx.paramSlots };
+    const vals = entries.map(([, v]) => compileValue(v, ctx));
+    return { sql: `INSERT INTO ${m.table} (${cols.join(', ')}) VALUES (${vals.join(', ')})${compileConflict(m, ctx)} RETURNING *`, slots: ctx.paramSlots };
+  }
+  if (m.op === 'insertEach') {
+    const entity = findEntity(m.table, schema);
+    const entries = Object.entries(m.values);
+    const cols = entries.map(([c]) => c);
+    const exprs = entries.map(([col, v]) => {
+      if (isItemRef(v)) {
+        const nt = entity?.fields.find((f) => f.name === col)?.normalizedType ?? 'string';
+        if (nt === 'json') return `(item.value->'${escapeItemKey(v.$item)}')`;
+        const cast = ITEM_CAST[nt];
+        const raw = `(item.value->>'${escapeItemKey(v.$item)}')`;
+        return cast === undefined ? raw : `${raw}::${cast}`;
+      }
+      return compileValue(v, ctx);
+    });
+    ctx.paramCounter.value += 1;
+    ctx.paramSlots.push({ key: m.items.$context, kind: 'context', type: 'json' });
+    const source = `jsonb_array_elements($${ctx.paramCounter.value}::jsonb) AS item`;
+    return {
+      sql: `INSERT INTO ${m.table} (${cols.join(', ')}) SELECT ${exprs.join(', ')} FROM ${source}${compileConflict(m, ctx)} RETURNING *`,
+      slots: ctx.paramSlots,
+    };
   }
   if (m.op === 'update') {
-    const sets = Object.entries(m.set).map(([c, v]) => `${c} = ${compileFieldOrValue(v, ctx)}`);
+    const sets = Object.entries(m.set).map(([c, v]) => `${c} = ${compileValue(v, ctx)}`);
     indexFilterFields(m.where, ctx.aliasMap);
     const where = compileFilter(m.where, ctx);
     return { sql: `UPDATE ${m.table} SET ${sets.join(', ')} WHERE ${where} RETURNING *`, slots: ctx.paramSlots };
@@ -163,7 +377,14 @@ export type MutationContext = {
   schema: DatabaseSchema;
 };
 
-export const executeMutation = async (client: MutationClient, def: MutationDefinition, mctx: MutationContext): Promise<Row[]> => {
+// One executed statement, named by what it did: the table, the op that
+// actually ran (post-desugar — an upsert reports the branch it took, an
+// insertEach reports 'insert' because that is what it is), and the rows the
+// database returned. This is the grain a write observer needs: a two-
+// statement mutation is two writes, each with its own rows.
+export type WriteResult = { table: string; op: 'insert' | 'update' | 'delete'; rows: Row[] };
+
+export const executeWrites = async (client: MutationClient, def: MutationDefinition, mctx: MutationContext): Promise<WriteResult[]> => {
   const parsed = MutationDefinitionSchema.parse(def);
   const entries = Array.isArray(parsed) ? parsed : [parsed];
   const compiled = entries.map((entry) => {
@@ -178,17 +399,27 @@ export const executeMutation = async (client: MutationClient, def: MutationDefin
     }
     const m = scopeMutation(core, mctx.policy);
     assertWritableColumns(m, mctx.schema);
-    return compileMutation(m);
+    return { ...compileMutation(m, mctx.schema), table: m.table, op: (m.op === 'insertEach' ? 'insert' : m.op) as WriteResult['op'] };
   });
 
-  const runAll = async (q: MutationTx): Promise<Row[]> => {
-    const rows: Row[] = [];
+  const runAll = async (q: MutationTx): Promise<WriteResult[]> => {
+    const results: WriteResult[] = [];
     for (const c of compiled) {
       const params = await resolveParams(c.slots, mctx.context, mctx.scope);
-      const res = await q.query(c.sql, params as unknown[]);
-      rows.push(...(res.rows as Row[]));
+      // A `json` slot (insertEach items) is bound as a JSON string — drivers
+      // would otherwise turn a JS array into a postgres ARRAY literal, which
+      // `::jsonb` refuses. Anything but an array fails loudly here.
+      const bound = params.map((value, i) => {
+        if (c.slots[i]?.type !== 'json') return value;
+        if (!Array.isArray(value)) {
+          throw new VexError('invalid_request', `"${c.slots[i]?.key ?? ''}" must be an array of objects (one inserted row per element).`);
+        }
+        return JSON.stringify(value);
+      });
+      const res = await q.query(c.sql, bound as unknown[]);
+      results.push({ table: c.table, op: c.op, rows: res.rows as Row[] });
     }
-    return rows;
+    return results;
   };
 
   // A batch runs atomically; a single write needs no transaction.
@@ -198,3 +429,8 @@ export const executeMutation = async (client: MutationClient, def: MutationDefin
   }
   return client.transaction((tx) => runAll(tx));
 };
+
+// The rows alone, statement order preserved — the shape every existing
+// caller wants when it does not care which statement returned what.
+export const executeMutation = async (client: MutationClient, def: MutationDefinition, mctx: MutationContext): Promise<Row[]> =>
+  (await executeWrites(client, def, mctx)).flatMap((w) => w.rows);

@@ -1,0 +1,278 @@
+import type { Pack } from '../../pack';
+import { STRIPE_BUNDLE } from './bundle';
+import { accountFor, rememberAccount, storeIsDurable } from './store';
+import { accountStanding, createAccountSession, createConnectedAccount, createOnboardingLink, stripeFor } from './client';
+import { embedPage, notOnboardedPage, unavailablePage } from './onboarding';
+import { createCheckout } from './checkout';
+import { billableFor } from './lyra';
+import { handleStripeEvent } from './hooks';
+import { invoicesFor, ledgerRows } from './ledger';
+
+// ═══════════════════════════════════════════════════════════════
+// STRIPE — payments, as a pack.
+//
+// Every route is relative and every one asks `ctx.identity(c)` with no audience
+// argument: the mounting bound this pack's id to both, so a token minted for
+// another pack on this deployment cannot be read here even by a handler that
+// never thought about it.
+//
+// THE STUDIO IN THE ASSERTION IS THE ONLY STUDIO THIS TOUCHES. Nothing reads a
+// studio id from a body; there is nowhere for one to come from but the token,
+// which is what makes "connect THIS studio" unable to mean somebody else's.
+// ═══════════════════════════════════════════════════════════════
+
+export const stripePack: Pack = {
+  id: 'stripe',
+  // Named, and therefore fenced: this pack cannot read another's secret even
+  // knowing its name, and Belts cannot read STRIPE_SECRET (pack.ts).
+  env: ['STRIPE_SECRET', 'STRIPE_PUBLISHABLE', 'STRIPE_WEBHOOK_SECRET', 'LYRA_BASE', 'STRIPE_KEY'],
+  bundle: () => STRIPE_BUNDLE,
+
+  mount: (r, ctx) => {
+    // SAID OUT LOUD, ONCE, AT BOOT. With no database this pack keeps connected
+    // account ids in memory, and a restart loses the only mapping between a
+    // studio and a live merchant account at Stripe. That is fine for a check
+    // and unacceptable for a deployment, and the difference between those two
+    // is not visible from a screen — so it is visible in the log instead.
+    if (!storeIsDurable(ctx.db)) {
+      console.warn('[stripe] no DATABASE_URL — connected accounts are held in memory and will not survive a restart. Run: pnpm --filter lyra-integrations db:up && pnpm --filter lyra-integrations migrate');
+    }
+
+    // What the setup and money screens both open on: does this studio have an
+    // account, and what is Stripe still waiting for.
+    r.post('/account', async (c) => {
+      const who = ctx.identity(c);
+      if (who === undefined) return c.json({ message: 'Who are you?' }, 401);
+      const held = await accountFor(ctx.db, who.studioId);
+      if (held === undefined) return c.json({ account_id: '', state_label: 'Not connected', state_tone: 'neutral', detail: '' });
+
+      const stripe = stripeFor(ctx.env);
+      if (stripe === undefined) {
+        return c.json({ account_id: held.accountId, state_label: 'Unavailable', state_tone: 'warn', detail: 'This deployment holds no Stripe key.' });
+      }
+      try {
+        const standing = await accountStanding(stripe, held.accountId);
+        // THREE STATES, not a boolean. The screen branches on `state` to decide
+        // whether to offer a button at all — offering one when Stripe is
+        // reviewing (`in_review`) is what sent the owner in circles.
+        const label =
+          standing.state === 'ready' ? 'Ready' : standing.state === 'in_review' ? 'In review' : 'Needs details';
+        const tone = standing.state === 'ready' ? 'good' : standing.state === 'in_review' ? 'calm' : 'warn';
+        return c.json({
+          account_id: held.accountId,
+          state: standing.state,
+          ready: standing.ready,
+          // Whether the STUDIO can do something now — the only thing that should
+          // put an action button on the screen.
+          actionable: standing.state === 'needs_info',
+          state_label: label,
+          state_tone: tone,
+          detail: standing.detail,
+        });
+      } catch (err) {
+        // A provider being down is an ordinary condition, not an outage here:
+        // the screen says so and nothing is claimed about the studio.
+        return c.json({ account_id: held.accountId, state: 'in_review', ready: false, actionable: false, state_label: 'Unknown', state_tone: 'neutral', detail: `Stripe did not answer: ${String(err).slice(0, 120)}` });
+      }
+    });
+
+    // ── HOSTED ONBOARDING: the owner's way to enter their details ──
+    //
+    // A short-lived redirect to Stripe's own hosted onboarding form, returning
+    // to lyra when done. This is the path that works TODAY — the embedded
+    // component needs platform-side Connect config that is not in place, so it
+    // renders blank; hosted onboarding needs none.
+    //
+    // The return address is the HOST's, and neither this pack nor its caller
+    // chooses it — a caller-supplied return on a payment onboarding flow is an
+    // open redirect that lands somebody on a page that looks like Stripe and is
+    // not.
+    r.post('/onboarding-link', async (c) => {
+      const who = ctx.identity(c);
+      if (who === undefined) return c.json({ message: 'Who are you?' }, 401);
+      const held = await accountFor(ctx.db, who.studioId);
+      if (held === undefined) return c.json({ message: 'This studio is not connected yet.' }, 409);
+      const stripe = stripeFor(ctx.env);
+      if (stripe === undefined) return c.json({ message: 'This deployment holds no Stripe key.' }, 503);
+
+      const base = ctx.env('LYRA_BASE').replace(/\/$/, '');
+      if (base === '') return c.json({ message: 'This deployment has no address to return to.' }, 503);
+
+      try {
+        const url = await createOnboardingLink(stripe, held.accountId, `${base}/`);
+        return c.json({ url });
+      } catch (err) {
+        return c.json({ message: `Stripe refused: ${String(err).slice(0, 200)}` }, 502);
+      }
+    });
+
+    // CONNECTING IS ONE CALL AND IT IS NOT REVERSIBLE ON STRIPE'S SIDE. The
+    // dashboard type is fixed at creation — changing it means a NEW account
+    // object — so this refuses to make a second one for a studio that has one
+    // rather than quietly stranding the first.
+    r.post('/connect', async (c) => {
+      const who = ctx.identity(c);
+      if (who === undefined) return c.json({ message: 'Who are you?' }, 401);
+      const held = await accountFor(ctx.db, who.studioId);
+      if (held !== undefined) return c.json({ account_id: held.accountId, state_label: 'Needs details', state_tone: 'warn', detail: 'This studio is already connected.' });
+
+      const stripe = stripeFor(ctx.env);
+      if (stripe === undefined) return c.json({ message: 'This deployment holds no Stripe key.' }, 503);
+      // WHERE THE STUDIO TRADES DECIDES WHAT STRIPE ASKS IT FOR, and it arrives
+      // in the assertion rather than being a constant here. No country, no
+      // account — a guess would create a merchant in the wrong jurisdiction, and
+      // the account object cannot be moved afterwards.
+      if (who.country === '') return c.json({ message: 'This studio has no country set, so no merchant account can be created for it.' }, 409);
+
+      try {
+        const accountId = await createConnectedAccount(stripe, { studioName: who.studioId, country: who.country });
+        await rememberAccount(ctx.db, { studioId: who.studioId, accountId, studioName: who.studioId, country: who.country, createdAt: new Date().toISOString() });
+        const standing = await accountStanding(stripe, accountId);
+        return c.json({ account_id: accountId, state_label: 'Needs details', state_tone: 'warn', detail: standing.detail });
+      } catch (err) {
+        return c.json({ message: `Stripe refused: ${String(err).slice(0, 200)}` }, 502);
+      }
+    });
+
+    // ── THE MEMBER PAYS ────────────────────────────────────────
+    //
+    // The membership comes from the ASSERTION, never the body: a member cannot
+    // ask to pay for somebody else's membership because there is nowhere to say
+    // whose. What to charge comes from lyra over this pack's own key — the
+    // price list is the studio's, and a payment provider does not get to have
+    // an opinion about it.
+    r.post('/checkout', async (c) => {
+      const who = ctx.identity(c);
+      if (who === undefined) return c.json({ message: 'Who are you?' }, 401);
+      if (who.personId === '') return c.json({ message: 'Only somebody the studio knows can pay for a membership.' }, 403);
+
+      const held = await accountFor(ctx.db, who.studioId);
+      if (held === undefined) return c.json({ message: 'This studio is not taking payments yet.' }, 409);
+      const stripe = stripeFor(ctx.env);
+      if (stripe === undefined) return c.json({ message: 'This deployment holds no Stripe key.' }, 503);
+
+      const billable = await billableFor(ctx.env, who.studioId, who.personId);
+      if (billable === undefined) return c.json({ message: 'There is nothing to pay for on this membership.' }, 409);
+
+      const body = (await c.req.json().catch(() => ({}))) as { email?: unknown };
+      // The return address is the HOST's, and neither this pack nor its caller
+      // gets to choose it — a caller-supplied return on a payment flow is an
+      // open redirect, and it lands somebody on a page that looks like a receipt
+      // and is not.
+      const base = ctx.env('LYRA_BASE').replace(/\/$/, '');
+      const returnUrl = base === '' ? '' : `${base}/`;
+      if (returnUrl === '') return c.json({ message: 'This deployment has no address to return to.' }, 503);
+
+      try {
+        const session = await createCheckout(stripe, ctx.db, {
+          accountId: held.accountId,
+          subscriptionId: billable.subscriptionId,
+          personId: who.personId,
+          studioId: who.studioId,
+          email: typeof body.email === 'string' ? body.email : '',
+          planName: billable.planName,
+          amount: billable.amount,
+          currency: billable.currency,
+          interval: billable.interval,
+          returnUrl,
+        });
+        return c.json({ url: session.url, plan_name: billable.planName });
+      } catch (err) {
+        return c.json({ message: `Stripe refused: ${String(err).slice(0, 200)}` }, 502);
+      }
+    });
+
+    // ── THE LEDGER, FROM THIS PACK'S OWN MIRROR ────────────────
+    //
+    // Read from what the webhooks recorded, not from Stripe. A screen that
+    // called a vendor on every open would be slow, rate-limited and broken
+    // whenever they were — and S4 puts the ledger on this side precisely so it
+    // is answerable without them.
+    //
+    // Scoped by the ASSERTION. Two studios install this pack and each reads its
+    // own; there is nowhere for a caller to say whose.
+    r.post('/ledger', async (c) => {
+      const who = ctx.identity(c);
+      if (who === undefined) return c.json({ message: 'Who are you?' }, 401);
+      return c.json(ledgerRows(await invoicesFor(ctx.db, who.studioId)));
+    });
+
+    // ── THE FRAMED PAGE ────────────────────────────────────────
+    //
+    // Reached only through a grant lyra minted for a path this bundle declared
+    // (moss: the frames seam). The assertion still arrives, so this is scoped
+    // exactly like every other route here.
+    r.get('/embed/onboarding', async (c) => {
+      const who = ctx.identity(c);
+      if (who === undefined) return c.html(unavailablePage('Who are you?'), 401);
+      const held = await accountFor(ctx.db, who.studioId);
+      if (held === undefined) return c.html(notOnboardedPage());
+
+      const stripe = stripeFor(ctx.env);
+      const publishable = ctx.env('STRIPE_PUBLISHABLE');
+      if (stripe === undefined || publishable === '') return c.html(unavailablePage('This deployment holds no Stripe key.'));
+
+      try {
+        const clientSecret = await createAccountSession(stripe, held.accountId);
+        return c.html(
+          embedPage({
+            publishableKey: publishable,
+            clientSecret,
+            component: 'account-onboarding',
+            // Relative to THIS document, which lyra serves at its own origin —
+            // so the refresh rides the grant already spent rather than needing
+            // one of its own.
+            refreshPath: 'session',
+          }),
+        );
+      } catch (err) {
+        return c.html(unavailablePage(`Stripe did not answer: ${String(err).slice(0, 160)}`));
+      }
+    });
+
+    // The embedded component asks for a fresh session when the one it holds is
+    // about to expire. Same identity as everything else — a session is minted
+    // for the studio in the token and no other.
+    r.post('/embed/session', async (c) => {
+      const who = ctx.identity(c);
+      if (who === undefined) return c.json({ message: 'Who are you?' }, 401);
+      const held = await accountFor(ctx.db, who.studioId);
+      const stripe = stripeFor(ctx.env);
+      if (held === undefined || stripe === undefined) return c.json({ message: 'Not connected.' }, 404);
+      try {
+        return c.json({ client_secret: await createAccountSession(stripe, held.accountId) });
+      } catch (err) {
+        return c.json({ message: String(err).slice(0, 200) }, 502);
+      }
+    });
+  },
+
+  // ── WHAT STRIPE TELLS US ─────────────────────────────────────
+  //
+  // Mounted at `/stripe/hook/*`, which moss reaches with NO principal and NO
+  // assertion — the one door on that server that asks for nothing, because a
+  // vendor calling in has no session and could not have one.
+  //
+  // So the context here has no `identity` to call. What replaces it is the
+  // signature, and `handleStripeEvent` verifies before it does anything at all.
+  //
+  // ONE ROUTE, not one per event type. Stripe posts every event to one endpoint
+  // and names the type inside the signed payload; a route per type would put the
+  // type in the URL, where it is unsigned and therefore a claim rather than a
+  // fact.
+  hooks: (r, ctx) => {
+    r.post('/events', async (c) => {
+      const stripe = stripeFor(ctx.env);
+      if (stripe === undefined) return c.json({ message: 'This deployment holds no Stripe key.' }, 503);
+
+      // THE EXACT BYTES. Not `c.req.json()`, not `c.req.text()` re-encoded —
+      // the signature is over what Stripe sent, and anything that parses and
+      // re-emits it breaks verification in a way that only shows up in
+      // production, on the day it goes live.
+      const raw = Buffer.from(await c.req.arrayBuffer());
+      const signature = c.req.header('stripe-signature') ?? '';
+      const outcome = await handleStripeEvent(stripe, ctx.db, ctx.env, raw, signature);
+      return c.json(outcome.body, outcome.status as 200);
+    });
+  },
+};

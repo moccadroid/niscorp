@@ -1,143 +1,171 @@
 import type { LayoutNode } from '@niscorp/nova';
 
-// WHAT HAPPENS WHEN NOBODY IS LOOKING — made lookable.
-//
-// The automations worked before this screen existed, which is exactly the
-// problem: a subsystem that lapses memberships overnight and cannot be seen is
-// one nobody can be responsible for. Every row here leads with the reflex's
-// INTENT — one factual sentence in the operator's language, which the reflex
-// schema demands for this reason and no other.
-//
-// Three controls, in order of how safe they are:
-//   Preview — runs the real pipeline, changes nothing, says what it would do.
-//   Run     — does it now. Works on a paused automation, because pausing gates
-//             the clock rather than the person.
-//   Pause   — stops the clock without deleting anything.
 export const automationsLayout: LayoutNode = {
   component: 'Stack',
   props: { gap: 22 },
   children: [
     {
-      component: 'Hero',
-      props: {
-        title: 'Automations',
-        lead: 'What this studio does overnight. Preview one to see exactly what it would change before it changes anything.',
-      },
-    },
-
-    { component: 'Row', props: { justify: 'end' }, children: [{ component: 'Button', props: { variant: 'solid', label: 'Add an automation' }, ref: 'add' }] },
-
-    { if: '$.error', then: { component: 'Notice', props: { tone: 'alert', message: '$.error' } }, else: '' },
-
-    // CREATE AND EDIT. What a studio authors is a SHAPE plus its knobs —
-    // never a fingerprint and never a template expression. The dangerous half
-    // stays authored in code, which is what makes this form safe to hand to
-    // somebody who has never seen a database.
-
-    // ONE TABLE.
-    //
-    // This was two: "Set up" (the rows) above "What it does" (the loaded
-    // reflexes), listing the same three automations twice with the controls
-    // split between them — you changed the schedule in the first and paused in
-    // the second, and nothing said they were the same thing.
-    //
-    // The name is the LABEL now, not the template id. An operator was being
-    // shown "trials.lapse" and asked to be responsible for what it does at four
-    // in the morning; the catalog has carried a human name and a one-sentence
-    // intent all along.
-    //
-    // And "Change" is a control rather than a row you have to guess is
-    // tappable. Tapping the row still works — it is just no longer the only way
-    // to find out that editing exists.
-    // What just happened, when you ran or paused one by hand.
-    { if: '$.notice', then: { component: 'Notice', props: { tone: 'good', message: '$.notice' } }, else: '' },
-
-    {
-      component: 'Section',
-      props: { title: 'What this studio runs', subtitle: 'Each one is shipped and previewable. Change when it runs, or look before it acts.' },
-      children: {
-        component: 'Card',
-        props: { flush: true },
-        children: {
-          component: 'Rows',
+      component: 'Row',
+      props: { justify: 'between', align: 'center' },
+      children: [
+        {
+          component: 'Hero',
           props: {
-            rows: '$.reflexes',
-            rowKey: 'automation_id',
-            onRowRef: 'edit',
-            loading: '$.loading',
-            empty: 'No automations yet.',
-            emptyHint: 'Add one and the studio starts doing it overnight.',
-            columns: [
-              // NO SUBTITLE. The composed name — 'Mark the trial lapsed —
-              // trials past their window' — already says what it does and to
-              // whom; the blurb under it said the same thing twice and forced
-              // a three-line wrap in a column nine others were squeezing.
-              // The long version is in the form, where you are deciding.
-              { label: 'What it does', w: 4, cell: { kind: 'primary', key: 'name' } },
-              { label: 'When', px: 96, cell: { kind: 'text', key: 'run_display', color: 'soft' } },
-              { label: 'State', px: 96, cell: { kind: 'badge', key: 'state_label', toneKey: 'state_tone' } },
-              { label: 'Last run', px: 96, cell: { kind: 'badge', key: 'last_outcome', toneKey: 'last_tone' } },
-              { label: '', px: 92, align: 'right', cell: { kind: 'action', label: 'Preview', ref: 'preview', variant: 'outline' } },
-              { label: '', px: 76, align: 'right', cell: { kind: 'action', label: 'Run', ref: 'run', variant: 'ghost' } },
-              { label: '', px: 84, align: 'right', cell: { kind: 'action', label: 'Pause', ref: 'pause', variant: 'ghost', showKey: 'enabled' } },
-              { label: '', px: 84, align: 'right', cell: { kind: 'action', label: 'Arm', ref: 'arm', variant: 'outline', hideKey: 'enabled' } },
-            ],
+            title: 'Automations',
+            lead: 'The things that happen without anybody doing them. Preview one to see exactly what it would do before it does anything.',
           },
         },
-      },
+        { component: 'Tabs', props: { value: '$.view', options: '$.views' }, ref: 'view' },
+      ],
     },
 
+    { if: '$.error', then: { component: 'Notice', props: { tone: 'alert', message: '$.error' } }, else: '' },
+    { if: '$.notice', then: { component: 'Notice', props: { tone: 'good', message: '$.notice' } }, else: '' },
+
+    // ── RECIPES ────────────────────────────────────────────────
     {
-      if: '$.previewOpen',
+      if: '$.showRecipes',
+      then: {
+        component: 'Stack',
+        props: { gap: 14 },
+        children: [
+          {
+            component: 'Cards',
+            props: {
+              rows: '$.recipes',
+              rowKey: 'id',
+              titleKey: 'title',
+              subtitleKey: 'sentence',
+              bodyKey: 'why',
+              iconKey: 'icon',
+              badgeKey: 'state_label',
+              badgeToneKey: 'state_tone',
+              columns: 320,
+              actions: [
+                { label: 'Set it up', ref: 'useRecipe', variant: 'solid', icon: 'plus', hideKey: 'installed' },
+                { label: 'Change it', ref: 'useRecipe', variant: 'ghost', icon: 'edit', showKey: 'installed' },
+              ],
+              empty: 'No recipes in this version.',
+            },
+          },
+          {
+            component: 'Prose',
+            props: { size: 'sm', color: 'mute' },
+            children:
+              'A recipe fills the form in for you — it does not switch anything on. You read the words, change what you want, and save. Nothing goes out until you do.',
+          },
+        ],
+      },
+      else: '',
+    },
+
+    // ── WHAT IS RUNNING ────────────────────────────────────────
+    {
+      if: '$.showRunning',
+      then: {
+        component: 'Stack',
+        props: { gap: 14 },
+        children: [
+          {
+            component: 'Row',
+            props: { justify: 'between', align: 'center' },
+            children: [
+              { component: 'Text', props: { size: 'sm', color: 'mute' }, children: '$.runningHint' },
+              { component: 'Button', props: { variant: 'outline', label: 'Build one from scratch' }, ref: 'add' },
+            ],
+          },
+          {
+            component: 'Cards',
+            props: {
+              rows: '$.reflexes',
+              rowKey: 'automation_id',
+              titleKey: 'name',
+              subtitleKey: 'run_display',
+              bodyKey: 'intent',
+              badgeKey: 'state_label',
+              badgeToneKey: 'state_tone',
+              factsKey: 'facts',
+              loading: '$.loading',
+              columns: 340,
+              actions: [
+                { label: 'Preview', ref: 'preview', variant: 'outline', icon: 'eye' },
+                { label: 'Run now', ref: 'run', variant: 'ghost', icon: 'play', hideKey: 'watched' },
+                { label: 'Edit', ref: 'edit', variant: 'ghost', icon: 'edit' },
+                { label: 'Pause', ref: 'pause', variant: 'ghost', hideKey: 'paused' },
+                { label: 'Arm', ref: 'arm', variant: 'ghost', showKey: 'paused' },
+              ],
+              empty: 'Nothing is automated yet.',
+              emptyHint: 'The recipes tab has eight things studios usually want.',
+              emptyIcon: 'automation',
+            },
+          },
+        ],
+      },
+      else: '',
+    },
+
+    // ── the outbox, and what it admits ─────────────────────────
+    {
+      if: '$.showOutbox',
       then: {
         component: 'Section',
-        props: { title: '$.previewName', subtitle: 'A dry run. Nothing below has happened.' },
+        props: {
+          title: 'Outbox',
+          subtitle: 'What the automations would send. Nothing is delivered — Lyra has no mail integration yet, so these are queued and stay queued.',
+        },
         children: {
           component: 'Card',
-          props: { pad: 22 },
+          props: { flush: true },
           children: {
-            component: 'Stack',
-            props: { gap: 14 },
-            children: [
-              { component: 'Notice', props: { tone: 'calm', message: '$.previewSummary' } },
-              {
-                component: 'Rows',
-                props: {
-                  rows: '$.previewUnits',
-                  rowKey: 'unit',
-                  empty: 'Nothing is due. That is an ordinary answer, not a failure.',
-                  columns: [{ label: 'Would act on', w: 1, cell: { kind: 'text', key: 'unit', color: 'ink', mono: true } }],
-                },
-              },
-              { component: 'Button', props: { variant: 'ghost', label: 'Close' }, ref: 'closePreview' },
-            ],
+            component: 'Rows',
+            props: {
+              rows: '$.outbox',
+              rowKey: 'message_id',
+              empty: 'Nothing queued.',
+              emptyHint: 'An automation with an email effect puts its messages here.',
+              emptyIcon: 'mail',
+              columns: [
+                { label: 'Message', w: 2, cell: { kind: 'primary', key: 'subject', subKey: 'to_address' } },
+                { label: '', px: 96, align: 'right', cell: { kind: 'badge', key: 'state_label', toneKey: 'state_tone' } },
+              ],
+            },
           },
         },
       },
       else: '',
     },
 
-    // What the automations have actually said. The ledger is about firings;
-    // this is about outcomes a human reads.
     {
-      component: 'Section',
-      props: { title: 'Messages', subtitle: 'What the automations have left for this studio. No email is sent yet — a message you can query beats one in a provider’s logs.' },
+      component: 'Sheet',
+      props: { open: '$.previewOpen', title: 'What it would do' },
+      ref: 'closePreview',
       children: {
-        component: 'Card',
-        props: { flush: true },
-        children: {
-          component: 'Rows',
-          props: {
-            rows: '$.notifications',
-            rowKey: 'notification_id',
-            empty: 'Nothing yet. Run one above and it will show up here.',
-            columns: [
-              { label: 'Message', w: 2, cell: { kind: 'primary', key: 'subject', subKey: 'body' } },
-              { label: 'Kind', px: 128, cell: { kind: 'text', key: 'kind' } },
-              { label: 'When', px: 120, cell: { kind: 'text', key: 'created_on' } },
-            ],
+        component: 'Stack',
+        props: { gap: 14 },
+        children: [
+          { component: 'Text', props: { weight: 'semi' }, children: '$.previewName' },
+          { component: 'Prose', props: { color: 'soft' }, children: '$.previewSummary' },
+          {
+            if: '$.previewAnyone',
+            then: {
+              component: 'Cards',
+              props: {
+                rows: '$.previewUnits',
+                rowKey: 'unit',
+                titleKey: 'who',
+                subtitleKey: 'to',
+                bodyKey: 'body',
+                badgeKey: 'subject',
+                badgeTone: 'calm',
+                empty: 'Nobody is due.',
+              },
+            },
+            // Said by the fn, not the layout: "come back later" is true of a
+            // clocked window with nobody in it and false of a watched moment,
+            // and only the fn knows which this is.
+            else: { component: 'Text', props: { color: 'faint' }, children: '$.previewHint' },
           },
-        },
+        ],
       },
     },
   ],

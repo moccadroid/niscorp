@@ -1,14 +1,3 @@
-// Every check, each in its own process over its own fresh database.
-//
-// Separate processes on purpose: checks ship the app different histories, and a
-// shared database would make the order of the suite part of its meaning.
-//
-// THIS FILE WAS ONCE TRUNCATED TO ZERO BYTES by a bad patch script, and the
-// suite then "passed" — silently, with no output and exit 0 — for as long as it
-// took somebody to run a check by hand. So it asserts its own list is non-empty
-// and prints a count at the end: a runner that runs nothing must not look like
-// a runner that found nothing wrong.
-//
 // Run: pnpm --filter lyra check
 import { spawnSync } from 'node:child_process';
 
@@ -17,6 +6,7 @@ const CHECKS = [
   ['sql-check', 'SQL is written, not assembled: the schema is a constant, every value a parameter'],
   ['shell-check', 'charter, shells, chrome, and one surface per principal'],
   ['scope-check', 'the tenant boundary is engine-side, and a forged request cannot cross it'],
+  ['sort-check', 'sorting is a context value, not a fingerprint — and the schema is the allowlist'],
   ['members-check', 'the roll end to end: list, record, edit, save, and the list hears about it'],
   ['roles-check', 'each rung sees its own application, and the engine agrees with the screen'],
   ['reachable-check', 'every grant has a destination, and every destination has a grant'],
@@ -31,6 +21,7 @@ const CHECKS = [
   ['tide-check', 'automations as principals: authored, scoped, idempotent'],
   ['automations-check', 'the automations, visible and still one studio’s own'],
   ['member-check', 'the member’s own side, and the boundary that allowed it'],
+  ['model-check', 'one person, many relationships: concurrent entitlements, the drop-in, and manual money'],
   ['scoping-check', 'one table, two reaches: a rung says how far and the query cannot tell'],
   ['visibility-check', 'the owner can see who is coming, and a grant always has a destination'],
   ['multirole-check', 'a person is not one role: two roles add up, and the card is still theirs'],
@@ -38,11 +29,17 @@ const CHECKS = [
   ['perimeter-check', 'the integration authenticates its caller, not just the identity claimed'],
   ['admin-check', 'the administration tool administers Lyra and can reach nothing inside it'],
   ['integrations-check', 'an application arrives over a wire, for one tenant, and leaves again'],
+  ['webhook-check', 'the one door that asks for nothing: forwarded, byte-faithful, and the pack still decides'],
+  ['stripe-check', 'payments arrive as a pack: declared, placed, framed, and honest about having no key'],
+  ['billing-check', 'Stripe speaks and a membership answers: signed, claimed once, stated rather than counted'],
+  ['frame-check', 'a pack serves a page and the host frames it — declared, granted, and never identity'],
+  ['roundtrip-check', 'the app survives being data: parsed from JSON it boots, renders and answers identically'],
   ['clock-check', 'one clock: the studio owns its day, and both halves compute it the same'],
   ['design-check', 'the surface holds: contrast in every theme, identity never wearing a status colour, prose never truncated'],
+  ['render-check', 'the kit draws it: every principal, every screen, every cell a spec names — through the real components, into a real DOM'],
+  ['click-check', 'the other half of every click: what a control emits is what its trigger reads'],
 ] as const;
 
-// A suite that lost its list would otherwise report a clean run.
 if (CHECKS.length < 25) {
   console.error(`\x1b[31mall-checks is missing its list — ${CHECKS.length} entries.\x1b[0m`);
   process.exit(1);

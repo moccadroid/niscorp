@@ -1,70 +1,144 @@
 import { coursesList, enrolMember, enrolmentsForMember, withdrawMember } from '@lyra/app/vex/course.entries';
-import { memberById, membersList, membersMatching } from '@lyra/app/vex/member.entries';
-import { memberEnd, memberReactivate, memberUpdate } from '@lyra/app/vex/member.mutations';
+import { personById, offeringsList, peopleList, peopleCount, offeringOptions } from '@lyra/app/vex/member.entries';
+import { personAnchorUpdate } from '@lyra/app/vex/member.mutations';
+import { peopleEnroll } from '@lyra/app/vex/intake.entries';
+import {
+  subscriptionForMember,
+  subscriptionGiveNotice,
+  subscriptionWithdrawNotice,
+  subscriptionStart,
+  subscriptionRecordPayment,
+  subscriptionEnd,
+  passSell,
+  passesForPerson,
+} from '@lyra/app/vex/subscription.entries';
 
-// Endpoint bodies for the roll. A vex call is `{ fingerprint, context }` and
-// the context carries only what the action's own data holds — `$ref` pulls
-// from the action, never from a component and never from the URL.
+// The wildcards are built HERE because a request prism is evaluated and a
+// trigger's `set` is not — a `$join` in a trigger sends the literal expression.
 //
-// One list endpoint, parameterised: which statuses the list is showing is
-// action data, so switching slices and re-reading after a save are the same
-// call. Nothing here has to remember which of two reads was current.
-// THE WILDCARDS ARE ADDED HERE, and that is not an arbitrary choice of file.
+// ONE FINGERPRINT, and the lens as a value. The tab used to carry which READ
+// it meant; it now carries which lens it means, and the read is the same read.
+// Replay-only holds either way — but a lens the caller invents now matches no
+// arm and returns nothing, rather than being a fingerprint that does not exist.
 //
-// The first attempt built the pattern in the TRIGGER, with a `set` carrying a
-// `$join` — which silently does nothing: a trigger's `set` resolves bindings and
-// never evaluates prism ops. The search box typed, the read ran, and the filter
-// received the literal string every time. This codebase has that limitation
-// written into a comment elsewhere, and it still got made here.
-//
-// A request prism IS evaluated, so this is where a value gets assembled. It also
-// means the box holds what somebody typed and nothing else — a member searching
-// for their own name should not have to know what a wildcard is.
-export const membersListPrism = {
-  fingerprint: membersList.fingerprint,
-  context: { statuses: { $ref: '$.statuses' }, q: { $join: { parts: ['%', { $ref: '$.search' }, '%'], sep: '' } } },
-};
-
-// The same context, counting instead of listing — so a capped list can say what
-// it is a slice OF. Two reads rather than one because an aggregate and a page of
-// rows are different shapes, and vex answers one question per fingerprint.
-export const membersCountPrism = {
-  fingerprint: membersMatching.fingerprint,
-  context: { statuses: { $ref: '$.statuses' }, q: { $join: { parts: ['%', { $ref: '$.search' }, '%'], sep: '' } } },
-};
-
-export const memberByIdPrism = {
-  fingerprint: memberById.fingerprint,
-  context: { membershipId: { $ref: '$.membershipId' } },
-};
-
-export const memberUpdatePrism = {
-  fingerprint: memberUpdate.fingerprint,
+// `after`/`afterId` are the SEEK: the last row already on screen. Empty means
+// the first page, and every name sorts above an empty string. See the roll's
+// entry for why this is a seek rather than an offset.
+export const peopleListPrism = {
+  fingerprint: peopleList.fingerprint,
   context: {
-    membershipId: { $ref: '$.membershipId' },
-    status: { $ref: '$.status' },
-    notes: { $ref: '$.notes' },
+    lens: { $ref: '$.scope' },
+    q: { $join: { parts: ['%', { $ref: '$.search' }, '%'], sep: '' } },
+    after: { $ref: '$.after' },
+    afterId: { $ref: '$.afterId' },
   },
 };
 
-// The end date is not sent. It is stamped by the engine from the studio's own
-// clock (`$scope: 'today'` in the mutation), so a cancellation cannot be dated
-// by whichever machine happened to make the request.
-export const memberEndPrism = {
-  fingerprint: memberEnd.fingerprint,
-  context: { membershipId: { $ref: '$.membershipId' } },
+export const peopleCountPrism = {
+  fingerprint: peopleCount.fingerprint,
+  context: {
+    lens: { $ref: '$.scope' },
+    q: { $join: { parts: ['%', { $ref: '$.search' }, '%'], sep: '' } },
+  },
 };
 
-export const memberReactivatePrism = {
-  fingerprint: memberReactivate.fingerprint,
-  context: { membershipId: { $ref: '$.membershipId' } },
+// The price list, shaped for choosing — one read, and the screen says which
+// kind it is asking for.
+export const planOptionsPrism = { fingerprint: offeringOptions.fingerprint, context: { kind: 'recurring' } };
+export const passOptionsPrism = { fingerprint: offeringOptions.fingerprint, context: { kind: 'pass' } };
+
+export const personByIdPrism = {
+  fingerprint: personById.fingerprint,
+  context: { personId: { $ref: '$.personId' } },
 };
 
-// The desk enrolling somebody. `membershipId` is the record already on screen;
-// `person_id` is derived by the database from it, and `studio_id` is stamped by
-// the engine — so nothing in this write names a human, and a request cannot
-// pair one member's membership with another's person.
+// The whole signup as one replay — what `members.create` (a server function)
+// used to orchestrate. The normalisation the function did (trim, lowercase
+// the login identity, '' → NULL for the trial date) happens HERE, in the
+// evaluated request, so the entry receives values in the shape the columns
+// hold. Idempotent from every starting state — see `people/enroll`.
+export const enrollPrism = {
+  fingerprint: peopleEnroll.fingerprint,
+  context: {
+    email: { $lower: { $trim: { $ref: '$.newEmail' } } },
+    name: { $trim: { $ref: '$.newName' } },
+    phone: { $trim: { $ref: '$.newPhone' } },
+    trialEndsOn: { $case: { branches: [{ when: { $eq: [{ $ref: '$.newTrialEndsOn' }, ''] }, then: null }], else: { $ref: '$.newTrialEndsOn' } } },
+    source: 'walk-in',
+    notes: '',
+  },
+};
+
+export const personUpdatePrism = {
+  fingerprint: personAnchorUpdate.fingerprint,
+  context: {
+    personId: { $ref: '$.personId' },
+    notes: { $ref: '$.notes' },
+    trialEndsOn: { $case: { branches: [{ when: { $eq: [{ $ref: '$.trialEndsOn' }, ''] }, then: null }], else: { $ref: '$.trialEndsOn' } } },
+  },
+};
+
 export const openCoursesPrism = { fingerprint: coursesList.fingerprint, context: {} };
-export const memberEnrolmentsPrism = { fingerprint: enrolmentsForMember.fingerprint, context: { membershipId: { $ref: '$.membershipId' } } };
-export const enrolPrism = { fingerprint: enrolMember.fingerprint, context: { courseId: { $ref: '$.courseId' }, membershipId: { $ref: '$.membershipId' } } };
+export const memberEnrolmentsPrism = { fingerprint: enrolmentsForMember.fingerprint, context: { personId: { $ref: '$.personId' } } };
+export const enrolPrism = { fingerprint: enrolMember.fingerprint, context: { courseId: { $ref: '$.courseId' }, personId: { $ref: '$.personId' } } };
 export const withdrawPrism = { fingerprint: withdrawMember.fingerprint, context: { enrolmentId: { $ref: '$.enrolmentId' } } };
+
+// ── what they hold, and granting more of it ──────────────────
+//
+// A separate read rather than widening `people/byId`: that shape is a contract
+// several screens hold, and "what is this person paying and until when" is a
+// different question from "who is this person".
+export const memberSubscriptionPrism = {
+  fingerprint: subscriptionForMember.fingerprint,
+  context: { personId: { $ref: '$.personId' } },
+};
+
+export const personPassesPrism = {
+  fingerprint: passesForPerson.fingerprint,
+  context: { personId: { $ref: '$.personId' } },
+};
+
+export const offeringsPrism = { fingerprint: offeringsList.fingerprint, context: {} };
+
+export const startPlanPrism = {
+  fingerprint: subscriptionStart.fingerprint,
+  context: {
+    personId: { $ref: '$.personId' },
+    offeringId: { $ref: '$.startOfferingId' },
+    paidVia: { $ref: '$.startPaidVia' },
+  },
+};
+
+export const recordPaymentPrism = {
+  fingerprint: subscriptionRecordPayment.fingerprint,
+  context: {
+    subscriptionId: { $ref: '$.subscription.subscription_id' },
+    paidUntil: { $ref: '$.paidUntil' },
+  },
+};
+
+export const endSubscriptionPrism = {
+  fingerprint: subscriptionEnd.fingerprint,
+  context: { subscriptionId: { $ref: '$.subscription.subscription_id' } },
+};
+
+export const sellPassPrism = {
+  fingerprint: passSell.fingerprint,
+  context: {
+    personId: { $ref: '$.personId' },
+    offeringId: { $ref: '$.sellOfferingId' },
+    paidVia: { $ref: '$.sellPaidVia' },
+  },
+};
+
+// The browser sends an id and nothing else. The DATE is stamped by the trigger
+// from the studio's own clock — see subscription.entries.ts.
+export const giveNoticePrism = {
+  fingerprint: subscriptionGiveNotice.fingerprint,
+  context: { subscriptionId: { $ref: '$.subscription.subscription_id' } },
+};
+
+export const withdrawNoticePrism = {
+  fingerprint: subscriptionWithdrawNotice.fingerprint,
+  context: { subscriptionId: { $ref: '$.subscription.subscription_id' } },
+};

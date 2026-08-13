@@ -219,6 +219,24 @@ that row, so a detail reads `$.result.field`). So the mapping — not Vex — ow
 the output: array, single object, or scalar. On a fingerprint-only replay the
 entry's STORED shape drives this — the caller sends none.
 
+Two more roots sit beside `$.result` for the mapping to read:
+
+| root | what it holds |
+|---|---|
+| `$.result` | the rows (or the single row) — what every mapping is written against |
+| `$.context` | the request's own context values |
+| `$.scope` | the engine-side scope values (`studioId`, `today`, `locale`, …) |
+
+`$.scope` is what lets a mapping produce words in the **reader's** language:
+a mapping is where a row becomes `"Active"`, `"Fri 14 Mar"`, `"€45"`, and words
+have a language. Reading it here widens nothing a caller can reach — scope
+values are injected by the host per session and are unauthorable by a request.
+
+None of this touches the cache. Vex caches the query **plan** (`dsl` +
+`prismIr`), never rows, and a compiled mapping holds the *lookup*, not the
+looked-up value — so a locale-parameterised mapping shares one cache entry
+across every language.
+
 ### Response
 
 ```typescript
@@ -688,15 +706,19 @@ as a `kind: 'mutation'` entry under a named fingerprint (normally
 
 ### The grammar
 
-Four ops, closed and strict. Values are literals or `{ $context: "key" }` —
-**never `$scope`** (identity is engine-injected, unforgeable) and never a
-field path. `update`/`delete` REQUIRE a `where` (a real vex `Filter`).
+Five ops, closed and strict. Values are literals, `{ $context: "key" }`, or a
+`{ $lookup }` scalar subquery (below) — **never `$scope`** (identity is
+engine-injected, unforgeable) and never a field path. `update`/`delete`
+REQUIRE a `where` (a real vex `Filter`).
 
 ```ts
 { op: 'insert', table: 'tasks', values: { title: { $context: 'title' } } }
 { op: 'update', table: 'tasks', set: { done: { $context: 'done' } },
   where: { eq: ['tasks.id', { $context: 'id' }] } }
 { op: 'delete', table: 'tasks', where: { eq: ['tasks.id', { $context: 'id' }] } }
+// one INSERT per element of a caller-sized array (see insertEach below)
+{ op: 'insertEach', table: 'slots', items: { $context: 'days' },
+  values: { weekday: { $item: 'weekday' }, name: { $context: 'name' } } }
 // sugar — insert-or-update keyed on `key`; `insert` columns apply on create only
 { op: 'upsert', table: 'tasks', key: 'id',
   columns: { title: { $context: 'title' } },
@@ -705,6 +727,85 @@ field path. `update`/`delete` REQUIRE a `where` (a real vex `Filter`).
 
 An array of ops is a batch and runs in ONE transaction (the client must
 expose `transaction`; a batch on a non-transactional client is refused).
+
+### `onConflict` — the database arbitrates
+
+`insert` and `insertEach` take an optional `onConflict`. Where the `upsert`
+sugar branches on what the CALLER sent (key present → update that row),
+`onConflict` branches on what the DATABASE holds — atomically, in one
+statement, the answer to every "look up, then insert if absent" race:
+
+```ts
+// create-or-fetch: the no-op "touch" keeps RETURNING * yielding the row on
+// BOTH paths — this is the idiom for "ensure this person exists, give me their id"
+{ op: 'insert', table: 'people',
+  values: { email: { $context: 'email' }, name: { $context: 'name' } },
+  onConflict: { target: ['email'], set: { email: { $context: 'email' } } } }
+
+// insert-if-absent: DO NOTHING returns NO row on conflict — callers read the
+// absence as "already existed" (a batch reply's row count tells the story)
+{ op: 'insert', table: 'memberships',
+  values: { person_id: { $context: 'personId' } },
+  onConflict: { target: ['studio_id', 'person_id'] } }
+```
+
+Two guarantees, both enforced before any SQL runs:
+
+- **`target` must name a real unique constraint.** It is validated against
+  the introspected schema (primary key + unique indexes, order-insensitive);
+  an ON CONFLICT that arrests nothing is an authoring error with the actual
+  unique column sets in the message — never a runtime surprise.
+- **DO UPDATE is an update and is governed like one.** Declaring `set`
+  requires the update (or `write` umbrella) phase — an insert-only grant
+  refuses it. Update-phase `set` rules stamp identity into the DO UPDATE SET;
+  `match` rules whose column the conflict target already pins are inherently
+  satisfied (the inserted, scope-pinned value must equal the existing row's
+  for a conflict to arise), and any other `match` compiles to a WHERE on the
+  DO UPDATE half — the RLS boundary, again. `mutationEffect` declares the
+  entry as the insert-plus-update it really is, so discovery visibility
+  follows the same rule.
+
+### `$lookup` — a value read from another table
+
+Any value position (insert `values`, update `set`, `onConflict.set`) may be a
+scalar subquery — how a statement references a row it cannot otherwise name:
+
+```ts
+{ op: 'insert', table: 'memberships',
+  values: {
+    person_id: { $lookup: { from: 'people', field: 'id',
+                            where: { eq: ['people.email', { $context: 'email' }] } } },
+  } }
+// → INSERT INTO memberships (person_id, …) VALUES ((SELECT id FROM people WHERE …), …)
+```
+
+The lookup READS, so the read-phase scope rules of `from` are ANDed into its
+WHERE by the engine — a mutation entry is never a read-scope bypass, and a
+table the principal cannot read refuses the whole write. The WHERE should hit
+a unique key: more than one matching row is a runtime error (deliberately —
+silently picking an arbitrary row would be worse), and zero rows write NULL
+(the column's constraints decide whether that lands).
+
+### `insertEach` — one statement for a caller-sized list
+
+`items` names a context key holding an array of objects; `{ $item: "key" }`
+values read from the current element (cast to the column's type from the
+schema); every other value — literal, `$context`, `$lookup`, engine-injected
+`$scope` — is constant across rows. Compiles to a single
+`INSERT … SELECT … FROM jsonb_array_elements($items)`, so "one row per ticked
+weekday" is one authored statement, not a code loop:
+
+```ts
+{ op: 'insertEach', table: 'class_templates', items: { $context: 'slots' },
+  values: { weekday: { $item: 'weekday' }, starts_at: { $item: 'startsAt' },
+            name: { $context: 'name' } },
+  onConflict: { target: ['studio_id', 'weekday', 'starts_at'] } }  // composes
+```
+
+Scope-wise it is an insert that happens N times: the insert phase gates it,
+and `set`/`match` rules pin their columns identically on every row. A
+non-array `items` value is refused loudly before any SQL runs; an empty array
+inserts nothing and returns no rows.
 
 ### Replay
 
@@ -759,6 +860,41 @@ mutationEffect(def);                  // [{ op: 'update', table: 'tasks', column
 `$context` — such a write is not caller-bounded (its only row limit is the
 scope policy). Run it in your seed path so an unkeyed write never ships:
 loud at boot, never at runtime.
+
+### The write observer
+
+Vex is the choke point every application write passes through, which makes
+it the one place a host can hear about all of them. `mutations.onWrite`
+(handler config; the hono adapter passes it through verbatim) fires once per
+successful mutation replay, AFTER the commit:
+
+```ts
+mutations: {
+  client, policy,
+  onWrite: ({ fingerprint, writes, scope }) => { … },
+  // writes: [{ table, op, rows }] — per statement, resolved post-desugar
+  // (an upsert reports the branch it took; insertEach reports 'insert'),
+  // rows as the database returned them. scope: what the request could
+  // not forge.
+}
+```
+
+The grain is the point: a two-statement mutation is two writes, each with
+its own `RETURNING` rows, and an UPDATE the scope narrowed to nothing
+carries zero rows — the observer is never told "a write landed" about a
+write that changed nothing. Reads never fire it; a refused or failed
+mutation never reaches it; a listener that throws is logged and contained,
+because the response must tell the truth about a commit that already
+happened.
+
+What the host does with the news is not the engine's business — moss mints
+tide write facts from it and fans row-less pings to the app. If you hand
+`rows` onward, know who is on the other end: a row given to code is a row
+outside every scope policy this engine compiles.
+
+`executeWrites(client, def, mctx)` is the same per-statement shape at the
+library level; `executeMutation` remains the flattened `Row[]` every
+existing caller expects.
 
 ---
 

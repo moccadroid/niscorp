@@ -45,12 +45,12 @@ describe('validation', () => {
   });
 
   it('refuses a firing subscription to a reflex that is not there', async () => {
-    await expect(build([manual('a', { on: { fact: { firing: 'nobody' } } })])).rejects.toThrow(/unknown reflex/);
+    await expect(build([manual('a', { on: { fact: { run: 'nobody' } } })])).rejects.toThrow(/unknown reflex/);
   });
 });
 
 describe('cycles', () => {
-  const echo: EffectRegistry = { echo: { run: () => null, touches: ['ping'] } };
+  const echo: EffectRegistry = { echo: { run: () => null, writes: ['ping'] } };
 
   it('refuses an UNGUARDED cycle — it diverges by construction', async () => {
     await expect(
@@ -74,9 +74,9 @@ describe('cycles', () => {
     expect(report.warnings.length).toBeGreaterThanOrEqual(0);
   });
 
-  it('reports an effect that declares no touches as an unverifiable edge', async () => {
+  it('reports an effect that declares no writes as a blind edge', async () => {
     const report = await build([manual('a')]);
-    expect(report.unverifiable).toEqual([{ reflexId: 'a', effect: 'work' }]);
+    expect(report.blind).toEqual([{ reflexId: 'a', effect: 'work' }]);
   });
 });
 

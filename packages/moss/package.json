@@ -66,6 +66,7 @@
     "@niscorp/charter": "workspace:^",
     "@niscorp/nova": "workspace:^",
     "@niscorp/prism": "workspace:^",
+    "@niscorp/tide": "workspace:^",
     "@niscorp/vex": "workspace:^",
     "hono": "^4.12.23",
     "ws": "^8.21.1",
@@ -88,6 +89,7 @@
     }
   },
   "devDependencies": {
+    "@electric-sql/pglite": "^0.5.1",
     "@types/node": "^26.1.1",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",

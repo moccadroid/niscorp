@@ -1,18 +1,6 @@
 import type { CacheEntry, MutationEntry } from './index';
 import { priceText } from '@lyra/app/prisms/format.prism';
 
-// WHAT THE STUDIO LOOKS LIKE FROM ABOVE.
-//
-// Every figure here is grouped on a DENORMALISED column — `hour_key`,
-// `week_key` — and that is the whole reason those columns exist. Vex has no
-// date functions, so "attendance by hour" and "attendance by week" cannot be
-// expressed as `date_trunc` in a query; the bucket is written when the row is,
-// and the report groups on it.
-//
-// The trade is explicit: a bucket is fixed at write time, so changing what a
-// week means later means a backfill. For a studio timetable that is a fine
-// price, and it keeps every report a single grouped read with no post-processing.
-
 const row = (name: string) => ({ $get: { from: { $var: 'r' }, path: [name] } });
 
 // Peak hours — the figure that tells a studio when to add a class and when to
@@ -25,11 +13,6 @@ export const attendanceByHour: CacheEntry = {
     from: ['check_ins'],
     fields: ['check_ins.hour_key'],
     aggregate: { total: { count: 'check_ins.id' } },
-    // BOUNDED BY THE CALLER'S WINDOW. Every attendance report here was
-    // all-time: a studio three years old read 'busiest hours' over three years,
-    // which answers a question nobody asks. The dates are context, so ONE
-    // fingerprint serves every window — the screen changes what it passes, not
-    // which read it calls.
     filter: { and: [{ gte: ['check_ins.held_on', { $context: 'from' }] }, { lte: ['check_ins.held_on', { $context: 'to' }] }] },
     groupBy: ['check_ins.hour_key'],
     sort: [{ field: 'check_ins.hour_key', dir: 'asc' }],
@@ -63,9 +46,6 @@ export const attendanceByWeek: CacheEntry = {
   },
 };
 
-// Which streams people actually turn up for. A studio running six Vinyasa slots
-// and one Foundations to the same headcount is a studio with a timetable
-// problem, and this is the read that says so.
 export const attendanceByProgram: CacheEntry = {
   fingerprint: 'reports/attendance-by-program',
   intent: 'Class attendance at this studio, by program',
@@ -83,96 +63,106 @@ export const attendanceByProgram: CacheEntry = {
   },
 };
 
-// How the roll splits. The figure an owner opens the app for.
+// How the book of subscriptions splits. The figure an owner opens the app
+// for. Prospect and pass-holder counts are their own reads — the People
+// lenses' `people/count/*` entries — because they are derived over
+// relationships, not states of one table.
 export const membersByStatus: CacheEntry = {
   fingerprint: 'reports/members-by-status',
-  intent: 'How many memberships this studio has in each state',
+  intent: 'How many subscriptions this studio has in each state',
   shape: [{ status: '', total: 0 }],
   dsl: {
-    from: ['memberships'],
-    fields: ['memberships.status'],
-    aggregate: { total: { count: 'memberships.id' } },
-    groupBy: ['memberships.status'],
-    sort: [{ field: 'memberships.status', dir: 'asc' }],
+    from: ['subscriptions'],
+    fields: ['subscriptions.status'],
+    aggregate: { total: { count: 'subscriptions.id' } },
+    groupBy: ['subscriptions.status'],
+    sort: [{ field: 'subscriptions.status', dir: 'asc' }],
   },
 };
 
-// ─── plans ───────────────────────────────────────────────────
+// ─── offerings ───────────────────────────────────────────────
 
-export const planCreate: MutationEntry = {
-  fingerprint: 'plans/create',
-  intent: 'Add a plan',
+export const offeringCreate: MutationEntry = {
+  fingerprint: 'offerings/create',
+  intent: 'Put something on sale — a plan or a pass',
   mutation: {
     op: 'insert',
-    table: 'plans',
-    // No `id`: the database mints it, the same as every other create in this
-    // application. A client that cannot author a primary key cannot collide
-    // with one, and there is nothing to guess.
+    table: 'offerings',
     values: {
       name: { $context: 'name' },
+      kind: { $context: 'kind' },
       price_cents: { $context: 'priceCents' },
       interval: { $context: 'interval' },
       class_allowance: { $context: 'classAllowance' },
+      // WHAT A PLAN COMMITS SOMEBODY TO — the half of a plan that sat in the
+      // schema, seeded with real terms, read by the retention screen, and
+      // writable by nothing. "Twelve months, one month's notice" and "rolling"
+      // are different products at the same price.
+      minimum_term_months: { $context: 'minimumTermMonths' },
+      notice_days: { $context: 'noticeDays' },
+      // The pass half: how many classes, and how long they live. NULL for a
+      // recurring plan.
+      credits: { $context: 'credits' },
+      valid_days: { $context: 'validDays' },
     },
   },
 };
 
-export const planUpdate: MutationEntry = {
-  fingerprint: 'plans/update',
-  intent: 'Change a plan',
+export const offeringUpdate: MutationEntry = {
+  fingerprint: 'offerings/update',
+  intent: 'Change an offering',
   mutation: {
     op: 'update',
-    table: 'plans',
+    table: 'offerings',
     set: {
       name: { $context: 'name' },
       price_cents: { $context: 'priceCents' },
       interval: { $context: 'interval' },
       class_allowance: { $context: 'classAllowance' },
+      // Editing the terms changes what is ON SALE. Nobody already signed moves:
+      // `committed_until` was stamped onto their subscription at sign-up and the
+      // trigger never restamps it (schema.ts), which is the same rule the price
+      // override follows.
+      minimum_term_months: { $context: 'minimumTermMonths' },
+      notice_days: { $context: 'noticeDays' },
+      credits: { $context: 'credits' },
+      valid_days: { $context: 'validDays' },
     },
-    where: { eq: ['plans.id', { $context: 'planId' }] },
+    where: { eq: ['offerings.id', { $context: 'offeringId' }] },
   },
 };
 
-// Retiring a plan, never deleting it: subscriptions point at it, and a studio
-// that drops a price still has people paying the old one.
-export const planRetire: MutationEntry = {
-  fingerprint: 'plans/retire',
-  intent: 'Stop offering a plan, keeping everybody already on it',
+// Retiring an offering, never deleting it: subscriptions and passes point at
+// it, and a studio that drops a price still has people paying the old one.
+// One verb, the flag as its argument — see `templates/set-active`.
+export const offeringSetActive: MutationEntry = {
+  fingerprint: 'offerings/set-active',
+  intent: 'Stop offering something, or offer it again — everybody already on it keeps their price',
   mutation: {
     op: 'update',
-    table: 'plans',
-    set: { active: false },
-    where: { eq: ['plans.id', { $context: 'planId' }] },
+    table: 'offerings',
+    set: { active: { $context: 'active' } },
+    where: { eq: ['offerings.id', { $context: 'offeringId' }] },
   },
 };
 
-export const planRestore: MutationEntry = {
-  fingerprint: 'plans/restore',
-  intent: 'Offer a plan again',
-  mutation: {
-    op: 'update',
-    table: 'plans',
-    set: { active: true },
-    where: { eq: ['plans.id', { $context: 'planId' }] },
-  },
-};
-
-// How many people are on each plan — the other half of the price list, and the
-// reason retiring beats deleting.
+// How many people are on each offering — the other half of the price list, and
+// the reason retiring beats deleting.
 export const planUptake: CacheEntry = {
   fingerprint: 'reports/plan-uptake',
-  intent: 'How many active subscriptions each plan carries at this studio',
+  intent: 'How many active subscriptions each offering carries at this studio',
   shape: [{ plan_name: '', price_display: '', total: 0 }],
   dsl: {
-    from: ['subscriptions', 'plans'],
+    from: ['subscriptions', 'offerings'],
     fields: [
-      { field: 'plans.name', as: 'plan_name' },
-      'plans.price_cents',
+      { field: 'offerings.name', as: 'plan_name' },
+      'offerings.price_cents',
+      'offerings.currency',
     ],
     aggregate: { total: { count: 'subscriptions.id' } },
-    groupBy: ['plans.name', 'plans.price_cents'],
+    groupBy: ['offerings.name', 'offerings.price_cents', 'offerings.currency'],
     filter: { eq: ['subscriptions.status', 'active'] },
-    sort: [{ field: 'plans.price_cents', dir: 'asc' }],
+    sort: [{ field: 'offerings.price_cents', dir: 'asc' }],
   },
   mapping: {
     $map: {
@@ -180,7 +170,7 @@ export const planUptake: CacheEntry = {
       as: 'r',
       body: {
         plan_name: row('plan_name'),
-        price_display: priceText(row('price_cents')),
+        price_display: priceText(row('price_cents'), row('currency')),
         total: row('total'),
       },
     },

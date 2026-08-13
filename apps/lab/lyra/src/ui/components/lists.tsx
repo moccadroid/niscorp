@@ -6,25 +6,6 @@ import { Badge, Icon } from './display';
 import { Empty } from './feedback';
 import { cx } from '../lib/cx';
 
-// ═══════════════════════════════════════════════════════════════
-// THE OTHER TWO LIST SHAPES.
-//
-// `Rows` is a spreadsheet, and for eight of the app's thirty-three lists that
-// is exactly right: an object, its state, and the verbs that act on it. For
-// the rest it was the only thing available, so a menu became a one-column
-// grid with the header switched off, and a store card became a table row that
-// clipped its own description at an ellipsis.
-//
-// Two more shapes cover the rest:
-//
-//   LINKS — the row is a door. An icon, a title, a sentence that WRAPS, and a
-//   chevron that says so. No columns, no alignment, no header.
-//
-//   CARDS — the row is an object worth a paragraph. A title, a tagline, prose,
-//   facts, and its verbs. What the admin tool worked out months ago and lyra
-//   never got.
-// ═══════════════════════════════════════════════════════════════
-
 type Row = Record<string, unknown>;
 const str = (row: Row, key: string | undefined): string => {
   if (key === undefined) return '';
@@ -139,10 +120,6 @@ export const Links: NovaComponent<Partial<z.infer<typeof LinksProps>>> = ({ item
 Links.meta = { description: 'A navigation list: icon, title, a sentence that wraps, and a chevron. For menus and choosers — not a table.', propsSchema: LinksProps };
 
 // ── CARDS ────────────────────────────────────────────────────
-//
-// One card per record, for the lists whose rows are objects rather than data
-// points: the add-on store, a plan, a programme. Everything about one thing in
-// one place, and prose that is allowed to be prose.
 
 const CardActionSchema = z.object({ label: z.string(), ref: z.string(), variant: z.string().optional(), showKey: z.string().optional(), hideKey: z.string().optional(), icon: z.string().optional() }).loose();
 

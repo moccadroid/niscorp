@@ -28,8 +28,9 @@ const recordingSession = (): ShellSession & { calls: string[] } => {
   return {
     calls,
     shell: {} as ShellSession['shell'],
-    attach: () => calls.push('attach'),
+    attach: (_connection, options) => calls.push(options?.delta === true ? 'attach:delta' : 'attach'),
     detach: () => calls.push('detach'),
+    resync: () => calls.push('resync'),
     dispatch: (canvas, event) => calls.push(`dispatch:${canvas}:${(event as { type?: string }).type}`),
     publish: (channel) => calls.push(`publish:${channel}`),
     reset: () => calls.push('reset'),
@@ -154,6 +155,41 @@ describe('socket — the authority channel', () => {
     conn.sent.length = 0;
     conn.emit({ type: 'reset' });
     expect(conn.first('error')?.code).toBe('no_shell');
+  });
+
+  // RESYNC — the terminal's copy of a canvas drifted; the shell is fine.
+  it('a resync envelope routes to the session resync, leaving the shell alone', async () => {
+    const session = recordingSession();
+    const accept = createSocket(ctxWith({ shells: hostFor(session) }));
+    const conn = new FakeConnection();
+    await accept('/socket?token=good', conn);
+    conn.sent.length = 0;
+    conn.emit({ type: 'resync' });
+    expect(session.calls).toContain('resync');
+    expect(session.calls).not.toContain('reset');
+    expect(conn.first('error')).toBeUndefined();
+  });
+
+  it('a resync without a shell host is answered no_shell', async () => {
+    const accept = createSocket(ctxWith());
+    const conn = new FakeConnection();
+    await accept('/socket?token=good', conn);
+    conn.sent.length = 0;
+    conn.emit({ type: 'resync' });
+    expect(conn.first('error')?.code).toBe('no_shell');
+  });
+
+  // The delta capability is negotiated on the upgrade url, beside the token —
+  // a terminal that says nothing is a terminal that gets whole frames.
+  it('?delta=1 attaches delta-capable; its absence does not', async () => {
+    const asked = recordingSession();
+    await createSocket(ctxWith({ shells: hostFor(asked) }))('/socket?token=good&delta=1', new FakeConnection());
+    expect(asked.calls).toContain('attach:delta');
+
+    const silent = recordingSession();
+    await createSocket(ctxWith({ shells: hostFor(silent) }))('/socket?token=good', new FakeConnection());
+    expect(silent.calls).toContain('attach');
+    expect(silent.calls).not.toContain('attach:delta');
   });
 
   it('exposes the two application close codes', () => {

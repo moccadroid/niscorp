@@ -58,7 +58,7 @@ describe('preview', () => {
     // The whole point: no effect ran…
     expect(sent).toHaveLength(0);
     // …and nothing was written to the ledger either.
-    expect(await tide.ledger.firings()).toHaveLength(0);
+    expect(await tide.ledger.runs()).toHaveLength(0);
     expect(await tide.ledger.tasks()).toHaveLength(0);
   });
 
@@ -118,7 +118,10 @@ describe('preview', () => {
 
   it('previews a reflex that is disarmed — that is what preview is for', async () => {
     const { tide } = await build({ 'mail.send': { run: () => null } });
-    tide.disarm('billing.dunning');
+    // Disarming is the host writing its own column and loading again, not a
+    // method on the engine. Preview does not consult the switch either way:
+    // looking before arming is most of what the verb is for.
+    await tide.load([{ ...dunning, enabled: false }], { at: NOW - 86_400_000 });
     const report = await tide.preview('billing.dunning', { now: NOW });
     expect(report.selected).toBe(2);
   });

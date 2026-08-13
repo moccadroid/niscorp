@@ -1,5 +1,7 @@
 import { createShell, createComponentRegistry, CANVAS_SLOT_NAME, ACTION_SLOT_NAME } from '@niscorp/nova';
 import { componentsOf, snapshotShell } from '@niscorp/nova/reflect';
+import { translateRenderTree } from '@niscorp/nova/i18n';
+import type { Phrasebook } from '@niscorp/nova/i18n';
 import type { Shell, CanvasConfig, FetchFn, LayoutNode, RenderNode } from '@niscorp/nova';
 import { evaluate } from '@niscorp/prism';
 import type { ScopePolicy } from '@niscorp/vex';
@@ -8,6 +10,7 @@ import type { NiscRuntime } from './runtime';
 import type { Catalog } from './principal';
 import { CLOSE_SIGNED_OUT } from './socket';
 import type { Connection, ServerMessage } from './socket';
+import { encodeDelta, frameHash } from './delta';
 
 // ═══════════════════════════════════════════════════════════════
 // The shell host (DESIGN.md § The shell runs on the server): the shell
@@ -58,6 +61,10 @@ export type ShellHostContext = {
   // swept — there is deliberately no absolute cap, because that would discard
   // the state of somebody who is working.
   idleMs?: number;
+  // Send a changed canvas as a delta against the frame the connection last
+  // received, instead of whole. Default off; a connection is only ever sent one
+  // if it asked at attach. See `runtime.shellFrameDelta` and DOCS.md.
+  delta?: boolean;
 };
 
 export type ShellSession = {
@@ -67,8 +74,13 @@ export type ShellSession = {
   // callers already hold, and a snapshot taken at session time would go on
   // addressing the disposed one.
   readonly shell: Shell;
-  attach: (connection: Connection) => void;
+  // `options.delta` is the terminal declaring it can apply frame deltas. Absent
+  // means whole frames, which is what every terminal predating them expects.
+  attach: (connection: Connection, options?: { delta?: boolean }) => void;
   detach: (connection: Connection) => void;
+  // This connection's copy of a canvas drifted from the server's — send whole
+  // frames until it is level again. The shell is untouched.
+  resync: (connection: Connection) => void;
   dispatch: (canvas: string, event: Record<string, unknown>) => void;
   publish: (channel: string, payload?: unknown) => void;
   // Throw this shell away and build its replacement, carrying every attached
@@ -102,6 +114,13 @@ export type ShellHost = {
   // rebuild. Ring 1 is re-applied per principal; ring 2 substitutes exactly
   // as at build.
   adopt: () => void;
+  // Publish a message into one principal's LIVE durable shell — the push half
+  // of the socket the shells already run. Whatever action is mounted and
+  // listening on the channel reacts, re-renders, and the change fans out to
+  // every attached terminal over the existing wire. `false` when they hold no
+  // living shell, which is an answer, not an error: offline people read the
+  // rows later. Nothing here builds a shell.
+  deliver: (principal: string, channel: string, payload?: unknown) => boolean;
   // Every durable shell alive right now. The honest roster: moss owns the map,
   // so moss is the only thing that can enumerate it without keeping a
   // second, drifting note beside it.
@@ -151,9 +170,13 @@ export const createShellHost = (ctx: ShellHostContext): ShellHost => {
   type Live = {
     shell: Shell;
     connections: Set<Connection>;
-    // last frame per canvas — only changes are sent (structural diffing
-    // inside the render message stays a later optimization)
+    // last frame per canvas — only changes are sent
     sent: Map<string, string>;
+    // Connections that asked for deltas at attach. Every connection is level
+    // with `sent` (attach hands a newcomer the current frames, and a change
+    // fans out to all of them), so one baseline serves the whole set — but a
+    // connection that has NOT asked still gets whole frames from the same pass.
+    deltaReady: Set<Connection>;
     flushing: boolean;
     // set when the session ends (sign-out, reset, eviction) — pending flush
     // passes must not render a disposed shell
@@ -161,6 +184,9 @@ export const createShellHost = (ctx: ShellHostContext): ShellHost => {
     // built at; and when the last connection left (null while attached)
     since: number;
     idleSince: number | null;
+    // The words this shell wears, resolved once at build. Empty = the source
+    // language, and the pass short-circuits on it.
+    phrases: Phrasebook;
   };
 
   // The indirection `reset` needs. A session, a socket and the durable map all
@@ -185,8 +211,19 @@ export const createShellHost = (ctx: ShellHostContext): ShellHost => {
       return true;
     });
 
+  // Flatten, then translate, then serialize. THIS is the point where a
+  // language is applied and the only one that works: before flattening the
+  // words are still behind slot markers, and after serializing they are bytes.
+  // Everything downstream — the delta encoder, the socket, the terminal — is
+  // handed a finished frame and never learns a language was involved.
+  const rendered = (live: Live, tree: RenderNode[]): RenderNode[] =>
+    translateRenderTree(tree, {
+      phrases: live.phrases,
+      ...(ctx.app.phraseKeys === undefined ? {} : { keys: ctx.app.phraseKeys }),
+    });
+
   const frame = (live: Live, canvasId: string): string => {
-    const tree = live.shell.flattenRenderTree(live.shell.getCanvasRenderTree(canvasId));
+    const tree = rendered(live, live.shell.flattenRenderTree(live.shell.getCanvasRenderTree(canvasId)));
     const message: ServerMessage = {
       type: 'render',
       canvas: canvasId,
@@ -208,6 +245,30 @@ export const createShellHost = (ctx: ShellHostContext): ShellHost => {
       return frame(live, canvasId);
     } catch (error) {
       console.error(`[moss/shells] canvas "${canvasId}" failed to render — holding its last tree:`, error);
+      return null;
+    }
+  };
+
+  const delta = ctx.delta ?? false;
+
+  // A delta is only worth sending when it is DECISIVELY smaller. The transport
+  // compresses whatever it is handed, and a delta that saves 20% of the bytes
+  // saves nothing once both go through deflate — while still costing the
+  // terminal a rebuild and a checksum. Measured on Lyra: an in-place update
+  // (keystroke, one row's badge) lands at 1–4% and is far under this; a
+  // navigation lands near 80% and is deliberately left whole.
+  const DELTA_CEILING = 0.6;
+
+  // The delta message, or null to send the frame whole. Never throws: a frame
+  // failing to encode is a reason to fall back, not a reason to lose the frame.
+  const shorterAsDelta = (previous: string, next: string, canvasId: string): string | null => {
+    try {
+      const ops = encodeDelta(previous, next);
+      const message: ServerMessage = { type: 'render-delta', canvas: canvasId, ops, hash: frameHash(next) };
+      const text = JSON.stringify(message);
+      return text.length <= next.length * DELTA_CEILING ? text : null;
+    } catch (error) {
+      console.error(`[moss/shells] canvas "${canvasId}" failed to encode as a delta — sending it whole:`, error);
       return null;
     }
   };
@@ -333,7 +394,13 @@ export const createShellHost = (ctx: ShellHostContext): ShellHost => {
 
     // Born idle: a shell exists before anything attaches to it, and a shell
     // nothing ever attaches to is exactly what the sweep should collect.
-    const live: Live = { shell, connections: new Set(), sent: new Map(), flushing: false, ended: false, since: Date.now(), idleSince: Date.now() };
+    // Resolved with the rest of the per-principal derivation. A principal whose
+    // language changes gets a `rebuild`, which re-reads this alongside their
+    // catalog and inputs — one path, so a language can never be a release
+    // behind the screen it is painting.
+    const phrases = ctx.app.phrases?.(principal) ?? {};
+
+    const live: Live = { shell, connections: new Set(), sent: new Map(), deltaReady: new Set(), flushing: false, ended: false, since: Date.now(), idleSince: Date.now(), phrases };
     liveRef = live;
 
     // Per-principal canvas SEEDING — the instance twin of `inputs`. The app
@@ -377,9 +444,15 @@ export const createShellHost = (ctx: ShellHostContext): ShellHost => {
       if (live.ended) return;
       for (const canvas of shellManifest.canvases) {
         const next = frameOf(live, canvas.id);
-        if (next === null || live.sent.get(canvas.id) === next) continue;
+        const previous = live.sent.get(canvas.id);
+        if (next === null || previous === next) continue;
         live.sent.set(canvas.id, next);
-        for (const connection of live.connections) connection.send(next);
+        // Encoded ONCE for the whole set: every connection holds `sent`, so
+        // they share a baseline and therefore a delta.
+        const short = delta && previous !== undefined && live.deltaReady.size > 0 ? shorterAsDelta(previous, next, canvas.id) : null;
+        for (const connection of live.connections) {
+          connection.send(short !== null && live.deltaReady.has(connection) ? short : next);
+        }
       }
     };
     const flush = (): void => {
@@ -403,12 +476,15 @@ export const createShellHost = (ctx: ShellHostContext): ShellHost => {
   // to be served is when the shell it is attaching to is the broken one: a
   // throw here would leave the connection open with nothing on it, which is
   // the failure that has no diagnosis.
-  const attach = (live: Live, connection: Connection): void => {
+  const attach = (live: Live, connection: Connection, options?: { delta?: boolean }): void => {
     live.connections.add(connection);
+    if (delta && options?.delta === true) live.deltaReady.add(connection);
     live.idleSince = null;
     let frameTree: RenderNode[] = [];
     try {
-      frameTree = live.shell.getShellRenderTree();
+      // The arrangement carries words too — a canvas's own chrome, a Sheet's
+      // title. Same pass, same book.
+      frameTree = rendered(live, live.shell.getShellRenderTree());
     } catch (error) {
       console.error('[moss/shells] the shell frame failed to render — serving an empty arrangement:', error);
     }
@@ -416,6 +492,14 @@ export const createShellHost = (ctx: ShellHostContext): ShellHost => {
     for (const canvas of shellManifest.canvases) {
       const next = frameOf(live, canvas.id);
       if (next === null) continue;
+      // Attaching RENDERS, and rendering can pick up a change the flush pass
+      // has not sent yet — `sent` would then move to a frame only the newcomer
+      // holds, and the next pass would skip it as unchanged, leaving everyone
+      // else stale. So the newcomer's frame is the whole room's frame. Deltas
+      // depend on this being true: one baseline, or the encode is a lie.
+      if (live.sent.get(canvas.id) !== next) {
+        for (const other of live.connections) if (other !== connection) other.send(next);
+      }
       live.sent.set(canvas.id, next);
       connection.send(next);
     }
@@ -435,12 +519,12 @@ export const createShellHost = (ctx: ShellHostContext): ShellHost => {
     // holding nothing at all: strictly worse than the wedged shell it was
     // called to fix. Built first, a failed reset changes nothing.
     const next = build(cell.token, cell.principal);
-    const carried = [...old.connections];
+    const carried = [...old.connections].map((connection) => ({ connection, delta: old.deltaReady.has(connection) }));
     old.ended = true;
     old.connections.clear();
     old.shell.dispose();
     cell.live = next;
-    for (const connection of carried) attach(next, connection);
+    for (const { connection, delta: wants } of carried) attach(next, connection, { delta: wants });
   };
 
   const sessionOn = (cell: Cell, ephemeral: boolean): ShellSession => ({
@@ -449,10 +533,30 @@ export const createShellHost = (ctx: ShellHostContext): ShellHost => {
     get shell(): Shell {
       return cell.live.shell;
     },
-    attach: (connection) => attach(cell.live, connection),
+    attach: (connection, options) => attach(cell.live, connection, options),
+    // Whole frames for this one connection — the state both ends can always
+    // agree on. It stays delta-capable: it is level with `sent` again the
+    // moment this returns, and the checksum will catch it if it is not.
+    resync: (connection) => {
+      const live = cell.live;
+      if (!live.connections.has(connection)) return;
+      let frameTree: RenderNode[] = [];
+      try {
+        frameTree = live.shell.getShellRenderTree();
+      } catch (error) {
+        console.error('[moss/shells] the shell frame failed to render on resync — serving an empty arrangement:', error);
+      }
+      connection.send(JSON.stringify({ type: 'frame', tree: frameTree } satisfies ServerMessage));
+      for (const canvas of shellManifest.canvases) {
+        const current = live.sent.get(canvas.id) ?? frameOf(live, canvas.id);
+        if (current === null || current === undefined) continue;
+        connection.send(current);
+      }
+    },
     detach: (connection) => {
       const live = cell.live;
       live.connections.delete(connection);
+      live.deltaReady.delete(connection);
       if (live.connections.size > 0) return;
       live.idleSince = Date.now();
       if (!ephemeral) return;
@@ -528,6 +632,21 @@ export const createShellHost = (ctx: ShellHostContext): ShellHost => {
           const layout = bindings.get(id);
           cell.live.shell.registerAction(layout === undefined ? definition : { ...definition, layout });
         }
+      }
+    },
+    deliver: (principal, channel, payload) => {
+      // Into the LIVE shell only. A principal with no durable shell hears
+      // nothing and that is correct — this is push over shells that already
+      // exist, never a reason to build one for somebody who is not there. The
+      // rows the message points at are still in the database; their screen
+      // reads them the next time it opens.
+      const cell = durable.get(principal);
+      if (cell === undefined || cell.live.ended) return false;
+      try {
+        cell.live.shell.publish(channel, payload);
+        return true;
+      } catch {
+        return false;
       }
     },
     list: () => {

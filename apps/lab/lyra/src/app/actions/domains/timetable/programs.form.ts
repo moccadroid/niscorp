@@ -2,9 +2,6 @@ import { z } from 'zod';
 import type { ActionDefinition, LayoutNode, Step } from '@niscorp/nova';
 import { programCreatePrism, programUpdatePrism } from './timetable.prism';
 
-// THE PROGRAM FORM, over the list rather than inside it. Same move as the plan
-// form, same reason — see `plans.form.ts` for the argument. An empty
-// `programId` is a create; a seeded one is an edit. There is no mode flag.
 const programFormLayout: LayoutNode = {
   component: 'Stack',
   props: { gap: 16 },
@@ -12,13 +9,6 @@ const programFormLayout: LayoutNode = {
     { if: '$.error', then: { component: 'Notice', props: { tone: 'alert', message: '$.error' } }, else: '' },
     { component: 'Input', props: { label: 'Name', placeholder: 'Vinyasa Flow' }, ref: 'name', model: '$.name' },
     { component: 'Input', props: { label: 'Blurb', placeholder: 'Breath-led, continuous movement. All levels.' }, ref: 'blurb', model: '$.blurb' },
-    // A COLOUR PICKER THAT OFFERS COLOURS.
-    //
-    // This used to be a dropdown reading Accent / Calm / Warm / **Alert** /
-    // **Good** / Neutral — six status words, no swatches — so naming a stream
-    // meant choosing whether Competition was an emergency or a success. Ten
-    // hues now, each shown as the colour it is, and none of them claims
-    // anything about the class.
     {
       component: 'Select',
       props: {

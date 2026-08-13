@@ -4,7 +4,7 @@ import type { ReflexInput } from '@niscorp/tide';
 // After four days of downtime, does the 03:00 run fire late, or is it
 // skipped? BOTH answers are right for different automations, and guessing
 // wrong either double-bills a customer or silently skips a month. So it is
-// authored, per reflex — and whichever way it goes, a firing row records the
+// authored, per reflex — and whichever way it goes, a run row records the
 // decision. A skipped run is never an absence somebody has to infer.
 //
 // Three identical reflexes, three policies. Press +5 days once.
@@ -30,6 +30,6 @@ export const Demo = () => (
       { label: '+4 days (the outage)', ms: 349_200_000 },
       { label: '+1 day', ms: 86_400_000 },
     ]}
-    note="Press +4 days once — that is the outage, ending half an hour after the last night's run was due. `run` fires all five missed nights (a monthly close wants every one). `latest` fires only the most recent and records four skipped. `skip` fires the one that is still on time and drops the four that are not. Read the firings panel: every skip carries a note saying which policy made the call and how late the occurrence was."
+    note="Press +4 days once — that is the outage, ending half an hour after the last night's run was due. `run` fires all five missed nights (a monthly close wants every one). `latest` fires only the most recent and records four skipped. `skip` fires the one that is still on time and drops the four that are not. Read the runs panel: every skip carries a note saying which policy made the call and how late the occurrence was."
   />
 );

@@ -479,6 +479,10 @@ Powered by [dayjs](https://day.js.org/). Date values can be ISO 8601 strings or 
 ```
 Without `format`, returns ISO 8601. With `format`, uses [dayjs format tokens](https://day.js.org/docs/en/display/format).
 
+`$date` is **locale-blind** — `MMM` is `Mar` in every language it will ever run
+in. That is right for a machine-readable stamp and wrong for anything a person
+reads: for that, use `$localeDate` below.
+
 ### `$dateAdd` — Date arithmetic
 ```json
 { "$dateAdd": { "date": { "$ref": "$.startDate" }, "amount": 30, "unit": "day" } }
@@ -491,6 +495,68 @@ Returns ISO 8601 string. Units: `year`, `month`, `day`, `hour`, `minute`, `secon
 { "$dateDiff": { "from": { "$ref": "$.start" }, "to": { "$ref": "$.end" }, "unit": "day" } }
 ```
 Returns a number. Same units as `$dateAdd`.
+
+---
+
+## Locale-Aware Formatting
+
+Three ops that turn a value into text **for a person reading in a particular
+language**. They delegate to the platform's own `Intl`, so the rules come from
+CLDR rather than from a table in this package.
+
+`locale` is required on all three. There is no default, deliberately: a default
+renders something plausible for everybody it is wrong for, and the only way to
+discover it is a reader in Vienna being shown American dates.
+
+### `$localeMoney` — an amount as money
+```json
+{ "$localeMoney": { "value": { "$ref": "$.price_cents" }, "currency": { "$ref": "$.currency" }, "locale": "de-AT" } }
+{ "$localeMoney": { "value": { "$ref": "$.total" }, "currency": "EUR", "locale": "de-DE", "minorUnits": false, "digits": 0 } }
+```
+
+Why this is not a `$join` of a symbol and a number — one currency, one language,
+three countries:
+
+| locale | output |
+|---|---|
+| `de-AT` | `€ 45,00` |
+| `de-DE` | `45,00 €` |
+| `de-CH` | `EUR 45.00` |
+| `en-IE` | `€45.00` |
+
+- `value` is in **minor units** (cents) by default. The divisor comes from the
+  currency, not a hardcoded `100` — JPY has no minor unit, and dividing it would
+  be a hundredfold error. Pass `minorUnits: false` for major units.
+- `digits` overrides the currency's own fraction digits.
+- `fallback` (default `""`) is rendered for a null/absent amount, so an empty
+  SUM shows a dash rather than a confident `€0.00`.
+- An ISO code `Intl` does not know prints beside the number instead of throwing.
+
+### `$localeDate` — a date for a human
+```json
+{ "$localeDate": { "value": { "$ref": "$.starts_on" }, "locale": "de-AT" } }
+{ "$localeDate": { "value": { "$ref": "$.starts_on" }, "locale": "de-AT", "options": { "weekday": "short", "day": "numeric", "month": "short" } } }
+```
+
+`options` is a checked subset of `Intl.DateTimeFormatOptions` (`dateStyle`,
+`timeStyle`, `weekday`, `year`, `month`, `day`, `hour`, `minute`, `second`,
+`hour12`, `timeZone`). Defaults to `{ "dateStyle": "medium" }`.
+
+**DATE-only values are read as UTC.** `"2026-03-14"` is UTC midnight, and
+formatting UTC midnight in any zone west of Greenwich prints the 13th. Every
+date column in a schema has this shape, so the trap is handled once here rather
+than rediscovered at each call site. An explicit `timeZone` still wins.
+
+### `$localeNumber` — a number
+```json
+{ "$localeNumber": { "value": { "$ref": "$.attendance" }, "locale": "de-DE", "minDigits": 1 } }
+{ "$localeNumber": { "value": { "$ref": "$.rate" }, "locale": "en-GB", "style": "percent" } }
+```
+
+`style` is `decimal` (default) or `percent` — percent multiplies by 100, so pass
+`0.42`, not `42`. `digits`/`minDigits` cap and floor the fraction digits;
+`compact` gives `1.2k`. Grouping and the decimal mark follow the locale
+(`1.234,5` in Germany, `1 234,5` in Austria, `1,234.5` in Britain).
 
 ---
 

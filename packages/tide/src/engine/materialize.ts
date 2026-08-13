@@ -1,42 +1,63 @@
-import { clockOf, pollOf } from '../schemas';
-import type { Row } from '../types';
-import { buildEnv, evaluateTemplate } from './runtime';
+import { clockOf } from '../schemas';
+import type { ReflexState } from '../types';
 import type { EngineDeps, LoadedReflex } from './runtime';
 import { occurrencesBetween } from './occurrence';
-import { openFiring } from './match';
-import { collectRows } from './fanout';
+import { openRun } from './match';
 
 // ═══════════════════════════════════════════════════════════════
-// Materialize (the clock) and Poll (the pull)
+// Materialize — the clock
 //
 // Occurrences are materialized AHEAD, which is what makes silence
-// visible: a firing that should have happened and didn't is a
-// pending row past its due time — a query, not a vanished event.
+// visible: a run that should have happened and didn't is a pending
+// row past its due time — a query, not a vanished event.
+//
+// One row read and written per reflex. The watermark used to be
+// an unbounded key/value table with a growing set of string keys;
+// "where has this reflex got to" is a property of the reflex, and
+// there are as many of those as there are reflexes.
 // ═══════════════════════════════════════════════════════════════
 
 const MAX_OCCURRENCES_PER_TICK = 500;
 
-const materializedKey = (reflexId: string): string => `materialized:${reflexId}`;
-const polledKey = (reflexId: string): string => `polled:${reflexId}`;
+export const stateOf = async (deps: EngineDeps, reflexId: string): Promise<ReflexState | undefined> =>
+  (await deps.store.query({ table: 'state', where: { reflexId }, limit: 1 }))[0];
 
-export type MaterializeReport = { materialized: number; skippedOccurrences: number; firingsCreated: number };
+// Upsert on a table whose primary key IS the reflex id. The append can lose
+// to another instance creating the row first, which is a refusal rather than
+// an error — so the patch is re-applied to the row that won.
+const patchState = async (deps: EngineDeps, reflexId: string, patch: Partial<ReflexState>): Promise<void> => {
+  if (await deps.store.cas('state', reflexId, {}, patch)) return;
+  const created = await deps.store.appendIfAbsent('state', { reflexId, armedAt: 0, ...patch });
+  if (created === undefined) await deps.store.cas('state', reflexId, {}, patch);
+};
+
+export type MaterializeReport = { materialized: number; skippedOccurrences: number; runsCreated: number };
 
 export const materializeClocks = async (deps: EngineDeps, now: number): Promise<MaterializeReport> => {
-  const report: MaterializeReport = { materialized: 0, skippedOccurrences: 0, firingsCreated: 0 };
+  const report: MaterializeReport = { materialized: 0, skippedOccurrences: 0, runsCreated: 0 };
 
   for (const loaded of deps.reflexes()) {
     const clock = clockOf(loaded.reflex.on);
-    if (clock === undefined || !loaded.reflex.enabled) continue;
+    if (clock === undefined) continue;
 
-    const stored = await deps.store.getWatermark(materializedKey(loaded.reflex.id));
+    const state = await stateOf(deps, loaded.reflex.id);
     // A clock reflex with no arming time ESTABLISHES its baseline on the
-    // first tick and mints nothing — the same rule a poll's first run
-    // follows, and for the same reason: materializing from the epoch would
+    // first advance and mints nothing: materializing from the epoch would
     // backfill decades of occurrences nobody asked for. A host that wants
     // history passes `at` to load(), or waits for the deferred backfill verb.
-    const through = stored !== undefined ? Number(stored) : loaded.armedAt > 0 ? loaded.armedAt : now;
-    if (now <= through) {
-      if (stored === undefined) await deps.store.setWatermark(materializedKey(loaded.reflex.id), String(through));
+    const through = state?.materializedThrough ?? (loaded.armedAt > 0 ? loaded.armedAt : now);
+
+    // A DISARMED REFLEX STILL MOVES ITS WATERMARK.
+    //
+    // Skipping it outright froze the line where the disarm happened, so a
+    // reflex paused for eight days minted eight occurrences the moment it
+    // came back — and, before the switch became the host's own column, eight
+    // real effects with it. Nothing is materialized while it is off; the
+    // clock simply keeps moving, which is what "paused" means to everybody
+    // who is not a computer.
+    if (!loaded.reflex.enabled || now <= through) {
+      if (state?.materializedThrough === undefined || now > through)
+        await patchState(deps, loaded.reflex.id, { materializedThrough: loaded.reflex.enabled ? through : now });
       continue;
     }
 
@@ -45,14 +66,14 @@ export const materializeClocks = async (deps: EngineDeps, now: number): Promise<
     const { catchUp, lateMs } = loaded.reflex.policy;
 
     for (const occurrence of occurrences) {
-      // Catch-up is AUTHORED, not guessed. Each decision leaves a firing row
+      // Catch-up is AUTHORED, not guessed. Each decision leaves a run row
       // saying which happened — a skipped run is a recorded decision, never
       // an absence somebody has to infer.
       const isNewest = occurrence === newest;
       const late = now - occurrence.at > lateMs;
       const skip = catchUp === 'latest' ? !isNewest : catchUp === 'skip' ? late : false;
 
-      const firing = await openFiring(deps, loaded, {
+      const run = await openRun(deps, loaded, {
         cause: `occurrence:${occurrence.key}`,
         depth: 0,
         dueAt: occurrence.at,
@@ -63,102 +84,24 @@ export const materializeClocks = async (deps: EngineDeps, now: number): Promise<
       });
 
       if (skip) report.skippedOccurrences += 1;
-      else if (firing !== undefined) {
+      else if (run !== undefined) {
         report.materialized += 1;
-        report.firingsCreated += 1;
+        report.runsCreated += 1;
       }
     }
 
-    await deps.store.setWatermark(materializedKey(loaded.reflex.id), String(now));
+    // THE WATERMARK FOLLOWS THE WORK, NOT THE CLOCK.
+    //
+    // It used to jump to `now` unconditionally. A reflex that came back after
+    // a long outage produced more occurrences than the per-tick cap, and
+    // everything past the cap was dropped while the watermark sailed past it:
+    // unreachable forever, with no row anywhere saying they had existed. When
+    // the cap bites, the next tick resumes from the last key actually
+    // materialized — `occurrencesBetween` is half-open at the start, so the
+    // edge is not re-minted.
+    const capped = occurrences.length >= MAX_OCCURRENCES_PER_TICK && newest !== undefined;
+    await patchState(deps, loaded.reflex.id, { materializedThrough: capped ? newest.at : now });
   }
 
   return report;
 };
-
-// ── poll ────────────────────────────────────────────────────────
-
-type PollState = { cursor?: string; at: number };
-
-const readPollState = (raw: string | undefined): PollState | undefined => {
-  if (raw === undefined) return undefined;
-  try {
-    const parsed: unknown = JSON.parse(raw);
-    if (typeof parsed === 'object' && parsed !== null && 'at' in parsed) {
-      const state = parsed as { cursor?: unknown; at?: unknown };
-      return { cursor: typeof state.cursor === 'string' ? state.cursor : undefined, at: Number(state.at) };
-    }
-  } catch {
-    return undefined;
-  }
-  return undefined;
-};
-
-// ISO timestamps and zero-padded ids compare correctly as strings; numeric
-// ids do not. Compare numerically when both sides are numbers.
-const isAfter = (candidate: string, cursor: string): boolean => {
-  const left = Number(candidate);
-  const right = Number(cursor);
-  if (Number.isFinite(left) && Number.isFinite(right)) return left > right;
-  return candidate > cursor;
-};
-
-export const pollSources = async (deps: EngineDeps, now: number): Promise<number> => {
-  let minted = 0;
-
-  for (const loaded of deps.reflexes()) {
-    const poll = pollOf(loaded.reflex.on);
-    if (poll === undefined || !loaded.reflex.enabled || loaded.reflex.select === undefined) continue;
-    if (deps.select === undefined) continue;
-
-    const state = readPollState(await deps.store.getWatermark(polledKey(loaded.reflex.id)));
-    if (state !== undefined && now - state.at < poll.everyMs) continue;
-
-    const env = buildEnv({ params: loaded.reflex.params, now });
-    let rows: readonly Row[] = [];
-    try {
-      const query = evaluateTemplate(deps.transform, loaded.reflex.select.query, env);
-      rows = await collectRows(deps.select(query, { reflexId: loaded.reflex.id, now, actor: deps.actorFor(loaded.reflex.as), env }), deps.maxFanOut);
-    } catch {
-      // A source that cannot be read is not a reason to lose the tick; the
-      // watermark stays put, so nothing is silently skipped either.
-      continue;
-    }
-
-    let highest = state?.cursor;
-    const fresh: Row[] = [];
-    for (const row of rows) {
-      const value = row[poll.cursor];
-      if (value === undefined || value === null) continue;
-      const cursorValue = String(value);
-      if (state?.cursor === undefined || isAfter(cursorValue, state.cursor)) fresh.push(row);
-      if (highest === undefined || isAfter(cursorValue, highest)) highest = cursorValue;
-    }
-
-    // The first run ESTABLISHES the watermark and mints nothing. Pointing a
-    // new poll at an existing table must not report ten thousand historical
-    // rows as "new" — the classic first-sync flood.
-    if (state !== undefined)
-      for (const row of fresh) {
-        const inserted = await deps.store.insertFact({
-          kind: 'write',
-          entity: poll.entity,
-          op: 'insert',
-          row,
-          at: now,
-          depth: 0,
-          dedupeKey: `${loaded.reflex.id}:${String(row[poll.cursor])}`,
-          cause: `poll:${loaded.reflex.id}`,
-        });
-        if (inserted !== undefined) {
-          deps.emit({ type: 'fact.ingested', fact: inserted });
-          minted += 1;
-        }
-      }
-
-    await deps.store.setWatermark(polledKey(loaded.reflex.id), JSON.stringify({ cursor: highest, at: now }));
-  }
-
-  return minted;
-};
-
-export const isClockReflex = (loaded: LoadedReflex): boolean => clockOf(loaded.reflex.on) !== undefined;

@@ -19,6 +19,7 @@ import {
   isMergeNode, isCoalesceNode, isCaseNode, isEntriesOfNode, isKeyByNode, isGroupByNode,
   isKeysNode, isValuesNode, isFromEntriesNode, isPickNode, isOmitNode, isTypeNode, isLengthNode,
   isDateNode, isDateAddNode, isDateDiffNode,
+  isLocaleDateNode, isLocaleMoneyNode, isLocaleNumberNode,
   isJsonObject, isPlainObject,
 } from '../schemas/guards';
 
@@ -35,6 +36,7 @@ import { opNot, opAnd, opOr } from '../ops/logic.ops';
 import { opMerge, opCoalesce, opCase, opEntriesOf, opKeyBy, opGroupBy } from '../ops/structure.ops';
 import { opKeys, opValues, opFromEntries, opPick, opOmit, opType, opLength } from '../ops/object.ops';
 import { opDate, opDateAdd, opDateDiff } from '../ops/time.ops';
+import { opLocaleDate, opLocaleMoney, opLocaleNumber } from '../ops/intl.ops';
 
 // ═══════════════════════════════════════════════════════════
 // Node Evaluator (recursive dispatcher)
@@ -164,6 +166,13 @@ export const evaluateNode: EvaluateFn = (node: unknown, context: EvalContext): J
   if (isDateNode(obj)) return opDate(obj, context, evaluateNode);
   if (isDateAddNode(obj)) return opDateAdd(obj, context, evaluateNode);
   if (isDateDiffNode(obj)) return opDateDiff(obj, context, evaluateNode);
+
+  // ───────────────────────────────────────────────────────
+  // Locale-aware formatting ops
+  // ───────────────────────────────────────────────────────
+  if (isLocaleDateNode(obj)) return opLocaleDate(obj, context, evaluateNode);
+  if (isLocaleMoneyNode(obj)) return opLocaleMoney(obj, context, evaluateNode);
+  if (isLocaleNumberNode(obj)) return opLocaleNumber(obj, context, evaluateNode);
 
   // ───────────────────────────────────────────────────────
   // Plain object — recursive template evaluation

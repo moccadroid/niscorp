@@ -50,7 +50,9 @@ export type TimingMeta = {
 };
 
 export type ContextMeta = {
-  type: 'string' | 'number' | 'boolean' | 'string[]' | 'number[]';
+  // Mirrors ParamSlot['type'] (adapters/adapter.types.ts) — the contract a
+  // caller reads is built from the slots the compiler bound, one for one.
+  type: 'string' | 'number' | 'boolean' | 'string[]' | 'number[]' | 'json';
   kind: 'context' | 'scope' | 'semantic';
 };
 

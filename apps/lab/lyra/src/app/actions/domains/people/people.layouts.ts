@@ -1,9 +1,5 @@
 import type { LayoutNode } from '@niscorp/nova';
 
-// The roll's three faces. Same kit, same `Rows` spec vocabulary — the list of
-// members and the timetable are the same component with different columns,
-// which is the whole reason there is no MemberRow.
-
 const page = (children: LayoutNode | LayoutNode[]): LayoutNode => ({
   component: 'Stack',
   props: { gap: 22 },
@@ -15,30 +11,14 @@ export const peopleListLayout: LayoutNode = page([
     component: 'Row',
     props: { justify: 'between', align: 'center' },
     children: [
-      { component: 'Hero', props: { title: 'Members' } },
-      { component: 'Button', props: { variant: 'solid', label: 'Add a member' }, ref: 'add' },
-      // A FILTER, WEARING A FILTER'S CONTROL.
-      //
-      // This was two buttons, and the comment beside them said `Tabs` "cannot
-      // work here: it emits one ref carrying the chosen value, and the trigger
-      // grammar has no way to branch on it." True, and the wrong conclusion —
-      // the grammar's answer to branching has always been to put the difference
-      // in the PAYLOAD, which is how one ref already serves a list of a hundred
-      // rows. So each slice carries its own `statuses` and one trigger reads
-      // them off the option.
-      //
-      // Which matters beyond tidiness: two buttons look like two ACTIONS, and
-      // "Everyone" is not something you do to the roll. A segmented control
-      // says the screen has two states and you are in one of them.
+      { component: 'Hero', props: { title: 'People' } },
+      { component: 'Button', props: { variant: 'solid', label: 'Add a person' }, ref: 'add' },
       { component: 'Tabs', props: { value: '$.scope', options: '$.scopes' }, ref: 'scope' },
     ],
   },
 
-  // THE SEARCH BOX, and the line under it that stops the list lying.
-  //
-  // A roll capped at fifty looks complete at any studio with more than fifty
-  // members. Saying how many matched is the difference between a filter and a
-  // silent truncation, and it is the only honest way to cap a list at all.
+  // The count beside the search box is what stops a capped list lying: fifty
+  // rows look complete at a studio with two thousand members.
   {
     component: 'Row',
     props: { justify: 'between', align: 'center', wrap: true, gap: 12 },
@@ -56,28 +36,34 @@ export const peopleListLayout: LayoutNode = page([
       props: {
         rows: '$.rows',
         loading: '$.loading',
-        rowKey: 'membership_id',
+        rowKey: 'person_id',
         onRowRef: 'open',
         empty: 'Nobody here yet.',
-        emptyHint: 'Members appear once somebody signs up or the desk adds them.',
+        emptyHint: 'People appear once somebody asks, signs up, or the desk writes them down.',
         columns: [
-          { label: 'Member', w: 2, cell: { kind: 'avatar', key: 'person_name', subKey: 'email' } },
-          { label: 'Status', px: 92, cell: { kind: 'badge', key: 'status_display', toneKey: 'status_tone' } },
-          { label: 'Joined', px: 104, align: 'right', cell: { kind: 'text', key: 'joined_display', color: 'mute' } },
+          { label: 'Person', w: 2, cell: { kind: 'avatar', key: 'person_name', subKey: 'email' } },
+          { label: 'Standing', px: 100, cell: { kind: 'badge', key: 'status_display', toneKey: 'status_tone' } },
+          { label: 'First seen', px: 104, align: 'right', cell: { kind: 'text', key: 'joined_display', color: 'mute' } },
         ],
       },
     },
   },
+
+  // THE WAY TO PERSON FIFTY-ONE. Shown only while a full page came back:
+  // a short page is the end of the roll, and a button that fetches nothing
+  // is a button that lies about there being more.
+  {
+    if: '$.hasMore',
+    then: {
+      component: 'Row',
+      props: { justify: 'center' },
+      children: { component: 'Button', props: { variant: 'outline', label: 'Show more' }, ref: 'more' },
+    },
+    else: '',
+  },
 ]);
 
 export const peopleDetailLayout: LayoutNode = page([
-  // NO BACK BUTTON, and the reason is the rule this file used to break.
-  //
-  // Back is NAVIGATION, and navigation is the shell's. An action that draws its
-  // own way out is an action that knows it was pushed — which is exactly what
-  // it must not know, because the same action is also mounted bare by a kiosk
-  // and would then offer a door to nowhere. The sheet fragment supplies the
-  // dismissal; a stack supplies its own.
 
   {
     component: 'Row',
@@ -104,11 +90,6 @@ export const peopleDetailLayout: LayoutNode = page([
 
   { if: '$.error', then: { component: 'Notice', props: { tone: 'alert', message: '$.error' } }, else: '' },
 
-  // FIELDS, NOT STATS, AND ONE CARD RATHER THAN THREE. `Stat` renders a
-  // FIGURE — 22px, tabular numerals, tightened tracking — and it was rendering
-  // `omar.haddad@example.com` at display size in its own bordered box, three
-  // boxes wide, for what is one block of contact details. A stat is for 412
-  // classes and €595 a month.
   {
     component: 'Card',
     props: { pad: 18 },
@@ -118,7 +99,7 @@ export const peopleDetailLayout: LayoutNode = page([
       children: [
         { component: 'Field', props: { label: 'Email', icon: 'mail', value: '$.member.email', empty: 'Not given' } },
         { component: 'Field', props: { label: 'Phone', icon: 'phone', value: '$.member.phone', empty: 'Not given' } },
-        { component: 'Field', props: { label: 'Joined', icon: 'clock', value: '$.member.joined_display' } },
+        { component: 'Field', props: { label: 'First seen', icon: 'clock', value: '$.member.joined_display' } },
       ],
     },
   },
@@ -128,16 +109,12 @@ export const peopleDetailLayout: LayoutNode = page([
     children: {
       component: 'Card',
       props: {},
-      // A note is PROSE — somebody's sentences about a person, at whatever
-      // length they needed. `Text` is a span with no leading and no measure.
+      // A note is PROSE, at whatever length somebody needed. `Text` is a span
+      // with no leading and no measure.
       children: { if: '$.member.notes', then: { component: 'Prose', props: { color: 'soft' }, children: '$.member.notes' }, else: { component: 'Text', props: { color: 'faint' }, children: 'Nothing noted.' } },
     },
   },
 
-  // THE RIDERS' STRIP — panels installed packs attach to this record, derived
-  // per studio (granted ∩ installed ∩ attached-here), labelled from their own
-  // actions. This screen never learns a pack's name, and when nothing rides,
-  // nothing renders — the guard is a count because an empty array is truthy.
   {
     if: '$.attachmentCount',
     then: {
@@ -160,16 +137,151 @@ export const peopleDetailLayout: LayoutNode = page([
     else: '',
   },
 
-  // COURSES, from the desk's side.
+  // ── WHAT THEY HOLD ─────────────────────────────────────────
   //
-  // The desk has held the grant to enrol somebody since courses landed and had
-  // nowhere to do it — capability with no door, which is the same shape of bug
-  // as a read-only screen called "Timetable". The member's record is the right
-  // door: it is where somebody stands when a person at the counter says "put
-  // me on the beginners block".
+  // Drawn from data, not from capability: a rung that cannot read a
+  // subscription gets an empty object here and the section is simply absent.
+  // No branch asks what anybody is allowed to do.
+  {
+    if: '$.subscription.subscription_id',
+    then: {
+      component: 'Section',
+      props: { title: 'Plan and terms' },
+      children: {
+        component: 'Stack',
+        props: { gap: 12 },
+        children: [
+          {
+            component: 'Row',
+            props: { gap: 22, wrap: true },
+            children: [
+              { component: 'Field', props: { label: 'Plan', value: '$.subscription.plan_name' } },
+              { component: 'Field', props: { label: 'Worth', value: '$.subscription.value_display' } },
+              { component: 'Field', props: { label: 'Minimum term', value: '$.subscription.term_display' } },
+              { component: 'Field', props: { label: 'Notice', value: '$.subscription.notice_display' } },
+              { component: 'Field', props: { label: 'Committed until', value: '$.subscription.committed_display' } },
+              { component: 'Field', props: { label: 'Paid', value: '$.subscription.paid_via_display' } },
+              { component: 'Field', props: { label: 'Paid until', value: '$.subscription.paid_until_display', empty: 'Nothing recorded' } },
+            ],
+          },
+          // The desk's own pen for money it took itself: cash, a transfer, the
+          // SEPA run. Standing only — the ledger is a later feature, and the
+          // screen says what was decided rather than pretending otherwise.
+          {
+            component: 'Row',
+            props: { gap: 10, align: 'end', wrap: true },
+            children: [
+              { component: 'Input', props: { label: 'Their money reaches', type: 'date' }, ref: 'paidUntil', model: '$.paidUntil' },
+              { component: 'Button', props: { variant: 'outline', label: 'Record payment' }, ref: 'recordPayment' },
+            ],
+          },
+          {
+            if: '$.subscription.notice_given',
+            // Once notice is given the date is the fact worth showing, and the
+            // control becomes the way back rather than a second way forward.
+            then: {
+              component: 'Row',
+              props: { gap: 12, align: 'center', wrap: true },
+              children: [
+                { component: 'Badge', props: { label: 'Leaving', tone: 'warn' } },
+                { component: 'Text', props: { size: 'sm', color: 'mute' }, children: 'Last day {{$.subscription.ends_display}} — the longer of their notice period and their minimum term.' },
+                { component: 'Button', props: { variant: 'ghost', label: 'They changed their mind' }, ref: 'withdrawNotice' },
+              ],
+            },
+            else: {
+              component: 'Row',
+              props: { gap: 12, align: 'center', wrap: true },
+              children: [
+                { component: 'Text', props: { size: 'sm', color: 'mute' }, children: 'Notice runs its course — a commitment outlives notice given inside it.' },
+                { component: 'Button', props: { variant: 'outline', label: 'Give notice' }, ref: 'giveNotice' },
+                { component: 'Button', props: { variant: 'danger', label: 'End now' }, ref: 'end' },
+              ],
+            },
+          },
+        ],
+      },
+    },
+    // No subscription: the desk puts them on a plan, saying how it will be
+    // paid. This is the write the old model did not have — a studio with no
+    // payment processor sells a plan right here.
+    else: {
+      component: 'Section',
+      props: { title: 'Plan', subtitle: 'Nothing running. Starting a plan grants access from today; how the money moves is its own question.' },
+      children: {
+        component: 'Row',
+        props: { gap: 10, align: 'end', wrap: true },
+        children: [
+          { component: 'Select', props: { label: 'Plan', options: '$.planOptions', placeholder: 'Choose a plan' }, ref: 'startOffering', model: '$.startOfferingId' },
+          {
+            component: 'Select',
+            props: {
+              label: 'Paid',
+              options: [
+                { value: 'manual', label: 'Billed by the studio' },
+                { value: 'comp', label: 'Complimentary' },
+              ],
+            },
+            ref: 'startPaidVia',
+            model: '$.startPaidVia',
+          },
+          { component: 'Button', props: { variant: 'solid', label: 'Start plan' }, ref: 'startPlan' },
+        ],
+      },
+    },
+  },
+
+  // ── PASSES ─────────────────────────────────────────────────
   {
     component: 'Section',
-    props: { title: 'Courses', subtitle: 'Blocks this member is on. Joining holds their place for every week of it.' },
+    props: { title: 'Passes', subtitle: 'Class credits. A drop-in is a one-credit pass; attending is what spends one.' },
+    children: {
+      component: 'Stack',
+      props: { gap: 14 },
+      children: [
+        {
+          component: 'Card',
+          props: { flush: true },
+          children: {
+            component: 'Rows',
+            props: {
+              rows: '$.passes',
+              rowKey: 'pass_id',
+              empty: 'No passes.',
+              columns: [
+                { label: 'Pass', w: 2, cell: { kind: 'primary', key: 'name', subKey: 'credits_display' } },
+                { label: 'State', px: 92, cell: { kind: 'badge', key: 'state_label', toneKey: 'state_tone' } },
+                { label: 'Bought', px: 104, align: 'right', cell: { kind: 'text', key: 'purchased_display', color: 'mute' } },
+              ],
+            },
+          },
+        },
+        {
+          component: 'Row',
+          props: { gap: 10, align: 'end', wrap: true },
+          children: [
+            { component: 'Select', props: { label: 'Sell', options: '$.passOptions', placeholder: 'Choose a pass' }, ref: 'sellOffering', model: '$.sellOfferingId' },
+            {
+              component: 'Select',
+              props: {
+                label: 'Paid',
+                options: [
+                  { value: 'manual', label: 'At the desk' },
+                  { value: 'comp', label: 'Complimentary' },
+                ],
+              },
+              ref: 'sellPaidVia',
+              model: '$.sellPaidVia',
+            },
+            { component: 'Button', props: { variant: 'outline', label: 'Sell pass' }, ref: 'sellPass' },
+          ],
+        },
+      ],
+    },
+  },
+
+  {
+    component: 'Section',
+    props: { title: 'Courses', subtitle: 'Blocks this person is on. Joining holds their place for every week of it.' },
     children: {
       component: 'Stack',
       props: { gap: 14 },
@@ -213,37 +325,10 @@ export const peopleDetailLayout: LayoutNode = page([
       ],
     },
   },
-
-  // Ending and restarting are the same control in two states, because they are
-  // the same decision. A cancelled membership offers the way back rather than
-  // a dead row.
-  {
-    component: 'Section',
-    props: { title: 'Membership' },
-    children: {
-      if: { $eq: ['$.member.status', 'cancelled'] },
-      then: {
-        component: 'Row',
-        props: { gap: 12, align: 'center' },
-        children: [
-          { component: 'Text', props: { size: 'sm', color: 'mute' }, children: 'This membership has ended.' },
-          { component: 'Button', props: { variant: 'outline', label: 'Reactivate' }, ref: 'reactivate' },
-        ],
-      },
-      else: {
-        component: 'Row',
-        props: { gap: 12, align: 'center' },
-        children: [
-          { component: 'Text', props: { size: 'sm', color: 'mute' }, children: 'Ending a membership keeps the record — it is how a studio can see who left.' },
-          { component: 'Button', props: { variant: 'danger', label: 'End membership' }, ref: 'end' },
-        ],
-      },
-    },
-  },
 ]);
 
 export const peopleFormLayout: LayoutNode = page([
-  { component: 'Hero', props: { eyebrow: '$.member.person_name', title: 'Edit member' } },
+  { component: 'Hero', props: { eyebrow: '$.member.person_name', title: 'Edit person' } },
 
   {
     component: 'Card',
@@ -252,21 +337,14 @@ export const peopleFormLayout: LayoutNode = page([
       component: 'Stack',
       props: { gap: 18, maxWidth: 460 },
       children: [
+        // No status field, deliberately: what a person IS derives from what
+        // they hold, and the writes that change that live on the record —
+        // start a plan, sell a pass, give notice. This form edits the anchor.
         {
-          component: 'Select',
-          props: {
-            label: 'Status',
-            hint: 'Where this membership is in its life. Trials become active; paused keeps the place without billing.',
-            options: [
-              { value: 'trialling', label: 'Trial' },
-              { value: 'active', label: 'Active' },
-              { value: 'paused', label: 'Paused' },
-              { value: 'lapsed', label: 'Lapsed' },
-              { value: 'cancelled', label: 'Cancelled' },
-            ],
-          },
-          ref: 'status',
-          model: '$.status',
+          component: 'Input',
+          props: { label: 'Free trial until', type: 'date', hint: 'The window closes on its own — nothing marks it.' },
+          ref: 'trialEndsOn',
+          model: '$.trialEndsOn',
         },
         {
           component: 'Textarea',
@@ -287,19 +365,6 @@ export const peopleFormLayout: LayoutNode = page([
   },
 ]);
 
-// SIGNING SOMEBODY UP — its own screen, not a panel on the roll.
-//
-// It is its own action because it is the only thing a KIOSK does. A tablet by
-// the door mounts this and nothing else: no roll behind it, no nav, no way
-// through to anybody's record. Folding it into the list as a mode would have
-// meant shipping the whole roll to reach the form, which for a kiosk is not a
-// layout preference — it is the difference between a sign-up sheet and a
-// customer list left open on the counter.
-//
-// It draws NO way out, and that is the point. Pushed into the sheet, the
-// fragment supplies the dismissal; mounted bare by a kiosk there is nothing to
-// dismiss to, and the same layout is correct in both cases because it never
-// asked how it got there.
 export const peopleSignupLayout: LayoutNode = page([
   {
     // Done and not-done are the same screen with the middle swapped, so the
@@ -309,11 +374,7 @@ export const peopleSignupLayout: LayoutNode = page([
       component: 'Stack',
       props: { gap: 22 },
       children: [
-        // The name is the whole message, so it is the heading. `set` resolves
-        // bindings but does not evaluate Prism ops, so there is no way to
-        // build "Nora is on the roll" as one string in a trigger — and no
-        // reason to, when the layout can put the two next to each other.
-        { component: 'Hero', props: { title: '$.signedUpName', lead: 'is on the roll and can book from today.' } },
+        { component: 'Hero', props: { title: '$.signedUpName', lead: 'is on the roll and can be booked from today.' } },
         {
           component: 'Card',
           props: { pad: 22 },
@@ -337,7 +398,7 @@ export const peopleSignupLayout: LayoutNode = page([
       component: 'Stack',
       props: { gap: 22 },
       children: [
-        { component: 'Hero', props: { title: 'New member', lead: 'Name and email are all we need. Everything else can wait.' } },
+        { component: 'Hero', props: { title: 'New person', lead: 'Name and email are all we need. Everything else can wait.' } },
         {
           component: 'Card',
           props: { pad: 22 },
@@ -348,24 +409,21 @@ export const peopleSignupLayout: LayoutNode = page([
               { component: 'Input', props: { label: 'Name', big: true, placeholder: 'Ava Klein' }, ref: 'newName', model: '$.newName' },
               { component: 'Input', props: { label: 'Email', type: 'email', big: true, placeholder: 'ava@example.com', hint: 'How they sign in. If we already know this address we reuse the person.' }, ref: 'newEmail', model: '$.newEmail' },
               { component: 'Input', props: { label: 'Phone', type: 'tel' }, ref: 'newPhone', model: '$.newPhone' },
+              // No "starting as" select: being written down IS the relationship,
+              // and everything else (a plan, a pass, a course) is granted from
+              // their record. What they ARE is never chosen from a dropdown.
               {
-                component: 'Select',
-                props: {
-                  label: 'Starting as',
-                  options: [
-                    { value: 'trialling', label: 'Trial' },
-                    { value: 'active', label: 'Active' },
-                  ],
-                },
-                ref: 'newStatus',
-                model: '$.newStatus',
+                component: 'Input',
+                props: { label: 'Free trial until', type: 'date', hint: 'Leave empty for no trial window.' },
+                ref: 'newTrialEndsOn',
+                model: '$.newTrialEndsOn',
               },
               { if: '$.error', then: { component: 'Notice', props: { tone: 'alert', message: '$.error' } }, else: '' },
               {
                 component: 'Row',
                 props: { gap: 10 },
                 children: [
-                  { component: 'Button', props: { variant: 'solid', big: true, label: 'Sign them up', disabled: '$.saving' }, ref: 'create' },
+                  { component: 'Button', props: { variant: 'solid', big: true, label: 'Add them', disabled: '$.blocked' }, ref: 'create' },
                 ],
               },
             ],

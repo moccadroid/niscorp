@@ -1,15 +1,5 @@
 import { z } from 'zod';
 
-// Semantic prop vocabularies. A layout names a TOKEN; the component turns it
-// into CSS. Layouts never carry a colour, a class or a pixel that means
-// something — only a word from one of these lists.
-//
-// This is rule 2 doing double duty. It exists so components stay domain-blind,
-// but it is also the entire reason a theme can be a row: every colour in the
-// running application resolves through a custom property, so a studio's palette
-// is a set of values, not a fork. A single hex in a layout would be a hole in
-// that, and it would be invisible until the day somebody rebrands.
-
 export const ALIGN: Record<string, string> = { start: 'flex-start', center: 'center', end: 'flex-end', stretch: 'stretch', baseline: 'baseline' };
 export const JUSTIFY: Record<string, string> = { start: 'flex-start', center: 'center', end: 'flex-end', between: 'space-between', around: 'space-around' };
 
@@ -46,10 +36,6 @@ export const SIZE: Record<string, string> = { xs: '11px', sm: '12.5px', md: '14p
 export const WEIGHT: Record<string, number> = { normal: 400, medium: 500, semi: 600, bold: 700 };
 
 // ── STATUS. Five words, each one a claim about a state.
-//
-// `neutral` reads on `--ink-soft` rather than `--ink-mute`: mute on sunk is
-// 4.6:1 in the stock palette and worse in a studio's, which is a caption
-// pretending to be a label.
 export const TONE: Record<string, { bg: string; fg: string }> = {
   neutral: { bg: 'var(--surface-sunk)', fg: 'var(--ink-soft)' },
   accent: { bg: 'var(--accent)', fg: 'var(--accent-ink)' },
@@ -60,12 +46,6 @@ export const TONE: Record<string, { bg: string; fg: string }> = {
 };
 
 // ── IDENTITY. Ten colours, each one a claim about nothing.
-//
-// A program, a role, a belt rank picks one of these. They are deliberately
-// named for what they LOOK like — a studio calling its competition stream
-// "rose" is describing a colour, where calling it "alert" was describing a
-// problem it does not have. `design-check` refuses a row that colours an
-// identity with a TONE word.
 export const HUES = ['rose', 'amber', 'lime', 'emerald', 'teal', 'sky', 'indigo', 'violet', 'fuchsia', 'stone'] as const;
 export type HueName = (typeof HUES)[number];
 
@@ -73,9 +53,6 @@ export const HUE: Record<string, { bg: string; fg: string }> = Object.fromEntrie
   HUES.map((hue) => [hue, { bg: `var(--hue-${hue}-soft)`, fg: `var(--hue-${hue})` }]),
 );
 
-// A STABLE HUE FOR A STRING. Used for avatars: the same person is the same
-// colour on every screen, forever, with no column to store and no meaning to
-// misread. FNV-1a, the same hash the catalog's version token uses.
 export const hueOf = (value: string): HueName => {
   let h = 0x811c9dc5;
   for (let i = 0; i < value.length; i += 1) {
@@ -85,9 +62,6 @@ export const hueOf = (value: string): HueName => {
   return HUES[h % HUES.length] as HueName;
 };
 
-// A mark's colour: a hue if it names one, a tone if it names one of those, and
-// the accent as the floor — so an unknown string is a visible mark rather than
-// a transparent one.
 export const markColor = (name: string | undefined): string =>
   name === undefined || name === ''
     ? 'var(--accent)'
@@ -107,10 +81,6 @@ export const border = z.union([z.boolean(), z.enum(['top', 'bottom', 'left', 'ri
 export const colorToken = z.enum(['ink', 'soft', 'mute', 'faint', 'accent', 'calm', 'warm', 'alert', 'good', 'invert']).optional();
 export const bgToken = z.enum(['none', 'ground', 'surface', 'sunk', 'ink', 'accent', 'accentSoft', 'calmSoft', 'warmSoft', 'alertSoft', 'goodSoft']).optional();
 export const toneToken = z.enum(['neutral', 'accent', 'calm', 'warm', 'alert', 'good']).optional();
-// A mark or pill may name either vocabulary; what it may not do is name a tone
-// for a thing that has no state. The enum stays open to both because one prop
-// (`Dot.tone`, a `dotKey` column) serves programs and statuses alike — the
-// discipline is enforced where the DATA is authored, not here.
 export const hueToken = z.enum(HUES).optional();
 export const markToken = z.enum([...HUES, 'neutral', 'accent', 'calm', 'warm', 'alert', 'good']).optional();
 export const sizeToken = z.enum(['xs', 'sm', 'md', 'lg', 'xl', 'xxl', 'display']).optional();

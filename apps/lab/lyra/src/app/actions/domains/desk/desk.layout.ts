@@ -1,10 +1,5 @@
 import type { LayoutNode } from '@niscorp/nova';
 
-// The front desk, at 5:55pm.
-//
-// Two panes and one gesture: pick the class that is about to start, tap the
-// people as they walk in. Everything else a desk does is somewhere else — this
-// screen exists to be used two hundred times a day without reading it.
 export const deskCheckInLayout: LayoutNode = {
   component: 'Stack',
   props: { gap: 22 },
@@ -59,9 +54,6 @@ export const deskCheckInLayout: LayoutNode = {
               columns: [
                 { label: 'Member', w: 2, cell: { kind: 'avatar', key: 'person_name', subKey: 'status_display' } },
                 { label: 'Arrived', px: 92, cell: { kind: 'badge', key: 'arrived_label', toneKey: 'arrived_tone' } },
-                // The control disappears once they are here — a button that
-                // does nothing is worse than no button, and `hideKey` is how
-                // a spec says so without a layout branching.
                 { label: '', px: 108, align: 'right', cell: { kind: 'action', label: 'Check in', ref: 'checkin', variant: 'accent', hideKey: 'attended' } },
               ],
             },

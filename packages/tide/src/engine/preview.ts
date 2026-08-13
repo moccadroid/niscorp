@@ -1,10 +1,10 @@
 import { clockOf, isRecurring } from '../schemas';
 import { TideError } from '../errors';
 import type { Fact, FactInput, PreviewReport, PreviewUnit } from '../types';
-import { evaluateTemplate, withNow } from './runtime';
+import { evaluateTemplate, isTruthy, withNow } from './runtime';
 import type { EngineDeps } from './runtime';
 import { occurrencesBetween } from './occurrence';
-import { unitsForFiring } from './fanout';
+import { unitsForRun } from './fanout';
 
 // ═══════════════════════════════════════════════════════════════
 // Preview — dry run as a verb, not a flag
@@ -65,8 +65,12 @@ export const previewReflex = async (
   if (reflex.when !== undefined && facts.length > 0) {
     try {
       const env = { params: reflex.params ?? {}, fact: { ...facts[0] }, now };
-      const passes = evaluateTemplate(deps.transform, reflex.when, env);
-      if (passes === false || passes === undefined || passes === null)
+      // THE ENGINE'S OWN PREDICATE, imported rather than restated. Preview
+      // used to reject only false/null/undefined while the matcher also
+      // rejects 0, '' and []: a `when` returning an empty list previewed as
+      // "this will fire" and then didn't — the exact class of surprise preview
+      // exists to eliminate.
+      if (!isTruthy(evaluateTemplate(deps.transform, reflex.when, env)))
         return { ...report, fired: false, reason: '`when` did not match this fact' };
     } catch (error) {
       return { ...report, fired: false, reason: `when: ${error instanceof Error ? error.message : String(error)}` };
@@ -75,7 +79,7 @@ export const previewReflex = async (
 
   let units;
   try {
-    units = await unitsForFiring(
+    units = await unitsForRun(
       deps,
       loaded,
       { cause, occurrence: occurrence?.key, dueAt: occurrence?.at ?? now },

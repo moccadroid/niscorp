@@ -12,6 +12,11 @@ import { compileQuery } from './compile.js';
 export type PostgresAdapterConfig = {
   pool: PgPool;
   schema?: string;
+  // Tables this adapter never reports. Set once at construction because the
+  // caller that knows a table is not application data is the one wiring the
+  // adapter, not each caller of `introspect()` — and `QueryEngine.introspect`
+  // takes no arguments, so per-call is not reachable from a host anyway.
+  exclude?: string[];
 };
 
 // ═══════════════════════════════════════════════════════════════
@@ -46,7 +51,7 @@ const coerceNumericColumns = (rows: Row[], fields: PgField[]): Row[] => {
 };
 
 export const createPostgresAdapter = (config: PostgresAdapterConfig): DatabaseAdapter => {
-  const { pool, schema = 'public' } = config;
+  const { pool, schema = 'public', exclude } = config;
 
   const capabilities: AdapterCapabilities = {
     vectorSearch: true,
@@ -60,7 +65,11 @@ export const createPostgresAdapter = (config: PostgresAdapterConfig): DatabaseAd
   };
 
   const introspect = async (options?: IntrospectOptions): Promise<DatabaseSchema> =>
-    introspectPostgres(pool, { ...options, schema: options?.schema ?? schema });
+    introspectPostgres(pool, {
+      ...options,
+      schema: options?.schema ?? schema,
+      exclude: options?.exclude ?? exclude,
+    });
 
   const compile = (resolved: ResolvedQuery): CompiledQuery =>
     compileQuery(resolved);

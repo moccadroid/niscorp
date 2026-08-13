@@ -1,414 +1,236 @@
+import { COMPARISON_OPS, PRIMARY_KEY, UNIQUE_BY } from '../types';
 import type {
-  Attempt,
-  ClaimOptions,
-  CoalesceWindow,
-  Delivery,
+  ClaimSpec,
+  Comparison,
   Fact,
-  Firing,
-  NewFact,
-  RecordResult,
-  Retention,
+  Mutation,
+  Order,
+  QuerySpec,
+  ReflexState,
+  RemoveSpec,
+  Row,
+  Run,
+  TableName,
   Task,
-  TaskState,
-  TideStoreLike,
+  TideStore,
+  TideTables,
+  Where,
 } from '../types';
 
 // ═══════════════════════════════════════════════════════════════
 // The memory store
 //
-// The reference implementation of TideStore, and the one a headless
-// check runs against: with a fake clock and stub effects the whole
-// engine runs here, so a test advances time and asserts on rows
-// with no sleeping and no database.
+// The reference implementation of TideStore, and the definition of
+// the contract: four tables, six operations, and no knowledge of
+// what a reflex, a retry or an occurrence is. It went from 414
+// lines to this by losing the twenty-seven nouns — `claimTasks`,
+// `drainSettled` and `claimClosedWindows` were three hand-written
+// implementations of one operation, and they diverged three ways.
 //
-// Its exactly-once promises are free in a single-threaded runtime —
-// which is exactly why the Postgres store must be held to the SAME
-// contract tests. A store that lies passes checks that then fail
-// in production.
+// Its exactly-once promises are free in a single-threaded runtime,
+// which is exactly why every store must be held to the SAME contract
+// tests. A store that lies passes checks that then fail in
+// production — see `test/store.contract.ts`.
 // ═══════════════════════════════════════════════════════════════
 
-type MemFact = Fact & { deliveredAt?: number };
+export type MemoryStore = TideStore & {
+  // Test/inspection affordance. Never part of TideStore — the engine must
+  // not be able to reach around the contract.
+  snapshot: () => { facts: readonly Fact[]; runs: readonly Run[]; tasks: readonly Task[]; state: readonly ReflexState[] };
+};
 
-export type MemoryStore = TideStoreLike & {
-  // Test/inspection affordances. Never part of TideStoreLike — the engine
-  // must not be able to reach around the contract.
-  snapshot: () => {
-    facts: readonly Fact[];
-    firings: readonly Firing[];
-    tasks: readonly Task[];
-    attempts: readonly Attempt[];
-    deliveries: readonly Delivery[];
-  };
+const ID_PREFIX: Record<TableName, string> = { fact: 'fact', run: 'run', task: 'task', state: 'st' };
+
+const isComparison = (value: unknown): value is Comparison<unknown> => {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) return false;
+  const keys = Object.keys(value);
+  return keys.length > 0 && keys.every((key) => (COMPARISON_OPS as readonly string[]).includes(key));
+};
+
+const compare = (left: unknown, right: unknown): number => {
+  if (typeof left === 'number' && typeof right === 'number') return left - right;
+  return String(left) < String(right) ? -1 : String(left) > String(right) ? 1 : 0;
+};
+
+const satisfies = (value: unknown, test: unknown): boolean => {
+  if (!isComparison(test)) return value === test;
+  const check = test;
+  if (check.eq !== undefined && value !== check.eq) return false;
+  if (check.ne !== undefined && value === check.ne) return false;
+  if (check.lt !== undefined && !(value !== undefined && compare(value, check.lt) < 0)) return false;
+  if (check.lte !== undefined && !(value !== undefined && compare(value, check.lte) <= 0)) return false;
+  if (check.gt !== undefined && !(value !== undefined && compare(value, check.gt) > 0)) return false;
+  if (check.gte !== undefined && !(value !== undefined && compare(value, check.gte) >= 0)) return false;
+  if (check.in !== undefined && !check.in.includes(value as never)) return false;
+  if (check.notIn !== undefined && check.notIn.includes(value as never)) return false;
+  if (check.isNull !== undefined && (value === undefined || value === null) !== check.isNull) return false;
+  return true;
+};
+
+const matches = (row: Row, where: Where<Row> | undefined): boolean => {
+  if (where === undefined) return true;
+  for (const [column, test] of Object.entries(where)) if (!satisfies(row[column], test)) return false;
+  return true;
+};
+
+const sorted = <R extends Row>(rows: readonly R[], order: Order<Row> | undefined): R[] => {
+  if (order === undefined || order.length === 0) return [...rows];
+  return [...rows].sort((left, right) => {
+    for (const key of order) {
+      const result = compare(left[key.by], right[key.by]) * (key.dir === 'desc' ? -1 : 1);
+      if (result !== 0) return result;
+    }
+    return 0;
+  });
+};
+
+// The one arithmetic escape. `attempt` has to rise at claim time, and a
+// caller that read it first would race its own increment.
+const applied = <R extends Row>(row: R, set: Mutation<R>): R => {
+  const next: Row = { ...row };
+  for (const [column, value] of Object.entries(set)) {
+    if (value !== null && typeof value === 'object' && 'inc' in value) {
+      next[column] = Number(row[column] ?? 0) + Number((value as { inc: number }).inc);
+      continue;
+    }
+    // `undefined` CLEARS. A settled task has no token and no lease, and
+    // "leave it as it was" is never what the engine means by writing one.
+    if (value === undefined) delete next[column];
+    else next[column] = value;
+  }
+  return next as R;
 };
 
 export const createMemoryStore = (): MemoryStore => {
-  const facts = new Map<string, MemFact>();
-  const firings = new Map<string, Firing>();
-  const tasks = new Map<string, Task>();
-  const attempts: Attempt[] = [];
-  const deliveries: Delivery[] = [];
-  const watermarks = new Map<string, string>();
-  const windows = new Map<string, CoalesceWindow>();
-  const dedupe = new Set<string>();
-  const firingByCause = new Map<string, string>();
-  const settledQueue: Firing[] = [];
+  let tables: { [T in TableName]: Map<string, TideTables[T]> } = {
+    fact: new Map(),
+    run: new Map(),
+    task: new Map(),
+    state: new Map(),
+  };
 
   let sequence = 0;
-  const nextId = (prefix: string): string => {
+
+  const rowsOf = <T extends TableName>(table: T): TideTables[T][] => [...tables[table].values()];
+  const keyOf = <T extends TableName>(table: T, row: TideTables[T]): string => String(row[PRIMARY_KEY[table]]);
+
+  // ── the six ────────────────────────────────────────────────────
+
+  const query = async <T extends TableName>(spec: QuerySpec<T>): Promise<readonly TideTables[T][]> => {
+    const found = sorted(
+      rowsOf(spec.table).filter((row) => matches(row as Row, spec.where as Where<Row> | undefined)),
+      spec.order as unknown as Order<Row> | undefined,
+    ) as TideTables[T][];
+    return spec.limit === undefined ? found : found.slice(0, spec.limit);
+  };
+
+  const appendIfAbsent = async <T extends TableName>(
+    table: T,
+    input: Omit<TideTables[T], 'id'> & { id?: string },
+  ): Promise<TideTables[T] | undefined> => {
+    const unique = UNIQUE_BY[table];
+    const candidate = input as unknown as Row;
+
+    // A row that does not carry the guard column is not claiming to be
+    // unique — a fact with no `dedupeKey` is a distinct occurrence of
+    // something, not a repeat of it.
+    const guarded = unique.when === undefined || candidate[unique.when] !== undefined;
+    if (guarded) {
+      const collides = rowsOf(table).some((existing) =>
+        unique.by.every((column) => (existing as unknown as Row)[column] === candidate[column]),
+      );
+      if (collides) return undefined;
+    }
+
     sequence += 1;
-    return `${prefix}_${sequence}`;
+    // An id is minted only where the primary key IS `id`. `state` is keyed by
+    // the reflex it belongs to, and giving it a second identity would invent
+    // a way for one reflex to have two states.
+    const row = (PRIMARY_KEY[table] === 'id' ? { ...candidate, id: candidate.id ?? `${ID_PREFIX[table]}_${sequence}` } : { ...candidate }) as TideTables[T];
+    tables[table].set(keyOf(table, row), row);
+    return row;
   };
 
-  const dueAtOf = (fact: MemFact): number => fact.notBefore ?? fact.at;
+  const claim = async <T extends TableName>(spec: ClaimSpec<T>): Promise<readonly TideTables[T][]> => {
+    const candidates = sorted(
+      rowsOf(spec.table).filter((row) => matches(row as Row, spec.where as Where<Row> | undefined)),
+      spec.order as unknown as Order<Row> | undefined,
+    ) as TideTables[T][];
 
-  // ── facts ──────────────────────────────────────────────────────
+    // Values whose one slot is already held. Counted HERE, inside the claim,
+    // rather than by the caller beforehand — a caller that looks first and
+    // claims second loses the race to its own second instance.
+    const taken = new Set<string>();
+    const restricted = new Set(spec.onePer?.only ?? []);
+    if (spec.onePer !== undefined)
+      for (const row of rowsOf(spec.table))
+        if (matches(row as Row, spec.onePer.held as Where<Row>)) taken.add(String((row as Row)[spec.onePer.column]));
 
-  const insertFact = async (input: NewFact): Promise<Fact | undefined> => {
-    if (input.dedupeKey !== undefined) {
-      const key = `${input.kind}:${input.name ?? ''}:${input.dedupeKey}`;
-      if (dedupe.has(key)) return undefined;
-      dedupe.add(key);
-    }
-    const fact: MemFact = { ...input, id: nextId('fact') };
-    facts.set(fact.id, fact);
-    return fact;
-  };
-
-  const dueFacts = async (now: number, limit: number): Promise<readonly Fact[]> =>
-    [...facts.values()]
-      .filter((fact) => fact.deliveredAt === undefined && fact.parked === undefined && dueAtOf(fact) <= now)
-      .sort((left, right) => dueAtOf(left) - dueAtOf(right))
-      .slice(0, limit);
-
-  const recordDelivery = async (delivery: Delivery): Promise<void> => {
-    deliveries.push(delivery);
-  };
-
-  const completeFact = async (factId: string, at: number): Promise<void> => {
-    const fact = facts.get(factId);
-    if (fact !== undefined) facts.set(factId, { ...fact, deliveredAt: at });
-  };
-
-  const parkFact = async (factId: string, reason: string): Promise<void> => {
-    const fact = facts.get(factId);
-    if (fact !== undefined) facts.set(factId, { ...fact, parked: reason });
-  };
-
-  const releaseFact = async (factId: string): Promise<boolean> => {
-    const fact = facts.get(factId);
-    if (fact === undefined || fact.parked === undefined) return false;
-    const { parked: _parked, ...released } = fact;
-    facts.set(factId, released);
-    return true;
-  };
-
-  const getFact = async (factId: string): Promise<Fact | undefined> => facts.get(factId);
-
-  const listFacts = async (filter?: { reflexId?: string; limit?: number }): Promise<readonly Fact[]> => {
-    const matched =
-      filter?.reflexId === undefined
-        ? [...facts.values()]
-        : [...facts.values()].filter((fact) => fact.reflex === filter.reflexId || fact.target === filter.reflexId);
-    return matched.slice(0, filter?.limit ?? matched.length);
-  };
-
-  // ── firings ────────────────────────────────────────────────────
-
-  const createFiring = async (input: Omit<Firing, 'id'>): Promise<Firing | undefined> => {
-    const causeKey = `${input.reflexId}::${input.cause}`;
-    if (firingByCause.has(causeKey)) return undefined;
-    const firing: Firing = { ...input, id: nextId('fir') };
-    firings.set(firing.id, firing);
-    firingByCause.set(causeKey, firing.id);
-    return firing;
-  };
-
-  const patchFiring = async (id: string, patch: Partial<Firing>): Promise<void> => {
-    const firing = firings.get(id);
-    if (firing !== undefined) firings.set(id, { ...firing, ...patch });
-  };
-
-  const getFiring = async (id: string): Promise<Firing | undefined> => firings.get(id);
-
-  const unsettledFiring = async (reflexId: string): Promise<Firing | undefined> =>
-    [...firings.values()].find(
-      (firing) => firing.reflexId === reflexId && (firing.state === 'pending' || firing.state === 'fanned'),
-    );
-
-  const pendingFirings = async (limit: number): Promise<readonly Firing[]> =>
-    [...firings.values()]
-      .filter((firing) => firing.state === 'pending')
-      .sort((left, right) => left.dueAt - right.dueAt)
-      .slice(0, limit);
-
-  const listFirings = async (filter?: { reflexId?: string; limit?: number }): Promise<readonly Firing[]> => {
-    const matched =
-      filter?.reflexId === undefined
-        ? [...firings.values()]
-        : [...firings.values()].filter((firing) => firing.reflexId === filter.reflexId);
-    const ordered = matched.sort((left, right) => right.createdAt - left.createdAt);
-    return ordered.slice(0, filter?.limit ?? ordered.length);
-  };
-
-  // ── tasks ──────────────────────────────────────────────────────
-
-  // Atomic by construction here; in Postgres this is one transaction.
-  // The guarantee is what matters: a crash mid-fan-out leaves NOTHING
-  // to resume from, because resuming would re-select against moved data.
-  const commitFanout = async (
-    firingId: string,
-    newTasks: readonly Omit<Task, 'id'>[],
-    selected: number,
-  ): Promise<number> => {
-    const firing = firings.get(firingId);
-    if (firing === undefined || firing.state !== 'pending') return 0;
-    for (const task of newTasks) {
-      const stored: Task = { ...task, id: nextId('task') };
-      tasks.set(stored.id, stored);
-    }
-    const settledNow = newTasks.length === 0;
-    firings.set(firingId, {
-      ...firing,
-      state: settledNow ? 'settled' : 'fanned',
-      selected,
-      total: newTasks.length,
-      settledAt: settledNow ? firing.dueAt : undefined,
-    });
-    // A zero-task firing settles immediately and still mints its fact —
-    // "nothing was due" is an answer a digest may legitimately want.
-    if (settledNow) {
-      const settled = firings.get(firingId);
-      if (settled !== undefined) settledQueue.push(settled);
-    }
-    return newTasks.length;
-  };
-
-  const claimTasks = async (opts: ClaimOptions): Promise<readonly Task[]> => {
-    const serial = new Set(opts.serialReflexIds);
-    const inFlight = new Set(
-      [...tasks.values()].filter((task) => task.state === 'claimed').map((task) => task.reflexId),
-    );
-    const claimed: Task[] = [];
-
-    const candidates = [...tasks.values()]
-      .filter((task) => task.state === 'pending' || task.state === 'retrying')
-      .filter((task) => task.notBefore <= opts.now)
-      .filter((task) => firings.get(task.firingId)?.state === 'fanned')
-      .sort((left, right) => left.notBefore - right.notBefore || left.createdAt - right.createdAt);
-
-    for (const task of candidates) {
-      if (claimed.length >= opts.limit) break;
-      if (serial.has(task.reflexId) && inFlight.has(task.reflexId)) continue;
-      const token = nextId('tok');
-      const next: Task = { ...task, state: 'claimed', token, attempt: task.attempt + 1 };
-      tasks.set(task.id, next);
-      inFlight.add(task.reflexId);
+    const claimed: TideTables[T][] = [];
+    for (const row of candidates) {
+      if (claimed.length >= spec.limit) break;
+      if (spec.onePer !== undefined) {
+        const group = String((row as Row)[spec.onePer.column]);
+        if (restricted.has(group)) {
+          if (taken.has(group)) continue;
+          taken.add(group);
+        }
+      }
+      const next = applied(row as Row, spec.set as Mutation<Row>) as TideTables[T];
+      tables[spec.table].set(keyOf(spec.table, next), next);
       claimed.push(next);
     }
     return claimed;
   };
 
-  const recordAttempt = async (taskId: string, token: string, result: RecordResult): Promise<boolean> => {
-    const task = tasks.get(taskId);
-    // The fence: a timed-out attempt that finishes late finds its token
-    // superseded and is discarded rather than overwriting the live one.
-    if (task === undefined || task.token !== token) return false;
-
-    attempts.push({
-      id: nextId('att'),
-      taskId,
-      reflexId: task.reflexId,
-      n: task.attempt,
-      token,
-      startedAt: task.createdAt,
-      endedAt: result.at,
-      outcome: result.outcome,
-      error: result.error,
-    });
-
-    const settles = result.next.state === 'done' || result.next.state === 'failed';
-    tasks.set(taskId, {
-      ...task,
-      state: result.next.state,
-      token: undefined,
-      output: result.output,
-      error: result.error,
-      notBefore: result.next.state === 'retrying' ? result.next.notBefore : task.notBefore,
-      settledAt: settles ? result.at : undefined,
-    });
-
-    // Emits ride the SUCCESSFUL attempt's transaction. A throwing handler
-    // discards its buffer, so a retry cannot double-mint a chain.
-    if (result.outcome === 'ok') for (const emit of result.emits) await insertFact(emit);
-
-    if (settles) {
-      const firing = firings.get(task.firingId);
-      if (firing !== undefined) {
-        const done = firing.done + (result.next.state === 'done' ? 1 : 0);
-        const failed = firing.failed + (result.next.state === 'failed' ? 1 : 0);
-        const complete = done + failed >= firing.total && firing.settledAt === undefined;
-        const updated: Firing = {
-          ...firing,
-          done,
-          failed,
-          state: complete ? 'settled' : firing.state,
-          settledAt: complete ? result.at : firing.settledAt,
-        };
-        firings.set(firing.id, updated);
-        if (complete) settledQueue.push(updated);
-      }
-    }
+  const cas = async <T extends TableName>(
+    table: T,
+    id: string,
+    expect: Where<TideTables[T]>,
+    set: Mutation<TideTables[T]>,
+  ): Promise<boolean> => {
+    const row = tables[table].get(id);
+    if (row === undefined || !matches(row as Row, expect as Where<Row>)) return false;
+    tables[table].set(id, applied(row as Row, set as Mutation<Row>) as TideTables[T]);
     return true;
   };
 
-  const getTask = async (id: string): Promise<Task | undefined> => tasks.get(id);
-
-  const listTasks = async (filter?: {
-    firingId?: string;
-    reflexId?: string;
-    state?: TaskState;
-    limit?: number;
-  }): Promise<readonly Task[]> => {
-    const matched = [...tasks.values()].filter(
-      (task) =>
-        (filter?.firingId === undefined || task.firingId === filter.firingId) &&
-        (filter?.reflexId === undefined || task.reflexId === filter.reflexId) &&
-        (filter?.state === undefined || task.state === filter.state),
-    );
-    return matched.slice(0, filter?.limit ?? matched.length);
-  };
-
-  const listAttempts = async (taskId: string): Promise<readonly Attempt[]> =>
-    attempts.filter((attempt) => attempt.taskId === taskId);
-
-  // The human recovery verb. Deliberately does NOT rewind the firing: a
-  // digest already went out saying twelve failed, and re-settling would
-  // send it again.
-  const reopenTask = async (taskId: string, now: number): Promise<Task | undefined> => {
-    const task = tasks.get(taskId);
-    if (task === undefined || task.state !== 'failed') return undefined;
-    const reopened: Task = { ...task, state: 'pending', notBefore: now, error: undefined, settledAt: undefined };
-    tasks.set(taskId, reopened);
-    return reopened;
-  };
-
-  const drainSettled = async (): Promise<readonly Firing[]> => settledQueue.splice(0, settledQueue.length);
-
-  // ── watermarks ─────────────────────────────────────────────────
-
-  const getWatermark = async (reflexId: string): Promise<string | undefined> => watermarks.get(reflexId);
-
-  const setWatermark = async (reflexId: string, value: string): Promise<void> => {
-    watermarks.set(reflexId, value);
-  };
-
-  // ── coalescing ─────────────────────────────────────────────────
-
-  // Fixed window from the first matched fact. A sliding window starves
-  // forever under a steady stream, which is the failure a digest must
-  // never have.
-  const appendCoalesce = async (
-    reflexId: string,
-    key: string,
-    factId: string,
-    now: number,
-    windowMs: number,
-  ): Promise<void> => {
-    const windowKey = `${reflexId}::${key}`;
-    const open = windows.get(windowKey);
-    if (open === undefined) {
-      windows.set(windowKey, {
-        id: nextId('win'),
-        reflexId,
-        key,
-        factIds: [factId],
-        opensAt: now,
-        closesAt: now + windowMs,
-      });
-      return;
+  const remove = async <T extends TableName>(spec: RemoveSpec<T>): Promise<number> => {
+    const doomed = rowsOf(spec.table).filter((row) => matches(row as Row, spec.where as Where<Row> | undefined));
+    for (const row of doomed) {
+      tables[spec.table].delete(keyOf(spec.table, row));
+      // A run and its tasks are one fact about the world. Deleting the run
+      // and keeping the tasks destroys the UNIQUE(runId, unit) entry that IS
+      // the "this unit already ran" record — and a restore then re-charges
+      // the invoice.
+      if (spec.table === 'run')
+        for (const task of rowsOf('task')) if (task.runId === (row as unknown as Run).id) tables.task.delete(task.id);
     }
-    windows.set(windowKey, { ...open, factIds: [...open.factIds, factId] });
+    return doomed.length;
   };
 
-  const claimClosedWindows = async (now: number): Promise<readonly CoalesceWindow[]> => {
-    const closed: CoalesceWindow[] = [];
-    for (const [windowKey, window] of windows) {
-      if (window.closesAt <= now) {
-        closed.push(window);
-        windows.delete(windowKey);
-      }
+  // Copy-on-enter, restore-on-throw. Trivial here and not a formality: the
+  // contract test asserts a throwing transaction leaves nothing behind, and
+  // a store that cannot promise that breaks fan-out's whole argument.
+  const transact = async <T>(fn: (tx: TideStore) => Promise<T>): Promise<T> => {
+    const saved = { fact: new Map(tables.fact), run: new Map(tables.run), task: new Map(tables.task), state: new Map(tables.state) };
+    try {
+      return await fn(store);
+    } catch (error) {
+      tables = saved;
+      throw error;
     }
-    return closed;
   };
 
-  // ── hygiene ────────────────────────────────────────────────────
-
-  const sweep = async (now: number, retention: Retention): Promise<number> => {
-    let removed = 0;
-    const expired = (horizon: number | undefined, at: number | undefined): boolean =>
-      horizon !== undefined && at !== undefined && at < now - horizon;
-
-    for (const [id, fact] of facts)
-      if (expired(retention.facts, fact.deliveredAt)) {
-        facts.delete(id);
-        removed += 1;
-      }
-    for (const [id, task] of tasks)
-      if (expired(retention.tasks, task.settledAt)) {
-        tasks.delete(id);
-        removed += 1;
-      }
-    for (const [id, firing] of firings)
-      if (expired(retention.firings, firing.settledAt)) {
-        firings.delete(id);
-        firingByCause.delete(`${firing.reflexId}::${firing.cause}`);
-        removed += 1;
-      }
-    const attemptHorizon = retention.attempts;
-    if (attemptHorizon !== undefined) {
-      const kept = attempts.filter((attempt) => attempt.endedAt >= now - attemptHorizon);
-      removed += attempts.length - kept.length;
-      attempts.splice(0, attempts.length, ...kept);
-    }
-    return removed;
+  const store: MemoryStore = {
+    transact,
+    appendIfAbsent,
+    claim,
+    cas,
+    query,
+    remove,
+    snapshot: () => ({ facts: rowsOf('fact'), runs: rowsOf('run'), tasks: rowsOf('task'), state: rowsOf('state') }),
   };
 
-  const snapshot = (): ReturnType<MemoryStore['snapshot']> => ({
-    facts: [...facts.values()],
-    firings: [...firings.values()],
-    tasks: [...tasks.values()],
-    attempts: [...attempts],
-    deliveries: [...deliveries],
-  });
-
-  return {
-    insertFact,
-    dueFacts,
-    recordDelivery,
-    completeFact,
-    parkFact,
-    releaseFact,
-    getFact,
-    listFacts,
-    createFiring,
-    patchFiring,
-    getFiring,
-    unsettledFiring,
-    pendingFirings,
-    listFirings,
-    commitFanout,
-    claimTasks,
-    recordAttempt,
-    getTask,
-    listTasks,
-    listAttempts,
-    reopenTask,
-    drainSettled,
-    getWatermark,
-    setWatermark,
-    appendCoalesce,
-    claimClosedWindows,
-    sweep,
-    snapshot,
-  };
+  return store;
 };

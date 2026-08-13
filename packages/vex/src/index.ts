@@ -53,15 +53,15 @@ export type { SeedEntry, SeedMutation } from './cache/seed.js';
 // The write pipeline: a closed grammar, engine-applied scope, and replay-only
 // execution — mutations are `kind: 'mutation'` cache entries invoked by
 // fingerprint; there is no generation path (dev-authored seeds only).
-export { MutationSchema, MutationDefinitionSchema, executeMutation, collectMutationContext, collectQueryContext, mutationEffect, requiredContextKeys, lintMutation } from './mutations/index.js';
-export type { Mutation, MutationDefinition, CoreMutation, ResolvedMutation, MutationClient, MutationTx, MutationContext, ContextField, ContextSignature, MutationEffect } from './mutations/index.js';
+export { MutationSchema, MutationDefinitionSchema, executeMutation, executeWrites, collectMutationContext, collectQueryContext, mutationEffect, requiredContextKeys, lintMutation } from './mutations/index.js';
+export type { Mutation, MutationDefinition, CoreMutation, ResolvedMutation, ResolvedOnConflict, MutationValue, LookupValue, ItemRef, MutationClient, MutationTx, MutationContext, ContextField, ContextSignature, MutationEffect, WriteResult } from './mutations/index.js';
 
 // ─── Utils ───────────────────────────────────────────────────
 export { buildValidationContext, resolveParams } from './utils/context.js';
 
 // ─── Handler ────────────────────────────────────────────────
 export { handleDiscovery, handleQuery, handleFingerprintPatch, handleFingerprintDelete } from './handler.js';
-export type { VexHandlerConfig, DiscoveryResponse, DiscoveryFingerprint, QueryResult } from './handler.js';
+export type { VexHandlerConfig, DiscoveryResponse, DiscoveryFingerprint, QueryResult, WriteEvent } from './handler.js';
 
 // ─── Events ─────────────────────────────────────────────────
 export type { VexEvent, VexEventHandler } from './events.js';

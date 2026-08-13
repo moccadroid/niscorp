@@ -1,17 +1,28 @@
-import { staffDeactivate, staffList, staffReactivate, staffSetRole } from '@lyra/app/vex/staff.entries';
+import { staffList, staffSetActive, staffSetRole } from '@lyra/app/vex/staff.entries';
+
+// SORTING COSTS NO FINGERPRINT. `sortBy`/`sortDir` are reserved context keys:
+// vex reads them straight into the ORDER BY instead of binding them as
+// parameters, and resolves `sortBy` against the entry's own schema — so the
+// allowlist is "a real column of a table this entry already joins", enforced
+// by the resolver rather than by a list somebody has to maintain. An empty
+// `sortBy` leaves the entry's authored order alone.
+const sorted = {
+  sortBy: { $ref: '$.sortBy' },
+  sortDir: { $ref: '$.sortDir' },
+};
 
 export const staffListPrism = {
   fingerprint: staffList.fingerprint,
-  context: { q: { $join: { parts: ['%', { $ref: '$.search' }, '%'], sep: '' } } },
+  context: { q: { $join: { parts: ['%', { $ref: '$.search' }, '%'], sep: '' } }, ...sorted },
 };
 
-// The role is set from the REF that was pressed, not from anything the row
-// carried — so a payload cannot ask for a role the screen does not offer, and
-// the four roles on offer are the four the charter defines.
 export const staffSetRolePrism = {
   fingerprint: staffSetRole.fingerprint,
   context: { staffId: { $ref: '$.pendingStaffId' }, role: { $ref: '$.pendingRole' } },
 };
 
-export const staffDeactivatePrism = { fingerprint: staffDeactivate.fingerprint, context: { staffId: { $ref: '$.pendingStaffId' } } };
-export const staffReactivatePrism = { fingerprint: staffReactivate.fingerprint, context: { staffId: { $ref: '$.pendingStaffId' } } };
+// One write either way — see `plans.prism`. The row already knows which
+// direction its menu item means, so the flag is a literal here rather than
+// another piece of pending state.
+export const staffDeactivatePrism = { fingerprint: staffSetActive.fingerprint, context: { staffId: { $ref: '$.pendingStaffId' }, active: false } };
+export const staffReactivatePrism = { fingerprint: staffSetActive.fingerprint, context: { staffId: { $ref: '$.pendingStaffId' }, active: true } };

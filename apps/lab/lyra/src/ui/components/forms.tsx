@@ -5,11 +5,6 @@ import type { NovaComponent, NovaModelBinding } from '@niscorp/nova/adapters/rea
 import { COLOR, SIZE, WEIGHT } from '../lib/tokens';
 import { Avatar, Icon } from './display';
 
-// Fields. Every one is two-way: the layout binds with `model:`, the component
-// dispatches `ui:model`, and the runtime writes the value back into the
-// action's data. Nothing here holds application state — the local draft exists
-// only so typing does not fight a server round trip.
-
 const fieldProps = {
   placeholder: z.string().optional(),
   label: z.string().optional(),
@@ -22,12 +17,6 @@ const fieldProps = {
 
 const InputProps = z.object({ ...fieldProps, type: z.enum(['text', 'email', 'tel', 'number', 'date', 'time', 'search']).optional(), big: z.boolean().optional() }).strict();
 
-// A control bound to a numeric column should hand back a NUMBER.
-//
-// Prism has no coercion op — deliberately, since converting a type is not a
-// transform — and the mutation grammar takes the value as given, so a string
-// "45" reaching an INTEGER column is a write that fails at the database. The
-// honest place to fix it is where the string is produced.
 const coerce = (raw: string, numeric: boolean): string | number => {
   if (!numeric) return raw;
   const parsed = Number(raw);
@@ -54,22 +43,9 @@ const Labelled = ({ label, hint, invalid, children }: { label?: string; hint?: s
   </div>
 );
 
-// ── FOCUS SURVIVES THE NODE, NOT JUST THE VALUE ──────────────
-//
-// `draft` already protects what somebody typed from being overwritten by a
-// server tree arriving mid-keystroke. It cannot protect them from the field
-// being UNMOUNTED: a tree whose shape changes — a Notice appearing above, a
-// row list going from loading to loaded — reconciles by position, React drops
-// the old node, and focus goes with it. The next keystrokes land on the body
-// and vanish.
-//
-// Found by typing into a screen that was still settling and watching five
-// characters disappear. It is not a panel problem; it is every form in the app,
-// and it is worst exactly when a screen is busiest.
-//
-// So the last-focused ref lives OUTSIDE the component, where an unmount cannot
-// reach it, and a field that mounts holding that ref takes focus back with the
-// caret where it was.
+// Outside the component on purpose: a tree whose shape changes reconciles by
+// position, React drops the node, and focus goes with it — so the next
+// keystrokes land on the body and vanish.
 let lastFocused: { ref: string; caret: number } | null = null;
 
 export const Input: NovaComponent<z.infer<typeof InputProps>> = ({ placeholder, label, hint, type = 'text', debounce, big, disabled, invalid, submitRef, novaRef, novaModel, value }: InputP) => {
@@ -82,9 +58,6 @@ export const Input: NovaComponent<z.infer<typeof InputProps>> = ({ placeholder, 
   const node = useRef<HTMLInputElement | null>(null);
   const ref = novaModel?.ref ?? novaRef;
 
-  // A server-driven tree arrives on every change anywhere; overwriting what
-  // somebody is mid-way through typing is the one thing a remote renderer must
-  // never do.
   useEffect(() => {
     if (!focused.current) setDraft(incoming);
   }, [incoming]);
@@ -204,10 +177,6 @@ type SelectP = Partial<z.infer<typeof SelectProps>> & { novaRef?: string; novaMo
 
 export const Select: NovaComponent<Partial<z.infer<typeof SelectProps>>> = ({ options, label, hint, disabled, invalid, numeric, emptyLabel, novaRef, novaModel, value }: SelectP) => {
   const dispatch = useNovaDispatch();
-  // A `numeric` select EMITS a number, so editing an existing row hands one
-  // back — and comparing that to the string option values would silently
-  // render an empty box over perfectly good data. Stringify on the way in;
-  // `coerce` puts it back on the way out.
   const current = typeof value === 'string' ? value : typeof value === 'number' ? String(value) : '';
   return (
     <Labelled label={label} hint={hint} invalid={invalid}>
@@ -279,17 +248,6 @@ export const Switch: NovaComponent<z.infer<typeof SwitchProps>> = ({ label, disa
 Switch.meta = { description: 'An on/off control. Emits `{ next }` so the trigger never has to compute a negation.', propsSchema: SwitchProps };
 
 // ── MONEY ────────────────────────────────────────────────────
-//
-// Prices are STORED in cents, which is right, and were ENTERED in cents, which
-// is a bug generator pointed at the only number that matters: the price fields
-// carried the hint "In cents. 8900 is €89.00." and left the arithmetic to a
-// person looking at a screen rather than a spreadsheet. One slip is a plan that
-// costs €890 or 89 cents, and nothing downstream can tell which was meant.
-//
-// So this field speaks decimal and emits cents. The conversion happens once,
-// here, where it can be read — and `Math.round` is not decoration: 89.1 * 100
-// is 8909.999999999999 in binary floating point, and a price landing a cent
-// light every few edits is the kind of bug nobody can reproduce.
 const MoneyProps = z.object({ ...fieldProps, symbol: z.string().optional(), big: z.boolean().optional() }).strict();
 type MoneyP = Partial<z.infer<typeof MoneyProps>> & { novaRef?: string; novaModel?: NovaModelBinding; value?: unknown };
 
@@ -304,9 +262,6 @@ export const Money: NovaComponent<Partial<z.infer<typeof MoneyProps>>> = ({ labe
   const incoming = centsToText(value);
   const [draft, setDraft] = useState(incoming);
   const [editing, setEditing] = useState(false);
-  // While the caret is in the box the draft rules — otherwise typing "8" into
-  // an empty field is instantly rewritten to "0.08" and the next keystroke
-  // lands somewhere nobody predicted.
   const shown = editing ? draft : incoming;
 
   const commit = (raw: string): void => {
@@ -357,10 +312,6 @@ export const Money: NovaComponent<Partial<z.infer<typeof MoneyProps>>> = ({ labe
 Money.meta = { description: 'An amount in the studio currency. Shows decimal, emits cents — the conversion lives here, not in a hint.', propsSchema: MoneyProps };
 
 // ── CHECKBOX ─────────────────────────────────────────────────
-//
-// The primitive selection needs. Without it nothing in this application could
-// express a bulk operation — "message these twelve" was unbuildable, not
-// merely unbuilt.
 const CheckboxProps = z.object({ label: z.string().optional(), disabled: z.boolean().optional(), value: z.unknown().optional(), payload: z.unknown().optional() }).strict();
 type CheckboxP = Partial<z.infer<typeof CheckboxProps>> & { novaRef?: string; novaModel?: NovaModelBinding; checked?: unknown };
 
@@ -402,15 +353,6 @@ export const Checkbox: NovaComponent<Partial<z.infer<typeof CheckboxProps>>> = (
 Checkbox.meta = { description: 'One selection. The primitive a bulk action is built from.', propsSchema: CheckboxProps };
 
 // ── PERSON PICKER ────────────────────────────────────────────
-//
-// A search-select. The kit had a native `<select>` fed a pre-built array, so
-// choosing a human meant loading every candidate up front and reading a
-// dropdown of two thousand names — which is why "put somebody on staff" is a
-// form that TYPES a person instead of finding one, and why the same screen
-// cannot say "this member also teaches".
-//
-// It filters locally over what it was given. That is the honest limit, and the
-// prop shape does not change the day the search becomes a read.
 const PickerOption = z.object({ value: z.string(), label: z.string(), sub: z.string().optional() }).loose();
 const PersonPickerProps = z
   .object({
@@ -466,9 +408,6 @@ export const PersonPicker: NovaComponent<Partial<z.infer<typeof PersonPickerProp
             placeholder={placeholder ?? 'Search by name or email'}
             value={query}
             onFocus={() => setOpen(true)}
-            // A blur that fires before the option's click closes the list out
-            // from under the pointer — the classic way a picker becomes
-            // unclickable. One frame is enough.
             onBlur={() => setTimeout(() => setOpen(false), 120)}
             onChange={(e) => {
               setQuery(e.target.value);

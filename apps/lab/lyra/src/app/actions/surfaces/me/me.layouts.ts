@@ -1,10 +1,7 @@
 import type { LayoutNode } from '@niscorp/nova';
 
-// THE MEMBER'S SIDE.
-//
-// Bigger type, fewer columns, one action per row. These screens are read on a
-// phone in a changing room, not at a desk — so nothing here is a table with
-// six columns, and the primary action on every row is a single tap.
+// The member's side: bigger type, fewer columns, one action per row. These
+// screens are read on a phone in a changing room, not at a desk.
 
 const page = (children: LayoutNode | LayoutNode[]): LayoutNode => ({
   component: 'Stack',
@@ -12,9 +9,9 @@ const page = (children: LayoutNode | LayoutNode[]): LayoutNode => ({
   children,
 });
 
-// The card. One row, joined from the membership, the studio and the plan the
-// subscription points at — filtered to the caller by the member rung's reach,
-// so there is no id on it and no way to ask for anybody else's.
+// The standing card, the plan panel and the passes list are three separate
+// facts about the same person — held apart because any of them can be absent:
+// a prospect has only the first, a drop-in only the third.
 const card: LayoutNode = {
   component: 'Card',
   props: { pad: 22 },
@@ -26,7 +23,11 @@ const card: LayoutNode = {
         component: 'Row',
         props: { justify: 'between', align: 'center', wrap: true, gap: 12 },
         children: [
-          { component: 'Text', props: { size: 'lg', weight: 'semi' }, children: '$.card.plan_name' },
+          {
+            component: 'Text',
+            props: { size: 'lg', weight: 'semi' },
+            children: { if: '$.membership.subscription_id', then: '$.membership.plan_name', else: '$.card.studio_name' },
+          },
           { component: 'Badge', props: { tone: '$.card.status_tone', label: '$.card.status_label' } },
         ],
       },
@@ -34,12 +35,51 @@ const card: LayoutNode = {
         component: 'Row',
         props: { gap: 22, wrap: true },
         children: [
-          { component: 'Stat', props: { label: 'Included', value: '$.card.allowance_display' } },
-          { component: 'Stat', props: { label: 'Member since', value: '$.card.joined_display' } },
+          { component: 'Stat', props: { label: 'With us since', value: '$.card.joined_display' } },
+          {
+            if: '$.membership.subscription_id',
+            then: { component: 'Stat', props: { label: 'Worth', value: '$.membership.value_display' } },
+            else: '',
+          },
         ],
+      },
+      // The trial CTA — the cliff Tom Vogel stands on, with the way forward
+      // ON it. A dead card was the old model's tell; this one has a door.
+      {
+        if: '$.card.on_trial',
+        then: {
+          component: 'Stack',
+          props: { gap: 10 },
+          children: [
+            { component: 'Notice', props: { tone: 'calm', message: 'Your trial runs until {{$.card.trial_display}}.' } },
+            { component: 'Button', props: { variant: 'solid', big: true, label: 'Choose a plan' }, ref: 'choosePlan' },
+          ],
+        },
+        else: '',
       },
     ],
   },
+};
+
+const passes: LayoutNode = {
+  if: '$.passes',
+  then: {
+    component: 'Card',
+    props: { flush: true },
+    children: {
+      component: 'Rows',
+      props: {
+        rows: '$.passes',
+        rowKey: 'pass_id',
+        headers: false,
+        columns: [
+          { label: '', w: 2, cell: { kind: 'primary', key: 'name', subKey: 'credits_display' } },
+          { label: '', px: 92, align: 'right', cell: { kind: 'text', key: 'state_label', color: 'mute' } },
+        ],
+      },
+    },
+  },
+  else: '',
 };
 
 export const homeMemberLayout: LayoutNode = page([
@@ -71,19 +111,93 @@ export const homeMemberLayout: LayoutNode = page([
   },
 ]);
 
-// THE MEMBERSHIP, ON ITS OWN SCREEN.
-//
-// The card is on the landing surface too, which is enough for somebody whose
-// only relationship with the studio is a membership. It is not enough for
-// somebody who ALSO works here: staff land on their staff surface, so a teacher
-// who trains here held a card they had no way to open. It is reachable from the
-// menu now, by anybody who holds a membership.
-//
-// It is also where a payment history and a signed waiver go, which the area's
-// own blurb has claimed since it was written.
 export const meMembershipLayout: LayoutNode = page([
-  { component: 'Hero', props: { title: 'My membership', lead: 'What you are on, and since when.' } },
+  { component: 'Hero', props: { title: 'My membership', lead: 'What you hold, and since when.' } },
+  { if: '$.error', then: { component: 'Notice', props: { tone: 'alert', message: '$.error' } }, else: '' },
+  { if: '$.notice', then: { component: 'Notice', props: { tone: 'good', message: '$.notice' } }, else: '' },
   card,
+
+  // ── THE CLIFF (D2) ─────────────────────────────────────────
+  //
+  // No subscription: the choice is theirs to make, immediately, behind a
+  // hard confirm whose words ARE the terms. This is the screen Tom Vogel's
+  // whole arc walks to — a prospect on a trial, choosing for himself, with
+  // the studio settling the money side however it settles it.
+  {
+    if: '$.membership.subscription_id',
+    then: '',
+    else: {
+      component: 'Section',
+      props: { title: 'Choose a plan', subtitle: 'Starts today. You will confirm the terms before anything is signed.' },
+      children: {
+        component: 'Card',
+        props: { flush: true },
+        children: {
+          component: 'Rows',
+          props: {
+            rows: '$.plans',
+            rowKey: 'offering_id',
+            empty: 'Nothing on sale just now.',
+            emptyHint: 'Ask at the desk about joining.',
+            columns: [
+              { label: 'Plan', w: 2, cell: { kind: 'primary', key: 'name', subKey: 'term_display' } },
+              { label: 'Price', px: 110, align: 'right', cell: { kind: 'text', key: 'price_display', color: 'ink' } },
+              { label: '', px: 96, align: 'right', cell: { kind: 'action', label: 'Choose', ref: 'pick', variant: 'solid' } },
+            ],
+          },
+        },
+      },
+    },
+  },
+  {
+    if: '$.membership.subscription_id',
+    then: {
+      component: 'Card',
+      props: { pad: 22 },
+      children: {
+        component: 'Stack',
+        props: { gap: 16 },
+        children: [
+          {
+            component: 'Row',
+            props: { gap: 22, wrap: true },
+            children: [
+              { component: 'Field', props: { label: 'Minimum term', value: '$.membership.term_display' } },
+              { component: 'Field', props: { label: 'Notice', value: '$.membership.notice_display' } },
+              { component: 'Field', props: { label: 'Committed until', value: '$.membership.committed_display' } },
+              { component: 'Field', props: { label: 'Paid', value: '$.membership.paid_via_display' } },
+            ],
+          },
+          // ── their own way out, and their own hold ────────────
+          {
+            if: '$.membership.notice_given',
+            then: {
+              component: 'Row',
+              props: { gap: 12, align: 'center', wrap: true },
+              children: [
+                { component: 'Badge', props: { label: 'Leaving', tone: 'warn' } },
+                { component: 'Text', props: { size: 'sm', color: 'mute' }, children: 'Your last day is {{$.membership.ends_display}} — the longer of your notice period and your minimum term. Changed your mind? Talk to the desk.' },
+              ],
+            },
+            else: {
+              component: 'Row',
+              props: { gap: 10, wrap: true },
+              children: [
+                {
+                  if: { $eq: ['$.membership.status', 'paused'] },
+                  then: { component: 'Button', props: { variant: 'solid', label: 'Resume' }, ref: 'resume' },
+                  else: { component: 'Button', props: { variant: 'outline', label: 'Pause' }, ref: 'pause' },
+                },
+                { component: 'Button', props: { variant: 'ghost', label: 'Give notice' }, ref: 'giveNotice' },
+              ],
+            },
+          },
+        ],
+      },
+    },
+    else: '',
+  },
+  passes,
   {
     component: 'Card',
     props: { pad: 22 },
@@ -98,18 +212,14 @@ export const meMembershipLayout: LayoutNode = page([
   },
 ]);
 
-// Booking. One list, one button per row, and the button is the whole
-// interaction — there is no form, because the only thing a member chooses is
-// which class, and they choose it by tapping it.
 export const meClassesLayout: LayoutNode = page([
   { component: 'Hero', props: { title: 'Book a class', lead: 'Drop into anything on the timetable, or join a course and hold your place for the whole block.' } },
 
   { if: '$.error', then: { component: 'Notice', props: { tone: 'alert', message: '$.error' } }, else: '' },
   { if: '$.notice', then: { component: 'Notice', props: { tone: 'good', message: '$.notice' } }, else: '' },
 
-  // COURSES FIRST, because they are the bigger commitment and the thing a
-  // studio most wants filled — and because a member who joins one never has to
-  // book its classes individually.
+  // Courses first: the bigger commitment, and a member who joins one never has
+  // to book its classes individually.
   {
     component: 'Section',
     props: { title: 'Courses', subtitle: 'Join once and your place is held for every week of the block.' },
@@ -127,9 +237,6 @@ export const meClassesLayout: LayoutNode = page([
             { label: 'Course', w: 2, cell: { kind: 'primary', key: 'name', subKey: 'blurb', dotKey: 'tone' } },
             { label: 'Runs', px: 168, cell: { kind: 'text', key: 'dates_display', color: 'ink' } },
             { label: 'Places', px: 84, align: 'right', cell: { kind: 'text', key: 'places_display' } },
-            // Hidden when the block is full rather than shown and refused —
-            // the database would say no, and offering it anyway is a promise
-            // the screen cannot keep.
             { label: '', px: 84, align: 'right', cell: { kind: 'action', label: 'Join', ref: 'join', variant: 'outline', hideKey: 'full' } },
           ],
         },
@@ -179,15 +286,6 @@ export const meClassesLayout: LayoutNode = page([
           { label: 'When', px: 112, cell: { kind: 'text', key: 'day_display', color: 'ink' } },
           { label: 'Time', px: 78, cell: { kind: 'text', key: 'time_display' } },
           { label: 'Places', px: 84, align: 'right', cell: { kind: 'text', key: 'booked_display', color: 'ink' } },
-          // Hidden on a CANCELLED class rather than shown and refused: the
-          // studio called that one off, and offering it would be a lie the
-          // database would then have to correct.
-          //
-          // A FULL class still offers the button, and that is what waitlists
-          // change. Turning somebody away loses the one fact a studio most
-          // wants — that demand exceeds the room — and leaves the member
-          // checking back by hand. The seat count next to it already says
-          // "24 of 24", and what they get is a place in the queue.
           { label: '', px: 96, align: 'right', cell: { kind: 'action', label: 'Book', ref: 'book', variant: 'outline', hideKey: 'cancelled' } },
         ],
       },
@@ -215,9 +313,8 @@ export const meBookingsLayout: LayoutNode = page([
         columns: [
           { label: 'Class', w: 2, cell: { kind: 'primary', key: 'class_name', subKey: 'program_name', dotKey: 'tone' } },
           { label: 'When', px: 120, cell: { kind: 'text', key: 'when_display', color: 'ink' } },
-          // Booked or waiting. The one status a member has to understand
-          // without being told what the app means by it, so it is said in
-          // words rather than left as a raw column value.
+          // In words: the one status a member has to understand without being
+          // told what the app means by it.
           { label: '', px: 92, cell: { kind: 'badge', key: 'state_label', toneKey: 'state_tone' } },
           { label: '', px: 96, align: 'right', cell: { kind: 'action', label: 'Cancel', ref: 'cancel', variant: 'ghost' } },
         ],

@@ -1,11 +1,5 @@
 import type { LayoutNode } from '@niscorp/nova';
 
-// Five figures, no chart library.
-//
-// `Rows` renders every one of them, because a bar chart and a table are the
-// same data with a different mark — and a studio with eight programs does not
-// need a canvas to read them. When a chart is genuinely worth it, it becomes a
-// primitive in the kit and these specs change one word.
 export const reportsLayout: LayoutNode = {
   component: 'Stack',
   props: { gap: 26 },
@@ -15,9 +9,6 @@ export const reportsLayout: LayoutNode = {
       props: { justify: 'between', align: 'center', wrap: true, gap: 12 },
       children: [
         { component: 'Hero', props: { title: 'Reports', lead: 'Where the week actually goes.' } },
-        // WHICH WEEK, THOUGH. Every figure below was all-time until now, which
-        // makes 'busiest hours' at a three-year-old studio an average of three
-        // years — a number that cannot move and so cannot be acted on.
         {
           component: 'Row',
           props: { gap: 6, align: 'center' },

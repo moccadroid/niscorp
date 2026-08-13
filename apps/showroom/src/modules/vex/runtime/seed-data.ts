@@ -36,6 +36,8 @@ export const ACCOUNTS: readonly string[] = [accountUuid(0), accountUuid(1), acco
 export const DEMO_CUSTOMER_ID = customerUuid(0); // Alice Johnson
 export const DEMO_PRODUCT_ID = productUuid(0); // iPhone 16 Pro
 export const DEMO_ORDER_ID = orderUuid(0); // Account A's order
+export const DEMO_AIRPODS_ID = productUuid(6); // AirPods Pro 3 — insertEach line item
+export const DEMO_KINDLE_ID = productUuid(9); // Kindle Paperwhite — insertEach line item
 
 const sql = (s: string): string => s.replace(/'/g, "''");
 
@@ -47,7 +49,7 @@ CREATE EXTENSION IF NOT EXISTS pg_trgm;
 CREATE EXTENSION IF NOT EXISTS fuzzystrmatch;
 
 CREATE TABLE IF NOT EXISTS customers (
-  id          UUID PRIMARY KEY,
+  id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   name        TEXT NOT NULL,
   email       TEXT UNIQUE NOT NULL,
   status      TEXT NOT NULL DEFAULT 'active',
@@ -85,7 +87,7 @@ CREATE TABLE IF NOT EXISTS orders (
 );
 
 CREATE TABLE IF NOT EXISTS order_items (
-  id          UUID PRIMARY KEY,
+  id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   order_id    UUID NOT NULL REFERENCES orders(id),
   product_id  UUID NOT NULL REFERENCES products(id),
   quantity    INT NOT NULL DEFAULT 1,

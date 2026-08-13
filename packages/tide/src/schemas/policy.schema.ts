@@ -15,13 +15,15 @@ export const RetrySchema = z
   })
   .strict();
 
-export const CoalesceSchema = z
-  .object({
-    windowMs: z.number().int().positive().describe('Fixed window, opened by the first matching fact.'),
-    key: z.unknown().optional().describe('A transform config grouping facts into separate windows. Opaque to tide.'),
-  })
-  .strict();
-
+// THERE IS NO COALESCE, and its absence is the design.
+//
+// It cost two port methods, a table, an exactly-once promise and a
+// `DELETE … RETURNING` on every tick, and nothing ever set it — its only
+// driver was one test. A digest that genuinely needs batching is a DELAYED
+// RUN: the first fact of a group mints one at `now + window` with
+// `cause: 'coalesce:<key>:<start>'`, the rest collide on
+// UNIQUE(reflexId, cause) and are refused, and when it comes due the reflex
+// selects what changed. Mechanisms that already exist, and no new table.
 export const PolicySchema = z
   .object({
     retry: RetrySchema.optional(),
@@ -34,12 +36,10 @@ export const PolicySchema = z
     // everything and 'latest' keeps the newest regardless of age.
     lateMs: z.number().int().positive().default(3_600_000),
     order: z.enum(['any', 'serial']).default('any'),
-    coalesce: CoalesceSchema.optional(),
   })
   .strict();
 
 export type Retry = z.infer<typeof RetrySchema>;
-export type Coalesce = z.infer<typeof CoalesceSchema>;
 export type Policy = z.infer<typeof PolicySchema>;
 
 // Every field defaults, so the empty policy is a real, complete policy —

@@ -52,12 +52,8 @@ export const ReflexSchema = z
   .superRefine((reflex, ctx) => {
     if (reflex.when !== undefined && !('fact' in reflex.on))
       ctx.addIssue({ code: 'custom', message: '`when` is for fact triggers; a clock condition belongs in `select`', path: ['when'] });
-    if (reflex.policy.coalesce !== undefined && !('fact' in reflex.on))
-      ctx.addIssue({ code: 'custom', message: 'coalesce holds FACTS — it is meaningless on a clock or poll trigger', path: ['policy', 'coalesce'] });
     if (reflex.select?.mode === 'each' && reflex.select.unitKey === undefined)
       ctx.addIssue({ code: 'custom', message: "`each` mode needs a unitKey — it is the task's idempotency grain", path: ['select', 'unitKey'] });
-    if ('poll' in reflex.on && reflex.select === undefined)
-      ctx.addIssue({ code: 'custom', message: 'a poll trigger needs a `select` — it is what gets polled', path: ['select'] });
   });
 
 export type Selection = z.infer<typeof SelectionSchema>;

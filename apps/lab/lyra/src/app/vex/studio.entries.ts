@@ -1,19 +1,7 @@
 import type { CacheEntry } from './index';
 import { money } from '@lyra/app/prisms/format.prism';
 
-// The studio, and the figures a landing screen leads with.
-//
-// Every one of these is scoped engine-side: `studios` matches on `id`, the rest
-// on `studio_id`, so none of them carries a studio parameter and none of them
-// could be made to answer for somebody else's.
-
-// ─── ONE ROW, OR NONE ────────────────────────────────────────
-// A non-array `shape` tells vex to map the FIRST row, handing `$.result` as
-// that row — or NULL when nothing matched. Prism's `$get` throws on null unless
-// the node carries a `fallback`, so a detail read that finds nothing would
-// answer 500 instead of "nothing". Finding no row is ORDINARY here (a principal
-// whose studio was deleted, a scope that resolved empty), so every field states
-// its own absent value.
+// ─── one row, or none ────────────────────────────────────────
 const rowText = (name: string) => ({ $get: { from: { $var: 'r' }, path: [name], fallback: { $const: '' } } });
 const rowNum = (name: string) => ({ $get: { from: { $var: 'r' }, path: [name], fallback: { $const: 0 } } });
 
@@ -39,17 +27,14 @@ export const studioCurrent: CacheEntry = {
   },
 };
 
-// How many people are on the books. Active and trialling only — a lapsed
-// member is not a member, and a headline figure that counts them is a figure
-// that flatters. `count` with no groupBy returns a single aggregated row.
 export const membersActiveCount: CacheEntry = {
   fingerprint: 'studio/members/active-count',
-  intent: 'How many memberships at this studio are active or trialling',
+  intent: 'How many live subscriptions this studio has on the books',
   shape: { total: 0 },
   dsl: {
-    from: ['memberships'],
-    aggregate: { total: { count: 'memberships.id' } },
-    filter: { in: ['memberships.status', ['active', 'trialling']] },
+    from: ['subscriptions'],
+    aggregate: { total: { count: 'subscriptions.id' } },
+    filter: { eq: ['subscriptions.status', 'active'] },
   },
   mapping: { $with: { let: { r: { $ref: '$.result' } }, value: { total: rowNum('total') } } },
 };
@@ -67,9 +52,3 @@ export const checkInsTodayCount: CacheEntry = {
   },
   mapping: { $with: { let: { r: { $ref: '$.result' } }, value: { total: rowNum('total') } } },
 };
-// `studio/revenue/expected` used to live here. It moved to `forecast.entries`
-// with the two figures it was always missing — what is contracted, and what has
-// given notice — because one number called "expected" was answering a question
-// nobody asked: it summed the price list for monthly plans and left every annual
-// member out of the total.
-

@@ -3,10 +3,6 @@ import type { NovaComponent } from '@niscorp/nova/adapters/react';
 import { COLOR, SIZE, WEIGHT } from '../lib/tokens';
 import { Icon } from './display';
 
-// Loading and nothing-here. Both are explicit data in this stack — `loading:
-// true` is a key in the action's data, never a Suspense boundary — so these
-// render a fact rather than intercept one.
-
 const SkeletonProps = z.object({ lines: z.number().optional(), height: z.number().optional(), width: z.union([z.number(), z.string()]).optional() }).strict();
 
 export const Skeleton: NovaComponent<z.infer<typeof SkeletonProps>> = ({ lines, height, width }: z.infer<typeof SkeletonProps>) => (
@@ -18,11 +14,6 @@ export const Skeleton: NovaComponent<z.infer<typeof SkeletonProps>> = ({ lines, 
 );
 Skeleton.meta = { description: 'Placeholder bars while a read is in flight.', propsSchema: SkeletonProps };
 
-// AN EMPTY STATE IS A DRAWING AND A SENTENCE. This took `children` and no
-// screen in the app ever passed any, so every "nothing here" in the product
-// was two lines of grey text in the middle of a white box — the moment a
-// person is most likely to think the thing is broken. A muted glyph costs
-// nothing and says "this is a state, not a failure".
 const EmptyProps = z.object({ title: z.string(), hint: z.string().optional(), icon: z.string().optional() }).strict();
 type EmptyP = Partial<z.infer<typeof EmptyProps>> & { children?: React.ReactNode };
 

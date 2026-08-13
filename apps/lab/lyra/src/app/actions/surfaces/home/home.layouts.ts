@@ -1,17 +1,5 @@
 import type { LayoutNode } from '@niscorp/nova';
 
-// Three landing surfaces, one per audience — and they are separate LAYOUTS
-// because they are separate ACTIONS (ring 1), not one screen hiding cards.
-//
-// The distinction is the whole point of the charter. A hidden card is still
-// served: the figure crossed the wire, the read ran, and only a layout decided
-// not to draw it. An action a principal does not hold never mounts, its
-// endpoints never fire, and the query is refused at the engine even if somebody
-// asks for it by hand.
-//
-// So an instructor does not see a revenue card that is switched off. There is
-// no revenue card in their application.
-
 const page = (children: LayoutNode | LayoutNode[]): LayoutNode => ({
   component: 'Stack',
   props: { gap: 26 },
@@ -54,7 +42,7 @@ export const overviewLayout: LayoutNode = page([
     component: 'Grid',
     props: { min: 190, gap: 14 },
     children: [
-      { component: 'Card', props: {}, children: { component: 'Stat', props: { label: 'Members', value: '{{$.memberCount}}', hint: 'active and trialling' } } },
+      { component: 'Card', props: {}, children: { component: 'Stat', props: { label: 'Members', value: '{{$.memberCount}}', hint: 'on the books' } } },
       { component: 'Card', props: {}, children: { component: 'Stat', props: { label: 'Checked in today', value: '{{$.checkedInToday}}' } } },
       { component: 'Card', props: {}, children: { component: 'Stat', props: { label: 'Classes today', value: '{{$.sessionsToday.length}}' } } },
       { component: 'Card', props: {}, children: { component: 'Stat', props: { label: 'Expected monthly', value: '$.revenue', hint: 'from active plans' } } },
@@ -64,15 +52,13 @@ export const overviewLayout: LayoutNode = page([
 ]);
 
 // ── the front desk's view ────────────────────────────────────
-// Who is on the books and who has walked in. No revenue: the desk runs the
-// day, and what the studio earns is not theirs to see.
 export const deskLayout: LayoutNode = page([
   hero,
   {
     component: 'Grid',
     props: { min: 190, gap: 14 },
     children: [
-      { component: 'Card', props: {}, children: { component: 'Stat', props: { label: 'Members', value: '{{$.memberCount}}', hint: 'active and trialling' } } },
+      { component: 'Card', props: {}, children: { component: 'Stat', props: { label: 'Members', value: '{{$.memberCount}}', hint: 'on the books' } } },
       { component: 'Card', props: {}, children: { component: 'Stat', props: { label: 'Checked in today', value: '{{$.checkedInToday}}' } } },
       { component: 'Card', props: {}, children: { component: 'Stat', props: { label: 'Classes today', value: '{{$.sessionsToday.length}}' } } },
     ],
@@ -81,6 +67,4 @@ export const deskLayout: LayoutNode = page([
 ]);
 
 // ── the instructor's and member's view ───────────────────────
-// The day, and nothing about the business. No headcount, no takings — an
-// instructor teaches and a member trains, and neither question is theirs.
 export const classesLayout: LayoutNode = page([hero, todaysClasses]);

@@ -1,10 +1,3 @@
-/* The kit's own rules — everything a style attribute cannot express: focus
- * rings, hover states, pseudo-elements, and the handful of resets that keep
- * native controls from bringing their own opinions.
- *
- * Colour values do not appear here. Every one is a custom property, so this
- * file survives a theme unchanged. */
-
 html,
 body,
 #root {
@@ -49,9 +42,18 @@ body {
 .ly-btn:active:not(:disabled) {
   transform: translateY(0.5px);
 }
-.ly-btn:disabled {
+.ly-btn:disabled,
+.ly-btn--disabled {
   cursor: not-allowed;
   opacity: 0.45;
+  pointer-events: none; /* an <a> ignores :disabled, so the class carries it */
+}
+/* The link-as-button keeps button text centred and unadorned. */
+a.ly-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
 }
 .ly-btn--big {
   padding: 12px 20px;
@@ -190,11 +192,7 @@ body {
   min-width: 0;
 }
 
-/* ── the shell's furniture ──────────────────────────────────────
- *
- * MOBILE FIRST, and meant literally: these are the phone rules, and the two
- * media queries below are the only places a wider screen is mentioned.
- */
+/* ── the shell's furniture */
 
 /* How tall the thumb bar is. Named because two rules need the same number —
  * the bar's own box and the inset that keeps content out from under it. */
@@ -211,18 +209,6 @@ body {
 }
 .ly-bar--top { border-bottom: 1px solid var(--line); }
 
-/* THE TAB BAR SITS WHERE A THUMB IS — which means FIXED, not merely last.
- *
- * The chrome is one canvas at the TOP of the frame, so a bar declared "bottom"
- * inside it rendered second from the top: a thumb bar an inch below the status
- * bar, which is the one place it is no use. Nothing about the arrangement was
- * wrong — the canvas holds the whole frame, top bar and drawer included — so
- * this is the same trade the rail already makes two hundred lines down: take it
- * out of flow, pin it, and inset the app to make room rather than have the two
- * fight over the same space.
- *
- * The home-indicator inset rides along, so it is not half-covered on a phone
- * that has one. */
 .ly-bar--bottom {
   position: fixed;
   left: 0;
@@ -235,11 +221,6 @@ body {
   justify-content: space-around;
 }
 
-/* The room it takes, and the notch above. One value for the bar's height and
- * the app's inset, so they cannot drift apart and leave the last row of a list
- * under the bar forever. The top inset is unconditional because the first thing
- * on screen is not always the tab row — a one-screen area has none, and its
- * content would start under the status bar. */
 #root {
   padding-top: env(safe-area-inset-top, 0px);
   padding-bottom: calc(var(--thumbbar) + env(safe-area-inset-bottom, 0px));
@@ -265,23 +246,9 @@ body {
  * overflow is a phone affordance, not a widget. */
 .ly-segments { scrollbar-width: none; }
 .ly-segments::-webkit-scrollbar { display: none; }
-/* It is `inline-flex`, which a column Stack stretches to full width anyway —
- * so Calendar/List became a page-wide tray with two pills huddled at the left.
- * A segmented control is as wide as its segments. */
 .ly-segments { align-self: flex-start; }
 .ly-subnav { align-self: stretch; }
 
-/* THE AREA'S SCREENS — navigation, and it has to LOOK like navigation.
- *
- * This row shipped as a segmented pill tray and read wrong immediately: a pill
- * tray is what Current/Everyone is, so the tabs looked like a filter on the
- * screen under them rather than the way to the two screens beside it. Same
- * event, same component, different promise — so a different look.
- *
- * An underline is the one that means "section of this thing" everywhere, and
- * the -1px pulls it onto the hairline the row sits on, which is what makes the
- * current tab read as CONNECTED to the content below rather than pointing at
- * it. */
 .ly-subnav { gap: 0; }
 .ly-subnav__tab {
   flex: 0 0 auto;
@@ -311,14 +278,6 @@ body {
 .ly-tab--on .ly-tab__dot { background: var(--accent); }
 .ly-tab--on svg { color: var(--accent); }
 
-/* A form over the surface rather than instead of it.
- *
- * On a phone it rises from the bottom, because that is where a thumb is. On a
- * desk it slides in from the right, because a wide screen has room beside the
- * work rather than only under it — and covering the bottom half of a 1300px
- * window to ask a one-line question is absurd.
- *
- * Same component, same canvas, same actions. Only where it sits. */
 .ly-sheet-scrim { align-items: flex-end; justify-content: center; }
 .ly-sheet {
   position: relative;
@@ -376,12 +335,7 @@ body {
  * that pads nothing reads correctly in either. */
 .ly-sheet__body { padding: 6px 18px 24px; }
 
-/* ── wider than a phone ─────────────────────────────────────────
- *
- * The sheet becomes a side drawer. Same canvas, same layouts, same actions —
- * only where they sit, which is the whole point of the arrangement living out
- * here rather than inside the actions.
- */
+/* ── wider than a phone */
 @media (min-width: 860px) {
   .ly-sheet-scrim { align-items: stretch; justify-content: flex-end; }
   .ly-sheet {
@@ -404,12 +358,7 @@ body {
   to { transform: translateX(0); opacity: 1; }
 }
 
-/* ── the drawer ─────────────────────────────────────────────────
- *
- * ONE navigation surface. The previous pass had a tab bar at the bottom and a
- * nine-item strip at the top, which is a flat nav split across two edges rather
- * than a grouped one — the same problem wearing a different shape.
- */
+/* ── the drawer */
 .ly-drawer-scrim { /* geometry is inline — see layout.tsx. Cosmetics only here. */ }
 .ly-drawer {
   padding: 14px 10px calc(20px + env(safe-area-inset-bottom, 0px));
@@ -453,14 +402,7 @@ body {
 }
 .ly-burger span { height: 2px; background: var(--ink); border-radius: 2px; }
 
-/* ── rows stop pretending to be a table ─────────────────────────
- *
- * A header row reading "Class · Day · Starts · Booked" over five columns is a
- * spreadsheet, and a spreadsheet on a 375px screen is unreadable — which is
- * exactly what shipped. Below 700px the header goes, and every row becomes a
- * two-line list item: what it is on the left, the one number that matters on
- * the right.
- */
+/* ── rows stop pretending to be a table */
 @media (max-width: 699px) {
   .ly-rows__head { display: none !important; }
   /* No desktop floor on a phone — the rows are a list here, not a grid. */
@@ -481,33 +423,13 @@ body {
   .ly-row-item > * { min-width: 0; text-align: left !important; }
   .ly-row-item > *:first-child { flex: 1 1 auto; }
   .ly-row-item > * + * { flex: 0 0 auto; text-align: right !important; }
-  /* TWO DISPLAY CELLS, NOT THREE. The comment above promised "what it is on
-   * the left, the one number that matters on the right", and the rule under it
-   * kept three — plus a `:not(:last-child)` exemption that kept a FOURTH
-   * whenever the last column was an ordinary one.
-   *
-   * Three cells do not fit 375px: the roll printed name-and-email with a status
-   * pill, and threw the join date onto a second line, hard left, on some rows
-   * and not others. A list where the same column lands in a different place on
-   * every row is worse than one that dropped it.
-   *
-   * ACTIONS ARE STILL EXEMPT — they are the only way to do the thing, and
-   * hiding one removes the feature rather than tidying the row. They wrap to a
-   * second line instead, which is why they keep their own class. */
   .ly-row-item > *:nth-child(n + 3):not(.ly-row-cell--action) { display: none; }
   .ly-row-cell--action { flex: 0 0 auto; }
 }
 
-
 .ly-sheet { position: relative; }
 
-/* ── the menu, laid out by frequency ────────────────────────────
- *
- * The list before this had every entry at the same weight, so a reader sorted
- * twelve items by hand every time. Group headings carry the sorting now, the
- * current place is marked, and the two things that are not destinations — who
- * you are, and the way out — are pinned to the ends where they belong.
- */
+/* ── the menu, laid out by frequency */
 .ly-drawer { display: flex; flex-direction: column; padding: 0 0 env(safe-area-inset-bottom, 0px); }
 
 .ly-drawer__header {
@@ -537,9 +459,6 @@ body {
   border-left: 3px solid transparent;
   line-height: 1.3;
 }
-/* A screen inside the open area: indented past the parent icon, one step down
- * in size and colour. The indent is what makes the menu readable as a tree
- * rather than a longer flat list. */
 .ly-drawer__link--sub {
   padding-left: 46px;
   font-size: 14px;
@@ -563,15 +482,7 @@ body {
   padding: 6px 0 8px;
 }
 
-/* ── the rail ───────────────────────────────────────────────────
- *
- * A burger hides navigation when there is no room for it. On a wide screen
- * there is room, so the same drawer simply stays open: no scrim, no tap, and
- * — the part that actually matters — where you ARE is on screen at all times
- * instead of one tap away.
- *
- * The rail is portaled to `body` and fixed, so the app is inset to make room
- * rather than the two fighting over the same space. */
+/* ── the rail */
 @media (min-width: 860px) {
   .ly-drawer--rail {
     position: fixed;
@@ -587,10 +498,6 @@ body {
   }
   #root { padding-left: 264px; }
 
-  /* THE THUMB BAR IS FOR THUMBS. The rail already shows every area at once and
-   * marks the open one, so a second copy pinned to the bottom of a 1400px
-   * window would be the same navigation twice — and neither would be where a
-   * mouse is. One arrangement, two shapes; the sheet makes the same trade. */
   .ly-bar--bottom { display: none; }
   #root { padding-bottom: 0; }
 }
@@ -614,17 +521,10 @@ body {
 .ly-day--on {
   background: var(--accent);
   border-color: var(--accent);
-  /* --accent-ink, the same token the accent button uses. The first draft
-   * invented --on-accent, which does not exist, so it fell through to white on
-   * lime — unreadable, and the kind of thing a token system exists to stop. */
   color: var(--accent-ink);
 }
 
-/* ── the fortnight, as a grid ────────────────────────────────
- *
- * Horizontal scroll on purpose: fourteen legible day columns do not fit a
- * phone, and squeezing them until they do produces fourteen unreadable ones.
- * A calendar you push sideways is how every calendar on a phone works. */
+/* ── the fortnight, as a grid */
 .ly-cal {
   display: grid;
   grid-auto-flow: column;
@@ -688,16 +588,7 @@ body {
 }
 .ly-cal__step:disabled { opacity: 0.35; cursor: not-allowed; }
 
-/* ── MOBILE FIRST, AND THIS TIME LITERALLY ───────────────────
- *
- * Seven columns squeezed onto a phone is a spreadsheet nobody can read, and
- * that is what shipped: 118px columns, three-and-a-bit visible, the rest off
- * the edge with no indication that swiping was a thing.
- *
- * A phone gets ONE DAY PER SCREEN, and it snaps — so a swipe moves exactly one
- * day and lands square, which is how every calendar on a phone behaves. The
- * week stepper still jumps seven at a time.
- */
+/* ── mobile first, literally */
 @media (max-width: 699px) {
   .ly-cal {
     grid-auto-columns: 100%;

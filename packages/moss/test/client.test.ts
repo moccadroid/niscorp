@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { createWire, browserEnv } from '../src/client';
 import type { WireEnv } from '../src/client';
 import { CLOSE_INVALID_TOKEN, CLOSE_SIGNED_OUT } from '../src/socket';
+import { encodeDelta, frameHash } from '../src/delta';
 
 // ═══════════════════════════════════════════════════════════════
 // The wire — driven headlessly, the way socket.test.ts drives the server:
@@ -325,6 +326,121 @@ describe('the wire — connection status', () => {
 
 // browserEnv is browser code — tested against a faked window, the one place
 // a global shim is honest (it IS the host this env binds to).
+// ═══════════════════════════════════════════════════════════════
+// FRAME DELTAS, terminal side. The wire either lands on exactly the frame the
+// server meant, or it asks for a whole one. There is no third outcome — a
+// terminal rendering a frame nobody authored is the failure this layer must
+// not have, and the checksum is what rules it out.
+// ═══════════════════════════════════════════════════════════════
+
+describe('the wire — frame deltas', () => {
+  const render = (tree: unknown[]): string => JSON.stringify({ type: 'render', canvas: 'main', tree });
+
+  it('advertises the capability on the url only when configured', () => {
+    createWire({ url: URL, env: env() });
+    expect(FakeSocket.last().url).not.toContain('delta=1');
+
+    createWire({ url: URL, env: env(), delta: true });
+    expect(FakeSocket.last().url).toContain('delta=1');
+
+    storage.setItem('nisc.token', 'tok-1');
+    createWire({ url: URL, env: env(), delta: true });
+    expect(FakeSocket.last().url).toContain('token=tok-1');
+    expect(FakeSocket.last().url).toContain('delta=1');
+  });
+
+  it('applies a delta against the last render and renders the rebuilt tree', () => {
+    const wire = createWire({ url: URL, env: env(), delta: true });
+    const socket = FakeSocket.last();
+    socket.open();
+    const base = render([{ type: 'text', value: 'a long steady line of chrome' }, { type: 'text', value: '1' }]);
+    socket.onmessage?.({ data: base });
+
+    const next = render([{ type: 'text', value: 'a long steady line of chrome' }, { type: 'text', value: '2' }]);
+    socket.emit({ type: 'render-delta', canvas: 'main', ops: encodeDelta(base, next), hash: frameHash(next) });
+
+    expect(wire.snapshot().trees.get('main')).toEqual((JSON.parse(next) as { tree: unknown[] }).tree);
+    expect(socket.envelopes().some((m) => m['type'] === 'resync')).toBe(false);
+  });
+
+  it('chains — the rebuilt frame becomes the next delta\'s base', () => {
+    const wire = createWire({ url: URL, env: env(), delta: true });
+    const socket = FakeSocket.last();
+    socket.open();
+    let held = render([{ type: 'text', value: 'chrome that never changes at all' }, { type: 'text', value: '0' }]);
+    socket.onmessage?.({ data: held });
+
+    for (const n of ['1', '2', '3']) {
+      const next = render([{ type: 'text', value: 'chrome that never changes at all' }, { type: 'text', value: n }]);
+      socket.emit({ type: 'render-delta', canvas: 'main', ops: encodeDelta(held, next), hash: frameHash(next) });
+      held = next;
+    }
+    expect(wire.snapshot().trees.get('main')).toEqual((JSON.parse(held) as { tree: unknown[] }).tree);
+    expect(socket.envelopes().some((m) => m['type'] === 'resync')).toBe(false);
+  });
+
+  it('asks to resync when a delta fails its checksum, and renders nothing new', () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const wire = createWire({ url: URL, env: env(), delta: true });
+    const socket = FakeSocket.last();
+    socket.open();
+    const base = render([{ type: 'text', value: 'a long steady line of chrome' }, { type: 'text', value: '1' }]);
+    socket.onmessage?.({ data: base });
+    const held = wire.snapshot().trees.get('main');
+
+    const next = render([{ type: 'text', value: 'a long steady line of chrome' }, { type: 'text', value: '2' }]);
+    socket.emit({ type: 'render-delta', canvas: 'main', ops: encodeDelta(base, next), hash: frameHash(next) + 1 });
+
+    expect(socket.envelopes().filter((m) => m['type'] === 'resync')).toHaveLength(1);
+    expect(wire.snapshot().trees.get('main')).toBe(held); // untouched, not half-applied
+  });
+
+  it('asks to resync when a delta arrives with no base to apply it to', () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const wire = createWire({ url: URL, env: env(), delta: true });
+    const socket = FakeSocket.last();
+    socket.open();
+    socket.emit({ type: 'render-delta', canvas: 'main', ops: [[1, render([])]], hash: frameHash(render([])) });
+
+    expect(socket.envelopes().filter((m) => m['type'] === 'resync')).toHaveLength(1);
+    expect(wire.snapshot().trees.get('main')).toBeUndefined();
+  });
+
+  it('asks to resync rather than throwing when an op runs past the base', () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const wire = createWire({ url: URL, env: env(), delta: true });
+    const socket = FakeSocket.last();
+    socket.open();
+    socket.onmessage?.({ data: render([{ type: 'text', value: 'short' }]) });
+    socket.emit({ type: 'render-delta', canvas: 'main', ops: [[0, 0, 99999]], hash: 1 });
+
+    expect(socket.envelopes().filter((m) => m['type'] === 'resync')).toHaveLength(1);
+    expect(wire.status()).toBe('open'); // it did not take the connection down with it
+  });
+
+  // A reconnect is served whole frames from scratch. A base carried across it
+  // is a base the server never assumed, and every delta after it would be a
+  // silent lie the checksum has to catch — cheaper to never hold one.
+  it('drops its bases on reconnect', () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    createWire({ url: URL, env: env(), delta: true });
+    const first = FakeSocket.last();
+    first.open();
+    const base = render([{ type: 'text', value: 'a long steady line of chrome' }, { type: 'text', value: '1' }]);
+    first.onmessage?.({ data: base });
+
+    first.serverClose(1006);
+    vi.advanceTimersByTime(60_000);
+    const second = FakeSocket.last();
+    expect(second).not.toBe(first);
+    second.open();
+
+    const next = render([{ type: 'text', value: 'a long steady line of chrome' }, { type: 'text', value: '2' }]);
+    second.emit({ type: 'render-delta', canvas: 'main', ops: encodeDelta(base, next), hash: frameHash(next) });
+    expect(second.envelopes().filter((m) => m['type'] === 'resync')).toHaveLength(1);
+  });
+});
+
 describe('browserEnv — the browser host', () => {
   const g = globalThis as unknown as { window?: unknown };
   afterEach(() => {

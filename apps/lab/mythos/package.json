@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "typecheck": "tsc --noEmit",
-    "check": "tsx src/dev/boot-check.ts && tsx src/dev/todos-check.ts && tsx src/dev/garden-check.ts && tsx src/dev/mood-check.ts"
+    "check": "turbo run build --filter=@lab/mythos^... && tsx src/dev/boot-check.ts && tsx src/dev/todos-check.ts && tsx src/dev/garden-check.ts && tsx src/dev/mood-check.ts"
   },
   "dependencies": {
     "@electric-sql/pglite": "^0.5.1",

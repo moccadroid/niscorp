@@ -1,4 +1,5 @@
-import { createHash, createPublicKey, generateKeyPairSync, randomBytes, sign as cryptoSign, verify as cryptoVerify } from 'node:crypto';
+import { createHash, createPrivateKey, createPublicKey, generateKeyPairSync, randomBytes, sign as cryptoSign, verify as cryptoVerify } from 'node:crypto';
+import type { KeyObject } from 'node:crypto';
 
 // ═══════════════════════════════════════════════════════════════
 // THE CREDENTIAL RULE, in one module: the verifier mints, stores at most a
@@ -50,11 +51,36 @@ export type AssertionSigner = {
   mint: (claims: { integration: string; principal: string; scope: Record<string, unknown> }, ttlMs?: number) => string;
 };
 
-// Generated at boot, held in memory, never persisted. Assertions live for
-// seconds, so a restart invalidating tokens in flight costs one retry — and a
-// key that is never written down is a key nothing can exfiltrate at rest.
-export const createAssertionSigner = (): AssertionSigner => {
-  const { publicKey, privateKey } = generateKeyPairSync('ed25519');
+// Generated at boot, held in memory, never persisted — UNLESS a seed is handed
+// in. That default is the right one for production: assertions live seconds, so
+// a restart invalidating tokens in flight costs one retry, and a key never
+// written down is a key nothing can exfiltrate at rest.
+//
+// THE SEED IS A DEV AFFORDANCE, and it earns its keep. On an in-memory database
+// every restart regenerates this keypair, which invalidates the public half an
+// integration is holding — so a separate service (the payments pack) starts
+// answering "who are you?" to every call until somebody re-copies the new key.
+// Seeding the keypair from a fixed value makes the public half STABLE across
+// restarts, so the integration's env stays valid. A deployment leaves the seed
+// unset and keeps the ephemeral key; a dev sets one and stops re-copying.
+//
+// The seed is 32 bytes, base64 — an ed25519 private scalar. It never leaves the
+// deployment; only the public half is ever served.
+const signerFromSeed = (seed: Buffer): { publicKey: KeyObject; privateKey: KeyObject } => {
+  // ed25519 private keys are a fixed 32-byte scalar; PKCS8 wraps them in a
+  // constant DER prefix, so a deterministic key is that prefix plus the seed.
+  const pkcs8 = Buffer.concat([Buffer.from('302e020100300506032b657004220420', 'hex'), seed.subarray(0, 32)]);
+  const privateKey = createPrivateKey({ key: pkcs8, format: 'der', type: 'pkcs8' });
+  // node derives the public half from a private KeyObject at runtime; the type
+  // overloads do not advertise the KeyObject input, hence the cast.
+  const asInput = privateKey as unknown as Parameters<typeof createPublicKey>[0];
+  return { privateKey, publicKey: createPublicKey(asInput) };
+};
+
+export const createAssertionSigner = (seedB64?: string): AssertionSigner => {
+  const seed = seedB64 !== undefined && seedB64 !== '' ? Buffer.from(seedB64, 'base64') : undefined;
+  const { publicKey, privateKey } =
+    seed !== undefined && seed.length >= 32 ? signerFromSeed(seed) : generateKeyPairSync('ed25519');
   const verifyKey = publicKey.export({ type: 'spki', format: 'der' }).toString('base64');
   return {
     verifyKey,

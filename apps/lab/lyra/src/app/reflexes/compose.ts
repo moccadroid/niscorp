@@ -1,366 +1,231 @@
 import type { ReflexInput } from '@niscorp/tide';
-import {
-  attendedOnDay,
-  bookingsOnDay,
-  bookingsToday,
-  enrolmentsStarting,
-  joinedRecently,
-  lapseTrial,
-  membershipsEnded,
-  membershipsPaused,
-  membersLapsedAway,
-  notify,
-  subscriptionsEnding,
-  trialsDue,
-  waitingForASeat,
-} from '@lyra/app/vex/tide.entries';
-
-// AN AUTOMATION IS A WHO, A WHAT AND A WHEN.
-//
-// What this replaces: three shipped SHAPES in a picklist. A studio could change
-// the time one ran and nothing else — every interesting decision had already
-// been made, by me, at build time. Three cron jobs with a toggle.
-//
-// The reason it was a picklist is real and survives intact: a reflex selects
-// rows and applies an effect, and a studio that could author either would route
-// around the charter completely. "A row cannot name a statement the app does not
-// ship" is load-bearing and is NOT relaxed here.
-//
-// But that rule never implied a picklist — it implies closed VOCABULARIES. The
-// old shapes already consisted of a `select` (who) and an `effect` (what),
-// frozen together in pairs. Below they are two registries, and a row picks one
-// from each. Both halves still ship with the application; the studio composes
-// them.
-//
-// The tell that the old factoring was wrong: the first genuinely useful new
-// automation — warn people BEFORE their trial lapses — needs no new fingerprint
-// at all. It is `trials.ending` × `message`, two things that already existed and
-// could not be said together.
+import { bookingsOnDay, enquiredPerson, joinedSubscription, membersLapsedAway, queueMessage, trialsDue } from '@lyra/app/vex/tide.entries';
 
 export type AutomationRow = {
   id: string;
-  audience: string;
+  moment: string;
   effect: string;
   enabled: boolean;
   run_at: string;
-  trial_days: number;
+  days: number;
   subject: string;
   body: string;
 };
 
-// ── WHO ──────────────────────────────────────────────────────
-//
-// An audience is a shipped read plus the unit it fans out on. `usesTrialDays`
-// is what lets the form ask for a window only when the audience has one, rather
-// than showing every knob any automation has ever needed.
-type Audience = {
+// ── WHEN ─────────────────────────────────────────────────────
+
+export type Moment = {
   id: string;
+  /** The "when" half of the sentence, lower case: "somebody joins". */
   label: string;
   blurb: string;
-  usesTrialDays: boolean;
+  /** Written (a write fact off the vex bridge wakes it) rather than clocked. */
+  watched: boolean;
+  /** Watched only: which write wakes this moment, and how the enrichment
+   *  selection anchors to the fact's own row. The anchor is a prism template
+   *  evaluated at fan-out with `$.fact` in scope, so the selection re-reads
+   *  exactly the row the write committed — under the automation's own
+   *  principal, which is what re-checks reality before anything sends. */
+  watch?: { entity: string; op: 'insert' | 'update' | 'delete'; anchor: Record<string, unknown> };
+  /** Whether the number means anything here, and what it means when it does.
+   *  The form asks for exactly the knobs a moment uses rather than showing
+   *  every knob any automation has ever needed. */
+  daysLabel?: string;
   unitKey: string;
   fingerprint: string;
   context: (row: AutomationRow) => Record<string, unknown>;
+  /** Does the row carry a class name and time? Decides whether a message may
+   *  mention one — a body ending "(Vinyasa at 18:30)" is wrong on a moment that
+   *  has no class. */
+  hasClass?: boolean;
 };
 
-// The cutoff is computed from the tick's LOGICAL now, never a wall-clock read —
-// which is what lets a check march time forward and get the answers the real
-// thing would.
-//
-// Wrapped in `$date`, and the reason is worth keeping: `$dateAdd` on an epoch
-// returns a full ISO timestamp, and comparing that to a DATE column matches
-// nothing — silently, with no error anywhere. A reflex selecting zero rows
-// forever looks exactly like a studio that has no trials.
 const dayOffset = (amount: number): Record<string, unknown> => ({
   $date: { value: { $dateAdd: { date: { $ref: '$.now' }, amount, unit: 'day' } }, format: 'YYYY-MM-DD' },
 });
 
-export const AUDIENCES: readonly Audience[] = [
+const FAR_FUTURE = '9999-12-31';
+
+export const MOMENTS: readonly Moment[] = [
+  // FIVE, DOWN FROM THIRTEEN, and the cut was made with evidence rather than
+  // taste: every moment below was driven through the engine against the seeded
+  // database and watched to select real people. Three of the thirteen were
+  // REFUSED every time they ran —
+  //
+  //   plan.ending     reads `plans`      · not on the automation rung
+  //   course.starting reads `enrolments` · not on the automation rung
+  //   member.trained  reads `check_ins`  · not on the automation rung
+  //
+  // — and one of them, `plan.ending`, was offered in the builder as a recipe a
+  // studio could click. They can come back the day somebody adds the grant and
+  // proves it; a moment nobody has seen work is a promise, not a feature.
+  //
+  // The rest went for reasons of their own, recorded so nobody re-adds them
+  // by reflex: `trial.ended` is `trial.ending` after it is too late to matter;
+  // `class.today` is `class.tomorrow` with less notice; `member.left` emails
+  // somebody who has already gone; `member.paused` works but earns less than
+  // it costs to explain; and `waitlist.waiting` was the WRONG SHAPE — a seat
+  // opening is an event, and a daily clock that tells somebody at 09:00 they
+  // have a place in a 10:00 class is not the automation that idea deserves.
+  // It belongs back here as a watched moment, and that is a real piece of work.
+
+  // ── watched: the two minutes worth reacting to inside one ──
   {
-    id: 'trials.ending',
-    label: 'trials past their window',
-    blurb: 'Everybody whose trial started longer ago than the studio’s trial window.',
-    usesTrialDays: true,
-    unitKey: 'membership_id',
-    fingerprint: trialsDue.fingerprint,
-    context: (row) => ({ cutoff: dayOffset(-row.trial_days) }),
-  },
-  {
-    id: 'classes.tomorrow',
-    label: 'booked tomorrow',
-    blurb: 'One unit per person per class, so forty reminders retry independently.',
-    usesTrialDays: false,
-    unitKey: 'booking_id',
-    fingerprint: bookingsOnDay.fingerprint,
-    context: () => ({ day: dayOffset(1) }),
-  },
-  {
-    // The most obviously useful automation a studio has, and there was no way
-    // to say it: the vocabulary held "trials past their window" and "booked
-    // tomorrow", and neither of those is "somebody new".
-    id: 'members.new',
-    label: 'just joined',
-    blurb: 'Anybody whose membership started within the window.',
-    usesTrialDays: true,
-    unitKey: 'membership_id',
-    fingerprint: joinedRecently.fingerprint,
-    context: (row) => ({ cutoff: dayOffset(-row.trial_days) }),
-  },
-  {
-    // People who actually TURNED UP, which is a different set from the one that
-    // booked — so this reads check-ins rather than bookings.
-    id: 'classes.attended',
-    label: 'came yesterday',
-    blurb: 'The people who checked in, not the ones who booked.',
-    usesTrialDays: false,
-    unitKey: 'check_in_id',
-    fingerprint: attendedOnDay.fingerprint,
-    context: () => ({ day: dayOffset(-1) }),
-  },
-  {
-    // Waitlisting already works and is already silent: a seat frees, the
-    // trigger promotes the longest waiter, and nobody tells them. This closes
-    // that loop without a line of new mechanism.
-    id: 'bookings.waitlisted',
-    label: 'on a waitlist',
-    blurb: 'Anybody on a waitlist for a class still to come.',
-    usesTrialDays: false,
-    unitKey: 'booking_id',
-    fingerprint: waitingForASeat.fingerprint,
-    context: () => ({ day: dayOffset(0) }),
-  },
-  {
-    // Today, not tomorrow — a morning list for the desk, or a nudge to the
-    // people who said they were coming.
-    id: 'classes.today',
-    label: 'booked in today',
-    blurb: 'Everybody with a seat in a class happening today.',
-    usesTrialDays: false,
-    unitKey: 'booking_id',
-    fingerprint: bookingsToday.fingerprint,
-    context: () => ({ day: dayOffset(0) }),
-  },
-  {
-    // The renewal conversation, which a studio currently has by remembering.
-    id: 'plans.ending',
-    label: 'whose plan is ending',
-    blurb: 'Anybody on an active plan due to end inside the window.',
-    usesTrialDays: true,
+    id: 'member.joined',
+    label: 'somebody joins',
+    blurb: 'The moment a subscription starts — the highest-value minute a studio has, and the one nothing used to notice.',
+    watched: true,
+    watch: { entity: 'subscriptions', op: 'insert', anchor: { subscriptionId: { $ref: '$.fact.row.id' } } },
     unitKey: 'subscription_id',
-    fingerprint: subscriptionsEnding.fingerprint,
-    context: (row) => ({ cutoff: dayOffset(row.trial_days) }),
-  },
-  {
-    // The win-back. A cancelled membership is the one row in this application
-    // that nothing ever looks at again.
-    id: 'members.left',
-    label: 'who recently left',
-    blurb: 'Memberships cancelled inside the window.',
-    usesTrialDays: true,
-    unitKey: 'membership_id',
-    fingerprint: membershipsEnded.fingerprint,
-    context: (row) => ({ cutoff: dayOffset(-row.trial_days) }),
-  },
-  {
-    // A paused membership is a decision somebody made once and nobody revisits.
-    id: 'members.paused',
-    label: 'on a paused membership',
-    blurb: 'Everybody who put their membership on hold and has not come back.',
-    usesTrialDays: false,
-    unitKey: 'membership_id',
-    fingerprint: membershipsPaused.fingerprint,
+    fingerprint: joinedSubscription.fingerprint,
     context: () => ({}),
   },
   {
-    // THE ONE THAT COSTS MONEY. Somebody is still paying and has stopped
-    // turning up; in a month or two they notice the direct debit rather than
-    // the classes. Every other audience here selects people who did something —
-    // this one selects people who did NOT, which is why it needed a correlated
-    // NOT EXISTS and why it was the last one built.
-    id: 'members.quiet',
-    label: 'who have stopped coming',
-    blurb: 'Still paying, no class attended inside the window. The people a studio loses without noticing.',
-    usesTrialDays: true,
-    unitKey: 'membership_id',
-    fingerprint: membersLapsedAway.fingerprint,
-    context: (row) => ({ cutoff: dayOffset(-row.trial_days) }),
+    id: 'enquiry.recorded',
+    label: 'somebody enquires',
+    blurb: 'The moment somebody new is written down. Replying within minutes is the difference between a member and a lost one.',
+    watched: true,
+    watch: { entity: 'studio_people', op: 'insert', anchor: { studioPersonId: { $ref: '$.fact.row.id' } } },
+    unitKey: 'studio_person_id',
+    fingerprint: enquiredPerson.fingerprint,
+    context: () => ({}),
+  },
+
+  // ── scheduled: the three that are genuinely a time of day ──
+  {
+    id: 'trial.ending',
+    label: 'a trial is about to run out',
+    blurb: 'People whose free window closes within the next few days — while there is still time to ask them.',
+    watched: false,
+    daysLabel: 'Days of notice',
+    unitKey: 'studio_person_id',
+    fingerprint: trialsDue.fingerprint,
+    context: (row) => ({ from: dayOffset(0), cutoff: dayOffset(row.days) }),
   },
   {
-    // The block is about to start and the people on it have forgotten.
-    id: 'courses.starting',
-    label: 'on a course about to start',
-    blurb: 'People enrolled on a block starting inside the window.',
-    usesTrialDays: true,
-    unitKey: 'enrolment_id',
-    fingerprint: enrolmentsStarting.fingerprint,
-    context: (row) => ({ cutoff: dayOffset(row.trial_days), day: dayOffset(0) }),
+    id: 'member.quiet',
+    label: 'somebody stops coming',
+    blurb: 'Still paying, no class attended inside the window. The people a studio loses without noticing.',
+    watched: false,
+    daysLabel: 'Days without a visit',
+    unitKey: 'subscription_id',
+    fingerprint: membersLapsedAway.fingerprint,
+    context: (row) => ({ cutoff: dayOffset(-row.days) }),
+  },
+  {
+    id: 'class.tomorrow',
+    label: "it is the day before somebody's class",
+    blurb: 'One message per person per class, so forty reminders retry independently.',
+    watched: false,
+    unitKey: 'booking_id',
+    fingerprint: bookingsOnDay.fingerprint,
+    context: () => ({ day: dayOffset(1) }),
+    hasClass: true,
   },
 ];
 
 // ── WHAT ─────────────────────────────────────────────────────
-//
-// `appliesTo` is the honest part of a composition model: not every pairing makes
-// sense. Marking a trial lapsed needs a membership, so it can only follow an
-// audience that yields one. The form offers what fits and nothing else, which is
-// better than letting somebody build a combination that silently selects zero
-// rows forever.
+
 type Effect = {
   id: string;
+  /** The "then" half, imperative: "add it to the desk's list". */
   label: string;
   blurb: string;
-  usesMessage: boolean;
-  appliesTo: readonly string[];
+  /** Does the studio write words for this one, and what are they called. */
+  words?: { subject: string; body?: string; hint: string };
   fingerprint: string;
-  input: (row: AutomationRow, audience: Audience) => Record<string, unknown>;
+  input: (row: AutomationRow, moment: Moment) => Record<string, unknown>;
 };
 
-// The studio's own words, with the row's facts available. A message about
-// somebody's membership is the studio talking to their member — hardcoding the
-// sentence was the clearest case in this application of data living in code.
-const withFacts = (text: string, audience: Audience): Record<string, unknown> | string => {
-  if (!['classes.tomorrow', 'classes.attended', 'bookings.waitlisted', 'classes.today', 'courses.starting'].includes(audience.id)) return text;
+const withFacts = (text: string, moment: Moment): Record<string, unknown> | string => {
+  if (moment.hasClass !== true) return text;
   return { $join: { parts: [text, ' (', { $ref: '$.row.class_name' }, ' at ', { $ref: '$.row.starts_at' }, ')'], sep: '' } };
 };
 
 export const EFFECTS: readonly Effect[] = [
   {
-    id: 'message',
-    label: 'Leave them a message',
-    blurb: 'A note in their account. The studio writes the words.',
-    usesMessage: true,
-    appliesTo: ['trials.ending', 'classes.tomorrow', 'members.new', 'classes.attended', 'bookings.waitlisted', 'classes.today', 'plans.ending', 'members.left', 'members.paused', 'courses.starting'],
-    fingerprint: notify.fingerprint,
-    input: (row, audience) => ({
+    id: 'email',
+    label: 'email them',
+    blurb: 'Queued in the outbox. Nothing is delivered yet — Lyra has no mail integration, and the screen says so rather than pretending.',
+    words: { subject: 'Subject', body: 'Message', hint: 'What they would receive. Your words, in your studio’s name.' },
+    fingerprint: queueMessage.fingerprint,
+    input: (row, moment) => ({
       personId: { $ref: '$.row.person_id' },
-      kind: 'studio-message',
+      toAddress: { $ref: '$.row.email' },
       subject: row.subject,
-      body: withFacts(row.body, audience),
-    }),
-  },
-  {
-    // The one effect here that changes somebody's standing with the studio, and
-    // therefore the one worth being most careful about. The WRITE re-checks
-    // `status = 'trialling'` in its own WHERE, so a desk reactivating somebody
-    // between selection and execution wins — a guard that survives every
-    // ordering, which is why it lives in the statement and not in this file.
-    id: 'trial.lapse',
-    label: 'Mark the trial lapsed',
-    blurb: 'Ends the trial. This one changes a membership, so preview it first.',
-    usesMessage: false,
-    appliesTo: ['trials.ending'],
-    fingerprint: lapseTrial.fingerprint,
-    input: () => ({ membershipId: { $ref: '$.row.membership_id' } }),
-  },
-  {
-    // TELL THE STUDIO, not the member. The same shipped write, addressed to
-    // nobody — which is what turns a message into a briefing.
-    //
-    // It pairs with every audience, and that is the whole argument for a
-    // vocabulary over a picklist: "who is coming today", "who is on a paused
-    // membership", "whose plan ends this month" all become a morning briefing
-    // without a line of new mechanism, and none of them was expressible an
-    // hour ago.
-    id: 'studio.notify',
-    label: 'Tell the studio',
-    blurb: 'A note for the studio itself, not for the member.',
-    usesMessage: true,
-    appliesTo: ['trials.ending', 'classes.tomorrow', 'members.new', 'classes.attended', 'bookings.waitlisted', 'classes.today', 'plans.ending', 'members.left', 'members.paused', 'courses.starting'],
-    fingerprint: notify.fingerprint,
-    input: (row, audience) => ({
-      personId: null,
-      kind: 'studio-briefing',
-      subject: row.subject,
-      body: withFacts(row.body, audience),
+      body: withFacts(row.body, moment),
+      source: row.id,
     }),
   },
 ];
 
-export const audienceById = (id: string): Audience | undefined => AUDIENCES.find((a) => a.id === id);
+// THE SELECTION, COMPOSED IN ONE PLACE.
+//
+// The reflex asks this question when it fires, and the form's rehearsal asks
+// the same one while somebody is still typing. Two copies of it would drift,
+// and the drift would be invisible: the rehearsal would say "3 people" about a
+// query the automation does not run.
+export const selectionFor = (moment: Moment, row: AutomationRow): { fingerprint: string; context: Record<string, unknown> } => ({
+  fingerprint: moment.fingerprint,
+  // A watched moment's anchor refs (`$.fact.row.…`) resolve at fan-out, when
+  // the fact is in scope — a rehearsal has no fact and must not ask this
+  // question; the form's audience says "as it happens" instead.
+  context: { ...moment.context(row), ...(moment.watch?.anchor ?? {}), horizon: FAR_FUTURE },
+});
+
+export const momentById = (id: string): Moment | undefined => MOMENTS.find((m) => m.id === id);
 export const effectById = (id: string): Effect | undefined => EFFECTS.find((e) => e.id === id);
 
-/** Does this pairing exist? The registries answer, not a hand-kept list. */
-export const pairs = (audienceId: string, effectId: string): boolean => effectById(effectId)?.appliesTo.includes(audienceId) === true;
+/** Every pairing is meaningful today. Kept as a function because the screens
+ *  ask, and because the day an effect needs something narrower this is where to
+ *  say so. */
+export const pairs = (momentId: string, effectId: string): boolean =>
+  momentById(momentId) !== undefined && effectById(effectId) !== undefined;
 
-/** The human name of a row, built from its two halves rather than stored. */
-export const nameOf = (row: { audience: string; effect: string }): string => {
-  const a = audienceById(row.audience);
+/** THE SENTENCE, moment first. It read effect-first — "Leave them a message —
+ *  booked tomorrow" — which is backwards in every language. */
+export const nameOf = (row: { moment: string; effect: string }): string => {
+  const m = momentById(row.moment);
   const e = effectById(row.effect);
-  if (a === undefined || e === undefined) return `${row.audience} → ${row.effect}`;
-  return `${e.label} — ${a.label}`;
+  if (m === undefined || e === undefined) return `${row.moment} → ${row.effect}`;
+  return `When ${m.label}, ${e.label}`;
 };
 
 export const reflexIdFor = (studioId: string, row: { id: string }): string => `${studioId}:${row.id}`;
 
 // ── THE COMPOSITION ──────────────────────────────────────────
-//
-// One row in, one reflex out — but the shape is now assembled from two
-// registries instead of looked up in one. A row naming an audience or an effect
-// this version does not ship yields nothing, which is the same refusal the
-// template registry gave and for the same reason.
 export const reflexesFor = (studioId: string, timezone: string, rows: readonly AutomationRow[] = []): ReflexInput[] => {
   const as = `automation@${studioId}`;
   const reflexes: ReflexInput[] = [];
 
   for (const row of rows) {
-    const audience = audienceById(row.audience);
+    const moment = momentById(row.moment);
     const effect = effectById(row.effect);
-    if (audience === undefined || effect === undefined || !pairs(row.audience, row.effect)) continue;
+    if (moment === undefined || effect === undefined) continue;
 
     reflexes.push({
       id: reflexIdFor(studioId, row),
-      // The intent is the reflex's own account of itself, and tide demands one.
-      // Composed from the two halves so it stays true when either changes —
-      // an automation nobody can read is one nobody can be responsible for.
-      intent: `${effect.label} — ${audience.label}.`,
+      intent: `${nameOf(row)}.`,
       as,
-      on: { clock: { every: 'day', at: row.run_at, tz: timezone } },
-      params: { trialDays: row.trial_days },
+      // A watched moment wakes ON THE WRITE — the vex bridge mints the fact
+      // the instant the row commits, stamped with this studio's automation
+      // identity, so nobody waits for a beat and nobody hears about another
+      // studio's members. A clocked moment is genuinely a time of day.
+      on: moment.watch !== undefined ? { fact: { entity: moment.watch.entity, op: moment.watch.op } } : { clock: { every: 'day', at: row.run_at, tz: timezone } },
+      params: { days: row.days },
       select: {
-        query: { fingerprint: audience.fingerprint, context: audience.context(row) },
+        query: selectionFor(moment, row),
         // `each` keys the task on the unit, so a retry is a no-op rather than a
         // second write.
         mode: 'each',
-        unitKey: audience.unitKey,
+        unitKey: moment.unitKey,
       },
-      effect: { name: effect.fingerprint, input: effect.input(row, audience) },
-      policy:
-        effect.id === 'trial.lapse'
-          ? { retry: { max: 3, backoff: 'exponential', baseMs: 60_000 }, timeoutMs: 30_000, overlap: 'skip', catchUp: 'latest' }
-          : { retry: { max: 2, backoff: 'fixed', baseMs: 30_000 }, timeoutMs: 15_000, overlap: 'skip', catchUp: 'skip' },
+      effect: { name: effect.fingerprint, input: effect.input(row, moment) },
+      // `catchUp: 'skip'` is the clock's knob: a night missed while the
+      // process was down should not produce yesterday's reminders at noon.
+      // A write fact needs no such rule — it either matched or it waits.
+      policy: { retry: { max: 2, backoff: 'fixed', baseMs: 30_000 }, timeoutMs: 15_000, overlap: 'skip', ...(moment.watch === undefined ? { catchUp: 'skip' as const } : {}) },
       enabled: row.enabled,
-    });
-  }
-
-  // ── WHAT HAPPENED OVERNIGHT ────────────────────────────────
-  //
-  // FAN-IN, and it costs nothing: a settled firing mints a fact carrying its
-  // stats, so "tell the studio what the night did" is an ordinary reflex
-  // watching an ordinary fact. No callback, no shared state, no ordering
-  // problem — the digest cannot run before the work because the fact it waits
-  // on does not exist until the work settles.
-  //
-  // It is DERIVED rather than configured: it watches whichever row lapses
-  // trials, so it follows the composition instead of naming a template id that
-  // rows no longer have. Nothing to set up, and nothing to get wrong.
-  const lapsing = rows.find((row) => row.effect === 'trial.lapse' && row.enabled);
-  if (lapsing !== undefined) {
-    reflexes.push({
-      id: `${studioId}:digest`,
-      intent: 'Tell the studio how many trials lapsed overnight.',
-      as,
-      on: { fact: { firing: reflexIdFor(studioId, lapsing) } },
-      effect: {
-        name: notify.fingerprint,
-        input: {
-          personId: null,
-          kind: 'digest',
-          subject: { $join: { parts: ['Trials lapsed overnight: ', { $ref: '$.fact.stats.done' }], sep: '' } },
-          body: { $join: { parts: [{ $ref: '$.fact.stats.done' }, ' of ', { $ref: '$.fact.stats.total' }, ' processed, ', { $ref: '$.fact.stats.failed' }, ' failed.'], sep: '' } },
-        },
-      },
-      // A digest for a night three days ago is noise.
-      policy: { timeoutMs: 10_000, overlap: 'skip', catchUp: 'skip' },
-      enabled: true,
     });
   }
 

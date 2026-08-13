@@ -103,6 +103,18 @@ const BundleSchema = z
     // action id → the MENU HUB it lists under (a roster under People). The hub
     // must be one the host offers to integrations.
     placements: z.record(z.string(), z.string()).default({}),
+    // PAGES THE PACK SERVES AND THE HOST FRAMES. Lyra validates every layout
+    // against a fixed component vocabulary, so a pack cannot ship UI — which is
+    // right until a vendor's own browser SDK is the only way to render
+    // something (a payment onboarding form). The answer is not to teach the
+    // host's kit about the vendor: it is for the pack to serve a page and the
+    // host to frame it, at its own origin, gated by exactly what every other
+    // pack call is gated by.
+    //
+    // Named lyra-side, like `preview`, and under the pack's own prefix. What is
+    // inside a frame the host does NOT validate — that is the real cost, and it
+    // is why this is a declaration rather than an iframe a layout can conjure.
+    frames: z.array(z.string()).default([]),
     // The ONE action allowed to surface in the store: this integration's own
     // settings screen, reachable from its tile and from nowhere else. Add-ons
     // is a store; nothing functional lives there.
@@ -113,6 +125,48 @@ const BundleSchema = z
 export type Bundle = z.infer<typeof BundleSchema>;
 
 export type IntakeResult = { ok: true; bundle: Bundle } | { ok: false; reasons: string[] };
+
+// ── WHAT A BUNDLE MAY BE CALLED AT ───────────────────────────
+//
+// The intake checks below constrain what a bundle DECLARES. They never
+// constrained what the proxy FORWARDS — which forwarded any path under a pack's
+// prefix, for any signed-in principal at an installed studio. For a rank tracker
+// that exposes rank data. For a payments service it exposes a payments service.
+//
+// So the declaration becomes the perimeter: the union of every endpoint a
+// bundle's actions name under its own prefix, plus every preview an attachment
+// rides on. Anything else is not a route this integration has, and the proxy
+// answers as if it were not there.
+//
+// DERIVED, NEVER AUTHORED. A pack cannot widen its own reach without shipping
+// the screen or the strip that uses it, and re-importing is the only thing that
+// moves it — the same call an operator already makes.
+const normalizeReach = (path: string): string => (path.split('?')[0] ?? '').replace(/\/+$/, '');
+
+export const reachOf = (bundle: Bundle, integrationId: string): string[] => {
+  const own = `/integrations/${integrationId}/`;
+  const reach = new Set<string>();
+  for (const raw of Object.values(bundle.actions)) {
+    const action = raw as ActionDefinition;
+    for (const endpoint of Object.values(action.endpoints ?? {})) {
+      const url = (endpoint as { url?: string }).url ?? '';
+      // A `/api/*/vex` endpoint is a call to the HOST, checked against the
+      // fingerprints above. Only the pack's own prefix is reach.
+      if (url.startsWith(own)) reach.add(normalizeReach(url));
+    }
+  }
+  for (const binding of Object.values(bundle.attachments)) {
+    const preview = typeof binding === 'string' ? '' : binding.preview;
+    if (preview.startsWith(own)) reach.add(normalizeReach(preview));
+  }
+  return [...reach].sort();
+};
+
+// Exact match, and FAIL CLOSED: a row with no reach — one written before this
+// column existed — forwards nothing. A silent widening is the failure mode worth
+// paying a re-import to avoid, and re-importing is one operator call.
+export const reachAdmits = (reach: readonly string[], path: string): boolean =>
+  reach.includes(normalizeReach(path));
 
 // ── the gate ──────────────────────────────────────────────────
 //
@@ -139,6 +193,11 @@ export type IntakeContext = {
 };
 
 const AUDIENCE = /^[a-z][a-z0-9-]*$/;
+
+// The host surface a screen calls to be handed a framed page's URL. Named once
+// here because intake admits it and the frame route serves it, and two spellings
+// of the same path is how a seam stops working for one caller.
+export const FRAME_GRANT_URL = '/api/integrations/frame';
 
 export const runIntake = (payload: unknown, ctx: IntakeContext): IntakeResult => {
   const parsed = BundleSchema.safeParse(payload);
@@ -185,7 +244,29 @@ export const runIntake = (payload: unknown, ctx: IntakeContext): IntakeResult =>
       }
       const url = ep.url ?? '';
       const own = `/integrations/${ctx.integrationId}/`;
-      if (url.startsWith(own)) continue;
+      // The one HOST surface an action may name without a fingerprint: asking
+      // for a frame grant. It reads nothing and writes nothing — it hands back
+      // a URL the pack's own page is served at — so there is no fingerprint for
+      // it to name, and the alternative is every pack inventing its own way to
+      // reach a door that already exists.
+      if (url === FRAME_GRANT_URL) continue;
+      if (url.startsWith(own)) {
+        // `/hook/` IS RESERVED. It is the one path on this server that requires
+        // no principal (server.ts, the webhook door) — a vendor calling in has
+        // no session and could not have one. An action endpoint declared there
+        // would be a screen's call riding the unauthenticated door, which is
+        // how a door meant for one thing becomes a way around everything else.
+        if (url.startsWith(`${own}hook/`)) {
+          reasons.push(`action ${id}: endpoint "${name}" is under /hook/, which is the unauthenticated webhook path`);
+        }
+        // `/frame/` is where a grant is REDEEMED — a browser GET carrying a
+        // token instead of a session. An action endpoint there would be a
+        // screen's call spending a credential meant for a document.
+        if (url.startsWith(`${own}frame/`)) {
+          reasons.push(`action ${id}: endpoint "${name}" is under /frame/, which redeems frame grants`);
+        }
+        continue;
+      }
       if (!url.startsWith('/api/')) {
         reasons.push(`action ${id}: endpoint "${name}" calls "${url}" — only ${own}* or /api/*/vex`);
         continue;
@@ -213,6 +294,18 @@ export const runIntake = (payload: unknown, ctx: IntakeContext): IntakeResult =>
     if (bundle.actions[actionId] === undefined) reasons.push(`placement ${actionId}: no such action in this bundle`);
     if (!ctx.menuSlots.has(hub)) reasons.push(`placement ${actionId}: targets "${hub}", which accepts no integrations`);
   }
+  // A FRAMED PAGE IS STILL THE PACK'S OWN GROUND. Same prefix rule as a
+  // preview, and neither reserved door: `/hook/` needs no principal and
+  // `/frame/` is where a grant is spent, so a page served at either would be
+  // reachable by something other than the grant that was minted for it.
+  const ownPrefix = `/integrations/${ctx.integrationId}/`;
+  for (const path of bundle.frames) {
+    if (!path.startsWith(ownPrefix)) {
+      reasons.push(`frame "${path}": not under this integration's own prefix`);
+    } else if (path.startsWith(`${ownPrefix}hook/`) || path.startsWith(`${ownPrefix}frame/`)) {
+      reasons.push(`frame "${path}": /hook/ and /frame/ are reserved`);
+    }
+  }
   if (bundle.settings !== '' && bundle.actions[bundle.settings] === undefined) {
     reasons.push(`settings: "${bundle.settings}" is not an action in this bundle`);
   }
@@ -223,14 +316,22 @@ export const runIntake = (payload: unknown, ctx: IntakeContext): IntakeResult =>
 // The sentence both decision screens print — the approval card and the store
 // tile say WHAT APPEARS WHERE from the same declarations, derived once here so
 // neither can drift from what intake actually accepted.
-export const describePlacements = (bundle: Bundle): string => {
+export const describePlacements = (bundle: Bundle, names: Readonly<Record<string, string>> = {}): string => {
+  // IDS ARE FOR WIRES; THIS SENTENCE IS FOR A PERSON.
+  //
+  // It is printed on the approval card and on the store tile — both read by
+  // somebody deciding whether to turn a pack on — and `hub.money` told them
+  // nothing they did not already have to guess. The host supplies the words for
+  // its own hubs and screens (`NiscApp.placementNames`); anything it has no word
+  // for falls back to the id, which is honest rather than blank.
+  const say = (id: string): string => names[id] ?? id;
   const parts: string[] = [];
   for (const [actionId, binding] of Object.entries(bundle.attachments)) {
     const host = typeof binding === 'string' ? binding : binding.to;
-    parts.push(`a "${bundle.actions[actionId]?.title ?? actionId}" panel on ${host}`);
+    parts.push(`a "${bundle.actions[actionId]?.title ?? actionId}" panel on ${say(host)}`);
   }
   for (const [actionId, hub] of Object.entries(bundle.placements)) {
-    parts.push(`"${bundle.actions[actionId]?.title ?? actionId}" under ${hub}`);
+    parts.push(`"${bundle.actions[actionId]?.title ?? actionId}" under ${say(hub)}`);
   }
   if (bundle.settings !== '') parts.push('a settings screen on its store tile');
   return parts.length === 0 ? '' : `Adds ${parts.join(' · ')}.`;
@@ -268,10 +369,22 @@ export const initIntegrations = async (pool: PgPool): Promise<void> => {
       requested_actions  jsonb NOT NULL DEFAULT '[]'::jsonb,
       requested_data     jsonb NOT NULL DEFAULT '[]'::jsonb,
       approved_data      jsonb NOT NULL DEFAULT '[]'::jsonb,
+      -- EVERY PATH THE PROXY MAY FORWARD, derived from the bundle at intake
+      -- (reachOf). Beside the grants because it is one: a grant of reach, held
+      -- by the same row, revoked by the same delete.
+      reach              jsonb NOT NULL DEFAULT '[]'::jsonb,
+      -- Pages this pack serves and the host frames. Kept apart from reach
+      -- because they are spent differently: reach is a screen's call carrying a
+      -- session, a frame is a document GET carrying a grant.
+      frames             jsonb NOT NULL DEFAULT '[]'::jsonb,
       last_import_at     timestamptz,
       last_error         text
     )
   `);
+  // The table predates these columns, and `CREATE TABLE IF NOT EXISTS` will not
+  // add them to a deployment that already has one. Fail-closed until re-import.
+  await pool.query(`ALTER TABLE integrations ADD COLUMN IF NOT EXISTS reach jsonb NOT NULL DEFAULT '[]'::jsonb`);
+  await pool.query(`ALTER TABLE integrations ADD COLUMN IF NOT EXISTS frames jsonb NOT NULL DEFAULT '[]'::jsonb`);
   await pool.query(`
     CREATE TABLE IF NOT EXISTS integration_actions (
       integration_id  text NOT NULL REFERENCES integrations(id) ON DELETE CASCADE,

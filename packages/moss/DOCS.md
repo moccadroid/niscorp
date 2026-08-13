@@ -54,6 +54,34 @@ type ShellManifest = {
 `inputs` is the app's one per-principal boot-derivation hook (nav flags, user
 chips), merged over each canvas's static seed.
 
+#### `phrases` / `phraseKeys` — the words a shell wears
+
+The language twin of `scope`. Moss renders server-side and serializes; between
+those two, every word the reader will see is present at once, so that is where a
+language is applied — one pass over the frame with
+[`@niscorp/nova/i18n`](../nova/src/i18n), source phrase in, translated phrase
+out. Nothing downstream (the socket, the delta encoder, the terminal) learns a
+language exists.
+
+```typescript
+phrases?: (principal: string | null) => Phrasebook | undefined;  // source phrase → translation
+phraseKeys?: PhraseKeys;                                         // which keys carry prose
+```
+
+- Per **principal**, because a shell is per principal. Resolved once when the
+  shell is built, so changing somebody's language is a `reset`/rebuild — exactly
+  like changing their catalog.
+- Returning `undefined` or `{}` is the **source language** and costs nothing: the
+  pass returns the same tree object and the frame serializes to the bytes it
+  always did.
+- `phraseKeys` is how an app names its own prose-bearing keys — nova's defaults
+  plus, typically, a display-field suffix (`{ suffixes: ['_display'] }`) so the
+  closed-set words a query manufactures are translatable without listing them.
+
+Moss supplies the *mechanism*; where the words come from is the app's business
+(rows, files, an API). See [`/docs/I18N.md`](../../docs/I18N.md) for the whole
+picture, including the three channels this pass deliberately does not cover.
+
 #### `FunctionSession`
 
 What the manifest's in-process functions close over:
@@ -83,12 +111,19 @@ type NiscRuntime = {
   session?: (token) => string | null | Promise<string | null>;  // defaults to devSession
   shellIdleMs?: number;            // idle shell eviction; default 30 min, `0` disables
   sessionRevalidateMs?: number;    // live-socket re-verify; default 60s, `0` disables
+  shellFrameDelta?: boolean;       // send changed canvases as deltas; default off
+  socketCompression?: boolean | Record<string, unknown>;  // permessage-deflate; default on
 };
 ```
 
 `session` is the whole of what an app writes to give its tokens a lifetime:
 return `null` for a token that has expired or been revoked. moss never learns
 what expiry means — it only asks again, on both surfaces.
+
+`shellFrameDelta` and `socketCompression` are the two wire-size knobs. They are
+environment settings, not manifest ones — an operational decision about a
+deployment, never something an application is written against. See
+[Wire size](#wire-size).
 
 #### `mintDevToken(sub, claims?) : string` / `devSession(token) : string | null`
 
@@ -109,6 +144,84 @@ with `{ socket, shells? }`.
 
 `Hono<Env> & { socket: SocketAccept; shells?: ShellHost }`. It's a Hono app —
 mount it, extend it, or hand it to a listener.
+
+### Reacting to writes
+
+Vex is the choke point every application write passes through, so its write
+observer is where a host learns about all of them. Moss subscribes once and
+splits the news down two lanes with deliberately different privileges.
+
+#### `app.reactions` — the app's lane, row-less
+
+```ts
+reactions: [
+  { table: 'notifications', op: 'insert',
+    run: ({ fingerprint, table, op, count, scope }, { deliver }) => { … } },
+  { table: 'studio_integrations', run: () => resync() },
+]
+```
+
+Interest is **declared**, not discovered: moss routes each committed statement
+to the reactions whose `table` (and optional `op`) match, so app code never
+hears about writes it did not ask for and never string-matches a fingerprint
+to work out what happened. `deliver(principal, channel, payload?)` publishes
+onto a principal's live durable shell over the socket the shells already run.
+
+Two rules hold this lane honest:
+
+- **A reaction is told THAT a write landed, never what it wrote.** No rows.
+  A receiver that wants the data re-reads it under its own policy — a row
+  handed to imperative code is a row outside every fence the stack builds,
+  and `deliver` payloads are pings for the same reason.
+- **Zero-row statements fire nothing.** An update the scope narrowed to
+  nothing, an insert a conflict clause skipped: nothing changed, so there is
+  no news. A reaction is never told about a write that did not happen.
+
+A reaction naming a table nothing writes is not an error anywhere — it simply
+never fires. Derive the names from `mutationEffect` over your own entries and
+assert them in a check.
+
+#### `app.facts` — the tide lane, rows and all
+
+```ts
+facts: {
+  tide: () => driver,                                   // the waking intake
+  identity: (scope) => `automation@${scope['studioId']}`,
+  chain: (scope, hints) => (isRobot(scope) ? hints : undefined),
+}
+```
+
+Each committed row becomes one `{ kind: 'write', entity, op, row }` fact.
+Rows travel here because tide has the fence that makes it safe: `identity`
+stamps each fact from the **write's own scope**, and tide offers a fact only
+to reflexes running under the same identity — so whose write it was decides
+who may be woken by it. Returning `undefined` mints nothing (an operator
+surface, a write with no tenant).
+
+`chain` is the causality gate. A tide effect writing back through vex names
+its chain position in `x-tide-cause` / `x-tide-depth`; this decides whether
+that caller's word is good, so the chain-depth ceiling survives the trip
+through the database. Absent = hints are always dropped, which is the safe
+default: a forged depth could park an innocent chain.
+
+#### `createTideDriver({ tide, janitorMs?, retention? }) : TideDriver`
+
+Tide reads no clocks and paces nothing; this is the thing that does.
+
+- **Wake** — `ingest` and `fire` advance the engine immediately, to
+  quiescence: a chain advances one committed hop per step, so the driver
+  loops until a step reports nothing moved. `wake()` returns the promise of
+  that drain, so a "run it now" button can await a settled world.
+- **Sleep** — after quiescence, `tide.nextDue(now)` names the next instant
+  worth waking for and one timer sleeps until exactly then, preempted by any
+  ingest. No beat, no polling for work.
+- **Janitor** — a slow fallback wake plus the retention sweep. It finds
+  nothing when nothing is broken; it exists because a durable multi-worker
+  design needs the scan that notices work committed by a process that died
+  before its own wake ran. It is how work is *recovered*, never how it moves.
+
+Hand `app.facts.tide` the **driver**, not bare tide, so a minted fact wakes
+the engine instead of waiting for somebody's beat.
 
 ### Resolution (exposed for tools)
 
@@ -173,8 +286,16 @@ mount it, extend it, or hand it to a listener.
     while every endpoint the server shell called came back 401 — a live
     interface whose every load silently fails.
 - `Connection` — the transport seam: `{ send, close, onMessage, onClose }`.
-- `ServerMessage` — `hello | catalog | frame | render | session | error`.
-- `ClientMessage` — `event | publish | reset`.
+- `ServerMessage` — `hello | catalog | frame | render | render-delta | session | error`.
+- `ClientMessage` — `event | publish | resync | reset`.
+- `render-delta` is only ever sent to a connection that advertised `?delta=1`
+  on the upgrade, and only when the server is configured for it. Everything
+  else is served whole frames, unchanged. See [Wire size](#wire-size).
+- `resync` says *this connection's copy of a canvas is not what you think it
+  is* — a delta failed its checksum, or arrived with no base. It is answered
+  with whole frames, the state both ends can always agree on. Distinct from
+  `reset`: the shell is fine, only this connection's copy drifted, so nothing
+  is torn down and no other terminal notices.
 - `reset` names no canvas, deliberately: it is the recovery for a session whose
   canvases are the broken thing, so it must not travel through one. It is
   protocol-level, not app-level — no action declares it and no charter grants
@@ -186,20 +307,90 @@ mount it, extend it, or hand it to a listener.
   `ActionSlot` is a boundary, not content — visibility is decided by what's
   inside it.
 
+### Wire size
+
+Two independent reductions, both optional, both invisible to an application.
+Neither changes a rendered tree, and an app that sets neither behaves exactly
+as it did before they existed. The reasoning and the measurements are in
+DESIGN.md § What a frame costs.
+
+#### Compression — `runtime.socketCompression`, default **on**
+
+`permessage-deflate` (RFC 7692), negotiated by the transport below the
+`Connection` seam. Nothing in moss or in an app sees it, and every browser
+understands it.
+
+```typescript
+socketCompression: true                       // the default
+socketCompression: false                      // off
+socketCompression: { threshold: 4096 }        // passed through to `ws`
+```
+
+Roughly 3–4× on render trees. The cost is memory: about **260 KB resident per
+connection** at the `ws` defaults, against about 43 KB for the shell being
+served. Turn it off — or tune `zlibDeflateOptions.memLevel` / `windowBits`
+through the object form — when connection count matters more than bandwidth.
+An object is handed to `ws` verbatim; see its `perMessageDeflate` options.
+
+#### Frame deltas — `runtime.shellFrameDelta`, default **off**
+
+A changed canvas, described against the frame that connection already holds:
+copy runs from the old frame plus literal inserts, checksummed.
+
+```typescript
+// server
+const server = await serve(app, { pool, db, shellFrameDelta: true });
+
+// terminal — both ends have to want it
+const wire = createWire({ delta: true });
+```
+
+**Both ends must opt in.** The terminal advertises `?delta=1` on the upgrade
+url; the server sends deltas only if `shellFrameDelta` is on *and* the delta is
+at most 60% of the whole frame. A terminal that never advertises — including
+every terminal built before this existed — receives whole frames forever, from
+the same shell, in the same pass. The two kinds of connection coexist.
+
+What it buys, measured on Lyra:
+
+| change | delta, as a share of the whole frame |
+| --- | --- |
+| in-place (keystroke, one row's badge) | 1–4% |
+| navigation (a genuinely different tree) | ~80% — over the threshold, so sent whole |
+
+Correctness, which matters more than the saving:
+
+- Every `render-delta` carries `hash`, a checksum of the frame it must rebuild.
+  A terminal that lands anywhere else — bad ops, missing base, a decode that
+  throws — **discards the result**, keeps the tree it was already showing, and
+  sends `resync`. It never renders a partially applied frame and never throws
+  on the connection.
+- Bases are dropped on every reconnect: attaching is served whole frames, so a
+  base carried across a reconnect is one the server never assumed.
+- A `reset` carries the capability across to the replacement shell.
+- `src/delta.ts` is the whole implementation — `encodeDelta`, `applyDelta`,
+  `frameHash` — with no dependency, small enough to read in full. A delta layer
+  that cannot be audited is a desync you cannot diagnose.
+
 ## `@niscorp/moss/node`
 
 - `serve(app, runtime & { port? }): Promise<MossServer>` — boots and listens:
   `createServer` runs inside (boot refusal included), then HTTP + the socket
   in one process. `port` defaults to 8787.
-- `attachSocket(httpServer, accept, path?)` — embed the socket on an existing
-  server (raw `ws`, `noServer`, path-matched — coexists with vite HMR). `path`
-  defaults to `/socket`.
+- `attachSocket(httpServer, accept, path?, options?)` — embed the socket on an
+  existing server (raw `ws`, `noServer`, path-matched — coexists with vite
+  HMR). `path` defaults to `/socket`. `options = { compression? }` is the same
+  value as `runtime.socketCompression` and defaults to `true`; `serve()` passes
+  the runtime's through for you, so only a host running its own listener (a
+  vite plugin, a dev check) ever needs it.
 
 ## `@niscorp/moss/client`
 
 - `createWire(config?): Wire` — the app end of the socket. `config = { url?,
-  env? }`. Plain TypeScript, no React, no globals — everything host-shaped
-  comes in as a `WireEnv`.
+  env?, delta? }`. Plain TypeScript, no React, no globals — everything
+  host-shaped comes in as a `WireEnv`. `delta` (default `false`) advertises
+  that this terminal can rebuild frame deltas; the snapshot it produces is
+  identical either way. See [Wire size](#wire-size).
 - `WireEnv` — the host seam: `{ tokens: { load, save, clear }, socket(url),
   defaultUrl() }`. The socket API is WHATWG-standard in every host (browser,
   Node ≥22, Bun); an env only constructs it.

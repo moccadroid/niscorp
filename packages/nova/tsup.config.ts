@@ -13,6 +13,7 @@ export default defineConfig([
       'adapters/tty/index': 'src/adapters/tty/index.ts',
       'adapters/tty/components/index': 'src/adapters/tty/components/index.ts',
       'agent/index': 'src/agent/index.ts',
+      'i18n/index': 'src/i18n/index.ts',
       'reflect/index': 'src/reflect/index.ts',
       'devtools/index': 'src/devtools/index.ts',
     },

@@ -1,21 +1,3 @@
-// Roles check — each rung of the ladder sees its own application.
-//
-// This exists because of a bug you could only find by looking: an instructor
-// logged in and saw the studio's headcount and its expected monthly revenue.
-// The cause was one wildcard — `home.*` granted at the member rung, which every
-// staff role extends, so the bottom of the ladder handed the owner's dashboard
-// to the whole ladder.
-//
-// It asserts on BOTH halves, because either alone is a false sense of safety:
-//
-//   ring 1 — the surface does not exist for them, so nothing renders and no
-//            endpoint fires
-//   ring 3 — the read is refused at the engine even if somebody asks for it by
-//            hand, because the verbs behind it are not in their policy
-//
-// A check that only tested the screen would pass on a hidden card, and a hidden
-// card still crossed the wire.
-//
 // Run: pnpm --filter lyra exec tsx src/dev/roles-check.ts
 import { resolveCatalog } from '@niscorp/moss';
 import { CAST } from '@lyra/db/seed';
@@ -39,19 +21,10 @@ for (const [who, email] of [['owner', OWNER], ['desk', DESK], ['instructor', INS
   ok(`${who} holds a landing surface`, held.length >= 1, held.join(', '));
 }
 
-// A member lands on THEIR screen, and an instructor no longer inherits it —
-// the two used to share `home.classes`, which meant a member opened the
-// instructor's day. Named grants at both rungs is what separates them.
 ok('a member lands on their own surface', idsFor(MEMBER).includes('home.member'));
 ok('...and not on the instructor’s day', !idsFor(MEMBER).includes('home.classes'));
 ok('an instructor still holds the day', idsFor(INSTRUCTOR).includes('home.classes'));
 
-// An instructor may ALSO hold `home.member`, and that is right rather than a
-// leak — but not by inheritance any more. Tobias trains here as well as
-// teaching, so he holds both roles, and the member one brings its own reach:
-// the card and the bookings on that screen are pinned to the caller. The direction that would be wrong is the other one, and the
-// candidate list is what settles it: `home.classes` is offered first, so an
-// instructor mounts the day and a member mounts the card.
 ok('an instructor may also see their own card', idsFor(INSTRUCTOR).includes('home.member'), 'their own row, never anybody else’s');
 
 ok('the owner holds the overview', idsFor(OWNER).includes('home.overview'));
@@ -81,30 +54,16 @@ ok('the desk sees the headcount they work with', deskTree.includes('Members'));
 ok('...but not the takings', !deskTree.toLowerCase().includes('expected monthly'));
 
 // ── ring 3: the engine refuses, screen or no screen ──
-//
-// The half that matters. Removing a card from a layout removes a card; this is
-// what makes the answer unavailable to a person with a terminal and an hour.
 const deskRevenue = await read(DESK, 'studio', 'studio/revenue/expected');
 ok('the desk asking for revenue by hand is refused', refused(deskRevenue), JSON.stringify(deskRevenue));
 
 const ownerRevenue = await read(OWNER, 'studio', 'studio/revenue/expected');
 ok('the owner is not — so the refusal is the policy, not a broken query', !refused(ownerRevenue), JSON.stringify(ownerRevenue));
 
-// THE INSTRUCTOR IS NOT REFUSED, and that is not a leak — it is where the
-// boundary sits for somebody who ALSO trains here.
-//
-// He is refused as an instructor: that rung has no `subscriptions.read`. He is
-// answered as a member, because a membership card is a join over subscriptions
-// and plans, and a member may see their own bill. So the figure comes back —
-// and it must be his, never the studio's. Asserting a refusal here would be
-// asserting that a teacher who trains stops being a member, which is the exact
-// flattening this was all about. See `multirole-check`.
 const instructorRevenue = await read(INSTRUCTOR, 'studio', 'studio/revenue/expected');
 ok('an instructor who trains here gets a figure — his own', !refused(instructorRevenue), JSON.stringify(instructorRevenue));
 ok("...and it is NOT the studio's takings", JSON.stringify(instructorRevenue) !== JSON.stringify(ownerRevenue), `his ${JSON.stringify(instructorRevenue)} against the studio's ${JSON.stringify(ownerRevenue)}`);
 
-// The member's own floor, re-asserted here so a future grant cannot quietly
-// undo it without this check going red.
 const memberRoll = await read(MEMBER, 'member', 'members/list', { statuses: ['active'], q: '%' });
 ok('a member still cannot read the roll', refused(memberRoll));
 

@@ -340,7 +340,28 @@ export const createQueryEngine = (engineConfig: QueryEngineConfig): QueryEngine 
       // row (`$.result` is that row — a detail/aggregate reads `$.result.field`,
       // no `[0]`). Vex never forces an array: the mapping owns the shape.
       const single = !Array.isArray(validRequest.shape);
-      const source = { result: single ? (rows[0] ?? null) : rows } as unknown as JsonObject;
+      // `$.result` is the rows, and it is what every mapping was written
+      // against. `$.context` and `$.scope` sit BESIDE it — additive, so nothing
+      // authored before this line changes meaning.
+      //
+      // WHY A MAPPING NEEDS THE SCOPE. A mapping is where a row becomes words
+      // ("Active", "Fri 14 Mar", "€45"), and words have a language. Without
+      // this, the deepest layer of an application's display strings is the one
+      // layer that structurally cannot be localised — and the only escape is to
+      // stop mapping in vex and re-derive the same fields somewhere further out,
+      // which is worse in every direction.
+      //
+      // Scope values are ENGINE-side (moss injects them per session; a request
+      // cannot author one), so reading them here does not widen what a caller
+      // can reach — it widens what the app can say about a caller it already
+      // knows. Note this does not touch the cache: vex caches the query PLAN
+      // (`dsl` + `prismIr`), never the rows, and the compiled IR holds the
+      // lookup rather than the looked-up value.
+      const source = {
+        result: single ? (rows[0] ?? null) : rows,
+        context,
+        scope,
+      } as unknown as JsonObject;
       if (cachedIr !== undefined) {
         const mapStart = Date.now();
         result = executePrism(cachedIr, source);

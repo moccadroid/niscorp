@@ -1,6 +1,7 @@
 import type { ScopeBehaviors, ScopePolicy, SeedEntry, SeedMutation } from '@niscorp/vex';
 import type { Charter } from '@niscorp/charter';
 import type { ActionDefinition, ActionFragment, CanvasConfig, FetchFn, FunctionHandler, LayoutNode, Shell } from '@niscorp/nova';
+import type { PhraseKeys, Phrasebook } from '@niscorp/nova/i18n';
 import type { NiscRuntime } from './runtime';
 
 // ═══════════════════════════════════════════════════════════════
@@ -46,6 +47,27 @@ export type NiscApp = {
   // so the app supplies it. Values are injected server-side and are
   // unreferenceable by a request — the enforcement is engine-side and unforgeable.
   scope?: (principal: string | null) => Record<string, unknown>;
+  // THE WORDS THIS PRINCIPAL'S SHELL WEARS — the language twin of `scope`.
+  //
+  // Moss renders a shell server-side and serializes its trees. Between those
+  // two, every word the reader will see is present at once, so that is where a
+  // language is applied: one pass over the frame (`@niscorp/nova/i18n`), source
+  // phrase in, translated phrase out. Nothing downstream — the socket, the
+  // delta encoder, the terminal — learns that a language exists.
+  //
+  // Returning undefined or an empty book is the SOURCE language, and costs
+  // nothing: the pass returns the same tree object and the frame serializes to
+  // the bytes it always did.
+  //
+  // Per PRINCIPAL, because a shell is per principal. Two people at the same
+  // tenant reading different languages get two shells, which they already had.
+  // Resolved once when the shell is built — a change to a principal's language
+  // is a `reset`/rebuild, exactly like a change to their catalog.
+  phrases?: (principal: string | null) => Phrasebook | undefined;
+  // Which keys in a tree carry prose. An app with its own display-field
+  // convention (`status_display`) declares it once here. Absent = nova's
+  // default prop set and no suffix rule.
+  phraseKeys?: PhraseKeys;
   // WHICH INTEGRATIONS ARE LIVE FOR THIS PRINCIPAL'S TENANT.
   //
   // The charter grants `ext.desk.*` once, to every desk in the deployment. In a
@@ -89,6 +111,10 @@ export type NiscApp = {
   // screens. Who owns a menu is the host's question; this list is its answer,
   // and intake refuses a placement outside it.
   menuSlots?: readonly string[];
+  // WORDS FOR THE IDS ABOVE, for the one sentence a person reads before
+  // turning a pack on. Optional: without it the approval card and store tile
+  // print ids, which is honest and unhelpful.
+  placementNames?: Readonly<Record<string, string>>;
   // the prewarmed API surface — every read and write the app serves, as
   // authored entries; seeded into the cache at boot (idempotent, protected).
   // Optional because a database may already carry its vex_cache rows.
@@ -126,7 +152,62 @@ export type NiscApp = {
   // agent's behaviour; an app that wants that can write five lines. Unset means
   // unrecorded, which is at least honest.
   runs?: RunSink;
+  // A WRITE LANDED, and the app declared its interest in advance. Each
+  // reaction names the table (and optionally the op) it cares about; moss
+  // routes vex's write observer to the reactions whose interest matches,
+  // once per matching statement — so app code never hears about writes it
+  // did not declare, and never string-matches fingerprints to find out what
+  // happened. `deliver` publishes onto a principal's live durable shell over
+  // the socket the shells already run — push built on the transport this
+  // server owns, never a second one.
+  //
+  // Deliberately row-less: a reaction hears THAT a write landed (table, op,
+  // how many rows, the unforgeable scope), never what it wrote. A receiver
+  // that wants the data re-reads it under its own policy — rows handed to
+  // imperative code would be rows outside every fence this stack builds.
+  // Zero-row statements (a scope-narrowed update, a conflict-skipped
+  // insert) fire no reaction: nothing changed, so there is no news.
+  reactions?: readonly {
+    table: string;
+    op?: 'insert' | 'update' | 'delete';
+    run: (
+      event: { fingerprint: string; table: string; op: 'insert' | 'update' | 'delete'; count: number; scope: Record<string, unknown> },
+      tools: { deliver: (principal: string, channel: string, payload?: unknown) => boolean },
+    ) => void;
+  }[];
+  // The write-fact bridge. Vex is the choke point every write passes
+  // through; when an app runs tide, each committed statement is minted into
+  // it as a `{ kind: 'write' }` fact — entity, op, and the row the database
+  // returned — stamped with the identity `identity(scope)` names. That
+  // identity is the fact's tenancy fence: tide offers a fact only to
+  // reflexes running AS the same identity, so whose write it was decides
+  // who may be woken by it. Returning undefined mints nothing for that
+  // write (an operator surface, a write with no tenant). `tide` is a
+  // getter because the instance stands up after the server does.
+  //
+  // Rows travel HERE and into tide's ledger only — host plumbing on one
+  // side, the identity fence on the other. They never reach `onMutation`.
+  //
+  // The intake is structural — hand back the tide DRIVER, so a minted fact
+  // wakes the engine instead of waiting for anybody's beat.
+  facts?: {
+    tide: () => FactIntake | undefined;
+    identity: (scope: Record<string, unknown>) => string | undefined;
+    // The causality gate. A tide effect that writes back through vex
+    // forwards its chain position as request headers (`x-tide-cause`,
+    // `x-tide-depth`); this decides whether THAT CALLER's word is good —
+    // return the hints to accept them onto the minted facts, undefined to
+    // drop them. Absent = hints are always dropped, which is the safe
+    // default: a forged depth could park an innocent chain, and a forged
+    // cause is fabricated provenance. An app grants this to exactly the
+    // principals that ARE its automation rungs.
+    chain?: (scope: Record<string, unknown>, hints: { cause: string; depth: number }) => { cause: string; depth: number } | undefined;
+  };
 };
+
+// The one verb the bridge needs. Both `Tide` and `TideDriver` satisfy it;
+// hand out the driver unless you have a reason to want facts that wait.
+export type FactIntake = Pick<import('@niscorp/tide').Tide, 'ingest'>;
 
 // One turn of an exchange with a model, in order. Provider-blind and
 // library-blind on purpose: moss depends on neither an LLM client nor an agent

@@ -1,33 +1,11 @@
 import type { CacheEntry, MutationEntry } from './index';
 
-// SIGNING SOMEBODY UP — the one write that creates two rows in two tables and
-// has to link them.
-//
-// The grammar cannot do it alone, and it is worth being exact about why: values
-// are literals or `$context`, so a mutation can neither generate a key nor read
-// back one the database generated. Insert a person and the membership that must
-// point at them has nothing to point with.
-//
-// The escape hatch D4 offers is a plain endpoint handler — an fn that opens the
-// database and writes both rows. That works and gives up something real: the
-// engine stops being the thing that enforces tenancy, and the fn's own care
-// becomes the boundary.
-//
-// So the fn does LESS than that. It mints an id and calls these two entries
-// over the session's own wire (server/functions/members.ts). The statements
-// stay authored and server-side, the scope policy still applies to both, and
-// the fn's entire contribution is a UUID and an order. Nothing about the
-// tenancy guarantee moves.
-
 export const personCreate: MutationEntry = {
   fingerprint: 'people/create',
   intent: 'Create a person — a human, not yet anybody at a studio',
   mutation: {
     op: 'insert',
     table: 'people',
-    // The id IS supplied here, unlike everywhere else in this schema, because
-    // the caller needs to know it to write the membership. It is minted
-    // server-side by the fn, never by a browser.
     values: {
       id: { $context: 'personId' },
       email: { $context: 'email' },
@@ -37,32 +15,68 @@ export const personCreate: MutationEntry = {
   },
 };
 
-// The membership. `studio_id` is absent because the engine stamps it, and
-// `joined_on` is absent because the database dates it — so a desk signing
-// somebody up supplies a name, an email and nothing else that could be wrong.
-export const membershipCreate: MutationEntry = {
-  fingerprint: 'memberships/create',
-  intent: 'Give a person a membership at this studio',
+export const studioPersonCreate: MutationEntry = {
+  fingerprint: 'people/add',
+  intent: 'Record that this studio knows a person — the anchor every relationship hangs off',
   mutation: {
     op: 'insert',
-    table: 'memberships',
+    table: 'studio_people',
     values: {
-      id: { $context: 'membershipId' },
+      id: { $context: 'studioPersonId' },
       person_id: { $context: 'personId' },
-      // AN ENQUIRY IS THIS INSERT WITH ONE DIFFERENT WORD. `status: 'enquired'`
-      // records somebody who asked; `'trialling'` records somebody who signed.
-      // There is no second create path, which is what makes a conversion an
-      // update rather than a retype.
-      status: { $context: 'status' },
+      // No status, deliberately. A prospect is this row holding nothing; a
+      // member is this row plus a subscription; the milkman is this row plus a
+      // contact tag. What they ARE is derived, never written. See standing.ts.
+      //
+      // A trial is a DATE, not a status: NULL means none, a date means the
+      // free window closes on its own.
+      trial_ends_on: { $context: 'trialEndsOn' },
       source: { $context: 'source' },
       notes: { $context: 'notes' },
     },
   },
 };
 
-// Somebody who already exists — a former member coming back, or a person who
-// trains at one studio and teaches at another once cross-studio identity lands.
-// Looked up by the address they would sign in with.
+// ── the whole signup, as ONE artifact ────────────────────────
+//
+// This used to be a server function: look the person up by email, mint ids,
+// insert `people` only if absent, insert the anchor, translate the duplicate-
+// key error. Every step existed because the grammar couldn't say it — and now
+// it can. Statement 1 ensures the person (ON CONFLICT on the email identity —
+// DO NOTHING, because statement 2 finds them by $lookup either way, fresh or
+// returning). Statement 2 writes the anchor, idempotently: someone already on
+// the roll conflicts on (studio_id, person_id) and returns no row — signing
+// up an existing member is a no-op, not an error. Ids are DB-minted,
+// `first_seen_on` is stamped by the studio-clock trigger, and the tenant
+// column is pinned by scope. The reply says what happened by its row count:
+// two rows = new person enrolled, one = known person enrolled (or fresh
+// person already anchored — impossible), zero = already on the roll.
+export const peopleEnroll: MutationEntry = {
+  fingerprint: 'people/enroll',
+  intent: 'Write a person down: ensure the human exists, then anchor them to this studio',
+  mutation: [
+    {
+      op: 'insert',
+      table: 'people',
+      values: { email: { $context: 'email' }, name: { $context: 'name' }, phone: { $context: 'phone' } },
+      onConflict: { target: ['email'] },
+    },
+    {
+      op: 'insert',
+      table: 'studio_people',
+      values: {
+        person_id: { $lookup: { from: 'people', field: 'id', where: { eq: ['people.email', { $context: 'email' }] } } },
+        trial_ends_on: { $context: 'trialEndsOn' },
+        source: { $context: 'source' },
+        notes: { $context: 'notes' },
+      },
+      onConflict: { target: ['studio_id', 'person_id'] },
+    },
+  ],
+};
+
+// Somebody who already exists — a former member coming back — looked up by the
+// address they would sign in with.
 export const personByEmail: CacheEntry = {
   fingerprint: 'people/byEmail',
   intent: 'Find a person by the email they sign in with',

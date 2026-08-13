@@ -4,6 +4,7 @@ import type { QueryEngine } from '../../types.js';
 import type { ScopePolicy, ScopeValues } from '../../scope/scope.types.js';
 import type { MutationClient } from '../../mutations/engine.js';
 import { handleDiscovery, handleQuery, handleFingerprintPatch, handleFingerprintDelete } from '../../handler.js';
+import type { WriteEvent } from '../../handler.js';
 
 // Generic over the hono Env so a host that mounts this under its own app
 // (with typed context variables — e.g. the resolved principal) reads them
@@ -26,9 +27,12 @@ export type VexHonoConfig<E extends Env = Env> = {
   // Enables replay of `kind: 'mutation'` cache entries on this endpoint.
   // `policy` is the static fallback when `getPolicy` is absent; at least
   // one of the two must supply a policy for writes to run.
+  // `onWrite` is the handler's write observer, passed through verbatim —
+  // fired after a successful commit with per-statement writes and scope.
   mutations?: {
     client: MutationClient;
     policy?: ScopePolicy;
+    onWrite?: (event: WriteEvent) => void;
   };
 };
 
@@ -56,7 +60,13 @@ export const vex = <E extends Env = Env>(config: VexHonoConfig<E>): Hono<E> => {
         ? { policyForReach: (reach: string) => config.getPolicyForReach?.(c, reach) }
         : {}),
       ...(config.mutations !== undefined && mutationPolicy !== undefined
-        ? { mutations: { client: config.mutations.client, policy: mutationPolicy } }
+        ? {
+            mutations: {
+              client: config.mutations.client,
+              policy: mutationPolicy,
+              ...(config.mutations.onWrite !== undefined ? { onWrite: config.mutations.onWrite } : {}),
+            },
+          }
         : {}),
     };
   };

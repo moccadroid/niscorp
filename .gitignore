@@ -10,3 +10,6 @@ coverage/
 .DS_Store
 
 .VSCodeCounter/
+
+# Per-machine agent settings. `.claude/launch.json` is project config and IS tracked.
+.claude/settings.local.json

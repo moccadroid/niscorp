@@ -5,11 +5,6 @@ import { COLOR, SIZE, WEIGHT } from '../lib/tokens';
 import { cx } from '../lib/cx';
 import { Icon } from './display';
 
-// Everything that emits. A control never receives a callback — it dispatches
-// `ui:click` with its own `novaRef`, and the action's triggers decide what that
-// means. `value` becomes the event payload, which is how one ref inside a loop
-// serves a whole list.
-
 const ButtonProps = z
   .object({
     variant: z.enum(['solid', 'accent', 'ghost', 'outline', 'danger']).optional(),
@@ -18,20 +13,48 @@ const ButtonProps = z
     label: z.string().optional().describe('Accessible name; also the visible text when there are no children'),
     value: z.unknown().optional().describe('Carried as the click payload — how one ref serves every row of a list'),
     full: z.boolean().optional(),
+    href: z.string().optional().describe('When set, this is a LINK styled as a button — it navigates rather than dispatching. For sending somebody OUT of the app (a payment page, a provider’s onboarding). Opens in a new tab.'),
   })
   .strict();
 
 type ButtonP = z.infer<typeof ButtonProps> & { novaRef?: string; children?: React.ReactNode };
 
-export const Button: NovaComponent<z.infer<typeof ButtonProps>> = ({ variant = 'solid', big, disabled, label, value, full, novaRef, children }: ButtonP) => {
+export const Button: NovaComponent<z.infer<typeof ButtonProps>> = ({ variant = 'solid', big, disabled, label, value, full, href, novaRef, children }: ButtonP) => {
   const dispatch = useNovaDispatch();
+  const className = cx('ly-btn', `ly-btn--${variant}`, big === true && 'ly-btn--big');
+  const style = full === true ? { width: '100%' } : undefined;
+
+  // A LINK THAT LOOKS LIKE A BUTTON. Set `href` and this navigates instead of
+  // dispatching — the only honest way to send somebody OUT of the app, to a
+  // payment page or a provider's onboarding, where a dispatched click could
+  // never take them. Silently ignoring `href` on a plain button (as this did)
+  // renders a dead control on exactly the screen where "continue" matters most.
+  //
+  // New tab, and `noopener` — an external page must not get a handle back to the
+  // window that opened it.
+  if (href !== undefined && href !== '') {
+    return (
+      <a
+        href={disabled === true ? undefined : href}
+        target="_blank"
+        rel="noopener noreferrer"
+        {...(label === undefined ? {} : { 'aria-label': label })}
+        className={cx(className, disabled === true && 'ly-btn--disabled')}
+        style={style}
+        role="button"
+      >
+        {children ?? label}
+      </a>
+    );
+  }
+
   return (
     <button
       type="button"
       disabled={disabled === true}
       {...(label === undefined ? {} : { 'aria-label': label })}
-      className={cx('ly-btn', `ly-btn--${variant}`, big === true && 'ly-btn--big')}
-      style={full === true ? { width: '100%' } : undefined}
+      className={className}
+      style={style}
       onClick={() => {
         if (disabled !== true && novaRef !== undefined) dispatch({ type: 'ui:click', ref: novaRef, payload: value });
       }}
@@ -40,46 +63,17 @@ export const Button: NovaComponent<z.infer<typeof ButtonProps>> = ({ variant = '
     </button>
   );
 };
-Button.meta = { description: 'A button. `solid` is ink; `accent` is the neon and should appear about once a screen.', propsSchema: ButtonProps };
+Button.meta = { description: 'A button. `solid` is ink; `accent` is the neon and should appear about once a screen. With `href` it is a link styled as a button — for sending somebody out of the app.', propsSchema: ButtonProps };
 
-// TWO LOOKS, BECAUSE THEY ARE TWO THINGS.
-//
-//   `segment` — a FILTER. Which slice of the same screen you are looking at:
-//   Current or Everyone, Calendar or List. It is a control, it sits in the
-//   content, and it looks like a control: pills in a sunk tray.
-//
-//   `underline` — NAVIGATION. Which screen of this area you are on. It is not
-//   a control and must not look like one, which is exactly what went wrong
-//   when the area row shipped as a pill tray: it read as a filter on the
-//   screen below it rather than as the way to the two screens beside it.
-//
-// Both emit the same event, so the difference is entirely what a person is
-// being told they are about to change.
 const TabsProps = z
   .object({
     value: z.string().optional(),
     look: z.enum(['segment', 'underline']).optional(),
-    // `.passthrough()` — AN OPTION CARRIES ITS OWN PARAMETER.
-    //
-    // A tab dispatches its whole option, not just the chosen string, which is
-    // what makes one ref serve a filter whose slices take different arguments:
-    // `{ value: 'everyone', label: 'Everyone', statuses: [...] }` sets the
-    // parameter from the option itself. Without it, "Current" and "Everyone"
-    // had to be two buttons with two triggers, because the trigger grammar has
-    // no conditional and there was nowhere else for the difference to live.
-    //
-    // Same trick as `Rows` (one ref, every row) and `RolePicker` (the choice
-    // arrives with its subject). The grammar's answer to branching is always
-    // to put the difference in the payload.
     options: z.array(z.object({ value: z.string(), label: z.string() }).passthrough()),
   })
   .strict();
 type TabsP = Partial<z.infer<typeof TabsProps>> & { novaRef?: string };
 
-// IT SCROLLS RATHER THAN WRAPS. Four segments of two words apiece overflow a
-// 375px screen, and a segmented control that has wrapped onto two lines has
-// stopped being one control. Sideways is the behaviour every native tab strip
-// has; the buttons refuse to shrink so the words never break.
 export const Tabs: NovaComponent<Partial<z.infer<typeof TabsProps>>> = ({ value, look = 'segment', options, novaRef }: TabsP) => {
   const dispatch = useNovaDispatch();
   const line = look === 'underline';
@@ -151,21 +145,6 @@ export const NavItem: NovaComponent<Partial<z.infer<typeof NavItemProps>>> = ({ 
 };
 NavItem.meta = { description: 'One entry in a navigation list. Active is a served fact, never a role check.', propsSchema: NavItemProps };
 
-// A destination in the tab bar.
-//
-// Separate from `NavItem` because it is a different thing: a nav item is a link
-// in a list, a tab is one of five places the application can be. The dot is the
-// only ornament, and it is what tells a thumb where it already is.
-// `current` rather than `active`: the comparison happens HERE, because a layout
-// cannot compare two values and a tab bar whose highlight lagged a tap by a
-// round trip would feel broken on a phone. Same trick `Tabs` uses.
-//
-// WHAT IT IS AND WHERE IT GOES ARE TWO VALUES. A tab lights when its `value`
-// matches `current` — and an AREA's identity is not the screen it opens: People
-// lights as `hub.people` and navigates to `people.list`. Collapsing them meant
-// either the highlight never matched or the tap opened a hub screen that no
-// longer exists. `payload` carries the destination; `value` carries the
-// identity; when a tab is its own destination they are simply the same string.
 const TabProps = z.object({ label: z.string(), value: z.string(), current: z.string().optional(), icon: z.string().optional(), payload: z.unknown().optional() }).strict();
 type TabP = Partial<z.infer<typeof TabProps>> & { novaRef?: string };
 
@@ -191,20 +170,6 @@ export const Tab: NovaComponent<Partial<z.infer<typeof TabProps>>> = ({ label, v
 };
 Tab.meta = { description: 'One destination in the tab bar. Five at most — a sixth is a sign the grouping is wrong.', propsSchema: TabProps };
 
-
-// A ROLE PICKER — one control per person, not four buttons.
-//
-// Four buttons was a bad call and the screenshot showed why: they overflowed
-// their row, wrapped, and turned a list of people into a wall of forty words.
-// The argument for them was "a permission change buried in a select is one
-// nobody reviews" — which stopped being true the moment the change grew a
-// confirmation step. With a confirm, a select is simply the better control:
-// one per row, showing the CURRENT role, and no wrapping at any width.
-//
-// It is not the generic `Select`, and the reason is identity: `Select` emits a
-// value and nothing else, so a list of them cannot say WHICH person changed.
-// This one carries its row's context back with the choice, which is what lets
-// one trigger serve every row.
 const RolePickerProps = z
   .object({
     value: z.string().optional(),
@@ -236,20 +201,6 @@ export const RolePicker: NovaComponent<Partial<z.infer<typeof RolePickerProps>>>
 };
 RolePicker.meta = { description: 'Pick somebody’s role. Carries its row back with the choice, so one trigger serves a whole list.', propsSchema: RolePickerProps };
 
-
-// A DAY, ON OR OFF — the control every calendar in the world uses.
-//
-// This started as `Switch`, which was wrong twice. A switch is for one thing
-// being on or off ("email me"), not for picking several out of a set; and
-// Lyra's Switch keeps its label in `aria-label` only, so seven of them in a row
-// rendered as seven anonymous toggles. Nothing on screen said which one was
-// Monday.
-//
-// A day picker is a row of labelled pills, filled when chosen. It fits on a
-// phone, it says what it is, and the whole week reads at a glance.
-//
-// It keeps `Switch`'s dispatch contract — `ui:click` carrying `{ next }` — so
-// the triggers that already set each day did not have to change.
 const DayToggleProps = z.object({ label: z.string(), value: z.boolean().optional() }).strict();
 type DayToggleP = Partial<z.infer<typeof DayToggleProps>> & { novaRef?: string; novaModel?: { ref?: string } };
 

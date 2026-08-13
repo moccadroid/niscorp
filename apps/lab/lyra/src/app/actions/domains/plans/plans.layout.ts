@@ -6,20 +6,13 @@ const page = (children: LayoutNode | LayoutNode[]): LayoutNode => ({
   children,
 });
 
-// THE PRICE LIST.
-//
-// The one screen in this application where nothing is deleted. A plan with
-// subscribers is a promise somebody is still paying against, so the only way
-// off the list is `active = false` — which stops it being offered and leaves
-// everybody on it exactly where they were. That is why the row action reads
-// "Retire" and why retired plans stay visible, greyed rather than gone.
 export const plansLayout: LayoutNode = page([
   {
     component: 'Row',
     props: { justify: 'between', align: 'center', wrap: true, gap: 12 },
     children: [
-      { component: 'Hero', props: { title: 'Plans', lead: 'What this studio sells. Retiring a plan keeps everybody already on it.' } },
-      { component: 'Button', props: { variant: 'solid', label: 'Add a plan' }, ref: 'add' },
+      { component: 'Hero', props: { title: 'Pricing', lead: 'Everything this studio sells — plans and passes. Retiring one keeps everybody already on it.' } },
+      { component: 'Button', props: { variant: 'solid', label: 'Add' }, ref: 'add' },
     ],
   },
 
@@ -33,13 +26,19 @@ export const plansLayout: LayoutNode = page([
       props: {
         rows: '$.plans',
         loading: '$.loading',
-        rowKey: 'plan_id',
+        rowKey: 'offering_id',
         onRowRef: 'edit',
-        empty: 'No plans yet. Add one and it becomes sellable immediately.',
+        empty: 'Nothing on sale yet. Add a plan or a pass and it becomes sellable immediately.',
+        // A sortable header names the COLUMN, not the row key — the value is
+        // sent as `sortBy` and resolved against the entry's own schema.
+        sortKey: '$.sortBy',
+        sortDir: '$.sortDir',
+        onSortRef: 'sort',
         columns: [
-          { label: 'Plan', w: 2, cell: { kind: 'primary', key: 'name', subKey: 'allowance_display' } },
-          { label: 'Price', px: 120, align: 'right', cell: { kind: 'text', key: 'price_display', color: 'ink' } },
-          { label: 'Billed', px: 96, cell: { kind: 'text', key: 'interval_display' } },
+          { label: 'On sale', w: 2, sortable: 'offerings.name', cell: { kind: 'primary', key: 'name', subKey: 'allowance_display' } },
+          { label: 'Price', px: 120, align: 'right', sortable: 'offerings.price_cents', cell: { kind: 'text', key: 'price_display', color: 'ink' } },
+          { label: 'Billed', px: 96, sortable: 'offerings.interval', cell: { kind: 'text', key: 'interval_display' } },
+          { label: 'Terms', px: 150, cell: { kind: 'text', key: 'term_display', color: 'mute' } },
           { label: '', px: 104, align: 'right', cell: { kind: 'badge', key: 'state_label', toneKey: 'state_tone' } },
         ],
       },

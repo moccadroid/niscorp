@@ -10,6 +10,7 @@ const defaultForType = (type: ParamSlot['type']): unknown => {
   if (type === 'boolean') return false;
   if (type === 'string[]') return [''];
   if (type === 'number[]') return [0];
+  if (type === 'json') return [];
   return '';
 };
 

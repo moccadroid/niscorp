@@ -26,20 +26,6 @@ export const templatesList: CacheEntry = {
   intent: "This studio's weekly class grid, with program and instructor",
   shape: [{ template_id: '', name: '', program_name: '', program_tone: '', weekday_display: '', starts_at: '', capacity: 0, instructor_name: '', active: false, course_id: '', is_course: false, runs_display: '', price_display: '', places_display: '' }],
   dsl: {
-    // NO join to people, and the reason is a real limitation worth naming.
-    // `instructor_id` is nullable so vex LEFT-joins staff — but `staff.person_id`
-    // is NOT NULL, so people INNER-joins to staff, and the chain drops every
-    // slot with no teacher. That is exactly the row a manager is hunting for.
-    //
-    // The name is denormalised onto the row instead, kept true by a trigger
-    // (schema.ts). Joining it afterwards in the action was the other candidate
-    // and does not work: a trigger's `set` resolves bindings but never
-    // evaluates Prism ops.
-    // A COURSE IS NOT A SECOND KIND OF SCHEDULE, so this does not need a
-    // second read. `course_id` is NULLABLE, which makes vex LEFT-join it — an
-    // ongoing slot keeps its row with the course columns empty, and that
-    // emptiness IS the difference between the two. Two screens listing the same
-    // table with different filters is what made them look unrelated.
     from: ['class_templates', 'programs', 'courses'],
     fields: [
       { field: 'class_templates.id', as: 'template_id' },
@@ -58,19 +44,9 @@ export const templatesList: CacheEntry = {
       'class_templates.starts_on',
       'class_templates.ends_on',
       { field: 'courses.price_cents', as: 'course_price' },
-      // HOW FULL THE BLOCK IS. It rode on the Courses screen, which is gone —
-      // and going with it left the merged list able to say a course exists and
-      // what it costs but not whether anybody had bought it, which is the one
-      // number a manager scans the list for. NULL on an ongoing slot, because
-      // only a block has a cohort.
+      { field: 'courses.currency', as: 'course_currency' },
       { field: 'courses.enrolled_count', as: 'course_enrolled' },
     ],
-    // GROUPED BEFORE ORDERED, because the screen groups on what a row RUNS as
-    // — every-week slots together, each dated block under its own dates. A
-    // list groups by breaking where a value changes, so an unsorted one
-    // interleaves: "Every week / Thu 13 Aug / Every week" down the page. The
-    // grouping is a rendering decision and the ORDER is a query decision, and
-    // this is the query keeping its half of that bargain.
     sort: [
       { field: 'class_templates.course_id', dir: 'asc' },
       { field: 'class_templates.weekday', dir: 'asc' },
@@ -93,9 +69,6 @@ export const templatesList: CacheEntry = {
         duration_mins: row('duration_mins'),
         capacity: row('capacity'),
         instructor_id: { $coalesce: [row('instructor_id'), ''] },
-        // Read straight off the row. A slot nobody teaches says "Unassigned",
-        // which is the column's own default — a state a manager needs to see,
-        // not a blank cell they have to interpret.
         instructor_name: row('instructor_name'),
         active: row('active'),
         // WHAT KIND OF THING THIS IS, in the row rather than in which screen
@@ -121,7 +94,7 @@ export const templatesList: CacheEntry = {
             else: 'Every week',
           },
         },
-        price_display: { $case: { branches: [{ when: row('course_id'), then: priceText(row('course_price')) }], else: '' } },
+        price_display: { $case: { branches: [{ when: row('course_id'), then: priceText(row('course_price'), row('course_currency')) }], else: '' } },
         state_label: { $case: { branches: [{ when: row('active'), then: 'On' }], else: 'Retired' } },
         state_tone: { $case: { branches: [{ when: row('active'), then: 'good' }], else: 'neutral' } },
       },
@@ -168,9 +141,6 @@ export const templateById: CacheEntry = {
   },
 };
 
-// Who can be put in front of a class. Instructors, managers and owners teach;
-// the front desk does not. That is a studio fact rather than a permission one,
-// which is why it is a filter here and not a charter grant.
 export const teachersList: CacheEntry = {
   fingerprint: 'staff/teachers',
   intent: 'Staff at this studio who can be assigned to a class',
@@ -198,10 +168,6 @@ export const teachersList: CacheEntry = {
 };
 
 // ─── writes ──────────────────────────────────────────────────
-//
-// Every authored table mints its own keys: the grammar sets literals and
-//  values and cannot generate or read back an id, so a database
-// default is the only place a primary key can honestly come from.
 
 export const templateCreate: MutationEntry = {
   fingerprint: 'templates/create',
@@ -209,9 +175,6 @@ export const templateCreate: MutationEntry = {
   mutation: {
     op: 'insert',
     table: 'class_templates',
-    // No id — the column defaults to `gen_random_uuid()`. Every authored table
-    // in this schema mints its own keys now: the grammar cannot generate one,
-    // and a client-invented primary key is a collision waiting to happen.
     values: {
       program_id: { $context: 'programId' },
       name: { $context: 'name' },
@@ -220,12 +183,32 @@ export const templateCreate: MutationEntry = {
       duration_mins: { $context: 'durationMins' },
       capacity: { $context: 'capacity' },
       instructor_id: { $context: 'instructorId' },
-      // A SLOT CAN BELONG TO A COURSE.
-      //
-      // These three are what make a bounded block possible: the course it is
-      // part of, and the window session generation is allowed to fill. Without
-      // them a course had dates and no classes — it told you the block ran for
-      // three weeks and never said when to turn up.
+      course_id: { $context: 'courseId' },
+      starts_on: { $context: 'startsOn' },
+      ends_on: { $context: 'endsOn' },
+    },
+  },
+};
+
+// One statement for however many days a course meets on — `slots` is an array
+// of `{ weekday }` objects and every other column is constant across rows.
+// This is the loop that used to live in a server function, now authored:
+// `INSERT … SELECT … FROM jsonb_array_elements($slots)`.
+export const templatesCreateEach: MutationEntry = {
+  fingerprint: 'templates/createEach',
+  intent: 'Add a weekly class slot for each chosen day — a course’s whole meeting pattern in one write',
+  mutation: {
+    op: 'insertEach',
+    table: 'class_templates',
+    items: { $context: 'slots' },
+    values: {
+      weekday: { $item: 'weekday' },
+      program_id: { $context: 'programId' },
+      name: { $context: 'name' },
+      starts_at: { $context: 'startsAt' },
+      duration_mins: { $context: 'durationMins' },
+      capacity: { $context: 'capacity' },
+      instructor_id: { $context: 'instructorId' },
       course_id: { $context: 'courseId' },
       starts_on: { $context: 'startsOn' },
       ends_on: { $context: 'endsOn' },
@@ -252,27 +235,21 @@ export const templateUpdate: MutationEntry = {
   },
 };
 
-// Retiring a slot, not deleting it. Sessions already generated from it keep
-// their rows and their bookings — a studio that drops Tuesday next term still
-// has last term's attendance.
-export const templateRetire: MutationEntry = {
-  fingerprint: 'templates/retire',
-  intent: 'Take a weekly slot out of the grid, keeping its history',
+// RETIRE AND RESTORE ARE ONE VERB. They were two entries writing `false` and
+// `true` into the same column of the same row — the flag is the only thing
+// that differed, so the flag is the argument.
+//
+// This gives up nothing. A boolean column bounds the value completely (there
+// is no third thing to write), and charter grants are table.operation
+// (`class_templates.write.update`), so both fingerprints already sat behind
+// one identical permission — splitting them never bought a narrower grant.
+export const templateSetActive: MutationEntry = {
+  fingerprint: 'templates/set-active',
+  intent: 'Take a weekly slot out of the grid, or put it back — its history is kept either way',
   mutation: {
     op: 'update',
     table: 'class_templates',
-    set: { active: false },
-    where: { eq: ['class_templates.id', { $context: 'templateId' }] },
-  },
-};
-
-export const templateRestore: MutationEntry = {
-  fingerprint: 'templates/restore',
-  intent: 'Put a retired slot back in the grid',
-  mutation: {
-    op: 'update',
-    table: 'class_templates',
-    set: { active: true },
+    set: { active: { $context: 'active' } },
     where: { eq: ['class_templates.id', { $context: 'templateId' }] },
   },
 };
@@ -324,15 +301,6 @@ export const programUpdate: MutationEntry = {
   },
 };
 
-// A ONE-OFF — a workshop, a masterclass, a Saturday intensive.
-//
-// No template, so no recurrence: this is the only write in the application
-// that makes a class_session directly. The schema always allowed it
-// (`template_id` is nullable); nothing could create one, which was a missing
-// screen rather than a missing concept.
-//
-// `week_key` and `hour_key` are absent on purpose — a trigger derives them, so
-// a hand-written session groups in reports exactly like a generated one.
 export const eventCreate: MutationEntry = {
   fingerprint: 'sessions/create-event',
   intent: 'Put a one-off class on the calendar',

@@ -5,10 +5,12 @@ import type { EffectRegistry } from '../types';
 // ═══════════════════════════════════════════════════════════════
 // The flow graph — derived, never drawn
 //
-// Reflexes declare what they watch; effects declare what they
-// touch. The graph is therefore STATIC DATA computed from the
-// artifacts, which is what makes it impossible for the flowchart
-// to drift from the flow.
+// Reflexes WATCH entities (their triggers name them); effects
+// WRITE entities. An edge is a write meeting a watch. The graph is
+// therefore STATIC DATA computed from the artifacts — under moss,
+// `writes` is DERIVED from the vex mutation behind each effect —
+// which is what makes it impossible for the flowchart to drift
+// from the flow.
 //
 // Cycles are CLASSIFIED, not banned. Tide's own best patterns are
 // cycles on purpose — a drip campaign is a reflex whose delayed
@@ -24,7 +26,11 @@ export type Edge = { from: string; to: string; via: string };
 export type GraphReport = {
   edges: readonly Edge[];
   cycles: readonly { reflexIds: readonly string[]; guarded: boolean }[];
-  unverifiable: readonly { reflexId: string; effect: string }[];
+  // Effects with no declared (or derived) `writes` — the checker cannot
+  // see through them. Under moss, where `writes` derives from the vex
+  // mutation, a blind edge means something BYPASSED vex, which is exactly
+  // when a loud word is wanted.
+  blind: readonly { reflexId: string; effect: string }[];
   errors: readonly string[];
   warnings: readonly string[];
 };
@@ -40,23 +46,23 @@ export const buildGraph = (reflexes: readonly Reflex[], effects: EffectRegistry)
   const edges: Edge[] = [];
   const errors: string[] = [];
   const warnings: string[] = [];
-  const unverifiable: { reflexId: string; effect: string }[] = [];
+  const blind: { reflexId: string; effect: string }[] = [];
 
   const byId = new Map(reflexes.map((reflex) => [reflex.id, reflex]));
 
   const watchers = new Map<string, string[]>();
-  const firingWatchers = new Map<string, string[]>();
+  const runWatchers = new Map<string, string[]>();
   for (const reflex of reflexes) {
     const fact = factOf(reflex.on);
     if (fact?.entity !== undefined) {
       const existing = watchers.get(fact.entity) ?? [];
       watchers.set(fact.entity, [...existing, reflex.id]);
     }
-    if (fact?.firing !== undefined) {
-      const existing = firingWatchers.get(fact.firing) ?? [];
-      firingWatchers.set(fact.firing, [...existing, reflex.id]);
-      if (fact.firing === reflex.id) warnings.push(`${reflex.id} subscribes to its own firing — a drain loop; make sure it narrows`);
-      if (!byId.has(fact.firing)) errors.push(`${reflex.id} watches the firing of unknown reflex "${fact.firing}"`);
+    if (fact?.run !== undefined) {
+      const existing = runWatchers.get(fact.run) ?? [];
+      runWatchers.set(fact.run, [...existing, reflex.id]);
+      if (fact.run === reflex.id) warnings.push(`${reflex.id} subscribes to its own run — a drain loop; make sure it narrows`);
+      if (!byId.has(fact.run)) errors.push(`${reflex.id} watches the run of unknown reflex "${fact.run}"`);
     }
   }
 
@@ -66,16 +72,16 @@ export const buildGraph = (reflexes: readonly Reflex[], effects: EffectRegistry)
       errors.push(`${reflex.id} names effect "${reflex.effect.name}", which is not registered`);
       continue;
     }
-    if (handler.touches === undefined) {
-      unverifiable.push({ reflexId: reflex.id, effect: reflex.effect.name });
+    if (handler.writes === undefined) {
+      blind.push({ reflexId: reflex.id, effect: reflex.effect.name });
       continue;
     }
-    for (const entity of handler.touches)
+    for (const entity of handler.writes)
       for (const target of watchers.get(entity) ?? []) edges.push({ from: reflex.id, to: target, via: entity });
   }
 
-  for (const [source, targets] of firingWatchers)
-    for (const target of targets) if (byId.has(source)) edges.push({ from: source, to: target, via: `firing:${source}` });
+  for (const [source, targets] of runWatchers)
+    for (const target of targets) if (byId.has(source)) edges.push({ from: source, to: target, via: `run:${source}` });
 
   const cycles = findCycles(reflexes, edges).map((reflexIds) => ({
     reflexIds,
@@ -91,7 +97,7 @@ export const buildGraph = (reflexes: readonly Reflex[], effects: EffectRegistry)
         `unguarded cycle: ${cycle.reflexIds.join(' → ')} → ${cycle.reflexIds[0]} — no selection and no \`when\` anywhere on the loop, so it diverges by construction`,
       );
 
-  return { edges, cycles, unverifiable, errors, warnings };
+  return { edges, cycles, blind, errors, warnings };
 };
 
 // Tarjan's SCC. Components of size > 1 are cycles; a size-1 component is

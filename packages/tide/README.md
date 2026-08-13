@@ -44,8 +44,12 @@ await tide.load([
   },
 ], { at: Date.now() });
 
-// The host owns wake-up. Tide reads no clock.
-setInterval(() => tide.tick({ now: Date.now() }), 60_000);
+// The HOST owns waking. Tide reads no clock — it advances one committed step
+// at a time and says when it next wants waking, and a driver does the rest:
+// drain on every ingest, then sleep until that instant.
+const drain = async () => { for (;;) { const r = await tide.advance({ now: Date.now() }); if (quiet(r)) break; } };
+await drain();
+const at = await tide.nextDue(Date.now());   // undefined = nothing scheduled
 ```
 
 ## The thesis
@@ -58,32 +62,49 @@ setInterval(() => tide.tick({ now: Date.now() }), 60_000);
 
 | | |
 |---|---|
-| **Four triggers, one ledger** | a clock, a fact (pushed or polled), an external signal, a person |
-| **Idempotency before the effect** | the task row is written first, keyed `(reflex, cause, unit)`; there is no path to the effect that skips it |
+| **Three triggers, one ledger** | a clock, a write pushed by the host that saw it, an external signal — plus a person, by hand |
+| **Idempotency before the effect** | the task row is written first, keyed `(run, unit)`; there is no path to the effect that skips it |
 | **DST-proof schedules** | occurrence identity is *local calendar fields*, so a transition can move the instant but cannot mint or lose a key |
 | **Retry as a calling convention** | a handler that returns is done; one that throws is retried on bounded backoff to a terminal, visible state |
-| **Transactional fan-out** | 500 tasks commit with the firing, so a crash never re-selects against moved data |
+| **Leased claims** | a process that dies mid-effect loses its lease and the work is taken back — no reaper, no heartbeat |
+| **Transactional fan-out** | 500 tasks commit with the run, so a crash never re-selects against moved data |
 | **Fenced attempts** | a timed-out attempt that finishes late cannot overwrite the live one |
-| **Fan-in for free** | a settled firing mints a fact carrying its stats — digests and dependencies are ordinary reflexes |
+| **Fan-in for free** | a settled run mints a fact carrying its stats — digests and dependencies are ordinary reflexes |
 | **Dry run as a verb** | `preview()` runs the real pipeline and stubs exactly one function; a reflex cannot opt out |
-| **A queryable ledger** | facts, firings, tasks, attempts — ordinary rows, with causality chains |
+| **A queryable ledger** | facts, runs, tasks — ordinary rows, with causality chains |
 | **Deterministic tests** | a memory store and a fake clock; nothing to sleep on |
 
-## Three verbs and two edges
+## Three verbs and the driver's edges
 
 ```typescript
 await tide.load(reflexes, { at: bootTime });   // validate, hash versions, verify the graph
 await tide.ingest(fact);                       // the public intake contract
-await tide.tick({ now });                      // the one heartbeat
+await tide.advance({ now });                   // one committed increment of the world
+await tide.nextDue(now);                       // when the driver should wake next
 
 await tide.fire('billing.dunning', { now, by: 'ada' });  // run it now — works on a disarmed reflex
-await tide.retry(taskId, now);                           // reopen a parked task
-await tide.preview('billing.dunning', { now });           // show me, change nothing
+await tide.retry(taskId, now);                           // reopen a failed task
+await tide.preview('billing.dunning', { now });          // show me, change nothing
 ```
+
+**There is no `arm`/`disarm`.** Enablement is a property of the reflex the host hands over, so pausing one is: write your own row, `load` again. One source of truth, it survives a restart, and it leaves something to audit. There used to be a pair of methods that mutated an in-memory map; they were a second copy of a fact the host already owned, and they disagreed with it the moment either moved.
+
+## Storage
+
+Four tables, and only two of them grow with events:
+
+| | carries |
+|---|---|
+| `fact` | the intake — durable before anything interprets it, so `ingest` is one write and matching is retryable |
+| `run` | `UNIQUE(reflexId, cause)` — *the* idempotency, one constraint for every trigger kind |
+| `task` | `UNIQUE(runId, unit)`, written before the effect; the lease; the retry counter |
+| `state` | where each reflex has got to — one row per reflex, bounded by how many exist |
+
+The port is six capabilities, not twenty-seven nouns: `transact`, `appendIfAbsent`, `claim`, `cas`, `query`, `remove`. `createMemoryStore()` is the reference implementation. `STORE_CONTRACT`, exported from `@niscorp/tide/testing`, is the same set of checks both it and any other store must pass — importable so a host's store is held to one definition rather than to two readings of a comment.
 
 ## Hosts
 
-Tide imports no host. Under **moss** the seams are filled with vex (selection under the actor's scope policy, mutations auto-registered as effects), prism (transform), cortex agents (effects), and moss's `ActorContext` (identity) — and tide's tables sit beside `vex_cache`. In plain Node they are filled with raw SQL and plain functions. Nothing above the seam can tell the difference.
+Tide imports no host. Under **moss** the seams are filled with vex (selection under the actor's scope policy, mutations auto-registered as effects), prism (transform), cortex agents (effects), moss's `ActorContext` (identity), and `createTideStore(pool)` from `@niscorp/moss` for persistence. In plain Node they are filled with raw SQL and plain functions. Nothing above the seam can tell the difference.
 
 ## Documentation
 

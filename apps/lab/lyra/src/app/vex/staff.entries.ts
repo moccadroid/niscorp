@@ -1,18 +1,5 @@
 import type { CacheEntry, MutationEntry } from './index';
 
-// WHO WORKS HERE, AND AS WHAT.
-//
-// This is the ACL surface, and it is worth being precise about what it does:
-// it writes a row in `staff`. It does not grant anything. The charter decides
-// what a role may hold, `assignments` maps a principal to their role, and moss
-// resolves the pair per principal — so changing this column changes somebody's
-// entire application, and it does it by changing one word in a database.
-//
-// Nothing here can invent a permission. A role that is not in the charter
-// resolves to nothing, and a role that is resolves to exactly what the charter
-// already said. That is the property worth having: the most dangerous screen in
-// the product cannot express anything the policy document does not.
-
 const row = (name: string) => ({ $get: { from: { $var: 's' }, path: [name] } });
 
 const roleText = (value: unknown) => ({
@@ -27,16 +14,8 @@ const roleText = (value: unknown) => ({
   },
 });
 
-// A ROLE IS AN IDENTITY, SO IT WEARS A HUE.
-//
-// This used to be `owner → alert`, defended in a comment as "the row somebody
-// should look twice at". It rendered the person who owns the business in the
-// same red the app uses for a failed payment and a cancelled class, on their
-// own staff roster — and `manager → warm` put the second-most-senior person in
-// a warning colour. Seniority is not a state of alarm.
-//
-// Four roles, four hues, ordered from senior to junior so the ladder is
-// legible without any of them claiming to be a problem.
+// A role is an identity, so it wears a HUE rather than a status tone: seniority
+// is not a state of alarm. Ordered senior to junior so the ladder is legible.
 const roleHue = (value: unknown) => ({
   $case: {
     branches: [
@@ -63,16 +42,6 @@ export const staffList: CacheEntry = {
       { field: 'people.name', as: 'person_name' },
       'people.email',
     ],
-    // THE AUTOMATION PRINCIPAL IS NOT STAFF YOU CAN PROMOTE.
-    //
-    // It is a staff row because that is what puts it under the charter — but it
-    // turned up on the roster with four role buttons beside it, so a mis-tap
-    // could have made a studio's nightly job an owner. It is not a person and
-    // it has no business on a screen about people.
-    //
-    // SEARCHABLE, like the roll and the follow-up list. A roster is small today
-    // and the rule does not depend on that: if a screen lists humans, you can
-    // type a name. Nothing about staff makes it the exception.
     filter: {
       and: [
         { neq: ['staff.role', 'automation'] },
@@ -94,9 +63,6 @@ export const staffList: CacheEntry = {
         role_display: roleText(row('role')),
         role_hue: roleHue(row('role')),
         active: row('active'),
-        // A STATE IS AN ADJECTIVE, A BUTTON IS AN IMPERATIVE. 'Off staff' was both:
-        // the badge said it and so did the button beside it. One is what somebody
-        // IS, the other is what you DO to them.
         state_label: { $case: { branches: [{ when: row('active'), then: 'Active' }], else: 'Former' } },
         state_tone: { $case: { branches: [{ when: row('active'), then: 'good' }], else: 'neutral' } },
       },
@@ -137,11 +103,6 @@ export const staffById: CacheEntry = {
 };
 
 // ─── writes ──────────────────────────────────────────────────
-//
-// The one write in this application that changes what somebody else can DO.
-// It is deliberately narrow: it sets a role on an existing staff row, and it
-// can set nothing else. Creating staff, or removing them, are separate verbs
-// with separate grants.
 
 export const staffSetRole: MutationEntry = {
   fingerprint: 'staff/set-role',
@@ -154,38 +115,18 @@ export const staffSetRole: MutationEntry = {
   },
 };
 
-// Taking somebody off staff keeps the row: who taught what, last term, is a
-// question a studio asks — and a deleted row answers it with silence. It also
-// means their sessions keep an instructor.
-export const staffDeactivate: MutationEntry = {
-  fingerprint: 'staff/deactivate',
-  intent: 'Take somebody off staff, keeping the record',
+// One verb, the flag as its argument — see `templates/set-active`.
+export const staffSetActive: MutationEntry = {
+  fingerprint: 'staff/set-active',
+  intent: 'Take somebody off staff, or put them back — the record is kept either way',
   mutation: {
     op: 'update',
     table: 'staff',
-    set: { active: false },
+    set: { active: { $context: 'active' } },
     where: { eq: ['staff.id', { $context: 'staffId' }] },
   },
 };
 
-export const staffReactivate: MutationEntry = {
-  fingerprint: 'staff/reactivate',
-  intent: 'Put somebody back on staff',
-  mutation: {
-    op: 'update',
-    table: 'staff',
-    set: { active: true },
-    where: { eq: ['staff.id', { $context: 'staffId' }] },
-  },
-};
-
-// Putting somebody ON staff. The person must already exist — the fn that
-// wraps this creates them first if we have never seen the address, exactly as
-// signing a member up does, and for the same reason: a human is not a studio's
-// property, and the row that binds them here is this one.
-//
-// `id` is supplied because the caller needs to know it; `studio_id` is not,
-// because the caller must never choose it. The engine stamps that.
 export const staffCreate: MutationEntry = {
   fingerprint: 'staff/create',
   intent: 'Put somebody on staff at this studio',
@@ -198,4 +139,32 @@ export const staffCreate: MutationEntry = {
       role: { $context: 'role' },
     },
   },
+};
+
+// The whole hire, as one artifact — the staff twin of `people/enroll` (see
+// intake.entries.ts for the pattern). A member who starts teaching keeps the
+// same person row: statement 1 conflicts on their email and steps aside,
+// statement 2 finds them by it. Someone already on staff conflicts on
+// (studio_id, person_id) and returns no row — a repeat hire is a no-op, and
+// "change their role instead" lives on the roster where it belongs.
+export const staffEnroll: MutationEntry = {
+  fingerprint: 'staff/enroll',
+  intent: 'Hire somebody: ensure the person exists, then put them on staff at this studio',
+  mutation: [
+    {
+      op: 'insert',
+      table: 'people',
+      values: { email: { $context: 'email' }, name: { $context: 'name' }, phone: { $context: 'phone' } },
+      onConflict: { target: ['email'] },
+    },
+    {
+      op: 'insert',
+      table: 'staff',
+      values: {
+        person_id: { $lookup: { from: 'people', field: 'id', where: { eq: ['people.email', { $context: 'email' }] } } },
+        role: { $context: 'role' },
+      },
+      onConflict: { target: ['studio_id', 'person_id'] },
+    },
+  ],
 };

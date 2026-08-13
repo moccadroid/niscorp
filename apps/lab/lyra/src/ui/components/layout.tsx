@@ -85,19 +85,6 @@ const flexStyle = (p: z.infer<typeof StackProps>, direction: 'row' | 'column'): 
   ...(p.py === undefined ? {} : { paddingTop: p.py, paddingBottom: p.py }),
   ...(p.align === undefined ? {} : { alignItems: ALIGN[p.align] }),
   ...(p.justify === undefined ? {} : { justifyContent: JUSTIFY[p.justify] }),
-  // A `between` ROW WRAPS, ALWAYS.
-  //
-  // `justify: between` means "this on the left, that on the right" — a title
-  // and its buttons, a label and its value. Thirteen screens use it for their
-  // header, and on a 375px phone every one of them overflowed: "Members" and
-  // "Add a member" printed on top of each other and the whole PAGE gained a
-  // sideways scrollbar, which is the single clearest sign a layout was written
-  // at desk width.
-  //
-  // There is no case where a between-row that does not fit should overflow
-  // rather than wrap, so this is the kit's answer and not thirteen edits — a
-  // rule in one place cannot be forgotten on the fourteenth screen. `rowGap`
-  // keeps the wrapped line off the one above it when no `gap` was given.
   ...(p.wrap === true || p.justify === 'between' ? { flexWrap: 'wrap', ...(p.gap === undefined ? { rowGap: 12 } : {}) } : {}),
   ...(p.grow === true ? { flex: 1, minHeight: 0, minWidth: 0 } : {}),
   ...(p.scroll === true ? { overflowY: 'auto' } : {}),
@@ -139,10 +126,6 @@ export const Spacer: NovaComponent<z.infer<typeof SpacerProps>> = ({ size }: z.i
 Spacer.meta = { description: 'Empty space. Bare, it pushes siblings apart in a flex parent.', propsSchema: SpacerProps };
 
 // ── the shell's own furniture ────────────────────────────────
-//
-// Three components that exist for the FRAME rather than for any screen. They
-// are in the kit because a layout must be able to name them, and they are here
-// rather than in `surface.tsx` because what they do is arrangement.
 
 const BarProps = z.object({ position: z.enum(['top', 'bottom']).optional() }).strict();
 type BarP = Partial<z.infer<typeof BarProps>> & { children?: React.ReactNode };
@@ -171,13 +154,6 @@ const SheetProps = z
   .object({
     open: z.boolean().optional(),
     title: z.string().optional(),
-    // HOW DEEP THE STACK IS, from the canvas scope (`$.count`).
-    //
-    // One entry means this is the only thing open, so the way out is a CLOSE.
-    // Two or more means something is stacked on top of something else, and the
-    // way out is a BACK — you are returning to the screen underneath, not
-    // dismissing the lot. Same gesture either way (`pop` removes one); only the
-    // affordance changes, because those are two different promises.
     depth: z.number().optional(),
   })
   .strict();
@@ -195,24 +171,10 @@ export const Sheet: NovaComponent<Partial<z.infer<typeof SheetProps>>> = ({ open
   // Two or more on the stack: this returns you to the one underneath.
   const back = (depth ?? 1) > 1;
   if (open === false) return null;
-  // A PANEL MUST BE CLOSEABLE FROM THE PANEL.
-  //
-  // This shipped with neither: the scrim was inert and the action inside was
-  // one that had never needed a Back button, so opening a class from the
-  // calendar was a dead end with no way out but a reload. A modal without an
-  // escape is the worst thing a phone can do, and it is entirely my fault for
-  // reusing an action in a context it was not written for.
-  //
-  // Two ways out, because that is the convention: tap beside it, or tap the
-  // control. Both dispatch the same ref, which every action the sheet can host
-  // answers with a pop.
   const close = (): void => {
     if (novaRef !== undefined) dispatch({ type: 'ui:click', ref: novaRef });
   };
   return overlay(
-    // NO GEOMETRY HERE. Where the panel sits is a width question, and a width
-    // question belongs in a media query — inline styles beat one, which is why
-    // a desk got a bottom sheet despite the rule for it already existing.
     <div className="ly-sheet-scrim" style={SCRIM} onClick={close} role="presentation">
       <div className="ly-sheet" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
         <div className="ly-sheet__grip" />
@@ -238,34 +200,6 @@ export const Sheet: NovaComponent<Partial<z.infer<typeof SheetProps>>> = ({ open
 };
 Sheet.meta = { description: 'A panel over the surface — a bottom sheet on a phone, a side panel on a desk.', propsSchema: SheetProps };
 
-// THE OVERLAY GEOMETRY LIVES HERE, NOT IN A STYLESHEET.
-//
-// The drawer rendered INLINE for somebody — a white box wedged into the top bar
-// showing one link, with no scrim, and therefore no way to close it and no way
-// to navigate. Whatever the cause (a stylesheet that had not arrived), the
-// lesson is the same: the ONE control that gets a person unstuck must not
-// depend on a separate file loading correctly.
-//
-// So the four properties that make an overlay an overlay are inline, where
-// nothing can fail to deliver them. Everything cosmetic stays in the sheet,
-// where it belongs and where a theme can reach it.
-// AND IT GOES THROUGH A PORTAL.
-//
-// Inline geometry was not enough: the scrim was `position: fixed` with all four
-// offsets at zero and still measured 59px tall — the height of the top bar —
-// because an ancestor of the chrome canvas establishes a CONTAINING BLOCK for
-// fixed descendants (a transform, a filter or a `contain` somewhere above).
-// Fixed positioning silently stops meaning "the viewport" when that happens.
-//
-// A portal to `document.body` is the only thing that cannot be undone from
-// above, which is what an overlay needs — an escape hatch that a parent cannot
-// take away. The alternative was auditing every ancestor forever.
-// THE ONE BREAKPOINT, and it lives in two places on purpose.
-//
-// CSS decides SHAPE (a sheet rises or slides in); this decides EXISTENCE (a
-// drawer is permanent or is behind a button), and a media query cannot decide
-// existence because React has already returned null. Same number, so they can
-// never disagree about which shape a screen is.
 const WIDE = '(min-width: 860px)';
 
 const useWide = (): boolean => {
@@ -285,10 +219,6 @@ const overlay = (node: React.ReactNode): React.ReactNode =>
 
 const SCRIM: React.CSSProperties = {
   position: 'fixed',
-  // The LONGHANDS, not `inset: 0`. The shorthand did not resolve here and the
-  // scrim sized to its content — 59px tall, pinned under the top bar, which is
-  // exactly the 'menu will not open' report: it opened, it was just the height
-  // of a bar and behind everything.
   top: 0,
   right: 0,
   bottom: 0,
@@ -312,15 +242,6 @@ type DrawerP = Partial<z.infer<typeof DrawerProps>> & { children?: React.ReactNo
  */
 export const Drawer: NovaComponent<Partial<z.infer<typeof DrawerProps>>> = ({ open, children, novaRef }: DrawerP) => {
   const dispatch = useNovaDispatch();
-  // ON A DESK IT IS JUST THERE.
-  //
-  // A burger is a way of hiding navigation when there is no room for it. On a
-  // 1300px screen there is room for it, so hiding it behind a tap costs a tap
-  // and buys nothing — and worse, it hides where you ARE, not only where you
-  // could go. Wide: a permanent rail. Narrow: the overlay, unchanged.
-  //
-  // Same component, same children, same `nav` markup, same `current` highlight.
-  // The only difference is whether `open` gets a say.
   const wide = useWide();
   if (wide) {
     return overlay(
@@ -368,9 +289,6 @@ const DrawerLinkProps = z
     value: z.string().optional(),
     current: z.string().optional(),
     icon: z.string().optional(),
-    // WHERE IT GOES, when that is not WHAT IT IS. An area lights by its own id
-    // and opens its first screen — see `Tab`, which splits these for the same
-    // reason. Omitted, the destination is the identity.
     payload: z.string().optional(),
     // A screen INSIDE the open area — indented, quieter, and marked with its
     // own current-state so an area and a screen can both be lit at once.

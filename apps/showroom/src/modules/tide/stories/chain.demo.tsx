@@ -6,7 +6,7 @@ import type { EffectRegistry, ReflexInput } from '@niscorp/tide';
 // receipt; if it fails, record the failure" — as four reflexes joined by
 // committed rows rather than one procedure.
 //
-// Press "one tick" repeatedly and watch the chain walk: each hop is a fact,
+// Press "one step" repeatedly and watch the chain walk: each hop is a fact,
 // each fact is a row, and a crash between any two of them loses nothing,
 // because the joint IS the database.
 
@@ -53,7 +53,7 @@ const whoOf = (input: unknown): string => String((input as { who?: unknown }).wh
 
 const effects: EffectRegistry = {
   'payments.charge': {
-    touches: ['charge_attempts'],
+    writes: ['charge_attempts'],
     run: (input, ctx) => {
       const who = whoOf(input);
       // Grace's card declines. That is an ANSWER, not a failure — so the
@@ -65,14 +65,14 @@ const effects: EffectRegistry = {
     },
   },
   'invoice.markPaid': {
-    touches: ['invoices'],
+    writes: ['invoices'],
     run: (input, ctx) => {
       const who = whoOf(input);
       ctx.emit({ kind: 'write', entity: 'invoices', op: 'update', row: { who, status: 'paid' }, at: ctx.now });
       return { paid: true };
     },
   },
-  'invoice.markFailed': { touches: ['invoices'], run: (input) => input },
+  'invoice.markFailed': { writes: ['invoices'], run: (input) => input },
   'mail.send': { run: (input) => input },
 };
 
@@ -83,6 +83,6 @@ export const Demo = () => (
     effects={effects}
     start={Date.UTC(2026, 2, 1, 0, 0)}
     steps={[{ label: '+1 day', ms: 86_400_000 }]}
-    note="Press +1 day to start the run, then ONE TICK repeatedly and watch the chain walk hop by hop: charge → charge_attempts → mark paid (or record the decline) → invoices → receipt. Grace's card declines: the handler RETURNS that outcome rather than throwing, so the task is done and a different reflex branches on the row. Every arrow in that sentence is a committed fact in the bottom panel."
+    note="Press +1 day to start the run, then ONE STEP repeatedly and watch the chain walk hop by hop: charge → charge_attempts → mark paid (or record the decline) → invoices → receipt. Grace's card declines: the handler RETURNS that outcome rather than throwing, so the task is done and a different reflex branches on the row. Every arrow in that sentence is a committed fact in the bottom panel. A host's driver does not press the button — it drains to quiescence on every ingest, so the whole chain runs in the milliseconds after the write."
   />
 );

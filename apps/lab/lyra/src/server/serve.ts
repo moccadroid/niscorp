@@ -1,12 +1,9 @@
-// The lyra app server, standalone. Dev only: `pnpm --filter lyra serve`.
-// The usual way to run this app is `pnpm --filter lyra dev`, which boots the
-// same composition inside vite.
 import { serve } from '@hono/node-server';
 import { attachSocket } from '@niscorp/moss/node';
-import { boot } from './boot';
+import { bootDevServer } from './boot';
 
 const main = async (): Promise<void> => {
-  const { server } = await boot();
+  const { server } = await bootDevServer();
   const port = Number(process.env['PORT'] ?? 8791);
   const httpServer = serve({ fetch: server.fetch, port });
   attachSocket(httpServer, server.socket);

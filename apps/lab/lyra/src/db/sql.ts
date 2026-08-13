@@ -1,30 +1,10 @@
-// The seed's SQL primitives — value literals, INSERT assembly, and dates the
-// DATABASE computes.
-//
-// ─── ONE CLOCK, AND IT BELONGS TO THE STUDIO ─────────────────
-// The dataset shifts with the wall clock, because a class schedule that says
-// "last March" is a dead demo. The natural way to do that is to compute the
-// shift in node and emit date literals — which is exactly what this file
-// prevents, because it puts two clocks in the app: node's, producing seeded
-// dates, and the database's, producing every column default and every
-// CURRENT_DATE. Two clocks disagree, and between local midnight and UTC
-// midnight a seeded "today" and a defaulted "today" are different days. So
-// nothing here computes a date: it emits SQL and the database works it out.
-//
-// That argument was right about node-versus-database and wrong about WHICH
-// database clock. CURRENT_DATE is the SERVER's day, and a deployment holds
-// studios in different timezones — so seeding North Rock's history on Lumen's
-// midnight is the same two-clocks bug one layer down. Every helper below takes
-// the studio it is placing a row for, and the studio's own `studio_today()`
-// works the date out.
-//
-// The parameter is REQUIRED on purpose. An optional one with a sensible default
-// is how the server's clock gets back in.
-
 export type Raw = { sql: string };
 export const raw = (sql: string): Raw => ({ sql });
 
 /** A date, N days from that studio's today. `day(0, studio)` is today there. */
+// Nothing here computes a date: it emits SQL and the database works it out, on
+// the STUDIO's clock. The studio parameter is required on purpose — an optional
+// one with a sensible default is how the server's clock gets back in.
 export const day = (offset: number, studio: string): Raw =>
   raw(offset === 0 ? `studio_today('${studio}')` : `studio_today('${studio}') ${offset > 0 ? '+' : '-'} ${Math.abs(offset)}`);
 
@@ -49,12 +29,7 @@ export const lit = (v: Val): string => {
 export const insert = (table: string, cols: string[], rows: Val[][]): string =>
   rows.length === 0 ? '' : `INSERT INTO ${table} (${cols.join(', ')}) VALUES\n  ${rows.map((r) => `(${r.map(lit).join(', ')})`).join(',\n  ')};\n`;
 
-// ─── DETERMINISTIC, NOT RANDOM ───────────────────────────────
-// The background of the dataset is generated — attendance history, bookings
-// across a term. Writing those by hand is pointless; nobody reads them, they
-// only need to be there and to be plausible. But they must be the SAME every
-// boot, because checks assert on counts and a dataset that reshuffled itself
-// would make a failure meaningless.
+// ─── deterministic, not random ───────────────────────────────
 export const rng = (seed: number): (() => number) => {
   let a = seed >>> 0;
   return () => {

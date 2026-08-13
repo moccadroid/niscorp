@@ -1,8 +1,5 @@
 import type { LayoutNode } from '@niscorp/nova';
 
-// The ACL screen, and it is deliberately plain. A role is one tap; the
-// consequence is the whole application changing for that person, so the screen
-// says so rather than dressing it up.
 export const staffLayout: LayoutNode = {
   component: 'Stack',
   props: { gap: 22 },
@@ -22,19 +19,10 @@ export const staffLayout: LayoutNode = {
       ],
     },
 
-    // A screen that lists humans lets you type a name. A roster is small at a
-    // studio of six and not at a chain of forty, and the rule does not depend
-    // on which one you are — the roll had this and these did not, which was an
-    // accident of which screen got the pass.
     { component: 'Input', props: { placeholder: 'Search by name or email' }, ref: 'search', model: '$.search' },
 
     { if: '$.error', then: { component: 'Notice', props: { tone: 'alert', message: '$.error' } }, else: '' },
     { if: '$.notice', then: { component: 'Notice', props: { tone: 'good', message: '$.notice' } }, else: '' },
-
-
-    // Hiring, in place: unlike signing a member up there is no kiosk that
-    // does only this, so it stays on the page it affects — and the role
-    // options are the same four the charter defines, for the same reason.
 
     {
       component: 'Card',
@@ -46,14 +34,15 @@ export const staffLayout: LayoutNode = {
           loading: '$.loading',
           rowKey: 'staff_id',
           empty: 'Nobody on staff yet.',
+          // A sortable header names the COLUMN, not the row key: the value goes
+          // to vex as `sortBy` and is resolved against the entry's schema.
+          sortKey: '$.sortBy',
+          sortDir: '$.sortDir',
+          onSortRef: 'sort',
           columns: [
-            { label: 'Person', w: 2, cell: { kind: 'avatar', key: 'person_name', subKey: 'email' } },
-            { label: 'Role', px: 104, cell: { kind: 'badge', key: 'role_display', hueKey: 'role_hue' } },
-            { label: 'State', px: 96, cell: { kind: 'badge', key: 'state_label', toneKey: 'state_tone' } },
-            // THE VERBS LIVE IN ONE COLUMN. Two buttons meant two columns of
-            // 92px holding labels that no longer fit — and a verb reads as an
-            // imperative sentence ("Remove from staff"), not a two-word stub
-            // squeezed to a width. The overflow holds as many as the row grows.
+            { label: 'Person', w: 2, sortable: 'people.name', cell: { kind: 'avatar', key: 'person_name', subKey: 'email' } },
+            { label: 'Role', px: 104, sortable: 'staff.role', cell: { kind: 'badge', key: 'role_display', hueKey: 'role_hue' } },
+            { label: 'State', px: 96, sortable: 'staff.active', cell: { kind: 'badge', key: 'state_label', toneKey: 'state_tone' } },
             {
               label: '',
               px: 44,
@@ -71,9 +60,6 @@ export const staffLayout: LayoutNode = {
       },
     },
 
-    // The role controls, one row per person, spelled out rather than hidden
-    // behind a dropdown. Four roles is few enough to show, and a permission
-    // change buried in a select is a permission change nobody reviews.
     {
       component: 'Section',
       props: { title: 'Change a role', subtitle: 'The four roles the charter defines. Nothing here can invent a fifth.' },

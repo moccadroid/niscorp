@@ -39,7 +39,7 @@ export const stories: readonly Story[] = [
   {
     id: 'catch-up',
     name: 'Catch-up after downtime',
-    description: 'Five missed nights, three policies: run / latest / skip. Every decision leaves a firing row that says which was made.',
+    description: 'Five missed nights, three policies: run / latest / skip. Every decision leaves a run row that says which was made.',
     category: 'Triggers',
     kind: 'trigger',
     Demo: catchUp.Demo,
@@ -48,7 +48,7 @@ export const stories: readonly Story[] = [
   {
     id: 'chain',
     name: 'Chains, not bodies',
-    description: 'Charge → mark paid → receipt, as four reflexes joined by committed rows. Tick one hop at a time and watch the flow walk.',
+    description: 'Charge → mark paid → receipt, as four reflexes joined by committed rows. Step one hop at a time and watch the flow walk.',
     category: 'Flows',
     kind: 'flow',
     Demo: chain.Demo,
@@ -57,7 +57,7 @@ export const stories: readonly Story[] = [
   {
     id: 'fan-in',
     name: 'Fan-in without a barrier',
-    description: 'Five charges, one summary. A settled firing mints a fact carrying its stats, so the digest is an ordinary reflex.',
+    description: 'Five charges, one summary. A settled run mints a fact carrying its stats, so the digest is an ordinary reflex.',
     category: 'Flows',
     kind: 'flow',
     Demo: fanIn.Demo,

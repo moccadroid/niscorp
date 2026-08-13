@@ -22,12 +22,10 @@ export {
   ClockOnceSchema,
   WriteTriggerSchema,
   SignalTriggerSchema,
-  FiringTriggerSchema,
-  PollTriggerSchema,
+  RunTriggerSchema,
   ManualTriggerSchema,
   PolicySchema,
   RetrySchema,
-  CoalesceSchema,
   FactInputSchema,
   FactKindSchema,
   ClockUnitSchema,
@@ -45,7 +43,6 @@ export type {
   ClockOnce,
   Policy,
   Retry,
-  Coalesce,
   FactInput,
   FactKind,
   Op,
@@ -54,38 +51,52 @@ export type {
 
 // ── the ledger, the seams, the reports ──────────────────────────
 export type {
-  Attempt,
   AttemptOutcome,
-  ClaimOptions,
-  CoalesceWindow,
-  Delivery,
-  DeliveryOutcome,
   EffectHandler,
   EffectRegistry,
   Fact,
-  Firing,
-  FiringState,
   LoadReport,
   NewFact,
   PreviewCtx,
   PreviewReport,
   PreviewUnit,
-  RecordResult,
+  ReflexState,
   Retention,
   Row,
+  Run,
+  RunState,
   SelectCtx,
   SelectFn,
   Task,
   TaskState,
-  TickReport,
+  AdvanceReport,
   TideConfig,
   TideCtx,
   TideEvent,
-  TideStoreLike,
   TransformFn,
 } from './types';
 
-export type { TickOptions } from './engine/tick';
+// ── the store contract ──────────────────────────────────────────
+//
+// Exported in full because a host writing its own store needs the whole
+// grammar, not just the interface: `UNIQUE_BY` IS the set of exactly-once
+// promises, and a store that does not enforce all four is not a tide store.
+export { PRIMARY_KEY, UNIQUE_BY, COMPARISON_OPS } from './types';
+export type {
+  ClaimSpec,
+  Comparison,
+  Mutation,
+  Order,
+  QuerySpec,
+  RemoveSpec,
+  TableName,
+  TideStore,
+  TideTables,
+  UniqueKey,
+  Where,
+} from './types';
+
+export type { AdvanceOptions } from './engine/advance';
 export type { PreviewOptions } from './engine/preview';
 export type { GraphReport, Edge } from './engine/graph';
 

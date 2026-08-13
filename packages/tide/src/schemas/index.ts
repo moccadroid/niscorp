@@ -5,22 +5,20 @@ export {
   ClockOnceSchema,
   WriteTriggerSchema,
   SignalTriggerSchema,
-  FiringTriggerSchema,
-  PollTriggerSchema,
+  RunTriggerSchema,
   ManualTriggerSchema,
   ClockUnitSchema,
   OpSchema,
   WEEKDAYS,
   clockOf,
   isRecurring,
-  pollOf,
   factOf,
   isManual,
 } from './trigger.schema';
 export type { Trigger, Clock, ClockRecurring, ClockOnce, Op, Weekday } from './trigger.schema';
 
-export { PolicySchema, RetrySchema, CoalesceSchema } from './policy.schema';
-export type { Policy, Retry, Coalesce } from './policy.schema';
+export { PolicySchema, RetrySchema } from './policy.schema';
+export type { Policy, Retry } from './policy.schema';
 
 export { FactInputSchema, FactKindSchema } from './fact.schema';
 export type { FactInput, FactKind } from './fact.schema';

@@ -1,86 +1,122 @@
-// Tide check — the automations, and the identity they run as.
-//
-// The claim is not "a cron job worked". It is that an automation is a
-// PRINCIPAL: its selection is an authored fingerprint replayed under a compiled
-// charter rung, its effects are authored mutations, and the tenant boundary is
-// the engine's — so Lumen's nightly job physically cannot reach a North Rock
-// row, and no line of automation code is what makes that true.
-//
-// Time is marched, never slept on. Tide reads no clocks; every `now` below is
-// supplied, which is why this whole file runs in milliseconds and gives the
-// same answer on every machine.
-//
 // Run: pnpm --filter lyra exec tsx src/dev/tide-check.ts
 import { reflexesForEveryStudio, wireTide } from '@lyra/server/tide';
 import { CAST, LUMEN, NORTHROCK } from '@lyra/db/seed';
-import { asPrincipal, ok, report, runtime, server } from './world';
+import { asPrincipal, ok, report, runtime, server, tideDriver } from './world';
 
 const count = async (sql: string, params: unknown[] = []): Promise<number> => {
   const result = await runtime.db.query<{ n: number }>(sql, params);
   return Number(result.rows[0]?.n ?? -1);
 };
 
-// A fixed moment, so occurrence keys are the same on every run. Tide's clock
-// identity is local calendar fields, so this is a date rather than an instant
-// in any meaningful sense — which is exactly the property that makes a DST
-// transition unable to mint or lose a firing.
 const DAY = 86_400_000;
-// TODAY AT NOON, not a date somebody typed once.
-//
-// This was a hardcoded 2026-08-08. Every row the check reads is seeded RELATIVE
-// to CURRENT_DATE — sessions are generated in a window around today — so a
-// fixed calendar date agrees with the data on exactly one day and drifts
-// afterwards. It drifted overnight, and the failure read "2 written for 0
-// bookings", which looks like a fan-out bug and was a clock disagreement.
-//
-// Left alone it would eventually fall outside the generated window entirely and
-// the check would go quiet rather than red, which is the worse failure.
 const wallClock = new Date();
 const boot = Date.UTC(wallClock.getUTCFullYear(), wallClock.getUTCMonth(), wallClock.getUTCDate(), 12, 0, 0);
 
 /** The calendar day a reflex fired at boot + offset is living in. */
 const dayAt = (offset: number): string => new Date(boot + offset).toISOString().slice(0, 10);
 
-const tide = wireTide({ server: () => server, now: () => boot });
+// THIS CHECK OWNS THE CLOCK, so the live driver stands down first.
+//
+// ⟲ Two engines over one ledger is two of everything. This check drives its
+// own instance with a fake `now` weeks ahead; the booted driver wakes on
+// every write at the real one. They materialized different occurrences of
+// the same clock reflex and both ran, so "one reminder per booking" got five
+// for four. The old 60-second metronome hid it by being slower than a whole
+// check run — a driver that wakes on every write does not. Writes still MINT
+// facts (a stopped driver still ingests), which is what the live path below
+// depends on; nothing advances the engine except the lines in this file.
+tideDriver().stop();
+
+const tide = wireTide({ server: () => server, now: () => boot, pool: runtime.pool });
 
 // ── load ─────────────────────────────────────────────────────
 const studios = await runtime.db.query<{ id: string; timezone: string }>('SELECT id, timezone FROM studios ORDER BY id');
-// Reflexes are ROWS now, so the check reads them the way boot does — which is
-// also what makes 'create an automation' a thing a studio can do at all.
-const automationRows = await runtime.db.query('SELECT id, studio_id, audience, effect, enabled, run_at, trial_days, subject, body FROM automations');
+const automationRows = await runtime.db.query('SELECT id, studio_id, moment, effect, enabled, run_at, days, subject, body FROM automations');
 const reflexes = reflexesForEveryStudio(studios.rows, automationRows.rows as never);
-// The derived digest — one per studio that lapses trials. It is not configured:
-// it watches whichever row does the lapsing, so it follows the composition
-// instead of naming a template id that rows no longer have.
-const derivedDigests = new Set(
-  (automationRows.rows as { studio_id: string; effect: string; enabled: boolean }[])
-    .filter((r) => r.effect === 'trial.lapse' && r.enabled)
-    .map((r) => r.studio_id),
-).size;
+const derivedDigests = 0;
 const loaded = await tide.load(reflexes, { at: boot });
 
-// NOT the same reflexes any more, and that is exactly the change: a studio’s
-// automations are its own rows, so Lumen runs three and North Rock two. A
-// count expecting them to match was asserting the old world, where every
-// studio got whatever happened to be hardcoded.
 ok(
   'each studio runs its own automations',
-  // Rows PLUS the derived digest — one per studio that lapses trials. The
-  // digest is not configured; it watches whichever row does the lapsing, so it
-  // follows the composition instead of naming an id rows no longer have.
   reflexes.length === automationRows.rows.length + derivedDigests,
   `${reflexes.length} reflexes from ${automationRows.rows.length} rows plus ${derivedDigests} derived digest(s)`,
 );
 ok(
   '...and they differ per studio',
   reflexes.filter((r) => r.id.startsWith(LUMEN)).length !== reflexes.filter((r) => r.id.startsWith(NORTHROCK)).length,
-  'three at Lumen, two at North Rock — which a studio can now change itself',
+  `${reflexes.filter((r) => r.id.startsWith(LUMEN)).length} at Lumen, ${reflexes.filter((r) => r.id.startsWith(NORTHROCK)).length} at North Rock — which a studio can change itself`,
 );
+
+// ── EVERY MOMENT THIS APP SHIPS SELECTS SOMEBODY ─────────────
+//
+// The check that was missing, and the one that would have caught the mess.
+// There were thirteen moments; three of them named tables the automation
+// principal is not granted to read, so they were REFUSED on every run — and
+// one of those three was offered in the builder as a recipe a studio could
+// click. Nothing said so, because nothing here had ever asked a moment to
+// select anybody.
+//
+// It asks now, for all of them, against this dataset. A moment that cannot
+// find a person on any day is a moment nobody should be able to choose.
+const { MOMENTS } = await import('@lyra/app/reflexes/compose');
+const { reflexesFor } = await import('@lyra/app/reflexes/compose');
+
+const probes = MOMENTS.map((moment) => ({
+  id: `probe_${moment.id}`,
+  studio_id: LUMEN,
+  moment: moment.id,
+  effect: 'email',
+  enabled: true,
+  run_at: '09:00',
+  days: 7,
+  subject: `Probe ${moment.id}`,
+  body: 'Probe.',
+}));
+const probeTide = wireTide({ server: () => server, now: () => boot, pool: runtime.pool });
+await probeTide.load(reflexesFor(LUMEN, 'Europe/Vienna', probes as never), { at: boot });
+
+const robotFor = 'automation@lumen.studio';
+for (const moment of MOMENTS) {
+  let best = 0;
+  let sample = '';
+  let refusal = '';
+
+  if (moment.watch !== undefined) {
+    // A watched moment fires per write, anchored on the fact's own row — so
+    // the claim to test is its ENRICHMENT: given a row that exists, does the
+    // anchored selection find the person behind it, as the automation rung?
+    const anchorRow = await runtime.db.query<{ id: string }>(
+      moment.watch.entity === 'subscriptions'
+        ? `SELECT id FROM subscriptions WHERE studio_id = 'st_lumen' AND status = 'active' LIMIT 1`
+        : `SELECT sp.id FROM studio_people sp WHERE sp.studio_id = 'st_lumen' AND sp.held_subscriptions = 0 AND sp.works_here = false AND sp.deals_here = false LIMIT 1`,
+    );
+    const anchorId = anchorRow.rows[0]?.id ?? '';
+    const key = moment.watch.entity === 'subscriptions' ? 'subscriptionId' : 'studioPersonId';
+    const answer = await asPrincipal(robotFor, '/api/automation/vex', { fingerprint: moment.fingerprint, context: { [key]: anchorId, horizon: '9999-12-31' } });
+    const rows = Array.isArray(answer) ? (answer as Record<string, unknown>[]) : [];
+    best = rows.length;
+    if (best === 0) refusal = JSON.stringify(answer).slice(0, 70);
+    else sample = `${String(rows[0]?.['person_name'] ?? '?')} <${String(rows[0]?.['email'] ?? '?')}>`;
+  } else {
+    // A clock moment is a window on the calendar, so it is asked across a
+    // fortnight rather than at one instant — "never, on any day" is the
+    // claim being tested, not "not at noon today".
+    for (const offset of [0, 1, 3, 7, 14]) {
+      const report = await probeTide.preview(`${LUMEN}:probe_${moment.id}`, { now: boot + offset * DAY }).catch((error: unknown) => ({ fired: false, selected: 0, reason: String(error), units: [] }));
+      if (!report.fired) refusal = String(report.reason ?? '').slice(0, 70);
+      if (report.selected > best) {
+        best = report.selected;
+        const row = (report.units[0]?.env as { row?: Record<string, unknown> } | undefined)?.row ?? {};
+        sample = `${String(row['person_name'] ?? '?')} <${String(row['email'] ?? '?')}>`;
+      }
+    }
+  }
+  ok(`"when ${moment.label}" finds somebody`, best > 0, refusal !== '' ? `REFUSED — ${refusal}` : `${best} selected, e.g. ${sample}`);
+  ok(`...and hands the effect a person to write to`, best === 0 || sample.includes('@'), sample);
+}
 ok('...and they all load', loaded.loaded === reflexes.length, JSON.stringify(loaded.warnings ?? []).slice(0, 90));
 ok('...with no cycles in the graph', (loaded.cycles?.length ?? 0) === 0);
 
-// Load verifies effects exist. A reflex naming a mutation this app cannot
-// write is refused here rather than at 3am.
 const bogus = await tide
   .load([{ ...reflexes[0]!, id: 'bogus', effect: { name: 'automation/pay-everybody', input: {} } }], { at: boot })
   .then(() => 'accepted')
@@ -88,89 +124,40 @@ const bogus = await tide
 ok('an effect the app cannot write is refused at load', bogus !== 'accepted', String(bogus).slice(0, 90));
 
 // ── preview: the dry run that costs nothing ──────────────────
-//
-// The authoring loop's inner verb. It runs the REAL pipeline — real selection,
-// real templates — and stubs exactly one function, the effect executor. A
-// reflex cannot opt out of being previewable, which is what makes it possible
-// to show a studio owner what tonight would do.
-// The reflex id is the ROW id now, not a template name: two automations can
-// share a pairing with different windows, so the row is what identifies one.
-const lumenLapse = `${LUMEN}:au_lumen_lapse`;
-const trialsBefore = await count("SELECT count(*) n FROM memberships WHERE studio_id = 'st_lumen' AND status = 'trialling'");
+const lumenTrial = `${LUMEN}:au_lumen_trial`;
+const queuedBefore = await count("SELECT count(*) n FROM outbox WHERE studio_id = 'st_lumen'");
 
-const preview = await tide.preview(lumenLapse, { now: boot });
+const preview = await tide.preview(lumenTrial, { now: boot });
 ok('a reflex previews against real data', preview !== undefined);
-// Nothing is due AT BOOT — Lena is 9 days into a 14-day window — and a dry
-// run that reported work anyway would be the more alarming result.
-ok('...selecting nothing, because nothing is due yet', JSON.stringify(preview).includes('"selected":0'), 'Lena is 9 days into a 14-day window');
+ok('...selecting nothing, because nothing is due yet', JSON.stringify(preview).includes('"selected":0'), 'four days left against a three-day window');
 
-// Six days on she is 15 days in, and the same preview says so — same reflex,
-// same data, different logical now. This is the assertion that proves the
-// window is computed from the tick rather than from a wall clock.
-const previewLater = await tide.preview(lumenLapse, { now: boot + 6 * DAY });
-ok('...and finding her once the window is up', JSON.stringify(previewLater).includes('Lena'), JSON.stringify(previewLater).slice(0, 90));
-ok('...and writes nothing', (await count("SELECT count(*) n FROM memberships WHERE studio_id = 'st_lumen' AND status = 'trialling'")) === trialsBefore, 'a dry run that changed data would not be a dry run');
+const previewLater = await tide.preview(lumenTrial, { now: boot + 2 * DAY });
+ok('...and finding her once the window opens', JSON.stringify(previewLater).includes('Lena'), JSON.stringify(previewLater).slice(0, 90));
+ok('...and writes nothing', (await count("SELECT count(*) n FROM outbox WHERE studio_id = 'st_lumen'")) === queuedBefore, 'a dry run that changed data would not be a dry run');
 
 // ── firing it ────────────────────────────────────────────────
-//
-// `fire` mints a manual fact aimed at one reflex. Lena is 9 days in and the
-// window is 14, so nothing is due yet — and "zero rows" is an ordinary
-// outcome, not an error.
-await tide.fire(lumenLapse, { now: boot, by: 'tide-check' });
-await tide.tick({ now: boot });
-ok('nothing lapses before the window is up', (await count("SELECT count(*) n FROM memberships WHERE id = 'mb_lena' AND status = 'trialling'")) === 1);
+await tide.fire(lumenTrial, { now: boot, by: 'tide-check' });
+await tide.advance({ now: boot });
+ok('nothing goes out before the window opens', (await count("SELECT count(*) n FROM outbox WHERE studio_id = 'st_lumen'")) === queuedBefore);
 
-// Six days later, Lena is 15 days in.
-const later = boot + 6 * DAY;
-await tide.fire(lumenLapse, { now: later, by: 'tide-check' });
-await tide.tick({ now: later });
-await tide.tick({ now: later });
+const later = boot + 2 * DAY;
+await tide.fire(lumenTrial, { now: later, by: 'tide-check' });
+await tide.advance({ now: later });
+await tide.advance({ now: later });
 
-ok('a trial past its window lapses', (await count("SELECT count(*) n FROM memberships WHERE id = 'mb_lena' AND status = 'lapsed'")) === 1);
-ok('...and the row is otherwise untouched', (await count("SELECT count(*) n FROM memberships WHERE id = 'mb_lena' AND notes <> ''")) === 1, 'an automation that rewrote the desk’s notes would destroy evidence');
-ok('...and nobody else moved', (await count("SELECT count(*) n FROM memberships WHERE studio_id = 'st_lumen' AND status = 'active'")) >= 3);
+ok('a trial inside the window produces a message', (await count("SELECT count(*) n FROM outbox WHERE studio_id = 'st_lumen'")) > queuedBefore);
+ok('...in the studio’s own words', (await count("SELECT count(*) n FROM outbox WHERE subject = 'Your trial is nearly up'")) >= 1, 'authored on the row, not hardcoded in a shape');
+ok('...and changed nobody’s standing', (await count("SELECT count(*) n FROM subscriptions WHERE person_id = 'p_lena' AND status = 'active'")) === 1, 'an automation may add a message; it may not move a person');
 
-// THE TENANT BOUNDARY. North Rock has its own trialling member, and Lumen's
-// reflex ran with `studio_id` pinned by the engine — not by a WHERE anybody
-// wrote in the reflex, which contains no studio id at all.
-ok('a competitor’s trials are untouched', (await count("SELECT count(*) n FROM memberships WHERE studio_id = 'st_northrock' AND status = 'trialling'")) >= 1, 'the reflex names no studio; the engine supplies it');
+ok('a competitor’s outbox is untouched', (await count("SELECT count(*) n FROM outbox WHERE studio_id = 'st_northrock'")) === 0, 'the reflex names no studio; the engine supplies it');
 
 // ── idempotency ──────────────────────────────────────────────
-//
-// The task row is keyed `(reflex, cause, unit)` and written BEFORE the effect,
-// so there is no path to the effect that skips it. Re-firing the same work must
-// not lapse anybody a second time — and the WRITE re-checks `trialling` in its
-// own WHERE, so even a replayed task is a no-op against a reactivated member.
-await runtime.db.query("UPDATE memberships SET status = 'active' WHERE id = 'mb_lena'");
-await tide.tick({ now: later });
-ok('a settled firing does not run again', (await count("SELECT count(*) n FROM memberships WHERE id = 'mb_lena' AND status = 'active'")) === 1, 'idempotent by task key, and guarded by the statement');
-
-// ── fan-in: the digest ───────────────────────────────────────
-//
-// A settled firing mints a fact carrying its stats, so the digest is an
-// ordinary reflex watching an ordinary fact. It cannot run before the work,
-// because the fact it waits on does not exist until the work settles.
-for (let i = 0; i < 4; i += 1) await tide.tick({ now: later + i });
-
-const digests = await count("SELECT count(*) n FROM notifications WHERE kind = 'digest' AND studio_id = 'st_lumen'");
-ok('a settled firing feeds the digest', digests >= 1, `${digests} written — fan-in with no callback and no shared state`);
-ok('...and it is addressed to the studio, not a person', (await count("SELECT count(*) n FROM notifications WHERE kind = 'digest' AND person_id IS NULL")) >= 1);
-ok('...stamped with the studio by the engine', (await count("SELECT count(*) n FROM notifications WHERE kind = 'digest' AND studio_id = 'st_lumen'")) >= 1, 'the reflex input carries no studio id');
+const afterOnce = await count("SELECT count(*) n FROM outbox WHERE studio_id = 'st_lumen'");
+await tide.advance({ now: later });
+ok('a settled firing does not run again', (await count("SELECT count(*) n FROM outbox WHERE studio_id = 'st_lumen'")) === afterOnce, 'idempotent by task key');
 
 // ── fan-out: one task per person ─────────────────────────────
 const lumenRemind = `${LUMEN}:au_lumen_remind`;
-// FIRE ON A DAY THAT HAS WORK, chosen from the data.
-//
-// This fired at boot + one day and counted bookings at boot + two, which asserts
-// the fan-out only when the seed happens to have put a class two days out. The
-// seed is a WEEKLY grid, so that depends on which weekday the check runs — it
-// held for months and then a Tuesday came round with nothing on it and the
-// check said "a fan-out of zero would assert nothing", which is true and is not
-// a bug in the product.
-//
-// A check for "one task per person" has to pick a day with people on it. The
-// day comes from the database; the firing time is derived backwards from it, so
-// the reflex's own "tomorrow" lands exactly there.
 const busiest = await runtime.db.query<{ d: string; n: number }>(
   `SELECT cs.held_on::text d, count(*) n
      FROM bookings b JOIN class_sessions cs ON cs.id = b.session_id
@@ -182,56 +169,202 @@ const busiest = await runtime.db.query<{ d: string; n: number }>(
 const targetDay = busiest.rows[0]?.d ?? '';
 const due = Number(busiest.rows[0]?.n ?? 0);
 
-// One day before the target, at noon — so the reflex's "now + 1 day" is the day
-// the bookings are actually on.
 const fireAt = Date.parse(`${targetDay}T12:00:00Z`) - DAY;
 await tide.fire(lumenRemind, { now: fireAt, by: 'tide-check' });
-for (let i = 0; i < 4; i += 1) await tide.tick({ now: fireAt + i });
+for (let i = 0; i < 4; i += 1) await tide.advance({ now: fireAt + i });
 
-const reminders = await count("SELECT count(*) n FROM notifications WHERE kind = 'studio-message' AND studio_id = 'st_lumen'");
+const reminders = await count("SELECT count(*) n FROM outbox WHERE source = 'au_lumen_remind' AND studio_id = 'st_lumen'");
 ok('a reminder per booking, not one for the batch', reminders === due, `${reminders} written for ${due} bookings — each retries independently`);
 ok('...and there was work to fan out', due > 0, `${due} on ${targetDay} — a fan-out of zero would assert nothing`);
 if (due > 0) {
-  // THE STUDIO'S OWN WORDS. The subject used to be a sentence I wrote —
-  // "Tomorrow: <class> at <time>" — which meant every studio on the platform
-  // sent the same message and none of them could change it. It is a column
-  // now, and this asserts the studio's text actually reaches the member.
-  ok('...in the studio’s own words', (await count("SELECT count(*) n FROM notifications WHERE kind = 'studio-message' AND subject = 'See you tomorrow'")) === reminders, 'authored on the row, not hardcoded in a shape');
-  // And the facts that only the row knows are still appended, so composing a
-  // message did not cost the detail the hardcoded version had.
-  ok('...still naming the class and time', (await count("SELECT count(*) n FROM notifications WHERE kind = 'studio-message' AND body LIKE '%(%at%)'")) === reminders);
-  ok('...and addressed to the person booked', (await count("SELECT count(*) n FROM notifications WHERE kind = 'studio-message' AND person_id IS NOT NULL")) === reminders);
+  ok('...in the studio’s own words', (await count("SELECT count(*) n FROM outbox WHERE source = 'au_lumen_remind' AND subject = 'See you tomorrow'")) === reminders, 'authored on the row, not hardcoded in a shape');
+  ok('...still naming the class and time', (await count("SELECT count(*) n FROM outbox WHERE source = 'au_lumen_remind' AND body LIKE '%(%at%)'")) === reminders);
+  ok('...and addressed to the person booked', (await count("SELECT count(*) n FROM outbox WHERE source = 'au_lumen_remind' AND person_id IS NOT NULL")) === reminders);
 }
 
-// ── what the automation may NOT do ───────────────────────────
+// ── WATCHED: writes wake automations, through the bridge's shape ──
 //
-// The rung is narrow on purpose. An automation that extended `owner` would
-// have every verb it might ever want, which is the temptation this refuses.
+// Three of this app's moments are watched rather than scheduled. A watched
+// moment runs the instant its write lands: vex's write observer hands moss
+// every committed statement with its rows, and moss mints one write fact per
+// row, stamped with the writing studio's automation identity. This section
+// drives that shape DETERMINISTICALLY — the rows land by SQL and the facts
+// are ingested exactly as the bridge mints them, at times this check owns.
+// (The live path, vex write → fact → welcome with no hand on the clock, is
+// proven at the end of this file.)
+const welcomeReflex = `${LUMEN}:au_lumen_welcome`;
+// AFTER everything above, so no earlier fake-now is later than these facts.
+const joinAt = Math.max(boot + 3 * DAY, fireAt) + DAY;
+const welcomedBefore = await count("SELECT count(*) n FROM outbox WHERE source = 'au_lumen_welcome'");
+
+// THREE people join in the same minute — new humans, written down and put on
+// a plan in one breath, exactly what an intro night's counter does. Joining
+// IS the subscription row landing; that is the write the moment watches.
+for (const [person, subscription, name] of [
+  ['p_join_a', 'sub_join_a', 'Nadia Okonkwo'],
+  ['p_join_b', 'sub_join_b', 'Tomas Berg'],
+  ['p_join_c', 'sub_join_c', 'Priya Raman'],
+] as const) {
+  await runtime.db.query(`INSERT INTO people (id, email, name) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING`, [person, `${person}@example.com`, name]);
+  await runtime.db.query(
+    `INSERT INTO studio_people (id, studio_id, person_id, source) VALUES ($1, 'st_lumen', $2, 'walk-in') ON CONFLICT DO NOTHING`,
+    [`sp_${person}`, person],
+  );
+  await runtime.db.query(
+    `INSERT INTO subscriptions (id, studio_id, person_id, offering_id, status)
+     VALUES ($1, 'st_lumen', $2, 'pl_lumen_eight', 'active')
+     ON CONFLICT DO NOTHING`,
+    [subscription, person],
+  );
+  await tide.ingest({ kind: 'write', entity: 'subscriptions', op: 'insert', row: { id: subscription, studio_id: 'st_lumen', person_id: person }, at: joinAt }, { as: 'automation@st_lumen' });
+}
+
+for (let i = 1; i <= 6; i += 1) await tide.advance({ now: joinAt + i });
+
+const welcomed = (await count("SELECT count(*) n FROM outbox WHERE source = 'au_lumen_welcome'")) - welcomedBefore;
+ok('three people joining in one minute get three welcomes', welcomed === 3, `${welcomed} of 3 — overlap governs repeats, not distinct events`);
+ok('...and none of them was refused as an overlap', (await count(`SELECT count(*) n FROM tide_run WHERE reflex_id = '${welcomeReflex}' AND state = 'skipped'`)) === 0, 'a skipped run here is a member nobody greeted');
+ok('...each addressed to the person who joined', (await count("SELECT count(*) n FROM outbox WHERE source = 'au_lumen_welcome' AND person_id IS NOT NULL")) === welcomed + welcomedBefore);
+
+// And still exactly once: a delivered fact is done, and a later advance has
+// nothing to re-match — at-most-once lives on rows, not on memory.
+for (let i = 7; i <= 10; i += 1) await tide.advance({ now: joinAt + i });
+ok('...and a later advance does not greet them again', (await count("SELECT count(*) n FROM outbox WHERE source = 'au_lumen_welcome'")) - welcomedBefore === 3, 'one fact, one welcome — the fact is delivered, not re-discovered');
+
+// ── AN ENQUIRY IS A WRITE TOO ────────────────────────────────
+//
+// An enquiry is the anchor row appearing, holding nothing — no shadow table,
+// no status word. The write fact carries the anchor row; the reflex's
+// selection re-reads it through the mirrors and answers the person.
+const enquiryAt = joinAt + 2 * DAY;
+await runtime.db.query(`INSERT INTO people (id, email, name) VALUES ('p_ask', 'p_ask@example.com', 'Sam Whitlock') ON CONFLICT DO NOTHING`);
+await runtime.db.query(
+  `INSERT INTO studio_people (id, studio_id, person_id, source)
+   VALUES ('sp_ask', 'st_lumen', 'p_ask', 'website') ON CONFLICT DO NOTHING`,
+);
+await tide.ingest({ kind: 'write', entity: 'studio_people', op: 'insert', row: { id: 'sp_ask', studio_id: 'st_lumen', person_id: 'p_ask' }, at: enquiryAt }, { as: 'automation@st_lumen' });
+for (let i = 1; i <= 4; i += 1) await tide.advance({ now: enquiryAt + i });
+ok(
+  'an enquiry write produces a greeting',
+  (await count("SELECT count(*) n FROM outbox WHERE source = 'au_lumen_enquiry' AND subject = 'Thanks for getting in touch'")) >= 1,
+  'the anchor row appearing IS the moment',
+);
+
+// ── EVERY SEEDED CLOCK AUTOMATION ACTUALLY SENDS ─────────────
+//
+// Selecting somebody and reaching them are different claims, and only the
+// second one is the feature. Each clocked row this studio ships is fired by
+// hand — the builder's "Run it now" — and the outbox read back for what
+// landed. The two watched rows have no by-hand story: a write fact IS their
+// firing, and the sections above are their proof.
+//
+// These are a WINDOW on the calendar — a trial three days out, a class
+// tomorrow — so each is fired at a moment it can actually find somebody,
+// discovered by asking preview rather than by hardcoding a date that rots as
+// the seed moves. Each search starts from boot independently, because the
+// windows do not overlap: the trial closes days before the classes fill.
+for (const [automation, subject] of [
+  ['au_lumen_trial', 'Your trial is nearly up'],
+  ['au_lumen_quiet', 'We have missed you'],
+  ['au_lumen_remind', 'See you tomorrow'],
+] as const) {
+  const before = await count('SELECT count(*) n FROM outbox WHERE source = $1', [automation]);
+
+  let at = boot;
+  for (let day = 0; day <= 21; day += 1) {
+    const when = boot + day * DAY;
+    const report = await tide.preview(`${LUMEN}:${automation}`, { now: when }).catch(() => ({ selected: 0 }));
+    if (report.selected > 0) {
+      at = when;
+      break;
+    }
+  }
+
+  await tide.fire(`${LUMEN}:${automation}`, { now: at, by: 'tide-check' });
+  for (let i = 0; i < 3; i += 1) await tide.advance({ now: at + i });
+  const written = (await count('SELECT count(*) n FROM outbox WHERE source = $1', [automation])) - before;
+
+  ok(`running "${automation}" by hand reaches somebody`, written > 0, `${written} message(s)`);
+  ok(
+    '...in the studio’s own words',
+    (await count('SELECT count(*) n FROM outbox WHERE source = $1 AND subject = $2', [automation, subject])) >= written,
+    `"${subject}" — authored on the row, not hardcoded in a shape`,
+  );
+  ok('...addressed to a real person', (await count('SELECT count(*) n FROM outbox WHERE source = $1 AND person_id IS NOT NULL', [automation])) >= written);
+  ok(
+    '...and every one of them landed at this studio',
+    (await count('SELECT count(*) n FROM outbox WHERE source = $1 AND studio_id <> $2', [automation, 'st_lumen'])) === 0,
+    'the reflex names no studio; the engine supplies it',
+  );
+}
+
+// ── ONE JOIN, ONE STUDIO, ONE EMAIL ──────────────────────────
+//
+// Both studios run "welcome somebody who joins", and both watch the same
+// table. A fact once paired with reflexes by entity alone meant a person who
+// joined Lumen was emailed by NORTH ROCK — over a row its reflex had never
+// selected. The scope engine could not catch it and was not wrong to miss
+// it: the message it wrote was legitimately North Rock's row. Only the name
+// and the address inside it belonged to a competitor's member.
+//
+// The fact's identity — stamped by the bridge from the WRITE's own scope —
+// is the fence now. This is the assertion that says so.
+const soloAt = joinAt + 20 * DAY;
+await runtime.db.query(`INSERT INTO people (id, email, name) VALUES ('p_solo', 'p_solo@example.com', 'Dara Vance') ON CONFLICT DO NOTHING`);
+
+// Written down AND signed in the same breath — what an intro night's counter
+// does. The join moment should greet her; the enquiry moment gets its fact
+// too, re-reads the anchor through the mirrors, finds her already holding
+// something, and stays quiet — two watched moments over adjacent tables.
+await runtime.db.query(
+  `INSERT INTO studio_people (id, studio_id, person_id, source)
+   VALUES ('sp_solo', 'st_lumen', 'p_solo', 'walk-in') ON CONFLICT DO NOTHING`,
+);
+await runtime.db.query(
+  `INSERT INTO subscriptions (id, studio_id, person_id, offering_id, status)
+   VALUES ('sub_solo', 'st_lumen', 'p_solo', 'pl_lumen_eight', 'active') ON CONFLICT DO NOTHING`,
+);
+await tide.ingest({ kind: 'write', entity: 'studio_people', op: 'insert', row: { id: 'sp_solo', studio_id: 'st_lumen', person_id: 'p_solo' }, at: soloAt }, { as: 'automation@st_lumen' });
+await tide.ingest({ kind: 'write', entity: 'subscriptions', op: 'insert', row: { id: 'sub_solo', studio_id: 'st_lumen', person_id: 'p_solo' }, at: soloAt }, { as: 'automation@st_lumen' });
+for (let i = 1; i <= 5; i += 1) await tide.advance({ now: soloAt + i });
+
+const hers = await runtime.db.query<{ studio_id: string; source: string }>(
+  `SELECT studio_id, source FROM outbox WHERE person_id = 'p_solo' ORDER BY id`,
+);
+ok('somebody joining one studio hears from that studio', hers.rows.some((r) => r.source === 'au_lumen_welcome'), `${hers.rows.length} message(s)`);
+ok(
+  '...and from nobody else',
+  hers.rows.every((r) => r.studio_id === 'st_lumen'),
+  hers.rows.map((r) => `${r.studio_id}/${r.source}`).join(', ') || 'none',
+);
+ok('...exactly once — one fact, one welcome', hers.rows.filter((r) => r.source === 'au_lumen_welcome').length === 1);
+ok(
+  '...and the enquiry automation did not greet a member who joined',
+  hers.rows.every((r) => r.source !== 'au_lumen_enquiry'),
+  'its selection re-checked the mirrors and found her already holding a plan',
+);
+
+// ── the ledger survives the process ──────────────────────────
+//
+// Rows, in the application's own database — so `runs` is a query, and the
+// screen that reads it is reading what actually happened rather than what this
+// process happens to remember.
+const persisted = await count(`SELECT count(*) n FROM tide_run WHERE reflex_id LIKE '${LUMEN}:%'`);
+ok('the run ledger is rows in the database', persisted > 0, `${persisted} runs — a memory store starts empty every boot`);
+ok('...carrying the identity each ran under', (await count(`SELECT count(*) n FROM tide_run WHERE reflex_id LIKE '${LUMEN}:%' AND as_who = 'automation@st_lumen'`)) === persisted, 'the column a scope rule matches, instead of a prefix on the id');
+ok('...and no run of one studio is filed under another', (await count(`SELECT count(*) n FROM tide_run WHERE reflex_id LIKE '${LUMEN}:%' AND as_who <> 'automation@st_lumen'`)) === 0);
+
+// ── what the automation may NOT do ───────────────────────────
 const robot = 'automation@lumen.studio';
 for (const [what, fingerprint, context] of [
-  ['change a price', 'plans/update', { planId: 'x', name: 'Free', priceCents: 0, interval: 'month', classAllowance: '' }],
+  ['change a price', 'offerings/update', { offeringId: 'x', name: 'Free', priceCents: 0, interval: 'month', classAllowance: '', minimumTermMonths: 0, noticeDays: 0, credits: null, validDays: null }],
   ['put somebody on staff', 'staff/create', { staffId: 'x', personId: 'p_ava', role: 'owner' }],
-  ['check somebody in', 'check-ins/mark', { membershipId: 'mb_ava', sessionId: 'x' }],
+  ['check somebody in', 'check-ins/mark', { personId: 'p_ava', sessionId: 'x' }],
 ] as const) {
   const result = await asPrincipal(robot, '/api/automation/vex', { fingerprint, context });
   ok(`an automation cannot ${what}`, JSON.stringify(result).includes('status'), JSON.stringify(result).slice(0, 70));
 }
 
-// ONE REFUSAL LEFT THIS LIST, and it is worth saying why rather than quietly
-// dropping it. "An automation cannot read the takings" used to pass, and it
-// passed BY ACCIDENT: the revenue read joined `plans`, which this rung does not
-// hold, so it bounced on a table rather than on a decision. The read is a sum
-// over `subscriptions` now — one table, which this rung DOES hold, because
-// "whose subscription ends this month" is a job it was given.
-//
-// So the sum is derivable from rows it already reads one at a time, exactly as
-// attendance reports are derivable for the desk. Asserting a refusal here would
-// be asserting the shape of a query rather than the shape of a policy, and the
-// next join added anywhere would flip it again.
-//
-// What IS a boundary for this rung is above: it cannot change a price, cannot
-// put somebody on staff, and cannot mark an attendance. Those are verbs it was
-// never issued, and no query shape can give them back.
 const robotRevenue = await asPrincipal(robot, '/api/automation/vex', { fingerprint: 'studio/revenue/expected', context: {} });
 ok(
   'an automation reads the sum of rows it already reads individually',
@@ -239,27 +372,52 @@ ok(
   'a refusal here would have been a fact about the join list, not about the rung',
 );
 
-// And it holds no application at all — no shell, no nav, no screen. Ring 1
-// resolving to nothing is the right answer for something that never logs in.
-const robotCatalog = await asPrincipal(robot, '/api/automation/vex', { fingerprint: 'automation/notifications', context: {} });
+const robotCatalog = await asPrincipal(robot, '/api/automation/vex', { fingerprint: 'automation/outbox', context: {} });
 ok('an automation still reads what its rung grants', !JSON.stringify(robotCatalog).includes('"status"'), JSON.stringify(robotCatalog).slice(0, 60));
 
-// Cross-tenant, through the raw surface rather than through a reflex — the
-// same assertion the tenancy check makes for people, made for robots.
 const northRobot = 'automation@northrock.gym';
-const lumenNotes = await asPrincipal(robot, '/api/automation/vex', { fingerprint: 'automation/notifications', context: {} });
-const rockNotes = await asPrincipal(northRobot, '/api/automation/vex', { fingerprint: 'automation/notifications', context: {} });
+const lumenNotes = await asPrincipal(robot, '/api/automation/vex', { fingerprint: 'automation/outbox', context: {} });
+const rockNotes = await asPrincipal(northRobot, '/api/automation/vex', { fingerprint: 'automation/outbox', context: {} });
 ok('two studios’ automations see different inboxes', JSON.stringify(lumenNotes) !== JSON.stringify(rockNotes), 'scope, not a filter either reflex wrote');
-// North Rock's inbox is NOT empty, and that is correct rather than a leak: a
-// tick materializes every armed clock occurrence, so both studios' nightly work
-// ran. What matters is that neither inbox contains a row belonging to the
-// other — asserted on ids, which cannot coincide.
-const idsOf = (value: unknown): string[] => (Array.isArray(value) ? value.map((r) => String((r as { notification_id?: unknown }).notification_id)) : []);
+const idsOf = (value: unknown): string[] => (Array.isArray(value) ? value.map((r) => String((r as { message_id?: unknown }).message_id)) : []);
 const shared = idsOf(lumenNotes).filter((id) => idsOf(rockNotes).includes(id));
 ok('...and the two share not one row', shared.length === 0, `${idsOf(lumenNotes).length} vs ${idsOf(rockNotes).length}, no overlap`);
-ok('...each seeing only what its own studio wrote', (await count("SELECT count(*) n FROM notifications WHERE studio_id NOT IN ('st_lumen', 'st_northrock')")) === 0);
+ok('...each seeing only what its own studio wrote', (await count("SELECT count(*) n FROM outbox WHERE studio_id NOT IN ('st_lumen', 'st_northrock')")) === 0);
+
+// ── THE LIVE PATH: a real write, no hand on any clock ────────
+//
+// Everything above drives the engine with a fake `now`. This is the loop as
+// deployed: a member picks a plan on the app surface; vex commits the write
+// and its observer hands moss the rows; moss mints a write fact stamped
+// `automation@st_lumen` and wakes the driver; the welcome automation runs as
+// the studio's own robot and queues the greeting — moments after the click,
+// with nobody advancing anything.
+const started = await asPrincipal('tom.vogel@example.com', '/api/me/vex', {
+  fingerprint: 'subscriptions/start',
+  context: { personId: 'p_tomv', offeringId: 'pl_lumen_eight', paidVia: 'manual' },
+});
+const startedRow = started as { id?: unknown; status?: unknown } | null;
+ok('a member starts a plan on the live surface', startedRow?.status === 'active' && typeof startedRow.id === 'string', JSON.stringify(started).slice(0, 70));
+
+// The mint is post-commit and off the response path, so give it a moment to
+// land, then drain — this check drives the engine itself (world.ts stops the
+// live driver, because two clocks over one ledger is two of everything), so
+// what a deployment gets for free is done by hand here. The FACT is the
+// claim: nobody called `fire`, and the write alone put it in the ledger.
+const liveAt = soloAt + DAY;
+let tomWelcomes = 0;
+for (let attempt = 0; attempt < 40 && tomWelcomes === 0; attempt += 1) {
+  await new Promise((resolve) => setTimeout(resolve, 25));
+  for (let i = 0; i < 4; i += 1) await tide.advance({ now: liveAt + i });
+  tomWelcomes = await count("SELECT count(*) n FROM outbox WHERE person_id = 'p_tomv' AND source = 'au_lumen_welcome'");
+}
+ok('...and the welcome automation heard the write itself', tomWelcomes === 1, `${tomWelcomes} greeting(s) — vex → fact → reflex → outbox, with nobody firing it`);
+const liveFact = await runtime.db.query<{ n: number }>(
+  `SELECT count(*) n FROM tide_fact WHERE kind = 'write' AND entity = 'subscriptions' AND as_who = 'automation@st_lumen' AND row->>'person_id' = 'p_tomv'`,
+);
+ok('...because the write itself became a fact', Number(liveFact.rows[0]?.n ?? 0) >= 1, 'minted at the vex choke point, stamped with the studio whose write it was');
 
 void CAST;
 void NORTHROCK;
 
-report('automations are principals: authored, scoped, idempotent, and previewable.');
+report('automations are principals: authored, scoped, idempotent, and previewable — and a write wakes them, not a clock.');

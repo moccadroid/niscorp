@@ -1,0 +1,29 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "lyra",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["--filter", "lyra", "dev"],
+      "port": 5180
+    },
+    {
+      "name": "lyra-admin",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["--filter", "lyra-admin", "dev"],
+      "port": 5190
+    },
+    {
+      "name": "lyra-integrations",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["--filter", "lyra-integrations", "serve"],
+      "port": 8799
+    },
+    {
+      "name": "showroom",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["--filter", "showroom", "dev", "--port", "5199", "--strictPort", "--no-open"],
+      "port": 5199
+    }
+  ]
+}

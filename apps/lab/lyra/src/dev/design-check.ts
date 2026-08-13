@@ -1,21 +1,14 @@
-// THE SURFACE, HELD BY A CHECK.
-//
-// Twenty-six suites assert what the application DOES. Nothing asserted what it
-// LOOKS like, and the gap showed: every status badge in the deployment failed
-// WCAG AA on both themes for months (3.07:1 at the worst, where 4.5 is the
-// floor), an owner's role rendered in the same red as a failed payment, and a
-// paragraph was being handed to a cell that truncates at the ellipsis. All
-// three were invisible to a suite that only ever asked whether the right rows
-// came back.
-//
-// So this is the design half, and the assertions are the same kind as the rest:
-// mechanical, falsifiable, and about the whole deployment rather than one
-// screen. Nothing here renders anything — it reads the palette, the seeded
-// themes, the vex entries and every layout in the catalog.
-//
 // Run: pnpm --filter lyra exec tsx src/dev/design-check.ts
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
+
+/** Every .ts under a directory, with its text — for the rules that are about source. */
+const walkSource = (dir: string): { path: string; text: string }[] =>
+  readdirSync(dir).flatMap((name) => {
+    const path = join(dir, name);
+    if (statSync(path).isDirectory()) return walkSource(path);
+    return path.endsWith('.ts') ? [{ path: path.replace(/\\/g, '/'), text: readFileSync(path, 'utf8') }] : [];
+  });
 import { CATALOG_DEFINITIONS } from '@lyra/app/action-catalog';
 import { HUES } from '@lyra/ui/lib/tokens';
 import { ICON_NAMES } from '@lyra/ui/lib/icons';
@@ -36,9 +29,6 @@ const ratio = (a: string, b: string): number => {
   return (Math.max(l1, l2) + 0.05) / (Math.min(l1, l2) + 0.05);
 };
 
-// The two blocks in theme.css: the root palette and the dark scheme. Parsed
-// rather than imported because CSS is where they live — a check that read a
-// duplicate copy in TypeScript would pass while the stylesheet was wrong.
 const blockOf = (selector: string): Record<string, string> => {
   const at = themeCss.indexOf(selector);
   const open = themeCss.indexOf('{', at);
@@ -54,9 +44,6 @@ const blockOf = (selector: string): Record<string, string> => {
 const light = blockOf(':root {');
 const dark = { ...light, ...blockOf(":root[data-scheme='dark']") };
 
-// A token may alias another (`--alert: var(--hue-rose)`), so resolve before
-// measuring — the aliasing is the whole reason status and identity stay one
-// palette instead of two that drift.
 const resolve = (block: Record<string, string>, name: string, depth = 0): string => {
   const raw = block[name];
   if (raw === undefined || depth > 4) return '#000000';
@@ -65,8 +52,6 @@ const resolve = (block: Record<string, string>, name: string, depth = 0): string
 };
 
 // ── 1. every pill passes, in every scheme ────────────────────
-//
-// Badge text is 11px semibold — normal text by WCAG, so 4.5:1, not 3:1.
 const TONES = ['calm', 'warm', 'alert', 'good'];
 const AA = 4.5;
 
@@ -86,16 +71,9 @@ for (const [schemeName, block, ground] of [
   ok(`every ${schemeName} pill and mark passes AA`, failures.length === 0, failures.join(' · ') || `${TONES.length + HUES.length} colours, ≥${AA}:1 against their pill and the page`);
 }
 
-// FALSIFIABLE: the measurement has to be able to fail. The old palette is the
-// fixture — `--alert #dc2626` on the charcoal theme's `#2e1010` measured 3.63.
 ok('...and the check can see a failure', ratio('#dc2626', '#2e1010') < AA, `the palette this replaced: ${ratio('#dc2626', '#2e1010').toFixed(2)}:1`);
 
 // ── 2. a studio's theme cannot break its own contrast ────────
-//
-// Sand overrode no status token and Charcoal could only reach the soft
-// backgrounds, so neither could fix what the other half of the pair did. A
-// theme declares a SCHEME now; if one ever hand-lists a colour again, this is
-// what notices.
 const themeRows = await runtime.db.query('SELECT name, tokens FROM themes');
 for (const raw of themeRows.rows as { name: string; tokens: unknown }[]) {
   const tokens = (typeof raw.tokens === 'string' ? JSON.parse(raw.tokens) : raw.tokens) as Record<string, string>;
@@ -113,9 +91,6 @@ for (const raw of themeRows.rows as { name: string; tokens: unknown }[]) {
 }
 
 // ── 3. identity never wears a status colour ──────────────────
-//
-// The rule the whole palette split exists for. A role, a programme or a rank
-// picks a HUE; `alert` is a claim that something is wrong.
 const TONE_WORDS = new Set(['calm', 'warm', 'alert', 'good', 'accent', 'neutral']);
 
 const programColours = await runtime.db.query('SELECT name, colour FROM programs');
@@ -125,17 +100,12 @@ ok('no programme is coloured with a status word', badProgram.length === 0, badPr
 const allProgramsKnown = (programColours.rows as { colour: string }[]).every((p) => (HUES as readonly string[]).includes(p.colour));
 ok('...and every one names a hue the kit has', allProgramsKnown, (HUES as readonly string[]).join(' '));
 
-// The role scale, read out of the entry that computes it rather than restated.
 const staffSource = readFileSync(join(here, '../app/vex/staff.entries.ts'), 'utf8');
 const roleBlock = staffSource.slice(staffSource.indexOf('const roleHue'), staffSource.indexOf('export const staffList'));
 const roleColours = [...roleBlock.matchAll(/then: '([a-z]+)'/g)].map((m) => m[1] ?? '');
 ok('no role is coloured with a status word', roleColours.every((c) => !TONE_WORDS.has(c)), roleColours.join(', '));
 
 // ── 4. prose is never handed to a cell that truncates ────────
-//
-// `kind: 'text'` is nowrap + ellipsis unless it says `wrap`. A key whose name
-// promises a sentence in one of those is the add-on store's clipped
-// description, waiting to happen again.
 const PROSE_KEYS = /(blurb|description|adds|hint|body|notes|message|summary)$/i;
 const truncated: string[] = [];
 const walk = (node: unknown, actionId: string): void => {
@@ -159,8 +129,6 @@ for (const [id, definition] of Object.entries(CATALOG_DEFINITIONS)) walk(definit
 ok('no sentence is rendered through a truncating cell', truncated.length === 0, truncated.join(' · ') || 'prose goes to Prose, a wrapping cell, or a card');
 
 // ── 5. every icon a layout names actually exists ─────────────
-//
-// An unknown name renders nothing — correct at runtime, invisible in review.
 const missing: string[] = [];
 const icons = (node: unknown, actionId: string): void => {
   if (Array.isArray(node)) return node.forEach((n) => icons(n, actionId));
@@ -178,16 +146,6 @@ for (const [id, definition] of Object.entries(CATALOG_DEFINITIONS)) icons(defini
 ok('every icon a layout names is in the kit', missing.length === 0, missing.join(', ') || `${ICON_NAMES.length} names available`);
 
 // ── 6. no list is too wide for the screen it runs on ─────────
-//
-// `Rows` gives each fraction a 150px floor and adds a 14px gutter, so a spec's
-// desktop minimum is arithmetic. Past the viewport it scrolls sideways — and
-// on a phone every display column past the SECOND is hidden outright, so a
-// tenth column is not narrow, it is ABSENT.
-//
-// Two, not three, and the number is not a taste call: three cells overflowed
-// 375px and threw the third onto a ragged second line. The rule lives in
-// ui.css (`.ly-row-item > *:nth-child(n + 3)`) and this mirrors it — if one
-// moves, move the other, or this reports a drop that does not happen.
 const WIDEST = 1000;
 const wide: string[] = [];
 const dropped: string[] = [];
@@ -209,13 +167,57 @@ const measure = (node: unknown, actionId: string): void => {
 };
 for (const [id, definition] of Object.entries(CATALOG_DEFINITIONS)) measure(definition.layout, id);
 
-// Recorded rather than enforced, for now: the widest specs are real management
-// tables and narrowing them is a design pass, not a rename. What the check
-// buys today is that nobody adds a column without seeing the number.
 ok('the widest lists are known', true, wide.length === 0 ? 'every spec fits 1000px' : wide.join(' · '));
 ok('...and so is what a phone drops', true, dropped.length === 0 ? 'no spec loses a column on a phone' : dropped.join(' · '));
 
 // ── 7. the kit's vocabulary is honestly advertised ───────────
 ok('every registered component is a real name', COMPONENT_NAMES.length > 0 && new Set(COMPONENT_NAMES).size === COMPONENT_NAMES.length, `${COMPONENT_NAMES.length} components, no duplicates`);
 
-report('the surface is checkable: contrast, colour meaning, prose, icons and width.');
+// ── 8. money says what it is ─────────────────────────────────
+//
+// A currency symbol written into a formatter is a promise that every studio
+// ever using this app charges in that currency. `€` sat in `money()` and
+// `priceText()` while `plans.currency` sat in the schema being read by nothing —
+// so the column was documentation and the glass was a guess.
+//
+// The formatters take a currency now and TypeScript refuses a call without one,
+// which is the real enforcement. This is the other half: nothing may reintroduce
+// a symbol by writing one into a mapping or a layout. It is a source scan
+// because that is where the mistake would be made — one hardcoded glyph in one
+// screen is exactly the shape of the bug this replaced.
+const moneyFiles = [...walkSource('src/app/vex'), ...walkSource('src/app/prisms'), ...walkSource('src/app/actions')];
+
+// `$` CANNOT BE PART OF THIS RULE as a bare character: it is the prism sigil, so
+// `$ref`, `$case` and `$join` are on nearly every line in these directories. A
+// first attempt at this check flagged 600 of them and would have been deleted
+// within the hour, which is how a check earns the reputation that gets the next
+// one ignored.
+//
+// So: the three glyphs that can only mean money, plus a dollar sign only where
+// it opens a string and is followed by a digit, a space, or the closing quote —
+// `'$'` and `'$89'` are money, `'$.result'` and `'$ref'` are not.
+const CURRENCY_GLYPH = /['"`][^'"`\n]*[€£¥][^'"`\n]*['"`]|['"`]\$(?:[\d\s]|['"`])/;
+const hardcoded: string[] = [];
+for (const file of moneyFiles) {
+  // The symbol table in format.prism.ts is where glyphs are ALLOWED to live —
+  // one map, keyed by currency code, and the only place that names them.
+  if (file.path.endsWith('format.prism.ts')) continue;
+  file.text.split(/\r?\n/).forEach((line, i) => {
+    if (CURRENCY_GLYPH.test(line) && !line.trimStart().startsWith('//')) hardcoded.push(`${file.path}:${i + 1}`);
+  });
+}
+ok('no currency symbol is written into a screen or a mapping', hardcoded.length === 0, hardcoded.join(', ') || `${moneyFiles.length} files, every glyph behind a currency code`);
+
+// The rule has to be able to see one, and to leave the sigil alone. Both
+// directions, because a rule that flags everything and a rule that flags nothing
+// are equally useless and look completely different in the log.
+ok(
+  '...and the rule knows money from a prism sigil',
+  CURRENCY_GLYPH.test("price_display: '€89'") &&
+    CURRENCY_GLYPH.test("parts: ['$', amount]") &&
+    !CURRENCY_GLYPH.test("value: { $ref: '$.result' }") &&
+    !CURRENCY_GLYPH.test("price_display: priceText(row('price_cents'), row('currency'))"),
+  'flags a glyph, ignores $ref and $.result',
+);
+
+report('the surface is checkable: contrast, colour meaning, prose, icons, width, and money that says what it is.');

@@ -1,5 +1,5 @@
 import type { Query, ScopeValues, MutationDefinition } from '@niscorp/vex';
-import { ACCOUNTS, DEMO_CUSTOMER_ID, DEMO_PRODUCT_ID, DEMO_ORDER_ID } from './runtime/seed-data';
+import { ACCOUNTS, DEMO_CUSTOMER_ID, DEMO_PRODUCT_ID, DEMO_ORDER_ID, DEMO_AIRPODS_ID, DEMO_KINDLE_ID } from './runtime/seed-data';
 
 // ═══════════════════════════════════════════════════════════
 // Canned scenarios — each is a real request (intent + shape) plus
@@ -655,5 +655,78 @@ export const scenarios: readonly VexScenario[] = [
     body: {
       mutation: { op: 'delete', table: 'orders', where: { eq: ['orders.id', 'anything'] } },
     },
+  },
+  {
+    id: 'mutation-conflict',
+    name: 'onConflict — the DB arbitrates',
+    description:
+      'Create-or-fetch in ONE atomic statement: INSERT … ON CONFLICT (email) DO UPDATE SET email = email. The no-op "touch" keeps RETURNING * yielding the row on BOTH paths — a fresh email inserts, a known one returns the existing row (same id, original created_at, name NOT overwritten). The target is validated against the introspected unique constraints at replay: a target that arrests nothing is an authoring error, not a runtime surprise. And because DO UPDATE is an update, the policy must grant the update phase — insert-only would refuse it.',
+    kind: KIND_MUTATIONS,
+    mode: 'mutate',
+    intent: 'Sign up a customer — or recognise them by email',
+    shape: { id: '', name: '', email: '', status: '' },
+    mutation: {
+      op: 'insert',
+      table: 'customers',
+      values: { email: { $context: 'email' }, name: { $context: 'name' } },
+      onConflict: { target: ['email'], set: { email: { $context: 'email' } } },
+    },
+    context: { email: 'nia.okafor@example.com', name: 'Nia Okafor' },
+    editable: [
+      { key: 'email', label: 'Email', options: ['nia.okafor@example.com', 'alice.johnson@example.com', 'sam.pryce@example.com'] },
+    ],
+    note: "Run with alice.johnson@example.com — a seeded customer. You get Alice's existing row back (her id, her name, her created_at), no duplicate, no race. That is the DB arbitrating insert-vs-update, not the caller.",
+  },
+  {
+    id: 'mutation-lookup',
+    name: '$lookup — a value read at write time',
+    description:
+      "The caller knows the tag's NAME, the row needs its id. A { $lookup } value compiles to an inline scalar subquery — INSERT … VALUES ($product, (SELECT id FROM tags WHERE name = $name)) — one statement, no read-then-write round trip. The lookup READS, so the read-phase scope rules of `tags` apply under the same policy the write runs with: a mutation entry is never a read-scope bypass. ON CONFLICT DO NOTHING makes it idempotent — tagging an already-tagged product returns no row instead of a constraint error (and needs no update grant).",
+    kind: KIND_MUTATIONS,
+    mode: 'mutate',
+    intent: 'Tag the iPhone by tag name',
+    shape: { product_id: '', tag_id: '' },
+    mutation: {
+      op: 'insert',
+      table: 'product_tags',
+      values: {
+        product_id: { $context: 'productId' },
+        tag_id: { $lookup: { from: 'tags', field: 'id', where: { eq: ['tags.name', { $context: 'tag' }] } } },
+      },
+      onConflict: { target: ['product_id', 'tag_id'] },
+    },
+    context: { productId: DEMO_PRODUCT_ID, tag: 'eco-friendly' },
+    editable: [{ key: 'tag', label: 'Tag', options: ['eco-friendly', 'trending', 'bestseller'] }],
+    note: "The iPhone already carries 'bestseller' from the seed. Pick it and re-run: DO NOTHING — the empty result IS the answer 'already tagged'. Pick a fresh tag and the row comes back.",
+  },
+  {
+    id: 'mutation-insert-each',
+    name: 'insertEach — one statement, N rows',
+    description:
+      'A caller-sized list — "add these three items to the order" — as ONE authored statement: INSERT … SELECT … FROM jsonb_array_elements($items). { $item: "key" } values read from the current element and are cast to the column\'s type from the introspected schema; $context values are constant across rows; scope rules pin their columns on EVERY row. The list length is the caller\'s business, the statement is the author\'s — no code loop, no N round trips, one transaction by construction.',
+    kind: KIND_MUTATIONS,
+    mode: 'mutate',
+    intent: "Add three items to Alice's order",
+    shape: [{ id: '', order_id: '', product_id: '', quantity: 0, unit_price: 0 }],
+    mutation: {
+      op: 'insertEach',
+      table: 'order_items',
+      items: { $context: 'items' },
+      values: {
+        order_id: { $context: 'orderId' },
+        product_id: { $item: 'productId' },
+        quantity: { $item: 'qty' },
+        unit_price: { $item: 'price' },
+      },
+    },
+    context: {
+      orderId: DEMO_ORDER_ID,
+      items: [
+        { productId: DEMO_PRODUCT_ID, qty: 1, price: 999.99 },
+        { productId: DEMO_AIRPODS_ID, qty: 2, price: 249.0 },
+        { productId: DEMO_KINDLE_ID, qty: 1, price: 149.99 },
+      ],
+    },
+    note: 'The reply is the three inserted rows — RETURNING * over the whole SELECT. An empty items array inserts nothing; a non-array is refused loudly before any SQL runs.',
   },
 ];

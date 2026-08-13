@@ -37,9 +37,6 @@ export const Text: NovaComponent<z.infer<typeof TextProps>> = ({ size, color, we
 );
 Text.meta = { description: 'Text. Size and weight carry the hierarchy — there is no second typeface in this kit.', propsSchema: TextProps };
 
-// A pill. `tone` says a STATE (five words), `hue` says an IDENTITY (ten) — a
-// badge takes one or the other, and taking a hue is what stopped an owner's
-// role reading as a danger warning on their own staff roster.
 const BadgeProps = z.object({ tone: toneToken, hue: hueToken, label: z.string().optional(), icon: z.string().optional() }).strict();
 type BadgeP = z.infer<typeof BadgeProps> & { children?: React.ReactNode };
 
@@ -71,10 +68,6 @@ Badge.meta = { description: 'A small status pill. `tone` is a token, so a status
 const StatProps = z.object({ label: z.string(), value: z.string(), hint: z.string().optional(), tone: toneToken }).strict();
 
 export const Stat: NovaComponent<Partial<z.infer<typeof StatProps>>> = ({ label, value, hint, tone }: Partial<z.infer<typeof StatProps>>) => (
-  // `minWidth: 0` on the column and `overflowWrap` on the value: a Stat holds
-  // figures most of the time, but it also holds an email address, and a long
-  // one used to run straight out of its card. Wrapping is right for text and
-  // harmless for a number, which never reaches the wrap.
   <div style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
     <span style={{ fontSize: SIZE['xs'], color: COLOR['mute'], fontWeight: WEIGHT['medium'], textTransform: 'uppercase', letterSpacing: '0.06em' }}>{label}</span>
     <span
@@ -96,19 +89,6 @@ export const Stat: NovaComponent<Partial<z.infer<typeof StatProps>>> = ({ label,
 );
 Stat.meta = { description: 'A figure with its label. Formatting happens upstream in a transform — this renders strings.', propsSchema: StatProps };
 
-// A STRIP OF COLORED SEGMENTS — a belt, a flag, a spectrum. Deliberately
-// generic: the kit knows how to paint bands, never what a rank is. The colors
-// are CONTENT (they arrive on rows, authored by whoever owns the domain — a
-// discipline pack's ranks, a program's palette), not theme — the same standing
-// an avatar image has. That is the one licensed exception to "layouts carry no
-// colour": these are somebody's data wearing its own skin. The hairline ring
-// is what keeps a white band visible on a white ground and a black band on a
-// dark one, in both themes, without asking the data to care.
-// A segment is a color, or a color carrying TICKS — small upright marks
-// painted across it (tape on a belt bar, notches on a gauge). `w` is a flex
-// weight so one segment can be wider than its neighbours. Still domain-blind:
-// the kit paints segments and marks; what they MEAN belongs to whoever
-// authored the row.
 const SegmentSchema = z.union([
   z.string(),
   z
@@ -167,19 +147,7 @@ export const Bands: NovaComponent<Partial<z.infer<typeof BandsProps>>> = ({ band
 };
 Bands.meta = { description: 'A horizontal strip of colored segments; a segment may carry tick marks. Colors are content from rows, never theme tokens.', propsSchema: BandsProps };
 
-// ── PROSE ────────────────────────────────────────────────────
-//
-// The kit had nowhere to put a sentence. `Text` is a `<span>`: no leading, no
-// measure, no paragraph spacing, and its one length control is `truncate`,
-// which is the opposite of prose. So every explanation in the app got squeezed
-// through something else — a row subtitle, an 11px field hint, a `text` cell
-// that clips at the ellipsis — and `rows.tsx` ended up carrying the verdict in
-// a comment: "if a subtitle is too long for a row, the fix is a shorter
-// subtitle." No. The fix is somewhere to put a paragraph.
-//
-// A MEASURE IS THE POINT. Body copy on a 1300px desktop runs to 180 characters
-// a line, which nobody reads. This caps at 62ch by default and takes a number
-// when a caller knows better.
+// ── prose ────────────────────────────────────────────────────
 const ProseProps = z
   .object({
     size: sizeToken,
@@ -206,12 +174,7 @@ export const Prose: NovaComponent<z.infer<typeof ProseProps>> = ({ size, color, 
 );
 Prose.meta = { description: 'A paragraph: real leading, a readable measure, and it wraps. For explanations — Text is for labels and values.', propsSchema: ProseProps };
 
-// ── FIELD ────────────────────────────────────────────────────
-//
-// A label and its value. Obvious, and it did not exist — so `Stat` became the
-// default, and a member's record rendered `omar.haddad@example.com` at 22px in
-// tabular numerals, in its own bordered card, three cards wide. `Stat` is for
-// a FIGURE (412 classes, €595 a month); this is for a fact.
+// ── field ────────────────────────────────────────────────────
 const FieldProps = z
   .object({
     label: z.string(),
@@ -239,15 +202,7 @@ export const Field: NovaComponent<Partial<z.infer<typeof FieldProps>>> = ({ labe
 };
 Field.meta = { description: 'A label and its value, sized for text. Stat is for figures; this is for facts.', propsSchema: FieldProps };
 
-// ── METER ────────────────────────────────────────────────────
-//
-// A quantity against its limit. The app had no way to draw one, so capacity
-// was a string plus a badge colour — "12 of 20" in amber — which makes the
-// reader do the division. A bar is read at a glance and the number stays for
-// the reader who wants it.
-//
-// The FULL case is the one that matters at a front desk, so it is a state
-// (tone), not a hue: at capacity the bar takes `warm`, over it `alert`.
+// ── meter ────────────────────────────────────────────────────
 const MeterProps = z
   .object({
     value: z.number(),
@@ -298,16 +253,7 @@ const RuleProps = z.object({ my: z.number().optional() }).strict();
 export const Rule: NovaComponent<z.infer<typeof RuleProps>> = ({ my }: z.infer<typeof RuleProps>) => <hr style={{ border: 0, borderTop: '1px solid var(--line)', margin: `${my ?? 0}px 0`, width: '100%' }} />;
 Rule.meta = { description: 'A horizontal rule.', propsSchema: RuleProps };
 
-// ── THE ICON ─────────────────────────────────────────────────
-//
-// A name from a fixed vocabulary (ui/lib/icons.ts), never a path. An unknown
-// name renders NOTHING rather than a broken glyph or a placeholder box: an
-// icon is decoration on top of a label everywhere the kit uses one, so its
-// absence costs a little clarity and never a meaning.
-//
-// `currentColor` and `1em`-relative sizing by default, so an icon inside a
-// button is the button's colour at the button's size without either of them
-// being told about the other.
+// ── the icon ─────────────────────────────────────────────────
 const IconProps = z
   .object({
     name: z.string().describe('A name from the kit vocabulary — see ui/lib/icons.ts'),
@@ -341,22 +287,12 @@ export const Icon: NovaComponent<Partial<z.infer<typeof IconProps>>> = ({ name, 
 };
 Icon.meta = { description: 'An icon by NAME from the kit vocabulary. Decorative — an unknown name renders nothing rather than a broken box.', propsSchema: IconProps };
 
-// A mark in a stream's colour. The colour is a TOKEN name held on the row —
-// never a hex — which is what lets a theme restyle the whole schedule. It
-// accepts a HUE (a program, a rank: an identity) or a tone (a state), because
-// one prop serves both kinds of list; which one a row is allowed to carry is
-// settled where the row is authored, and `design-check` holds it.
 const DotProps = z.object({ tone: markToken, size: z.number().optional() }).strict();
 export const Dot: NovaComponent<z.infer<typeof DotProps>> = ({ tone, size }: z.infer<typeof DotProps>) => (
   <span style={{ display: 'inline-block', flexShrink: 0, width: size ?? 8, height: size ?? 8, borderRadius: '50%', background: markColor(tone) }} />
 );
 Dot.meta = { description: 'A small colour mark, for which stream or rank a thing belongs to.', propsSchema: DotProps };
 
-// INITIALS, AND WHICH COLOUR THEY WEAR. Left on `neutral` every avatar in a
-// roll is the same grey disc and the column reads as texture; derived from the
-// name, a roster becomes scannable — you find Omar by the colour you have seen
-// forty times, before you have read anything. The hue is a hash of the name,
-// so it is stable per person, needs no column, and means nothing.
 const AvatarProps = z.object({ name: z.string(), size: z.number().optional(), tone: toneToken, hue: hueToken }).strict();
 export const Avatar: NovaComponent<Partial<z.infer<typeof AvatarProps>>> = ({ name, size, tone, hue }: Partial<z.infer<typeof AvatarProps>>) => {
   const initials = (name ?? '')

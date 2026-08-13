@@ -29,7 +29,7 @@ const onReminderDue: ReflexInput = {
 };
 
 const effects = {
-  'dunning.open': { touches: ['dunning_cases'], run: (input: unknown) => input },
+  'dunning.open': { writes: ['dunning_cases'], run: (input: unknown) => input },
   'mail.send': { run: (input: unknown) => input },
 };
 
@@ -59,6 +59,6 @@ export const Demo = () => (
         fact: { kind: 'write', entity: 'dunning_reminders', op: 'insert', row: { member: 'Ada' }, at: 0, notBefore: Date.UTC(2026, 2, 4, 9, 0) },
       },
     ]}
-    note="Push the failed charge, then press one tick. Push the SAME webhook again — the ledger does not grow, because the provider's event id already arrived. The succeeded webhook is delivered but does not match the `when`, which is recorded rather than silent. Finally schedule the reminder: it sits in the fact panel marked with the time it waits for, and only fires once you cross it."
+    note="Push the failed charge, then press one step. Push the SAME webhook again — the ledger does not grow, because the provider's event id already arrived. The succeeded webhook is delivered but does not match the `when`, which is recorded rather than silent. Finally schedule the reminder: it sits in the fact panel marked with the time it waits for, and only fires once you cross it."
   />
 );

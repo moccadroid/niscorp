@@ -1,24 +1,10 @@
 import type { CacheEntry } from './index';
-import { dayText, fillText, fillTone, statusText, statusTone } from '@lyra/app/prisms/format.prism';
-
-// ONE CLASS, LOOKED AT PROPERLY.
-//
-// The timetable answers "what is on" and the check-in screen answers "who has
-// arrived". Neither answers the question an owner actually asks — who is coming
-// to this class — and the gap was filled by opening the DESK's check-in tool
-// over the calendar: a sheet with its own today-only class picker inside it,
-// showing a roster for a class next Monday. Two screens deep, and wrong.
-//
-// These two entries are that question. Everybody who holds a place, booked or
-// waiting, and the facts about the class itself in one row.
+import { dayText, fillText, fillTone } from '@lyra/app/prisms/format.prism';
+import { standingOver, standingLabel, standingTone } from './standing';
 
 const row = (name: string) => ({ $get: { from: { $var: 's' }, path: [name] } });
 const person = (name: string) => ({ $get: { from: { $var: 'b' }, path: [name] } });
 
-// The class itself. Separate from the roster below on purpose: this joins
-// through `staff` to `people` for the teacher, and the roster joins through
-// `memberships` to `people` for the attendees. One query wanting `people` twice
-// for two different reasons is a query nobody can read.
 export const sessionDetail: CacheEntry = {
   fingerprint: 'session/detail',
   intent: 'One class: when it runs, who teaches it, and how full it is',
@@ -57,24 +43,18 @@ export const sessionDetail: CacheEntry = {
   },
 };
 
-// Everybody with a place, INCLUDING the queue.
-//
-// `roster/forSession` deliberately shows only confirmed bookings, because the
-// desk checks in the people who are actually coming. An owner looking at a full
-// class needs the other half of the picture: five waiting is the difference
-// between "popular" and "put another one on".
 export const sessionAttending: CacheEntry = {
   fingerprint: 'session/attending',
   intent: 'Everyone holding a place in one class, booked or waiting',
   shape: [{ booking_id: '', person_name: '', place_label: '', place_tone: '', status_display: '', status_tone: '' }],
   dsl: {
-    from: ['bookings', 'memberships', 'people'],
+    from: ['bookings', 'people'],
     fields: [
       { field: 'bookings.id', as: 'booking_id' },
       { field: 'bookings.status', as: 'place' },
-      { field: 'memberships.status', as: 'membership_status' },
       { field: 'people.name', as: 'person_name' },
     ],
+    compute: standingOver('bookings'),
     filter: {
       and: [
         { eq: ['bookings.session_id', { $context: 'sessionId' }] },
@@ -93,8 +73,8 @@ export const sessionAttending: CacheEntry = {
         person_name: person('person_name'),
         place_label: { $case: { branches: [{ when: { $eq: [person('place'), 'waitlisted'] }, then: 'Waiting' }], else: 'Booked' } },
         place_tone: { $case: { branches: [{ when: { $eq: [person('place'), 'waitlisted'] }, then: 'warm' }], else: 'good' } },
-        status_display: statusText(person('membership_status')),
-        status_tone: statusTone(person('membership_status')),
+        status_display: standingLabel(person('standing')),
+        status_tone: standingTone(person('standing')),
       },
     },
   },

@@ -140,14 +140,18 @@ canvases are ten canvas ids on one pipe.
 **Down:** `hello` (the resolved catalog on connect), `catalog` (declared for
 catalog pushes — not yet sent; terminals know it and ignore it), `frame` (the
 canvas arrangement — a served layout of `CanvasSlot` markers), `render` (a
-canvas's tree), `session` (a login grant), `error`. **Up:** `event` (a
-canvas-tagged `NovaEvent`), `publish` (a channel message).
+canvas's tree), `render-delta` (the same tree, against the last one — opt-in,
+see below), `session` (a login grant), `error`. **Up:** `event` (a
+canvas-tagged `NovaEvent`), `publish` (a channel message), `resync` (this
+connection's copy of a canvas drifted; send whole frames).
 
 Operational shape, all falling out of "the message is state, not history":
 
 - **Backpressure.** At most one pending tree per canvas per connection; a newer
-  render replaces it, never queues behind it. A diff stream could never drop an
-  update this way.
+  render replaces it, never queues behind it. A diff *stream* could never drop
+  an update this way — which is exactly why frame deltas are written against
+  the last frame **sent**, never against an intermediate that was coalesced
+  away. Dropping renders stays free.
 - **Delivery.** Events are fire-and-forget; the tree is the confirmation. No
   acks, no replay after reconnect — a replayed intention against a changed screen
   is worse than a lost one, so reconnect simply re-sends the current trees.
@@ -167,6 +171,62 @@ Operational shape, all falling out of "the message is state, not history":
 - **Emptiness.** A canvas whose layout renders no visible content is served as
   `[]`, so a terminal collapses chrome on `length` alone. An `ActionSlot` is a
   boundary, not content — visibility is decided by what's inside it.
+- **Size.** Two optional reductions — transport compression and frame deltas —
+  sit under the protocol, both off the app's books. See below.
+
+### What a frame costs
+
+A server-authored shell pays for its inversion in bytes: every change re-sends
+a canvas's whole tree, where a client-side framework would have re-rendered
+locally and sent nothing. That is the trade the shell exists to make, and it is
+worth measuring rather than assuming.
+
+Two reductions are available, and they are deliberately separate things:
+
+- **Compression** (`socketCompression`, **on** by default) is
+  `permessage-deflate`, an RFC 7692 websocket extension. It is negotiated by
+  the transport, invisible above the `Connection` seam, and understood by every
+  browser. Render trees are mostly repeated keys, so it earns roughly 3–4×. Its
+  cost is memory, and it is not small: about 260 KB resident per connection at
+  the `ws` defaults, against about 43 KB for the shell being served. That trade
+  is obviously right at hundreds of connections and obviously wrong at a
+  hundred thousand, which is the only reason it is a knob rather than a
+  constant.
+- **Frame deltas** (`shellFrameDelta`, **off** by default) describe a changed
+  canvas against the frame the connection already holds, as copy runs plus
+  literal inserts (`src/delta.ts` — an encoder and a decoder, both readable in
+  full, no dependency). Measured on Lyra: an in-place change (a keystroke
+  filtering a list, one row's badge flipping) falls to **1–4%** of the frame; a
+  navigation, where the tree is genuinely different, lands near **80%** and is
+  therefore left whole.
+
+The choice of algorithm is the interesting part, because the obvious one is
+wrong. A **structural** diff — walk both trees, emit `[path, value]` for every
+leaf that moved — is what a virtual DOM does and what most people reach for. On
+a navigation it measured **98–114%** of the frame it was replacing: worse than
+useless, because every path string is overhead the frame itself doesn't carry,
+and an unkeyed list reorder costs the whole list. A **byte** matcher has no
+such cliff: it finds shared vocabulary between two trees that share no
+structure at all, and it is indifferent to what the tree means. It is also far
+simpler to prove correct, which for a layer that can silently desync a screen
+is the dominant consideration.
+
+Three rules keep it honest:
+
+1. **One baseline per shell.** Every connection is level with the host's
+   `sent` map — attaching serves whole frames, and a change fans out to
+   everyone — so one encode serves the whole room.
+2. **Decisively smaller, or whole.** A delta is only sent at ≤60% of the frame.
+   Below that it wins even after deflate; above it, deflate on the whole frame
+   does as well and the terminal does less work.
+3. **Checksummed, always.** Every delta carries a hash of the frame it should
+   rebuild. A terminal that lands anywhere else discards the result and sends
+   `resync` — the failure this layer must not have is a screen that is silently
+   wrong, and no saving is worth risking it.
+
+Neither reduction is visible to an application, and neither changes a rendered
+tree. A terminal that never advertises `delta=1` is served exactly what it was
+served before either existed.
 
 Two design points worth naming:
 
@@ -245,6 +305,43 @@ over the living shell, the caller's compiled scope policy, the environment, and
 they see what the caller sees); keys are `.env`. This is deliberately the *side-
 effect-ful, session-bound* half. The canonical, side-effect-free function — an
 independently deployable endpoint under `/fns` — is specified and pending.
+
+## The write lanes
+
+Vex is the choke point every application write passes through, which makes its
+write observer the one place a host can learn about all of them. Moss
+subscribes once and splits the news two ways — and the split is a privilege
+boundary, not a convenience.
+
+**The app lane carries no rows.** A declared reaction hears table, op, row
+*count* and the unforgeable scope. That is enough to invalidate, resync, or
+push a ping onto a living shell, and it is not enough to leak anything: a
+receiver that wants data re-reads it under its own policy, through the same
+governed wire as everybody else. The alternative — handing rows to a callback
+— puts data in the one place this stack has no fence for, arbitrary imperative
+code, and `deliver` payloads are pings for exactly the same reason.
+
+**The tide lane carries rows, because tide has the fence.** A fact is stamped
+with the identity derived from the *write's own* scope, and the matcher offers
+a fact only to reflexes running under that same identity. Tide is the one
+place a row travels without being read — no policy is consulted on the way —
+so that stamp is the whole boundary, and it is the app's naming rule, never a
+listener's interest, that sets it. Stamping by who is listening would walk one
+tenant's row into another tenant's effect, which is a defect this stack has
+already had once and does not intend to have again.
+
+Interest is **declared, not discovered**: reactions name their table up front
+and moss routes by that name, so app code never string-matches a fingerprint
+to work out what happened. The cost of the declaration is that a name nothing
+writes fires nothing, quietly — derive the names from `mutationEffect` and
+assert them, the way an app already asserts its charter.
+
+**Pacing belongs to the host, not the engine.** Tide names the next instant it
+wants waking for; the driver owns the timer, wakes on every ingest, and drains
+to quiescence. The interval that used to stand in for this was both a latency
+floor and a throughput ceiling — a chain advanced one hop per beat — and the
+only periodic thing left is a janitor that finds nothing when nothing is
+broken.
 
 ## Model runs
 

@@ -3,7 +3,7 @@ import type { ReflexInput } from '@niscorp/tide';
 
 // Fan-in without a barrier primitive.
 //
-// Tide is the bookkeeper of its own fan-out: the firing knows it minted five
+// Tide is the bookkeeper of its own fan-out: the run knows it minted five
 // tasks, and when the last one settles it mints a FACT carrying the stats.
 // "Send one digest when the batch is done" is then an ordinary reflex on an
 // ordinary fact — no barrier, no "am I last?" logic in a handler, no state
@@ -21,7 +21,7 @@ const run: ReflexInput = {
 const digest: ReflexInput = {
   id: 'billing.digest',
   intent: 'Mail the owner one summary once the run settles.',
-  on: { fact: { firing: 'billing.run' } },
+  on: { fact: { run: 'billing.run' } },
   effect: {
     name: 'mail.send',
     input: {
@@ -65,6 +65,6 @@ export const Demo = () => (
       { label: '+1 day', ms: 86_400_000 },
       { label: '+20 min', ms: 1_200_000 },
     ]}
-    note="+1 day starts the monthly run: five tasks, four succeed, Alan's throws and goes to `retrying`. The digest stays silent — the firing is not settled. Press +20 min until the retry exhausts and the task parks `failed`; the moment the last task settles, tide mints a `firing` fact and the digest fires ONCE, carrying 4✓ 1✗ /5."
+    note="+1 day starts the monthly run: five tasks, four succeed, Alan's throws and goes to `retrying`. The digest stays silent — the run is not settled. Press +20 min until the retry exhausts and the task parks `failed`; the moment the last task settles, tide mints a `run` fact and the digest fires ONCE, carrying 4✓ 1✗ /5."
   />
 );

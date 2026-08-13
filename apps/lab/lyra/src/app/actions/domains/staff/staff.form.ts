@@ -1,12 +1,31 @@
 import { z } from 'zod';
 import type { ActionDefinition, LayoutNode } from '@niscorp/nova';
+import { staffEnroll } from '@lyra/app/vex/staff.entries';
 
-// PUTTING SOMEBODY ON STAFF, over the roster rather than inside it. See
-// `plans.form.ts` for the argument.
-//
-// Create only. Changing a role afterwards is a different gesture with a
-// different safeguard — a picker on the row and the shared `confirm` — because
-// hiring and re-permissioning are not the same decision.
+// The whole hire as one replay — `staff/enroll` ensures the person and puts
+// them on staff in a single transaction; the role select's options are the
+// contract, so no role check is needed beyond the DB's own.
+const hirePrism = {
+  fingerprint: staffEnroll.fingerprint,
+  context: {
+    email: { $lower: { $trim: { $ref: '$.newEmail' } } },
+    name: { $trim: { $ref: '$.newName' } },
+    phone: { $trim: { $ref: '$.newPhone' } },
+    role: { $ref: '$.newRole' },
+  },
+};
+
+// Refused by never enabling the button rather than by a thrown error: a blank
+// name, or an address without an @.
+const hireBlocked = {
+  $prism: {
+    $or: [
+      { $eq: [{ $trim: { $ref: '$.newName' } }, ''] },
+      { $not: { $contains: { value: { $ref: '$.newEmail' }, search: '@' } } },
+    ],
+  },
+};
+
 const staffFormLayout: LayoutNode = {
   component: 'Stack',
   props: { gap: 16 },
@@ -40,35 +59,36 @@ const staffFormLayout: LayoutNode = {
       ref: 'newRole',
       model: '$.newRole',
     },
-    { component: 'Button', props: { variant: 'solid', big: true, label: 'Add to staff', disabled: '$.saving' }, ref: 'create' },
+    { component: 'Button', props: { variant: 'solid', big: true, label: 'Add to staff', disabled: '$.blocked' }, ref: 'create' },
   ],
 };
 
 export const staffFormAction: ActionDefinition = {
   id: 'staff.form',
   title: 'Put somebody on staff',
-  data: { newName: '', newEmail: '', newPhone: '', newRole: 'instructor', saving: false, error: '' },
+  data: { newName: '', newEmail: '', newPhone: '', newRole: 'instructor', saving: false, blocked: true, error: '' },
   layout: staffFormLayout,
   endpoints: {
-    // A FUNCTION, not a fingerprint: hiring writes a person and a staff row
-    // and has to be one act, which the closed mutation grammar deliberately
-    // cannot express.
-    create: { fn: 'staff.create', errorTarget: 'error' },
+    create: { url: '/api/staff/vex', method: 'POST', request: hirePrism, errorTarget: 'error' },
   },
   triggers: [
+    // Two triggers per field, not two steps — buffered sets in one trigger
+    // resolve against the same pre-write snapshot (see people.signup).
+    { event: 'ui:model', ref: 'newName', do: [{ set: 'newName', value: '@event.payload' }] },
+    { event: 'ui:model', ref: 'newEmail', do: [{ set: 'newEmail', value: '@event.payload' }] },
+    { event: 'ui:model', ref: 'newName', do: [{ set: 'blocked', value: hireBlocked }] },
+    { event: 'ui:model', ref: 'newEmail', do: [{ set: 'blocked', value: hireBlocked }] },
     {
       event: 'ui:click',
       ref: 'create',
       do: [
         { set: 'error', value: '' },
         { set: 'saving', value: true },
+        { set: 'blocked', value: true },
         {
           call: 'create',
-          // The roster listens for this and does the refresh — including
-          // rebuilding the application of a member who just started teaching,
-          // so they are not told to sign out and in.
           onSuccess: [{ set: 'saving', value: false }, { emit: { channel: 'staff-changed' } }, { pop: true }],
-          onError: [{ set: 'saving', value: false }],
+          onError: [{ set: 'saving', value: false }, { set: 'blocked', value: hireBlocked }],
         },
       ],
     },

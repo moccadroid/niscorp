@@ -3,19 +3,6 @@ import type { ActionDefinition, LayoutNode } from '@niscorp/nova';
 import { membersLapsedAway } from '@lyra/app/vex/tide.entries';
 import { revenueAtRisk, revenueCommitted, revenueExpected, revenueLeaving } from '@lyra/app/vex/forecast.entries';
 
-// WHO IS DRIFTING, AND WHAT IT COSTS.
-//
-// The two halves belong on one screen because they are one fact seen from two
-// ends. "Four people have not been to a class in six weeks" and "€119 a month is
-// walking out of the door" are the same sentence — one names the people, the
-// other names the number, and a studio that sees only the number cannot do
-// anything about it.
-//
-// The audience under "gone quiet" is the same one the automations use. That is
-// the point: an automation can already email these people, and until now nobody
-// could LOOK at them. A rule you cannot inspect before it fires is a rule you
-// turn off.
-
 const windowed = (fingerprint: string) => ({ fingerprint, context: { cutoff: { $ref: '$.from' } } });
 const plain = (fingerprint: string) => ({ fingerprint, context: {} });
 
@@ -54,9 +41,6 @@ const retentionLayout: LayoutNode = {
       ],
     },
 
-    // THREE FIGURES, AND THE MIDDLE ONE IS THE POINT. A run rate on its own says
-    // nothing about risk: two studios taking €5,000 a month are different
-    // businesses if one has it under contract and the other does not.
     {
       component: 'Grid',
       props: { min: 240, gap: 18 },
@@ -103,12 +87,12 @@ const retentionLayout: LayoutNode = {
           props: {
             rows: '$.quiet',
             loading: '$.loading',
-            rowKey: 'membership_id',
+            rowKey: 'subscription_id',
             empty: 'Everybody has been in.',
             emptyHint: 'No active member has missed the whole window.',
             columns: [
               { label: 'Member', w: 2, cell: { kind: 'primary', key: 'person_name' } },
-              { label: 'Member since', px: 130, cell: { kind: 'text', key: 'joined_on', color: 'soft' } },
+              { label: 'Member since', px: 130, cell: { kind: 'text', key: 'started_on', color: 'soft' } },
             ],
           },
         },

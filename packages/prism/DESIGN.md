@@ -190,6 +190,14 @@ src/
 - `zod` (peer, ^4.0.0) — Schema validation, JSON Schema generation via `z.toJSONSchema()`
 - `dayjs` (^1.11.0) — Date operations (`$date`, `$dateAdd`, `$dateDiff`)
 
+The locale-aware family (`$localeDate`, `$localeMoney`, `$localeNumber`) adds
+**no** dependency: it delegates to the platform's `Intl`. That is why dayjs
+stays locale-blind here — localising it would mean shipping a locale pack per
+language into a package that has no business knowing which languages exist.
+Formatter construction is cached per resolved argument tuple, because building
+an `Intl` formatter costs roughly two orders of magnitude more than using one
+and a mapping over a thousand rows would otherwise build a thousand of them.
+
 ---
 
 ## Design Decisions

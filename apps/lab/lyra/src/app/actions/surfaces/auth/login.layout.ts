@@ -1,8 +1,5 @@
 import type { LayoutNode } from '@niscorp/nova';
 
-// The lock screen. One column, centred, nothing else on it — an anonymous
-// principal's application consists of this and literally nothing more, so
-// there is no chrome to sit inside and no navigation to suppress.
 export const loginLayout: LayoutNode = {
   component: 'Stack',
   props: { gap: 28, maxWidth: 420, center: true },
@@ -41,10 +38,6 @@ export const loginLayout: LayoutNode = {
     },
 
     // ── the lab's inbox ──
-    // Standing in for a mail client, so the demo can be driven without
-    // reading a console. Every seeded person, and choosing one is exactly
-    // what clicking their link would do. Real auth deletes this block and
-    // the `people` key it reads; nothing else on this page changes.
     { if: '$.people.length', then: { component: 'Rule', props: { my: 4 } }, else: '' },
     {
       if: '$.people.length',

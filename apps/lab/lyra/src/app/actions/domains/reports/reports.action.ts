@@ -3,23 +3,12 @@ import type { ActionDefinition } from '@niscorp/nova';
 import { reportsLayout } from './reports.layout';
 import { attendanceByHourPrism, attendanceByProgramPrism, attendanceByWeekPrism, membersByStatusPrism, planUptakePrism } from './reports.prism';
 
-// What the studio looks like from above.
-//
-// Five grouped reads, all fired on mount and all independent — none of these
-// figures depends on another, and chaining them would let the slowest decide
-// when any of the page appears.
-//
-// Manager and owner only, by ring 1 and by ring 3 both: the reads touch
-// `subscriptions`, which is the grant that separates what a studio SELLS from
-// what it EARNS.
 export const reportsAction: ActionDefinition = {
   id: 'reports.overview',
   title: 'Reports',
   data: {
-    // THE WINDOW, seeded by the server. A date range that defaulted to something
-    // the browser computed would be the studio-clock bug again — a studio in
-    // Kiritimati and one in Niue do not agree on what "the last 90 days" ends on.
-    // `nav.identity` already resolves the studio's own day; these come with it.
+    // Seeded by the server: two studios on different dates do not agree on what
+    // "the last 90 days" ends on.
     from: '',
     to: '',
     rangeLabel: 'Last 90 days',
@@ -45,11 +34,6 @@ export const reportsAction: ActionDefinition = {
     uptake: { url: '/api/studio/vex', method: 'POST', request: planUptakePrism, target: 'uptake' },
   },
   lifecycle: {
-    // THE WINDOW FIRST, and everything else inside its `onSuccess`.
-    //
-    // The three attendance reads take `from` and `to` as context; firing them
-    // beside the call that resolves those dates would send two empty strings and
-    // return nothing, on every mount, silently.
     mount: [
       {
         call: 'window',
@@ -69,10 +53,8 @@ export const reportsAction: ActionDefinition = {
   // A check-in or a sign-up moves these figures, so the page listens rather
   // than being told.
   triggers: [
-    // THREE PRESETS, THREE REFS, no branch — the same shape the roll's two slice
-    // buttons use. Each sets the span, then re-resolves the window and re-reads
-    // the three charts that take it. The `set` lands first: a `call` before it
-    // would send the previous period.
+    // Three presets, three refs, no branch. The `set` lands first: a `call`
+    // before it would send the previous period.
     {
       event: 'ui:click',
       ref: 'range-30',

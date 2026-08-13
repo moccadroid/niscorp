@@ -3,13 +3,6 @@ import type { ActionDefinition } from '@niscorp/nova';
 import { deskCheckInLayout } from './desk.layout';
 import { checkInPrism, rosterPrism, sessionsTodayPrism } from './desk.prism';
 
-// The front desk's daily loop: pick a class, tap people in.
-//
-// One action rather than list → detail, deliberately. A desk works ONE class
-// for twenty minutes and needs the roster and the schedule on screen together —
-// pushing a record would cost a Back press per arrival, which is the wrong
-// trade at 200 taps a day. The rule is "list → detail → form" where a record is
-// a place you go; here it is a pane you glance at.
 export const deskCheckInAction: ActionDefinition = {
   id: 'desk.checkin',
   title: 'Check in',
@@ -23,7 +16,7 @@ export const deskCheckInAction: ActionDefinition = {
     loadingRoster: false,
     // What the pending tap is about. Held as data because a trigger's steps
     // run against the action, not against the event.
-    pendingMembershipId: '',
+    pendingPersonId: '',
     pendingBookingId: '',
     error: '',
   },
@@ -34,10 +27,6 @@ export const deskCheckInAction: ActionDefinition = {
     checkin: { url: '/api/schedule/vex', method: 'POST', request: checkInPrism, errorTarget: 'error' },
   },
   lifecycle: { mount: [
-      // Opened FROM a class — the calendar links each row to its roster, so the
-      // session arrives as input and the roster loads without a second tap.
-      // Opened bare, `selectedSessionId` is empty, the roster read answers
-      // nothing, and the ordinary pick-a-class flow is exactly what shows.
       { call: 'roster' },{ call: 'sessions', onSuccess: [{ set: 'loadingSessions', value: false }] }] },
   triggers: [
     {
@@ -55,7 +44,7 @@ export const deskCheckInAction: ActionDefinition = {
       ref: 'checkin',
       do: [
         { set: 'error', value: '' },
-        { set: 'pendingMembershipId', value: '@event.payload.membership_id' },
+        { set: 'pendingPersonId', value: '@event.payload.person_id' },
         { set: 'pendingBookingId', value: '@event.payload.booking_id' },
         {
           call: 'checkin',

@@ -1,39 +1,73 @@
 import { z } from 'zod';
 import type { ActionDefinition, LayoutNode } from '@niscorp/nova';
-import { addonsInstalled, addonsList } from '@lyra/app/vex/addon.entries';
-
-// THE STORE.
-//
-// Two reads rather than one, and the layout marks the rows: what the deployment
-// offers, and what this studio holds. An owner sees a list and a button; they
-// never see a permission dialog, because what an integration may read was
-// settled by an operator before it was ever listed. A store that asked every
-// owner to approve `memberships.read` would be a store where everybody clicks
-// yes.
-//
-// Installing writes one row. What it changes is the CATALOG: moss drops every
-// `ext.*` action outside a studio's installed set, so turning this on is what
-// makes the screens appear in the menu — for this studio and nobody else.
+import { addonInstall, addonUninstall, addonsInstalled, addonsList } from '@lyra/app/vex/addon.entries';
 
 const listPrism = { fingerprint: addonsList.fingerprint, context: {} };
 const installedPrism = { fingerprint: addonsInstalled.fingerprint, context: {} };
+const installPrism = { fingerprint: addonInstall.fingerprint, context: { integrationId: { $ref: '$.pendingId' } } };
+const uninstallPrism = { fingerprint: addonUninstall.fingerprint, context: { integrationId: { $ref: '$.pendingId' } } };
 
-// TILES, NOT ROWS. Each add-on is a card built from its bundle's meta — the
-// name, the line under it, the paragraph, and the derived "Adds …" sentence
-// that says what appears where BEFORE anybody installs anything. The buttons
-// are the store's whole verb set: Install, Remove, and — only when installed
-// and only when the pack shipped one — its Settings. Nothing functional ever
-// renders here; this is a store.
+// The store's tiles: `offered` (every approved integration) joined with
+// `installed` (this studio's rows) — the stitch that used to be a server
+// function, now a derivation over data the screen already holds. Both halves
+// of `has_settings` on purpose: the pack shipped a settings screen AND this
+// studio has it on — a store must never open functionality a studio has not
+// bought. The "Adds …" sentence rides as a fact rather than a clipped table
+// cell, and a bundle that shipped no meta still gets a tile named by its id.
+const stitchRows = {
+  $prism: {
+    $map: {
+      over: { $ref: '$.offered' },
+      as: 'a',
+      body: {
+        $with: {
+          let: {
+            id: { $get: { from: { $var: 'a' }, path: ['integration_id'] } },
+            title: { $get: { from: { $var: 'a' }, path: ['title'] } },
+            settings: { $get: { from: { $var: 'a' }, path: ['settings_action'] } },
+            adds: { $get: { from: { $var: 'a' }, path: ['adds'] } },
+            on: {
+              $gt: [
+                {
+                  $length: {
+                    $filter: {
+                      over: { $ref: '$.installed' },
+                      as: 'i',
+                      when: { $eq: [{ $get: { from: { $var: 'i' }, path: ['integration_id'] } }, { $get: { from: { $var: 'a' }, path: ['integration_id'] } }] },
+                    },
+                  },
+                },
+                0,
+              ],
+            },
+          },
+          value: {
+            integration_id: { $var: 'id' },
+            name: { $case: { branches: [{ when: { $eq: [{ $var: 'title' }, ''] }, then: { $var: 'id' } }], else: { $var: 'title' } } },
+            tagline: { $get: { from: { $var: 'a' }, path: ['tagline'] } },
+            description: { $get: { from: { $var: 'a' }, path: ['description'] } },
+            adds: { $var: 'adds' },
+            settings_action: { $var: 'settings' },
+            installed: { $var: 'on' },
+            has_settings: { $and: [{ $var: 'on' }, { $neq: [{ $var: 'settings' }, ''] }] },
+            state_label: { $case: { branches: [{ when: { $var: 'on' }, then: 'On' }], else: 'Available' } },
+            state_tone: { $case: { branches: [{ when: { $var: 'on' }, then: 'good' }], else: 'neutral' } },
+            facts: { $case: { branches: [{ when: { $eq: [{ $var: 'adds' }, ''] }, then: [] }], else: [{ label: 'Adds', value: { $var: 'adds' } }] } },
+          },
+        },
+      },
+    },
+  },
+};
+
 const layout: LayoutNode = {
   component: 'Stack',
   props: { gap: 22 },
   children: [
     { component: 'Hero', props: { title: 'Add-ons', lead: 'What this studio can turn on. Screens land where they belong — a store, not a menu.' } },
     { if: '$.error', then: { component: 'Notice', props: { tone: 'alert', message: '$.error' } }, else: '' },
-    // TILES, NOT ROWS — the shape a store is. As a table the description had
-    // a 150px track between fixed columns totalling 410px and clipped at the
-    // ellipsis every time: "Adds a Belt panel on p…". No width fixed that;
-    // prose in a spreadsheet cell was the wrong container.
+    // Tiles, because prose in a spreadsheet cell clips at the ellipsis whatever
+    // width you give it.
     {
       component: 'Cards',
       props: {
@@ -61,33 +95,27 @@ const layout: LayoutNode = {
   ],
 };
 
-// The two reads are stitched here rather than in a query, because they are
-// scoped differently: the catalogue is the deployment's and the installs are
-// this studio's. A `fn:` is the only place that can hold both without one
-// table's rule deciding the other's answer.
 export const addonsAction: ActionDefinition = {
   id: 'studio.addons',
   title: 'Add-ons',
-  data: { rows: [], offered: [], installed: [], loading: true, error: '', pendingId: '', pendingEnable: false },
+  data: { rows: [], offered: [], installed: [], loading: true, error: '', pendingId: '' },
   layout,
   endpoints: {
-    // A failed read says so and stops pretending to load. The skeleton with no
-    // error was this screen's first recorded fault: a refusal underneath and
-    // grey bars on top, forever.
+    // A failed read says so and stops pretending to load — otherwise it is a
+    // refusal underneath and grey bars on top, forever.
     offered: { url: '/api/studio/vex', method: 'POST', request: listPrism, target: 'offered', errorTarget: 'error' },
     installed: { url: '/api/studio/vex', method: 'POST', request: installedPrism, target: 'installed', errorTarget: 'error' },
-    stitch: { fn: 'addons.stitch', target: 'rows' },
-    // ONE fn for both directions of the toggle. Install-after-uninstall is an
-    // UPDATE where first-install is an INSERT (the uninstalled row keeps its
-    // key), the grammar cannot branch, and the write is only half the job —
-    // the directory snapshot and the catalog memos must follow, or the menu
-    // never learns what the studio just bought. See `addons.apply` in nav.ts.
-    apply: { fn: 'addons.apply', errorTarget: 'error' },
+    // Install is idempotent from every starting state — fresh, removed,
+    // already on — the DB arbitrates via ON CONFLICT (see addon.entries.ts).
+    // The server-side world refresh rides `onMutation` in app.ts: it fires on
+    // the WRITE landing, whoever caused it, not on this screen remembering to.
+    enable: { url: '/api/studio/vex', method: 'POST', request: installPrism, errorTarget: 'error' },
+    disable: { url: '/api/studio/vex', method: 'POST', request: uninstallPrism, errorTarget: 'error' },
   },
   lifecycle: {
     mount: [
       { call: 'offered', onError: [{ set: 'loading', value: false }] },
-      { call: 'installed', onSuccess: [{ call: 'stitch', onSuccess: [{ set: 'loading', value: false }] }], onError: [{ set: 'loading', value: false }] },
+      { call: 'installed', onSuccess: [{ set: 'rows', value: stitchRows }, { set: 'loading', value: false }], onError: [{ set: 'loading', value: false }] },
     ],
   },
   triggers: [
@@ -96,9 +124,8 @@ export const addonsAction: ActionDefinition = {
       ref: 'install',
       do: [
         { set: 'pendingId', value: '@event.payload.integration_id' },
-        { set: 'pendingEnable', value: true },
         { set: 'error', value: '' },
-        { call: 'apply', onSuccess: [{ emit: { channel: 'addons-changed' } }] },
+        { call: 'enable', onSuccess: [{ emit: { channel: 'addons-changed' } }] },
       ],
     },
     {
@@ -106,25 +133,20 @@ export const addonsAction: ActionDefinition = {
       ref: 'uninstall',
       do: [
         { set: 'pendingId', value: '@event.payload.integration_id' },
-        { set: 'pendingEnable', value: false },
         { set: 'error', value: '' },
-        { call: 'apply', onSuccess: [{ emit: { channel: 'addons-changed' } }] },
+        { call: 'disable', onSuccess: [{ emit: { channel: 'addons-changed' } }] },
       ],
     },
-    // THE ONE INTEGRATION ACTION A STORE MAY OPEN: the pack's own settings,
-    // on the sheet, from its tile. The id comes off the row, which came off
-    // the bundle's `settings` declaration through intake — the store never
-    // knows an integration's name.
     {
       event: 'ui:click',
       ref: 'openSettings',
       do: [{ push: { action: '@event.payload.settings_action', canvas: 'sheet', with: ['sheet'] } }],
     },
-    // The fn re-resolved the catalog server-side; these re-reads are only the
-    // store repainting its own list.
+    // The world refresh happened server-side when the write landed; these
+    // re-reads are only the store repainting its own list.
     {
       message: 'addons-changed',
-      do: [{ call: 'offered' }, { call: 'installed', onSuccess: [{ call: 'stitch' }] }],
+      do: [{ call: 'offered' }, { call: 'installed', onSuccess: [{ set: 'rows', value: stitchRows }] }],
     },
   ],
 };

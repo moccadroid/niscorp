@@ -1,10 +1,3 @@
-// Seed check — the dataset is what the rest of the suite assumes.
-//
-// Every other check reads these rows as ground truth, so a silent change here
-// would make their failures meaningless. It also pins the two facts the data
-// model exists to express: a walk-in check-in with no session, and a person who
-// is staff and a member at the same studio.
-//
 // Run: pnpm --filter lyra exec tsx src/dev/seed-check.ts
 import { devRuntime } from '@lyra/server/runtime';
 import { LUMEN, NORTHROCK } from '@lyra/db/seed';
@@ -27,54 +20,65 @@ ok('two studios', (await count('SELECT count(*) n FROM studios')) === 2);
 ok('both kinds differ', (await count('SELECT count(DISTINCT kind) n FROM studios')) === 2);
 
 // ── people and their relationships ──
-// EVERYBODY IS A PERSON. Sixteen members and staff, five prospects, three
-// outsiders the studios only deal with, plus one automation principal per
-// studio. The prospects used to be rows in a `leads` table — a second class of
-// human who could not become the first without being retyped — and the
-// outsiders had nowhere to exist at all. The robots are people for the same
-// reason: the directory is keyed on people, and an automation resolving
-// through some other path would be an automation the charter does not govern.
 ok('twenty-four people and two automations', (await count('SELECT count(*) n FROM people')) === 26, 'members, staff, prospects, outsiders, robots');
 ok('every email unique', (await count('SELECT count(DISTINCT email) n FROM people')) === 26);
 
-// Thirteen who train (or did) plus five enquiries — the SAME table, because an
-// enquiry is a membership at stage zero. Four are still asking; Rafi's ended.
-ok('eighteen memberships', (await count('SELECT count(*) n FROM memberships')) === 18);
-ok('...four of them still asking', (await count("SELECT count(*) n FROM memberships WHERE status = 'enquired'")) === 4, 'an enquiry is this row one status earlier');
-ok('...and none of them on the roll', (await count("SELECT count(*) n FROM memberships WHERE status IN ('active','trialling')")) === 10, 'the roll reads named statuses, so a prospect cannot leak onto it');
+// The anchor: one row per human a studio knows, and NO category on any of them.
+ok('twenty-two anchor rows', (await count('SELECT count(*) n FROM studio_people')) === 22);
+ok(
+  '...and the anchor stores no category',
+  (await count("SELECT count(*) n FROM information_schema.columns WHERE table_name = 'studio_people' AND column_name IN ('status','kind','role')")) === 0,
+  'what a person IS derives from what they hold — standing.ts',
+);
+ok('...one person is known to both studios', (await count('SELECT count(*) n FROM (SELECT person_id FROM studio_people GROUP BY person_id HAVING count(DISTINCT studio_id) > 1) x')) === 1, 'the physio both gyms refer to');
+ok('...and no automation is on a roll', (await count("SELECT count(*) n FROM studio_people sp JOIN staff s ON s.person_id = sp.person_id AND s.role = 'automation'")) === 0);
 
-// The third verb. Gretel is the case worth having: one human, known to both
-// studios, which the old shape could not represent at all.
-ok('four connections', (await count('SELECT count(*) n FROM connections')) === 4);
-ok('...and one person is known to both studios', (await count('SELECT count(*) n FROM (SELECT person_id FROM connections GROUP BY person_id HAVING count(DISTINCT studio_id) > 1) x')) === 1, 'the physio both gyms refer to');
-ok('...and no automation holds one', (await count("SELECT count(*) n FROM memberships m JOIN staff s ON s.person_id = m.person_id WHERE s.role = 'automation'")) === 0, 'they never appear on a roll');
+ok('four contact tags', (await count('SELECT count(*) n FROM connections')) === 4);
+ok('...every tagged person is anchored', (await count('SELECT count(*) n FROM connections c WHERE NOT EXISTS (SELECT 1 FROM studio_people sp WHERE sp.person_id = c.person_id AND sp.studio_id = c.studio_id)')) === 0, 'a tag hangs off the anchor, never floats');
 ok('five staff and two automations', (await count('SELECT count(*) n FROM staff')) === 7);
 ok('one automation per studio', (await count("SELECT count(DISTINCT studio_id) n FROM staff WHERE role = 'automation'")) === 2);
 
-// Every lifecycle state appears — a screen that has only seen `active` is a
-// screen nobody tested.
-const states = await runtime.db.query<{ status: string }>('SELECT DISTINCT status FROM memberships ORDER BY status');
 ok(
-  'every membership status is represented',
-  ['active', 'cancelled', 'lapsed', 'paused', 'trialling'].every((s) => states.rows.some((r) => r.status === s)),
-  states.rows.map((r) => r.status).join(', '),
+  'two people are staff AND train at their studio',
+  (await count('SELECT count(*) n FROM staff s JOIN studio_people sp ON sp.person_id = s.person_id AND sp.studio_id = s.studio_id')) === 2,
+  'holding two relationships at once is the point of the model',
 );
 
-// The person/membership split earns its keep: staff who also train.
+// ── what is on sale ──
+ok('eight offerings', (await count('SELECT count(*) n FROM offerings')) === 8, 'five plans, three passes');
+ok('...three of them passes', (await count("SELECT count(*) n FROM offerings WHERE kind = 'pass'")) === 3);
+ok('...including a drop-in at each studio', (await count("SELECT count(DISTINCT studio_id) n FROM offerings WHERE kind = 'pass' AND credits = 1")) === 2, 'a drop-in is a one-credit pass');
+ok('...and a pass cannot be creditless', (await count("SELECT count(*) n FROM offerings WHERE kind = 'pass' AND credits IS NULL")) === 0, 'a CHECK, not a convention');
+
+// ── entitlements ──
+ok('eleven subscriptions', (await count('SELECT count(*) n FROM subscriptions')) === 11, 'Hana has none — her trial closed and nobody asked her yet');
+ok('...every state represented', (await count('SELECT count(DISTINCT status) n FROM subscriptions')) === 3, 'active, paused, cancelled');
+ok('...and one that ENDED through the notice ledger', (await count("SELECT count(*) n FROM subscriptions WHERE status = 'cancelled' AND ends_on IS NOT NULL")) === 1, 'Luca — his leaving date is arithmetic, not a hand-typed column');
+ok('one pass sold', (await count('SELECT count(*) n FROM passes')) === 1);
+ok('...a single-class drop-in, unspent', (await count('SELECT count(*) n FROM passes WHERE credits_total = 1 AND credits_used = 0')) === 1, 'Ida — the person the old schema could not represent');
+
+// A live trial and a closed one, both DERIVED from a date nothing updates.
+const running = await count('SELECT count(*) n FROM studio_people WHERE trial_ends_on >= studio_today(studio_id)');
+const over = await count('SELECT count(*) n FROM studio_people WHERE trial_ends_on < studio_today(studio_id)');
+ok('trials still running exist to test with', running >= 2, `${running} live — Lena beside a subscription, Tom with nothing`);
+ok('...and ones that ran out, without anything having run', over >= 2, `${over} past their window — derived, not written`);
+
+// Tom Vogel: the canonical self-service subject, standing at the plan-choice
+// cliff — an anchor, a live trial, and NOTHING else.
+// docs/plans/lyra-model-overhaul.md Part 8.
 ok(
-  'two people are staff AND members at their studio',
-  (await count('SELECT count(*) n FROM staff s JOIN memberships m ON m.person_id = s.person_id AND m.studio_id = s.studio_id')) === 2,
+  'Tom Vogel stands at the cliff',
+  (await count(`SELECT count(*) n FROM studio_people sp WHERE sp.person_id = 'p_tomv' AND sp.trial_ends_on >= studio_today(sp.studio_id)
+      AND NOT EXISTS (SELECT 1 FROM subscriptions s WHERE s.person_id = sp.person_id)
+      AND NOT EXISTS (SELECT 1 FROM passes p WHERE p.person_id = sp.person_id)
+      AND NOT EXISTS (SELECT 1 FROM enrolments e WHERE e.person_id = sp.person_id)`)) === 1,
+  'a live trial and no entitlement — the acceptance test walks from here',
 );
 
 // ── the schedule ──
 ok('fourteen ongoing slots and two course slots', (await count('SELECT count(*) n FROM class_templates')) === 16);
 
 // ── programs are a taxonomy; courses are dated ──
-//
-// The distinction this schema got wrong first. A program with no dates that
-// claimed "six weeks, every term" in its blurb was prose standing in for
-// structure — unreadable by the app, unbookable by a member, and untrue the
-// moment somebody moved the dates.
 ok('a program carries no dates', (await count("SELECT count(*) n FROM information_schema.columns WHERE table_name = 'programs' AND column_name IN ('starts_on','ends_on')")) === 0, 'a stream runs indefinitely; that is what makes it a stream');
 ok('...and no blurb smuggles a schedule in', (await count("SELECT count(*) n FROM programs WHERE blurb ~* '(six|four|eight) weeks|every term|saturday mornings'")) === 0, 'a blurb is prose for a human, never a fact the app needs');
 
@@ -82,17 +86,14 @@ ok('two courses, one per studio', (await count('SELECT count(*) n FROM courses')
 ok('...each with a start and an end', (await count('SELECT count(*) n FROM courses WHERE starts_on IS NOT NULL AND ends_on IS NOT NULL')) === 2);
 ok('...and a price to charge later', (await count('SELECT count(*) n FROM courses WHERE price_cents > 0')) === 2);
 
-// BOUNDED RECURRENCE. One generator, one schedule concept — a course's weeks
-// are a weekly rule that stops.
 ok('a course slot is bounded', (await count('SELECT count(*) n FROM class_templates WHERE course_id IS NOT NULL AND starts_on IS NOT NULL AND ends_on IS NOT NULL')) === 2);
 ok('...and an ordinary class is not', (await count('SELECT count(*) n FROM class_templates WHERE course_id IS NULL AND starts_on IS NULL')) === 14, 'both NULL is an ongoing class');
 ok('...so no session lands outside its block', (await count('SELECT count(*) n FROM class_sessions cs JOIN class_templates ct ON ct.id = cs.template_id WHERE ct.ends_on IS NOT NULL AND (cs.held_on < ct.starts_on OR cs.held_on > ct.ends_on)')) === 0);
 ok('...while the block does have classes', (await count("SELECT count(*) n FROM class_sessions cs JOIN class_templates ct ON ct.id = cs.template_id WHERE ct.course_id = 'co_lumen_found'")) > 0);
 
-// ONE ROW IN, A BLOCK OF BOOKINGS OUT.
 ok('one enrolment is seeded', (await count('SELECT count(*) n FROM enrolments')) === 1);
 ok('...and the counter cache followed', (await count("SELECT enrolled_count n FROM courses WHERE id = 'co_lumen_found'")) === 1);
-ok('...fanned out into real bookings', (await count("SELECT count(*) n FROM bookings b JOIN class_sessions cs ON cs.id = b.session_id JOIN class_templates ct ON ct.id = cs.template_id WHERE ct.course_id = 'co_lumen_found' AND b.membership_id = 'mb_jonas'")) > 0, 'the desk’s roster has no idea a course exists');
+ok('...fanned out into real bookings', (await count("SELECT count(*) n FROM bookings b JOIN class_sessions cs ON cs.id = b.session_id JOIN class_templates ct ON ct.id = cs.template_id WHERE ct.course_id = 'co_lumen_found' AND b.person_id = 'p_jonas'")) > 0, 'the desk’s roster has no idea a course exists');
 ok('sessions were generated', (await count('SELECT count(*) n FROM class_sessions')) > 140);
 ok(
   'every session matches its template weekday',
@@ -102,8 +103,6 @@ ok('both studios have sessions this week', (await count('SELECT count(DISTINCT s
 ok('north rock runs more classes than lumen', (await count(`SELECT count(*) n FROM class_sessions WHERE studio_id='${NORTHROCK}'`)) > (await count(`SELECT count(*) n FROM class_sessions WHERE studio_id='${LUMEN}'`)));
 ok('one class is cancelled', (await count("SELECT count(*) n FROM class_sessions WHERE status='cancelled'")) >= 1);
 
-// The denormalised buckets exist because vex has no date functions; if they
-// stop matching the date they are worse than useless.
 ok(
   'hour_key agrees with starts_at',
   (await count("SELECT count(*) n FROM class_sessions WHERE hour_key <> split_part(starts_at, ':', 1)::int")) === 0,
@@ -112,32 +111,50 @@ ok('week_key is populated', (await count("SELECT count(*) n FROM class_sessions 
 
 // ── bookings and attendance ──
 ok('bookings were generated', (await count('SELECT count(*) n FROM bookings')) > 180);
-ok('only active and trialling memberships booked', (await count("SELECT count(*) n FROM bookings b JOIN memberships m ON m.id = b.membership_id WHERE m.status NOT IN ('active','trialling')")) === 0);
+ok('only live subscribers were generated bookings', (await count("SELECT count(*) n FROM bookings b WHERE b.id LIKE 'bk_%' AND NOT EXISTS (SELECT 1 FROM subscriptions s WHERE s.person_id = b.person_id AND s.studio_id = b.studio_id AND s.status = 'active')")) === 0, 'the entitlement, not a category, is what put them in class');
 ok('no booking crosses a studio', (await count('SELECT count(*) n FROM bookings b JOIN class_sessions s ON s.id = b.session_id WHERE s.studio_id <> b.studio_id')) === 0);
 ok('check-ins were generated', (await count('SELECT count(*) n FROM check_ins')) > 120);
 ok('nobody checked in to a future class', (await count('SELECT count(*) n FROM check_ins WHERE held_on > studio_today(studio_id)')) === 0);
 
-// Attendance is short of bookings on purpose: no-shows are the signal a
-// retention screen exists to find.
 const booked = await count('SELECT count(*) n FROM bookings b JOIN class_sessions s ON s.id=b.session_id WHERE s.held_on < studio_today(s.studio_id)');
 const attended = await count('SELECT count(*) n FROM check_ins WHERE session_id IS NOT NULL');
 ok('past bookings include no-shows', attended < booked && attended > booked * 0.6, `${attended} of ${booked} attended`);
 
-// The attendance counter cache agrees with the check-ins it caches. A booking
-// flagged without a check_in (or the reverse) is the drift the maintenance
-// contract exists to prevent, and it is invisible from any screen.
 ok(
   'the attended flag agrees with the check-ins',
-  (await count("SELECT count(*) n FROM bookings b WHERE b.attended <> EXISTS (SELECT 1 FROM check_ins c WHERE c.session_id = b.session_id AND c.membership_id = b.membership_id)")) === 0,
+  (await count("SELECT count(*) n FROM bookings b WHERE b.attended <> EXISTS (SELECT 1 FROM check_ins c WHERE c.session_id = b.session_id AND c.person_id = b.person_id)")) === 0,
 );
 ok('...and some bookings are flagged attended', (await count('SELECT count(*) n FROM bookings WHERE attended')) > 100);
 
-// The walk-in: attendance with no booking and no session.
 ok('one walk-in has no session', (await count('SELECT count(*) n FROM check_ins WHERE session_id IS NULL')) === 1);
 
+// ── the relationship mirrors agree with the rows they mirror ──
+//
+// The same hygiene every counter cache here gets: recompute from the source
+// tables and compare, so a trigger nobody fired (or a seed order nobody
+// noticed) is a red line rather than a wrong badge on the roll.
+ok(
+  'the subscription mirrors agree',
+  (await count(`SELECT count(*) n FROM studio_people sp WHERE
+      sp.active_subscriptions <> (SELECT count(*) FROM subscriptions s WHERE s.studio_id = sp.studio_id AND s.person_id = sp.person_id AND s.status = 'active')
+   OR sp.paused_subscriptions <> (SELECT count(*) FROM subscriptions s WHERE s.studio_id = sp.studio_id AND s.person_id = sp.person_id AND s.status = 'paused')
+   OR sp.held_subscriptions   <> (SELECT count(*) FROM subscriptions s WHERE s.studio_id = sp.studio_id AND s.person_id = sp.person_id)`)) === 0,
+  'recomputed from the table, zero drift',
+);
+ok(
+  '...and the pass, course, staff and contact mirrors too',
+  (await count(`SELECT count(*) n FROM studio_people sp WHERE
+      sp.pass_live_until IS DISTINCT FROM (SELECT MAX(COALESCE(p.expires_on, DATE '9999-12-31')) FROM passes p WHERE p.studio_id = sp.studio_id AND p.person_id = sp.person_id AND p.status = 'active' AND p.credits_used < p.credits_total)
+   OR sp.enrolled_until  IS DISTINCT FROM (SELECT MAX(c.ends_on) FROM enrolments e JOIN courses c ON c.id = e.course_id WHERE e.studio_id = sp.studio_id AND e.person_id = sp.person_id AND e.status = 'enrolled')
+   OR sp.works_here <> EXISTS (SELECT 1 FROM staff st WHERE st.studio_id = sp.studio_id AND st.person_id = sp.person_id AND st.active)
+   OR sp.deals_here <> EXISTS (SELECT 1 FROM connections c WHERE c.studio_id = sp.studio_id AND c.person_id = sp.person_id AND c.active)`)) === 0,
+  'horizon dates compared at read, counts resynced at write — nothing stored that can rot',
+);
+ok('...with somebody on each side of every line', (await count('SELECT count(*) n FROM studio_people WHERE works_here')) === 2 && (await count('SELECT count(*) n FROM studio_people WHERE deals_here')) === 4 && (await count('SELECT count(*) n FROM studio_people WHERE pass_live_until IS NOT NULL')) === 1, 'the mirrors carry the seed’s own stories');
+
 // ── the tenant boundary, in the data itself ──
-ok('no person holds memberships at both studios', (await count('SELECT count(*) n FROM (SELECT person_id FROM memberships GROUP BY person_id HAVING count(DISTINCT studio_id) > 1) x')) === 0);
-ok('no plan is offered across studios', (await count('SELECT count(*) n FROM subscriptions sub JOIN plans p ON p.id = sub.plan_id WHERE p.studio_id <> sub.studio_id')) === 0);
+ok('no subscription crosses studios through its offering', (await count('SELECT count(*) n FROM subscriptions sub JOIN offerings o ON o.id = sub.offering_id WHERE o.studio_id <> sub.studio_id')) === 0);
+ok('no pass crosses studios through its offering', (await count('SELECT count(*) n FROM passes p JOIN offerings o ON o.id = p.offering_id WHERE o.studio_id <> p.studio_id')) === 0);
 
 console.log(failed === 0 ? `\n\x1b[32mOK — the dataset is as the suite assumes.\x1b[0m` : `\n\x1b[31mFAIL — ${failed} assertion(s).\x1b[0m`);
 process.exit(failed === 0 ? 0 : 1);

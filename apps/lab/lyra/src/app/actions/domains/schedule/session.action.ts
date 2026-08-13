@@ -1,16 +1,6 @@
 import { z } from 'zod';
 import type { ActionDefinition, LayoutNode } from '@niscorp/nova';
 
-// WHO IS COMING TO THIS CLASS.
-//
-// The one question about a class that had no screen. Tapping a class on the
-// timetable used to open the DESK's check-in tool — a sheet carrying its own
-// today-only class picker, then the roster of a class next Monday underneath
-// it. Two unrelated things in one panel, and the answer three taps in.
-//
-// This is one class and the people in it. The desk keeps its own screen,
-// because checking somebody in is a different job done at a different moment.
-
 const sessionRequest = {
   fingerprint: 'session/detail',
   context: { sessionId: { $ref: '$.sessionId' } },
@@ -80,12 +70,6 @@ export const scheduleSessionAction: ActionDefinition = {
   lifecycle: {
     mount: [{ call: 'session' }, { call: 'attending', onSuccess: [{ set: 'loading', value: false }] }],
   },
-  // Somebody booked or checked in while this was open — the list is stale.
-  //
-  // These are the channels the app ACTUALLY emits. The first version listened
-  // for `bookings-changed`, which reads like the obvious name and is sent by
-  // nothing: a trigger on a channel nobody emits is a screen that silently
-  // stops updating, and nothing fails.
   triggers: [
     { message: 'my-bookings-changed', do: [{ call: 'session' }, { call: 'attending' }] },
     { message: 'check-ins-changed', do: [{ call: 'attending' }] },

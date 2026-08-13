@@ -50,6 +50,6 @@ export const Demo = () => (
     start={Date.UTC(2026, 2, 10, 12, 0)}
     previewOf="billing.dunning"
     steps={[{ label: '+1 day', ms: 86_400_000 }]}
-    note="Press preview and read the report: three members by name, each with the resolved message. Then check the panels — no firing, no task, nothing sent. Preview writes nothing at all. It is also where a typo'd template surfaces, which makes it the inner verb of the authoring loop rather than a debugging afterthought."
+    note="Press preview and read the report: three members by name, each with the resolved message. Then check the panels — no run, no task, nothing sent. Preview writes nothing at all. It is also where a typo'd template surfaces, which makes it the inner verb of the authoring loop rather than a debugging afterthought."
   />
 );

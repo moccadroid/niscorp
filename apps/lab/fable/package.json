@@ -11,7 +11,7 @@
     "check:boot": "tsx src/dev/boot-check.ts",
     "check:write": "tsx src/dev/write-check.ts",
     "check:form": "tsx src/dev/form-check.ts",
-    "check": "tsx src/dev/boot-check.ts && tsx src/dev/write-check.ts && tsx src/dev/form-check.ts"
+    "check": "turbo run build --filter=fable^... && tsx src/dev/boot-check.ts && tsx src/dev/write-check.ts && tsx src/dev/form-check.ts"
   },
   "dependencies": {
     "@electric-sql/pglite": "^0.5.1",

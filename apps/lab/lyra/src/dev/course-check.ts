@@ -1,20 +1,3 @@
-// Course check — the distinction a program could not carry.
-//
-// The claim: a PROGRAM is a taxonomy (a name, a colour, a stream that runs
-// indefinitely) and a COURSE is a dated block somebody joins. The schema had
-// only the first, so the second lived in prose — "six weeks, runs every term"
-// in a blurb, where no query can reach it and nothing keeps it true.
-//
-// Three things have to hold, and each fails differently:
-//
-//   1. A course's weeks are BOUNDED. One generator, one schedule concept — a
-//      block that generated classes forever would be an ongoing class wearing
-//      a start date.
-//   2. Capacity is the COURSE's, not each session's. Twelve places means twelve
-//      people for the block.
-//   3. Enrolling ONCE holds a place in every session, as ordinary bookings —
-//      so the desk's roster and the check-in screen need to know nothing.
-//
 // Run: pnpm --filter lyra exec tsx src/dev/course-check.ts
 import { CAST } from '@lyra/db/seed';
 import { areasFor } from '@lyra/app/nav/sections';
@@ -44,17 +27,6 @@ ok('...while an ongoing class keeps running', (await count("SELECT count(*) n FR
 // ── the manager's screen ─────────────────────────────────────
 const owner = login(CAST.lumen.owner);
 await settle(8);
-// THROUGH THE MENU, not past it.
-//
-// This used to dispatch `nav` with `courses.list` — an action that was in
-// nobody's menu. The screen was real, granted, and unreachable: the only thing
-// that ever opened it was this line. A check that fabricates the route it is
-// testing will keep a dead screen green for as long as it exists, which is what
-// happened, and `courses.list` is gone now. Courses live on the Classes screen
-// with everything else that runs, which is what was asked for.
-//
-// So the nav id comes from the MENU, and the check fails if it stops being
-// offered rather than quietly testing a private door.
 const offered = areasFor(idsFor(CAST.lumen.owner)).flatMap((a) => a.items.map((i) => i.action));
 ok('the owner is offered the Classes screen', offered.includes('timetable.list'), offered.join(', '));
 
@@ -62,8 +34,6 @@ owner.dispatch({ type: 'ui:click', ref: 'nav', payload: 'timetable.list' });
 await settle(12);
 let tree = treeOf(owner);
 ok('an owner reaches it', tree.includes('Everything this studio runs'));
-// The merge is at the SLOT level, which is the honest place for it: a course
-// meets weekly like everything else, and the row says which kind it is.
 ok('...and courses are ON it, beside the weekly classes', tree.includes('"is_course":true'), 'one list, which is the whole point of merging them');
 ok('...with the dates that make it a block', tree.includes('runs_display'));
 ok('...and a way to see who is on it', tree.includes('"ref":"roster"'), 'offered on course rows only — showKey: is_course');
@@ -80,20 +50,27 @@ owner.dispatch({ type: 'ui:model', ref: 'endsOn', payload: '2026-12-14' });
 owner.dispatch({ type: 'ui:model', ref: 'capacity', payload: 10 });
 owner.dispatch({ type: 'ui:model', ref: 'priceCents', payload: 14000 });
 await settle();
+
+// Untick the default days and try anyway — headless dispatch does not look at
+// disabled buttons, which is the point: the create request's FINGERPRINT
+// resolves to a sentinel nothing answers, so the refusal is the wire's, not
+// the button's. A course with no days must be uncreatable from any direction.
+owner.dispatch({ type: 'ui:click', ref: 'mon', payload: { next: false } });
+owner.dispatch({ type: 'ui:click', ref: 'wed', payload: { next: false } });
+await settle();
+owner.dispatch({ type: 'ui:click', ref: 'create' });
+await settle(14);
+ok('a dayless course is refused at the wire', (await count("SELECT count(*) n FROM courses WHERE studio_id = 'st_lumen'")) === before, 'the fingerprint itself is the guard');
+
+owner.dispatch({ type: 'ui:click', ref: 'mon', payload: { next: true } });
+owner.dispatch({ type: 'ui:click', ref: 'wed', payload: { next: true } });
+await settle();
 owner.dispatch({ type: 'ui:click', ref: 'create' });
 await settle(14);
 
 ok('a course can be created', (await count("SELECT count(*) n FROM courses WHERE studio_id = 'st_lumen'")) === before + 1);
 ok('...with its dates and size', (await count("SELECT count(*) n FROM courses WHERE name = 'Winter beginners' AND capacity = 10 AND price_cents = 14000 AND starts_on = '2026-11-02'")) === 1);
 
-// ── AND IT IS ON THE CALENDAR ────────────────────────────────
-//
-// The assertion this check was missing, and the bug it was missing: a course
-// used to be one row with two dates and NO CLASSES. It appeared on the courses
-// screen, people could enrol on it, and "when do I turn up" had no answer.
-// Every assertion above passed the whole time.
-//
-// A course is a set of weekly slots with an end date. These say so.
 ok(
   '...and it MEETS on days, not just between dates',
   (await count("SELECT count(*) n FROM class_templates ct JOIN courses c ON c.id = ct.course_id WHERE c.name = 'Winter beginners'")) === 2,
@@ -115,10 +92,6 @@ ok(
   'a seat on the block is a seat in each of its classes',
 );
 
-// A COURSE WITH NO DAYS IS REFUSED. It was previously the only kind you could
-// make, so this is the assertion that stops it coming back.
-const noDays = await asPrincipal(CAST.lumen.owner, '/api/fn/courses.create', {});
-void noDays;
 const daysless = await runtime.db.query(
   "SELECT count(*) n FROM courses c WHERE c.studio_id = 'st_lumen' AND NOT EXISTS (SELECT 1 FROM class_templates ct WHERE ct.course_id = c.id)",
 );
@@ -134,20 +107,17 @@ ok('a course has a roster', tree.includes('Everybody who holds a place on this b
 ok('...naming who is on it', tree.includes('Jonas Weber'), 'the cohort — what six separate bookings could not have told a studio');
 
 // ── a member joins ───────────────────────────────────────────
-//
-// ONE row. The bookings follow, and they are ordinary bookings — the desk's
-// roster and the capacity check have no idea a course exists.
 const member = login(CAST.lumen.member);
 await settle(10);
-const bookingsBefore = await count("SELECT count(*) n FROM bookings WHERE membership_id = 'mb_ava' AND status = 'booked'");
+const bookingsBefore = await count("SELECT count(*) n FROM bookings WHERE person_id = 'p_ava' AND status = 'booked'");
 
 const joined = await asPrincipal(CAST.lumen.member, '/api/me/vex', { fingerprint: 'me/join-course', context: { courseId: 'co_lumen_found' } });
 ok('a member can join a course', !refused(joined), JSON.stringify(joined).slice(0, 80));
 ok('...creating ONE enrolment', (await count("SELECT count(*) n FROM enrolments WHERE person_id = 'p_ava' AND course_id = 'co_lumen_found' AND status = 'enrolled'")) === 1);
 
-const bookingsAfter = await count("SELECT count(*) n FROM bookings WHERE membership_id = 'mb_ava' AND status = 'booked'");
+const bookingsAfter = await count("SELECT count(*) n FROM bookings WHERE person_id = 'p_ava' AND status = 'booked'");
 ok('...which fanned out into the block’s classes', bookingsAfter > bookingsBefore, `${bookingsAfter - bookingsBefore} bookings from one enrolment`);
-ok('...as ORDINARY bookings', (await count("SELECT count(*) n FROM bookings b JOIN class_sessions cs ON cs.id = b.session_id JOIN class_templates ct ON ct.id = cs.template_id WHERE ct.course_id = 'co_lumen_found' AND b.membership_id = 'mb_ava'")) > 0, 'the desk’s roster needs to know nothing about courses');
+ok('...as ORDINARY bookings', (await count("SELECT count(*) n FROM bookings b JOIN class_sessions cs ON cs.id = b.session_id JOIN class_templates ct ON ct.id = cs.template_id WHERE ct.course_id = 'co_lumen_found' AND b.person_id = 'p_ava'")) > 0, 'the desk’s roster needs to know nothing about courses');
 ok('...and the counter cache followed', (await count("SELECT enrolled_count n FROM courses WHERE id = 'co_lumen_found'")) === 2);
 
 // ── capacity is the COURSE's ─────────────────────────────────
@@ -164,10 +134,10 @@ ok('a member cannot join the same course twice', refused(twice), JSON.stringify(
 const mine = await asPrincipal(CAST.lumen.member, '/api/me/vex', { fingerprint: 'me/enrolments', context: {} });
 ok('a member sees what they are on', JSON.stringify(mine).includes('Foundations'), JSON.stringify(mine).slice(0, 90));
 
-const enrolmentId = (await runtime.db.query<{ id: string }>("SELECT id FROM enrolments WHERE membership_id = 'mb_ava'")).rows[0]?.id ?? '';
+const enrolmentId = (await runtime.db.query<{ id: string }>("SELECT id FROM enrolments WHERE person_id = 'p_ava'")).rows[0]?.id ?? '';
 await asPrincipal(CAST.lumen.member, '/api/me/vex', { fingerprint: 'me/leave-course', context: { enrolmentId } });
 ok('withdrawing releases the enrolment', (await count("SELECT count(*) n FROM enrolments WHERE person_id = 'p_ava' AND status = 'withdrawn'")) === 1);
-ok('...and frees the seats', (await count("SELECT count(*) n FROM bookings b JOIN class_sessions cs ON cs.id = b.session_id JOIN class_templates ct ON ct.id = cs.template_id WHERE ct.course_id = 'co_lumen_found' AND b.membership_id = 'mb_ava' AND b.status = 'booked' AND cs.held_on >= studio_today('st_lumen')")) === 0, 'seats held by somebody who left is how a studio finds out by counting chairs');
+ok('...and frees the seats', (await count("SELECT count(*) n FROM bookings b JOIN class_sessions cs ON cs.id = b.session_id JOIN class_templates ct ON ct.id = cs.template_id WHERE ct.course_id = 'co_lumen_found' AND b.person_id = 'p_ava' AND b.status = 'booked' AND cs.held_on >= studio_today('st_lumen')")) === 0, 'seats held by somebody who left is how a studio finds out by counting chairs');
 ok('...and the counter followed back down', (await count("SELECT enrolled_count n FROM courses WHERE id = 'co_lumen_found'")) === 1);
 
 // ── who may decide what a block IS ───────────────────────────
@@ -178,10 +148,9 @@ const deskWrite = await asPrincipal(CAST.lumen.desk, '/api/schedule/vex', {
 ok('the desk cannot change a course', refused(deskWrite), JSON.stringify(deskWrite).slice(0, 70));
 ok('...and it is untouched', (await count("SELECT count(*) n FROM courses WHERE id = 'co_lumen_found' AND capacity = 12")) === 1);
 
-const memberWrite = await asPrincipal(CAST.lumen.member, '/api/schedule/vex', { fingerprint: 'courses/retire', context: { courseId: 'co_lumen_found' } });
+const memberWrite = await asPrincipal(CAST.lumen.member, '/api/schedule/vex', { fingerprint: 'courses/set-active', context: { courseId: 'co_lumen_found', active: false } });
 ok('a member certainly cannot', refused(memberWrite) || (await count("SELECT count(*) n FROM courses WHERE id = 'co_lumen_found' AND active")) === 1);
 
-// Tenancy, as everywhere: a course is a studio's row.
 const foreign = await asPrincipal(CAST.northrock.member, '/api/me/vex', { fingerprint: 'me/join-course', context: { courseId: 'co_lumen_found' } });
 ok('another studio’s member cannot join this block', refused(foreign), JSON.stringify(foreign).slice(0, 90));
 ok('...and no row crossed', (await count("SELECT count(*) n FROM enrolments WHERE course_id = 'co_lumen_found' AND studio_id <> 'st_lumen'")) === 0);
@@ -189,45 +158,35 @@ ok('...and no row crossed', (await count("SELECT count(*) n FROM enrolments WHER
 void member;
 
 // ── the desk, at the counter ─────────────────────────────────
-//
-// The desk held the grant to enrol somebody from the moment courses landed and
-// had nowhere to do it. Capability with no door is the same shape of bug as a
-// read-only screen called "Timetable": nothing is broken, and the feature does
-// not exist to whoever is using it.
 const desk = login(CAST.lumen.desk);
 await settle(10);
 desk.dispatch({ type: 'ui:click', ref: 'nav', payload: 'people.list' });
 await settle(10);
-desk.dispatch({ type: 'ui:click', ref: 'open', payload: { membership_id: 'mb_sofia' } });
+desk.dispatch({ type: 'ui:click', ref: 'open', payload: { person_id: 'p_sofia' } });
 await settle(16);
 let deskTree = treeOf(desk);
-ok('the desk sees courses on a member record', deskTree.includes('Blocks this member is on'));
+ok('the desk sees courses on a member record', deskTree.includes('Blocks this person is on'));
 ok('...and is offered the open ones', deskTree.includes('Put them on'));
 
-const sofiaBefore = await count("SELECT count(*) n FROM enrolments WHERE membership_id = 'mb_sofia' AND status = 'enrolled'");
+const sofiaBefore = await count("SELECT count(*) n FROM enrolments WHERE person_id = 'p_sofia' AND status = 'enrolled'");
 desk.dispatch({ type: 'ui:click', ref: 'enrol', payload: { course_id: 'co_lumen_found' } });
 await settle(18);
-ok('a desk can enrol somebody at the counter', (await count("SELECT count(*) n FROM enrolments WHERE membership_id = 'mb_sofia' AND status = 'enrolled'")) === sofiaBefore + 1);
+ok('a desk can enrol somebody at the counter', (await count("SELECT count(*) n FROM enrolments WHERE person_id = 'p_sofia' AND status = 'enrolled'")) === sofiaBefore + 1);
 
-// THE DERIVATION. The write named a course and a membership; the person came
-// from the database, so the row cannot be a lie about who is on the block.
-ok('...with the person derived, not sent', (await count("SELECT count(*) n FROM enrolments e JOIN memberships m ON m.id = e.membership_id WHERE e.membership_id = 'mb_sofia' AND e.person_id = m.person_id")) >= 1, 'nothing in the write names a human');
-ok('...and the block booked for them', (await count("SELECT count(*) n FROM bookings b JOIN class_sessions cs ON cs.id = b.session_id JOIN class_templates ct ON ct.id = cs.template_id WHERE ct.course_id = 'co_lumen_found' AND b.membership_id = 'mb_sofia'")) > 0);
+ok('...with the studio stamped by the engine, not the caller', (await count("SELECT count(*) n FROM enrolments e WHERE e.person_id = 'p_sofia' AND e.studio_id = 'st_lumen'")) >= 1, 'the write named a course and a person; the tenant came from scope');
+ok('...and the block booked for them', (await count("SELECT count(*) n FROM bookings b JOIN class_sessions cs ON cs.id = b.session_id JOIN class_templates ct ON ct.id = cs.template_id WHERE ct.course_id = 'co_lumen_found' AND b.person_id = 'p_sofia'")) > 0);
 ok('...and it shows on the record', treeOf(desk).includes('Foundations — autumn block'));
 
-desk.dispatch({ type: 'ui:click', ref: 'withdraw', payload: { enrolment_id: (await runtime.db.query("SELECT id FROM enrolments WHERE membership_id = 'mb_sofia' AND status = 'enrolled' LIMIT 1")).rows[0]?.id } });
+desk.dispatch({ type: 'ui:click', ref: 'withdraw', payload: { enrolment_id: (await runtime.db.query("SELECT id FROM enrolments WHERE person_id = 'p_sofia' AND status = 'enrolled' LIMIT 1")).rows[0]?.id } });
 await settle(18);
-ok('...and take them off again', (await count("SELECT count(*) n FROM enrolments WHERE membership_id = 'mb_sofia' AND status = 'withdrawn'")) === 1);
+ok('...and take them off again', (await count("SELECT count(*) n FROM enrolments WHERE person_id = 'p_sofia' AND status = 'withdrawn'")) === 1);
 
-
-// Enrolling somebody twice, and re-enrolling somebody who left. Both are things
-// a desk actually does, and they are different answers.
-const dup = await asPrincipal(CAST.lumen.desk, '/api/schedule/vex', { fingerprint: 'enrolments/create', context: { courseId: 'co_lumen_found', membershipId: 'mb_jonas' } });
+const dup = await asPrincipal(CAST.lumen.desk, '/api/schedule/vex', { fingerprint: 'enrolments/create', context: { courseId: 'co_lumen_found', personId: 'p_jonas' } });
 ok('enrolling somebody already on a block is refused', refused(dup), JSON.stringify(dup).slice(0, 80));
 
-const rejoin = await asPrincipal(CAST.lumen.desk, '/api/schedule/vex', { fingerprint: 'enrolments/create', context: { courseId: 'co_lumen_found', membershipId: 'mb_sofia' } });
+const rejoin = await asPrincipal(CAST.lumen.desk, '/api/schedule/vex', { fingerprint: 'enrolments/create', context: { courseId: 'co_lumen_found', personId: 'p_sofia' } });
 ok('...but somebody who withdrew can be put back', !refused(rejoin), JSON.stringify(rejoin).slice(0, 80));
-ok('...reusing the row rather than duplicating it', (await count("SELECT count(*) n FROM enrolments WHERE membership_id = 'mb_sofia' AND course_id = 'co_lumen_found'")) === 1);
-ok('...and re-booking the block', (await count("SELECT count(*) n FROM bookings b JOIN class_sessions cs ON cs.id = b.session_id JOIN class_templates ct ON ct.id = cs.template_id WHERE ct.course_id = 'co_lumen_found' AND b.membership_id = 'mb_sofia' AND b.status = 'booked' AND cs.held_on >= studio_today('st_lumen')")) > 0);
+ok('...reusing the row rather than duplicating it', (await count("SELECT count(*) n FROM enrolments WHERE person_id = 'p_sofia' AND course_id = 'co_lumen_found'")) === 1);
+ok('...and re-booking the block', (await count("SELECT count(*) n FROM bookings b JOIN class_sessions cs ON cs.id = b.session_id JOIN class_templates ct ON ct.id = cs.template_id WHERE ct.course_id = 'co_lumen_found' AND b.person_id = 'p_sofia' AND b.status = 'booked' AND cs.held_on >= studio_today('st_lumen')")) > 0);
 
 report('a program is a stream, a course is a block: bounded, capped, and joined once.');

@@ -1,16 +1,15 @@
-import { pollOf } from '../schemas';
-import { TideError } from '../errors';
-import type { Fact, Firing, Row, Task } from '../types';
+import { TideError, isTideError } from '../errors';
+import type { Fact, Row, Run, Task } from '../types';
 import { buildEnv, evaluateTemplate } from './runtime';
 import type { EngineDeps, LoadedReflex } from './runtime';
 
 // ═══════════════════════════════════════════════════════════════
-// Fan out — a firing becomes unit tasks
+// Fan out — a run becomes unit tasks
 //
 // Transactional, and that is the whole point. A fan-out that
 // crashed at row 200 of 500 and RESUMED would re-select against
 // moved data: a member who paid in the gap keeps a task minted
-// from the stale pass. Committing the tasks with the firing's
+// from the stale pass. Committing the tasks with the run's
 // transition means a crash leaves nothing to resume from, so the
 // re-run selects fresh and mints clean.
 // ═══════════════════════════════════════════════════════════════
@@ -42,9 +41,9 @@ const unitsFrom = (rows: readonly Row[], unitKey: string | undefined, base: Row,
   return rows.map((row) => {
     const raw = unitKey === undefined ? undefined : row[unitKey];
     const unit = raw === undefined || raw === null ? '' : String(raw);
-    // A duplicate unit key means the firing's GRAIN is wrong. ON CONFLICT
-    // would eat the second row silently; an authoring error is loud or it
-    // is invisible.
+    // A duplicate unit key means the run's GRAIN is wrong. Letting the
+    // unique constraint eat the second row would hide an authoring error;
+    // an authoring error is loud or it is invisible.
     if (seen.has(unit))
       throw new TideError('duplicate_unit', `${reflexId}: duplicate unit key "${unit}" — the selection's unitKey is not unique`);
     seen.add(unit);
@@ -52,99 +51,162 @@ const unitsFrom = (rows: readonly Row[], unitKey: string | undefined, base: Row,
   });
 };
 
-const factRowsOf = async (deps: EngineDeps, firing: Firing): Promise<readonly Fact[]> => {
-  const ids = firing.factIds ?? [];
-  const found: Fact[] = [];
-  for (const id of ids) {
-    const fact = await deps.store.getFact(id);
-    if (fact !== undefined) found.push(fact);
-  }
-  return found;
+const factRowsOf = async (deps: EngineDeps, run: Run): Promise<readonly Fact[]> => {
+  const ids = run.factIds ?? [];
+  if (ids.length === 0) return [];
+  return deps.store.query({ table: 'fact', where: { id: { in: [...ids] } } });
 };
 
 export const fanOut = async (deps: EngineDeps, now: number, limit: number): Promise<number> => {
   let created = 0;
 
-  for (const firing of await deps.store.pendingFirings(limit)) {
-    const loaded = deps.find(firing.reflexId);
+  const pending = await deps.store.query({
+    table: 'run',
+    where: { state: 'pending' },
+    order: [{ by: 'dueAt' }],
+    limit,
+  });
+
+  for (const run of pending) {
+    const loaded = deps.find(run.reflexId);
     if (loaded === undefined) {
-      await deps.store.patchFiring(firing.id, { state: 'skipped', settledAt: now, note: 'reflex is no longer loaded' });
+      await deps.store.cas('run', run.id, { state: 'pending' }, { state: 'skipped', settledAt: now, drained: true, note: 'reflex is no longer loaded' });
       continue;
     }
 
     try {
-      const facts = await factRowsOf(deps, firing);
-      const units = await unitsForFiring(deps, loaded, shapeOf(firing), facts, now);
-      const committed = await deps.store.commitFanout(
-        firing.id,
-        units.map((unit) => taskOf(unit, firing, loaded, now)),
-        units.length,
-      );
-      created += committed;
+      const facts = await factRowsOf(deps, run);
+      const units = await unitsForRun(deps, loaded, shapeOf(run), facts, now);
+      created += await commitFanout(deps, run, units.map((unit) => taskOf(unit, run, loaded, now)), units.length, now);
     } catch (error) {
-      await deps.store.patchFiring(firing.id, {
-        state: 'skipped',
-        settledAt: now,
-        note: `fan-out failed: ${error instanceof Error ? error.message : String(error)}`,
-      });
-      deps.emit({ type: 'firing.skipped', reflexId: firing.reflexId, reason: 'fan-out failed' });
+      const reason = error instanceof Error ? error.message : String(error);
+
+      // A TRANSIENT FAILURE MUST NOT CONSUME AN OCCURRENCE.
+      //
+      // Every throw used to mark the run `skipped`. Runs are idempotent on
+      // (reflexId, cause), so the occurrence could never re-materialize —
+      // one database hiccup during a selection destroyed that night's
+      // billing run permanently, and because `skipped` is not `settled`,
+      // anything waiting on it waited forever.
+      //
+      // The two cases are distinguishable and the distinction is the fix.
+      // A TideError is tide's own refusal — a duplicate unit key, a
+      // selection with no `select` seam — which means the REFLEX is wrong
+      // and will be wrong again next tick. Anything else came out of a host
+      // seam: the selection, the transform, the database. That is a bad
+      // minute, not a bad reflex.
+      //
+      // Deferring leaves the run `pending`, which is a row past its due
+      // time that a query can see — visible silence, not a vanished event.
+      if (isTideError(error)) {
+        await deps.store.cas('run', run.id, { state: 'pending' }, { state: 'skipped', settledAt: now, drained: true, note: `fan-out refused: ${reason}` });
+        deps.emit({ type: 'run.skipped', reflexId: run.reflexId, reason });
+        continue;
+      }
+
+      await deps.store.cas('run', run.id, { state: 'pending' }, { note: `fan-out deferred: ${reason}` });
+      deps.emit({ type: 'run.deferred', reflexId: run.reflexId, runId: run.id, reason });
     }
   }
 
   return created;
 };
 
-const taskOf = (unit: Unit, firing: Firing, loaded: LoadedReflex, now: number): Omit<Task, 'id'> => ({
-  firingId: firing.id,
+// ATOMIC: the tasks and the run's move to `fanned` commit together. A crash
+// mid-fan-out must leave NOTHING to resume from, because resuming would
+// re-select against moved data.
+const commitFanout = async (
+  deps: EngineDeps,
+  run: Run,
+  tasks: readonly Omit<Task, 'id'>[],
+  selected: number,
+  now: number,
+): Promise<number> =>
+  deps.store.transact(async (tx) => {
+    // Guarded on `pending`, so a second instance that fanned this run out
+    // first finds nothing to do rather than minting a duplicate set.
+    const claimed = await tx.cas('run', run.id, { state: 'pending' }, { state: 'fanned' });
+    if (!claimed) return 0;
+
+    let written = 0;
+    for (const task of tasks) if ((await tx.appendIfAbsent('task', task)) !== undefined) written += 1;
+
+    // `total` is what was WRITTEN, not what was offered. Counting the input
+    // array meant any refusal by the unique key left `total` permanently
+    // unreachable — the run never settled, never drained, and blocked its
+    // reflex for good.
+    const settledNow = written === 0;
+    await tx.cas(
+      'run',
+      run.id,
+      {},
+      {
+        selected,
+        total: written,
+        // A zero-task run settles immediately and still announces itself —
+        // "nothing was due" is an answer a digest may legitimately want.
+        state: settledNow ? 'settled' : 'fanned',
+        settledAt: settledNow ? now : undefined,
+      },
+    );
+    return written;
+  });
+
+const taskOf = (unit: Unit, run: Run, loaded: LoadedReflex, now: number): Omit<Task, 'id'> => ({
+  runId: run.id,
   reflexId: loaded.reflex.id,
   unit: unit.unit,
-  // UNIQUE(reflex, cause, unit) — the idempotency grain, written BEFORE the
-  // effect runs. There is no path to the effect that skips this row.
-  cause: firing.cause,
+  // UNIQUE(runId, unit) — the idempotency grain, written BEFORE the effect
+  // runs. There is no path to the effect that skips this row.
+  cause: run.cause,
   env: unit.env,
+  // Carried, not looked up later: a swept run must not reset the chain
+  // ceiling for work that is still in flight.
+  depth: run.depth,
   state: 'pending',
   attempt: 0,
-  notBefore: firing.dueAt > now ? firing.dueAt : now,
+  claimedUntil: 0,
+  notBefore: run.dueAt > now ? run.dueAt : now,
   createdAt: now,
 });
 
-// What fan-out needs from a firing — no more. Preview builds one of these
+// What fan-out needs from a run — no more. Preview builds one of these
 // without persisting anything, which is how the dry run walks the SAME code
 // path as the real thing rather than a sympathetic reimplementation of it.
-export type FiringShape = { cause: string; occurrence?: string; dueAt: number };
+export type RunShape = { cause: string; occurrence?: string; dueAt: number };
 
-const shapeOf = (firing: Firing): FiringShape => ({
-  cause: firing.cause,
-  occurrence: firing.occurrence,
-  dueAt: firing.dueAt,
-});
+const shapeOf = (run: Run): RunShape => ({ cause: run.cause, occurrence: run.occurrence, dueAt: run.dueAt });
 
-export const unitsForFiring = async (
+export const unitsForRun = async (
   deps: EngineDeps,
   loaded: LoadedReflex,
-  firing: FiringShape,
+  run: RunShape,
   facts: readonly Fact[],
   now: number,
 ): Promise<Unit[]> => {
   const { reflex } = loaded;
-  const batched = firing.cause.startsWith('window:');
 
   const base = buildEnv({
     params: reflex.params,
-    occurrence: firing.occurrence === undefined ? undefined : { key: firing.occurrence, at: firing.dueAt },
-    fact: !batched && facts.length === 1 ? { ...facts[0] } : undefined,
-    facts: batched || facts.length > 1 ? facts.map((fact) => ({ ...fact })) : undefined,
+    occurrence: run.occurrence === undefined ? undefined : { key: run.occurrence, at: run.dueAt },
+    fact: facts.length === 1 ? { ...facts[0] } : undefined,
+    facts: facts.length > 1 ? facts.map((fact) => ({ ...fact })) : undefined,
     now,
   });
 
-  // A poll reflex's `select` IS the polled query — it already ran, and the
-  // row it produced is the unit. Re-selecting here would ask the source the
-  // same question twice and answer it differently.
-  const poll = pollOf(reflex.on);
-  if (poll !== undefined) {
-    const rows = facts.map((fact) => fact.row).filter((row): row is Row => row !== undefined);
-    return unitsFrom(rows, reflex.select?.unitKey, base, reflex.id);
-  }
+  // A write fact CARRIES the row that caused it — minted at the host's
+  // write choke point under this reflex's own identity. With no selection
+  // declared, that row IS the unit: re-selecting would ask the database a
+  // question the fact already answers, and answer it differently if the
+  // row has moved. A declared selection is ENRICHMENT — it re-checks
+  // reality under the reflex's own principal at fan-out time, which is the
+  // guard that makes write-driven chains safe to loop.
+  //
+  // `preview` passes no fact and `fire`'s manual fact has no row; both fall
+  // through to the selection (or the unit-less base), which is what a human
+  // rehearsing or forcing a reflex means to ask.
+  const carried = facts.map((fact) => fact.row).filter((row): row is Row => row !== undefined);
+  if (carried.length > 0 && reflex.select === undefined) return unitsFrom(carried, undefined, base, reflex.id);
 
   if (reflex.select === undefined) return [{ unit: '', env: base }];
 

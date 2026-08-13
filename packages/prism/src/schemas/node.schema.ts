@@ -49,6 +49,10 @@ import {
   setNodeSchema as setTimeNode,
 } from './ops/time.schema';
 import {
+  LocaleDateNodeSchema, LocaleMoneyNodeSchema, LocaleNumberNodeSchema,
+  setNodeSchema as setIntlNode,
+} from './ops/intl.schema';
+import {
   SumNodeSchema, AvgNodeSchema, CountNodeSchema, MinNodeSchema, MaxNodeSchema,
   PluckNodeSchema, TakeNodeSchema, DropNodeSchema, MatchNodeSchema, FlatMapNodeSchema,
   setNodeSchema as setSugarNode,
@@ -68,6 +72,7 @@ export const OP_KEYS = [
   '$merge', '$coalesce', '$case', '$entriesOf', '$keyBy', '$groupBy',
   '$keys', '$values', '$fromEntries', '$pick', '$omit', '$type', '$length',
   '$date', '$dateAdd', '$dateDiff',
+  '$localeDate', '$localeMoney', '$localeNumber',
   '$sum', '$avg', '$count', '$min', '$max',
   '$pluck', '$take', '$drop', '$match', '$flatMap',
 ] as const;
@@ -122,6 +127,8 @@ export const NodeSchema: z.ZodType<unknown> = z.lazy(
       PickNodeSchema, OmitNodeSchema, TypeNodeSchema, LengthNodeSchema,
       // Time
       DateNodeSchema, DateAddNodeSchema, DateDiffNodeSchema,
+      // Locale-aware formatting
+      LocaleDateNodeSchema, LocaleMoneyNodeSchema, LocaleNumberNodeSchema,
       // Sugar
       SumNodeSchema, AvgNodeSchema, CountNodeSchema, MinNodeSchema, MaxNodeSchema,
       PluckNodeSchema, TakeNodeSchema, DropNodeSchema, MatchNodeSchema, FlatMapNodeSchema,
@@ -149,4 +156,5 @@ setLogicNode(NodeSchema);
 setStructureNode(NodeSchema);
 setObjectNode(NodeSchema);
 setTimeNode(NodeSchema);
+setIntlNode(NodeSchema);
 setSugarNode(NodeSchema);

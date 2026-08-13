@@ -1,16 +1,5 @@
 import type { CacheEntry, MutationEntry } from './index';
 
-// The LOOK, as data.
-//
-// `studios` is scoped on `id`, so this read answers for the caller's own studio
-// and no other — a theme read cannot be pointed at somebody else's studio any
-// more than a member read can.
-//
-// Read as an endpoint rather than taken only from `inputs`: boot input is fixed
-// at shell build, so a studio that changed its palette would keep the old one
-// until somebody reloaded. Chrome loads this on mount and re-loads when a
-// change announces itself, which is what makes a theme swap land on screens
-// that are already open.
 const one = (name: string, fallback: unknown = '') => ({ $get: { from: { $var: 'r' }, path: [name], fallback: { $const: fallback } } });
 
 export const themeCurrent: CacheEntry = {
@@ -25,9 +14,6 @@ export const themeCurrent: CacheEntry = {
       'themes.tokens',
     ],
   },
-  // Absent is the STOCK palette, not an error: `{}` applies nothing and the
-  // stylesheet's own values stand. A studio that never customised anything
-  // takes the same code path as one that did.
   mapping: {
     $with: {
       let: { r: { $ref: '$.result' } },
@@ -49,26 +35,47 @@ export const themesList: CacheEntry = {
   },
 };
 
-// Changing the look is one column on one row.
+// ── the words ────────────────────────────────────────────────
 //
-// I first wrote this with `where: { isNotNull: 'studios.id' }`, reasoning that
-// the engine's own `match: 'id' → studioId` behavior would narrow it to the
-// caller's row anyway, and that a statement carrying no studio id has nothing
-// to forge. Vex's `lintMutation` refused it at seed:
+// Same shape as the theme above, because it is the same kind of decision. The
+// options are read from the `phrases` table rather than listed: a language this
+// deployment holds no words for is not a language it can offer, and a hardcoded
+// list would offer it anyway.
+export const localeCurrent: CacheEntry = {
+  fingerprint: 'locale/current',
+  intent: 'The language this studio reads in',
+  shape: { locale: '' },
+  dsl: { from: ['studios'], fields: ['studios.locale'] },
+  mapping: { $with: { let: { r: { $ref: '$.result' } }, value: { locale: one('locale', 'en-GB') } } },
+};
+
+// WHICH LANGUAGES ARE ON OFFER is deliberately NOT an entry here.
 //
-//   update on "studios" has no $context-keyed WHERE — the write is not caller-bounded
+// The obvious query — DISTINCT locale FROM phrases — is wrong in a way worth
+// recording: the SOURCE language has no rows in that table, by construction,
+// because nothing about it needs translating. A studio reading English would
+// be offered every language except the one it is already in, and switching
+// back would be impossible.
 //
-// The lint is right and I was wrong. A write whose only bound is an injected
-// clause is one behaviors edit away from being a blanket update, and the
-// grammar declines to store that shape at all. `$scope` is unauthorable here
-// for the same reason — tenancy is the engine's to place, never a stored
-// statement's.
-//
-// So the caller names the row, and the engine ANDs its own match on top: the
-// authored condition and the injected one must BOTH hold, so a forged studioId
-// selects nothing rather than somebody else's studio. The id itself comes from
-// `studio/current`, which is already scoped — the action reads its own subject
-// rather than being told what it is.
+// So the offer is "the source language, plus every language we hold words for",
+// which is a fact about the loaded server rather than about a table. It is the
+// `world.languages` endpoint (server/functions/world.ts), where the language
+// names also come from `Intl.DisplayNames` instead of a hand-kept list.
+
+// The caller NAMES the row and the engine ANDs its own match on top. Relying on
+// the injected clause alone is refused at seed by vex's `lintMutation`: a write
+// whose only bound is injected is one behaviors edit away from a blanket update.
+export const studioSetLocale: MutationEntry = {
+  fingerprint: 'studio/set-language',
+  intent: 'Set which language this studio reads in',
+  mutation: {
+    op: 'update',
+    table: 'studios',
+    set: { locale: { $context: 'locale' } },
+    where: { eq: ['studios.id', { $context: 'studioId' }] },
+  },
+};
+
 export const studioSetTheme: MutationEntry = {
   fingerprint: 'studio/set-theme',
   intent: 'Set which theme this studio wears',

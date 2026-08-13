@@ -7,7 +7,7 @@ import type { ActionDefinition } from '@niscorp/nova';
 // came from `GET /api/integrations/contract`, which is why that endpoint exists.
 //
 // It stores its own records. A belt is not a column beside `memberships` — it
-// lives in this service, keyed by the `membership_id` the assertion (or the
+// lives in this service, keyed by the `person_id` the assertion (or the
 // host screen) hands over. That is the whole reason a discipline pack does not
 // need a migration in Lyra: the two systems share identifiers, not tables.
 //
@@ -31,7 +31,7 @@ const heading = (title: string, lead: string) => ({
 const panelAction: ActionDefinition = {
   id: 'ext.desk.belts.panel',
   title: 'Belt',
-  data: { membership_id: '', person_name: '', belt: {}, loading: true, error: '' },
+  data: { person_id: '', person_name: '', belt: {}, loading: true, error: '' },
   layout: {
     component: 'Stack',
     props: { gap: 22 },
@@ -107,28 +107,28 @@ const panelAction: ActionDefinition = {
     ],
   },
   endpoints: {
-    belt: { url: '/integrations/belts/member', method: 'POST', request: { membershipId: { $ref: '$.membership_id' } }, target: 'belt', errorTarget: 'error' },
+    belt: { url: '/integrations/belts/member', method: 'POST', request: { personId: { $ref: '$.person_id' } }, target: 'belt', errorTarget: 'error' },
     // Promote answers with the updated record, so one call both writes and
     // repaints. Behind it the service also acts AS ITSELF: its key carries a
     // notification into Lyra's inbox — the panel neither knows nor needs to.
     promote: {
       url: '/integrations/belts/promote',
       method: 'POST',
-      request: { membershipId: { $ref: '$.membership_id' }, personName: { $ref: '$.person_name' } },
+      request: { personId: { $ref: '$.person_id' }, personName: { $ref: '$.person_name' } },
       target: 'belt',
       errorTarget: 'error',
     },
     stripe: {
       url: '/integrations/belts/stripe',
       method: 'POST',
-      request: { membershipId: { $ref: '$.membership_id' }, personName: { $ref: '$.person_name' } },
+      request: { personId: { $ref: '$.person_id' }, personName: { $ref: '$.person_name' } },
       target: 'belt',
       errorTarget: 'error',
     },
     undo: {
       url: '/integrations/belts/undo',
       method: 'POST',
-      request: { membershipId: { $ref: '$.membership_id' }, personName: { $ref: '$.person_name' } },
+      request: { personId: { $ref: '$.person_id' }, personName: { $ref: '$.person_name' } },
       target: 'belt',
       errorTarget: 'error',
     },
@@ -228,7 +228,7 @@ const rosterAction: ActionDefinition = {
           props: {
             rows: '$.rows',
             loading: '$.loading',
-            rowKey: 'membership_id',
+            rowKey: 'person_id',
             empty: 'Nobody graded yet.',
             emptyHint: 'Belts are recorded here and stay here.',
             columns: [
@@ -250,7 +250,7 @@ const rosterAction: ActionDefinition = {
     members: {
       url: '/api/member/vex',
       method: 'POST',
-      request: { fingerprint: 'members/list', context: { statuses: ['active', 'trialling'], q: '%' } },
+      request: { fingerprint: 'people/list/members', context: { q: '%' } },
       target: 'members',
     },
   },
@@ -277,33 +277,33 @@ const rosterAction: ActionDefinition = {
                   $prism: {
                   $with: {
                     let: {
-                      byBelt: { $keyBy: { over: { $ref: '$.belts' }, as: 'b', key: { $get: { from: { $var: 'b' }, path: ['membership_id'] } } } },
+                      byBelt: { $keyBy: { over: { $ref: '$.belts' }, as: 'b', key: { $get: { from: { $var: 'b' }, path: ['person_id'] } } } },
                     },
                     value: {
                       $map: {
                         over: { $ref: '$.members' },
                         as: 'm',
                         body: {
-                          membership_id: { $get: { from: { $var: 'm' }, path: ['membership_id'] } },
+                          person_id: { $get: { from: { $var: 'm' }, path: ['person_id'] } },
                           person_name: { $get: { from: { $var: 'm' }, path: ['person_name'] } },
                           belt: {
                             $get: {
                               from: { $var: 'byBelt' },
-                              path: [{ $get: { from: { $var: 'm' }, path: ['membership_id'] } }, 'label'],
+                              path: [{ $get: { from: { $var: 'm' }, path: ['person_id'] } }, 'label'],
                               fallback: 'White',
                             },
                           },
                           bands: {
                             $get: {
                               from: { $var: 'byBelt' },
-                              path: [{ $get: { from: { $var: 'm' }, path: ['membership_id'] } }, 'bands'],
+                              path: [{ $get: { from: { $var: 'm' }, path: ['person_id'] } }, 'bands'],
                               fallback: ['#e9e7e2', '#e9e7e2', '#e9e7e2', { color: '#141416', w: 2 }, '#e9e7e2'],
                             },
                           },
                           since: {
                             $get: {
                               from: { $var: 'byBelt' },
-                              path: [{ $get: { from: { $var: 'm' }, path: ['membership_id'] } }, 'since'],
+                              path: [{ $get: { from: { $var: 'm' }, path: ['person_id'] } }, 'since'],
                               fallback: '—',
                             },
                           },
@@ -431,7 +431,11 @@ export const BELTS_BUNDLE = {
   // operator says yes, nothing here is served and the data grants are not held.
   grants: {
     actions: ['ext.desk.belts.*', 'ext.member.belts.*'],
-    data: ['memberships.read', 'people.read'],
+    // The roll it joins against: the anchor and the person. Standing derives
+    // from the anchor's own mirrors, so nothing else is asked for. Read as
+    // the person DRIVING — this is what the screens need, not what the
+    // pack's key holds.
+    data: ['studio_people.read', 'people.read'],
   },
   actions: {
     [panelAction.id]: panelAction,
@@ -443,5 +447,9 @@ export const BELTS_BUNDLE = {
   // the contract advertised; intake refuses anything else with a sentence.
   attachments: { [panelAction.id]: { to: 'people.detail', preview: '/integrations/belts/preview' } },
   placements: { [rosterAction.id]: 'hub.people', [mineAction.id]: 'hub.me' },
+  // Pages the host may FRAME — declared here for the same reason a preview is:
+  // the host will not open one it was not told about. Belts serves this to
+  // exercise the seam; a pack whose screens are ordinary layouts needs none.
+  frames: ['/integrations/belts/embed/summary'],
   settings: settingsAction.id,
 };

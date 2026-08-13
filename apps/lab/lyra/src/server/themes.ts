@@ -1,17 +1,6 @@
 import { isRecord } from '@niscorp/nova/reflect';
 import type { PgPool } from '@niscorp/vex';
 
-// A studio's LOOK, read from rows at boot and held as a snapshot.
-//
-// This is the surface half only — the token set a `Theme` component writes onto
-// the document. The structure half (replacement layouts per action) belongs to
-// moss's substitution point and is not this file's business.
-//
-// A studio with no theme row gets `{}`, which is the stock palette. That is the
-// whole fallback: absent is not an error state, it is the default product, and
-// the code path for "this studio never customised anything" is the same code
-// path as everything else.
-
 export type Theme = { name: string; tokens: Record<string, string> };
 
 const STOCK: Theme = { name: 'stock', tokens: {} };

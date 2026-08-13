@@ -14,7 +14,7 @@ export const rosterPrism = {
 export const checkInPrism = {
   fingerprint: checkInMark.fingerprint,
   context: {
-    membershipId: { $ref: '$.pendingMembershipId' },
+    personId: { $ref: '$.pendingPersonId' },
     sessionId: { $ref: '$.selectedSessionId' },
     bookingId: { $ref: '$.pendingBookingId' },
   },

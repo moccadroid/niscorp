@@ -6,8 +6,8 @@ import { QueryRequestSchema } from './schemas/request.schema.js';
 import { QuerySchema } from './schemas/query.schema.js';
 import { isEntryFresh, fireAndForget } from './cache/util.js';
 import { computeSchemaFingerprint } from './cache/hash.js';
-import { executeMutation } from './mutations/engine.js';
-import type { MutationClient } from './mutations/engine.js';
+import { executeWrites } from './mutations/engine.js';
+import type { MutationClient, WriteResult } from './mutations/engine.js';
 import { collectMutationContext, collectQueryContext, mutationEffect } from './mutations/signature.js';
 import type { ContextSignature, MutationEffect } from './mutations/signature.js';
 import type { CacheEntry } from './cache/cache.types.js';
@@ -41,8 +41,18 @@ export type VexHandlerConfig = {
   mutations?: {
     client: MutationClient;
     policy: ScopePolicy;
+    // The write observer. Fired once per successful mutation replay, AFTER
+    // the commit — per-statement writes with the rows the database returned,
+    // plus the scope the request could not forge. Vex is the choke point
+    // every write passes through, so this is where a host learns about all
+    // of them; what the host does with the news (mint facts, wake shells)
+    // is not the engine's business. A listener that throws cannot unwrite
+    // a committed write, so its error is contained, never the request's.
+    onWrite?: (event: WriteEvent) => void;
   };
 };
+
+export type WriteEvent = { fingerprint: string; writes: WriteResult[]; scope: ScopeValues };
 
 export type DiscoveryFingerprint = {
   fingerprint: string;
@@ -129,7 +139,8 @@ const canWriteTable = (policy: ScopePolicy, table: string, op: string): boolean 
   if ('public' in rule) return true;
   if ('deny' in rule) return false;
   if (rule.write !== undefined || policy.default === 'allow') return true;
-  if (op === 'insert') return rule.insert !== undefined;
+  // insertEach is an insert that happens N times — same phase.
+  if (op === 'insert' || op === 'insertEach') return rule.insert !== undefined;
   if (op === 'update') return rule.update !== undefined;
   if (op === 'delete') return rule.delete !== undefined;
   // upsert desugars to insert or update per call — advertise if either exists
@@ -334,12 +345,23 @@ export const handleQuery = async (
           writePolicy = narrowed;
         }
 
-        const rows = await executeMutation(config.mutations.client, entry.mutation, {
+        const writes = await executeWrites(config.mutations.client, entry.mutation, {
           context: parsed.data.context,
           scope,
           policy: writePolicy,
           schema,
         });
+        const rows = writes.flatMap((w) => w.rows);
+        // The commit happened; the observer hears about it now, and its
+        // failure is its own — the response must tell the truth about a
+        // write that already landed.
+        if (config.mutations.onWrite !== undefined) {
+          try {
+            config.mutations.onWrite({ fingerprint: parsed.data.fingerprint, writes, scope });
+          } catch (err) {
+            console.error('[vex:onWrite]', err);
+          }
+        }
         // Lifetime = usage, for writes exactly as for reads: stamp
         // lastUsedAt (off the hot path) so the GC sweep sees replays.
         fireAndForget(engine.cache.set(parsed.data.fingerprint, { ...entry, lastUsedAt: Date.now() }));

@@ -96,19 +96,39 @@ const walkFilter = (filter: Filter, schema: DatabaseSchema | undefined, sig: Con
   deepScan(f, sig);
 };
 
+const isLookupRef = (v: unknown): v is { $lookup: { from: string; field: string; where: Filter } } =>
+  v !== null && typeof v === 'object' && !Array.isArray(v) && '$lookup' in v;
+
 const columnsOf = (m: Mutation): Record<string, unknown> =>
-  m.op === 'insert' ? m.values : m.op === 'update' ? m.set : m.op === 'upsert' ? { ...m.columns, ...(m.insert ?? {}) } : {};
+  m.op === 'insert' || m.op === 'insertEach'
+    ? { ...m.values, ...(m.onConflict?.set ?? {}) }
+    : m.op === 'update'
+      ? m.set
+      : m.op === 'upsert'
+        ? { ...m.columns, ...(m.insert ?? {}) }
+        : {};
 
 export const collectMutationContext = (def: MutationDefinition, schema?: DatabaseSchema): ContextSignature => {
   const sig: ContextSignature = {};
   const list = Array.isArray(def) ? def : [def];
   for (const m of list) {
     for (const [col, v] of Object.entries(columnsOf(m))) {
+      if (isLookupRef(v)) {
+        // The lookup's WHERE binds context like any filter does.
+        walkFilter(v.$lookup.where, schema, sig);
+        continue;
+      }
       if (!isContextRef(v)) continue;
       const insertOnly = m.op === 'upsert' && m.insert !== undefined && col in m.insert;
       addField(sig, v.$context, { ...columnInfo(`${m.table}.${col}`, schema), ...(insertOnly ? { note: 'insert only' } : {}) });
     }
     if (m.op === 'update' || m.op === 'delete') walkFilter(m.where, schema, sig);
+    if (m.op === 'insertEach') {
+      const itemKeys = Object.values(m.values)
+        .filter((v): v is { $item: string } => v !== null && typeof v === 'object' && '$item' in v)
+        .map((v) => v.$item);
+      sig[m.items.$context] = { type: 'json', note: `array of objects — one inserted row per element${itemKeys.length > 0 ? ` (keys: ${itemKeys.join(', ')})` : ''}` };
+    }
     if (m.op === 'upsert') {
       sig[m.key] = { ...columnInfo(`${m.table}.${m.key}`, schema), note: 'upsert key — present updates that row, absent/empty inserts' };
     }
@@ -132,7 +152,14 @@ export const collectQueryContext = (dsl: Query, schema?: DatabaseSchema): Contex
 
 export const mutationEffect = (def: MutationDefinition): MutationEffect[] => {
   const list = Array.isArray(def) ? def : [def];
-  return list.map((m) => ({ op: m.op, table: m.table, columns: Object.keys(columnsOf(m)).sort() }));
+  return list.flatMap((m) => {
+    const base: MutationEffect = { op: m.op, table: m.table, columns: Object.keys(columnsOf(m)).sort() };
+    // ON CONFLICT DO UPDATE also updates — declare it, so visibility and
+    // grants treat the entry as the insert-plus-update it really is.
+    const conflictSet = (m.op === 'insert' || m.op === 'insertEach') && m.onConflict?.set !== undefined ? m.onConflict.set : undefined;
+    if (conflictSet === undefined) return [base];
+    return [base, { op: 'update', table: m.table, columns: Object.keys(conflictSet).sort() }];
+  });
 };
 
 // The keys a DESUGARED core mutation actually binds — the hard requirement
@@ -140,11 +167,17 @@ export const mutationEffect = (def: MutationDefinition): MutationEffect[] => {
 // insert branch, so requirement is computed after desugaring).
 export const requiredContextKeys = (m: CoreMutation): string[] => {
   const keys = new Set<string>();
-  const cols = m.op === 'insert' ? m.values : m.op === 'update' ? m.set : {};
+  const cols = m.op === 'insert' || m.op === 'insertEach' ? { ...m.values, ...(m.onConflict?.set ?? {}) } : m.op === 'update' ? m.set : {};
   for (const v of Object.values(cols)) {
     if (isContextRef(v)) keys.add(v.$context);
+    else if (isLookupRef(v)) {
+      const sub: ContextSignature = {};
+      deepScan(v.$lookup.where, sub);
+      for (const k of Object.keys(sub)) keys.add(k);
+    }
   }
-  if (m.op !== 'insert') {
+  if (m.op === 'insertEach') keys.add(m.items.$context);
+  if (m.op === 'update' || m.op === 'delete') {
     const sub: ContextSignature = {};
     deepScan(m.where, sub);
     for (const k of Object.keys(sub)) keys.add(k);
