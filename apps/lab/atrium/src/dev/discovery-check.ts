@@ -73,9 +73,16 @@ const main = async (): Promise<void> => {
 
   // The pulled queries are REPLAYABLE — they seeded the cache, protected, the
   // same as the app's own. A bundle's data surface is not a special case.
-  const spa = await runtime.cache.get('spa/diary');
+  //
+  // The cache is optional on the runtime, and the two assertions below are ONLY
+  // about what is in it — read through an absent one and they both compare
+  // undefined against a kind and fail as "not protected", which is a true-looking
+  // answer to a question that was never asked.
+  const cache = runtime.cache;
+  if (cache === undefined) throw new Error('discovery-check: the runtime came up without a cache — there is nothing to have seeded');
+  const spa = await cache.get('spa/diary');
   check('a pulled query is a protected cache row, replayable like any other', spa?.kind === 'ok' && spa.protected === true);
-  const record = await runtime.cache.get('spa/record');
+  const record = await cache.get('spa/record');
   check('...and a pulled write landed as a mutation entry', record?.kind === 'mutation');
 
   // ── 3. the console owns the switches ──

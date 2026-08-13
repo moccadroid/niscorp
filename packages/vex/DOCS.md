@@ -61,8 +61,25 @@ def never travels and no generation path exists for writes. See
 
 **Reserved sort keys.** `sortBy` (an `entity.field`) and `sortDir` (`asc`/`desc`)
 are reserved keys in `context`: the engine reads them straight into the `ORDER BY`
-(the column is schema-validated), overriding the query's literal `sort` for that
-run. They drive sorting directly and are never bound as parameters.
+(the column is schema-validated) and they are never bound as parameters. The
+caller's column **leads**; the query's own `sort` keys stay behind it as
+tiebreakers, minus a duplicate of the chosen column. That matters for a keyset
+page: an entry sorted `(name, id)` keeps `id` behind whatever the caller asks
+for, so the order stays total and no row can straddle a page boundary
+unreachably. An empty `sortBy` leaves the authored order alone.
+
+**Optional conditions.** `{ optional: { key, then } }` lets a caller switch a
+condition ON by supplying its key — omit it and the condition is removed from
+the query before it compiles. It is *not there*, as opposed to there and
+matching everything, so one entry answers "everyone", "everyone matching a
+search", and "one by id" without sentinel values like `'%'`. Absent means
+missing, `undefined` or `null` (`''` is a value); a condition reading several
+keys names them all, and the direction of the change follows position — under
+`and` supplying the key narrows, under `or` it widens. Reads only: the seed lint
+refuses one inside a mutation, and the correlation inside an `exists` must hold
+unconditionally. `meta.context` marks such keys `optional: true`, plus
+`absent: true` on a run that did not supply them, so a caller can learn what a
+fingerprint accepts without failing a request first.
 
 ---
 
@@ -250,12 +267,15 @@ type QueryResponse = {
       intent?: string;        // the stored intent (descriptive only)
     };
     context: Record<string, {                      // the resolved parameter contract
-      type: 'string' | 'number' | 'boolean' | 'string[]' | 'number[]';
+      type?: 'string' | 'number' | 'boolean' | 'string[]' | 'number[]';
       kind: 'context' | 'scope' | 'semantic';
+      optional?: true;                    // supplying it switches a condition on
+      absent?: true;                      // optional, and not supplied this run (so: no type)
     }>;
     timing?: { agentMs?: number; executionMs: number; mappingMs?: number };
     warnings?: string[];                  // analyzer warnings, if any
-    missingContext?: string[];            // present when required keys were not supplied
+    missingContext?: string[];            // present when REQUIRED keys were not supplied;
+                                          // optional keys never appear here
   };
 };
 ```
@@ -361,6 +381,12 @@ in `from`.
 { or:  [f1, f2, ...] }
 { not: f }
 
+// OPTIONAL — a condition the CALLER turns on, by supplying its key(s).
+// Absent, the condition is removed before the query compiles: it is not
+// there, rather than there and matching everything.
+{ optional: { key: "q",                  then: { ilike: ["people.name", { $context: "q" }] } } }
+{ optional: { key: ["after", "afterId"], then: SEEK } }   // needs both, so it names both
+
 // EXISTS — is there a row over there that points back at this one?
 // The subquery is the same { from, filter } a query is, and NOTHING else:
 // no fields, no sort, no limit. EXISTS asks whether, not what.
@@ -384,6 +410,11 @@ in `from`.
 
 There is intentionally **no** `offset` (use a cursor: `{ gt: ["entity.id",
 { $context: "cursor" }] }`) and **no** `between` (use `{ and: [{ gte }, { lte }] }`).
+
+Wrap the cursor in an `optional` so the first page is one that sends no cursor
+at all rather than one that sends a sentinel — and name **every** key the seek
+reads, because a surviving clause with a missing key returns nothing, which on a
+paging loop reads as the end of the list.
 
 ### Values
 

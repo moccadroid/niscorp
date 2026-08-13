@@ -27,11 +27,11 @@ const main = async (): Promise<void> => {
   // The bundles call their connector live — availability is ITS truth. The
   // world already runs the service (boot pulled the bundles from it), so this
   // check just uses it.
-  const amara = login('amara'); // guest, The Lumen
-  const ines = login('ines'); // guest, Casa Marisol
-  const rosa = login('rosa'); // desk, The Lumen
-  const pilar = login('pilar'); // desk, Casa Marisol
-  const henrik = login('henrik'); // ops, The Lumen
+  const amara = await login('amara'); // guest, The Lumen
+  const ines = await login('ines'); // guest, Casa Marisol
+  const rosa = await login('rosa'); // desk, The Lumen
+  const pilar = await login('pilar'); // desk, Casa Marisol
+  const henrik = await login('henrik'); // ops, The Lumen
   await settle();
 
   // ── 1. messaging, both directions ─────────────────────────
@@ -328,7 +328,7 @@ const main = async (): Promise<void> => {
   // of what is being tested.
   check('express checkout is dark before the vendor enables it', !rows(topData(amara, 'main'), 'slots').some((s) => s['slot_id'] === 'gs_checkout'));
 
-  const vendor = login('atrium');
+  const vendor = await login('atrium');
   await settle();
   const opera = rows(cardData(vendor, 'deploy.connectors'), 'rows').find((c) => c['connector_id'] === 'con_opera');
   tapCard(vendor, 'deploy.connectors', 'pick', opera);
@@ -354,7 +354,7 @@ const main = async (): Promise<void> => {
   check('...and the stay really departed', departed[0]?.['state'] === 'departed');
 
   // ── everything above survives a fresh login ───────────────
-  const rosaAgain = login('rosa');
+  const rosaAgain = await login('rosa');
   await settle();
   await openFromMenu(rosaAgain, 'desk.message.list');
   check(

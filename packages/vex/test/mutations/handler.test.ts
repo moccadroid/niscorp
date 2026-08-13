@@ -3,6 +3,7 @@ import { handleQuery, handleDiscovery, handleFingerprintPatch } from '../../src/
 import { createMemoryCache } from '../../src/cache/memory.js';
 import type { QueryEngine } from '../../src/types.js';
 import type { DatabaseSchema } from '../../src/schemas/database.schema.js';
+import type { MutationDefinition } from '../../src/mutations/schema.js';
 import type { ScopePolicy } from '../../src/scope/scope.types.js';
 import type { MutationClient } from '../../src/mutations/engine.js';
 
@@ -28,7 +29,9 @@ const schema: DatabaseSchema = {
 
 const policy: ScopePolicy = { default: 'deny', entities: { tasks: { write: [{ match: 'assignee_id', to: 'userId' }] } } };
 
-const setDone = { op: 'update' as const, table: 'tasks', set: { done: { $context: 'done' } }, where: { eq: ['tasks.id', { $context: 'id' }] } };
+// Annotated so the literal is checked against the write grammar — see the same
+// note in conflict.test.ts.
+const setDone: MutationDefinition = { op: 'update' as const, table: 'tasks', set: { done: { $context: 'done' } }, where: { eq: ['tasks.id', { $context: 'id' }] } };
 
 const makeWorld = async () => {
   const cache = createMemoryCache();

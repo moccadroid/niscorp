@@ -1,6 +1,6 @@
 import { timingSafeEqual } from 'node:crypto';
 import { verifyCharter } from '@niscorp/charter';
-import { auditClosure } from '@niscorp/moss';
+import { auditClosure, wearableOf } from '@niscorp/moss';
 import { scopeGrants } from '@niscorp/vex';
 import type { MossServer, NiscApp, FunctionSession, ShellHost } from '@niscorp/moss';
 import { CHARTER, ASSIGNMENTS } from '@atrium/app/charter';
@@ -154,7 +154,7 @@ const charterReport = (app: NiscApp): unknown => {
   const report = verifyCharter(
     app.charter,
     { actions: Object.keys(app.actions), data: scopeGrants([...TABLES]), layouts: Object.keys(app.layouts ?? {}) },
-    app.assignments,
+    wearableOf(app),
     auditClosure(app.actions, app.layouts),
   );
   return {

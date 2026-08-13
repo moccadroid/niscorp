@@ -218,6 +218,22 @@ export type TideConfig = {
   // rather than fired — the runtime backstop behind the load-time cycle
   // rules, and nearly free because causality is already recorded.
   maxChainDepth?: number;
+  // KEEP A WRITE FACT NOTHING WATCHES? Default true, which is what the ledger
+  // means today: `ledger.facts()` is every write the host committed, and
+  // `causeChain` walks it — an audit trail that answers "why did this person
+  // get this" without anybody having predicted the question.
+  //
+  // A host that mints a fact per committed ROW pays for that trail on the hot
+  // path of every write: an INSERT here, awaited, for a fact no loaded reflex
+  // could ever match. A host whose ledger is not its audit log sets this false
+  // and pays only for the writes something is actually listening to.
+  //
+  // NOT retroactive and not clever: it drops nothing while no reflexes are
+  // loaded (a fact arriving in that window still waits, exactly as matchFacts
+  // has always let it), and it ignores enablement, arming and identity — the
+  // question it asks is only "could any loaded reflex ever watch this entity
+  // and op", which is strictly weaker than the matcher.
+  storeUnwatchedWrites?: boolean;
   // How many units one fan-out may mint before the run is refused.
   maxFanOut?: number;
   // How long a claim is good for. A task still `claimed` past this is

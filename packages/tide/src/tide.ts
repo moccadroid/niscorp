@@ -1,4 +1,4 @@
-import { FactInputSchema, ReflexSchema } from './schemas';
+import { FactInputSchema, ReflexSchema, factOf } from './schemas';
 import type { Reflex, ReflexInput } from './schemas';
 import { TideError } from './errors';
 import type {
@@ -180,6 +180,29 @@ export const createTide = (config: TideConfig): Tide => {
 
   // ── edges ────────────────────────────────────────────────────
 
+  // IS THERE ANYBODY WHO COULD EVER WANT THIS? Only asked when a host has said
+  // its ledger is not its audit log (`storeUnwatchedWrites: false`), and only
+  // of write facts — a signal or a manual fact is somebody talking to tide on
+  // purpose, and a run fact is tide talking to itself.
+  //
+  // Three deliberate weaknesses, each of them a bug this would otherwise have:
+  // it never drops while nothing is loaded (a fact minted in that window still
+  // waits, which is the rule matchFacts was fixed to keep); it ignores
+  // `enabled`, so arming an automation does not depend on what was thrown away
+  // while it was paused; and it ignores `as` and `armedAt`, which are delivery
+  // rules rather than facts about whether anyone is listening at all.
+  const watchable = (fact: FactInput): boolean => {
+    if (config.storeUnwatchedWrites !== false) return true;
+    if (fact.kind !== 'write') return true;
+    if (loaded.size === 0) return true;
+    for (const entry of loaded.values()) {
+      const watched = factOf(entry.reflex.on);
+      if (watched === undefined) continue;
+      if (watched.entity === fact.entity && (watched.op === undefined || watched.op === fact.op)) return true;
+    }
+    return false;
+  };
+
   const ingest = async (fact: FactInput, options?: { as?: string; cause?: string; depth?: number }): Promise<Fact | undefined> => {
     const result = FactInputSchema.safeParse(fact);
     if (!result.success)
@@ -198,6 +221,7 @@ export const createTide = (config: TideConfig): Tide => {
     // handler's own writes back in as facts, and must carry the chain the
     // write belongs to or the depth ceiling resets at every trip through
     // the host's database.
+    if (!watchable(result.data)) return undefined;
     const stored = await config.store.appendIfAbsent('fact', { ...result.data, cause: options?.cause, depth: options?.depth ?? 0, as: options?.as });
     if (stored !== undefined) deps.emit({ type: 'fact.ingested', fact: stored });
     return stored;

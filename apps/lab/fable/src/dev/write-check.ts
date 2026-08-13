@@ -1,6 +1,10 @@
 // Writes. Proves the full round-trip for every write: create → announce →
 // re-read, complete/reopen via the inline checkbox, edit seeded from the row,
 // and delete behind the confirm dialog. Run: pnpm --filter fable check:write
+// A check runs under node, not in a browser — imported rather than assumed.
+// The tsconfig types list is [vite/client], so node globals are ambient only
+// when something drags them in.
+import process from 'node:process';
 import { getVexRuntime } from '../vex/runtime';
 import { SEED_COUNTS } from '../vex/seed';
 import { shell } from '../nova/shell';

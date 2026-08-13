@@ -11,9 +11,20 @@ const sorted = {
   sortDir: { $ref: '$.sortDir' },
 };
 
+// An empty box sends NOTHING, not a wildcard. `null` is how a prism says
+// "absent" — it assembles a fixed object and cannot drop a key, and vex counts
+// null as absent for optional keys precisely so this reads the way it looks.
 export const staffListPrism = {
   fingerprint: staffList.fingerprint,
-  context: { q: { $join: { parts: ['%', { $ref: '$.search' }, '%'], sep: '' } }, ...sorted },
+  context: {
+    q: {
+      $case: {
+        branches: [{ when: { $eq: [{ $ref: '$.search' }, ''] }, then: null }],
+        else: { $join: { parts: ['%', { $ref: '$.search' }, '%'], sep: '' } },
+      },
+    },
+    ...sorted,
+  },
 };
 
 export const staffSetRolePrism = {

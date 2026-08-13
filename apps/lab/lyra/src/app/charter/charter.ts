@@ -182,10 +182,29 @@ export const CHARTER: Charter = {
       'people.read',
       'class_sessions.read',
       'bookings.read',
-      // Everything here only ADDS, and lands on a screen somebody reads. Nothing
-      // running unattended can alter a row a human wrote.
+      // WHOSE NAME THE MAIL GOES OUT IN. The envelope is composed by the
+      // selection, not by the transport — which reads nothing at all — so the
+      // studio's own name and reply address have to be readable here. Without
+      // it the send is REFUSED on every run and the screen has no way to know:
+      // exactly the failure the three deleted moments died of (compose.ts).
+      'studios.read',
+      // WHO NOT TO WRITE TO, written by the provider's own webhook. Read-only
+      // here: a robot may refuse to send, never decide who is unreachable.
+      'mail_suppressions.read',
+      // Everything here only ADDS, and lands on a screen somebody reads —
+      // EXCEPT the one below, and the exception is worth stating rather than
+      // discovering.
       'outbox.write.insert',
       'outbox.read',
+      // THE FIRST HOLE IN THAT SENTENCE, and a deliberate one. Sending is not
+      // complete until the row says what happened, and the row must be claimed
+      // ('queued' → 'sending') before the send or a retry mails somebody twice.
+      // The rule this contradicts is about rows A HUMAN WROTE: `outbox` is the
+      // one table in this app that no human ever writes — every row in it is an
+      // automation's own — so this grant contradicts the wording and not the
+      // reason. A charter grant is table.verb and cannot tell two updates
+      // apart, so if a person ever gains a pen here, this comes back out.
+      'outbox.write.update',
       // Telling the studio something is an ADD onto the notices list — the
       // same published fingerprint the packs replay, on the same discipline.
       'notifications.write.insert',

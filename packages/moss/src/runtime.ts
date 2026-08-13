@@ -27,6 +27,22 @@ export type NiscRuntime = {
   // connection per interval — the knob is here for a verifier that is
   // expensive to ask.
   sessionRevalidateMs?: number;
+  // Ceiling on resident identity records (default 10,000), and how long one may
+  // sit unread before the sweep drops it (default: 30 minutes, `0` disables).
+  //
+  // Here rather than on the manifest for the reason `shellIdleMs` is: this
+  // trades memory against a re-resolution on the next request, which is an
+  // operational decision about a deployment and not something an application is
+  // written against. Reaching the ceiling evicts the least recently read and
+  // increments a meter — an unbounded map works beautifully at demo scale and
+  // dies at production scale with no signal in between, and the meter is the
+  // signal.
+  //
+  // Revalidation deliberately has no knob of its own: an identity record goes
+  // stale on exactly the clock a live socket credential does, so it reuses
+  // `sessionRevalidateMs` above.
+  identityMax?: number;
+  identityIdleMs?: number;
   // Send each canvas frame as a DELTA against the last one this connection
   // received, rather than whole (default: off).
   //

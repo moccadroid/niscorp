@@ -13,7 +13,8 @@ import { describe, it, expect, beforeAll } from 'vitest';
 import { handleQuery } from '../../src/handler.js';
 import { createQueryEngine } from '../../src/engine/runtime.js';
 import { createMemoryCache } from '../../src/cache/memory.js';
-import type { QueryEngine, ScopePolicy } from '../../src/types.js';
+import type { QueryEngine } from '../../src/types.js';
+import type { ScopePolicy } from '../../src/scope/scope.types.js';
 import type { DatabaseAdapter, CompiledQuery, BoundParams, Row } from '../../src/adapters/adapter.types.js';
 import type { DatabaseSchema } from '../../src/schemas/database.schema.js';
 import type { ResolvedQuery } from '../../src/engine/engine.types.js';
@@ -33,20 +34,20 @@ const SCHEMA: DatabaseSchema = {
       rowCount: 100,
     },
   ],
-  dialect: 'postgres',
-  version: '16',
 };
 
 // The compiled SQL is what the assertions read: whether the substitution
 // happened is visible in the WHERE clause, not in the rows.
 let lastSql = '';
 
+// A stand-in adapter, kept in step with the real `DatabaseAdapter`: `id` and
+// `contextContract` are both members it grew, and a double missing either is
+// not the thing it stands for.
 const adapter = (): DatabaseAdapter => ({
-  dialect: 'postgres',
+  id: 'test',
   introspect: async (): Promise<DatabaseSchema> => SCHEMA,
   compile: (q: ResolvedQuery): CompiledQuery => ({
     sql: `SELECT * FROM bookings${q.filter !== undefined ? ` WHERE ${JSON.stringify(q.filter)}` : ''}`,
-    params: [],
     paramSlots: [],
     contextContract: {},
   }),

@@ -1,4 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
+import { at, lastOf } from './helpers/at';
 import { z } from 'zod';
 import { createStream } from '../src/create-stream';
 
@@ -150,7 +151,7 @@ describe('createStream — arrays', () => {
 
     stream.write('{"items":[{"name":"first","value":1},{"name":"second","value":2}]');
     // Should have received the first element
-    expect(values[values.length - 1]).toEqual({ name: 'first', value: 1 });
+    expect(lastOf(values)).toEqual({ name: 'first', value: 1 });
   });
 
   it('array element finalizes when next element starts', async () => {
@@ -197,7 +198,7 @@ describe('createStream — on()', () => {
     stream.write(',"title":"Hello"}');
 
     expect(values.length).toBeGreaterThanOrEqual(2);
-    expect(values[values.length - 1].widget.title).toBe('Hello');
+    expect(lastOf(values).widget.title).toBe('Hello');
   });
 
   it('unsubscribe stops notifications', () => {
@@ -322,7 +323,7 @@ describe('createStream — select()', () => {
 
     stream.write('{"widget":{"type":"card","title":"Hi"},"response":"Hello World"');
 
-    expect(values[values.length - 1]).toBe('Hello World');
+    expect(lastOf(values)).toBe('Hello World');
   });
 
   it('selected stream does not emit when its subtree is unchanged', () => {

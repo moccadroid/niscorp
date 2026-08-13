@@ -48,9 +48,16 @@ const fake = (name: string): ReturnType<typeof reactTarget> => () => {
   log.push(`mount:${name}`);
   return { update: () => undefined, destroy: () => log.push(`destroy:${name}`) };
 };
+// A stand-in for the real Wire, and it has to stay one. `status` and `reset`
+// arrived with shell recovery and this literal never followed, so the terminal
+// was being mounted on something that is not a wire — it passed only because
+// nothing in this file reaches for the two it was missing. That is the whole
+// failure mode of a hand-built double: it stops being a stand-in silently.
 const bareWire: Wire = {
   subscribe: () => () => undefined,
   snapshot: () => ({ frame: [], trees: new Map() }),
+  status: () => 'open',
+  reset: () => undefined,
   dispatch: () => undefined,
   publish: () => undefined,
   dispose: () => undefined,
@@ -75,6 +82,8 @@ const trees = new Map<string, RenderNode[]>([['main', [{ type: 'text', value: 'H
 const contentWire: Wire = {
   subscribe: () => () => undefined,
   snapshot: () => ({ frame, trees }),
+  status: () => 'open',
+  reset: () => undefined,
   dispatch: () => undefined,
   publish: () => undefined,
   dispose: () => undefined,

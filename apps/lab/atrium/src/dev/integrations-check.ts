@@ -22,7 +22,7 @@ const rows = (data: Record<string, unknown>, key: string): Row[] => (Array.isArr
 // Enable the key on Opera's offer and go live — the capability has to exist
 // before its failure mode can be tested.
 const enableOperaKeys = async (): Promise<void> => {
-  const vendor = login('atrium');
+  const vendor = await login('atrium');
   await settle();
   const opera = rows(cardData(vendor, 'deploy.connectors'), 'rows').find((c) => c['connector_id'] === 'con_opera');
   tapCard(vendor, 'deploy.connectors', 'pick', opera);
@@ -35,7 +35,7 @@ const enableOperaKeys = async (): Promise<void> => {
 };
 
 const openKeyAction = async (): Promise<ReturnType<typeof login>> => {
-  const amara = login('amara');
+  const amara = await login('amara');
   await settle();
   const slot = rows(topData(amara, 'main'), 'slots').find((s) => s['action_id'] === 'stay.key');
   check('the key action is live after enabling it', slot !== undefined);
@@ -66,7 +66,7 @@ const main = async (): Promise<void> => {
   check('the database does NOT claim a key exists', stay[0]?.['key_issued'] === false);
 
   // The rest of the application is untouched by a dead connector.
-  const rosa = login('rosa');
+  const rosa = await login('rosa');
   await settle();
   // Her whole surface still composes with the service down — those cards are
   // ROWS, synced earlier; only live calls into the connector fail.

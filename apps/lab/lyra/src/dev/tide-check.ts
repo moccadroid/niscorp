@@ -1,4 +1,17 @@
 // Run: pnpm --filter lyra exec tsx src/dev/tide-check.ts
+//
+// THE TRANSPORT STANDS IN ITS LAB MODE FOR THE WHOLE OF THIS FILE. A check
+// with no provider key would watch every message record `failed: no provider
+// configured` and would have proved only that the failure path works. The sink
+// sends nothing and says so in the id (`sink_…`); everything up to the wire is
+// the deployed path.
+//
+// Written above the imports for the reader, NOT for the runtime: ES modules
+// hoist their imports, so this assignment runs after every module below has
+// been evaluated. It works because the transport reads its environment per
+// call rather than at import — see send.ts, which says why.
+process.env['MAIL_SINK'] = 'log';
+
 import { reflexesForEveryStudio, wireTide } from '@lyra/server/tide';
 import { CAST, LUMEN, NORTHROCK } from '@lyra/db/seed';
 import { asPrincipal, ok, report, runtime, server, tideDriver } from './world';
@@ -27,7 +40,7 @@ const dayAt = (offset: number): string => new Date(boot + offset).toISOString().
 // depends on; nothing advances the engine except the lines in this file.
 tideDriver().stop();
 
-const tide = wireTide({ server: () => server, now: () => boot, pool: runtime.pool });
+const tide = wireTide({ server: () => server, now: () => boot, pool: runtime.pool, base: () => 'http://localhost:5180' });
 
 // ── load ─────────────────────────────────────────────────────
 const studios = await runtime.db.query<{ id: string; timezone: string }>('SELECT id, timezone FROM studios ORDER BY id');
@@ -36,10 +49,14 @@ const reflexes = reflexesForEveryStudio(studios.rows, automationRows.rows as nev
 const derivedDigests = 0;
 const loaded = await tide.load(reflexes, { at: boot });
 
+// ONE PER ROW, PLUS TWO PER STUDIO. The extras are infrastructure rather than
+// a studio's automations: the outbox DISPATCHER, which wakes on the write, and
+// the SWEEP, which is the net under it — a delivered-once fact cannot wake
+// anything for a row whose process died mid-send.
 ok(
-  'each studio runs its own automations',
-  reflexes.length === automationRows.rows.length + derivedDigests,
-  `${reflexes.length} reflexes from ${automationRows.rows.length} rows plus ${derivedDigests} derived digest(s)`,
+  'each studio runs its own automations, and the thing that sends them',
+  reflexes.length === automationRows.rows.length + studios.rows.length * 2 + derivedDigests,
+  `${reflexes.length} reflexes from ${automationRows.rows.length} rows, ${studios.rows.length} studios × 2 (dispatch + sweep) plus ${derivedDigests} derived digest(s)`,
 );
 ok(
   '...and they differ per studio',
@@ -72,7 +89,7 @@ const probes = MOMENTS.map((moment) => ({
   subject: `Probe ${moment.id}`,
   body: 'Probe.',
 }));
-const probeTide = wireTide({ server: () => server, now: () => boot, pool: runtime.pool });
+const probeTide = wireTide({ server: () => server, now: () => boot, pool: runtime.pool, base: () => 'http://localhost:5180' });
 await probeTide.load(reflexesFor(LUMEN, 'Europe/Vienna', probes as never), { at: boot });
 
 const robotFor = 'automation@lumen.studio';
@@ -115,7 +132,15 @@ for (const moment of MOMENTS) {
   ok(`...and hands the effect a person to write to`, best === 0 || sample.includes('@'), sample);
 }
 ok('...and they all load', loaded.loaded === reflexes.length, JSON.stringify(loaded.warnings ?? []).slice(0, 90));
-ok('...with no cycles in the graph', (loaded.cycles?.length ?? 0) === 0);
+// NO UNGUARDED CYCLE — which is a different claim from "no cycle", and the
+// right one. The outbox dispatcher watches `outbox` and its effect writes
+// `outbox`, so the graph reports a loop; it is keyed by entity and cannot see
+// that the watch is on `insert` while the write is an update. What makes that
+// loop safe is not its absence but its GUARD: the selection re-reads the row
+// and answers with nothing for a message already claimed, so it converges.
+// Asserting the count would have banned the shape tide was built to allow.
+const unguarded = (loaded.cycles ?? []).filter((cycle) => !cycle.guarded);
+ok('...and every cycle in the graph passes a guard', unguarded.length === 0, JSON.stringify(loaded.cycles ?? []).slice(0, 120));
 
 const bogus = await tide
   .load([{ ...reflexes[0]!, id: 'bogus', effect: { name: 'automation/pay-everybody', input: {} } }], { at: boot })
@@ -416,6 +441,62 @@ const liveFact = await runtime.db.query<{ n: number }>(
   `SELECT count(*) n FROM tide_fact WHERE kind = 'write' AND entity = 'subscriptions' AND as_who = 'automation@st_lumen' AND row->>'person_id' = 'p_tomv'`,
 );
 ok('...because the write itself became a fact', Number(liveFact.rows[0]?.n ?? 0) >= 1, 'minted at the vex choke point, stamped with the studio whose write it was');
+
+// AND NOTHING ELSE DID. Every committed write in this app mints a fact; three
+// (entity, op) pairs are watched. The rest — bookings, check-ins, notes, and
+// the claim and the outcome this very message wrote — used to cost an awaited
+// INSERT on the hot path of the click that caused them, to be read by nobody
+// and swept a week later. `storeUnwatchedWrites: false` (server/tide.ts) is
+// what stops that, and this is the assertion that it is switched on: the
+// clause below is the whole of what this app listens to.
+const strays = await runtime.db.query<{ entity: string; op: string; n: number }>(`
+  SELECT entity, op, count(*) n FROM tide_fact
+   WHERE kind = 'write'
+     AND (entity, op) NOT IN (('subscriptions', 'insert'), ('studio_people', 'insert'), ('outbox', 'insert'))
+   GROUP BY entity, op
+`);
+ok(
+  '...and a write nothing watches minted nothing at all',
+  strays.rows.length === 0,
+  strays.rows.length === 0 ? 'the ledger holds what something is listening to' : JSON.stringify(strays.rows).slice(0, 120),
+);
+
+// ── AND THEN IT LEAVES THE BUILDING ──────────────────────────
+//
+// THE ASSERTION THIS WHOLE STACK EXISTS FOR. The queued row is itself a
+// committed write, so it mints a fact of its own, and the outbox dispatcher
+// wakes on that: it re-reads the row under the studio's own principal, claims
+// it, composes the envelope from the studio's name and reply address, and
+// hands it to the transport. Two reflexes, one chain, nobody firing anything.
+//
+// The transport is in its lab mode (MAIL_SINK, set at the top of this file),
+// so nothing reaches a person — but everything up to the wire is the deployed
+// path, including the claim that makes a retry safe.
+let sent = { state: '', provider_message_id: '', failed_reason: '', sent_at: null as unknown };
+for (let attempt = 0; attempt < 40 && sent.state !== 'sent'; attempt += 1) {
+  await new Promise((resolve) => setTimeout(resolve, 25));
+  for (let i = 0; i < 4; i += 1) await tide.advance({ now: liveAt + 100 + i });
+  const row = await runtime.db.query<typeof sent>(
+    "SELECT state, provider_message_id, failed_reason, sent_at FROM outbox WHERE person_id = 'p_tomv' AND source = 'au_lumen_welcome'",
+  );
+  sent = row.rows[0] ?? sent;
+}
+ok('...and the message it queued was SENT', sent.state === 'sent', `${sent.state || 'nothing'} — ${sent.failed_reason || 'no reason given'}`);
+ok('...with something to quote at support', sent.provider_message_id !== '', sent.provider_message_id);
+// A column a plan adds and nothing writes is a column that reads NULL forever,
+// and the only way that gets noticed is somebody asserting it once.
+ok('...and when it went, in the row rather than in a log', sent.sent_at !== null && sent.sent_at !== undefined, String(sent.sent_at));
+
+// A second delivery of the same fact must not produce a second email. The
+// claim is what refuses it: the row is no longer `queued`, so the selection
+// finds nothing and the effect never reaches the transport.
+const before = await count("SELECT count(*) n FROM outbox WHERE person_id = 'p_tomv' AND state = 'sent'");
+for (let i = 0; i < 6; i += 1) await tide.advance({ now: liveAt + 200 + i });
+ok(
+  '...once, and a re-run does not send it again',
+  (await count("SELECT count(*) n FROM outbox WHERE person_id = 'p_tomv' AND state = 'sent'")) === before && before === 1,
+  'the claim on the row, not a hope about delivery',
+);
 
 void CAST;
 void NORTHROCK;

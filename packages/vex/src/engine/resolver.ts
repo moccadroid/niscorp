@@ -3,6 +3,7 @@ import type { Filter } from '../schemas/filter.schema.js';
 import type { ComputeExpression } from '../schemas/compute.schema.js';
 import type { AggregateExpression } from '../schemas/aggregate.schema.js';
 import type { FieldOrValue } from '../schemas/value.schema.js';
+import { refuseOptional } from './optional.js';
 import type { DatabaseSchema, EntitySchema, FieldSchema, NormalizedType } from '../schemas/database.schema.js';
 import type {
   ResolvedQuery,
@@ -365,6 +366,9 @@ const collectFilterPaths = (
     resolveFilterFieldPath(filter.fuzzy.field, entityLookup, schema, resolvedPaths);
     return;
   }
+
+  // Resolved away before the pipeline — see engine/optional.ts.
+  if ('optional' in filter) refuseOptional('field resolution');
 };
 
 const resolveFilterFieldPath = (

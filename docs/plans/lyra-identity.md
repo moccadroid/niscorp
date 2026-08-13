@@ -1,9 +1,55 @@
 # lyra — identity below the engine
 
-**Status: NOT STARTED, 2026-08-13.** Nothing here is built. The problem is
-diagnosed and the design is agreed; Part 9 lists what a human must decide before
-Part 7 can begin. Part 7.0 is six independent defects that stand on their own
-merit and can land before any of the rest.
+**Status: DONE (2026-08-13).** `server/users.ts` does not exist. Zero row-backed
+caches outside `dev/`. Zero `everyone()` callers in production. `pnpm lint` reports 0.
+All 44 Lyra checks pass; moss 182/182; charter 17/17; atrium, relay, lyra-admin and
+lyra-integrations typecheck clean. Every decision is taken — D1–D5 and D7–D9 ratified,
+D6 deferred behind a check.
+
+## Part 10, scored
+
+| Criterion | |
+|---|---|
+| `server/users.ts` does not exist | **yes** — deleted, along with `themes.ts` and `phrases.ts` module state |
+| `grep -r "everyone()" --include=*.ts` returns nothing outside `dev/` | **yes** — 0 callers |
+| No unauthenticated request obtains more than one person's row | **yes** — the picker is behind `LYRA_DEV_LOGIN`, asserted both ways |
+| Two processes agree without a restart | **yes** — the generation pointer |
+| A tenant-local write invalidates that tenant, not the deployment | **partly, and it cannot be more** — see below |
+| Identity is an artifact a check can read | **yes** — pinned by `identity-sql-check` rather than declared in vex (D4 chose (b)) |
+| `pnpm --filter lyra check` passes | **yes** — 44 checks, including four that did not exist |
+| The Part 8.3 invariant checks exist | **yes** — invariants 1, 3, 4, 5, 6 asserted across `identity-check`, `identity.test.ts`, `held-state-check` |
+
+**The one criterion that cannot be met as written.** *"A tenant-local write
+invalidates that tenant, not the deployment"* requires enumerating a tenant's
+principals — which is exactly what invariant 1 exists to make impossible. `refresh()`
+is correct but deployment-wide; `invalidateIdentity(principal)` is the scalpel where a
+caller knows whose. Either the criterion softens or identity grows a tenant-keyed
+secondary index, which invariant 2 bans. It should be reworded, not built.
+
+## What replaced what
+
+| Was | Is |
+|---|---|
+| `DIRECTORY`, `BY_EMAIL`, `INSTALLED`, `AUTOMATION`, `TIMEZONES`, `COUNTRIES`, `LOCALES`, `CURRENCIES` (`users.ts`) | [`server/lookup.ts`](../../apps/lab/lyra/src/server/lookup.ts) — point reads, one row each, nothing held |
+| `BY_STUDIO` (`themes.ts`) | `themeFor(pool, studioId)` — read at shell build |
+| `BY_LOCALE` (`phrases.ts`) | `phrasesFor(pool, locale)` — read at shell build |
+| the `Directory` seam and `assignments` | the `identity` seam, resolved once per session and held by moss with a bound, eviction, revalidation, a meter and an operator roster |
+| six synchronous per-principal seams | all six async; `shell.inputs` wire-bearing, matching `seeds` |
+| nothing watching module state | `held-state-check` (AST, four kinds, falsifiable self-test) and `pnpm lint` |
+
+**The last mile cost more than the estimate twice, and both misses are worth keeping.**
+The first: `shell.inputs` decides what MOUNTS, so unlike `seeds` it cannot be deferred
+— async `inputs` forces async `build()` forces async `session()`, ~40 files across
+three apps. The second: `grep` for `shells.session`, `login` and `personByEmail` found
+the call sites but not `server/functions/nav.ts`, which resolved catalogs with
+`resolveCatalog(app, principal)` and so quietly lost a pack's menu entry while its
+screens still existed. A blast radius measured by grepping for the names you already
+know is a blast radius measured wrong.
+
+**And `adopt` had to re-resolve.** A shell is the long-lived thing here; the install
+list it was born with is precisely what must not be trusted when a tenant installs a
+pack. It re-resolves asynchronously and unawaited now, the same progressive path
+`seeds` takes.
 
 Scope spans `moss`, `charter` and `lyra`. Atrium and relay carry the same shape
 and are **deliberately out of scope** — they are demos; Lyra is the production
@@ -129,11 +175,17 @@ schema over the resolver*, which is about this same file).
 
 | File | Module-level state | Written by |
 |---|---|---|
-| [`server/users.ts`](../../apps/lab/lyra/src/server/users.ts) | `DIRECTORY` (:19), `TIMEZONES` (:22), `COUNTRIES` (:24), `LOCALES` (:27), `BY_EMAIL` (:28), `INSTALLED` (:55) | `loadDirectory` (:64) |
+| [`server/users.ts`](../../apps/lab/lyra/src/server/users.ts) | `DIRECTORY` (:19), `TIMEZONES` (:22), `COUNTRIES` (:24), `LOCALES` (:27), `BY_EMAIL` (:28), `INSTALLED` (:55), **`AUTOMATION`**, **`DAY_FORMAT`** | `loadDirectory` |
 | [`server/themes.ts`](../../apps/lab/lyra/src/server/themes.ts) | `BY_STUDIO` (:8) | `loadThemes` (:10) |
 | [`server/phrases.ts`](../../apps/lab/lyra/src/server/phrases.ts) | `BY_LOCALE` (:23) | `loadPhrases` (:25) |
 
-Three files, eight caches, one pattern: `loadX(pool)` writes module state,
+**Ten, not eight** — batch 1 added two, deliberately, and they are counted here
+rather than left to be discovered: `AUTOMATION` (row-backed, replaces a per-effect
+population scan, dies with the file in 7.3 step 8) and `DAY_FORMAT` (a memo over
+IANA timezone strings, *not* row-backed, and the one entry in this table that
+should outlive the plan — see 8.2 and D9).
+
+Three files, one pattern: `loadX(pool)` writes module state,
 everything downstream reads it synchronously forever. **`users.ts` is not an
 outlier — it is the house style**, and `phrases.ts` was written while this plan
 was being drafted.
@@ -158,6 +210,7 @@ through the identity seam, because that is where the map already was.
 | Stale `INSTALLED` on every process but the writer's | [`app.ts:220`](../../apps/lab/lyra/src/app/app.ts#L220) |
 | Tenant-local write drops every principal's memos process-wide and re-adopts every live shell | [`server.ts:903`](../../packages/moss/src/server.ts#L903) |
 | Four unbounded, unevicted per-principal maps, keyed by principal though their contents depend only on (roles ⊕ installed) | [`server.ts:118`](../../packages/moss/src/server.ts#L118)–165 |
+| **`refresh()` never clears `reachPolicies`** — it drops `policies`, `catalogs` and `variantBindings` and leaves the fourth map standing, so every reach-scoped policy is stale for the process lifetime after an approval or a role change | [`server.ts:917`](../../packages/moss/src/server.ts#L917) vs [`server.ts:130`](../../packages/moss/src/server.ts#L130) |
 
 The roster disclosure deserves its own line: it is the class of hole the charter
 exists to prevent, sitting in the one place the charter is structurally blind to.
@@ -300,8 +353,10 @@ This is not a new idea — it is moss's stated design, unbuilt
 of three bolt-ons, and it retires `world.refresh` entirely.
 
 **Sequencing:** Moves 1 and 2 need *an* invalidation story before Move 4 lands.
-The interim is an explicit `invalidate(principal)` plus a Postgres
-`LISTEN/NOTIFY` channel so every process hears it. Move 4 subsumes both. Note
+The interim is an explicit `invalidate(principal)` plus a **generation counter
+row**, read on the `sessionRevalidateMs` tick moss already runs, so every process
+hears it. (This replaces an earlier recommendation of Postgres `LISTEN/NOTIFY` —
+see Part 12.2 for why that was wrong.) Move 4 subsumes both. Note
 that moss lists *"scale-out beyond sticky sessions"* under **Deliberately
 unbuilt** ([DESIGN.md:400](../../packages/moss/DESIGN.md#L400)) — the gap is
 declared, but Lyra is production and needs it closed.
@@ -390,8 +445,9 @@ Independent of everything below. Land these first; each is live today.
 | Derive the automation principal instead of scanning | [`tide.ts:17`](../../apps/lab/lyra/src/server/tide.ts#L17) |
 | Deliver notifications via the live-shell roster | [`app.ts:208`](../../apps/lab/lyra/src/app/app.ts#L208) |
 | Rebuild shells via the roster, not the population | [`world.ts:118`](../../apps/lab/lyra/src/server/functions/world.ts#L118) |
-| Stop serving the full roster to anonymous requests | [`app.ts:340`](../../apps/lab/lyra/src/app/app.ts#L340) |
+| Move the anonymous roster behind the dev-transport flag — **not** simply delete it; the roster leak and the click-to-login test affordance are one code path (Part 12.1). Lands with the mail work, not before. | [`app.ts:340`](../../apps/lab/lyra/src/app/app.ts#L340) |
 | Cache the per-studio `Intl.DateTimeFormat` | [`users.ts:151`](../../apps/lab/lyra/src/server/users.ts#L151), :161 |
+| Clear `reachPolicies` in `refresh()` — the fourth memo map is skipped | [`server.ts:917`](../../packages/moss/src/server.ts#L917) |
 | Fix the single-role rebuild — it still does `[person.audience]`, the flattening the production path was fixed away from ([`app.ts:243`](../../apps/lab/lyra/src/app/app.ts#L243) records why) | [`acl-check.ts:105`](../../apps/lab/lyra/src/dev/acl-check.ts#L105) |
 
 Three of the first four want the **live-shell roster**, which moss already
@@ -410,8 +466,23 @@ connected.
    during migration; the old seams are deprecated, not deleted.
 4. Implement the cache in moss with eviction, revalidation, bound and roster —
    invariants 5 and 6 **from the first commit**, not retrofitted.
-5. Add `invalidateIdentity` and the `LISTEN/NOTIFY` channel. This closes the
-   two-process correctness bug.
+5. Add `invalidateIdentity` and the generation counter, read on the existing
+   `sessionRevalidateMs` tick. This closes the two-process correctness bug.
+6. **Take the memo key off the request path.** Batch 2 re-keyed the four memos by
+   `memoKeyOf` = (roles ⊕ installed), which is correct and bounded — but it made
+   `getPolicy` and `getPolicyForReach` recompute that key on **every request**,
+   including a call into the app's `installedIntegrations` seam, an array copy, a
+   sort and two joins. That replaced an O(1) `Map.get` with an allocation per
+   request. It is a real regression, it is live now, and **it does not disappear
+   on its own when the identity seam lands** — the seam removes it only if the
+   key is read off the resolved identity record instead of being recomputed.
+   Written as its own step because a step that is merely implied is a step that
+   does not happen.
+
+   **Acceptance criterion, assertable rather than asserted:** a check that
+   installs a counting `installedIntegrations` seam, drives N authenticated
+   requests through one session, and fails unless the seam was called **once**.
+   Goes in `all-checks.ts` with the Part 8.3 set.
 
 ### 7.2 — moss: the wire, everywhere
 
@@ -420,7 +491,11 @@ connected.
 
 ### 7.3 — lyra: migrate onto the seams
 
-8. Implement `identity` over the wire. Delete `DIRECTORY`, `BY_EMAIL`, `INSTALLED`.
+8. Implement `identity` over the wire. Delete `DIRECTORY`, `BY_EMAIL`, `INSTALLED`
+   and **`AUTOMATION`** — named explicitly because an unnamed cache survives a
+   step that lists its neighbours, and because deleting it is also where the
+   automation principal unifies on the synthetic id (12.4). **`DAY_FORMAT` is not
+   on this list** and must be rehomed rather than deleted (D9).
 9. Move themes, locales, countries, timezones and phrases to reads through the
    wire at session resolution. Delete `themes.ts` and `phrases.ts` module state.
 10. Migrate the eleven sites touching `app.assignments` — four in production
@@ -478,9 +553,19 @@ and only one is a defect —
 - **late-bound singletons** (needs a carve-out): `driver`
   ([`boot.ts:29`](../../apps/lab/lyra/src/server/boot.ts#L29)). Neither cache nor
   constant.
+- **bounded memos over an authored key space** (a fourth kind, found while
+  building batch 1 and not in the original three): `DAY_FORMAT` holds one
+  `Intl.DateTimeFormat` per IANA timezone. It is module-level and mutable, so the
+  ESLint rule in 8.1 flags it and so does the discriminator below — but it is
+  neither row-backed nor a defect. Its key space is bounded by a standard rather
+  than by the population, and dropping it loses nothing (invariant 3 holds).
+  Without this category the census either flags a legitimate memo or the rule is
+  weakened to let real ones through.
 
 The honest discriminator is *assigned from a query result*, mechanically
-detectable on the AST the census already walks.
+detectable on the AST the census already walks — which is exactly why the fourth
+category above is needed: `DAY_FORMAT` is assigned from an **argument**, not a
+row, and that distinction is the whole rule.
 
 ### 8.3 Checks that should exist afterwards
 
@@ -503,16 +588,22 @@ passes trivially.
 
 Answers needed **before** Part 7.1, not during.
 
-| # | Decision | Why it blocks |
-|---|---|---|
-| **D1** | **Session lifetime vs. mid-session role change.** If identity resolves once per session, what invalidates it, and what may a stale principal do in the window? `world.refresh` answers today with a shell reset; that must become the general mechanism. `sessionRevalidateMs` is the existing precedent and possibly the same clock. | **Highest uncertainty in the plan.** Gates 7.1–7.3. Everything else here is bounded and countable. |
-| **D2** | **Who declares `wearable`?** The app, or derived from the charter? Deriving is tempting and may be wrong — the charter defines roles, not which combinations a person can hold. | Shape of the charter API change. |
-| **D3** | **Does `scope` stay per-request or become per-session?** Per-request today ([`server.ts:250`](../../packages/moss/src/server.ts#L250)); per-session is the point of the cache. | Probably decided with D1. |
-| **D4** | **Bootstrap policy reachability.** Confirm it cannot be reached from any HTTP surface and cannot accept a caller-supplied fingerprint. Wants an adversarial check, not a code review. | Gates 7.4. Security. |
-| **D5** | **Are `dev/` checks held to rule 16?** 95 of 132 type assertions live there. | Sizes the 7.5 backlog. |
-| **D6** | **Multi-studio identity** (Part 2.4). One principal per (person, studio)? | Latent now, load-bearing later. Decide before the feature, not during. |
-| **D7** | **Census scope** — lyra-only, or promoted to a shared tool? Atrium and relay hold ~6,200 lines of unaudited `server/` between them. | Lyra-only is the stated priority; say so explicitly or it drifts. |
-| **D8** | **The red-on-day-one backlog.** When the census becomes a gate it fails against the current tree. One decision per violation, or a baseline? | A baseline is how this class returns. |
+Each carries a **recommended** answer and the evidence for it. Recommendations
+are not ratifications — a human still says yes. Where the recommendation was
+reached by reading code rather than by preference, the citation is the argument.
+
+| # | Decision | Recommended answer | Status |
+|---|---|---|---|
+| **D1** | **Session lifetime vs. mid-session role change.** If identity resolves once per session, what invalidates it, and what may a stale principal do in the window? | **Per session; invalidation is `shells.reset(principal)`, which already exists and is already the answer** for a role change ([`world.ts:73`](../../apps/lab/lyra/src/server/functions/world.ts#L73)) and a language change ([`world.ts:120`](../../apps/lab/lyra/src/server/functions/world.ts#L120)). The identity entry dies with the shell. Stale window = `sessionRevalidateMs` (60 s default) — the same window a live socket credential already carries ([`runtime.ts:29`](../../packages/moss/src/runtime.ts#L29)), so this adds no new exposure class. No new mechanism. | **ratified 2026-08-13** — gates 7.1–7.3 |
+| **D2** | **Who declares `wearable`?** The app, or derived from the charter? | **The app, as a list of role combinations.** Settled by the two consumers: [`verify.ts:154`](../../packages/charter/src/verify.ts#L154) flattens `assignments` to a role *set*, and [`principal.ts:106`](../../packages/moss/src/principal.ts#L106) builds one wearer per distinct *combination* — naming the principal only for the error string. Neither wants principals. The charter can enumerate single roles; it cannot know `['instructor','member']` exists, because that is a schema fact (a `staff` row **and** a `studio_people` row, [`users.ts:47`](../../apps/lab/lyra/src/server/users.ts#L47)). ~12 authored entries for Lyra. | **ratified 2026-08-13** |
+| **D3** | **Does `scope` stay per-request or become per-session?** Per-request today ([`server.ts:250`](../../packages/moss/src/server.ts#L250)). | **Per-session — this is D1, not a second question.** Per-request is free today only because it is O(1) map hits; async + wire makes per-request a round trip per request, so the signature change forces per-session on its own. | **folded into D1** |
+| **D4** | **Bootstrap policy — build it, or pin the SQL instead?** | **Pin the SQL (option b).** A bootstrap policy relocates the exception from a FILE into a VALUE, and values get passed to the wrong caller; the file cannot be. Its failure mode is silent until exploited and its blast radius is total, because every tenant boundary here is engine-side. The benefit that actually mattered was auditability, and a check delivers that: [`identity-sql-check.ts`](../../apps/lab/lyra/src/dev/identity-sql-check.ts) pins five tables, no splicing, one row by key, and **executes the queries against the live schema** — which recovers most of the boot-time validation a declared entry would have given. | **ratified 2026-08-13 — option (b) built** |
+| **D5** | **Are `dev/` checks held to rule 16?** 95 of 132 type assertions live there. | **No.** Holding checks to it buys nothing and triples the 7.5 backlog. | **ratified 2026-08-13** |
+| **D6** | **Multi-studio identity** (Part 2.4). One principal per (person, studio)? | **Defer, but fence it now:** a check that fails when a principal resolves to a studio whose `studio_people` does not know them, so the latent hazard cannot land silently while the decision waits. | **deferred, fenced** |
+| **D7** | **Census scope** — lyra-only, or promoted to a shared tool? | **Lyra-only**, said explicitly. Atrium and relay are demos and stay outside. | **ratified 2026-08-13** |
+| **D9** | ~~**Where does `DAY_FORMAT` live once `users.ts` is gone?**~~ **Resolved:** [`server/clock.ts`](../../apps/lab/lyra/src/server/clock.ts) — its own file, and `identity.ts` now takes the clock from there rather than from the directory it replaced. It lived in `users.ts` only because that is where the timezone map happened to be, which is the same accident that grew `Directory` to thirteen methods. | **ratified 2026-08-13** |
+| ~~D9 (original)~~ | **Where does `DAY_FORMAT` live once `users.ts` is gone?** The formatter memo is legitimate (8.2, fourth category) and survives the file that currently holds it. Options: beside whatever owns `studioToday` after 7.3; or a declared prism/format concern; or moss, since every multi-tenant app has this exact need. | **open** — small, but it is the one piece of batch-1 state with no scheduled home, and unowned state is how this class returns |
+| **D8** | **The red-on-day-one backlog.** One decision per violation, or a baseline? | **Clean, not a baseline.** 134 rule-16 breaks and 140 unnamed lines. `phrases.ts` was written by somebody who had already read the `users.ts` post-mortem — a baseline is exactly how that recurs. | **ratified 2026-08-13** |
 
 ---
 
@@ -546,5 +637,245 @@ Answers needed **before** Part 7.1, not during.
   moss refuses ([DESIGN.md:380](../../packages/moss/DESIGN.md#L380)). Close it in
   7.3, same release.
 - **Move 4 is large enough to become permanent scaffolding if deferred
-  indefinitely.** The interim `LISTEN/NOTIFY` must be written as interim and
-  recorded as such.
+  indefinitely.** The interim generation counter must be written as interim and
+  recorded as such — though unlike `LISTEN/NOTIFY` it converges on Move 4's
+  design rather than away from it (Part 12.2).
+
+---
+
+## Part 12 — amendments on review (2026-08-13)
+
+### 12.1 Lyra is pre-production, and the dev login is a feature
+
+An earlier draft of this review treated Lyra's auth surface as a defect: `auth.enter`
+takes an email, checks the person exists, and mints a session with no password and
+no verified link ([`auth.ts:17`](../../apps/lab/lyra/src/server/functions/auth.ts#L17));
+`auth.request` `console.log`s the link ([`auth.ts:12`](../../apps/lab/lyra/src/server/functions/auth.ts#L12)).
+
+That framing was wrong. Lyra is **not yet in production**, and click-to-login as
+different principals is worth real money in testing. The finding that survives is
+narrower and more useful:
+
+**The roster leak and the test affordance are the same code path.** The anonymous
+branch of `shell.inputs` returns `directory.everyone()`
+([`app.ts:334`](../../apps/lab/lyra/src/app/app.ts#L334)) — the roster *is* the login
+screen. Deleting it, as 7.0 originally said, kills the test workflow. That is why
+that row now reads *move behind the dev-transport flag*.
+
+The split, which invents nothing — moss already names `runtime.session` as the auth
+seam, *"real auth replaces that one function"*
+([`runtime.ts:8`](../../packages/moss/src/runtime.ts#L8)), and it is already
+async-capable ([`runtime.ts:15`](../../packages/moss/src/runtime.ts#L15)) and already
+awaited ([`server.ts:208`](../../packages/moss/src/server.ts#L208)):
+
+| Stage | Production | Dev | Shared |
+|---|---|---|---|
+| resolve email → person | declared vex point read (`people/byEmail` already exists, [`intake.entries.ts:80`](../../apps/lab/lyra/src/app/vex/intake.entries.ts#L80)) | same | ✅ |
+| mint short-lived single-use token | same | same | ✅ |
+| **deliver the token** | mail integration | console line / picker click | ❌ — the only fork |
+| `?token=` → `session.grant` | same | same | ✅ |
+
+Selecting the transport is a runtime knob, which is where moss already argues this
+class of decision belongs: *"an operational decision about a deployment, not
+something an application is written against"*
+([`runtime.ts:18`](../../packages/moss/src/runtime.ts#L18)). Flag off → anonymous
+`inputs` carries zero person rows, asserted by a check in the house style. Flag on →
+the picker, and a click mints the token the mail would have carried.
+
+**Payoff beyond the leak:** the ~14 `dev/` files that address principals by importing
+`personByEmail` out of module state ([`acl-check.ts:4`](../../apps/lab/lyra/src/dev/acl-check.ts#L4),
+plus roles, reachable, visibility, shell, course, integrations, roundtrip, world and
+both benches) can move onto that surface — the same path a human tester uses, instead
+of reaching into `server/` and bypassing the session boundary as they do today. This
+converts 7.3's largest unbudgeted cost into a benefit.
+
+**Corollary for the mail work in flight: auth mail is not a pack.** The send happens
+*before* a principal exists — there is an address, not a person, so there is no tenant
+to resolve an install against; a studio uninstalling it would lock its own users out;
+and routing it through `installedIntegrations`/`integrationActor` would couple the
+login path to two of the six seams 7.1–7.2 is migrating. Tenant-configurable *sender
+identity* is a legitimate pack concern; delivery is platform infrastructure.
+
+### 12.2 Reversed: no `LISTEN/NOTIFY`
+
+The interim invalidation channel is a **generation counter row**, read on the
+`sessionRevalidateMs` tick moss already runs — not Postgres `LISTEN/NOTIFY`.
+
+- `NiscRuntime` takes a `PgPool` and a `MutationClient`
+  ([`runtime.ts:11`](../../packages/moss/src/runtime.ts#L11)), deliberately abstract.
+  `LISTEN` needs a raw dedicated connection held outside the pool: a new capability at
+  the environment boundary, for one feature.
+- Its failure mode is **silent**. A dropped listener stops invalidating and nothing
+  says so — invariant 6 ("breaks rather than degrades") violated by the fix for
+  invariant 6.
+- A counter converges on Move 4 instead of being thrown away by it. *"Other processes
+  observe a pointer move"* ([DESIGN.md:56](../../packages/moss/DESIGN.md#L56)) **is** a
+  generation counter.
+
+Cost: staleness bounded by a clock already being tuned, rather than arriving instantly.
+Today it is bounded by nothing.
+
+### 12.3 Two findings not in the original plan
+
+1. **`refresh()` leaks stale reach policies.**
+   [`server.ts:917`](../../packages/moss/src/server.ts#L917) clears `policies`,
+   `catalogs` and `variantBindings` — and skips `reachPolicies`
+   ([`server.ts:130`](../../packages/moss/src/server.ts#L130)). After an integration
+   approval or a role change, every reach-scoped policy stays stale for the process
+   lifetime. One line, live today, in batch 1.
+2. **`assignments` never needed to be an eager `Record`.** Neither consumer wants
+   principals; both want role *combinations* (see D2). That is the whole reason the
+   seam is eager, and it is why D2's answer is an authored constant rather than a
+   redesign.
+
+### 12.4 The automation principal
+
+`tokenFor` scans the population per effect
+([`tide.ts:17`](../../apps/lab/lyra/src/server/tide.ts#L17)) because the automation
+*principal* is a `people` row id while the automation *actor* is the synthetic
+`automation@<studioId>` ([`app.ts:147`](../../apps/lab/lyra/src/app/app.ts#L147)).
+They are two names for one thing.
+
+Preferred fix is to unify them on the synthetic id — the same construction integration
+actors already get ([`users.ts:124`](../../apps/lab/lyra/src/server/users.ts#L124)) —
+which deletes the scan outright and makes `scope.automationActor` *be* the principal.
+
+**Checked, and deferred to batch 3.** The automation principals are real `people` rows
+(`p_auto_lumen`, `p_auto_northrock`, seeded with `staff` rows at role `automation`),
+and `people(id)` is a foreign-key target from roughly fifteen tables. Re-pointing the
+principal at a synthetic id also means synthesizing its directory entry *and* its
+`assignments` rung, or every automation call compiles an empty policy and 403s — which
+is the identity rework itself, not a standalone defect fix.
+
+**Batch 1 therefore took the narrower branch:** the per-studio automation principal is
+derived in the pass `loadDirectory` already makes over every row, beside `TIMEZONES`,
+`COUNTRIES` and `LOCALES`, and `tide` reads it as `automationFor(studioId)`. That
+deletes the per-effect population scan and removes `everyone()` from `tide.ts`
+altogether — one of the five production callers Part 10 wants gone — without touching
+seed data or identity semantics. The unification stands as the batch-3 endpoint.
+
+### 12.5 Build batches
+
+| Batch | Contents | Needs |
+|---|---|---|
+| **1** | 7.0's decision-free defects + the `reachPolicies` fix (12.3). The anonymous-roster row is **not** here — it lands with the mail work per 12.1. | nothing |
+| **2** | `wearable` in charter; re-key moss's four memos by (roles ⊕ installed); the `identity` seam with bound, eviction, revalidation and roster from the first commit; the generation counter. Then `shell.inputs` and `integrationActor` onto the wire — the latter is already called from async middleware ([`server.ts:201`](../../packages/moss/src/server.ts#L201)), so it is nearly free. | D1, D2 |
+
+**Batch 2 progress (2026-08-13).** Landed: `wearable` (D2) — `verifyCharter`'s third
+parameter is now the combinations rather than the assignment map, `verifyVariants`
+reads `wearableOf(app)`, and Lyra declares thirteen combinations instead of deriving
+six hundred thousand; the four memo maps are re-keyed by `memoKeyOf` = (role
+combination ⊕ installed set), collapsing them from O(principals) to ~10 entries;
+`integrationActor` is widened to `string | null | Promise<string | null>` and awaited
+— the first of the six synchronous seams to stop being synchronous.
+
+**Also landed:** the `identity` seam is declared on `NiscApp`, its cache is built
+([`identity.ts`](../../packages/moss/src/identity.ts): bounded, LRU-evicted,
+revalidated on `sessionRevalidateMs`, metered, operator-rostered, in-flight
+deduplicated, failures uncached), the runtime knobs exist (`identityMax`,
+`identityIdleMs`), and **the request path is rerouted**: identity resolves ONCE in
+the auth middleware and rides the request as `Resolved`, which closes 7.1 step 6 —
+`getScope`, `getPolicy` and `getPolicyForReach` now read a record instead of
+re-asking three seams and re-deriving a memo key per request. The key itself is
+derived once per record through a `WeakMap`. Applications that have not declared
+`identity` fall through `fromSeams` to the old behaviour unchanged, which is what
+keeps atrium, relay and lyra-admin green.
+
+**Still open in batch 2:** the generation counter, and `shell.inputs` onto the wire.
+Two notes for whoever picks this up:
+
+- `integrationActor` took only the ASYNC half of 7.2 step 7. The wire-bearing half
+  needs the bootstrap policy, because that seam runs before a principal exists —
+  **D4**, still open. 7.2 step 7 is two steps.
+- The shell host and the contract-fingerprint surface deliberately still call
+  `fromSeams`. Both are per-SESSION rather than per-request, so they cost nothing
+  now — but both read `app.assignments`, so both must move before 7.3 deletes it.
+**Batch 3 slice 1 landed (2026-08-13): Lyra declares `identity`.** Verified at *all
+39 checks pass*. The seam returns roles, installed ids and the stable scope values;
+moss holds the record for the session. Four things came out of building it that the
+plan did not anticipate:
+
+1. **The clock had to be split out of scope.** `today` and `horizon` were per-request
+   because `scope` was; folding them into a per-session record would have frozen them,
+   and a session opened at 23:58 would tell every read it was yesterday — including
+   the ones the database compares a `DATE` column against. So `scope` survives beside
+   `identity` as the VOLATILE half, asked per request, and is handed the resolved
+   record so the day can be computed from a fact the session already holds. It stays
+   synchronous on purpose: a sync seam is only a trap when the answer lives in rows.
+2. **Roles must come off the principal id, not the directory row.** An actor for a
+   pack installed after boot has no row yet, and reading roles from a missing row put
+   a payments pack on the member rung — which reads nothing and refuses quietly.
+   Also: an unknown principal wears `public`, never `member`.
+3. **`refresh()` must drop identity too.** Dropping the compiled policies while
+   keeping the records they were compiled from keeps the stale half: a promoted
+   instructor held their old rung until the record expired on its own clock. Caught by
+   `acl-check`, which is exactly what that check is for.
+4. **There were four spellings of "compose this principal's scope values"** — one at
+   the vex mount and three around the integration surfaces. Lyra's `scope` shrinking
+   to two keys silently emptied the assertion a pack receives, so a proxied call
+   answered about nobody. Now one `composeScope`, used everywhere. This is the
+   `everyone()` lesson again in a different costume: a derivation spelled more than
+   once will disagree with itself, and the disagreement will be silent.
+
+**7.1 step 6's acceptance criterion is now asserted**, not promised:
+[`identity-check.ts`](../../apps/lab/lyra/src/dev/identity-check.ts) drives eight
+requests through one session and fails unless the seam was asked **once** — read off
+`server.identities.meter()`, so the check sees what an operator would see. It also
+asserts invariant 3 (drop it, get the identical answer back for one re-resolution)
+and invariant 1 (the roster carries `principal/since/lastSeen` and no records).
+
+**Batch 3 slice 2 landed (2026-08-13): the seam reads a row.**
+[`server/identity.ts`](../../apps/lab/lyra/src/server/identity.ts) resolves one
+principal with one query — person, studio, staff role, anchor and installs together —
+and the request path no longer touches `DIRECTORY` at all. This is exactly the surface
+Part 4 licenses and nothing more: `principal → { roles, scope values }`, for the one
+principal asking.
+
+Three things worth recording:
+
+- **The zone travels, the day does not.** The record carries `timezone`; `clockScope`
+  derives `today` and `horizon` from it per request. So the volatile half needs no
+  lookup and no cache — which is what lets `studioToday`'s resident `TIMEZONES` map
+  leave the request path entirely.
+- **Integration actors resolve without a row.** `ig_<pack>@<studio>` is parsed, the
+  install is verified against `studio_integrations`, and the rung comes off the id.
+  The install IS the credential's lifetime — uninstalling revokes the actor, with no
+  second mechanism to forget.
+- **An unresolvable principal is `public`.** Not `member`, which is a working
+  application. A token that verifies for somebody this deployment cannot resolve
+  lands on the lock screen.
+
+**Batch 4 landed: held state is classified, and the rule gates.**
+[`held-state-check.ts`](../../apps/lab/lyra/src/dev/held-state-check.ts) walks the
+AST for module-level bindings and sorts them into the four kinds of 8.2, failing on
+any row-backed cache not named in a list somebody has to shorten on purpose. It
+found nine, all scheduled.
+
+Its self-test caught three bugs in its own rule before it ran on the tree, which is
+the entire argument for writing them:
+
+1. Matching only `=` missed `??=` — every memo in this codebase is written that
+   way, so the rule found no writes and filed a formatter cache as inert data.
+2. "Assigned inside a function that queries" condemned `boot.ts`'s driver
+   singleton, which sits in a function that happens to query. The discriminator the
+   plan names is *assigned FROM a query result*, so the VALUE has to be traced.
+3. Worst: the first draft missed `DIRECTORY` — **the canonical example**.
+   `loadDirectory` fills a plain local in a loop and publishes it in one statement
+   that mentions no row at all. A rule tested only against the obvious spelling
+   passes while the thing it was written for sits three lines away.
+
+**The generation counter landed with it** ([`generation.ts`](../../packages/moss/src/generation.ts)),
+so 7.1 step 5 is closed: `refresh()` moves the pointer, every other process drops
+its derivations within one poll, and a pointer that cannot be READ says so loudly —
+which was the whole reason for choosing it over `LISTEN/NOTIFY`. Asserted in
+`generation.test.ts`, including that a process does not react to its own bump and
+that a quiet interval is not a move.
+
+**Still open:** the caches themselves. `DIRECTORY`, `BY_EMAIL`, `INSTALLED` and
+`AUTOMATION` are now unused by the request path but still feed `assignments`, the
+anonymous login picker and ~14 `dev/` files — that is the deletion slice, and it wants
+the shell host and contract surfaces off `fromSeams` first, since both still read
+`app.assignments`. Then Move 2 (declared entry + bootstrap policy, **D4**), the
+generation counter, and `shell.inputs` onto the wire.
+| **3** | Lyra migrates: delete `DIRECTORY`, `BY_EMAIL`, `INSTALLED`, and the module state in `themes.ts` and `phrases.ts`; move the ~14 `dev/` files off `personByEmail`; convert `assignments` in atrium, atrium/admin and lyra-admin. `users.ts` shrinks to the login path and dies when the mail work lands. | D1, D2 |
+| **4** | ESLint; the census `edgeOf` rewrite plus held-state detection; `census` into `all-checks.ts`; the four invariant checks of Part 8.3 with falsifiable self-tests. | D5, D7, D8 |

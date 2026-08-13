@@ -44,7 +44,7 @@ const otherStudio = await asPrincipal(CAST.northrock.member, '/api/me/vex', { fi
 ok('another studio’s member gets their own', JSON.stringify(otherStudio).includes('North Rock') && !JSON.stringify(otherStudio).includes('Lumen'), JSON.stringify(otherStudio).slice(0, 90));
 
 // ── the screens ──────────────────────────────────────────────
-const member = login(MEMBER);
+const member = await login(MEMBER);
 await settle(10);
 let tree = treeOf(member);
 ok('a member lands on their own surface', tree.includes('Your classes and your membership'));
@@ -61,7 +61,7 @@ ok('...four at most, always', (tree.match(/"name":"Tab"/g) ?? []).length <= 5, `
 // ── the prospect at the cliff ────────────────────────────────
 // Tom Vogel signs in like anybody the studio knows — the old model refused
 // him a principal until somebody lied about a membership.
-const tom = login('tom.vogel@example.com');
+const tom = await login('tom.vogel@example.com');
 await settle(10);
 let tomTree = treeOf(tom);
 ok('a prospect signs in at all', tomTree.includes('Your classes and your membership'), 'known to the studio IS the login relationship');
@@ -222,7 +222,7 @@ if (jonasBooking.rows[0] !== undefined) {
 }
 
 // ── who is offered the member surfaces ───────────────────────
-const boss = login(CAST.lumen.owner);
+const boss = await login(CAST.lumen.owner);
 await settle(8);
 const bossTree = treeOf(boss);
 ok('an owner who does not train is not offered booking', !bossTree.includes('"label":"Booking"'), 'derived from the anchor row, not from the charter');
@@ -230,7 +230,7 @@ const bossCard = await asPrincipal(CAST.lumen.owner, '/api/me/vex', { fingerprin
 ok('...though the grant is still theirs', !refused(bossCard), 'the read answers; it just has nothing to say');
 ok('...and answers with nothing, because the studio does not know them that way', !JSON.stringify(bossCard).includes('Lumen Yoga'), JSON.stringify(bossCard).slice(0, 70));
 
-const both = login(CAST.lumen.instructor);
+const both = await login(CAST.lumen.instructor);
 await settle(8);
 const bothTree = treeOf(both);
 ok('an instructor who trains IS offered booking', bothTree.includes('"label":"Booking"'), 'one person, two relationships with the studio');

@@ -5,7 +5,7 @@ import { startIntegrationsService } from '@atrium/integrations/service';
 import { boot } from '@atrium/server/boot';
 import { mintToken, userByUsername } from '@atrium/server/users';
 
-// The checks' world: ONE moss over ONE dev database. `login()` hands back the
+// The checks' world: ONE moss over ONE dev database. `await login()` hands back the
 // SERVER'S OWN living shell for a principal — the same durable nova Shell the
 // socket streams — so a check drives the real thing rather than a replica.
 //
@@ -27,16 +27,16 @@ export const app = booted.app;
 // hands back `session.shell`, which is the right thing to drive and the wrong
 // thing to hold across a reset: the reset builds a new shell and the session is
 // what follows it. Everything that never resets can keep using `login`.
-export const sessionFor = (username: string): NonNullable<ReturnType<NonNullable<typeof server.shells>['session']>> => {
+export const sessionFor = async (username: string): Promise<Awaited<ReturnType<NonNullable<typeof server.shells>['session']>>> => {
   const token = mintToken(username);
   const user = userByUsername(username);
   if (token === null || user === undefined) throw new Error(`world: unknown username "${username}"`);
-  const session = server.shells?.session(token, user.id);
+  const session = await server.shells?.session(token, user.id);
   if (session === undefined) throw new Error('world: the app serves no shell');
   return session;
 };
 
-export const login = (username: string): Shell => sessionFor(username).shell;
+export const login = async (username: string): Promise<Shell> => (await sessionFor(username)).shell;
 
 // Give the shell's mount chain time to settle. Mount fires an endpoint, whose
 // onSuccess fires another — a check has to await the whole chain, not the first

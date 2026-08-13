@@ -1,13 +1,12 @@
 // Run: pnpm --filter lyra exec tsx src/dev/acl-check.ts
 import { resolveCatalog } from '@niscorp/moss';
+import { audienceOf } from '@lyra/server/identity';
 import { CAST } from '@lyra/db/seed';
-import { personByEmail } from '@lyra/server/users';
-import { app, asPrincipal, login, ok, report, runtime, sessionFor, settle, treeOf } from './world';
+import { app, asPrincipal, idFor, idsFor, login, ok, report, runtime, server, sessionFor, settle, treeOf } from './world';
 
 const INSTRUCTOR = CAST.lumen.instructor;
 const OWNER = CAST.lumen.owner;
 
-const idsFor = (email: string): readonly string[] => resolveCatalog(app, personByEmail(email)?.id ?? null).ids;
 const roleOf = async (staffId: string): Promise<string> => {
   const result = await runtime.db.query<{ role: string }>('SELECT role FROM staff WHERE id = $1', [staffId]);
   return String(result.rows[0]?.role ?? '');
@@ -20,10 +19,10 @@ const TAKINGS = await revenueFor(OWNER);
 
 // ── before ──
 ok('Tobias is an instructor', (await roleOf('sf_tobias')) === 'instructor');
-ok('...and holds no overview', !idsFor(INSTRUCTOR).includes('home.overview'));
-ok('...and cannot touch the timetable', !idsFor(INSTRUCTOR).includes('timetable.list'));
+ok('...and holds no overview', !(await idsFor(INSTRUCTOR)).includes('home.overview'));
+ok('...and cannot touch the timetable', !(await idsFor(INSTRUCTOR)).includes('timetable.list'));
 
-const tobiasSession = sessionFor(INSTRUCTOR);
+const tobiasSession = await sessionFor(INSTRUCTOR);
 await settle();
 ok('...and his screen shows no revenue', !treeOf(tobiasSession.shell).toLowerCase().includes('expected monthly'));
 
@@ -31,7 +30,7 @@ const revenueBefore = await revenueFor(INSTRUCTOR);
 ok('...and the engine does not give him the takings', revenueBefore !== TAKINGS, `${revenueBefore} against the studio's ${TAKINGS}`);
 
 // ── the owner promotes him, through the real screen ──
-const owner = login(OWNER);
+const owner = await login(OWNER);
 await settle();
 owner.dispatch({ type: 'ui:click', ref: 'nav', payload: 'staff.list' });
 await settle();
@@ -47,8 +46,8 @@ await settle(18);
 
 ok('the role was written', (await roleOf('sf_tobias')) === 'manager');
 
-ok('moss re-resolved the charter for him', idsFor(INSTRUCTOR).includes('home.overview'), 'assignments rebuilt, memos dropped');
-ok('...so he now holds the timetable too', idsFor(INSTRUCTOR).includes('timetable.list'));
+ok('moss re-resolved the charter for him', (await idsFor(INSTRUCTOR)).includes('home.overview'), 'assignments rebuilt, memos dropped');
+ok('...so he now holds the timetable too', (await idsFor(INSTRUCTOR)).includes('timetable.list'));
 
 await settle(10);
 const after = treeOf(tobiasSession.shell);
@@ -65,7 +64,7 @@ ok('...and a confirmation asks first', treeOf(owner).includes('Change their role
 owner.dispatch({ type: 'ui:click', ref: 'confirm' });
 await settle(18);
 ok('demotion is the same gesture', (await roleOf('sf_tobias')) === 'desk');
-ok('...and takes the overview away again', !idsFor(INSTRUCTOR).includes('home.overview'));
+ok('...and takes the overview away again', !(await idsFor(INSTRUCTOR)).includes('home.overview'));
 const revenueDemoted = await revenueFor(INSTRUCTOR);
 ok('...and the engine takes the studio figure back', revenueDemoted !== TAKINGS, `${revenueDemoted} against the studio's ${TAKINGS}`);
 
@@ -87,22 +86,22 @@ try {
 }
 ok('the column refuses a role the charter never defined', refusedByColumn, 'the comment listing four roles is a CHECK constraint now');
 
-const { loadDirectory, everyone, audienceOf } = await import('@lyra/server/users');
 
 ok('an unrecognised role becomes a member, never an administrator', audienceOf('superuser') === 'member', 'the direction that matters when the word arrives from somewhere nobody reviewed');
 ok('...while every role the column allows keeps its own rung', ['owner', 'manager', 'instructor', 'desk', 'automation'].every((r) => audienceOf(r) === r));
 
-const memberIds = idsFor(CAST.lumen.member);
+const memberIds = await idsFor(CAST.lumen.member);
 ok('...and that rung is a working application', memberIds.length > 0, `${memberIds.length} actions`);
 ok('...with no staff surface on it', !memberIds.includes('desk.checkin') && !memberIds.includes('staff.list') && !memberIds.includes('reports.overview'));
 
-void loadDirectory;
-void everyone;
-
+// PUT HIM BACK, and let the engine notice. There is no assignment map to
+// rebuild any more: roles are resolved per principal from rows, so forgetting
+// the held record is the whole of what a role change requires. This used to be
+// three lines of the check re-deriving the world by hand — and the way that
+// went wrong was silent.
 await runtime.db.query("UPDATE staff SET role = 'instructor' WHERE id = 'sf_tobias'");
-await loadDirectory(runtime.pool);
-for (const key of Object.keys(app.assignments)) delete app.assignments[key];
-for (const person of everyone()) app.assignments[person.id] = [person.audience];
+server.invalidateIdentity(idFor(INSTRUCTOR));
+server.refresh();
 
 // ── hiring ──
 owner.dispatch({ type: 'ui:click', ref: 'nav', payload: 'staff.list' });

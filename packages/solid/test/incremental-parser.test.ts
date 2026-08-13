@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { at, lastOf } from './helpers/at';
 import { createIncrementalParser } from '../src/incremental-parser';
 
 const base = {
@@ -254,7 +255,7 @@ describe('incremental parser — events', () => {
     const parser = createIncrementalParser({ a: '', b: '' });
     const events = parser.write('{"a":"x","b":"y"}');
     const leaves = events.filter(e => e.type === 'leaveObject');
-    expect(leaves[leaves.length - 1].path).toBe('');
+    expect(lastOf(leaves).path).toBe('');
   });
 });
 
@@ -278,8 +279,8 @@ describe('incremental parser — complex', () => {
     const snap = parser.snapshot(complexBase);
     if (!snap.changed) throw new Error('expected change');
     expect(snap.value.data).toHaveLength(2);
-    expect(snap.value.data[0].tags).toEqual(['a', 'b']);
-    expect(snap.value.data[1].tags).toEqual(['c']);
+    expect(at(snap.value.data, 0).tags).toEqual(['a', 'b']);
+    expect(at(snap.value.data, 1).tags).toEqual(['c']);
   });
 
   it('mixed value types', () => {

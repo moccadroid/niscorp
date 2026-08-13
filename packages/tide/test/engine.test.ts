@@ -325,6 +325,41 @@ describe('facts', () => {
     expect(calls[0]?.input).toEqual({ invoice: 'inv_1' });
   });
 
+  // A HOST WHOSE LEDGER IS NOT ITS AUDIT LOG. Minting one fact per committed
+  // row puts an awaited INSERT on the hot path of every write, most of them
+  // for entities nothing watches. Off by default, because `ledger.facts()`
+  // meaning "every write" is the more useful default and the one causeChain
+  // was written for.
+  describe('storeUnwatchedWrites: false', () => {
+    it('keeps a write something watches, and drops one nothing does', async () => {
+      const { tide } = await harness([onWrite], { mail: noop }, { storeUnwatchedWrites: false });
+
+      expect(await tide.ingest({ kind: 'write', entity: 'payments', op: 'insert', row: { invoice_id: 'inv_1' }, at: T0 })).toBeDefined();
+      expect(await tide.ingest({ kind: 'write', entity: 'notes', op: 'insert', row: {}, at: T0 })).toBeUndefined();
+      // Watched entity, unwatched op — the matcher treats those as distinct
+      // stimuli, so this asks the same question the matcher would.
+      expect(await tide.ingest({ kind: 'write', entity: 'payments', op: 'update', row: {}, at: T0 })).toBeUndefined();
+
+      expect(await tide.ledger.facts()).toHaveLength(1);
+      const report = await tide.advance({ now: T0 });
+      expect(report.factsMatched).toBe(1);
+    });
+
+    it('still keeps everything that is not a write', async () => {
+      const { tide } = await harness([onWrite], { mail: noop }, { storeUnwatchedWrites: false });
+      expect(await tide.ingest({ kind: 'signal', name: 'nobody-listens', at: T0 })).toBeDefined();
+    });
+
+    // THE RACE THIS MUST NOT REINTRODUCE. `matchFacts` was fixed to let facts
+    // WAIT while nothing is loaded rather than marking a backlog delivered; a
+    // filter that consulted an empty reflex set would throw that backlog away
+    // instead, which is the same bug with a better excuse.
+    it('drops nothing while no reflexes are loaded', async () => {
+      const { tide } = await harness([], { mail: noop }, { storeUnwatchedWrites: false });
+      expect(await tide.ingest({ kind: 'write', entity: 'notes', op: 'insert', row: {}, at: T0 })).toBeDefined();
+    });
+  });
+
   it('ops are distinct stimuli — an update does not wake an insert reflex', async () => {
     const { tide, calls } = await harness([onWrite], { mail: noop });
     await tide.ingest({ kind: 'write', entity: 'payments', op: 'update', row: { invoice_id: 'inv_1' }, at: T0 });

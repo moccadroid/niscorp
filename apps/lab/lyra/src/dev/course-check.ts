@@ -2,10 +2,8 @@
 import { CAST } from '@lyra/db/seed';
 import { areasFor } from '@lyra/app/nav/sections';
 import { resolveCatalog } from '@niscorp/moss';
-import { personByEmail } from '@lyra/server/users';
-import { app, asPrincipal, login, ok, report, runtime, settle, treeOf } from './world';
+import { app, asPrincipal, idFor, idsFor, login, ok, report, runtime, settle, treeOf } from './world';
 
-const idsFor = (email: string): readonly string[] => resolveCatalog(app, personByEmail(email)?.id ?? null).ids;
 
 const count = async (sql: string, params: unknown[] = []): Promise<number> => {
   const result = await runtime.db.query<{ n: number }>(sql, params);
@@ -25,9 +23,9 @@ ok('...and none outside its dates', (await count("SELECT count(*) n FROM class_s
 ok('...while an ongoing class keeps running', (await count("SELECT count(*) n FROM class_sessions WHERE template_id = 'ct_l_mon_am' AND held_on > studio_today('st_lumen')")) > 0, 'both NULL is unbounded, which is the default');
 
 // ── the manager's screen ─────────────────────────────────────
-const owner = login(CAST.lumen.owner);
+const owner = await login(CAST.lumen.owner);
 await settle(8);
-const offered = areasFor(idsFor(CAST.lumen.owner)).flatMap((a) => a.items.map((i) => i.action));
+const offered = areasFor(await idsFor(CAST.lumen.owner)).flatMap((a) => a.items.map((i) => i.action));
 ok('the owner is offered the Classes screen', offered.includes('timetable.list'), offered.join(', '));
 
 owner.dispatch({ type: 'ui:click', ref: 'nav', payload: 'timetable.list' });
@@ -107,7 +105,7 @@ ok('a course has a roster', tree.includes('Everybody who holds a place on this b
 ok('...naming who is on it', tree.includes('Jonas Weber'), 'the cohort — what six separate bookings could not have told a studio');
 
 // ── a member joins ───────────────────────────────────────────
-const member = login(CAST.lumen.member);
+const member = await login(CAST.lumen.member);
 await settle(10);
 const bookingsBefore = await count("SELECT count(*) n FROM bookings WHERE person_id = 'p_ava' AND status = 'booked'");
 
@@ -158,7 +156,7 @@ ok('...and no row crossed', (await count("SELECT count(*) n FROM enrolments WHER
 void member;
 
 // ── the desk, at the counter ─────────────────────────────────
-const desk = login(CAST.lumen.desk);
+const desk = await login(CAST.lumen.desk);
 await settle(10);
 desk.dispatch({ type: 'ui:click', ref: 'nav', payload: 'people.list' });
 await settle(10);
@@ -177,7 +175,7 @@ ok('...with the studio stamped by the engine, not the caller', (await count("SEL
 ok('...and the block booked for them', (await count("SELECT count(*) n FROM bookings b JOIN class_sessions cs ON cs.id = b.session_id JOIN class_templates ct ON ct.id = cs.template_id WHERE ct.course_id = 'co_lumen_found' AND b.person_id = 'p_sofia'")) > 0);
 ok('...and it shows on the record', treeOf(desk).includes('Foundations — autumn block'));
 
-desk.dispatch({ type: 'ui:click', ref: 'withdraw', payload: { enrolment_id: (await runtime.db.query("SELECT id FROM enrolments WHERE person_id = 'p_sofia' AND status = 'enrolled' LIMIT 1")).rows[0]?.id } });
+desk.dispatch({ type: 'ui:click', ref: 'withdraw', payload: { enrolment_id: (await runtime.db.query<{ id: string }>("SELECT id FROM enrolments WHERE person_id = 'p_sofia' AND status = 'enrolled' LIMIT 1")).rows[0]?.id } });
 await settle(18);
 ok('...and take them off again', (await count("SELECT count(*) n FROM enrolments WHERE person_id = 'p_sofia' AND status = 'withdrawn'")) === 1);
 

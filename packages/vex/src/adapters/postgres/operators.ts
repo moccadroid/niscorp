@@ -6,6 +6,7 @@ import type { ParamSlot } from '../adapter.types.js';
 import type { FieldSchema } from '../../schemas/database.schema.js';
 import type { ResolvedExists } from '../../engine/engine.types.js';
 import { RESERVED_CONTEXT_KEYS } from '../../schemas/request.schema.js';
+import { refuseOptional } from '../../engine/optional.js';
 import { VexError } from '../../errors.js';
 
 // A `$context` ref naming a reserved sort key would otherwise become a bound
@@ -312,6 +313,13 @@ export const compileFilter = (
     // pg_trgm similarity
     return `${col} % ${paramRef}`;
   }
+
+  // Resolved away before the pipeline — see engine/optional.ts. Named
+  // explicitly because the fallthrough below is `TRUE`: an unrecognised node
+  // would quietly compile to "match everything", which for an optional
+  // condition is the right answer reached by the wrong route, and for anything
+  // else is a filter that silently stopped filtering.
+  if ('optional' in filter) refuseOptional('SQL compilation');
 
   // Should not reach here if the filter was validated
   return 'TRUE';

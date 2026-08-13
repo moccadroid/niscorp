@@ -26,14 +26,27 @@ export const executeQuery = async (
 // Context contract builder
 // ═══════════════════════════════════════════════════════════════
 
-export const buildContextContract = (compiled: CompiledQuery): Record<string, ContextMeta> => {
+export const buildContextContract = (
+  compiled: CompiledQuery,
+  // Every key that controls an `optional` condition anywhere in the STORED
+  // dsl — including the ones this run pruned away, which have no slot and so
+  // would otherwise be invisible to the caller who most needs to know they
+  // exist: the one who did not send them.
+  optionalKeys: readonly string[] = [],
+): Record<string, ContextMeta> => {
   const contract: Record<string, ContextMeta> = {};
 
   for (const slot of compiled.paramSlots) {
     contract[slot.key] = {
       type: slot.type,
       kind: slot.kind,
+      ...(optionalKeys.includes(slot.key) ? { optional: true as const } : {}),
     };
+  }
+
+  for (const key of optionalKeys) {
+    if (contract[key] !== undefined) continue;
+    contract[key] = { kind: 'context', optional: true, absent: true };
   }
 
   return contract;

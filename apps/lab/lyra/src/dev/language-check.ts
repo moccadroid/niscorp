@@ -7,19 +7,19 @@
 // question: does a language reach the glass without any action, layout or
 // component knowing it exists?
 import { CAST } from '@lyra/db/seed';
+import { localeOf } from '@lyra/server/lookup';
 import { phrasesFor } from '@lyra/server/phrases';
-import { studioLocale } from '@lyra/server/users';
 import { asPrincipal, login, ok, report, runtime, servedTo, settle } from './world';
 
-const maren = login(CAST.lumen.owner); // de-AT
-const dario = login(CAST.northrock.owner); // en-GB
+const maren = await login(CAST.lumen.owner); // de-AT
+const dario = await login(CAST.northrock.owner); // en-GB
 await settle();
 
 // What each terminal is actually SENT — not what the shell holds. The language
 // pass runs between flatten and serialize inside moss, so a tree read straight
 // from nova is always the source language, whoever is reading it.
-const german = servedTo(CAST.lumen.owner);
-const english = servedTo(CAST.northrock.owner);
+const german = await servedTo(CAST.lumen.owner);
+const english = await servedTo(CAST.northrock.owner);
 
 // ── the words ────────────────────────────────────────────────
 ok('the German shell is served German chrome', german.includes('Personen'), 'People → Personen');
@@ -66,12 +66,12 @@ const idsIn = (tree: string): string[] => [...tree.matchAll(/"definitionId":"([^
 ok('both languages run the identical action set', JSON.stringify(idsIn(german)) === JSON.stringify(idsIn(english)), idsIn(german).join(', ') || 'same set');
 
 // ── the book resolves by language, the format by region ──────
-ok('de-AT falls back to the de book', Object.keys(phrasesFor('de-AT')).length > 400, `${String(Object.keys(phrasesFor('de-AT')).length)} phrases`);
-ok('an unknown language gets the source, not a mixture', Object.keys(phrasesFor('fr-FR')).length === 0);
-ok('the source language holds no rows', Object.keys(phrasesFor('en-GB')).length === 0, 'nothing about it needs translating');
+ok('de-AT falls back to the de book', Object.keys(await phrasesFor(runtime.pool, 'de-AT')).length > 400, `${String(Object.keys(await phrasesFor(runtime.pool, 'de-AT')).length)} phrases`);
+ok('an unknown language gets the source, not a mixture', Object.keys(await phrasesFor(runtime.pool, 'fr-FR')).length === 0);
+ok('the source language holds no rows', Object.keys(await phrasesFor(runtime.pool, 'en-GB')).length === 0, 'nothing about it needs translating');
 
 // ── switching ────────────────────────────────────────────────
-const before = studioLocale('st_northrock');
+const before = await localeOf(runtime.pool, 'st_northrock');
 const switched = await asPrincipal(CAST.northrock.owner, '/api/studio/vex', {
   fingerprint: 'studio/set-language',
   context: { studioId: 'st_northrock', locale: 'de-AT' },

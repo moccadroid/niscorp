@@ -303,11 +303,16 @@ const compileSet = (set: Mutation<Record<string, unknown>>, start: number): Bind
 
 // ── the store ───────────────────────────────────────────────────
 
-let sequence = 0;
-const mintId = (table: TableName): string => {
-  sequence += 1;
-  return `${table}_${Date.now().toString(36)}_${sequence.toString(36)}`;
-};
+// A counter, in the closure that owns it rather than at module scope. Same
+// value, same monotonicity; what changes is that it is no longer process-global
+// state a second store would silently share.
+const mintId = ((): ((table: TableName) => string) => {
+  let sequence = 0;
+  return (table) => {
+    sequence += 1;
+    return `${table}_${Date.now().toString(36)}_${sequence.toString(36)}`;
+  };
+})();
 
 export type TideStoreOptions = {
   // Run the DDL on construction. On by default because a store that cannot

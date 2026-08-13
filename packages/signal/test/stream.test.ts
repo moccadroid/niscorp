@@ -35,7 +35,10 @@ const scripted = (turns: Turn[]): RunDeps => {
         const base: StepResult = {
           content: (turn.text ?? []).join(''),
           toolCalls: (turn.toolCalls ?? []).map((call) => ({ ...call })),
-          usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 },
+          // `reported: true` — this mock IS stating a cost. Leaving it off made
+          // the double say "the provider told us nothing", which is the exact
+          // confusion the flag was added to end.
+          usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15, reported: true },
           finishReason: (turn.toolCalls?.length ?? 0) > 0 ? 'tool_calls' : 'stop',
           raw: null,
         };

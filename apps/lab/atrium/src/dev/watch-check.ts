@@ -62,9 +62,9 @@ const main = async (): Promise<void> => {
   await setMode('stf_rosa', 'full');
 
   // ── who is watched ──
-  const rosa = login('rosa');
-  login('kwame');
-  login('amara');
+  const rosa = await login('rosa');
+  await login('kwame');
+  await login('amara');
   await settle(14);
   await wait(600);
   check('the desk is watched', watching().includes('stf_rosa'));
@@ -208,7 +208,9 @@ const main = async (): Promise<void> => {
 
   // ── a card the person closes is a refusal, not a wake ──
   const offered = rosa.push('aside', 'desk.issue.detail', { issueId: 'iss_003', propertyId: 'prop_lumen' }, [], { origin: ASSISTANT });
-  ledger.remember(offered, { definitionId: 'desk.issue.detail', title: 'The issue', aim: '{"issueId":"iss_003"}' });
+  // `at` is when the card was closed — the ledger ages refusals off, so a
+  // dismissal without one is a dismissal that cannot expire.
+  ledger.remember(offered, { definitionId: 'desk.issue.detail', title: 'The issue', aim: '{"issueId":"iss_003"}', at: Date.now() });
   await settle(8);
   clearWakes();
   rosa.removeInstance('aside', offered);
@@ -222,7 +224,7 @@ const main = async (): Promise<void> => {
   // ── off means off ──
   stopWatching();
   await setMode('stf_rosa', 'authored');
-  const quiet = login('rosa');
+  const quiet = await login('rosa');
   await settle(14);
   await wait(600);
   check('a person who turned it off has no watcher', !watching().includes('stf_rosa'));
@@ -238,7 +240,7 @@ const main = async (): Promise<void> => {
   // behind. Sabotaging one and then firing a real event drives the settle and
   // fire paths into it.
   await setMode('stf_pilar', 'full');
-  const pilar = login('pilar');
+  const pilar = await login('pilar');
   await settle(14);
   await wait(400);
   check('the other desk is watched too', watching().includes('stf_pilar'));

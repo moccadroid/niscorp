@@ -6,10 +6,14 @@ import type { TriggerConfig } from '@action/schemas';
 
 const tick = (): Promise<void> => new Promise((r) => setTimeout(r, 0));
 
+// Typed FROM StepContext, not from the factories. This helper builds a step
+// context, so its parts are that context's parts — inferring them from
+// `ReturnType<typeof createEventBus>` instead described a bus the runtime does
+// not take, and the mismatch was invisible while tests went untypechecked.
 const makeBuild = (
-  dataStore: ReturnType<typeof createDataStore>,
-  eventBus: ReturnType<typeof createEventBus>,
-  messageBus: ReturnType<typeof createMessageBus>,
+  dataStore: StepContext['dataStore'],
+  eventBus: StepContext['eventBus'],
+  messageBus: StepContext['messageBus'],
 ): (() => StepContext) => () => ({
   dataStore,
   endpoints: {},
@@ -26,7 +30,7 @@ describe('attachTriggers', () => {
   it('fires on matching ui event with matching ref', async () => {
     const eventBus = createEventBus();
     const messageBus = createMessageBus();
-    const dataStore = createDataStore({ n: 0 });
+    const dataStore = createDataStore<Record<string, unknown>>({ n: 0 });
     const triggers: TriggerConfig[] = [
       { event: 'ui:click', ref: 'btn', do: [{ increment: 'n' }] },
     ];
@@ -39,7 +43,7 @@ describe('attachTriggers', () => {
   it('exposes the firing event to steps as @event (e.g. a clicked list index)', async () => {
     const eventBus = createEventBus();
     const messageBus = createMessageBus();
-    const dataStore = createDataStore({ items: ['a', 'b', 'c'] });
+    const dataStore = createDataStore<Record<string, unknown>>({ items: ['a', 'b', 'c'] });
     attachTriggers(
       [{ event: 'ui:click', ref: 'remove', do: [{ removeAt: 'items', index: '{{@event.payload}}' }] }],
       eventBus,
@@ -55,7 +59,7 @@ describe('attachTriggers', () => {
   it('ignores ui event when ref does not match', async () => {
     const eventBus = createEventBus();
     const messageBus = createMessageBus();
-    const dataStore = createDataStore({ n: 0 });
+    const dataStore = createDataStore<Record<string, unknown>>({ n: 0 });
     attachTriggers(
       [{ event: 'ui:click', ref: 'btn', do: [{ increment: 'n' }] }],
       eventBus,
@@ -71,7 +75,7 @@ describe('attachTriggers', () => {
   it('fires on ui:key only for the matching key', async () => {
     const eventBus = createEventBus();
     const messageBus = createMessageBus();
-    const dataStore = createDataStore({ n: 0 });
+    const dataStore = createDataStore<Record<string, unknown>>({ n: 0 });
     attachTriggers(
       [{ event: 'ui:key', key: 'ArrowDown', do: [{ increment: 'n' }] }],
       eventBus,
@@ -90,7 +94,7 @@ describe('attachTriggers', () => {
   it('fires multiple matching triggers in order', async () => {
     const eventBus = createEventBus();
     const messageBus = createMessageBus();
-    const dataStore = createDataStore<{ log: string[] }>({ log: [] });
+    const dataStore = createDataStore<Record<string, unknown>>({ log: [] as string[] });
     attachTriggers(
       [
         { event: 'ui:submit', do: [{ push: 'log', value: 'a' }] },
@@ -110,7 +114,7 @@ describe('attachTriggers', () => {
   it('handles message triggers via messageBus', async () => {
     const eventBus = createEventBus();
     const messageBus = createMessageBus();
-    const dataStore = createDataStore({ n: 0 });
+    const dataStore = createDataStore<Record<string, unknown>>({ n: 0 });
     attachTriggers(
       [{ message: 'cart-updated', do: [{ increment: 'n' }] }],
       eventBus,
@@ -126,7 +130,7 @@ describe('attachTriggers', () => {
   it('detach unsubscribes', async () => {
     const eventBus = createEventBus();
     const messageBus = createMessageBus();
-    const dataStore = createDataStore({ n: 0 });
+    const dataStore = createDataStore<Record<string, unknown>>({ n: 0 });
     const handle = attachTriggers(
       [{ event: 'ui:click', do: [{ increment: 'n' }] }],
       eventBus,

@@ -24,22 +24,22 @@ const run = async (): Promise<void> => {
   const shells = server.shells;
   if (shells === undefined) throw new Error('no shell host');
 
-  const as = (username: string): Shell => {
+  const as = async (username: string): Promise<Shell> => {
     const token = mintToken(username);
     if (token === null) throw new Error(`unknown user ${username}`);
-    return shells.session(token, userByUsername(username)?.id ?? null).shell;
+    return (await shells.session(token, userByUsername(username)?.id ?? null)).shell;
   };
 
   // ── anonymous: their application IS the lock screen (the charter's
   // `public` grant; the main canvas's candidate list mounts the first
   // action a principal holds) — chrome mounts nothing ──
-  const anon = shells.session(null, null).shell;
+  const anon = (await shells.session(null, null)).shell;
   await settle();
   checks.push(['anonymous mounts exactly the lock screen', anon.getCanvasState('main').active?.definitionId === 'auth.login' && anon.getCanvasState('sidebar').stack.length === 0]);
   checks.push(['anonymous cannot push a screen', denied(() => anon.push('main', 'crm.deals'))]);
 
   // ── jordan = viewer: lists + views, nothing else ──
-  const viewer = as('jordan');
+  const viewer = await as('jordan');
   await settle();
   const sidebarId = viewer.getCanvasState('sidebar').active?.id;
   const nav = (sidebarId !== undefined ? viewer.getRuntime(sidebarId)?.getData()['nav'] : undefined) as Record<string, boolean> | undefined;
@@ -49,18 +49,18 @@ const run = async (): Promise<void> => {
   checks.push(['viewer cannot open the contact form — deny-by-nonexistence', denied(() => viewer.push('modal', 'crm.contact.form'))]);
 
   // ── sam = admin: the delete tier is its distinction now (settings is universal) ──
-  const admin = as('sam');
+  const admin = await as('sam');
   await settle();
   checks.push(['admin opens settings (like everyone)', !denied(() => admin.push('main', 'settings'))]);
 
   // ── alex = sales: forms yes, and settings too (member floor) ──
-  const sales = as('alex');
+  const sales = await as('alex');
   await settle();
   checks.push(['alex opens the deal form', !denied(() => sales.push('modal', 'crm.deal.form', {}, ['modal']))]);
   checks.push(['alex (sales) opens settings too (member floor)', !denied(() => sales.push('main', 'settings'))]);
 
   // ── durable: same principal, same shell; different principals differ ──
-  checks.push(['one durable shell per principal', as('jordan') === viewer && as('alex') === sales]);
+  checks.push(['one durable shell per principal', await as('jordan') === viewer && await as('alex') === sales]);
   checks.push(['different principals, different shells', viewer !== sales && sales !== admin]);
 
   await runtime.db.close();

@@ -20,65 +20,33 @@ export type Phrasebook = Readonly<Record<string, string>>;
 
 const EMPTY: Phrasebook = {};
 
-let BY_LOCALE: Record<string, Phrasebook> = {};
-
-export const loadPhrases = async (pool: PgPool): Promise<number> => {
-  const result = await pool.query(/* sql */ `
-    SELECT locale, source, text
-    FROM phrases
-    WHERE context IS NULL
-  `);
-  const byLocale: Record<string, Record<string, string>> = {};
-  for (const row of result.rows) {
-    const locale = String(row['locale'] ?? '');
-    const source = String(row['source'] ?? '');
-    const text = String(row['text'] ?? '');
-    if (locale === '' || source === '' || text === '') continue;
-    (byLocale[locale] ??= {})[source] = text;
-  }
-  BY_LOCALE = byLocale;
-  return result.rows.length;
+// ONE LANGUAGE'S WORDS, read when they are wanted.
+//
+// This was `BY_LOCALE`, every phrase for every language held at boot so that a
+// synchronous seam could answer. Both seams that wanted it are asynchronous
+// now, so this reads the rows for the one language being asked about.
+export const phrasesFor = async (pool: PgPool, locale: string): Promise<Phrasebook> => {
+  const language = locale.split('-')[0] ?? locale;
+  if (language === '' || language === 'en') return EMPTY;
+  const result = await pool.query(/* sql */ `SELECT source, text FROM phrases WHERE locale = $1`, [language]);
+  const book: Record<string, string> = {};
+  for (const row of result.rows) book[String(row['source'])] = String(row['text']);
+  return book;
 };
 
-// A tag resolves to its own book, then to its language's. `de-AT` falls back to
-// `de` so a regional studio inherits the shared German wording and overrides
-// only what differs — which is almost nothing in words, and everything in
-// number formatting (that half is `Intl`'s and never comes from this table).
-//
-// No fallback to a DIFFERENT language: an unknown locale gets the source
-// language, and a half-translated screen is the honest signal that a book is
-// missing rather than a screen quietly mixing two languages.
-export const phrasesFor = (locale: string): Phrasebook => {
-  if (locale === '') return EMPTY;
-  const exact = BY_LOCALE[locale];
-  const language = locale.split('-')[0] ?? '';
-  const base = language === locale ? undefined : BY_LOCALE[language];
-  if (exact === undefined) return base ?? EMPTY;
-  if (base === undefined) return exact;
-  return { ...base, ...exact };
+/** Which languages this deployment holds words for — the switcher's options. */
+export const loadedLocales = async (pool: PgPool): Promise<readonly string[]> => {
+  const result = await pool.query(/* sql */ `SELECT DISTINCT locale FROM phrases ORDER BY locale`);
+  return result.rows.map((row) => String(row['locale']));
 };
 
-/** Which languages the deployment actually holds words for. The switcher reads
- *  this rather than a hardcoded list, so adding a language is adding rows. */
-export const loadedLocales = (): readonly string[] => Object.keys(BY_LOCALE).sort();
-
-// ONE GREETING, COMPOSED ONCE.
-//
-// "Guten Morgen, Maren" is the third channel a language reaches, after the
-// render pass and the formatting ops: a string the application builds itself.
-// The fixed half is looked up here, from the same table every screen uses; the
-// name is concatenated after, because a name makes the whole string's
-// cardinality unbounded and no dictionary will ever hold it.
-//
-// It lives here rather than at its two call sites because it HAD two call
-// sites — `inputs` for the opening paint and `nav.identity` for the confirming
-// read — and they drifted the moment one of them learned about languages. Two
-// spellings of one sentence is how a screen ends up greeting somebody in
-// German on load and in English a tick later.
-export const greetingFor = (name: string, locale: string, at: Date): string => {
+// Composed from a book the caller already has, rather than fetching one. The
+// two places that greet somebody (the opening paint and `nav.identity`) both
+// hold the phrasebook by the time they need this, and a second fetch here is
+// how the same sentence gets to disagree with itself.
+export const greetingFrom = (book: Phrasebook, name: string, at: Date): string => {
   const hour = at.getHours();
   const stem = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
-  const book = phrasesFor(locale);
   const first = name.split(' ')[0] ?? name;
   return `${book[stem] ?? stem}, ${first}`;
 };

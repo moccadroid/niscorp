@@ -15,7 +15,7 @@ const post = async (body: unknown, method = 'POST'): Promise<{ status: number; b
 };
 
 const run = async (): Promise<void> => {
-  login('alex'); // binds the wire's Bearer to alex's session
+  await login('alex'); // binds the wire's Bearer to alex's session
 
   // ── every protected seed replays under lock ──
   let replayed = 0;

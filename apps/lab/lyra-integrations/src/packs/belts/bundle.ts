@@ -246,11 +246,13 @@ const rosterAction: ActionDefinition = {
     // OURS. A URL under our own prefix — intake refuses anything else.
     belts: { url: '/integrations/belts/roster', method: 'POST', request: {}, target: 'belts' },
     // THEIRS. A fingerprint the contract listed. We do not know what table it
-    // reads and cannot ask.
+    // reads and cannot ask. The lens is a CONTEXT VALUE now rather than part of
+    // the name, and the search is optional — a pack asking for the members
+    // lens sends the lens and nothing else, with no wildcard to know about.
     members: {
       url: '/api/member/vex',
       method: 'POST',
-      request: { fingerprint: 'people/list/members', context: { q: '%' } },
+      request: { fingerprint: 'people/list', context: { lens: 'members' } },
       target: 'members',
     },
   },

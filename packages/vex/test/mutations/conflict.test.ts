@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { executeMutation } from '../../src/mutations/engine.js';
 import type { MutationClient } from '../../src/mutations/engine.js';
 import { MutationDefinitionSchema } from '../../src/mutations/schema.js';
+import type { MutationDefinition } from '../../src/mutations/schema.js';
 import { collectMutationContext, mutationEffect, requiredContextKeys } from '../../src/mutations/signature.js';
 import { VexError } from '../../src/errors.js';
 import { VexScopeError } from '../../src/scope/apply.js';
@@ -298,7 +299,10 @@ describe('onConflict signatures', () => {
 // ─── $lookup ────────────────────────────────────────────────────
 
 describe('$lookup', () => {
-  const enroll = {
+  // Annotated, so the literal is CHECKED against the grammar rather than
+  // inferred into a looser shape of its own — unannotated, the `eq` pair widens
+  // to an array and the fixture stops being a mutation the engine would accept.
+  const enroll: MutationDefinition = {
     op: 'insert' as const,
     table: 'memberships',
     values: {

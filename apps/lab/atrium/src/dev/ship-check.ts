@@ -18,9 +18,9 @@ const offerRows = (data: Record<string, unknown>): OfferRow[] => (Array.isArray(
 
 const main = async (): Promise<void> => {
   // Two guests, two hotels, both already looking at their phones.
-  const amara = login('amara'); // The Lumen, Opera
-  const ines = login('ines'); // Casa Marisol, Mews
-  const vendor = login('atrium');
+  const amara = await login('amara'); // The Lumen, Opera
+  const ines = await login('ines'); // Casa Marisol, Mews
+  const vendor = await login('atrium');
   await settle();
 
   const before = slotIds(topData(amara, 'main'));
@@ -102,7 +102,7 @@ const main = async (): Promise<void> => {
   check('the hotel on the other PMS was not touched', inesNow.join(',') === inesBefore.join(','));
 
   // And the desk gained its half of the same capability, in the same instant.
-  login('rosa');
+  await login('rosa');
   await settle();
   check('the front desk holds the key tool in its charter', catalogFor('rosa').includes('desk.keys'));
   const deskSurface = await sql(

@@ -3,7 +3,7 @@ import { CAST } from '@lyra/db/seed';
 import { asPrincipal, login, ok, report, runtime, settle, treeOf } from './world';
 import { ROLL_PAGE } from '@lyra/app/vex/member.entries';
 
-const shell = login(CAST.lumen.owner);
+const shell = await login(CAST.lumen.owner);
 await settle();
 
 const trialOf = async (personId: string): Promise<string> => {
@@ -150,10 +150,14 @@ for (let i = 0; i < 60; i += 1) {
   await runtime.db.query("INSERT INTO studio_people (id, studio_id, person_id, source) VALUES ($1, 'st_lumen', $2, 'walk-in') ON CONFLICT DO NOTHING", [`sp_page_${i}`, id]);
 }
 
+// The cursor key names the ORDER it is a position in — `afterNameAsc` here,
+// the roll's default. A seek belongs to one ordering, so each declared order
+// carries its own key (member.entries.ts, ROLL_ORDERS); sending the wrong one,
+// or a bare `after`, is simply not a cursor and the page starts over.
 const rollPage = async (after: string, afterId: string): Promise<{ person_id: string; person_name: string }[]> =>
   (await asPrincipal(CAST.lumen.owner, '/api/member/vex', {
     fingerprint: 'people/list',
-    context: { q: '%', lens: 'everyone', after, afterId },
+    context: { q: '%', lens: 'everyone', afterNameAsc: after === '' ? null : after, afterId: afterId === '' ? null : afterId },
   })) as { person_id: string; person_name: string }[];
 
 const known = Number((await runtime.db.query<{ n: number }>("SELECT count(*) n FROM studio_people WHERE studio_id = 'st_lumen'")).rows[0]?.n ?? 0);

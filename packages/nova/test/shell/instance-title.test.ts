@@ -1,7 +1,7 @@
 import { createPermissiveRegistry } from '../helpers';
 import { describe, expect, it } from 'vitest';
 import type { ActionDefinition } from '@action';
-import type { RenderNode } from '@layout';
+import type { LayoutNode, RenderNode } from '@layout';
 import { createLayoutStore } from '@layout';
 import { createShell } from '@shell';
 
@@ -20,10 +20,13 @@ const texts = (nodes: RenderNode[]): string[] =>
 
 describe('shell — instance.title on the actionLayout scope', () => {
   // An actionLayout that just prints every instance's resolved title.
-  const titleLayout: RenderNode | string = {
+  // A LayoutNode, which is what `actionLayout` takes — this was cast to
+  // RenderNode, the RENDERED form. The two are different ends of the pipeline
+  // and the cast said so was fine.
+  const titleLayout: LayoutNode = {
     component: 'Box',
     children: { for: '$.instances', as: 'i', do: { component: 'Box', children: '{{$.i.title}}' } },
-  } as unknown as RenderNode;
+  } as unknown as LayoutNode;
 
   const setup = (actions: Record<string, ActionDefinition>) =>
     createShell({

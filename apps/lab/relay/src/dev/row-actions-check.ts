@@ -3,11 +3,11 @@
 // passes the whole row to menu items), opens the edit form / confirm dialog, and
 // proves the writes land in PGlite and the lists re-read. Run:
 //   pnpm --filter relay exec tsx src/dev/row-actions-check.ts
-import { login, runtime } from './check-shell';
+import { login, must, runtime } from './check-shell';
 
 // Deleting shared CRM records is the admin's verb now — walk as sam (admin),
 // the same flows sales can no longer complete.
-const shell = login('sam');
+const shell = await login('sam');
 
 const settle = (ms = 220): Promise<void> => new Promise((r) => setTimeout(r, ms));
 const mainData = (): Record<string, unknown> => {
@@ -28,7 +28,7 @@ const main = async (): Promise<void> => {
   // ── Contacts: row → Edit seeds the form (incl. phone, which the table doesn't show) ──
   shell.dispatch({ type: 'ui:click', ref: 'nav-contacts' });
   await settle(320);
-  const c0 = rows().find((r) => String(r['phone'] ?? '') !== '') ?? rows()[0];
+  const c0 = must(rows().find((r) => String(r['phone'] ?? '') !== '') ?? rows()[0], 'a contact row');
   shell.dispatch({ type: 'ui:click', ref: 'row-edit', payload: c0 });
   await settle(260);
   checks.push([`contact Edit opens the form (got ${String(modalId())})`, modalId() === 'crm.contact.form']);
@@ -38,7 +38,7 @@ const main = async (): Promise<void> => {
   await settle(120);
 
   // ── Contacts: row → Delete asks first, then deletes on confirm ──
-  const cDel = rows()[1];
+  const cDel = must(rows()[1], 'a second contact row to delete');
   const beforeC = rows().length;
   shell.dispatch({ type: 'ui:click', ref: 'row-delete', payload: cDel });
   await settle(220);
@@ -55,7 +55,7 @@ const main = async (): Promise<void> => {
   // ── Deals: row → Edit seeds raw value (number) + stage_id + raw close_date ──
   shell.dispatch({ type: 'ui:click', ref: 'nav-deals' });
   await settle(320);
-  const d0 = rows().find((r) => typeof r['value'] === 'number') ?? rows()[0];
+  const d0 = must(rows().find((r) => typeof r['value'] === 'number') ?? rows()[0], 'a deal row with a value');
   shell.dispatch({ type: 'ui:click', ref: 'row-edit', payload: d0 });
   await settle(260);
   checks.push([`deal Edit opens the form (got ${String(modalId())})`, modalId() === 'crm.deal.form']);
@@ -65,7 +65,7 @@ const main = async (): Promise<void> => {
   await settle(120);
 
   // ── Deals: row → Delete cascades the line items ──
-  const dDel = rows()[0];
+  const dDel = must(rows()[0], 'a deal row to delete');
   const dId = dDel['deal_id'] as string;
   const liBefore = (await runtime.db.query('SELECT count(*)::int AS n FROM deal_products WHERE deal_id = $1', [dId])).rows[0] as { n: number };
   shell.dispatch({ type: 'ui:click', ref: 'row-delete', payload: dDel });

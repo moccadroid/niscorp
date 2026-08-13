@@ -1,7 +1,7 @@
 import type { FunctionHandler } from '@niscorp/nova';
 import type { Tide } from '@niscorp/tide';
 import type { FunctionSession } from '@niscorp/moss';
-import { personById } from '../users';
+import { personCard } from '../lookup';
 import { effectById, momentById, nameOf, reflexIdFor, selectionFor } from '@lyra/app/reflexes/compose';
 import { askAsAutomation } from '../tide';
 import { evaluate } from '@niscorp/prism';
@@ -12,7 +12,7 @@ type Deps = { tide: () => Tide; driver: () => import('@niscorp/moss').TideDriver
 const mine = (studioId: string, reflexId: string): boolean => reflexId.startsWith(`${studioId}:`);
 
 export const automationFunctions = (session: FunctionSession, deps: Deps & { pool: import('@niscorp/vex').PgPool }): Record<string, FunctionHandler> => {
-  const studioOf = (): string => personById(session.principal)?.studioId ?? '';
+  const studioOf = async (): Promise<string> => (await personCard(deps.pool, session.principal ?? ''))?.studioId ?? '';
 
   // WHICH MOMENT THIS AUTOMATION IS, asked of the moment rather than of the
   // engine. Whether a thing runs on a write or on a clock is a property of
@@ -28,7 +28,7 @@ export const automationFunctions = (session: FunctionSession, deps: Deps & { poo
 
   return {
   'automations.preview': async (data) => {
-    const studioId = studioOf();
+    const studioId = await studioOf();
     const reflexId = String(data['reflexId'] ?? '');
     if (!mine(studioId, reflexId)) throw new Error('That automation is not yours.');
     // A watched automation fires per write, anchored to the row that caused
@@ -71,8 +71,40 @@ export const automationFunctions = (session: FunctionSession, deps: Deps & { poo
     };
   },
 
+  // ── SEND IT AGAIN ────────────────────────────────────────────
+  //
+  // A studio looking at a failed message and deciding it was a blip. What it
+  // NAMED `sendAgain` DELIBERATELY. The obvious English verb for this collides
+  // with the mail provider's name, and `mail-check` asserts that name appears
+  // in exactly one file — a dumb fence catching an ordinary word is a fence
+  // working, not one to loosen. It also spares every future grep.
+  //
+  // What this does NOT do is grant a human the pen on the outbox: the requeue runs as
+  // the studio's own automation principal — the only one that writes there —
+  // so pressing this asks the robot to reconsider rather than widening a rung
+  // to let somebody edit a row a robot wrote.
+  //
+  // Nothing here needs protecting from an impatient finger. Requeue only moves
+  // a `failed` row, so a second press finds it `queued` and changes nothing;
+  // the sweep it fires carries `overlap: 'skip'`, so a second firing while one
+  // is running is dropped; and a message that failed for a permanent reason
+  // fails again in the same words. The cost of leaning on it is one API call.
+  'automations.sendAgain': async (data) => {
+    const studioId = await studioOf();
+    const messageId = String(data['messageId'] ?? '');
+    if (studioId === '' || messageId === '') throw new Error('Nothing to send again.');
+    // The scope policy is what makes this safe rather than the check above:
+    // the requeue runs under the studio's own principal, so a message id from
+    // somewhere else matches no row.
+    await askAsAutomation(deps.server(), deps.pool, studioId, 'outbox/requeue', { messageId, failedReason: 'sending again, asked by the studio' });
+    const driver = deps.driver();
+    await driver.fire(`${studioId}:outbox-sweep`, { now: Date.now(), by: 'operator' });
+    await driver.wake();
+    return { sent: true };
+  },
+
   'automations.run': async (data) => {
-    const studioId = studioOf();
+    const studioId = await studioOf();
     const reflexId = String(data['reflexId'] ?? '');
     if (!mine(studioId, reflexId)) throw new Error('That automation is not yours.');
     if ((await momentOf(studioId, reflexId))?.watch !== undefined) {
@@ -98,7 +130,7 @@ export const automationFunctions = (session: FunctionSession, deps: Deps & { poo
   // `selectionFor` the reflex uses. A grant that is missing shows up here as a
   // sentence in the form rather than as silence in production.
   'automations.audience': async (data) => {
-    const studioId = studioOf();
+    const studioId = await studioOf();
     const moment = momentById(String(data['moment'] ?? ''));
     if (studioId === '' || moment === undefined) return { known: false, tone: 'neutral', summary: '', names: '' };
 
@@ -119,7 +151,7 @@ export const automationFunctions = (session: FunctionSession, deps: Deps & { poo
     const context = evaluate(query.context as never, { now: Date.now() } as never) as Record<string, unknown>;
 
     try {
-      const body = await askAsAutomation(deps.server(), studioId, query.fingerprint, context);
+      const body = await askAsAutomation(deps.server(), deps.pool, studioId, query.fingerprint, context);
       const rows = body !== null && typeof body === 'object' && 'result' in body ? (body as { result: unknown }).result : body;
       const people = Array.isArray(rows) ? (rows as Record<string, unknown>[]) : [];
       const named = people.map((r) => String(r['person_name'] ?? '')).filter((name) => name !== '');

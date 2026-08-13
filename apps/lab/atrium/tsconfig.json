@@ -10,6 +10,5 @@
     "baseUrl": ".",
     "paths": { "@atrium/*": ["src/*"] }
   },
-  "include": ["src", "vite.config.ts"],
-  "exclude": ["src/dev"]
+  "include": ["src", "vite.config.ts"]
 }

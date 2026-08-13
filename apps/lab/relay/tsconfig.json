@@ -10,6 +10,5 @@
     "baseUrl": ".",
     "paths": { "@relay/*": ["src/*"] }
   },
-  "include": ["src", "vite.config.ts"],
-  "exclude": ["src/dev"]
+  "include": ["src", "vite.config.ts"]
 }

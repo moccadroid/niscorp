@@ -10,10 +10,15 @@ import { ENTRIES, MUTATION_ENTRIES } from './vex';
 import { scopeBehaviors } from './vex/behaviors';
 import { RESOURCES } from './vex/resources';
 import { authFunctions } from '@lyra/server/functions/auth';
+import { mailFunctions } from '@lyra/server/functions/mail';
 import { worldFunctions } from '@lyra/server/functions/world';
 import { automationFunctions } from '@lyra/server/functions/automations';
 import { navFunctions } from '@lyra/server/functions/nav';
-import { loadDirectory } from '@lyra/server/users';
+import { identityFor } from '@lyra/server/identity';
+import { clockScope } from '@lyra/server/clock';
+import { installedFor, integrationActorFor, localeOf, personCard, studioOf } from '@lyra/server/lookup';
+import { themeFor } from '@lyra/server/themes';
+import { greetingFrom, phrasesFor } from '@lyra/server/phrases';
 
 export type ServerDeps = {
   pool: import('@niscorp/vex').PgPool;
@@ -28,35 +33,6 @@ export type ServerDeps = {
   // Re-read the automation rows into tide. Late-bound like everything else
   // here; the `automations` reaction is its only caller.
   reloadAutomations: () => Promise<number>;
-};
-
-export type Directory = {
-  person: (principal: string | null) => { id: string; name: string; studioId: string; studioName: string; audience: string; studioPersonId: string | null } | undefined;
-  everyone: () => { id: string; name: string; email: string; studioId: string; studioName: string; audience: string; studioPersonId: string | null }[];
-  themeFor: (studioId: string) => { name: string; tokens: Record<string, string> };
-  /** Integration ids installed for this principal's studio. */
-  installedFor: (principal: string | null) => readonly string[];
-  /** The principal an integration acts as at a studio — null refuses. */
-  integrationActor: (integration: string, studioId: string) => string | null;
-  /** Every role a person holds — staff, member, or both. */
-  rolesOf: (person: { audience: string; studioPersonId: string | null }) => readonly string[];
-  /** The studio's own day, as YYYY-MM-DD. The database computes the same value in `studio_today()`. */
-  todayFor: (studioId: string) => string;
-  /** How far ahead a read looks, on the same clock. */
-  horizonFor: (studioId: string) => string;
-  /** Where a studio trades, ISO-3166 alpha-2 — decides payment methods and which law applies. */
-  countryFor: (studioId: string) => string;
-  /** What language a studio reads in, BCP-47 — decides its words AND its number
-   *  and date formatting. The two travel together on purpose: `de-AT` picks
-   *  German wording and Austrian money, and splitting them is how a screen ends
-   *  up German with American dates. */
-  localeFor: (studioId: string) => string;
-  /** The words for a language, source phrase → translation. */
-  phrasesFor: (locale: string) => Readonly<Record<string, string>>;
-  /** Which languages this deployment holds words for — the switcher's options. */
-  localesFor: () => readonly string[];
-  /** "Guten Morgen, Maren" — the fixed half from the book, the name after it. */
-  greetingFor: (name: string, studioId: string) => string;
 };
 
 const ROLE_LABEL: Record<string, string> = { owner: 'Owner', manager: 'Manager', instructor: 'Instructor', desk: 'Front desk', member: 'Member', automation: 'Automation', integration: 'Integration' };
@@ -76,22 +52,34 @@ const integrationRung = (actorId: string): string | undefined => {
   return pack !== '' && CHARTER[pack] !== undefined ? pack : 'integration';
 };
 
-// Derived rather than authored: people arrive at the speed of sign-ups, not
-// releases. First thing that moves to rows when the artifact layer lands.
-const assignmentsFrom = (directory: Directory): Record<string, readonly string[]> => {
-  const assignments: Record<string, readonly string[]> = {};
-  for (const person of directory.everyone()) {
-    const rung = integrationRung(person.id);
-    assignments[person.id] = rung === undefined ? directory.rolesOf(person) : [rung];
-  }
-  return assignments;
-};
+// THE ROLE COMBINATIONS SOMEBODY CAN WEAR — the PAIRS, and only the pairs.
+//
+// The coherence gates want the set of combinations this application can
+// produce. They used to read it off `assignments`, which meant walking the
+// population to learn a fact with nothing to do with how many people there are:
+// at hundreds of studios, six hundred thousand entries collapsing to four.
+//
+// SINGLE roles are deliberately absent. `verifyVariants` already iterates every
+// role in the charter on its own, so listing them here would be noise that
+// drifts — a pack gaining a rung would have to be remembered in two places, and
+// the one that was forgotten would be this one.
+//
+// What no other document can derive is which roles COINCIDE on one person, and
+// that is a fact about two tables rather than about the grants: `rolesOf` in
+// server/users.ts adds `member` to a staff role when the studio also KNOWS them
+// (a `studio_people` anchor beside the `staff` row). An instructor who trains
+// is the case; a robot is not, which is why `automation` is not paired here.
+const DUAL = ['owner', 'manager', 'instructor', 'desk'] as const;
+const WEARABLE: readonly (readonly string[])[] = DUAL.map((role) => [role, 'member']);
 
-export const buildLyra = (directory: Directory, deps: ServerDeps): NiscApp => {
-  const assignments = assignmentsFrom(directory);
+export const buildLyra = (deps: ServerDeps): NiscApp => {
   const app: NiscApp = defineApp({
     charter: CHARTER,
-    assignments,
+    // NO ASSIGNMENT MAP. `identity` below answers per principal, one row at a
+    // time — which is the whole of what this plan was about. The map existed
+    // only because an eager `Record` cannot be filled without enumerating
+    // everybody, and enumerating everybody is what made a directory a database.
+    wearable: WEARABLE,
     actions: CATALOG_DEFINITIONS,
 
     entries: [...ENTRIES, ...MUTATION_ENTRIES],
@@ -100,20 +88,14 @@ export const buildLyra = (directory: Directory, deps: ServerDeps): NiscApp => {
 
     // A grant from `ext.*` is deployment-wide; an installation is not. Moss
     // drops every integration action outside this list.
-    installedIntegrations: (principal) => directory.installedFor(principal),
+    installedIntegrations: (principal) => installedFor(deps.pool, principal),
     // An actor exists exactly as long as the install does, so one appearing
     // mid-process registers its assignment at first use.
-    integrationActor: (integration, actsFor) => {
-      const actor = directory.integrationActor(integration, actsFor);
-      if (actor !== null && app.assignments[actor] === undefined) {
-        // The same derivation the snapshot uses, so an actor that appears
-        // mid-process lands on the rung its pack would have had at boot — a
-        // second spelling here is how `stripe` would quietly become
-        // `integration` for exactly the installs nobody restarted for.
-        (app.assignments as Record<string, readonly string[]>)[actor] = [integrationRung(actor) ?? 'integration'];
-      }
-      return actor;
-    },
+    // An actor exists exactly as long as its install does. Nothing is
+    // registered here any more: `identity` resolves the rung from the actor's
+    // own id on the first call, so a pack installed after boot needs no
+    // bookkeeping to be recognised.
+    integrationActor: (integration, actsFor) => integrationActorFor(deps.pool, integration, actsFor),
 
     attachable: { 'people.detail': { person_id: 'personId', person_name: 'member.person_name' } },
     // A pack may place a screen into these and nowhere else — intake refuses a
@@ -124,29 +106,33 @@ export const buildLyra = (directory: Directory, deps: ServerDeps): NiscApp => {
     // approval card and the store tile say "under Money" rather than
     // "under hub.money". Derived from the nav rather than typed twice.
     placementNames: { ...Object.fromEntries(AREAS.map((area) => [area.id, area.label])), 'people.detail': 'a member’s record' },
-    scope: (principal) => {
-      const studioId = directory.person(principal)?.studioId ?? '';
-      const person = directory.person(principal);
-      return {
-        studioId,
-        // Set only for people the studio KNOWS (the anchor row) — staff-only
-        // principals and integration actors get '', which is what a pack's
-        // "only somebody the studio knows can pay" check keys on.
-        personId: person?.studioPersonId !== null && person !== undefined ? person.id : '',
-        // Travels in the assertion, so an installed pack learns where a studio
-        // trades without asking it and without a country ever being sent by a
-        // browser. The payments pack held this as a constant until now.
-        country: directory.countryFor(studioId),
-        // Travels in the assertion for the same reason `country` does, and is
-        // read by every vex mapping that renders a date or an amount
-        // (`prisms/format.prism.ts`). Engine-side, so a browser cannot ask to
-        // be shown a different studio's money in its own language.
-        locale: directory.localeFor(studioId),
-        today: directory.todayFor(studioId),
-        horizon: directory.horizonFor(studioId),
-        automationActor: studioId === '' ? '' : `automation@${studioId}`,
-      };
-    },
+    // WHO SOMEBODY IS, resolved once per session and held by moss.
+    //
+    // Everything here is stable for as long as a session lasts: which studio,
+    // which anchor, where it trades, what it reads and prices in. Nothing here
+    // is derived from the clock — that is `scope` below, and the split is the
+    // point rather than an accident of tidiness.
+    // WHO SOMEBODY IS — ONE ROW, read on demand for whoever presented a token.
+    //
+    // Not a lookup into a resident map: `server/identity.ts` queries for this
+    // principal and nobody else. That is the whole of what Part 4 licenses, and
+    // it is available at all only because this seam is async — the six
+    // synchronous ones around it could not have been implemented any other way
+    // than by holding the population, which is how Lyra grew eight caches
+    // nobody decided on.
+    identity: (principal) => identityFor(deps.pool, principal, integrationRung),
+    // WHAT THE CLOCK SAYS, and nothing else — asked per request, deliberately.
+    //
+    // These two sat in `scope` beside the rest until identity became a
+    // per-session record, and folding them in would have frozen them: a session
+    // opened at 23:58 would go on telling every read it was yesterday, including
+    // the ones the database compares a DATE column against. A studio's day is
+    // not part of who anybody is.
+    //
+    // Synchronous is right here for the reason it was wrong everywhere else —
+    // this is COMPUTED, not read. The zone comes off the record the session
+    // already resolved, so there is no lookup behind it and no cache under it.
+    scope: (_principal, identity) => clockScope(String(identity?.scope['timezone'] ?? '')),
 
     // THE WORDS EACH SHELL WEARS. moss applies these in one pass over the
     // rendered frame, so nothing below this line — no action, no layout, no
@@ -156,9 +142,12 @@ export const buildLyra = (directory: Directory, deps: ServerDeps): NiscApp => {
     // is a real gap and a deliberate one: who is reading is not known until
     // they sign in, and guessing from an Accept-Language header would mean the
     // one screen in the app whose language is a guess. See the design doc.
-    phrases: (principal) => {
-      const person = directory.person(principal);
-      return person === undefined ? undefined : directory.phrasesFor(directory.localeFor(person.studioId));
+    phrases: async (principal) => {
+      // One book, for the language this principal's studio reads in. Read when
+      // the shell is built, which is the only moment it can matter.
+      const studioId = await studioOf(deps.pool, principal);
+      if (studioId === '') return undefined;
+      return phrasesFor(deps.pool, await localeOf(deps.pool, studioId));
     },
     // THIS APP'S DISPLAY-FIELD CONVENTION, declared once.
     //
@@ -205,11 +194,22 @@ export const buildLyra = (directory: Directory, deps: ServerDeps): NiscApp => {
         run: ({ scope }, { deliver }) => {
           const studioId = String(scope['studioId'] ?? '');
           if (studioId === '') return;
-          for (const person of directory.everyone()) {
-            if (person.studioId !== studioId) continue;
-            if (person.audience !== 'owner' && person.audience !== 'manager' && person.audience !== 'desk') continue;
-            deliver(person.id, 'notified');
-          }
+          // THE ROSTER, NOT THE POPULATION. `deliver` only ever reaches somebody
+          // holding a live shell, so the set worth walking is the one moss
+          // already owns — bounded by who is connected, not by how many people
+          // the deployment knows. Each live principal costs one point lookup.
+          // Asynchronously, because naming who is connected is a read now
+          // rather than a map hit — and a push is news, not a transaction. The
+          // insert is the durable fact; whoever is not reached simply reads the
+          // rows later, which was always true.
+          void (async () => {
+            for (const live of deps.server().shells?.list() ?? []) {
+              const person = await personCard(deps.pool, live.principal);
+              if (person === undefined || person.studioId !== studioId) continue;
+              if (person.audience !== 'owner' && person.audience !== 'manager' && person.audience !== 'desk') continue;
+              deliver(person.id, 'notified');
+            }
+          })().catch((err: unknown) => console.error('[lyra:notify]', err));
         },
       },
       // An add-on landing or leaving changes what the directory derives —
@@ -219,10 +219,11 @@ export const buildLyra = (directory: Directory, deps: ServerDeps): NiscApp => {
       {
         table: 'studio_integrations',
         run: () => {
-          void (async () => {
-            await loadDirectory(deps.pool);
-            deps.server().refresh();
-          })();
+          // Nothing to reload: installs are read when they are asked about.
+          // `refresh` is still right — it drops every derivation made under the
+          // old install set and moves the generation pointer, so the other
+          // processes forget too.
+          deps.server().refresh();
         },
       },
       // An automation row changing means the loaded reflexes are stale —
@@ -259,14 +260,17 @@ export const buildLyra = (directory: Directory, deps: ServerDeps): NiscApp => {
       // Chain headers are believed from the automation rungs and nobody
       // else: a forged depth could park an innocent chain, and the robots
       // are the only principals whose writes ARE chain hops.
-      chain: (scope, hints) => (directory.person(String(scope['userId'] ?? ''))?.audience === 'automation' ? hints : undefined),
+      // The write's OWN scope says who its automation would be; a write made
+      // BY that principal is the one whose chain headers are worth trusting. No
+      // lookup: both halves are already on the scope the engine stamped.
+      chain: (scope, hints) => (String(scope['userId'] ?? '') === String(scope['automationActor'] ?? ' ') ? hints : undefined),
     },
 
     // `world.refresh` re-derives assignments with the SAME `assignmentsFrom`
     // boot uses — injected, so a refresh cannot disagree with a restart. (Its
     // predecessor rebuilt from `[audience]` alone, and an instructor who also
     // trains lost their member role until the next boot.)
-    functions: (session) => ({ ...authFunctions(session), ...worldFunctions(session, { pool: deps.pool, app, server: deps.server, assignments: () => assignmentsFrom(directory), studioOf: (principal) => directory.person(principal)?.studioId ?? '' }), ...automationFunctions(session, { tide: deps.tide, driver: deps.driver, pool: deps.pool, server: deps.server }), ...navFunctions(session, { app, directory, pool: deps.pool }) }),
+    functions: (session) => ({ ...authFunctions(session, { pool: deps.pool, now: () => Date.now(), base: () => process.env['LYRA_BASE'] ?? 'http://localhost:5180' }), ...worldFunctions(session, { pool: deps.pool, app, server: deps.server, studioOf: (principal) => studioOf(deps.pool, principal) }), ...automationFunctions(session, { tide: deps.tide, driver: deps.driver, pool: deps.pool, server: deps.server }), ...navFunctions(session, { app, pool: deps.pool }), ...mailFunctions({ pool: deps.pool, studioOf: (principal) => studioOf(deps.pool, principal) }, session.principal) }),
 
     shell: {
       // Every canvas needs an explicit `actionLayout` with an `ActionSlot`: the
@@ -317,12 +321,17 @@ export const buildLyra = (directory: Directory, deps: ServerDeps): NiscApp => {
 
       // Per-principal boot input, resolved once on the server. Everything
       // downstream reads these from action data; a terminal cannot author them.
-      inputs: ({ principal, actions: granted }): Record<string, Record<string, unknown>> => {
-        const person = directory.person(principal);
+      inputs: async ({ principal, actions: granted, identity }): Promise<Record<string, Record<string, unknown>>> => {
+        // FROM THE RECORD THE SESSION ALREADY RESOLVED. This used to reach into
+        // a resident directory for four facts about one person — which is the
+        // seam that made the directory exist.
+        const str = (key: string): string => String(identity[key] ?? '');
+        const studioId = str('studioId');
+        const known = principal !== null && studioId !== '';
 
         const homeId = ['home.overview', 'home.desk', 'home.classes', 'home.member'].find((id) => granted.includes(id)) ?? '';
 
-        const trains = person !== undefined && person.studioPersonId !== null;
+        const trains = identity['trains'] === true;
         const MEMBER_ONLY = new Set(['hub.me']);
 
         const offered = areasFor(granted).filter((area) => trains || !MEMBER_ONLY.has(area.id));
@@ -331,32 +340,58 @@ export const buildLyra = (directory: Directory, deps: ServerDeps): NiscApp => {
         const home = { action: homeId, areaId: homeId, label: 'Today', icon: 'home' };
         const primaryAreas = [home, ...areas].slice(0, 4);
 
-        if (person === undefined) {
+        if (!known) {
+          // THE PICKER IS A TRANSPORT, NOT A SURFACE.
+          //
+          // Signing in is one path — resolve the address, mint a short-lived
+          // nonce, hand it over — and the only thing that differs between a
+          // deployment and this lab is HOW the nonce reaches the browser: by
+          // mail, or by being clickable right here. That fork belongs to the
+          // environment, which is where moss already argues this class of knob
+          // lives (`runtime.ts`: an operational decision about a deployment,
+          // not something an application is written against).
+          //
+          // Unset means OFF, because the cost of getting this wrong is the
+          // entire roster — every name and every email — served to anybody who
+          // can reach the login screen. `dev/world.ts` and `server/serve.ts`
+          // turn it on; nothing else does. See docs/plans/lyra-identity.md 12.1.
+          if (process.env['LYRA_DEV_LOGIN'] !== 'on') return { main: { people: [] } };
           return {
             main: {
               // Automations and integration actors never log in, so they are not
               // on the one screen whose whole job is logging in.
-              people: directory
-                .everyone()
-                .filter((p) => p.audience !== 'automation' && p.audience !== 'integration')
-                .map((p) => ({ id: p.id, name: p.name, email: p.email, studio: p.studioName, role: ROLE_LABEL[p.audience] ?? 'Member' })),
+              // The one query in this application that reads a population, in
+              // the one place whose job is offering a choice of who to be, and
+              // only when the environment says this is a lab.
+              people: (
+                await deps.pool.query(/* sql */ `
+                  SELECT p.id, p.name, p.email, st.name AS studio, COALESCE(sf.role, 'member') AS role
+                  FROM people p
+                  LEFT JOIN staff sf ON sf.person_id = p.id AND sf.active
+                  LEFT JOIN studio_people sp ON sp.person_id = p.id
+                  JOIN studios st ON st.id = COALESCE(sf.studio_id, sp.studio_id)
+                  WHERE COALESCE(sf.role, '') NOT IN ('automation')
+                  ORDER BY p.name
+                `)
+              ).rows.map((r) => ({ id: String(r['id']), name: String(r['name']), email: String(r['email']), studio: String(r['studio']), role: ROLE_LABEL[String(r['role'])] ?? 'Member' })),
             },
           };
         }
 
-        const theme = directory.themeFor(person.studioId);
+        const theme = await themeFor(deps.pool, studioId);
+        const book = await phrasesFor(deps.pool, str('locale'));
 
         // The opening paint's greeting. `nav.identity` recomputes it on mount
         // with the SAME composer (server/phrases.ts) — two spellings of one
         // sentence is how a screen greets somebody in German on load and in
         // English a tick later.
-        const greeting = directory.greetingFor(person.name, person.studioId);
+        const greeting = greetingFrom(book, str('name'), new Date());
 
         return {
           chrome: {
-            studioName: person.studioName,
-            personName: person.name,
-            roleLabel: ROLE_LABEL[person.audience] ?? 'Member',
+            studioName: str('studioName'),
+            personName: str('name'),
+            roleLabel: ROLE_LABEL[str('audience')] ?? 'Member',
             homeId,
             home,
             areas,
@@ -370,7 +405,7 @@ export const buildLyra = (directory: Directory, deps: ServerDeps): NiscApp => {
           },
           // `studioId` is seeded, not sent: the settings write names the row it
           // touches, and a browser has no way to author which row that is.
-          main: { studioId: person.studioId, studioName: person.studioName, personName: person.name, greeting },
+          main: { studioId, studioName: str('studioName'), personName: str('name'), greeting },
         };
       },
     },

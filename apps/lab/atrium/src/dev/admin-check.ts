@@ -9,6 +9,7 @@
 // shell.
 //
 // Run: pnpm --filter atrium exec tsx src/dev/admin-check.ts
+import { OPERATOR_KEY } from './operator-key'; // FIRST — before the world boots; see that file
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { Shell } from '@niscorp/nova';
@@ -18,11 +19,14 @@ import { buildAdminServer } from '@atrium/admin/service';
 import { createSeam } from '@atrium/admin/seam';
 import { ADMIN_PRINCIPAL } from '@atrium/admin/token';
 
-// The key both sides hold. Read lazily by the seam middleware, so setting it
-// here — after the app booted — is enough, which is itself worth knowing: the
-// seam can be opened and closed on a running process.
-const KEY = 'check-operator-key';
-process.env['OPERATOR_KEY'] = KEY;
+// The key both sides hold, set in `./operator-key` BEFORE the world is imported.
+//
+// It used to be set here, under a comment claiming the seam reads it lazily so
+// after-boot was soon enough. That is true of this app's own middleware and
+// false of moss's, which captures the key onto the runtime at construction —
+// and moss's is the one registered first. Every operator path answered 404 to
+// the right key, and the comment explained why that could not be happening.
+const KEY = OPERATOR_KEY;
 
 type Row = Record<string, unknown>;
 const rowsOf = (data: Record<string, unknown>, key: string): Row[] => (Array.isArray(data[key]) ? (data[key] as Row[]) : []);
@@ -85,17 +89,17 @@ const main = async (): Promise<void> => {
   const admin = (await buildAdminServer(seam)).server;
 
   // ── who gets an application ────────────────────────────────
-  const stranger = admin.shells?.session(null, null);
+  const stranger = await admin.shells?.session(null, null);
   check('an anonymous caller gets an admin shell with nothing on it', (stranger?.shell.getState().canvases['admin']?.stack ?? []).length === 0);
 
   // A principal from the app's own cast is not a principal here. The two
   // identity spaces do not overlap: Rosa's token is a valid token and an
   // unknown person.
   const rosaToken = mintDevToken('stf_rosa');
-  const rosaHere = admin.shells?.session(rosaToken, 'stf_rosa');
+  const rosaHere = await admin.shells?.session(rosaToken, 'stf_rosa');
   check("a hotel's own front-desk principal is nobody in this tool", (rosaHere?.shell.getState().canvases['admin']?.stack ?? []).length === 0);
 
-  const operator = admin.shells?.session(mintDevToken(ADMIN_PRINCIPAL), ADMIN_PRINCIPAL);
+  const operator = await admin.shells?.session(mintDevToken(ADMIN_PRINCIPAL), ADMIN_PRINCIPAL);
   if (operator === undefined) throw new Error('admin-check: the admin app serves no shell');
   const dock = operator.shell;
   await settle();
@@ -203,8 +207,8 @@ const main = async (): Promise<void> => {
 
   // A guest already holding the surface, with their shell open — and a clerk
   // beside him, so the feed later has two principals to tell apart.
-  const theo = login('theo');
-  login('rosa');
+  const theo = await login('theo');
+  await login('rosa');
   await settle(8);
   check('Theo, arriving today, is offered online check-in', slotIds(topData(theo, 'main')).includes('stay.checkin'));
 
@@ -400,7 +404,7 @@ const main = async (): Promise<void> => {
   // the shell is server state keyed by principal, so nothing they can do
   // reaches it — reloading reattaches to it, and so does signing out and back
   // in. This is the move from outside their session.
-  const rosaSession = sessionFor('rosa');
+  const rosaSession = await sessionFor('rosa');
   await settle(8);
   // Put her somewhere that is not her boot screen, so "back to login" is a
   // visible fact rather than a claim.

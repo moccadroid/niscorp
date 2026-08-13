@@ -144,7 +144,7 @@ ok('...and the roll derives her as a member', JSON.stringify(roll).includes('Han
 // already run: the connected owner's chrome hears it and the unread strip
 // appears with no navigation and no reload. The row is the durable fact —
 // this is only the news of it arriving while somebody is looking.
-const watching = login(CAST.lumen.owner);
+const watching = await login(CAST.lumen.owner);
 await settle(10);
 ok('the owner starts with nothing unread', !treeOf(watching).includes('unread notice'), 'a quiet studio has a quiet chrome');
 

@@ -41,7 +41,8 @@ export type Filter =
   | { or: Filter[] }
   | { not: Filter }
   | { semantic: { field: string; query: ContextRef | ScopeRef; minScore?: number } }
-  | { fuzzy: { field: string; query: ContextRef | ScopeRef; maxDistance?: number } };
+  | { fuzzy: { field: string; query: ContextRef | ScopeRef; maxDistance?: number } }
+  | { optional: { key: string | string[]; then: Filter } };
 
 const comparisonPair = z
   .tuple([FieldOrValueSchema, FieldOrValueSchema])
@@ -98,5 +99,20 @@ export const FilterSchema: z.ZodType<Filter> = z.lazy(() =>
         maxDistance: z.number().int().nonnegative().optional().describe('Maximum Levenshtein edit distance'),
       }).strict(),
     }).strict().describe('Fuzzy string match'),
+    z.object({
+      optional: z.object({
+        key: z.union([z.string().min(1), z.array(z.string().min(1)).min(1)])
+          .describe('The context key this condition depends on, or EVERY key it depends on. A condition referencing two keys must name both — gating on one leaves the other conditionally required, which surfaces as an empty result rather than as a condition that did not apply.'),
+        // BARE, never `.describe()`d. That call CLONES the schema, and zod
+        // detects a recursive reference by instance identity — a clone is a
+        // different instance, so `to-json-schema` stops seeing the cycle and
+        // expands the filter union into itself until the stack goes. Every
+        // other recursive slot here (`not`, `and`, `or`) uses it bare for the
+        // same reason; the description belongs on the wrapper below.
+        then: FilterSchema,
+      }).strict(),
+    }).strict().describe(
+      'A condition the caller turns on by supplying context keys. When any named key is absent the condition is REMOVED from the query before it compiles — it does not match everything, it is not there. Absent means missing, undefined or null; "" is a value and keeps the condition. Direction follows position: under `and` supplying the key NARROWS, under `or` it WIDENS. Either way an absent key reads exactly as if the condition had never been written, and scope is injected afterwards regardless. Reads only: a mutation may not contain one, and neither may the inside of an `exists` (its correlation must be unconditional).',
+    ),
   ]),
 );

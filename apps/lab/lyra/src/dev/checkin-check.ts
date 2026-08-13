@@ -2,7 +2,7 @@
 import { CAST } from '@lyra/db/seed';
 import { asPrincipal, login, ok, report, runtime, settle, treeOf } from './world';
 
-const shell = login(CAST.lumen.desk);
+const shell = await login(CAST.lumen.desk);
 await settle();
 
 const one = async <T>(sql: string, params: unknown[] = []): Promise<T | undefined> => {

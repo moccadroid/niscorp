@@ -1,7 +1,7 @@
 {
   "name": "@niscorp/vex",
   "version": "0.1.0",
-  "description": "Declarative query synthesis \u2014 intent to SQL with caching and scope policies",
+  "description": "Declarative query synthesis — intent to SQL with caching and scope policies",
   "license": "MIT",
   "type": "module",
   "sideEffects": false,
@@ -38,7 +38,7 @@
     "dev": "tsup --watch",
     "test": "vitest run",
     "test:watch": "vitest",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit -p tsconfig.test.json",
     "seed": "tsup && tsx scripts/seed.ts",
     "dev:server": "docker compose up -d --wait && tsup && tsx watch --env-file=.env scripts/dev.ts",
     "test:queries": "tsx scripts/test-queries.ts",

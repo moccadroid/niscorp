@@ -14,6 +14,7 @@ import { checkScope, scopeResolved } from '../scope/apply.js';
 import { resolve } from './resolver.js';
 import { analyze } from './analyzer.js';
 import { executeQuery, buildContextContract, findMissingContext } from './executor.js';
+import { pruneOptional, presenceOf, presenceSignature, optionalKeysOf } from './optional.js';
 import { createMemoryCache } from '../cache/memory.js';
 import { computeSchemaFingerprint, computeRequestHash, mintFingerprint } from '../cache/hash.js';
 import { isEntryFresh, fireAndForget } from '../cache/util.js';
@@ -30,7 +31,16 @@ export const applySortContext = (dsl: Query, context: Record<string, unknown>): 
   const sortBy = context['sortBy'];
   if (typeof sortBy !== 'string' || sortBy === '') return dsl;
   const dir: 'asc' | 'desc' = context['sortDir'] === 'desc' ? 'desc' : 'asc';
-  return { ...dsl, sort: [{ field: sortBy, dir }] };
+  // The caller's column LEADS; the entry's own keys stay behind it as
+  // tiebreakers. This used to replace the sort outright, which quietly broke
+  // any entry whose last sort key was there to make the order TOTAL — a keyset
+  // page ordered by (name, id) became ordered by name alone, and two people
+  // sharing a name could straddle a page boundary and never be reached.
+  // A trailing key is not decoration; it is what makes "the next fifty" mean
+  // anything. The caller's own column is dropped from the tail so it cannot
+  // appear twice with two directions.
+  const tiebreakers = (dsl.sort ?? []).filter((entry) => entry.field !== sortBy);
+  return { ...dsl, sort: [{ field: sortBy, dir }, ...tiebreakers] };
 };
 
 // ═══════════════════════════════════════════════════════════════
@@ -50,6 +60,7 @@ const DEFAULT_MAX_NESTING_DEPTH = 2;
 const DEFAULT_LIMIT = 100;
 const DEFAULT_MAX_LIMIT = 1000;
 const DEFAULT_UNSATISFIABLE_TTL_MS = 300_000;
+const DEFAULT_MAX_PRESENCE_VARIANTS = 32;
 
 // ═══════════════════════════════════════════════════════════════
 // Runtime factory
@@ -76,6 +87,38 @@ export const createQueryEngine = (engineConfig: QueryEngineConfig): QueryEngine 
   let cachedSchema: DatabaseSchema | undefined;
   let cachedFingerprint: string | undefined;
   const cache: CacheBackend = engineConfig.cache ?? createMemoryCache();
+
+  // ── how many SHAPES one entry is being asked for ──
+  //
+  // Optional conditions trade one artifact for up to 2^n compiled forms. That
+  // is the deal and it is a good one — but it is worth SAYING when an entry
+  // starts behaving like a query builder, because at that point a caller is
+  // composing rather than choosing, and the closed grammar is doing less work
+  // than it looks like it is.
+  //
+  // A warning rather than a refusal: every variant is still a query the author
+  // wrote, scope still applies, and failing a legitimate read to make a point
+  // about authoring would be the wrong trade. There is no per-call cost here
+  // either — vex compiles per request already, so a new shape is not a cache
+  // miss, it is just a different string.
+  const variantsSeen = new Map<string, Set<string>>();
+  const maxPresenceVariants = engineConfig.config?.maxPresenceVariants ?? DEFAULT_MAX_PRESENCE_VARIANTS;
+
+  const noteVariant = (fingerprint: string | undefined, signature: string, warnings: string[]): void => {
+    if (fingerprint === undefined || signature === '') return;
+    let seen = variantsSeen.get(fingerprint);
+    if (seen === undefined) {
+      seen = new Set<string>();
+      variantsSeen.set(fingerprint, seen);
+    }
+    if (seen.has(signature)) return;
+    seen.add(signature);
+    if (seen.size > maxPresenceVariants) {
+      warnings.push(
+        `"${fingerprint}" has now compiled ${seen.size} distinct optional-key combinations (limit ${maxPresenceVariants}). An entry answering this many shapes is closer to a query builder than to a question — consider splitting it.`,
+      );
+    }
+  };
 
   // Single-flight: collapse concurrent identical misses (same request
   // identity) so a burst of N requests triggers one agent generation,
@@ -155,15 +198,19 @@ export const createQueryEngine = (engineConfig: QueryEngineConfig): QueryEngine 
 
   // ─── Compile ───────────────────────────────────────────────
 
+  // No caller, so no presence to resolve against: `all` compiles the WIDEST
+  // form of the query, every optional condition included. That is the right
+  // default for both of these — a compile is asking "does this query build",
+  // and a test is asking "does the hardest version of it run".
   const compile = (dsl: Query, scopeValues?: ScopeValues): CompiledQuery =>
-    runPipeline(dsl, scopeValues).compiled;
+    runPipeline(pruneOptional(dsl, 'all'), scopeValues).compiled;
 
   // ─── Test ──────────────────────────────────────────────────
 
   const test = async (dsl: Query, scopeValues?: ScopeValues): Promise<TestResult> => {
     try {
       // Override limit to 5 for test queries
-      const testDsl: Query = { ...dsl, limit: 5 };
+      const testDsl: Query = { ...pruneOptional(dsl, 'all'), limit: 5 };
       const { compiled, warnings } = runPipeline(testDsl, scopeValues);
 
       // Build synthetic context for testing
@@ -433,9 +480,16 @@ export const createQueryEngine = (engineConfig: QueryEngineConfig): QueryEngine 
       emit({ type: 'query.dsl', dsl, agentMs });
     }
 
-    // Run the pipeline. `sortBy`/`sortDir` from context override the literal
-    // `sort` for this run (the cached `dsl` keeps its default — see cache.set below).
-    const { compiled, warnings } = runPipeline(applySortContext(dsl, validRequest.context), scopeValues, options?.scopePolicy);
+    // Run the pipeline. Two caller-driven rewrites happen here and NOWHERE
+    // else, both against the stored `dsl` rather than replacing it:
+    //   · `sortBy`/`sortDir` override the literal `sort` for this run
+    //   · optional conditions the caller did not key are pruned OUT entirely
+    // The cached entry keeps its full form — every run re-derives its own
+    // shape, so one stored artifact answers every combination of keys.
+    const presence = presenceOf(validRequest.context);
+    const shaped = pruneOptional(applySortContext(dsl, validRequest.context), presence);
+    const { compiled, warnings } = runPipeline(shaped, scopeValues, options?.scopePolicy);
+    noteVariant(cached.fingerprint, presenceSignature(dsl, presence), warnings);
     emit({ type: 'query.sql', sql: compiled.sql, warnings });
 
     // Check for missing context
@@ -453,7 +507,7 @@ export const createQueryEngine = (engineConfig: QueryEngineConfig): QueryEngine 
             intent: cached.intent ?? validRequest.intent,
             ...(cached.replaced ? { replaced: true } : {}),
           },
-          context: buildContextContract(compiled),
+          context: buildContextContract(compiled, optionalKeysOf(dsl)),
           warnings: warnings.length > 0 ? warnings : undefined,
           missingContext: missingKeys,
         },
@@ -496,7 +550,7 @@ export const createQueryEngine = (engineConfig: QueryEngineConfig): QueryEngine 
           intent: cached.intent ?? validRequest.intent,
           ...(cached.replaced ? { replaced: true } : {}),
         },
-        context: buildContextContract(compiled),
+        context: buildContextContract(compiled, optionalKeysOf(dsl)),
         timing: {
           ...(agentMs !== undefined ? { agentMs } : {}),
           executionMs,

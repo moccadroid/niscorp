@@ -6,6 +6,7 @@ export { createQueryEngine } from './engine/runtime.js';
 export { resolve } from './engine/resolver.js';
 export { analyze } from './engine/analyzer.js';
 export { executeQuery, buildContextContract, findMissingContext } from './engine/executor.js';
+export { pruneOptional, presenceOf, optionalKeysOf } from './engine/optional.js';
 
 // ─── Adapters ────────────────────────────────────────────────
 export { createPostgresAdapter } from './adapters/postgres/index.js';

@@ -1,4 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
+import { at, lastOf } from './helpers/at';
 import { z } from 'zod';
 import { createStream } from '../src/create-stream';
 import { simulateStream, simulateAsyncStream, generatePayload } from './helpers/simulate-stream';
@@ -100,7 +101,7 @@ describe('e2e — progressive observation', () => {
 
     // Widget should have been populated early in the stream
     expect(widgetSnapshots.length).toBeGreaterThanOrEqual(2);
-    expect(widgetSnapshots[widgetSnapshots.length - 1].type).toBe('card');
+    expect(lastOf(widgetSnapshots).type).toBe('card');
 
     // When widget.title finalized, response was still incomplete
     // (widget comes before response in the JSON, char-by-char ensures
@@ -215,7 +216,7 @@ describe('e2e — async streaming', () => {
     // Write first half
     const half = Math.floor(chunks.length / 2);
     for (let i = 0; i < half; i++) {
-      stream.write(chunks[i]);
+      stream.write(at(chunks, i));
     }
 
     // Subscribe mid-stream
@@ -224,11 +225,11 @@ describe('e2e — async streaming', () => {
 
     // First emission should have partial data from first half
     expect(states.length).toBe(1);
-    expect(states[0].widget.type).toBe('card'); // widget comes early
+    expect(at(states, 0).widget.type).toBe('card'); // widget comes early
 
     // Write second half
     for (let i = half; i < chunks.length; i++) {
-      stream.write(chunks[i]);
+      stream.write(at(chunks, i));
     }
 
     // Should have received updates
@@ -254,7 +255,7 @@ describe('e2e — destroy mid-stream', () => {
     // Write first quarter
     const quarter = Math.floor(chunks.length / 4);
     for (let i = 0; i < quarter; i++) {
-      stream.write(chunks[i]);
+      stream.write(at(chunks, i));
     }
 
     const stateAtDestroy = structuredClone(stream.current());
@@ -264,7 +265,7 @@ describe('e2e — destroy mid-stream', () => {
 
     // Write rest — should be ignored
     for (let i = quarter; i < chunks.length; i++) {
-      stream.write(chunks[i]);
+      stream.write(at(chunks, i));
     }
 
     expect(stream.current()).toEqual(stateAtDestroy);

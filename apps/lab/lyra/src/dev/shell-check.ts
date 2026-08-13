@@ -3,29 +3,27 @@ import { resolveCatalog } from '@niscorp/moss';
 import { componentsOf } from '@niscorp/nova/reflect';
 import { CAST } from '@lyra/db/seed';
 import { AREAS } from '@lyra/app/nav/sections';
-import { personByEmail } from '@lyra/server/users';
-import { anonymous, app, login, ok, report, server, settle, treeOf } from './world';
+import { anonymous, app, idFor, idsFor, login, ok, report, server, settle, treeOf } from './world';
 
 // ── the boot itself ──
 ok('the manifest boots', server !== undefined);
 ok('the app serves shells', server.shells !== undefined);
 
 // ── ring 1: existence, per principal ──
-const idsFor = (email: string | null): readonly string[] => resolveCatalog(app, email === null ? null : (personByEmail(email)?.id ?? null)).ids;
 
-const anonIds = idsFor(null);
+const anonIds = await idsFor(null);
 ok('anonymous holds exactly one action', anonIds.length === 1, anonIds.join(', '));
 ok('...and it is the way in', anonIds.includes('auth.login'));
 
-const ownerIds = idsFor(CAST.lumen.owner);
-const memberIds = idsFor(CAST.lumen.member);
+const ownerIds = await idsFor(CAST.lumen.owner);
+const memberIds = await idsFor(CAST.lumen.member);
 ok('an owner holds more than a member does', ownerIds.length > memberIds.length, `${ownerIds.length} vs ${memberIds.length}`);
 ok('a member does NOT hold the staff chrome', !memberIds.includes('chrome.staff'));
 ok('an owner does hold it', ownerIds.includes('chrome.staff'));
 ok('nobody signed in holds the login page', !ownerIds.includes('auth.login') && !memberIds.includes('auth.login'));
 
 // ── the anonymous principal ──
-const anon = anonymous();
+const anon = await anonymous();
 await settle();
 const anonTree = treeOf(anon);
 ok('anonymous is served the login page', anonTree.includes('Sign in'));
@@ -33,7 +31,7 @@ ok('...with the cast to pick from', anonTree.includes('Maren Holt'));
 ok('...and no chrome at all — they hold neither bar', !anonTree.includes('Sign out'));
 
 // ── a studio owner ──
-const maren = login(CAST.lumen.owner);
+const maren = await login(CAST.lumen.owner);
 await settle();
 const marenTree = treeOf(maren);
 ok('the owner gets the staff chrome', marenTree.includes('Lumen Yoga'));
@@ -42,14 +40,14 @@ ok('...and lands on Today, greeted by name', marenTree.includes('Maren'));
 ok('...with no login page anywhere in their shell', !marenTree.includes('Email me a link'));
 
 // ── a member ──
-const ava = login(CAST.lumen.member);
+const ava = await login(CAST.lumen.member);
 await settle();
 const avaTree = treeOf(ava);
 ok('a member gets their own chrome', avaTree.includes('Lumen Yoga') && avaTree.includes('Ava'));
 ok('...and is not labelled a role they do not hold', !avaTree.includes('Owner'));
 
 // ── the tenant boundary, as the shell sees it ──
-const dario = login(CAST.northrock.owner);
+const dario = await login(CAST.northrock.owner);
 await settle();
 const darioTree = treeOf(dario);
 ok('the other studio sees its own name', darioTree.includes('North Rock'));
@@ -95,7 +93,7 @@ for (const definition of Object.values(app.actions)) {
 ok('...and every push composes the sheet fragment', naked.length === 0, naked.length === 0 ? 'the escape is supplied once, not remembered five times' : `bare: ${naked.join(', ')}`);
 
 // ── the menu does not grow with the feature list ─────────────
-const owner = login(CAST.lumen.owner);
+const owner = await login(CAST.lumen.owner);
 await settle(10);
 const menu = [...treeOf(owner).matchAll(/"name":"DrawerLink","props":{"label":"([^"]+)"/g)].map((m) => m[1]);
 ok('the menu is areas, not features', menu.length <= 8, menu.join(' · '));
@@ -120,7 +118,11 @@ const refsIn = (node: unknown, found: Set<string>): Set<string> => {
 };
 
 const fragmentRefs = new Set<string>();
-for (const fragment of Object.values(app.manifest?.shell?.fragments ?? {})) {
+// `app.manifest` has never existed on NiscApp — the fragments live at
+// `app.shell.fragments`. So this loop read `undefined ?? {}` and iterated
+// NOTHING: every assertion below about fragment refs has been passing on an
+// empty set. Vacuous, and invisible while src/dev went untypechecked.
+for (const fragment of Object.values(app.shell?.fragments ?? {})) {
   for (const trigger of (fragment as { triggers?: { ref?: string }[] }).triggers ?? []) {
     if (typeof trigger.ref === 'string') fragmentRefs.add(trigger.ref);
   }

@@ -27,11 +27,11 @@ if ((process.env['GROQ_API_KEY'] ?? '') === '') {
   process.exit(0);
 }
 
-const login = (username: string): Shell => {
+const login = async (username: string): Promise<Shell> => {
   const token = mintToken(username);
   const user = userByUsername(username);
   if (token === null || user === undefined) throw new Error(`unknown "${username}"`);
-  const session = server.shells?.session(token, user.id);
+  const session = await server.shells?.session(token, user.id);
   if (session === undefined) throw new Error('no shell host');
   return session.shell;
 };
@@ -97,7 +97,7 @@ const check = (label: string, pass: boolean): void => {
 
 const main = async (): Promise<void> => {
   // ═══ the dock, as a guest ═══
-  const amara = login('amara');
+  const amara = await login('amara');
   await settle(1000);
   tap(amara, 'assistant', 'open');
 
@@ -120,7 +120,7 @@ const main = async (): Promise<void> => {
 
   // ═══ the watcher, as the desk ═══
   await runtime.pool.query(`UPDATE staff SET layout_control = 'full' WHERE id = 'stf_rosa'`, []);
-  const rosa = login('rosa');
+  const rosa = await login('rosa');
   await settle(2500);
 
   const menu = instanceOf(rosa, 'staff.menu');

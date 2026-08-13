@@ -3,6 +3,11 @@
 // shell mounts and the list/stat reads land in the todos action's data,
 // matching the seed's buckets. Run: pnpm --filter fable check:boot
 import { ENTRIES } from '../api';
+// A check runs under node, not in a browser — imported rather than assumed.
+// `types` is ["vite/client"] here, so node's globals are ambient only when
+// something drags them in; the other apps get them by accident, from an
+// unrelated `node:` import elsewhere in the file.
+import process from 'node:process';
 import { getVexRuntime, CURRENT_DATE } from '../vex/runtime';
 import { SEED_COUNTS } from '../vex/seed';
 import { shell } from '../nova/shell';

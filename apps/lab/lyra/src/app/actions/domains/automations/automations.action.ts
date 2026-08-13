@@ -17,6 +17,7 @@ export const automationsAction: ActionDefinition = {
     reflexes: [],
     recipes: [],
     outbox: [],
+    messageId: '',
     loading: true,
     // Recipes first for a studio with nothing set up; the manifest flips it to
     // Running for one that already has some.
@@ -47,6 +48,8 @@ export const automationsAction: ActionDefinition = {
     load: { url: '/api/studio/vex', method: 'POST', request: listPrism, target: 'reflexes', errorTarget: 'error' },
     recipes: { url: '/api/studio/vex', method: 'POST', request: recipesPrism, target: 'recipes', errorTarget: 'error' },
     outbox: { url: '/api/automation/vex', method: 'POST', request: outboxPrism, target: 'outbox' },
+    // The studio asking its own robot to try again — see automations.sendAgain.
+    sendAgain: { fn: 'automations.sendAgain', errorTarget: 'error' },
     preview: { fn: 'automations.preview', target: 'previewResult', errorTarget: 'error' },
     run: { fn: 'automations.run', errorTarget: 'error' },
     // A vex write like any other; the reflex reload rides the app's
@@ -66,6 +69,15 @@ export const automationsAction: ActionDefinition = {
     ],
   },
   triggers: [
+    {
+      event: 'ui:click',
+      ref: 'sendAgain',
+      do: [
+        { set: 'error', value: '' },
+        { set: 'messageId', value: '@event.payload.message_id' },
+        { call: 'sendAgain', onSuccess: [{ call: 'outbox' }] },
+      ],
+    },
     // The two faces. The option carries which panels it shows, so one trigger
     // serves both and the layout's guards are plain values.
     {

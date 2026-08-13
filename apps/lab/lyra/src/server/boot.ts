@@ -1,11 +1,11 @@
-import { createServer, createTideDriver } from '@niscorp/moss';
+import { createServer, createTideDriver, mintDevToken } from '@niscorp/moss';
+import { redeemLink } from './links';
+import { unsubscribe } from './unsubscribe';
+import { readMailEvent } from './mail/send';
 import type { MossServer, NiscApp, TideDriver } from '@niscorp/moss';
 import type { Tide } from '@niscorp/tide';
 import { buildLyra } from '@lyra/app/app';
 import { COMPONENT_NAMES } from '@lyra/ui/registry';
-import { everyone, installedFor, integrationActorFor, loadDirectory, personById, rolesOf, studioCountry, studioHorizon, studioLocale, studioToday } from './users';
-import { loadThemes, themeFor } from './themes';
-import { greetingFor, loadPhrases, loadedLocales, phrasesFor } from './phrases';
 import { registerDevPacks } from './dev-packs';
 import { devRuntime } from './runtime';
 import { reflexesForEveryStudio, wireTide } from './tide';
@@ -72,14 +72,9 @@ const wireRunMirror = async (pool: import('@niscorp/vex').PgPool): Promise<void>
 
 export const boot = async (): Promise<{ server: MossServer; runtime: DevRuntime; app: NiscApp; tide: Tide }> => {
   const runtime = await devRuntime();
-  await loadDirectory(runtime.pool);
-  await loadThemes(runtime.pool);
-  await loadPhrases(runtime.pool);
-
   let built: MossServer | undefined;
   let tide: Tide | undefined;
   const app = buildLyra(
-    { person: personById, everyone, themeFor, todayFor: studioToday, horizonFor: studioHorizon, countryFor: studioCountry, localeFor: studioLocale, phrasesFor, localesFor: loadedLocales, greetingFor: (name, studioId) => greetingFor(name, studioLocale(studioId), new Date()), rolesOf, installedFor, integrationActor: integrationActorFor },
     {
       pool: runtime.pool,
       server: () => (built === undefined ? (() => { throw new Error('boot: the server is not up yet'); })() : built),
@@ -94,9 +89,113 @@ export const boot = async (): Promise<{ server: MossServer; runtime: DevRuntime;
   }
 
   const server = await createServer(app, runtime);
+
+  // ── THE OTHER DOOR NOBODY SIGNS IN AT ────────────────────────
+  //
+  // GET, because a mailbox provider's one-click unsubscribe issues a POST and
+  // a human clicking the footer issues a GET, and both must work. It is
+  // idempotent either way: unsubscribing twice is unsubscribing.
+  //
+  // Answers HTML rather than JSON — the only surface in this app a person
+  // reaches without a shell, so it has to say something a human can read.
+  const farewell = (message: string): string =>
+    `<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">` +
+    `<title>Unsubscribed</title><body style="font:16px/1.5 system-ui,sans-serif;max-width:32rem;margin:20vh auto;padding:0 1.5rem">` +
+    `<p>${message}</p></body>`;
+
+  const stop = async (c: { req: { param: (name: string) => string | undefined } }): Promise<Response> => {
+    const done = await unsubscribe(runtime.pool, c.req.param('token') ?? '');
+    // ONE ANSWER EITHER WAY. A forged token and an already-unsubscribed person
+    // read the same, because the alternative is a page that confirms guesses.
+    return new Response(
+      farewell(
+        done === null
+          ? 'That link is not one we recognise. If you are still hearing from a studio you would rather not, reply to one of their emails and they will take you off.'
+          : 'Done — you will not hear from this studio again. Anything you have booked still stands, and they can still write to you about it.',
+      ),
+      { status: 200, headers: { 'content-type': 'text/html; charset=utf-8' } },
+    );
+  };
+
+  // ── WHAT HAPPENED AFTER WE HANDED IT OVER ────────────────────
+  //
+  // The provider's own voice, and the only thing that can make "Sent" mean
+  // more than "they took it". No principal — a vendor calling in has none and
+  // could not have one — so the signature IS the authentication, checked over
+  // the RAW body before anything is parsed.
+  //
+  // ALWAYS 200, even for a forged call. A webhook sender reads a 4xx as "retry
+  // this forever"; a refusal that says so is a refusal that gets replayed at
+  // us all night. Nothing happened, and nothing needs to be said about it.
+  server.post('/api/mail/events', async (c) => {
+    const raw = await c.req.text();
+    const headers: Record<string, string> = {};
+    for (const name of ['svix-id', 'svix-timestamp', 'svix-signature']) headers[name] = c.req.header(name) ?? '';
+    const event = readMailEvent(headers, raw, Date.now());
+    if (event === null) return c.json({ ok: true }, 200);
+
+    // These writes carry no identity and go through the pool, like the
+    // unsubscribe door and for the same reason: there is nobody to be. Each is
+    // one narrow statement, addressed by the provider's own id or by an
+    // address the provider just told us about.
+    if (event.kind === 'delivered') {
+      await runtime.pool.query('UPDATE outbox SET delivered_at = now() WHERE provider_message_id = $1', [event.id]);
+      return c.json({ ok: true });
+    }
+    if (event.kind === 'bounced' || event.kind === 'complained') {
+      const studio = await runtime.pool.query('SELECT studio_id FROM outbox WHERE provider_message_id = $1', [event.id]);
+      const studioId = String((studio.rows[0] as { studio_id?: string } | undefined)?.studio_id ?? '');
+      // A BOUNCE IS ABOUT THE ADDRESS and holds everywhere; a COMPLAINT is
+      // about the relationship and holds at the studio complained about.
+      const scope = event.kind === 'bounced' ? '' : studioId;
+      await runtime.pool.query(
+        `INSERT INTO mail_suppressions (address, studio_id, kind, reason) VALUES ($1, $2, $3, $4)
+         ON CONFLICT (address, studio_id) DO UPDATE SET kind = EXCLUDED.kind, reason = EXCLUDED.reason`,
+        [event.to, scope, event.kind, event.reason],
+      );
+      await runtime.pool.query("UPDATE outbox SET state = 'failed', failed_reason = $2 WHERE provider_message_id = $1", [event.id, event.reason]);
+      // Somebody reporting a studio's mail as spam has withdrawn consent by
+      // any reading of it, whatever a checkbox says.
+      if (event.kind === 'complained' && studioId !== '') {
+        await runtime.pool.query(
+          'UPDATE studio_people SET marketing_ok = false WHERE studio_id = $1 AND person_id = (SELECT person_id FROM outbox WHERE provider_message_id = $2)',
+          [studioId, event.id],
+        );
+      }
+    }
+    return c.json({ ok: true });
+  });
+
+  server.get('/api/unsubscribe/:token', stop);
+  server.post('/api/unsubscribe/:token', stop);
+
+  // ── THE ONE DOOR A SIGN-IN LINK KNOCKS ON ────────────────────
+  //
+  // Public, because nobody redeeming a link has a session yet — that is what
+  // they are here to get. The nonce is the whole credential and it is spent by
+  // the same statement that reads it, so this route holds no logic worth
+  // attacking: it either names a live row or it does not.
+  //
+  // Under `/api/` because the dev server forwards that prefix (vite.config)
+  // and moss's own `/api/*` middleware only attaches the tide chain context —
+  // there is no principal gate to slip past, and `/api/:resource/vex` cannot
+  // collide with a literal second segment.
+  //
+  // ⟲ The link used to BE the session: `?token=` went into localStorage
+  // untouched. Trading it here is the difference between mailing somebody a
+  // key and mailing them a doorbell.
+  server.post('/api/auth/redeem', async (c) => {
+    const body = (await c.req.json().catch(() => ({}))) as { nonce?: unknown };
+    const personId = await redeemLink(runtime.pool, String(body.nonce ?? ''), Date.now());
+    // One sentence for expired, spent and never-existed alike. Which of the
+    // three it was is not the caller's business, and answering differently
+    // would make this a place to test nonces against.
+    if (personId === null) return c.json({ message: 'That sign-in link has expired or has already been used.' }, 401);
+    return c.json({ token: mintDevToken(personId) });
+  });
   built = server;
 
-  tide = wireTide({ server: () => server, now: () => Date.now(), pool: runtime.pool });
+  tide = wireTide({ server: () => server, now: () => Date.now(), pool: runtime.pool, base: () => process.env['LYRA_BASE'] ?? 'http://localhost:5180' });
   // No beat. The driver wakes on every ingest (the vex bridge mints through
   // it), sleeps until tide's own nextDue instant, and keeps a slow janitor
   // for recovery — the 60-second metronome this replaced was both a latency
@@ -125,6 +224,6 @@ export const boot = async (): Promise<{ server: MossServer; runtime: DevRuntime;
 // `LYRA_DEV_PACKS` is set — see dev-packs.ts.
 export const bootDevServer = async (): Promise<Awaited<ReturnType<typeof boot>>> => {
   const booted = await boot();
-  await registerDevPacks(booted.server, booted.runtime.pool, booted.runtime.operatorKey ?? '', () => loadDirectory(booted.runtime.pool));
+  await registerDevPacks(booted.server, booted.runtime.pool, booted.runtime.operatorKey ?? '', async () => { booted.server.refresh(); });
   return booted;
 };

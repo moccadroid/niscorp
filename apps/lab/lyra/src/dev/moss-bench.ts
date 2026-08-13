@@ -7,9 +7,8 @@
 //
 // Run: pnpm --filter lyra exec tsx --expose-gc src/dev/moss-bench.ts
 import type { Shell } from '@niscorp/nova';
-import { mintToken, loadDirectory, personByEmail, rolesOf } from '@lyra/server/users';
 import { CAST } from '@lyra/db/seed';
-import { app, login, runtime, server, settle } from './world';
+import { app, idFor, login, mintToken, runtime, server, settle } from './world';
 
 const KB = 1024;
 const bold = (s: string): string => `\x1b[1m${s}\x1b[0m`;
@@ -38,7 +37,7 @@ const gcOn = (globalThis as { gc?: () => void }).gc !== undefined;
 if (!gcOn) console.log(dim('  (no --expose-gc: memory figures are noisier, treat as indicative)'));
 
 // ─── 1. what one interaction puts on the wire ────────────────
-const owner = server.shells?.session(mintToken(CAST.lumen.owner), personByEmail(CAST.lumen.owner)?.id ?? null);
+const owner = await server.shells?.session(await mintToken(CAST.lumen.owner), idFor(CAST.lumen.owner));
 await settle(20);
 if (owner === undefined) throw new Error('bench: no shell');
 
@@ -143,7 +142,6 @@ await runtime.db.query(
    ON CONFLICT (id) DO NOTHING`,
   [BATCH, MODEL],
 );
-await loadDirectory(runtime.pool);
 
 // ROWS ARE NOT PRINCIPALS. `app.assignments` is a snapshot taken at boot from
 // the directory, so somebody who arrives after it is a person the app knows
@@ -156,10 +154,7 @@ await loadDirectory(runtime.pool);
 // session), so the bench does what app.ts already does for an integration
 // actor that appears mid-process — splices the person in using the app's OWN
 // `rolesOf`, rather than a second spelling of what a role is.
-for (let i = 1; i <= BATCH; i += 1) {
-  const person = personByEmail(`bench${i}@lumen.studio`);
-  if (person !== undefined) (app.assignments as Record<string, readonly string[]>)[person.id] = rolesOf(person);
-}
+// No assignment map to seed any more: roles are resolved per principal.
 server.refresh();
 
 // The rows are there before anything is built on them. A failed copy above is
@@ -181,7 +176,9 @@ const shells: Shell[] = [];
 const started = performance.now();
 for (let i = 1; i <= BATCH; i += 1) {
   const email = `bench${i}@lumen.studio`;
-  const session = server.shells?.session(mintToken(email), personByEmail(email)?.id ?? null);
+  // Not `idFor` — the world's roster is a boot-time snapshot, taken before the
+  // cohort above was planted. The id is the INSERT's own spelling.
+  const session = await server.shells?.session(await mintToken(email), `p_bench_${i}`);
   if (session !== undefined) shells.push(session.shell);
 }
 
@@ -230,7 +227,7 @@ const median = [...measured].sort((a, b) => a - b)[Math.floor(measured.length / 
 // almost nothing, and comparing against almost nothing passes anything. That
 // is exactly how the first version of this guard let 250 half-built shells
 // through calling them "a real member's screen".
-const seeded = login(CAST.lumen.member);
+const seeded = await login(CAST.lumen.member);
 let refStable = 0;
 let refLast = -1;
 while (refStable < 3) {

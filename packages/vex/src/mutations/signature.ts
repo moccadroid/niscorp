@@ -188,10 +188,26 @@ export const requiredContextKeys = (m: CoreMutation): string[] => {
 // Authoring lint (run by the seed path): an update/delete whose WHERE binds no
 // `$context` is not caller-bounded — its only row limit is the scope policy.
 // Loud at boot, never at runtime.
+// An `optional` condition is a READ construct. In a WHERE it would mean "this
+// bound disappears when the caller omits a key" — which is precisely the
+// unkeyed update the lint below exists to refuse, only reachable by omission
+// rather than by authoring. Writes keep the rule they have always had: every
+// key is mandatory, and a missing one is a hard `missing_context` (see
+// mutations/engine.ts), never a wider statement.
+const findOptional = (value: unknown): boolean => {
+  if (Array.isArray(value)) return value.some(findOptional);
+  if (value === null || typeof value !== 'object') return false;
+  if ('optional' in value) return true;
+  return Object.values(value).some(findOptional);
+};
+
 export const lintMutation = (def: MutationDefinition): string[] => {
   const issues: string[] = [];
   const list = Array.isArray(def) ? def : [def];
   for (const m of list) {
+    if (findOptional(m)) {
+      issues.push(`${m.op} on "${m.table}" contains an optional condition — a write's bounds cannot depend on what the caller chose to send`);
+    }
     if (m.op !== 'update' && m.op !== 'delete') continue;
     const sub: ContextSignature = {};
     deepScan(m.where, sub);

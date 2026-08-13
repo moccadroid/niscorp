@@ -81,6 +81,28 @@ export const DDL = /* sql */ `
     -- "45,00 €" and "de-CH" writes "EUR 45.00" — three countries, one
     -- language, three answers, and a bare "de" would silently pick one.
     locale      TEXT NOT NULL DEFAULT 'en-GB' CHECK (locale ~ '^[a-z]{2}(-[A-Z]{2})?$'),
+    -- WHERE A REPLY GOES, and the first contact detail this table has ever
+    -- carried. Every studio sends from one shared, verified deployment domain
+    -- wearing its OWN name — "Lumen Yoga" <lumen@mail.lyra.app> — so the member
+    -- sees who it is from; this is what makes a reply reach the studio rather
+    -- than us. Empty means a member's reply bounces, which is why the studio
+    -- settings screen asks for it.
+    reply_to    TEXT NOT NULL DEFAULT '',
+    -- A CEILING, NOT A BUDGET. It exists so one studio's mistake — a bad
+    -- import, an automation pointed at the whole roll — cannot spend the shared
+    -- sending domain's reputation on everybody else's behalf before anybody
+    -- notices. A studio of three hundred sending one broadcast spends three
+    -- hundred; a thousand is generous for a day's honest work and cheap to
+    -- raise, which is why it is a column and not a constant.
+    daily_mail_cap INTEGER NOT NULL DEFAULT 1000 CHECK (daily_mail_cap >= 0),
+    -- ── BRING YOUR OWN DOMAIN ────────────────────────────────
+    -- Empty means the shared deployment domain, which is what every studio
+    -- sends from until it decides otherwise. Verified is the PROVIDER'S word
+    -- rather than ours: a domain whose DNS has not landed sends nothing, so
+    -- until it flips the shared sender stays in use and nothing breaks.
+    sending_domain      TEXT NOT NULL DEFAULT '',
+    sending_domain_id   TEXT NOT NULL DEFAULT '',
+    sending_domain_ok   BOOLEAN NOT NULL DEFAULT false,
     theme_id    TEXT REFERENCES themes(id),
     created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
     -- Redundant as a constraint — "id" is already unique — and load-bearing as a
@@ -106,6 +128,29 @@ export const DDL = /* sql */ `
     name        TEXT NOT NULL,
     phone       TEXT NOT NULL DEFAULT '',
     created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+  );
+
+  -- ── the sign-in link ────────────────────────────────────────
+  --
+  -- ONE ROW PER LINK, AND THE ROW IS THE CREDENTIAL.
+  --
+  -- The link used to carry a session token: "?token=" went straight into
+  -- localStorage (main.tsx), so the thing in somebody's inbox WAS the session,
+  -- forever, for whoever read the mail. This holds a 256-bit random nonce
+  -- instead, and redeeming it TRADES it for a session.
+  --
+  -- No signature, deliberately. A signed stateless token still needs a row to
+  -- be single-use, and once there is a row the signature proves nothing the
+  -- lookup does not: an unguessable value either matches a live row or it does
+  -- not. One mechanism, no secret to rotate.
+  --
+  -- Redeeming DELETES, in the same statement that reads. That is what makes it
+  -- single-use rather than "single-use unless two requests arrive together".
+  CREATE TABLE login_links (
+    nonce      TEXT PRIMARY KEY,
+    person_id  TEXT NOT NULL REFERENCES people(id),
+    expires_at TIMESTAMPTZ NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
   );
 
   -- ── the anchor ──────────────────────────────────────────────
@@ -137,6 +182,13 @@ export const DDL = /* sql */ `
     -- window closes on its own with nothing running. See standing.ts.
     trial_ends_on DATE,
     notes         TEXT NOT NULL DEFAULT '',
+    -- CONSENT TO BE MARKETED AT, held on the ANCHOR because it is given to a
+    -- studio and not to Lyra: the same human may want one studio's news and not
+    -- another's, and a flag on the person could not say so. Default false, which
+    -- means "somebody stops coming" reaches nobody until a studio has actually
+    -- asked — correct, and a surprise to anybody who did not read for it.
+    -- A class reminder is not marketing; see the moment's own marketing flag.
+    marketing_ok  BOOLEAN NOT NULL DEFAULT false,
 
     -- ── THE RELATIONSHIP MIRRORS ─────────────────────────────
     --
@@ -1245,12 +1297,64 @@ export const DDL = /* sql */ `
     to_address  TEXT NOT NULL DEFAULT '',
     subject     TEXT NOT NULL,
     body        TEXT NOT NULL DEFAULT '',
-    -- 'queued' is where every row lives today, because nothing delivers. The
-    -- other two exist so the shape does not change when something does.
-    state       TEXT NOT NULL DEFAULT 'queued' CHECK (state IN ('queued', 'sent', 'failed')),
+    -- FOUR STATES, AND 'sending' IS THE LOAD-BEARING ONE. Tide retries a failed
+    -- task, and the case that bites is not a failure: the provider accepted the
+    -- message and the acknowledgement never came back inside the timeout. A
+    -- retry then sends it a second time. So the effect CLAIMS the row before it
+    -- sends — 'queued' → 'sending', and it sends only if it won that update —
+    -- and a retry finds 'sending' and stops. The provider's idempotency key is
+    -- the second line of defence, never the only one.
+    state       TEXT NOT NULL DEFAULT 'queued' CHECK (state IN ('queued', 'sending', 'sent', 'failed')),
+    -- WHAT HAPPENED, in enough detail to answer the only question anybody ever
+    -- asks about mail. The provider's id is what support is quoted; the reason
+    -- is in the provider's own words, because a studio that cannot see why
+    -- nothing arrived asks us instead, every time.
+    provider_message_id TEXT NOT NULL DEFAULT '',
+    failed_reason       TEXT NOT NULL DEFAULT '',
+    sent_at             TIMESTAMPTZ,
+    -- WHEN THE CLAIM WAS TAKEN, which is the only thing that can ever free a
+    -- row stuck in 'sending'. The effect claims, sends, and records; a process
+    -- that dies between the first and the third leaves a row nobody will look
+    -- at again and no state can distinguish from one that is simply mid-flight.
+    -- A sweep needs an age to act on, and an age needs a timestamp somebody
+    -- wrote down BEFORE the thing that might not come back.
+    claimed_at          TIMESTAMPTZ,
+    -- WHEN IT ACTUALLY ARRIVED, which is a different fact from when the
+    -- provider accepted it. A state of 'sent' means "they took it"; this column
+    -- is the only thing that can say more, and it is filled by the webhook.
+    -- Deliberately a column and not a fifth state: the screen's vocabulary
+    -- stays as it is until somebody decides what a studio should read.
+    delivered_at        TIMESTAMPTZ,
+    -- IS THIS MARKETING? Carried on the ROW because the thing that sends is a
+    -- reflex woken by the row, and by then the moment that queued it is out of
+    -- reach. It decides two things at the wire: an unsubscribe footer, and the
+    -- List-Unsubscribe headers the large mailbox providers now expect. A class
+    -- reminder is not marketing and gets neither.
+    marketing   BOOLEAN NOT NULL DEFAULT false,
     source      TEXT NOT NULL DEFAULT '',
     created_on  DATE NOT NULL DEFAULT CURRENT_DATE,
     created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+  );
+
+  -- ── WHO WE MUST NOT WRITE TO AGAIN ──────────────────────────
+  --
+  -- A shared sending domain is a shared reputation: one studio mailing dead
+  -- addresses or collecting spam complaints degrades delivery for every other
+  -- studio sending from it. This is the list that stops that, written by the
+  -- provider's own webhook rather than by anybody's opinion.
+  --
+  -- An EMPTY studio_id means everybody. A hard bounce is a fact about the
+  -- ADDRESS — it does not exist — so it holds across studios. A complaint is a
+  -- fact about a RELATIONSHIP: this person does not want this studio's mail,
+  -- and suppressing them everywhere would punish a studio they never
+  -- complained about.
+  CREATE TABLE mail_suppressions (
+    address    TEXT NOT NULL,
+    studio_id  TEXT NOT NULL DEFAULT '',
+    kind       TEXT NOT NULL CHECK (kind IN ('bounced', 'complained')),
+    reason     TEXT NOT NULL DEFAULT '',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    PRIMARY KEY (address, studio_id)
   );
 
   -- ─── indexes the reads actually use ─────────────────────────

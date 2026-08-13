@@ -25,8 +25,13 @@ const run = async (): Promise<void> => {
   const taskIds = async (contextUserId: string, scopeUserId: string): Promise<Set<string>> => {
     const state = { scope: 'all', search: '', sortBy: 'tasks.due_date', sortDir: 'asc', userId: contextUserId, today: todayStr() };
     const request = evaluate(listTasksPrism as Parameters<typeof evaluate>[0], state) as QueryRequest;
-    const res = (await rt.engine.execute(request, { scope: { userId: scopeUserId } })) as { result: { task_id: string }[] };
-    return new Set(res.result.map((r) => r.task_id));
+    const res = await rt.engine.execute(request, { scope: { userId: scopeUserId } });
+    // `result` is a JsonValue — a list here by the ENTRY's promise, not by the
+    // type's. Checked rather than asserted past: a refusal or a reshaped read
+    // then lands as an empty set, which the `size > 0` assertions below catch,
+    // instead of a cast that says "trust me" and a TypeError that says nothing.
+    const rows = Array.isArray(res.result) ? res.result : [];
+    return new Set(rows.map((row) => String((row as Record<string, unknown>)['task_id'])));
   };
 
   // ── reads are assignee-scoped, per principal ──

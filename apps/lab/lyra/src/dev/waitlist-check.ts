@@ -10,7 +10,7 @@ const refused = (value: unknown): boolean =>
   value !== null && typeof value === 'object' && !Array.isArray(value) && typeof (value as { status?: unknown }).status === 'number';
 
 // ── a one-off ────────────────────────────────────────────────
-const owner = login(CAST.lumen.owner);
+const owner = await login(CAST.lumen.owner);
 await settle(10);
 owner.dispatch({ type: 'ui:click', ref: 'nav', payload: 'timetable.list' });
 await settle(12);
@@ -42,7 +42,7 @@ ok('...and its report buckets derived', (await count("SELECT count(*) n FROM cla
 
 const eventId = (await runtime.db.query<{ id: string }>("SELECT id FROM class_sessions WHERE name = 'Inversions masterclass'")).rows[0]?.id ?? '';
 
-const member = login(CAST.lumen.member);
+const member = await login(CAST.lumen.member);
 await settle(12);
 member.dispatch({ type: 'ui:click', ref: 'nav', payload: 'me.classes' });
 await settle(14);
@@ -74,7 +74,7 @@ await asPrincipal('lena.gruber@example.com', '/api/me/vex', { fingerprint: 'me/c
 ok('a cancellation with an empty queue just frees the seat', (await count('SELECT booked_count n FROM class_sessions WHERE id = $1', [eventId])) === 1);
 
 // ── what the member is told ──────────────────────────────────
-const jonas = login(CAST.lumen.instructor);
+const jonas = await login(CAST.lumen.instructor);
 await settle(12);
 jonas.dispatch({ type: 'ui:click', ref: 'nav', payload: 'me.bookings' });
 await settle(14);

@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { at, lastOf } from './helpers/at';
 import { z } from 'zod';
 import { createStream } from '../src/create-stream';
 import { simulateStream, generateLargePayload } from './helpers/simulate-stream';
@@ -136,14 +137,14 @@ describe('perf — O(n²) analysis', () => {
 
     // If O(n²), ms/KB should increase roughly linearly with size
     // If O(n), ms/KB should stay roughly constant
-    const firstMsPerKb = results[0].msPerKb;
-    const lastMsPerKb = results[results.length - 1].msPerKb;
+    const firstMsPerKb = at(results, 0).msPerKb;
+    const lastMsPerKb = lastOf(results).msPerKb;
     const ratio = lastMsPerKb / firstMsPerKb;
 
     console.log(`\n  Scaling ratio (last/first ms/KB): ${Math.round(ratio * 10) / 10}x`);
     console.log(`  (1.0x = O(n) linear, >2x suggests O(n²) quadratic)`);
 
     // Just verify it completes — the scaling ratio is informational
-    expect(results[results.length - 1].totalMs).toBeGreaterThan(0);
+    expect(lastOf(results).totalMs).toBeGreaterThan(0);
   });
 });

@@ -7,7 +7,7 @@ const count = async (sql: string, params: unknown[] = []): Promise<number> => {
   return Number(result.rows[0]?.n ?? -1);
 };
 
-const manager = login(CAST.lumen.owner);
+const manager = await login(CAST.lumen.owner);
 await settle();
 
 // ── the list ──
@@ -15,7 +15,9 @@ manager.dispatch({ type: 'ui:click', ref: 'nav', payload: 'plans.list' });
 await settle(8);
 let tree = treeOf(manager);
 ok('a manager reaches the price list', tree.includes('Everything this studio sells'));
-ok('...with prices formatted, not in cents', tree.includes('€89'), 'the mapping does the money');
+// Not `€89`: a de-AT studio writes `€ 89,00`. The claim is cents became money,
+// so the assertion is the symbol and the major units, whatever sits between.
+ok('...with prices formatted, not in cents', /€\s?89/.test(tree), 'the mapping does the money');
 ok('...and billing said in words', tree.includes('Monthly'));
 ok('...and an unlimited plan says so', tree.includes('Unlimited'));
 
@@ -40,7 +42,7 @@ ok('...stamped with this studio by the engine', (await count("SELECT count(*) n 
 
 tree = treeOf(manager);
 ok('...and the list shows it', tree.includes('"name":"Drop-in"'), 'asserted on the ROW, not the form field');
-ok('...formatted', tree.includes('€18'));
+ok('...formatted', /€\s?18/.test(tree));
 ok('the form closed itself', !tree.includes('In cents'));
 
 // ── editing one ──
@@ -99,7 +101,7 @@ const foreignWrite = await asPrincipal(CAST.northrock.manager, '/api/studio/vex'
 });
 ok('a manager cannot retire another studio’s plan', JSON.stringify(foreignWrite).includes('status') || (await count('SELECT count(*) n FROM offerings WHERE id = $1 AND active = true', [unlimitedId])) === 1, 'scope, not just role');
 
-const deskSees = login(CAST.lumen.desk);
+const deskSees = await login(CAST.lumen.desk);
 await settle();
 ok('the desk has no Plans in its nav', !treeOf(deskSees).includes('"label":"Plans"'), 'ring 1 removes the door, not just the lock');
 
@@ -200,7 +202,7 @@ ok('a subscription seeded with notice keeps it', (await count("SELECT count(*) n
 // this; what did not exist was a way for a person to use them. So the last
 // assertion is that the record actually draws it, and that the control changes
 // depending on what has been decided rather than sitting there twice.
-const record = login(CAST.lumen.owner);
+const record = await login(CAST.lumen.owner);
 await settle(10);
 const withNotice = await runtime.db.query<{ id: string }>(
   "SELECT person_id AS id FROM subscriptions WHERE studio_id = 'st_lumen' AND notice_given_on IS NOT NULL AND status = 'active' ORDER BY id LIMIT 1",

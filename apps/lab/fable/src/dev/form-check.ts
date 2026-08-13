@@ -2,6 +2,10 @@
 // (bare = create, seeded = edit), that cancel never writes, and that every
 // action's declared `input` is a subset of its `data` keys (rule 11 / review
 // item 3), mechanically. Run: pnpm --filter fable check:form
+// A check runs under node, not in a browser — imported rather than assumed.
+// The tsconfig types list is [vite/client], so node globals are ambient only
+// when something drags them in.
+import process from 'node:process';
 import { getVexRuntime } from '../vex/runtime';
 import { SEED_COUNTS } from '../vex/seed';
 import { shell, ACTIONS } from '../nova/shell';

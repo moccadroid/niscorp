@@ -1,0 +1,73 @@
+name: Verify
+
+# Types and unit tests, on every push and every pull request.
+#
+# WHY THIS EXISTS. Four apps carried `"exclude": ["src/dev"]` and ten packages
+# carried `"include": ["src"]`, so the compiler never saw a single check or test
+# file. `tsc` was green for months while test doubles drifted away from the code
+# they stood in for — a `Directory` four members stale, a `Wire` missing the two
+# members shell recovery added, a `usage` stub predating the flag that says
+# whether a provider reported anything at all. None of it was visible until the
+# excludes came off, and then it was 110 errors across fourteen workspaces.
+#
+# The configs are fixed. This is what keeps them fixed: the failure mode is not
+# somebody re-adding an exclude, it is nobody running `pnpm typecheck` before a
+# merge and a drifted double surfacing days later, three packages away, as a
+# runtime error that reads like somebody else's problem.
+on:
+  push:
+    branches: [main, lyra]
+  pull_request:
+  workflow_dispatch:
+
+# A newer push supersedes an in-flight run on the same ref. Unlike the deploy
+# workflow there is nothing to half-finish here, so cancelling is free.
+concurrency:
+  group: verify-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.0
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # `turbo --concurrency=1` rather than pnpm's `--workspace-concurrency`:
+      # `pnpm build` delegates straight to turbo, which schedules its own work,
+      # so the pnpm flag would pass through and change nothing. Serial matters
+      # for the reason the deploy workflow records — prism's `agent` sub-export
+      # imports cortex while declaring it only as an optional peer, so a
+      # parallel run races prism's DTS pass against cortex's and prism cannot
+      # find the types.
+      #
+      # Both tasks below need this: apps resolve `@niscorp/*` to `dist`, not to
+      # source, so an unbuilt package makes typecheck fail on stale types.
+      # Verified cold (no cache): 16 tasks, ~70s.
+      - name: Build packages
+        run: npx turbo build --concurrency=1
+
+      # Every workspace: ten packages and eight apps, tests and checks included.
+      # This is the step that would have caught all 110.
+      - name: Typecheck
+        run: pnpm typecheck
+
+      # The packages' own suites — 1,907 assertions. The apps' `check` scripts
+      # are deliberately NOT here: they boot a database and a server each, they
+      # take minutes, and three of them have known failures that predate this
+      # workflow (atrium's connector proxy, relay's architect harness). Adding
+      # them red would teach everybody to ignore a red tick, which is worse than
+      # not running them.
+      - name: Test
+        run: pnpm test

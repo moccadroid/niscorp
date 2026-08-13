@@ -60,7 +60,7 @@ describe('buildInitialData — isolation', () => {
 
   it('buildInitialData alone produces an isolated tree', () => {
     const def: ActionDefinition = { id: 'a', data: { nested: { x: 1 } } };
-    const out = buildInitialData(def, undefined, undefined);
+    const out = buildInitialData(def, undefined);
     (out.nested as { x: number }).x = 42;
     expect(def.data).toEqual({ nested: { x: 1 } });
   });

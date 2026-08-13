@@ -105,7 +105,7 @@ const PRINCIPALS: [string, string | null, string][] = [
 ];
 
 for (const [who, email, expected] of PRINCIPALS) {
-  const shell = email === null ? anonymous() : login(email);
+  const shell = email === null ? await anonymous() : await login(email);
   await settle(10);
   const tree = treeOf(shell);
   remember(tree);
@@ -124,7 +124,7 @@ const DESTINATIONS = ['people.list', 'staff.list', 'plans.list', 'timetable.list
   (id) => app.actions[id] !== undefined,
 );
 
-const owner = login(CAST.lumen.owner);
+const owner = await login(CAST.lumen.owner);
 await settle(12);
 
 let drawn = 0;

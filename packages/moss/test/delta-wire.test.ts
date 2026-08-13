@@ -57,12 +57,11 @@ const servers: Server[] = [];
 const listening = async (delta: boolean): Promise<string> => {
   const shells = createShellHost({
     app,
-    catalog: () => ({ ids: ['roster'], hash: 'h' }),
-    variants: () => new Map(),
-    roles: () => ['public'],
+    catalogFor: () => ({ ids: ['roster'], hash: 'h' }),
+    variantsFor: () => new Map(),
+    resolve: async () => ({ roles: ['public'], scope: {}, installed: undefined, catalog: { ids: ['roster'], hash: 'h' }, variants: new Map(), policy: { default: 'deny' as const, entities: {} } }),
     wire: () => async () => ({ ok: true, status: 200, json: async () => ({}), text: async () => '{}' }),
     runtime: {} as never,
-    policy: () => ({ default: 'deny', entities: {} }),
     delta,
   });
   const accept = createSocket({

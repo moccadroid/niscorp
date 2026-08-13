@@ -1,6 +1,7 @@
 // Run: pnpm --filter lyra exec tsx src/dev/scoping-check.ts
 import { CAST } from '@lyra/db/seed';
-import { resolvePolicy } from '@niscorp/moss';
+import { resolvePolicyForRoles } from '@niscorp/moss';
+import { identityFor } from '@lyra/server/identity';
 import { app, asPrincipal, ok, report, runtime } from './world';
 
 const count = async (sql: string): Promise<number> => Number((await runtime.db.query<{ n: string }>(sql)).rows[0]?.n ?? -1);
@@ -39,13 +40,16 @@ ok('...with no Lumen row among them', leaked === 0, 'the personal rule ANDs onto
 // ── reach itself, read off the compiled policy ───────────────
 const BOOKING_GRANTS = ['bookings.read', 'bookings.write.insert', 'bookings.write.update'];
 
-const rulesFor = (personId: string, phase: 'read'): number => {
-  const entity = resolvePolicy(app, BOOKING_GRANTS, personId).entities['bookings'];
+// Compiled from the ROLES the identity seam resolves — the same path the
+// request takes. There is no assignment map to read them out of any more.
+const rulesFor = async (personId: string, phase: 'read'): Promise<number> => {
+  const { roles } = await identityFor(runtime.pool, personId, () => undefined);
+  const entity = resolvePolicyForRoles(app, BOOKING_GRANTS, roles).entities['bookings'];
   return entity === undefined || 'public' in entity || 'deny' in entity ? -1 : (entity[phase] ?? []).length;
 };
 
-const memberRules = rulesFor('p_ava', 'read');
-const deskRules = rulesFor('p_ines', 'read');
+const memberRules = await rulesFor('p_ava', 'read');
+const deskRules = await rulesFor('p_ines', 'read');
 ok("a member's policy filters bookings by more than the tenant", memberRules > deskRules, `${memberRules} rule(s) against the desk's ${deskRules}`);
 ok('...and the desk keeps the roster it exists to read', deskRules >= 1, `${deskRules} rule(s) — the tenant boundary, and nothing narrower`);
 

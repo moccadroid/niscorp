@@ -88,13 +88,76 @@ export const ROLL_PAGE = 50;
 //
 //   name > after  OR  (name = after AND person_id > afterId)
 //
-// The first page passes an empty `after`, which every name sorts above.
-const AFTER: Filter = {
-  or: [
-    { gt: ['people.name', { $context: 'after' }] },
-    { and: [{ eq: ['people.name', { $context: 'after' }] }, { gt: ['studio_people.person_id', { $context: 'afterId' }] }] },
-  ],
-};
+// The first page sends NO cursor at all — the condition is simply not in the
+// query. It used to send an empty string and lean on every name sorting above
+// it, which was true for this dataset and not a property of anything.
+//
+// ── AND THE SEEK KNOWS WHICH ORDER IT IS IN ──────────────────
+//
+// A cursor is a position in ONE ordering. Sort the roll by first-seen and a
+// name-based seek is measuring the wrong axis: page two skips and repeats.
+// That is why sorting used to cost the roll its paging — the entry offered one
+// order and one cursor, and the caller could change the first without the
+// second.
+//
+// So the orders are DECLARED, once, and both halves are built from the same
+// list: the entry's default `sort` is the first entry's, and the seek is one
+// guarded arm per order. They cannot disagree, because there is nothing left
+// to keep in step by hand.
+//
+// EACH ORDER CARRIES ITS OWN CURSOR KEY, and which key the caller sends is
+// what says which order they are in. There is no separate discriminator —
+// presence is the statement, which is exactly what an optional condition is for.
+//
+// It has to be per-order rather than one shared `after`, and the reason is
+// types. All four arms compile into ONE statement, so a single shared param is
+// bound once for all of them: a cursor holding a NAME reached the date arms
+// too, Postgres cast `'Zy Order 036'` to a date, and the whole read died with a
+// 500 — even though those arms were guarded false, because a cast happens
+// before a guard can matter. Separate keys mean each comparison binds a value
+// of its own column's type, and the arms a caller is not using bind nothing at
+// all.
+export type RollOrder = { id: string; field: string; dir: 'asc' | 'desc'; rowKey: string; cursor: string };
+
+export const ROLL_ORDERS: readonly RollOrder[] = [
+  { id: 'name-asc', field: 'people.name', dir: 'asc', rowKey: 'person_name', cursor: 'afterNameAsc' },
+  { id: 'name-desc', field: 'people.name', dir: 'desc', rowKey: 'person_name', cursor: 'afterNameDesc' },
+  { id: 'joined-asc', field: 'studio_people.first_seen_on', dir: 'asc', rowKey: 'first_seen_on', cursor: 'afterJoinedAsc' },
+  { id: 'joined-desc', field: 'studio_people.first_seen_on', dir: 'desc', rowKey: 'first_seen_on', cursor: 'afterJoinedDesc' },
+];
+
+const DEFAULT_ORDER = ROLL_ORDERS[0] as RollOrder;
+
+// One order's seek: strictly past the last row on the sorted column, or level
+// with it and past its id. `person_id` breaks every tie in the SAME direction
+// whatever the column does, because it is there to make the order total rather
+// than to express a preference.
+//
+// Gated on its own cursor AND `afterId`: both halves of a position, so half a
+// cursor drops the condition instead of leaving a hole that answers empty.
+const seekArm = (order: RollOrder): Filter => ({
+  optional: {
+    key: [order.cursor, 'afterId'],
+    then: {
+      or: [
+        order.dir === 'asc'
+          ? { gt: [order.field, { $context: order.cursor }] }
+          : { lt: [order.field, { $context: order.cursor }] },
+        {
+          and: [
+            { eq: [order.field, { $context: order.cursor }] },
+            { gt: ['studio_people.person_id', { $context: 'afterId' }] },
+          ],
+        },
+      ],
+    },
+  },
+});
+
+// An `or` of optionals: send no cursor and every arm drops, so the whole
+// condition disappears and this is page one. Send one and the `or` collapses
+// to that arm alone.
+const AFTER: Filter = { or: ROLL_ORDERS.map(seekArm) };
 
 export const LENSES: ReadonlyArray<{ lens: string; label: string; condition: Filter | undefined }> = [
   { lens: 'current', label: 'Current', condition: CURRENT },
@@ -134,7 +197,10 @@ const LENS: Filter = { or: LENSES.map((l) => lensArm(l.lens, l.condition)) };
 export const peopleList: CacheEntry = {
   fingerprint: 'people/list',
   intent: 'The studio roll seen through one lens, searched, a page at a time',
-  shape: [{ person_id: '', person_name: '', email: '', standing: '', status_display: '', status_tone: '', joined_display: '' }],
+  // `first_seen_on` travels RAW as well as pretty: it is a sortable column, so
+  // the cursor has to carry its value, and a formatted date cannot be compared
+  // against one. Same reason the timetable carries raw values beside displays.
+  shape: [{ person_id: '', person_name: '', email: '', standing: '', status_display: '', status_tone: '', joined_display: '', first_seen_on: '' }],
   dsl: {
     from: ['studio_people', 'people'],
     fields: [
@@ -145,11 +211,25 @@ export const peopleList: CacheEntry = {
     ],
     // Computed by the engine against the studio's own day — see `standing.ts`.
     compute: STANDING,
-    filter: { and: [LENS, SEARCH, AFTER] },
-    // The sort IS the page key: (name, person_id), the same pair the seek
-    // compares. A sort that disagreed with the seek would skip people.
+    // THREE QUESTIONS THE CALLER TURNS ON, or leaves off. Send none of them and
+    // this is the whole roll; each key adds a condition rather than filling a
+    // hole in one. No sentinels: "everyone" is not `lens: 'everyone'` plus
+    // `q: '%'` plus `after: ''` — it is an empty context.
+    filter: {
+      and: [
+        { optional: { key: 'lens', then: LENS } },
+        { optional: { key: 'q', then: SEARCH } },
+        // The seek: one arm per order, each gating on its own cursor. Nothing
+        // wraps it, because the arms gate themselves — see `seekArm`.
+        AFTER,
+      ],
+    },
+    // The default order, from the same declaration the seek arms are built
+    // from — and `person_id` behind it, which is what makes the order total.
+    // A caller's `sortBy` leads and keeps this tiebreaker (vex's
+    // applySortContext), so every order the roll can be in ends the same way.
     sort: [
-      { field: 'people.name', dir: 'asc' },
+      { field: DEFAULT_ORDER.field, dir: DEFAULT_ORDER.dir },
       { field: 'studio_people.person_id', dir: 'asc' },
     ],
     limit: ROLL_PAGE,
@@ -166,6 +246,8 @@ export const peopleList: CacheEntry = {
         status_display: standingLabel(row('standing')),
         status_tone: standingTone(row('standing')),
         joined_display: dateText(row('first_seen_on')),
+        // The cursor's value when the roll is in first-seen order.
+        first_seen_on: row('first_seen_on'),
       },
     },
   },
@@ -184,7 +266,8 @@ export const peopleCount: CacheEntry = {
   dsl: {
     from: ['studio_people', 'people'],
     aggregate: { total: { count: 'studio_people.id' } },
-    filter: { and: [LENS, SEARCH] },
+    // The same two questions the list takes, minus the cursor — see above.
+    filter: { and: [{ optional: { key: 'lens', then: LENS } }, { optional: { key: 'q', then: SEARCH } }] },
   },
   mapping: {
     $with: {
@@ -202,7 +285,7 @@ const one = (name: string, fallback: unknown = '') => ({ $get: { from: { $var: '
 export const personById: CacheEntry = {
   fingerprint: 'people/byId',
   intent: 'One person this studio knows, with their contact details and derived standing',
-  shape: { person_id: '', person_name: '', email: '', phone: '', standing: '', status_display: '', status_tone: '', joined_display: '', source: '', trial_ends_on: '', trial_display: '', notes: '' },
+  shape: { person_id: '', person_name: '', email: '', phone: '', standing: '', status_display: '', status_tone: '', joined_display: '', source: '', trial_ends_on: '', trial_display: '', notes: '', marketing_ok: false },
   dsl: {
     from: ['studio_people', 'people'],
     fields: [
@@ -211,6 +294,7 @@ export const personById: CacheEntry = {
       'studio_people.source',
       'studio_people.trial_ends_on',
       'studio_people.notes',
+      'studio_people.marketing_ok',
       { field: 'people.name', as: 'person_name' },
       'people.email',
       'people.phone',
@@ -234,6 +318,9 @@ export const personById: CacheEntry = {
         trial_ends_on: one('trial_ends_on', null),
         trial_display: { $case: { branches: [{ when: one('trial_ends_on', null), then: dateText(one('trial_ends_on', null)) }], else: '' } },
         notes: one('notes'),
+        // Whether this studio may write to them beyond what they booked. On the
+        // person's own record because that is where the desk asks the question.
+        marketing_ok: { $get: { from: { $var: 'r' }, path: ['marketing_ok'], fallback: { $const: false } } },
       },
     },
   },

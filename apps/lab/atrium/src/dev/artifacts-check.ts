@@ -46,6 +46,10 @@ const impurity = (value: unknown, path: string): string => {
     }
     return '';
   }
+  // Narrowed on `value`, not on `t`: the typeof result was copied into a
+  // variable above, which severs it from the value for control-flow purposes,
+  // so everything past here was still `unknown` as far as the compiler knew.
+  if (typeof value !== 'object' || value === null) return `${path} is ${t}`;
   if (Object.getPrototypeOf(value) !== Object.prototype) return `${path} is a non-plain object`;
   for (const [k, v] of Object.entries(value)) {
     const found = impurity(v, path === '' ? k : `${path}.${k}`);

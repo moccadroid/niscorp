@@ -15,8 +15,7 @@
 // Run: pnpm --filter lyra exec tsx src/dev/stripe-check.ts
 import { startIntegrations } from '../../../lyra-integrations/src/serve';
 import { CAST } from '@lyra/db/seed';
-import { mintToken } from '@lyra/server/users';
-import { login, ok, report, runtime, server, settle, treeOf } from './world';
+import { login, mintToken, ok, report, runtime, server, settle, treeOf } from './world';
 
 const KEY = 'lab-operator-key';
 runtime.operatorKey = KEY;
@@ -49,7 +48,7 @@ const operator = async (path: string, body: unknown): Promise<{ status: number; 
 const asOwner = async (path: string, body: unknown = {}): Promise<{ status: number; text: string; type: string }> => {
   const response = await server.request(path, {
     method: 'POST',
-    headers: { Authorization: `Bearer ${String(mintToken(CAST.northrock.owner))}`, 'content-type': 'application/json' },
+    headers: { Authorization: `Bearer ${String(await mintToken(CAST.northrock.owner))}`, 'content-type': 'application/json' },
     body: JSON.stringify(body),
   });
   return { status: response.status, text: await response.text(), type: response.headers.get('content-type') ?? '' };
@@ -72,7 +71,7 @@ try {
   ok('...and the money screen is placed in the money hub', (row.rows[0] as { place_in?: string } | undefined)?.place_in === 'hub.money', 'a hub the host offers, or the bundle is refused whole');
 
   await operator('/operator/integrations/stripe/approve', {});
-  const owner = login(CAST.northrock.owner);
+  const owner = await login(CAST.northrock.owner);
   await settle(10);
   owner.dispatch({ type: 'ui:click', ref: 'nav', payload: 'studio.addons' });
   await settle(14);

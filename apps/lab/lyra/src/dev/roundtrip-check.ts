@@ -14,10 +14,9 @@ import { createServer, resolveCatalog } from '@niscorp/moss';
 import type { ActionDefinition } from '@niscorp/nova';
 import { buildLyra } from '@lyra/app/app';
 import { COMPONENT_NAMES } from '@lyra/ui/registry';
-import { everyone, installedFor, integrationActorFor, mintToken, personById, personByEmail, rolesOf, studioCountry, studioHorizon, studioToday } from '@lyra/server/users';
-import { themeFor } from '@lyra/server/themes';
+import { tideDriver } from '@lyra/server/boot';
 import { CAST } from '@lyra/db/seed';
-import { app, ok, report, runtime, server, settle, tide, treeOf } from './world';
+import { app, idFor, mintToken, ok, report, runtime, server, settle, tide, treeOf } from './world';
 
 const json = (value: unknown): string => JSON.stringify(value) ?? '';
 
@@ -61,8 +60,12 @@ ok('the vex entries serialise', json(JSON.parse(entriesWire)) === entriesWire, `
 //
 // The real test. Same database, same directory, same everything — the only
 // difference is that this manifest's actions came out of a string.
+// THE SAME directory object the real app was built from, imported rather than
+// re-typed. A second literal here drifted the moment the directory grew — it
+// went four members stale (locale, phrases, locales, greeting) and the twin
+// stopped booting, which surfaced as a TypeError deep in a shell build rather
+// than as the one-line type error it always was.
 const twin = buildLyra(
-  { person: personById, everyone, themeFor, todayFor: studioToday, horizonFor: studioHorizon, countryFor: studioCountry, rolesOf, installedFor, integrationActor: integrationActorFor },
   {
     pool: runtime.pool,
     server: () => twinServer,
@@ -70,6 +73,11 @@ const twin = buildLyra(
     // render the automations screen differently for a reason that has nothing to
     // do with the round trip — that would be testing the harness.
     tide: () => tide,
+    driver: tideDriver,
+    // The twin renders and answers; it never edits an automation, so there is
+    // nothing for it to re-read. Stated rather than omitted, because `deps` is
+    // the other literal here that drifts when the real one grows.
+    reloadAutomations: async () => 0,
   },
 );
 twin.actions = rehydrated;
@@ -90,7 +98,7 @@ const PRINCIPALS: [string, string | null][] = [
 ];
 
 for (const [who, email] of PRINCIPALS) {
-  const id = email === null ? null : (personByEmail(email)?.id ?? null);
+  const id = email === null ? null : (idFor(email));
   const original = resolveCatalog(app, id).ids;
   const twinIds = resolveCatalog(twin, id).ids;
   ok(`a ${who} resolves the same catalog on both`, json([...original].sort()) === json([...twinIds].sort()), `${original.length} actions`);
@@ -107,18 +115,23 @@ for (const [who, email] of PRINCIPALS) {
 // finding.
 const stable = (tree: string): string => tree.replace(/act-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/g, 'act-·');
 
-const openShell = (target: typeof server, email: string | null): ReturnType<NonNullable<typeof server.shells>['session']> => {
-  const token = email === null ? null : mintToken(email);
-  const principal = email === null ? null : (personByEmail(email)?.id ?? null);
-  return target.shells?.session(token, principal);
+const openShell = async (target: typeof server, email: string | null): ReturnType<NonNullable<typeof server.shells>['session']> => {
+  // A server with no shells cannot be compared to one that has them — that is a
+  // broken harness, not an empty result, so it says so rather than returning
+  // undefined and failing later as a tree that renders nothing.
+  const shells = target.shells;
+  if (shells === undefined) throw new Error('roundtrip: this server has no shells — there is nothing to compare');
+  const token = email === null ? null : await mintToken(email);
+  const principal = email === null ? null : (idFor(email));
+  return await shells.session(token, principal);
 };
 
 // Both shells are opened, THEN settled, THEN read. Reading on the turn a shell
 // is created captures it mid-mount, so the comparison would be of two blank
 // trees agreeing about nothing.
 for (const [who, email] of PRINCIPALS) {
-  const a = openShell(server, email);
-  const b = openShell(twinServer, email);
+  const a = await openShell(server, email);
+  const b = await openShell(twinServer, email);
   await settle(18);
   const treeA = a === undefined ? '' : treeOf(a.shell);
   const treeB = b === undefined ? '' : treeOf(b.shell);
@@ -137,8 +150,8 @@ for (const [who, email] of PRINCIPALS) {
 // to NAVIGATE to would sail straight past it. So both shells are driven through
 // the same destinations and compared at each stop.
 const OWNER = CAST.lumen.owner;
-const ownerA = openShell(server, OWNER);
-const ownerB = openShell(twinServer, OWNER);
+const ownerA = await openShell(server, OWNER);
+const ownerB = await openShell(twinServer, OWNER);
 await settle(18);
 
 const DESTINATIONS = ['people.list', 'leads.list', 'staff.list', 'plans.list', 'timetable.list', 'schedule.timetable', 'reports.overview', 'studio.settings', 'automations.list'];
@@ -160,7 +173,7 @@ ok(`every screen an owner can open renders identically`, walked === DESTINATIONS
 // The entries round-tripped too, so a read replayed against the twin has to
 // return what the original does — same fingerprint, same policy, same rows.
 const readFrom = async (target: typeof server, email: string, path: string, body: unknown): Promise<string> => {
-  const token = mintToken(email);
+  const token = await mintToken(email);
   const response = await target.request(path, {
     method: 'POST',
     headers: { Authorization: `Bearer ${String(token)}`, 'content-type': 'application/json' },

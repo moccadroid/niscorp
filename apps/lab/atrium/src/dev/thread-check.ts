@@ -12,9 +12,9 @@ type Row = Record<string, unknown>;
 const rows = (data: Record<string, unknown>, key: string): Row[] => (Array.isArray(data[key]) ? (data[key] as Row[]) : []);
 
 const main = async (): Promise<void> => {
-  const amara = login('amara'); // in house, The Lumen, room 412
-  const rosa = login('rosa'); // front desk, The Lumen
-  const kwame = login('kwame'); // maintenance, The Lumen
+  const amara = await login('amara'); // in house, The Lumen, room 412
+  const rosa = await login('rosa'); // front desk, The Lumen
+  const kwame = await login('kwame'); // maintenance, The Lumen
   await settle();
 
   // The manager's count is the `issues/openCount` read; the DB is the bus, so

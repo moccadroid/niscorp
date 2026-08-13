@@ -16,8 +16,7 @@ import { createHmac } from 'node:crypto';
 import { serve as listen } from '@hono/node-server';
 import { startIntegrations } from '../../../lyra-integrations/src/serve';
 import { CAST } from '@lyra/db/seed';
-import { mintToken } from '@lyra/server/users';
-import { login, ok, report, runtime, server, settle } from './world';
+import { login, mintToken, ok, report, runtime, server, settle } from './world';
 
 const KEY = 'lab-operator-key';
 runtime.operatorKey = KEY;
@@ -117,7 +116,7 @@ try {
   const registered = await operator('/operator/integrations', { id: 'stripe', url: `http://127.0.0.1:${PORT}/stripe` });
   process.env['STRIPE_KEY'] = String(registered['key'] ?? '');
   await operator('/operator/integrations/stripe/approve', {});
-  const owner = login(CAST.northrock.owner);
+  const owner = await login(CAST.northrock.owner);
   await settle(10);
   owner.dispatch({ type: 'ui:click', ref: 'nav', payload: 'studio.addons' });
   await settle(14);
@@ -293,7 +292,7 @@ try {
 
   const ledger = await server.request('/integrations/stripe/ledger', {
     method: 'POST',
-    headers: { Authorization: `Bearer ${String(mintToken(CAST.northrock.owner))}`, 'content-type': 'application/json' },
+    headers: { Authorization: `Bearer ${String(await mintToken(CAST.northrock.owner))}`, 'content-type': 'application/json' },
     body: '{}',
   });
   const rows = (await ledger.json()) as { invoice_id: string; amount_display: string; state_label: string; note: string }[];
@@ -316,7 +315,7 @@ try {
   const refunded = (await (
     await server.request('/integrations/stripe/ledger', {
       method: 'POST',
-      headers: { Authorization: `Bearer ${String(mintToken(CAST.northrock.owner))}`, 'content-type': 'application/json' },
+      headers: { Authorization: `Bearer ${String(await mintToken(CAST.northrock.owner))}`, 'content-type': 'application/json' },
       body: '{}',
     })
   ).json()) as { invoice_id: string; state_label: string; note: string }[];
@@ -327,7 +326,7 @@ try {
   // ── AND A STUDIO READS ITS OWN ───────────────────────────────
   const otherStudio = await server.request('/integrations/stripe/ledger', {
     method: 'POST',
-    headers: { Authorization: `Bearer ${String(mintToken(CAST.lumen.owner))}`, 'content-type': 'application/json' },
+    headers: { Authorization: `Bearer ${String(await mintToken(CAST.lumen.owner))}`, 'content-type': 'application/json' },
     body: '{}',
   });
   ok('...and nobody else’s', otherStudio.status === 404 || ((await otherStudio.json()) as unknown[]).length === 0, 'scoped by the assertion, like every other route here');

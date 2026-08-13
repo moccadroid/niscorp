@@ -5,8 +5,7 @@ import { MUTATION_ENTRIES } from '@lyra/app/vex';
 import { areasFor } from '@lyra/app/nav/sections';
 import { CATALOG_DEFINITIONS } from '@lyra/app/action-catalog';
 import { CAST } from '@lyra/db/seed';
-import { personByEmail } from '@lyra/server/users';
-import { app, ok, report } from './world';
+import { app, idFor, idsFor, ok, report } from './world';
 
 const PUSHED = new Set<string>();
 for (const def of Object.values(CATALOG_DEFINITIONS)) {
@@ -20,19 +19,19 @@ const CAST_PEOPLE = Object.entries(CAST.lumen).filter(([who]) => who !== 'studio
 
 const navFor = (granted: readonly string[]) => areasFor(granted);
 
-const orphansFor = (email: string): string[] => {
-  const ids = resolveCatalog(app, personByEmail(email)?.id ?? null).ids;
+const orphansFor = async (email: string): Promise<string[]> => {
+  const ids = (await idsFor(email));
   const nav = new Set(navFor(ids).flatMap((a) => [a.id, ...a.items.map((i) => i.action)]));
   return ids.filter((id) => !nav.has(id) && !STRUCTURAL(id) && !PUSHED.has(id));
 };
 
 for (const [who, email] of CAST_PEOPLE) {
-  const orphans = orphansFor(email);
+  const orphans = await orphansFor(email);
   ok(`everything the ${who} holds can be opened`, orphans.length === 0, orphans.length > 0 ? `unreachable: ${orphans.join(', ')}` : 'menu, sheet, or landing');
 }
 
 // Falsifiable: the check above passes trivially if `orphansFor` sees nothing.
-const ids = resolveCatalog(app, personByEmail(CAST.lumen.owner)?.id ?? null).ids;
+const ids = (await idsFor(CAST.lumen.owner));
 const invented = [...ids, 'ghost.screen'];
 const navIds = new Set(navFor(invented).flatMap((a) => [a.id, ...a.items.map((i) => i.action)]));
 ok(
@@ -42,7 +41,7 @@ ok(
 );
 
 for (const [who, email] of CAST_PEOPLE) {
-  const held = new Set(resolveCatalog(app, personByEmail(email)?.id ?? null).ids);
+  const held = new Set((await idsFor(email)));
   const offered = navFor([...held]).flatMap((a) => a.items.map((i) => i.action));
   const dead = offered.filter((id) => !held.has(id));
   ok(`the ${who}'s menu offers nothing they do not hold`, dead.length === 0, dead.join(', ') || 'every item leads somewhere');

@@ -111,7 +111,7 @@ export const automationsLayout: LayoutNode = {
         component: 'Section',
         props: {
           title: 'Outbox',
-          subtitle: 'What the automations would send. Nothing is delivered — Lyra has no mail integration yet, so these are queued and stay queued.',
+          subtitle: 'Every message the automations have sent, and every one that did not go — with the reason beside it.',
         },
         children: {
           component: 'Card',
@@ -125,8 +125,12 @@ export const automationsLayout: LayoutNode = {
               emptyHint: 'An automation with an email effect puts its messages here.',
               emptyIcon: 'mail',
               columns: [
-                { label: 'Message', w: 2, cell: { kind: 'primary', key: 'subject', subKey: 'to_address' } },
+                { label: 'Message', w: 2, cell: { kind: 'primary', key: 'subject', subKey: 'detail' } },
                 { label: '', px: 96, align: 'right', cell: { kind: 'badge', key: 'state_label', toneKey: 'state_tone' } },
+                // Only on a row that did not go: an action offered beside a
+                // message that already arrived is an invitation to send it
+                // twice.
+                { label: '', px: 104, align: 'right', cell: { kind: 'action', ref: 'sendAgain', label: 'Send again', showKey: 'can_send_again' } },
               ],
             },
           },

@@ -7,7 +7,7 @@ const count = async (sql: string, params: unknown[] = []): Promise<number> => {
   return Number(result.rows[0]?.n ?? -1);
 };
 
-const shell = login(CAST.lumen.owner);
+const shell = await login(CAST.lumen.owner);
 await settle();
 
 // ── the grid ──
@@ -98,7 +98,7 @@ void foreign;
 ok('another studio cannot edit this one’s timetable', (await count("SELECT count(*) n FROM class_templates WHERE name = 'Hijacked'")) === 0);
 
 // ── the grid is reachable and says which screen it is ────────
-const boss2 = login(CAST.lumen.owner);
+const boss2 = await login(CAST.lumen.owner);
 await settle(8);
 boss2.dispatch({ type: 'ui:click', ref: 'nav', payload: 'timetable.list' });
 await settle(10);

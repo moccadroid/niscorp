@@ -40,6 +40,12 @@ const asAction = (id: string): AvailableAction => ({
   blurb: '',
   capabilities: [],
   keywords: '',
+  // Empty, and that is a STATEMENT rather than a shrug: this fixture builds
+  // single-slot actions, so there is no other published job to list. Actions
+  // offered under several titles (housekeeping and fault reporting over one
+  // surface) carry them here, and nothing below exercises that — a real gap,
+  // now visible instead of hidden behind a fixture that did not compile.
+  also: [],
   input: (definitions[id] as { input?: unknown } | undefined)?.input ?? { properties: {} },
 });
 
@@ -51,11 +57,11 @@ const main = async (): Promise<void> => {
   check(`five personas seeded (${personas.map((p) => String(p['name'])).join(', ')})`, personas.length === 5);
 
   // ── the dock is on every shell ──
-  const amara = login('amara');
-  const rosa = login('rosa');
-  const kwame = login('kwame');
-  const henrik = login('henrik');
-  const vendor = login('atrium');
+  const amara = await login('amara');
+  const rosa = await login('rosa');
+  const kwame = await login('kwame');
+  const henrik = await login('henrik');
+  const vendor = await login('atrium');
   await settle();
   for (const [who, shell] of [['amara', amara], ['rosa', rosa], ['kwame', kwame], ['henrik', henrik], ['vendor', vendor]] as const) {
     check(`${who} carries the assistant`, mounted(shell, 'assistant')[0] === 'assistant');

@@ -42,35 +42,34 @@ const policy: ScopePolicy = { default: 'deny', entities: {} };
 
 const ctx: ShellHostContext = {
   app,
-  catalog: () => ({ ids: ['counter'], hash: 'h' }),
-  variants: () => new Map(),
-  roles: () => ['public'],
+  catalogFor: () => ({ ids: ['counter'], hash: 'h' }),
+  variantsFor: () => new Map(),
+  resolve: async () => ({ roles: ['public'], scope: {}, installed: undefined, catalog: { ids: ['counter'], hash: 'h' }, variants: new Map(), policy }),
   wire: () => async () => ({ ok: true, status: 200, json: async () => ({}), text: async () => '{}' }),
   runtime: {} as ShellHostContext['runtime'],
-  policy: () => policy,
 };
 
 describe('shells — the shell host', () => {
-  it('one durable shell per principal (same principal → same shell)', () => {
+  it('one durable shell per principal (same principal → same shell)', async () => {
     const host = createShellHost(ctx);
-    const a = host.session('t', 'usr_1');
-    const b = host.session('t', 'usr_1');
+    const a = await host.session('t', 'usr_1');
+    const b = await host.session('t', 'usr_1');
     expect(a.shell).toBe(b.shell);
   });
 
-  it('a different principal is a different shell', () => {
+  it('a different principal is a different shell', async () => {
     const host = createShellHost(ctx);
-    expect(host.session('t', 'usr_1').shell).not.toBe(host.session('t', 'usr_2').shell);
+    expect((await host.session('t', 'usr_1')).shell).not.toBe((await host.session('t', 'usr_2')).shell);
   });
 
-  it('anonymous sessions are ephemeral (a fresh shell each time)', () => {
+  it('anonymous sessions are ephemeral (a fresh shell each time)', async () => {
     const host = createShellHost(ctx);
-    expect(host.session(null, null).shell).not.toBe(host.session(null, null).shell);
+    expect((await host.session(null, null)).shell).not.toBe((await host.session(null, null)).shell);
   });
 
   it('dispatch(canvas, event) stamps the active instance as origin — the event is delivered', async () => {
     const host = createShellHost(ctx);
-    const session = host.session('t', 'usr_1');
+    const session = await host.session('t', 'usr_1');
     await tick();
     const active = session.shell.getState().canvases['main']?.active;
     expect(active).toBeDefined();
@@ -80,9 +79,9 @@ describe('shells — the shell host', () => {
     expect(session.shell.getRuntime(active!.id)?.getData()['n']).toBe(1);
   });
 
-  it('an ungranted initial does not mount (ring 1)', () => {
-    const host = createShellHost({ ...ctx, catalog: () => ({ ids: [], hash: 'h' }) });
-    const session = host.session('t', 'usr_1');
+  it('an ungranted initial does not mount (ring 1)', async () => {
+    const host = createShellHost({ ...ctx, catalogFor: () => ({ ids: [], hash: 'h' }), resolve: async () => ({ roles: ['public'], scope: {}, installed: undefined, catalog: { ids: [], hash: 'h' }, variants: new Map(), policy }) });
+    const session = await host.session('t', 'usr_1');
     expect(session.shell.getState().canvases['main']?.active).toBeUndefined();
   });
 
@@ -94,26 +93,34 @@ describe('shells — the shell host', () => {
       actions: { counter: { ...counter, layout: { component: 'Text', children: 'base' } } },
       layouts: { 'counter.basic': { action: 'counter', layout: { component: 'Text', children: 'variant' } } },
     } as unknown as NiscApp;
-    const rendered = (principal: string, held: boolean): string => {
+    const rendered = async (principal: string, held: boolean): Promise<string> => {
       const host = createShellHost({
         ...ctx,
         app: withLayouts,
-        variants: () => (held ? new Map([['counter', { component: 'Text', children: 'variant' }]]) : new Map()),
+        variantsFor: () => (held ? new Map([['counter', { component: 'Text', children: 'variant' }]]) : new Map()),
+        resolve: async () => ({
+          roles: ['public'],
+          scope: {},
+          installed: undefined,
+          catalog: { ids: ['counter'], hash: 'h' },
+          variants: held ? new Map([['counter', { component: 'Text', children: 'variant' }]]) : new Map(),
+          policy,
+        }),
       });
-      return JSON.stringify(host.session('t', principal).shell.flattenRenderTree(host.session('t', principal).shell.getCanvasRenderTree('main')));
+      return JSON.stringify((await host.session('t', principal)).shell.flattenRenderTree((await host.session('t', principal)).shell.getCanvasRenderTree('main')));
     };
-    expect(rendered('usr_base', false)).toContain('base');
-    expect(rendered('usr_base', false)).not.toContain('variant');
-    expect(rendered('usr_held', true)).toContain('variant');
-    expect(rendered('usr_held', true)).not.toContain('"base"');
+    expect(await rendered('usr_base', false)).toContain('base');
+    expect(await rendered('usr_base', false)).not.toContain('variant');
+    expect(await rendered('usr_held', true)).toContain('variant');
+    expect(await rendered('usr_held', true)).not.toContain('"base"');
 
     // Behavior survives the swap: the variant principal's click still bumps.
     const host = createShellHost({
       ...ctx,
       app: withLayouts,
-      variants: () => new Map([['counter', { component: 'Text', children: 'variant' }]]),
+      variantsFor: () => new Map([['counter', { component: 'Text', children: 'variant' }]]),
     });
-    const session = host.session('t', 'usr_bump');
+    const session = await host.session('t', 'usr_bump');
     await tick();
     const active = session.shell.getState().canvases['main']?.active;
     session.dispatch('main', { type: 'ui:click', ref: 'bump' });
@@ -131,7 +138,7 @@ describe('shells — the shell host', () => {
 describe('shells — reset', () => {
   it('builds a new shell and the session addresses it (the old state is gone)', async () => {
     const host = createShellHost(ctx);
-    const session = host.session('t', 'usr_1');
+    const session = await host.session('t', 'usr_1');
     await tick();
     const before = session.shell;
     const active = before.getState().canvases['main']?.active;
@@ -157,7 +164,7 @@ describe('shells — reset', () => {
 
   it('carries attached connections across — every terminal is served a fresh frame and trees', async () => {
     const host = createShellHost(ctx);
-    const session = host.session('t', 'usr_1');
+    const session = await host.session('t', 'usr_1');
     const a = fakeConnection();
     const b = fakeConnection();
     session.attach(a);
@@ -180,17 +187,17 @@ describe('shells — reset', () => {
 
   it('the durable map holds the replacement — a later connection joins it, not the disposed one', async () => {
     const host = createShellHost(ctx);
-    const first = host.session('t', 'usr_1');
+    const first = await host.session('t', 'usr_1');
     await tick();
     first.reset();
     await tick();
-    expect(host.session('t', 'usr_1').shell).toBe(first.shell);
+    expect((await host.session('t', 'usr_1')).shell).toBe(first.shell);
   });
 
-  it('resetting a principal who holds no shell answers false rather than throwing', () => {
+  it('resetting a principal who holds no shell answers false rather than throwing', async () => {
     const host = createShellHost(ctx);
     expect(host.reset('usr_nobody')).toBe(false);
-    host.session('t', 'usr_1');
+    await host.session('t', 'usr_1');
     expect(host.reset('usr_1')).toBe(true);
   });
 
@@ -210,14 +217,25 @@ describe('shells — reset', () => {
     } as unknown as NiscApp;
 
     const host = createShellHost({ ...ctx, app: withInputs });
-    const session = host.session('t', 'usr_1');
+    const session = await host.session('t', 'usr_1');
     await tick();
     const before = session.shell;
     const connection = fakeConnection();
     session.attach(connection);
 
     broken = true;
-    expect(() => session.reset()).toThrow();
+    // The rebuild is asynchronous now — `reset` answers "did they hold a shell"
+    // immediately and the replacement lands a tick later, exactly as `seeds`
+    // already behaved. So the failure surfaces on the console rather than to
+    // this caller. What must NOT change is the guarantee underneath: a reset
+    // that cannot build leaves the old shell standing.
+    const errors: unknown[] = [];
+    const original = console.error;
+    console.error = (...args: unknown[]) => errors.push(args[0]);
+    session.reset();
+    await tick();
+    console.error = original;
+    expect(errors.length).toBeGreaterThan(0);
 
     // Untouched: same shell, still attached, still rendering.
     expect(session.shell).toBe(before);
@@ -238,8 +256,8 @@ describe('shells — reset', () => {
 describe('shells — list', () => {
   it('reports durable shells with their attachments and what is mounted', async () => {
     const host = createShellHost(ctx);
-    const session = host.session('t', 'usr_1');
-    host.session(null, null); // an anonymous shell is not durable, so not listed
+    const session = await host.session('t', 'usr_1');
+    await host.session(null, null); // an anonymous shell is not durable, so not listed
     await tick();
 
     expect(host.list().map((s) => s.principal)).toEqual(['usr_1']);
@@ -260,7 +278,7 @@ describe('shells — list', () => {
 
   it('a signed-out shell leaves the roster at once, not when somebody next looks', async () => {
     const host = createShellHost(ctx);
-    host.session('t', 'usr_1');
+    await host.session('t', 'usr_1');
     await tick();
     expect(host.list()).toHaveLength(1);
     host.reset('usr_1');
@@ -279,7 +297,7 @@ describe('shells — the idle sweep', () => {
     vi.useFakeTimers();
     try {
       const host = createShellHost({ ...ctx, idleMs: 1000 });
-      const session = host.session('t', 'usr_1');
+      const session = await host.session('t', 'usr_1');
       const before = session.shell;
       await vi.advanceTimersByTimeAsync(0);
 
@@ -294,7 +312,7 @@ describe('shells — the idle sweep', () => {
       expect(host.list()).toHaveLength(0);
 
       // Rebuilt on the next connection — the shell is a cache, not the truth.
-      const after = host.session('t', 'usr_1');
+      const after = await host.session('t', 'usr_1');
       expect(after.shell).not.toBe(before);
       expect(host.list()).toHaveLength(1);
       host.stop();
@@ -307,7 +325,7 @@ describe('shells — the idle sweep', () => {
     vi.useFakeTimers();
     try {
       const host = createShellHost({ ...ctx, idleMs: 0 });
-      host.session('t', 'usr_1');
+      await host.session('t', 'usr_1');
       await vi.advanceTimersByTimeAsync(24 * 60 * 60 * 1000);
       expect(host.list()).toHaveLength(1);
       host.stop();
@@ -367,7 +385,7 @@ const lastOfType = (texts: string[], type: string): Record<string, unknown> | un
 describe('shells — frame deltas', () => {
   it('a delta rebuilds the exact frame a whole-frame terminal was sent', async () => {
     const host = createShellHost({ ...ctx, app: wide, delta: true });
-    const session = host.session('t', 'usr_1');
+    const session = await host.session('t', 'usr_1');
     const asked = textConnection();
     const silent = textConnection();
     session.attach(asked, { delta: true });
@@ -400,7 +418,7 @@ describe('shells — frame deltas', () => {
 
   it('deltas chain — each one is written against the last frame, not the first', async () => {
     const host = createShellHost({ ...ctx, app: wide, delta: true });
-    const session = host.session('t', 'usr_1');
+    const session = await host.session('t', 'usr_1');
     const asked = textConnection();
     session.attach(asked, { delta: true });
     await tick();
@@ -422,7 +440,7 @@ describe('shells — frame deltas', () => {
 
   it('off by default — a terminal that asks is still served whole frames', async () => {
     const host = createShellHost({ ...ctx, app: wide });
-    const session = host.session('t', 'usr_1');
+    const session = await host.session('t', 'usr_1');
     const asked = textConnection();
     session.attach(asked, { delta: true });
     await tick();
@@ -436,7 +454,7 @@ describe('shells — frame deltas', () => {
 
   it('resync serves whole frames without touching the shell', async () => {
     const host = createShellHost({ ...ctx, app: wide, delta: true });
-    const session = host.session('t', 'usr_1');
+    const session = await host.session('t', 'usr_1');
     const asked = textConnection();
     session.attach(asked, { delta: true });
     await tick();
@@ -463,7 +481,7 @@ describe('shells — frame deltas', () => {
 
   it('a reset carries the capability across — the replacement still deltas', async () => {
     const host = createShellHost({ ...ctx, app: wide, delta: true });
-    const session = host.session('t', 'usr_1');
+    const session = await host.session('t', 'usr_1');
     const asked = textConnection();
     session.attach(asked, { delta: true });
     await tick();
@@ -482,7 +500,7 @@ describe('shells — frame deltas', () => {
 
   it('a detached connection is forgotten by both sets', async () => {
     const host = createShellHost({ ...ctx, app: wide, delta: true });
-    const session = host.session('t', 'usr_1');
+    const session = await host.session('t', 'usr_1');
     const asked = textConnection();
     session.attach(asked, { delta: true });
     await tick();
@@ -500,7 +518,7 @@ describe('shells — a canvas that fails to render', () => {
     const errors = vi.spyOn(console, 'error').mockImplementation(() => {});
     try {
       const host = createShellHost({ ...ctx, app: twoCanvas });
-      const session = host.session('t', 'usr_1');
+      const session = await host.session('t', 'usr_1');
       await tick();
 
       // The narrowest possible break: this one canvas throws while rendering.
@@ -536,7 +554,7 @@ describe('shells — a canvas that fails to render', () => {
     const errors = vi.spyOn(console, 'error').mockImplementation(() => {});
     try {
       const host = createShellHost({ ...ctx, app: twoCanvas });
-      const session = host.session('t', 'usr_1');
+      const session = await host.session('t', 'usr_1');
       await tick();
       const shell = session.shell as unknown as { getCanvasRenderTree: (id: string) => unknown };
       shell.getCanvasRenderTree = () => {

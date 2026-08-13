@@ -11,8 +11,9 @@ had been implemented while most of it was running in production code.
 
 | Plan | Status | What it is |
 |---|---|---|
+| [lyra-defects.md](lyra-defects.md) | **Not started** | Defects from the 2026-08-13 product review: four member-facing bugs, the i18n coverage gap and the three structural leaks behind it, the unwired walk-in desk, the pack error contract, and a measured per-navigation memory growth in the shell. Every item cited to a line and reproducible; carries three decisions (D1–D3) that gate parts of it. |
 | [lyra-identity.md](lyra-identity.md) | **Not started** | Removing Lyra's in-memory directory, and the moss seam shapes that force one. Six standalone defects can land first; the rest carries eight decisions a human must make, one of which (session lifetime) gates everything. |
-| [lyra-vex-parameters.md](lyra-vex-parameters.md) | **Partially built** | Selection as context values instead of fingerprints. The collapse (141 → 112) and sorting are done; **optional context keys in vex** are not, and Part 4 is the only thing that raises the ceiling. Carries decisions a human must make first. |
+| [lyra-vex-parameters.md](lyra-vex-parameters.md) | **Built** | Selection as context values instead of fingerprints: the collapse (141 → 112), sorting, and optional context keys in vex. Kept for Part 1's list of collapses that were REFUSED and why, Part 4's design space, and Part 4.6 — four places the built thing departs from the design, including one merge withdrawn because two entries read different tables on purpose. |
 | [lyra-mail.md](lyra-mail.md) | **Not started** | Making the product able to send: one provider, a `mail` pack, the magic link and automation mail through one route. Includes the consent work that becomes mandatory the moment anything sends. |
 | [lyra-families.md](lyra-families.md) | **Not started** | A parent acting for a child. Carries a decision a human must make first — one option touches vex. |
 | [lyra-stripe.md](lyra-stripe.md) | **Partially built** | Payments as an integration. The pack and the trust story ship; invoicing, receipts and tax do not. Part 6 lists what a human must supply. |

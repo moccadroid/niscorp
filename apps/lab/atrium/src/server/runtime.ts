@@ -24,5 +24,23 @@ export const devRuntime = async (): Promise<DevRuntime> => {
   const cache = createPostgresCache({ pool: createPglitePool(db) });
   await cache.init();
 
-  return { db, pool: createPglitePool(db, RAW_DATE_PARSERS), cache };
+  // THE OPERATOR KEY BELONGS ON THE RUNTIME, not only in the environment.
+  //
+  // There are two gates on `/operator/*`: moss mounts one (server.ts) that
+  // reads `runtime.operatorKey`, and this app mounts its own (server/operator.ts)
+  // that reads `process.env.OPERATOR_KEY`. moss's is registered first, so its
+  // answer is the only one that ever runs — and with the field unset it read
+  // '', which means "the seam does not exist" and 404s every path under it.
+  //
+  // The result was an operator surface that could not be reached with the right
+  // key, by anybody, ever. Setting the env var looked like it should work and
+  // silently did nothing, because the half that was listening never read it.
+  return {
+    db,
+    pool: createPglitePool(db, RAW_DATE_PARSERS),
+    cache,
+    ...(process.env['OPERATOR_KEY'] !== undefined && process.env['OPERATOR_KEY'] !== ''
+      ? { operatorKey: process.env['OPERATOR_KEY'] }
+      : {}),
+  };
 };

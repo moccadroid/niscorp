@@ -29,7 +29,7 @@ const tick = (ms = 30): Promise<void> => new Promise((r) => setTimeout(r, ms));
 
 const main = async (): Promise<void> => {
   // ── a dev principal: devtools starts OFF (empty canvas) ──
-  const alex = login('alex'); // sales + dev → holds devtools.dock
+  const alex = await login('alex'); // sales + dev → holds devtools.dock
   await tick();
   checks.push(['dev principal: the devtools canvas starts empty (no seed)', alex.getCanvasState(DEVTOOLS_CANVAS).active === undefined]);
 
@@ -154,7 +154,7 @@ const main = async (): Promise<void> => {
   checks.push(['flipping the toggle off unmounts the dock', alex.getCanvasState(DEVTOOLS_CANVAS).active === undefined]);
 
   // ── everyone SEES the toggle, but it no-ops for a non-dev (dock not granted) ──
-  const jordan = login('jordan'); // viewer → holds settings, NOT devtools.dock
+  const jordan = await login('jordan'); // viewer → holds settings, NOT devtools.dock
   jordan.push('main', 'settings');
   await tick();
   jordan.dispatch({ type: 'ui:model', ref: 'devtools-toggle', payload: true });

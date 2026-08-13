@@ -3,7 +3,7 @@
 // the row ⋯ menu edits (task.update) and deletes (task.delete behind the confirm),
 // and a deal's task completes from the workspace. Run:
 //   pnpm --filter relay exec tsx src/dev/task-mgmt-check.ts
-import { shell, runtime } from './check-shell';
+import { shell, must, runtime } from './check-shell';
 import { todayStr } from '@relay/lib/date';
 
 const settle = (ms = 240): Promise<void> => new Promise((r) => setTimeout(r, ms));
@@ -49,7 +49,7 @@ const main = async (): Promise<void> => {
   // ── Inline complete: check off an open task → it leaves the Open list, lands done ──
   await tab('open');
   const openBefore = rows().length;
-  const t = rows()[0];
+  const t = must(rows()[0], 'an open task');
   const tId = t['task_id'] as string;
   shell.dispatch({ type: 'ui:click', ref: 'toggle', payload: { id: tId, done: true } });
   await settle(360);
@@ -65,7 +65,7 @@ const main = async (): Promise<void> => {
 
   // ── Edit a task from the row ⋯ menu (seeded from the row, saves the new title) ──
   await tab('open');
-  const er = rows()[0];
+  const er = must(rows()[0], 'a task to edit');
   shell.dispatch({ type: 'ui:click', ref: 'row-edit', payload: er });
   await settle(280);
   checks.push([`Edit opens the form (got ${String(modalId())})`, modalId() === 'tasks.form']);
@@ -76,7 +76,7 @@ const main = async (): Promise<void> => {
   checks.push([`save updated the title in PGlite`, (await count("SELECT count(*)::int n FROM tasks WHERE id=$1 AND title='Renamed by check'", [er['task_id']])) === 1]);
 
   // ── Delete a task (confirm first, then it's gone) ──
-  const dr = rows()[1];
+  const dr = must(rows()[1], 'a second task to delete');
   const dId = dr['task_id'] as string;
   shell.dispatch({ type: 'ui:click', ref: 'row-delete', payload: dr });
   await settle(240);

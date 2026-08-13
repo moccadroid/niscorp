@@ -1,7 +1,12 @@
 import { z } from 'zod';
 import type { ActionDefinition, Step } from '@niscorp/nova';
 import { peopleListLayout, peopleDetailLayout, peopleFormLayout, peopleSignupLayout } from './people.layouts';
-import { LENSES, ROLL_PAGE } from '@lyra/app/vex/member.entries';
+import { LENSES, ROLL_PAGE, ROLL_ORDERS } from '@lyra/app/vex/member.entries';
+
+// The order the roll opens in — first in the entry's own declaration, so the
+// screen and the query agree about the default without either naming it twice.
+const DEFAULT_ORDER = ROLL_ORDERS[0]!;
+const DEFAULT_ROW_KEY = DEFAULT_ORDER.rowKey;
 import {
   peopleListPrism,
   peopleCountPrism,
@@ -40,7 +45,28 @@ const lastOf = (page: string, field: string) => ({
 // Whether a full page came back. A short page is the end of the list; there is
 // no count to compare against, and asking for one would be a second read that
 // can disagree with the first.
+//
+// This used to be false whenever a sort was active — the seek only knew the
+// name order, so any other order got one page and no "show more". The entry
+// declares its orders now (ROLL_ORDERS) and carries one seek arm per order, so
+// paging works in all of them and there is nothing left to special-case.
 const FULL_PAGE = (page: string) => ({ $prism: { $eq: [{ $length: { $ref: page } }, ROLL_PAGE] } });
+
+// THE CURSOR'S VALUE IS THE SORTED COLUMN'S, whichever that is — a position in
+// the name order is a name, and in the first-seen order a date. Read off the
+// row by the key the order declares, so adding a sortable column is one entry
+// in ROLL_ORDERS rather than a branch here and a clause there.
+const CURSOR_VALUE = (page: string) => ({
+  $prism: {
+    $case: {
+      branches: ROLL_ORDERS.filter((o) => o.rowKey !== DEFAULT_ROW_KEY).map((o) => ({
+        when: { $eq: [{ $ref: '$.sortBy' }, o.field] },
+        then: { $get: { from: { $slice: { from: { $ref: page }, start: -1 } }, path: ['0', o.rowKey], fallback: { $const: '' } } },
+      })),
+      else: { $get: { from: { $slice: { from: { $ref: page }, start: -1 } }, path: ['0', DEFAULT_ROW_KEY], fallback: { $const: '' } } },
+    },
+  },
+});
 
 // A fresh read: forget where we were. The seek is a position in a list that
 // the new lens, search or write has just replaced.
@@ -50,7 +76,7 @@ const REWIND: Step[] = [
 ];
 
 const AFTER_FIRST_PAGE: Step[] = [
-  { set: 'after', value: lastOf('$.rows', 'person_name') },
+  { set: 'after', value: CURSOR_VALUE('$.rows') },
   { set: 'afterId', value: lastOf('$.rows', 'person_id') },
   { set: 'hasMore', value: FULL_PAGE('$.rows') },
 ];
@@ -80,6 +106,14 @@ export const peopleListAction: ActionDefinition = {
     afterId: '',
     more: [],
     hasMore: false,
+
+    // NAMED, not empty. The roll opens in the entry's own order and now SAYS
+    // which one that is — the cursor is a position in a named ordering, so
+    // "whatever the entry does" is not something a seek can be in. It also
+    // makes the header light up on the column the list is actually sorted by,
+    // which an empty value could never do.
+    sortBy: DEFAULT_ORDER.field,
+    sortDir: DEFAULT_ORDER.dir,
   },
   layout: peopleListLayout,
   endpoints: {
@@ -98,6 +132,19 @@ export const peopleListAction: ActionDefinition = {
   },
   triggers: [
     { event: 'ui:click', ref: 'scope', do: [{ set: 'scope', value: '@event.payload.value' }, { set: 'loading', value: true }, ...REWIND, { call: 'load', onSuccess: [{ set: 'loading', value: false }, ...AFTER_FIRST_PAGE] }, { call: 'count', onSuccess: [{ set: 'totalDisplay', value: '$.countRow.total_display' }] }] },
+
+    // A new order is a new list, so the cursor goes with it — REWIND first,
+    // exactly like a lens change or a keystroke.
+    {
+      event: 'ui:click',
+      ref: 'sort',
+      do: [
+        { set: 'sortBy', value: '@event.payload.key' },
+        { set: 'sortDir', value: '@event.payload.dir' },
+        ...REWIND,
+        { call: 'load', onSuccess: AFTER_FIRST_PAGE },
+      ],
+    },
 
     // A row opens the record on top, so Back returns to the list — with the
     // lens it was showing, because the list instance was never unmounted.
@@ -129,7 +176,7 @@ export const peopleListAction: ActionDefinition = {
           call: 'loadMore',
           onSuccess: [
             { set: 'rows', value: { $prism: { $flatten: [{ $ref: '$.rows' }, { $ref: '$.more' }] } } },
-            { set: 'after', value: lastOf('$.more', 'person_name') },
+            { set: 'after', value: CURSOR_VALUE('$.more') },
             { set: 'afterId', value: lastOf('$.more', 'person_id') },
             { set: 'hasMore', value: FULL_PAGE('$.more') },
           ],
@@ -319,6 +366,7 @@ export const peopleFormAction: ActionDefinition = {
     // not an undo.
     trialEndsOn: '',
     notes: '',
+    marketingOk: false,
     saving: false,
     error: '',
   },
@@ -326,6 +374,16 @@ export const peopleFormAction: ActionDefinition = {
   endpoints: {
     load: { url: '/api/member/vex', method: 'POST', request: personByIdPrism, target: 'member' },
     save: { url: '/api/member/vex', method: 'POST', request: personUpdatePrism, errorTarget: 'error' },
+    // CONSENT SAVES ON THE FLIP, not on Save. It is not an edit to a note: the
+    // studio is recording that somebody said yes, and a person who says it at
+    // the counter and walks away should not depend on the desk pressing a
+    // button afterwards.
+    consent: {
+      url: '/api/member/vex',
+      method: 'POST',
+      request: { fingerprint: 'people/consent', context: { personId: { $ref: '$.personId' }, marketingOk: { $ref: '$.marketingOk' } } },
+      errorTarget: 'error',
+    },
   },
   lifecycle: {
     // The raw values travel alongside their display strings precisely so a
@@ -336,11 +394,13 @@ export const peopleFormAction: ActionDefinition = {
         onSuccess: [
           { set: 'trialEndsOn', value: '$.member.trial_ends_on' },
           { set: 'notes', value: '$.member.notes' },
+          { set: 'marketingOk', value: '$.member.marketing_ok' },
         ],
       },
     ],
   },
   triggers: [
+    { event: 'ui:model', ref: 'marketingOk', do: [{ set: 'marketingOk', value: '@event.payload' }, { call: 'consent' }] },
     {
       event: 'ui:click',
       ref: 'save',

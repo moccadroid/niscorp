@@ -7,7 +7,7 @@ const count = async (sql: string, params: unknown[] = []): Promise<number> => {
   return Number(result.rows[0]?.n ?? -1);
 };
 
-const desk = login(CAST.lumen.desk);
+const desk = await login(CAST.lumen.desk);
 await settle();
 
 // ── the form ──
@@ -71,7 +71,7 @@ const asMember = await asPrincipal(CAST.lumen.member, '/api/member/vex', {
 ok('a member cannot write people down', JSON.stringify(asMember).includes('status'), JSON.stringify(asMember).slice(0, 70));
 
 // ── the reports moved ──
-const owner = login(CAST.lumen.owner);
+const owner = await login(CAST.lumen.owner);
 await settle();
 owner.dispatch({ type: 'ui:click', ref: 'nav', payload: 'reports.overview' });
 await settle(14);
@@ -93,7 +93,7 @@ ok('every studio gets its own figures', JSON.stringify(foreign) !== JSON.stringi
 const beforePeople = await count('SELECT count(*)::int n FROM people');
 const beforeAnchors = await count('SELECT count(*)::int n FROM studio_people');
 
-const front = login(CAST.lumen.desk);
+const front = await login(CAST.lumen.desk);
 await settle();
 front.dispatch({ type: 'ui:click', ref: 'nav', payload: 'people.list' });
 await settle(6);
@@ -110,7 +110,7 @@ ok('...and offers the plan to change that', tree.includes('Start plan'));
 
 // The desk cannot start one — contracts are the manager's pen — so the check
 // hands the counter to Kaya's Lumen counterpart: the owner.
-const boss = login(CAST.lumen.owner);
+const boss = await login(CAST.lumen.owner);
 await settle();
 boss.dispatch({ type: 'ui:click', ref: 'nav', payload: 'people.list' });
 await settle(6);

@@ -1,10 +1,10 @@
 import type { SeedEntry, SeedMutation } from '@niscorp/vex';
-import { studioCurrent, membersActiveCount, checkInsTodayCount } from './studio.entries';
+import { studioCurrent, membersActiveCount, checkInsTodayCount, studioSetReplyTo, studioSetDomain, outboxSentToday } from './studio.entries';
 import { revenueAtRisk, revenueCommitted, revenueExpected, revenueLeaving } from './forecast.entries';
 import { sessionsToday, sessionsUpcoming, programsList } from './schedule.entries';
 import { sessionAttending, sessionDetail } from './session.entries';
 import { peopleList, peopleCount, personById, offeringsList, offeringOptions, offeringsOnSale } from './member.entries';
-import { personAnchorUpdate } from './member.mutations';
+import { personAnchorUpdate, personConsentSet } from './member.mutations';
 import { subscriptionAssert, subscriptionBillable, subscriptionForMember, subscriptionGiveNotice, subscriptionWithdrawNotice, subscriptionStart, subscriptionRecordPayment, subscriptionEnd, subscriptionPause, subscriptionResume, myMembership, passSell, passesForPerson } from './subscription.entries';
 import { localeCurrent, studioSetLocale, studioSetTheme, themeCurrent, themesList } from './theme.entries';
 import { bookableForSession, bookingCancel, bookingCreate, checkInMark, rosterForSession, walkInsToday } from './desk.entries';
@@ -24,7 +24,7 @@ import {
 } from './timetable.entries';
 import { staffById, staffCreate, staffEnroll, staffList, staffSetActive, staffSetRole } from './staff.entries';
 import { bookClass, cancelMyBooking, myBookedSessions, myBookings, myCard, myPasses } from './me.entries';
-import { enquiredPerson, membersLapsedAway, automationArm, automationCreate, automationUpdate, automationsList, automationRecipes, automationRuns, bookingsOnDay, joinedSubscription, followUpsOpen, notificationsUnseen, notificationsMarkSeen, outboxRecent, closeFollowUp, notify, queueMessage, trialsDue } from './tide.entries';
+import { enquiredPerson, membersLapsedAway, automationArm, automationCreate, automationUpdate, automationsList, automationRecipes, automationRuns, bookingsOnDay, joinedSubscription, followUpsOpen, notificationsUnseen, notificationsMarkSeen, outboxRecent, outboxQueued, outboxStuck, outboxClaim, outboxSent, outboxFailed, outboxRequeue, closeFollowUp, notify, queueMessage, trialsDue } from './tide.entries';
 import { courseCreate, courseSetActive, courseRoster, courseUpdate, coursesList, enrolMember, enrolmentsForMember, joinCourse, leaveCourse, myEnrolments, withdrawMember } from './course.entries';
 import { studioPersonCreate, peopleEnroll, personByEmail, personCreate } from './intake.entries';
 import { addonInstall, addonUninstall, addonsInstalled, addonsList } from './addon.entries';
@@ -82,6 +82,9 @@ export const ENTRIES: CacheEntry[] = [
   followUpsOpen,
   notificationsUnseen,
   outboxRecent,
+  outboxQueued,
+  outboxStuck,
+  outboxSentToday,
   automationsList,
   automationRecipes,
   joinedSubscription,
@@ -103,6 +106,7 @@ export const MUTATION_ENTRIES: MutationEntry[] = [
   addonInstall,
   addonUninstall,
   personAnchorUpdate,
+  personConsentSet,
   subscriptionStart,
   subscriptionRecordPayment,
   subscriptionEnd,
@@ -114,6 +118,8 @@ export const MUTATION_ENTRIES: MutationEntry[] = [
   subscriptionAssert,
   studioSetTheme,
   studioSetLocale,
+  studioSetReplyTo,
+  studioSetDomain,
   checkInMark,
   bookingCreate,
   bookingCancel,
@@ -131,6 +137,10 @@ export const MUTATION_ENTRIES: MutationEntry[] = [
   closeFollowUp,
   notificationsMarkSeen,
   queueMessage,
+  outboxClaim,
+  outboxSent,
+  outboxFailed,
+  outboxRequeue,
   automationCreate,
   automationUpdate,
   automationArm,

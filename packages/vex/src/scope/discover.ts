@@ -3,6 +3,7 @@ import type { Filter } from '../schemas/filter.schema.js';
 import type { ComputeExpression } from '../schemas/compute.schema.js';
 import type { AggregateExpression } from '../schemas/aggregate.schema.js';
 import type { FieldOrValue } from '../schemas/value.schema.js';
+import { refuseOptional } from '../engine/optional.js';
 
 // ───────────────────────────────────────────────────────────────
 // Helpers
@@ -110,6 +111,14 @@ const collectFromFilter = (filter: Filter, out: Set<string>): void => {
     if (entity !== undefined) out.add(entity);
     return;
   }
+
+  // THE ONE THAT MATTERS. This walker decides which entities get scope
+  // injected; a node it does not recognise falls through and contributes
+  // nothing, so an entity mentioned only inside an unrecognised node would be
+  // read WITHOUT a tenant filter. `optional` is resolved before the pipeline
+  // (engine/optional.ts) precisely so it can never reach here — and if it ever
+  // does, that is a scope hole, not a missing feature.
+  if ('optional' in filter) refuseOptional('scope discovery');
 };
 
 // ───────────────────────────────────────────────────────────────

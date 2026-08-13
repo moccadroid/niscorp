@@ -40,10 +40,18 @@ export const peopleListLayout: LayoutNode = page([
         onRowRef: 'open',
         empty: 'Nobody here yet.',
         emptyHint: 'People appear once somebody asks, signs up, or the desk writes them down.',
+        // The database owns the order, so a header click re-reads rather than
+        // shuffling the fifty rows already on screen — sorting two thousand
+        // people by the fifty you happen to be looking at is not sorting.
+        // Standing is deliberately NOT sortable: it is computed per row and no
+        // dialect will order by an alias that is not a column.
+        sortKey: '$.sortBy',
+        sortDir: '$.sortDir',
+        onSortRef: 'sort',
         columns: [
-          { label: 'Person', w: 2, cell: { kind: 'avatar', key: 'person_name', subKey: 'email' } },
+          { label: 'Person', w: 2, sortable: 'people.name', cell: { kind: 'avatar', key: 'person_name', subKey: 'email' } },
           { label: 'Standing', px: 100, cell: { kind: 'badge', key: 'status_display', toneKey: 'status_tone' } },
-          { label: 'First seen', px: 104, align: 'right', cell: { kind: 'text', key: 'joined_display', color: 'mute' } },
+          { label: 'First seen', px: 104, align: 'right', sortable: 'studio_people.first_seen_on', cell: { kind: 'text', key: 'joined_display', color: 'mute' } },
         ],
       },
     },
@@ -351,6 +359,19 @@ export const peopleFormLayout: LayoutNode = page([
           props: { label: 'Notes', rows: 5, placeholder: 'Anything the desk should know.', hint: 'Internal only — the member never sees this.' },
           ref: 'notes',
           model: '$.notes',
+        },
+        // THE ONLY PLACE A YES CAN BE RECORDED. Class reminders and booking
+        // confirmations need no permission — they asked for the class. This is
+        // for everything else, and without it the studio's win-back automation
+        // reaches nobody at all, which is correct and looks broken.
+        {
+          component: 'Switch',
+          props: {
+            label: 'May we email them news and offers?',
+            hint: 'Reminders about their own classes go out either way. This is for anything else — and they can take it back from any email.',
+          },
+          ref: 'marketingOk',
+          model: '$.marketingOk',
         },
         { if: '$.error', then: { component: 'Notice', props: { tone: 'alert', message: '$.error' } }, else: '' },
         {

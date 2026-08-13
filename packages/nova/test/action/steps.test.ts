@@ -18,7 +18,7 @@ const fail = (data: unknown, status = 500): FetchResponse => ({
 });
 
 const makeCtx = (overrides: Partial<StepContext> = {}): StepContext => {
-  const dataStore = overrides.dataStore ?? createDataStore({});
+  const dataStore = overrides.dataStore ?? createDataStore<Record<string, unknown>>({});
   return {
     dataStore,
     endpoints: {},
@@ -35,7 +35,7 @@ const makeCtx = (overrides: Partial<StepContext> = {}): StepContext => {
 
 describe('executeSteps — mutations', () => {
   it('runs sequential mutations', async () => {
-    const dataStore = createDataStore({ n: 0 });
+    const dataStore = createDataStore<Record<string, unknown>>({ n: 0 });
     await executeSteps(
       [{ increment: 'n', by: 2 }, { increment: 'n' }, { set: 'label', value: 'x' }],
       makeCtx({ dataStore }),
@@ -46,7 +46,7 @@ describe('executeSteps — mutations', () => {
 
 describe('executeSteps — call', () => {
   it('runs onSuccess and writes target', async () => {
-    const dataStore = createDataStore({});
+    const dataStore = createDataStore<Record<string, unknown>>({});
     const endpoints: Record<string, EndpointConfig> = {
       load: { url: '/x', method: 'GET', target: 'user' },
     };
@@ -59,7 +59,7 @@ describe('executeSteps — call', () => {
   });
 
   it('runs onError with @error scope accessible via templates', async () => {
-    const dataStore = createDataStore({});
+    const dataStore = createDataStore<Record<string, unknown>>({});
     const endpoints: Record<string, EndpointConfig> = {
       load: { url: '/x', method: 'GET' },
     };
@@ -84,7 +84,7 @@ describe('executeSteps — emit', () => {
     const messageBus = createMessageBus();
     const fn = vi.fn();
     messageBus.subscribe('cart-updated', fn);
-    const dataStore = createDataStore({ id: 'u1' });
+    const dataStore = createDataStore<Record<string, unknown>>({ id: 'u1' });
     await executeSteps(
       [{ emit: { channel: 'cart-updated', payload: { user: '{{$.id}}' } } }],
       makeCtx({ dataStore, messageBus }),
@@ -128,7 +128,7 @@ describe('executeSteps — navigation', () => {
 
 describe('executeSteps — interleaving', () => {
   it('runs mutations between effects', async () => {
-    const dataStore = createDataStore({ n: 0 });
+    const dataStore = createDataStore<Record<string, unknown>>({ n: 0 });
     const endpoints: Record<string, EndpointConfig> = {
       ping: { url: '/p', method: 'GET' },
     };

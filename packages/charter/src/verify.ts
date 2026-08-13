@@ -34,7 +34,12 @@ export type ClosureAuditor = (grantedIds: readonly string[], layoutIds?: readonl
 export const verifyCharter = (
   charter: Charter,
   universes: { actions: readonly string[]; data: readonly string[]; layouts?: readonly string[] },
-  assignments: Record<string, readonly string[]> = {},
+  // THE ROLE COMBINATIONS A PRINCIPAL MAY WEAR — one entry per combination, not
+  // one per person. The only rule below that reads it (`subtractive-assigned`)
+  // wants the set of roles somebody actually holds, and a population is a very
+  // expensive way to spell a set. A composer that still holds an assignment map
+  // passes `Object.values(map)`; one that declares its combinations passes them.
+  wearable: readonly (readonly string[])[] = [],
   closure?: ClosureAuditor,
 ): VerifyReport => {
   const actionUniverse = universes.actions;
@@ -151,7 +156,7 @@ export const verifyCharter = (
     if (Array.isArray(def)) continue;
     for (const sub of def.without ?? []) subtractive.add(sub);
   }
-  const worn = new Set(Object.values(assignments).flat());
+  const worn = new Set(wearable.flat());
   for (const role of subtractive) {
     if (worn.has(role)) {
       warnings.push({ level: 'warning', rule: 'subtractive-assigned', detail: `role "${role}" is referenced in "without" but is also assigned to a principal` });

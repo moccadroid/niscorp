@@ -83,7 +83,7 @@ export const CLOSE_SIGNED_OUT = 4403;
 
 export type SocketContext = {
   session: (token: string) => string | null | Promise<string | null>;
-  catalog: (principal: string | null) => Catalog;
+  catalog: (principal: string | null) => Catalog | Promise<Catalog>;
   // The shell host — when the manifest declares a shell, events route into
   // the session's server shell and render frames flow back.
   shells?: ShellHost;
@@ -194,7 +194,7 @@ export const createSocket = (ctx: SocketContext): SocketAccept => {
 
     // The catalog channel: the application, resolved for YOU, on every
     // (re)connect — reconnect re-sends current state, no replay machinery.
-    const { ids, hash } = ctx.catalog(principal);
+    const { ids, hash } = await ctx.catalog(principal);
     send({ type: 'hello', principal, catalog: { actions: ids, hash } });
 
     // The canvas streams: attach to the session's shell (durable per
@@ -207,7 +207,7 @@ export const createSocket = (ctx: SocketContext): SocketAccept => {
     // this existed does.
     const wantsDelta = new URL(url, 'http://nisc.local').searchParams.get('delta') === '1';
 
-    const session = ctx.shells?.session(token, principal);
+    const session = await ctx.shells?.session(token, principal);
     if (session !== undefined) {
       session.attach(connection, { delta: wantsDelta });
       connection.onClose(() => session.detach(connection));

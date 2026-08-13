@@ -1,30 +1,35 @@
-import { listAttachments, listPlacements, resolveCatalog } from '@niscorp/moss';
+import { listAttachments, listPlacements, resolveCatalogForRoles } from '@niscorp/moss';
 import type { FunctionHandler } from '@niscorp/nova';
 import type { FunctionSession, NiscApp } from '@niscorp/moss';
 import type { PgPool } from '@niscorp/vex';
 import { contextFor } from '@lyra/app/nav/sections';
-import type { Directory } from '@lyra/app/app';
-import { greetingFor } from '../phrases';
+import { greetingFrom, phrasesFor } from '../phrases';
+import { installedFor, localeOf, personCard, studioOf } from '../lookup';
+import { dayIn } from '../clock';
 
 export const navFunctions = (
   session: FunctionSession,
-  deps: { app: NiscApp; directory: Directory; pool: PgPool },
+  deps: { app: NiscApp; pool: PgPool },
 ): Record<string, FunctionHandler> => ({
   'nav.identity': async () => {
-    const person = deps.directory.person(session.principal);
+    if (session.principal === null) return {};
+    const person = await personCard(deps.pool, session.principal);
     if (person === undefined) return {};
+    const studio = await deps.pool.query('SELECT name, locale FROM studios WHERE id = $1', [person.studioId]);
+    const row = studio.rows[0] as { name?: unknown; locale?: unknown } | undefined;
     return {
-      studioName: person.studioName,
+      studioName: String(row?.name ?? ''),
       personName: person.name,
       // The same composer `inputs` uses, so the opening paint and this
       // confirming read cannot disagree about which language they greet in.
-      greeting: greetingFor(person.name, deps.directory.localeFor(person.studioId), new Date()),
+      greeting: greetingFrom(await phrasesFor(deps.pool, String(row?.locale ?? 'en-GB')), person.name, new Date()),
     };
   },
   'reports.window': async (data) => {
-    const person = deps.directory.person(session.principal);
-    if (person === undefined) return {};
-    const to = deps.directory.todayFor(person.studioId);
+    const studioId = await studioOf(deps.pool, session.principal);
+    if (studioId === '') return {};
+    const zone = await deps.pool.query('SELECT timezone FROM studios WHERE id = $1', [studioId]);
+    const to = dayIn(String((zone.rows[0] as { timezone?: unknown } | undefined)?.timezone ?? 'UTC'));
     const days = Number(data['days'] ?? 90);
     const from = new Date(`${to}T00:00:00Z`);
     from.setUTCDate(from.getUTCDate() - days);
@@ -36,7 +41,7 @@ export const navFunctions = (
   },
   'nav.context': async (data) => {
     const action = String(data['currentLeaf'] ?? '');
-    const granted = resolveCatalog(deps.app as never, session.principal).ids;
+    const granted = resolveCatalogForRoles(deps.app as never, session.roles, await installedFor(deps.pool, session.principal)).ids;
     const context = contextFor(action, granted);
     if (context.areaId === '') return { areaId: action, areaLabel: '', tabs: [], moreValue: '' };
 
@@ -60,7 +65,7 @@ export const navFunctions = (
   'nav.attachments': async (data) => {
     const host = String(data['hostId'] ?? '');
     if (host === '') return [];
-    const granted = resolveCatalog(deps.app as never, session.principal).ids;
+    const granted = resolveCatalogForRoles(deps.app as never, session.roles, await installedFor(deps.pool, session.principal)).ids;
     const attached = await listAttachments(deps.pool, host);
 
     const offers = deps.app.attachable?.[host] ?? {};

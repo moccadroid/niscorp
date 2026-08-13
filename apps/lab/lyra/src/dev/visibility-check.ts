@@ -2,10 +2,8 @@
 import { CAST } from '@lyra/db/seed';
 import { areasFor } from '@lyra/app/nav/sections';
 import { resolveCatalog } from '@niscorp/moss';
-import { personByEmail } from '@lyra/server/users';
-import { app, asPrincipal, ok, report, runtime } from './world';
+import { app, asPrincipal, idFor, idsFor, ok, report, runtime } from './world';
 
-const idsFor = (email: string): readonly string[] => resolveCatalog(app, personByEmail(email)?.id ?? null).ids;
 const read = (email: string, fingerprint: string, context: Record<string, unknown> = {}): Promise<unknown> =>
   asPrincipal(email, '/api/schedule/vex', { fingerprint, context });
 
@@ -19,7 +17,9 @@ ok('the seed has a class worth looking at', booked > 1, `${booked} people in it`
 // ── the owner ────────────────────────────────────────────────
 const detail = (await read(CAST.lumen.owner, 'session/detail', { sessionId })) as Record<string, unknown>;
 ok('an owner can ask about one class', typeof detail['name'] === 'string' && detail['name'] !== '', String(detail['name']));
-ok('...and is told how full it is', String(detail['booked_display'] ?? '').includes('of'), String(detail['booked_display']));
+// A number, a word, a number — in whatever language the studio reads. See the
+// same assertion in scope-check for why the word itself is not the claim.
+ok('...and is told how full it is', /\d+\s+\p{L}+\s+\d+/u.test(String(detail['booked_display'] ?? '')), String(detail['booked_display']));
 
 const attending = (await read(CAST.lumen.owner, 'session/attending', { sessionId })) as unknown[];
 ok('...and WHO is in it, by name', Array.isArray(attending) && attending.length === booked, `${Array.isArray(attending) ? attending.length : -1} against ${booked} in the table`);
@@ -53,11 +53,11 @@ ok('...and the owner sees them waiting, not missing', withQueue.some((r) => r.pl
 ok('...with the confirmed places still first', withQueue[0]?.place_label === 'Booked', withQueue.map((r) => r.place_label).join(', '));
 
 // ── a destination, not just a grant ──────────────────────────
-ok('the owner holds the screen it lives on', idsFor(CAST.lumen.owner).includes('schedule.session'));
-ok('...and reaches it from the timetable, which is in their menu', areasFor(idsFor(CAST.lumen.owner)).some((a) => a.items.some((i) => i.action === 'schedule.timetable')));
+ok('the owner holds the screen it lives on', (await idsFor(CAST.lumen.owner)).includes('schedule.session'));
+ok('...and reaches it from the timetable, which is in their menu', areasFor(await idsFor(CAST.lumen.owner)).some((a) => a.items.some((i) => i.action === 'schedule.timetable')));
 
 // ── the same fault, one rung down ────────────────────────────
-const teacher = idsFor(CAST.lumen.instructor);
+const teacher = await idsFor(CAST.lumen.instructor);
 ok('a teacher who trains here holds the membership screen', teacher.includes('me.membership'));
 ok(
   '...and it is in his menu, not just in his grants',
@@ -70,6 +70,6 @@ ok('...and it answers with HIS card', card['status_label'] === 'Staff', `standin
 const teacherPlan = (await asPrincipal(CAST.lumen.instructor, '/api/me/vex', { fingerprint: 'me/membership', context: {} })) as Record<string, unknown>;
 ok('...and his own plan beside it', typeof teacherPlan['plan_name'] === 'string' && teacherPlan['plan_name'] !== '', String(teacherPlan['plan_name']));
 
-ok('the front desk is offered no membership screen', !areasFor(idsFor(CAST.lumen.desk)).some((a) => a.items.some((i) => i.action === 'me.membership')));
+ok('the front desk is offered no membership screen', !areasFor(await idsFor(CAST.lumen.desk)).some((a) => a.items.some((i) => i.action === 'me.membership')));
 
 report('the owner can see who is coming, and a teacher who trains here can reach their own card.');

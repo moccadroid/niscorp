@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { createTtyView } from '../../src/adapters/tty';
 import type { TtyRenderApi } from '../../src/adapters/tty';
 import { defaultRegistry, fallback } from '../../src/adapters/tty/components';
-import type { RenderNode } from '../../src/layout/types';
+import type { RenderComponentNode, RenderNode } from '../../src/layout/types';
 
 // ═══════════════════════════════════════════════════════════
 // The TTY adapter — pure render: served trees in, { text, interactives }
@@ -10,7 +10,10 @@ import type { RenderNode } from '../../src/layout/types';
 // stub RenderApi; no I/O anywhere.
 // ═══════════════════════════════════════════════════════════
 
-const component = (name: string, props: Record<string, unknown> = {}, children: RenderNode[] = []): RenderNode => ({
+// RenderComponentNode, not the RenderNode union: `ref` and `model` live on the
+// component member alone, so a helper typed as the union produces values that
+// cannot carry either one once spread.
+const component = (name: string, props: Record<string, unknown> = {}, children: RenderNode[] = []): RenderComponentNode => ({
   type: 'component',
   name,
   props,

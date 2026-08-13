@@ -24,6 +24,8 @@
 
 /** The studio's language, as every helper below reads it. */
 const LOCALE = { $ref: '$.scope.locale' };
+/** The studio's own money, for amounts that belong to no row — see `amount`. */
+const CURRENCY = { $ref: '$.scope.currency' };
 
 /** Absent renders as an em dash, never as a zero and never as a crash. */
 const NONE = '—';
@@ -62,7 +64,17 @@ const amount = (cents: unknown, currency: unknown, digits: number) => ({
     // A SUM over no rows is NULL and a studio with nothing sold yet is an
     // ordinary Tuesday — it shows a zero IN ITS OWN CURRENCY, not a dash,
     // because "nothing earned" is a number and "no date" is not.
-    fallback: { $localeMoney: { value: 0, currency, locale: LOCALE, digits, minorUnits: false } },
+    //
+    // THE ZERO READS ITS CURRENCY FROM SCOPE, NOT FROM THE ROW. This fallback
+    // runs precisely when there is no row — so asking the row for its currency
+    // asked the absent thing to describe itself, and `$localeMoney` threw for
+    // want of an ISO-4217 code. Every read shaped as ONE object over zero rows
+    // answered 500: a prospect's own membership card, a member's the day their
+    // subscription ended, the revenue tiles of a studio that had sold nothing.
+    // The studio's currency is a property of the STUDIO, so it is on the
+    // assertion beside `locale` (app.ts) and available whether or not anything
+    // matched.
+    fallback: { $localeMoney: { value: 0, currency: CURRENCY, locale: LOCALE, digits, minorUnits: false } },
   },
 });
 

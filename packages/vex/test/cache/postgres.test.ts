@@ -250,6 +250,12 @@ describe('createPostgresCache', () => {
     await cache.init();
 
     // Inject a corrupt row directly, bypassing write validation.
+    //
+    // Corrupt in its DSL, not in its SHAPE: this stands for a row the database
+    // really holds, so it carries every column one has — `reach` included, which
+    // the table grew after this fixture was written. What validate-on-read is
+    // being asked to catch is the nonsense inside `dsl`, and a row missing a
+    // column would be caught for the wrong reason.
     rows.set('corrupt', {
       key: 'corrupt',
       kind: 'ok',
@@ -257,6 +263,7 @@ describe('createPostgresCache', () => {
       shape: null,
       dsl: { nonsense: true },
       prism_ir: null,
+      reach: null,
       reason: null,
       created_at: new Date(),
       expires_at: null,

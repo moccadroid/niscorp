@@ -111,7 +111,11 @@ export const CharterLab: FC<CharterLabProps> = ({ charter, actions, data = [], i
 
 
   const report = useMemo<VerifyReport>(
-    () => verifyCharter(charter, { actions, data }, assignments),
+    // `verifyCharter` takes the role COMBINATIONS a principal may wear, not a
+    // person-by-person map — one entry per combination rather than one per
+    // human. The lab holds a map, so it hands over the values, which is exactly
+    // what that parameter's own comment tells a composer in this position to do.
+    () => verifyCharter(charter, { actions, data }, Object.values(assignments)),
     [charter, actions, data, assignments],
   );
 

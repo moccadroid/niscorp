@@ -22,8 +22,9 @@ export const vexGuide = (): string =>
     '  - The query binds ONLY keys you pass at generation. To parameterize a query: name the value in the intent AND pass the key with a real value in context — e.g. intent "companies whose name contains the search text" with context { "q": "acme" }. Replays then pass new values for the same keys.',
     '  - Reserved keys: sortBy (an "entity.field", schema-validated) and sortDir ("asc"|"desc") drive ORDER BY directly on any replay.',
     '  - A value the query filters with ILIKE is a pattern: "%text%" matches contains.',
+    '  - OPTIONAL keys: meta.context marks some keys `optional: true`. Those switch a condition ON — send the key and it applies, omit it and the condition is not in the query at all (it does not match everything by accident, and omitting it is never an error). A key marked `absent: true` is one you did not send on this run. This is how one fingerprint answers "everyone", "everyone matching a search", and "one by id".',
     '',
-    'result — exactly the requested shape (array, object, or scalar). meta.cache = { hit, fingerprint, replaced? }; meta.missingContext lists required context keys you did not send — the query ran without them, so the result is WRONG. Supply the keys and re-run before trusting it.',
+    'result — exactly the requested shape (array, object, or scalar). meta.cache = { hit, fingerprint, replaced? }; meta.missingContext lists REQUIRED context keys you did not send — the query ran without them, so the result is WRONG. Supply the keys and re-run before trusting it. Optional keys never appear there; leaving one out is a choice, not a mistake.',
     '',
     'GET on the same URL returns the endpoint\'s self-description: its entities, the query body contract, and every existing named fingerprint with its intent — check it before generating a query that may already exist.',
   ].join('\n');

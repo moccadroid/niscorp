@@ -99,13 +99,13 @@ describe('verifier', () => {
   it('re-allow of an ancestor deny is flagged; an assigned subtractive role is flagged', () => {
     expect(verifyCharter({ ...G, all: ['*'] }, universes(gids)).warnings.some((w) => w.rule === 're-allow')).toBe(true);
     expect(
-      verifyCharter({ ...G, all: ['*'] }, universes(gids), { u1: ['muzzle'] }).warnings.some((w) => w.rule === 'subtractive-assigned'),
+      verifyCharter({ ...G, all: ['*'] }, universes(gids), [['muzzle']]).warnings.some((w) => w.rule === 'subtractive-assigned'),
     ).toBe(true);
   });
 
   it('the closure auditor is injected and fed each role\'s granted set', () => {
     const seen: string[][] = [];
-    const report = verifyCharter({ r: ['a.*'], all: ['*'] }, universes(gids), {}, (ids) => {
+    const report = verifyCharter({ r: ['a.*'], all: ['*'] }, universes(gids), [], (ids) => {
       seen.push([...ids]);
       return ids.includes('b.one') ? ['b.one: dangles'] : [];
     });
@@ -134,7 +134,7 @@ describe('verifier', () => {
     verifyCharter(
       { r: { actions: ['a.*'], layouts: ['a.one.basic'] } },
       { ...universes(gids), layouts: ['a.one.basic'] },
-      {},
+      [],
       (_ids, layoutIds) => {
         seen.push(layoutIds);
         return [];

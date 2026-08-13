@@ -3,8 +3,7 @@ import { resolveCatalog } from '@niscorp/moss';
 import { serve as listen } from '@hono/node-server';
 import { startIntegrations } from '../../../lyra-integrations/src/serve';
 import { CAST } from '@lyra/db/seed';
-import { mintToken, personByEmail } from '@lyra/server/users';
-import { app, login, ok, report, runtime, server, settle, treeOf } from './world';
+import { app, idFor, idsFor, login, mintToken, ok, report, runtime, server, settle, treeOf } from './world';
 
 const KEY = 'lab-operator-key';
 runtime.operatorKey = KEY;
@@ -16,7 +15,6 @@ const PORT = 8798;
 const verifyKey = (await (await server.request('/api/integrations/verify-key')).json()) as { key: string };
 process.env['LYRA_VERIFY_KEY'] = verifyKey.key;
 const service = startIntegrations(PORT);
-const idsFor = (email: string): readonly string[] => resolveCatalog(app, personByEmail(email)?.id ?? null).ids;
 
 // Lyra on a real port: the service's keyed notify is an HTTP call INTO lyra,
 // and an in-process hono has no address.
@@ -31,7 +29,7 @@ const closeLyraHttp = (): Promise<void> =>
 // Raw, not `asPrincipal`: that helper unwraps vex's `{ result }` envelope and an
 // integration answers with a bare body.
 const asIntegration = async (email: string, path: string, body: unknown): Promise<unknown> => {
-  const token = mintToken(email);
+  const token = await mintToken(email);
   const response = await server.request(path, {
     method: 'POST',
     headers: { Authorization: `Bearer ${String(token)}`, 'content-type': 'application/json' },
@@ -70,7 +68,7 @@ try {
   const again = await post('/operator/integrations', { id: 'belts', url: `http://127.0.0.1:${PORT}/belts` });
   ok('...shown exactly once — a re-import repeats nothing', again.json['key'] === undefined, 'the plaintext is not stored, so it cannot come back');
 
-  ok('a pending integration is in nobody’s application', !idsFor(CAST.northrock.owner).some((id) => id.startsWith('ext.')), 'approval is what makes a grant real');
+  ok('a pending integration is in nobody’s application', !(await idsFor(CAST.northrock.owner)).some((id) => id.startsWith('ext.')), 'approval is what makes a grant real');
 
   const early = await server.request('/api/automation/vex', {
     method: 'POST',
@@ -84,7 +82,7 @@ try {
   ok('approving grants what it asked for', approved.status === 200, JSON.stringify(approved.json));
 
   // ── installed for one studio, not the other ──────────────────
-  const owner = login(CAST.northrock.owner);
+  const owner = await login(CAST.northrock.owner);
   await settle(10);
   owner.dispatch({ type: 'ui:click', ref: 'nav', payload: 'studio.addons' });
   await settle(14);
@@ -96,14 +94,14 @@ try {
   await settle(18);
   ok('...and installing flips it on', treeOf(owner).includes('On'), 'one row, written through the owner’s own policy');
 
-  const northrock = idsFor(CAST.northrock.owner);
-  const lumen = idsFor(CAST.lumen.owner);
+  const northrock = await idsFor(CAST.northrock.owner);
+  const lumen = await idsFor(CAST.lumen.owner);
   ok('the studio that installed it has the screens', northrock.includes('ext.desk.belts.roster'), northrock.filter((i) => i.startsWith('ext.')).join(', '));
   ok('...and the studio that did not, does not', !lumen.some((id) => id.startsWith('ext.')), 'one glob, two tenants, different applications');
 
-  const nrMember = idsFor(CAST.northrock.member);
+  const nrMember = await idsFor(CAST.northrock.member);
   ok('a member at the installed studio gets the member half', nrMember.includes('ext.member.belts.mine'), nrMember.filter((i) => i.startsWith('ext.')).join(', '));
-  ok('...and a member elsewhere does not', !idsFor(CAST.lumen.member).some((id) => id.startsWith('ext.')));
+  ok('...and a member elsewhere does not', !(await idsFor(CAST.lumen.member)).some((id) => id.startsWith('ext.')));
 
   // ── the proxy carries identity the caller cannot forge ───────
   const mine = await asIntegration(CAST.northrock.member, '/integrations/belts/mine', {});
@@ -128,7 +126,7 @@ try {
   // that service grew next release. Now reach is derived from the bundle at
   // intake (moss: reachOf) and this is not in it.
   const undeclared = await server.request('/integrations/belts/_selftest', {
-    headers: { Authorization: `Bearer ${String(mintToken(CAST.northrock.owner))}` },
+    headers: { Authorization: `Bearer ${String(await mintToken(CAST.northrock.owner))}` },
   });
   ok('an undeclared path is not forwarded', undeclared.status === 404, `${undeclared.status} — the owner is signed in and the studio has it installed`);
   ok('...and the route it refuses is really there', (selftest['north'] ?? 0) > 0, 'the 404 is the proxy declining, not the pack having moved');
@@ -143,7 +141,7 @@ try {
     return { status: response.status, body: (await response.json().catch(() => ({}))) as Record<string, unknown> };
   };
 
-  const omar = personByEmail(CAST.northrock.member);
+  const omar = { id: idFor(CAST.northrock.member) };
   const noted = await asKey('st_northrock', 'automation/notify', { personId: omar?.id ?? '', kind: 'integration', subject: 'Graded', body: 'Omar holds Purple.' });
   ok('a keyed mutation lands', noted.status === 200, JSON.stringify(noted.body).slice(0, 80));
 
@@ -332,15 +330,15 @@ try {
   // PER PACK, not per studio: this studio also has the payments pack installed
   // now, and an assertion that no ext.* survives would be asserting that
   // uninstalling one pack takes every pack's screens away.
-  ok('uninstalling takes the screens away', !idsFor(CAST.northrock.owner).some((id) => id.startsWith('ext.desk.belts.') || id.startsWith('ext.member.belts.')), 'the row stays, disabled; the studio stopped paying');
+  ok('uninstalling takes the screens away', !(await idsFor(CAST.northrock.owner)).some((id) => id.startsWith('ext.desk.belts.') || id.startsWith('ext.member.belts.')), 'the row stays, disabled; the studio stopped paying');
 
   owner.dispatch({ type: 'ui:click', ref: 'install', payload: { integration_id: 'belts' } });
   await settle(18);
-  ok('...and installing AGAIN works — the row it left behind is re-enabled', idsFor(CAST.northrock.owner).includes('ext.desk.belts.roster'), 'an update where the first install was an insert');
+  ok('...and installing AGAIN works — the row it left behind is re-enabled', (await idsFor(CAST.northrock.owner)).includes('ext.desk.belts.roster'), 'an update where the first install was an insert');
 
   owner.dispatch({ type: 'ui:click', ref: 'uninstall', payload: { integration_id: 'belts' } });
   await settle(18);
-  ok('...and off again, for the assertions below', !idsFor(CAST.northrock.owner).some((id) => id.startsWith('ext.desk.belts.') || id.startsWith('ext.member.belts.')));
+  ok('...and off again, for the assertions below', !(await idsFor(CAST.northrock.owner)).some((id) => id.startsWith('ext.desk.belts.') || id.startsWith('ext.member.belts.')));
 
   const afterRemoval = await asIntegration(CAST.northrock.owner, '/integrations/belts/roster', {});
   ok('...and the proxy stops forwarding', (afterRemoval as { status?: number }).status === 404, JSON.stringify(afterRemoval));
@@ -351,7 +349,7 @@ try {
   // ── a bad bundle is refused whole ────────────────────────────
   const bad = await post('/operator/integrations', { id: 'belts', url: `http://127.0.0.1:${PORT}/nope` });
   ok('a bundle that cannot be fetched is refused', bad.status === 502, String(bad.status));
-  ok('...and the app is still standing', idsFor(CAST.northrock.owner).length > 0, 'a refusal is not an outage');
+  ok('...and the app is still standing', (await idsFor(CAST.northrock.owner)).length > 0, 'a refusal is not an outage');
 
   // ── and one that is refused for cause ────────────────────────
   const broken = await post('/operator/integrations', { id: 'broken', url: `http://127.0.0.1:${PORT}/broken` });
@@ -361,7 +359,7 @@ try {
   ok('...for claiming somebody else’s namespace', reasons.some((r) => r.includes('belongs to somebody else')), reasons.find((r) => r.includes('belongs')) ?? '(not said)');
   ok('...for a component this app cannot render', reasons.some((r) => r.includes('Teleporter')), reasons.find((r) => r.includes('Teleporter')) ?? '(not said)');
   ok('...and for calling a fingerprint that does not exist', reasons.some((r) => r.includes('nothing/here')), reasons.find((r) => r.includes('nothing/here')) ?? '(not said)');
-  ok('...and none of it landed', (await runtime.db.query("SELECT count(*) n FROM integration_actions WHERE integration_id = 'broken'")).rows[0] !== undefined && Number((await runtime.db.query("SELECT count(*) n FROM integration_actions WHERE integration_id = 'broken'")).rows[0]!['n']) === 0, 'whole-payload refusal');
+  ok('...and none of it landed', (await runtime.db.query<{ n: number }>("SELECT count(*) n FROM integration_actions WHERE integration_id = 'broken'")).rows[0] !== undefined && Number((await runtime.db.query<{ n: number }>("SELECT count(*) n FROM integration_actions WHERE integration_id = 'broken'")).rows[0]!['n']) === 0, 'whole-payload refusal');
 
   // ── removal revokes, in one act ──────────────────────────────
   const removed = await server.request('/operator/integrations/belts', { method: 'DELETE', headers: { 'x-operator-key': KEY } });

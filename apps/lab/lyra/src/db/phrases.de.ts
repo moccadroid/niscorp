@@ -392,8 +392,8 @@ export const GERMAN: Record<string, string> = {
   'Put somebody on staff': 'Jemanden ins Team aufnehmen',
   'Put them on': 'Aufnehmen',
 
-  'Queued in the outbox. Nothing is delivered yet — Lyra has no mail integration, and the screen says so rather than pretending.':
-    'Im Postausgang eingereiht. Zugestellt wird noch nichts — Lyra hat keine Mail-Anbindung, und der Bildschirm sagt das, statt so zu tun als ob.',
+  'Sent in your studio’s name. Every message is kept in the outbox, so you can see what went and what did not.':
+    'Wird im Namen Ihres Studios gesendet. Jede Nachricht bleibt im Postausgang, damit Sie sehen, was gesendet wurde und was nicht.',
   'Quiet day. The timetable is where classes get added.':
     'Ruhiger Tag. Kurse werden im Stundenplan angelegt.',
 
@@ -471,8 +471,8 @@ export const GERMAN: Record<string, string> = {
     'Das Erscheinungsbild, das jedes Mitglied und jede Person im Team sieht.',
   'The moment a subscription starts — the highest-value minute a studio has, and the one nothing used to notice.':
     'Der Moment, in dem eine Mitgliedschaft beginnt — die wertvollste Minute eines Studios, und die, die früher niemandem auffiel.',
-  'The moment a subscription starts — the highest-value minute a studio has, and the one nothing used to notice. Queued in the outbox. Nothing is delivered yet — Lyra has no mail integration, and the screen says so rather than pretending.':
-    'Der Moment, in dem eine Mitgliedschaft beginnt — die wertvollste Minute eines Studios, und die, die früher niemandem auffiel. Im Postausgang eingereiht. Zugestellt wird noch nichts — Lyra hat keine Mail-Anbindung, und der Bildschirm sagt das, statt so zu tun als ob.',
+  'The moment a subscription starts — the highest-value minute a studio has, and the one nothing used to notice. Sent in your studio’s name. Every message is kept in the outbox, so you can see what went and what did not.':
+    'Der Moment, in dem eine Mitgliedschaft beginnt — die wertvollste Minute eines Studios, und die, die früher niemandem auffiel. Wird im Namen Ihres Studios gesendet. Jede Nachricht bleibt im Postausgang, damit Sie sehen, was gesendet wurde und was nicht.',
   'The next two weeks, generated from everything under Classes.':
     'Die nächsten zwei Wochen, erzeugt aus allem unter Kurse.',
   'The recipes tab has eight things studios usually want.':
@@ -540,8 +540,8 @@ export const GERMAN: Record<string, string> = {
     'Welche Kursart das ist. Die Art trägt die Farbe, die der Stundenplan verwendet.',
   'What people are actually on — and why a retired plan keeps its subscribers.':
     'Was tatsächlich genutzt wird — und warum ein eingestellter Tarif seine Mitglieder behält.',
-  'What the automations would send. Nothing is delivered — Lyra has no mail integration yet, so these are queued and stay queued.':
-    'Was die Automatisierungen senden würden. Zugestellt wird nichts — Lyra hat noch keine Mail-Anbindung, also bleibt alles in der Warteschlange.',
+  'Every message the automations have sent, and every one that did not go — with the reason beside it.':
+    'Jede Nachricht, die die Automatisierungen gesendet haben, und jede, die nicht ankam — mit dem Grund daneben.',
   'What the desk has written down. Members never see this.':
     'Was der Empfang notiert hat. Mitglieder sehen das nie.',
   'What the studio charges, and what it earns.': 'Was das Studio verlangt und was es einnimmt.',

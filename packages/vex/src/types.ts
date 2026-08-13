@@ -43,6 +43,10 @@ export type QueryEngineConfig = {
     rejectUnindexedFilters?: boolean;
     entities?: string[];
     unsatisfiableTtlMs?: number;          // negative-cache TTL, default 300_000 (5 min)
+    // How many distinct optional-key combinations one entry may compile before
+    // it warns. Not a limit on what runs — a note that an entry has stopped
+    // being a question. Default 32.
+    maxPresenceVariants?: number;
   };
 };
 

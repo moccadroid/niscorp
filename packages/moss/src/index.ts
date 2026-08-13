@@ -18,7 +18,7 @@ export { runIntake, initIntegrations, listIntegrations, loadIntegrationActions, 
 export type { IntegrationRow, Bundle, IntakeResult, IntakeContext, Contract } from './integrations';
 export { createAssertionSigner, verifyAssertion, mintIntegrationKey, hashIntegrationKey } from './assert';
 export type { Assertion, AssertionSigner } from './assert';
-export { resolveRoles, resolvePolicy, resolvePolicyAtReach, resolveCatalog, resolveVariants, verifyVariants } from './principal';
+export { resolveRoles, resolvePolicy, resolvePolicyAtReach, resolveCatalog, resolveVariants, resolveCatalogForRoles, resolveVariantsForRoles, resolvePolicyForRoles, verifyVariants, wearableOf, memoKeyOf } from './principal';
 export type { Catalog } from './principal';
 export { createDataLayer } from './data';
 export { createTideStore, TIDE_DDL, TIDE_TABLES, mintWrites } from './tide';
@@ -30,5 +30,9 @@ export { auditClosure } from './closure';
 export type { DataLayer } from './data';
 export { createSocket, CLOSE_INVALID_TOKEN, CLOSE_SIGNED_OUT, DEFAULT_REVALIDATE_MS } from './socket';
 export { createShellHost, DEFAULT_IDLE_MS } from './shells';
+export { createIdentityCache, DEFAULT_IDENTITY_MAX, DEFAULT_IDENTITY_IDLE_MS } from './identity';
+export { createGeneration, GENERATION_DDL, DEFAULT_GENERATION_POLL_MS } from './generation';
+export type { Generation } from './generation';
+export type { IdentityRecord, IdentityReport, IdentityCache, IdentityCacheContext } from './identity';
 export type { ShellHost, ShellSession, ShellReport } from './shells';
 export type { Connection, ServerMessage, ClientMessage, SocketAccept, SocketContext } from './socket';

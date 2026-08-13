@@ -56,6 +56,7 @@ export const AREAS: NavArea[] = [
     items: [
       { icon: 'building', action: 'studio.settings', label: 'Appearance', blurb: 'The look every member and every member of staff sees.' },
       { icon: 'automation', action: 'automations.list', label: 'Automations', blurb: 'What happens overnight, and what it has done lately.' },
+      { icon: 'mail', action: 'studio.mail', label: 'Mail', blurb: 'Your studio’s name on what goes out, and where an answer comes back to.' },
     ],
   },
   {

@@ -17,8 +17,8 @@ type Row = Record<string, unknown>;
 const rows = (data: Row, key: string): Row[] => (data[key] ?? []) as Row[];
 
 const main = async (): Promise<void> => {
-  const rosa = login('rosa');
-  const pilar = login('pilar');
+  const rosa = await login('rosa');
+  const pilar = await login('pilar');
   await settle(14);
 
   // ═══ 1. what is waiting, derived ═════════════════════════

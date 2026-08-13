@@ -86,7 +86,7 @@ checks.push([
 ]);
 
 // ── relay's charter is coherent — same verify the shell and server boot on ──
-const report = verifyCharter(CHARTER, { actions: ids, data: dataU, layouts: layoutU }, ASSIGNMENTS, auditClosure(CATALOG_DEFINITIONS, LAYOUT_VARIANTS));
+const report = verifyCharter(CHARTER, { actions: ids, data: dataU, layouts: layoutU }, Object.values(ASSIGNMENTS), auditClosure(CATALOG_DEFINITIONS, LAYOUT_VARIANTS));
 checks.push([`relay charter: zero errors (got ${report.errors.length})`, report.errors.length === 0]);
 checks.push([`relay charter: zero warnings (got ${report.warnings.length})`, report.warnings.length === 0]);
 

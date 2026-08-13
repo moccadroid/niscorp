@@ -1,6 +1,6 @@
 // Run: pnpm --filter lyra exec tsx src/dev/clock-check.ts
-import { loadDirectory, studioToday } from '@lyra/server/users';
 import { ok, report, runtime } from './world';
+import { dayIn } from '@lyra/server/clock';
 
 const one = async <T>(sql: string, params: unknown[] = []): Promise<T | undefined> =>
   (await runtime.db.query(sql, params)).rows[0] as T | undefined;
@@ -15,7 +15,6 @@ await runtime.db.query(`
 
 // The server's half of the clock is a cache of a database fact, so a new studio
 // has to reach it. This is the reload a deployment does.
-await loadDirectory(runtime.pool);
 
 const days = await one<{ early: string; late: string; server: string }>(`
   SELECT studio_today('st_early')::text AS early,
@@ -31,11 +30,11 @@ ok(
 );
 
 // ── the two halves agree ─────────────────────────────────────
-const studios = await runtime.db.query<{ id: string; sql_day: string }>(
-  `SELECT id, studio_today(id)::text AS sql_day FROM studios ORDER BY id`,
+const studios = await runtime.db.query<{ id: string; sql_day: string; timezone: string }>(
+  `SELECT id, timezone, studio_today(id)::text AS sql_day FROM studios ORDER BY id`,
 );
 const disagreements = studios.rows
-  .map((row) => ({ id: row.id, sql: row.sql_day, js: studioToday(row.id) }))
+  .map((row) => ({ id: row.id, sql: row.sql_day, js: dayIn(String(row.timezone)) }))
   .filter((row) => row.sql !== row.js);
 
 ok(

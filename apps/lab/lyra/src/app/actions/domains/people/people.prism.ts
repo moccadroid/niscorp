@@ -1,5 +1,5 @@
 import { coursesList, enrolMember, enrolmentsForMember, withdrawMember } from '@lyra/app/vex/course.entries';
-import { personById, offeringsList, peopleList, peopleCount, offeringOptions } from '@lyra/app/vex/member.entries';
+import { personById, offeringsList, peopleList, peopleCount, offeringOptions, ROLL_ORDERS } from '@lyra/app/vex/member.entries';
 import { personAnchorUpdate } from '@lyra/app/vex/member.mutations';
 import { peopleEnroll } from '@lyra/app/vex/intake.entries';
 import {
@@ -21,16 +21,58 @@ import {
 // Replay-only holds either way — but a lens the caller invents now matches no
 // arm and returns nothing, rather than being a fingerprint that does not exist.
 //
-// `after`/`afterId` are the SEEK: the last row already on screen. Empty means
-// the first page, and every name sorts above an empty string. See the roll's
-// entry for why this is a seek rather than an offset.
+// `after`/`afterId`/`order` are the SEEK: the last row already on screen, and
+// which ordering that position is in. See the roll's entry for why a cursor
+// belongs to one order, and why the orders are declared rather than assumed.
+//
+// EACH KEY IS A QUESTION, and null is how a prism declines to ask one — it
+// assembles a fixed object and cannot drop a key, so vex counts null as absent
+// for optional conditions. An empty search box sends no search; a first page
+// sends no cursor. Neither sends a sentinel that has to mean "everything".
+const SEARCH_OR_NOTHING = {
+  $case: {
+    branches: [{ when: { $eq: [{ $ref: '$.search' }, ''] }, then: null }],
+    else: { $join: { parts: ['%', { $ref: '$.search' }, '%'], sep: '' } },
+  },
+};
+
+const CURSOR_OR_NOTHING = (ref: string) => ({
+  $case: { branches: [{ when: { $eq: [{ $ref: ref }, ''] }, then: null }], else: { $ref: ref } },
+});
+
+
 export const peopleListPrism = {
   fingerprint: peopleList.fingerprint,
   context: {
     lens: { $ref: '$.scope' },
-    q: { $join: { parts: ['%', { $ref: '$.search' }, '%'], sep: '' } },
-    after: { $ref: '$.after' },
-    afterId: { $ref: '$.afterId' },
+    q: SEARCH_OR_NOTHING,
+    afterId: CURSOR_OR_NOTHING('$.afterId'),
+    // ONE CURSOR KEY PER ORDER, and only the live one carries a value.
+    //
+    // The screen holds a single `after` — the last row's value on whatever
+    // column it is sorted by — and this routes it to the key belonging to the
+    // order actually in force. Every other order's key goes null, so its arm
+    // drops out and binds nothing: that is what keeps a name out of a date
+    // comparison, which is a 500 rather than a wrong answer.
+    //
+    // Generated from ROLL_ORDERS, so a new sortable column is one entry there
+    // and nothing here.
+    ...Object.fromEntries(
+      ROLL_ORDERS.map((o) => [
+        o.cursor,
+        {
+          $case: {
+            branches: [{
+              when: { $eq: [{ $join: { parts: [{ $ref: '$.sortBy' }, '-', { $ref: '$.sortDir' }], sep: '' } }, `${o.field}-${o.dir}`] },
+              then: CURSOR_OR_NOTHING('$.after'),
+            }],
+            else: null,
+          },
+        },
+      ]),
+    ),
+    sortBy: { $ref: '$.sortBy' },
+    sortDir: { $ref: '$.sortDir' },
   },
 };
 
@@ -38,7 +80,7 @@ export const peopleCountPrism = {
   fingerprint: peopleCount.fingerprint,
   context: {
     lens: { $ref: '$.scope' },
-    q: { $join: { parts: ['%', { $ref: '$.search' }, '%'], sep: '' } },
+    q: SEARCH_OR_NOTHING,
   },
 };
 

@@ -34,7 +34,7 @@ describe('<Nova.Layout> — static layout surface', () => {
   it('accepts extra components via the components prop', () => {
     const Badge = (({ children }: { children?: React.ReactNode }) => (
       <strong data-testid="badge">{children}</strong>
-    )) as unknown as Parameters<typeof Nova.Layout>[0]['components'][string];
+    )) as unknown as NonNullable<Parameters<typeof Nova.Layout>[0]['components']>[string];
     render(
       <Nova.Layout
         layout={{ component: 'Badge', children: 'new' }}

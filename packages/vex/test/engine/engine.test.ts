@@ -920,8 +920,21 @@ describe('Full pipeline', () => {
 describe('Context-driven sort', () => {
   const schema = createTestSchema();
 
-  it('applySortContext replaces the literal sort with the context column + dir', () => {
+  it('applySortContext leads with the context column and keeps the literal sort behind it', () => {
     const dsl: Query = { from: ['orders'], fields: ['orders.id'], sort: [{ field: 'orders.created_at', dir: 'asc' }] };
+    const out = applySortContext(dsl, { sortBy: 'orders.total', sortDir: 'desc' });
+    // It used to REPLACE. That quietly un-totalled any query whose trailing
+    // sort key was there to break ties — a keyset page ordered by (name, id)
+    // became ordered by name alone, and two rows sharing a name could straddle
+    // a page boundary and never be reached. A trailing key is not decoration.
+    expect(out.sort).toEqual([
+      { field: 'orders.total', dir: 'desc' },
+      { field: 'orders.created_at', dir: 'asc' },
+    ]);
+  });
+
+  it('applySortContext does not let the chosen column appear twice', () => {
+    const dsl: Query = { from: ['orders'], fields: ['orders.id'], sort: [{ field: 'orders.total', dir: 'asc' }] };
     const out = applySortContext(dsl, { sortBy: 'orders.total', sortDir: 'desc' });
     expect(out.sort).toEqual([{ field: 'orders.total', dir: 'desc' }]);
   });

@@ -1,5 +1,5 @@
 import type { ReflexInput } from '@niscorp/tide';
-import { bookingsOnDay, enquiredPerson, joinedSubscription, membersLapsedAway, queueMessage, trialsDue } from '@lyra/app/vex/tide.entries';
+import { bookingsOnDay, enquiredPerson, joinedSubscription, membersLapsedAway, outboxStuck, queueMessage, trialsDue } from '@lyra/app/vex/tide.entries';
 
 export type AutomationRow = {
   id: string;
@@ -38,6 +38,14 @@ export type Moment = {
    *  mention one — a body ending "(Vinyasa at 18:30)" is wrong on a moment that
    *  has no class. */
   hasClass?: boolean;
+  /** IS THIS WINNING SOMEBODY BACK, rather than serving somebody who asked?
+   *
+   *  Declared on the MOMENT and not per automation, so the consent filter
+   *  cannot be forgotten by whoever writes the next one: the selection behind a
+   *  marketing moment carries the opt-in test, and the row it queues carries
+   *  the flag that puts an unsubscribe footer on the wire. A reminder about a
+   *  class somebody booked is contractual and needs neither. */
+  marketing?: boolean;
 };
 
 const dayOffset = (amount: number): Record<string, unknown> => ({
@@ -111,6 +119,11 @@ export const MOMENTS: readonly Moment[] = [
     unitKey: 'subscription_id',
     fingerprint: membersLapsedAway.fingerprint,
     context: (row) => ({ cutoff: dayOffset(-row.days) }),
+    // "We have missed you" is marketing in AT/DE however warmly it is worded:
+    // it is sent to win somebody back, not because they asked for it. Consent
+    // and a one-click opt-out are the price, and the selection behind this
+    // moment enforces the first.
+    marketing: true,
   },
   {
     id: 'class.tomorrow',
@@ -146,7 +159,12 @@ export const EFFECTS: readonly Effect[] = [
   {
     id: 'email',
     label: 'email them',
-    blurb: 'Queued in the outbox. Nothing is delivered yet — Lyra has no mail integration, and the screen says so rather than pretending.',
+    // SAYS ONLY WHAT IS TRUE FOR EVERY STUDIO. It said replies come back to
+    // your own address, which is what the design intends and what the seeded
+    // studios do — and a studio whose reply address is still blank would have
+    // been reading a promise. The place to say that sentence is the settings
+    // screen, next to the field that makes it true.
+    blurb: 'Sent in your studio’s name. Every message is kept in the outbox, so you can see what went and what did not.',
     words: { subject: 'Subject', body: 'Message', hint: 'What they would receive. Your words, in your studio’s name.' },
     fingerprint: queueMessage.fingerprint,
     input: (row, moment) => ({
@@ -155,6 +173,9 @@ export const EFFECTS: readonly Effect[] = [
       subject: row.subject,
       body: withFacts(row.body, moment),
       source: row.id,
+      // Travels with the message rather than being re-derived at the wire: by
+      // the time the dispatcher wakes, all it has is the row.
+      marketing: moment.marketing === true,
     }),
   },
 ];
@@ -192,6 +213,134 @@ export const nameOf = (row: { moment: string; effect: string }): string => {
 };
 
 export const reflexIdFor = (studioId: string, row: { id: string }): string => `${studioId}:${row.id}`;
+
+// ── THE ONE REFLEX NOBODY SET UP ─────────────────────────────
+//
+// HOW MANY TIMES A MESSAGE IS TRIED, stated once because two places need the
+// same number: the policy below, and the effect, which has to know when it is
+// on its LAST attempt so it can stop putting the row back in a queue nothing
+// will ever read again. Tide counts attempts from 1, so the last one is
+// `MAIL_RETRIES + 1`.
+export const MAIL_RETRIES = 2;
+export const MAIL_ATTEMPTS = MAIL_RETRIES + 1;
+
+//
+// Every reflex above is a row a studio wrote. This one is the product being
+// able to send at all: a queued message wakes it, it re-reads that row under
+// the studio's own principal, and the effect hands it to the transport.
+//
+// WHY A REFLEX AND NOT A LOOP, which is the whole reason the bridge exists:
+// one task per message, so forty reminders retry independently rather than as
+// one batch that half-fails; the retry policy is already written; the ledger
+// already records what ran. A drain loop would have to invent all three, and
+// would still send the fortieth message late.
+//
+// It is A CYCLE in the flow graph — it watches `outbox` and its effect writes
+// `outbox` — and that is honest rather than accidental: the graph is keyed by
+// entity and cannot see that the watch is on `insert` and the write is an
+// update. It is a GUARDED cycle (it has a selection, which re-reads state and
+// answers with nothing for a message already taken), and a guarded cycle is
+// the shape tide was built to allow. See tide-check, which asserts the
+// distinction rather than the count.
+/** How long a message may sit before the sweep counts it as abandoned. Long
+ *  enough that it never races the dispatcher, short enough that a retry
+ *  somebody pressed is picked up the same day. */
+export const STUCK_AFTER_MS = 15 * 60_000;
+
+// ── THE SAFETY NET ───────────────────────────────────────────
+//
+// The dispatcher above wakes on a WRITE, which is the right trigger and has
+// one hole in it: the fact is delivered once. A process that dies mid-send, or
+// a row put back by hand, has nothing left to wake anything — the message
+// simply sits there, and the screen says "Not sent" forever with nobody
+// working on it.
+//
+// So a clock, once a day, asking the only question that matters: what did this
+// studio queue that never went? It runs the SAME effect, so a swept message
+// takes the identical path — claim, send, record — and the claim is what stops
+// it colliding with a dispatcher that was merely slow.
+//
+// Daily is what tide's calendar clock offers and it is proportionate: this is
+// a net, not a queue. When somebody presses Retry the screen fires this reflex
+// directly rather than waiting for tomorrow.
+export const sweepReflex = (studioId: string, timezone: string): ReflexInput => ({
+  id: `${studioId}:outbox-sweep`,
+  intent: 'Send what never went out.',
+  as: `automation@${studioId}`,
+  on: { clock: { every: 'day', at: '04:00', tz: timezone } },
+  select: {
+    query: { fingerprint: outboxStuck.fingerprint, context: { stuckBefore: { $dateAdd: { date: { $ref: '$.now' }, amount: -15, unit: 'minute' } } } },
+    mode: 'each',
+    unitKey: 'message_id',
+  },
+  // The same input the dispatcher builds, because it is the same effect and
+  // the same envelope — see `outboxStuck`, which shares its shape.
+  effect: {
+    name: 'mail.send',
+    input: {
+      messageId: { $ref: '$.row.message_id' },
+      to: { $ref: '$.row.to_address' },
+      subject: { $ref: '$.row.subject' },
+      body: { $ref: '$.row.body' },
+      fromName: { $ref: '$.row.from_name' },
+      fromBox: { $ref: '$.row.from_box' },
+      replyTo: { $ref: '$.row.reply_to' },
+      marketing: { $ref: '$.row.marketing' },
+      personId: { $ref: '$.row.person_id' },
+      studioId: { $ref: '$.row.studio_id' },
+      suppressed: { $ref: '$.row.suppressed' },
+      sendingDomain: { $ref: '$.row.sending_domain' },
+      sendingDomainOk: { $ref: '$.row.sending_domain_ok' },
+      dailyCap: { $ref: '$.row.daily_cap' },
+    },
+  },
+  // A night missed is not a reason to skip: the whole point is that these rows
+  // have been waiting.
+  policy: { retry: { max: MAIL_RETRIES, backoff: 'fixed', baseMs: 30_000 }, timeoutMs: 15_000, overlap: 'skip' },
+  enabled: true,
+});
+
+export const dispatchReflex = (studioId: string): ReflexInput => ({
+  id: `${studioId}:outbox-dispatch`,
+  intent: 'Send what the automations queued.',
+  as: `automation@${studioId}`,
+  on: { fact: { entity: 'outbox', op: 'insert' } },
+  select: {
+    query: {
+      fingerprint: 'automation/outbox-queued',
+      // Resolved at fan-out, with the fact in scope: the selection re-reads
+      // exactly the row that committed, and nothing else.
+      context: { messageId: { $ref: '$.fact.row.id' } },
+    },
+    mode: 'each',
+    unitKey: 'message_id',
+  },
+  effect: {
+    name: 'mail.send',
+    input: {
+      messageId: { $ref: '$.row.message_id' },
+      to: { $ref: '$.row.to_address' },
+      subject: { $ref: '$.row.subject' },
+      body: { $ref: '$.row.body' },
+      fromName: { $ref: '$.row.from_name' },
+      fromBox: { $ref: '$.row.from_box' },
+      replyTo: { $ref: '$.row.reply_to' },
+      // Consent's half of the message: whether it earns a footer, and who the
+      // opt-out link is minted for.
+      marketing: { $ref: '$.row.marketing' },
+      personId: { $ref: '$.row.person_id' },
+      studioId: { $ref: '$.row.studio_id' },
+      suppressed: { $ref: '$.row.suppressed' },
+      sendingDomain: { $ref: '$.row.sending_domain' },
+      sendingDomainOk: { $ref: '$.row.sending_domain_ok' },
+      dailyCap: { $ref: '$.row.daily_cap' },
+    },
+  },
+  // The same policy the automations carry, for the same reasons — and no
+  // `catchUp`, which is a clock's word: a write fact either matched or waits.
+  policy: { retry: { max: MAIL_RETRIES, backoff: 'fixed', baseMs: 30_000 }, timeoutMs: 15_000, overlap: 'skip' },
+  enabled: true,
+});
 
 // ── THE COMPOSITION ──────────────────────────────────────────
 export const reflexesFor = (studioId: string, timezone: string, rows: readonly AutomationRow[] = []): ReflexInput[] => {

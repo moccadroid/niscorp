@@ -1,4 +1,4 @@
-// The dev checks' world: ONE moss over ONE dev database. `login()` mints a
+// The dev checks' world: ONE moss over ONE dev database. `await login()` mints a
 // dev token via the server-side directory (there is no client auth
 // machinery any more) and hands back the SERVER'S OWN living shell for
 // that principal — the same durable nova Shell the socket streams — so
@@ -18,22 +18,35 @@ export const readToken = (): string | null => currentToken;
 
 type Init = { method?: string; headers?: Record<string, string>; body?: string };
 
-export const wire = (url: string, init?: Init): Promise<Response> => {
-  return server.request(url, {
+// `async` because `server.request` may answer synchronously — the declared
+// `Promise<Response>` was a claim about a union, and every caller awaits anyway.
+export const wire = async (url: string, init?: Init): Promise<Response> => {
+  return await server.request(url, {
     method: init?.method ?? 'GET',
     headers: { ...init?.headers, ...(currentToken !== null ? { Authorization: `Bearer ${currentToken}` } : {}) },
     ...(init?.body !== undefined ? { body: init.body } : {}),
   });
 };
 
-export const login = (username: string): Shell => {
+/** The row a check is about — or a loud stop.
+ *
+ *  `rows()[0]` is `T | undefined`, and a check that reads straight through it is
+ *  making a silent bet on the fixture. When the bet is wrong the failure is not
+ *  "no rows": it is a cascade of `undefined` reads that ends in a comparison of
+ *  two undefineds, which PASSES. Say what was expected instead, once, out loud. */
+export const must = <T>(value: T | undefined, what: string): T => {
+  if (value === undefined) throw new Error(`check-shell: expected ${what}, and the list had none — the fixture moved`);
+  return value;
+};
+
+export const login = async (username: string): Promise<Shell> => {
   const token = mintToken(username);
   const user = userByUsername(username);
   if (token === null || user === undefined) throw new Error(`check-shell: unknown username "${username}"`);
   currentToken = token;
-  const session = server.shells?.session(token, user.id);
+  const session = await server.shells?.session(token, user.id);
   if (session === undefined) throw new Error('check-shell: the app serves no shell');
   return session.shell;
 };
 
-export const shell = login('alex');
+export const shell = await login('alex');

@@ -1,8 +1,7 @@
 import type { FunctionHandler } from '@niscorp/nova';
 import type { FunctionSession, MossServer, NiscApp } from '@niscorp/moss';
 import type { PgPool } from '@niscorp/vex';
-import { everyone, loadDirectory } from '../users';
-import { loadPhrases, loadedLocales } from '../phrases';
+import { loadedLocales } from '../phrases';
 
 // THE LANGUAGE THE APPLICATION IS WRITTEN IN. Every layout literal, every
 // action title, every display word a read manufactures is this, and the
@@ -45,20 +44,18 @@ export const worldFunctions = (
     pool: PgPool;
     app: NiscApp;
     server: () => MossServer;
-    // The same derivation boot uses, injected by app.ts — so a refresh cannot
-    // disagree with a restart.
-    assignments: () => Record<string, readonly string[]>;
     /** Which studio a principal belongs to. Injected rather than imported so
      *  this file keeps taking its world from app.ts. */
-    studioOf: (principal: string | null) => string;
+    studioOf: (principal: string | null) => Promise<string>;
   },
 ): Record<string, FunctionHandler> => ({
   'world.refresh': async (data) => {
-    await loadDirectory(deps.pool);
 
-    const next = deps.assignments();
-    for (const key of Object.keys(deps.app.assignments)) delete deps.app.assignments[key];
-    for (const [principal, roles] of Object.entries(next)) deps.app.assignments[principal] = roles;
+    // NO MAP TO REBUILD. Roles come from the identity seam, one principal at a
+    // time, so a role change is a forgetting rather than a re-derivation — and
+    // `refresh` below does the forgetting for everybody. What used to be here
+    // was the population walked once more, on every role change, in every
+    // process that happened to serve one.
 
     // Re-verify the charter, drop every per-principal memo, and have living
     // shells adopt their re-resolved definitions.
@@ -100,7 +97,7 @@ export const worldFunctions = (
   // they cannot read has to be able to find the way out, and the word "German"
   // is no help to them; "Deutsch" is.
   'world.languages': async () => {
-    const offered = [SOURCE_LOCALE, ...loadedLocales().flatMap((language) => REGIONS[language] ?? [language])];
+    const offered = [SOURCE_LOCALE, ...(await loadedLocales(deps.pool)).flatMap((language) => REGIONS[language] ?? [language])];
     // `{ value, label }` because that is the shape the Select primitive takes —
     // the endpoint answers in the kit's vocabulary rather than making the
     // screen reshape it, which would be a transform with one caller.
@@ -108,16 +105,20 @@ export const worldFunctions = (
   },
 
   'world.relanguage': async () => {
-    await loadDirectory(deps.pool);
-    const reloaded = await loadPhrases(deps.pool);
+    // Nothing to reload: the words are read when a shell is built.
+    const reloaded = (await loadedLocales(deps.pool)).length;
 
-    const studioId = deps.studioOf(session.principal);
+    const studioId = await deps.studioOf(session.principal);
     if (studioId === '') return { locales: 0, shells: 0 };
 
+    // Only a LIVE shell can be wearing the old words, so the roster moss already
+    // keeps is the honest set to walk — the population was only ever a way of
+    // finding the handful who were connected, and `reset` answered false for
+    // everybody else.
     let rebuilt = 0;
-    for (const person of everyone()) {
-      if (person.studioId !== studioId) continue;
-      if (deps.server().shells?.reset(person.id) === true) rebuilt += 1;
+    for (const live of deps.server().shells?.list() ?? []) {
+      if ((await deps.studioOf(live.principal)) !== studioId) continue;
+      if (deps.server().shells?.reset(live.principal) === true) rebuilt += 1;
     }
     // Reported rather than silent: "nothing happened" and "nobody was connected"
     // look identical from the screen otherwise.

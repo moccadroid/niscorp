@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { buildSyntheticParams } from '../../src/agent/tools.js';
-import type { CompiledQuery } from '../../src/adapters/adapter.types.js';
+import type { CompiledQuery, ParamSlot } from '../../src/adapters/adapter.types.js';
 
 // testQuery executes drafts with synthetic params. They MUST be NULL:
 // a comparison against a column of any type is valid SQL with NULL
@@ -11,10 +11,12 @@ import type { CompiledQuery } from '../../src/adapters/adapter.types.js';
 
 const compiled = (types: string[]): CompiledQuery => ({
   sql: 'SELECT 1',
+  // `key`, not `name` — a ParamSlot is keyed by the context key it binds, and
+  // the field has never been called `name`.
   paramSlots: types.map((type, index) => ({
-    name: `p${index}`,
+    key: `p${index}`,
     kind: 'context' as const,
-    type: type as never,
+    type: type as ParamSlot['type'],
   })),
   contextContract: {},
 });

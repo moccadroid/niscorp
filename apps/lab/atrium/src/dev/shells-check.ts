@@ -13,11 +13,11 @@ const actionIds = (data: Record<string, unknown>): string[] => (Array.isArray(da
 
 const main = async (): Promise<void> => {
   // ── the five audiences boot five different applications ──
-  const amara = login('amara');
-  const rosa = login('rosa');
-  const kwame = login('kwame');
-  const henrik = login('henrik');
-  const vendor = login('atrium');
+  const amara = await login('amara');
+  const rosa = await login('rosa');
+  const kwame = await login('kwame');
+  const henrik = await login('henrik');
+  const vendor = await login('atrium');
   await settle();
 
   // `main` is FURNITURE now — the guest's concierge and nothing else. Every
@@ -86,14 +86,14 @@ const main = async (): Promise<void> => {
   check('...but not the spa — Opera has no spa module', !amaraSlots.includes('gs_spa'));
 
   // Same property, same code, different stay state → a different application.
-  const theo = login('theo');
+  const theo = await login('theo');
   await settle();
   const theoSlots = slotIds(topData(theo, 'main'));
   check('Theo is arriving, so he gets check-in', theoSlots.includes('gs_checkin'));
   check('Amara is in house, so she does not', !amaraSlots.includes('gs_checkin'));
 
   // Different property, different PMS, genuinely different application.
-  const ines = login('ines');
+  const ines = await login('ines');
   await settle();
   const inesSlots = slotIds(topData(ines, 'main'));
   check('Inés gets the spa — Mews has that module', inesSlots.includes('gs_spa'));

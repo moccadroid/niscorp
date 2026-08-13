@@ -8,7 +8,7 @@ const count = async (sql: string): Promise<number> => {
 };
 
 // ── the screen ───────────────────────────────────────────────
-const owner = login(CAST.lumen.owner);
+const owner = await login(CAST.lumen.owner);
 await settle(10);
 owner.dispatch({ type: 'ui:click', ref: 'nav', payload: 'automations.list' });
 await settle(16);
@@ -83,7 +83,30 @@ ok(
   `${String(mirrored.rows[0]?.state)}, ${String(mirrored.rows[0]?.done)} done — a trigger on the engine's own runs, because the ledger is keyed by a composed id no join can carry`,
 );
 ok('...and the card reads it as a fact, not a query', treeOf(owner).includes('done'), 'one entry answers the whole screen');
-ok('...marked as not delivered, because nothing delivers', (await count("SELECT count(*) n FROM outbox WHERE studio_id = 'st_lumen' AND state = 'queued'")) === queuedAfter, 'honest about the seam that is missing');
+// ⟲ THIS USED TO ASSERT EVERY ROW WAS STILL `queued`, "because nothing
+// delivers". Something delivers now — the outbox dispatcher wakes on the write
+// the run above committed, with nobody advancing anything.
+//
+// A check runs with no provider key, which is the interesting half: the
+// dispatcher still wakes, still claims the row, and records the refusal in
+// words. That is the posture the whole design turns on — a missing secret is a
+// VISIBLE STATE, never a crash and never a silent success — and it is only
+// worth anything if something asserts it on the real path.
+let latest = { state: '', failed_reason: '' };
+for (let attempt = 0; attempt < 40 && latest.state !== 'failed'; attempt += 1) {
+  await settle(4);
+  const row = await runtime.db.query<typeof latest>(
+    "SELECT state, failed_reason FROM outbox WHERE studio_id = 'st_lumen' ORDER BY created_at DESC LIMIT 1",
+  );
+  latest = row.rows[0] ?? latest;
+}
+ok('...and the thing that sends picked it up on its own', latest.state === 'failed', `${latest.state || 'nothing'} — nobody fired the dispatcher`);
+ok('...saying why, rather than crashing or claiming success', latest.failed_reason === 'no provider configured', latest.failed_reason);
+ok(
+  '...and it stopped there rather than queuing forever',
+  (await count("SELECT count(*) n FROM outbox WHERE studio_id = 'st_lumen' AND state = 'queued'")) < queuedAfter,
+  'a message out of attempts has failed, and the row says so — nothing is left waiting for a reader that will never come',
+);
 
 ok('...and Lyra’s own automations wrote no jobs', (await count("SELECT count(*) n FROM notifications WHERE studio_id = 'st_lumen'")) === 0, 'what a query can answer is a screen, not a list');
 
@@ -164,16 +187,18 @@ await settle(16);
 ok('...nor preview one', treeOf(owner).includes('not yours'));
 
 // ── who may see any of it ────────────────────────────────────
-const desk = login(CAST.lumen.desk);
+const desk = await login(CAST.lumen.desk);
 await settle(10);
 ok('the desk is offered no Settings at all', !treeOf(desk).includes('"label":"Settings"'), 'an automation changes memberships overnight — same rung as the price list');
 
-const member = login(CAST.lumen.member);
+const member = await login(CAST.lumen.member);
 await settle(10);
 ok('a member certainly does not', !treeOf(member).includes('"label":"Settings"'));
 
 // ── an automation is not a person you can be ─────────────────
-const anonInputs = app.shell?.inputs?.({ principal: null, actions: ['auth.login'] }) ?? {};
+// `roles` is part of the session `inputs` reads — anonymous holds none, and
+// saying so is what makes this the anonymous case rather than a partial one.
+const anonInputs = (await app.shell?.inputs?.({ identity: {}, wire: (async () => ({ ok: true, status: 200, json: async () => ({}), text: async () => '{}' })) as never, principal: null, actions: ['auth.login'], roles: [] })) ?? {};
 const loginTree = JSON.stringify(anonInputs);
 ok('the sign-in list offers real people', loginTree.includes('Ava Klein'));
 ok('...and not the automations', !loginTree.includes('Lumen automations'), 'a principal that never logs in does not belong on the login screen');
@@ -189,6 +214,14 @@ const truth = async (cutoff: string): Promise<number> => {
   const r = await runtime.db.query<{ n: string }>(
     `SELECT count(*) n FROM subscriptions m
       WHERE m.studio_id = 'st_lumen' AND m.status = 'active'
+        -- THE SAME OPT-IN THE ENTRY ASKS FOR. Winning somebody back is
+        -- marketing, so "who has stopped coming" means "who has stopped
+        -- coming AND said we may write to them" — and a truth query that
+        -- forgot the second half would fail this check for being right.
+        AND EXISTS (
+          SELECT 1 FROM studio_people sp
+           WHERE sp.person_id = m.person_id AND sp.studio_id = m.studio_id AND sp.marketing_ok = true
+        )
         AND NOT EXISTS (
           SELECT 1 FROM bookings b JOIN class_sessions cs ON cs.id = b.session_id
            WHERE b.person_id = m.person_id AND b.studio_id = m.studio_id AND b.attended = true AND cs.held_on >= $1::date
@@ -197,6 +230,28 @@ const truth = async (cutoff: string): Promise<number> => {
   );
   return Number(r.rows[0]?.n ?? -1);
 };
+
+// ── AND THE ONE IT MUST NOT FIND ─────────────────────────────
+//
+// Jonas is an active member who has stopped coming — the exact shape this
+// automation exists to catch — and he never opted in. He is seeded that way on
+// purpose: an opt-in nobody has ever refused proves nothing.
+const missed = await quiet('2026-08-09');
+ok(
+  'a marketing automation skips somebody who never opted in',
+  !missed.some((name) => name.includes('Jonas')),
+  `${missed.join(', ') || 'nobody'} — he is quiet, paying, and not to be written to`,
+);
+// THROUGH VEX, like every other write in this app — a raw pool UPDATE changes
+// the row and leaves the read cache holding the old answer, which is a check
+// that fails for a reason that has nothing to do with consent.
+await asPrincipal(CAST.lumen.owner, '/api/member/vex', { fingerprint: 'people/consent', context: { personId: 'p_jonas', marketingOk: true } });
+ok(
+  '...and reaches him the moment he says yes',
+  (await quiet('2026-08-09')).some((name) => name.includes('Jonas')),
+  'consent is a column, not a code path',
+);
+await asPrincipal(CAST.lumen.owner, '/api/member/vex', { fingerprint: 'people/consent', context: { personId: 'p_jonas', marketingOk: false } });
 
 const spread = new Set<number>();
 for (const cutoff of ['2026-08-04', '2026-08-06', '2026-08-09']) {

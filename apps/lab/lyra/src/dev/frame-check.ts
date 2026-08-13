@@ -15,8 +15,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { startIntegrations } from '../../../lyra-integrations/src/serve';
 import { CAST } from '@lyra/db/seed';
-import { mintToken } from '@lyra/server/users';
-import { app, login, ok, report, runtime, server, settle } from './world';
+import { app, login, mintToken, ok, report, runtime, server, settle } from './world';
 
 const KEY = 'lab-operator-key';
 runtime.operatorKey = KEY;
@@ -40,7 +39,7 @@ const operator = async (path: string, body: unknown): Promise<{ status: number; 
 const grantFor = async (email: string, path: string): Promise<{ status: number; json: Record<string, unknown> }> => {
   const response = await server.request('/api/integrations/frame', {
     method: 'POST',
-    headers: { Authorization: `Bearer ${String(mintToken(email))}`, 'content-type': 'application/json' },
+    headers: { Authorization: `Bearer ${String(await mintToken(email))}`, 'content-type': 'application/json' },
     body: JSON.stringify({ path }),
   });
   return { status: response.status, json: (await response.json().catch(() => ({}))) as Record<string, unknown> };
@@ -57,7 +56,7 @@ try {
 
   // Installed the way a studio installs anything — through the owner's own
   // screen and their own policy, not by writing the row from here.
-  const owner = login(CAST.northrock.owner);
+  const owner = await login(CAST.northrock.owner);
   await settle(10);
   owner.dispatch({ type: 'ui:click', ref: 'nav', payload: 'studio.addons' });
   await settle(14);

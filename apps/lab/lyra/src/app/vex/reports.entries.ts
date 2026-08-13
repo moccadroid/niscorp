@@ -65,7 +65,7 @@ export const attendanceByProgram: CacheEntry = {
 
 // How the book of subscriptions splits. The figure an owner opens the app
 // for. Prospect and pass-holder counts are their own reads — the People
-// lenses' `people/count/*` entries — because they are derived over
+// lenses' `people/count` entry, under its own lens — because they are derived over
 // relationships, not states of one table.
 export const membersByStatus: CacheEntry = {
   fingerprint: 'reports/members-by-status',

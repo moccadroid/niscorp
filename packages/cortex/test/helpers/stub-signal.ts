@@ -30,7 +30,10 @@ export type ScriptedTurn = {
   // the stub routes it exactly like production and sets finishReason
   // 'error_recovered'.
   rejection?: Rejection;
-  usage?: { inputTokens: number; outputTokens: number; totalTokens: number };
+  // `reported` says whether the provider stated a cost at all — zero and
+  // silence are different facts (see signal's StepResult). A stub that omits it
+  // describes a turn no real provider produces.
+  usage?: { inputTokens: number; outputTokens: number; totalTokens: number; reported: boolean };
   finishReason?: string;
 };
 
@@ -74,7 +77,7 @@ const turnResult = (turn: ScriptedTurn, request: StepRequest): StepResult => {
     return {
       content: '',
       toolCalls: routed.outcome.kind === 'tool_calls' ? routed.outcome.calls : [],
-      usage: turn.usage ?? { inputTokens: 0, outputTokens: 0, totalTokens: 0 },
+      usage: turn.usage ?? { inputTokens: 0, outputTokens: 0, totalTokens: 0, reported: true },
       finishReason: 'error_recovered',
       raw: null,
       outcome: routed.outcome,
@@ -92,7 +95,7 @@ const turnResult = (turn: ScriptedTurn, request: StepRequest): StepResult => {
   const base: StepResult = {
     content: (turn.text ?? []).join(''),
     toolCalls: (turn.toolCalls ?? []).map((call) => ({ id: call.id, name: call.name, args: call.args })),
-    usage: turn.usage ?? { inputTokens: 10, outputTokens: 5, totalTokens: 15 },
+    usage: turn.usage ?? { inputTokens: 10, outputTokens: 5, totalTokens: 15, reported: true },
     finishReason: turn.finishReason ?? ((turn.toolCalls?.length ?? 0) > 0 ? 'tool_calls' : 'stop'),
     raw: null,
   };

@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { normalizeShape, mintFingerprint, computeSchemaFingerprint, computeRequestHash } from '../../src/cache/hash.js';
 import type { DatabaseSchema } from '../../src/schemas/database.schema.js';
 import { createMemoryCache } from '../../src/cache/memory.js';
-import type { OkCacheEntry } from '../../src/cache/cache.types.js';
+import type { CacheEntry, OkCacheEntry } from '../../src/cache/cache.types.js';
 
 // ───────────────────────────────────────────────────────────────
 // normalizeShape
@@ -168,6 +168,14 @@ describe('computeRequestHash', () => {
 // ───────────────────────────────────────────────────────────────
 
 describe('createMemoryCache', () => {
+  // `cache.get` answers the UNION — an entry may be ok, unsatisfiable or a
+  // mutation, and only the first has a `dsl`. A consumer has to establish which
+  // it got before reading through it, so the tests do too.
+  const okOf = (entry: CacheEntry | undefined): OkCacheEntry => {
+    if (entry?.kind !== 'ok') throw new Error(`expected an ok entry, got ${entry?.kind ?? 'nothing'}`);
+    return entry;
+  };
+
   const makeEntry = (overrides: Partial<OkCacheEntry> = {}): OkCacheEntry => ({
     kind: 'ok',
     dsl: { from: ['users'], fields: ['users.id'] },
@@ -187,7 +195,7 @@ describe('createMemoryCache', () => {
     await cache.set('key1', entry);
     const result = await cache.get('key1');
     expect(result).toBeDefined();
-    expect(result?.dsl).toEqual(entry.dsl);
+    expect(okOf(result).dsl).toEqual(entry.dsl);
   });
 
   it('delete removes the entry', async () => {
@@ -230,7 +238,7 @@ describe('createMemoryCache', () => {
     const result1 = await cache.get('users-query');
     const result2 = await cache.get('orders-query');
 
-    expect(result1?.dsl.from).toEqual(['users']);
-    expect(result2?.dsl.from).toEqual(['orders']);
+    expect(okOf(result1).dsl.from).toEqual(['users']);
+    expect(okOf(result2).dsl.from).toEqual(['orders']);
   });
 });

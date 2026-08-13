@@ -55,9 +55,16 @@ describe('principal — per-principal resolution', () => {
   it('the compiled policy carries the resolved data grants (default-deny elsewhere)', () => {
     const policy = resolvePolicy(app, grants, 'usr_1');
     expect(policy.default).toBe('deny');
-    expect(policy.entities['deals']?.read).toBeDefined();     // viewer's *.read
-    expect(policy.entities['deals']?.insert).toBeDefined();   // sales write
-    expect(policy.entities['deals']?.delete).toBeUndefined(); // never granted
+    // `ScopeEntityRule` is a union — `public` and `deny` are whole-entity
+    // verdicts with no per-op rules on them. This assertion is about the third
+    // branch, so it says which branch it expects before reading through it.
+    const deals = policy.entities['deals'];
+    if (deals === undefined || 'public' in deals || 'deny' in deals) {
+      throw new Error(`expected rule-shaped grants on deals, got ${JSON.stringify(deals)}`);
+    }
+    expect(deals.read).toBeDefined();     // viewer's *.read
+    expect(deals.insert).toBeDefined();   // sales write
+    expect(deals.delete).toBeUndefined(); // never granted
   });
 });
 
@@ -122,6 +129,14 @@ describe('principal — ring-2 variant resolution', () => {
     } as unknown as NiscApp;
     const errors = verifyVariants(twoAcrossRoles);
     expect(errors.some((e) => e.includes('role'))).toBe(false); // each role alone is coherent
-    expect(errors.some((e) => e.includes('principal "usr_2"') && e.includes('crm.deals'))).toBe(true);
+    // Named by the COMBINATION, not by whoever happened to wear it: the defect
+    // is that [viewer, dense] resolves to two variants, and it is the same
+    // defect whether one person holds it or ten thousand do.
+    expect(errors.some((e) => e.includes('[viewer, dense]') && e.includes('crm.deals'))).toBe(true);
+
+    // ...and the combinations may be DECLARED rather than counted off the
+    // population — same finding, no assignment map at all.
+    const declared = { ...twoAcrossRoles, assignments: {}, wearable: [['viewer', 'dense']] } as unknown as NiscApp;
+    expect(verifyVariants(declared).some((e) => e.includes('[viewer, dense]') && e.includes('crm.deals'))).toBe(true);
   });
 });

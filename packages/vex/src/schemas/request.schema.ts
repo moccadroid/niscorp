@@ -52,8 +52,20 @@ export type TimingMeta = {
 export type ContextMeta = {
   // Mirrors ParamSlot['type'] (adapters/adapter.types.ts) — the contract a
   // caller reads is built from the slots the compiler bound, one for one.
-  type: 'string' | 'number' | 'boolean' | 'string[]' | 'number[]' | 'json';
+  // Absent on a key that is optional and was not supplied: nothing bound it
+  // this run, so there is no slot to read a type off.
+  type?: 'string' | 'number' | 'boolean' | 'string[]' | 'number[]' | 'json';
   kind: 'context' | 'scope' | 'semantic';
+  // True when the key controls an `optional` condition — supply it and the
+  // condition applies, omit it and the condition is not in the query. DERIVED
+  // from the stored DSL rather than declared beside it, for the same reason
+  // mutation signatures are (see "Derived context signatures" in DOCS.md): a
+  // contract somebody maintains by hand is a contract that eventually lies.
+  optional?: true;
+  // True when this run did not supply the key, so its condition was pruned.
+  // The key is still published — that is the point of listing it — so a caller
+  // can discover what a fingerprint accepts without failing a request first.
+  absent?: true;
 };
 
 export type QueryResponse = {

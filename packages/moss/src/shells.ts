@@ -42,19 +42,43 @@ import { encodeDelta, frameHash } from './delta';
 // the projection is the durable thing, a shell is a warm cache.
 // ═══════════════════════════════════════════════════════════════
 
+// WHO A SHELL IS BEING BUILT FOR, resolved ONCE.
+//
+// A shell used to ask four separate synchronous questions about its principal,
+// every one of them ultimately answered by a resident map of the whole
+// population. One async answer replaces all four. This seam arrives last in the
+// migration because `inputs` decides what MOUNTS and so cannot be deferred the
+// way `seeds` can — which is exactly why it was the last thing still forcing an
+// application to hold a directory.
+export type ShellPrincipal = {
+  roles: readonly string[];
+  // The app's own scope values, passed back to `inputs` untouched. Moss never
+  // looks inside; it is the app's record, on its way back to the app.
+  scope: Record<string, unknown>;
+  // The tenant's live integrations. Carried because `adopt` has to recompute a
+  // catalog when the ACTIONS change, and a catalog that forgot which packs were
+  // installed would hand every studio every pack's screens.
+  installed: readonly string[] | undefined;
+  catalog: Catalog;
+  variants: ReadonlyMap<string, LayoutNode>;
+  policy: ScopePolicy;
+};
+
 export type ShellHostContext = {
   app: NiscApp;
-  catalog: (principal: string | null) => Catalog;
-  // Ring-2 bindings: action id → the granted variant's layout (empty map =
-  // every action serves its base layout).
-  variants: (principal: string | null) => ReadonlyMap<string, LayoutNode>;
-  roles: (principal: string | null) => readonly string[];
+  // The one resolution, awaited once per shell build.
+  resolve: (principal: string | null) => Promise<ShellPrincipal>;
+  // The same derivations keyed by ROLES rather than by principal, for `adopt`.
+  // Adopting is for changed ARTIFACTS, not changed people: the roles a live
+  // shell was built with are still its roles, so re-resolving them would be a
+  // round trip to learn what the cell already knows.
+  catalogFor: (roles: readonly string[], installed: readonly string[] | undefined) => Catalog;
+  variantsFor: (roles: readonly string[]) => ReadonlyMap<string, LayoutNode>;
   // The internal wire: the server's own fetch, authorized as the session.
   wire: (token: string | null) => FetchFn;
   // The environment and the per-principal policy — what the manifest's
   // in-process functions close over (agents read data under the policy).
   runtime: NiscRuntime;
-  policy: (principal: string | null) => ScopePolicy;
   // How long a durable shell may sit with NOTHING attached before it is
   // disposed. Default `DEFAULT_IDLE_MS`; `0` or `Infinity` disables the sweep
   // and shells live until sign-out or process exit. Only the idle clock is
@@ -106,7 +130,7 @@ export type ShellReport = {
 };
 
 export type ShellHost = {
-  session: (token: string | null, principal: string | null) => ShellSession;
+  session: (token: string | null, principal: string | null) => Promise<ShellSession>;
   // Artifacts changed (the app mutated its `actions`, the server dropped its
   // memos): every LIVING durable shell adopts its freshly-resolved granted
   // definitions in place — nova's registerAction adds or replaces, mounted
@@ -196,7 +220,7 @@ export const createShellHost = (ctx: ShellHostContext): ShellHost => {
   // re-authorize the server's own wire as the same session, and it is
   // refreshed on reattach so a rebuild uses the newest one the principal
   // arrived with rather than the one they first appeared with.
-  type Cell = { live: Live; token: string | null; principal: string | null };
+  type Cell = { live: Live; token: string | null; principal: string | null; roles: readonly string[]; installed: readonly string[] | undefined; hash: string };
 
   // No visible content = empty tree over the wire. A canvas whose layout
   // renders to nothing but empty text / empty wrappers (the collapsed aside
@@ -275,11 +299,17 @@ export const createShellHost = (ctx: ShellHostContext): ShellHost => {
 
   const durable = new Map<string, Cell>(); // principal → the one living shell
 
-  const build = (token: string | null, principal: string | null): Live => {
-    const { ids } = ctx.catalog(principal);
+  const build = async (token: string | null, principal: string | null): Promise<Live> => {
+    const who = await ctx.resolve(principal);
+    const { ids } = who.catalog;
     const granted = new Set(ids);
-    const bindings = ctx.variants(principal);
-    const inputs = shellManifest.inputs?.({ principal, actions: ids, roles: ctx.roles(principal) }) ?? {};
+    const bindings = who.variants;
+    // ASYNC AND WIRE-BEARING, matching `seeds`. This file's own manifest called
+    // the two twins while handing one the governed wire and not the other, and
+    // that asymmetry is the whole origin of the resident directory: a hook that
+    // cannot await, asked a question about rows, has exactly one implementation
+    // available to it.
+    const inputs = (await shellManifest.inputs?.({ principal, actions: ids, roles: who.roles, identity: who.scope, wire: ctx.wire(token) })) ?? {};
 
     // Canvases are data; mounting is derivation: of the declared seed (or
     // CANDIDATE list) the first action the principal holds mounts — none
@@ -315,10 +345,10 @@ export const createShellHost = (ctx: ShellHostContext): ShellHost => {
     let liveRef: Live | undefined;
     const session: FunctionSession = {
         principal,
-        roles: ctx.roles(principal),
+        roles: who.roles,
         wire,
         runtime: ctx.runtime,
-        policy: ctx.policy(principal),
+        policy: who.policy,
         get shell(): Shell {
           if (built === undefined) throw new Error('moss: a function touched the shell before the session finished building.');
           return built;
@@ -398,7 +428,7 @@ export const createShellHost = (ctx: ShellHostContext): ShellHost => {
     // language changes gets a `rebuild`, which re-reads this alongside their
     // catalog and inputs — one path, so a language can never be a release
     // behind the screen it is painting.
-    const phrases = ctx.app.phrases?.(principal) ?? {};
+    const phrases = (await ctx.app.phrases?.(principal)) ?? {};
 
     const live: Live = { shell, connections: new Set(), sent: new Map(), deltaReady: new Set(), flushing: false, ended: false, since: Date.now(), idleSince: Date.now(), phrases };
     liveRef = live;
@@ -409,7 +439,7 @@ export const createShellHost = (ctx: ShellHostContext): ShellHost => {
     // exactly as `initial` does, an unknown action or canvas skips rather
     // than kills the session, and seeds landing after attach simply render —
     // the same progressive path every later push takes.
-    const declaredSeeds = shellManifest.seeds?.({ principal, actions: ids, roles: ctx.roles(principal), wire });
+    const declaredSeeds = shellManifest.seeds?.({ principal, actions: ids, roles: who.roles, wire });
     if (declaredSeeds !== undefined) {
       void Promise.resolve(declaredSeeds)
         .then((byCanvas) => {
@@ -511,14 +541,19 @@ export const createShellHost = (ctx: ShellHostContext): ShellHost => {
   // comes back is the screen boot would have served this principal now. The
   // terminals are not told anything: they receive a frame and current trees,
   // the same two messages a reconnect brings.
-  const rebuild = (cell: Cell): void => {
+  // ASYNC, and its callers deliberately do not await it. `reset` answers "did
+  // they hold a shell", which is knowable at once; the replacement lands a tick
+  // later and every attached terminal receives a fresh frame when it does —
+  // exactly as `seeds` already behaves. A reset that blocked its caller on a
+  // round trip would make a role change slower than the write that caused it.
+  const rebuild = async (cell: Cell): Promise<void> => {
     const old = cell.live;
     // The replacement is built BEFORE the old one is torn down. `build` runs
     // app code — `inputs`, `functions`, `onSession` — and if that throws, a
     // reset that had already disposed the old shell would leave the session
     // holding nothing at all: strictly worse than the wedged shell it was
     // called to fix. Built first, a failed reset changes nothing.
-    const next = build(cell.token, cell.principal);
+    const next = await build(cell.token, cell.principal);
     const carried = [...old.connections].map((connection) => ({ connection, delta: old.deltaReady.has(connection) }));
     old.ended = true;
     old.connections.clear();
@@ -575,7 +610,7 @@ export const createShellHost = (ctx: ShellHostContext): ShellHost => {
       shell.dispatch(stamped as Parameters<Shell['dispatch']>[0]);
     },
     publish: (channel, payload) => cell.live.shell.publish(channel, payload),
-    reset: () => rebuild(cell),
+    reset: () => void rebuild(cell).catch((err: unknown) => console.error('[moss/shells] a reset failed to rebuild', err)),
   });
 
   // ── the idle sweep ──
@@ -611,28 +646,43 @@ export const createShellHost = (ctx: ShellHostContext): ShellHost => {
   }
 
   return {
-    session: (token, principal) => {
-      if (principal === null) return sessionOn({ live: build(token, principal), token, principal }, true);
+    session: async (token, principal) => {
+      if (principal === null) {
+        const anon = await ctx.resolve(principal);
+        return sessionOn({ live: await build(token, principal), token, principal, roles: anon.roles, installed: anon.installed, hash: anon.catalog.hash }, true);
+      }
       const existing = durable.get(principal);
       if (existing !== undefined) {
         existing.token = token; // a rebuild should re-authorize as the newest session
         return sessionOn(existing, false);
       }
-      const cell: Cell = { live: build(token, principal), token, principal };
+      const who = await ctx.resolve(principal);
+      const cell: Cell = { live: await build(token, principal), token, principal, roles: who.roles, installed: who.installed, hash: who.catalog.hash };
       durable.set(principal, cell);
       return sessionOn(cell, false);
     },
+    // RE-RESOLVED, not re-read off the cell. Adopting happens because something
+    // the derivations were made FROM changed, and the commonest such change is a
+    // tenant installing a pack — so the install list a shell was born with is
+    // exactly the thing that must not be trusted here. Asynchronous and
+    // unawaited: definitions landing a tick late simply register, which is the
+    // same progressive path `seeds` already takes.
     adopt: () => {
-      for (const [principal, cell] of durable) {
-        if (cell.live.ended) continue;
-        const granted = new Set(ctx.catalog(principal).ids);
-        const bindings = ctx.variants(principal);
-        for (const [id, definition] of Object.entries(ctx.app.actions)) {
-          if (!granted.has(id)) continue;
-          const layout = bindings.get(id);
-          cell.live.shell.registerAction(layout === undefined ? definition : { ...definition, layout });
+      void (async () => {
+        for (const [, cell] of durable) {
+          if (cell.live.ended) continue;
+          const who = await ctx.resolve(cell.principal);
+          cell.roles = who.roles;
+          cell.installed = who.installed;
+          cell.hash = who.catalog.hash;
+          const granted = new Set(who.catalog.ids);
+          for (const [id, definition] of Object.entries(ctx.app.actions)) {
+            if (!granted.has(id)) continue;
+            const layout = who.variants.get(id);
+            cell.live.shell.registerAction(layout === undefined ? definition : { ...definition, layout });
+          }
         }
-      }
+      })().catch((err: unknown) => console.error('[moss/shells] adopt failed', err));
     },
     deliver: (principal, channel, payload) => {
       // Into the LIVE shell only. A principal with no durable shell hears
@@ -669,7 +719,7 @@ export const createShellHost = (ctx: ShellHostContext): ShellHost => {
     reset: (principal) => {
       const cell = durable.get(principal);
       if (cell === undefined || cell.live.ended) return false;
-      rebuild(cell);
+      void rebuild(cell).catch((err: unknown) => console.error('[moss/shells] a reset failed to rebuild', err));
       return true;
     },
     stop: () => {

@@ -1,6 +1,6 @@
 import { PassThrough } from 'node:stream';
 import { describe, it, expect, vi } from 'vitest';
-import type { RenderNode } from '@niscorp/nova';
+import type { RenderComponentNode, RenderNode } from '@niscorp/nova';
 import { ttyTarget } from '../src/terminal/tty';
 import type { TerminalApi } from '../src/terminal';
 
@@ -10,7 +10,10 @@ import type { TerminalApi } from '../src/terminal';
 // input, dispatches captured. The REPL contract in the open, no TTY needed.
 // ═══════════════════════════════════════════════════════════
 
-const component = (name: string, props: Record<string, unknown> = {}, children: RenderNode[] = []): RenderNode => ({
+// RenderComponentNode, not the RenderNode union: `ref` and `model` live on the
+// component member alone, so a helper typed as the union produces values that
+// cannot carry either one once spread.
+const component = (name: string, props: Record<string, unknown> = {}, children: RenderNode[] = []): RenderComponentNode => ({
   type: 'component',
   name,
   props,

@@ -2,6 +2,16 @@ import { describe, it, expect } from 'vitest';
 import type { ProviderAdapter, ProviderStreamDelta, StepStreamEvent } from '../src/types';
 import { executeStepStream } from '../src/stream/execute-step-stream';
 
+// `noUncheckedIndexedAccess` is on, so an index read is `T | undefined`. Every
+// assertion below is about the LAST event of a stream, and a stream that
+// produced none is a failure worth its own sentence rather than a `.type` read
+// through nothing.
+const lastOf = <T>(items: readonly T[]): T => {
+  const item = items[items.length - 1];
+  if (item === undefined) throw new Error('expected the stream to emit at least one event, and it emitted none');
+  return item;
+};
+
 // ═══════════════════════════════════════════════════════════
 // Mock adapter — returns canned stream deltas
 // ═══════════════════════════════════════════════════════════
@@ -47,7 +57,7 @@ describe('stepStream — simple text', () => {
     expect(events[0]).toEqual({ type: 'text', text: 'Hello' });
     expect(events[1]).toEqual({ type: 'text', text: ' world' });
 
-    const done = events[events.length - 1];
+    const done = lastOf(events);
     expect(done.type).toBe('done');
     if (done.type === 'done') {
       expect(done.result.content).toBe('Hello world');
@@ -68,7 +78,7 @@ describe('stepStream — simple text', () => {
     }));
     const textEvents = events.filter((e) => e.type === 'text');
     expect(textEvents).toHaveLength(0);
-    expect(events[events.length - 1].type).toBe('done');
+    expect(lastOf(events).type).toBe('done');
   });
 });
 
@@ -94,7 +104,7 @@ describe('stepStream — tool calls', () => {
       },
     }));
 
-    const done = events[events.length - 1];
+    const done = lastOf(events);
     expect(done.type).toBe('done');
     if (done.type === 'done') {
       expect(done.result.toolCalls).toEqual([
@@ -140,7 +150,7 @@ describe('stepStream — tool calls', () => {
       model: 'test',
       request: { messages: [{ role: 'user', content: 'go' }] },
     }));
-    const done = events[events.length - 1];
+    const done = lastOf(events);
     if (done.type === 'done') {
       expect(done.result.toolCalls[0]!.args).toBe('not-json');
     }
@@ -177,7 +187,7 @@ describe('stepStream — tool_call_delta events', () => {
     const joined = deltas
       .map((d) => (d.type === 'tool_call_delta' ? d.argsText : ''))
       .join('');
-    const done = events[events.length - 1];
+    const done = lastOf(events);
     expect(done.type).toBe('done');
     if (done.type === 'done') {
       expect(done.result.toolCalls[0]?.args).toEqual(JSON.parse(joined));

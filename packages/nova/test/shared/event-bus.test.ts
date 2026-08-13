@@ -30,7 +30,10 @@ describe('event bus — typed NovaEvent', () => {
     const handler = vi.fn();
     bus.on(/^ui:/, handler);
     bus.emit({ type: 'ui:click', ref: 'a' });
-    bus.emit({ type: 'ui:input', ref: 'b', value: 'y' });
+    // What an input carries rides in `payload` — a ui event has no `value`
+    // field, and never has. Excess-property checking was the only thing that
+    // would have said so, and it was switched off for this whole directory.
+    bus.emit({ type: 'ui:input', ref: 'b', payload: 'y' });
     expect(handler).toHaveBeenCalledTimes(2);
   });
 

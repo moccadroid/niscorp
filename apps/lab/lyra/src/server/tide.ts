@@ -6,17 +6,19 @@ import type { MossServer } from '@niscorp/moss';
 import { mutationEffect } from '@niscorp/vex';
 import type { PgPool } from '@niscorp/vex';
 import { MUTATION_ENTRIES } from '@lyra/app/vex';
-import { reflexesFor } from '@lyra/app/reflexes/compose';
+import { MAIL_ATTEMPTS, STUCK_AFTER_MS, dispatchReflex, reflexesFor, sweepReflex } from '@lyra/app/reflexes/compose';
 import type { AutomationRow } from '@lyra/app/reflexes/compose';
-import { everyone } from './users';
+import { sendMail } from './mail/send';
+import { unsubscribeUrl } from './unsubscribe';
+import { automationFor } from './lookup';
 import { mintDevToken } from '@niscorp/moss';
 
-type Deps = { server: () => MossServer; now: () => number; pool: PgPool };
+type Deps = { server: () => MossServer; now: () => number; pool: PgPool; base: () => string };
 
-const tokenFor = (studioId: string): string => {
-  const robot = everyone().find((p) => p.audience === 'automation' && p.studioId === studioId);
-  if (robot === undefined) throw new Error(`tide: ${studioId} has no automation principal`);
-  return mintDevToken(robot.id);
+const tokenFor = async (pool: PgPool, studioId: string): Promise<string> => {
+  const robot = await automationFor(pool, studioId);
+  if (robot === null) throw new Error(`tide: ${studioId} has no automation principal`);
+  return mintDevToken(robot);
 };
 
 // One POST to the app's own surface. `as` carries the studio, so the identity
@@ -32,7 +34,7 @@ const callVex = async (deps: Deps, as: string, fingerprint: string, context: Rec
       method: 'POST',
       headers: {
         'content-type': 'application/json',
-        authorization: `Bearer ${tokenFor(studioId)}`,
+        authorization: `Bearer ${await tokenFor(deps.pool, studioId)}`,
         ...(chain !== undefined ? { 'x-tide-cause': chain.cause, 'x-tide-depth': String(chain.depth) } : {}),
       },
       body: JSON.stringify({ fingerprint, context }),
@@ -56,14 +58,152 @@ const callVex = async (deps: Deps, as: string, fingerprint: string, context: Rec
 // the operator, say — would have answered happily and proved nothing.
 export const askAsAutomation = async (
   server: MossServer,
+  pool: PgPool,
   studioId: string,
   fingerprint: string,
   context: Record<string, unknown>,
-): Promise<unknown> => callVex({ server: () => server, now: () => Date.now(), pool: undefined as never }, `automation@${studioId}`, fingerprint, context);
+): Promise<unknown> => callVex({ server: () => server, now: () => Date.now(), pool, base: () => '' }, `automation@${studioId}`, fingerprint, context);
+
+// ── THE ONE EFFECT THAT IS NOT A WRITE ───────────────────────
+//
+// Every other effect in this registry is a vex mutation replayed. This one
+// leaves the building: it hands a composed message to the mail transport and
+// then records what happened — which it does through vex, as the same
+// automation principal, so the write is scoped and observed like any other.
+//
+// THE ORDER IS THE DESIGN. Claim, send, record:
+//
+//   CLAIM first, because tide retries and the dangerous case is not a failure
+//   — it is a send that succeeded and whose acknowledgement never arrived. The
+//   claim answers with no row when somebody already took it, and this stops.
+//
+//   RECORD always, including when the send threw, because a row left saying
+//   `sending` is a message nobody will ever look at again. The only path that
+//   can still strand one is the process dying mid-send; that wants a sweep,
+//   and it is not this.
+//
+// A retryable failure puts the row BACK to `queued` and throws — the throw is
+// what tells tide to use the retry policy the reflex already carries, and the
+// state is what lets the next attempt win the claim again.
+const mailEffect = (deps: Deps, as: string | undefined) => ({
+  writes: ['outbox'],
+  run: async (input: unknown, ctx: import('@niscorp/tide').TideCtx) => {
+    if (as === undefined) throw new Error('tide: mail ran with no identity');
+    const row = (input ?? {}) as Record<string, unknown>;
+    const messageId = String(row['messageId'] ?? '');
+    if (messageId === '') throw new Error('tide: mail ran with no message');
+    const chain = { cause: `task:${ctx.taskId}`, depth: ctx.depth };
+
+    // An UPDATE answers with the rows it changed. None means the WHERE found
+    // no queued row under this studio's scope — already claimed, already sent,
+    // or not ours — and every one of those is a reason not to send.
+    const claimed = await callVex(
+      deps,
+      as,
+      'outbox/claim',
+      { messageId, claimedAt: new Date(deps.now()).toISOString(), abandonedBefore: new Date(deps.now() - STUCK_AFTER_MS).toISOString() },
+      chain,
+    );
+    const changed = claimed !== null && typeof claimed === 'object' && 'result' in claimed ? (claimed as { result: unknown }).result : null;
+    if (Array.isArray(changed) && changed.length === 0) return { sent: false, reason: 'already taken' };
+
+    // ── WHAT MARKETING MAIL CARRIES THAT OTHER MAIL DOES NOT ──
+    //
+    // A footer somebody can click, and the headers a mailbox provider reads:
+    // Gmail and Yahoo surface their own one-click control from these, and mail
+    // sent in volume without them is mail that lands in spam. Both are added
+    // HERE rather than written into the studio's words, because a studio
+    // composing its own opt-out is a studio that can forget to.
+    //
+    // A class reminder gets neither. It is not marketing, and an unsubscribe
+    // link on a booking confirmation teaches people to expect one everywhere.
+    const marketing = row['marketing'] === true || row['marketing'] === 'true';
+    const link = marketing ? unsubscribeUrl(deps.base(), String(row['studioId'] ?? ''), String(row['personId'] ?? '')) : '';
+    const body = String(row['body'] ?? '');
+
+    // A DEAD ADDRESS, OR SOMEBODY WHO REPORTED US. Either way the provider has
+    // already told us, and sending again is how a shared sending domain loses
+    // its reputation for every studio on it at once.
+    if (row['suppressed'] === true || row['suppressed'] === 'true') {
+      await callVex(deps, as, 'outbox/record-failed', { messageId, failedReason: 'this address bounced or reported us — not written to again' }, chain);
+      return { sent: false, reason: 'suppressed' };
+    }
+
+    // ── THE CEILING ──────────────────────────────────────────
+    //
+    // Asked AFTER the claim, so a message counted against the cap is one that
+    // was genuinely about to go, and BEFORE the send, so the cap is a limit
+    // rather than a report. The count comes from the outbox itself (there is
+    // no counter to drift) and it includes this row, which is why the
+    // comparison is `>` and not `>=`.
+    //
+    // A capped message FAILS rather than waiting: a reminder about tomorrow's
+    // class delivered the day after tomorrow is worse than one that visibly
+    // did not go, and a studio that hit its ceiling has something to see.
+    const cap = Number(row['dailyCap'] ?? 0);
+    if (cap > 0) {
+      const counted = await callVex(deps, as, 'automation/sent-today', { today: new Date(deps.now()).toISOString().slice(0, 10) }, chain);
+      const total = Number(((counted as { result?: { total?: unknown } } | null)?.result?.total ?? 0));
+      if (total > cap) {
+        await callVex(deps, as, 'outbox/record-failed', { messageId, failedReason: `this studio's daily limit of ${cap} messages was reached` }, chain);
+        return { sent: false, reason: 'daily cap reached' };
+      }
+    }
+
+    // NO WAY OUT, NO MESSAGE. A deployment with no signing seed cannot mint a
+    // link that will ever verify, so marketing mail would go out carrying an
+    // opt-out that answers "not one we recognise" — worse than none, because
+    // it is a promise. The row says so and stops; it is a configuration
+    // problem, so it reads like one rather than like a delivery failure.
+    if (marketing && link === '') {
+      await callVex(deps, as, 'outbox/record-failed', { messageId, failedReason: 'no unsubscribe secret configured — marketing mail needs a working opt-out' }, chain);
+      return { sent: false, reason: 'no unsubscribe secret configured' };
+    }
+
+    const sent = await sendMail({
+      to: String(row['to'] ?? ''),
+      fromName: String(row['fromName'] ?? ''),
+      fromBox: String(row['fromBox'] ?? ''),
+      replyTo: String(row['replyTo'] ?? ''),
+      subject: String(row['subject'] ?? ''),
+      text: link === '' ? body : `${body}\n\n—\nIf you would rather not hear from us: ${link}`,
+      ...(link === ''
+        ? {}
+        : { headers: { 'List-Unsubscribe': `<${link}>`, 'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click' } }),
+      // The row's own id: the provider refuses a duplicate of it, and the
+      // claim above refused one before that.
+      // A STUDIO'S OWN DOMAIN, only once the provider has verified it. An
+      // unverified one is not a sender, it is an intention.
+      ...(row['sendingDomainOk'] === true || row['sendingDomainOk'] === 'true' ? { fromDomain: String(row['sendingDomain'] ?? '') } : {}),
+      key: messageId,
+    }).catch((error: unknown) => ({ ok: false, reason: String(error).slice(0, 200), retry: true }) as const);
+
+    if (sent.ok) {
+      await callVex(deps, as, 'outbox/record-sent', { messageId, providerMessageId: sent.id, sentAt: new Date(deps.now()).toISOString() }, chain);
+      return { sent: true, id: sent.id };
+    }
+
+    // WORTH ANOTHER GO, AND THERE IS ANOTHER GO TO HAVE. Both halves matter:
+    // requeueing on the LAST attempt would leave the row `queued` with nobody
+    // left to read it — the insert fact that woke this is long consumed, so
+    // nothing would ever pick it up again and a studio would see "Not sent"
+    // forever. A message that has run out of attempts has failed, and the row
+    // has to say so.
+    if (sent.retry && ctx.attempt < MAIL_ATTEMPTS) {
+      await callVex(deps, as, 'outbox/requeue', { messageId, failedReason: sent.reason }, chain);
+      throw new Error(`mail: ${sent.reason}`);
+    }
+
+    const reason = sent.retry ? `${sent.reason} (gave up after ${ctx.attempt} attempts)` : sent.reason;
+    await callVex(deps, as, 'outbox/record-failed', { messageId, failedReason: reason }, chain);
+    return { sent: false, reason };
+  },
+});
 
 export const wireTide = (deps: Deps): Tide => {
-  const effects = (as: string | undefined) =>
-    Object.fromEntries(
+  const effects = (as: string | undefined) => ({
+    'mail.send': mailEffect(deps, as),
+    ...Object.fromEntries(
       MUTATION_ENTRIES.map((entry) => [
         entry.fingerprint,
         {
@@ -81,10 +221,23 @@ export const wireTide = (deps: Deps): Tide => {
           },
         },
       ]),
-    );
+    ),
+  });
 
   return createTide({
     store: createTideStore(deps.pool),
+
+    // EVERY COMMITTED WRITE IN THIS APP MINTS A FACT (app.ts, the bridge), and
+    // three (entity, op) pairs are watched. Every booking, check-in, note and
+    // payment was paying for an awaited INSERT into `tide_fact` for a row no
+    // reflex could ever match — on the hot path of the click that caused it,
+    // and swept a week later having been read by nobody.
+    //
+    // Lyra's audit trail is its own tables, not tide's ledger: `outbox` says
+    // what was sent, `notifications` what was told, `tide_run` how each
+    // automation ran. What is given up is `ledger.facts()` meaning "every
+    // write this app committed", which nothing here has ever asked it.
+    storeUnwatchedWrites: false,
 
     transform: (config, source) => evaluate(config, source as never),
 
@@ -109,10 +262,17 @@ export const wireTide = (deps: Deps): Tide => {
 };
 
 export const reflexesForEveryStudio = (studios: { id: string; timezone: string }[], rows: readonly (AutomationRow & { studio_id: string })[]) =>
-  studios.flatMap((studio) =>
-    reflexesFor(
+  studios.flatMap((studio) => [
+    // NOT ONE OF THE STUDIO'S AUTOMATIONS — infrastructure, per studio because
+    // a fact is stamped with the studio's own robot and can only wake that
+    // studio's reflexes. It exists for a studio that has set up nothing at all:
+    // the day they arm their first automation, the thing that sends is already
+    // standing.
+    dispatchReflex(studio.id),
+    sweepReflex(studio.id, studio.timezone),
+    ...reflexesFor(
       studio.id,
       studio.timezone,
       rows.filter((row) => row.studio_id === studio.id),
     ),
-  );
+  ]);

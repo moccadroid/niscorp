@@ -3,6 +3,7 @@ import type { Charter } from '@niscorp/charter';
 import type { ActionDefinition, ActionFragment, CanvasConfig, FetchFn, FunctionHandler, LayoutNode, Shell } from '@niscorp/nova';
 import type { PhraseKeys, Phrasebook } from '@niscorp/nova/i18n';
 import type { NiscRuntime } from './runtime';
+import type { IdentityRecord } from './identity';
 
 // ═══════════════════════════════════════════════════════════════
 // The application, as data. Every field is an ARTIFACT — content someone
@@ -30,7 +31,31 @@ export type LayoutVariant = { action: string; layout: LayoutNode };
 
 export type NiscApp = {
   charter: Charter;
-  assignments: Record<string, readonly string[]>;
+  // THE ASSIGNMENT MAP — one entry per principal, and the reason a resident
+  // copy of the population had to exist at all: an eager `Record` cannot be
+  // filled without enumerating everybody.
+  //
+  // OPTIONAL now. An app that declares `identity` answers this per principal,
+  // asynchronously, one row at a time, and never builds the map. What remains
+  // here is for apps whose assignments are AUTHORED — a handful of static
+  // rungs in a demo — where a literal is the honest shape.
+  assignments?: Record<string, readonly string[]>;
+  // WHICH ROLE COMBINATIONS A PRINCIPAL MAY HOLD — declared, not counted.
+  //
+  // The two coherence gates below (`verifyCharter`'s subtractive-assigned rule,
+  // `verifyVariants`' one-variant-per-action rule) never wanted principals; they
+  // wanted the distinct COMBINATIONS somebody could wear. Reading them off
+  // `assignments` is the only reason that map has to be eager — and enumerating
+  // the population to learn that `['instructor','member']` exists is a strange
+  // way to learn it.
+  //
+  // The charter cannot supply this. It defines roles; it does not know which of
+  // them coincide on one person, because that is a fact about the application's
+  // schema (staff row AND membership row), not about the grant graph.
+  //
+  // Absent = derived from `assignments`, which is what every app did before this
+  // existed and is correct while the map is still eager.
+  wearable?: readonly (readonly string[])[];
   actions: Record<string, ActionDefinition>;
   // layout variants by variant id — the `layouts` universe the charter
   // selects over (ring 2; `actions` is ring 1, `data` is ring 3)
@@ -46,7 +71,40 @@ export type NiscApp = {
   // mapping is application knowledge (a directory, a claims table, a lookup),
   // so the app supplies it. Values are injected server-side and are
   // unreferenceable by a request — the enforcement is engine-side and unforgeable.
-  scope?: (principal: string | null) => Record<string, unknown>;
+  //
+  // VOLATILE VALUES ONLY, once `identity` below exists. A resolved identity is
+  // held for a session; anything derived from the CLOCK must not be, or a
+  // session opened before midnight serves yesterday's date to every query that
+  // compares a DATE column against it. So this seam survives beside `identity`
+  // and is asked per request — and it stays synchronous on purpose, because the
+  // values that belong here are COMPUTED rather than read. A sync signature is
+  // only a trap when the answer lives in rows.
+  //
+  // The resolved record is handed in so the computation has what it needs
+  // without a lookup: the day is derived from the timezone the record already
+  // carries. Merged OVER the record's own scope values.
+  scope?: (principal: string | null, identity?: IdentityRecord) => Record<string, unknown>;
+  // WHO A PRINCIPAL IS, resolved ONCE per session instead of asked in pieces
+  // per request — the seam that replaces `scope` + `assignments` +
+  // `installedIntegrations` with a single async answer.
+  //
+  // The three seams around this one are synchronous, and that is not a detail:
+  // a hook that cannot await has exactly one implementation available to it
+  // when the answer lives in rows, and that implementation is a resident map of
+  // the whole population. Lyra grew eight of them across three files, and every
+  // one exists to satisfy a signature rather than a decision. This is the same
+  // question asked in a tense that permits the obvious answer — read the row.
+  //
+  // Moss OWNS the resulting cache: bounded, evicted, revalidated on
+  // `sessionRevalidateMs`, and enumerable only by an operator (see identity.ts,
+  // and the invariants in docs/plans/lyra-identity.md Part 6). What it will
+  // never do is look inside the record. `roles` goes to charter, `installed` is
+  // filtered against, `scope` is merged into the engine's scope values — all
+  // pass-through. The moment moss reads `.studioId` off one of these, moss has
+  // learned what a tenant is and the boundary is gone.
+  //
+  // Absent = the three older seams answer, exactly as before.
+  identity?: (principal: string) => Promise<IdentityRecord>;
   // THE WORDS THIS PRINCIPAL'S SHELL WEARS — the language twin of `scope`.
   //
   // Moss renders a shell server-side and serializes its trees. Between those
@@ -63,7 +121,11 @@ export type NiscApp = {
   // tenant reading different languages get two shells, which they already had.
   // Resolved once when the shell is built — a change to a principal's language
   // is a `reset`/rebuild, exactly like a change to their catalog.
-  phrases?: (principal: string | null) => Phrasebook | undefined;
+  // May be async, for the same reason `seeds` and `inputs` are: a book that
+  // lives in rows cannot be fetched by a function that cannot await, and the
+  // only implementation a sync signature leaves is a resident copy of every
+  // language.
+  phrases?: (principal: string | null) => Phrasebook | undefined | Promise<Phrasebook | undefined>;
   // Which keys in a tree carry prose. An app with its own display-field
   // convention (`status_display`) declares it once here. Absent = nova's
   // default prop set and no suffix rule.
@@ -81,7 +143,8 @@ export type NiscApp = {
   //
   // Absent = every registered integration is live for everybody, which is right
   // for an app with one tenant and wrong the moment there are two.
-  installedIntegrations?: (principal: string | null) => readonly string[];
+  // May be async, like every other per-principal seam here now.
+  installedIntegrations?: (principal: string | null) => readonly string[] | Promise<readonly string[]>;
   // WHO AN INTEGRATION IS when it acts and nobody is driving.
   //
   // A webhook lands, a nightly sync runs: the integration presents its minted
@@ -95,7 +158,17 @@ export type NiscApp = {
   // Returning null refuses: an integration the tenant has not installed, a
   // tenant that does not exist, an app that has no actor for unattended work.
   // Absent = integration keys resolve to nobody and every keyed call is 403.
-  integrationActor?: (integration: string, actsFor: string) => string | null;
+  // MAY BE ASYNC, and this is the first of the six per-principal seams to say
+  // so. A synchronous signature cannot perform I/O, so an app answering this
+  // question about rows had exactly one implementation available to it: hold
+  // the rows. That is how a resident copy of the database gets built by a type
+  // rather than by a decision (docs/plans/lyra-identity.md, Part 1).
+  //
+  // Nothing here needed it: moss resolves this inside async middleware, one
+  // call per keyed request, and has awaited the session verifier beside it
+  // since the beginning. A sync implementation still satisfies this — the
+  // widening is the point, not a migration.
+  integrationActor?: (integration: string, actsFor: string) => string | null | Promise<string | null>;
   // WHERE AN INTEGRATION MAY APPEAR — the host's half of the placement
   // contract, advertised on the discovery surface and enforced at intake.
   //
@@ -333,11 +406,24 @@ export type ShellManifest = {
   // server-side. Names listed here are registered even when no authored
   // layout mentions them (generated layouts may).
   components?: Record<string, { meta?: { description?: string; propsSchema?: unknown } }>;
+  //
+  // ASYNC AND WIRE-BEARING, matching `seeds`. These two are called twins a few
+  // lines apart, and one was handed the governed internal wire while the other
+  // was not. That asymmetry is the origin of every resident cache in this repo:
+  // a hook that cannot await, asked a question about rows, has exactly one
+  // implementation available to it, and that implementation is a map of
+  // everybody (docs/plans/lyra-identity.md, Part 1). A synchronous
+  // implementation still satisfies this — the widening is the point.
   inputs?: (session: {
     principal: string | null;
     actions: readonly string[];
     roles: readonly string[];
-  }) => Record<string, Record<string, unknown>>;
+    // The scope values the app's own `identity` seam returned — handed straight
+    // back so a shell can be composed from the record the session already
+    // resolved, instead of reaching into a directory for the same four facts.
+    identity: Record<string, unknown>;
+    wire: FetchFn;
+  }) => Record<string, Record<string, unknown>> | Promise<Record<string, Record<string, unknown>>>;
 };
 
 // Identity today, a validation seam tomorrow — and the one name an app

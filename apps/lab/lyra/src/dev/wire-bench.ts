@@ -9,9 +9,8 @@
 // Run: pnpm --filter lyra exec tsx src/dev/wire-bench.ts
 import { deflateSync } from 'node:zlib';
 import type { Shell } from '@niscorp/nova';
-import { mintToken, personByEmail } from '@lyra/server/users';
 import { CAST } from '@lyra/db/seed';
-import { server, settle } from './world';
+import { idFor, mintToken, runtime, server, settle } from './world';
 
 const bold = (s: string): string => `\x1b[1m${s}\x1b[0m`;
 const dim = (s: string): string => `\x1b[2m${s}\x1b[0m`;
@@ -47,7 +46,7 @@ const patchBytes = (a: unknown, b: unknown): number => {
   return bytes(ops);
 };
 
-const owner = server.shells?.session(mintToken(CAST.lumen.owner), personByEmail(CAST.lumen.owner)?.id ?? null);
+const owner = await server.shells?.session(await mintToken(CAST.lumen.owner), idFor(CAST.lumen.owner));
 await settle(20);
 if (owner === undefined) throw new Error('bench: no shell');
 const shell = owner.shell;

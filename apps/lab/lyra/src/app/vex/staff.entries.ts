@@ -42,10 +42,18 @@ export const staffList: CacheEntry = {
       { field: 'people.name', as: 'person_name' },
       'people.email',
     ],
+    // The search is OPTIONAL: an empty box is not a search for '%%', it is the
+    // absence of one, and the condition is not in the query at all. Before,
+    // every caller had to know the wildcard sentinel to ask for "everyone".
     filter: {
       and: [
         { neq: ['staff.role', 'automation'] },
-        { or: [{ ilike: ['people.name', { $context: 'q' }] }, { ilike: ['people.email', { $context: 'q' }] }] },
+        {
+          optional: {
+            key: 'q',
+            then: { or: [{ ilike: ['people.name', { $context: 'q' }] }, { ilike: ['people.email', { $context: 'q' }] }] },
+          },
+        },
       ],
     },
     sort: [{ field: 'people.name', dir: 'asc' }],

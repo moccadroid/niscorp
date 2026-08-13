@@ -9,6 +9,7 @@ import { scheduleTimetableAction, scheduleTimetableInputSchema } from './actions
 import { scheduleSessionAction, scheduleSessionInputSchema } from './actions/domains/schedule/session.action';
 import { studioSettingsAction, studioSettingsInputSchema } from './actions/domains/studio/studio.action';
 import { addonsAction, addonsInputSchema } from './actions/domains/studio/addons.action';
+import { studioMailAction } from './actions/domains/studio/mail.action';
 import { deskCheckInAction, deskCheckInInputSchema } from './actions/domains/desk/desk.action';
 import { followUpsAction, followUpsInputSchema } from './actions/domains/desk/followups.action';
 import { automationsAction, automationsInputSchema } from './actions/domains/automations/automations.action';
@@ -41,6 +42,7 @@ export const CATALOG_DEFINITIONS: Record<string, ActionDefinition> = {
   'schedule.session': { ...scheduleSessionAction, input: scheduleSessionInputSchema },
   'studio.settings': { ...studioSettingsAction, input: studioSettingsInputSchema },
   'studio.addons': { ...addonsAction, input: addonsInputSchema },
+  'studio.mail': studioMailAction,
   'desk.checkin': { ...deskCheckInAction, input: deskCheckInInputSchema },
   'desk.followups': { ...followUpsAction, input: followUpsInputSchema },
   'timetable.list': { ...timetableListAction, input: timetableListInputSchema },

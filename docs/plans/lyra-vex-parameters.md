@@ -1,14 +1,25 @@
 # vex — parameters, not fingerprints
 
-**Status: PARTIALLY BUILT, 2026-08-13.** Parts 2 and 3 are **built and checked**:
-Lyra went from 141 fingerprints to 112, sorting is wired and proven by
-[`sort-check.ts`](../../apps/lab/lyra/src/dev/sort-check.ts), and five dead
-automation selections are gone. Part 4 — **optional context keys in vex** — is
-**not started**, and it is the only item here that raises the ceiling. Parts 5–7
-are what to build and what a human must decide first.
+**Status: BUILT, 2026-08-13.** All of it. Lyra went from 141 fingerprints to
+112, sorting is wired, five dead automation selections are gone, and **optional
+context keys exist in vex** — the item this whole document was written to
+justify. Two checks hold it down:
+[`sort-check.ts`](../../apps/lab/lyra/src/dev/sort-check.ts) and
+[`optional-check.ts`](../../apps/lab/lyra/src/dev/optional-check.ts).
 
-Do not re-litigate Parts 1–3; they are done and the reasoning is recorded so
-nobody re-derives it. Start at Part 4.
+The roll now takes lens, search, cursor and sort as four values on one
+fingerprint, and answers an **empty context** with the whole roll — no lens
+name, no `'%'`, no empty-string cursor. Every sentinel is gone.
+
+**Read Part 4.6 before extending this.** Three things were decided differently
+from the design below once the code was in front of me, and one of Part 5's
+steps was abandoned for a better reason than it failing. Part 7 lists what is
+genuinely still open — chiefly the sort-aware cursor.
+
+This document is kept for the reasoning, not as instructions. Parts 1–3 record
+why the collapse was worth doing and which collapses were REFUSED; Part 4
+records the design space and which point in it was chosen. Both get
+re-litigated otherwise.
 
 Every claim carries a `file:line`. Where a claim was **verified by execution**
 it says so. If something is not cited, treat it as unverified opinion and check
@@ -223,7 +234,7 @@ Fix the assertions with the i18n work, not with this.
 
 ---
 
-## Part 4 — the wall: optional context keys (NOT STARTED)
+## Part 4 — the wall: optional context keys (BUILT)
 
 ### 4.1 The mechanism, exactly
 
@@ -320,6 +331,78 @@ round-trip.
 *Against:* on its own it is ① with the sentinel moved server-side. It still
 needs a meaningful default per type and still cannot say "no id filter at all."
 
+### 4.6 What was actually built, and where it departs from the above
+
+**③+④ was chosen** — the presence-shaped node with a published contract. Four
+things turned out differently once the code existed, and each is worth keeping:
+
+**① The prune is a DSL→DSL pass, not a compiler feature.**
+[`engine/optional.ts`](../../packages/vex/src/engine/optional.ts) resolves every
+optional condition at the same point `applySortContext` runs
+(`runtime.ts:438`), so the node **never reaches the resolver, the compiler, or
+the scope walker**. That was not the plan — the plan assumed three walkers to
+teach. It is strictly better, and the reason is a safety argument rather than a
+tidiness one: an entity cannot enter the query after `discoverEntities` has
+decided what to scope, because by then there is nothing left to resolve. All
+three walkers now `refuseOptional()` if they ever meet the node, which
+converted a silent hole into an error — `scope/discover.ts` fell THROUGH on an
+unrecognised node (contributing no entities, hence no tenant filter) and
+`operators.ts` fell through to `return 'TRUE'`.
+
+**② The contract is derived, not declared.** ④ said entries would declare their
+parameters. They do not: `optionalKeysOf(dsl)` reads them off the stored DSL and
+`buildContextContract` marks them `optional: true`, plus `absent: true` for the
+ones this run did not supply. A hand-written declaration can disagree with the
+filter it describes; a derived one cannot. This is the rule vex already applies
+to mutation signatures ("Nothing is authored; nothing drifts", DOCS.md).
+**Defaults were dropped entirely** — with clause-dropping, a default is a second
+mechanism for the same job.
+
+**③ Absent means missing, `undefined`, OR `null`** — wider than 4.4's
+recommendation. Two reasons agreed. A bound null can never match anything
+(`col = NULL` is NULL, never true), so "send null" could only ever have meant
+"I have nothing", and `isNull`/`isNotNull` already exist for the real question.
+And a request prism assembles a fixed object — it **cannot omit a key** — so
+without this every empty search box would need a sentinel again, which is the
+thing being removed. `findMissingContext` keeps its narrower `undefined` test
+for required keys.
+
+**④ `people/byId` + `people/byEmail` do NOT merge**, and Part 5 step 4 was
+abandoned. Not for ergonomics — they read different tables on purpose.
+`people` is global (no `studio_id`, schema.ts:103); `studio_people` is the
+per-studio anchor. `byEmail` reads `people` ALONE so intake can find a human who
+exists but has no anchor here yet — a former member, or a signup whose address
+is already known. Joining `studio_people` would make that INNER and return
+nobody for exactly the case it exists for. **The proof case became `staff/list`'s
+search sentinel instead**, then the roll.
+
+### 4.7 Found in review, after the above was written
+
+**A gate names EVERY key its condition reads.** `key` accepts a string or an
+array, and the condition applies only when *all* of them are present. The first
+cut gated the roll's cursor on `after` alone while the surviving clause also
+read `afterId` — so a caller sending half a cursor got `[]` and
+`missingContext: ["afterId"]`, which on a paging loop reads as **the end of the
+roll**. People silently lost. An incomplete gate now drops the whole condition
+and answers the first page: still wrong, but wrong where a caller can see it.
+This is the failure mode the feature was supposed to remove, reintroduced by
+gating carelessly, and it is worth assuming any future two-key condition has it
+until the gate says otherwise.
+
+**"Absence widens" is only true under `and`.** Under `or` an absent key removes
+an *alternative*, so the answer gets narrower. Both readings are correct —
+absence means "as if the condition were never written", and position decides
+the direction. The earlier wording here and in the check stated the `and` case
+as though it were general. What holds unconditionally is the security property,
+and only that: **absence never reaches past scope**, because scope is injected
+after the prune. `optional-check.ts` now asserts both directions on the pure
+function.
+
+**Two claims in Part 7 were made without a test.** The seed lint refusing an
+optional inside a mutation, and the three walkers refusing an unpruned node,
+were both written and then listed as done. Neither had an assertion until this
+review. Both do now.
+
 ---
 
 ## Part 5 — the recommendation and the build order
@@ -359,39 +442,66 @@ by a human. It touches every domain.
 
 ---
 
-## Part 6 — what a human must decide
+## Part 6 — the decisions, and how they went
 
-1. **② or ③+④.** Speed against the ceiling. Everything else follows.
-2. **Absence semantics** (4.4 decision 2). Recommendation: missing-or-`undefined`
-   only.
-3. **The variant cap.** How many presence variants may one entry compile before
-   it is an authoring error rather than a feature? A number has to be picked.
-4. **`sessions/cancel` + `restore`.** Merging them writes an enum from context.
-   The column's CHECK bounds it to three legal statuses, so it is safe *in the
-   database* — but it widens one verb. Merge, or leave split?
-5. **Sort precedence** (step 7). When a caller sends `sortBy` and the entry has
-   a multi-column sort, does the caller's column replace the first key, or
-   prepend to the whole list? The seek requires the tiebreaker to survive either
-   way.
-6. **Whether the cut moments come back.** Part 2.5 deleted their SQL. Three of
-   them were refused by the charter every time they ran; they need a grant and a
-   proof, not a re-paste.
+1. ~~**② or ③+④**~~ — **③+④**, built. See 4.6 for how each half landed.
+2. ~~**Absence semantics**~~ — **missing, `undefined`, or `null`**, wider than
+   recommended. Reasoning in 4.6 ③.
+3. ~~**The variant cap**~~ — **32, and it warns rather than refuses**
+   (`maxPresenceVariants`, `runtime.ts`). Every variant is still a query the
+   author wrote and scope still applies, so failing a legitimate read to make a
+   point about authoring was the wrong trade. The warning says an entry has
+   stopped being a question and started being a query builder.
+4. **`sessions/cancel` + `restore`** — STILL OPEN. Merging writes an enum from
+   context; the column's CHECK bounds it to three legal statuses, so it is safe
+   in the database but widens one verb. Deliberately left for a human.
+5. ~~**Sort precedence**~~ — **the caller's column leads, the entry's own keys
+   stay behind it as tiebreakers**, with the caller's column removed from the
+   tail so it cannot appear twice with two directions (`applySortContext`). The
+   old behaviour replaced the sort outright, which silently un-totalled any
+   keyset page key — `(name, id)` became `name`, and two people sharing a name
+   could straddle a boundary and never be reached.
+6. **Whether the cut moments come back** — STILL OPEN. Part 2.5 deleted their
+   SQL. Three were refused by the charter every time they ran; they need a grant
+   and a proof, not a re-paste.
 
 ---
 
-## Part 7 — what "done" looks like
+## Part 7 — done, and what is left
 
-- An entry can declare a parameter optional, and a read that omits it executes
-  with that clause absent rather than returning `[]`.
-- `people/byId` and `people/byEmail` are one entry.
-- Every list/byId pair in Lyra is one entry.
-- The People roll takes lens, search, sort and page as four context values on
-  **one** fingerprint, and sorting it does not break the seek.
-- `meta.context` tells a caller which keys a fingerprint takes and which are
-  optional, without a failed round-trip.
-- A mutation containing an `optional` node fails at seed lint.
-- `sort-check.ts` still passes unchanged — the schema is still the allowlist,
-  and optionality did not open a way to name a column the entry does not read.
-- A new check proves the negative: an absent optional key **widens** the result
-  (no filter) while an invented one is still refused. Those are different
-  behaviours and both need a test.
+Done, each with a passing assertion:
+
+- ✅ A read that omits an optional key executes with that clause **absent**
+  rather than returning `[]`.
+- ✅ The People roll takes lens, search, cursor and sort on **one** fingerprint
+  and answers an empty context with the whole roll.
+- ✅ `meta.context` publishes optional keys — including the ones this run did
+  not supply (`optional: true, absent: true`) — so a caller learns the shape
+  without failing first.
+- ✅ A mutation containing an `optional` node fails the seed lint
+  (`mutations/signature.ts`).
+- ✅ `sort-check.ts` passes unchanged: the schema is still the allowlist, and
+  optionality opened no way to name a column the entry does not read.
+- ✅ The negatives are tested in `optional-check.ts`: an absent key reaches no
+  further than the tenant's own rows; an invented lens still selects nobody; a
+  condition that is not optional survives its neighbour's absence; direction is
+  asserted in **both** the `and` and `or` cases; half a cursor drops the seek
+  instead of emptying the page; and the two refusals above actually throw.
+- ❌ ~~`people/byId` and `people/byEmail` are one entry~~ — withdrawn, 4.6 ④.
+
+Still open:
+
+1. **A sort-aware cursor.** The seek compares `(name, person_id)`, so it is a
+   position in THAT order. Sorting the roll by any other column therefore gets
+   one ordered page and no "show more" — stated in the UI rather than left as a
+   paging bug (`people.actions.ts`, `FULL_PAGE`). Lifting it means a cursor per
+   sortable column **and per direction**: four optional clauses for two columns.
+   Worth doing when a second sortable list wants paging too.
+2. **The list/byId sweep.** Now unblocked, and deliberately not done — it
+   touches every domain and wants a human's eye per pair, since `byId`/`byEmail`
+   showed that "same shape" does not mean "same question".
+3. **Part 6 items 4 and 6.**
+
+Not this plan's, but blocking a green suite: **7 checks fail on the concurrent
+i18n work** — `$localeMoney needs an ISO-4217 currency code` is a real bug in
+that feature, not a stale assertion. See Part 3.

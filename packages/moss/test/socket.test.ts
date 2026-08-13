@@ -40,11 +40,17 @@ const recordingSession = (): ShellSession & { calls: string[] } => {
 // The host seam, filled out — the socket only ever calls `session`, but a
 // partial object here would drift silently as the host grows.
 const hostFor = (session: ShellSession): ShellHost => ({
-  session: () => session,
+  session: async () => session,
   adopt: () => {},
   list: () => [],
   reset: () => false,
   stop: () => {},
+  // `deliver` arrived with the socket fan-out and this literal did not follow —
+  // exactly the drift the comment above warned about, which went unseen because
+  // this directory was never typechecked. False: nothing in these tests pushes
+  // to a principal, and a stub that claimed a successful delivery would be
+  // asserting something no one asked it.
+  deliver: () => false,
 });
 
 const ctxWith = (over: Partial<SocketContext> = {}): SocketContext => ({

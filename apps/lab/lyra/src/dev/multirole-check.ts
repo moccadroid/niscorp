@@ -1,4 +1,5 @@
-import { asPrincipal, app, ok, report } from './world';
+import { identityFor } from '@lyra/server/identity';
+import { asPrincipal, ok, report, runtime } from './world';
 
 const TOBIAS = 'tobias@lumen.studio';
 const AVA = 'ava.klein@example.com';
@@ -14,9 +15,13 @@ const planOf = async (email: string): Promise<Record<string, unknown>> => {
 };
 
 // ─── the assignment ────────────────────────────────────────────
-const tobias = app.assignments['p_tobias'] ?? [];
-const ava = app.assignments['p_ava'] ?? [];
-const ines = app.assignments['p_ines'] ?? [];
+// ASKED, not read off a map. There is no assignment map any more — roles come
+// from the identity seam, one principal at a time, which is the whole point.
+const rolesOfPrincipal = async (id: string): Promise<readonly string[]> =>
+  (await identityFor(runtime.pool, id, () => undefined)).roles;
+const tobias = await rolesOfPrincipal('p_tobias');
+const ava = await rolesOfPrincipal('p_ava');
+const ines = await rolesOfPrincipal('p_ines');
 
 ok('somebody who teaches and trains holds BOTH roles', tobias.includes('instructor') && tobias.includes('member'), tobias.join(' + '));
 ok('...a member who is only a member holds one', ava.length === 1 && ava.includes('member'), ava.join(' + '));
