@@ -313,10 +313,12 @@ export const meBookingsLayout: LayoutNode = page([
         columns: [
           { label: 'Class', w: 2, cell: { kind: 'primary', key: 'class_name', subKey: 'program_name', dotKey: 'tone' } },
           { label: 'When', px: 120, cell: { kind: 'text', key: 'when_display', color: 'ink' } },
-          // In words: the one status a member has to understand without being
-          // told what the app means by it.
+          // In words: the states a member has to understand without being
+          // told what the app means by them — including the studio calling
+          // the class off after they booked it.
           { label: '', px: 92, cell: { kind: 'badge', key: 'state_label', toneKey: 'state_tone' } },
-          { label: '', px: 96, align: 'right', cell: { kind: 'action', label: 'Cancel', ref: 'cancel', variant: 'ghost' } },
+          // Hidden on a cancelled session: there is nothing left to cancel.
+          { label: '', px: 96, align: 'right', cell: { kind: 'action', label: 'Cancel', ref: 'cancel', variant: 'ghost', hideKey: 'session_cancelled' } },
         ],
       },
     },

@@ -86,7 +86,7 @@ export const myBookings: CacheEntry = {
   // booking at the studio to a teacher who also trains there.
   reach: 'personal',
   intent: 'The classes the person asking has booked',
-  shape: [{ booking_id: '', session_id: '', class_name: '', program_name: '', tone: '', status: '', when_display: '', held_on: '', state_label: '', state_tone: '' }],
+  shape: [{ booking_id: '', session_id: '', class_name: '', program_name: '', tone: '', status: '', when_display: '', held_on: '', state_label: '', state_tone: '', session_cancelled: false }],
   dsl: {
     from: ['bookings', 'class_sessions', 'programs'],
     fields: [
@@ -96,6 +96,10 @@ export const myBookings: CacheEntry = {
       { field: 'class_sessions.name', as: 'class_name' },
       { field: 'class_sessions.held_on', as: 'held_on' },
       { field: 'class_sessions.starts_at', as: 'starts_at' },
+      // The SESSION's own status, not just the booking's. A studio cancelling
+      // a class does not touch anybody's booking row — the one screen that
+      // tells a member where to turn up has to look at both.
+      { field: 'class_sessions.status', as: 'session_status' },
       { field: 'programs.name', as: 'program_name' },
       { field: 'programs.colour', as: 'tone' },
     ],
@@ -115,10 +119,31 @@ export const myBookings: CacheEntry = {
         status: row('status'),
         held_on: row('held_on'),
         when_display: dateText(row('held_on')),
-        // In words: "waitlisted" is the one status a member has to understand
-        // without being told what the app means by it.
-        state_label: { $case: { branches: [{ when: { $eq: [row('status'), 'waitlisted'] }, then: 'Waiting' }], else: 'Booked' } },
-        state_tone: { $case: { branches: [{ when: { $eq: [row('status'), 'waitlisted'] }, then: 'warm' }], else: 'good' } },
+        // What the layout branches on: the Cancel verb disappears when the
+        // studio already cancelled the class — there is nothing left to cancel.
+        session_cancelled: { $eq: [row('session_status'), 'cancelled'] },
+        // In words: the two states a member has to understand without being
+        // told what the app means by them. The SESSION being off outranks
+        // whatever the booking says — "Booked" on a cancelled class is a
+        // member turning up to a locked door.
+        state_label: {
+          $case: {
+            branches: [
+              { when: { $eq: [row('session_status'), 'cancelled'] }, then: 'Cancelled' },
+              { when: { $eq: [row('status'), 'waitlisted'] }, then: 'Waiting' },
+            ],
+            else: 'Booked',
+          },
+        },
+        state_tone: {
+          $case: {
+            branches: [
+              { when: { $eq: [row('session_status'), 'cancelled'] }, then: 'warn' },
+              { when: { $eq: [row('status'), 'waitlisted'] }, then: 'warm' },
+            ],
+            else: 'good',
+          },
+        },
       },
     },
   },

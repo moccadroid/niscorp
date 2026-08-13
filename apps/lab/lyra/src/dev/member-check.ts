@@ -252,4 +252,28 @@ ok('a member can join a course themselves', !refused(joined), JSON.stringify(joi
 const after = await runtime.db.query("SELECT count(*) n FROM bookings WHERE person_id = 'p_omar' AND status = 'booked'");
 ok('...and the whole block lands in their diary', Number((after.rows[0] as { n: string }).n) > before, `${(after.rows[0] as { n: string }).n} after ${before}`);
 
+// ── the studio calls a class off after she booked it ─────────
+//
+// Cancelling a class touches the SESSION's status and nobody's booking row,
+// so the only way her list can tell the truth is by reading both. The row
+// must STAY — silently removing it is the same failure with better manners.
+await runtime.db.query("UPDATE class_sessions SET status = 'cancelled' WHERE id = $1", [sessionId]);
+const offList = await asPrincipal(MEMBER, '/api/me/vex', { fingerprint: 'me/bookings', context: {} });
+const offRow = (Array.isArray(offList) ? (offList as { session_id?: string; state_label?: string; session_cancelled?: boolean }[]) : []).find((r) => r.session_id === sessionId);
+ok('a cancelled class stays on her list', offRow !== undefined, 'she needs to be told, not spared the sight');
+ok('...and no longer reads Booked', offRow?.state_label === 'Cancelled', String(offRow?.state_label ?? '(row missing)'));
+ok('...and the Cancel verb has nothing to stand on', offRow?.session_cancelled === true, 'the layout hides it on this flag');
+
+// The raw UPDATE above rode no write path, so nothing pushed — navigate away
+// and back to force a fresh read, the way a member opening the screen would.
+member.dispatch({ type: 'ui:click', ref: 'nav', payload: 'me.classes' });
+await settle(6);
+member.dispatch({ type: 'ui:click', ref: 'nav', payload: 'me.bookings' });
+await settle(12);
+const offTree = treeOf(member);
+const offAt = offTree.indexOf(sessionId);
+const offWindow = offAt < 0 ? '' : offTree.slice(offAt, offAt + 400);
+ok('...which is what her screen renders', offWindow.includes('"state_label":"Cancelled"') && offWindow.includes('"session_cancelled":true'), offWindow === '' ? 'session row not in the tree' : offWindow.slice(0, 140));
+ok('...with the Cancel control reading that flag', offTree.includes('"hideKey":"session_cancelled"'), 'the cell spec, beside the row data it reads');
+
 report('a member has their own side, the prospect and the milkman sign in beside them, and holding it is not holding anybody else’s.');
