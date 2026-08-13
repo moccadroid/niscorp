@@ -76,6 +76,43 @@ ok('the roster re-read itself', tree.includes(due.person));
 ok('...and the row now reads Here', tree.includes('"arrived_label":"Here"'), 'asserted on the row data — Rows renders its cells in React, so expanded badges never reach the tree');
 ok('...while anyone still due reads Due', roster.rows.length > 1 ? tree.includes('"arrived_label":"Due"') : true);
 
+// ── the walk-in: most of a front desk's day ──────────────────
+//
+// Somebody with live access, no booking, standing at the desk. One tap books
+// the place and checks them in — the reads and writes existed for two
+// reviews; this is the first time anything calls them.
+const walkIn = await one<{ person_id: string; name: string }>(
+  `SELECT sp.person_id, p.name FROM studio_people sp JOIN people p ON p.id = sp.person_id
+   WHERE sp.studio_id = 'st_lumen'
+     AND EXISTS (SELECT 1 FROM subscriptions su WHERE su.person_id = sp.person_id AND su.studio_id = sp.studio_id AND su.status = 'active')
+     AND NOT EXISTS (SELECT 1 FROM bookings b WHERE b.person_id = sp.person_id AND b.session_id = $1 AND b.status = 'booked')
+   ORDER BY p.name LIMIT 1`,
+  [sessionId],
+);
+ok('somebody with live access is not booked into this class', walkIn !== undefined, walkIn?.name ?? 'everyone is booked — the seed shifted');
+if (walkIn === undefined) report('nobody to walk in');
+
+tree = treeOf(shell);
+ok('the picker offers them', tree.includes(`"value":"${walkIn.person_id}"`), 'people/bookable-for-session, called at last');
+ok('...by name, at a key no language pass touches', tree.includes(`"name":"${walkIn.name}"`), 'options carry `name`, deliberately not `label`');
+
+shell.dispatch({ type: 'ui:model', ref: 'walkInPerson', payload: walkIn.person_id });
+await settle(6);
+shell.dispatch({ type: 'ui:click', ref: 'walkinBook', payload: {} });
+await settle(18);
+
+const walkInBooking = await one<{ id: string; attended: boolean }>(
+  "SELECT id, attended FROM bookings WHERE person_id = $1 AND session_id = $2 AND status = 'booked'",
+  [walkIn.person_id, sessionId],
+);
+ok('one tap wrote the booking', walkInBooking !== undefined, 'bookings/create, called at last');
+ok('...and the check-in beside it', (await one<{ n: number }>('SELECT count(*)::int n FROM check_ins WHERE person_id = $1 AND session_id = $2', [walkIn.person_id, sessionId]))?.n === 1);
+ok('...with attended flipped on the booking the tap just made', walkInBooking?.attended === true, 'the create answered with its row, and the check-in used that id');
+
+tree = treeOf(shell);
+ok('the roster now holds the walk-in', tree.includes(walkIn.name), 're-read after the write');
+ok('...and stopped offering them in the picker', !tree.includes(`"value":"${walkIn.person_id}"`), 'booked is no longer bookable');
+
 // ── the boundary holds on the new surfaces too ──
 const foreign = await asPrincipal(CAST.northrock.owner, '/api/schedule/vex', { fingerprint: 'roster/forSession', context: { sessionId } });
 ok("another studio cannot read Lumen's roster", Array.isArray(foreign) && foreign.length === 0, JSON.stringify(foreign).slice(0, 80));

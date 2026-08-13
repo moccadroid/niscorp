@@ -34,6 +34,8 @@ import type { PhraseKeys } from '@niscorp/nova/i18n';
 // key a mapping emits is closed-set vocabulary, so the suffix is safe with
 // zero exceptions.
 export const PHRASE_KEYS: PhraseKeys = {
-  props: [...DEFAULT_PHRASE_KEYS.props, 'role', 'phrase', 'why', 'sentence'],
+  // `sub`: the second line of a picker option — a standing word beside a
+  // person's name. The name sits at `name`, which stays untouchable.
+  props: [...DEFAULT_PHRASE_KEYS.props, 'role', 'phrase', 'why', 'sentence', 'sub'],
   suffixes: ['_display', '_label'],
 };

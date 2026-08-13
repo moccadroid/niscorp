@@ -353,7 +353,11 @@ export const Checkbox: NovaComponent<Partial<z.infer<typeof CheckboxProps>>> = (
 Checkbox.meta = { description: 'One selection. The primitive a bulk action is built from.', propsSchema: CheckboxProps };
 
 // ── PERSON PICKER ────────────────────────────────────────────
-const PickerOption = z.object({ value: z.string(), label: z.string(), sub: z.string().optional() }).loose();
+// `name`, deliberately not `label`: an option carries a PERSON, and `label`
+// is a prose key the language pass translates — the exact hole where somebody
+// called "Active" gets renamed. `sub` carries the standing word, which SHOULD
+// translate.
+const PickerOption = z.object({ value: z.string(), name: z.string(), sub: z.string().optional() }).loose();
 const PersonPickerProps = z
   .object({
     ...fieldProps,
@@ -385,7 +389,7 @@ export const PersonPicker: NovaComponent<Partial<z.infer<typeof PersonPickerProp
   const [open, setOpen] = useState(false);
 
   const needle = query.trim().toLowerCase();
-  const matches = needle === '' ? list.slice(0, 8) : list.filter((o) => `${o.label} ${o.sub ?? ''}`.toLowerCase().includes(needle)).slice(0, 8);
+  const matches = needle === '' ? list.slice(0, 8) : list.filter((o) => `${o.name} ${o.sub ?? ''}`.toLowerCase().includes(needle)).slice(0, 8);
 
   const choose = (option: { value: string } | undefined): void => {
     const ref = novaModel?.ref ?? novaRef;
@@ -416,8 +420,8 @@ export const PersonPicker: NovaComponent<Partial<z.infer<typeof PersonPickerProp
           />
         ) : (
           <div className="ly-field" style={{ display: 'flex', alignItems: 'center', gap: 9, cursor: 'default' }}>
-            <Avatar name={chosen.label} size={22} />
-            <span style={{ fontSize: SIZE['md'], color: COLOR['ink'], flex: '1 1 auto', minWidth: 0 }}>{chosen.label}</span>
+            <Avatar name={chosen.name} size={22} />
+            <span style={{ fontSize: SIZE['md'], color: COLOR['ink'], flex: '1 1 auto', minWidth: 0 }}>{chosen.name}</span>
             <button
               type="button"
               aria-label="Clear"
@@ -456,9 +460,9 @@ export const PersonPicker: NovaComponent<Partial<z.infer<typeof PersonPickerProp
             ) : (
               matches.map((option) => (
                 <button key={option.value} type="button" role="option" aria-selected={false} onMouseDown={(e) => e.preventDefault()} onClick={() => choose(option)} style={pickerRow}>
-                  <Avatar name={option.label} size={26} />
+                  <Avatar name={option.name} size={26} />
                   <span style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
-                    <span style={{ fontSize: SIZE['md'], color: COLOR['ink'] }}>{option.label}</span>
+                    <span style={{ fontSize: SIZE['md'], color: COLOR['ink'] }}>{option.name}</span>
                     {option.sub === undefined ? null : <span style={{ fontSize: SIZE['sm'], color: COLOR['mute'] }}>{option.sub}</span>}
                   </span>
                 </button>

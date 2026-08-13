@@ -693,6 +693,18 @@ export const GERMAN: Record<string, string> = {
   Waiting: 'Warteliste',
   Wednesday: 'Mittwoch',
 
+  // ── the walk-in desk ─────────────────────────────────────
+  'Walk-in': 'Walk-in',
+  'At the desk, not on the list.': 'Am Empfang, aber nicht auf der Liste.',
+  'Who is here?': 'Wer ist da?',
+  'Search by name': 'Nach Namen suchen',
+  'Nobody with live access matches.': 'Niemand mit aktivem Zugang passt dazu.',
+  'Book & check in': 'Buchen & einchecken',
+  'Walk-ins today': 'Walk-ins heute',
+  'Check-ins that belong to no class.': 'Check-ins, die zu keinem Kurs gehören.',
+  'Nobody outside a class yet.': 'Bisher niemand außerhalb eines Kurses.',
+  'A walk-in goes through the picker below.': 'Ein Walk-in läuft über die Auswahl unten.',
+
   // ── mail, and the consent switch ─────────────────────────
   //
   // The settings screen for outbound mail, and the one switch on the person

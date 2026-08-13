@@ -80,7 +80,11 @@ export const checkInMark: MutationEntry = {
 export const bookableForSession: CacheEntry = {
   fingerprint: 'people/bookable-for-session',
   intent: 'People with live access at this studio who are not booked into the given class',
-  shape: [{ person_id: '', person_name: '', status_display: '', status_tone: '' }],
+  // The PersonPicker's own option shape, emitted at the source — this read's
+  // one consumer is the walk-in picker, and `name` (never `label`) is what
+  // keeps a person's name off the language pass. `sub` is the standing word,
+  // which is prose and translates.
+  shape: [{ value: '', name: '', sub: '' }],
   dsl: {
     from: ['studio_people', 'people'],
     fields: [
@@ -125,10 +129,9 @@ export const bookableForSession: CacheEntry = {
       over: { $ref: '$.result' },
       as: 'b',
       body: {
-        person_id: row('person_id'),
-        person_name: row('person_name'),
-        status_display: standingLabel(row('standing')),
-        status_tone: standingTone(row('standing')),
+        value: row('person_id'),
+        name: row('person_name'),
+        sub: standingLabel(row('standing')),
       },
     },
   },
