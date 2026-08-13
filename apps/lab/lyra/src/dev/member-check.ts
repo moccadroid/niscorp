@@ -211,6 +211,15 @@ ok('a member can book again after cancelling', !refused(again), JSON.stringify(a
 ok('...reusing the row rather than duplicating it', (await count('SELECT count(*) n FROM bookings WHERE person_id = $1 AND session_id = $2', ['p_ava', sessionId])) === 1);
 ok('...and the seat is taken again', (await count('SELECT booked_count n FROM class_sessions WHERE id = $1', [sessionId])) === seatsBefore + 1);
 
+// ── the row says WHEN, time included ─────────────────────────
+// The screen whose whole job is "when do I turn up" carried the day and
+// dropped the time — starts_at was fetched for the sort and never shown.
+const whenRow = await runtime.db.query<{ starts: string }>('SELECT starts_at::text AS starts FROM class_sessions WHERE id = $1', [sessionId]);
+const hhmm = (whenRow.rows[0]?.starts ?? '').slice(0, 5);
+const timedList = await asPrincipal(MEMBER, '/api/me/vex', { fingerprint: 'me/bookings', context: {} });
+const timedRow = (Array.isArray(timedList) ? (timedList as { session_id?: string; when_display?: string }[]) : []).find((r) => r.session_id === sessionId);
+ok('a booked row carries the session’s time', hhmm !== '' && String(timedRow?.when_display ?? '').includes(hhmm), `${String(timedRow?.when_display ?? '(row missing)')} against ${hhmm}`);
+
 // ── cancelling is theirs alone ───────────────────────────────
 const jonasBooking = await runtime.db.query<{ id: string }>("SELECT id FROM bookings WHERE person_id <> 'p_ava' AND status = 'booked' LIMIT 1");
 if (jonasBooking.rows[0] !== undefined) {

@@ -103,7 +103,7 @@ export const homeMemberLayout: LayoutNode = page([
           emptyHint: 'Pick something from Book a class.',
           columns: [
             { label: 'Class', w: 2, cell: { kind: 'primary', key: 'class_name', subKey: 'program_name', dotKey: 'tone' } },
-            { label: 'When', px: 120, cell: { kind: 'text', key: 'when_display', color: 'ink' } },
+            { label: 'When', px: 150, cell: { kind: 'text', key: 'when_display', color: 'ink' } },
           ],
         },
       },
@@ -312,7 +312,7 @@ export const meBookingsLayout: LayoutNode = page([
         emptyHint: 'Anything you book will show up here.',
         columns: [
           { label: 'Class', w: 2, cell: { kind: 'primary', key: 'class_name', subKey: 'program_name', dotKey: 'tone' } },
-          { label: 'When', px: 120, cell: { kind: 'text', key: 'when_display', color: 'ink' } },
+          { label: 'When', px: 150, cell: { kind: 'text', key: 'when_display', color: 'ink' } },
           // In words: the states a member has to understand without being
           // told what the app means by them — including the studio calling
           // the class off after they booked it.

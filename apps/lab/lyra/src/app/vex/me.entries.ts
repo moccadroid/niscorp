@@ -1,5 +1,5 @@
 import type { CacheEntry, MutationEntry } from './index';
-import { dateText } from '@lyra/app/prisms/format.prism';
+import { dateText, timeText } from '@lyra/app/prisms/format.prism';
 import { STANDING, standingLabel, standingTone } from './standing';
 
 const row = (name: string) => ({ $get: { from: { $var: 'r' }, path: [name] } });
@@ -118,7 +118,10 @@ export const myBookings: CacheEntry = {
         tone: row('tone'),
         status: row('status'),
         held_on: row('held_on'),
-        when_display: dateText(row('held_on')),
+        // Day AND time — this list's whole job is saying when to turn up.
+        // Joined with punctuation, not words: each half is already made by a
+        // locale-aware op, and a separator with no language needs no book.
+        when_display: { $join: { parts: [dateText(row('held_on')), timeText(row('starts_at'))], sep: ' · ' } },
         // What the layout branches on: the Cancel verb disappears when the
         // studio already cancelled the class — there is nothing left to cancel.
         session_cancelled: { $eq: [row('session_status'), 'cancelled'] },
