@@ -164,7 +164,7 @@ export const meMembershipLayout: LayoutNode = page([
             children: [
               { component: 'Field', props: { label: 'Minimum term', value: '$.membership.term_display' } },
               { component: 'Field', props: { label: 'Notice', value: '$.membership.notice_display' } },
-              { component: 'Field', props: { label: 'Committed until', value: '$.membership.committed_display' } },
+              { component: 'Field', props: { label: 'Committed until', value: '$.membership.committed_display', empty: 'No commitment' } },
               { component: 'Field', props: { label: 'Paid', value: '$.membership.paid_via_display' } },
             ],
           },

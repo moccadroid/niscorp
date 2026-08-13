@@ -167,7 +167,7 @@ export const peopleDetailLayout: LayoutNode = page([
               { component: 'Field', props: { label: 'Worth', value: '$.subscription.value_display' } },
               { component: 'Field', props: { label: 'Minimum term', value: '$.subscription.term_display' } },
               { component: 'Field', props: { label: 'Notice', value: '$.subscription.notice_display' } },
-              { component: 'Field', props: { label: 'Committed until', value: '$.subscription.committed_display' } },
+              { component: 'Field', props: { label: 'Committed until', value: '$.subscription.committed_display', empty: 'No commitment' } },
               { component: 'Field', props: { label: 'Paid', value: '$.subscription.paid_via_display' } },
               { component: 'Field', props: { label: 'Paid until', value: '$.subscription.paid_until_display', empty: 'Nothing recorded' } },
             ],

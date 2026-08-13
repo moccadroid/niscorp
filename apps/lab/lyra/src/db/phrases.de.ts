@@ -290,6 +290,7 @@ export const GERMAN: Record<string, string> = {
   'No courses running just now.': 'Zurzeit laufen keine Kursblöcke.',
   'No courses running.': 'Keine laufenden Kursblöcke.',
   'No members yet.': 'Noch keine Mitglieder.',
+  'No commitment': 'Keine Bindung',
   'No minimum — rolling': 'Keine Mindestlaufzeit — laufend',
   'No passes.': 'Keine Blockkarten.',
   'No programs yet.': 'Noch keine Kursarten.',

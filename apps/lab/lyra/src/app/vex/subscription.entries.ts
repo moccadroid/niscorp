@@ -49,7 +49,17 @@ const SUBSCRIPTION_VALUE = {
       else: 'None',
     },
   },
-  committed_display: dateText(one('committed_until', null)),
+  // Only when there IS a commitment. With no minimum term the trigger stamps
+  // committed_until = started_on — harmless to the arithmetic (a past date
+  // loses every GREATEST), meaningless on a screen: "committed until" a date
+  // already behind them, beside a field saying there is no commitment. The
+  // column keeps its value; the display declines to say it.
+  committed_display: {
+    $case: {
+      branches: [{ when: one('minimum_term_months'), then: dateText(one('committed_until', null)) }],
+      else: '',
+    },
+  },
   ends_display: dateText(one('ends_on', null)),
   // How the money moves, in words a desk uses out loud.
   paid_via: one('paid_via'),

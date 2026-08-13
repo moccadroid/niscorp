@@ -164,4 +164,38 @@ await settle(8);
 ok('...and reading marks the studio caught up', !treeOf(watching).includes('unread notice'), 'seen is a flag a screen may set; when is the trigger’s');
 ok('...stamped by the database', (await count("SELECT count(*) n FROM notifications WHERE source = 'model-check' AND seen = true AND seen_at IS NOT NULL")) === 1);
 
+// ── a commitment that does not exist is not displayed ────────
+//
+// With no minimum term the trigger stamps committed_until = started_on —
+// right for the arithmetic (a past date loses every GREATEST), wrong to
+// show: "committed until" a date already behind them, beside a field that
+// says there is no commitment. The column keeps its value; the display
+// declines to invent one.
+const loose = await runtime.db.query<{ person_id: string; committed: string | null }>(
+  `SELECT s.person_id, s.committed_until::text AS committed FROM subscriptions s
+     JOIN offerings o ON o.id = s.offering_id
+    WHERE s.studio_id = 'st_lumen' AND s.status = 'active' AND o.minimum_term_months = 0
+    LIMIT 1`,
+);
+const loosePerson = loose.rows[0]?.person_id ?? '';
+ok('the seed holds a no-minimum subscription, stamped anyway', loosePerson !== '' && loose.rows[0]?.committed !== null, 'the column is set; only the display declines');
+const loosePanel = await asPrincipal(OWNER, '/api/member/vex', { fingerprint: 'subscriptions/for-member', context: { personId: loosePerson } });
+ok('a no-minimum subscription renders no committed-until', (loosePanel as { committed_display?: string }).committed_display === '', JSON.stringify((loosePanel as { committed_display?: string }).committed_display));
+
+// And one WITH a minimum still says its date — this is a refusal to invent,
+// not a lost field.
+const bound = await runtime.db.query<{ person_id: string; studio_id: string }>(
+  `SELECT s.person_id, s.studio_id FROM subscriptions s
+     JOIN offerings o ON o.id = s.offering_id
+    WHERE s.status = 'active' AND o.minimum_term_months > 0
+    LIMIT 1`,
+);
+if (bound.rows[0] !== undefined) {
+  const boundOwner = bound.rows[0].studio_id === 'st_lumen' ? OWNER : rock;
+  const boundPanel = await asPrincipal(boundOwner, '/api/member/vex', { fingerprint: 'subscriptions/for-member', context: { personId: bound.rows[0].person_id } });
+  ok('...while a real commitment still shows its date', String((boundPanel as { committed_display?: string }).committed_display ?? '').length > 0, JSON.stringify((boundPanel as { committed_display?: string }).committed_display));
+} else {
+  ok('...while a real commitment still shows its date', true, 'no termed subscription in the seed to hold this against');
+}
+
 report('one human, many relationships: the drop-in attends, the member banks credits, cash at the desk reaches the same standing a webhook does — and the studio hears about all of it live.');
