@@ -286,7 +286,10 @@ export const meClassesLayout: LayoutNode = page([
           { label: 'When', px: 112, cell: { kind: 'text', key: 'day_display', color: 'ink' } },
           { label: 'Time', px: 78, cell: { kind: 'text', key: 'time_display' } },
           { label: 'Places', px: 84, align: 'right', cell: { kind: 'text', key: 'booked_display', color: 'ink' } },
-          { label: '', px: 96, align: 'right', cell: { kind: 'action', label: 'Book', ref: 'book', variant: 'outline', hideKey: 'cancelled' } },
+          // A class they already hold says so instead of offering Book — the
+          // button could only ever have answered with an error message.
+          { label: '', px: 92, align: 'right', cell: { kind: 'badge', key: 'mine_display', toneKey: 'mine_tone', showKey: 'already_booked' } },
+          { label: '', px: 96, align: 'right', cell: { kind: 'action', label: 'Book', ref: 'book', variant: 'outline', hideKey: 'unbookable' } },
         ],
       },
     },

@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import type { ActionDefinition } from '@niscorp/nova';
 import { homeMemberLayout, meMembershipLayout, meBookingsLayout, meClassesLayout } from './me.layouts';
-import { bookPrism, cancelPrism, choosePlanPrism, coursesPrism, joinPrism, leavePrism, myBookingsPrism, myCardPrism, myEnrolmentsPrism, myGiveNoticePrism, myMembershipPrism, myPassesPrism, myPausePrism, myResumePrism, plansOnSalePrism, upcomingPrism } from './me.prism';
+import { bookPrism, cancelPrism, choosePlanPrism, coursesPrism, joinPrism, leavePrism, myBookedSessionsPrism, myBookingsPrism, myCardPrism, myEnrolmentsPrism, myGiveNoticePrism, myMembershipPrism, myPassesPrism, myPausePrism, myResumePrism, plansOnSalePrism, upcomingPrism } from './me.prism';
 
 // The member's landing surface, granted BY NAME at the member rung like every
 // other home — a wildcard at the bottom of a ladder grants to the whole ladder.
@@ -205,6 +205,12 @@ export const meClassesAction: ActionDefinition = {
   title: 'Book a class',
   data: {
     sessions: [],
+    // The two halves `sessions` is composed from: the studio's list, and the
+    // personal read saying which of them the caller already holds. The list
+    // only ever reaches the screen marked — an unmarked flash would offer
+    // Book on a class they are already in.
+    rawSessions: [],
+    bookedSessions: [],
     sessionId: '',
     courses: [],
     enrolments: [],
@@ -216,15 +222,69 @@ export const meClassesAction: ActionDefinition = {
   },
   layout: meClassesLayout,
   endpoints: {
-    load: { url: '/api/me/vex', method: 'POST', request: upcomingPrism, target: 'sessions' },
+    load: { url: '/api/me/vex', method: 'POST', request: upcomingPrism, target: 'rawSessions' },
+    booked: { url: '/api/me/vex', method: 'POST', request: myBookedSessionsPrism, target: 'bookedSessions' },
     book: { url: '/api/me/vex', method: 'POST', request: bookPrism, errorTarget: 'error' },
     courses: { url: '/api/me/vex', method: 'POST', request: coursesPrism, target: 'courses' },
     mine: { url: '/api/me/vex', method: 'POST', request: myEnrolmentsPrism, target: 'enrolments' },
     join: { url: '/api/me/vex', method: 'POST', request: joinPrism, errorTarget: 'error' },
     leave: { url: '/api/me/vex', method: 'POST', request: leavePrism, errorTarget: 'error' },
   },
-  lifecycle: { mount: [{ call: 'courses' }, { call: 'mine' }, { call: 'load', onSuccess: [{ set: 'loading', value: false }] }] },
+  // Steps run in order, each awaited — `booked` has landed by the time `load`
+  // succeeds, so the mark never reads a stale half.
+  lifecycle: { mount: [{ call: 'courses' }, { call: 'mine' }, { call: 'booked' }, { call: 'load', onSuccess: [{ emit: { channel: 'mark-booked' } }] }] },
   triggers: [
+    // The join: each session wears whether the caller already holds it, and
+    // the verbs read the result — Book hides, a Booked badge shows. A policy
+    // could not permit the entry itself to join these (a studio-wide list
+    // against a personal read), so the screen holds both and marks.
+    {
+      message: 'mark-booked',
+      do: [
+        {
+          set: 'sessions',
+          value: {
+            $prism: {
+              $map: {
+                over: { $ref: '$.rawSessions' },
+                as: 's',
+                body: {
+                  $with: {
+                    let: {
+                      held: {
+                        $not: {
+                          $empty: {
+                            $filter: {
+                              over: { $ref: '$.bookedSessions' },
+                              as: 'b',
+                              when: { $eq: [{ $get: { from: { $var: 'b' }, path: ['session_id'] } }, { $get: { from: { $var: 's' }, path: ['session_id'] } }] },
+                            },
+                          },
+                        },
+                      },
+                    },
+                    value: {
+                      $merge: [
+                        { $var: 's' },
+                        {
+                          already_booked: { $var: 'held' },
+                          mine_display: { $case: { branches: [{ when: { $var: 'held' }, then: 'Booked' }], else: '' } },
+                          mine_tone: 'good',
+                          // One key for the Book cell to read: off for a class
+                          // they hold, off for a class the studio called off.
+                          unbookable: { $or: [{ $get: { from: { $var: 's' }, path: ['cancelled'] } }, { $var: 'held' }] },
+                        },
+                      ],
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+        { set: 'loading', value: false },
+      ],
+    },
     {
       event: 'ui:click',
       ref: 'join',
@@ -234,7 +294,7 @@ export const meClassesAction: ActionDefinition = {
         { set: 'courseId', value: '@event.payload.course_id' },
         {
           call: 'join',
-          onSuccess: [{ set: 'notice', value: 'You are on the course. Every week is booked for you.' }, { call: 'courses' }, { call: 'mine' }, { call: 'load' }, { emit: { channel: 'my-bookings-changed' } }],
+          onSuccess: [{ set: 'notice', value: 'You are on the course. Every week is booked for you.' }, { call: 'courses' }, { call: 'mine' }, { call: 'booked' }, { call: 'load', onSuccess: [{ emit: { channel: 'mark-booked' } }] }, { emit: { channel: 'my-bookings-changed' } }],
         },
       ],
     },
@@ -247,7 +307,7 @@ export const meClassesAction: ActionDefinition = {
         { set: 'enrolmentId', value: '@event.payload.enrolment_id' },
         {
           call: 'leave',
-          onSuccess: [{ set: 'notice', value: 'Withdrawn. Your places are free again.' }, { call: 'courses' }, { call: 'mine' }, { call: 'load' }, { emit: { channel: 'my-bookings-changed' } }],
+          onSuccess: [{ set: 'notice', value: 'Withdrawn. Your places are free again.' }, { call: 'courses' }, { call: 'mine' }, { call: 'booked' }, { call: 'load', onSuccess: [{ emit: { channel: 'mark-booked' } }] }, { emit: { channel: 'my-bookings-changed' } }],
         },
       ],
     },
@@ -260,11 +320,11 @@ export const meClassesAction: ActionDefinition = {
         { set: 'sessionId', value: '@event.payload.session_id' },
         {
           call: 'book',
-          onSuccess: [{ set: 'notice', value: 'Added — see My classes. A full class puts you on the waiting list.' }, { call: 'load' }, { emit: { channel: 'my-bookings-changed' } }],
+          onSuccess: [{ set: 'notice', value: 'Added — see My classes. A full class puts you on the waiting list.' }, { call: 'booked' }, { call: 'load', onSuccess: [{ emit: { channel: 'mark-booked' } }] }, { emit: { channel: 'my-bookings-changed' } }],
         },
       ],
     },
-    { message: 'my-bookings-changed', do: [{ call: 'load' }, { call: 'mine' }, { call: 'courses' }] },
+    { message: 'my-bookings-changed', do: [{ call: 'booked' }, { call: 'load', onSuccess: [{ emit: { channel: 'mark-booked' } }] }, { call: 'mine' }, { call: 'courses' }] },
   ],
 };
 

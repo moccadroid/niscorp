@@ -1,4 +1,4 @@
-import { bookClass, cancelMyBooking, myBookings, myCard, myPasses } from '@lyra/app/vex/me.entries';
+import { bookClass, cancelMyBooking, myBookedSessions, myBookings, myCard, myPasses } from '@lyra/app/vex/me.entries';
 import { myMembership } from '@lyra/app/vex/subscription.entries';
 import { sessionsUpcoming } from '@lyra/app/vex/schedule.entries';
 import { coursesList } from '@lyra/app/vex/course.entries';
@@ -44,6 +44,10 @@ export const upcomingPrism = {
   fingerprint: sessionsUpcoming.fingerprint,
   context: {},
 };
+
+// What they already hold, so the class list can say so — the read written for
+// exactly this two reviews ago, called for the first time here.
+export const myBookedSessionsPrism = { fingerprint: myBookedSessions.fingerprint, context: {} };
 
 export const bookPrism = { fingerprint: bookClass.fingerprint, context: { sessionId: { $ref: '$.sessionId' } } };
 export const cancelPrism = { fingerprint: cancelMyBooking.fingerprint, context: { bookingId: { $ref: '$.bookingId' } } };

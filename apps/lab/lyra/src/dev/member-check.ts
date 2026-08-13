@@ -174,6 +174,17 @@ ok('a member can book themselves in', (await count('SELECT count(*) n FROM booki
 ok('...and the seat count moved', (await count('SELECT booked_count n FROM class_sessions WHERE id = $1', [sessionId])) === seatsBefore + 1);
 ok('...so the desk sees them on the roster', (await count("SELECT count(*) n FROM bookings WHERE session_id = $1 AND person_id = 'p_ava' AND status = 'booked'", [sessionId])) === 1);
 
+// ── and the list itself now knows ────────────────────────────
+// me/booked-sessions sat unwired for two reviews while the Book button
+// invited a press whose only possible answer was an error. The list marks
+// what she holds: a Booked badge, and no Book on that row.
+tree = treeOf(member);
+const mineAt = tree.indexOf(`"session_id":"${sessionId}"`);
+const mineWindow = mineAt < 0 ? '' : tree.slice(mineAt, mineAt + 500);
+ok('the class list marks what she already holds', mineWindow.includes('"already_booked":true'), mineWindow === '' ? 'her session is not in the tree' : mineWindow.slice(0, 120));
+ok('...in words', mineWindow.includes('"mine_display":"Booked"'), 'the badge the layout shows instead of the verb');
+ok('...and stops offering Book on it', mineWindow.includes('"unbookable":true') && tree.includes('"hideKey":"unbookable"'), 'a button that could only answer with an error');
+
 // ── what a booking cannot be aimed at ────────────────────────
 const foreignSession = await runtime.db.query<{ id: string }>("SELECT id FROM class_sessions WHERE studio_id = 'st_northrock' AND held_on > studio_today('st_northrock') LIMIT 1");
 const across = await asPrincipal(MEMBER, '/api/me/vex', { fingerprint: 'me/book', context: { sessionId: foreignSession.rows[0]?.id ?? '' } });

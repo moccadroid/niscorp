@@ -16,7 +16,7 @@ const Check = Checkbox as unknown as (props: { label?: string; checked?: boolean
 const CellSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('text'), key: z.string(), color: z.enum(['ink', 'soft', 'mute', 'faint']).optional(), mono: z.boolean().optional(), wrap: z.boolean().optional() }).strict(),
   z.object({ kind: z.literal('primary'), key: z.string(), subKey: z.string().optional(), dotKey: z.string().optional().describe('Row key holding a tone token — the stream marker') }).strict(),
-  z.object({ kind: z.literal('badge'), key: z.string(), toneKey: z.string().optional(), hueKey: z.string().optional() }).strict(),
+  z.object({ kind: z.literal('badge'), key: z.string(), toneKey: z.string().optional(), hueKey: z.string().optional(), showKey: z.string().optional().describe('Row key that must be true for the badge to appear') }).strict(),
   z.object({ kind: z.literal('bands'), key: z.string() }).strict(),
   // An icon by name, from the row or fixed on the column. For the leading
   // glyph a list of kinds wants — a class type, a source, a channel.
@@ -437,6 +437,7 @@ const renderCell = (cell: z.infer<typeof CellSchema>, row: Row, dispatch: Return
         </div>
       );
     case 'badge': {
+      if (cell.showKey !== undefined && row[cell.showKey] !== true) return null;
       const hue = cell.hueKey === undefined ? '' : str(row, cell.hueKey);
       if (hue !== '') return <Badge hue={hue as never} label={str(row, cell.key)} />;
       return <Badge tone={toneOf(row, cell.toneKey)} label={str(row, cell.key)} />;
