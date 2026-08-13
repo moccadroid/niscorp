@@ -96,4 +96,23 @@ const asDesk = await asPrincipal(CAST.lumen.desk, '/api/studio/vex', {
 });
 ok('the desk cannot change the studio’s language', JSON.stringify(asDesk).includes('status'), JSON.stringify(asDesk));
 
+// ── the words a READ manufactures reach the glass ────────────
+//
+// The three holes the product review filed together: `_label` keys never
+// declared prose, Field values losing their key at binding, and counted
+// phrases welded in English. One German member, three screens.
+const ava = await login(CAST.lumen.member);
+await settle(10);
+ok('a German member is Gebucht, never Booked', (await servedTo(CAST.lumen.member)).includes('Gebucht'), 'state_label — the _label suffix, declared at last');
+
+ava.dispatch({ type: 'ui:click', ref: 'nav', payload: 'me.membership' });
+await settle(12);
+const membershipFrame = await servedTo(CAST.lumen.member);
+ok('how she pays renders German', membershipFrame.includes('Vom Studio abgerechnet'), 'paid_via_display through the Field phrase prop — the value was in the book all along');
+
+ava.dispatch({ type: 'ui:click', ref: 'nav', payload: 'me.classes' });
+await settle(12);
+const classesFrame = await servedTo(CAST.lumen.member);
+ok('a German count reads 1 von 12 — one book row, filled', /\d+ von \d+/.test(classesFrame), classesFrame.match(/\d+ von \d+/)?.[0] ?? '(no filled pattern in the frame)');
+
 report('one deployment, two languages, nothing shared but the rows');

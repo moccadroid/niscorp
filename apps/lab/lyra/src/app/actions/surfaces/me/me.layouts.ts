@@ -162,10 +162,14 @@ export const meMembershipLayout: LayoutNode = page([
             component: 'Row',
             props: { gap: 22, wrap: true },
             children: [
-              { component: 'Field', props: { label: 'Minimum term', value: '$.membership.term_display' } },
-              { component: 'Field', props: { label: 'Notice', value: '$.membership.notice_display' } },
+              // `phrase`, not `value`: these carry VOCABULARY and counted
+              // patterns — the binding's key dies at resolution, so the prop
+              // itself declares proseness. Committed-until stays `value`: a
+              // date is data, already in the reader's locale.
+              { component: 'Field', props: { label: 'Minimum term', phrase: '$.membership.term_display' } },
+              { component: 'Field', props: { label: 'Notice', phrase: '$.membership.notice_display' } },
               { component: 'Field', props: { label: 'Committed until', value: '$.membership.committed_display', empty: 'No commitment' } },
-              { component: 'Field', props: { label: 'Paid', value: '$.membership.paid_via_display' } },
+              { component: 'Field', props: { label: 'Paid', phrase: '$.membership.paid_via_display' } },
             ],
           },
           // ── their own way out, and their own hold ────────────

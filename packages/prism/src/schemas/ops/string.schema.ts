@@ -38,6 +38,16 @@ export const InterpolateNodeSchema = z
   .describe('Replace {{key}} placeholders in a template with values from an object.');
 export type InterpolateNode = z.infer<typeof InterpolateNodeSchema>;
 
+export const FillNodeSchema = z
+  .object({
+    $fill: z
+      .lazy(node)
+      .describe('A pattern value `{ phrase, slots }` — filled with its own slots, source language. Non-patterns pass through.'),
+  })
+  .strict()
+  .describe('Fill a counted phrase: `{ phrase: "{n} of {total}", slots: { n: 1, total: 12 } }` → "1 of 12".');
+export type FillNode = z.infer<typeof FillNodeSchema>;
+
 export const TrimNodeSchema = z
   .object({ $trim: z.lazy(node).describe('String to trim whitespace from.') })
   .strict()

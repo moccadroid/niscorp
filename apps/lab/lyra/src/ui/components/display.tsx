@@ -2,6 +2,7 @@ import { z } from 'zod';
 import type { NovaComponent } from '@niscorp/nova/adapters/react';
 import { COLOR, HUE, RADIUS, SIZE, TONE, WEIGHT, colorToken, hueOf, hueToken, markColor, markToken, sizeToken, toneToken } from '../lib/tokens';
 import { ICON_PATHS } from '../lib/icons';
+import { fillPhrase } from '../lib/phrase';
 
 const TextProps = z
   .object({
@@ -13,12 +14,16 @@ const TextProps = z
     mono: z.boolean().optional(),
     truncate: z.boolean().optional(),
     tabular: z.boolean().optional().describe('Lining figures — for anything in a column that should line up'),
+    // A prose value bound as a PROP rather than as a text-node child: a bare
+    // child binding stringifies at resolve time, which turns a counted
+    // pattern into '[object Object]' before any pass can see it.
+    phrase: z.union([z.string(), z.object({ phrase: z.string(), slots: z.record(z.string(), z.unknown()) }).strict()]).optional(),
   })
   .strict();
 
 type TextP = z.infer<typeof TextProps> & { children?: React.ReactNode };
 
-export const Text: NovaComponent<z.infer<typeof TextProps>> = ({ size, color, weight, align, uppercase, mono, truncate, tabular, children }: TextP) => (
+export const Text: NovaComponent<z.infer<typeof TextProps>> = ({ size, color, weight, align, uppercase, mono, truncate, tabular, phrase, children }: TextP) => (
   <span
     style={{
       fontSize: SIZE[size ?? 'md'],
@@ -32,7 +37,7 @@ export const Text: NovaComponent<z.infer<typeof TextProps>> = ({ size, color, we
       ...(size === 'display' || size === 'xxl' ? { letterSpacing: '-0.02em', lineHeight: 1.1 } : {}),
     }}
   >
-    {children}
+    {phrase === undefined ? children : String(fillPhrase(phrase))}
   </span>
 );
 Text.meta = { description: 'Text. Size and weight carry the hierarchy — there is no second typeface in this kit.', propsSchema: TextProps };
@@ -65,9 +70,19 @@ export const Badge: NovaComponent<z.infer<typeof BadgeProps>> = ({ tone, hue, la
 };
 Badge.meta = { description: 'A small status pill. `tone` is a token, so a status never carries its own colour.', propsSchema: BadgeProps };
 
-const StatProps = z.object({ label: z.string(), value: z.string(), hint: z.string().optional(), tone: toneToken }).strict();
+// `phrase` beside `value` for the same reason Field has both — see Field.
+const StatPattern = z.object({ phrase: z.string(), slots: z.record(z.string(), z.unknown()) }).strict();
+const StatProps = z
+  .object({
+    label: z.string(),
+    value: z.string().optional(),
+    phrase: z.union([z.string(), StatPattern]).optional().describe('A prose value: translated by the pass, patterns filled'),
+    hint: z.string().optional(),
+    tone: toneToken,
+  })
+  .strict();
 
-export const Stat: NovaComponent<Partial<z.infer<typeof StatProps>>> = ({ label, value, hint, tone }: Partial<z.infer<typeof StatProps>>) => (
+export const Stat: NovaComponent<Partial<z.infer<typeof StatProps>>> = ({ label, value, phrase, hint, tone }: Partial<z.infer<typeof StatProps>>) => (
   <div style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
     <span style={{ fontSize: SIZE['xs'], color: COLOR['mute'], fontWeight: WEIGHT['medium'], textTransform: 'uppercase', letterSpacing: '0.06em' }}>{label}</span>
     <span
@@ -82,7 +97,7 @@ export const Stat: NovaComponent<Partial<z.infer<typeof StatProps>>> = ({ label,
         lineHeight: 1.25,
       }}
     >
-      {value}
+      {phrase === undefined ? value : String(fillPhrase(phrase))}
     </span>
     {hint === undefined ? null : <span style={{ fontSize: SIZE['sm'], color: COLOR['mute'] }}>{hint}</span>}
   </div>
@@ -175,18 +190,30 @@ export const Prose: NovaComponent<z.infer<typeof ProseProps>> = ({ size, color, 
 Prose.meta = { description: 'A paragraph: real leading, a readable measure, and it wraps. For explanations — Text is for labels and values.', propsSchema: ProseProps };
 
 // ── field ────────────────────────────────────────────────────
+//
+// `value` and `phrase` are the same slot with different CITIZENSHIP. A
+// binding's key dies at resolution — `$.x.paid_via_display` reaches the tree
+// as a prop named `value` — so proseness has to be declared by the prop the
+// author picks, not recovered from where the data came from. `value` is data
+// (a name, an amount) and the pass never touches it; `phrase` is vocabulary
+// (a closed-set word, a counted pattern) and translates. Deciding which is
+// which is the author's one job here, and it is the same decision the vex
+// mapping already made when it spelled the field `*_display`.
+const PatternValue = z.object({ phrase: z.string(), slots: z.record(z.string(), z.unknown()) }).strict();
 const FieldProps = z
   .object({
     label: z.string(),
     value: z.string().optional(),
+    phrase: z.union([z.string(), PatternValue]).optional().describe('A prose value: translated by the pass, patterns filled'),
     hint: z.string().optional(),
     icon: z.string().optional(),
     empty: z.string().optional().describe('Shown when the value is blank — "Not given" beats a silent gap'),
   })
   .strict();
 
-export const Field: NovaComponent<Partial<z.infer<typeof FieldProps>>> = ({ label, value, hint, icon, empty }: Partial<z.infer<typeof FieldProps>>) => {
-  const shown = value === undefined || value === '' ? undefined : value;
+export const Field: NovaComponent<Partial<z.infer<typeof FieldProps>>> = ({ label, value, phrase, hint, icon, empty }: Partial<z.infer<typeof FieldProps>>) => {
+  const held = phrase === undefined ? value : String(fillPhrase(phrase));
+  const shown = held === undefined || held === '' ? undefined : held;
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 3, minWidth: 0 }}>
       <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: SIZE['xs'], color: COLOR['mute'], fontWeight: WEIGHT['medium'], textTransform: 'uppercase', letterSpacing: '0.06em' }}>

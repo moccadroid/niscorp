@@ -79,7 +79,7 @@ export const automationsLayout: LayoutNode = {
             props: {
               rows: '$.reflexes',
               rowKey: 'automation_id',
-              titleKey: 'name',
+              titleKey: 'sentence',
               subtitleKey: 'run_display',
               bodyKey: 'intent',
               badgeKey: 'state_label',

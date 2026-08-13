@@ -1,5 +1,5 @@
 import type { JsonValue, EvalContext, EvaluateFn } from '../types';
-import type { JoinNode, ToStringNode, InterpolateNode, TrimNode, LowerNode, UpperNode, SplitNode, ReplaceNode } from '../schemas';
+import type { FillNode, JoinNode, ToStringNode, InterpolateNode, TrimNode, LowerNode, UpperNode, SplitNode, ReplaceNode } from '../schemas';
 import { PrismError, ErrorCode } from '../errors';
 import { isJsonObject } from '../schemas/guards';
 
@@ -25,6 +25,27 @@ export const opInterpolate = (node: InterpolateNode, context: EvalContext, evalu
     String(values[key] ?? ''),
   );
 };
+
+// A counted phrase — `{ phrase: '{n} of {total}', slots: { n: 1, total: 12 } }`
+// — filled with its own slots, in the source language. The TRANSLATED fill
+// belongs to the render pass, which holds the book; this op exists for the
+// places that compose a sentence from pattern values before any pass runs
+// (a confirm sheet's message, a notification body). A nested pattern slot
+// fills recursively; anything that is not a pattern passes through as the
+// string it already was.
+const fillOne = (value: JsonValue): JsonValue => {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) return value;
+  const { phrase, slots } = value as { phrase?: JsonValue; slots?: JsonValue };
+  if (typeof phrase !== 'string' || !isJsonObject(slots)) return value;
+  return phrase.replace(/\{([A-Za-z_][A-Za-z0-9_]*)\}/g, (hole, name: string) => {
+    const slot = slots[name];
+    if (slot === undefined || slot === null) return hole;
+    const filled = fillOne(slot);
+    return typeof filled === 'object' ? hole : String(filled);
+  });
+};
+
+export const opFill = (node: FillNode, context: EvalContext, evaluate: EvaluateFn): JsonValue => fillOne(evaluate(node.$fill, context));
 
 export const opTrim = (node: TrimNode, context: EvalContext, evaluate: EvaluateFn): JsonValue => {
   const value = evaluate(node.$trim, context);

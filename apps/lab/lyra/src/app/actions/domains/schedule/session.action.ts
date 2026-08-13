@@ -27,7 +27,7 @@ const sessionLayout: LayoutNode = {
         props: { gap: 22, wrap: true },
         children: [
           { component: 'Stat', props: { label: 'Starts', value: '$.session.starts_at' } },
-          { component: 'Stat', props: { label: 'Booked', value: '$.session.booked_display' } },
+          { component: 'Stat', props: { label: 'Booked', phrase: '$.session.booked_display' } },
         ],
       },
     },

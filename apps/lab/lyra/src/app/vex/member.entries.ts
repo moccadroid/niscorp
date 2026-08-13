@@ -1,6 +1,6 @@
 import type { CacheEntry } from './index';
 import type { Filter } from '@niscorp/vex';
-import { dateText, priceText } from '@lyra/app/prisms/format.prism';
+import { dateText, pattern, priceText } from '@lyra/app/prisms/format.prism';
 import { STANDING, standingLabel, standingTone, hasSubscription, hasLivePass, onACourse, isStaff, isContact, holdsAnySubscription } from './standing';
 
 const row = (name: string) => ({ $get: { from: { $var: 'm' }, path: [name] } });
@@ -274,7 +274,7 @@ export const peopleCount: CacheEntry = {
       let: { c: { $ref: '$.result' } },
       value: {
         total: { $get: { from: { $var: 'c' }, path: ['total'], fallback: { $const: 0 } } },
-        total_display: { $join: { parts: [{ $get: { from: { $var: 'c' }, path: ['total'], fallback: { $const: 0 } } }, ' matching'], sep: '' } },
+        total_display: pattern('{n} matching', { n: { $get: { from: { $var: 'c' }, path: ['total'], fallback: { $const: 0 } } } }),
       },
     },
   },
@@ -378,15 +378,15 @@ export const offeringsOnSale: CacheEntry = {
         name: row('name'),
         price_display: priceText(row('price_cents'), row('currency')),
         interval_display: { $case: { branches: [{ when: { $eq: [row('interval'), 'year'] }, then: 'a year' }], else: 'a month' } },
-        allowance_display: { $case: { branches: [{ when: row('class_allowance'), then: { $join: { parts: [row('class_allowance'), ' classes a month'], sep: '' } } }], else: 'Unlimited classes' } },
+        allowance_display: { $case: { branches: [{ when: row('class_allowance'), then: pattern('{n} classes a month', { n: row('class_allowance') }) }], else: 'Unlimited classes' } },
+        // Whole patterns per shape, never an optional tail glued on — half a
+        // sentence translates like half a sentence.
         term_display: {
           $case: {
             branches: [
-              {
-                when: row('minimum_term_months'),
-                then: { $join: { parts: [row('minimum_term_months'), '-month minimum', { $case: { branches: [{ when: row('notice_days'), then: { $join: { parts: [' · ', row('notice_days'), ' days notice'], sep: '' } } }], else: '' } }], sep: '' } },
-              },
-              { when: row('notice_days'), then: { $join: { parts: ['Rolling · ', row('notice_days'), ' days notice'], sep: '' } } },
+              { when: { $and: [row('minimum_term_months'), row('notice_days')] }, then: pattern('{n}-month minimum · {m} days notice', { n: row('minimum_term_months'), m: row('notice_days') }) },
+              { when: row('minimum_term_months'), then: pattern('{n}-month minimum', { n: row('minimum_term_months') }) },
+              { when: row('notice_days'), then: pattern('Rolling · {n} days notice', { n: row('notice_days') }) },
             ],
             else: 'Rolling — cancel any time',
           },
@@ -436,8 +436,8 @@ export const offeringsList: CacheEntry = {
         allowance_display: {
           $case: {
             branches: [
-              { when: { $eq: [row('kind'), 'pass'] }, then: { $case: { branches: [{ when: { $eq: [row('credits'), 1] }, then: 'Single class' }], else: { $join: { parts: [row('credits'), ' classes'], sep: '' } } } } },
-              { when: row('class_allowance'), then: { $join: { parts: [row('class_allowance'), ' a month'], sep: '' } } },
+              { when: { $eq: [row('kind'), 'pass'] }, then: { $case: { branches: [{ when: { $eq: [row('credits'), 1] }, then: 'Single class' }], else: pattern('{n} classes', { n: row('credits') }) } } },
+              { when: row('class_allowance'), then: pattern('{n} a month', { n: row('class_allowance') }) },
             ],
             else: 'Unlimited',
           },
@@ -459,22 +459,11 @@ export const offeringsList: CacheEntry = {
             branches: [
               {
                 when: { $eq: [row('kind'), 'pass'] },
-                then: { $case: { branches: [{ when: row('valid_days'), then: { $join: { parts: ['Valid ', row('valid_days'), ' days'], sep: '' } } }], else: 'Never expires' } },
+                then: { $case: { branches: [{ when: row('valid_days'), then: pattern('Valid {n} days', { n: row('valid_days') }) }], else: 'Never expires' } },
               },
-              {
-                when: row('minimum_term_months'),
-                then: {
-                  $join: {
-                    parts: [
-                      row('minimum_term_months'),
-                      ' months',
-                      { $case: { branches: [{ when: row('notice_days'), then: { $join: { parts: [' · ', row('notice_days'), ' days notice'], sep: '' } } }], else: '' } },
-                    ],
-                    sep: '',
-                  },
-                },
-              },
-              { when: row('notice_days'), then: { $join: { parts: ['Rolling · ', row('notice_days'), ' days notice'], sep: '' } } },
+              { when: { $and: [row('minimum_term_months'), row('notice_days')] }, then: pattern('{n} months · {m} days notice', { n: row('minimum_term_months'), m: row('notice_days') }) },
+              { when: row('minimum_term_months'), then: pattern('{n} months', { n: row('minimum_term_months') }) },
+              { when: row('notice_days'), then: pattern('Rolling · {n} days notice', { n: row('notice_days') }) },
             ],
             else: 'Rolling',
           },

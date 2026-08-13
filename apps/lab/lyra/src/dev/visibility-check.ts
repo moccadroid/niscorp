@@ -3,6 +3,7 @@ import { CAST } from '@lyra/db/seed';
 import { areasFor } from '@lyra/app/nav/sections';
 import { resolveCatalog } from '@niscorp/moss';
 import { app, asPrincipal, idFor, idsFor, ok, report, runtime } from './world';
+import { fillPhrase } from '@lyra/ui/lib/phrase';
 
 const read = (email: string, fingerprint: string, context: Record<string, unknown> = {}): Promise<unknown> =>
   asPrincipal(email, '/api/schedule/vex', { fingerprint, context });
@@ -17,9 +18,10 @@ ok('the seed has a class worth looking at', booked > 1, `${booked} people in it`
 // ── the owner ────────────────────────────────────────────────
 const detail = (await read(CAST.lumen.owner, 'session/detail', { sessionId })) as Record<string, unknown>;
 ok('an owner can ask about one class', typeof detail['name'] === 'string' && detail['name'] !== '', String(detail['name']));
-// A number, a word, a number — in whatever language the studio reads. See the
-// same assertion in scope-check for why the word itself is not the claim.
-ok('...and is told how full it is', /\d+\s+\p{L}+\s+\d+/u.test(String(detail['booked_display'] ?? '')), String(detail['booked_display']));
+// A number, a word, a number — in whatever language the studio reads. The
+// figure now travels as a counted PATTERN and fills at the glass, so the
+// assertion fills it the same way before asking.
+ok('...and is told how full it is', /\d+\s+\p{L}+\s+\d+/u.test(String(fillPhrase(detail['booked_display']) ?? '')), String(fillPhrase(detail['booked_display'])));
 
 const attending = (await read(CAST.lumen.owner, 'session/attending', { sessionId })) as unknown[];
 ok('...and WHO is in it, by name', Array.isArray(attending) && attending.length === booked, `${Array.isArray(attending) ? attending.length : -1} against ${booked} in the table`);

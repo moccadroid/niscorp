@@ -79,10 +79,14 @@ const sessions = await read(CAST.lumen.owner, 'schedule', 'schedule/today', { to
 const nrSessions = await read(CAST.northrock.owner, 'schedule', 'schedule/today', { today });
 ok('today’s classes come back', Array.isArray(sessions));
 // "1 von 12" at a German studio, "1 of 12" at an English one. The claim is
-// that the MAPPING composed it — a number, a word, a number — not that the word
-// is English. Asserting the spelling made this fail the day a studio was seeded
-// de-AT, which was the feature working.
-ok('...formatted on the way out, not in a component', /\d+\s+\p{L}+\s+\d+/u.test(JSON.stringify(sessions)), JSON.stringify(sessions).slice(0, 120));
+// that the MAPPING composed it — not a component. It now travels as a counted
+// PATTERN ('{n} of {total}' beside its slots) so ONE book row serves every
+// count; the assertion holds the pattern and its numbers, spelled by nobody.
+ok(
+  '...formatted on the way out, not in a component',
+  JSON.stringify(sessions).includes('{n} of {total}') && /"n":\d+,"total":\d+/.test(JSON.stringify(sessions).replace(/\s/g, '')),
+  JSON.stringify(sessions).slice(0, 120),
+);
 ok('...and each studio gets only its own', JSON.stringify(sessions) !== JSON.stringify(nrSessions));
 
 const memberSees = await read(CAST.lumen.member, 'member', 'people/list', { q: '%', lens: 'everyone' });

@@ -16,8 +16,8 @@ export { AddNodeSchema, SubNodeSchema, MulNodeSchema, DivNodeSchema, RoundNodeSc
 export type { AddNode, SubNode, MulNode, DivNode, RoundNode } from './ops/math.schema';
 
 // String op schemas + types
-export { JoinNodeSchema, ToStringNodeSchema, InterpolateNodeSchema, TrimNodeSchema, LowerNodeSchema, UpperNodeSchema, SplitNodeSchema, ReplaceNodeSchema } from './ops/string.schema';
-export type { JoinNode, ToStringNode, InterpolateNode, TrimNode, LowerNode, UpperNode, SplitNode, ReplaceNode } from './ops/string.schema';
+export { FillNodeSchema, JoinNodeSchema, ToStringNodeSchema, InterpolateNodeSchema, TrimNodeSchema, LowerNodeSchema, UpperNodeSchema, SplitNodeSchema, ReplaceNodeSchema } from './ops/string.schema';
+export type { FillNode, JoinNode, ToStringNode, InterpolateNode, TrimNode, LowerNode, UpperNode, SplitNode, ReplaceNode } from './ops/string.schema';
 
 // Predicate op schemas + types
 export { EqNodeSchema, NeqNodeSchema, GtNodeSchema, GteNodeSchema, LtNodeSchema, LteNodeSchema, EmptyNodeSchema, StartsWithNodeSchema, EndsWithNodeSchema, ContainsNodeSchema } from './ops/predicate.schema';

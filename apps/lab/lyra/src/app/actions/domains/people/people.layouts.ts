@@ -24,7 +24,7 @@ export const peopleListLayout: LayoutNode = page([
     props: { justify: 'between', align: 'center', wrap: true, gap: 12 },
     children: [
       { component: 'Input', props: { placeholder: 'Search by name or email' }, ref: 'search', model: '$.search' },
-      { component: 'Text', props: { size: 'sm', color: 'mute' }, children: '$.totalDisplay' },
+      { component: 'Text', props: { size: 'sm', color: 'mute', phrase: '$.totalDisplay' } },
     ],
   },
 
@@ -165,10 +165,13 @@ export const peopleDetailLayout: LayoutNode = page([
             children: [
               { component: 'Field', props: { label: 'Plan', value: '$.subscription.plan_name' } },
               { component: 'Field', props: { label: 'Worth', value: '$.subscription.value_display' } },
-              { component: 'Field', props: { label: 'Minimum term', value: '$.subscription.term_display' } },
-              { component: 'Field', props: { label: 'Notice', value: '$.subscription.notice_display' } },
+              // `phrase` for the three that carry vocabulary or a counted
+              // pattern; names, money and dates stay `value` — data, already
+              // in the reader's locale, and the pass must never rename them.
+              { component: 'Field', props: { label: 'Minimum term', phrase: '$.subscription.term_display' } },
+              { component: 'Field', props: { label: 'Notice', phrase: '$.subscription.notice_display' } },
               { component: 'Field', props: { label: 'Committed until', value: '$.subscription.committed_display', empty: 'No commitment' } },
-              { component: 'Field', props: { label: 'Paid', value: '$.subscription.paid_via_display' } },
+              { component: 'Field', props: { label: 'Paid', phrase: '$.subscription.paid_via_display' } },
               { component: 'Field', props: { label: 'Paid until', value: '$.subscription.paid_until_display', empty: 'Nothing recorded' } },
             ],
           },

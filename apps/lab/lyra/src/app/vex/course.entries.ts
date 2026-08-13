@@ -1,5 +1,5 @@
 import type { CacheEntry, MutationEntry } from './index';
-import { dateText, priceText } from '@lyra/app/prisms/format.prism';
+import { dateText, pattern, priceText } from '@lyra/app/prisms/format.prism';
 
 const row = (name: string) => ({ $get: { from: { $var: 'r' }, path: [name] } });
 
@@ -44,7 +44,7 @@ export const coursesList: CacheEntry = {
         active: row('active'),
         dates_display: { $join: { parts: [dateText(row('starts_on')), ' – ', dateText(row('ends_on'))], sep: '' } },
         price_display: priceText(row('price_cents'), row('currency')),
-        places_display: { $join: { parts: [row('enrolled_count'), ' of ', row('capacity')], sep: '' } },
+        places_display: pattern('{n} of {total}', { n: row('enrolled_count'), total: row('capacity') }),
         full: { $gte: [row('enrolled_count'), row('capacity')] },
       },
     },

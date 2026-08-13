@@ -9,13 +9,14 @@
 //
 // Prints a report by default; `--emit` writes the missing set as a seed-shaped
 // TS block on stdout, which is how the German book was first filled in.
-import { harvestDefinitions, missingFrom } from '@niscorp/nova/i18n';
+import { harvestDefinitions, matcherFor, missingFrom } from '@niscorp/nova/i18n';
 import type { HarvestedPhrase } from '@niscorp/nova/i18n';
 import { CATALOG_DEFINITIONS } from '@lyra/app/action-catalog';
 import { PHRASE_KEYS } from '@lyra/app/phrase-keys';
 import { AREAS } from '@lyra/app/nav/sections';
 import { EFFECTS, MOMENTS } from '@lyra/app/reflexes/compose';
 import { RECIPES } from '@lyra/app/reflexes/recipes';
+import { ENTRIES } from '@lyra/app/vex';
 import { GERMAN } from '@lyra/db/phrases.de';
 
 // The APP'S OWN declaration, not a copy of it. The copy this used to be had
@@ -40,21 +41,92 @@ const fromNav: HarvestedPhrase[] = AREAS.flatMap((area) => [
   ]),
 ]);
 
-// Words a READ manufactures. These live in vex mappings (`standing.ts`,
-// `format.prism.ts`) and land on `*_display` fields, where the render pass
-// picks them up — but no walk over layouts can find them, because they are
-// authored inside a query rather than inside a screen.
+// WORDS A READ MANUFACTURES, derived from the entries themselves.
 //
-// Closed sets only. A formatted date or amount is NOT here and never will be:
-// those are handled at their source by `$localeDate` / `$localeMoney`.
-const FROM_READS: string[] = [
-  // standing.ts — the one vocabulary for what a person IS to a studio
-  'Staff', 'On trial', 'Active', 'Paused', 'Pass holder', 'On a course', 'Trial over', 'Contact', 'Left', 'Prospect',
-  // format.prism.ts
-  'Cancelled',
-  // subscription.entries.ts — how somebody pays and on what terms
-  'Monthly', 'Rolling', 'Notice given', 'Card', 'Cash', 'Transfer', 'Direct debit',
-];
+// The vex mappings invent closed-set vocabulary inside `$case` branches on
+// prose-suffixed keys (`state_label`, `paid_via_display`), and no walk over
+// layouts can see it — it is authored inside a query rather than inside a
+// screen. This used to be a hand-kept list, and it rotted the way hand-kept
+// lists do: five words were missing by the time the product review found
+// them. So it is enumerated from `ENTRIES`, with the SAME matcher the render
+// pass uses — the two can no longer disagree about what counts as prose.
+//
+// Two rules, mirroring the pass:
+//  - a THEN/ELSE literal under a prose key is vocabulary; a string inside a
+//    WHEN is data (`'used_up'` beside `then: 'Used up'`).
+//  - a `{ phrase, slots }` object is a PATTERN — translated whole, filled in
+//    the target language — and its pattern string is harvested like a word.
+//  - a `$join` under a prose key with wordy string parts is a WELD:
+//    untranslatable by any dictionary. Welds fail this harvest outright.
+const matcher = matcherFor(KEYS);
+const wordy = (part: string): boolean => /\p{L}/u.test(part);
+
+type EntrySink = { word: (phrase: string, where: string) => void; weld: (part: string, where: string) => void };
+
+// A value that SITS under a prose key: collect the words it can produce.
+const collectProse = (node: unknown, where: string, sink: EntrySink): void => {
+  if (typeof node === 'string') {
+    // A word has a letter. '—', ' – ' and ':00' sit at prose keys as
+    // punctuation and formatting, and no book should be asked for them.
+    if (wordy(node)) sink.word(node, where);
+    return;
+  }
+  if (node === null || typeof node !== 'object') return;
+  if (Array.isArray(node)) {
+    for (const entry of node) collectProse(entry, where, sink);
+    return;
+  }
+  const obj = node as Record<string, unknown>;
+  if (typeof obj['phrase'] === 'string' && typeof obj['slots'] === 'object') {
+    sink.word(obj['phrase'], where);
+    return;
+  }
+  if (typeof obj['$case'] === 'object' && obj['$case'] !== null) {
+    const kase = obj['$case'] as { branches?: { then?: unknown }[]; else?: unknown };
+    for (const branch of kase.branches ?? []) collectProse(branch.then, where, sink);
+    collectProse(kase.else, where, sink);
+    return;
+  }
+  if (typeof obj['$with'] === 'object' && obj['$with'] !== null) {
+    collectProse((obj['$with'] as { value?: unknown }).value, where, sink);
+    return;
+  }
+  if (typeof obj['$join'] === 'object' && obj['$join'] !== null) {
+    const parts = (obj['$join'] as { parts?: unknown[] }).parts ?? [];
+    for (const part of parts) {
+      if (typeof part === 'string' && wordy(part)) sink.weld(part, where);
+      else collectProse(part, where, sink);
+    }
+    return;
+  }
+  // $get, $eq, arithmetic — data plumbing; nothing under it is a word the
+  // mapping is inventing.
+};
+
+// The generic walk: find every prose-keyed property anywhere in a mapping.
+const walkMapping = (node: unknown, where: string, sink: EntrySink): void => {
+  if (node === null || typeof node !== 'object') return;
+  if (Array.isArray(node)) {
+    for (const entry of node) walkMapping(entry, where, sink);
+    return;
+  }
+  for (const [key, value] of Object.entries(node as Record<string, unknown>)) {
+    if (matcher.isProse(key)) collectProse(value, where, sink);
+    else walkMapping(value, where, sink);
+  }
+};
+
+const entryWords: HarvestedPhrase[] = [];
+const welds: { part: string; where: string }[] = [];
+for (const entry of ENTRIES) {
+  const mapping = (entry as { mapping?: unknown }).mapping;
+  if (mapping === undefined) continue;
+  const where = `vex/${(entry as { fingerprint: string }).fingerprint}`;
+  walkMapping(mapping, where, {
+    word: (phrase, at) => entryWords.push({ phrase, where: [at] }),
+    weld: (part, at) => welds.push({ part, where: at }),
+  });
+}
 
 // THE AUTOMATION VOCABULARY, which lives in ROWS rather than in layouts.
 //
@@ -145,7 +217,7 @@ const merge = (groups: HarvestedPhrase[][]): HarvestedPhrase[] => {
 const listed = (phrases: string[], where: string): HarvestedPhrase[] =>
   phrases.map((phrase) => ({ phrase, where: [where] }));
 
-const all = merge([fromActions, fromNav, fromVocabulary, listed(FROM_READS, 'reads'), listed(APP_COMPOSED, 'app.ts')]).filter(
+const all = merge([fromActions, fromNav, fromVocabulary, entryWords, listed(APP_COMPOSED, 'app.ts')]).filter(
   (entry) => !NOT_PROSE.has(entry.phrase) && !UNIVERSAL.has(entry.phrase),
 );
 
@@ -169,6 +241,16 @@ if (process.argv.includes('--emit')) {
 console.log(`\nphrases this application can show: ${String(all.length)}`);
 console.log(`  fixed (translatable):    ${String(fixed.length)}`);
 console.log(`  assembled (formatted):   ${String(assembled.length)}  — handled by $locale* ops, not the book`);
+
+// A weld is not a missing translation — it is a phrase NO book can ever
+// hold, because the words were glued around a value in the source language.
+// Counted phrases are patterns; a weld is the bug the pattern op exists for.
+if (welds.length > 0) {
+  console.log(`\n\x1b[31m${String(welds.length)} welded fragment(s) — untranslatable by construction\x1b[0m`);
+  for (const weld of welds) console.log(`  ${JSON.stringify(weld.part)}  \x1b[90m${weld.where}\x1b[0m`);
+  process.exit(1);
+}
+
 console.log(`\n${locale}: ${String(fixed.length - missing.length)}/${String(fixed.length)} translated`);
 
 if (missing.length > 0) {

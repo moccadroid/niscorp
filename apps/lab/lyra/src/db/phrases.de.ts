@@ -634,6 +634,65 @@ export const GERMAN: Record<string, string> = {
   'Morning Flow': 'Morgen-Flow',
   'Vinyasa Flow': 'Vinyasa Flow',
 
+  // ── what the reads manufacture ───────────────────────────
+  //
+  // Closed-set words and counted PATTERNS from the vex mappings, surfaced by
+  // the derived harvest source. A pattern translates whole — '{n} von
+  // {total}' is one row however big n gets — and its slots are filled in
+  // this language by the pass.
+  '{n} a month': '{n} pro Monat',
+  '{n} classes': '{n} Kurse',
+  '{n} classes a month': '{n} Kurse pro Monat',
+  '{n} days': '{n} Tage',
+  '{n} matching': '{n} Treffer',
+  '{n} months': '{n} Monate',
+  '{n} months · {m} days notice': '{n} Monate · {m} Tage Kündigungsfrist',
+  '{n} of {total}': '{n} von {total}',
+  '{n} of {total} left': 'Noch {n} von {total}',
+  '{n}-month minimum': '{n} Monate Mindestlaufzeit',
+  '{n}-month minimum · {m} days notice': '{n} Monate Mindestlaufzeit · {m} Tage Kündigungsfrist',
+  'Every day at {time}': 'Täglich um {time}',
+  'Rolling · {n} days notice': 'Laufend · {n} Tage Kündigungsfrist',
+  'Set up: {title}': 'Einrichten: {title}',
+  'Valid {n} days': '{n} Tage gültig',
+  'When {moment}, {effect}': 'Wenn {moment}, {effect}',
+
+  'a month': 'pro Monat',
+  'a year': 'pro Jahr',
+  Armed: 'Scharfgeschaltet',
+  'As it happens': 'Sobald es passiert',
+  'Card, online': 'Karte, online',
+  'Every week': 'Jede Woche',
+  Failed: 'Fehlgeschlagen',
+  Former: 'Ehemalig',
+  Free: 'Gratis',
+  Friday: 'Freitag',
+  Here: 'Da',
+  'Last run': 'Zuletzt gelaufen',
+  Monday: 'Montag',
+  'No minimum': 'Keine Mindestlaufzeit',
+  None: 'Keine',
+  'Not sent': 'Nicht gesendet',
+  'Not set up': 'Nicht eingerichtet',
+  Offered: 'Im Angebot',
+  On: 'Aktiv',
+  'One-off': 'Einmalig',
+  Refunded: 'Erstattet',
+  Retired: 'Eingestellt',
+  'Rolling — cancel any time': 'Laufend — jederzeit kündbar',
+  Running: 'Läuft',
+  Saturday: 'Samstag',
+  Sending: 'Wird gesendet',
+  Sent: 'Gesendet',
+  'Single class': 'Ein Kurs',
+  Sunday: 'Sonntag',
+  Thursday: 'Donnerstag',
+  Tuesday: 'Dienstag',
+  'Unlimited classes': 'Unbegrenzt Kurse',
+  'Used up': 'Aufgebraucht',
+  Waiting: 'Warteliste',
+  Wednesday: 'Mittwoch',
+
   // ── mail, and the consent switch ─────────────────────────
   //
   // The settings screen for outbound mail, and the one switch on the person

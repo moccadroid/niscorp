@@ -1,5 +1,5 @@
 import type { CacheEntry, MutationEntry } from './index';
-import { dateText, timeText } from '@lyra/app/prisms/format.prism';
+import { dateText, pattern, timeText } from '@lyra/app/prisms/format.prism';
 import { STANDING, standingLabel, standingTone } from './standing';
 
 const row = (name: string) => ({ $get: { from: { $var: 'r' }, path: [name] } });
@@ -70,9 +70,7 @@ export const myPasses: CacheEntry = {
       body: {
         pass_id: row('pass_id'),
         name: row('name'),
-        credits_display: {
-          $join: { parts: [{ $sub: [row('credits_total'), row('credits_used')] }, ' of ', row('credits_total'), ' left'], sep: '' },
-        },
+        credits_display: pattern('{n} of {total} left', { n: { $sub: [row('credits_total'), row('credits_used')] }, total: row('credits_total') }),
         state_label: { $case: { branches: [{ when: { $eq: [row('status'), 'used_up'] }, then: 'Used up' }], else: 'Active' } },
         expires_display: dateText({ $get: { from: { $var: 'r' }, path: ['expires_on'], fallback: { $const: null } } }),
       },

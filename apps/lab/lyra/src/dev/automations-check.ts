@@ -25,7 +25,11 @@ owner.dispatch({ type: 'ui:click', ref: 'view', payload: { value: 'running', sho
 await settle(16);
 tree = treeOf(owner);
 
-ok('...listing what each one DOES, as a sentence', tree.includes('When somebody joins, email them'), 'composed in the entry’s mapping from the vocabulary it joins');
+ok(
+  '...listing what each one DOES, as a sentence',
+  tree.includes('When {moment}, {effect}') && tree.includes('somebody joins') && tree.includes('email them'),
+  'a PATTERN and its vocabulary slots — the frame and the fragments each translate on their own',
+);
 // The card body is read at a glance: it says what the MOMENT is, not what
 // email is like. ⟲ Joining both blurbs put "Nothing is delivered yet…" on
 // every card. Asserted on the FIELD, because the effect's words are still on

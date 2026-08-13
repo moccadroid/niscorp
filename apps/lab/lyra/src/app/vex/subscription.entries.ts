@@ -1,5 +1,5 @@
 import type { CacheEntry, MutationEntry } from './index';
-import { dateText, money } from '@lyra/app/prisms/format.prism';
+import { dateText, money, pattern } from '@lyra/app/prisms/format.prism';
 
 const one = (name: string, fallback: unknown = '') => ({ $get: { from: { $var: 'r' }, path: [name], fallback: { $const: fallback } } });
 
@@ -39,13 +39,13 @@ const SUBSCRIPTION_VALUE = {
   // minimum" is a real answer and a selling point; blank is neither.
   term_display: {
     $case: {
-      branches: [{ when: one('minimum_term_months'), then: { $join: { parts: [one('minimum_term_months'), ' months'], sep: '' } } }],
+      branches: [{ when: one('minimum_term_months'), then: pattern('{n} months', { n: one('minimum_term_months') }) }],
       else: 'No minimum',
     },
   },
   notice_display: {
     $case: {
-      branches: [{ when: one('notice_days'), then: { $join: { parts: [one('notice_days'), ' days'], sep: '' } } }],
+      branches: [{ when: one('notice_days'), then: pattern('{n} days', { n: one('notice_days') }) }],
       else: 'None',
     },
   },
@@ -456,17 +456,10 @@ export const passesForPerson: CacheEntry = {
       body: {
         pass_id: { $get: { from: { $var: 'r' }, path: ['pass_id'] } },
         name: { $get: { from: { $var: 'r' }, path: ['name'] } },
-        credits_display: {
-          $join: {
-            parts: [
-              { $sub: [{ $get: { from: { $var: 'r' }, path: ['credits_total'] } }, { $get: { from: { $var: 'r' }, path: ['credits_used'] } }] },
-              ' of ',
-              { $get: { from: { $var: 'r' }, path: ['credits_total'] } },
-              ' left',
-            ],
-            sep: '',
-          },
-        },
+        credits_display: pattern('{n} of {total} left', {
+          n: { $sub: [{ $get: { from: { $var: 'r' }, path: ['credits_total'] } }, { $get: { from: { $var: 'r' }, path: ['credits_used'] } }] },
+          total: { $get: { from: { $var: 'r' }, path: ['credits_total'] } },
+        }),
         state_label: {
           $case: {
             branches: [

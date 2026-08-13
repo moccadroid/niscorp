@@ -121,9 +121,13 @@ export const meMembershipAction: ActionDefinition = {
                   ' ',
                   { $ref: '$.chosenInterval' },
                   ' · ',
-                  { $ref: '$.chosenAllowance' },
+                  // `$fill`: allowance and terms arrive as counted PATTERNS
+                  // now ('{n} classes a month') — filled here in the source
+                  // language, because this sentence is composed before any
+                  // render pass could do it with a book.
+                  { $fill: { $ref: '$.chosenAllowance' } },
                   ' · ',
-                  { $ref: '$.chosenTerms' },
+                  { $fill: { $ref: '$.chosenTerms' } },
                   '. Starting today. The studio settles payment with you directly.',
                 ],
                 sep: '',

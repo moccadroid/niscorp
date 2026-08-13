@@ -1,5 +1,5 @@
 import type { CacheEntry, MutationEntry } from './index';
-import { dateText, priceText } from '@lyra/app/prisms/format.prism';
+import { dateText, pattern, priceText } from '@lyra/app/prisms/format.prism';
 
 // The TIMETABLE — the rules a studio runs on, as opposed to the dated classes
 // they produce. Managing this is a manager's job; reading it is everybody's.
@@ -82,7 +82,7 @@ export const templatesList: CacheEntry = {
             branches: [
               {
                 when: row('course_id'),
-                then: { $join: { parts: [row('course_enrolled'), ' of ', row('capacity')], sep: '' } },
+                then: pattern('{n} of {total}', { n: row('course_enrolled'), total: row('capacity') }),
               },
             ],
             else: '',

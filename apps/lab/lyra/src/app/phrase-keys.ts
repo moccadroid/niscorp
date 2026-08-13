@@ -26,7 +26,14 @@ import type { PhraseKeys } from '@niscorp/nova/i18n';
 // not a prose key — translating one would show German and save English.
 // That line is the difference between chrome and content: this pass owns
 // the words the application says, never the words a studio wrote.
+//
+// `_label` was audited for exactly that trap before joining the list:
+// `subject_label`/`body_label` LOOK like studio copy but hold the form's own
+// field words ("Subject", "Message") from EFFECTS.words — the copy itself
+// travels under `subject`/`body`, which no suffix reaches. Every `*_label`
+// key a mapping emits is closed-set vocabulary, so the suffix is safe with
+// zero exceptions.
 export const PHRASE_KEYS: PhraseKeys = {
   props: [...DEFAULT_PHRASE_KEYS.props, 'role', 'phrase', 'why', 'sentence'],
-  suffixes: ['_display'],
+  suffixes: ['_display', '_label'],
 };

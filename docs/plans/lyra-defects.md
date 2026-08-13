@@ -1,13 +1,21 @@
 # lyra — defects from the product review
 
-> **Status (2026-08-14): in progress.** Decisions taken: D1 = a prose-capable
-> `phrase` prop on Field/Stat, local to lyra (nova untouched); D2 = none —
-> first version, fingerprints may change freely, 4.3 dropped; D3 = rename the
-> two keys off the suffix. Landed: Part 2.7 (language-check + phrase-harvest
-> gate `pnpm check`, one PHRASE_KEYS declaration), Part 1 (all four member
-> fixes, checks grown), 6.1, 6.2's comment, 6.3, 6.4. Open: 2.1–2.6, Part 3,
-> Part 5 (bench numbers re-measured 2026-08-14 and WORSE: 214.5 KB/shell,
-> 384 KB/nav without --expose-gc), 4.1, 4.2, 4.4, 6.5.
+> **Status (2026-08-14): in progress — Parts 1, 2 and 6 landed.** Decisions:
+> D1 = a prose-capable `phrase` prop on Field/Stat/Text, local to lyra; D2 =
+> none — first version, fingerprints may change freely, 4.3 dropped; D3 =
+> DISSOLVED on inspection — `subject_label`/`body_label` hold the form's own
+> field words from EFFECTS.words ("Subject", "Message"), not studio copy,
+> which travels under `subject`/`body`; the `_label` suffix is safe with zero
+> exceptions. Landed: 2.7 (language-check + phrase-harvest gate `pnpm
+> check`), Part 1 (four member fixes, checks grown), Part 2 complete —
+> `_label` suffix, `phrase` prop, counted phrases as PATTERNS ({n} of
+> {total}: one book row, pass-filled; kit fills the source language; prism
+> gained `$fill` for pre-pass composition), 46 more book rows, and the
+> harvest derives the read-manufactured vocabulary from ENTRIES and FAILS on
+> welds — it found 27 against this document's 14, including the automations
+> sentence hiding at the non-prose `name:` key. All of Part 6. Open: Part 3,
+> Part 5 (bench re-measured 2026-08-14 and WORSE: 214.5 KB/shell, 384
+> KB/nav without --expose-gc), 4.1, 4.2, 4.4.
 >
 > Every item below was found by clicking
 > the running app or reading the code at the cited line, and each one is

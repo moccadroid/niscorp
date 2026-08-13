@@ -1,5 +1,5 @@
 import type { CacheEntry, MutationEntry } from './index';
-import { dateText } from '@lyra/app/prisms/format.prism';
+import { dateText, pattern } from '@lyra/app/prisms/format.prism';
 
 const row = (name: string) => ({ $get: { from: { $var: 'r' }, path: [name] } });
 
@@ -577,7 +577,7 @@ export const notificationsMarkSeen: MutationEntry = {
 export const automationsList: CacheEntry = {
   fingerprint: 'automations/list',
   intent: 'The automations this studio has set up, as the cards that show them',
-  shape: [{ automation_id: '', name: '', intent: '', run_display: '', watched: false, state_label: '', state_tone: '', last_run: '' }],
+  shape: [{ automation_id: '', sentence: '', intent: '', run_display: '', watched: false, state_label: '', state_tone: '', last_run: '' }],
   dsl: {
     from: ['automations', 'automation_moments', 'automation_effects'],
     fields: [
@@ -624,14 +624,18 @@ export const automationsList: CacheEntry = {
         days: row('days'),
         // THE SENTENCE, composed rather than stored: it is what the row does,
         // in the operator's language, so it stays true when either half moves.
-        name: { $join: { parts: ['When ', row('moment_phrase'), ', ', row('effect_phrase')], sep: '' } },
+        // A PATTERN, not a join — the frame translates whole and the fragment
+        // slots go through the book themselves. And spelled `sentence`, not
+        // `name`: `name` is deliberately no prose key (people are named), so
+        // this sentence filed under it was invisible to the language pass.
+        sentence: pattern('When {moment}, {effect}', { moment: row('moment_phrase'), effect: row('effect_phrase') }),
         // The MOMENT's blurb alone. The card is a list of things that happen,
         // read at a glance; what the effect is like belongs in the form, where
         // somebody is choosing one. Joining both here turns every card into
         // two paragraphs saying the same thing about email.
         intent: row('moment_blurb'),
         // A watched moment has no hour, and a row claiming one it ignores lies.
-        run_display: { $case: { branches: [{ when: row('watched'), then: 'As it happens' }], else: { $join: { parts: ['Every day at ', row('run_at')], sep: '' } } } },
+        run_display: { $case: { branches: [{ when: row('watched'), then: 'As it happens' }], else: pattern('Every day at {time}', { time: row('run_at') }) } },
         watched: row('watched'),
         // The pairing's shape, carried on the row — "Edit" hands it straight
         // to the form, which then has nothing to ask anybody.
@@ -740,7 +744,7 @@ export const automationRecipes: CacheEntry = {
         icon: row('icon'),
         moment: row('moment'),
         effect: row('effect'),
-        sentence: { $join: { parts: ['When ', row('moment_phrase'), ', ', row('effect_phrase')], sep: '' } },
+        sentence: pattern('When {moment}, {effect}', { moment: row('moment_phrase'), effect: row('effect_phrase') }),
         run_at: row('recipe_run_at'),
         days: row('recipe_days'),
         subject: row('recipe_subject'),
@@ -759,7 +763,9 @@ export const automationRecipes: CacheEntry = {
         installed: row('installed'),
         // A recipe a studio already runs is not an offer — saying so beats
         // letting them add it and hit a unique-constraint error.
-        heading: { $case: { branches: [{ when: row('installed'), then: row('title') }], else: { $join: { parts: ['Set up: ', row('title')], sep: '' } } } },
+        // The title slot is itself vocabulary (the seeded recipe titles), so
+        // it translates inside its frame.
+        heading: { $case: { branches: [{ when: row('installed'), then: row('title') }], else: pattern('Set up: {title}', { title: row('title') }) } },
         state_label: { $case: { branches: [{ when: row('installed'), then: 'Running' }], else: 'Not set up' } },
         state_tone: { $case: { branches: [{ when: row('installed'), then: 'good' }], else: 'neutral' } },
       },

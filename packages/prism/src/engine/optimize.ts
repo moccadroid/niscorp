@@ -5,7 +5,7 @@ import {
   isRefNode, isConstNode, isVarNode, isGetNode, isWithNode,
   isMapNode, isFilterNode, isReduceNode, isSliceNode, isFlattenNode, isUniqueNode, isSortByNode,
   isAddNode, isSubNode, isMulNode, isDivNode, isRoundNode,
-  isJoinNode, isToStringNode, isInterpolateNode, isTrimNode, isLowerNode, isUpperNode, isSplitNode, isReplaceNode,
+  isFillNode, isJoinNode, isToStringNode, isInterpolateNode, isTrimNode, isLowerNode, isUpperNode, isSplitNode, isReplaceNode,
   isEqNode, isNeqNode, isGtNode, isGteNode, isLtNode, isLteNode, isEmptyNode, isStartsWithNode, isEndsWithNode, isContainsNode,
   isNotNode, isAndNode, isOrNode,
   isMergeNode, isCoalesceNode, isCaseNode, isEntriesOfNode, isKeyByNode, isGroupByNode,
@@ -17,7 +17,7 @@ import {
 import { opRef, opConst, opVar, opGet, opWith } from '../ops/core.ops';
 import { opMap, opFilter, opReduce, opSlice, opFlatten, opUnique, opSortBy } from '../ops/array.ops';
 import { opAdd, opSub, opMul, opDiv, opRound } from '../ops/math.ops';
-import { opJoin, opToString, opInterpolate, opTrim, opLower, opUpper, opSplit, opReplace } from '../ops/string.ops';
+import { opFill, opJoin, opToString, opInterpolate, opTrim, opLower, opUpper, opSplit, opReplace } from '../ops/string.ops';
 import { opEq, opNeq, opGt, opGte, opLt, opLte, opEmpty, opStartsWith, opEndsWith, opContains } from '../ops/predicate.ops';
 import { opNot, opAnd, opOr } from '../ops/logic.ops';
 import { opMerge, opCoalesce, opCase, opEntriesOf, opKeyBy, opGroupBy } from '../ops/structure.ops';
@@ -128,6 +128,7 @@ const resolveHandler = (node: Record<string, unknown>): OpHandler | undefined =>
   if (isJoinNode(node)) return eraseOp(opJoin);
   if (isToStringNode(node)) return eraseOp(opToString);
   if (isInterpolateNode(node)) return eraseOp(opInterpolate);
+  if (isFillNode(node)) return eraseOp(opFill);
   if (isTrimNode(node)) return eraseOp(opTrim);
   if (isLowerNode(node)) return eraseOp(opLower);
   if (isUpperNode(node)) return eraseOp(opUpper);

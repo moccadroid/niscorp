@@ -18,6 +18,7 @@
 import { anonymous, app, login, ok, report, settle } from './world';
 import { CAST } from '@lyra/db/seed';
 import { COMPONENT_NAMES } from '@lyra/ui/registry';
+import { fillPhrase } from '@lyra/ui/lib/phrase';
 import type { RenderNode } from '@niscorp/nova';
 import { all, click, draw, errorMarkers, events, find, namesIn, resize, show, text } from './surface';
 
@@ -58,7 +59,9 @@ type Cell = { kind?: string; key?: string; subKey?: string; suffix?: string };
 const shownBy = (cell: Cell, row: Record<string, unknown>): string[] => {
   const at = (key: string | undefined): string => {
     if (key === undefined) return '';
-    const value = row[key];
+    // Filled exactly the way the kit fills — a counted phrase is owed to the
+    // screen as its text, not as the `{ phrase, slots }` it travels as.
+    const value = fillPhrase(row[key]);
     return value === undefined || value === null ? '' : String(value);
   };
   switch (cell.kind) {

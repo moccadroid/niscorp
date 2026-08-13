@@ -98,32 +98,23 @@ export const timeText = (value: unknown) => ({
   },
 });
 
-// ── the handful of strings that are FORMATTED rather than fixed ──
+// ── counted phrases: patterns, translated whole ──────────────
 //
-// "12 of 20" carries two numbers, so its cardinality is unbounded and the
-// render-tree pass can never hold it in a dictionary. It has to be assembled
-// in the reader's language at the point of assembly, which is here.
+// "12 of 20" carries two numbers, so its cardinality is unbounded and no
+// book can hold the sentence. What a book CAN hold is the PATTERN: '{n} of
+// {total}' is one row, translated whole, and the holes are filled in the
+// reader's language — by the render pass where a book exists, by the kit's
+// `fillPhrase` in the source language. A string slot is offered to the book
+// too, so a composed sentence's fragments translate with their frame.
 //
-// This is a two-entry table, not an i18n system, and it should stay that way:
-// every new entry is a sign that a string wants to be a fixed phrase with the
-// numbers beside it rather than baked in.
-const byLanguage = (table: Record<string, string>, fallback: string) => ({
-  $case: {
-    branches: Object.entries(table).map(([prefix, word]) => ({
-      when: { $startsWith: { value: LOCALE, prefix } },
-      then: word,
-    })),
-    else: fallback,
-  },
-});
+// This replaced a per-word `byLanguage` table that taught ONE mapping the
+// difference between 'of' and 'von' — the two-entry table the old comment
+// here warned would grow.
+export const pattern = (phrase: string, slots: Record<string, unknown>) => ({ phrase, slots });
 
 /** "12 of 20" — a fill figure a person can read at a glance. */
-export const fillText = (booked: unknown, capacity: unknown) => ({
-  $join: {
-    parts: [{ $coalesce: [booked, 0] }, ' ', byLanguage({ de: 'von' }, 'of'), ' ', { $coalesce: [capacity, 0] }],
-    sep: '',
-  },
-});
+export const fillText = (booked: unknown, capacity: unknown) =>
+  pattern('{n} of {total}', { n: { $coalesce: [booked, 0] }, total: { $coalesce: [capacity, 0] } });
 
 export const fillTone = (booked: unknown, capacity: unknown) => ({
   $case: {
