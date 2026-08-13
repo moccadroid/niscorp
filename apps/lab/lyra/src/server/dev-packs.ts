@@ -14,7 +14,9 @@ import type { PgPool } from '@niscorp/vex';
 // the same surfaces — nothing here is a privileged shortcut. Off by default and
 // unreachable without the env var, so it cannot touch a real deployment.
 //
-// Format: `LYRA_DEV_PACKS="stripe@http://127.0.0.1:8781/stripe,belts@http://127.0.0.1:8781/belts"`.
+// Format: `LYRA_DEV_PACKS="stripe@http://127.0.0.1:8799/stripe,belts@http://127.0.0.1:8799/belts"`
+// — 8799 being where the integrations service actually listens in dev; this
+// example said 8781 for a while and cost two sessions an empty store.
 // A pack that is not running yet fails its fetch and is logged and skipped — it
 // registers on the next boot once it is up, rather than taking lyra down.
 

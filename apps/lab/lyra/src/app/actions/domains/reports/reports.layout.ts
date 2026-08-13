@@ -86,7 +86,9 @@ export const reportsLayout: LayoutNode = {
             rowKey: 'week_key',
             empty: 'Not enough history yet.',
             columns: [
-              { label: 'Week', px: 140, cell: { kind: 'text', key: 'week_key', color: 'ink', mono: true } },
+              // The week's first attended day, in the studio's locale —
+              // `2026-W25` is the grouping key, not a label.
+              { label: 'Week', px: 140, cell: { kind: 'text', key: 'week_display', color: 'ink' } },
               { label: 'Check-ins', w: 1, align: 'right', cell: { kind: 'number', key: 'total' } },
             ],
           },
@@ -112,7 +114,7 @@ export const reportsLayout: LayoutNode = {
                 rowKey: 'status',
                 empty: 'No members yet.',
                 columns: [
-                  { label: 'Status', w: 1, cell: { kind: 'text', key: 'status', color: 'ink' } },
+                  { label: 'Status', w: 1, cell: { kind: 'badge', key: 'status_display', toneKey: 'status_tone' } },
                   { label: 'People', px: 88, align: 'right', cell: { kind: 'number', key: 'total' } },
                 ],
               },

@@ -1,6 +1,15 @@
 # lyra — defects from the product review
 
-> **Status (2026-08-13): not started.** Every item below was found by clicking
+> **Status (2026-08-14): in progress.** Decisions taken: D1 = a prose-capable
+> `phrase` prop on Field/Stat, local to lyra (nova untouched); D2 = none —
+> first version, fingerprints may change freely, 4.3 dropped; D3 = rename the
+> two keys off the suffix. Landed: Part 2.7 (language-check + phrase-harvest
+> gate `pnpm check`, one PHRASE_KEYS declaration), Part 1 (all four member
+> fixes, checks grown), 6.1, 6.2's comment, 6.3, 6.4. Open: 2.1–2.6, Part 3,
+> Part 5 (bench numbers re-measured 2026-08-14 and WORSE: 214.5 KB/shell,
+> 384 KB/nav without --expose-gc), 4.1, 4.2, 4.4, 6.5.
+>
+> Every item below was found by clicking
 > the running app or reading the code at the cited line, and each one is
 > reproducible. Nothing here is a feature request — this is the list of things
 > that are wrong, missing their last wire, or silently unenforced.

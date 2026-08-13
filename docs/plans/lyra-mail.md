@@ -1,8 +1,14 @@
 # Mail — making the product able to send
 
-> **Status: not built.** This is a build brief, written to be handed to one
-> agent and executed. Read it whole before touching anything; the last three
-> sections exist because they are the parts people skip.
+> **Status: built — all eight steps, green in the suite** (`mail-check`,
+> `bounce-check`, `consent-check`, `auth-check` carry the claims). The cap is
+> a per-studio column (`daily_mail_cap`, default 1000/day) with a field on
+> the settings screen. Bring-your-own-domain is built end to end — register,
+> show the DNS records, verify, send from the studio's own domain — and is
+> the one thing that has never run LIVE: the current provider key is
+> send-only, so the domains API answers 403 until a broader one exists.
+> This header said four different things at once for a while; the one line
+> above is current, and the history lives in git rather than stacked here.
 >
 > **Revision.** The first draft of this document put mail in a pack. It is
 > platform now, and the section that argues why is the one to read first — the
@@ -20,28 +26,6 @@
 > delivery — `Sent` on that screen means "the provider took it", and only a
 > bounce webhook can make it mean more. And the provider key is send-only, so
 > the domains API (step 8) and webhook management (step 7) need a broader one.
->
-> **Where this stands: steps 1–7 are built and green, and 8 is half.** All 43
-> checks pass. The transport, schema and charter, the reflex, the screen, the
-> sign-in link, consent end to end (asked at the desk, enforced in the
-> selection, withdrawn without a session, footered on the wire), and bounces
-> (signed, scoped, suppressed) — plus the sweep that rescues a message whose
-> process died mid-send, and the studio's own Mail settings screen.
->
-> **All eight steps are built.** The cap is a per-studio column with a
-> generous default (1000/day) and a field on the settings screen — a ceiling
-> against a runaway, not a business limit, and the right number is not ours to
-> know. Bring-your-own-domain is built end to end: register, show the DNS
-> records, verify, and send from the studio's own domain once the PROVIDER says
-> it is verified. It is the one thing that has never run: the current key is
-> send-only, so the domains API answers 403 until a broader one exists.
-
-> Built: the transport (1), schema and charter (2), the reflex (3), the screen
-> (4), the sign-in link (5) and consent (6) — the opt-in inside the selection,
-> the footer and headers at the wire, and the login-free unsubscribe door.
-> `tide-check`, `auth-check` and `consent-check` carry the claims. What is left
-> is consent's COLLECTION surface (a studio has no screen to record a yes),
-> bounces (7) and bring-your-own-domain (8).
 >
 > Landed alongside: `storeUnwatchedWrites: false` in tide, so a write fact
 > nothing watches is no longer stored — see the cost section.
@@ -675,13 +659,15 @@ this still works.
    and holds everywhere, a complaint is a fact about the relationship and holds
    at the studio complained about — and takes that studio's consent with it.
    The door always answers 200: a 4xx tells a webhook sender to retry all
-   night. **Per-studio volume caps are NOT built** — see the status note.
+   night. Per-studio volume caps: `daily_mail_cap` on the studio row,
+   default 1000/day, with a field on the settings screen.
 8. **The studio's own mail settings.** ✅ `studio.mail` on the owner rung under
    Settings: the sender a member actually sees (asked of the server, because
    the domain lives in the environment and a screen inventing it lies the day a
    deployment changes it) and the reply address, saved to the studio's own row.
-   **Bring-your-own-domain is not built**: `addDomain`/`checkDomain` need a
-   provider key with more than send permission.
+   Bring-your-own-domain is built end to end but has never run LIVE:
+   `addDomain`/`checkDomain` need a provider key with more than send
+   permission, and the current one answers 403.
 
 Steps 1–4 make the product able to send. 5 makes people able to sign in. 6
 makes it legal. 7 keeps the shared domain alive. 8 is what a studio asks for in

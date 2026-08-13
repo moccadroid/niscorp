@@ -1,5 +1,5 @@
 import type { CacheEntry, MutationEntry } from './index';
-import { priceText } from '@lyra/app/prisms/format.prism';
+import { dateText, priceText } from '@lyra/app/prisms/format.prism';
 
 const row = (name: string) => ({ $get: { from: { $var: 'r' }, path: [name] } });
 
@@ -35,14 +35,28 @@ export const attendanceByHour: CacheEntry = {
 export const attendanceByWeek: CacheEntry = {
   fingerprint: 'reports/attendance-by-week',
   intent: 'Class attendance at this studio, by week',
-  shape: [{ week_key: '', total: 0 }],
+  shape: [{ week_key: '', week_display: '', total: 0 }],
   dsl: {
     from: ['check_ins', 'class_sessions'],
     fields: ['class_sessions.week_key'],
-    aggregate: { total: { count: 'check_ins.id' } },
+    // The week's first attended day, so the label can be a DATE in the
+    // studio's own locale — `2026-W25` is a grouping key, not a word anybody
+    // says, and no book can hold a phrase with a number in it.
+    aggregate: { total: { count: 'check_ins.id' }, week_start: { min: 'check_ins.held_on' } },
     filter: { and: [{ gte: ['check_ins.held_on', { $context: 'from' }] }, { lte: ['check_ins.held_on', { $context: 'to' }] }] },
     groupBy: ['class_sessions.week_key'],
     sort: [{ field: 'class_sessions.week_key', dir: 'asc' }],
+  },
+  mapping: {
+    $map: {
+      over: { $ref: '$.result' },
+      as: 'r',
+      body: {
+        week_key: row('week_key'),
+        week_display: dateText(row('week_start')),
+        total: row('total'),
+      },
+    },
   },
 };
 
@@ -70,13 +84,36 @@ export const attendanceByProgram: CacheEntry = {
 export const membersByStatus: CacheEntry = {
   fingerprint: 'reports/members-by-status',
   intent: 'How many subscriptions this studio has in each state',
-  shape: [{ status: '', total: 0 }],
+  shape: [{ status: '', status_display: '', status_tone: '', total: 0 }],
   dsl: {
     from: ['subscriptions'],
     fields: ['subscriptions.status'],
     aggregate: { total: { count: 'subscriptions.id' } },
     groupBy: ['subscriptions.status'],
     sort: [{ field: 'subscriptions.status', dir: 'asc' }],
+  },
+  // The same WORDS every other screen wears — `standing.ts` states the rule.
+  // Not `standingLabel` itself: that maps the derived standing, whose else-arm
+  // is Prospect, and a cancelled subscription is not a prospect.
+  mapping: {
+    $map: {
+      over: { $ref: '$.result' },
+      as: 'r',
+      body: {
+        status: row('status'),
+        status_display: {
+          $case: {
+            branches: [
+              { when: { $eq: [row('status'), 'active'] }, then: 'Active' },
+              { when: { $eq: [row('status'), 'paused'] }, then: 'Paused' },
+            ],
+            else: 'Cancelled',
+          },
+        },
+        status_tone: { $case: { branches: [{ when: { $eq: [row('status'), 'active'] }, then: 'good' }], else: 'neutral' } },
+        total: row('total'),
+      },
+    },
   },
 };
 

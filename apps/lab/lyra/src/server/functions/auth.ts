@@ -65,7 +65,12 @@ export const authFunctions = (session: FunctionSession, deps: Deps): Record<stri
     // names it, so a production build cannot be talked into handing out a
     // session for an address somebody typed. The link above is the real path
     // and always works; this is the lab's shortcut through it.
-    if ((process.env['LYRA_DEV_PICKER'] ?? '') === '') throw new Error('Sign in with the link we email you.');
+    //
+    // ONE flag, shared with the list in `app.ts` — this guard read its own
+    // spelling (LYRA_DEV_PICKER) for a while, and the picker was either a
+    // list that refused to sign anybody in or a login with no list,
+    // depending on which name a .env happened to set.
+    if (process.env['LYRA_DEV_LOGIN'] !== 'on') throw new Error('Sign in with the link we email you.');
     const email = String(data['email'] ?? '').trim();
     const token = await mintToken(deps.pool, email);
     if (token === null) throw new Error(`No account for ${email}.`);
