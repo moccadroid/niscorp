@@ -44,6 +44,8 @@ const CHECKS = [
   ['roundtrip-check', 'the app survives being data: parsed from JSON it boots, renders and answers identically'],
   ['clock-check', 'one clock: the studio owns its day, and both halves compute it the same'],
   ['design-check', 'the surface holds: contrast in every theme, identity never wearing a status colour, prose never truncated'],
+  ['language-check', 'one deployment, two languages, nothing shared but the rows'],
+  ['phrase-harvest', 'every word this app can say, counted — and a seeded language missing one turns this red'],
   ['render-check', 'the kit draws it: every principal, every screen, every cell a spec names — through the real components, into a real DOM'],
   ['click-check', 'the other half of every click: what a control emits is what its trigger reads'],
 ] as const;

@@ -11,14 +11,16 @@
 // TS block on stdout, which is how the German book was first filled in.
 import { harvestDefinitions, missingFrom } from '@niscorp/nova/i18n';
 import type { HarvestedPhrase } from '@niscorp/nova/i18n';
-import { DEFAULT_PHRASE_KEYS } from '@niscorp/nova/i18n';
 import { CATALOG_DEFINITIONS } from '@lyra/app/action-catalog';
+import { PHRASE_KEYS } from '@lyra/app/phrase-keys';
 import { AREAS } from '@lyra/app/nav/sections';
 import { EFFECTS, MOMENTS } from '@lyra/app/reflexes/compose';
 import { RECIPES } from '@lyra/app/reflexes/recipes';
 import { GERMAN } from '@lyra/db/phrases.de';
 
-const KEYS = { props: [...DEFAULT_PHRASE_KEYS.props, 'role'], suffixes: ['_display'] };
+// The APP'S OWN declaration, not a copy of it. The copy this used to be had
+// already drifted — the pass translated three props the harvest never walked.
+const KEYS = PHRASE_KEYS;
 
 // ── the four places words come from ──────────────────────────
 //
@@ -108,6 +110,8 @@ const NOT_PROSE = new Set([
   // enum values and design tokens sitting in `data`
   'accent', 'calendar', 'confirmed', 'current', 'email', 'instructor', 'manual',
   'month', 'recipes', 'recurring', 'solid',
+  // sort keys — machine values that leak from `data` defaults
+  'asc', 'people.name',
   // ids and fingerprints
   'desk.followups', 'member.joined', 'people.detail', 'people/count', 'people/list',
 ]);

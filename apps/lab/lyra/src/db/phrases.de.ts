@@ -632,4 +632,46 @@ export const GERMAN: Record<string, string> = {
   'Inversions masterclass': 'Umkehrhaltungen-Masterclass',
   'Morning Flow': 'Morgen-Flow',
   'Vinyasa Flow': 'Vinyasa Flow',
+
+  // ── mail, and the consent switch ─────────────────────────
+  //
+  // The settings screen for outbound mail, and the one switch on the person
+  // form it made mandatory. "Domain" stays "Domain" — considered, not skipped:
+  // German UIs say Domain, and an entry here stops somebody "fixing" it later.
+  'A ceiling, not a target. It is here so one mistake — a bad import, an automation pointed at everybody — cannot run away overnight.':
+    'Eine Obergrenze, kein Ziel. Sie ist dafür da, dass ein einzelner Fehler — ein schlechter Import, eine Automatisierung, die auf alle zeigt — nicht über Nacht durchgehen kann.',
+  'A subdomain you own. We will show you the records to publish.':
+    'Eine Subdomain, die dir gehört. Wir zeigen dir die Einträge, die du hinterlegen musst.',
+  'Add domain': 'Domain hinzufügen',
+  'Check again': 'Erneut prüfen',
+  Domain: 'Domain',
+  'hallo@yourstudio.at': 'hallo@deinstudio.at',
+  Mail: 'E-Mail',
+  'mail.yourstudio.at': 'mail.deinstudio.at',
+  'May we email them news and offers?': 'Dürfen wir dieser Person Neuigkeiten und Angebote per E-Mail schicken?',
+  'Messages are sent as': 'Nachrichten gehen raus als',
+  'Most messages in a day': 'Höchstzahl Nachrichten pro Tag',
+  'Not verified yet. DNS takes a while to travel — press Check again in a few minutes.':
+    'Noch nicht bestätigt. DNS braucht eine Weile — drück in ein paar Minuten auf Erneut prüfen.',
+  'Nothing to publish.': 'Nichts zu hinterlegen.',
+  'Optional. Members see your address instead of ours, and your sending reputation stops being shared with anybody.':
+    'Optional. Mitglieder sehen deine Adresse statt unserer, und deine Absender-Reputation teilst du mit niemandem mehr.',
+  'Publish these records with whoever runs your DNS, then press Check again. It can take minutes or hours — that part is not ours.':
+    'Hinterleg diese Einträge bei dem, der dein DNS verwaltet, und drück dann auf Erneut prüfen. Das kann Minuten oder Stunden dauern — dieser Teil liegt nicht bei uns.',
+  'Reminders about their own classes go out either way. This is for anything else — and they can take it back from any email.':
+    'Erinnerungen an die eigenen Kurse gehen so oder so raus. Das hier gilt für alles andere — und lässt sich aus jeder E-Mail widerrufen.',
+  'Replies go to': 'Antworten gehen an',
+  'Saved.': 'Gespeichert.',
+  'Send again': 'Erneut senden',
+  Type: 'Typ',
+  Value: 'Wert',
+  'Verified — your mail goes out from your own domain.':
+    'Bestätigt — deine Mails gehen über deine eigene Domain raus.',
+  'Your own address. A member who answers one of these emails reaches you, not us — leave it blank and their reply goes nowhere.':
+    'Deine eigene Adresse. Wer auf eine dieser E-Mails antwortet, erreicht dich, nicht uns — bleibt das Feld leer, läuft die Antwort ins Leere.',
+  'Your own domain': 'Deine eigene Domain',
+  'Your studio’s name is on everything the automations send. This is where an answer comes back to.':
+    'Auf allem, was die Automatisierungen verschicken, steht der Name deines Studios. Hierhin kommt eine Antwort zurück.',
+  'Your studio’s name on what goes out, and where an answer comes back to.':
+    'Der Name deines Studios auf allem, was rausgeht — und wohin eine Antwort zurückkommt.',
 };

@@ -1,9 +1,9 @@
 import { defineApp } from '@niscorp/moss';
 import type { NiscApp } from '@niscorp/moss';
-import { DEFAULT_PHRASE_KEYS } from '@niscorp/nova/i18n';
 import { CHARTER } from './charter/charter';
 import { AREAS, areasFor, landingFor } from './nav/sections';
 import { CATALOG_DEFINITIONS } from './action-catalog';
+import { PHRASE_KEYS } from './phrase-keys';
 import { frameLayout } from './shell/frame.layout';
 import { sheetFragment } from './shell/sheet.fragment';
 import { ENTRIES, MUTATION_ENTRIES } from './vex';
@@ -149,30 +149,11 @@ export const buildLyra = (deps: ServerDeps): NiscApp => {
       if (studioId === '') return undefined;
       return phrasesFor(deps.pool, await localeOf(deps.pool, studioId));
     },
-    // THIS APP'S DISPLAY-FIELD CONVENTION, declared once.
-    //
-    // Every read that manufactures a word for a screen writes it to a
-    // `*_display` field (`status_display`, `term_display`, `paid_via_display`)
-    // — a convention the vex entries already followed for their own reasons.
-    // Naming it here is what makes the closed-set vocabulary a query invents
-    // translatable without listing forty field names, and without the pass
-    // ever touching a person's name or a plan's title.
-    // Four keys added to nova's default prose props, each for a place this app
-    // renders words that arrive as ROW DATA rather than as layout literals:
-    //   role     — the identity card shows a role LABEL ("Front desk"), not an id
-    //   phrase   — the automation vocabulary tables (`somebody joins`)
-    //   why      — a recipe card's body
-    //   sentence — a recipe card's subtitle, composed from moment + effect
-    //
-    // Deliberately NOT added: anything a form is about to SAVE. A recipe's
-    // email subject and body reach the screen as `Input` values, and `value` is
-    // not a prose key — translating one would show German and save English.
-    // That line is the difference between chrome and content: this pass owns
-    // the words the application says, never the words a studio wrote.
-    phraseKeys: {
-      props: [...DEFAULT_PHRASE_KEYS.props, 'role', 'phrase', 'why', 'sentence'],
-      suffixes: ['_display'],
-    },
+    // THIS APP'S DISPLAY-FIELD CONVENTION — shared with the harvest, so the
+    // pass and the report can never disagree about what counts as prose. The
+    // convention itself, and what is deliberately absent from it, is argued
+    // in `phrase-keys.ts`.
+    phraseKeys: PHRASE_KEYS,
 
     // WRITES THIS APP REACTS TO, declared by table — moss routes the write
     // observer here, row-less, and nothing below ever string-matches a
@@ -263,7 +244,7 @@ export const buildLyra = (deps: ServerDeps): NiscApp => {
       // The write's OWN scope says who its automation would be; a write made
       // BY that principal is the one whose chain headers are worth trusting. No
       // lookup: both halves are already on the scope the engine stamped.
-      chain: (scope, hints) => (String(scope['userId'] ?? '') === String(scope['automationActor'] ?? ' ') ? hints : undefined),
+      chain: (scope, hints) => (String(scope['userId'] ?? '') === String(scope['automationActor'] ?? '\u0000') ? hints : undefined),
     },
 
     // `world.refresh` re-derives assignments with the SAME `assignmentsFrom`
