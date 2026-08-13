@@ -268,14 +268,26 @@ for (const n of [1_000, 10_000, 100_000]) {
 console.log(`\n${bold('  Does one shell grow with use?')}`);
 const walker = shells[0];
 if (walker !== undefined) {
-  const settled = heap();
-  const LOOP = 40;
-  for (let i = 0; i < LOOP; i += 1) {
+  const lap = async (): Promise<void> => {
     for (const destination of ['me.classes', 'me.bookings', 'me.membership']) {
       walker.dispatch({ type: 'ui:click', ref: 'nav', payload: destination });
       await settle(3);
     }
-  }
+  };
+  // WARM-UP FIRST, measured second. Cold, the first ~100 navigations are V8
+  // tiering up the hot paths and the in-process database growing its own
+  // caches — real memory, none of it the shell's, and measuring from cold
+  // reported that warm-up as "the shell grows per navigation" for two
+  // reviews running. The heap-snapshot diff that settled it: past warm-up,
+  // ZERO application objects grow per navigation, and the residual tracks
+  // QUERY volume (pglite's wasm heap) — it belongs to the lab's in-process
+  // database, not to moss. A control loop of bare reads with no navigation
+  // grows the same way.
+  for (let i = 0; i < 32; i += 1) await lap();
+  await settle(20);
+  const settled = heap();
+  const LOOP = 40;
+  for (let i = 0; i < LOOP; i += 1) await lap();
   await settle(20);
   const grown = heap();
   const perNav = (grown - settled) / (LOOP * 3);
@@ -298,6 +310,17 @@ if (walker !== undefined) {
   console.log(`  ${`${LOOP * 3} navigations on one shell`.padEnd(34)} ${(growth / KB).toFixed(0).padStart(7)} KB total`);
   console.log(`  ${'per navigation'.padEnd(34)} ${(perNav / KB).toFixed(2).padStart(7)} KB  ${dim(verdict)}`);
   console.log(`  ${'its tree after the loop'.padEnd(34)} ${(allCanvases(walker) / KB).toFixed(1).padStart(7)} KB`);
+
+  // THE CEILING, ASSERTED — a bench that only prints is a number nobody has
+  // to act on. 8 KB sits far above the measured residual (database + jit
+  // noise, 2–6 KB warm) and far below what real retention looks like: a
+  // held instance or data store is tens of KB per navigation. Breaching
+  // this is the OOM-after-week-one class of defect, so it is a failure,
+  // not a figure.
+  if (perNav > 8 * KB) {
+    console.error(`\n  \x1b[31m✗ per-navigation growth ${(perNav / KB).toFixed(2)} KB exceeds the 8 KB ceiling — something retains per navigation.\x1b[0m\n`);
+    process.exit(1);
+  }
 }
 
 console.log(`\n${bold('  Reclamation')}`);

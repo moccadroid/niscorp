@@ -39,6 +39,12 @@ export const createLifecycleOps = (deps: LifecycleOpsDeps): LifecycleOps => {
     runtime.dispose();
     registry.unregister(instanceId);
     onUnmount?.(instanceId);
+    // BOUNDED, not forever. Once the registry no longer holds the instance,
+    // the `registry.get` guard above returns early on its own — the set only
+    // has to cover re-entry inside THIS call. Keeping the id would grow this
+    // set by one string per navigation for the life of a durable shell: the
+    // one genuinely unbounded structure the memory hunt found.
+    unmounted.delete(instanceId);
   };
 
   const suspendTop = (canvas: Canvas): void => {

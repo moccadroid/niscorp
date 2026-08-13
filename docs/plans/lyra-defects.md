@@ -13,9 +13,18 @@
 > gained `$fill` for pre-pass composition), 46 more book rows, and the
 > harvest derives the read-manufactured vocabulary from ENTRIES and FAILS on
 > welds — it found 27 against this document's 14, including the automations
-> sentence hiding at the non-prose `name:` key. All of Part 6. Open: Part 3,
-> Part 5 (bench re-measured 2026-08-14 and WORSE: 214.5 KB/shell, 384
-> KB/nav without --expose-gc), 4.1, 4.2, 4.4.
+> sentence hiding at the non-prose `name:` key. All of Part 6. Part 3: the
+> walk-in desk is wired — picker (options carry `name`, never `label`), one
+> tap books and checks in, the walk-ins list renders, the lying empty-state
+> sentence is gone; checkin-check walks the loop. Part 5 RESOLVED by
+> heap-snapshot diff and a no-navigation control: past warm-up, ZERO
+> application objects grow per navigation — the measured growth was V8
+> tiering plus the in-process database (pglite's wasm heap) growing with
+> QUERY volume, and a control loop of bare reads grows identically. The one
+> real unbounded structure — nova's `unmounted` id set, one string per
+> navigation forever — is bounded now. The bench warms up before measuring
+> and ASSERTS an 8 KB/nav ceiling: it reads 0.57 KB/nav, flat, 49% of one
+> shell over 120 navigations. Open: 4.1, 4.2, 4.4.
 >
 > Every item below was found by clicking
 > the running app or reading the code at the cited line, and each one is
