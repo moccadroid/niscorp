@@ -24,7 +24,24 @@
 > real unbounded structure — nova's `unmounted` id set, one string per
 > navigation forever — is bounded now. The bench warms up before measuring
 > and ASSERTS an 8 KB/nav ceiling: it reads 0.57 KB/nav, flat, 49% of one
-> shell over 120 navigations. Open: 4.1, 4.2, 4.4.
+> shell over 120 navigations. 4.4: every vex entry must have a caller or a
+> reason on the DELIBERATE list — first run found nineteen, eight of which
+> are now recorded decisions (including sessions/cancel, which no screen
+> offers). 4.1: pack throws wrap into `{ message }`, the session wire floors
+> silent and generic failures with a sentence naming the pack, and the
+> bundles bind `$.error.message` instead of the whole error object. 4.2:
+> bundles carry a phrasebook (keyed by LANGUAGE, refused otherwise at
+> intake), stored on the integrations row, merged UNDER the host's book —
+> `Mein Gürtel` renders from the pack's own rows through the same pass as
+> everything else.
+>
+> **Every part of this document is now landed or explicitly decided.** The
+> whole-document done-when holds: `pnpm check` is green at 46 with
+> language-check in it and the harvest gating at zero missing; a German
+> studio's Preise, person record and member screens carry no English; a
+> member whose class was cancelled is told so; the desk checks in walk-ins;
+> and moss-bench reports flat memory (0.57 KB/nav) across 120 navigations,
+> asserted rather than printed.
 >
 > Every item below was found by clicking
 > the running app or reading the code at the cited line, and each one is

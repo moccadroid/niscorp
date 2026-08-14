@@ -3,7 +3,7 @@ import { resolveCatalog } from '@niscorp/moss';
 import { serve as listen } from '@hono/node-server';
 import { startIntegrations } from '../../../lyra-integrations/src/serve';
 import { CAST } from '@lyra/db/seed';
-import { app, idFor, idsFor, login, mintToken, ok, report, runtime, server, settle, treeOf } from './world';
+import { app, idFor, idsFor, login, mintToken, ok, report, runtime, server, servedTo, settle, treeOf } from './world';
 
 const KEY = 'lab-operator-key';
 runtime.operatorKey = KEY;
@@ -102,6 +102,27 @@ try {
   const nrMember = await idsFor(CAST.northrock.member);
   ok('a member at the installed studio gets the member half', nrMember.includes('ext.member.belts.mine'), nrMember.filter((i) => i.startsWith('ext.')).join(', '));
   ok('...and a member elsewhere does not', !(await idsFor(CAST.lumen.member)).some((id) => id.startsWith('ext.')));
+
+  // ── the pack's words translate with everything else ──────────
+  //
+  // The bundle carried a `de` phrasebook; the host stored it at intake and
+  // merges it UNDER its own book. A German member's navigation must not read
+  // `Kurs buchen · Meine Kurse · My belt` — the mixed row the product review
+  // photographed. Flipped before this member's first shell exists, so the
+  // build reads the German book; flipped back before anybody else logs in.
+  await runtime.db.query("UPDATE studios SET locale = 'de-AT' WHERE id = $1", ['st_northrock']);
+  // The raw UPDATE rides no write path, and the member's identity — locale
+  // included — is resolved and held; drop it the way the language switch does.
+  server.invalidateTenant('st_northrock');
+  const germanShell = await login(CAST.northrock.member);
+  await settle(12);
+  germanShell.dispatch({ type: 'ui:click', ref: 'navLeaf', payload: { value: 'ext.member.belts.mine', label: 'My belt' } });
+  await settle(14);
+  const germanMember = await servedTo(CAST.northrock.member);
+  ok("a pack's screen renders German", germanMember.includes('Mein Gürtel'), 'My belt → Mein Gürtel, from the bundle’s own book');
+  ok('...through the same pass as the host’s words', germanMember.includes('Heute'), 'host and pack words in ONE German shell');
+  await runtime.db.query("UPDATE studios SET locale = 'en-GB' WHERE id = $1", ['st_northrock']);
+  server.invalidateTenant('st_northrock');
 
   // ── the proxy carries identity the caller cannot forge ───────
   const mine = await asIntegration(CAST.northrock.member, '/integrations/belts/mine', {});

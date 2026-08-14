@@ -119,6 +119,14 @@ const BundleSchema = z
     // settings screen, reachable from its tile and from nowhere else. Add-ons
     // is a store; nothing functional lives there.
     settings: z.string().default(''),
+    // THE PACK'S OWN WORDS, in the languages it speaks — the same
+    // `(language, source, text)` shape the host's book uses, keyed by
+    // LANGUAGE, never by full locale: Vienna and Hamburg read the same
+    // sentences, and region is money and dates, which never come from a
+    // book. A malformed key refuses the whole bundle at intake, exactly as a
+    // placement outside the vocabulary does. The host merges these under its
+    // own book, so a pack can never rename a host word.
+    phrasebook: z.record(z.string().regex(/^[a-z]{2}$/, 'a phrasebook is keyed by LANGUAGE (`de`), never by locale (`de-AT`)'), z.record(z.string(), z.string())).default({}),
   })
   .strict();
 
@@ -385,6 +393,7 @@ export const initIntegrations = async (pool: PgPool): Promise<void> => {
   // add them to a deployment that already has one. Fail-closed until re-import.
   await pool.query(`ALTER TABLE integrations ADD COLUMN IF NOT EXISTS reach jsonb NOT NULL DEFAULT '[]'::jsonb`);
   await pool.query(`ALTER TABLE integrations ADD COLUMN IF NOT EXISTS frames jsonb NOT NULL DEFAULT '[]'::jsonb`);
+  await pool.query(`ALTER TABLE integrations ADD COLUMN IF NOT EXISTS phrasebook jsonb NOT NULL DEFAULT '{}'::jsonb`);
   await pool.query(`
     CREATE TABLE IF NOT EXISTS integration_actions (
       integration_id  text NOT NULL REFERENCES integrations(id) ON DELETE CASCADE,

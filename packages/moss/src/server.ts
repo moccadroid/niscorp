@@ -562,14 +562,15 @@ export const createServer = async (app: NiscApp, runtime: NiscRuntime): Promise<
     }
 
     await runtime.pool.query(
-      `INSERT INTO integrations (id, url, title, tagline, description, adds, settings_action, requested_actions, requested_data, reach, frames, last_import_at, last_error)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9::jsonb, $10::jsonb, $11::jsonb, now(), NULL)
+      `INSERT INTO integrations (id, url, title, tagline, description, adds, settings_action, requested_actions, requested_data, reach, frames, phrasebook, last_import_at, last_error)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9::jsonb, $10::jsonb, $11::jsonb, $12::jsonb, now(), NULL)
        ON CONFLICT (id) DO UPDATE SET url = EXCLUDED.url,
          title = EXCLUDED.title, tagline = EXCLUDED.tagline, description = EXCLUDED.description,
          adds = EXCLUDED.adds, settings_action = EXCLUDED.settings_action,
          requested_actions = EXCLUDED.requested_actions,
          requested_data = EXCLUDED.requested_data,
          reach = EXCLUDED.reach, frames = EXCLUDED.frames,
+         phrasebook = EXCLUDED.phrasebook,
          last_import_at = now(), last_error = NULL`,
       [
         id,
@@ -586,6 +587,10 @@ export const createServer = async (app: NiscApp, runtime: NiscRuntime): Promise<
         // list of everything the pack has ever been able to do.
         JSON.stringify(reachOf(result.bundle, id)),
         JSON.stringify(result.bundle.frames),
+        // The pack's own words, in the languages it speaks — stored beside
+        // its actions so the app's language pass can reach them, and
+        // re-imported whole like everything else about a bundle.
+        JSON.stringify(result.bundle.phrasebook),
       ],
     );
     await runtime.pool.query('DELETE FROM integration_actions WHERE integration_id = $1', [id]);

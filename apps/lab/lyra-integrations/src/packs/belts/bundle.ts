@@ -422,6 +422,31 @@ const settingsAction: ActionDefinition = {
 
 export const BELTS_BUNDLE = {
   integration: 'belts',
+  // THE PACK'S OWN WORDS, in the languages it speaks — the host merges this
+  // under its OWN book (host words win) and the language pass covers these
+  // screens with everything else. Keyed by LANGUAGE, per the contract; a
+  // full locale here refuses the whole bundle at intake.
+  phrasebook: {
+    de: {
+      Belts: 'Gürtel',
+      Belt: 'Gürtel',
+      'My belt': 'Mein Gürtel',
+      'Belt settings': 'Gürtel-Einstellungen',
+      'Who holds what, and who is due.': 'Wer welchen Gürtel trägt — und wer dran ist.',
+      Since: 'Seit',
+      Classes: 'Kurse',
+      'Add stripe': 'Streifen hinzufügen',
+      Promote: 'Befördern',
+      Undo: 'Rückgängig',
+      'No gradings recorded.': 'Noch keine Graduierungen erfasst.',
+      'Nobody graded yet.': 'Noch niemand graduiert.',
+      'The ranks this pack grades through, in order.': 'Die Ränge, die dieses Add-on vergibt, in Reihenfolge.',
+      'No ranks defined.': 'Keine Ränge definiert.',
+      'New rank': 'Neuer Rang',
+      'Add rank': 'Rang hinzufügen',
+      'Rank tracking for grappling gyms': 'Gürtel und Grade für Kampfsport-Studios',
+    },
+  },
   // WORDS, for the store tile and the approval card. Never parsed, never
   // trusted for anything but reading.
   meta: {

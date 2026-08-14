@@ -25,11 +25,23 @@ const EMPTY: Phrasebook = {};
 // This was `BY_LOCALE`, every phrase for every language held at boot so that a
 // synchronous seam could answer. Both seams that wanted it are asynchronous
 // now, so this reads the rows for the one language being asked about.
+//
+// PACK WORDS FIRST, the app's own book OVER them. An approved pack ships a
+// phrasebook with its bundle (the same `(language, source, text)` shape) and
+// its screens translate with everything else — but merge order means a pack
+// can never rename a word the host already owns. Approved is the bar, not
+// installed: words are harmless where the screens are absent, and a book that
+// changed per studio would put the tenant back into a language fact.
 export const phrasesFor = async (pool: PgPool, locale: string): Promise<Phrasebook> => {
   const language = locale.split('-')[0] ?? locale;
   if (language === '' || language === 'en') return EMPTY;
-  const result = await pool.query(/* sql */ `SELECT source, text FROM phrases WHERE locale = $1`, [language]);
   const book: Record<string, string> = {};
+  const packs = await pool.query(/* sql */ `SELECT phrasebook FROM integrations WHERE status = 'approved'`);
+  for (const row of packs.rows) {
+    const held = (row['phrasebook'] ?? {}) as Record<string, Record<string, string>>;
+    for (const [source, text] of Object.entries(held[language] ?? {})) book[source] = String(text);
+  }
+  const result = await pool.query(/* sql */ `SELECT source, text FROM phrases WHERE locale = $1`, [language]);
   for (const row of result.rows) book[String(row['source'])] = String(row['text']);
   return book;
 };
