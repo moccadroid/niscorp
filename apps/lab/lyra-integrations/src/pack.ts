@@ -108,6 +108,13 @@ export const mountPack = (app: Hono, pack: Pack): void => {
   const db = storeFor(pack);
   const router = new Hono();
 
+  // A THROW ANSWERS IN SENTENCES. The contract requires a pack's error
+  // responses to carry a `message` — the host's screens print it, and its
+  // fallback is a bare status code a studio owner cannot act on. Wrapped
+  // here, once, so a pack cannot forget: the throw's own words go out,
+  // stamped with who is speaking.
+  router.onError((err, c) => c.json({ message: `The ${pack.id} add-on hit a problem: ${err.message}` }, 500));
+
   // OPEN, and it has to be: the host fetches this at registration, before the
   // deployment's verify key has ever reached this environment.
   router.get('/bundle', (c) => c.json(pack.bundle() as Record<string, unknown>));

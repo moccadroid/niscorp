@@ -91,7 +91,23 @@ ok(
 // ── the other direction ──────────────────────────────────────
 const lyraFiles = walk('src').map((path) => ({ path: path.replace(/\\/g, '/'), text: readFileSync(path, 'utf8') }));
 const reachingIn = lyraFiles
-  .filter((f) => !['src/dev/integrations-check.ts', 'src/dev/separation-check.ts', 'src/dev/admin-check.ts', 'src/dev/perimeter-check.ts', 'src/dev/webhook-check.ts', 'src/dev/frame-check.ts', 'src/dev/stripe-check.ts', 'src/dev/billing-check.ts'].some((named) => f.path.endsWith(named)))
+  .filter(
+    (f) =>
+      ![
+        'src/dev/integrations-check.ts',
+        'src/dev/separation-check.ts',
+        'src/dev/admin-check.ts',
+        'src/dev/perimeter-check.ts',
+        'src/dev/webhook-check.ts',
+        'src/dev/frame-check.ts',
+        'src/dev/stripe-check.ts',
+        'src/dev/billing-check.ts',
+        // Reads the other services' SOURCE AS TEXT, looking for fingerprint
+        // literals — consumption evidence for the entry-caller rule. It
+        // imports nothing across the wire.
+        'src/dev/reachable-check.ts',
+      ].some((named) => f.path.endsWith(named)),
+  )
   .filter((f) => f.text.includes('lyra-integrations') || f.text.includes('lyra-admin'))
   .map((f) => f.path);
 ok('Lyra reaches into the other services only from named checks', reachingIn.length === 0, reachingIn.join(', ') || 'two checks that boot them, and nothing else');

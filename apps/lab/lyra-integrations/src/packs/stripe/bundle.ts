@@ -39,7 +39,7 @@ const setupAction: ActionDefinition = {
     props: { gap: 22 },
     children: [
       heading('Stripe', 'Take card and SEPA payments for memberships through Stripe. The studio is the merchant; money goes to the studio’s own account.'),
-      { if: '$.error', then: { component: 'Notice', props: { tone: 'alert', message: '$.error' } }, else: '' },
+      { if: '$.error', then: { component: 'Notice', props: { tone: 'alert', message: '$.error.message' } }, else: '' },
 
       {
         // LOADING FIRST, so the screen does not flash "Not connected" while it is
@@ -233,7 +233,7 @@ const ledgerAction: ActionDefinition = {
     props: { gap: 22 },
     children: [
       heading('Money', 'What has been charged, refunded and disputed at this studio.'),
-      { if: '$.error', then: { component: 'Notice', props: { tone: 'alert', message: '$.error' } }, else: '' },
+      { if: '$.error', then: { component: 'Notice', props: { tone: 'alert', message: '$.error.message' } }, else: '' },
       {
         if: '$.account.account_id',
         // THE PACK'S OWN MIRROR, not a call to Stripe on every page load (S4).
@@ -288,7 +288,7 @@ const payAction: ActionDefinition = {
     props: { gap: 18 },
     children: [
       heading('Payment', 'Set up your membership payment. You will be taken to a secure page to enter your card or bank details.'),
-      { if: '$.error', then: { component: 'Notice', props: { tone: 'alert', message: '$.error' } }, else: '' },
+      { if: '$.error', then: { component: 'Notice', props: { tone: 'alert', message: '$.error.message' } }, else: '' },
       {
         if: '$.checkout.url',
         // The URL is NOT followed automatically. A redirect that happens without

@@ -37,7 +37,7 @@ const panelAction: ActionDefinition = {
     props: { gap: 22 },
     children: [
       heading('Belt', 'Where they are, and what is next.'),
-      { if: '$.error', then: { component: 'Notice', props: { tone: 'alert', message: '$.error' } }, else: '' },
+      { if: '$.error', then: { component: 'Notice', props: { tone: 'alert', message: '$.error.message' } }, else: '' },
       {
         component: 'Card',
         props: { pad: 22 },
@@ -376,7 +376,7 @@ const settingsAction: ActionDefinition = {
     props: { gap: 22 },
     children: [
       heading('Belt settings', 'The ranks this pack grades through, in order.'),
-      { if: '$.error', then: { component: 'Notice', props: { tone: 'alert', message: '$.error' } }, else: '' },
+      { if: '$.error', then: { component: 'Notice', props: { tone: 'alert', message: '$.error.message' } }, else: '' },
       {
         component: 'Card',
         props: { flush: true },

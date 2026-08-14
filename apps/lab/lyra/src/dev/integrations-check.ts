@@ -322,6 +322,28 @@ try {
   await settle(16);
   ok('...and edit the pack’s OWN configuration', treeOf(owner).includes('Coral'), 'a rank added to rows Lyra does not have');
 
+  // ── a DEAD pack answers in sentences, not status codes ───────
+  //
+  // A third-party service being down is the steady state of a marketplace.
+  // The screen in front of it belongs to a studio owner: the floor under a
+  // pack that answers nothing usable is a sentence naming the pack, and a
+  // bare `HTTP 500` reaching the glass is the defect. The pack's own words,
+  // when it manages any, always win — the throw-wrapper in pack.ts is the
+  // other half of the same contract.
+  // The raw UPDATE rides no write path, so the derivations must be dropped
+  // the way an install write drops them.
+  await runtime.db.query("UPDATE integrations SET url = 'http://127.0.0.1:9/belts' WHERE id = 'belts'");
+  server.refresh();
+  owner.dispatch({ type: 'ui:click', ref: 'nav', payload: 'studio.addons' });
+  await settle(10);
+  owner.dispatch({ type: 'ui:click', ref: 'openSettings', payload: { settings_action: 'ext.desk.belts.settings' } });
+  await settle(18);
+  const deadTree = treeOf(owner);
+  ok('a dead pack is a sentence naming the pack', deadTree.includes('The belts add-on is not answering right now'), 'the floor the wire puts under every integration call');
+  ok('...never a bare status code', !/HTTP \d/.test(deadTree), 'a studio owner cannot act on a number');
+  await runtime.db.query('UPDATE integrations SET url = $1 WHERE id = $2', [`http://127.0.0.1:${String(PORT)}/belts`, 'belts']);
+  server.refresh();
+
   // ── the toggle, both directions, through the button ──────────
   owner.dispatch({ type: 'ui:click', ref: 'nav', payload: 'studio.addons' });
   await settle(14);
