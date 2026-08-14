@@ -13,7 +13,7 @@ export type { NiscApp, ShellManifest, FunctionSession, LayoutVariant, RunRecord,
 export { devSession, mintDevToken } from './runtime';
 export type { NiscRuntime } from './runtime';
 export { createServer } from './server';
-export type { MossServer } from './server';
+export type { MossServer, ExecuteAs } from './server';
 export { runIntake, initIntegrations, listIntegrations, loadIntegrationActions, integrationOfAction, integrationByKey, filterInstalled, buildContract, contractAsMarkdown, describePlacements, listAttachments, listPlacements } from './integrations';
 export type { IntegrationRow, Bundle, IntakeResult, IntakeContext, Contract } from './integrations';
 export { createAssertionSigner, verifyAssertion, mintIntegrationKey, hashIntegrationKey } from './assert';

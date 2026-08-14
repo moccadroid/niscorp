@@ -25,7 +25,12 @@ const personal = {
 
 export const scopeBehaviors: ScopeBehaviors = {
   // ── the studio's own data ──
-  staff: tenantWrite,
+  // Named for the machinery reaches: `transport` (the lab picker) reads the
+  // deployment's staff; everything else keeps the tenant fence.
+  staff: {
+    default: tenantWrite,
+    transport: { read: [] },
+  },
   offerings: tenantWrite,
   programs: tenantWrite,
   class_templates: tenantWrite,
@@ -43,6 +48,11 @@ export const scopeBehaviors: ScopeBehaviors = {
   studio_people: {
     default: tenantWrite,
     personal: { read: [{ match: 'studio_id', to: 'studioId' }, { match: 'person_id', to: 'userId' }] },
+    // The lab picker reads anchors deployment-wide.
+    transport: { read: [] },
+    // The unsubscribe write, pinned by the ENGINE to the exact pair the
+    // token's HMAC verified — scope values server code supplied, never a body.
+    mailer: { write: [{ match: 'studio_id', to: 'studioId' }, { match: 'person_id', to: 'personId' }] },
   },
   subscriptions: {
     default: tenantWrite,
@@ -85,11 +95,28 @@ export const scopeBehaviors: ScopeBehaviors = {
   // What the automations leave behind — scoped, so a reflex cannot write into
   // another studio's inbox whatever its input says.
   notifications: tenantWrite,
-  outbox: tenantWrite,
-  automations: tenantWrite,
+  outbox: {
+    default: tenantWrite,
+    // The provider's own voice: delivery stamps and failures land keyed by the
+    // provider's message id, before any tenant is in scope.
+    mailer: { read: [], write: [] },
+  },
+  automations: {
+    default: tenantWrite,
+    // The engine loads every studio's reflex rows; it schedules for all.
+    scheduler: { read: [] },
+  },
 
-  // Scoped on `id` rather than `studio_id`, because it IS the studio.
-  studios: { read: [{ match: 'id', to: 'studioId' }], write: [{ match: 'id', to: 'studioId' }] },
+  // Scoped on `id` rather than `studio_id`, because it IS the studio. The
+  // `identity` reach carries the same pin: by the time moss reads
+  // `identity/studio`, the licensed pre-auth read has established `studioId`
+  // as an engine-side scope value no request authored.
+  studios: {
+    default: { read: [{ match: 'id', to: 'studioId' }], write: [{ match: 'id', to: 'studioId' }] },
+    identity: { read: [{ match: 'id', to: 'studioId' }] },
+    transport: { read: [] },
+    scheduler: { read: [] },
+  },
 
   tide_run: { read: [{ match: 'as_who', to: 'automationActor' }] },
 
@@ -105,7 +132,20 @@ export const scopeBehaviors: ScopeBehaviors = {
   // scoped is every row that points at it (`automations`), which is where a
   // studio's own words and hours live.
   //
-  // `people` is deliberately unscoped — a person is shared across tenants.
+  // `people` carries ONE named reach: identity, pinned to the caller's own
+  // row — the engine-enforced answer to "who am I", and the pin that makes the
+  // whole identity read self-scoped no matter what anybody passes. The default
+  // stays rule-free (the historical posture, preserved exactly): a person is
+  // shared across tenants, every route to one goes through a scoped table, and
+  // whether a rung may read `people` AT ALL stays a grant the charter refuses
+  // to hand to members — which is what keeps the roster refused.
+  people: {
+    default: {},
+    identity: { read: [{ match: 'id', to: 'userId' }] },
+    transport: { read: [] },
+  },
+
+  // `people`'s default is deliberately unscoped — a person is shared across tenants.
   // Every route to one goes through `studio_people` or an entitlement, all of
   // which are scoped, and `resources.ts` gives people no surface of its own. An
   // authored bare read of `people` would leak the cast; that is the line to

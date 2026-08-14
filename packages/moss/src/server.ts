@@ -2,6 +2,7 @@ import { randomBytes } from 'node:crypto';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { Hono } from 'hono';
 import { vex } from '@niscorp/vex/hono';
+import { handleQuery } from '@niscorp/vex';
 import { scopeProfiles } from '@niscorp/vex';
 import type { ScopePolicy, WriteEvent } from '@niscorp/vex';
 import { verifyCharter } from '@niscorp/charter';
@@ -75,6 +76,11 @@ type Resolved = {
   record?: IdentityRecord;
 };
 
+// The capability lent to no-principal machinery: execute a seeded entry as a
+// declared charter role. See `createServer` for the four bounds that make it
+// tighter than the raw SQL it replaces.
+export type ExecuteAs = (role: string, fingerprint: string, context: Record<string, unknown>, scope?: Record<string, unknown>) => Promise<unknown>;
+
 type Env = { Variables: { principal: string | null; resolved: Resolved } };
 
 // The composed app — hono (so a host mounts, extends or listens with any
@@ -90,11 +96,27 @@ export type MossServer = Hono<Env> & {
   // incoherent charter/variant set — a bad publish refuses, exactly like boot.
   refresh: () => void;
   // ONE PERSON'S identity, forgotten — for a change that concerns them and
-  // nobody else (their role moved, their tenant installed a pack). `false` if
+  // nobody else (their role moved, their tenant installed an integration). `false` if
   // they were not held, which is an answer rather than an error. `refresh()`
   // above is the deployment-wide hammer; this is the scalpel, and a tenant-local
   // write should reach for it rather than dropping every principal's record.
   invalidateIdentity: (principal: string) => boolean;
+  // The resolved record for one principal — the app reading back what its own
+  // seam and entries produced, through the same cache the request path uses.
+  // Not an enumerator: one principal in, one record out.
+  identity: (principal: string | null) => Promise<IdentityRecord>;
+  // Execute a seeded entry as a declared charter role — for surfaces that have
+  // no principal by nature. In-process, replay-only, charter-bounded; see the
+  // construction inside `createServer`.
+  executeAs: ExecuteAs;
+  // FORGET ONE TENANT, not the deployment. The application tags each identity
+  // record it resolves (`IdentityRecord.tag`); this drops every record wearing
+  // one and answers how many it held. Moss never interprets the tag.
+  //
+  // This is what makes a tenant-local write tenant-local. `refresh()` is still
+  // the right hammer for a changed ARTIFACT, because artifacts are deployment
+  // -wide; a tenant installing an integration is not.
+  invalidateTenant: (tag: string) => number;
   // The generation this process has observed. Moves when any process calls
   // `refresh`; every process drops its derivations within one poll of it.
   generation: () => number;
@@ -170,9 +192,67 @@ export const createServer = async (app: NiscApp, runtime: NiscRuntime): Promise<
   for (const statement of GENERATION_DDL) await runtime.pool.query(statement);
   let generation: Generation | undefined;
 
+  // ONE RESOLUTION, TWO HALVES. The app's `resolve` answers what cannot be
+  // read under any policy (roles, the tag, an actor's pre-auth scope). Then
+  // moss executes the entries the manifest declares — through its own engine,
+  // as the charter role `identity.as` names, locked to replay — and merges
+  // each mapped object into the record's scope, in order, so a later entry may
+  // be pinned by a value an earlier one established. Every value the engine
+  // pins by was resolved engine-side; no request authored any of it.
+  //
+  // FAIL CLOSED, twice: a scope entry that cannot be read merges nothing, so
+  // tenant-scoped reads match no rows; a declared `installed` that cannot be
+  // read is NO integrations, never every integration.
+  // EXECUTE A SEEDED ENTRY AS A DECLARED CHARTER ROLE — the one mechanism for
+  // every surface that has no principal by nature: identity resolution, the
+  // sign-in credential, a mail provider's callback, the lab's picker.
+  //
+  // Strictly tighter than the raw SQL it replaces, on four counts: in-process
+  // only (never a route); locked to REPLAY (only seeded entries run — no
+  // caller-authored query); the policy is compiled from a charter role with
+  // declared grants and a declared reach, like any principal's; and the scope
+  // values are supplied by server code, never by a request. Widening what a
+  // machinery role can touch is a charter diff somebody reviews.
+  const executeAs = async (role: string, fingerprint: string, context: Record<string, unknown>, scope: Record<string, unknown> = {}): Promise<unknown> => {
+    const roles = [role];
+    const outcome = await handleQuery(
+      {
+        engine: data.engine,
+        locked: true,
+        scopePolicy: resolvePolicyForRoles(app, data.grants, roles),
+        policyForReach: (reach) => resolvePolicyAtReachForRoles(app, data.grants, roles, reach),
+        // Mutation replay under the same role policy — write gates and scope
+        // pins apply exactly as they would for a person.
+        mutations: { client: runtime.db, policy: resolvePolicyForRoles(app, data.grants, roles) },
+      },
+      { fingerprint, context },
+      scope,
+    );
+    if (outcome.status !== 200) {
+      console.error(`[moss:executeAs] "${fingerprint}" as "${role}" refused (${outcome.status})`, outcome.body);
+      return undefined;
+    }
+    const body = outcome.body as Record<string, unknown>;
+    return 'result' in body ? body['result'] : undefined;
+  };
+
+  const identityEntry = async (roles: readonly string[], fingerprint: string, scope: Record<string, unknown>): Promise<unknown> =>
+    executeAs(roles[0] ?? '', fingerprint, {}, scope);
+
+  const composedResolve = async (principal: string): Promise<IdentityRecord> => {
+    const config = app.identity;
+    if (config === undefined) throw new Error('moss: identity resolved with no seam');
+    const reader = config.as === undefined ? undefined : [config.as];
+    const read = async (fingerprint: string, scope: Record<string, unknown>): Promise<unknown> => {
+      if (reader === undefined) throw new Error('moss: identity.read needs identity.as — name the charter role the reader executes as');
+      return identityEntry(reader, fingerprint, scope);
+    };
+    return config.resolve(principal, read);
+  };
+
   const identities = app.identity !== undefined
     ? createIdentityCache({
-        resolve: app.identity,
+        resolve: composedResolve,
         ...(runtime.identityMax !== undefined ? { max: runtime.identityMax } : {}),
         ...(runtime.identityIdleMs !== undefined ? { idleMs: runtime.identityIdleMs } : {}),
         revalidateMs: runtime.sessionRevalidateMs ?? DEFAULT_REVALIDATE_MS,
@@ -197,7 +277,7 @@ export const createServer = async (app: NiscApp, runtime: NiscRuntime): Promise<
   // the `scope` hook, applied last and per request. There used to be four
   // spellings of this composition — one at the vex mount and three around the
   // integration surfaces — and a value that reached one but not the others is
-  // exactly how a pack learns a member's studio on one route and nothing on the
+  // exactly how an integration learns a member's studio on one route and nothing on the
   // next.
   const composeScope = (principal: string | null, resolved: Resolved): Record<string, unknown> => ({
     userId: principal ?? 'anonymous',
@@ -327,8 +407,15 @@ export const createServer = async (app: NiscApp, runtime: NiscRuntime): Promise<
       if (actor === null) {
         return c.json({ error: 'no_actor', message: 'This integration has no actor there.' }, 403);
       }
+      // The seam may now be PURE (composing the actor id from its parts) —
+      // whether the install is live is identity's question, so an actor that
+      // resolves to nobody is refused here, where null used to be.
+      const resolved = await resolveIdentity(actor);
+      if (resolved.roles.length === 1 && resolved.roles[0] === 'public') {
+        return c.json({ error: 'no_actor', message: 'This integration has no actor there.' }, 403);
+      }
       c.set('principal', actor);
-      c.set('resolved', await resolveIdentity(actor));
+      c.set('resolved', resolved);
       return next();
     }
     const principal = await session(token);
@@ -582,12 +669,12 @@ export const createServer = async (app: NiscApp, runtime: NiscRuntime): Promise<
         result.bundle.settings,
         JSON.stringify(result.bundle.grants.actions),
         JSON.stringify(result.bundle.grants.data),
-        // Re-derived on every import, so a screen a pack DROPPED takes its
+        // Re-derived on every import, so a screen an integration DROPPED takes its
         // endpoint's reach with it. An allow-list that only ever grows is a
-        // list of everything the pack has ever been able to do.
+        // list of everything the integration has ever been able to do.
         JSON.stringify(reachOf(result.bundle, id)),
         JSON.stringify(result.bundle.frames),
-        // The pack's own words, in the languages it speaks — stored beside
+        // The integration's own words, in the languages it speaks — stored beside
         // its actions so the app's language pass can reach them, and
         // re-imported whole like everything else about a bundle.
         JSON.stringify(result.bundle.phrasebook),
@@ -665,8 +752,8 @@ export const createServer = async (app: NiscApp, runtime: NiscRuntime): Promise<
   // It probes what the integration DECLARED, plus `bundle` — which is the
   // answer to "the screen is empty" most of the time and is open by design
   // anyway. It used to take an operator-chosen arbitrary path, which made this
-  // a second door into the pack's service beside the proxy, and one that minted
-  // no assertion at all. An operator wanting a path the pack never declared is
+  // a second door into the integration's service beside the proxy, and one that minted
+  // no assertion at all. An operator wanting a path the integration never declared is
   // asking a question about somebody else's service, not about this one.
   operator.post('/integrations/:id/probe', async (c) => {
     const id = c.req.param('id');
@@ -677,7 +764,7 @@ export const createServer = async (app: NiscApp, runtime: NiscRuntime): Promise<
     const body = (await c.req.json().catch(() => ({}))) as { path?: unknown };
     const path = typeof body.path === 'string' ? body.path : 'bundle';
     // The declaration holds lyra-side paths (`/integrations/<id>/roster`); a
-    // probe names the pack-side tail (`roster`), the same tail the proxy
+    // probe names the integration-side tail (`roster`), the same tail the proxy
     // forwards. One spelling to compare, derived rather than stored twice.
     if (path !== 'bundle' && !reachAdmits((found?.reach ?? []) as string[], `/integrations/${id}/${path}`)) {
       return c.json({ message: 'That path is not one this integration declared.' }, 404);
@@ -698,13 +785,13 @@ export const createServer = async (app: NiscApp, runtime: NiscRuntime): Promise<
   //
   // Lyra validates every layout against a fixed component vocabulary and
   // refuses a bundle naming anything else, which is what stops an untrusted
-  // pack rendering arbitrary UI. That holds until a vendor's own browser SDK is
+  // integration rendering arbitrary UI. That holds until a vendor's own browser SDK is
   // the only way to draw something — a payment onboarding form nobody else may
   // collect the fields for. The alternative to this seam is the HOST importing
   // that vendor's SDK, which is worse: it makes every app that ever installs
-  // the pack carry the dependency.
+  // the integration carry the dependency.
   //
-  // So the pack serves a page and the host frames it, at the host's own origin.
+  // So the integration serves a page and the host frames it, at the host's own origin.
   //
   // AN IFRAME CARRIES NO AUTHORIZATION HEADER. The session token lives in
   // localStorage and `src=` is a plain browser GET, so the one thing every
@@ -714,10 +801,10 @@ export const createServer = async (app: NiscApp, runtime: NiscRuntime): Promise<
   //
   // THE GRANT IS OPAQUE AND LOCAL — deliberately NOT a signed assertion. It
   // travels in a URL, where things linger: history, logs, a Referer. Anything
-  // this deployment's key signs is something a pack accepts as identity, so a
+  // this deployment's key signs is something an integration accepts as identity, so a
   // signed grant leaking from a URL bar would be an identity token leaking. A
   // random string in a Map cannot be replayed as anything; it is redeemed here,
-  // and what crosses to the pack is a fresh assertion exactly like every other
+  // and what crosses to the integration is a fresh assertion exactly like every other
   // call. Held in memory for the same reason the signing keypair is: it lives
   // two minutes, and a restart costs one reload.
   //
@@ -746,11 +833,11 @@ export const createServer = async (app: NiscApp, runtime: NiscRuntime): Promise<
     const row = await runtime.pool.query('SELECT status, frames FROM integrations WHERE id = $1', [id]);
     const found = row.rows[0] as { status?: string; frames?: unknown } | undefined;
     if (found === undefined || found.status !== 'approved') return c.json({ message: 'No such integration.' }, 404);
-    const installed = await app.installedIntegrations?.(principal);
+    const installed = (await resolveIdentity(principal)).installed;
     if (installed !== undefined && !installed.includes(id)) return c.json({ message: 'Not installed here.' }, 404);
     // THE DECLARATION IS THE PERIMETER HERE TOO. A grant is only ever minted
     // for a page the bundle named at intake, so a screen cannot frame a path
-    // the pack never published — including one it serves but did not declare.
+    // the integration never published — including one it serves but did not declare.
     if (!((found.frames ?? []) as string[]).includes(path)) return c.json({ message: 'No such frame.' }, 404);
 
     const now = Date.now();
@@ -767,7 +854,7 @@ export const createServer = async (app: NiscApp, runtime: NiscRuntime): Promise<
     const now = Date.now();
     sweepGrants(now);
     const grant = grants.get(c.req.param('token'));
-    // One answer for expired, unknown, and minted-for-another-pack. A grant is
+    // One answer for expired, unknown, and minted-for-another-integration. A grant is
     // a URL somebody may still have; what it opens is nothing.
     if (grant === undefined || grant.integration !== id || now >= grant.expires) {
       return c.json({ message: 'Not found.' }, 404);
@@ -777,7 +864,7 @@ export const createServer = async (app: NiscApp, runtime: NiscRuntime): Promise<
     const row = await runtime.pool.query('SELECT url, status FROM integrations WHERE id = $1', [id]);
     const found = row.rows[0] as { url?: string; status?: string } | undefined;
     if (found === undefined || found.status !== 'approved') return c.json({ message: 'Not found.' }, 404);
-    const installed = await app.installedIntegrations?.(grant.principal);
+    const installed = (await resolveIdentity(grant.principal)).installed;
     if (installed !== undefined && !installed.includes(id)) return c.json({ message: 'Not found.' }, 404);
 
     const scope = await scopeValuesFor(grant.principal);
@@ -786,7 +873,7 @@ export const createServer = async (app: NiscApp, runtime: NiscRuntime): Promise<
       const response = await fetch(`${String(found.url).replace(/\/$/, '')}/${rest}`, {
         headers: { authorization: `Bearer ${assertions.mint({ integration: id, principal: grant.principal, scope })}` },
       });
-      // THE PACK'S OWN CONTENT TYPE TRAVELS. A framed page is HTML; forcing
+      // THE INTEGRATION'S OWN CONTENT TYPE TRAVELS. A framed page is HTML; forcing
       // `application/json` the way the proxy below used to would hand the
       // browser a document it will not render.
       return new Response(response.body, {
@@ -809,7 +896,7 @@ export const createServer = async (app: NiscApp, runtime: NiscRuntime): Promise<
   //
   // BOUNDED TO ONE SEGMENT BESIDE THE DECLARED PAGE. `embed/onboarding` may call
   // `embed/session` and nothing else — no slashes, no dots, no climbing. The
-  // grant already fixes which pack, which principal and which page; this fixes
+  // grant already fixes which integration, which principal and which page; this fixes
   // how far a page may reach from where it was let in.
   const CALLBACK = /^[a-z0-9][a-z0-9-]*$/;
 
@@ -825,7 +912,7 @@ export const createServer = async (app: NiscApp, runtime: NiscRuntime): Promise<
     const row = await runtime.pool.query('SELECT url, status FROM integrations WHERE id = $1', [id]);
     const found = row.rows[0] as { url?: string; status?: string } | undefined;
     if (found === undefined || found.status !== 'approved') return c.json({ message: 'Not found.' }, 404);
-    const installed = await app.installedIntegrations?.(grant.principal);
+    const installed = (await resolveIdentity(grant.principal)).installed;
     if (installed !== undefined && !installed.includes(id)) return c.json({ message: 'Not found.' }, 404);
 
     // Beside the page, never above it: the declared frame's own directory.
@@ -909,7 +996,7 @@ export const createServer = async (app: NiscApp, runtime: NiscRuntime): Promise<
     const row = await runtime.pool.query('SELECT url, status FROM integrations WHERE id = $1', [id]);
     const found = row.rows[0] as { url?: string; status?: string } | undefined;
     // 404 for "no such integration" AND for "not approved yet" — the same
-    // answer, so a stranger probing this learns nothing about which packs a
+    // answer, so a stranger probing this learns nothing about which integrations a
     // deployment is currently considering.
     if (found === undefined || found.status !== 'approved') return c.json({ message: 'Not found.' }, 404);
     if (!hookAllows(id, Date.now())) return c.json({ message: 'Too many.' }, 429);
@@ -958,14 +1045,14 @@ export const createServer = async (app: NiscApp, runtime: NiscRuntime): Promise<
     const row = await runtime.pool.query('SELECT url, status, reach FROM integrations WHERE id = $1', [id]);
     const found = row.rows[0] as { url?: string; status?: string; reach?: unknown } | undefined;
     if (found === undefined || found.status !== 'approved') return c.json({ message: 'No such integration.' }, 404);
-    const installed = await app.installedIntegrations?.(principal);
+    const installed = (await resolveIdentity(principal)).installed;
     if (installed !== undefined && !installed.includes(id)) return c.json({ message: 'Not installed here.' }, 404);
 
     // THE DECLARATION IS THE PERIMETER (integrations.ts, reachOf). Before this,
-    // being signed in at a studio that installed a pack was permission to call
-    // ANY path the pack's service happened to serve — its internals, its
+    // being signed in at a studio that installed an integration was permission to call
+    // ANY path the integration's service happened to serve — its internals, its
     // admin verbs, whatever it grew next release. Now it is permission to call
-    // the paths the pack declared, and nothing is forwarded for the rest.
+    // the paths the integration declared, and nothing is forwarded for the rest.
     //
     // Checked BEFORE the assertion is minted: an undeclared path gets no
     // credential, not even one that would have died at the other end.
@@ -974,7 +1061,7 @@ export const createServer = async (app: NiscApp, runtime: NiscRuntime): Promise<
 
     const scope = await scopeValuesFor(principal);
     // The QUERY TRAVELS. `c.req.path` drops it, so an endpoint declared with
-    // `?view=summary` arrived at the pack without it — the pack answered a
+    // `?view=summary` arrived at the integration without it — the integration answered a
     // different question than the screen asked, and nothing said so.
     const here = new URL(c.req.url);
     const rest = `${here.pathname.split('/').slice(3).join('/')}${here.search}`;
@@ -988,7 +1075,7 @@ export const createServer = async (app: NiscApp, runtime: NiscRuntime): Promise<
         headers,
         ...(c.req.method === 'GET' ? {} : { body: await c.req.text() }),
       });
-      // What the pack answered WITH, not what we assumed it answered with.
+      // What the integration answered WITH, not what we assumed it answered with.
       return new Response(response.body, {
         status: response.status,
         headers: { 'content-type': response.headers.get('content-type') ?? 'application/json' },
@@ -1015,13 +1102,14 @@ export const createServer = async (app: NiscApp, runtime: NiscRuntime): Promise<
           const resolved = await resolveIdentity(principal);
           // THE INSTALL LIST IS RE-READ AT BUILD. A shell is the long-lived
           // thing here: an identity record may have been resolved before the
-          // tenant installed a pack, and a shell built from it would be missing
-          // that pack's screens for the life of the session. Once per shell,
+          // tenant installed an integration, and a shell built from it would be missing
+          // that integration's screens for the life of the session. Once per shell,
           // not once per request — the seam this consults is synchronous and
           // cheap, and it is the same one `adopt` re-reads for the same reason.
-          const live = (await app.installedIntegrations?.(principal)) ?? resolved.installed;
-          const fresh: Resolved = live === resolved.installed ? resolved : { ...resolved, installed: live, key: memoKey(resolved.roles, live) };
-          return { roles: fresh.roles, scope: fresh.scope, installed: fresh.installed, catalog: catalog(fresh), variants: variants(fresh), policy: policy(fresh) };
+          // The record IS the install list now — resolved through the same
+          // engine entries as everything else, revalidated on the identity
+          // cache's own clock.
+          return { roles: resolved.roles, scope: resolved.scope, installed: resolved.installed, catalog: catalog(resolved), variants: variants(resolved), policy: policy(resolved) };
         },
         catalogFor: (roles, installed) => catalog(asRoles(roles, installed)),
         variantsFor: (roles) => variants(asRoles(roles, undefined)),
@@ -1130,6 +1218,27 @@ export const createServer = async (app: NiscApp, runtime: NiscRuntime): Promise<
     ...(shells !== undefined ? { shells } : {}),
     refresh,
     generation: () => generation?.current() ?? -1,
+    executeAs,
+    identity: async (principal: string | null) => {
+      const resolved = await resolveIdentity(principal);
+      return { roles: resolved.roles, scope: resolved.scope, ...(resolved.installed !== undefined ? { installed: resolved.installed } : {}) };
+    },
+    invalidateTenant: (tag: string) => {
+      // FORGETS, AND DOES NOT RESET.
+      //
+      // Resetting throws a shell away and builds its replacement, which is
+      // right for a ROLE change — the landing surface and the nav were seeded
+      // from the old rung — and wrong here. A tenant installing an integration changes
+      // what its people may REACH, not who they are, and `adopt` (called by
+      // `refresh` alongside this) re-resolves every live shell and registers
+      // the new definitions in place. Resetting as well would discard whatever
+      // anybody at that studio was in the middle of, to arrive at the same
+      // screen.
+      //
+      // A caller who does mean "rebuild theirs" has `invalidateIdentity`, which
+      // is what a role change uses.
+      return (identities?.invalidateTag(tag) ?? []).length;
+    },
     invalidateIdentity: (principal: string) => {
       // The compiled memos are keyed by (roles + installed), not by principal,
       // so they need no clearing here: a re-resolved record either lands on the

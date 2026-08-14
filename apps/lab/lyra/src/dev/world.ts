@@ -5,7 +5,6 @@ import type { Shell } from '@niscorp/nova';
 process.env['LYRA_DEV_LOGIN'] = 'on';
 
 import { boot, tideDriver } from '@lyra/server/boot';
-import { identityFor } from '@lyra/server/identity';
 import { resolveCatalogForRoles } from '@niscorp/moss';
 
 const booted = await boot();
@@ -39,7 +38,7 @@ import { mintToken as mintFor } from '@lyra/server/tokens';
 
 /** The lab's credential for an address. Bound to the harness pool so a check
  *  says `mintToken(email)` and nothing else. */
-export const mintToken = async (email: string): Promise<string | null> => mintFor(booted.runtime.pool, email);
+export const mintToken = async (email: string): Promise<string | null> => mintFor(server.executeAs, email);
 
 export const idFor = (email: string): string => {
   const id = ROSTER[email.trim().toLowerCase()];
@@ -74,8 +73,25 @@ export const anonymous = async (): Promise<Shell> => {
 // take is a check asserting about a deployment nobody runs.
 export const idsFor = async (email: string | null): Promise<readonly string[]> => {
   if (email === null) return resolveCatalogForRoles(app, ['public'], undefined).ids;
-  const record = await identityFor(booted.runtime.pool, idFor(email), () => undefined);
+  const record = await server.identity(idFor(email));
   return resolveCatalogForRoles(app, record.roles, record.installed).ids;
+};
+
+
+/** A session-authorized wire for checks — the same shape moss lends shells,
+ *  with the same /vex envelope unwrapping, so a check reads an entry exactly
+ *  as a shell would. */
+export const wireFor = (email: string): import('@niscorp/nova').FetchFn => async (url, init) => {
+  const token = await mintToken(email);
+  const res = await server.request(url, {
+    method: init?.method ?? 'GET',
+    headers: { ...(init?.headers ?? {}), ...(token !== null ? { Authorization: `Bearer ${token}` } : {}) },
+    ...(init?.body !== undefined ? { body: init.body } : {}),
+  });
+  if (!url.split('?')[0]?.endsWith('/vex') || !res.ok) return res;
+  const body = (await res.json()) as Record<string, unknown> | null;
+  const result = body !== null && typeof body === 'object' && 'result' in body ? body['result'] : body;
+  return { ok: res.ok, status: res.status, json: () => Promise.resolve(result), text: () => Promise.resolve(JSON.stringify(result)) } as unknown as Response;
 };
 
 export const settle = async (turns = 6): Promise<void> => {

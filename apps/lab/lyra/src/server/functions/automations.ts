@@ -1,7 +1,6 @@
 import type { FunctionHandler } from '@niscorp/nova';
 import type { Tide } from '@niscorp/tide';
 import type { FunctionSession } from '@niscorp/moss';
-import { personCard } from '../lookup';
 import { effectById, momentById, nameOf, reflexIdFor, selectionFor } from '@lyra/app/reflexes/compose';
 import { askAsAutomation } from '../tide';
 import { evaluate } from '@niscorp/prism';
@@ -11,8 +10,9 @@ type Deps = { tide: () => Tide; driver: () => import('@niscorp/moss').TideDriver
 
 const mine = (studioId: string, reflexId: string): boolean => reflexId.startsWith(`${studioId}:`);
 
-export const automationFunctions = (session: FunctionSession, deps: Deps & { pool: import('@niscorp/vex').PgPool }): Record<string, FunctionHandler> => {
-  const studioOf = async (): Promise<string> => (await personCard(deps.pool, session.principal ?? ''))?.studioId ?? '';
+export const automationFunctions = (session: FunctionSession, deps: Deps): Record<string, FunctionHandler> => {
+  // Off the session record — the engine resolved it, nothing looks it up.
+  const studioOf = async (): Promise<string> => String(session.identity['studioId'] ?? '');
 
   // WHICH MOMENT THIS AUTOMATION IS, asked of the moment rather than of the
   // engine. Whether a thing runs on a write or on a clock is a property of
@@ -21,9 +21,17 @@ export const automationFunctions = (session: FunctionSession, deps: Deps & { poo
   // is also empty for a beat after a reload.
   //
   // The reflex id IS `<studioId>:<automationId>`, read backwards.
-  const momentOf = async (studioId: string, reflexId: string) => {
-    const result = await deps.pool.query('SELECT moment FROM automations WHERE id = $1 AND studio_id = $2', [reflexId.slice(studioId.length + 1), studioId]);
-    return momentById(String((result.rows[0] as { moment?: unknown } | undefined)?.moment ?? ''));
+  const watchedOf = async (studioId: string, reflexId: string): Promise<boolean> => {
+    // Through the engine, as the session: the same `automations/list` the
+    // screen reads, scoped to this studio by the same policy — and `watched`
+    // is on the card row precisely because whether a thing runs on a write is
+    // a property of the MOMENT the vocabulary declares.
+    const response = await session.wire('/api/automation/vex', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ fingerprint: 'automations/list', context: {} }) });
+    if (!response.ok) return false;
+    const rows = (await response.json()) as unknown;
+    const automationId = reflexId.slice(studioId.length + 1);
+    const row = Array.isArray(rows) ? (rows as { automation_id?: unknown; watched?: unknown }[]).find((r) => String(r.automation_id ?? '') === automationId) : undefined;
+    return row?.watched === true;
   };
 
   return {
@@ -34,7 +42,7 @@ export const automationFunctions = (session: FunctionSession, deps: Deps & { poo
     // A watched automation fires per write, anchored to the row that caused
     // it — with no write there is nothing to rehearse, and pretending would
     // mean answering a different question than the one it runs on.
-    if ((await momentOf(studioId, reflexId))?.watch !== undefined) {
+    if (await watchedOf(studioId, reflexId)) {
       return {
         summary: 'Runs as it happens — the moment its write lands, anchored to the person it concerns. The card shows how it last ran.',
         anyone: false,
@@ -55,7 +63,7 @@ export const automationFunctions = (session: FunctionSession, deps: Deps & { poo
         to: text(row['email']) || text(input['toAddress']),
         subject: text(input['subject']) || text(input['title']) || text(input['tag']),
         body: text(input['body']) || text(input['detail']),
-        // A pack's effect answers for itself; empty for a shipped one, where the
+        // An integration's effect answers for itself; empty for a shipped one, where the
         // input above already says everything.
         note: typeof u.render === 'string' ? u.render : '',
         error: u.error ?? '',
@@ -96,7 +104,7 @@ export const automationFunctions = (session: FunctionSession, deps: Deps & { poo
     // The scope policy is what makes this safe rather than the check above:
     // the requeue runs under the studio's own principal, so a message id from
     // somewhere else matches no row.
-    await askAsAutomation(deps.server(), deps.pool, studioId, 'outbox/requeue', { messageId, failedReason: 'sending again, asked by the studio' });
+    await askAsAutomation(deps.server(), studioId, 'outbox/requeue', { messageId, failedReason: 'sending again, asked by the studio' });
     const driver = deps.driver();
     await driver.fire(`${studioId}:outbox-sweep`, { now: Date.now(), by: 'operator' });
     await driver.wake();
@@ -107,7 +115,7 @@ export const automationFunctions = (session: FunctionSession, deps: Deps & { poo
     const studioId = await studioOf();
     const reflexId = String(data['reflexId'] ?? '');
     if (!mine(studioId, reflexId)) throw new Error('That automation is not yours.');
-    if ((await momentOf(studioId, reflexId))?.watch !== undefined) {
+    if (await watchedOf(studioId, reflexId)) {
       throw new Error('This one runs by itself — the moment its write lands. There is nothing to run by hand.');
     }
     const driver = deps.driver();
@@ -151,7 +159,7 @@ export const automationFunctions = (session: FunctionSession, deps: Deps & { poo
     const context = evaluate(query.context as never, { now: Date.now() } as never) as Record<string, unknown>;
 
     try {
-      const body = await askAsAutomation(deps.server(), deps.pool, studioId, query.fingerprint, context);
+      const body = await askAsAutomation(deps.server(), studioId, query.fingerprint, context);
       const rows = body !== null && typeof body === 'object' && 'result' in body ? (body as { result: unknown }).result : body;
       const people = Array.isArray(rows) ? (rows as Record<string, unknown>[]) : [];
       const named = people.map((r) => String(r['person_name'] ?? '')).filter((name) => name !== '');

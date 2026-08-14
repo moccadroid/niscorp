@@ -1,8 +1,7 @@
 // Run: pnpm --filter lyra exec tsx src/dev/scoping-check.ts
 import { CAST } from '@lyra/db/seed';
 import { resolvePolicyForRoles } from '@niscorp/moss';
-import { identityFor } from '@lyra/server/identity';
-import { app, asPrincipal, ok, report, runtime } from './world';
+import { app, asPrincipal, ok, report, runtime, server } from './world';
 
 const count = async (sql: string): Promise<number> => Number((await runtime.db.query<{ n: string }>(sql)).rows[0]?.n ?? -1);
 
@@ -43,7 +42,7 @@ const BOOKING_GRANTS = ['bookings.read', 'bookings.write.insert', 'bookings.writ
 // Compiled from the ROLES the identity seam resolves — the same path the
 // request takes. There is no assignment map to read them out of any more.
 const rulesFor = async (personId: string, phase: 'read'): Promise<number> => {
-  const { roles } = await identityFor(runtime.pool, personId, () => undefined);
+  const { roles } = await server.identity(personId);
   const entity = resolvePolicyForRoles(app, BOOKING_GRANTS, roles).entities['bookings'];
   return entity === undefined || 'public' in entity || 'deny' in entity ? -1 : (entity[phase] ?? []).length;
 };

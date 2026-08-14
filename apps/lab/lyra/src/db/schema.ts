@@ -66,7 +66,7 @@ export const DDL = /* sql */ `
     -- It decides more than an address: which payment methods a member is offered
     -- (SEPA against a card), which verification a payment provider asks the
     -- studio for, and which consumer law the contract sits under. It was a
-    -- constant in the payments pack, which is fine for one country and wrong the
+    -- constant in the payments integration, which is fine for one country and wrong the
     -- first time somebody signs up from anywhere else.
     country     TEXT NOT NULL DEFAULT 'AT' CHECK (country ~ '^[A-Z]{2}$'),
     -- WHAT LANGUAGE THIS STUDIO READS IN, as a BCP-47 tag.

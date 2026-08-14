@@ -10,7 +10,7 @@ const uninstallPrism = { fingerprint: addonUninstall.fingerprint, context: { int
 // The store's tiles: `offered` (every approved integration) joined with
 // `installed` (this studio's rows) — the stitch that used to be a server
 // function, now a derivation over data the screen already holds. Both halves
-// of `has_settings` on purpose: the pack shipped a settings screen AND this
+// of `has_settings` on purpose: the integration shipped a settings screen AND this
 // studio has it on — a store must never open functionality a studio has not
 // bought. The "Adds …" sentence rides as a fact rather than a clipped table
 // cell, and a bundle that shipped no meta still gets a tile named by its id.

@@ -1,5 +1,5 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
-import type { PgPool } from '@niscorp/vex';
+import type { ExecuteAs } from '@niscorp/moss';
 
 // ═══════════════════════════════════════════════════════════════
 // ONE CLICK, NO SESSION — the other half of consent.
@@ -47,7 +47,7 @@ export const unsubscribeUrl = (base: string, studioId: string, personId: string)
  * forged token, a wrong signature and a person who was never opted in, because
  * telling them apart would make this a place to test guesses against.
  */
-export const unsubscribe = async (pool: PgPool, token: string): Promise<{ studioId: string; personId: string } | null> => {
+export const unsubscribe = async (runAs: ExecuteAs, token: string): Promise<{ studioId: string; personId: string } | null> => {
   if (seed() === '') return null;
   const parts = token.split('.');
   if (parts.length !== 3) return null;
@@ -59,10 +59,9 @@ export const unsubscribe = async (pool: PgPool, token: string): Promise<{ studio
   const b = Buffer.from(expected);
   if (a.length !== b.length || !timingSafeEqual(a, b)) return null;
 
-  // The write is deliberately NOT through vex: there is no principal here and
-  // no rung to run it on — the whole point of this door is that nobody is
-  // signed in. It is one column, on one row, set to false, named by a
-  // signature we minted. Anything wider would want an identity.
-  await pool.query('UPDATE studio_people SET marketing_ok = false WHERE studio_id = $1 AND person_id = $2', [studioId, personId]);
+  // Through the engine, as the charter's `mailer` role: one column, on one
+  // row, and the `mailer` reach pins the write to exactly the pair this
+  // signature verified — scope values supplied here, never by a request.
+  await runAs('mailer', 'mailer/opt-out', { studioId, personId }, { studioId, personId });
   return { studioId, personId };
 };

@@ -104,7 +104,28 @@ export type NiscApp = {
   // learned what a tenant is and the boundary is gone.
   //
   // Absent = the three older seams answer, exactly as before.
-  identity?: (principal: string) => Promise<IdentityRecord>;
+  //
+  // `resolve` is the pre-authorisation half: roles, the invalidation tag, and
+  // whatever scope the app can only establish before a policy exists (an
+  // integration actor's studio; a person's tenant). `scope` and `installed`
+  // name SEEDED entries moss then executes through its own engine — under the
+  // policy of the charter role `as` names, with the scope values resolved so
+  // far — merging each mapped object into the record. The app's model of a
+  // session thereby lives in its ARTIFACTS: the entries and their reach
+  // profiles, checkable like any other, with moss holding no opinion about
+  // what any of it means.
+  identity?: {
+    // The charter role the lent reader executes AS — a role nobody wears,
+    // holding exactly the verbs identity's engine reads need. Opaque here.
+    as?: string;
+    // ONE seam. `read` is a capability moss lends for the duration of the
+    // call: it executes a SEEDED entry through moss's own engine, locked to
+    // replay, under the `as` role's compiled policy, with exactly the scope
+    // values the app passes — values the app itself resolved, engine-side.
+    // The app composes its whole record from its one licensed pre-auth read
+    // plus these; moss caches the result and never looks inside it.
+    resolve: (principal: string, read: (fingerprint: string, scope: Record<string, unknown>) => Promise<unknown>) => Promise<IdentityRecord>;
+  };
   // THE WORDS THIS PRINCIPAL'S SHELL WEARS — the language twin of `scope`.
   //
   // Moss renders a shell server-side and serializes its trees. Between those
@@ -121,11 +142,11 @@ export type NiscApp = {
   // tenant reading different languages get two shells, which they already had.
   // Resolved once when the shell is built — a change to a principal's language
   // is a `reset`/rebuild, exactly like a change to their catalog.
-  // May be async, for the same reason `seeds` and `inputs` are: a book that
-  // lives in rows cannot be fetched by a function that cannot await, and the
-  // only implementation a sync signature leaves is a resident copy of every
-  // language.
-  phrases?: (principal: string | null) => Phrasebook | undefined | Promise<Phrasebook | undefined>;
+  // Async and wire-bearing, for the same reason `seeds` and `inputs` are: a
+  // book lives in rows, and a hook that cannot reach them holds a resident
+  // copy of every language. The resolved identity rides along so the app can
+  // pick the language off the record the session already established.
+  phrases?: (session: { principal: string | null; identity: Record<string, unknown>; wire: FetchFn }) => Phrasebook | undefined | Promise<Phrasebook | undefined>;
   // Which keys in a tree carry prose. An app with its own display-field
   // convention (`status_display`) declares it once here. Absent = nova's
   // default prop set and no suffix rule.
@@ -134,7 +155,7 @@ export type NiscApp = {
   //
   // The charter grants `ext.desk.*` once, to every desk in the deployment. In a
   // single-tenant app that is the whole answer. In a multi-tenant one it is a
-  // leak: one studio installing a pack would put it on every studio's front
+  // leak: one studio installing an integration would put it on every studio's front
   // desk, and nothing would say so.
   //
   // Moss cannot decide this — it does not know what a tenant is, deliberately,
@@ -185,7 +206,7 @@ export type NiscApp = {
   // and intake refuses a placement outside it.
   menuSlots?: readonly string[];
   // WORDS FOR THE IDS ABOVE, for the one sentence a person reads before
-  // turning a pack on. Optional: without it the approval card and store tile
+  // turning an integration on. Optional: without it the approval card and store tile
   // print ids, which is honest and unhelpful.
   placementNames?: Readonly<Record<string, string>>;
   // the prewarmed API surface — every read and write the app serves, as
@@ -358,6 +379,14 @@ export type FunctionSession = {
   shell: Shell;
   principal: string | null;
   roles: readonly string[];
+  // The scope half of the resolved identity — the record the session was built
+  // from, handed back so a function reads "which studio am I" off what the
+  // engine already established instead of looking anybody up.
+  identity: Record<string, unknown>;
+  // The session's granted action ids, installs already filtered — the same
+  // catalog the shell was built from, so a function and a screen cannot
+  // disagree about what this person holds.
+  actions: readonly string[];
   wire: FetchFn;
   runtime: NiscRuntime;
   policy: ScopePolicy;

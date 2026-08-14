@@ -117,7 +117,7 @@ export const sendMail = async (message: Message): Promise<Sent> => {
   }
 
   // A MISSING SECRET IS A VISIBLE STATE — never a crash, and never a silent
-  // success. The same posture the payments pack takes about having no key: the
+  // success. The same posture the payments integration takes about having no key: the
   // row says `Failed`, the reason says why in words, and the screen shows it.
   if (secret === '') return { ok: false, reason: 'no provider configured', retry: false };
   if (sending === '') return { ok: false, reason: 'no sending domain configured', retry: false };

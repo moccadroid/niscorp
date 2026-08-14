@@ -1,10 +1,46 @@
 # lyra — identity below the engine
 
-**Status: DONE (2026-08-13).** `server/users.ts` does not exist. Zero row-backed
-caches outside `dev/`. Zero `everyone()` callers in production. `pnpm lint` reports 0.
-All 44 Lyra checks pass; moss 182/182; charter 17/17; atrium, relay, lyra-admin and
-lyra-integrations typecheck clean. Every decision is taken — D1–D5 and D7–D9 ratified,
-D6 deferred behind a check.
+**Status: REBUILT (2026-08-14).** The first "done" was a lie of accounting: the caches
+were gone, but the architecture underneath them was fifteen raw SQL statements spread
+across `server/` — the directory rebuilt as queries, with a private `Person` model no
+check could see. That version is deleted. What stands now, held by
+[`reads-are-vex-check`](../../apps/lab/lyra/src/dev/reads-are-vex-check.ts) IN the
+suite:
+
+- **One licensed statement.** `server/identity.ts` holds exactly one query — the
+  roles read, the only read a policy cannot authorise because it compiles from the
+  answer. The count is asserted (`=== 1`), its tables are asserted equal to the
+  `identity/roles` artifact's declaration, and both checks carry falsifiable
+  self-tests. The budget is a count, not a list anybody can widen.
+- **The person model is an artifact.** `identity/roles` in
+  [`identity.entries.ts`](../../apps/lab/lyra/src/app/vex/identity.entries.ts) maps
+  three facts to the whole seam record — roles, tenant tag, derived scope — as an
+  executed prism. `audienceOf`, `rolesOf`, `Person`, `personCard` and `lookup.ts` do
+  not exist.
+- **Everything else is the engine.** Name, studio facts, installs, themes, phrase
+  books, locales, the automations vocabulary — all seeded entries
+  (`identity/person`, `identity/studio`, `identity/installed`, `studio/theme`,
+  `phrases/book`, `phrases/integrations`, `phrases/locales`), read either by moss as
+  the charter's **`identity` reader role** (a role nobody wears, pinned to the caller
+  by the `identity` reach in behaviors.ts) or over each session's own wire under its
+  own policy. Members get sessions without members getting `people.read` — the
+  roster stays refused.
+- **Two principals need no read at all.** An integration actor and a studio's robot
+  are named by their own ids (`ig_<integration>@<studio>`, `automation@<studio>`);
+  the install gate rides `identity/installed`, and the automation unification makes
+  the chain-trust comparison (`userId === automationActor`) exact — closing 12.4.
+- **There is no doors list, because there are no doors.** Every surface that acts
+  without a principal — the sign-in credential (`links.ts`), unsubscribe, the mail
+  provider's webhook, the lab's picker, the automations engine loading its rows —
+  executes seeded entries through **`server.executeAs`** as one of four machinery
+  charter roles (`credential`, `mailer`, `transport`, `scheduler`): in-process only,
+  replay-only, charter-bounded, reach-pinned, none of them wearable. The one `exec`
+  exception is `server/runtime.ts`, the lab's database builder applying the declared
+  `db/` artifacts — creating the database is not reading it. Widening any of this is
+  a charter diff somebody reviews, not a list entry.
+
+Everything green: 47/47 Lyra checks (the law included), moss 186/186, charter 17/17,
+five apps typecheck clean, lint 0.
 
 ## Part 10, scored
 
@@ -14,41 +50,68 @@ D6 deferred behind a check.
 | `grep -r "everyone()" --include=*.ts` returns nothing outside `dev/` | **yes** — 0 callers |
 | No unauthenticated request obtains more than one person's row | **yes** — the picker is behind `LYRA_DEV_LOGIN`, asserted both ways |
 | Two processes agree without a restart | **yes** — the generation pointer |
-| A tenant-local write invalidates that tenant, not the deployment | **partly, and it cannot be more** — see below |
+| A tenant-local write invalidates that tenant, not the deployment | **yes** — see below |
 | Identity is an artifact a check can read | **yes** — pinned by `identity-sql-check` rather than declared in vex (D4 chose (b)) |
 | `pnpm --filter lyra check` passes | **yes** — 44 checks, including four that did not exist |
 | The Part 8.3 invariant checks exist | **yes** — invariants 1, 3, 4, 5, 6 asserted across `identity-check`, `identity.test.ts`, `held-state-check` |
 
-**The one criterion that cannot be met as written.** *"A tenant-local write
-invalidates that tenant, not the deployment"* requires enumerating a tenant's
-principals — which is exactly what invariant 1 exists to make impossible. `refresh()`
-is correct but deployment-wide; `invalidateIdentity(principal)` is the scalpel where a
-caller knows whose. Either the criterion softens or identity grows a tenant-keyed
-secondary index, which invariant 2 bans. It should be reworded, not built.
+**The criterion I first wrote off, and was wrong about.** This was recorded here as
+unachievable: forgetting one tenant means naming its principals, and naming them
+without enumerating the population looked like it needed the secondary index
+invariant 2 bans. That reasoning does not survive reading the invariant. It bans an
+index you can **read** through — *"a second index is a query planner"* — because a way
+to find somebody is a way to scan everybody. An index that supports exactly one
+operation, FORGET, returns nothing and finds nobody.
+
+So `IdentityRecord` carries an opaque `tag`, moss keeps a write-only `tag → principals`
+map beside the cache, and `server.invalidateTenant(tag)` drops that group and answers
+how many it held. Moss never interprets the string; Lyra sets it to the studio id.
+The `studio_integrations` reaction now forgets one studio instead of every principal
+in the deployment. Asserted in `identity.test.ts` (four cases, including that the map
+prunes on eviction and that the cache's surface exposes no way to read through it) and
+end-to-end in `identity-check`.
+
+**Two things it must NOT do**, both found by the suite rather than by reasoning:
+
+- **It must not reset shells.** Resetting throws a shell away and rebuilds it, which is
+  right for a ROLE change and wrong here: a tenant installing an integration changes what its
+  people may reach, not who they are, and `adopt` already re-resolves every live shell
+  in place. Resetting as well discarded whatever anybody at that studio was doing to
+  arrive at the same screen — and broke three integration assertions.
+- **It must reset nobody else.** The first version looped `shells.list()` and reset
+  every live principal whenever anything was dropped, which is the deployment-wide
+  hammer wearing a tenant-local name. `invalidateTag` returns WHO it forgot for exactly
+  this reason: a count would leave the caller guessing, and guessing here means
+  resetting everybody to be safe.
+
+**Still deployment-wide, honestly:** the generation pointer. A second process holds its
+own copies of the same tenant's records and has no other way to hear, so the pointer
+moves and every process drops everything. Coarse across processes, precise within one.
+Move 4 is where that asymmetry goes.
 
 ## What replaced what
 
 | Was | Is |
 |---|---|
-| `DIRECTORY`, `BY_EMAIL`, `INSTALLED`, `AUTOMATION`, `TIMEZONES`, `COUNTRIES`, `LOCALES`, `CURRENCIES` (`users.ts`) | [`server/lookup.ts`](../../apps/lab/lyra/src/server/lookup.ts) — point reads, one row each, nothing held |
-| `BY_STUDIO` (`themes.ts`) | `themeFor(pool, studioId)` — read at shell build |
-| `BY_LOCALE` (`phrases.ts`) | `phrasesFor(pool, locale)` — read at shell build |
-| the `Directory` seam and `assignments` | the `identity` seam, resolved once per session and held by moss with a bound, eviction, revalidation, a meter and an operator roster |
-| six synchronous per-principal seams | all six async; `shell.inputs` wire-bearing, matching `seeds` |
-| nothing watching module state | `held-state-check` (AST, four kinds, falsifiable self-test) and `pnpm lint` |
+| eight module caches (`users.ts`), then briefly fifteen raw queries (`lookup.ts` and friends) | ONE licensed statement + seeded entries, the split `reads-are-vex-check` enforces |
+| `BY_STUDIO` (`themes.ts`) | `studio/theme` entry, read over the session's wire at shell build |
+| `BY_LOCALE` (`phrases.ts`) | `phrases/book` + `phrases/integrations` + `phrases/locales` entries, folded by `bookOverWire` |
+| the `Directory` seam and `assignments` | the `identity` seam — one licensed read plus the reader-role entries — held by moss with a bound, eviction, revalidation, a meter and an operator roster |
+| six synchronous per-principal seams | all async; `inputs` and `phrases` wire-bearing, `FunctionSession` carrying the record and the catalog |
+| nothing watching module state or SQL residence | `held-state-check`, `reads-are-vex-check`, `identity-sql-check`, `pnpm lint` |
 
 **The last mile cost more than the estimate twice, and both misses are worth keeping.**
 The first: `shell.inputs` decides what MOUNTS, so unlike `seeds` it cannot be deferred
 — async `inputs` forces async `build()` forces async `session()`, ~40 files across
 three apps. The second: `grep` for `shells.session`, `login` and `personByEmail` found
 the call sites but not `server/functions/nav.ts`, which resolved catalogs with
-`resolveCatalog(app, principal)` and so quietly lost a pack's menu entry while its
+`resolveCatalog(app, principal)` and so quietly lost an integration's menu entry while its
 screens still existed. A blast radius measured by grepping for the names you already
 know is a blast radius measured wrong.
 
 **And `adopt` had to re-resolve.** A shell is the long-lived thing here; the install
 list it was born with is precisely what must not be trusted when a tenant installs a
-pack. It re-resolves asynchronously and unawaited now, the same progressive path
+integration. It re-resolves asynchronously and unawaited now, the same progressive path
 `seeds` takes.
 
 Scope spans `moss`, `charter` and `lyra`. Atrium and relay carry the same shape
@@ -98,7 +161,7 @@ and each would have sent the work somewhere useless:
    no cross-process invalidation at all: the `studio_integrations` reaction fires
    only in the process that handled the write
    ([`app.ts:220`](../../apps/lab/lyra/src/app/app.ts#L220)). At two processes
-   this is a **correctness bug, not a scaling concern** — a pack installed via
+   this is a **correctness bug, not a scaling concern** — an integration installed via
    process A leaves process B with a stale `INSTALLED`,
    `integrationActorFor` returns null there
    ([`users.ts:146`](../../apps/lab/lyra/src/server/users.ts#L146)), and keyed
@@ -614,7 +677,7 @@ reached by reading code rather than by preference, the citation is the argument.
 - `grep -r "everyone()" apps/lab/lyra/src --include=*.ts` returns nothing outside
   `dev/`. Five production callers today.
 - No unauthenticated request can obtain more than one person's row.
-- Two processes serving the same database agree about installed packs, roles and
+- Two processes serving the same database agree about installed integrations, roles and
   themes without a restart.
 - A tenant-local write invalidates that tenant, not the deployment.
 - Identity is an artifact a check can read, and at least one existing check
@@ -689,12 +752,12 @@ both benches) can move onto that surface — the same path a human tester uses, 
 of reaching into `server/` and bypassing the session boundary as they do today. This
 converts 7.3's largest unbudgeted cost into a benefit.
 
-**Corollary for the mail work in flight: auth mail is not a pack.** The send happens
+**Corollary for the mail work in flight: auth mail is not an integration.** The send happens
 *before* a principal exists — there is an address, not a person, so there is no tenant
 to resolve an install against; a studio uninstalling it would lock its own users out;
 and routing it through `installedIntegrations`/`integrationActor` would couple the
 login path to two of the six seams 7.1–7.2 is migrating. Tenant-configurable *sender
-identity* is a legitimate pack concern; delivery is platform infrastructure.
+identity* is a legitimate integration concern; delivery is platform infrastructure.
 
 ### 12.2 Reversed: no `LISTEN/NOTIFY`
 
@@ -803,8 +866,8 @@ plan did not anticipate:
    record so the day can be computed from a fact the session already holds. It stays
    synchronous on purpose: a sync seam is only a trap when the answer lives in rows.
 2. **Roles must come off the principal id, not the directory row.** An actor for a
-   pack installed after boot has no row yet, and reading roles from a missing row put
-   a payments pack on the member rung — which reads nothing and refuses quietly.
+   integration installed after boot has no row yet, and reading roles from a missing row put
+   a payments integration on the member rung — which reads nothing and refuses quietly.
    Also: an unknown principal wears `public`, never `member`.
 3. **`refresh()` must drop identity too.** Dropping the compiled policies while
    keeping the records they were compiled from keeps the stale half: a promoted
@@ -812,7 +875,7 @@ plan did not anticipate:
    `acl-check`, which is exactly what that check is for.
 4. **There were four spellings of "compose this principal's scope values"** — one at
    the vex mount and three around the integration surfaces. Lyra's `scope` shrinking
-   to two keys silently emptied the assertion a pack receives, so a proxied call
+   to two keys silently emptied the assertion an integration receives, so a proxied call
    answered about nobody. Now one `composeScope`, used everywhere. This is the
    `everyone()` lesson again in a different costume: a derivation spelled more than
    once will disagree with itself, and the disagreement will be silent.
@@ -837,7 +900,7 @@ Three things worth recording:
   derives `today` and `horizon` from it per request. So the volatile half needs no
   lookup and no cache — which is what lets `studioToday`'s resident `TIMEZONES` map
   leave the request path entirely.
-- **Integration actors resolve without a row.** `ig_<pack>@<studio>` is parsed, the
+- **Integration actors resolve without a row.** `ig_<integration>@<studio>` is parsed, the
   install is verified against `studio_integrations`, and the rung comes off the id.
   The install IS the credential's lifetime — uninstalling revokes the actor, with no
   second mechanism to forget.

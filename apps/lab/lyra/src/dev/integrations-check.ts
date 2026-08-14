@@ -54,7 +54,7 @@ try {
   ok('the integration is a separate service with its own records', (selftest['north'] ?? 0) > 0, `${selftest['north']} belts, none of them in our database`);
 
   const ours = await runtime.db.query("SELECT count(*) n FROM information_schema.tables WHERE table_name LIKE '%belt%'");
-  ok('...and no table of ours holds a belt', Number((ours.rows[0] as { n: string }).n) === 0, 'a discipline pack with no migration');
+  ok('...and no table of ours holds a belt', Number((ours.rows[0] as { n: string }).n) === 0, 'a discipline integration with no migration');
 
   // ── announce ─────────────────────────────────────────────────
   const registered = await post('/operator/integrations', { id: 'belts', url: `http://127.0.0.1:${PORT}/belts` });
@@ -103,7 +103,7 @@ try {
   ok('a member at the installed studio gets the member half', nrMember.includes('ext.member.belts.mine'), nrMember.filter((i) => i.startsWith('ext.')).join(', '));
   ok('...and a member elsewhere does not', !(await idsFor(CAST.lumen.member)).some((id) => id.startsWith('ext.')));
 
-  // ── the pack's words translate with everything else ──────────
+  // ── the integration's words translate with everything else ──────────
   //
   // The bundle carried a `de` phrasebook; the host stored it at intake and
   // merges it UNDER its own book. A German member's navigation must not read
@@ -119,8 +119,8 @@ try {
   germanShell.dispatch({ type: 'ui:click', ref: 'navLeaf', payload: { value: 'ext.member.belts.mine', label: 'My belt' } });
   await settle(14);
   const germanMember = await servedTo(CAST.northrock.member);
-  ok("a pack's screen renders German", germanMember.includes('Mein Gürtel'), 'My belt → Mein Gürtel, from the bundle’s own book');
-  ok('...through the same pass as the host’s words', germanMember.includes('Heute'), 'host and pack words in ONE German shell');
+  ok("an integration's screen renders German", germanMember.includes('Mein Gürtel'), 'My belt → Mein Gürtel, from the bundle’s own book');
+  ok('...through the same pass as the host’s words', germanMember.includes('Heute'), 'host and integration words in ONE German shell');
   await runtime.db.query("UPDATE studios SET locale = 'en-GB' WHERE id = $1", ['st_northrock']);
   server.invalidateTenant('st_northrock');
 
@@ -140,9 +140,9 @@ try {
 
   // ── THE DECLARATION IS THE PERIMETER ─────────────────────────
   //
-  // `/belts/_selftest` is a real route on the pack — line 55 above reads belt
+  // `/belts/_selftest` is a real route on the integration — line 55 above reads belt
   // counts off it — and the bundle never declared it. The proxy used to forward
-  // ANY path under a pack's prefix to anybody signed in at an installed studio,
+  // ANY path under an integration's prefix to anybody signed in at an installed studio,
   // so being a member here was permission to call it, and to call whatever else
   // that service grew next release. Now reach is derived from the bundle at
   // intake (moss: reachOf) and this is not in it.
@@ -150,7 +150,7 @@ try {
     headers: { Authorization: `Bearer ${String(await mintToken(CAST.northrock.owner))}` },
   });
   ok('an undeclared path is not forwarded', undeclared.status === 404, `${undeclared.status} — the owner is signed in and the studio has it installed`);
-  ok('...and the route it refuses is really there', (selftest['north'] ?? 0) > 0, 'the 404 is the proxy declining, not the pack having moved');
+  ok('...and the route it refuses is really there', (selftest['north'] ?? 0) > 0, 'the 404 is the proxy declining, not the integration having moved');
 
   // ── the integration acts as itself ───────────────────────────
   const asKey = async (actsFor: string, fingerprint: string, context: unknown, withKey: string = key): Promise<{ status: number; body: Record<string, unknown> }> => {
@@ -178,12 +178,12 @@ try {
   const gibberish = await asKey('st_northrock', 'automation/notify', {}, 'ik_0000000000000000000000000000000000000000000000000000000000000000');
   ok('...and a key nobody minted resolves to nobody', gibberish.status === 401, String(gibberish.status));
 
-  // ── ONE RUNG PER PACK, not one rung for every pack ───────────
+  // ── ONE RUNG PER INTEGRATION, not one rung for every integration ───────────
   //
-  // Every installed pack used to resolve to the same `integration` principal, so
+  // Every installed integration used to resolve to the same `integration` principal, so
   // the day one of them needed to touch money, the grant would have been added
   // to the rung a rank tracker also holds. The rung is derived from the actor's
-  // own id now (`ig_<pack>@<studio>` — app.ts), so a pack with a rung of its own
+  // own id now (`ig_<integration>@<studio>` — app.ts), so an integration with a rung of its own
   // gets it and everything else keeps the near-empty shared one.
   //
   // Belts is the control. It is installed, its key works, and this is the write
@@ -194,9 +194,9 @@ try {
   ok('a rank tracker cannot move somebody’s standing', beltsAssert.status >= 400, `${beltsAssert.status} — the same key that just wrote a follow-up`);
 
   const stillActive = await runtime.db.query("SELECT count(*) n FROM subscriptions WHERE id = 'sub_omar' AND status = 'active'");
-  ok('...and nothing moved', Number((stillActive.rows[0] as { n: string }).n) === 1, 'refused by the charter, not by the pack being polite');
+  ok('...and nothing moved', Number((stillActive.rows[0] as { n: string }).n) === 1, 'refused by the charter, not by the integration being polite');
 
-  // Now the pack the rung was drawn for. Same ceremony, same wire — the only
+  // Now the integration the rung was drawn for. Same ceremony, same wire — the only
   // difference is which fence it lands inside.
   const stripeReg = await post('/operator/integrations', { id: 'stripe', url: `http://127.0.0.1:${PORT}/stripe` });
   const stripeKey = String(stripeReg.json['key'] ?? '');
@@ -210,7 +210,7 @@ try {
   const asserted = await asKey('st_northrock', 'subscriptions/assert', {
     subscriptionId: 'sub_omar', status: 'active', paidUntil, priceCents: null,
   }, stripeKey);
-  ok('the payments pack may state a standing', asserted.status === 200, JSON.stringify(asserted.body).slice(0, 80));
+  ok('the payments integration may state a standing', asserted.status === 200, JSON.stringify(asserted.body).slice(0, 80));
 
   const isoDay = (value: unknown): string => (value === null || value === undefined ? '' : new Date(String(value)).toISOString().slice(0, 10));
   const assertedRow = await runtime.db.query("SELECT paid_until, studio_id FROM subscriptions WHERE id = 'sub_omar'");
@@ -241,7 +241,7 @@ try {
   // notice was a column on `subscriptions`, the rung that needs
   // `subscriptions.write.update` to assert a standing reached
   // `subscriptions/give-notice` too — and this call returned 200. The fence is
-  // drawn by the engine now, not by the pack choosing not to.
+  // drawn by the engine now, not by the integration choosing not to.
   const noticeGrab = await asKey('st_northrock', 'subscriptions/give-notice', { subscriptionId: 'sub_omar' }, stripeKey);
   ok('...nor give notice on somebody’s behalf', noticeGrab.status >= 400, `${noticeGrab.status} — a person decides that, and a billing system is not a person`);
 
@@ -251,7 +251,7 @@ try {
   const withdrawGrab = await asKey('st_northrock', 'subscriptions/withdraw-notice', { subscriptionId: 'sub_tobias' }, stripeKey);
   ok('...nor take one back', withdrawGrab.status >= 400, `${withdrawGrab.status} — the same table, the same fence`);
 
-  // ── placement: the pack's screens live with their domain ─────
+  // ── placement: the integration's screens live with their domain ─────
   owner.dispatch({ type: 'ui:click', ref: 'nav', payload: 'people.list' });
   await settle(14);
   ok('a placed screen joins its domain’s tabs', treeOf(owner).includes('Belts'), 'People: Members, Enquiries, Staff — and Belts, placed by the bundle');
@@ -273,18 +273,18 @@ try {
   await settle(14);
   owner.dispatch({ type: 'ui:click', ref: 'open', payload: { person_id: 'p_omar' } });
   await settle(16);
-  ok('the member record offers the pack’s panel', treeOf(owner).includes('Belt'), 'the riders’ strip, derived per studio');
-  ok('...wearing the pack’s preview — the belt, stripes and all', treeOf(owner).includes('Purple — 2nd stripe · since'), 'display atoms over the session’s own wire');
+  ok('the member record offers the integration’s panel', treeOf(owner).includes('Belt'), 'the riders’ strip, derived per studio');
+  ok('...wearing the integration’s preview — the belt, stripes and all', treeOf(owner).includes('Purple — 2nd stripe · since'), 'display atoms over the session’s own wire');
 
   owner.dispatch({ type: 'ui:click', ref: 'openAttachment', payload: { action: 'ext.desk.belts.panel' } });
   await settle(16);
   const panel = treeOf(owner);
   ok('the panel opens with the member’s belt', panel.includes('Purple — 2nd stripe'), 'belt and stripes, from what the host offered');
-  ok('...and their history', panel.includes('2022-03-19'), 'the pack’s own rows');
+  ok('...and their history', panel.includes('2022-03-19'), 'the integration’s own rows');
 
   owner.dispatch({ type: 'ui:click', ref: 'stripe', payload: {} });
   await settle(14);
-  ok('Add stripe asks before it acts', treeOf(owner).includes('Add a stripe?'), 'Lyra’s confirm sheet, pushed by the pack');
+  ok('Add stripe asks before it acts', treeOf(owner).includes('Add a stripe?'), 'Lyra’s confirm sheet, pushed by the integration');
   owner.dispatch({ type: 'ui:click', ref: 'cancel', payload: {} });
   await settle(14);
   ok('...and cancel changes nothing', treeOf(owner).includes('Purple — 2nd stripe'), 'a mistake costs a click, not a correction');
@@ -307,7 +307,7 @@ try {
   const heard = await runtime.db.query("SELECT studio_id, title AS subject FROM notifications WHERE title LIKE '%promoted to Brown%'");
   const note = heard.rows[0] as { studio_id?: string; subject?: string } | undefined;
   ok('...and Lyra’s inbox heard about it BY NAME', note?.subject === 'Omar Haddad was promoted to Brown.', note?.subject ?? '(nothing landed)');
-  ok('...through the pack’s own key, stamped to the studio', note?.studio_id === 'st_northrock', 'the first real consumer of an integration key');
+  ok('...through the integration’s own key, stamped to the studio', note?.studio_id === 'st_northrock', 'the first real consumer of an integration key');
 
   // ── every edit is reversible: the ledger is the undo stack ───
   owner.dispatch({ type: 'ui:click', ref: 'undo', payload: {} });
@@ -336,19 +336,19 @@ try {
 
   owner.dispatch({ type: 'ui:click', ref: 'openSettings', payload: { settings_action: 'ext.desk.belts.settings' } });
   await settle(16);
-  ok('the pack’s settings open from the store', treeOf(owner).includes('The ranks this pack grades through'), 'configuration, not a workspace');
+  ok('the integration’s settings open from the store', treeOf(owner).includes('The ranks this pack grades through'), 'configuration, not a workspace');
 
   owner.dispatch({ type: 'ui:model', ref: 'newRank', payload: 'Coral' });
   owner.dispatch({ type: 'ui:click', ref: 'add', payload: {} });
   await settle(16);
-  ok('...and edit the pack’s OWN configuration', treeOf(owner).includes('Coral'), 'a rank added to rows Lyra does not have');
+  ok('...and edit the integration’s OWN configuration', treeOf(owner).includes('Coral'), 'a rank added to rows Lyra does not have');
 
-  // ── a DEAD pack answers in sentences, not status codes ───────
+  // ── a DEAD integration answers in sentences, not status codes ───────
   //
   // A third-party service being down is the steady state of a marketplace.
   // The screen in front of it belongs to a studio owner: the floor under a
-  // pack that answers nothing usable is a sentence naming the pack, and a
-  // bare `HTTP 500` reaching the glass is the defect. The pack's own words,
+  // integration that answers nothing usable is a sentence naming the integration, and a
+  // bare `HTTP 500` reaching the glass is the defect. The integration's own words,
   // when it manages any, always win — the throw-wrapper in pack.ts is the
   // other half of the same contract.
   // The raw UPDATE rides no write path, so the derivations must be dropped
@@ -360,7 +360,7 @@ try {
   owner.dispatch({ type: 'ui:click', ref: 'openSettings', payload: { settings_action: 'ext.desk.belts.settings' } });
   await settle(18);
   const deadTree = treeOf(owner);
-  ok('a dead pack is a sentence naming the pack', deadTree.includes('The belts add-on is not answering right now'), 'the floor the wire puts under every integration call');
+  ok('a dead integration is a sentence naming the integration', deadTree.includes('The belts add-on is not answering right now'), 'the floor the wire puts under every integration call');
   ok('...never a bare status code', !/HTTP \d/.test(deadTree), 'a studio owner cannot act on a number');
   await runtime.db.query('UPDATE integrations SET url = $1 WHERE id = $2', [`http://127.0.0.1:${String(PORT)}/belts`, 'belts']);
   server.refresh();
@@ -370,9 +370,9 @@ try {
   await settle(14);
   owner.dispatch({ type: 'ui:click', ref: 'uninstall', payload: { integration_id: 'belts' } });
   await settle(18);
-  // PER PACK, not per studio: this studio also has the payments pack installed
+  // PER INTEGRATION, not per studio: this studio also has the payments integration installed
   // now, and an assertion that no ext.* survives would be asserting that
-  // uninstalling one pack takes every pack's screens away.
+  // uninstalling one integration takes every integration's screens away.
   ok('uninstalling takes the screens away', !(await idsFor(CAST.northrock.owner)).some((id) => id.startsWith('ext.desk.belts.') || id.startsWith('ext.member.belts.')), 'the row stays, disabled; the studio stopped paying');
 
   owner.dispatch({ type: 'ui:click', ref: 'install', payload: { integration_id: 'belts' } });

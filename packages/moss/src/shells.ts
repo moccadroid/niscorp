@@ -56,8 +56,8 @@ export type ShellPrincipal = {
   // looks inside; it is the app's record, on its way back to the app.
   scope: Record<string, unknown>;
   // The tenant's live integrations. Carried because `adopt` has to recompute a
-  // catalog when the ACTIONS change, and a catalog that forgot which packs were
-  // installed would hand every studio every pack's screens.
+  // catalog when the ACTIONS change, and a catalog that forgot which integrations were
+  // installed would hand every studio every integration's screens.
   installed: readonly string[] | undefined;
   catalog: Catalog;
   variants: ReadonlyMap<string, LayoutNode>;
@@ -91,24 +91,24 @@ export type ShellHostContext = {
   delta?: boolean;
 };
 
-// ── THE FLOOR UNDER A FAILING PACK ───────────────────────────
+// ── THE FLOOR UNDER A FAILING INTEGRATION ───────────────────────────
 //
 // A third-party service being down is the steady state of a marketplace, and
 // the screen in front of it belongs to a studio owner, not an operator. A
-// pack reply carrying no `message` falls through to the terminal's bare
+// integration reply carrying no `message` falls through to the terminal's bare
 // `HTTP 500` — a status code in front of a customer. So the session's wire
-// puts a SENTENCE under every integration call: naming the pack, saying it
-// is the pack, saying the studio is otherwise fine. A reply that DOES carry
-// a message passes through untouched — the pack's own words always win —
+// puts a SENTENCE under every integration call: naming the integration, saying it
+// is the integration, saying the studio is otherwise fine. A reply that DOES carry
+// a message passes through untouched — the integration's own words always win —
 // and no other path pays anything.
-const PACK_PATH = /^\/integrations\/([a-z][a-z0-9-]*)\//;
+const INTEGRATION_PATH = /^\/integrations\/([a-z][a-z0-9-]*)\//;
 
 const flooredWire = (inner: FetchFn): FetchFn => async (url, init) => {
-  const pack = PACK_PATH.exec(url)?.[1];
-  if (pack === undefined) return inner(url, init);
+  const integration = INTEGRATION_PATH.exec(url)?.[1];
+  if (integration === undefined) return inner(url, init);
 
   const floor = (status: number): Awaited<ReturnType<FetchFn>> => {
-    const body = { message: `The ${pack} add-on is not answering right now. The rest of the studio is unaffected.` };
+    const body = { message: `The ${integration} add-on is not answering right now. The rest of the studio is unaffected.` };
     return { ok: false, status, json: async () => body, text: async () => JSON.stringify(body) };
   };
 
@@ -124,7 +124,7 @@ const flooredWire = (inner: FetchFn): FetchFn => async (url, init) => {
     const body: unknown = await reply.json();
     const message = (body as { message?: unknown } | null)?.message;
     // The proxy's own generic phrase gets the same upgrade as silence — it
-    // knows no pack name; this seam does. The literal belongs to the proxy
+    // knows no integration name; this seam does. The literal belongs to the proxy
     // (server.ts) and the naming should move there with its next edit.
     if (typeof message === 'string' && message !== 'The integration is unreachable.') {
       // Re-serve the consumed body — `json()` reads once.
@@ -391,6 +391,8 @@ export const createShellHost = (ctx: ShellHostContext): ShellHost => {
     const session: FunctionSession = {
         principal,
         roles: who.roles,
+        identity: who.scope,
+        actions: ids,
         wire,
         runtime: ctx.runtime,
         policy: who.policy,
@@ -473,7 +475,7 @@ export const createShellHost = (ctx: ShellHostContext): ShellHost => {
     // language changes gets a `rebuild`, which re-reads this alongside their
     // catalog and inputs — one path, so a language can never be a release
     // behind the screen it is painting.
-    const phrases = (await ctx.app.phrases?.(principal)) ?? {};
+    const phrases = (await ctx.app.phrases?.({ principal, identity: who.scope, wire: ctx.wire(token) })) ?? {};
 
     const live: Live = { shell, connections: new Set(), sent: new Map(), deltaReady: new Set(), flushing: false, ended: false, since: Date.now(), idleSince: Date.now(), phrases };
     liveRef = live;
@@ -708,7 +710,7 @@ export const createShellHost = (ctx: ShellHostContext): ShellHost => {
     },
     // RE-RESOLVED, not re-read off the cell. Adopting happens because something
     // the derivations were made FROM changed, and the commonest such change is a
-    // tenant installing a pack — so the install list a shell was born with is
+    // tenant installing an integration — so the install list a shell was born with is
     // exactly the thing that must not be trusted here. Asynchronous and
     // unawaited: definitions landing a tick late simply register, which is the
     // same progressive path `seeds` already takes.

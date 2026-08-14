@@ -2,21 +2,26 @@ import { createServer, createTideDriver, mintDevToken } from '@niscorp/moss';
 import { redeemLink } from './links';
 import { unsubscribe } from './unsubscribe';
 import { readMailEvent } from './mail/send';
-import type { MossServer, NiscApp, TideDriver } from '@niscorp/moss';
+import type { ExecuteAs, MossServer, NiscApp, TideDriver } from '@niscorp/moss';
 import type { Tide } from '@niscorp/tide';
 import { buildLyra } from '@lyra/app/app';
 import { COMPONENT_NAMES } from '@lyra/ui/registry';
-import { registerDevPacks } from './dev-packs';
+// The lab's integration registrar is HARNESS — it seeds the lab world the way
+// db/seed.ts seeds rows — and lives with the rest of the harness in dev/.
+import { registerDevPacks } from '../dev/dev-packs';
 import { devRuntime } from './runtime';
 import { reflexesForEveryStudio, wireTide } from './tide';
 import type { DevRuntime } from './runtime';
 
-export const reloadReflexes = async (pool: import('@niscorp/vex').PgPool, tide: Tide): Promise<number> => {
-  const studios = await pool.query('SELECT id, timezone FROM studios ORDER BY id');
-  const rows = await pool.query('SELECT id, studio_id, moment, effect, enabled, run_at, days, subject, body FROM automations');
+export const reloadReflexes = async (runAs: ExecuteAs, tide: Tide): Promise<number> => {
+  // Through the engine, as the charter's `scheduler` role: the automations
+  // engine schedules for every studio, and that reach is DECLARED rather than
+  // being whatever a pool handle happens to allow.
+  const studios = await runAs('scheduler', 'scheduler/studio-zones', {});
+  const rows = await runAs('scheduler', 'scheduler/reflex-rows', {});
   const reflexes = reflexesForEveryStudio(
-    studios.rows as { id: string; timezone: string }[],
-    rows.rows as never,
+    (Array.isArray(studios) ? studios : []) as { id: string; timezone: string }[],
+    (Array.isArray(rows) ? rows : []) as never,
   );
   await tide.load(reflexes, { at: Date.now() });
   // The loaded set changed, so what is due changed with it — re-plan the
@@ -33,42 +38,6 @@ export const tideDriver = (): TideDriver => {
   return driver;
 };
 
-// HOW EACH AUTOMATION LAST RAN, MIRRORED ONTO ITS OWN ROW.
-//
-// The card wants one line per automation; the ledger is keyed by a COMPOSED
-// reflex id (`<studioId>:<automationId>`), which is a join no foreign key
-// can carry and no vex entry can express. So the engine's ledger pushes to
-// the automation instead — the counter-cache this schema already runs for
-// booked seats and the anchor's relationships, and for the same reason:
-// recompute on write, read as a column.
-//
-// It is created HERE and not in schema.ts because `tide_run` belongs to
-// moss and does not exist until the store stands up. Recomputed from the
-// newest run rather than incremented, so a re-settled run cannot drift it.
-//
-// These writes are the engine's own bookkeeping and go through the pool, not
-// vex — so they mint no facts, and a reflex settling cannot wake a reload of
-// itself.
-const wireRunMirror = async (pool: import('@niscorp/vex').PgPool): Promise<void> => {
-  await pool.query(/* sql */ `
-    CREATE OR REPLACE FUNCTION mirror_last_run() RETURNS TRIGGER AS $mirror$
-    BEGIN
-      UPDATE automations a
-         SET last_run_state  = NEW.state,
-             last_run_done   = NEW.done,
-             last_run_failed = NEW.failed
-       WHERE NEW.reflex_id = a.studio_id || ':' || a.id;
-      RETURN NEW;
-    END;
-    $mirror$ LANGUAGE plpgsql;
-  `);
-  await pool.query('DROP TRIGGER IF EXISTS mirror_last_run_row ON tide_run');
-  await pool.query(/* sql */ `
-    CREATE TRIGGER mirror_last_run_row
-    AFTER INSERT OR UPDATE OF state, done, failed ON tide_run
-    FOR EACH ROW EXECUTE FUNCTION mirror_last_run();
-  `);
-};
 
 export const boot = async (): Promise<{ server: MossServer; runtime: DevRuntime; app: NiscApp; tide: Tide }> => {
   const runtime = await devRuntime();
@@ -80,7 +49,7 @@ export const boot = async (): Promise<{ server: MossServer; runtime: DevRuntime;
       server: () => (built === undefined ? (() => { throw new Error('boot: the server is not up yet'); })() : built),
       tide: () => (tide === undefined ? (() => { throw new Error('boot: tide is not up yet'); })() : tide),
       driver: tideDriver,
-      reloadAutomations: async () => (tide === undefined ? 0 : reloadReflexes(runtime.pool, tide)),
+      reloadAutomations: async () => (tide === undefined || built === undefined ? 0 : reloadReflexes(built.executeAs, tide)),
     },
   );
 
@@ -98,17 +67,17 @@ export const boot = async (): Promise<{ server: MossServer; runtime: DevRuntime;
   //
   // Answers HTML rather than JSON — the only surface in this app a person
   // reaches without a shell, so it has to say something a human can read.
-  const farewell = (message: string): string =>
+  const buildUnsubscribePage = (message: string): string =>
     `<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">` +
     `<title>Unsubscribed</title><body style="font:16px/1.5 system-ui,sans-serif;max-width:32rem;margin:20vh auto;padding:0 1.5rem">` +
     `<p>${message}</p></body>`;
 
-  const stop = async (c: { req: { param: (name: string) => string | undefined } }): Promise<Response> => {
-    const done = await unsubscribe(runtime.pool, c.req.param('token') ?? '');
+  const handleUnsubscribeRequest = async (c: { req: { param: (name: string) => string | undefined } }): Promise<Response> => {
+    const done = await unsubscribe(server.executeAs, c.req.param('token') ?? '');
     // ONE ANSWER EITHER WAY. A forged token and an already-unsubscribed person
     // read the same, because the alternative is a page that confirms guesses.
     return new Response(
-      farewell(
+      buildUnsubscribePage(
         done === null
           ? 'That link is not one we recognise. If you are still hearing from a studio you would rather not, reply to one of their emails and they will take you off.'
           : 'Done — you will not hear from this studio again. Anything you have booked still stands, and they can still write to you about it.',
@@ -134,40 +103,33 @@ export const boot = async (): Promise<{ server: MossServer; runtime: DevRuntime;
     const event = readMailEvent(headers, raw, Date.now());
     if (event === null) return c.json({ ok: true }, 200);
 
-    // These writes carry no identity and go through the pool, like the
-    // unsubscribe door and for the same reason: there is nobody to be. Each is
-    // one narrow statement, addressed by the provider's own id or by an
-    // address the provider just told us about.
+    // Through the engine, as the charter's `mailer` role: a vendor calling in
+    // has no principal and could not have one, so the role IS the identity —
+    // declared verbs, declared reach, nothing wider reachable.
     if (event.kind === 'delivered') {
-      await runtime.pool.query('UPDATE outbox SET delivered_at = now() WHERE provider_message_id = $1', [event.id]);
+      await server.executeAs('mailer', 'mailer/record-delivered', { providerMessageId: event.id, at: new Date().toISOString() });
       return c.json({ ok: true });
     }
     if (event.kind === 'bounced' || event.kind === 'complained') {
-      const studio = await runtime.pool.query('SELECT studio_id FROM outbox WHERE provider_message_id = $1', [event.id]);
-      const studioId = String((studio.rows[0] as { studio_id?: string } | undefined)?.studio_id ?? '');
+      const origin = (await server.executeAs('mailer', 'mailer/outbox-origin', { providerMessageId: event.id })) as { studio_id?: unknown; person_id?: unknown } | null;
+      const studioId = String(origin?.studio_id ?? '');
+      const personId = String(origin?.person_id ?? '');
       // A BOUNCE IS ABOUT THE ADDRESS and holds everywhere; a COMPLAINT is
       // about the relationship and holds at the studio complained about.
-      const scope = event.kind === 'bounced' ? '' : studioId;
-      await runtime.pool.query(
-        `INSERT INTO mail_suppressions (address, studio_id, kind, reason) VALUES ($1, $2, $3, $4)
-         ON CONFLICT (address, studio_id) DO UPDATE SET kind = EXCLUDED.kind, reason = EXCLUDED.reason`,
-        [event.to, scope, event.kind, event.reason],
-      );
-      await runtime.pool.query("UPDATE outbox SET state = 'failed', failed_reason = $2 WHERE provider_message_id = $1", [event.id, event.reason]);
+      const suppressAt = event.kind === 'bounced' ? '' : studioId;
+      await server.executeAs('mailer', 'mailer/suppress', { address: event.to, studioId: suppressAt, kind: event.kind, reason: event.reason });
+      await server.executeAs('mailer', 'mailer/record-failed', { providerMessageId: event.id, reason: event.reason });
       // Somebody reporting a studio's mail as spam has withdrawn consent by
       // any reading of it, whatever a checkbox says.
-      if (event.kind === 'complained' && studioId !== '') {
-        await runtime.pool.query(
-          'UPDATE studio_people SET marketing_ok = false WHERE studio_id = $1 AND person_id = (SELECT person_id FROM outbox WHERE provider_message_id = $2)',
-          [studioId, event.id],
-        );
+      if (event.kind === 'complained' && studioId !== '' && personId !== '') {
+        await server.executeAs('mailer', 'mailer/opt-out', { studioId, personId }, { studioId, personId });
       }
     }
     return c.json({ ok: true });
   });
 
-  server.get('/api/unsubscribe/:token', stop);
-  server.post('/api/unsubscribe/:token', stop);
+  server.get('/api/unsubscribe/:token', handleUnsubscribeRequest);
+  server.post('/api/unsubscribe/:token', handleUnsubscribeRequest);
 
   // ── THE ONE DOOR A SIGN-IN LINK KNOCKS ON ────────────────────
   //
@@ -186,7 +148,7 @@ export const boot = async (): Promise<{ server: MossServer; runtime: DevRuntime;
   // key and mailing them a doorbell.
   server.post('/api/auth/redeem', async (c) => {
     const body = (await c.req.json().catch(() => ({}))) as { nonce?: unknown };
-    const personId = await redeemLink(runtime.pool, String(body.nonce ?? ''), Date.now());
+    const personId = await redeemLink(server.executeAs, String(body.nonce ?? ''), Date.now());
     // One sentence for expired, spent and never-existed alike. Which of the
     // three it was is not the caller's business, and answering differently
     // would make this a place to test nonces against.
@@ -205,8 +167,7 @@ export const boot = async (): Promise<{ server: MossServer; runtime: DevRuntime;
   // AFTER the first load, not merely after the store is constructed: the
   // store migrates lazily on first use, so `tide_run` does not exist until
   // something reads it — and `load` is the first thing that does.
-  await reloadReflexes(runtime.pool, tide);
-  await wireRunMirror(runtime.pool);
+  await reloadReflexes(server.executeAs, tide);
 
   return { server, runtime, app, tide };
 };
@@ -214,7 +175,7 @@ export const boot = async (): Promise<{ server: MossServer; runtime: DevRuntime;
 // DEV ONLY, and DELIBERATELY NOT PART OF `boot()`.
 //
 // `boot()` is shared: the dev server calls it, and so does every check (via
-// world.ts). Auto-registering packs inside it leaked into the checks — a check
+// world.ts). Auto-registering integrations inside it leaked into the checks — a check
 // imports the integrations service, whose module load reads THIS app's `.env`,
 // so `LYRA_DEV_PACKS` was set by the time boot ran and the store came up
 // pre-registered, breaking the check's own registration.

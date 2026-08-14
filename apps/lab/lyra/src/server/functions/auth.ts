@@ -1,12 +1,11 @@
 import type { FunctionHandler } from '@niscorp/nova';
 import type { FunctionSession } from '@niscorp/moss';
-import type { PgPool } from '@niscorp/vex';
-import { personCard, principalByEmail } from '../lookup';
+import { principalByEmail } from '../links';
 import { mintToken } from '../tokens';
 import { mintLink, tooManyLinks } from '../links';
 import { sendMail } from '../mail/send';
 
-type Deps = { pool: PgPool; now: () => number; base: () => string };
+type Deps = { runAs: import('@niscorp/moss').ExecuteAs; now: () => number; base: () => string };
 
 export const authFunctions = (session: FunctionSession, deps: Deps): Record<string, FunctionHandler> => ({
   // ONE ANSWER FOR EVERY ADDRESS. Whether somebody has an account here is not
@@ -22,11 +21,10 @@ export const authFunctions = (session: FunctionSession, deps: Deps): Record<stri
     // accounts would be the oracle this endpoint just avoided being.
     if (tooManyLinks(email, deps.now())) throw new Error('That is a lot of sign-in links. Try again in a few minutes.');
 
-    const principal = await principalByEmail(deps.pool, email);
+    const principal = await principalByEmail(deps.runAs, email);
     if (principal === null) return true;
-    const card = await personCard(deps.pool, principal);
 
-    const nonce = await mintLink(deps.pool, principal, deps.now());
+    const nonce = await mintLink(deps.runAs, principal, deps.now());
     const link = `${deps.base().replace(/\/$/, '')}/?login=${nonce}`;
 
     const sent = await sendMail({
@@ -39,7 +37,7 @@ export const authFunctions = (session: FunctionSession, deps: Deps): Record<stri
       fromBox: 'no-reply',
       replyTo: '',
       subject: 'Your sign-in link',
-      text: `Hello ${card?.name ?? 'there'},\n\nHere is your link to sign in. It works once, and for the next 15 minutes:\n\n${link}\n\nIf you did not ask for this, nothing has happened — you can ignore it.`,
+      text: `Hello,\n\nHere is your link to sign in. It works once, and for the next 15 minutes:\n\n${link}\n\nIf you did not ask for this, nothing has happened — you can ignore it.`,
       key: nonce,
     });
 
@@ -59,9 +57,9 @@ export const authFunctions = (session: FunctionSession, deps: Deps): Record<stri
   // IT IS NOT A PRODUCTION DOOR. It grants a session for any address in the
   // directory without proving anything, which is only survivable while every
   // session token in this app is forgeable anyway (moss's `mintDevToken`).
-  // So it now sits behind the same env fence the dev packs do — see below.
+  // So it now sits behind the same env fence the dev integrations do — see below.
   'auth.enter': async (data) => {
-    // BEHIND AN ENV FENCE, like the dev packs. It is off unless a deployment
+    // BEHIND AN ENV FENCE, like the dev integrations. It is off unless a deployment
     // names it, so a production build cannot be talked into handing out a
     // session for an address somebody typed. The link above is the real path
     // and always works; this is the lab's shortcut through it.
@@ -72,7 +70,7 @@ export const authFunctions = (session: FunctionSession, deps: Deps): Record<stri
     // depending on which name a .env happened to set.
     if (process.env['LYRA_DEV_LOGIN'] !== 'on') throw new Error('Sign in with the link we email you.');
     const email = String(data['email'] ?? '').trim();
-    const token = await mintToken(deps.pool, email);
+    const token = await mintToken(deps.runAs, email);
     if (token === null) throw new Error(`No account for ${email}.`);
     session.grant(token);
     return true;

@@ -1,13 +1,13 @@
 // THE FRAME SEAM — the one place this app renders something it did not validate.
 //
-// Everything else a pack ships is checked against a fixed component vocabulary
-// and refused if it names anything else. A framed page is not: it is the pack's
+// Everything else an integration ships is checked against a fixed component vocabulary
+// and refused if it names anything else. A framed page is not: it is the integration's
 // own HTML, served at THIS app's origin, and nothing here inspects it. That is a
 // real weakening and it is why the seam is declared rather than conjured — so
 // this check is the argument that the bounds actually hold.
 //
 // The bounds, in order: only a DECLARED page, only through a GRANT, only for a
-// principal the grant was minted for, only while the pack is installed — and the
+// principal the grant was minted for, only while the integration is installed — and the
 // grant itself must be worthless as identity, because it travels in a URL.
 //
 // Run: pnpm --filter lyra exec tsx src/dev/frame-check.ts
@@ -70,15 +70,15 @@ try {
   ok('...at THIS app’s origin, so the browser sends nothing of ours abroad', src.startsWith('/'), 'a relative path — same origin is the whole reason the seam is bounded');
 
   const page = await open(src);
-  ok('...and spending it serves the pack’s own document', page.status === 200 && page.body.includes('<!doctype html'), `${page.status} · ${page.body.length} bytes`);
+  ok('...and spending it serves the integration’s own document', page.status === 200 && page.body.includes('<!doctype html'), `${page.status} · ${page.body.length} bytes`);
   ok('...as HTML, not as JSON', page.type.includes('text/html'), page.type);
-  ok('...with the assertion still reaching the pack', !page.body.includes('Who are you?'), 'the grant was redeemed and a fresh assertion minted for the hop');
-  ok('...answering about the RIGHT studio', page.body.includes('Purple — 2nd stripe'), 'the pack scoped by the assertion, exactly as on every other route');
+  ok('...with the assertion still reaching the integration', !page.body.includes('Who are you?'), 'the grant was redeemed and a fresh assertion minted for the hop');
+  ok('...answering about the RIGHT studio', page.body.includes('Purple — 2nd stripe'), 'the integration scoped by the assertion, exactly as on every other route');
 
   // ── the grant is not identity ────────────────────────────────
   //
   // It travels in a URL, so it will end up in a history entry and a log. What
-  // it must NOT be is something the pack would accept as a caller.
+  // it must NOT be is something the integration would accept as a caller.
   const token = src.split('/').pop() ?? '';
   const asBearer = await server.request('/integrations/belts/roster', {
     method: 'POST',
@@ -116,10 +116,10 @@ try {
   ok('a grant minted before an uninstall does not open after it', afterUninstall.status === 404, `${afterUninstall.status} — checked when spent, not only when minted`);
   // ── the component is GENERIC, and stays that way ─────────────
   //
-  // The whole point of the seam is that this app never learns what a pack is.
+  // The whole point of the seam is that this app never learns what an integration is.
   // A kit that grew a `StripeEmbed` would have conceded exactly the thing the
   // frame exists to avoid, and it would have done so one commit at a time.
-  ok('the kit offers a generic Frame', Object.keys(app.shell?.components ?? {}).includes('Frame'), 'a URL and a height — it knows no pack');
+  ok('the kit offers a generic Frame', Object.keys(app.shell?.components ?? {}).includes('Frame'), 'a URL and a height — it knows no integration');
   ok('...and nothing vendor-shaped beside it', !Object.keys(app.shell?.components ?? {}).some((n) => /stripe|paypal|embed/i.test(n)), Object.keys(app.shell?.components ?? {}).length + ' components, none named for a vendor');
 
   // THE GATE FOR THIS WHOLE SEAM. The alternative design was this app importing
@@ -137,10 +137,10 @@ try {
   };
   walk(join(process.cwd(), 'src'));
   const manifest = readFileSync(join(process.cwd(), 'package.json'), 'utf8');
-  ok('this app imports no payment SDK', vendorRefs.length === 0, vendorRefs.join(', ') || 'the pack carries it; the host gained a Frame');
-  ok('...and depends on none', !/stripe/i.test(manifest), 'a dependency here is a dependency for every app that installs the pack');
+  ok('this app imports no payment SDK', vendorRefs.length === 0, vendorRefs.join(', ') || 'the integration carries it; the host gained a Frame');
+  ok('...and depends on none', !/stripe/i.test(manifest), 'a dependency here is a dependency for every app that installs the integration');
 } finally {
   await service.close();
 }
 
-report('a pack may serve a page and this app will frame it — declared, granted, scoped, and never mistaken for identity.');
+report('an integration may serve a page and this app will frame it — declared, granted, scoped, and never mistaken for identity.');

@@ -1,4 +1,4 @@
-// THE PAYMENTS PACK, up to the point where money would move.
+// THE PAYMENTS INTEGRATION, up to the point where money would move.
 //
 // Everything here runs WITHOUT a Stripe key, on purpose. The live path — create
 // a connected account, mint an account session, mount Stripe's own onboarding
@@ -6,9 +6,9 @@
 // it is a network call that creates a real object at a vendor. What a check can
 // hold is everything around it, which is where the mistakes actually are: what
 // the bundle is allowed to declare, which page may be framed, how far a framed
-// page may reach back, and what the pack says when it has no key.
+// page may reach back, and what the integration says when it has no key.
 //
-// A pack that refuses cleanly with no key is not a detail. It is the state every
+// An integration that refuses cleanly with no key is not a detail. It is the state every
 // deployment is in before an operator pastes one, and "it crashed" and "it says
 // payments are not configured" look identical from a screen until somebody looks.
 //
@@ -96,7 +96,7 @@ try {
 
   const page = await server.request(src);
   const html = await page.text();
-  ok('spending the grant serves the pack’s own document', page.status === 200 && (page.headers.get('content-type') ?? '').includes('text/html'), page.headers.get('content-type') ?? '');
+  ok('spending the grant serves the integration’s own document', page.status === 200 && (page.headers.get('content-type') ?? '').includes('text/html'), page.headers.get('content-type') ?? '');
   // Not the key message: with no account there is nothing to onboard yet, and
   // the page says THAT. Either way it is a sentence rather than a blank frame.
   ok('...which says where the studio stands', html.includes('not been connected'), 'a page that explains beats a page that is blank');
@@ -110,11 +110,11 @@ try {
   const token = src.split('/').pop() ?? '';
   const beside = await server.request(`/integrations/stripe/frame/${token}/session`, { method: 'POST', body: '{}' });
   const besideBody = await beside.text();
-  // The PACK's own words, not the host's. Both answer 404 here — the pack
+  // The INTEGRATION's own words, not the host's. Both answer 404 here — the integration
   // because this studio has no account, the host when it refuses to forward —
   // so the status alone would not tell them apart, and asserting on it would
   // have passed just as well if the callback had never been wired.
-  ok('a framed page may call back beside itself', besideBody.includes('Not connected'), `${beside.status} ${besideBody.slice(0, 40)} — the pack answered, so the callback reached it`);
+  ok('a framed page may call back beside itself', besideBody.includes('Not connected'), `${beside.status} ${besideBody.slice(0, 40)} — the integration answered, so the callback reached it`);
 
   const climbing = await server.request(`/integrations/stripe/frame/${token}/..`, { method: 'POST', body: '{}' });
   // Refused before it is even a callback: the URL collapses and lands on the
@@ -130,9 +130,9 @@ try {
 
   // ── the SDK stays on this side of the wire ───────────────────
   const manifest = await import('node:fs').then((fs) => fs.readFileSync('package.json', 'utf8'));
-  ok('lyra depends on no payment SDK', !/stripe/i.test(manifest), 'the pack carries it; frame-check asserts the same for imports');
+  ok('lyra depends on no payment SDK', !/stripe/i.test(manifest), 'the integration carries it; frame-check asserts the same for imports');
 } finally {
   await service.close();
 }
 
-report('payments arrive as a pack: declared, placed, framed — and honest about having no key.');
+report('payments arrive as an integration: declared, placed, framed — and honest about having no key.');

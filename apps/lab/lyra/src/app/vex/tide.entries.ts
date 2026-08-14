@@ -503,8 +503,8 @@ export const queueMessage: MutationEntry = {
 
 export const notify: MutationEntry = {
   fingerprint: 'automation/notify',
-  intent: 'Record something an automation or an installed pack wants the studio to know',
-  // A PUBLISHED interface: the belts and stripe packs replay this by name, so
+  intent: 'Record something an automation or an installed integration wants the studio to know',
+  // A PUBLISHED interface: the belts and stripe integrations replay this by name, so
   // the fingerprint stays put while the table under it got its honest name.
   // Landing a row here also fans out over the socket to the studio's
   // connected staff — see the app's onMutation hook (app.ts).

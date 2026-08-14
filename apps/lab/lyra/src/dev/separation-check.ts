@@ -19,7 +19,7 @@ const IMPORT = /(?:^|\n)\s*import[^;]*?from\s+['"]([^'"]+)['"]/g;
 
 // WHERE IT LANDS, not how many dots it has. This counted `../../` and called it
 // an escape, which was true while the service was one flat directory and became
-// false the moment packs nested: `packs/belts/index.ts` importing `../../pack`
+// false the moment integrations nested: `packs/belts/index.ts` importing `../../integration`
 // is reaching for the contract one floor up, inside its own tree. Resolving the
 // specifier says so; counting dots accuses it.
 const SRC_ROOT = join(ROOT, 'src').replace(/\\/g, '/');
@@ -40,8 +40,8 @@ ok('it imports nothing from Lyra', offenders.length === 0, offenders.join(', ') 
 ok('...and does not climb out of its own tree', escapes.length === 0, escapes.join(', ') || 'every relative import lands under its own src');
 ok(
   '...by resolving the path, not counting dots',
-  landsOutside(`${SRC_ROOT}/packs/belts/index.ts`, '../../../../lyra/src/app/app') && !landsOutside(`${SRC_ROOT}/packs/belts/index.ts`, '../../pack'),
-  'a nested pack reaching one floor up is not an escape; reaching into another app is',
+  landsOutside(`${SRC_ROOT}/packs/belts/index.ts`, '../../../../lyra/src/app/app') && !landsOutside(`${SRC_ROOT}/packs/belts/index.ts`, '../../integration'),
+  'a nested integration reaching one floor up is not an escape; reaching into another app is',
 );
 
 // ── and depends only on the protocol ─────────────────────────
@@ -54,38 +54,38 @@ ok('...and the platform ones are protocol libraries', nisc.every((d) => d === '@
 const BAD = "import { membersList } from '@lyra/app/vex/member.entries';";
 ok('...and the rule catches an import that should not exist', [...BAD.matchAll(IMPORT)].some((m) => (m[1] ?? '').startsWith('@lyra/')));
 
-// ── AND NO PACK REACHES INTO ANOTHER ─────────────────────────
+// ── AND NO INTEGRATION REACHES INTO ANOTHER ─────────────────────────
 //
-// One service now hosts several packs, which puts a second boundary inside the
+// One service now hosts several integrations, which puts a second boundary inside the
 // first. It is the one that will matter: Belts holding rank data and a payments
-// pack holding a Stripe key are in the same process, and the only thing keeping
+// integration holding a Stripe key are in the same process, and the only thing keeping
 // the first out of the second is that it never imports it.
 //
 // TypeScript will not say no to this — a relative import up and across is
-// perfectly legal — so the check is the enforcement. A shared helper two packs
+// perfectly legal — so the check is the enforcement. A shared helper two integrations
 // both want belongs beside `pack.ts`, hoisted deliberately, not reached for
 // sideways.
-const packDir = (path: string): string | undefined => path.match(/\/src\/packs\/([^/.]+)/)?.[1];
-const crossPack: string[] = [];
+const integrationDir = (path: string): string | undefined => path.match(/\/src\/packs\/([^/.]+)/)?.[1];
+const crossIntegration: string[] = [];
 for (const file of files) {
-  const home = packDir(file.path);
+  const home = integrationDir(file.path);
   if (home === undefined) continue;
   for (const match of file.text.matchAll(IMPORT)) {
     const spec = match[1] ?? '';
     if (!spec.startsWith('.')) continue;
     // Resolve the specifier against the importing file to see where it lands.
     const landed = join(file.path, '..', spec).replace(/\\/g, '/');
-    const target = packDir(`/src/packs/${landed.split('/src/packs/')[1] ?? ''}`);
-    if (target !== undefined && target !== home) crossPack.push(`${file.path} → ${spec}`);
+    const target = integrationDir(`/src/packs/${landed.split('/src/packs/')[1] ?? ''}`);
+    if (target !== undefined && target !== home) crossIntegration.push(`${file.path} → ${spec}`);
   }
 }
-ok('no pack imports another pack', crossPack.length === 0, crossPack.join(', ') || `${new Set(files.map((f) => packDir(f.path)).filter(Boolean)).size} packs, each its own`);
+ok('no integration imports another integration', crossIntegration.length === 0, crossIntegration.join(', ') || `${new Set(files.map((f) => integrationDir(f.path)).filter(Boolean)).size} integrations, each its own`);
 
 // The rule has to be able to see one, or it is a comment.
 ok(
   '...and the rule would catch one',
-  packDir('/x/src/packs/belts/index.ts') === 'belts' && packDir('/x/src/packs/stripe/store.ts') === 'stripe',
-  'a pack is its directory, and two directories are two packs',
+  integrationDir('/x/src/packs/belts/index.ts') === 'belts' && integrationDir('/x/src/packs/stripe/store.ts') === 'stripe',
+  'an integration is its directory, and two directories are two integrations',
 );
 
 // ── the other direction ──────────────────────────────────────

@@ -1,5 +1,5 @@
 import type { FunctionHandler } from '@niscorp/nova';
-import type { PgPool } from '@niscorp/vex';
+import type { FunctionSession } from '@niscorp/moss';
 import { domainState, registerDomain, senderFor } from '../mail/send';
 
 // ONE QUESTION A SCREEN CANNOT ANSWER FROM ROWS: what address does this
@@ -8,13 +8,15 @@ import { domainState, registerDomain, senderFor } from '../mail/send';
 // So the settings screen asks, and what it shows is what the transport would
 // really put in the From: header — including "not configured", which is the
 // answer somebody needs most.
-export const mailFunctions = (deps: { pool: PgPool; studioOf: (principal: string | null) => Promise<string> }, principal: string | null): Record<string, FunctionHandler> => ({
+export const mailFunctions = (session: FunctionSession): Record<string, FunctionHandler> => ({
   'mail.sender': async () => {
-    const studioId = await deps.studioOf(principal);
-    if (studioId === '') return '';
-    const row = await deps.pool.query('SELECT name, slug FROM studios WHERE id = $1', [studioId]);
-    const studio = row.rows[0] as { name?: string; slug?: string } | undefined;
-    return studio === undefined ? '' : senderFor(String(studio.name ?? ''), String(studio.slug ?? ''));
+    // The studio's name and slug are an entry (`studio/current`), read over
+    // the session's own wire — the same rows the settings screen shows.
+    const response = await session.wire('/api/vex', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ fingerprint: 'studio/current', context: {} }) });
+    if (!response.ok) return '';
+    const studio = (await response.json()) as { name?: unknown; slug?: unknown } | null;
+    if (studio === null || typeof studio !== 'object') return '';
+    return senderFor(String(studio.name ?? ''), String(studio.slug ?? ''));
   },
 
   // ── BRING YOUR OWN DOMAIN, in two acts ──────────────────────

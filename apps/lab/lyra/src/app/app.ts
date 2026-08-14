@@ -16,9 +16,8 @@ import { automationFunctions } from '@lyra/server/functions/automations';
 import { navFunctions } from '@lyra/server/functions/nav';
 import { identityFor } from '@lyra/server/identity';
 import { clockScope } from '@lyra/server/clock';
-import { installedFor, integrationActorFor, localeOf, personCard, studioOf } from '@lyra/server/lookup';
-import { themeFor } from '@lyra/server/themes';
-import { greetingFrom, phrasesFor } from '@lyra/server/phrases';
+import { readDevLoginRoster } from '@lyra/server/dev-login';
+import { greetingFrom } from '@lyra/server/phrases';
 
 export type ServerDeps = {
   pool: import('@niscorp/vex').PgPool;
@@ -37,19 +36,65 @@ export type ServerDeps = {
 
 const ROLE_LABEL: Record<string, string> = { owner: 'Owner', manager: 'Manager', instructor: 'Instructor', desk: 'Front desk', member: 'Member', automation: 'Automation', integration: 'Integration' };
 
-// WHICH RUNG A PACK ACTS ON, derived from the actor's own id.
+// ── engine reads the shell composes from, over the session's own wire ──
 //
-// An integration actor is `ig_<integration>@<studio>` — the id names the pack,
-// so the rung can too. A pack with a rung of its own gets it; everything else
+// The shell's derivation hooks (`inputs`, `phrases`) read entries exactly as a
+// terminal would: same surface, same policy, same fences. These helpers are
+// the only spelling of that call, so a screen and a shell can never disagree
+// about how an entry is asked for.
+type Wire = import('@niscorp/nova').FetchFn;
+
+export const readEntry = async (wire: Wire, fingerprint: string, context: Record<string, unknown>): Promise<unknown> => {
+  const response = await wire('/api/vex', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ fingerprint, context }) });
+  if (!response.ok) return undefined;
+  return response.json();
+};
+
+/** One language's book, folded: approved integrations' words first (`phrases/integrations`),
+ *  the app's own rows OVER them (`phrases/book`) — so an integration can never rename
+ *  a word the host already owns. */
+export const bookOverWire = async (wire: Wire, locale: string): Promise<Record<string, string>> => {
+  const language = locale.split('-')[0] ?? '';
+  if (language === '' || language === 'en') return {};
+  const book: Record<string, string> = {};
+  const integrations = await readEntry(wire, 'phrases/integrations', { locale: language });
+  if (Array.isArray(integrations)) {
+    for (const held of integrations) {
+      if (held === null || typeof held !== 'object' || Array.isArray(held)) continue;
+      for (const [source, text] of Object.entries(held as Record<string, unknown>)) book[source] = String(text);
+    }
+  }
+  const rows = await readEntry(wire, 'phrases/book', { locale: language });
+  if (Array.isArray(rows)) for (const row of rows as { source?: unknown; text?: unknown }[]) book[String(row.source ?? '')] = String(row.text ?? '');
+  return book;
+};
+
+/** The session studio's look — `studio/theme`, stock when it names none. */
+const themeOverWire = async (wire: Wire): Promise<{ name: string; tokens: Record<string, string> }> => {
+  const raw = await readEntry(wire, 'studio/theme', {});
+  if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) return { name: 'stock', tokens: {} };
+  const row = raw as { name?: unknown; tokens?: unknown };
+  const tokens: Record<string, string> = {};
+  if (row.tokens !== null && typeof row.tokens === 'object' && !Array.isArray(row.tokens)) {
+    for (const [key, value] of Object.entries(row.tokens as Record<string, unknown>)) if (typeof value === 'string') tokens[key] = value;
+  }
+  const name = String(row.name ?? '');
+  return name === '' ? { name: 'stock', tokens: {} } : { name, tokens };
+};
+
+// WHICH RUNG AN INTEGRATION ACTS ON, derived from the actor's own id.
+//
+// An integration actor is `ig_<integration>@<studio>` — the id names the integration,
+// so the rung can too. An integration with a rung of its own gets it; everything else
 // shares `integration`, which holds almost nothing.
 //
-// This is what keeps a payments pack's grants away from a rank tracker. Without
-// it every installed pack is the same principal shape, and widening the shared
+// This is what keeps a payments integration's grants away from a rank tracker. Without
+// it every installed integration is the same principal shape, and widening the shared
 // rung for one of them widens it for all of them.
 const integrationRung = (actorId: string): string | undefined => {
   if (!actorId.startsWith('ig_')) return undefined;
-  const pack = actorId.slice('ig_'.length).split('@')[0] ?? '';
-  return pack !== '' && CHARTER[pack] !== undefined ? pack : 'integration';
+  const integration = actorId.slice('ig_'.length).split('@')[0] ?? '';
+  return integration !== '' && CHARTER[integration] !== undefined ? integration : 'integration';
 };
 
 // THE ROLE COMBINATIONS SOMEBODY CAN WEAR — the PAIRS, and only the pairs.
@@ -61,7 +106,7 @@ const integrationRung = (actorId: string): string | undefined => {
 //
 // SINGLE roles are deliberately absent. `verifyVariants` already iterates every
 // role in the charter on its own, so listing them here would be noise that
-// drifts — a pack gaining a rung would have to be remembered in two places, and
+// drifts — an integration gaining a rung would have to be remembered in two places, and
 // the one that was forgotten would be this one.
 //
 // What no other document can derive is which roles COINCIDE on one person, and
@@ -86,21 +131,20 @@ export const buildLyra = (deps: ServerDeps): NiscApp => {
     behaviors: scopeBehaviors,
     resources: RESOURCES,
 
-    // A grant from `ext.*` is deployment-wide; an installation is not. Moss
-    // drops every integration action outside this list.
-    installedIntegrations: (principal) => installedFor(deps.pool, principal),
-    // An actor exists exactly as long as the install does, so one appearing
-    // mid-process registers its assignment at first use.
-    // An actor exists exactly as long as its install does. Nothing is
-    // registered here any more: `identity` resolves the rung from the actor's
-    // own id on the first call, so a pack installed after boot needs no
-    // bookkeeping to be recognised.
-    integrationActor: (integration, actsFor) => integrationActorFor(deps.pool, integration, actsFor),
+    // `installedIntegrations` is gone as a question: the install list lives on
+    // the identity record (`identity/installed`), resolved once per session
+    // through the engine, and moss's surfaces read the record.
+    //
+    // The actor seam is PURE now — the id names both halves, so composing it
+    // reads nothing. Whether the install is live is identity's question:
+    // `identity/actor` answers it when the record resolves, and moss refuses
+    // the keyed call at the door when it answers nobody.
+    integrationActor: (integration, actsFor) => (integration === '' || actsFor === '' ? null : `ig_${integration}@${actsFor}`),
 
     attachable: { 'people.detail': { person_id: 'personId', person_name: 'member.person_name' } },
-    // A pack may place a screen into these and nowhere else — intake refuses a
+    // An integration may place a screen into these and nowhere else — intake refuses a
     // placement naming anything absent here. `hub.money` is offered because a
-    // payments pack has somewhere to belong that is not somebody's roster.
+    // payments integration has somewhere to belong that is not somebody's roster.
     menuSlots: ['hub.people', 'hub.me', 'hub.money'],
     // The same ids, in the words this studio's own navigation uses — so the
     // approval card and the store tile say "under Money" rather than
@@ -120,7 +164,16 @@ export const buildLyra = (deps: ServerDeps): NiscApp => {
     // synchronous ones around it could not have been implemented any other way
     // than by holding the population, which is how Lyra grew eight caches
     // nobody decided on.
-    identity: (principal) => identityFor(deps.pool, principal, integrationRung),
+    identity: {
+      // The reader role — a charter role nobody wears, holding exactly the
+      // verbs identity's engine reads need. Moss lends `read` bound to it.
+      as: 'identity',
+      // ONE licensed statement lives behind this (`server/identity.ts`, the
+      // roles read); everything else the record carries arrives through `read`
+      // — engine executions of the seeded identity entries, each pinned to the
+      // caller by the `identity` reach in behaviors.ts.
+      resolve: (principal, read) => identityFor(deps.pool, principal, integrationRung, read),
+    },
     // WHAT THE CLOCK SAYS, and nothing else — asked per request, deliberately.
     //
     // These two sat in `scope` beside the rest until identity became a
@@ -142,12 +195,13 @@ export const buildLyra = (deps: ServerDeps): NiscApp => {
     // is a real gap and a deliberate one: who is reading is not known until
     // they sign in, and guessing from an Accept-Language header would mean the
     // one screen in the app whose language is a guess. See the design doc.
-    phrases: async (principal) => {
-      // One book, for the language this principal's studio reads in. Read when
-      // the shell is built, which is the only moment it can matter.
-      const studioId = await studioOf(deps.pool, principal);
-      if (studioId === '') return undefined;
-      return phrasesFor(deps.pool, await localeOf(deps.pool, studioId));
+    phrases: async ({ principal, identity, wire }) => {
+      // The language is on the record the session already resolved; the book
+      // is an engine read over the session's own wire, at shell build — the
+      // only moment it can matter. The source language needs no book.
+      if (principal === null) return undefined;
+      const book = await bookOverWire(wire, String(identity['locale'] ?? ''));
+      return Object.keys(book).length === 0 ? undefined : book;
     },
     // THIS APP'S DISPLAY-FIELD CONVENTION — shared with the harvest, so the
     // pass and the report can never disagree about what counts as prose. The
@@ -160,7 +214,7 @@ export const buildLyra = (deps: ServerDeps): NiscApp => {
     // fingerprint to find out what happened.
     reactions: [
       // A notification landing means "the studio was told something" — a
-      // pack's grading, a dunning outcome, an automation's note — so it fans
+      // integration's grading, a dunning outcome, an automation's note — so it fans
       // out to the studio's connected STAFF over the socket their shells
       // already run: the chrome hears 'notified', bumps the bell, re-reads
       // the count. Whoever holds no live shell hears nothing and reads the
@@ -184,26 +238,39 @@ export const buildLyra = (deps: ServerDeps): NiscApp => {
           // insert is the durable fact; whoever is not reached simply reads the
           // rows later, which was always true.
           void (async () => {
+            const HEARS = new Set(['owner', 'manager', 'desk']);
             for (const live of deps.server().shells?.list() ?? []) {
-              const person = await personCard(deps.pool, live.principal);
-              if (person === undefined || person.studioId !== studioId) continue;
-              if (person.audience !== 'owner' && person.audience !== 'manager' && person.audience !== 'desk') continue;
-              deliver(person.id, 'notified');
+              // The app reading back its own records — one live principal at a
+              // time, through the same cache the request path uses.
+              const record = await deps.server().identity(live.principal);
+              if (String(record.scope['studioId'] ?? '') !== studioId) continue;
+              if (!record.roles.some((role) => HEARS.has(role))) continue;
+              deliver(live.principal, 'notified');
             }
           })().catch((err: unknown) => console.error('[lyra:notify]', err));
         },
       },
       // An add-on landing or leaving changes what the directory derives —
       // installed integrations, catalogs, actor rungs. The resync rides the
-      // WRITE, whoever caused it (the store screen, a pack, a check),
+      // WRITE, whoever caused it (the store screen, an integration, a check),
       // instead of every caller remembering to poke a function afterwards.
       {
         table: 'studio_integrations',
-        run: () => {
-          // Nothing to reload: installs are read when they are asked about.
-          // `refresh` is still right — it drops every derivation made under the
-          // old install set and moves the generation pointer, so the other
-          // processes forget too.
+        run: ({ scope }) => {
+          // TENANT-LOCAL, at last. An integration landing at one studio changes what
+          // THAT studio's people may see and nothing about anybody else's, so
+          // this forgets that studio's identities and rebuilds their shells —
+          // rather than dropping every principal's record in the deployment,
+          // which is what `refresh()` does and what this used to call.
+          //
+          // The generation pointer still moves (below), because a second
+          // process holds its own copies of the same tenant's records and has
+          // no other way to hear. Coarse across processes, precise within one;
+          // Move 4 is where that last asymmetry goes.
+          const studioId = String(scope['studioId'] ?? '');
+          if (studioId !== '') deps.server().invalidateTenant(studioId);
+          // The integration's ACTIONS are deployment-wide artifacts, so registering
+          // them is not a tenant's business and still needs the full refresh.
           deps.server().refresh();
         },
       },
@@ -251,7 +318,7 @@ export const buildLyra = (deps: ServerDeps): NiscApp => {
     // boot uses — injected, so a refresh cannot disagree with a restart. (Its
     // predecessor rebuilt from `[audience]` alone, and an instructor who also
     // trains lost their member role until the next boot.)
-    functions: (session) => ({ ...authFunctions(session, { pool: deps.pool, now: () => Date.now(), base: () => process.env['LYRA_BASE'] ?? 'http://localhost:5180' }), ...worldFunctions(session, { pool: deps.pool, app, server: deps.server, studioOf: (principal) => studioOf(deps.pool, principal) }), ...automationFunctions(session, { tide: deps.tide, driver: deps.driver, pool: deps.pool, server: deps.server }), ...navFunctions(session, { app, pool: deps.pool }), ...mailFunctions({ pool: deps.pool, studioOf: (principal) => studioOf(deps.pool, principal) }, session.principal) }),
+    functions: (session) => ({ ...authFunctions(session, { runAs: (role, fingerprint, context, scope) => deps.server().executeAs(role, fingerprint, context, scope), now: () => Date.now(), base: () => process.env['LYRA_BASE'] ?? 'http://localhost:5180' }), ...worldFunctions(session, { app, server: deps.server }), ...automationFunctions(session, { tide: deps.tide, driver: deps.driver, server: deps.server }), ...navFunctions(session, { app, pool: deps.pool }), ...mailFunctions(session) }),
 
     shell: {
       // Every canvas needs an explicit `actionLayout` with an `ActionSlot`: the
@@ -302,7 +369,7 @@ export const buildLyra = (deps: ServerDeps): NiscApp => {
 
       // Per-principal boot input, resolved once on the server. Everything
       // downstream reads these from action data; a terminal cannot author them.
-      inputs: async ({ principal, actions: granted, identity }): Promise<Record<string, Record<string, unknown>>> => {
+      inputs: async ({ principal, actions: granted, identity, wire }): Promise<Record<string, Record<string, unknown>>> => {
         // FROM THE RECORD THE SESSION ALREADY RESOLVED. This used to reach into
         // a resident directory for four facts about one person — which is the
         // seam that made the directory exist.
@@ -336,31 +403,14 @@ export const buildLyra = (deps: ServerDeps): NiscApp => {
           // entire roster — every name and every email — served to anybody who
           // can reach the login screen. `dev/world.ts` and `server/serve.ts`
           // turn it on; nothing else does. See docs/plans/lyra-identity.md 12.1.
-          if (process.env['LYRA_DEV_LOGIN'] !== 'on') return { main: { people: [] } };
-          return {
-            main: {
-              // Automations and integration actors never log in, so they are not
-              // on the one screen whose whole job is logging in.
-              // The one query in this application that reads a population, in
-              // the one place whose job is offering a choice of who to be, and
-              // only when the environment says this is a lab.
-              people: (
-                await deps.pool.query(/* sql */ `
-                  SELECT p.id, p.name, p.email, st.name AS studio, COALESCE(sf.role, 'member') AS role
-                  FROM people p
-                  LEFT JOIN staff sf ON sf.person_id = p.id AND sf.active
-                  LEFT JOIN studio_people sp ON sp.person_id = p.id
-                  JOIN studios st ON st.id = COALESCE(sf.studio_id, sp.studio_id)
-                  WHERE COALESCE(sf.role, '') NOT IN ('automation')
-                  ORDER BY p.name
-                `)
-              ).rows.map((r) => ({ id: String(r['id']), name: String(r['name']), email: String(r['email']), studio: String(r['studio']), role: ROLE_LABEL[String(r['role'])] ?? 'Member' })),
-            },
-          };
+          // The roster query lives in `server/dev-login.ts` — a named
+          // no-principal door beside the nonce, gated on the same flag.
+          const people = await readDevLoginRoster((role, fingerprint, context, scope) => deps.server().executeAs(role, fingerprint, context, scope));
+          return { main: { people: people.map((p) => ({ ...p, role: ROLE_LABEL[p.role] ?? 'Member' })) } };
         }
 
-        const theme = await themeFor(deps.pool, studioId);
-        const book = await phrasesFor(deps.pool, str('locale'));
+        const theme = await themeOverWire(wire);
+        const book = await bookOverWire(wire, str('locale'));
 
         // The opening paint's greeting. `nav.identity` recomputes it on mount
         // with the SAME composer (server/phrases.ts) — two spellings of one

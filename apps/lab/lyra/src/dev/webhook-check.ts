@@ -3,13 +3,13 @@
 // Every other route is bounded by a credential. This one cannot be: a vendor
 // calling in has no session and no key, because nobody is driving. So the
 // question this check asks is not "who was let in" but "what does being let in
-// get you" — and the answer must be: forwarded to the pack, with no identity
-// manufactured on the way, and the pack still has to decide for itself.
+// get you" — and the answer must be: forwarded to the integration, with no identity
+// manufactured on the way, and the integration still has to decide for itself.
 //
 // The property that cannot be seen from outside is BYTE FIDELITY. A vendor
 // signs exact bytes; a JSON round-trip through this process would re-order one
 // key and break every verification downstream, silently and only in production.
-// So the pack answers with a hash of what it received and this check compares it
+// So the integration answers with a hash of what it received and this check compares it
 // against a hash of what was sent.
 //
 // Run: pnpm --filter lyra exec tsx src/dev/webhook-check.ts
@@ -59,30 +59,30 @@ try {
   await operator('/operator/integrations', { id: 'belts', url: `http://127.0.0.1:${PORT}/belts` });
   const pending = await hook('belts', 'invoice.paid', PAYLOAD);
   ok('...and a PENDING one does not either', pending.status === 404, `${pending.status} — registered is not approved`);
-  ok('...answering 404, never 403', pending.json['message'] === 'Not found.', 'a stranger learns nothing about which packs we are considering');
+  ok('...answering 404, never 403', pending.json['message'] === 'Not found.', 'a stranger learns nothing about which integrations we are considering');
 
   await operator('/operator/integrations/belts/approve', {});
 
-  // ── approved: the call lands, and the pack decides ───────────
+  // ── approved: the call lands, and the integration decides ───────────
   const unsigned = await hook('belts', 'invoice.paid', PAYLOAD);
-  ok('an unsigned call REACHES the pack', unsigned.json['sha256'] !== undefined, 'the pack answered about a body, so it was forwarded');
-  ok('...and the pack refuses it itself', unsigned.status === 401, `${unsigned.status} — moss vouched for nobody, so the pack had to ask`);
+  ok('an unsigned call REACHES the integration', unsigned.json['sha256'] !== undefined, 'the integration answered about a body, so it was forwarded');
+  ok('...and the integration refuses it itself', unsigned.status === 401, `${unsigned.status} — moss vouched for nobody, so the integration had to ask`);
 
   // ── the property that cannot be seen from outside ────────────
   ok('the body arrives byte-identical', unsigned.json['sha256'] === sha256(PAYLOAD), `${String(unsigned.json['sha256']).slice(0, 16)}… over ${String(unsigned.json['bytes'])} bytes`);
   ok('...including the bytes a re-serializer would tidy', Number(unsigned.json['bytes']) === Buffer.byteLength(PAYLOAD), `${Buffer.byteLength(PAYLOAD)} bytes of awkward spacing and unicode`);
 
-  // ── a signature the pack can actually check ──────────────────
+  // ── a signature the integration can actually check ──────────────────
   const signature = createHash('sha256').update(SECRET).update(Buffer.from(PAYLOAD)).digest('hex');
   const signed = await hook('belts', 'invoice.paid', PAYLOAD, { 'x-belts-signature': signature });
-  ok('a signed call is accepted BY THE PACK', signed.status === 200 && signed.json['ok'] === true, 'the vendor is the only party that can vouch here');
+  ok('a signed call is accepted BY THE INTEGRATION', signed.status === 200 && signed.json['ok'] === true, 'the vendor is the only party that can vouch here');
 
   const tampered = await hook('belts', 'invoice.paid', `${PAYLOAD} `, { 'x-belts-signature': signature });
   ok('...and one byte later it is not', tampered.status === 401, 'the signature is over the bytes, and the bytes reached it intact');
 
-  // ── the path segment is what isolates one pack from another ──
+  // ── the path segment is what isolates one integration from another ──
   const wrongPack = await hook('hookclaim', 'invoice.paid', PAYLOAD);
-  ok('one pack’s door is not another’s', wrongPack.status === 404, 'the :id segment is the isolation — a secret and a failure are both per integration');
+  ok('one integration’s door is not another’s', wrongPack.status === 404, 'the :id segment is the isolation — a secret and a failure are both per integration');
 
   // ── and no action may declare itself under it ────────────────
   const claim = await operator('/operator/integrations', { id: 'hookclaim', url: `http://127.0.0.1:${PORT}/hookclaim` });
@@ -100,4 +100,4 @@ try {
   await service.close();
 }
 
-report('the webhook door is open, narrow, and byte-faithful — and the pack still decides.');
+report('the webhook door is open, narrow, and byte-faithful — and the integration still decides.');

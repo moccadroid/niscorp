@@ -25,8 +25,10 @@
 //     the directory a database — being listable was. You cannot scan what you
 //     cannot list. `list()` below is an OPERATOR surface, on the same model as
 //     the shell roster, and it returns structural facts rather than records.
-//   - a secondary index. No by-email, no by-tenant. A second index is a query
-//     planner, and a query planner is a database.
+//   - a secondary index you can READ through. No by-email, no by-tenant lookup.
+//     A second index that answers "who is X" is a query planner, and a query
+//     planner is a database. The tag map below is the one exception and it is
+//     write-only: it can forget a group, and it cannot return one.
 //   - any inspection of what it holds. Not one line here reads a field off a
 //     record's `scope`. The moment moss says `.studioId`, moss has learned what
 //     a tenant is and the boundary this whole design rests on is gone.
@@ -45,6 +47,23 @@ export type IdentityRecord = {
   // registered integration is live, which is right for a single-tenant app and
   // wrong the moment there are two.
   installed?: readonly string[];
+  // WHAT THIS PRINCIPAL SHARES A FATE WITH — an opaque string the application
+  // chooses, and the only reason moss keeps a second map.
+  //
+  // This is NOT the secondary index invariant 2 bans, and the difference is the
+  // whole justification: `BY_EMAIL` was a way to FIND somebody, and a way to
+  // find somebody is a query planner. This supports exactly one operation —
+  // FORGET everyone wearing this tag — and no operation that returns a record.
+  // You cannot read anything through it, which is what invariant 1 is actually
+  // protecting.
+  //
+  // It exists because "a tenant-local write invalidates that tenant, not the
+  // deployment" is otherwise unachievable: dropping one tenant's records means
+  // naming them, and naming them without enumerating the population needs the
+  // application to have said, at resolve time, which ones go together. Moss
+  // never interprets the string — it is a tenant id here, and it could be an
+  // org, a region, or nothing at all.
+  tag?: string;
 };
 
 // One resident identity, as an operator needs to see it: structural facts only.
@@ -68,6 +87,11 @@ export type IdentityCache = {
   // Forget everybody. The generation pointer moved, or an artifact changed
   // under the whole deployment.
   invalidateAll: () => void;
+  // Forget everybody who shares a tag — one tenant, not the deployment. Answers
+  // WHO was forgotten, because the caller's next move is to reset exactly those
+  // shells: a count would leave it guessing, and guessing here means resetting
+  // the whole deployment to be safe, which is the thing this exists to stop.
+  invalidateTag: (tag: string) => readonly string[];
   // Every identity resident right now — the operator roster, on the shell-list
   // model. Structural facts, never records.
   list: () => IdentityReport[];
@@ -130,6 +154,29 @@ export const createIdentityCache = (ctx: IdentityCacheContext): IdentityCache =>
   // read rather than by a second structure that could disagree with this one.
   const held = new Map<string, Held>();
 
+  // tag -> the principals wearing it. Maintained beside `held` and never read
+  // out of: `invalidateTag` deletes through it and nothing else touches it.
+  // Kept honest by pruning on every removal, so a tag whose last principal was
+  // evicted does not linger as an empty set.
+  const tagged = new Map<string, Set<string>>();
+
+  const untag = (principal: string, record: IdentityRecord): void => {
+    const tag = record.tag;
+    if (tag === undefined) return;
+    const group = tagged.get(tag);
+    if (group === undefined) return;
+    group.delete(principal);
+    if (group.size === 0) tagged.delete(tag);
+  };
+
+  const forget = (principal: string): boolean => {
+    const entry = held.get(principal);
+    if (entry === undefined) return false;
+    untag(principal, entry.record);
+    held.delete(principal);
+    return true;
+  };
+
   // IN FLIGHT, so that a burst of requests for one principal at login resolves
   // ONCE. Without this the first request's latency is paid by every request
   // that arrives while it is outstanding, which is precisely the moment a
@@ -143,16 +190,21 @@ export const createIdentityCache = (ctx: IdentityCacheContext): IdentityCache =>
   const evictOldest = (): void => {
     const oldest = held.keys().next();
     if (oldest.done === true) return;
-    held.delete(oldest.value);
+    forget(oldest.value);
     evicted += 1;
   };
 
   const remember = (principal: string, record: IdentityRecord, at: number): void => {
-    held.delete(principal);
+    forget(principal);
     // Evict AFTER the delete above, so re-resolving somebody already held never
     // evicts a stranger to make room for a record that needs none.
     while (held.size >= max) evictOldest();
     held.set(principal, { record, since: at, lastSeen: at });
+    if (record.tag !== undefined) {
+      const group = tagged.get(record.tag) ?? new Set<string>();
+      group.add(principal);
+      tagged.set(record.tag, group);
+    }
   };
 
   const get = async (principal: string): Promise<IdentityRecord> => {
@@ -193,7 +245,7 @@ export const createIdentityCache = (ctx: IdentityCacheContext): IdentityCache =>
     const at = now();
     for (const [principal, entry] of [...held]) {
       if (at - entry.lastSeen >= idleMs) {
-        held.delete(principal);
+        forget(principal);
         evicted += 1;
       }
     }
@@ -204,11 +256,23 @@ export const createIdentityCache = (ctx: IdentityCacheContext): IdentityCache =>
     get,
     invalidate: (principal) => {
       pending.delete(principal);
-      return held.delete(principal);
+      return forget(principal);
     },
     invalidateAll: () => {
       held.clear();
+      tagged.clear();
       pending.clear();
+    },
+    invalidateTag: (tag) => {
+      const group = tagged.get(tag);
+      if (group === undefined) return [];
+      // Copied before iterating: `forget` mutates the set this is walking.
+      const principals = [...group];
+      for (const principal of principals) {
+        pending.delete(principal);
+        forget(principal);
+      }
+      return principals;
     },
     list: () => [...held].map(([principal, entry]) => ({ principal, since: entry.since, lastSeen: entry.lastSeen })),
     meter: () => ({ size: held.size, max, resolved, evicted, expired }),

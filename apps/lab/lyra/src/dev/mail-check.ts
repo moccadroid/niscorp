@@ -3,8 +3,8 @@
 // THE FENCE ROUND THE MAIL TRANSPORT, and it is a check because it is no
 // longer a process.
 //
-// Mail used to be planned as a pack, over a wire, in another service — and a
-// pack cannot reach into this app because it cannot import it. Delivery is
+// Mail used to be planned as an integration, over a wire, in another service — and a
+// integration cannot reach into this app because it cannot import it. Delivery is
 // platform now (docs/plans/lyra-mail.md argues why: the send happens before a
 // principal exists, so there is no tenant to resolve an install against), and
 // the boundary that came free with a process boundary has to be asserted here
@@ -49,7 +49,7 @@ ok(
 
 // ── two: the secrets are read in one file ────────────────────
 //
-// A pack declares its environment and the accessor throws on anything
+// An integration declares its environment and the accessor throws on anything
 // undeclared (pack.ts). In-house there is no accessor, so the equivalent claim
 // is this one: `MAIL_*` is read where mail policy lives and nowhere else.
 // READING is what this forbids, and SETTING is not reading. A file that reads

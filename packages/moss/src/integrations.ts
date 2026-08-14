@@ -89,7 +89,7 @@ const BundleSchema = z
     actions: z.record(z.string(), ActionDefinitionSchema),
     // action id → HOST action it rides on (a panel on the member detail). The
     // host must have declared itself attachable — see IntakeContext. The long
-    // form adds a `preview`: an endpoint under the pack's own prefix that the
+    // form adds a `preview`: an endpoint under the integration's own prefix that the
     // host calls with the offered identifiers while deriving its strip, and
     // that answers with display atoms — `bands` (colors) and `hint` (a line) —
     // so the rider's row can SHOW the belt, not the word for it, while the
@@ -103,15 +103,15 @@ const BundleSchema = z
     // action id → the MENU HUB it lists under (a roster under People). The hub
     // must be one the host offers to integrations.
     placements: z.record(z.string(), z.string()).default({}),
-    // PAGES THE PACK SERVES AND THE HOST FRAMES. Lyra validates every layout
-    // against a fixed component vocabulary, so a pack cannot ship UI — which is
+    // PAGES THE INTEGRATION SERVES AND THE HOST FRAMES. Lyra validates every layout
+    // against a fixed component vocabulary, so an integration cannot ship UI — which is
     // right until a vendor's own browser SDK is the only way to render
     // something (a payment onboarding form). The answer is not to teach the
-    // host's kit about the vendor: it is for the pack to serve a page and the
+    // host's kit about the vendor: it is for the integration to serve a page and the
     // host to frame it, at its own origin, gated by exactly what every other
-    // pack call is gated by.
+    // integration call is gated by.
     //
-    // Named lyra-side, like `preview`, and under the pack's own prefix. What is
+    // Named lyra-side, like `preview`, and under the integration's own prefix. What is
     // inside a frame the host does NOT validate — that is the real cost, and it
     // is why this is a declaration rather than an iframe a layout can conjure.
     frames: z.array(z.string()).default([]),
@@ -119,13 +119,13 @@ const BundleSchema = z
     // settings screen, reachable from its tile and from nowhere else. Add-ons
     // is a store; nothing functional lives there.
     settings: z.string().default(''),
-    // THE PACK'S OWN WORDS, in the languages it speaks — the same
+    // THE INTEGRATION'S OWN WORDS, in the languages it speaks — the same
     // `(language, source, text)` shape the host's book uses, keyed by
     // LANGUAGE, never by full locale: Vienna and Hamburg read the same
     // sentences, and region is money and dates, which never come from a
     // book. A malformed key refuses the whole bundle at intake, exactly as a
     // placement outside the vocabulary does. The host merges these under its
-    // own book, so a pack can never rename a host word.
+    // own book, so an integration can never rename a host word.
     phrasebook: z.record(z.string().regex(/^[a-z]{2}$/, 'a phrasebook is keyed by LANGUAGE (`de`), never by locale (`de-AT`)'), z.record(z.string(), z.string())).default({}),
   })
   .strict();
@@ -137,7 +137,7 @@ export type IntakeResult = { ok: true; bundle: Bundle } | { ok: false; reasons: 
 // ── WHAT A BUNDLE MAY BE CALLED AT ───────────────────────────
 //
 // The intake checks below constrain what a bundle DECLARES. They never
-// constrained what the proxy FORWARDS — which forwarded any path under a pack's
+// constrained what the proxy FORWARDS — which forwarded any path under an integration's
 // prefix, for any signed-in principal at an installed studio. For a rank tracker
 // that exposes rank data. For a payments service it exposes a payments service.
 //
@@ -146,7 +146,7 @@ export type IntakeResult = { ok: true; bundle: Bundle } | { ok: false; reasons: 
 // rides on. Anything else is not a route this integration has, and the proxy
 // answers as if it were not there.
 //
-// DERIVED, NEVER AUTHORED. A pack cannot widen its own reach without shipping
+// DERIVED, NEVER AUTHORED. An integration cannot widen its own reach without shipping
 // the screen or the strip that uses it, and re-importing is the only thing that
 // moves it — the same call an operator already makes.
 const normalizeReach = (path: string): string => (path.split('?')[0] ?? '').replace(/\/+$/, '');
@@ -159,7 +159,7 @@ export const reachOf = (bundle: Bundle, integrationId: string): string[] => {
     for (const endpoint of Object.values(action.endpoints ?? {})) {
       const url = (endpoint as { url?: string }).url ?? '';
       // A `/api/*/vex` endpoint is a call to the HOST, checked against the
-      // fingerprints above. Only the pack's own prefix is reach.
+      // fingerprints above. Only the integration's own prefix is reach.
       if (url.startsWith(own)) reach.add(normalizeReach(url));
     }
   }
@@ -254,8 +254,8 @@ export const runIntake = (payload: unknown, ctx: IntakeContext): IntakeResult =>
       const own = `/integrations/${ctx.integrationId}/`;
       // The one HOST surface an action may name without a fingerprint: asking
       // for a frame grant. It reads nothing and writes nothing — it hands back
-      // a URL the pack's own page is served at — so there is no fingerprint for
-      // it to name, and the alternative is every pack inventing its own way to
+      // a URL the integration's own page is served at — so there is no fingerprint for
+      // it to name, and the alternative is every integration inventing its own way to
       // reach a door that already exists.
       if (url === FRAME_GRANT_URL) continue;
       if (url.startsWith(own)) {
@@ -302,7 +302,7 @@ export const runIntake = (payload: unknown, ctx: IntakeContext): IntakeResult =>
     if (bundle.actions[actionId] === undefined) reasons.push(`placement ${actionId}: no such action in this bundle`);
     if (!ctx.menuSlots.has(hub)) reasons.push(`placement ${actionId}: targets "${hub}", which accepts no integrations`);
   }
-  // A FRAMED PAGE IS STILL THE PACK'S OWN GROUND. Same prefix rule as a
+  // A FRAMED PAGE IS STILL THE INTEGRATION'S OWN GROUND. Same prefix rule as a
   // preview, and neither reserved door: `/hook/` needs no principal and
   // `/frame/` is where a grant is spent, so a page served at either would be
   // reachable by something other than the grant that was minted for it.
@@ -328,7 +328,7 @@ export const describePlacements = (bundle: Bundle, names: Readonly<Record<string
   // IDS ARE FOR WIRES; THIS SENTENCE IS FOR A PERSON.
   //
   // It is printed on the approval card and on the store tile — both read by
-  // somebody deciding whether to turn a pack on — and `hub.money` told them
+  // somebody deciding whether to turn an integration on — and `hub.money` told them
   // nothing they did not already have to guess. The host supplies the words for
   // its own hubs and screens (`NiscApp.placementNames`); anything it has no word
   // for falls back to the id, which is honest rather than blank.
@@ -381,7 +381,7 @@ export const initIntegrations = async (pool: PgPool): Promise<void> => {
       -- (reachOf). Beside the grants because it is one: a grant of reach, held
       -- by the same row, revoked by the same delete.
       reach              jsonb NOT NULL DEFAULT '[]'::jsonb,
-      -- Pages this pack serves and the host frames. Kept apart from reach
+      -- Pages this integration serves and the host frames. Kept apart from reach
       -- because they are spent differently: reach is a screen's call carrying a
       -- session, a frame is a document GET carrying a grant.
       frames             jsonb NOT NULL DEFAULT '[]'::jsonb,
@@ -513,7 +513,7 @@ export const integrationOfAction = (id: string): string | undefined =>
 // INSTALLATION IS PER TENANT, and this is where that lands.
 //
 // The charter grants `ext.desk.*` once, to every desk in the deployment — so
-// without this, one studio installing a pack puts it on every studio's front
+// without this, one studio installing an integration puts it on every studio's front
 // desk. Moss cannot filter that itself: it does not know what a studio is, on
 // purpose. The app answers, and the answer is a list of ids.
 export const filterInstalled = (ids: readonly string[], installed: ReadonlySet<string> | undefined): readonly string[] => {

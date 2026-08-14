@@ -111,3 +111,24 @@ export const outboxSentToday: CacheEntry = {
   },
   mapping: { $with: { let: { r: { $ref: '$.result' } }, value: { total: rowNum('total') } } },
 };
+
+// ─── the studio's look, as an entry ──────────────────────────
+//
+// What replaced `BY_STUDIO`: one studio's theme, read at shell build over the
+// session's own wire, pinned to the caller's studio by the default reach. The
+// join is LEFT (theme_id is nullable), so a studio that names no theme answers
+// nulls and the shell falls back to stock.
+export const studioTheme: CacheEntry = {
+  fingerprint: 'studio/theme',
+  intent: "The session studio's look — name and tokens, stock when it names none",
+  shape: { name: '', tokens: {} },
+  dsl: {
+    from: ['studios', 'themes'],
+    fields: [{ field: 'themes.name', as: 'name' }, 'themes.tokens'],
+    limit: 1,
+  },
+  mapping: {
+    name: { $get: { from: { $ref: '$.result' }, path: ['name'], fallback: { $const: '' } } },
+    tokens: { $get: { from: { $ref: '$.result' }, path: ['tokens'], fallback: { $const: {} } } },
+  },
+};

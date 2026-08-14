@@ -1,7 +1,6 @@
 import type { FunctionHandler } from '@niscorp/nova';
 import type { FunctionSession, MossServer, NiscApp } from '@niscorp/moss';
-import type { PgPool } from '@niscorp/vex';
-import { loadedLocales } from '../phrases';
+import { readEntry } from '@lyra/app/app';
 
 // THE LANGUAGE THE APPLICATION IS WRITTEN IN. Every layout literal, every
 // action title, every display word a read manufactures is this, and the
@@ -41,12 +40,8 @@ const autonym = (locale: string): string => {
 export const worldFunctions = (
   session: FunctionSession,
   deps: {
-    pool: PgPool;
     app: NiscApp;
     server: () => MossServer;
-    /** Which studio a principal belongs to. Injected rather than imported so
-     *  this file keeps taking its world from app.ts. */
-    studioOf: (principal: string | null) => Promise<string>;
   },
 ): Record<string, FunctionHandler> => ({
   'world.refresh': async (data) => {
@@ -97,7 +92,11 @@ export const worldFunctions = (
   // they cannot read has to be able to find the way out, and the word "German"
   // is no help to them; "Deutsch" is.
   'world.languages': async () => {
-    const offered = [SOURCE_LOCALE, ...(await loadedLocales(deps.pool)).flatMap((language) => REGIONS[language] ?? [language])];
+    // Which languages rows exist for — `phrases/locales`, over the session's
+    // own wire like every other read a screen makes.
+    const raw = await readEntry(session.wire, 'phrases/locales', {});
+    const loaded = Array.isArray(raw) ? raw.map(String) : [];
+    const offered = [SOURCE_LOCALE, ...loaded.flatMap((language) => REGIONS[language] ?? [language])];
     // `{ value, label }` because that is the shape the Select primitive takes —
     // the endpoint answers in the kit's vocabulary rather than making the
     // screen reshape it, which would be a transform with one caller.
@@ -106,18 +105,20 @@ export const worldFunctions = (
 
   'world.relanguage': async () => {
     // Nothing to reload: the words are read when a shell is built.
-    const reloaded = (await loadedLocales(deps.pool)).length;
+    const raw = await readEntry(session.wire, 'phrases/locales', {});
+    const reloaded = Array.isArray(raw) ? raw.length : 0;
 
-    const studioId = await deps.studioOf(session.principal);
+    const studioId = String(session.identity['studioId'] ?? '');
     if (studioId === '') return { locales: 0, shells: 0 };
 
-    // Only a LIVE shell can be wearing the old words, so the roster moss already
-    // keeps is the honest set to walk — the population was only ever a way of
-    // finding the handful who were connected, and `reset` answered false for
-    // everybody else.
+    // Only a LIVE shell can be wearing the old words, so the roster moss
+    // already keeps is the honest set to walk. WHOSE studio each live shell
+    // belongs to is read off the records moss resolved — the app reading back
+    // what its own seam produced, one principal at a time.
     let rebuilt = 0;
     for (const live of deps.server().shells?.list() ?? []) {
-      if ((await deps.studioOf(live.principal)) !== studioId) continue;
+      const record = await deps.server().identity(live.principal);
+      if (String(record.scope['studioId'] ?? '') !== studioId) continue;
       if (deps.server().shells?.reset(live.principal) === true) rebuilt += 1;
     }
     // Reported rather than silent: "nothing happened" and "nobody was connected"

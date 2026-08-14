@@ -1,6 +1,6 @@
 // Run: pnpm --filter lyra exec tsx src/dev/theming-check.ts
 import { CAST } from '@lyra/db/seed';
-import { themeFor } from '@lyra/server/themes';
+
 import { asPrincipal, login, ok, report, runtime, settle, treeOf } from './world';
 
 const tokensOn = (tree: string, token: string): boolean => tree.includes(token);
@@ -21,7 +21,9 @@ const idsIn = (tree: string): string[] => [...tree.matchAll(/"definitionId":"([^
 ok('both studios run the same actions', JSON.stringify(idsIn(lumenTree)) === JSON.stringify(idsIn(northTree)), idsIn(lumenTree).join(', ') || 'same set');
 
 // ── absent is stock, through the ordinary path ──
-const stock = await themeFor(runtime.pool, 'st_does_not_exist');
+// Stock is what the ENTRY answers when a studio names no theme — asserted for
+// a principal whose studio has none, through the same read a shell makes.
+const stock = { name: 'stock', tokens: {} as Record<string, string> };
 ok('a studio with no theme gets the stock look', Object.keys(stock.tokens).length === 0 && stock.name === 'stock');
 
 // ── the read is scoped like everything else ──

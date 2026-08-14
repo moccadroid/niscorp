@@ -58,7 +58,7 @@ export type AssertionSigner = {
 //
 // THE SEED IS A DEV AFFORDANCE, and it earns its keep. On an in-memory database
 // every restart regenerates this keypair, which invalidates the public half an
-// integration is holding — so a separate service (the payments pack) starts
+// integration is holding — so a separate service (the payments integration) starts
 // answering "who are you?" to every call until somebody re-copies the new key.
 // Seeding the keypair from a fixed value makes the public half STABLE across
 // restarts, so the integration's env stays valid. A deployment leaves the seed

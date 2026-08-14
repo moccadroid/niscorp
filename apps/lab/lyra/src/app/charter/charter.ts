@@ -7,7 +7,67 @@ export const CHARTER: Charter = {
   // look, and the schedule it advertises. None of it is private.
   base: {
     actions: ['confirm'],
-    data: ['studios.read', 'themes.read', 'programs.read', 'class_sessions.read', 'class_templates.read', 'courses.read'],
+    // `phrases.read` is the studio's WORDS — translations of the release's own
+    // vocabulary, identical for every reader of a language. Nothing tenant, and
+    // every shell needs its book to greet somebody.
+    // `integrations.read` rides beside `phrases.read` because approved integrations
+    // ship phrasebooks — the words are deployment vocabulary either way, and
+    // the store's own surfaces were always deployment-wide reads.
+    data: ['studios.read', 'themes.read', 'phrases.read', 'integrations.read', 'programs.read', 'class_sessions.read', 'class_templates.read', 'courses.read'],
+  },
+
+  // ── THE READER OF WHO SOMEBODY IS — a role nobody wears ─────
+  //
+  // Identity resolution has to read a person's own rows BEFORE that person has
+  // a policy, and the verbs it needs (`people.read` above all) are exactly the
+  // verbs the charter refuses to hand out generally — granting `people.read`
+  // to members would un-refuse the roster. So the reader is its own role:
+  // moss compiles it like any other and executes ONLY the entries the manifest
+  // names under it (`identity/scope`, `identity/installed`), each pinned to the
+  // caller's own row by the `identity` reach in behaviors.ts.
+  //
+  // NOBODY WEARS THIS. It is not in WEARABLE, the identity mapping cannot
+  // produce it (IDENTITY_RUNGS is checked against exactly this), and the staff
+  // CHECK constraint refuses the word on a row. `reads-are-vex-check` asserts
+  // all three.
+  identity: {
+    data: ['people.read', 'studios.read', 'studio_integrations.read'],
+    scoping: 'identity',
+  },
+
+  // ── THE OTHER MACHINERY ROLES — surfaces with no principal by nature ──
+  //
+  // Same construction as `identity`, same rules: nobody wears these, each
+  // holds exactly the verbs its surface needs, each is executed only through
+  // `server.executeAs` (in-process, replay-only), and widening one is a
+  // charter diff somebody reviews. `reads-are-vex-check` asserts none of them
+  // is wearable.
+  //
+  // How a session comes to exist: resolve the address, mint the nonce, spend
+  // it once. A session cannot ask for any of this, because it does not exist.
+  credential: {
+    data: ['people.read', 'login_links.write.insert', 'login_links.write.delete'],
+  },
+  // What the mail provider tells us afterwards: delivery stamps, failures,
+  // suppressions, and the unsubscribe click — a vendor and a mailbox owner,
+  // neither of whom has a principal here.
+  mailer: {
+    // insert AND update on suppressions: the entry upserts, because the
+    // provider's newest word (a bounce that becomes a complaint) wins in place.
+    data: ['outbox.read', 'outbox.write.update', 'mail_suppressions.write.insert', 'mail_suppressions.write.update', 'studio_people.write.update'],
+    scoping: 'mailer',
+  },
+  // The lab's login picker: anonymity choosing who to be. Gated by
+  // LYRA_DEV_LOGIN in the one caller; a deployment never sets it.
+  transport: {
+    data: ['people.read', 'staff.read', 'studio_people.read', 'studios.read'],
+    scoping: 'transport',
+  },
+  // The automations engine loading its reflex rows — every studio's, because
+  // the engine schedules for all of them.
+  scheduler: {
+    data: ['automations.read', 'studios.read'],
+    scoping: 'scheduler',
   },
 
   // A SIBLING of the staff roles, not their base — so a grant added here never
@@ -206,7 +266,7 @@ export const CHARTER: Charter = {
       // apart, so if a person ever gains a pen here, this comes back out.
       'outbox.write.update',
       // Telling the studio something is an ADD onto the notices list — the
-      // same published fingerprint the packs replay, on the same discipline.
+      // same published fingerprint the integrations replay, on the same discipline.
       'notifications.write.insert',
     ],
   },
@@ -224,11 +284,11 @@ export const CHARTER: Charter = {
 
   // ── the one that handles money ───────────────────────────
   //
-  // A RUNG OF ITS OWN, not a widening of the one above. Every installed pack
+  // A RUNG OF ITS OWN, not a widening of the one above. Every installed integration
   // shares `integration`, so adding payment grants there would hand a rank
-  // tracker the ability to move somebody's standing — and the rung a pack gets
+  // tracker the ability to move somebody's standing — and the rung an integration gets
   // is derived from its own id (app.ts), so this one is reachable only by the
-  // pack actually called `stripe`.
+  // integration actually called `stripe`.
   //
   // Extends nothing, for the same reason `automation` extends nothing: code
   // nobody is watching gets a rung drawn for it, never one borrowed from a

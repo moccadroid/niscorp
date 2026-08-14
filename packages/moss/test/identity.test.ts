@@ -155,6 +155,69 @@ describe('identity cache', () => {
   // INVARIANT 1 — enumeration is an OPERATOR capability and returns structural
   // facts. The roster must not become a way to read everybody's record, which
   // is the exact door `everyone()` opened in the directory this replaces.
+  // The criterion the plan had written off as unachievable: a tenant-local
+  // write must invalidate that tenant, not the deployment. It needs the app to
+  // have said which records go together, because naming them any other way
+  // means enumerating the population.
+  it('a tag forgets one group and leaves the rest held', async () => {
+    let calls = 0;
+    const cache = createIdentityCache({
+      resolve: async (p) => {
+        calls += 1;
+        return { roles: ['member'], scope: {}, tag: p.startsWith('a_') ? 'st_a' : 'st_b' };
+      },
+      idleMs: 0,
+    });
+    await cache.get('a_1');
+    await cache.get('a_2');
+    await cache.get('b_1');
+    expect(cache.meter().size).toBe(3);
+
+    expect(cache.invalidateTag('st_a')).toEqual(['a_1', 'a_2']);
+    expect(cache.meter().size).toBe(1);
+    expect(cache.list().map((r) => r.principal)).toEqual(['b_1']);
+
+    // The untouched tenant is genuinely untouched — no re-resolution.
+    const before = calls;
+    await cache.get('b_1');
+    expect(calls).toBe(before);
+
+    // An unknown tag is an answer, not an error.
+    expect(cache.invalidateTag('st_nobody')).toEqual([]);
+    cache.stop();
+  });
+
+  it('the tag map cannot be read through — it only forgets', async () => {
+    const cache = createIdentityCache({ resolve: async () => ({ roles: ['member'], scope: {}, tag: 'st_a' }), idleMs: 0 });
+    await cache.get('a_1');
+    // Falsifiable: if a `byTag`/`ofTag`/`find` ever appears, this fails and the
+    // exception invariant 2 was granted stops being an exception.
+    const surface = Object.keys(cache).sort();
+    expect(surface).toEqual(['get', 'invalidate', 'invalidateAll', 'invalidateTag', 'list', 'meter', 'stop']);
+    expect(JSON.stringify(cache.list())).not.toContain('st_a');
+    cache.stop();
+  });
+
+  it('forgetting a tagged record does not leave it in the tag map', async () => {
+    const cache = createIdentityCache({ resolve: async () => ({ roles: ['member'], scope: {}, tag: 'st_a' }), idleMs: 0 });
+    await cache.get('a_1');
+    cache.invalidate('a_1');
+    // If the index leaked, this would still report one.
+    expect(cache.invalidateTag('st_a')).toEqual([]);
+    cache.stop();
+  });
+
+  it('eviction under the ceiling prunes the tag map too', async () => {
+    const cache = createIdentityCache({ resolve: async (p) => ({ roles: ['member'], scope: {}, tag: p }), max: 2, idleMs: 0 });
+    await cache.get('a');
+    await cache.get('b');
+    await cache.get('c'); // evicts 'a'
+    expect(cache.meter().size).toBe(2);
+    expect(cache.invalidateTag('a')).toEqual([]);
+    expect(cache.invalidateTag('c')).toEqual(['c']);
+    cache.stop();
+  });
+
   it('the roster names principals and exposes no records', async () => {
     const cache = createIdentityCache({ resolve: async (p) => recordFor(p), idleMs: 0 });
     await cache.get('p_ava');

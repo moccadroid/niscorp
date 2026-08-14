@@ -13,7 +13,7 @@
 process.env['MAIL_SINK'] = 'log';
 
 import { CAST } from '@lyra/db/seed';
-import { principalByEmail } from '@lyra/server/lookup';
+import { principalByEmail } from '@lyra/server/links';
 import { anonymous, ok, report, runtime, server, settle, treeOf } from './world';
 import { linkLifetimeMs, mintLink, redeemLink, forgetLinkRequests } from '@lyra/server/links';
 
@@ -61,10 +61,10 @@ ok('...and the lab can still read it, sent or not', said.join('\n').includes('?l
 ok('...and it is a nonce, never a session token', !said.join('\n').includes('?token='), 'the link buys a session; it is not one');
 
 // ── spending one ─────────────────────────────────────────────
-const person = await principalByEmail(runtime.pool, LENA);
+const person = await principalByEmail(server.executeAs, LENA);
 ok('the address resolves to somebody', person !== undefined, LENA);
 
-const nonce = await mintLink(runtime.pool, person ?? '', now);
+const nonce = await mintLink(server.executeAs, person ?? '', now);
 const first = await redeem(nonce);
 ok('a fresh link is traded for a session', first.status === 200 && first.token !== '', `${first.status}`);
 
@@ -75,7 +75,7 @@ ok('...and spending it again is refused', second.status === 401, `${second.statu
 const guessed = await redeem('nEt5C4rV6y2Vj1s0GZ5wUq8Xn3lPq7RbTf9hKm2A0dU');
 ok('a guessed nonce is refused', guessed.status === 401, '256 bits, and nothing else to attack');
 
-const stale = await mintLink(runtime.pool, person ?? '', now - linkLifetimeMs - 1_000);
+const stale = await mintLink(server.executeAs, person ?? '', now - linkLifetimeMs - 1_000);
 const expired = await redeem(stale);
 ok('an expired link is refused', expired.status === 401, `${Math.round(linkLifetimeMs / 60_000)} minutes, then it is scrap`);
 

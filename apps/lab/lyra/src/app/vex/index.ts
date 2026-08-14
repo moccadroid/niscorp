@@ -1,5 +1,5 @@
 import type { SeedEntry, SeedMutation } from '@niscorp/vex';
-import { studioCurrent, membersActiveCount, checkInsTodayCount, studioSetReplyTo, studioSetDomain, outboxSentToday } from './studio.entries';
+import { studioCurrent, studioTheme, membersActiveCount, checkInsTodayCount, studioSetReplyTo, studioSetDomain, outboxSentToday } from './studio.entries';
 import { revenueAtRisk, revenueCommitted, revenueExpected, revenueLeaving } from './forecast.entries';
 import { sessionsToday, sessionsUpcoming, programsList } from './schedule.entries';
 import { sessionAttending, sessionDetail } from './session.entries';
@@ -27,6 +27,9 @@ import { bookClass, cancelMyBooking, myBookedSessions, myBookings, myCard, myPas
 import { enquiredPerson, membersLapsedAway, automationArm, automationCreate, automationUpdate, automationsList, automationRecipes, automationRuns, bookingsOnDay, joinedSubscription, followUpsOpen, notificationsUnseen, notificationsMarkSeen, outboxRecent, outboxQueued, outboxStuck, outboxClaim, outboxSent, outboxFailed, outboxRequeue, closeFollowUp, notify, queueMessage, trialsDue } from './tide.entries';
 import { courseCreate, courseSetActive, courseRoster, courseUpdate, coursesList, enrolMember, enrolmentsForMember, joinCourse, leaveCourse, myEnrolments, withdrawMember } from './course.entries';
 import { studioPersonCreate, peopleEnroll, personByEmail, personCreate } from './intake.entries';
+import { identityPerson, identityStudio, identityInstalled } from './identity.entries';
+import { phrasesBook, phrasesLocales, phrasesPacks } from './language.entries';
+import { credentialPrincipalByEmail, credentialSweepLinks, credentialMintLink, credentialRedeemLink, mailerRecordDelivered, mailerRecordFailed, mailerOutboxOrigin, mailerSuppress, mailerOptOut, transportStaffRoster, transportMemberRoster, schedulerReflexRows, schedulerStudioZones } from './machinery.entries';
 import { addonInstall, addonUninstall, addonsInstalled, addonsList } from './addon.entries';
 import { attendanceByHour, attendanceByProgram, attendanceByWeek, membersByStatus, offeringCreate, offeringSetActive, offeringUpdate, planUptake } from './reports.entries';
 
@@ -98,11 +101,36 @@ export const ENTRIES: CacheEntry[] = [
   planUptake,
   subscriptionForMember,
   subscriptionBillable,
+  // The session's own facts, self-pinned at the identity reach. The licensed
+  // pre-auth entries (identity/roles, identity/actor, and friends) are
+  // DELIBERATELY not here: a pre-auth read on the wire is the hole D4 refused,
+  // and reads-are-vex-check asserts their absence.
+  identityPerson,
+  identityStudio,
+  identityInstalled,
+  studioTheme,
+  phrasesBook,
+  phrasesLocales,
+  phrasesPacks,
+  credentialPrincipalByEmail,
+  mailerOutboxOrigin,
+  transportStaffRoster,
+  transportMemberRoster,
+  schedulerReflexRows,
+  schedulerStudioZones,
 ];
 
 // Every write the app can make. Replay-only forever: never generated, linted at
 // seed, and the statement lives server-side where a request cannot see it.
 export const MUTATION_ENTRIES: MutationEntry[] = [
+  // the no-principal machinery, executed only via `server.executeAs`
+  credentialSweepLinks,
+  credentialMintLink,
+  credentialRedeemLink,
+  mailerRecordDelivered,
+  mailerRecordFailed,
+  mailerSuppress,
+  mailerOptOut,
   addonInstall,
   addonUninstall,
   personAnchorUpdate,

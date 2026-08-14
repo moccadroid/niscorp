@@ -8,7 +8,7 @@ import type { PgPool } from '@niscorp/vex';
 // studio's theme is. A write changes those rows and the writing process drops
 // its memos. Every OTHER process goes on serving the old answer until it is
 // restarted, which at two processes is a correctness bug rather than a scaling
-// concern: a pack installed via A leaves B refusing that pack's keyed calls,
+// concern: an integration installed via A leaves B refusing that integration's keyed calls,
 // and nothing says so.
 //
 // This is a counter and a clock, deliberately, and NOT `LISTEN/NOTIFY`:

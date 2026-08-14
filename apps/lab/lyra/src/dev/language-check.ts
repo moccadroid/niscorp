@@ -7,9 +7,8 @@
 // question: does a language reach the glass without any action, layout or
 // component knowing it exists?
 import { CAST } from '@lyra/db/seed';
-import { localeOf } from '@lyra/server/lookup';
-import { phrasesFor } from '@lyra/server/phrases';
-import { asPrincipal, login, ok, report, runtime, servedTo, settle } from './world';
+import { bookOverWire } from '@lyra/app/app';
+import { asPrincipal, login, ok, report, runtime, servedTo, settle, wireFor } from './world';
 
 const maren = await login(CAST.lumen.owner); // de-AT
 const dario = await login(CAST.northrock.owner); // en-GB
@@ -66,12 +65,14 @@ const idsIn = (tree: string): string[] => [...tree.matchAll(/"definitionId":"([^
 ok('both languages run the identical action set', JSON.stringify(idsIn(german)) === JSON.stringify(idsIn(english)), idsIn(german).join(', ') || 'same set');
 
 // ── the book resolves by language, the format by region ──────
-ok('de-AT falls back to the de book', Object.keys(await phrasesFor(runtime.pool, 'de-AT')).length > 400, `${String(Object.keys(await phrasesFor(runtime.pool, 'de-AT')).length)} phrases`);
-ok('an unknown language gets the source, not a mixture', Object.keys(await phrasesFor(runtime.pool, 'fr-FR')).length === 0);
-ok('the source language holds no rows', Object.keys(await phrasesFor(runtime.pool, 'en-GB')).length === 0, 'nothing about it needs translating');
+// Read exactly as a shell reads it: the entries, over a session's own wire.
+const bookOf = async (locale: string): Promise<number> => Object.keys(await bookOverWire(wireFor(CAST.northrock.owner), locale)).length;
+ok('de-AT falls back to the de book', (await bookOf('de-AT')) > 400, `${String(await bookOf('de-AT'))} phrases`);
+ok('an unknown language gets the source, not a mixture', (await bookOf('fr-FR')) === 0);
+ok('the source language holds no rows', (await bookOf('en-GB')) === 0, 'nothing about it needs translating');
 
 // ── switching ────────────────────────────────────────────────
-const before = await localeOf(runtime.pool, 'st_northrock');
+const before = String((await runtime.db.query<{ l: string }>("SELECT locale l FROM studios WHERE id='st_northrock'")).rows[0]?.l ?? '');
 const switched = await asPrincipal(CAST.northrock.owner, '/api/studio/vex', {
   fingerprint: 'studio/set-language',
   context: { studioId: 'st_northrock', locale: 'de-AT' },

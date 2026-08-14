@@ -159,7 +159,7 @@ export const myMembership: CacheEntry = {
 // a second source of truth out of a display string.
 //
 // COALESCE is the grandfathering rule, stated once here rather than in the
-// pack: a subscription's own `price_cents` is an override and the offering's
+// integration: a subscription's own `price_cents` is an override and the offering's
 // is the fallback, so somebody on a rate the offering no longer sells keeps it.
 //
 // `subscription_id` is the contract's key now: checkout stamps it into the

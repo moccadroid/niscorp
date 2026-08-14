@@ -7,8 +7,8 @@
 // the verification are all the production path. Only the sender is us.
 //
 // The route is real too — the event goes in through moss's webhook door, the
-// one surface that asks for nothing, and comes out at the pack having been
-// forwarded unparsed. And the write back into lyra is the pack's own `ik_` key
+// one surface that asks for nothing, and comes out at the integration having been
+// forwarded unparsed. And the write back into lyra is the integration's own `ik_` key
 // on its own charter rung, which is the same fence Phase 6 proved.
 //
 // Run: pnpm --filter lyra exec tsx src/dev/billing-check.ts
@@ -33,7 +33,7 @@ delete process.env['DATABASE_URL'];
 const verifyKey = (await (await server.request('/api/integrations/verify-key')).json()) as { key: string };
 process.env['LYRA_VERIFY_KEY'] = verifyKey.key;
 
-// Lyra on a real port: the pack writes back over HTTP with its own key, and an
+// Lyra on a real port: the integration writes back over HTTP with its own key, and an
 // in-process hono has no address to be called at.
 const lyraHttp = listen({ fetch: server.fetch, port: LYRA_PORT });
 process.env['LYRA_BASE'] = `http://127.0.0.1:${LYRA_PORT}`;
@@ -41,7 +41,7 @@ const service = startIntegrations(PORT);
 
 // SIGNED BY HAND, and deliberately so. Lyra depends on no payment SDK —
 // frame-check asserts it, because a host that carried one would carry that
-// dependency into every app that ever installs this pack. So this check writes
+// dependency into every app that ever installs this integration. So this check writes
 // the wire contract itself, exactly as the integrations service writes the
 // assertion format rather than importing moss's signer.
 //
@@ -63,7 +63,7 @@ const operator = async (path: string, body: unknown): Promise<Record<string, unk
   return (await response.json().catch(() => ({}))) as Record<string, unknown>;
 };
 
-// A subscription event as Stripe sends one, carrying the metadata this pack
+// A subscription event as Stripe sends one, carrying the metadata this integration
 // stamps at checkout — which is how an event arriving months later resolves to a
 // membership without a lookup that could be stale.
 const subscriptionEvent = (id: string, status: string, periodEnd: number, meta: Record<string, string>): string =>
@@ -112,7 +112,7 @@ const closeLyra = (): Promise<void> =>
   });
 
 try {
-  // ── the pack is installed and holds a key of its own ─────────
+  // ── the integration is installed and holds a key of its own ─────────
   const registered = await operator('/operator/integrations', { id: 'stripe', url: `http://127.0.0.1:${PORT}/stripe` });
   process.env['STRIPE_KEY'] = String(registered['key'] ?? '');
   await operator('/operator/integrations/stripe/approve', {});
@@ -122,7 +122,7 @@ try {
   await settle(14);
   owner.dispatch({ type: 'ui:click', ref: 'install', payload: { integration_id: 'stripe' } });
   await settle(18);
-  ok('the payments pack holds a key for this deployment', String(process.env['STRIPE_KEY']).startsWith('ik_'), 'minted at registration, shown once');
+  ok('the payments integration holds a key for this deployment', String(process.env['STRIPE_KEY']).startsWith('ik_'), 'minted at registration, shown once');
 
   const before = await runtime.db.query<{ paid_until: unknown; status: string }>(
     "SELECT paid_until, status FROM subscriptions WHERE id = 'sub_omar'",
@@ -135,7 +135,7 @@ try {
     headers: { 'content-type': 'application/json' },
     body: subscriptionEvent('evt_unsigned', 'active', 0, {}),
   });
-  ok('an unsigned delivery is refused', unsigned.status === 400, `${unsigned.status} — nobody vouched for this, so the pack asked the signature`);
+  ok('an unsigned delivery is refused', unsigned.status === 400, `${unsigned.status} — nobody vouched for this, so the integration asked the signature`);
 
   const wrongSecret = await deliver(subscriptionEvent('evt_wrong', 'active', 0, {}), 'whsec_a_different_secret');
   ok('...and one signed with the wrong secret', wrongSecret.status === 400, String(wrongSecret.status));
@@ -147,11 +147,11 @@ try {
       'stripe-signature': signPayload(subscriptionEvent('evt_x', 'active', 0, {}), HOOK_SECRET),
     },
     // Same signature, one byte more. The signature is over the BYTES, so this is
-    // also the assertion that nothing between Stripe and the pack re-serialised
+    // also the assertion that nothing between Stripe and the integration re-serialised
     // them — a JSON round-trip anywhere on this path fails exactly here.
     body: `${subscriptionEvent('evt_x', 'active', 0, {})} `,
   });
-  ok('...and a body one byte different from what was signed', tampered.status === 400, 'the bytes reached the pack unparsed, or this would pass by accident');
+  ok('...and a body one byte different from what was signed', tampered.status === 400, 'the bytes reached the integration unparsed, or this would pass by accident');
 
   // ── THE LOOP ─────────────────────────────────────────────────
   const paidUntil = Math.floor(Date.parse('2027-03-31T00:00:00Z') / 1000);
@@ -261,11 +261,11 @@ try {
   );
   ok('...without inventing a leaving date', notLeaving.rows[0]?.ends_on === null && notLeaving.rows[0]?.notice_given_on === null, 'a notice is a person’s decision, and no person made one here');
 
-  // ── THE LEDGER IS THIS PACK'S OWN (S4) ───────────────────────
+  // ── THE LEDGER IS THIS INTEGRATION'S OWN (S4) ───────────────────────
   //
   // Lyra holds standing and never learns an invoice; this side holds the
   // invoices and never learns a member's name. So the money screen reads the
-  // pack's mirror rather than calling a vendor on every open — and the mirror is
+  // integration's mirror rather than calling a vendor on every open — and the mirror is
   // filled by the same signed events as everything else.
   const invoice = (id: string, status: string, amount: number, created: number): string =>
     JSON.stringify({
@@ -296,7 +296,7 @@ try {
     body: '{}',
   });
   const rows = (await ledger.json()) as { invoice_id: string; amount_display: string; state_label: string; note: string }[];
-  ok('the money screen reads the pack’s own mirror', rows.length === 2, `${rows.length} invoices, newest first`);
+  ok('the money screen reads the integration’s own mirror', rows.length === 2, `${rows.length} invoices, newest first`);
   ok('...in the studio’s money, not in cents', rows[0]?.amount_display === '€89.00', String(rows[0]?.amount_display));
   ok('...saying what each one is', rows.map((r) => r.state_label).join(', ') === 'Unpaid, Paid', rows.map((r) => r.state_label).join(', '));
 

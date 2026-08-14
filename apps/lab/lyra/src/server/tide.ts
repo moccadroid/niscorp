@@ -10,16 +10,16 @@ import { MAIL_ATTEMPTS, STUCK_AFTER_MS, dispatchReflex, reflexesFor, sweepReflex
 import type { AutomationRow } from '@lyra/app/reflexes/compose';
 import { sendMail } from './mail/send';
 import { unsubscribeUrl } from './unsubscribe';
-import { automationFor } from './lookup';
 import { mintDevToken } from '@niscorp/moss';
 
 type Deps = { server: () => MossServer; now: () => number; pool: PgPool; base: () => string };
 
-const tokenFor = async (pool: PgPool, studioId: string): Promise<string> => {
-  const robot = await automationFor(pool, studioId);
-  if (robot === null) throw new Error(`tide: ${studioId} has no automation principal`);
-  return mintDevToken(robot);
-};
+// PURE. A studio's robot IS `automation@<studioId>` — the id names the tenant,
+// so minting the credential reads nothing, and the chain-trust comparison in
+// app.ts (`userId === automationActor`) is exact instead of inferred. The
+// principal resolves like any other: identity gives it the automation rung and
+// its studio's scope, and the engine treats it as just another client.
+const tokenFor = (studioId: string): string => mintDevToken(`automation@${studioId}`);
 
 // One POST to the app's own surface. `as` carries the studio, so the identity
 // travels with the work rather than being ambient. `chain` carries the run's
@@ -27,14 +27,14 @@ const tokenFor = async (pool: PgPool, studioId: string): Promise<string> => {
 // it mints from this write, so the depth ceiling survives the trip through
 // the database. Moss trusts the headers only because `facts.chain` (app.ts)
 // vouches for the automation principal this token names.
-const callVex = async (deps: Deps, as: string, fingerprint: string, context: Record<string, unknown>, chain?: { cause: string; depth: number }): Promise<unknown> => {
+const callVex = async (deps: { server: () => MossServer }, as: string, fingerprint: string, context: Record<string, unknown>, chain?: { cause: string; depth: number }): Promise<unknown> => {
   const studioId = as.slice(as.indexOf('@') + 1);
   const response = await deps.server().fetch(
     new Request('http://lyra/api/automation/vex', {
       method: 'POST',
       headers: {
         'content-type': 'application/json',
-        authorization: `Bearer ${await tokenFor(deps.pool, studioId)}`,
+        authorization: `Bearer ${tokenFor(studioId)}`,
         ...(chain !== undefined ? { 'x-tide-cause': chain.cause, 'x-tide-depth': String(chain.depth) } : {}),
       },
       body: JSON.stringify({ fingerprint, context }),
@@ -58,11 +58,10 @@ const callVex = async (deps: Deps, as: string, fingerprint: string, context: Rec
 // the operator, say — would have answered happily and proved nothing.
 export const askAsAutomation = async (
   server: MossServer,
-  pool: PgPool,
   studioId: string,
   fingerprint: string,
   context: Record<string, unknown>,
-): Promise<unknown> => callVex({ server: () => server, now: () => Date.now(), pool, base: () => '' }, `automation@${studioId}`, fingerprint, context);
+): Promise<unknown> => callVex({ server: () => server }, `automation@${studioId}`, fingerprint, context);
 
 // ── THE ONE EFFECT THAT IS NOT A WRITE ───────────────────────
 //

@@ -72,6 +72,30 @@ ok('...and loses no information — the answer is identical', again === truth, '
 // ── the bound is real ────────────────────────────────────────
 ok('the cache is metered, so pressure is visible before it is fatal', typeof meter().evicted === 'number' && typeof meter().size === 'number', JSON.stringify(meter()));
 
+// ── A TENANT-LOCAL WRITE IS TENANT-LOCAL ─────────────────────
+//
+// The last of Part 10's criteria, and the one the plan had written off as
+// unachievable: forgetting one studio means naming its people, and naming them
+// without enumerating the population needs the application to have said, at
+// resolve time, which records go together. It does — every identity carries an
+// opaque `tag`, which here is the studio.
+//
+// The exception this asks of invariant 2 is narrow and worth restating: the tag
+// map can FORGET a group and cannot RETURN one. Nothing is readable through it.
+await revenue(CAST.lumen.owner);
+await revenue(CAST.northrock.owner);
+const bothHeld = server.identities?.list().length ?? 0;
+ok('two studios are resident', bothHeld >= 2, `${bothHeld} identities`);
+
+const droppedLumen = server.invalidateTenant('st_lumen');
+ok('forgetting one studio forgets its people', droppedLumen > 0, `${droppedLumen} dropped`);
+ok(
+  '...and leaves the other studio held — an integration landing at Lumen is not North Rock’s business',
+  (server.identities?.list() ?? []).length === bothHeld - droppedLumen,
+  `${(server.identities?.list() ?? []).length} still resident`,
+);
+ok('an unknown tenant is an answer, not an error', server.invalidateTenant('st_nobody') === 0);
+
 // ── THE LOGIN SCREEN IS NOT A DIRECTORY ──────────────────────
 //
 // The anonymous shell used to answer with every name and every email at the

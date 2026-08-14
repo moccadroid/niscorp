@@ -1,6 +1,7 @@
 // Run: pnpm --filter lyra exec tsx src/dev/acl-check.ts
 import { resolveCatalog } from '@niscorp/moss';
-import { audienceOf } from '@lyra/server/identity';
+import { evaluate } from '@niscorp/prism';
+import { identityRoles } from '@lyra/app/vex/identity.entries';
 import { CAST } from '@lyra/db/seed';
 import { app, asPrincipal, idFor, idsFor, login, ok, report, runtime, server, sessionFor, settle, treeOf } from './world';
 
@@ -87,8 +88,9 @@ try {
 ok('the column refuses a role the charter never defined', refusedByColumn, 'the comment listing four roles is a CHECK constraint now');
 
 
-ok('an unrecognised role becomes a member, never an administrator', audienceOf('superuser') === 'member', 'the direction that matters when the word arrives from somewhere nobody reviewed');
-ok('...while every role the column allows keeps its own rung', ['owner', 'manager', 'instructor', 'desk', 'automation'].every((r) => audienceOf(r) === r));
+const rungFor = (word: string): string => String((evaluate(identityRoles.mapping as never, { staff_role: word, anchor_id: null, studio_id: 'st_x', principal: 'p_x' } as never) as { scope: { audience: string } }).scope.audience);
+ok('an unrecognised role becomes a member, never an administrator', rungFor('superuser') === 'member', 'the direction that matters when the word arrives from somewhere nobody reviewed');
+ok('...while every role the column allows keeps its own rung', ['owner', 'manager', 'instructor', 'desk', 'automation'].every((r) => rungFor(r) === r));
 
 const memberIds = await idsFor(CAST.lumen.member);
 ok('...and that rung is a working application', memberIds.length > 0, `${memberIds.length} actions`);
