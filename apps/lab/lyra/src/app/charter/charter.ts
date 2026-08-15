@@ -31,7 +31,11 @@ export const CHARTER: Charter = {
   // CHECK constraint refuses the word on a row. `reads-are-vex-check` asserts
   // all three.
   identity: {
-    data: ['people.read', 'studios.read', 'studio_integrations.read'],
+    // `guardianships.read` rides here for the same reason the others do: a
+    // session's household is resolved once, before any screen exists, and the
+    // `identity` reach pins the rows to the caller's own guardian side. It is
+    // a read of a relationship the caller is one half of — never a roster.
+    data: ['people.read', 'studios.read', 'studio_integrations.read', 'guardianships.read'],
     scoping: 'identity',
   },
 
@@ -110,8 +114,24 @@ export const CHARTER: Charter = {
       'enrolments.read',
       'enrolments.write.insert',
       'enrolments.write.update',
-      // Absent deliberately: `people.read`. No member screen needs a name but
-      // their own, which the session already carries.
+      // WHO THEY ARE ANSWERABLE FOR. Read-only, and pinned by every reach this
+      // rung can be served at to `guardian_person_id = userId` — so it answers
+      // "my children" and has no shape in which it answers anybody else's.
+      // This is what the family switcher lists; the REACH is what makes acting
+      // on it permitted, and this grant is only what makes it nameable.
+      'guardianships.read',
+      // STILL ABSENT: `people.read`, and the reason survived contact with the
+      // families work. A parent needs their CHILD'S name, and a name lives on
+      // `people` — but granting the verb here makes `people/list` replayable by
+      // a member, and "a member cannot read the roll" is an invariant this
+      // codebase asserts in three separate checks. Row rules would have clamped
+      // it to one row; the posture is that the VERB is withheld, not merely
+      // narrowed.
+      //
+      // So the names arrive the way every other per-session fact does: on the
+      // identity record, read once by the `identity` role (which does hold
+      // `people.read`, pinned to the household) and served to the screen by
+      // `nav.family`. The engine reads stay id-only.
     ],
   },
 
@@ -148,6 +168,14 @@ export const CHARTER: Charter = {
       'connections.read',
       'connections.write.insert',
       'connections.write.update',
+      // WRITING A CHILD DOWN, and saying whose they are. The desk is the only
+      // place a guardianship is made today — no member screen creates one,
+      // because "may act for" is a claim a studio records rather than one a
+      // person asserts about themselves. No update and no delete: ending a
+      // guardianship is a decision somebody should have to be deliberate
+      // about, and nothing in v1 needs it.
+      'guardianships.read',
+      'guardianships.write.insert',
       'check_ins.write.insert',
       'bookings.write.insert',
       'bookings.write.update',

@@ -179,6 +179,155 @@ export const bookClass: MutationEntry = {
   },
 };
 
+// ═══════════════════════════════════════════════════════════════
+// THE FAMILY — the same surface, one reach wider.
+//
+// Every entry above keeps `reach: 'personal'` and is untouched by any of
+// this. That is not caution, it is the design: reach is a property of the
+// ENTRY as well as the rung, so a family surface is entries ADDED beside the
+// member surface rather than a widening of it. A member who guards nobody
+// reads exactly what they read before, through exactly the same artifacts —
+// and `householdIds` resolves to `[them]` anyway, so even these answer
+// personally for them.
+// ═══════════════════════════════════════════════════════════════
+
+// WHO I MAY ACT FOR is NOT an entry — see `nav.family` (server/functions/nav.ts).
+// A member holds no `people.read`, so a child's NAME cannot be read through the
+// engine on this rung at all; it rides on the identity record, read once by the
+// `identity` role when the session resolved. What IS an entry is everything
+// below, because rows are what the engine is for.
+
+// THE FAMILY'S WEEK, IN ONE READ — which is the whole reason the reach won
+// over a switcher that swaps identity. A parent with two enrolled kids on a
+// Saturday morning wants one screen, and this is it: their own classes and
+// their children's, in one answer, ordered by when to turn up.
+//
+// The `person_id` comes back on every row because the screen has to say WHOSE
+// class each one is. Under a personal reach that column is a constant and
+// worth nothing; here it is the point.
+export const familyBookings: CacheEntry = {
+  fingerprint: 'me/family-bookings',
+  intent: "The classes the person asking and their children have booked, in one answer",
+  reach: 'household',
+  shape: [{ booking_id: '', person_id: '', session_id: '', class_name: '', program_name: '', tone: '', when_display: '', held_on: '', state_label: '', state_tone: '', session_cancelled: false }],
+  dsl: {
+    from: ['bookings', 'class_sessions', 'programs'],
+    fields: [
+      { field: 'bookings.id', as: 'booking_id' },
+      'bookings.person_id',
+      'bookings.session_id',
+      'bookings.status',
+      { field: 'class_sessions.name', as: 'class_name' },
+      { field: 'class_sessions.held_on', as: 'held_on' },
+      { field: 'class_sessions.starts_at', as: 'starts_at' },
+      { field: 'class_sessions.status', as: 'session_status' },
+      { field: 'programs.name', as: 'program_name' },
+      { field: 'programs.colour', as: 'tone' },
+    ],
+    filter: { and: [{ gte: ['class_sessions.held_on', { $scope: 'today' }] }, { neq: ['bookings.status', 'cancelled'] }] },
+    sort: [{ field: 'class_sessions.held_on', dir: 'asc' }, { field: 'class_sessions.starts_at', dir: 'asc' }],
+  },
+  mapping: {
+    $map: {
+      over: { $ref: '$.result' },
+      as: 'r',
+      body: {
+        booking_id: row('booking_id'),
+        person_id: row('person_id'),
+        session_id: row('session_id'),
+        class_name: row('class_name'),
+        program_name: row('program_name'),
+        tone: row('tone'),
+        held_on: row('held_on'),
+        when_display: { $join: { parts: [dateText(row('held_on')), timeText(row('starts_at'))], sep: ' · ' } },
+        session_cancelled: { $eq: [row('session_status'), 'cancelled'] },
+        state_label: {
+          $case: {
+            branches: [
+              { when: { $eq: [row('session_status'), 'cancelled'] }, then: 'Cancelled' },
+              { when: { $eq: [row('status'), 'waitlisted'] }, then: 'Waiting' },
+            ],
+            else: 'Booked',
+          },
+        },
+        state_tone: {
+          $case: {
+            branches: [
+              { when: { $eq: [row('session_status'), 'cancelled'] }, then: 'warn' },
+              { when: { $eq: [row('status'), 'waitlisted'] }, then: 'warm' },
+            ],
+            else: 'good',
+          },
+        },
+      },
+    },
+  },
+};
+
+// ── BOOKING FOR SOMEBODY ELSE, SAFELY ────────────────────────
+//
+// The one write in this application whose subject is not the caller, and the
+// place the whole families design either holds or does not.
+//
+// `person_id` is NOT sent by the browser and NOT stamped from scope. It is a
+// `$lookup` on `guardianships` — and a `$lookup` READS its table, so vex ANDs
+// that table's read rules into this very subquery: `guardian_person_id =
+// userId` and the studio pin, both engine-supplied. The subquery therefore
+// answers the child's id only if the caller actually guards them, at this
+// studio, and answers NULL otherwise — landing on `bookings.person_id NOT
+// NULL`. There is no path in which it returns somebody else's id.
+//
+// WHY NOT A SCOPE RULE. The household reach carries NO person rule on writes
+// (behaviors.ts): a `set` cannot name a set, and swapping the stamp for a
+// check against `householdIds` would trade a guarantee that holds by
+// construction for one that holds by diligence. vex refuses a set-valued rule
+// on an INSERT outright, so that trade cannot be made later by accident.
+//
+// `can_book` IS tested here and not in `me/family`: seeing a child's classes
+// and booking one for them are different verbs, and this is the one the
+// capability column was added for.
+export const bookForFamily: MutationEntry = {
+  fingerprint: 'me/book-for',
+  intent: 'Book one of my children into a class',
+  reach: 'household',
+  mutation: {
+    op: 'insert',
+    table: 'bookings',
+    values: {
+      session_id: { $context: 'sessionId' },
+      person_id: {
+        $lookup: {
+          from: 'guardianships',
+          field: 'child_person_id',
+          where: {
+            and: [
+              { eq: ['guardianships.child_person_id', { $context: 'subjectId' }] },
+              { eq: ['guardianships.can_book', true] },
+            ],
+          },
+        },
+      },
+    },
+  },
+};
+
+// The mirror of the above. An UPDATE may safely carry the set — the rows
+// already exist and the rule only narrows which of them may be touched — so
+// this needs no lookup: the household reach's own `person_id = ANY(...)` is
+// what stops a parent cancelling a stranger's class, applied by the engine
+// underneath the id the caller named.
+export const cancelFamilyBooking: MutationEntry = {
+  fingerprint: 'me/cancel-for',
+  intent: "Cancel a class booked for me or one of my children",
+  reach: 'household',
+  mutation: {
+    op: 'update',
+    table: 'bookings',
+    set: { status: 'cancelled' },
+    where: { eq: ['bookings.id', { $context: 'bookingId' }] },
+  },
+};
+
 // An update, never a delete: the seat has to be freed on the operational row,
 // and "who cancels every week" needs the row to still be there to answer.
 export const cancelMyBooking: MutationEntry = {

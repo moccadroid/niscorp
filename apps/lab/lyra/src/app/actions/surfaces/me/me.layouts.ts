@@ -222,6 +222,35 @@ export const meMembershipLayout: LayoutNode = page([
   },
 ]);
 
+// The single-classes list, which differs between "booking for me" and "booking
+// for a child" only in which verb its last column fires.
+const classList = (book: { label: string; ref: string }): LayoutNode => ({
+  component: 'Card',
+  props: { flush: true },
+  children: {
+    component: 'Rows',
+    props: {
+      rows: '$.sessions',
+      loading: '$.loading',
+      rowKey: 'session_id',
+      empty: 'No classes scheduled.',
+      columns: [
+        { label: 'Class', w: 2, cell: { kind: 'primary', key: 'name', subKey: 'program_name', dotKey: 'program_tone' } },
+        { label: 'When', px: 112, cell: { kind: 'text', key: 'day_display', color: 'ink' } },
+        { label: 'Time', px: 78, cell: { kind: 'text', key: 'time_display' } },
+        { label: 'Places', px: 84, align: 'right', cell: { kind: 'text', key: 'booked_display', color: 'ink' } },
+        // A class they already hold says so instead of offering Book — the
+        // button could only ever have answered with an error message.
+        // NOTE this marks what the CALLER holds; a child's own bookings are
+        // not in `me/booked-sessions`, so the mark is absent when booking for
+        // one. The capacity trigger refuses a duplicate either way.
+        { label: '', px: 92, align: 'right', cell: { kind: 'badge', key: 'mine_display', toneKey: 'mine_tone', showKey: 'already_booked' } },
+        { label: '', px: 96, align: 'right', cell: { kind: 'action', label: book.label, ref: book.ref, variant: 'outline', hideKey: 'unbookable' } },
+      ],
+    },
+  },
+});
+
 export const meClassesLayout: LayoutNode = page([
   { component: 'Hero', props: { title: 'Book a class', lead: 'Drop into anything on the timetable, or join a course and hold your place for the whole block.' } },
 
@@ -281,28 +310,42 @@ export const meClassesLayout: LayoutNode = page([
 
   { component: 'Text', props: { size: 'lg', weight: 'semi' }, children: 'Single classes' },
 
+  // ── WHO AM I BOOKING FOR ─────────────────────────────────────
+  //
+  // Absent for anybody who guards nobody, which is nearly everybody: the
+  // picker exists only where there is a choice to make. When it IS shown, the
+  // row's Book button carries the chosen subject and calls `me/book-for`
+  // instead of `me/book`.
+  //
+  // THE PICKER IS CONVENIENCE, NEVER PERMISSION. What makes booking for Emma
+  // allowed is the guardianship the engine reads inside the write; this only
+  // makes it reachable. If the two ever disagree, the engine wins and the
+  // write fails — which is the right way round.
   {
-    component: 'Card',
-    props: { flush: true },
-    children: {
-      component: 'Rows',
-      props: {
-        rows: '$.sessions',
-        loading: '$.loading',
-        rowKey: 'session_id',
-        empty: 'No classes scheduled.',
-        columns: [
-          { label: 'Class', w: 2, cell: { kind: 'primary', key: 'name', subKey: 'program_name', dotKey: 'program_tone' } },
-          { label: 'When', px: 112, cell: { kind: 'text', key: 'day_display', color: 'ink' } },
-          { label: 'Time', px: 78, cell: { kind: 'text', key: 'time_display' } },
-          { label: 'Places', px: 84, align: 'right', cell: { kind: 'text', key: 'booked_display', color: 'ink' } },
-          // A class they already hold says so instead of offering Book — the
-          // button could only ever have answered with an error message.
-          { label: '', px: 92, align: 'right', cell: { kind: 'badge', key: 'mine_display', toneKey: 'mine_tone', showKey: 'already_booked' } },
-          { label: '', px: 96, align: 'right', cell: { kind: 'action', label: 'Book', ref: 'book', variant: 'outline', hideKey: 'unbookable' } },
-        ],
-      },
+    if: '$.family',
+    then: {
+      component: 'Row',
+      props: { gap: 12, align: 'center', wrap: true },
+      children: [
+        { component: 'Text', props: { size: 'sm', color: 'mute' }, children: 'Booking for' },
+        { component: 'Tabs', props: { value: '$.subjectId', options: '$.family' }, ref: 'subject' },
+      ],
     },
+    else: '',
+  },
+
+  // ONE LIST, TWO VERBS — and the verb is chosen by the picker above rather
+  // than inside the row, because the step grammar has no conditional and a
+  // single button cannot decide at click time which write it means.
+  //
+  // The duplication is the honest shape: `me/book` stamps person_id from the
+  // caller and CANNOT name anybody else; `me/book-for` carries a subject the
+  // engine validates through guardianships. Collapsing them into one control
+  // would mean one of the two lost its guarantee.
+  {
+    if: '$.subjectId',
+    then: classList({ label: 'Book for them', ref: 'bookFor' }),
+    else: classList({ label: 'Book', ref: 'book' }),
   },
 ]);
 
@@ -335,5 +378,45 @@ export const meBookingsLayout: LayoutNode = page([
         ],
       },
     },
+  },
+
+  // ── THE FAMILY'S WEEK ────────────────────────────────────────
+  //
+  // Drawn only for somebody who actually guards a child — `$.family` is empty
+  // for everybody else, and this whole block is absent for them. That is the
+  // screen agreeing with the engine rather than duplicating it: the reach
+  // already answers personally for a member with no children, so a member
+  // with no children could see this list and learn nothing from it.
+  //
+  // ONE LIST FOR THE WHOLE HOUSEHOLD, with a name against each row, because
+  // that is the question a parent is actually asking on a Saturday morning —
+  // "where does anybody have to be today". A per-child tab would make them
+  // ask it once per child and assemble the answer themselves.
+  {
+    if: '$.family',
+    then: {
+      component: 'Section',
+      props: { title: 'My family', subtitle: 'Everything your children are booked into.' },
+      children: {
+        component: 'Card',
+        props: { flush: true },
+        children: {
+          component: 'Rows',
+          props: {
+            rows: '$.familyBookings',
+            rowKey: 'booking_id',
+            empty: 'Nothing booked yet.',
+            emptyHint: 'Anything you book for them will show up here.',
+            columns: [
+              { label: 'Class', w: 2, cell: { kind: 'primary', key: 'class_name', subKey: 'program_name', dotKey: 'tone' } },
+              { label: 'When', px: 150, cell: { kind: 'text', key: 'when_display', color: 'ink' } },
+              { label: '', px: 92, cell: { kind: 'badge', key: 'state_label', toneKey: 'state_tone' } },
+              { label: '', px: 96, align: 'right', cell: { kind: 'action', label: 'Cancel', ref: 'cancelFor', variant: 'ghost', hideKey: 'session_cancelled' } },
+            ],
+          },
+        },
+      },
+    },
+    else: '',
   },
 ]);

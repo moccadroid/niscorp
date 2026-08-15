@@ -8,26 +8,29 @@ import { LENSES, ROLL_PAGE, ROLL_ORDERS } from '@lyra/app/vex/member.entries';
 const DEFAULT_ORDER = ROLL_ORDERS[0]!;
 const DEFAULT_ROW_KEY = DEFAULT_ORDER.rowKey;
 import {
-  peopleListPrism,
-  peopleCountPrism,
-  personByIdPrism,
-  personUpdatePrism,
-  memberSubscriptionPrism,
-  personPassesPrism,
-  personPurchasesPrism,
-  startPlanPrism,
-  recordPaymentPrism,
+  attachChildPrism,
+  createChildPrism,
   endSubscriptionPrism,
-  sellPassPrism,
-  giveNoticePrism,
-  withdrawNoticePrism,
   enrolPrism,
   enrollPrism,
+  giveNoticePrism,
   memberEnrolmentsPrism,
+  memberSubscriptionPrism,
   openCoursesPrism,
-  withdrawPrism,
-  planOptionsPrism,
   passOptionsPrism,
+  peopleCountPrism,
+  peopleListPrism,
+  personByIdPrism,
+  personFamilyPrism,
+  personPassesPrism,
+  personPurchasesPrism,
+  personUpdatePrism,
+  planOptionsPrism,
+  recordPaymentPrism,
+  sellPassPrism,
+  startPlanPrism,
+  withdrawNoticePrism,
+  withdrawPrism,
 } from './people.prism';
 
 // A tab is a VALUE now. It used to carry the fingerprint pair its lens meant;
@@ -221,6 +224,11 @@ export const peopleDetailAction: ActionDefinition = {
     hostId: 'people.detail',
     attachments: [],
     attachmentCount: 0,
+    family: [],
+    newChild: {},
+    childName: '',
+    childBornOn: '',
+    addingChild: false,
   },
   layout: peopleDetailLayout,
   endpoints: {
@@ -244,6 +252,12 @@ export const peopleDetailAction: ActionDefinition = {
     enrol: { url: '/api/schedule/vex', method: 'POST', request: enrolPrism, errorTarget: 'error' },
     withdraw: { url: '/api/schedule/vex', method: 'POST', request: withdrawPrism, errorTarget: 'error' },
     attachments: { fn: 'nav.attachments', target: 'attachments' },
+    family: { url: '/api/member/vex', method: 'POST', request: personFamilyPrism, target: 'family' },
+    // Two calls, chained by the trigger below: the first mints the child (the
+    // database owns the id), the second puts them on the roll and says whose
+    // they are. See intake.entries.ts for why one artifact cannot do it.
+    createChild: { url: '/api/member/vex', method: 'POST', request: createChildPrism, target: 'newChild', errorTarget: 'error' },
+    attachChild: { url: '/api/member/vex', method: 'POST', request: attachChildPrism, errorTarget: 'error' },
   },
   lifecycle: {
     mount: [
@@ -256,13 +270,43 @@ export const peopleDetailAction: ActionDefinition = {
       { call: 'purchases' },
       { call: 'planOptions' },
       { call: 'passOptions' },
+      { call: 'family' },
     ],
     // Coming back from the form: re-read rather than trust what was left
     // behind. The form may have written something this record has not seen.
-    resume: [{ call: 'load' }, { call: 'subscription' }, { call: 'passes' }, { call: 'purchases' }, { call: 'enrolments' }, { call: 'courses' }],
+    resume: [{ call: 'load' }, { call: 'subscription' }, { call: 'passes' }, { call: 'purchases' }, { call: 'enrolments' }, { call: 'courses' }, { call: 'family' }],
   },
   triggers: [
     { event: 'ui:click', ref: 'edit', do: [{ push: { action: 'people.form', canvas: 'sheet', with: ['sheet'], input: { personId: '$.personId' } } }] },
+
+    // ── writing a child down ──
+    { event: 'ui:click', ref: 'addChild', do: [{ set: 'addingChild', value: true }, { set: 'error', value: '' }] },
+    { event: 'ui:click', ref: 'cancelChild', do: [{ set: 'addingChild', value: false }, { set: 'childName', value: '' }, { set: 'childBornOn', value: '' }] },
+    // THE CHAIN, and the only place the two halves are joined. `attachChild`
+    // runs from the FIRST call's success, so it cannot fire with a stale id
+    // from a previous attempt — and if it never fires, what is left is an
+    // orphan `people` row nobody can see rather than a child nobody can act
+    // for. See intake.entries.ts.
+    {
+      event: 'ui:click',
+      ref: 'saveChild',
+      do: [
+        {
+          call: 'createChild',
+          onSuccess: [
+            {
+              call: 'attachChild',
+              onSuccess: [
+                { set: 'addingChild', value: false },
+                { set: 'childName', value: '' },
+                { set: 'childBornOn', value: '' },
+                { call: 'family' },
+              ],
+            },
+          ],
+        },
+      ],
+    },
 
     // The implementation of the `attachable` declaration: the offered keys are
     // bound HERE, once, by the host, and a rider cannot reach past them.

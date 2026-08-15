@@ -181,6 +181,94 @@ export const identityStudio: CacheEntry = {
   }),
 };
 
+// WHO THIS SESSION IS ANSWERABLE FOR — the children, and nothing else.
+//
+// The set half of "me and mine". Resolved ONCE per session, exactly like the
+// install list beside it, and for the same reason: it is stable for as long as
+// a session lasts, and asking per request would put a join under every member
+// read in the application.
+//
+// PINNED TO THE GUARDIAN SIDE by the `identity` reach in behaviors.ts —
+// `guardian_person_id = userId` — so this can only ever answer with the
+// children the CALLER is answerable for. That pin is what makes the set safe
+// to hand to a reach: no request authored it, and asking differently cannot
+// widen it. A guardian at another studio contributes nothing, because the
+// studio pin rides beside it.
+//
+// The empty answer is the common one — most members guard nobody — and it
+// costs a single indexed lookup. `householdIds` then resolves to the caller
+// alone, which is `personal` by another name: the whole existing member
+// surface behaves identically for anybody with no children, by construction
+// rather than by a branch.
+export const identityGuarded: CacheEntry = {
+  fingerprint: 'identity/guarded',
+  intent: 'The children this session may act for — the set half of the household reach, pinned to the guardian',
+  reach: 'identity',
+  // IDS ONLY, and this entry may not learn the names.
+  //
+  // It reads `guardianships` alone. Joining `people` here for the name looks
+  // obvious and is a contradiction: the `identity` reach pins `people.id =
+  // userId`, so `people.id = child_person_id AND people.id = <the parent>` is
+  // unsatisfiable and the whole read answers nothing — silently, because an
+  // empty household is a legitimate answer for almost everybody. The names
+  // come from `identity/household` below, once these ids exist to pin by.
+  shape: [{ value: '', can_book: false }],
+  dsl: {
+    from: ['guardianships'],
+    fields: [
+      { field: 'guardianships.child_person_id', as: 'child_person_id' },
+      'guardianships.can_book',
+    ],
+    // `can_book` is deliberately NOT filtered on. This answers WHO the session
+    // may see, and seeing a child's classes is not booking them; the capability
+    // travels with the row and gates the verb at the screen.
+  },
+  mapping: {
+    $map: {
+      over: { $ref: '$.result' },
+      as: 'r',
+      body: {
+        value: { $get: { from: { $var: 'r' }, path: ['child_person_id'] } },
+        can_book: { $eq: [{ $get: { from: { $var: 'r' }, path: ['can_book'] } }, true] },
+      },
+    },
+  },
+};
+
+// THE NAMES, read at the HOUSEHOLD reach rather than the identity one.
+//
+// A member holds no `people.read` and never will — "a member cannot read the
+// roll" is an invariant three checks assert. The `identity` role does hold it,
+// but pinned to the caller's own row, which is right for `identity/person` and
+// useless for a child.
+//
+// So this entry declares `reach: 'household'`, and the host recompiles the
+// identity role's SAME grants at that profile: `people.id = ANY(householdIds)`.
+// The set is the one the read above just established and the server passes in
+// — engine-side, no request anywhere near it. That is why this is two reads
+// and not one: the second is pinned by the first's answer.
+export const identityHousehold: CacheEntry = {
+  fingerprint: 'identity/household',
+  intent: "The names of the people this session may act for — pinned to the household the guardianship read established",
+  reach: 'household',
+  shape: [{ value: '', label: '' }],
+  dsl: {
+    from: ['people'],
+    fields: ['people.id', 'people.name'],
+    sort: [{ field: 'people.name', dir: 'asc' }],
+  },
+  mapping: {
+    $map: {
+      over: { $ref: '$.result' },
+      as: 'r',
+      body: {
+        value: { $get: { from: { $var: 'r' }, path: ['id'] } },
+        label: { $get: { from: { $var: 'r' }, path: ['name'] } },
+      },
+    },
+  },
+};
+
 // A bare list of ids, consumed wholesale: moss never reads a field off it,
 // which is what keeps the record opaque. The no-row shape is naturally [] here.
 export const identityInstalled: CacheEntry = {

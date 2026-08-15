@@ -111,6 +111,66 @@ export const peopleDetailLayout: LayoutNode = page([
       ],
     },
   },
+  // ── the family ───────────────────────────────────────────────
+  //
+  // Children this person may act for. Drawn on every record rather than only
+  // on parents': an empty family with an "Add a child" button beside it is how
+  // a desk discovers the feature exists, and a section that appears only once
+  // somebody already used it teaches nobody.
+  {
+    component: 'Section',
+    props: { title: 'Family', subtitle: 'Children this person may book and pay for.' },
+    children: {
+      component: 'Card',
+      props: { pad: 18 },
+      children: [
+        {
+          if: '$.family',
+          then: {
+            component: 'Rows',
+            props: { gap: 10 },
+            children: {
+              for: '$.family',
+              as: 'child',
+              key: 'person_id',
+              do: {
+                component: 'Row',
+                props: { gap: 12, align: 'center' },
+                children: [
+                  { component: 'Text', props: { weight: 'medium' }, children: '$.child.name' },
+                  { component: 'Text', props: { color: 'faint' }, children: '$.child.born_display' },
+                ],
+              },
+            },
+          },
+          else: { component: 'Text', props: { color: 'faint' }, children: 'Nobody yet.' },
+        },
+        {
+          if: '$.addingChild',
+          then: {
+            component: 'Rows',
+            props: { gap: 12 },
+            children: [
+              // NO EMAIL FIELD, and that is the screen saying what the schema
+              // says: a child is a record, not a login. Somebody looking for
+              // the field is meant to notice it is not there.
+              { component: 'Input', props: { label: 'Name', big: true, placeholder: 'Emma Klein' }, ref: 'childName', model: '$.childName' },
+              { component: 'Input', props: { label: 'Date of birth', type: 'date', hint: 'Kids’ classes are grouped by age.' }, ref: 'childBornOn', model: '$.childBornOn' },
+              {
+                component: 'Row',
+                props: { gap: 10 },
+                children: [
+                  { component: 'Button', props: { variant: 'solid', label: 'Add child' }, ref: 'saveChild' },
+                  { component: 'Button', props: { variant: 'ghost', label: 'Cancel' }, ref: 'cancelChild' },
+                ],
+              },
+            ],
+          },
+          else: { component: 'Button', props: { variant: 'ghost', label: 'Add a child' }, ref: 'addChild' },
+        },
+      ],
+    },
+  },
   {
     component: 'Section',
     props: { title: 'Notes', subtitle: 'What the desk has written down. Members never see this.' },

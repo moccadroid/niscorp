@@ -3,7 +3,7 @@ import { studioCurrent, studioTheme, membersActiveCount, checkInsTodayCount, stu
 import { revenueAtRisk, revenueCommitted, revenueExpected, revenueLeaving } from './forecast.entries';
 import { sessionsToday, sessionsUpcoming, programsList } from './schedule.entries';
 import { sessionAttending, sessionDetail } from './session.entries';
-import { peopleList, peopleCount, personById, offeringsList, offeringOptions, offeringsOnSale } from './member.entries';
+import { peopleList, peopleCount, personById, familyForPerson, offeringsList, offeringOptions, offeringsOnSale } from './member.entries';
 import { personAnchorUpdate, personConsentSet } from './member.mutations';
 import { subscriptionAssert, subscriptionBillable, subscriptionForMember, subscriptionGiveNotice, subscriptionWithdrawNotice, subscriptionStart, subscriptionRecordPayment, subscriptionEnd, subscriptionPause, subscriptionResume, myMembership, passSell, passesForPerson, enrolPerson, offeringPrice, coursePrice, offeringsPurchasable, purchaseRecord, purchasesForPerson, subscriptionsLeaving, subscriptionPaidByProvider, subscriptionNames, subscriptionsOfPerson } from './subscription.entries';
 import { localeCurrent, studioSetLocale, studioSetTheme, themeCurrent, themesList } from './theme.entries';
@@ -23,11 +23,11 @@ import {
   eventCreate,
 } from './timetable.entries';
 import { staffById, staffCreate, staffEnroll, staffList, staffSetActive, staffSetRole } from './staff.entries';
-import { bookClass, cancelMyBooking, myBookedSessions, myBookings, myCard, myPasses } from './me.entries';
+import { bookClass, bookForFamily, cancelFamilyBooking, cancelMyBooking, familyBookings, myBookedSessions, myBookings, myCard, myPasses } from './me.entries';
 import { enquiredPerson, membersLapsedAway, automationArm, automationCreate, automationUpdate, automationsList, automationRecipes, automationRuns, bookingsOnDay, joinedSubscription, followUpsOpen, notificationsUnseen, notificationsMarkSeen, outboxRecent, outboxQueued, outboxStuck, outboxClaim, outboxSent, outboxFailed, outboxRequeue, closeFollowUp, notify, queueMessage, trialsDue } from './tide.entries';
 import { courseCreate, courseSetActive, courseRoster, courseUpdate, coursesList, enrolMember, enrolmentsForMember, joinCourse, leaveCourse, myEnrolments, withdrawMember } from './course.entries';
-import { studioPersonCreate, peopleEnroll, personByEmail, personCreate } from './intake.entries';
-import { identityPerson, identityStudio, identityInstalled } from './identity.entries';
+import { childCreate, childAttach, studioPersonCreate, peopleEnroll, personByEmail, personCreate } from './intake.entries';
+import { identityPerson, identityStudio, identityInstalled, identityGuarded, identityHousehold } from './identity.entries';
 import { phrasesBook, phrasesLocales, phrasesIntegrations } from './language.entries';
 import { credentialPrincipalByEmail, credentialSweepLinks, credentialMintLink, credentialRedeemLink, mailerRecordDelivered, mailerRecordFailed, mailerOutboxOrigin, mailerSuppress, mailerOptOut, transportStaffRoster, transportMemberRoster, schedulerReflexRows, schedulerStudioZones } from './machinery.entries';
 import { addonInstall, addonUninstall, addonsInstalled, addonsList } from './addon.entries';
@@ -55,6 +55,7 @@ export const ENTRIES: CacheEntry[] = [
   peopleList,
   peopleCount,
   personById,
+  familyForPerson,
   offeringsList,
   offeringOptions,
   offeringsOnSale,
@@ -73,6 +74,7 @@ export const ENTRIES: CacheEntry[] = [
   myPasses,
   myMembership,
   myBookings,
+  familyBookings,
   myBookedSessions,
   coursesList,
   courseRoster,
@@ -115,6 +117,8 @@ export const ENTRIES: CacheEntry[] = [
   identityPerson,
   identityStudio,
   identityInstalled,
+  identityGuarded,
+  identityHousehold,
   studioTheme,
   phrasesBook,
   phrasesLocales,
@@ -173,6 +177,8 @@ export const MUTATION_ENTRIES: MutationEntry[] = [
   programUpdate,
   bookClass,
   cancelMyBooking,
+  bookForFamily,
+  cancelFamilyBooking,
   notify,
   closeFollowUp,
   notificationsMarkSeen,
@@ -199,6 +205,8 @@ export const MUTATION_ENTRIES: MutationEntry[] = [
   personCreate,
   studioPersonCreate,
   peopleEnroll,
+  childCreate,
+  childAttach,
   offeringCreate,
   offeringUpdate,
   offeringSetActive,

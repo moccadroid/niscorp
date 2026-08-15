@@ -64,6 +64,50 @@ const PAST: Filter = {
 
 const SEARCH: Filter = { or: [{ ilike: ['people.name', { $context: 'q' }] }, { ilike: ['people.email', { $context: 'q' }] }] };
 
+// ── WHOSE CHILDREN THESE ARE ─────────────────────────────────
+//
+// The desk's half of the family, read for whichever person's record is open.
+// Tenant-scoped like everything else on this rung — a guardianship is a
+// relationship AT a studio, so the desk sees its own and no other's.
+//
+// Named by the GUARDIAN, because that is the direction the record is read
+// from: "who does this person look after". The reverse question ("who looks
+// after this child") is the same table read the other way and has no screen
+// yet — the desk reaches a child through their guardian's record.
+export const familyForPerson: CacheEntry = {
+  fingerprint: 'people/family',
+  intent: 'The children a person may act for, at this studio',
+  shape: [{ person_id: '', name: '', born_display: '', can_book: false }],
+  dsl: {
+    from: ['guardianships', 'people'],
+    fields: [
+      { field: 'guardianships.child_person_id', as: 'person_id' },
+      'guardianships.can_book',
+      { field: 'people.name', as: 'name' },
+      { field: 'people.born_on', as: 'born_on' },
+    ],
+    filter: {
+      and: [
+        { eq: ['guardianships.guardian_person_id', { $context: 'personId' }] },
+        { eq: ['people.id', 'guardianships.child_person_id'] },
+      ],
+    },
+    sort: [{ field: 'people.born_on', dir: 'asc' }],
+  },
+  mapping: {
+    $map: {
+      over: { $ref: '$.result' },
+      as: 'm',
+      body: {
+        person_id: row('person_id'),
+        name: row('name'),
+        born_display: dateText({ $get: { from: { $var: 'm' }, path: ['born_on'], fallback: { $const: null } } }),
+        can_book: { $eq: [row('can_book'), true] },
+      },
+    },
+  },
+};
+
 /** How many people a page of the roll holds. */
 export const ROLL_PAGE = 50;
 

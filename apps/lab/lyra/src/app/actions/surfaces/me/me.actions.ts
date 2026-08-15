@@ -1,7 +1,28 @@
 import { z } from 'zod';
 import type { ActionDefinition } from '@niscorp/nova';
 import { homeMemberLayout, meMembershipLayout, meBookingsLayout, meClassesLayout } from './me.layouts';
-import { bookPrism, cancelPrism, choosePlanPrism, coursesPrism, joinPrism, leavePrism, myBookedSessionsPrism, myBookingsPrism, myCardPrism, myEnrolmentsPrism, myGiveNoticePrism, myMembershipPrism, myPassesPrism, myPausePrism, myResumePrism, plansOnSalePrism, upcomingPrism } from './me.prism';
+import {
+  bookForPrism,
+  bookPrism,
+  cancelForPrism,
+  cancelPrism,
+  choosePlanPrism,
+  coursesPrism,
+  familyBookingsPrism,
+  joinPrism,
+  leavePrism,
+  myBookedSessionsPrism,
+  myBookingsPrism,
+  myCardPrism,
+  myEnrolmentsPrism,
+  myGiveNoticePrism,
+  myMembershipPrism,
+  myPassesPrism,
+  myPausePrism,
+  myResumePrism,
+  plansOnSalePrism,
+  upcomingPrism,
+} from './me.prism';
 
 // The member's landing surface, granted BY NAME at the member rung like every
 // other home — a wildcard at the bottom of a ladder grants to the whole ladder.
@@ -223,12 +244,25 @@ export const meClassesAction: ActionDefinition = {
     loading: true,
     error: '',
     notice: '',
+    // Who this booking is FOR. Empty means the caller themselves, which is
+    // what everybody who guards nobody always sends — and `me/book` (the
+    // personal-reached write that stamps the caller) is what runs then. The
+    // subject only exists for a member who has children.
+    family: [],
+    subjectId: '',
   },
   layout: meClassesLayout,
   endpoints: {
     load: { url: '/api/me/vex', method: 'POST', request: upcomingPrism, target: 'rawSessions' },
     booked: { url: '/api/me/vex', method: 'POST', request: myBookedSessionsPrism, target: 'bookedSessions' },
     book: { url: '/api/me/vex', method: 'POST', request: bookPrism, errorTarget: 'error' },
+    family: { fn: 'nav.family', target: 'family' },
+    // A SECOND VERB RATHER THAN A PARAMETER ON THE FIRST, deliberately.
+    // `me/book` stamps person_id from the caller and cannot say anybody else;
+    // this one carries a subject the engine validates through guardianships.
+    // Keeping them apart means the ordinary path keeps the stronger guarantee
+    // — the one that holds whether or not anybody thought about it.
+    bookFor: { url: '/api/me/vex', method: 'POST', request: bookForPrism, errorTarget: 'error' },
     courses: { url: '/api/me/vex', method: 'POST', request: coursesPrism, target: 'courses' },
     mine: { url: '/api/me/vex', method: 'POST', request: myEnrolmentsPrism, target: 'enrolments' },
     join: { url: '/api/me/vex', method: 'POST', request: joinPrism, errorTarget: 'error' },
@@ -236,7 +270,7 @@ export const meClassesAction: ActionDefinition = {
   },
   // Steps run in order, each awaited — `booked` has landed by the time `load`
   // succeeds, so the mark never reads a stale half.
-  lifecycle: { mount: [{ call: 'courses' }, { call: 'mine' }, { call: 'booked' }, { call: 'load', onSuccess: [{ emit: { channel: 'mark-booked' } }] }] },
+  lifecycle: { mount: [{ call: 'courses' }, { call: 'mine' }, { call: 'booked' }, { call: 'family' }, { call: 'load', onSuccess: [{ emit: { channel: 'mark-booked' } }] }] },
   triggers: [
     // The join: each session wears whether the caller already holds it, and
     // the verbs read the result — Book hides, a Booked badge shows. A policy
@@ -328,6 +362,21 @@ export const meClassesAction: ActionDefinition = {
         },
       ],
     },
+    // Choosing whose class this is, then booking it for them.
+    { event: 'ui:click', ref: 'subject', do: [{ set: 'subjectId', value: '@event.payload.value' }] },
+    {
+      event: 'ui:click',
+      ref: 'bookFor',
+      do: [
+        { set: 'error', value: '' },
+        { set: 'notice', value: '' },
+        { set: 'sessionId', value: '@event.payload.session_id' },
+        {
+          call: 'bookFor',
+          onSuccess: [{ set: 'notice', value: 'Added — see My classes.' }, { call: 'booked' }, { call: 'load', onSuccess: [{ emit: { channel: 'mark-booked' } }] }, { emit: { channel: 'my-bookings-changed' } }],
+        },
+      ],
+    },
     { message: 'my-bookings-changed', do: [{ call: 'booked' }, { call: 'load', onSuccess: [{ emit: { channel: 'mark-booked' } }] }, { call: 'mine' }, { call: 'courses' }] },
   ],
 };
@@ -344,13 +393,26 @@ export const meBookingsAction: ActionDefinition = {
     loading: true,
     error: '',
     notice: '',
+    // WHO THIS MEMBER MAY ACT FOR, and the whole household's week. Both are
+    // empty for everybody who guards nobody, and the screen then draws exactly
+    // what it drew before — the family surface is additive on the screen for
+    // the same reason it is additive in the engine.
+    family: [],
+    familyBookings: [],
   },
   layout: meBookingsLayout,
   endpoints: {
     load: { url: '/api/me/vex', method: 'POST', request: myBookingsPrism, target: 'bookings' },
     cancel: { url: '/api/me/vex', method: 'POST', request: cancelPrism, errorTarget: 'error' },
+    family: { fn: 'nav.family', target: 'family' },
+    // THE ONE READ THAT MAKES THE SATURDAY-MORNING SCREEN POSSIBLE: the
+    // member's own classes and their children's, together, ordered by when to
+    // turn up. Under an identity switcher this would have been one session per
+    // child.
+    familyBookings: { url: '/api/me/vex', method: 'POST', request: familyBookingsPrism, target: 'familyBookings' },
+    cancelFor: { url: '/api/me/vex', method: 'POST', request: cancelForPrism, errorTarget: 'error' },
   },
-  lifecycle: { mount: [{ call: 'load', onSuccess: [{ set: 'loading', value: false }] }] },
+  lifecycle: { mount: [{ call: 'load', onSuccess: [{ set: 'loading', value: false }] }, { call: 'family' }, { call: 'familyBookings' }] },
   triggers: [
     {
       event: 'ui:click',
@@ -365,7 +427,24 @@ export const meBookingsAction: ActionDefinition = {
         },
       ],
     },
-    { message: 'my-bookings-changed', do: [{ call: 'load' }] },
+    // Cancelling a CHILD's class. Its own verb because its reach is wider:
+    // `me/cancel` is pinned to the caller and would match nothing for a
+    // child's booking id — which is the personal clamp doing its job, not a
+    // bug to route around.
+    {
+      event: 'ui:click',
+      ref: 'cancelFor',
+      do: [
+        { set: 'error', value: '' },
+        { set: 'notice', value: '' },
+        { set: 'bookingId', value: '@event.payload.booking_id' },
+        {
+          call: 'cancelFor',
+          onSuccess: [{ set: 'notice', value: 'Cancelled. The place is free again.' }, { call: 'familyBookings' }, { emit: { channel: 'my-bookings-changed' } }],
+        },
+      ],
+    },
+    { message: 'my-bookings-changed', do: [{ call: 'load' }, { call: 'familyBookings' }] },
   ],
 };
 

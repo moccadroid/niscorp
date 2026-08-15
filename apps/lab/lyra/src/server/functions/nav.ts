@@ -23,6 +23,24 @@ export const navFunctions = (
   };
 
   return {
+  // ── WHO THIS SESSION MAY ACT FOR ──────────────────────────
+  //
+  // Off the identity record, never a lookup — the same rule every other seam
+  // in this file follows. The children were read ONCE, by the `identity` role
+  // (which holds `people.read` pinned to the household), when the session
+  // resolved.
+  //
+  // It is a function rather than an entry because a member holds no
+  // `people.read` and never will: "a member cannot read the roll" is an
+  // invariant three checks assert, and a name lives on `people`. This is the
+  // seam that lets a parent see their child's NAME without the rung gaining a
+  // verb that would make the roster replayable.
+  //
+  // A picker is all this feeds. Nothing here decides what anybody may DO —
+  // the household reach and the guardianships `$lookup` do that, engine-side,
+  // and they would refuse a subject this list was wrong about.
+  'nav.family': async () => (session.principal === null ? [] : Array.isArray(session.identity['household']) ? session.identity['household'] : []),
+
   'nav.identity': async () => {
     // EVERYTHING A SESSION IS is on the session: the record the engine
     // resolved carries the name, the studio and the language. Nothing here

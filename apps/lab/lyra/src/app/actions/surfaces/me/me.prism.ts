@@ -1,4 +1,4 @@
-import { bookClass, cancelMyBooking, myBookedSessions, myBookings, myCard, myPasses } from '@lyra/app/vex/me.entries';
+import { bookClass, bookForFamily, cancelFamilyBooking, cancelMyBooking, familyBookings, myBookedSessions, myBookings, myCard, myPasses } from '@lyra/app/vex/me.entries';
 import { myMembership } from '@lyra/app/vex/subscription.entries';
 import { sessionsUpcoming } from '@lyra/app/vex/schedule.entries';
 import { coursesList } from '@lyra/app/vex/course.entries';
@@ -10,6 +10,27 @@ export const myCardPrism = { fingerprint: myCard.fingerprint, context: {} };
 export const myMembershipPrism = { fingerprint: myMembership.fingerprint, context: {} };
 export const myPassesPrism = { fingerprint: myPasses.fingerprint, context: {} };
 export const myBookingsPrism = { fingerprint: myBookings.fingerprint, context: {} };
+
+// ── the family ───────────────────────────────────────────────
+//
+// Who this member may act for, and the week for all of them at once. The
+// second is what the household reach bought: one read, whatever the family's
+// size, rather than a session per child.
+export const familyBookingsPrism = { fingerprint: familyBookings.fingerprint, context: {} };
+
+// BOOKING FOR A CHILD. `subjectId` names WHO, and it is the one value on this
+// surface that is not the caller — which is exactly why it is not trusted:
+// the entry resolves it through a `$lookup` on `guardianships` whose read
+// rules the engine supplies, so a subject this member does not guard becomes
+// NULL and the write dies. See me.entries.ts.
+export const bookForPrism = {
+  fingerprint: bookForFamily.fingerprint,
+  context: { sessionId: { $ref: '$.sessionId' }, subjectId: { $ref: '$.subjectId' } },
+};
+export const cancelForPrism = {
+  fingerprint: cancelFamilyBooking.fingerprint,
+  context: { bookingId: { $ref: '$.bookingId' } },
+};
 
 // The plans a member may start themselves, and the start itself. The SAME
 // fingerprint the desk replays — at the member's reach the engine stamps

@@ -829,4 +829,21 @@ export const GERMAN: Record<string, string> = {
     'Auf allem, was die Automatisierungen verschicken, steht der Name deines Studios. Hierhin kommt eine Antwort zurück.',
   'Your studio’s name on what goes out, and where an answer comes back to.':
     'Der Name deines Studios auf allem, was rausgeht — und wohin eine Antwort zurückkommt.',
+  // ── families ──
+  Family: 'Familie',
+  'My family': 'Meine Familie',
+  'Add a child': 'Kind hinzufügen',
+  'Add child': 'Kind anlegen',
+  'Date of birth': 'Geburtsdatum',
+  'Emma Klein': 'Emma Klein',
+  'Booking for': 'Buchen für',
+  'Book for them': 'Für sie buchen',
+  'Added — see My classes.': 'Eingetragen — siehe Meine Kurse.',
+  'Children this person may book and pay for.':
+    'Kinder, für die diese Person buchen und zahlen darf.',
+  'Kids’ classes are grouped by age.': 'Kinderkurse sind nach Alter gruppiert.',
+  'Everything your children are booked into.':
+    'Alles, wofür deine Kinder eingetragen sind.',
+  'Anything you book for them will show up here.':
+    'Alles, was du für sie buchst, erscheint hier.',
 };

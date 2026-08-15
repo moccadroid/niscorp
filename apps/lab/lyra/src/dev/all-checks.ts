@@ -28,6 +28,8 @@ const CHECKS = [
   ['member-check', 'the member’s own side, and the boundary that allowed it'],
   ['model-check', 'one person, many relationships: concurrent entitlements, the drop-in, and manual money'],
   ['scoping-check', 'one table, two reaches: a rung says how far and the query cannot tell'],
+  ['reach-coverage-check', 'a reach is only safe once every table declares it — a missing profile falls through to the studio'],
+  ['families-check', 'a parent acts for their child: the booking belongs to the child, and nobody else moved'],
   ['visibility-check', 'the owner can see who is coming, and a grant always has a destination'],
   ['multirole-check', 'a person is not one role: two roles add up, and the card is still theirs'],
   ['auth-check', 'a sign-in link is a nonce: single-use, short-lived, rate-limited, and never a session'],

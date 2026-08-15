@@ -1,7 +1,7 @@
 import { coursesList, enrolMember, enrolmentsForMember, withdrawMember } from '@lyra/app/vex/course.entries';
-import { personById, offeringsList, peopleList, peopleCount, offeringOptions, ROLL_ORDERS } from '@lyra/app/vex/member.entries';
+import { personById, familyForPerson, offeringsList, peopleList, peopleCount, offeringOptions, ROLL_ORDERS } from '@lyra/app/vex/member.entries';
 import { personAnchorUpdate } from '@lyra/app/vex/member.mutations';
-import { peopleEnroll } from '@lyra/app/vex/intake.entries';
+import { childCreate, childAttach, peopleEnroll } from '@lyra/app/vex/intake.entries';
 import {
   subscriptionForMember,
   subscriptionGiveNotice,
@@ -139,6 +139,41 @@ export const memberSubscriptionPrism = {
 export const personPassesPrism = {
   fingerprint: passesForPerson.fingerprint,
   context: { personId: { $ref: '$.personId' } },
+};
+
+// ── the family ───────────────────────────────────────────────
+//
+// Whose children this person looks after, and the form that writes one down.
+//
+// The child's id is minted HERE rather than by the database, for the same
+// reason `people/enroll`'s ids are: three statements have to agree about who
+// they are writing, and a DEFAULT that fires inside statement one is not
+// available to statements two and three. `$uuid` is the request prism's, so
+// the browser never authors an id either.
+export const personFamilyPrism = {
+  fingerprint: familyForPerson.fingerprint,
+  context: { personId: { $ref: '$.personId' } },
+};
+
+export const createChildPrism = {
+  fingerprint: childCreate.fingerprint,
+  context: {
+    name: { $trim: { $ref: '$.childName' } },
+    // '' → NULL, so an unanswered date is absent rather than an epoch.
+    bornOn: { $case: { branches: [{ when: { $eq: [{ $ref: '$.childBornOn' }, ''] }, then: null }], else: { $ref: '$.childBornOn' } } },
+  },
+};
+
+// The id comes off the row the call above returned — see the entries' own
+// comment for why it cannot ride inside one artifact.
+export const attachChildPrism = {
+  fingerprint: childAttach.fingerprint,
+  context: {
+    childPersonId: { $ref: '$.newChild.id' },
+    guardianPersonId: { $ref: '$.personId' },
+    source: 'referral',
+    notes: '',
+  },
 };
 
 // What they have bought outright — the desk's answer to "did they pay the

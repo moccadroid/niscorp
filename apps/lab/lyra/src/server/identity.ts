@@ -129,10 +129,45 @@ export const identityFor = async (pool: PgPool, principal: string, rungOf: (acto
   const { studio, installed } = await readStudioAndInstalls(read, principal, seam.tag);
   const nameRaw = await read('identity/person', { userId: principal });
   const name = nameRaw !== null && typeof nameRaw === 'object' && !Array.isArray(nameRaw) ? (nameRaw as Record<string, unknown>) : {};
+
+  // ── ME AND MINE ────────────────────────────────────────────
+  //
+  // The household this session reaches: the caller, then whoever they are
+  // answerable for. Another engine read, pinned to the guardian by the
+  // `identity` reach — no new licensed SQL, and the same shape as the install
+  // list above.
+  //
+  // THE CALLER IS ALWAYS FIRST AND ALWAYS PRESENT, which is what makes the
+  // household reach a superset of the personal one rather than a replacement
+  // for it: somebody who guards nobody resolves to `[them]`, and every
+  // household-reached read then answers exactly what a personal-reached one
+  // would. FAIL CLOSED: a failed read is the caller alone, never everybody.
+  const guardedRaw = await read('identity/guarded', { userId: principal, studioId: seam.tag });
+  const guarded = Array.isArray(guardedRaw) ? (guardedRaw as { value?: unknown; can_book?: unknown }[]) : [];
+  const householdIds = [principal, ...guarded.map((c) => String(c.value ?? ''))];
+
+  // The NAMES, pinned by the ids above — a second read because the first one's
+  // answer is what this one is scoped by. Skipped entirely for the common case
+  // (nobody guards anybody), so a member with no children pays nothing for a
+  // feature they do not use.
+  const namesRaw = guarded.length === 0 ? [] : await read('identity/household', { userId: principal, studioId: seam.tag, householdIds });
+  const names = new Map((Array.isArray(namesRaw) ? (namesRaw as { value?: unknown; label?: unknown }[]) : []).map((n) => [String(n.value ?? ''), String(n.label ?? '')]));
+  const household = guarded.map((c) => ({ value: String(c.value ?? ''), label: names.get(String(c.value ?? '')) ?? '', can_book: c.can_book === true }));
+
   return {
     roles: seam.roles,
     tag: seam.tag,
     installed,
-    scope: { ...seam.scope, ...name, ...studio },
+    scope: {
+      ...seam.scope,
+      ...name,
+      ...studio,
+      // The SET the household reach matches on — ids only, and the only half
+      // of this that reaches SQL.
+      householdIds,
+      // The same children as the screen says them. Never a scope value in a
+      // query: `nav.family` hands this to a picker and nothing else reads it.
+      household,
+    },
   };
 };

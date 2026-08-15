@@ -1,4 +1,4 @@
-import type { ScopeBehaviors } from '@niscorp/vex';
+import type { ScopeBehaviors, ScopeMatch, ScopeRule } from '@niscorp/vex';
 
 const tenantRead = { read: [{ match: 'studio_id', to: 'studioId' }] };
 
@@ -23,6 +23,41 @@ const personal = {
   ],
 };
 
+// ── ME AND MINE ──────────────────────────────────────────────
+//
+// `personal` for somebody answerable for other people — a parent and their
+// children. The READ widens from one person to a set the session resolved
+// once at sign-in (`householdIds`, identity.entries.ts): caller-plus-guarded,
+// pinned to the guardian side, so it cannot be widened by asking differently.
+//
+// THE WRITE DELIBERATELY CARRIES NO PERSON RULE, and that is the whole design
+// rather than an omission. `personal` STAMPS `person_id` from the caller,
+// which is what makes "book somebody else" unsayable rather than merely
+// refused — an overwrite cannot be forgotten. A set cannot stamp, so the
+// obvious move is to swap the stamp for a check against the set — and a check
+// is something a future author can forget to write.
+//
+// So neither: the subject arrives through a `$lookup` on `guardianships`,
+// whose own read rules the engine ANDs into the subquery. A subject the
+// caller does not guard resolves NULL and the insert dies on NOT NULL. The
+// subject is engine-pinned, exactly as it was before; only the source of the
+// pin moved. vex refuses a set-valued rule on an INSERT outright, so this
+// cannot quietly become the other thing.
+const household: { read: ScopeMatch[]; write: ScopeRule[] } = {
+  read: [
+    { match: 'person_id', in: 'householdIds' },
+    { match: 'studio_id', to: 'studioId' },
+  ],
+  write: [
+    { set: 'studio_id', to: 'studioId' },
+    { match: 'studio_id', to: 'studioId' },
+  ],
+};
+
+// The same, for a table read at the household reach that a household member
+// never writes — the mirror rows the family surface only ever displays.
+const householdRead = { read: household.read };
+
 export const scopeBehaviors: ScopeBehaviors = {
   // ── the studio's own data ──
   // Named for the machinery reaches: `transport` (the lab picker) reads the
@@ -42,12 +77,14 @@ export const scopeBehaviors: ScopeBehaviors = {
   bookings: {
     default: tenantWrite,
     personal,
+    household,
   },
-  enrolments: { default: tenantWrite, personal },
+  enrolments: { default: tenantWrite, personal, household },
 
   studio_people: {
     default: tenantWrite,
     personal: { read: [{ match: 'studio_id', to: 'studioId' }, { match: 'person_id', to: 'userId' }] },
+    household: householdRead,
     // The lab picker reads anchors deployment-wide.
     transport: { read: [] },
     // The unsubscribe write, pinned by the ENGINE to the exact pair the
@@ -69,10 +106,17 @@ export const scopeBehaviors: ScopeBehaviors = {
         { match: 'studio_id', to: 'studioId' },
       ],
     },
+    // READ ONLY at the household reach, deliberately. A parent SEES what their
+    // child holds; starting or ending a child's plan stays the desk's, because
+    // it is a commitment about money and the switcher is not where a family
+    // should discover they have made one. The columns to widen it are here
+    // when somebody decides otherwise.
+    household: householdRead,
   },
   passes: {
     default: tenantWrite,
     personal: { read: [{ match: 'studio_id', to: 'studioId' }, { match: 'person_id', to: 'userId' }] },
+    household: householdRead,
   },
   // Things bought once that grant nothing — same shape as a pass, because the
   // question is the same: whose studio sold it, and whose record does a member
@@ -81,6 +125,7 @@ export const scopeBehaviors: ScopeBehaviors = {
   purchases: {
     default: tenantWrite,
     personal: { read: [{ match: 'studio_id', to: 'studioId' }, { match: 'person_id', to: 'userId' }] },
+    household: householdRead,
   },
   // Notice belongs to the studio whose subscription it ends; the point of the
   // separate table is the VERB. On the member's reach the caller is pinned
@@ -89,15 +134,41 @@ export const scopeBehaviors: ScopeBehaviors = {
   subscription_notices: {
     default: tenantWrite,
     personal,
+    household,
   },
   // The pause ledger, same fence, same reason — see the table's own comment
   // for why freezing training must not be the grant that states standings.
   subscription_pauses: {
     default: tenantWrite,
     personal,
+    household,
   },
   check_ins: tenantWrite,
   connections: tenantWrite,
+  // WHO MAY ACT FOR WHOM. The desk writes these; nobody else does yet.
+  //
+  // The named reaches below are what a guardian's own session is built from,
+  // and both are pinned to the GUARDIAN side — never the child's. That
+  // direction is the whole security property: `guardian_person_id = userId`
+  // means a caller can only ever discover the children THEY are answerable
+  // for, so the set a reach resolves from cannot be widened by asking
+  // differently.
+  //
+  // `identity` is how the session learns its own household (identity.entries),
+  // and `personal` is how a member's own screen lists their children — the
+  // same rows, the same pin, read at the two reaches that need them.
+  guardianships: {
+    default: tenantWrite,
+    identity: { read: [{ match: 'studio_id', to: 'studioId' }, { match: 'guardian_person_id', to: 'userId' }] },
+    personal: { read: [{ match: 'studio_id', to: 'studioId' }, { match: 'guardian_person_id', to: 'userId' }] },
+    // THE WRITE-SUBJECT PIN, and the reason a parent booking for a child is
+    // safe without a set-valued write rule. A `$lookup` on this table at the
+    // household reach carries these read matches into its own subquery
+    // (vex mutations/engine.ts), so a subject the caller does not guard
+    // resolves NULL and the insert dies on NOT NULL. The engine applies it;
+    // no entry can forget it.
+    household: { read: [{ match: 'studio_id', to: 'studioId' }, { match: 'guardian_person_id', to: 'userId' }] },
+  },
   studio_integrations: tenantWrite,
   courses: tenantWrite,
   // What the automations leave behind — scoped, so a reflex cannot write into
@@ -150,6 +221,22 @@ export const scopeBehaviors: ScopeBehaviors = {
   people: {
     default: {},
     identity: { read: [{ match: 'id', to: 'userId' }] },
+    // A MEMBER MAY NOW READ A PERSON, AND ONLY EVER THESE PEOPLE.
+    //
+    // The member rung holds `people.read` so a parent can see their child's
+    // NAME — which is otherwise unreadable anywhere, because a name lives on
+    // `people` and nothing else. That grant is only safe because of these two
+    // lines: at `personal` a member reads their own row, at `household` their
+    // own and their children's. The roster stays refused by the ROW RULE
+    // rather than by the absence of the verb.
+    //
+    // BOTH VARIANTS OR NEITHER. `people`'s default is deliberately rule-free —
+    // a person is shared across tenants — so a reach that names no variant
+    // here falls through to NO RULES AT ALL and reads the whole deployment.
+    // That is the worst fall-through in this file, and `reach-coverage-check`
+    // is what stops one being added without the other.
+    personal: { read: [{ match: 'id', to: 'userId' }] },
+    household: { read: [{ match: 'id', in: 'householdIds' }] },
     transport: { read: [] },
   },
 
