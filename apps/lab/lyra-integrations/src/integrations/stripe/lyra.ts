@@ -122,6 +122,21 @@ export const namesForSubscriptions = async (
   return named;
 };
 
+/** Which subscriptions a person holds, so their own invoices can be found. The
+ *  mirror keys on the subscription, and a panel is opened on a PERSON — this is
+ *  the one hop between the two, made by the host that knows both. */
+export const subscriptionsOfPerson = async (env: IntegrationEnv, studioId: string, personId: string): Promise<string[]> => {
+  if (personId === '') return [];
+  const answer = await callLyra(env, {
+    studioId,
+    resource: 'member',
+    fingerprint: 'subscriptions/of-person',
+    context: { personId },
+  });
+  const rows = (answer.result as unknown as { subscription_id?: string }[] | undefined) ?? [];
+  return rows.map((row) => String(row.subscription_id ?? '')).filter((id) => id !== '');
+};
+
 // ── BUYING ONE THING, ONCE ───────────────────────────────────
 //
 // A subscription is a standing this integration restates. A pass and a course

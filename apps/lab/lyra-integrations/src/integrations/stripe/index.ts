@@ -4,9 +4,9 @@ import { accountFor, rememberAccount, storeIsDurable, stripeSubscriptionFor } fr
 import { accountStanding, createAccountSession, createConnectedAccount, createOnboardingLink, createPortalSession, refundInvoice, stripeFor } from './client';
 import { embedPage, notOnboardedPage, unavailablePage } from './onboarding';
 import { createCheckout, createPurchase, customerFor } from './checkout';
-import { billableFor, namesForSubscriptions, purchaseFor } from './lyra';
+import { billableFor, namesForSubscriptions, purchaseFor, subscriptionsOfPerson } from './lyra';
 import { handleStripeEvent } from './hooks';
-import { invoicesFor, ledgerRows } from './ledger';
+import { invoicesFor, invoicesForSubscriptions, ledgerRows } from './ledger';
 import { sweepLeaving } from './leaving';
 
 // ═══════════════════════════════════════════════════════════════
@@ -319,6 +319,38 @@ export const stripeIntegration: Integration = {
       const invoices = await invoicesFor(ctx.db, who.studioId);
       const named = await namesForSubscriptions(ctx.env, who.studioId, invoices.map((i) => i.subscriptionId));
       return c.json(ledgerRows(invoices, named));
+    });
+
+    // ── ONE PERSON'S OWN PAYMENTS ──────────────────────────────
+    //
+    // What the panel on a member's record reads. The person is named by the
+    // host — a panel is opened ON somebody — and the studio is still the
+    // assertion's, so naming somebody else's person id resolves to subscriptions
+    // this studio does not have and therefore to no invoices.
+    r.post('/member-ledger', async (c) => {
+      const who = ctx.identity(c);
+      if (who === undefined) return c.json({ message: 'Who are you?' }, 401);
+      const body = (await c.req.json().catch(() => ({}))) as { personId?: unknown };
+      const personId = typeof body.personId === 'string' ? body.personId : '';
+      const held = await subscriptionsOfPerson(ctx.env, who.studioId, personId);
+      return c.json(ledgerRows(await invoicesForSubscriptions(ctx.db, who.studioId, held)));
+    });
+
+    // THE STRIP, before the panel is opened. The host paints a line per offered
+    // person while deriving the list, so this answers about several at once and
+    // says only what a strip can show.
+    r.post('/preview/member', async (c) => {
+      const who = ctx.identity(c);
+      if (who === undefined) return c.json({ message: 'Who are you?' }, 401);
+      const body = (await c.req.json().catch(() => ({}))) as { ids?: unknown };
+      const ids = Array.isArray(body.ids) ? body.ids.filter((id): id is string => typeof id === 'string') : [];
+      const out: Record<string, unknown> = {};
+      for (const personId of ids.slice(0, 50)) {
+        const held = await subscriptionsOfPerson(ctx.env, who.studioId, personId);
+        const paid = (await invoicesForSubscriptions(ctx.db, who.studioId, held)).filter((i) => i.status === 'paid');
+        out[personId] = { hint: paid.length === 0 ? '' : `${String(paid.length)} paid` };
+      }
+      return c.json(out);
     });
 
     // ── GIVING MONEY BACK ──────────────────────────────────────

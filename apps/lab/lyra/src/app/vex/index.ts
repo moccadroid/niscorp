@@ -5,7 +5,7 @@ import { sessionsToday, sessionsUpcoming, programsList } from './schedule.entrie
 import { sessionAttending, sessionDetail } from './session.entries';
 import { peopleList, peopleCount, personById, offeringsList, offeringOptions, offeringsOnSale } from './member.entries';
 import { personAnchorUpdate, personConsentSet } from './member.mutations';
-import { subscriptionAssert, subscriptionBillable, subscriptionForMember, subscriptionGiveNotice, subscriptionWithdrawNotice, subscriptionStart, subscriptionRecordPayment, subscriptionEnd, subscriptionPause, subscriptionResume, myMembership, passSell, passesForPerson, enrolPerson, offeringPrice, coursePrice, offeringsPurchasable, purchaseRecord, purchasesForPerson, subscriptionsLeaving, subscriptionPaidByProvider, subscriptionNames } from './subscription.entries';
+import { subscriptionAssert, subscriptionBillable, subscriptionForMember, subscriptionGiveNotice, subscriptionWithdrawNotice, subscriptionStart, subscriptionRecordPayment, subscriptionEnd, subscriptionPause, subscriptionResume, myMembership, passSell, passesForPerson, enrolPerson, offeringPrice, coursePrice, offeringsPurchasable, purchaseRecord, purchasesForPerson, subscriptionsLeaving, subscriptionPaidByProvider, subscriptionNames, subscriptionsOfPerson } from './subscription.entries';
 import { localeCurrent, studioSetLocale, studioSetTheme, themeCurrent, themesList } from './theme.entries';
 import { bookableForSession, bookingCancel, bookingCreate, checkInMark, rosterForSession, walkInsToday } from './desk.entries';
 import {
@@ -103,6 +103,7 @@ export const ENTRIES: CacheEntry[] = [
   subscriptionBillable,
   subscriptionsLeaving,
   subscriptionNames,
+  subscriptionsOfPerson,
   offeringsPurchasable,
   purchasesForPerson,
   offeringPrice,

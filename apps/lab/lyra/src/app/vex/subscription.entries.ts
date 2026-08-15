@@ -419,6 +419,26 @@ export const subscriptionNames: CacheEntry = {
   },
 };
 
+// Which subscriptions a person holds. The payments mirror keys on the
+// subscription and a panel is opened on a PERSON — this is the one hop between
+// the two, and only the host can make it, because only the host knows both.
+export const subscriptionsOfPerson: CacheEntry = {
+  fingerprint: 'subscriptions/of-person',
+  intent: 'The subscription ids a person holds at this studio',
+  shape: [{ subscription_id: '' }],
+  dsl: {
+    from: ['subscriptions'],
+    fields: [{ field: 'subscriptions.id', as: 'subscription_id' }],
+    // Cancelled ones included: a record of what somebody PAID does not stop
+    // being theirs when they leave, and a desk asking "did they ever pay?" is
+    // usually asking about somebody who has gone.
+    filter: { eq: ['subscriptions.person_id', { $context: 'personId' }] },
+  },
+  mapping: {
+    $map: { over: { $ref: '$.result' }, as: 'p', body: { subscription_id: { $get: { from: { $var: 'p' }, path: ['subscription_id'] } } } },
+  },
+};
+
 // ── WHO IS LEAVING, AND WHEN ─────────────────────────────────
 //
 // The read that closes S6. A member gives notice, the trigger computes

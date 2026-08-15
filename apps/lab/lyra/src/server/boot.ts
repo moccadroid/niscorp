@@ -7,7 +7,7 @@ import type { Tide } from '@niscorp/tide';
 import { buildLyra } from '@lyra/app/app';
 import { COMPONENT_NAMES } from '@lyra/ui/registry';
 // The lab's integration registrar is HARNESS — it seeds the lab world the way
-// db/seed.ts seeds rows — and lives with the rest of the harness in dev/.
+// db/seed/ seeds rows — and lives with the rest of the harness in dev/.
 import { registerDevIntegrations } from '../dev/dev-integrations';
 import { devRuntime } from './runtime';
 import { reflexesForEveryStudio, wireTide } from './tide';

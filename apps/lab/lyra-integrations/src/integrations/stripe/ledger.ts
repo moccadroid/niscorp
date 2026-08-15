@@ -111,6 +111,19 @@ export const recordDispute = async (db: IntegrationStore | undefined, invoiceId:
   await db.query(`UPDATE ${db.table('invoices')} SET disputed = true, updated_at = now() WHERE invoice_id = $1`, [invoiceId]);
 };
 
+/** The mirror, filtered to the subscriptions a person holds. Same rows, same
+ *  scoping — the studio is still the assertion's, and the subscription ids come
+ *  from the host rather than from a body. */
+export const invoicesForSubscriptions = async (
+  db: IntegrationStore | undefined,
+  studioId: string,
+  subscriptionIds: readonly string[],
+): Promise<MirroredInvoice[]> => {
+  const wanted = new Set(subscriptionIds.filter((id) => id !== ''));
+  if (wanted.size === 0) return [];
+  return (await invoicesFor(db, studioId)).filter((invoice) => wanted.has(invoice.subscriptionId));
+};
+
 export const invoicesFor = async (db: IntegrationStore | undefined, studioId: string): Promise<MirroredInvoice[]> => {
   if (db === undefined) {
     return [...MEMORY.values()].filter((i) => i.studioId === studioId).sort((a, b) => b.invoicedOn.localeCompare(a.invoicedOn));

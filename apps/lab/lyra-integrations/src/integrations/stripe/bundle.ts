@@ -514,6 +514,54 @@ const buyAction: ActionDefinition = {
   ],
 };
 
+
+// ── A MEMBER'S OWN PAYMENTS, ON THEIR RECORD ─────────────────
+//
+// The plan asked for this from the start and it never landed: the desk could see
+// a studio-wide ledger and nothing about the person in front of them. "Has Nina
+// actually paid?" meant scrolling a list of amounts looking for a date.
+//
+// It rides `people.detail` as a panel — the host offered the seat, this fills
+// it — and reads the same mirror the money screen does, filtered to the person
+// whose record is open.
+const memberPanelAction: ActionDefinition = {
+  id: 'ext.desk.stripe.member',
+  title: 'Payments',
+  data: { invoices: [], loading: true, error: '' },
+  layout: {
+    component: 'Stack',
+    props: { gap: 12 },
+    children: [
+      { if: '$.error', then: { component: 'Notice', props: { tone: 'alert', message: '$.error.message' } }, else: '' },
+      {
+        component: 'Card',
+        props: { flush: true },
+        children: {
+          component: 'Rows',
+          props: {
+            rows: '$.invoices',
+            loading: '$.loading',
+            rowKey: 'invoice_id',
+            empty: 'Nothing charged to this person yet.',
+            columns: [
+              { label: 'Date', px: 120, cell: { kind: 'text', key: 'date_display', color: 'soft' } },
+              { label: 'Amount', px: 110, cell: { kind: 'primary', key: 'amount_display' } },
+              { label: 'State', px: 120, cell: { kind: 'badge', key: 'state_label', toneKey: 'state_tone' } },
+              { label: '', px: 96, align: 'right', cell: { kind: 'link', key: 'document_url', label: 'Invoice' } },
+            ],
+          },
+        },
+      },
+    ],
+  },
+  endpoints: {
+    // The person comes from the host: a panel is opened ON somebody, and the id
+    // rides the input rather than being asked for.
+    invoices: { url: `${OWN}/member-ledger`, method: 'POST', request: { personId: { $ref: '$.personId' } }, target: 'invoices', errorTarget: 'error' },
+  },
+  lifecycle: { mount: [{ call: 'invoices', onSuccess: [{ set: 'loading', value: false }], onError: [{ set: 'loading', value: false }] }] },
+};
+
 export const STRIPE_BUNDLE = {
   integration: 'stripe',
   // THIS INTEGRATION'S OWN WORDS, in the languages it speaks — the host merges
@@ -529,6 +577,8 @@ export const STRIPE_BUNDLE = {
   phrasebook: {
     de: {
       Amount: 'Betrag',
+      Payments: 'Zahlungen',
+      'Nothing charged to this person yet.': 'Für diese Person wurde noch nichts abgerechnet.',
       Refund: 'Erstatten',
       'Refund this payment?': 'Diese Zahlung erstatten?',
       'The whole amount goes back to the member. It can take a few days to reach them, and it cannot be undone from here.':
@@ -615,6 +665,7 @@ export const STRIPE_BUNDLE = {
     [ledgerAction.id]: ledgerAction,
     [payAction.id]: payAction,
     [buyAction.id]: buyAction,
+    [memberPanelAction.id]: memberPanelAction,
   },
   placements: { [ledgerAction.id]: 'hub.money', [payAction.id]: 'hub.me', [buyAction.id]: 'hub.me' },
   // PAGES THE HOST MAY FRAME. Declared, so lyra will not open one this
@@ -625,6 +676,9 @@ export const STRIPE_BUNDLE = {
   // somebody who holds that screen and by nobody else. Without the owner, a
   // member of the studio could be served the form that changes where this
   // studio's money is paid out.
+  // A PANEL ON A HOST SCREEN. The host advertised `people.detail` as attachable;
+  // this rides it, and the preview is what paints the strip before it opens.
+  attachments: { [memberPanelAction.id]: { to: 'people.detail', preview: `${OWN}/preview/member` } },
   frames: { [`${OWN}/embed/onboarding`]: setupAction.id },
   settings: setupAction.id,
 };
