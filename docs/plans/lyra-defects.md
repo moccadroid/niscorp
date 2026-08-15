@@ -35,6 +35,18 @@
 > `Mein Gürtel` renders from the pack's own rows through the same pass as
 > everything else.
 >
+> **Part 10 (2026-08-15): all three residuals landed.** 10.1 — the harvest
+> walks nested `data` under the prose matcher; thirteen words came out of
+> hiding rather than the six filed here, including a third screen (Schedule's
+> `Calendar`/`List`) and the five welded `When <moment>` labels;
+> `language-check` renders the three screens and asserts the labels swapped
+> while the values did not. 10.2 — Stripe ships 24 rows on the host's
+> glossary, and `integrations-check` now harvests every shipped bundle and
+> demands its own words back, which immediately found five gaps in Belts.
+> 10.3 — diagnosed, not merely watched: the birth cost WAS the phrasebook,
+> folded and kept per shell. One shared frozen book per language takes
+> per-shell cost 138.8 → 84.1 KB and the 1,000-shell projection 136 → 82 MB.
+>
 > **Every part of this document is now landed or explicitly decided.** The
 > whole-document done-when holds: `pnpm check` is green at 46 with
 > language-check in it and the harvest gating at zero missing; a German
@@ -642,6 +654,130 @@ numbering and tax · charts on Reports · settings depth (hours, address, rooms,
 booking window, cancellation policy, waiver) · no-show as distinct from
 not-yet-checked-in · member profile editing, attendance history and payment
 method · bulk operations · keyboard paths.
+
+---
+
+## Part 10 — residuals found at verification (2026-08-14)
+
+Found by re-clicking every fixed screen after the status above was written.
+Three items, all small, none blocking the "landed" verdict.
+
+### 10.1 Prose living in action DATA is invisible to the harvest — the gate passes while words are missing
+
+The harvest walks layouts and derives the read-manufactured vocabulary from
+entries. It does not walk an action's `data:` — so a label that reaches the
+screen through a data-held options array is untranslatable-in-practice and
+uncounted. Two live instances, both **[seen]** on a de-AT studio while
+`phrase-harvest` reports 548/548:
+
+- The People lens tabs: `Current`, `Prospects`, `Contacts`, `Past`,
+  `Everyone` render English (four of their siblings translate, because those
+  words happen to be in the book from elsewhere). Source:
+  `apps/lab/lyra/src/app/vex/member.entries.ts:162` (`LENSES` labels) via
+  `LENS_OPTIONS` → `scopes` (`people.actions.ts:35,94`).
+- The Automations tab row: `Recipes` renders English
+  (`automations.action.ts:26`, an options array in the action's data; its
+  sibling shows German only because `Running` → `Läuft` is in the book).
+
+**Fix.** Teach the harvest to walk `data:` with the same prose-key matcher
+the pass uses (options arrays inherit their key's proseness already — this is
+purely a counting gap), then add the missing rows. **Done when** deleting
+`Mitglieder` from the book turns the harvest red AND the five lens words plus
+`Recipes` render German.
+
+**Landed (2026-08-15).** Two corrections to the note above, both found on the
+way in. The harvest DID walk `data` — one level, strings only, and key-blind,
+which is why `NOT_PROSE` exists and has to stay: `scope: 'current'` and
+`view: 'recipes'` are top-level data strings and still arrive as noise. The
+rule that landed is therefore two rules, not one: a top-level string is still
+taken whole whatever its key (`runningHint` is not a prose key and reaches the
+glass as a text child — a matcher applied there would DROP a sentence the pass
+translates), while anything nested is walked by the matcher.
+
+Thirteen words, not six. Beyond the eight named here: the Schedule screen's
+`Calendar`/`List` (`schedule.action.ts:18`), a third screen nobody had
+clicked, and the five `When <moment>` labels the automations form welds in
+TypeScript (`\`When ${moment.label}\``, `automations.form.ts:20`). Those five
+are a weld the entry-side weld detector cannot see, and a pattern would be
+wrong rather than merely verbose — German moves the verb to the end after
+"wenn", so the fragments already in the book do not compose. Five whole
+sentences instead, and the harvest now sees the array, so a sixth moment turns
+the gate red rather than shipping English.
+
+`language-check` renders People, Automations and Schedule as Maren and asserts
+both halves of the rule: the labels swapped, the option VALUES did not.
+
+### 10.2 The Stripe pack carries no phrasebook
+
+The mechanism landed (4.2) and Belts uses it — `Mein Gürtel` renders from the
+pack's own rows. The Stripe pack ships none, so a German member's nav reads
+`… Meine Mitgliedschaft · Payment` **[seen]**, and its screens are English.
+One book in `packs/stripe/bundle.ts`, same shape as Belts'.
+
+**Landed (2026-08-15).** 24 rows, on the host's glossary rather than an
+invented one: `State` is Status because that is what a standing reads as
+everywhere else, `Money` is Finanzen because that is the hub the screen sits
+in.
+
+The missing book was the smaller half. Nothing could have CAUGHT it —
+`phrase-harvest` walks the host's catalog, and a bundle's actions arrive over
+a wire at intake — so `integrations-check` now runs the same harvester over
+every shipped bundle and demands its own words back. It immediately found five
+gaps in Belts, the book everybody believed was finished. The bar is the fold
+(a word the host already owns is covered), and which side covers each word is
+printed rather than implied; today neither book leans on the host for
+anything.
+
+### 10.3 Per-shell birth cost rose 80.6 → 140.6 KB between the two bench runs
+
+Same day, same machine, `--expose-gc` both times. Per-navigation growth is
+fixed (0.88 KB/nav, flat, asserted) — this is the *birth* figure, up 74%,
+median tree 3.7 → 4.3 KB. Plausibly the language pass state and two packs'
+actions in the bench world; not diagnosed. Not urgent at 137 MB per 1,000
+concurrent shells — but worth one heap-snapshot look before anybody quotes
+the projection table, and worth the bench printing WHAT is in a shell (action
+count, book size) so a jump like this self-explains next time.
+
+**Landed (2026-08-15) — diagnosed, and it was the language pass state.**
+Not "plausibly": every de-AT shell ran two engine reads at build and then KEPT
+its own fold of ~560 rows. Measured at 66 KB per copy against an observed
++58 KB, and the build time told the same story (two extra reads per shell).
+The book is derived from the LANGUAGE and nothing else — `phrases` is release
+vocabulary owned by no tenant, `phrases/integrations` filters on
+`status = 'approved'` rather than on who installed what — so every German
+shell in the deployment was holding a byte-identical copy of one object.
+
+One shared frozen book per language:
+
+```
+  per shell        138.8 → 84.1 KB      1,000 concurrent   136 → 82 MB heap
+  build + settle    50.5 → 36.6 ms      per navigation     0.84 KB, flat
+```
+
+It cannot serve a stale integration set: the integration half is re-read per
+build and its content IS the memo key, so approving Stripe refolds on the next
+shell. That one small read is why build time returns to 36.6 rather than 20.7
+ms. Only the app's own rows are held, and `phrases` has no runtime write path
+to go stale against.
+
+Two reactions were written for this and deleted before landing — `phrases` and
+`integrations` are written by raw SQL in moss's operator routes rather than
+through vex, so neither could ever have fired. Worth knowing before anybody
+declares a third one.
+
+`held-state-check` separates DROPS from FILLS now. An invalidation hook takes
+no arguments and empties everything, which read as "not keyed by an argument"
+and demoted the memo to inert authored data — the one binding in the file
+worth watching, unwatched. Three memos are visible where one was.
+
+**And two ways the bench itself misled.** Its growth verdict was
+`growth / perShell`, so it moved when the DENOMINATOR did: it printed GROWING
+on runs the 8 KB ceiling passed cleanly, which reads as a landed defect
+reopening. The word and the gate share a number now. And per-shell cost had no
+composition beside it, which is the whole reason this was filed as
+undiagnosed — the bench prints actions served, actions mounted and phrases
+worn next to the weight, and says outright that the book is one object for the
+deployment so nobody multiplies it by the projection table.
 
 ---
 
