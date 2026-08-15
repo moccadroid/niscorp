@@ -1,6 +1,25 @@
 # Lyra payments — review, 2026-08-15
 
-Read of `apps/lab/lyra-integrations/src/packs/stripe/**`, `packages/moss/src/{server,integrations}.ts`,
+> **Since this was written, most of it has been acted on** (`5ffc7ab`, `bfcf2f7`).
+> The findings below are kept as written — an audit that edits itself to match
+> the fix stops being evidence of what was wrong. What changed is recorded here,
+> once, and each section is marked.
+>
+> | | |
+> |---|---|
+> | **A1** per-action perimeter | **FIXED**, both doors, `role-perimeter-check` |
+> | **A5/A6** studio name, entity type | open — studios still onboard as `st_northrock` |
+> | **A2** notice never reaches Stripe | open — still no `cancel_at` anywhere |
+> | **A3** double subscription | open — the confirming state that provokes it is unbuilt |
+> | **A4** `paid_via` never becomes `stripe` | open for subscriptions; correct for passes and one-offs |
+> | **A7** unexercised SQL | **narrower than stated** — see the correction in §A7 |
+> | **B/C** owner and member surfaces | member can buy and manage a card; owner surfaces untouched |
+> | **D** compliance | unchanged, and §D's cash paragraph is corrected below |
+>
+> Also built beyond the plan: the studio authors its own terms and billing
+> periods, everything it sells is payable, and one-offs exist as their own kind.
+
+Read of `apps/lab/lyra-integrations/src/integrations/stripe/**` (then spelled `packs/`), `packages/moss/src/{server,integrations}.ts`,
 lyra's `app/vex/subscription.entries.ts`, `app/charter/charter.ts`, the desk and member
 surfaces, and the four checks that claim to cover this (`stripe-check`, `billing-check`,
 `webhook-check`, `perimeter-check`).
@@ -58,7 +77,7 @@ fixed before a live key exists anywhere.
 
 **There is a second door.** `/api/integrations/frame` (`server.ts:827`) gates a grant on
 exactly the same three conditions and then checks `frames` — a bare array of paths with no
-owning action at all (`packs/stripe/bundle.ts:354`). So a member can also mint a grant for
+owning action at all (`integrations/stripe/bundle.ts`). So a member can also mint a grant for
 `/integrations/stripe/embed/onboarding` and be served the page that mounts Stripe's
 `account-onboarding` component against the studio's merchant account.
 
@@ -154,7 +173,7 @@ the cancel button carry.
 
 ### A3 · Nothing stops a second subscription
 
-`packs/stripe/index.ts:144` — `/checkout` resolves `billableFor` and creates a Checkout
+`integrations/stripe/index.ts` — `/checkout` resolves `billableFor` and creates a Checkout
 Session. There is no check for a live Stripe subscription already covering that
 `subscriptionId`. A member who taps **Set up payment** again after paying — or who paid,
 came back to the screen, and did not see a confirmation (see C4) — gets a second Stripe
@@ -185,7 +204,20 @@ its own correspondence with the studio.
 which verification documents Stripe demands and is not a field to get wrong on an account
 whose type cannot be changed after creation.
 
-### A7 · Every SQL path in the integration is unexercised
+### A7 · Every SQL path in the integration is unexercised — *narrower than first stated*
+
+> **CORRECTION.** As first written this section implied lyra's own schema was
+> unexercised too. It is not: every lyra check boots PGlite
+> (`src/server/runtime.ts`), runs the DDL, and fires the triggers — the notice
+> arithmetic, `months_per_period`, the purchase stamp and the kind guards are all
+> proven against a real database, and a constraint violation there comes back as a
+> real Postgres error.
+>
+> What has never run is **the integration's own SQL** — the `db.query(...)` calls
+> behind `DATABASE_URL` in `store.ts`, `prices.ts`, `ledger.ts`, `checkout.ts` and
+> `hooks.ts`. That is still true, still the place a `membership_id` → `subscription_id`
+> rename would hide, and still worth one check. The finding stands; its blast
+> radius was overstated.
 
 `billing-check.ts:31`, `stripe-check.ts:32` and `lyra-integrations/src/dev/pack-check.ts:33`
 all `delete process.env['DATABASE_URL']`. So event claiming, the ledger mirror, the price
@@ -227,7 +259,7 @@ integration's ledger. The ledger is the only payments surface, and:
   (`hooks.ts:179`), so there is nothing to hand a member who asks for their invoice.
 - **No payouts and no balance.** "When does this money reach my bank" has no answer anywhere.
 - **No per-member view.** The bundle declares no `attachments`
-  (`packs/stripe/bundle.ts:329`), although `docs/plans/lyra-stripe.md` §3.2 planned one on
+  (`integrations/stripe/bundle.ts`), although `docs/plans/lyra-stripe.md` §3.2 planned one on
   `people.detail`. From a member's record there is no way to see their payments.
 - **No reconcile sweep.** `PLAN.md` requires one — Stripe stops retrying after ~3 days.
   `grep -rni reconcile` finds nothing. A missed delivery is a membership permanently wrong.
@@ -275,19 +307,37 @@ has `country` and `currency` and no legal name, no address, and no UID/VAT id
 invoice-shaped. B2B reverse charge is not modelled at all.
 
 **Desk cash and Registrierkassenpflicht.** Worth being precise, because it sharpens the
-question for the accountant. `subscriptions/record-payment` (`subscription.entries.ts:252`)
+question for the accountant. `subscriptions/record-payment` (`subscription.entries.ts`)
 sets `paid_until` and nothing else — **no amount, no date taken, no who took it**. As built,
-lyra records an entitlement date, not a cash transaction. It is therefore not plausibly a
-Registrierkasse under §131b BAO today, because it records no receipt. The moment D3 level 2
-lands (`lyra-model-overhaul.md:242` — a `payments` table with amounts), that changes.
+lyra records an entitlement date, not a cash transaction.
 
-So the question to put to the accountant is not "is lyra a cash register?" but:
+> **CORRECTION, and it matters for the question below.** The paragraph originally
+> concluded that lyra "records no cash transaction at all" and was therefore not
+> plausibly a Registrierkasse. That was overstated even when written: `passes/sell`
+> with `paid_via: 'manual'` already recorded that a person bought a pass at the
+> desk — it simply stored no amount, because a pass carries no price.
+>
+> It is now wrong. **`purchases` stores an amount, a date and a person, with
+> `paid_via: 'manual'` a legal value** — a joining fee taken in cash is written
+> down with its number. That is a sales record by any ordinary reading, and it
+> is the row to put in front of the accountant. The schema says so at the table.
+>
+> What lyra still does not do is ISSUE anything: no receipt number, no document,
+> no sequence. That is the distinction the question below turns on.
 
-> Today we record only that a member's entitlement runs to a given date — no amount, no
-> receipt. If we add a cash ledger recording amount, date and who took the money at the
-> desk, does that make lyra the Registrierkassensystem for the studio, and does it then need
-> RKSV signature-device integration — or does the studio's existing till remain the
-> Registrierkasse and lyra a downstream record?
+So the question to put to the accountant is not "is lyra a cash register?" but — and this
+is the version to actually send, now that the table exists rather than being hypothetical:
+
+> Our system records, per studio, that a named person bought a named thing on a named day
+> for a stated amount, and whether it was paid by card through a payment provider or in
+> cash at the counter. It issues nothing: there is no receipt, no receipt number and no
+> sequence, and nothing is printed or handed to the customer.
+>
+> For the cash rows: does holding that record make us the Registrierkassensystem for the
+> studio — with the RKSV signature-device and FinanzOnline obligations that implies — or
+> does the studio's own till remain the Registrierkasse, with ours a downstream record of
+> sales it already receipted? And if we later mirror receipts from a certified POS
+> terminal, does mirroring carry any obligation of its own?
 
 That is answerable. "Is lyra a cash register" is not.
 
@@ -388,15 +438,25 @@ mode with the documented test values. Which is what makes this a good plan.
 
 | # | Work | Where | Gate |
 |---|---|---|---|
-| 1 | **Per-action perimeter**, both doors — proxy and frame grant. Spelled out under A1. | moss + one line of the Stripe bundle | new `role-perimeter-check`, over Stripe *and* belts |
+| 1 | ~~**Per-action perimeter**, both doors — proxy and frame grant.~~ **DONE** (`5ffc7ab`). | moss + both bundles | `role-perimeter-check`, over Stripe *and* belts |
 | 2 | **Guard `/checkout`** against a live subscription for that `subscriptionId`. | integration | a second checkout for a paying member is refused in a sentence |
 | 3 | **Studio identity into the wire.** Legal name and entity type reach the integration — either as scope values beside `country`, or a `studios/identity` read on the stripe rung. Stop A5 and A6 together. | lyra + integration | a connected account carries the studio's real name and its real entity type |
-| 4 | **One check against a real database.** A `--db` variant of `billing-check`, or a separate `ledger-sql-check`. | both | the ledger, event and price SQL runs at least once in CI |
+| 4 | **One check against a real database.** A `--db` variant of `billing-check`, or a separate `ledger-sql-check`. Note the scope is narrower than §A7 first claimed: lyra's own DDL and triggers DO run, against PGlite, in every check. What has never run is the INTEGRATION's SQL — the ledger, event, price and customer queries behind `DATABASE_URL`. | lyra-integrations | that SQL runs at least once in CI |
 | 5 | **Test-clock harness** (§E). A reusable way to create a clock, put a member's subscription on it and advance it. | integration + a check | a renewal moves `paid_until` in lyra without waiting a month |
 | 6 | **Mode separation decided** (§E) — one deployment per mode unless something forces otherwise. | deployment | written down; no `livemode` retrofit later |
 | 7 | **A stable test-mode event destination** at a reachable URL, created by `setup.ts`. | integration | events arrive over elapsed time, not only from `stripe trigger` |
 
 The A8 items fold into this phase; they are each a few lines.
+
+**Landed since, though not on this list** — the studio now authors its own terms and
+billing periods (no fixed menus), everything it sells is payable including passes,
+drop-ins, course places and one-offs, and a member can manage their own card and read
+their own invoices through the connected account's billing portal. `bfcf2f7`.
+
+**Unverified against a live key**, and first to check when one exists: the billing-portal
+configuration and session, and the one-time checkout with inline `price_data`. Both are
+written to the documented shape and neither has ever called Stripe — `stripe-check` runs
+without a key by design.
 
 ### Phase 1 — close the loop lyra already promises the member
 

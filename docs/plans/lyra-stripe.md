@@ -3,12 +3,19 @@
 **Status: PARTIALLY BUILT.** The integration exists and ships
 (`apps/lab/lyra-integrations/src/integrations/stripe/` — checkout, hooks, ledger,
 onboarding, prices, store) and the trust story is done and proven by
-`integrations-check`, `perimeter-check`, `stripe-check` and `billing-check`.
-**Part 7 is the authority on what not to rebuild.** What money still cannot do
-is the rest: no invoice, no receipt, no VAT or tax model, no invoice numbering
-— and the desk already takes cash through `paid_via: 'manual'`, which raises a
-receipt obligation in AT/DE that nothing in the schema anticipates. Part 6 is
-still outstanding: it lists what a human must supply.
+`integrations-check`, `perimeter-check`, `role-perimeter-check`, `stripe-check`
+and `billing-check`. **Part 7 is the authority on what not to rebuild.**
+
+**Read [`lyra-stripe-review.md`](lyra-stripe-review.md) beside this.** It is the
+2026-08-15 audit and it supersedes this document wherever the two disagree: it
+records what was actually found wrong, what has since been fixed, and what
+remains. In particular this page's own summary of the gap is now out of date —
+a member can buy a pass, a drop-in, a course place or a one-off, and can manage
+their own card and read their own invoices. What money still cannot do is
+narrower: notice given in lyra never reaches Stripe (`cancel_at` is unbuilt), and
+there is no invoice or tax model on this side.
+
+Part 6 is still outstanding: it lists what a human must supply.
 
 **Purpose:** a complete, handoff-ready build plan for payments in lyra, as an integration.
 Written for an agent starting cold. Everything is cited `file:line` so nothing has to be
