@@ -1,7 +1,7 @@
 import type { Integration } from '../../integration';
 import { STRIPE_BUNDLE } from './bundle';
 import { accountFor, rememberAccount, storeIsDurable, stripeSubscriptionFor } from './store';
-import { accountStanding, createAccountSession, createConnectedAccount, createOnboardingLink, createPortalSession, refundInvoice, stripeFor } from './client';
+import { accountStanding, createAccountSession, createConnectedAccount, createOnboardingLink, createPortalSession, notReadyToCharge, refundInvoice, stripeFor } from './client';
 import { embedPage, notOnboardedPage, unavailablePage } from './onboarding';
 import { createCheckout, createPurchase, customerFor } from './checkout';
 import { billableFor, namesForSubscriptions, purchaseFor, subscriptionsOfPerson } from './lyra';
@@ -130,7 +130,10 @@ export const stripeIntegration: Integration = {
         // became a merchant called `st_northrock` — the name Stripe then uses in
         // its own correspondence with the business.
         const accountId = await createConnectedAccount(stripe, {
-          studioName: who.studioName === '' ? who.studioId : who.studioName,
+          // THE REGISTERED NAME WHERE THERE IS ONE. A provider puts this on
+          // documents and asks a register about it; the name above the door is
+          // the fallback, and the studio id is the fallback's fallback.
+          studioName: who.legalName !== '' ? who.legalName : who.studioName === '' ? who.studioId : who.studioName,
           country: who.country,
           entityType: who.legalForm === 'individual' ? 'individual' : 'company',
         });
@@ -164,6 +167,13 @@ export const stripeIntegration: Integration = {
       if (held === undefined) return c.json({ message: 'This studio is not taking payments yet.' }, 409);
       const stripe = stripeFor(ctx.env);
       if (stripe === undefined) return c.json({ message: 'This deployment holds no Stripe key.' }, 503);
+
+      // READY TO CHARGE? Asked here, in a sentence, rather than discovered at a
+      // card form. Automatic tax refuses a session when the merchant is not set
+      // up for it, and that refusal arrives as a provider's error code in front
+      // of a member who was trying to pay their gym.
+      const notReady = await notReadyToCharge(stripe, held.accountId);
+      if (notReady !== undefined) return c.json({ message: notReady }, 409);
 
       const billable = await billableFor(ctx.env, who.studioId, who.personId);
       if (billable === undefined) return c.json({ message: 'There is nothing to pay for on this membership.' }, 409);

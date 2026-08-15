@@ -23,7 +23,7 @@ const verifyKey = (): string => process.env['LYRA_VERIFY_KEY'] ?? '';
 // `personId` is set only for callers the studio KNOWS (lyra's anchor row) —
 // staff-only principals arrive with it empty, which is what an integration's "only
 // somebody the studio knows can pay" check keys on.
-export type Identity = { principal: string; studioId: string; personId: string; country: string; studioName: string; legalForm: string };
+export type Identity = { principal: string; studioId: string; personId: string; country: string; studioName: string; legalName: string; legalForm: string };
 
 const fromB64url = (text: string): Buffer => Buffer.from(text.replace(/-/g, '+').replace(/_/g, '/'), 'base64');
 
@@ -66,6 +66,7 @@ export const readIdentity = (
       // them, and a merchant account created without them carries a database id
       // for a name and a guess for its legal form.
       studioName: String(scope['studioName'] ?? ''),
+      legalName: String(scope['legalName'] ?? ''),
       legalForm: String(scope['legalForm'] ?? ''),
     };
   } catch {

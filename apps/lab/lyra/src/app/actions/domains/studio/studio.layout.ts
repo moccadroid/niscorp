@@ -70,6 +70,18 @@ export const studioSettingsLayout: LayoutNode = {
             },
             ref: 'legalForm',
           },
+          // WHAT A DOCUMENT NEEDS, which the display name is not. A payment
+          // provider asks for these before it will compute tax or let money
+          // move, and a studio that has not filled them in finds that out at a
+          // member's checkout unless something says so here first.
+          { component: 'Input', props: { label: 'Registered name', hint: 'As it appears on the register — not the name above the door, if they differ.' }, ref: 'legalName', model: '$.legalName' },
+          { component: 'Input', props: { label: 'Address', hint: 'Where the business trades from.' }, ref: 'address', model: '$.address' },
+          { component: 'Input', props: { label: 'VAT number', hint: 'UID, USt-IdNr, VAT number — whatever it is called where you are. Leave it empty if the business is not registered for VAT.' }, ref: 'vatId', model: '$.vatId' },
+          {
+            component: 'Row',
+            props: { gap: 10 },
+            children: [{ component: 'Button', props: { variant: 'outline', label: 'Save business details' }, ref: 'saveBusiness' }],
+          },
           { if: '$.legalSaved', then: { component: 'Notice', props: { tone: 'good', message: 'Saved.' } }, else: '' },
         ],
       },

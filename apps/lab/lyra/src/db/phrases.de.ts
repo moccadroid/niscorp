@@ -228,6 +228,13 @@ export const GERMAN: Record<string, string> = {
   'Good morning': 'Guten Morgen',
 
   Hour: 'Stunde',
+  Address: 'Adresse',
+  'As it appears on the register — not the name above the door, if they differ.': 'Wie im Register eingetragen — nicht der Name über der Tür, falls sie sich unterscheiden.',
+  'Registered name': 'Eingetragener Name',
+  'Save business details': 'Unternehmensdaten speichern',
+  'UID, USt-IdNr, VAT number — whatever it is called where you are. Leave it empty if the business is not registered for VAT.': 'UID, USt-IdNr, VAT-Nummer — wie auch immer sie bei dir heißt. Leer lassen, wenn das Unternehmen nicht umsatzsteuerpflichtig ist.',
+  'VAT number': 'UID-Nummer',
+  'Where the business trades from.': 'Von wo aus das Unternehmen tätig ist.',
   'Remove this add-on?': 'Dieses Add-on entfernen?',
   'Its screens go away for everyone here. Anything it was already doing outside this app — payments a provider is collecting, for instance — carries on, and you will not be able to see it from here until you add the add-on back.':
     'Seine Ansichten verschwinden für alle hier. Was es außerhalb dieser App bereits tut — etwa Zahlungen, die ein Anbieter einzieht — läuft weiter, und du kannst es von hier aus erst wieder sehen, wenn du das Add-on erneut hinzufügst.',

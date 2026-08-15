@@ -8,10 +8,10 @@ const rowNum = (name: string) => ({ $get: { from: { $var: 'r' }, path: [name], f
 export const studioCurrent: CacheEntry = {
   fingerprint: 'studio/current',
   intent: "The signed-in principal's own studio",
-  shape: { studio_id: '', name: '', slug: '', kind: '', timezone: '', legal_form: '', reply_to: '', daily_mail_cap: 0, sending_domain: '', sending_domain_id: '', sending_domain_ok: false },
+  shape: { studio_id: '', name: '', slug: '', kind: '', timezone: '', legal_form: '', legal_name: '', address: '', vat_id: '', reply_to: '', daily_mail_cap: 0, sending_domain: '', sending_domain_id: '', sending_domain_ok: false },
   dsl: {
     from: ['studios'],
-    fields: [{ field: 'studios.id', as: 'studio_id' }, 'studios.name', 'studios.slug', 'studios.kind', 'studios.timezone', 'studios.legal_form', 'studios.reply_to', 'studios.daily_mail_cap', 'studios.sending_domain', 'studios.sending_domain_id', 'studios.sending_domain_ok'],
+    fields: [{ field: 'studios.id', as: 'studio_id' }, 'studios.name', 'studios.slug', 'studios.kind', 'studios.timezone', 'studios.legal_form', 'studios.legal_name', 'studios.address', 'studios.vat_id', 'studios.reply_to', 'studios.daily_mail_cap', 'studios.sending_domain', 'studios.sending_domain_id', 'studios.sending_domain_ok'],
   },
   mapping: {
     $with: {
@@ -88,6 +88,17 @@ export const studioSetReplyTo: MutationEntry = {
 // It was a constant in the payments integration ('company'), which is right for
 // a GmbH and wrong for every Einzelunternehmen, which is most small studios in
 // the countries these trade in. The owner answers it.
+export const studioSetBusiness: MutationEntry = {
+  fingerprint: 'studio/set-business',
+  intent: 'Record the registered name, address and VAT number this studio trades under',
+  mutation: {
+    op: 'update',
+    table: 'studios',
+    set: { legal_name: { $context: 'legalName' }, address: { $context: 'address' }, vat_id: { $context: 'vatId' } },
+    where: { eq: ['studios.id', { $context: 'studioId' }] },
+  },
+};
+
 export const studioSetLegalForm: MutationEntry = {
   fingerprint: 'studio/set-legal-form',
   intent: 'Say whether this studio is a company or a sole trader',

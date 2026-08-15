@@ -1,4 +1,4 @@
-import { studioCurrent, studioSetLegalForm } from '@lyra/app/vex/studio.entries';
+import { studioCurrent, studioSetBusiness, studioSetLegalForm } from '@lyra/app/vex/studio.entries';
 import { localeCurrent, studioSetLocale, studioSetTheme, themeCurrent, themesList } from '@lyra/app/vex/theme.entries';
 
 export const themesListPrism = { fingerprint: themesList.fingerprint, context: {} };
@@ -24,6 +24,18 @@ export const localeCurrentPrism = { fingerprint: localeCurrent.fingerprint, cont
 export const setLegalFormPrism = {
   fingerprint: studioSetLegalForm.fingerprint,
   context: { studioId: { $ref: '$.studioId' }, legalForm: { $ref: '$.pendingLegalForm' } },
+};
+
+// The three a payment provider asks for before it will compute tax or move
+// money. Saved together because they are one answer to one question.
+export const setBusinessPrism = {
+  fingerprint: studioSetBusiness.fingerprint,
+  context: {
+    studioId: { $ref: '$.studioId' },
+    legalName: { $ref: '$.legalName' },
+    address: { $ref: '$.address' },
+    vatId: { $ref: '$.vatId' },
+  },
 };
 
 export const setLocalePrism = {

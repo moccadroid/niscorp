@@ -156,10 +156,10 @@ export const identityStudio: CacheEntry = {
   fingerprint: 'identity/studio',
   intent: "The session's studio, as it trades: name, clock zone, country, language, currency",
   reach: 'identity',
-  shape: { studioName: '', timezone: '', country: '', legalForm: '', locale: '', currency: '' },
+  shape: { studioName: '', timezone: '', country: '', legalForm: '', legalName: '', locale: '', currency: '' },
   dsl: {
     from: ['studios'],
-    fields: [{ field: 'studios.name', as: 'studio_name' }, 'studios.timezone', 'studios.country', 'studios.legal_form', 'studios.locale', 'studios.currency'],
+    fields: [{ field: 'studios.name', as: 'studio_name' }, 'studios.timezone', 'studios.country', 'studios.legal_form', 'studios.legal_name', 'studios.locale', 'studios.currency'],
     limit: 1,
   },
   mapping: emptyWhenNoRow({
@@ -172,6 +172,10 @@ export const identityStudio: CacheEntry = {
     // provider asks this business for, both are the studio's own fact, and
     // neither is a question an integration should have to put to a caller.
     legalForm: { $get: { from: { $ref: '$.result' }, path: ['legal_form'], fallback: { $const: '' } } },
+    // The registered name, for the merchant account — a payment provider puts
+    // it on documents, and "Lumen Yoga" above the door is not always what the
+    // register says.
+    legalName: { $get: { from: { $ref: '$.result' }, path: ['legal_name'], fallback: { $const: '' } } },
     locale: { $get: { from: { $ref: '$.result' }, path: ['locale'], fallback: { $const: '' } } },
     currency: { $get: { from: { $ref: '$.result' }, path: ['currency'], fallback: { $const: '' } } },
   }),

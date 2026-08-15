@@ -267,3 +267,39 @@ export const refundInvoice = async (stripe: Stripe, accountId: string, invoiceId
   const refund = await stripe.refunds.create({ charge }, onAccount);
   return { refunded: refund.amount };
 };
+
+
+// ── IS THIS STUDIO ACTUALLY ABLE TO CHARGE? ──────────────────
+//
+// Two things have to be true before a member can pay, and both fail late and
+// badly. The account has to be able to take card payments — Stripe says
+// `active` — and, because every price here carries inclusive tax and every
+// session asks for automatic tax, the merchant has to be registered for tax
+// somewhere.
+//
+// Without this the first checkout at a fresh studio dies inside Stripe's own
+// form with a provider error code, in front of a member who was trying to pay
+// their gym. The refusal is the same either way; the difference is whose words
+// it arrives in and whether anybody can act on them.
+//
+// Returns a SENTENCE when something is wrong and nothing when it is not, so a
+// caller reads it as "the reason, or no reason".
+export const notReadyToCharge = async (stripe: Stripe, accountId: string): Promise<string | undefined> => {
+  try {
+    const standing = await accountStanding(stripe, accountId);
+    if (!standing.ready) {
+      return 'This studio cannot take payments yet — its details are still with Stripe. An owner can check progress on the Stripe screen.';
+    }
+    const registrations = await stripe.tax.registrations.list({ status: 'active', limit: 1 }, { stripeAccount: accountId });
+    if (registrations.data.length === 0) {
+      return 'This studio is not set up for tax yet, so a payment cannot be taken. An owner needs to add a tax registration before members can pay.';
+    }
+    return undefined;
+  } catch {
+    // A PROVIDER BEING UNREACHABLE IS NOT A REFUSAL. Blocking a checkout because
+    // a pre-flight could not run would turn an outage at their end into a
+    // studio that cannot take money — and the real call two lines later will
+    // fail honestly if there is something actually wrong.
+    return undefined;
+  }
+};

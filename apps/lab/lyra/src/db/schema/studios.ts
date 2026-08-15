@@ -33,6 +33,28 @@ export const STUDIOS_DDL = /* sql */ `
     -- The owner says which; nobody guesses for them. The default is what the
     -- constant used to be, so no existing studio changes by this arriving.
     legal_form  TEXT NOT NULL DEFAULT 'company' CHECK (legal_form IN ('company', 'individual')),
+    -- ── WHO THIS BUSINESS IS, ON PAPER ──────────────────────
+    --
+    -- The display name above is what a member sees on a screen — "Lumen Yoga". These three are
+    -- what a document needs: the registered name, the address it trades from,
+    -- and the VAT identification number.
+    --
+    -- Nothing here issues an invoice, and that is deliberate — the payment
+    -- provider does, numbered and sequenced under the studio's own identity.
+    -- These exist because a provider ASKS for them before it will compute tax
+    -- or let money move, and because the answers are the studio's rather than
+    -- something to be typed again at a vendor.
+    --
+    -- Empty is the honest default. A studio that has not filled them in has not
+    -- filled them in, and the payments screen says so rather than a checkout
+    -- failing later with somebody else's error message.
+    legal_name  TEXT NOT NULL DEFAULT '',
+    address     TEXT NOT NULL DEFAULT '',
+    -- UID in Austria, USt-IdNr in Germany, VAT number in the UK. Format is not
+    -- checked here: it differs per country and a regex that is wrong for one of
+    -- them refuses a real business, which is worse than accepting a typo the
+    -- provider will catch.
+    vat_id      TEXT NOT NULL DEFAULT '',
     -- WHAT LANGUAGE THIS STUDIO READS IN, as a BCP-47 tag.
     --
     -- Sits beside "country" and "currency" rather than on a person, and that

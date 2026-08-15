@@ -1,5 +1,5 @@
 import type { SeedEntry, SeedMutation } from '@niscorp/vex';
-import { studioCurrent, studioTheme, membersActiveCount, checkInsTodayCount, studioSetReplyTo, studioSetLegalForm, studioSetDomain, outboxSentToday } from './studio.entries';
+import { studioCurrent, studioTheme, membersActiveCount, checkInsTodayCount, studioSetReplyTo, studioSetLegalForm, studioSetBusiness, studioSetDomain, outboxSentToday } from './studio.entries';
 import { revenueAtRisk, revenueCommitted, revenueExpected, revenueLeaving } from './forecast.entries';
 import { sessionsToday, sessionsUpcoming, programsList } from './schedule.entries';
 import { sessionAttending, sessionDetail } from './session.entries';
@@ -158,6 +158,7 @@ export const MUTATION_ENTRIES: MutationEntry[] = [
   studioSetLocale,
   studioSetReplyTo,
   studioSetLegalForm,
+  studioSetBusiness,
   studioSetDomain,
   checkInMark,
   bookingCreate,

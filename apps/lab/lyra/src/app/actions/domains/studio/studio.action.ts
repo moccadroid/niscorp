@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import type { ActionDefinition } from '@niscorp/nova';
 import { studioSettingsLayout } from './studio.layout';
-import { localeCurrentPrism, setLegalFormPrism, setLocalePrism, setThemePrism, studioSelfPrism, themeCurrentPrism, themesListPrism } from './studio.prism';
+import { localeCurrentPrism, setBusinessPrism, setLegalFormPrism, setLocalePrism, setThemePrism, studioSelfPrism, themeCurrentPrism, themesListPrism } from './studio.prism';
 
 export const studioSettingsAction: ActionDefinition = {
   id: 'studio.settings',
@@ -11,6 +11,9 @@ export const studioSettingsAction: ActionDefinition = {
     studioName: '',
     pendingLegalForm: '',
     legalSaved: false,
+    legalName: '',
+    address: '',
+    vatId: '',
     themes: [],
     currentThemeId: '',
     currentThemeName: 'Stock',
@@ -39,6 +42,7 @@ export const studioSettingsAction: ActionDefinition = {
     locale: { url: '/api/studio/vex', method: 'POST', request: localeCurrentPrism, target: 'localeRow' },
     setLocale: { url: '/api/studio/vex', method: 'POST', request: setLocalePrism, errorTarget: 'error' },
     setLegalForm: { url: '/api/studio/vex', method: 'POST', request: setLegalFormPrism, errorTarget: 'error' },
+    setBusiness: { url: '/api/studio/vex', method: 'POST', request: setBusinessPrism, errorTarget: 'error' },
     relanguage: { fn: 'world.relanguage' },
   },
   lifecycle: {
@@ -74,6 +78,14 @@ export const studioSettingsAction: ActionDefinition = {
     //
     // Hence `switching`: the only thing this screen can usefully say afterwards
     // is that it is going, so it says that and stops.
+    {
+      event: 'ui:click',
+      ref: 'saveBusiness',
+      do: [
+        { set: 'error', value: '' },
+        { call: 'setBusiness', onSuccess: [{ set: 'legalSaved', value: true }, { call: 'self' }] },
+      ],
+    },
     {
       // Saved on choosing, like the language beside it: a Select with a Save
       // button next to it is two acts for one decision.
