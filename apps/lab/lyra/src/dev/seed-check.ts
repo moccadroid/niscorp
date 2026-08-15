@@ -20,11 +20,24 @@ ok('two studios', (await count('SELECT count(*) n FROM studios')) === 2);
 ok('both kinds differ', (await count('SELECT count(DISTINCT kind) n FROM studios')) === 2);
 
 // ── people and their relationships ──
-ok('twenty-four people and two automations', (await count('SELECT count(*) n FROM people')) === 26, 'members, staff, prospects, outsiders, robots');
+ok('twenty-six people, two automations and two children', (await count('SELECT count(*) n FROM people')) === 28, 'members, staff, prospects, outsiders, robots, and the two with no way in');
+// COUNT(DISTINCT email) skips NULLs, which is the assertion rather than an
+// accident of it: the two children carry no address, so 26 distinct addresses
+// across 28 people is exactly "everybody who can sign in has their own way in".
 ok('every email unique', (await count('SELECT count(DISTINCT email) n FROM people')) === 26);
+ok(
+  '...and the two with none are NULL rather than empty',
+  (await count("SELECT count(*) n FROM people WHERE email IS NULL")) === 2 && (await count("SELECT count(*) n FROM people WHERE email = ''")) === 0,
+  'two empty strings would collide under UNIQUE; two NULLs do not — see db/schema/people.ts',
+);
 
 // The anchor: one row per human a studio knows, and NO category on any of them.
-ok('twenty-two anchor rows', (await count('SELECT count(*) n FROM studio_people')) === 22);
+ok('twenty-four anchor rows', (await count('SELECT count(*) n FROM studio_people')) === 24, 'the children are on the roll like anybody else');
+ok(
+  'one parent, two children, one studio',
+  (await count('SELECT count(*) n FROM guardianships')) === 2 && (await count("SELECT count(*) n FROM guardianships WHERE guardian_person_id = 'p_ava'")) === 2,
+  'the shape a scalar household id could not express',
+);
 ok(
   '...and the anchor stores no category',
   (await count("SELECT count(*) n FROM information_schema.columns WHERE table_name = 'studio_people' AND column_name IN ('status','kind','role')")) === 0,

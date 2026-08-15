@@ -14,7 +14,7 @@ import { VOCABULARY_SQL } from './vocabulary';
 import { THEMES_SQL } from './themes';
 import { PHRASES_SQL } from './phrases';
 import { LUMEN, NORTHROCK, STUDIOS_SQL } from './studios';
-import { CONNECTIONS_SQL, PEOPLE_SQL, STAFF_SQL, STUDIO_PEOPLE_SQL } from './people';
+import { CONNECTIONS_SQL, GUARDIANSHIPS_SQL, PEOPLE_SQL, STAFF_SQL, STUDIO_PEOPLE_SQL } from './people';
 import { OFFERINGS_SQL } from './offerings';
 import { SUBSCRIPTIONS_SQL } from './subscriptions';
 import { NOTICES_SQL } from './notices';
@@ -55,6 +55,7 @@ export const buildSeedSql = (): string =>
     ENROLMENTS_SQL,
     AUTOMATIONS_SQL,
     CONNECTIONS_SQL,
+    GUARDIANSHIPS_SQL, //     who may act for whom — a record, until a reach reads it
   ].join('\n');
 
 export const CAST = {

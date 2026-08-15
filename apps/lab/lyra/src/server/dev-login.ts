@@ -24,7 +24,13 @@ export const readDevLoginRoster = async (runAs: ExecuteAs): Promise<DevLoginRow[
   const byId = new Map<string, DevLoginRow>();
   if (Array.isArray(members)) {
     for (const row of members as { person_id?: unknown; name?: unknown; email?: unknown; studio?: unknown }[]) {
-      byId.set(String(row.person_id ?? ''), { id: String(row.person_id ?? ''), name: String(row.name ?? ''), email: String(row.email ?? ''), studio: String(row.studio ?? ''), role: 'member' });
+      // A PERSON YOU CANNOT BE DOES NOT BELONG IN A PICKER OF PEOPLE TO BE.
+      // A child has no address (db/schema/people.ts), so `mintToken` refuses
+      // them by construction — listing them would offer a click that dies at
+      // `principalByEmail` with nothing to say. The roster is a transport for
+      // signing in, so its membership test is "could sign in".
+      if (row.email === null || row.email === undefined || row.email === '') continue;
+      byId.set(String(row.person_id ?? ''), { id: String(row.person_id ?? ''), name: String(row.name ?? ''), email: String(row.email), studio: String(row.studio ?? ''), role: 'member' });
     }
   }
   if (Array.isArray(staff)) {

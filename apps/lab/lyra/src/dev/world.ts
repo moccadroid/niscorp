@@ -29,7 +29,11 @@ export { tideDriver };
 // The application below it holds nothing.
 const ROSTER: Record<string, string> = {};
 {
-  const rows = await booted.runtime.pool.query('SELECT id, email FROM people');
+  // ADDRESSED PEOPLE ONLY. `people.email` is nullable because a child is a
+  // record rather than a user (db/schema/people.ts), and this roster's whole
+  // job is turning an address into a principal — somebody with no address has
+  // nothing to turn. A check that wants a child names them by id.
+  const rows = await booted.runtime.pool.query('SELECT id, email FROM people WHERE email IS NOT NULL');
   for (const row of rows.rows as { id: string; email: string }[]) ROSTER[row.email.trim().toLowerCase()] = row.id;
 }
 

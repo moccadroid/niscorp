@@ -4,11 +4,39 @@ export const PEOPLE_DDL = /* sql */ `
   -- A human. Deliberately thin: a person is not a member and not staff and not
   -- a lead — they HOLD relationships to a studio, plural and concurrent. Email
   -- is the login identity (magic link).
+  --
+  -- ── EMAIL IS NULLABLE, AND THAT IS THE FEATURE ──────────────
+  --
+  -- A seven-year-old has no address, and a kids' class is a large share of
+  -- what BJJ, karate, dance and music schools sell. A child is a RECORD, not a
+  -- user: they are known to the studio, they hold a pass, they sit in a class
+  -- and they derive standing the ordinary way — what they do not have is a way
+  -- in. NULL here IS that absence, stated once, in the column that means
+  -- "how you sign in".
+  --
+  -- No login path needs changing for this, which is the point:
+  -- credential/principal-by-email filters email = $1 and NULL never
+  -- equals, so a person with no address cannot be resolved, cannot be minted a
+  -- link, and cannot be signed in as. The refusal is SQL's, not a guard
+  -- somebody has to remember. auth-check asserts it.
+  --
+  -- NULL AND NEVER ''. Postgres permits many NULLs in a UNIQUE column and
+  -- exactly one empty string, so '' would let the first child be written and
+  -- silently refuse the second. Anything that writes a person without an
+  -- address writes NULL.
+  --
+  -- The day they turn 14 and get an address, it is set like any other column
+  -- and they sign in like anybody else. Nothing special happens, because
+  -- nothing about signing in was made special for them.
   CREATE TABLE people (
     id          TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
-    email       TEXT NOT NULL UNIQUE,
+    email       TEXT UNIQUE,
     name        TEXT NOT NULL,
     phone       TEXT NOT NULL DEFAULT '',
+    -- Kids' classes are age-graded, and an age is the one fact about a child
+    -- the studio needs that an adult's record never carries. NULL for
+    -- everybody it was never asked of.
+    born_on     DATE,
     created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
   );
 
@@ -191,6 +219,50 @@ export const PEOPLE_DDL = /* sql */ `
   CREATE TRIGGER connections_resync_relationships
     AFTER INSERT OR UPDATE OR DELETE ON connections
     FOR EACH ROW EXECUTE FUNCTION resync_relationships_row();
+
+  -- ── MAY ACT FOR ────────────────────────────────────────────
+  --
+  -- A parent and their child. NOT connections.kind = 'guardian', which is a
+  -- CONTACT TAG on a UNIQUE (studio, person, kind) row: it records that a
+  -- studio deals with somebody in that capacity, in the same list as
+  -- 'supplier' and 'physio'. It does not name WHICH CHILD, and it does not
+  -- mean MAY ACT FOR. This does both.
+  --
+  -- PER STUDIO, deliberately — it is a relationship AT a studio, exactly like
+  -- studio_people, staff and connections. A family training at two studios is
+  -- two sets of rows, and neither studio learns about the other.
+  --
+  -- DIRECTIONAL. Guardian → child, and the reverse is never implied: a child
+  -- does not act for a parent. The CHECK stops the degenerate row that would
+  -- make somebody their own guardian, which is the shape a set-valued reach
+  -- would quietly turn into "and also everybody I guard, including me".
+  --
+  -- TWO CAPABILITIES, NOT ONE, because a 16-year-old may book for themselves
+  -- while a parent still pays. Both ship true with no UI for changing them;
+  -- the columns exist so the model does not have to move when somebody asks.
+  --
+  -- WHAT THIS TABLE DOES NOT DO ON ITS OWN: nothing. It is a record until a
+  -- reach reads it. A parent sees no more of their child's rows for its
+  -- existing than they did before — the member surface is clamped by the
+  -- engine underneath every screen, and only a reach can widen that. The desk
+  -- is what acts on these rows today.
+  CREATE TABLE guardianships (
+    id                 TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+    studio_id          TEXT NOT NULL REFERENCES studios(id),
+    guardian_person_id TEXT NOT NULL REFERENCES people(id),
+    child_person_id    TEXT NOT NULL REFERENCES people(id),
+    can_book           BOOLEAN NOT NULL DEFAULT true,
+    can_pay            BOOLEAN NOT NULL DEFAULT true,
+    created_on         DATE NOT NULL DEFAULT CURRENT_DATE,
+    UNIQUE (studio_id, guardian_person_id, child_person_id),
+    CHECK (guardian_person_id <> child_person_id)
+  );
+
+  -- Both directions get an index: "who does this person guard" is the
+  -- session's question (the reach resolves it once per sign-in), and "who
+  -- guards this child" is the desk's and the mail system's.
+  CREATE INDEX guardianships_guardian ON guardianships (studio_id, guardian_person_id);
+  CREATE INDEX guardianships_child ON guardianships (studio_id, child_person_id);
 
   -- Who works here, and as what. A person can be staff at a studio and hold a
   -- membership there too — an instructor who also trains.

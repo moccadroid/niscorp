@@ -3,7 +3,10 @@
 import { day, insert, type Val } from '../sql';
 import { LUMEN, NORTHROCK } from './studios';
 
-type Person = { id: string; email: string; name: string; phone: string };
+// `email` is nullable and `born_on` optional for the same one reason: a child.
+// See the column's own comment in db/schema/people.ts — NULL is how "no way in"
+// is spelled, and it must never be the empty string.
+type Person = { id: string; email: string | null; name: string; phone: string; bornOn?: string };
 
 const LUMEN_PEOPLE: Person[] = [
   { id: 'p_maren', email: 'maren@lumen.studio', name: 'Maren Holt', phone: '+43 660 1010' },
@@ -48,10 +51,43 @@ const OUTSIDERS: Person[] = [
   { id: 'p_wim', email: 'wim.declercq@example.com', name: 'Wim De Clercq', phone: '' },
 ];
 
+// ─── the children ────────────────────────────────────────────
+//
+// A parent with two enrolled kids, which is the shape a BJJ, karate or dance
+// school lives on and the one the whole families plan is written for. Ava
+// Klein already trains at Lumen; Emma and Tom are hers.
+//
+// NO EMAIL, AND THAT IS THE ASSERTION. These two rows are what prove a person
+// can exist, appear on the roll and derive standing without any way in —
+// `auth-check` mints against them and must get nothing back. A third child at
+// North Rock would add no case; a SECOND child under one parent does, because
+// it is what a scalar household id could not express and what the UNIQUE email
+// constraint would have refused.
+const CHILDREN: Person[] = [
+  { id: 'p_emma', email: null, name: 'Emma Klein', phone: '', bornOn: '2017-04-12' },
+  { id: 'p_tomk', email: null, name: 'Tom Klein', phone: '', bornOn: '2019-09-30' },
+];
+
 export const PEOPLE_SQL = insert(
   'people',
-  ['id', 'email', 'name', 'phone'],
-  [...LUMEN_PEOPLE, ...NORTHROCK_PEOPLE, ...PROSPECTS, ...OUTSIDERS, ...ROBOTS].map((p) => [p.id, p.email, p.name, p.phone] satisfies Val[]),
+  ['id', 'email', 'name', 'phone', 'born_on'],
+  [...LUMEN_PEOPLE, ...NORTHROCK_PEOPLE, ...PROSPECTS, ...OUTSIDERS, ...ROBOTS, ...CHILDREN].map(
+    (p) => [p.id, p.email, p.name, p.phone, p.bornOn ?? null] satisfies Val[],
+  ),
+);
+
+// ─── who may act for whom ────────────────────────────────────
+//
+// Ava guards both her children at Lumen. One guardian and two children, at one
+// studio — the minimum that makes "the family's week" a question with more
+// than one answer in it.
+export const GUARDIANSHIPS_SQL = insert(
+  'guardianships',
+  ['id', 'studio_id', 'guardian_person_id', 'child_person_id'],
+  [
+    ['gd_ava_emma', LUMEN, 'p_ava', 'p_emma'],
+    ['gd_ava_tomk', LUMEN, 'p_ava', 'p_tomk'],
+  ],
 );
 
 // ─── who works where ─────────────────────────────────────────
@@ -124,6 +160,16 @@ export const STUDIO_PEOPLE_SQL = insert(
     ['sp_gretel_l', LUMEN, 'p_gretel', 'other', day(-500, LUMEN), null, '', true],
     ['sp_gretel_n', NORTHROCK, 'p_gretel', 'other', day(-450, NORTHROCK), null, '', true],
     ['sp_wim', NORTHROCK, 'p_wim', 'other', day(-30, NORTHROCK), null, '', true],
+
+    // ── the children ──
+    // ORDINARY ANCHOR ROWS, and that is the whole claim. A child is on the roll
+    // the same way everybody else is; what differs is derived, never stored.
+    // `marketing_ok` is FALSE for both — consent for a child's data is the
+    // guardian's to give (GDPR Art. 8, 14 in AT), and nobody has asked Ava. It
+    // is the correct default and the one that keeps a child out of every
+    // marketing selection until a human decides otherwise.
+    ['sp_emma', LUMEN, 'p_emma', 'referral', day(-200, LUMEN), null, 'Ava’s eldest. Tuesday and Thursday kids’ class.', false],
+    ['sp_tomk', LUMEN, 'p_tomk', 'referral', day(-95, LUMEN), null, 'Ava’s youngest. Started in the little kids’ group.', false],
   ],
 );
 
