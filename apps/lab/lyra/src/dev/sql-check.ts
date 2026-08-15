@@ -13,13 +13,26 @@ const FILES = walk('src').map((path) => ({ path: path.replace(/\\/g, '/'), text:
 ok('there is source to check', FILES.length > 20, `${FILES.length} files`);
 
 // ── the schema is a constant ─────────────────────────────────
-const schema = FILES.find((f) => f.path.endsWith('src/db/schema.ts'));
-ok('the schema file is where it is expected', schema !== undefined, 'src/db/schema.ts');
-const holes = [...(schema?.text ?? '').matchAll(/\$\{/g)].length;
-ok('the DDL splices nothing in', holes === 0, holes > 0 ? `${holes} interpolation(s) in the schema` : 'a constant, as it should be');
+// One fragment per subject (db/schema/), composed in dependency order by the
+// barrel. Every one of them is held to what the single file was held to.
+const SCHEMA_DIR = 'src/db/schema/';
+const fragments = FILES.filter((f) => f.path.includes(SCHEMA_DIR) && !f.path.endsWith('/index.ts'));
+const barrel = FILES.find((f) => f.path.endsWith(`${SCHEMA_DIR}index.ts`));
+ok('the schema is where it is expected', barrel !== undefined && fragments.length > 0, `${fragments.length} fragments + a barrel`);
 
-const ticks = [...(schema?.text ?? '').matchAll(/`/g)].length;
-ok('...and its template literals are balanced', ticks % 2 === 0, `${ticks} backticks`);
+const holes = fragments.flatMap((f) => [...f.text.matchAll(/\$\{/g)].map(() => f.path));
+ok('no fragment splices anything in', holes.length === 0, holes.length > 0 ? `${holes.length} interpolation(s): ${[...new Set(holes)].join(', ')}` : 'constants, as they should be');
+
+const unbalanced = fragments.filter((f) => [...f.text.matchAll(/`/g)].length % 2 !== 0);
+ok('...and their template literals are balanced', unbalanced.length === 0, unbalanced.map((f) => f.path).join(', ') || `${fragments.length} fragments`);
+
+// A fragment nobody composes is a table that does not exist — and it would fail
+// silently, at boot, as a missing relation somewhere else entirely.
+const orphans = fragments.filter((f) => {
+  const name = f.path.slice(f.path.lastIndexOf('/') + 1, -3);
+  return !(barrel?.text ?? '').includes(`from './${name}'`);
+});
+ok('every fragment is composed into the DDL', orphans.length === 0, orphans.map((f) => f.path).join(', ') || 'the barrel imports all of them');
 
 // ── no query is built by splicing ────────────────────────────
 const SPLICED = /\.query(?:<[^>]*>)?\(\s*`[^`]*\$\{/gs;

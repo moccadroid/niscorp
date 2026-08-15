@@ -70,7 +70,7 @@ const edgeOf = (file: string): Edge => {
 };
 
 // Setup files inside an edge that is otherwise something else.
-const SETUP_FILES = new Set(['ui/registry.ts', 'server/boot.ts', 'server/runtime.ts', 'server/serve.ts', 'db/schema.ts', 'db/seed.ts', 'db/sql.ts']);
+const SETUP_FILES = new Set(['ui/registry.ts', 'server/boot.ts', 'server/runtime.ts', 'server/serve.ts', 'db/seed.ts', 'db/sql.ts']);
 
 // ─── reading a declaration ───────────────────────────────────
 
@@ -387,7 +387,7 @@ const buckets: [string, number][] = [
   ['actions + layouts + prisms', dataIn((f) => f.startsWith('app/actions/'))],
   ['charter, nav, reflexes', dataIn((f) => /^app\/(charter|nav|reflexes|prisms|shell)\//.test(f))],
   ['component prop schemas (ui/)', dataIn((f) => f.startsWith('ui/'))],
-  ['SQL schema (db/schema.ts)', dataIn((f) => f === 'db/schema.ts')],
+  ['SQL schema (db/schema/)', dataIn((f) => f.startsWith('db/schema/'))],
   ['demo fixtures (db/seed.ts)', dataIn((f) => f === 'db/seed.ts')],
   ['other', 0],
 ];
