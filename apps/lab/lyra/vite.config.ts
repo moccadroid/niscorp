@@ -31,6 +31,11 @@ const SERVER_DIRS = /[\\/]src[\\/](app|server|db|ui)[\\/]/;
 type BootedServer = {
   fetch: (req: Request) => Response | Promise<Response>;
   socket: Parameters<typeof attachSocket>[1];
+  // The in-process replay seam. `/dev/as` needs it to mint a token, which is
+  // the one thing that surface does — and taking it from the BOOTED server
+  // rather than importing a module means it cannot drift away from the server
+  // actually answering requests.
+  executeAs: unknown;
   // A booted server owns timers — the socket's revalidation pass, the shell
   // host's idle sweep. A hot rebuild has to hand them back.
   shells?: { stop: () => void };
@@ -105,9 +110,11 @@ const appServer = (): Plugin => ({
         return;
       }
       void current
-        .then(async () => {
-          const users = (await viteServer.ssrLoadModule('/src/server/users.ts')) as { mintToken: (u: string) => string | null };
-          const token = users.mintToken(decodeURIComponent(who));
+        .then(async ({ server }) => {
+          const tokens = (await viteServer.ssrLoadModule('/src/server/tokens.ts')) as {
+            mintToken: (runAs: unknown, email: string) => Promise<string | null>;
+          };
+          const token = await tokens.mintToken(server.executeAs, decodeURIComponent(who));
           res.setHeader('content-type', 'text/html');
           res.end(
             token === null
