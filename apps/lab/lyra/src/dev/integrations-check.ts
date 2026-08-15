@@ -416,6 +416,10 @@ try {
   owner.dispatch({ type: 'ui:click', ref: 'nav', payload: 'studio.addons' });
   await settle(14);
   owner.dispatch({ type: 'ui:click', ref: 'uninstall', payload: { integration_id: 'belts' } });
+  await settle(6);
+  // Removing an add-on asks first now: for a payments one the money does not
+  // stop with the screens, and that is worth a sentence before the tap lands.
+  owner.dispatch({ type: 'ui:click', ref: 'confirm', payload: {} });
   await settle(18);
   // PER INTEGRATION, not per studio: this studio also has the payments integration installed
   // now, and an assertion that no ext.* survives would be asserting that
@@ -427,6 +431,10 @@ try {
   ok('...and installing AGAIN works — the row it left behind is re-enabled', (await idsFor(CAST.northrock.owner)).includes('ext.desk.belts.roster'), 'an update where the first install was an insert');
 
   owner.dispatch({ type: 'ui:click', ref: 'uninstall', payload: { integration_id: 'belts' } });
+  await settle(6);
+  // Removing an add-on asks first now: for a payments one the money does not
+  // stop with the screens, and that is worth a sentence before the tap lands.
+  owner.dispatch({ type: 'ui:click', ref: 'confirm', payload: {} });
   await settle(18);
   ok('...and off again, for the assertions below', !(await idsFor(CAST.northrock.owner)).some((id) => id.startsWith('ext.desk.belts.') || id.startsWith('ext.member.belts.')));
 

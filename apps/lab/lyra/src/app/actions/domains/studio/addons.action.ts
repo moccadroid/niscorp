@@ -129,14 +129,39 @@ export const addonsAction: ActionDefinition = {
       ],
     },
     {
+      // REMOVING ONE IS NOT THE OPPOSITE OF ADDING ONE, and it used to be one
+      // click either way. Installing shows some screens; removing takes them
+      // away — and for a payments add-on the money does NOT stop with them.
+      // Members keep being charged by a provider the studio can no longer see,
+      // which is the worst possible shape for a mistake.
+      //
+      // Leaving the subscriptions running is the right behaviour: cancelling
+      // everybody's payments because somebody tapped Remove would be far worse,
+      // and a studio that re-installs finds its ledger where it left it. So the
+      // fix is not a bigger machine, it is telling the truth before the tap
+      // lands.
       event: 'ui:click',
       ref: 'uninstall',
       do: [
         { set: 'pendingId', value: '@event.payload.integration_id' },
         { set: 'error', value: '' },
-        { call: 'disable', onSuccess: [{ emit: { channel: 'addons-changed' } }] },
+        {
+          push: {
+            action: 'confirm',
+            canvas: 'sheet',
+            with: ['sheet'],
+            input: {
+              title: 'Remove this add-on?',
+              message: 'Its screens go away for everyone here. Anything it was already doing outside this app — payments a provider is collecting, for instance — carries on, and you will not be able to see it from here until you add the add-on back.',
+              confirmLabel: 'Remove',
+              tone: 'danger',
+              channel: 'addon-remove',
+            },
+          },
+        },
       ],
     },
+    { message: 'addon-remove', do: [{ call: 'disable', onSuccess: [{ emit: { channel: 'addons-changed' } }] }] },
     {
       event: 'ui:click',
       ref: 'openSettings',

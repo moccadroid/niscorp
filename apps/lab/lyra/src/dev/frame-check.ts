@@ -111,6 +111,10 @@ try {
   owner.dispatch({ type: 'ui:click', ref: 'nav', payload: 'studio.addons' });
   await settle(14);
   owner.dispatch({ type: 'ui:click', ref: 'uninstall', payload: { integration_id: 'belts' } });
+  await settle(6);
+  // Removing an add-on asks first now: for a payments one the money does not
+  // stop with the screens, and that is worth a sentence before the tap lands.
+  owner.dispatch({ type: 'ui:click', ref: 'confirm', payload: {} });
   await settle(18);
   const afterUninstall = await open(String(stale.json['src'] ?? ''));
   ok('a grant minted before an uninstall does not open after it', afterUninstall.status === 404, `${afterUninstall.status} — checked when spent, not only when minted`);
