@@ -238,6 +238,22 @@ try {
   ok('...naming who it is about', (afterFirst[0]?.title ?? '').includes('Ruben'), String(afterFirst[0]?.title));
   ok('...and attached to them, so the desk can open the record', afterFirst[0]?.person_id !== null, 'a follow-up nobody is attached to is research, not a task');
 
+  // AND THE MEMBER IS TOLD, which the desk's list could not do. They are the
+  // only person who can fix an expired card, and before this the first they
+  // heard was a phone call or a membership quietly pausing.
+  const mailFor = async (personId: string): Promise<{ subject: string; marketing: boolean }[]> =>
+    (await runtime.db.query<{ subject: string; marketing: boolean }>(
+      'SELECT subject, marketing FROM outbox WHERE person_id = $1 ORDER BY created_at DESC',
+      [personId],
+    )).rows;
+  const queued = await mailFor('p_ruben');
+  ok('...and so is the member', queued.length === 1, `${queued.length} message queued`);
+  ok('...in words they can act on', (queued[0]?.subject ?? '').includes('did not go through'), String(queued[0]?.subject));
+  // CONSENT GATES MARKETING, and this is not marketing: somebody who opted out
+  // of news has not opted out of being told their payment failed. Mislabelling
+  // it would suppress exactly the message that matters.
+  ok('...and not as marketing, which consent would have suppressed', queued[0]?.marketing === false, 'a failed payment is not news');
+
   // FINAL FAILURE: Stripe has exhausted its retries. Paused, not cancelled —
   // nobody decided to end anything except a card issuer.
   await deliver(subscriptionEvent('evt_late_2', 'unpaid', paidUntil, { subscription_id: 'sub_ruben', person_id: 'p_ruben', studio_id: 'st_northrock' }));

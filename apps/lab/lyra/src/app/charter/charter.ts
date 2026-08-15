@@ -322,6 +322,18 @@ export const CHARTER: Charter = {
       'people.read',
       // Dunning outcomes land on the desk's list, where somebody looks.
       'notifications.write.insert',
+      // AND ON THE MEMBER, which the desk's list alone could not do. A card
+      // expires, the payment fails, a task appears on a list the member cannot
+      // see — and the first they hear of it is somebody ringing them, or a
+      // membership quietly pausing. Telling them is the difference between a
+      // problem they can fix in a minute and one that ends their membership.
+      //
+      // The same published interface the automations use
+      // (`automation/queue-message`), on the same discipline: this only ADDS a
+      // row to a queue that a separate transport claims and sends. Nothing here
+      // sends anything, and `outbox.write.update` is absent — claiming a message
+      // is the sender's verb, not a payment provider's.
+      'outbox.write.insert',
 
       // ── WHAT A MEMBER BOUGHT, ONCE ─────────────────────────
       //

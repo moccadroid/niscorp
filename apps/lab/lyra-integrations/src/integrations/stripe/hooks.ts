@@ -1,6 +1,6 @@
 import type Stripe from 'stripe';
 import type { IntegrationEnv, IntegrationStore } from '../../integration';
-import { billableFor, callLyra, grantPurchase, notifyDesk } from './lyra';
+import { billableFor, callLyra, grantPurchase, mailMember, notifyDesk } from './lyra';
 import { recordDispute, recordInvoice, recordRefund } from './ledger';
 import { rememberSubscription } from './store';
 
@@ -97,14 +97,26 @@ const STANDING: Record<string, 'active' | 'paused' | 'cancelled'> = {
 // retry notice swallow the escalation, silently, on the day it matters.
 //
 // A repeat of the SAME thing still collapses, which is what the rule is for.
-const DUNNING: Record<string, { source: string; body: string }> = {
+//
+// EACH CARRIES TWO MESSAGES, because the desk and the member need different
+// sentences about one event. The desk's is a task — who to talk to. The
+// member's is the thing only they can act on: a card to replace. Sending the
+// desk's wording to a member ("someone should talk to them") would be absurd,
+// and sending nothing at all is what happened before.
+const DUNNING: Record<string, { source: string; body: string; subject: string; member: string }> = {
   past_due: {
     source: 'payment-retry',
     body: 'A payment failed. Stripe will try again on its own schedule — nothing to do yet, but worth knowing.',
+    subject: 'Your payment did not go through',
+    member:
+      'Your membership payment did not go through. We will try again automatically over the next few days, so there is nothing you must do right now — but if your card has expired or changed, you can update it from Payment in the app and the next attempt will use it.',
   },
   unpaid: {
     source: 'payment-failed',
     body: 'Payment has failed for the last time and the membership is now paused. Someone should talk to them.',
+    subject: 'Your membership is on hold',
+    member:
+      'We could not take payment for your membership after several attempts, so it is on hold for now. Updating your card under Payment in the app is usually all it takes — or talk to us at the studio and we will sort it out.',
   },
 };
 
@@ -275,6 +287,15 @@ export const handleStripeEvent = async (
         if (dunning !== undefined && (meta.studio_id ?? '') !== '') {
           const billable = await billableFor(env, meta.studio_id ?? '', meta.person_id ?? '');
           const name = billable?.personName ?? 'A member';
+          // THE MEMBER FIRST — they are the only one who can fix it, and the
+          // desk's list is the studio's copy rather than the notice.
+          await mailMember(env, {
+            studioId: meta.studio_id ?? '',
+            personId: billable?.personId ?? meta.person_id ?? '',
+            subject: dunning.subject,
+            body: dunning.member,
+            source: dunning.source,
+          });
           told = await notifyDesk(env, {
             studioId: meta.studio_id ?? '',
             // Attached to the person where we could resolve one, so the desk can

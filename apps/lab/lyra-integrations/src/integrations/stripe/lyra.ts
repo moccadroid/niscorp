@@ -77,6 +77,45 @@ export const notifyDesk = async (
   return answer.ok;
 };
 
+// ── TELLING THE MEMBER, NOT ONLY THE DESK ────────────────────
+//
+// A follow-up on the desk's list is the studio's copy. The member — whose card
+// expired, whose bank declined, whose membership is about to pause — could not
+// see it, and the first they heard was a phone call or an empty account. That is
+// a problem they could have fixed in a minute, discovered too late.
+//
+// `automation/queue-message` is the same published interface the automations
+// use, and this only ADDS to a queue: a separate transport claims each row and
+// sends it. Nothing here sends anything, and this rung holds no `outbox` update,
+// because claiming a message is the sender's verb.
+export const mailMember = async (
+  env: IntegrationEnv,
+  args: { studioId: string; personId: string; subject: string; body: string; source: string },
+): Promise<boolean> => {
+  if (args.personId === '') return false;
+  const answer = await callLyra(env, {
+    studioId: args.studioId,
+    resource: 'automation',
+    fingerprint: 'automation/queue-message',
+    context: {
+      personId: args.personId,
+      // The address is the HOST's to resolve — this service never learns one it
+      // was not handed, and a queue row with an address typed in by an
+      // integration is an integration deciding who gets written to.
+      toAddress: '',
+      subject: args.subject,
+      body: args.body,
+      source: args.source,
+      // NOT MARKETING, and the flag is load-bearing rather than descriptive:
+      // consent gates marketing, and a member who opted out of news has NOT
+      // opted out of being told their payment failed. Mislabelling this would
+      // suppress exactly the message that matters.
+      marketing: false,
+    },
+  });
+  return answer.ok;
+};
+
 export type Billable = {
   // THE CONTRACT'S KEY. Checkout stamps it into the provider's metadata and
   // `assert` is keyed on it — a person may hold more than one subscription,
