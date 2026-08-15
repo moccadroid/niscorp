@@ -1,4 +1,4 @@
-// THE PACK CONTRACT — what one process hosting several integrations must hold.
+// THE INTEGRATION CONTRACT — what one process hosting several integrations must hold.
 //
 // This service used to be one Hono app with every route written out longhand:
 // `app.post('/belts/roster')` nine times, `identity(c, 'belts')` nine times.
@@ -16,9 +16,9 @@ import { createHash } from 'node:crypto';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { integrationsApp } from '../serve';
-import { mountPack } from '../pack';
-import { priceKey } from '../packs/stripe/prices';
-import { accountStanding } from '../packs/stripe/client';
+import { mountIntegration } from '../integration';
+import { priceKey } from '../integrations/stripe/prices';
+import { accountStanding } from '../integrations/stripe/client';
 import { deployment, ok, report } from './world';
 
 // serve.ts loads `.env`, which on a developer's machine carries a real verify
@@ -39,15 +39,15 @@ const post = async (path: string, init: RequestInit = {}): Promise<{ status: num
 
 const NORTHROCK = { principal: 'p_omar', scope: { studioId: 'st_northrock', personId: 'p_omar' } };
 
-// ── every pack answers at its own prefix, and nowhere else ───
+// ── every integration answers at its own prefix, and nowhere else ───
 const bundle = await integrationsApp.request('/belts/bundle');
 const bundleJson = (await bundle.json()) as { integration?: string; frames?: Record<string, string> };
-ok('a pack is served at its own prefix', bundle.status === 200 && bundleJson.integration === 'belts', `${bundle.status} · ${bundleJson.integration}`);
-ok('...and the prefix is applied by the mounting, not written into the route', (await integrationsApp.request('/bundle')).status === 404, 'a pack mounts /bundle; only one place turns that into /belts/bundle');
-ok('...so a second pack does not collide with the first', (await integrationsApp.request('/hookclaim/bundle')).status === 200, 'two packs, two prefixes, one process');
+ok('an integration is served at its own prefix', bundle.status === 200 && bundleJson.integration === 'belts', `${bundle.status} · ${bundleJson.integration}`);
+ok('...and the prefix is applied by the mounting, not written into the route', (await integrationsApp.request('/bundle')).status === 404, 'an integration mounts /bundle; only one place turns that into /belts/bundle');
+ok('...so a second integration does not collide with the first', (await integrationsApp.request('/hookclaim/bundle')).status === 200, 'two integrations, two prefixes, one process');
 
 const roster = await post('/belts/roster');
-ok('a pack route exists under its prefix', roster.status === 401, `${roster.status} — reached the handler, which asked who was calling`);
+ok('an integration route exists under its prefix', roster.status === 401, `${roster.status} — reached the handler, which asked who was calling`);
 ok('...and does not exist outside it', (await post('/roster')).status === 404, 'relative routes cannot be served at somebody else’s address');
 
 // ── with no verify key, identity is not merely absent ────────
@@ -77,23 +77,23 @@ ok('...and an expired one', expired.status === 401, 'a token lives seconds; one 
 
 // THE ASSERTION THIS REFACTOR EXISTS FOR.
 //
-// The audience is no longer a literal at each call site — it is the pack's id,
-// bound once when it was mounted. So a token minted for a DIFFERENT pack on
+// The audience is no longer a literal at each call site — it is the integration's id,
+// bound once when it was mounted. So a token minted for a DIFFERENT integration on
 // this same deployment is refused by a handler that never mentions audiences at
 // all, which is what makes forgetting impossible rather than unlikely.
 const sideways = await post('/belts/roster', {
   headers: { authorization: `Bearer ${lyra.mint({ integration: 'hookclaim', ...NORTHROCK })}` },
 });
-ok('a token minted for another pack is refused', sideways.status === 401, 'the audience is derived from the mounting — no handler can forget it');
+ok('a token minted for another integration is refused', sideways.status === 401, 'the audience is derived from the mounting — no handler can forget it');
 
 // ── the env fence ────────────────────────────────────────────
 //
-// Two packs in one process means one pack's secret is one import away from the
-// other. It is not a convention that stops that; it is the accessor.
+// Two integrations in one process means one integration's secret is one import
+// away from the other. It is not a convention that stops that; it is the accessor.
 process.env['DECLARED_BY_PROBE'] = 'visible';
 process.env['NEVER_DECLARED'] = 'should-be-unreachable';
 const probeApp = new Hono();
-mountPack(probeApp, {
+mountIntegration(probeApp, {
   id: 'probe',
   bundle: () => ({ integration: 'probe' }),
   env: ['DECLARED_BY_PROBE'],
@@ -109,7 +109,7 @@ mountPack(probeApp, {
   },
 });
 const declared = await (await probeApp.request('/probe/declared', { method: 'POST' })).json() as { value?: string };
-ok('a pack reads what it declared', declared.value === 'visible', String(declared.value));
+ok('an integration reads what it declared', declared.value === 'visible', String(declared.value));
 const undeclared = await (await probeApp.request('/probe/undeclared', { method: 'POST' })).json() as { threw?: string };
 ok('...and reading what it did not THROWS', (undeclared.threw ?? '').includes('without declaring it'), undeclared.threw ?? '(returned a value)');
 ok('...rather than answering empty', !(undeclared.threw ?? '').includes('should-be-unreachable'), 'a silent empty string reads as a configuration problem for as long as anybody will look');
@@ -122,8 +122,8 @@ ok('...rather than answering empty', !(undeclared.threw ?? '').includes('should-
 const PAYLOAD = '{"id":"evt_1",  "type":"ping","n":0.10}';
 process.env['BELTS_HOOK_SECRET'] = 'lab-hook-secret';
 const unsigned = await post('/belts/hook/ping', { body: PAYLOAD, headers: { 'content-type': 'application/json' } });
-ok('a hook route lives under the pack’s /hook/', unsigned.status === 401, `${unsigned.status} — reached the handler, which refused it`);
-ok('...and refuses an unsigned call itself', unsigned.text.includes('Who are you?'), 'nobody vouched for this caller, so the pack had to ask');
+ok('a hook route lives under the integration’s /hook/', unsigned.status === 401, `${unsigned.status} — reached the handler, which refused it`);
+ok('...and refuses an unsigned call itself', unsigned.text.includes('Who are you?'), 'nobody vouched for this caller, so the integration had to ask');
 
 const digest = createHash('sha256').update(Buffer.from(PAYLOAD)).digest('hex');
 ok('...having received the bytes exactly', unsigned.text.includes(digest), `sha256 ${digest.slice(0, 16)}… over ${Buffer.byteLength(PAYLOAD)} bytes`);
@@ -215,27 +215,27 @@ ok('...and so is the studio it belongs to', priceKey(shape) !== priceKey({ ...sh
 // reason has to come and edit this line and say what it is.
 ok('the key is made of the money and nothing else', priceKey(shape) === 'acct_one:8900:eur:month:1', priceKey(shape));
 
-// ── ONE DATABASE, ONE PREFIX PER PACK ────────────────────────
+// ── ONE DATABASE, ONE PREFIX PER INTEGRATION ─────────────────
 //
-// Every pack in this service shares one Postgres, so the table prefix IS the
-// boundary between two packs' data. `ctx.db.table('accounts')` applies it — a
-// pack names `accounts` and gets `stripe_accounts` and cannot spell it
+// Every integration in this service shares one Postgres, so the table prefix IS the
+// boundary between two integrations' data. `ctx.db.table('accounts')` applies it — a
+// integration names `accounts` and gets `stripe_accounts` and cannot spell it
 // otherwise from there.
 //
-// Which leaves exactly one way to cross: writing another pack's table name out
+// Which leaves exactly one way to cross: writing another integration's table name out
 // by hand in a query. TypeScript has nothing to say about a string, so this
-// does. Same argument as the cross-pack import rule in separation-check: the
-// two packs that will matter are a rank tracker and something holding payment
+// does. Same argument as the cross-integration import rule in separation-check: the
+// two integrations that will matter are a rank tracker and something holding payment
 // identifiers, and they are in the same process.
-const packDirs = readdirSync(join(process.cwd(), 'src', 'packs'), { withFileTypes: true })
+const integrationDirs = readdirSync(join(process.cwd(), 'src', 'integrations'), { withFileTypes: true })
   .filter((e) => e.isDirectory())
   .map((e) => e.name);
-ok('the packs are discoverable by directory', packDirs.length > 0, packDirs.join(', '));
+ok('the integrations are discoverable by directory', integrationDirs.length > 0, integrationDirs.join(', '));
 
 const TABLE_IN_SQL = /(?:FROM|JOIN|INTO|UPDATE|TABLE)\s+([a-z_][a-z0-9_]*)/gi;
 const strayTables: string[] = [];
-for (const pack of packDirs) {
-  const dir = join(process.cwd(), 'src', 'packs', pack);
+for (const integration of integrationDirs) {
+  const dir = join(process.cwd(), 'src', 'integrations', integration);
   const files = readdirSync(dir, { withFileTypes: true }).filter((e) => e.isFile() && e.name.endsWith('.ts'));
   for (const file of files) {
     const text = readFileSync(join(dir, file.name), 'utf8');
@@ -246,11 +246,11 @@ for (const pack of packDirs) {
       // carries somebody else's prefix is the thing being looked for.
       if (!name.includes('_')) continue;
       const owner = name.split('_')[0] ?? '';
-      if (packDirs.includes(owner) && owner !== pack) strayTables.push(`${pack}/${file.name}: ${name}`);
+      if (integrationDirs.includes(owner) && owner !== integration) strayTables.push(`${integration}/${file.name}: ${name}`);
     }
   }
 }
-ok('no pack names another pack’s table', strayTables.length === 0, strayTables.join(', ') || `${packDirs.length} packs, each inside its own prefix`);
+ok('no integration names another integration’s table', strayTables.length === 0, strayTables.join(', ') || `${integrationDirs.length} integrations, each inside its own prefix`);
 
 // The rule has to be able to see one, or it is a comment.
 const CAUGHT = [...'SELECT * FROM belts_records'.matchAll(TABLE_IN_SQL)].map((m) => (m[1] ?? '').split('_')[0]);
@@ -264,4 +264,4 @@ ok('a framed page is declared, not conjured', frames.every(([path]) => path.star
 // declaration that makes the grant answerable to the charter.
 ok('...and belongs to a screen, so a grant can be refused', frames.every(([, actionId]) => actionId.startsWith('ext.')), frames.map(([, a]) => a).join(', ') || 'none declared');
 
-report('one process, several packs: each at its own prefix, with its own audience, its own env, and its own door.');
+report('one process, several integrations: each at its own prefix, with its own audience, its own env, and its own door.');

@@ -1,11 +1,11 @@
-import type { PackStore } from '../../pack';
+import type { IntegrationStore } from '../../integration';
 
 // ── THE LEDGER MIRROR (S4) ───────────────────────────────────
 //
 // Lyra's subscription row holds STANDING — active, and how far the money
 // reaches. It never learns a Stripe id. Individual invoices, what was refunded,
 // what is disputed: all of that is this service's own mirror, read by this
-// pack's own screens.
+// integration's own screens.
 //
 // That split is what makes cash at the desk and a second provider the same
 // change rather than a rewrite — they write the same standing through the same
@@ -30,12 +30,12 @@ export type MirroredInvoice = {
   invoicedOn: string;
 };
 
-// The same fallback the rest of this pack keeps, for the same reason: the checks
+// The same fallback the rest of this integration keeps, for the same reason: the checks
 // boot an isolated world in-process, and a developer before `pnpm db:up` should
 // get a working service rather than a screen that cannot explain itself.
 const MEMORY = new Map<string, MirroredInvoice>();
 
-export const recordInvoice = async (db: PackStore | undefined, invoice: MirroredInvoice): Promise<void> => {
+export const recordInvoice = async (db: IntegrationStore | undefined, invoice: MirroredInvoice): Promise<void> => {
   if (db === undefined) {
     const held = MEMORY.get(invoice.invoiceId);
     MEMORY.set(invoice.invoiceId, {
@@ -73,7 +73,7 @@ export const recordInvoice = async (db: PackStore | undefined, invoice: Mirrored
 };
 
 /** Mark money given back, without needing the rest of the invoice. */
-export const recordRefund = async (db: PackStore | undefined, invoiceId: string, refundedCents: number): Promise<void> => {
+export const recordRefund = async (db: IntegrationStore | undefined, invoiceId: string, refundedCents: number): Promise<void> => {
   if (db === undefined) {
     const held = MEMORY.get(invoiceId);
     if (held !== undefined) MEMORY.set(invoiceId, { ...held, refundedCents: Math.max(held.refundedCents, refundedCents) });
@@ -85,7 +85,7 @@ export const recordRefund = async (db: PackStore | undefined, invoiceId: string,
   );
 };
 
-export const recordDispute = async (db: PackStore | undefined, invoiceId: string): Promise<void> => {
+export const recordDispute = async (db: IntegrationStore | undefined, invoiceId: string): Promise<void> => {
   if (db === undefined) {
     const held = MEMORY.get(invoiceId);
     if (held !== undefined) MEMORY.set(invoiceId, { ...held, disputed: true });
@@ -94,7 +94,7 @@ export const recordDispute = async (db: PackStore | undefined, invoiceId: string
   await db.query(`UPDATE ${db.table('invoices')} SET disputed = true, updated_at = now() WHERE invoice_id = $1`, [invoiceId]);
 };
 
-export const invoicesFor = async (db: PackStore | undefined, studioId: string): Promise<MirroredInvoice[]> => {
+export const invoicesFor = async (db: IntegrationStore | undefined, studioId: string): Promise<MirroredInvoice[]> => {
   if (db === undefined) {
     return [...MEMORY.values()].filter((i) => i.studioId === studioId).sort((a, b) => b.invoicedOn.localeCompare(a.invoicedOn));
   }

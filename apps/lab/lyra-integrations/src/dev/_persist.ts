@@ -1,5 +1,5 @@
 import { database } from '../db';
-import { accountFor, forgetAccounts, rememberAccount, storeIsDurable } from '../packs/stripe/store';
+import { accountFor, forgetAccounts, rememberAccount, storeIsDurable } from '../integrations/stripe/store';
 
 const db = database();
 const store = db === undefined ? undefined : { query: db.query, table: (n: string) => `stripe_${n}` };

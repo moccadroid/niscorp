@@ -4,14 +4,14 @@
 # database every boot — and that is deliberate: its schema is still moving, and
 # a disposable store is what makes editing it freely possible. This one is the
 # opposite case. A connected payment account is created ONCE at a vendor and
-# lives forever on their side; a pack that forgets which studio it belongs to
-# has stranded a live merchant account nobody can reach. Everything else in this
-# repo can be thrown away and regenerated. This cannot.
+# lives forever on their side; an integration that forgets which studio it
+# belongs to has stranded a live merchant account nobody can reach. Everything
+# else in this repo can be thrown away and regenerated. This cannot.
 #
-# ONE DATABASE, ONE TABLE PREFIX PER PACK (`stripe_`, `belts_`). Packs share a
-# process already, so a second connection string per pack would be ceremony
-# around a boundary the prefix states plainly — and `pack-check` asserts a pack
-# only ever names its own.
+# ONE DATABASE, ONE TABLE PREFIX PER INTEGRATION (`stripe_`, `belts_`).
+# Integrations share a process already, so a second connection string per
+# integration would be ceremony around a boundary the prefix states plainly —
+# and `integration-check` asserts an integration only ever names its own.
 services:
   db:
     image: postgres:17-alpine

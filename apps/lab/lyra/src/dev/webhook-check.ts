@@ -81,8 +81,8 @@ try {
   ok('...and one byte later it is not', tampered.status === 401, 'the signature is over the bytes, and the bytes reached it intact');
 
   // ── the path segment is what isolates one integration from another ──
-  const wrongPack = await hook('hookclaim', 'invoice.paid', PAYLOAD);
-  ok('one integration’s door is not another’s', wrongPack.status === 404, 'the :id segment is the isolation — a secret and a failure are both per integration');
+  const wrongIntegration = await hook('hookclaim', 'invoice.paid', PAYLOAD);
+  ok('one integration’s door is not another’s', wrongIntegration.status === 404, 'the :id segment is the isolation — a secret and a failure are both per integration');
 
   // ── and no action may declare itself under it ────────────────
   const claim = await operator('/operator/integrations', { id: 'hookclaim', url: `http://127.0.0.1:${PORT}/hookclaim` });

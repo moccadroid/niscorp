@@ -1,5 +1,5 @@
 import type Stripe from 'stripe';
-import type { PackStore } from '../../pack';
+import type { IntegrationStore } from '../../integration';
 
 // ═══════════════════════════════════════════════════════════════
 // PRICES ARE LAZY AND CONTENT-ADDRESSED (S7).
@@ -44,7 +44,7 @@ export type PriceShape = { accountId: string; amount: number; currency: string; 
 export const priceKey = (shape: PriceShape): string =>
   [shape.accountId, String(shape.amount), shape.currency.toLowerCase(), shape.interval, String(shape.intervalCount)].join(':');
 
-export const priceFor = async (db: PackStore | undefined, key: string): Promise<string | undefined> => {
+export const priceFor = async (db: IntegrationStore | undefined, key: string): Promise<string | undefined> => {
   if (db === undefined) return MEMORY.get(key);
   const result = await db.query<{ price_id: string }>(`SELECT price_id FROM ${db.table('prices')} WHERE price_key = $1`, [key]);
   return result.rows[0]?.price_id;
@@ -52,7 +52,7 @@ export const priceFor = async (db: PackStore | undefined, key: string): Promise<
 
 const MEMORY = new Map<string, string>();
 
-const remember = async (db: PackStore | undefined, key: string, shape: PriceShape, priceId: string): Promise<string> => {
+const remember = async (db: IntegrationStore | undefined, key: string, shape: PriceShape, priceId: string): Promise<string> => {
   if (db === undefined) {
     if (!MEMORY.has(key)) MEMORY.set(key, priceId);
     return MEMORY.get(key) ?? priceId;
@@ -76,7 +76,7 @@ const remember = async (db: PackStore | undefined, key: string, shape: PriceShap
  * and the price are the studio's, not the platform's. A Price on the platform
  * would charge the wrong party and settle to the wrong bank account.
  */
-export const ensurePrice = async (stripe: Stripe, db: PackStore | undefined, shape: PriceShape, productName: string): Promise<string> => {
+export const ensurePrice = async (stripe: Stripe, db: IntegrationStore | undefined, shape: PriceShape, productName: string): Promise<string> => {
   const key = priceKey(shape);
   const held = await priceFor(db, key);
   if (held !== undefined) return held;

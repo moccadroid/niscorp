@@ -1,4 +1,4 @@
-import type { Pack } from '../pack';
+import type { Integration } from '../integration';
 
 // ── BUNDLES SERVED IN ORDER TO BE REFUSED ────────────────────
 //
@@ -7,12 +7,12 @@ import type { Pack } from '../pack';
 // gate nobody knows the shape of. These two exist so the host's refusals are
 // exercised by something real rather than described in a comment.
 //
-// They are packs like any other — a fixture that took a different path through
+// They are integrations like any other — a fixture that took a different path through
 // the mounting machinery would stop testing the machinery.
 
 // Three refusals in one payload: a namespace it does not own, a component the
 // host cannot render, and a fingerprint the host does not serve.
-export const brokenPack: Pack = {
+export const brokenIntegration: Integration = {
   id: 'broken',
   bundle: () => ({
     integration: 'broken',
@@ -30,10 +30,10 @@ export const brokenPack: Pack = {
   mount: () => {},
 };
 
-// `/hook/` requires no principal. A pack declaring an ACTION endpoint there
+// `/hook/` requires no principal. An integration declaring an ACTION endpoint there
 // would be a screen's call riding the unauthenticated path — the whole point of
 // reserving it.
-export const hookClaimPack: Pack = {
+export const hookClaimIntegration: Integration = {
   id: 'hookclaim',
   bundle: () => ({
     integration: 'hookclaim',

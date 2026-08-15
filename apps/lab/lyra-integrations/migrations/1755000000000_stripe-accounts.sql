@@ -7,9 +7,10 @@
 -- studios is this?" from their side — so if this mapping is lost, the account is
 -- live, billable, and unreachable.
 --
--- PREFIXED `stripe_` because every pack in this service shares one database. The
--- prefix is the boundary: pack-check asserts a pack's SQL never names a table
--- outside its own, which TypeScript cannot say and a convention would not keep.
+-- PREFIXED `stripe_` because every integration in this service shares one
+-- database. The prefix is the boundary: integration-check asserts an
+-- integration's SQL never names a table outside its own, which TypeScript
+-- cannot say and a convention would not keep.
 CREATE TABLE stripe_accounts (
   studio_id    TEXT PRIMARY KEY,
   account_id   TEXT NOT NULL UNIQUE,

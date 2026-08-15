@@ -1,18 +1,18 @@
-import type { PackEnv } from '../../pack';
+import type { IntegrationEnv } from '../../integration';
 
-// ── THE SECOND DIRECTION: this pack acting as ITSELF ─────────
+// ── THE SECOND DIRECTION: this integration acting as ITSELF ──
 //
 // Reads through the proxy travel as the PERSON driving, and that is right for a
 // screen. This is the other half: work nobody asked for — a webhook arriving at
 // three in the morning, a checkout resolving what to charge — where there is no
-// person, so the pack presents its OWN key and names the studio it is acting
+// person, so the integration presents its OWN key and names the studio it is acting
 // for.
 //
 // The key is long-lived and the deployment issued it (moss mints at
 // registration, shows it once, stores only the hash). `x-nisc-acts-for` names
-// the studio; lyra resolves that to a per-(pack, studio) principal on the pack's
-// own charter rung, and from there nothing is special — same compiled policy,
-// same engine-stamped scope, no privileged path.
+// the studio; lyra resolves that to a per-(integration, studio) principal on
+// the integration's own charter rung, and from there nothing is special — same
+// compiled policy, same engine-stamped scope, no privileged path.
 //
 // WHICH IS WHY A FINGERPRINT OUTSIDE THE RUNG SIMPLY FAILS. This function can
 // name anything; the charter decides what answers.
@@ -20,13 +20,13 @@ import type { PackEnv } from '../../pack';
 export type LyraCall = { ok: boolean; status: number; result: Record<string, unknown> | undefined; message: string };
 
 export const callLyra = async (
-  env: PackEnv,
+  env: IntegrationEnv,
   args: { studioId: string; resource: string; fingerprint: string; context: Record<string, unknown> },
 ): Promise<LyraCall> => {
   const key = env('STRIPE_KEY');
   const base = env('LYRA_BASE').replace(/\/$/, '');
   if (key === '' || base === '') {
-    return { ok: false, status: 0, result: undefined, message: 'This deployment has no lyra key or address for the payments pack.' };
+    return { ok: false, status: 0, result: undefined, message: 'This deployment has no lyra key or address for the payments integration.' };
   }
   try {
     const response = await fetch(`${base}/api/${args.resource}/vex`, {
@@ -42,7 +42,7 @@ export const callLyra = async (
       message: String(body.message ?? ''),
     };
   } catch (err) {
-    // Lyra being unreachable is an ordinary condition for a pack: the caller
+    // Lyra being unreachable is an ordinary condition for an integration: the caller
     // says so and claims nothing about the studio.
     return { ok: false, status: 0, result: undefined, message: String(err).slice(0, 200) };
   }
@@ -54,8 +54,8 @@ export const callLyra = async (
 // not an email nobody reads and not a status only this service can see.
 //
 // `automation/notify` is a PUBLISHED interface: the fingerprint name is
-// somebody else's contract, the same one the belts pack posts through, and the
-// only write the shared integration rung has ever held. This pack reaches it on
+// somebody else's contract, the same one the belts integration posts through, and the
+// only write the shared integration rung has ever held. This integration reaches it on
 // its own rung, which also grants it.
 //
 // The person is named because a follow-up reading "a payment failed" with nobody
@@ -65,7 +65,7 @@ export const callLyra = async (
 // notice about the same person today is a duplicate to collapse or a different
 // thing to file. Callers name it deliberately.
 export const notifyDesk = async (
-  env: PackEnv,
+  env: IntegrationEnv,
   args: { studioId: string; personId: string | null; subject: string; body: string; source?: string },
 ): Promise<boolean> => {
   const answer = await callLyra(env, {
@@ -95,7 +95,7 @@ export type Billable = {
 };
 
 /** What a person should be charged — the numbers, not the words a screen shows. */
-export const billableFor = async (env: PackEnv, studioId: string, personId: string): Promise<Billable | undefined> => {
+export const billableFor = async (env: IntegrationEnv, studioId: string, personId: string): Promise<Billable | undefined> => {
   const answer = await callLyra(env, {
     studioId,
     resource: 'member',

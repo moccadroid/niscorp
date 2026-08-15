@@ -9,20 +9,21 @@ import type { PgPool } from '@niscorp/vex';
 // vanishes on every save, and the store reads "Nothing on offer" until somebody
 // re-runs the whole register → approve → install dance by hand.
 //
-// This does that dance automatically when `LYRA_DEV_PACKS` names an integration. It is
-// the same three operator calls a person would make, in the same order, through
-// the same surfaces — nothing here is a privileged shortcut. Off by default and
-// unreachable without the env var, so it cannot touch a real deployment.
+// This does that dance automatically when `LYRA_DEV_INTEGRATIONS` names an
+// integration. It is the same three operator calls a person would make, in the
+// same order, through the same surfaces — nothing here is a privileged shortcut.
+// Off by default and unreachable without the env var, so it cannot touch a real
+// deployment.
 //
-// Format: `LYRA_DEV_PACKS="stripe@http://127.0.0.1:8799/stripe,belts@http://127.0.0.1:8799/belts"`
+// Format: `LYRA_DEV_INTEGRATIONS="stripe@http://127.0.0.1:8799/stripe,belts@http://127.0.0.1:8799/belts"`
 // — 8799 being where the integrations service actually listens in dev; this
 // example said 8781 for a while and cost two sessions an empty store.
 // An integration that is not running yet fails its fetch and is logged and skipped — it
 // registers on the next boot once it is up, rather than taking lyra down.
 
-type DevPack = { id: string; url: string };
+type DevIntegration = { id: string; url: string };
 
-const parse = (raw: string): DevPack[] =>
+const parse = (raw: string): DevIntegration[] =>
   raw
     .split(',')
     .map((entry) => entry.trim())
@@ -33,13 +34,13 @@ const parse = (raw: string): DevPack[] =>
     })
     .filter((p) => p.id !== '' && p.url !== '');
 
-export const registerDevPacks = async (
+export const registerDevIntegrations = async (
   server: MossServer,
   pool: PgPool,
   operatorKey: string,
   reloadDirectory: () => Promise<void>,
 ): Promise<void> => {
-  const raw = process.env['LYRA_DEV_PACKS'] ?? '';
+  const raw = process.env['LYRA_DEV_INTEGRATIONS'] ?? '';
   if (raw === '' || operatorKey === '') return;
 
   const op = async (path: string, body: unknown): Promise<Response> =>
@@ -56,7 +57,7 @@ export const registerDevPacks = async (
     try {
       const registered = await op('/operator/integrations', { id: integration.id, url: integration.url });
       if (!registered.ok) {
-        console.warn(`[dev-packs] ${integration.id}: ${integration.url} did not register (${registered.status}) — is it running? skipping.`);
+        console.warn(`[dev-integrations] ${integration.id}: ${integration.url} did not register (${registered.status}) — is it running? skipping.`);
         continue;
       }
       await op(`/operator/integrations/${integration.id}/approve`, {});
@@ -69,9 +70,9 @@ export const registerDevPacks = async (
           [studio.id, integration.id],
         );
       }
-      console.log(`[dev-packs] ${integration.id} registered, approved and installed for ${studios.length} studios`);
+      console.log(`[dev-integrations] ${integration.id} registered, approved and installed for ${studios.length} studios`);
     } catch (err) {
-      console.warn(`[dev-packs] ${integration.id} failed: ${String(err).slice(0, 140)}`);
+      console.warn(`[dev-integrations] ${integration.id} failed: ${String(err).slice(0, 140)}`);
     }
   }
 

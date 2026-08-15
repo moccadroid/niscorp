@@ -1,18 +1,18 @@
 import { createHash } from 'node:crypto';
-import type { Pack } from '../../pack';
+import type { Integration } from '../../integration';
 import { BELTS_BUNDLE } from './bundle';
 import { BELTS, RANKS, bandsFor, beltView, labelFor, nextRank, ordinal, sinceFor, toneOf } from './store';
 
 // ═══════════════════════════════════════════════════════════════
-// BELTS — rank tracking for grappling gyms, as a pack.
+// BELTS — rank tracking for grappling gyms, as an integration.
 //
 // Every route here is RELATIVE and every one asks `ctx.identity(c)` with no
-// audience argument: the mounting bound this pack's id to both. The nine
+// audience argument: the mounting bound this integration's id to both. The nine
 // hand-written `/belts/...` paths and nine `identity(c, 'belts')` calls this
 // replaces were nine chances to write the wrong string.
 // ═══════════════════════════════════════════════════════════════
 
-// ── the second direction: the pack acts as ITSELF ────────────
+// ── the second direction: the integration acts as ITSELF ─────
 //
 // The person driving is in the assertion; the write lands in OUR storage. Then
 // this service presents its OWN KEY and leaves a message in Lyra's
@@ -41,10 +41,10 @@ const notifyLyra = async (env: (name: string) => string, studioId: string, subje
 
 const rankRows = (): unknown[] => RANKS.map((r) => ({ name: r.name, tone: r.tone, bands: bandsFor(r.name) }));
 
-export const beltsPack: Pack = {
+export const beltsIntegration: Integration = {
   id: 'belts',
   bundle: () => BELTS_BUNDLE,
-  // Named, so they are fenced: this pack cannot read a secret belonging to
+  // Named, so they are fenced: this integration cannot read a secret belonging to
   // another one even by knowing its name.
   env: ['BELTS_KEY', 'LYRA_BASE', 'BELTS_HOOK_SECRET'],
 
@@ -215,7 +215,7 @@ export const beltsPack: Pack = {
 
     // ── A FRAMED PAGE, from this side ──────────────────────────
     //
-    // The pack serves HTML and the host frames it. Belts does not need this —
+    // The integration serves HTML and the host frames it. Belts does not need this —
     // its screens are ordinary nova layouts, which is the right way — so what
     // this exists to prove is the SEAM: that a declared page is reachable only
     // through a grant, that the assertion still arrives, and that the host
@@ -241,7 +241,7 @@ export const beltsPack: Pack = {
 <body>
   <ul>${rows === '' ? '<li>Nobody graded yet.</li>' : rows}</ul>
   <script>
-    // THE HEIGHT HANDSHAKE, the pack's half. The host cannot know how tall this
+    // THE HEIGHT HANDSHAKE, the integration's half. The host cannot know how tall this
     // is, so the page says — and keeps saying, because content moves.
     var tell = function () {
       parent.postMessage({ type: 'frame:height', height: document.documentElement.scrollHeight }, '*');
@@ -255,7 +255,7 @@ export const beltsPack: Pack = {
     // A checkable statement about the tenancy rule above, without a running Lyra.
     //
     // NOT DECLARED in the bundle, on purpose: it is the undeclared route the
-    // host's allow-list must refuse (integrations-check). A pack always has one
+    // host's allow-list must refuse (integrations-check). An integration always has one
     // of these; the point is that having one costs the host nothing.
     r.get('/_selftest', (c) => {
       const north = BELTS.filter((b) => b.studioId === 'st_northrock').length;

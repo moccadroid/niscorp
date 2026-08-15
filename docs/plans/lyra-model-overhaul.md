@@ -92,7 +92,7 @@ The only commercial relationship the schema models is a **recurring** `plan` →
 ### 1.4 Access is welded to payment, and payment is welded to Stripe
 
 A subscription's standing is written by `subscriptions/assert` (built for the
-Stripe pack) and by the desk flipping `status`. But there is **no desk-side way
+Stripe integration) and by the desk flipping `status`. But there is **no desk-side way
 to put someone on a plan and record that they paid offline**. The desk can only
 mark a membership "active" with no plan attached — which is exactly why Tom
 Vogel "just *has* a membership" with no plan and no money attached. A studio
@@ -370,7 +370,7 @@ notifications (
 
 - `due_on` set + `done` → a task ("call Ruben about the failed payment").
 - `due_on` null → an FYI ("payment failed").
-- `automation/notify` (the fingerprint the Stripe pack and automations already
+- `automation/notify` (the fingerprint the Stripe integration and automations already
   use) writes here unchanged — it is already a published interface; the table
   underneath just gets the honest name.
 
@@ -389,7 +389,7 @@ not a transport.
 - **Web Push** (browser notifications with the tab closed — service worker,
   VAPID, permission prompt) is a separate, later phase. Not v1.
 
-The integration boundary does not change: a pack still can only `notify` through
+The integration boundary does not change: an integration still can only `notify` through
 the granted fingerprint; moss decides how loud that is.
 
 ---
@@ -442,12 +442,12 @@ model**. Under the new model:
 - **Checkout reads `subscriptions/billable`** (amount/currency/interval/person).
   That fingerprint currently joins `subscriptions` + `plans` + `memberships` +
   `people`. It re-points at `subscriptions` + `offerings` + `studio_people` +
-  `people`. The *shape* it returns to the pack is unchanged — keep it, so the
-  pack does not change.
+  `people`. The *shape* it returns to the integration is unchanged — keep it, so the
+  integration does not change.
 - **`subscriptions/assert`** (webhook write-back) is unchanged — it already
   writes standing keyed on `membership_id`. If `memberships` goes away,
   `assert`'s key becomes `subscription_id` or `(studio_id, person_id)`; the
-  pack sends whatever metadata checkout stamped, so update **both** the checkout
+  integration sends whatever metadata checkout stamped, so update **both** the checkout
   metadata and `assert`'s `where` together (they are one contract — see the
   billing-check that proves it).
 - **`paid_via`** lets checkout mark a subscription `stripe` and the desk mark one
@@ -456,12 +456,12 @@ model**. Under the new model:
   not Stripe's to report.
 - **Drop-in via Stripe** (Tom pays €18 once for a single class): a one-off
   Checkout in `payment` mode (not `subscription`) creating a `pass` credits=1.
-  New, small, additive to the pack — not part of this remodel, but the offerings
+  New, small, additive to the integration — not part of this remodel, but the offerings
   model is what makes it expressible.
 - **The manual-first reality:** most studios onboard without Stripe. The remodel
   makes the app fully usable (sell plans, passes, drop-ins; take attendance;
   give notice) with `paid_via = manual` and **no payment processor at all** —
-  Stripe becomes an upgrade, exactly as BUILD_STRIPE framed it (a pack, not app
+  Stripe becomes an upgrade, exactly as BUILD_STRIPE framed it (an integration, not app
   code).
 
 ---
@@ -546,11 +546,11 @@ lyra-integrations check` green **before and after** each step:
   offerings rename.
 - **The payment loop** (`billing-check`, `stripe-check`, `webhook-check`,
   `frame-check`, `perimeter-check`, `integrations-check`) — signed webhook →
-  `assert` → standing; the pack sees no lyra internals; the frame seam holds.
+  `assert` → standing; the integration sees no lyra internals; the frame seam holds.
 - **The app is data** (`roundtrip-check`) — it still boots identically from
   serialized JSON (the property the configurator will build on).
-- **Separation** (`separation-check`, `pack-check`) — lyra imports no payment
-  SDK; packs share no code; one prefix per pack.
+- **Separation** (`separation-check`, `integration-check`) — lyra imports no payment
+  SDK; integrations share no code; one prefix per integration.
 
 New checks the remodel should add: a milkman resolves as a principal; a person
 holds two concurrent entitlements; a drop-in attends without a subscription; a
@@ -561,19 +561,19 @@ reaches a connected owner over the socket.
 
 ## Appendix — running dev state (as handed off)
 
-- **lyra** dev on `:5180`; **stripe pack** on `:8781`; **`stripe listen`**
+- **lyra** dev on `:5180`; **stripe integration** on `:8781`; **`stripe listen`**
   forwarding to `localhost:5180/integrations/stripe/hook/events`; **Postgres**
-  (the pack's own store) on `:5433`.
+  (the integration's own store) on `:5433`.
 - **Dev ergonomics already fixed:** `LYRA_SIGNING_SEED` in `apps/lab/lyra/.env`
-  keeps lyra's assertion keypair stable across restarts (the pack's
-  `LYRA_VERIFY_KEY` stays valid); `LYRA_DEV_PACKS` auto-registers/approves/
-  installs the pack on boot (`server/dev-packs.ts`, called only from
+  keeps lyra's assertion keypair stable across restarts (the integration's
+  `LYRA_VERIFY_KEY` stays valid); `LYRA_DEV_INTEGRATIONS` auto-registers/approves/
+  installs the integration on boot (`server/dev-integrations.ts`, called only from
   `bootDevServer`, never from the shared `boot()` the checks use).
 - **The connected test account** `acct_1U3YTxPqgTbTvqhS` belongs to **North
   Rock** (sign in as Dario). It is Stripe-liable, `dashboard=none`, AT. Its
   embedded onboarding needs the platform's Connect profile configured (a
   one-time Stripe-dashboard task); **hosted onboarding (Account Links) works
   today** and is what the setup screen uses.
-- The pack's own store is Postgres and **persists across lyra restarts** — the
+- The integration's own store is Postgres and **persists across lyra restarts** — the
   connected-account mapping survives even though lyra's PGlite resets. This is
   deliberate (a connected account is unrecoverable if lost).

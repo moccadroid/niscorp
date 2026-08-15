@@ -106,7 +106,7 @@ export const sendMail = async (message: Message): Promise<Sent> => {
   };
 
   // THE LAB'S TRANSPORT, and it is off unless somebody names it — same posture
-  // as `LYRA_DEV_PACKS`. A development database is replayed from seed on every
+  // as `LYRA_DEV_INTEGRATIONS`. A development database is replayed from seed on every
   // save, so an automation that can never report anything but `Failed` teaches
   // nobody anything about whether the automation worked. This makes the mail
   // VISIBLE without making it SENT, and the id says which it was: a row reading

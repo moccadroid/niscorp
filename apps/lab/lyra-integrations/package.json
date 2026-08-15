@@ -5,7 +5,7 @@
   "scripts": {
     "serve": "tsx src/serve.ts",
     "typecheck": "tsc --noEmit",
-    "check": "turbo run build --filter=lyra-integrations^... && tsx src/dev/pack-check.ts",
+    "check": "turbo run build --filter=lyra-integrations^... && tsx src/dev/integration-check.ts",
     "db:up": "docker compose up -d --wait",
     "db:down": "docker compose down",
     "db:reset": "docker compose down -v && docker compose up -d --wait && pnpm migrate",

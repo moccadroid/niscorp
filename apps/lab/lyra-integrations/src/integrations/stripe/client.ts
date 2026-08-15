@@ -1,5 +1,5 @@
 import Stripe from 'stripe';
-import type { PackEnv } from '../../pack';
+import type { IntegrationEnv } from '../../integration';
 
 // ═══════════════════════════════════════════════════════════════
 // THE ONLY FILE IN THIS WORKSPACE THAT IMPORTS THE STRIPE SDK.
@@ -7,9 +7,9 @@ import type { PackEnv } from '../../pack';
 // Not a style rule. Lyra validates every layout against a fixed component
 // vocabulary and every action against a fixed set of endpoints — a host that
 // imported a payment provider's SDK would carry that dependency into every app
-// that ever installs this pack, and `frame-check` asserts it never does. Keeping
+// that ever installs this integration, and `frame-check` asserts it never does. Keeping
 // the import to one file here is the same discipline one level down: the rest of
-// the pack talks about accounts and sessions, not about a vendor's client.
+// the integration talks about accounts and sessions, not about a vendor's client.
 //
 // THE API VERSION IS PINNED AND EXPLICIT. Stripe's v2 surfaces refuse a request
 // with no version header outright — a bare `/v2/core/...` call answers 400, "You
@@ -21,7 +21,7 @@ const API_VERSION = '2026-07-29.dahlia';
 // READ PER CALL, not at import. An operator pastes a key and restarts; a check
 // sets one after boot without restarting a process it holds. The same reason
 // `identity.ts` reads its verify key per request.
-export const stripeFor = (env: PackEnv): Stripe | undefined => {
+export const stripeFor = (env: IntegrationEnv): Stripe | undefined => {
   const secret = env('STRIPE_SECRET');
   if (secret === '') return undefined;
   return new Stripe(secret, { apiVersion: API_VERSION as Stripe.LatestApiVersion });
@@ -84,7 +84,7 @@ export const createOnboardingLink = async (stripe: Stripe, accountId: string, re
   const link = await stripe.accountLinks.create({
     account: accountId,
     // Both point back at lyra: `refresh` is where an expired link sends the
-    // owner to get a fresh one, `return` is where a finished one lands. The pack
+    // owner to get a fresh one, `return` is where a finished one lands. The integration
     // does not choose these — they are the host's address (index.ts).
     refresh_url: returnUrl,
     return_url: returnUrl,

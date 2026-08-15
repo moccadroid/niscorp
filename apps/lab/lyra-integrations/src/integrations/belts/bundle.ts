@@ -1,6 +1,6 @@
 import type { ActionDefinition } from '@niscorp/nova';
 
-// BELTS — a discipline pack for a grappling gym, shipped from outside.
+// BELTS — a discipline integration for a grappling gym, shipped from outside.
 //
 // This file may not import anything from Lyra. Not a fingerprint constant, not
 // a component name, not a type. Everything it knows about the app it extends
@@ -8,7 +8,7 @@ import type { ActionDefinition } from '@niscorp/nova';
 //
 // It stores its own records. A belt is not a column beside `memberships` — it
 // lives in this service, keyed by the `person_id` the assertion (or the
-// host screen) hands over. That is the whole reason a discipline pack does not
+// host screen) hands over. That is the whole reason a discipline integration does not
 // need a migration in Lyra: the two systems share identifiers, not tables.
 //
 // WHERE ITS SCREENS GO is declared at the bottom, beside the actions and never
@@ -46,7 +46,7 @@ const panelAction: ActionDefinition = {
           props: { gap: 22, wrap: true, align: 'end' },
           children: [
             // THE BELT ITSELF, not the word for it. The bands arrive on the
-            // record — this pack owns what a grappling belt looks like; the
+            // record — this integration owns what a grappling belt looks like; the
             // kit only knows how to paint segments.
             {
               component: 'Stack',
@@ -65,7 +65,7 @@ const panelAction: ActionDefinition = {
             // and only exists while there is a step to unwind. Every one of
             // them ASKS first: the clicks push Lyra's own `confirm` sheet
             // (granted to everybody at the base rung) and the work fires only
-            // when its channel answers yes — this pack could not perform the
+            // when its channel answers yes — this integration could not perform the
             // change from inside the question if it wanted to.
             {
               if: '$.belt.can_stripe',
@@ -136,7 +136,7 @@ const panelAction: ActionDefinition = {
   lifecycle: { mount: [{ call: 'belt', onSuccess: [{ set: 'loading', value: false }], onError: [{ set: 'loading', value: false }] }] },
   triggers: [
     // Each click ASKS; each answer WORKS. The channels are namespaced to this
-    // pack so two integrations confirming on one screen cannot hear each
+    // integration so two integrations confirming on one screen cannot hear each
     // other's yes.
     {
       event: 'ui:click',
@@ -247,7 +247,7 @@ const rosterAction: ActionDefinition = {
     belts: { url: '/integrations/belts/roster', method: 'POST', request: {}, target: 'belts' },
     // THEIRS. A fingerprint the contract listed. We do not know what table it
     // reads and cannot ask. The lens is a CONTEXT VALUE now rather than part of
-    // the name, and the search is optional — a pack asking for the members
+    // the name, and the search is optional — an integration asking for the members
     // lens sends the lens and nothing else, with no wildcard to know about.
     members: {
       url: '/api/member/vex',
@@ -273,8 +273,8 @@ const rosterAction: ActionDefinition = {
                 // the ROLL drives the map, not the belt records: there is no
                 // unranked, so every member is on the wall, and one with no
                 // record yet is a white belt with an empty bar. The white-belt
-                // fallback is a literal because what a white belt looks like
-                // is THIS pack's knowledge, written where the pack composes.
+                // fallback is a literal because what a white belt looks like is
+                // THIS integration's knowledge, written where it composes.
                 value: {
                   $prism: {
                   $with: {
@@ -364,9 +364,9 @@ const mineAction: ActionDefinition = {
 
 // ── the settings door, on the store tile and nowhere else ────
 //
-// "What belts exist" is this pack's own configuration — rows in ITS storage,
+// "What belts exist" is this integration's own configuration — rows in ITS storage,
 // reachable only from the Add-ons tile once a studio has it on. Nothing here
-// is a screen anybody works in; it is how the pack is set up.
+// is a screen anybody works in; it is how the integration is set up.
 const settingsAction: ActionDefinition = {
   id: 'ext.desk.belts.settings',
   title: 'Belt settings',
@@ -375,7 +375,7 @@ const settingsAction: ActionDefinition = {
     component: 'Stack',
     props: { gap: 22 },
     children: [
-      heading('Belt settings', 'The ranks this pack grades through, in order.'),
+      heading('Belt settings', 'The ranks this add-on grades through, in order.'),
       { if: '$.error', then: { component: 'Notice', props: { tone: 'alert', message: '$.error.message' } }, else: '' },
       {
         component: 'Card',
@@ -422,7 +422,7 @@ const settingsAction: ActionDefinition = {
 
 export const BELTS_BUNDLE = {
   integration: 'belts',
-  // THE PACK'S OWN WORDS, in the languages it speaks — the host merges this
+  // THE INTEGRATION'S OWN WORDS, in the languages it speaks — the host merges this
   // under its OWN book (host words win) and the language pass covers these
   // screens with everything else. Keyed by LANGUAGE, per the contract; a
   // full locale here refuses the whole bundle at intake.
@@ -446,12 +446,12 @@ export const BELTS_BUNDLE = {
       Coral: 'Koralle',
       Member: 'Mitglied',
       'Nobody graded yet.': 'Noch niemand graduiert.',
-      'The ranks this pack grades through, in order.': 'Die Ränge, die dieses Add-on vergibt, in Reihenfolge.',
+      'The ranks this add-on grades through, in order.': 'Die Ränge, die dieses Add-on vergibt, in Reihenfolge.',
       'No ranks defined.': 'Keine Ränge definiert.',
       'New rank': 'Neuer Rang',
       'Add rank': 'Rang hinzufügen',
       'Rank tracking for grappling gyms': 'Gürtel und Grade für Kampfsport-Studios',
-      'Belts, promotion dates and class counts, kept in the pack’s own storage. Promotions land in the studio’s notifications.':
+      'Belts, promotion dates and class counts, kept in the add-on’s own storage. Promotions land in the studio’s notifications.':
         'Gürtel, Graduierungsdaten und Kurszahlen, im eigenen Speicher des Add-ons. Graduierungen landen in den Mitteilungen des Studios.',
     },
   },
@@ -460,7 +460,7 @@ export const BELTS_BUNDLE = {
   meta: {
     title: 'Belts',
     tagline: 'Rank tracking for grappling gyms',
-    description: 'Belts, promotion dates and class counts, kept in the pack’s own storage. Promotions land in the studio’s notifications.',
+    description: 'Belts, promotion dates and class counts, kept in the add-on’s own storage. Promotions land in the studio’s notifications.',
   },
   // WHAT WE NEED, which somebody approves once. Asking is not getting: until an
   // operator says yes, nothing here is served and the data grants are not held.
@@ -469,7 +469,7 @@ export const BELTS_BUNDLE = {
     // The roll it joins against: the anchor and the person. Standing derives
     // from the anchor's own mirrors, so nothing else is asked for. Read as
     // the person DRIVING — this is what the screens need, not what the
-    // pack's key holds.
+    // integration's key holds.
     data: ['studio_people.read', 'people.read'],
   },
   actions: {
