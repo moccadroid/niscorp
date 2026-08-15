@@ -428,7 +428,15 @@ export const offeringsList: CacheEntry = {
         offering_id: row('offering_id'),
         name: row('name'),
         kind: row('kind'),
-        kind_label: { $case: { branches: [{ when: { $eq: [row('kind'), 'pass'] }, then: 'Pass' }], else: 'Plan' } },
+        kind_label: {
+          $case: {
+            branches: [
+              { when: { $eq: [row('kind'), 'pass'] }, then: 'Pass' },
+              { when: { $eq: [row('kind'), 'one_off'] }, then: 'One-off' },
+            ],
+            else: 'Plan',
+          },
+        },
         price_cents: row('price_cents'),
         price_display: priceText(row('price_cents'), row('currency')),
         interval: row('interval'),
@@ -438,7 +446,13 @@ export const offeringsList: CacheEntry = {
         interval_count: row('interval_count'),
         interval_display: {
           $case: {
-            branches: [{ when: { $eq: [row('kind'), 'pass'] }, then: 'One-off' }],
+            // Neither recurs, so neither has a period to print. 'Once' rather
+            // than a blank cell: a price list where some rows say nothing reads
+            // as a price list with something missing from it.
+            branches: [
+              { when: { $eq: [row('kind'), 'pass'] }, then: 'Once' },
+              { when: { $eq: [row('kind'), 'one_off'] }, then: 'Once' },
+            ],
             else: intervalText(row('interval'), row('interval_count')),
           },
         },
@@ -449,6 +463,9 @@ export const offeringsList: CacheEntry = {
           $case: {
             branches: [
               { when: { $eq: [row('kind'), 'pass'] }, then: { $case: { branches: [{ when: { $eq: [row('credits'), 1] }, then: 'Single class' }], else: pattern('{n} classes', { n: row('credits') }) } } },
+              // A one-off entitles nobody to anything, and that IS its
+              // description — an empty cell here would read as missing data.
+              { when: { $eq: [row('kind'), 'one_off'] }, then: 'Grants nothing' },
               { when: row('class_allowance'), then: pattern('{n} {per}', { n: row('class_allowance'), per: perIntervalText(row('interval'), row('interval_count')) }) },
             ],
             else: 'Unlimited',

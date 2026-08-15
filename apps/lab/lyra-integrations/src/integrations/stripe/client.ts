@@ -157,3 +157,79 @@ export const accountStanding = async (
   // was sent. Offering a button here is what sent the owner in a circle.
   return { state: 'in_review', ready: false, detail: 'Stripe is reviewing what you sent — nothing to do right now. This can take a little while.', actionable: 0 };
 };
+
+// ── WHERE A MEMBER CHANGES THEIR OWN CARD ────────────────────
+//
+// The gap this closes is the worst one on the member's side: without it a card
+// that expires is a dead end. The member cannot fix it, the desk cannot fix it
+// for them, and the only thing that happens next is dunning — a payment fails,
+// a follow-up lands on a list, and somebody has to ring them up to ask for a
+// number over the phone.
+//
+// HOSTED, not embedded, for the same reason onboarding is: the embedded
+// components need the platform's Connect profile configured, which is not done,
+// and an embed nobody can fill is worse than a redirect that works. This is on
+// the CONNECTED account — the studio is the merchant, so it is the studio's own
+// billing portal and the studio's name on it.
+//
+// WHAT THE PORTAL MAY DO IS NOT STRIPE'S DEFAULT, and the difference is the
+// whole configuration below.
+const PORTAL_HEADLINE = 'Manage your membership payments';
+
+export const ensurePortalConfiguration = async (stripe: Stripe, accountId: string): Promise<string> => {
+  const onAccount = { stripeAccount: accountId };
+  // Made once per studio and found again by its own headline — the same
+  // list-then-create shape `ensureDestination` uses, and for the same reason:
+  // this runs on a member's click, so a second run must cost nothing.
+  const held = await stripe.billingPortal.configurations.list({ limit: 100 }, onAccount);
+  const found = held.data.find((c) => c.business_profile?.headline === PORTAL_HEADLINE);
+  if (found !== undefined) return found.id;
+
+  const made = await stripe.billingPortal.configurations.create(
+    {
+      business_profile: { headline: PORTAL_HEADLINE },
+      features: {
+        // THE POINT OF THE WHOLE THING.
+        payment_method_update: { enabled: true },
+        // Their own invoices, downloadable. Lyra still never learns what an
+        // invoice is (S4) — the member reads them at the merchant, which is
+        // where they legally come from anyway.
+        invoice_history: { enabled: true },
+        // Their billing address, which Stripe Tax needs kept current and which
+        // appears on those invoices.
+        customer_update: { enabled: true, allowed_updates: ['address', 'email', 'name', 'phone'] },
+        // ── AND TWO THAT ARE DELIBERATELY OFF ──────────────
+        //
+        // CANCELLING IS LYRA'S (S6). A membership here has a minimum term and a
+        // notice period, and the leaving date is arithmetic over both that a
+        // database trigger owns. Stripe knows about neither, so a portal cancel
+        // would end the money on a date nobody agreed to and leave lyra
+        // believing they were still a member. §312k requires the member be able
+        // to leave in one place, and that place is lyra, where the terms are.
+        subscription_cancel: { enabled: false },
+        // CHANGING PLAN IS THE STUDIO'S PRICE LIST, not a menu at a vendor.
+        // What is on sale, what it commits somebody to, and what they are
+        // grandfathered onto are all lyra's — and a member switching plan here
+        // would move the money without moving any of that.
+        subscription_update: { enabled: false },
+      },
+    },
+    onAccount,
+  );
+  return made.id;
+};
+
+/** A short-lived door into the studio's own portal, for one member. */
+export const createPortalSession = async (
+  stripe: Stripe,
+  accountId: string,
+  customerId: string,
+  returnUrl: string,
+): Promise<string> => {
+  const configuration = await ensurePortalConfiguration(stripe, accountId);
+  const session = await stripe.billingPortal.sessions.create(
+    { customer: customerId, configuration, return_url: returnUrl },
+    { stripeAccount: accountId },
+  );
+  return session.url;
+};

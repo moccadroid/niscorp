@@ -1,10 +1,10 @@
 import type { Integration } from '../../integration';
 import { STRIPE_BUNDLE } from './bundle';
 import { accountFor, rememberAccount, storeIsDurable } from './store';
-import { accountStanding, createAccountSession, createConnectedAccount, createOnboardingLink, stripeFor } from './client';
+import { accountStanding, createAccountSession, createConnectedAccount, createOnboardingLink, createPortalSession, stripeFor } from './client';
 import { embedPage, notOnboardedPage, unavailablePage } from './onboarding';
-import { createCheckout } from './checkout';
-import { billableFor } from './lyra';
+import { createCheckout, createPurchase, customerFor } from './checkout';
+import { billableFor, purchaseFor } from './lyra';
 import { handleStripeEvent } from './hooks';
 import { invoicesFor, ledgerRows } from './ledger';
 
@@ -178,6 +178,100 @@ export const stripeIntegration: Integration = {
           returnUrl,
         });
         return c.json({ url: session.url, plan_name: billable.planName });
+      } catch (err) {
+        return c.json({ message: `Stripe refused: ${String(err).slice(0, 200)}` }, 502);
+      }
+    });
+
+    // ── THE MEMBER'S OWN CARD ──────────────────────────────────
+    //
+    // A door into the studio's billing portal for the person in the assertion,
+    // and nobody else: the customer is looked up by (studio, person) from this
+    // integration's own map, so there is nowhere for a caller to name whose
+    // payment details they would like to manage.
+    //
+    // What the portal is ALLOWED to do is configured rather than accepted
+    // (client.ts) — updating a card and reading invoices, never cancelling and
+    // never switching plan, because those two are lyra's and have terms behind
+    // them.
+    r.post('/portal', async (c) => {
+      const who = ctx.identity(c);
+      if (who === undefined) return c.json({ message: 'Who are you?' }, 401);
+      if (who.personId === '') return c.json({ message: 'Only somebody the studio knows has payments to manage.' }, 403);
+
+      const held = await accountFor(ctx.db, who.studioId);
+      if (held === undefined) return c.json({ message: 'This studio is not taking payments yet.' }, 409);
+      const stripe = stripeFor(ctx.env);
+      if (stripe === undefined) return c.json({ message: 'This deployment holds no Stripe key.' }, 503);
+
+      // NO CUSTOMER, NOTHING TO MANAGE — and that is an ordinary state, not a
+      // failure: somebody who has never paid through the app has no card on
+      // file anywhere. The sentence says so rather than opening an empty portal.
+      const customerId = await customerFor(ctx.db, who.studioId, who.personId);
+      if (customerId === undefined) return c.json({ message: 'There is no payment set up for you yet.' }, 409);
+
+      const base = ctx.env('LYRA_BASE').replace(/\/$/, '');
+      if (base === '') return c.json({ message: 'This deployment has no address to return to.' }, 503);
+
+      try {
+        return c.json({ url: await createPortalSession(stripe, held.accountId, customerId, `${base}/`) });
+      } catch (err) {
+        return c.json({ message: `Stripe refused: ${String(err).slice(0, 200)}` }, 502);
+      }
+    });
+
+    // ── BUYING ONE THING ───────────────────────────────────────
+    //
+    // A pass, a drop-in, a course place. The other half of what a studio sells,
+    // and until now the half with no way to pay for it: a studio could author a
+    // €18 drop-in and a €240 block and take money for neither except at a desk.
+    //
+    // WHICH thing comes from the body and that is fine — WHOSE studio and WHICH
+    // person do not, so the worst a caller can name is something their own
+    // studio sells to themselves. The PRICE is never in the body; it is read
+    // from lyra, and a caller who could send an amount would be setting it.
+    r.post('/purchase', async (c) => {
+      const who = ctx.identity(c);
+      if (who === undefined) return c.json({ message: 'Who are you?' }, 401);
+      if (who.personId === '') return c.json({ message: 'Only somebody the studio knows can buy this.' }, 403);
+
+      const held = await accountFor(ctx.db, who.studioId);
+      if (held === undefined) return c.json({ message: 'This studio is not taking payments yet.' }, 409);
+      const stripe = stripeFor(ctx.env);
+      if (stripe === undefined) return c.json({ message: 'This deployment holds no Stripe key.' }, 503);
+
+      const body = (await c.req.json().catch(() => ({}))) as { kind?: unknown; targetId?: unknown; email?: unknown };
+      // What the caller says is only a HINT about which read to make; for
+      // anything on the price list the kind comes back from lyra, so a caller
+      // cannot decide whether their purchase grants classes.
+      const kind = body.kind === 'course' ? 'course' : 'pass';
+      const targetId = typeof body.targetId === 'string' ? body.targetId : '';
+
+      const purchase = await purchaseFor(ctx.env, who.studioId, kind, targetId);
+      // ONE SENTENCE FOR SEVERAL REFUSALS, deliberately: retired, sold out, not
+      // this studio's, not a thing at all. A member does not need to be told
+      // which of those it was, and telling them turns this into a way to ask
+      // questions about another studio's price list.
+      if (purchase === undefined) return c.json({ message: 'That is not on sale just now.' }, 409);
+      if (purchase.amount <= 0) return c.json({ message: 'There is nothing to pay for this.' }, 409);
+
+      const base = ctx.env('LYRA_BASE').replace(/\/$/, '');
+      if (base === '') return c.json({ message: 'This deployment has no address to return to.' }, 503);
+
+      try {
+        const session = await createPurchase(stripe, ctx.db, {
+          accountId: held.accountId,
+          personId: who.personId,
+          studioId: who.studioId,
+          email: typeof body.email === 'string' ? body.email : '',
+          kind: purchase.kind,
+          targetId: purchase.targetId,
+          name: purchase.name,
+          amount: purchase.amount,
+          currency: purchase.currency,
+          returnUrl: `${base}/`,
+        });
+        return c.json({ url: session.url, item_name: purchase.name });
       } catch (err) {
         return c.json({ message: `Stripe refused: ${String(err).slice(0, 200)}` }, 502);
       }

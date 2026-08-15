@@ -282,7 +282,7 @@ const ledgerAction: ActionDefinition = {
 const payAction: ActionDefinition = {
   id: 'ext.member.stripe.pay',
   title: 'Payment',
-  data: { checkout: {}, error: '', starting: false },
+  data: { checkout: {}, portal: {}, error: '', starting: false, managing: false },
   layout: {
     component: 'Stack',
     props: { gap: 18 },
@@ -303,15 +303,46 @@ const payAction: ActionDefinition = {
           ],
         },
         else: {
-          component: 'Row',
-          props: { gap: 10 },
-          children: [{ component: 'Button', props: { variant: 'solid', big: true, label: 'Set up payment', disabled: '$.starting' }, ref: 'start' }],
+          component: 'Stack',
+          props: { gap: 14 },
+          children: [
+            {
+              component: 'Row',
+              props: { gap: 10 },
+              children: [{ component: 'Button', props: { variant: 'solid', big: true, label: 'Set up payment', disabled: '$.starting' }, ref: 'start' }],
+            },
+            // ── CHANGING A CARD ALREADY ON FILE ────────────────
+            //
+            // The gap this closes is the worst one a member had: a card expires,
+            // and there is nothing anywhere that lets them fix it. What happens
+            // instead is dunning — a payment fails, a task lands on a desk, and
+            // somebody rings them to ask for a number over the phone.
+            //
+            // Offered unconditionally rather than behind a "do they have a card"
+            // read: the answer costs a call to a vendor, and the honest refusal
+            // ("there is no payment set up for you yet") is a sentence this
+            // screen can already print. A control that is occasionally a
+            // sentence beats a screen that waits to find out.
+            {
+              if: '$.portal.url',
+              then: {
+                component: 'Stack',
+                props: { gap: 8 },
+                children: [
+                  { component: 'Text', props: { size: 'sm', color: 'mute' }, children: 'Your payment details, your invoices, and the card this comes off.' },
+                  { component: 'Button', props: { variant: 'outline', label: 'Open payment settings', href: '$.portal.url' }, ref: 'goPortal' },
+                ],
+              },
+              else: { component: 'Button', props: { variant: 'ghost', label: 'Manage payment method', disabled: '$.managing' }, ref: 'manage' },
+            },
+          ],
         },
       },
     ],
   },
   endpoints: {
     start: { url: `${OWN}/checkout`, method: 'POST', request: {}, target: 'checkout', errorTarget: 'error' },
+    manage: { url: `${OWN}/portal`, method: 'POST', request: {}, target: 'portal', errorTarget: 'error' },
   },
   triggers: [
     {
@@ -321,6 +352,97 @@ const payAction: ActionDefinition = {
         { set: 'error', value: '' },
         { set: 'starting', value: true },
         { call: 'start', onSuccess: [{ set: 'starting', value: false }], onError: [{ set: 'starting', value: false }] },
+      ],
+    },
+    {
+      event: 'ui:click',
+      ref: 'manage',
+      do: [
+        { set: 'error', value: '' },
+        { set: 'managing', value: true },
+        { call: 'manage', onSuccess: [{ set: 'managing', value: false }], onError: [{ set: 'managing', value: false }] },
+      ],
+    },
+  ],
+  // Coming back from the portal: DROP the used link. A portal session is
+  // short-lived and single-purpose, so a stale one behind the button is a dead
+  // control — the same rule the setup screen keeps about onboarding links.
+  lifecycle: { resume: [{ set: 'portal', value: {} }] },
+};
+
+// ── BUYING A PASS OR A PLACE ─────────────────────────────────
+//
+// The other half of what a studio sells. A membership recurs and has the screen
+// above; a pass, a drop-in and a course block are bought once, and until this
+// screen existed a studio could author them and take money for neither except
+// in cash at a desk.
+//
+// The list comes from the HOST, over this integration's own reach: lyra knows
+// what is on sale and this screen does not need a second opinion about it. What
+// this integration adds is the one thing lyra cannot do — a card form.
+const buyAction: ActionDefinition = {
+  id: 'ext.member.stripe.buy',
+  title: 'Buy',
+  data: { items: [], checkout: {}, error: '', loading: true, starting: false },
+  layout: {
+    component: 'Stack',
+    props: { gap: 18 },
+    children: [
+      heading('Buy a pass', 'Class passes and drop-ins you can pay for now. What you buy is added to your account as soon as the payment goes through.'),
+      { if: '$.error', then: { component: 'Notice', props: { tone: 'alert', message: '$.error.message' } }, else: '' },
+      {
+        if: '$.checkout.url',
+        // Same rule as the membership screen: the redirect waits for a click.
+        // A page that sends somebody to a card form on its own is
+        // indistinguishable from one that sends them somewhere else.
+        then: {
+          component: 'Stack',
+          props: { gap: 10 },
+          children: [
+            { component: 'Text', props: { size: 'sm', color: 'mute' }, children: 'Ready for {{$.checkout.item_name}}.' },
+            { component: 'Button', props: { variant: 'solid', big: true, label: 'Continue to payment', href: '$.checkout.url' }, ref: 'go' },
+          ],
+        },
+        else: {
+          component: 'Card',
+          props: { flush: true },
+          children: {
+            component: 'Rows',
+            props: {
+              rows: '$.items',
+              loading: '$.loading',
+              rowKey: 'offering_id',
+              empty: 'Nothing on sale just now.',
+              emptyHint: 'Ask at the desk about passes.',
+              columns: [
+                { label: 'Pass', w: 2, cell: { kind: 'primary', key: 'name', subKey: 'allowance_display' } },
+                { label: 'Price', px: 110, align: 'right', cell: { kind: 'text', key: 'price_display', color: 'ink' } },
+                { label: '', px: 96, align: 'right', cell: { kind: 'action', label: 'Buy', ref: 'buy', variant: 'solid' } },
+              ],
+            },
+          },
+        },
+      },
+    ],
+  },
+  endpoints: {
+    // THE HOST'S OWN READ, called over this integration's rung. The price list
+    // is the studio's and this screen is a card form, not a second catalogue.
+    items: { url: '/api/member/vex', method: 'POST', request: { fingerprint: 'offerings/purchasable', context: {} }, target: 'items', errorTarget: 'error' },
+    buy: { url: `${OWN}/purchase`, method: 'POST', request: { kind: 'pass', targetId: { $ref: '$.chosenId' } }, target: 'checkout', errorTarget: 'error' },
+  },
+  lifecycle: { mount: [{ call: 'items', onSuccess: [{ set: 'loading', value: false }], onError: [{ set: 'loading', value: false }] }] },
+  triggers: [
+    {
+      event: 'ui:click',
+      ref: 'buy',
+      do: [
+        { set: 'error', value: '' },
+        // The ROW is the payload, so the id comes off it rather than out of a
+        // second piece of state that could disagree with what was clicked.
+        { set: 'chosenId', value: '@event.payload.offering_id' },
+        { set: 'starting', value: true },
+        { call: 'buy', onSuccess: [{ set: 'starting', value: false }], onError: [{ set: 'starting', value: false }] },
       ],
     },
   ],
@@ -341,6 +463,20 @@ export const STRIPE_BUNDLE = {
   phrasebook: {
     de: {
       Amount: 'Betrag',
+      // ── the member's own card ──
+      'Manage payment method': 'Zahlungsmittel verwalten',
+      'Open payment settings': 'Zahlungseinstellungen öffnen',
+      'Your payment details, your invoices, and the card this comes off.':
+        'Deine Zahlungsdaten, deine Rechnungen und die Karte, von der abgebucht wird.',
+      // ── buying a pass ──
+      Buy: 'Kaufen',
+      Pass: 'Blockkarte',
+      Price: 'Preis',
+      'Buy a pass': 'Blockkarte kaufen',
+      'Class passes and drop-ins you can pay for now. What you buy is added to your account as soon as the payment goes through.':
+        'Blockkarten und Einzelstunden, die du jetzt bezahlen kannst. Was du kaufst, wird deinem Konto gutgeschrieben, sobald die Zahlung durch ist.',
+      'Nothing on sale just now.': 'Zurzeit ist nichts im Verkauf.',
+      'Ask at the desk about passes.': 'Frag am Empfang nach Blockkarten.',
       Date: 'Datum',
       State: 'Status',
       Money: 'Finanzen',
@@ -387,14 +523,28 @@ export const STRIPE_BUNDLE = {
   // regardless, and an operator approves this list once at registration.
   grants: {
     actions: ['ext.desk.stripe.*', 'ext.member.stripe.*'],
-    data: ['subscriptions.read', 'subscriptions.write.update', 'offerings.read', 'studio_people.read', 'people.read', 'notifications.write.insert'],
+    data: [
+      'subscriptions.read',
+      'subscriptions.write.update',
+      'offerings.read',
+      'studio_people.read',
+      'people.read',
+      'notifications.write.insert',
+      // What a member bought once. Inserts, because a pass has nothing to
+      // assert onto until it is paid for — and the host's constraints, not this
+      // integration's care, are what make a redelivery land on the same row.
+      'courses.read',
+      'passes.write.insert',
+      'enrolments.write.insert',
+    ],
   },
   actions: {
     [setupAction.id]: setupAction,
     [ledgerAction.id]: ledgerAction,
     [payAction.id]: payAction,
+    [buyAction.id]: buyAction,
   },
-  placements: { [ledgerAction.id]: 'hub.money', [payAction.id]: 'hub.me' },
+  placements: { [ledgerAction.id]: 'hub.money', [payAction.id]: 'hub.me', [buyAction.id]: 'hub.me' },
   // PAGES THE HOST MAY FRAME. Declared, so lyra will not open one this
   // integration did not publish — including a path it happens to serve.
   //

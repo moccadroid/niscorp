@@ -14,6 +14,7 @@ import {
   personUpdatePrism,
   memberSubscriptionPrism,
   personPassesPrism,
+  personPurchasesPrism,
   startPlanPrism,
   recordPaymentPrism,
   endSubscriptionPrism,
@@ -203,6 +204,7 @@ export const peopleDetailAction: ActionDefinition = {
     member: {},
     subscription: {},
     passes: [],
+    purchases: [],
     planOptions: [],
     passOptions: [],
     courses: [],
@@ -228,6 +230,7 @@ export const peopleDetailAction: ActionDefinition = {
     // nothing here and the section simply does not draw.
     subscription: { url: '/api/member/vex', method: 'POST', request: memberSubscriptionPrism, target: 'subscription' },
     passes: { url: '/api/member/vex', method: 'POST', request: personPassesPrism, target: 'passes' },
+    purchases: { url: '/api/member/vex', method: 'POST', request: personPurchasesPrism, target: 'purchases' },
     planOptions: { url: '/api/member/vex', method: 'POST', request: planOptionsPrism, target: 'planOptions' },
     passOptions: { url: '/api/member/vex', method: 'POST', request: passOptionsPrism, target: 'passOptions' },
     startPlan: { url: '/api/member/vex', method: 'POST', request: startPlanPrism, errorTarget: 'error' },
@@ -250,12 +253,13 @@ export const peopleDetailAction: ActionDefinition = {
       { call: 'load', onSuccess: [{ set: 'loading', value: false }] },
       { call: 'subscription' },
       { call: 'passes' },
+      { call: 'purchases' },
       { call: 'planOptions' },
       { call: 'passOptions' },
     ],
     // Coming back from the form: re-read rather than trust what was left
     // behind. The form may have written something this record has not seen.
-    resume: [{ call: 'load' }, { call: 'subscription' }, { call: 'passes' }, { call: 'enrolments' }, { call: 'courses' }],
+    resume: [{ call: 'load' }, { call: 'subscription' }, { call: 'passes' }, { call: 'purchases' }, { call: 'enrolments' }, { call: 'courses' }],
   },
   triggers: [
     { event: 'ui:click', ref: 'edit', do: [{ push: { action: 'people.form', canvas: 'sheet', with: ['sheet'], input: { personId: '$.personId' } } }] },

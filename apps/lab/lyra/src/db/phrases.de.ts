@@ -228,6 +228,12 @@ export const GERMAN: Record<string, string> = {
   'Good morning': 'Guten Morgen',
 
   Hour: 'Stunde',
+  'A one-off — sold once, grants nothing': 'Ein Einzelposten — einmal verkauft, berechtigt zu nichts',
+  'Grants nothing': 'Berechtigt zu nichts',
+  'Nothing bought outright.': 'Nichts einzeln gekauft.',
+  Once: 'Einmalig',
+  'Paid at the studio': 'Im Studio bezahlt',
+  'What a member pays each period — or once, for a pass or a one-off.': 'Was ein Mitglied je Zeitraum zahlt — oder einmalig, bei einer Blockkarte oder einem Einzelposten.',
   'Daily': 'Täglich',
   'Weekly': 'Wöchentlich',
   'Every {n} days': 'Alle {n} Tage',

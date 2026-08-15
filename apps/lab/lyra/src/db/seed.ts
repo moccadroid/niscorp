@@ -291,6 +291,11 @@ const offerings = insert(
     ['of_lumen_dropin', LUMEN, 'Single class', 'pass', 1800, 'EUR', 'month', 1, null, true, 0, 0, 1, null],
     ['of_lumen_ten', LUMEN, 'Ten classes', 'pass', 15500, 'EUR', 'month', 1, null, true, 0, 0, 10, 180],
     ['of_nr_dropin', NORTHROCK, 'Open mat drop-in', 'pass', 1500, 'EUR', 'month', 1, null, true, 0, 0, 1, null],
+
+    // SOLD ONCE, GRANTS NOTHING — the shape that had no home at all. A joining
+    // fee is not a class and not a membership, and recording it as a one-credit
+    // pass would have handed everybody who paid it a free session.
+    ['of_nr_joining', NORTHROCK, 'Joining fee', 'one_off', 3000, 'EUR', 'month', 1, null, true, 0, 0, null, null],
   ],
 );
 

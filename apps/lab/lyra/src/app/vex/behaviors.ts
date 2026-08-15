@@ -74,6 +74,14 @@ export const scopeBehaviors: ScopeBehaviors = {
     default: tenantWrite,
     personal: { read: [{ match: 'studio_id', to: 'studioId' }, { match: 'person_id', to: 'userId' }] },
   },
+  // Things bought once that grant nothing — same shape as a pass, because the
+  // question is the same: whose studio sold it, and whose record does a member
+  // get to read. The member's reach reads only their own; the desk's writes are
+  // stamped with the studio like every other write here.
+  purchases: {
+    default: tenantWrite,
+    personal: { read: [{ match: 'studio_id', to: 'studioId' }, { match: 'person_id', to: 'userId' }] },
+  },
   // Notice belongs to the studio whose subscription it ends; the point of the
   // separate table is the VERB. On the member's reach the caller is pinned
   // into `person_id`, and the stamp trigger verifies it against the

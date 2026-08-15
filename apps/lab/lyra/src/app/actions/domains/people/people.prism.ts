@@ -11,6 +11,7 @@ import {
   subscriptionEnd,
   passSell,
   passesForPerson,
+  purchasesForPerson,
 } from '@lyra/app/vex/subscription.entries';
 
 // The wildcards are built HERE because a request prism is evaluated and a
@@ -140,6 +141,13 @@ export const personPassesPrism = {
   context: { personId: { $ref: '$.personId' } },
 };
 
+// What they have bought outright — the desk's answer to "did they pay the
+// joining fee?", which had no answer anywhere before there was a table for it.
+export const personPurchasesPrism = {
+  fingerprint: purchasesForPerson.fingerprint,
+  context: { personId: { $ref: '$.personId' } },
+};
+
 export const offeringsPrism = { fingerprint: offeringsList.fingerprint, context: {} };
 
 export const startPlanPrism = {
@@ -170,6 +178,12 @@ export const sellPassPrism = {
     personId: { $ref: '$.personId' },
     offeringId: { $ref: '$.sellOfferingId' },
     paidVia: { $ref: '$.sellPaidVia' },
+    // NULL from a desk. The reference names an OUTSIDE payment so a redelivered
+    // one cannot sell a second pass (schema.ts) — and somebody standing at a
+    // counter taking money is already the thing that happens once. Null rather
+    // than empty because nulls do not collide, so two hand-sold passes are two
+    // passes.
+    purchaseRef: null,
   },
 };
 

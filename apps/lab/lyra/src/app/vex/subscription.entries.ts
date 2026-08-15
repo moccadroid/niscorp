@@ -221,6 +221,170 @@ export const subscriptionBillable: CacheEntry = {
   },
 };
 
+// ── WHAT A ONE-OFF COSTS, IN NUMBERS ─────────────────────────
+//
+// `subscriptions/billable` answers "what should this person be charged every
+// period". These two answer the other question a payment provider has to ask —
+// "what does this THING cost, once" — and until they existed, exactly one of
+// the three things a studio sells could be bought through the app. A studio
+// could author a drop-in at €18 and a course block at €240, and neither had a
+// path to any money but cash at the desk.
+//
+// SCOPED BY THE ENGINE, which is what makes it safe to let a caller name the
+// id. The reach stamps `studio_id`, so an id belonging to another studio
+// matches nothing and the answer is "no such thing" rather than somebody else's
+// price. Nothing here trusts an amount from a caller; the amount is the whole
+// point of asking.
+export const offeringPrice: CacheEntry = {
+  fingerprint: 'offerings/price',
+  intent: 'What one thing on the price list costs, as numbers a payment provider can use',
+  shape: { offering_id: '', name: '', kind: '', amount: 0, currency: '', credits: 0, active: false },
+  dsl: {
+    from: ['offerings'],
+    fields: [
+      { field: 'offerings.id', as: 'offering_id' },
+      'offerings.name',
+      'offerings.kind',
+      { field: 'offerings.price_cents', as: 'amount' },
+      'offerings.currency',
+      'offerings.credits',
+      'offerings.active',
+    ],
+    // RETIRED IS NOT BUYABLE. Retiring keeps everybody already holding one —
+    // that is the rule the pricing screen states — but it stops new sales, and
+    // a checkout is a new sale.
+    filter: { and: [{ eq: ['offerings.id', { $context: 'offeringId' }] }, { eq: ['offerings.active', true] }] },
+    limit: 1,
+  },
+  mapping: {
+    $with: {
+      let: { r: { $ref: '$.result' } },
+      value: {
+        offering_id: one('offering_id'),
+        name: one('name'),
+        kind: one('kind'),
+        amount: one('amount', 0),
+        currency: one('currency'),
+        credits: one('credits', 0),
+        active: one('active', false),
+      },
+    },
+  },
+};
+
+// WHAT A MEMBER MAY BUY OUTRIGHT — the list behind the buy screen.
+//
+// Passes only: a recurring plan is chosen on the membership screen, where the
+// terms are spelled out before anybody commits (D2), and a plan appearing in a
+// list of things to buy with a Buy button beside it would skip that sentence.
+//
+// Reach is the member's own, so it needs no context and could not take one —
+// "what is on sale" is a question about the studio, and the studio is the
+// caller's.
+export const offeringsPurchasable: CacheEntry = {
+  fingerprint: 'offerings/purchasable',
+  intent: 'Passes and drop-ins a member can buy for themselves right now',
+  shape: [{ offering_id: '', kind: '', name: '', price_display: '', allowance_display: '' }],
+  dsl: {
+    from: ['offerings'],
+    fields: [
+      { field: 'offerings.id', as: 'offering_id' },
+      'offerings.kind',
+      'offerings.name',
+      'offerings.price_cents',
+      'offerings.currency',
+      'offerings.credits',
+      'offerings.valid_days',
+    ],
+    // Retired is not buyable — retiring keeps everybody already holding one and
+    // stops new sales, and a purchase is a new sale. Free things are absent for
+    // a different reason: there is no card form for nothing, and a studio giving
+    // something away does it at the desk.
+    filter: {
+      and: [
+        // Passes AND one-offs: both are bought outright, and a member should be
+        // able to pay the joining fee or the workshop ticket in the same place
+        // they buy a ten-pack. A recurring plan is absent on purpose — it is
+        // chosen on the membership screen, where the terms are spelled out
+        // before anybody commits (D2).
+        { neq: ['offerings.kind', 'recurring'] },
+        { eq: ['offerings.active', true] },
+        { gt: ['offerings.price_cents', 0] },
+      ],
+    },
+    sort: [{ field: 'offerings.price_cents', dir: 'asc' }],
+  },
+  mapping: {
+    $map: {
+      over: { $ref: '$.result' },
+      as: 'p',
+      body: {
+        offering_id: { $get: { from: { $var: 'p' }, path: ['offering_id'] } },
+        // WHICH KIND, because the buy screen has to tell the integration what it
+        // is buying — a pass and a one-off are granted onto different tables.
+        kind: { $get: { from: { $var: 'p' }, path: ['kind'] } },
+        name: { $get: { from: { $var: 'p' }, path: ['name'] } },
+        price_display: money({ $get: { from: { $var: 'p' }, path: ['price_cents'] } }, { $get: { from: { $var: 'p' }, path: ['currency'] } }),
+        // What they actually get, which is the number that decides whether the
+        // price is a good one. A one-credit pass IS the drop-in.
+        allowance_display: {
+          $case: {
+            branches: [
+              // A one-off has no credits and buys no classes — saying "0 classes"
+              // beside a joining fee would be describing what it is not.
+              { when: { $eq: [{ $get: { from: { $var: 'p' }, path: ['kind'] } }, 'one_off'] }, then: 'One-off' },
+              { when: { $eq: [{ $get: { from: { $var: 'p' }, path: ['credits'] } }, 1] }, then: 'Single class' },
+            ],
+            else: pattern('{n} classes', { n: { $get: { from: { $var: 'p' }, path: ['credits'] } } }),
+          },
+        },
+      },
+    },
+  },
+};
+
+// A course keeps its own table and its own price (Decision D5, and it stands):
+// a dated block with a capacity and a schedule is not a price-list row, and
+// making it one would have been a migration in service of a join. What
+// generalises is BILLABLE, not offering — so this is a second read of the same
+// shape rather than a second kind of thing.
+export const coursePrice: CacheEntry = {
+  fingerprint: 'courses/price',
+  intent: 'What a course block costs, and whether there is still a seat',
+  shape: { course_id: '', name: '', amount: 0, currency: '', capacity: 0, enrolled_count: 0, seats_left: 0 },
+  dsl: {
+    from: ['courses'],
+    fields: [
+      { field: 'courses.id', as: 'course_id' },
+      'courses.name',
+      { field: 'courses.price_cents', as: 'amount' },
+      'courses.currency',
+      'courses.capacity',
+      'courses.enrolled_count',
+    ],
+    // SEATS LEFT IS THE DATABASE'S ARITHMETIC, not the caller's subtraction —
+    // `enrolled_count` is a counter the enrolment trigger keeps, and a checkout
+    // that computed this itself would be reading two numbers a moment apart.
+    compute: { seats_left: { subtract: ['courses.capacity', 'courses.enrolled_count'] } },
+    filter: { eq: ['courses.id', { $context: 'courseId' }] },
+    limit: 1,
+  },
+  mapping: {
+    $with: {
+      let: { r: { $ref: '$.result' } },
+      value: {
+        course_id: one('course_id'),
+        name: one('name'),
+        amount: one('amount', 0),
+        currency: one('currency'),
+        capacity: one('capacity', 0),
+        enrolled_count: one('enrolled_count', 0),
+        seats_left: one('seats_left', 0),
+      },
+    },
+  },
+};
+
 // ── STARTING ONE ─────────────────────────────────────────────
 //
 // THE WRITE THE OLD MODEL DID NOT HAVE, which is why Tom Vogel "just had a
@@ -429,6 +593,124 @@ export const passSell: MutationEntry = {
     values: {
       person_id: { $context: 'personId' },
       offering_id: { $context: 'offeringId' },
+      paid_via: { $context: 'paidVia' },
+      // WHAT PAID FOR IT, when something outside this app did. NULL from a
+      // desk; a payment provider's CHECKOUT SESSION id when a member bought it
+      // themselves.
+      //
+      // The session and not the delivery, which is a distinction that cost a
+      // pass to find: one purchase can arrive as two events — completed, then
+      // succeeded when a slow payment method settles — and a reference naming
+      // the delivery makes those two different purchases and sells two passes.
+      //
+      // The same fingerprint serves both callers, because selling a pass is one
+      // act however the money arrived. What differs is who is answerable for
+      // it, and that is `paid_via`.
+      purchase_ref: { $context: 'purchaseRef' },
+    },
+    // SELLING IT TWICE IS THE FAILURE, so the database refuses rather than this
+    // integration remembering. DO NOTHING and not an update: a purchase that
+    // already landed is finished, and the second delivery has nothing to add to
+    // it. The caller reads success either way, which is correct — the member
+    // does hold the pass.
+    onConflict: { target: ['studio_id', 'purchase_ref'] },
+  },
+};
+
+// ── SOMETHING SOLD ONCE ──────────────────────────────────────
+//
+// The joining fee, the deposit, the workshop ticket, the gi. It grants nothing
+// — no class, no standing, no membership — which is exactly why it needed its
+// own table rather than being squeezed into a one-credit pass that would have
+// granted a class with every T-shirt.
+//
+// The AMOUNT is not sent. The trigger stamps it from the offering at the moment
+// of sale, so a price list edited next spring cannot rewrite what somebody paid
+// last autumn — and no caller, desk or provider, gets to name a number.
+export const purchaseRecord: MutationEntry = {
+  fingerprint: 'purchases/record',
+  intent: 'Record that a person bought something sold once, saying how it was paid',
+  mutation: {
+    op: 'insert',
+    table: 'purchases',
+    values: {
+      person_id: { $context: 'personId' },
+      offering_id: { $context: 'offeringId' },
+      paid_via: { $context: 'paidVia' },
+      purchase_ref: { $context: 'purchaseRef' },
+    },
+    // Same fence as a pass: one outside payment is one sale, and a redelivered
+    // webhook lands on the row the first one made.
+    onConflict: { target: ['studio_id', 'purchase_ref'] },
+  },
+};
+
+// What somebody has bought outright — the desk's answer to "did they pay the
+// joining fee?", which before this had no answer anywhere.
+export const purchasesForPerson: CacheEntry = {
+  fingerprint: 'purchases/for-person',
+  intent: 'Things this person has bought outright, newest first',
+  shape: [{ purchase_id: '', name: '', amount_display: '', paid_via_display: '', purchased_display: '' }],
+  dsl: {
+    from: ['purchases', 'offerings'],
+    fields: [
+      { field: 'purchases.id', as: 'purchase_id' },
+      'purchases.price_cents',
+      'purchases.currency',
+      'purchases.paid_via',
+      'purchases.purchased_on',
+      { field: 'offerings.name', as: 'name' },
+    ],
+    filter: { eq: ['purchases.person_id', { $context: 'personId' }] },
+    sort: [{ field: 'purchases.purchased_on', dir: 'desc' }],
+  },
+  mapping: {
+    $map: {
+      over: { $ref: '$.result' },
+      as: 'b',
+      body: {
+        purchase_id: { $get: { from: { $var: 'b' }, path: ['purchase_id'] } },
+        name: { $get: { from: { $var: 'b' }, path: ['name'] } },
+        // THE PRICE THEY PAID, off the purchase row — not off the offering,
+        // which is the whole reason the amount is stamped at the sale.
+        amount_display: money({ $get: { from: { $var: 'b' }, path: ['price_cents'] } }, { $get: { from: { $var: 'b' }, path: ['currency'] } }),
+        paid_via_display: {
+          $case: {
+            branches: [
+              { when: { $eq: [{ $get: { from: { $var: 'b' }, path: ['paid_via'] } }, 'stripe'] }, then: 'Card, online' },
+              { when: { $eq: [{ $get: { from: { $var: 'b' }, path: ['paid_via'] } }, 'comp'] }, then: 'Complimentary' },
+              { when: { $eq: [{ $get: { from: { $var: 'b' }, path: ['paid_via'] } }, 'free'] }, then: 'Free' },
+            ],
+            else: 'Paid at the studio',
+          },
+        },
+        purchased_display: dateText({ $get: { from: { $var: 'b' }, path: ['purchased_on'] } }),
+      },
+    },
+  },
+};
+
+// ── ENROLLING SOMEBODY WHO IS NOT THE CALLER ─────────────────
+//
+// `me/join-course` is personal-reached: the person comes from the session, so
+// "join somebody else" is unsayable. That is right for a member and useless to
+// a payment integration, which has no session and is acting for a member who
+// finished paying two seconds ago on somebody else's website.
+//
+// So this names the person. It is the same insert on the same table with the
+// same triggers — the dedupe trigger and `UNIQUE (course_id, person_id)` make
+// it idempotent by construction, which is why it needs no purchase reference
+// the way a pass does: a person holds at most one seat on a block, so a
+// redelivery lands on the seat they already have.
+export const enrolPerson: MutationEntry = {
+  fingerprint: 'enrolments/enrol',
+  intent: 'Put a named person on a course, saying how it was paid',
+  mutation: {
+    op: 'insert',
+    table: 'enrolments',
+    values: {
+      person_id: { $context: 'personId' },
+      course_id: { $context: 'courseId' },
       paid_via: { $context: 'paidVia' },
     },
   },

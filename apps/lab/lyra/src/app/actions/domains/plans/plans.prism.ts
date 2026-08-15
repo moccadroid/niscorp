@@ -11,6 +11,12 @@ export const plansPrism = {
 // The blanks are said HERE, once, so the form can hold both shapes without
 // either write carrying fields that mean nothing to its kind.
 const isPass = { $eq: [{ $ref: '$.kind' }, 'pass'] };
+// A one-off is a name and a price. Everything else about an offering describes
+// how it recurs or what it entitles somebody to, and it does neither — so every
+// one of those columns is written as its own absence rather than as whatever the
+// form was holding when the kind was switched.
+const isOneOff = { $eq: [{ $ref: '$.kind' }, 'one_off'] };
+const notRecurring = { $or: [isPass, isOneOff] };
 
 // ── WHAT A CLEARED FIELD MEANS, and it differs per column ────
 //
@@ -31,14 +37,14 @@ const orZero = (path: string): unknown => ({ $case: { branches: [{ when: { $ref:
 const orNull = (path: string): unknown => ({ $case: { branches: [{ when: { $ref: path }, then: { $ref: path } }], else: null } });
 
 const KIND_FIELDS = {
-  interval: { $case: { branches: [{ when: isPass, then: 'month' }], else: { $ref: '$.interval' } } },
+  interval: { $case: { branches: [{ when: notRecurring, then: 'month' }], else: { $ref: '$.interval' } } },
   // A pass is bought once, so its period is the column's default rather than
   // whatever the form happened to be holding when the kind was switched.
   // Empty falls to 1: a unit with no count is that unit, once.
-  intervalCount: { $case: { branches: [{ when: isPass, then: 1 }], else: { $case: { branches: [{ when: { $ref: '$.intervalCount' }, then: { $ref: '$.intervalCount' } }], else: 1 } } } },
-  classAllowance: { $case: { branches: [{ when: isPass, then: null }], else: orNull('$.classAllowance') } },
-  minimumTermMonths: { $case: { branches: [{ when: isPass, then: 0 }], else: orZero('$.minimumTermMonths') } },
-  noticeDays: { $case: { branches: [{ when: isPass, then: 0 }], else: orZero('$.noticeDays') } },
+  intervalCount: { $case: { branches: [{ when: notRecurring, then: 1 }], else: { $case: { branches: [{ when: { $ref: '$.intervalCount' }, then: { $ref: '$.intervalCount' } }], else: 1 } } } },
+  classAllowance: { $case: { branches: [{ when: notRecurring, then: null }], else: orNull('$.classAllowance') } },
+  minimumTermMonths: { $case: { branches: [{ when: notRecurring, then: 0 }], else: orZero('$.minimumTermMonths') } },
+  noticeDays: { $case: { branches: [{ when: notRecurring, then: 0 }], else: orZero('$.noticeDays') } },
   // A pass with no credit count is not a pass, and the schema says so
   // (`CHECK (kind <> 'pass' OR credits IS NOT NULL)`). Left as the database's
   // refusal rather than defaulted here: guessing "one" for somebody who cleared

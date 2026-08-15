@@ -266,6 +266,27 @@ export const peopleDetailLayout: LayoutNode = page([
             },
           },
         },
+        // BOUGHT OUTRIGHT, and granting nothing — the joining fee, the deposit,
+        // the gi. Drawn from data like everything else on this record: a studio
+        // that sells none has an empty list and the section says so, rather than
+        // the screen asking what anybody is allowed to see.
+        {
+          component: 'Card',
+          props: { flush: true },
+          children: {
+            component: 'Rows',
+            props: {
+              rows: '$.purchases',
+              rowKey: 'purchase_id',
+              empty: 'Nothing bought outright.',
+              columns: [
+                { label: 'Bought', w: 2, cell: { kind: 'primary', key: 'name', subKey: 'paid_via_display' } },
+                { label: 'Paid', px: 92, align: 'right', cell: { kind: 'text', key: 'amount_display', color: 'ink' } },
+                { label: 'When', px: 104, align: 'right', cell: { kind: 'text', key: 'purchased_display', color: 'mute' } },
+              ],
+            },
+          },
+        },
         {
           component: 'Row',
           props: { gap: 10, align: 'end', wrap: true },

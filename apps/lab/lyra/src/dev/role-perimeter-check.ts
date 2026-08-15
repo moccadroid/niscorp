@@ -140,6 +140,17 @@ try {
   const bothDesk = await call(manager, '/integrations/stripe/ledger');
   ok('...and the desk screens too, from the same session', reached(bothDesk), `${bothDesk.status} ${bothDesk.body}`);
 
+  // The member's own money: buying a pass, and changing the card it comes off.
+  // Both belong to member screens, so the same fence answers them — and the
+  // portal one matters most, because a door to somebody's stored payment
+  // details is the last one that should open on "signed in here".
+  const staffBuying = await call(owner, '/integrations/stripe/purchase');
+  ok('somebody who is only staff cannot buy as a member', refused(staffBuying), `${staffBuying.status} ${staffBuying.body}`);
+  const staffPortal = await call(owner, '/integrations/stripe/portal');
+  ok('...nor open a member’s payment settings', refused(staffPortal), `${staffPortal.status} ${staffPortal.body}`);
+  const ownPortal = await call(member, '/integrations/stripe/portal');
+  ok('...and a member reaches their own', reached(ownPortal), `${ownPortal.status} ${ownPortal.body}`);
+
   // ── THE FRAME DOOR ASKS THE SAME QUESTION ────────────────────
   //
   // It used to ask a weaker one. `frames` was a bare list of paths with no

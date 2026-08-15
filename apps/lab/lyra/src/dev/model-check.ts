@@ -31,7 +31,7 @@ const OWNER = CAST.lumen.owner;
 // this row combination unrepresentable.
 const sold = await asPrincipal(OWNER, '/api/member/vex', {
   fingerprint: 'passes/sell',
-  context: { personId: 'p_ava', offeringId: 'of_lumen_ten', paidVia: 'manual' },
+  context: { personId: 'p_ava', offeringId: 'of_lumen_ten', paidVia: 'manual', purchaseRef: null },
 });
 ok('the desk sells a pass to somebody who already subscribes', !refused(sold), JSON.stringify(sold).slice(0, 80));
 ok(

@@ -141,3 +141,72 @@ export const createCheckout = async (stripe: Stripe, db: IntegrationStore | unde
   );
   return { url: session.url ?? '', sessionId: session.id };
 };
+
+export type PurchaseArgs = {
+  accountId: string;
+  personId: string;
+  studioId: string;
+  email: string;
+  kind: 'pass' | 'course' | 'one_off';
+  targetId: string;
+  name: string;
+  amount: number;
+  currency: string;
+  returnUrl: string;
+};
+
+/**
+ * A Checkout Session for ONE payment — a pass, a drop-in, a course block.
+ *
+ * `mode: 'payment'` rather than `'subscription'`, and that word is the whole
+ * difference: no Price is materialised and nothing recurs. The amount is inline
+ * because it is bought once — content-addressing a Price (prices.ts) exists so
+ * that everybody on a recurring plan keeps the one they signed on, and a single
+ * payment has nobody to keep anything for.
+ *
+ * NOTHING IS GRANTED HERE. The session is an intention to pay; the pass appears
+ * when `checkout.session.completed` arrives and not one moment earlier. A member
+ * who closes the tab at the card form has bought nothing, which is the only
+ * arrangement where an unpaid entitlement cannot exist.
+ *
+ * THE METADATA IS THE WIRE HOME, exactly as it is for a subscription — but on
+ * the SESSION, because there is no subscription object to hang it on. What the
+ * webhook needs to grant the right thing to the right person at the right
+ * studio travels with the payment.
+ */
+export const createPurchase = async (stripe: Stripe, db: IntegrationStore | undefined, args: PurchaseArgs): Promise<{ url: string; sessionId: string }> => {
+  const customerId = await ensureCustomer(stripe, db, {
+    personId: args.personId,
+    studioId: args.studioId,
+    accountId: args.accountId,
+    email: args.email,
+  });
+
+  const session = await stripe.checkout.sessions.create(
+    {
+      mode: 'payment',
+      customer: customerId,
+      line_items: [
+        {
+          quantity: 1,
+          price_data: {
+            currency: args.currency.toLowerCase(),
+            unit_amount: args.amount,
+            product_data: { name: args.name },
+            // GROSS, as everywhere else in this integration: lyra's price is
+            // what a member pays, so the tax is found inside it rather than
+            // added at the card form.
+            tax_behavior: 'inclusive',
+          },
+        },
+      ],
+      success_url: args.returnUrl,
+      cancel_url: args.returnUrl,
+      automatic_tax: { enabled: true },
+      customer_update: { address: 'auto', name: 'auto' },
+      metadata: { purchase_kind: args.kind, target_id: args.targetId, person_id: args.personId, studio_id: args.studioId },
+    },
+    { stripeAccount: args.accountId },
+  );
+  return { url: session.url ?? '', sessionId: session.id };
+};

@@ -45,7 +45,15 @@ ok(
 );
 
 // ── what is on sale ──
-ok('nine offerings', (await count('SELECT count(*) n FROM offerings')) === 9, 'six plans, three passes');
+ok('ten offerings', (await count('SELECT count(*) n FROM offerings')) === 10, 'six plans, three passes, one one-off');
+// SOLD ONCE AND GRANTING NOTHING — seeded rather than only tested, because the
+// screens that derive what somebody IS read this dataset, and a joining fee
+// must not make anybody a pass holder.
+ok(
+  '...one of them sold once and granting nothing',
+  (await count("SELECT count(*) n FROM offerings WHERE kind = 'one_off'")) === 1,
+  'the shape that had no home until it had its own kind',
+);
 // A PERIOD THAT IS NOT ONE MONTH, in the dataset rather than only in a test.
 // Every revenue figure in this app sums `monthly_cents`, and a seed where every
 // plan bills monthly makes an arithmetic that ignores the period look correct.

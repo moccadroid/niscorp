@@ -1,6 +1,6 @@
 import type Stripe from 'stripe';
 import type { IntegrationEnv, IntegrationStore } from '../../integration';
-import { billableFor, callLyra, notifyDesk } from './lyra';
+import { billableFor, callLyra, grantPurchase, notifyDesk } from './lyra';
 import { recordDispute, recordInvoice, recordRefund } from './ledger';
 
 // ═══════════════════════════════════════════════════════════════
@@ -115,7 +115,10 @@ const asDay = (seconds: unknown): string | null => {
 // Stamped at checkout: WHICH subscription (the assert key — a person may hold
 // more than one), WHO it is about (for the follow-up a failure writes), and
 // WHOSE studio. Ids only; this service never learns a name it did not ask for.
-type Meta = { subscription_id?: string; person_id?: string; studio_id?: string };
+// A one-off carries three more: WHICH kind of thing, and WHICH one — stamped
+// on the session rather than on a subscription, because a single payment has no
+// subscription object to hang anything on.
+type Meta = { subscription_id?: string; person_id?: string; studio_id?: string; purchase_kind?: string; target_id?: string };
 
 /**
  * State a subscription's standing in lyra.
@@ -267,9 +270,71 @@ export const handleStripeEvent = async (
       // Checkout completing is the moment a member first has a subscription. The
       // subscription events above carry everything needed, and Stripe sends them
       // too — so this only notes that it happened rather than asserting twice.
-      case 'checkout.session.completed': {
-        await settleEvent(db, event.id, 'noted', String(object['subscription'] ?? ''));
-        return { status: 200, body: { ok: true, noted: 'checkout' } };
+      // ── THE MOMENT A ONE-OFF IS ACTUALLY BOUGHT ─────────────
+      //
+      // For a SUBSCRIPTION this is still only a note: the subscription events
+      // carry everything and Stripe sends them too, so asserting here would
+      // assert twice.
+      //
+      // For a PASS or a COURSE SEAT it is the whole thing. There is no row in
+      // lyra yet and deliberately so — an entitlement created when somebody
+      // opened a card form would be a pass they could spend without paying, and
+      // no later event would take it back. So this is the first and only place
+      // the thing is granted, and it runs after money.
+      // BOTH, because one purchase can arrive as two events. A delayed payment
+      // method completes the session unpaid and settles later under
+      // `async_payment_succeeded` — handled nowhere, until now, so a member
+      // paying by anything slower than a card bought nothing and was charged.
+      case 'checkout.session.completed':
+      case 'checkout.session.async_payment_succeeded': {
+        const purchase = (object['metadata'] as Meta | undefined) ?? {};
+        const kind = purchase.purchase_kind ?? '';
+        if (kind === '') {
+          await settleEvent(db, event.id, 'noted', String(object['subscription'] ?? ''));
+          return { status: 200, body: { ok: true, noted: 'checkout' } };
+        }
+
+        // PAID, not merely completed. A session can complete with payment still
+        // in flight — a delayed method, a bank that answers tomorrow — and
+        // granting on 'unpaid' hands over a pass for money that has not arrived.
+        // Stripe sends the event again when it settles, and the claim above is
+        // per EVENT, so the later delivery is a different event and lands here.
+        if (String(object['payment_status'] ?? '') !== 'paid') {
+          await settleEvent(db, event.id, 'skipped', `payment_status ${String(object['payment_status'] ?? 'unknown')}`);
+          return { status: 200, body: { ok: true, waiting: true } };
+        }
+
+        const granted = await grantPurchase(env, {
+          studioId: purchase.studio_id ?? '',
+          personId: purchase.person_id ?? '',
+          kind,
+          targetId: purchase.target_id ?? '',
+          // THE SESSION IS THE PURCHASE'S NAME, and the event is only the
+          // envelope it came in. lyra is unique on (studio, purchase_ref) and
+          // does nothing on conflict, so every later delivery about this same
+          // session — a retry, or the settle-later event above — lands on the
+          // pass the first one made.
+          //
+          // Naming the EVENT here instead is a second ten-pack, and it is not a
+          // theoretical one: the two cases above are two event ids for one
+          // purchase by construction.
+          purchaseRef: String(object['id'] ?? ''),
+        });
+        await settleEvent(db, event.id, granted.ok ? 'applied' : 'failed', granted.ok ? `${kind} granted` : granted.message);
+        // A REFUSAL FROM LYRA IS NOT A RETRY. The money is taken and the
+        // entitlement did not land, which is a person's problem now rather than
+        // a delivery's — so it goes where a person looks instead of bouncing
+        // between two machines until Stripe gives up in three days.
+        if (!granted.ok && (purchase.studio_id ?? '') !== '') {
+          await notifyDesk(env, {
+            studioId: purchase.studio_id ?? '',
+            personId: (purchase.person_id ?? '') === '' ? null : (purchase.person_id ?? null),
+            subject: 'A paid purchase did not land',
+            body: `Somebody paid for ${kind === 'course' ? 'a course place' : 'a pass'} and it could not be added to their record. They have been charged. ${granted.message}`.slice(0, 400),
+            source: 'purchase-failed',
+          });
+        }
+        return { status: 200, body: { ok: true, granted: granted.ok, kind } };
       }
 
       // ── the ledger ──────────────────────────────────────────

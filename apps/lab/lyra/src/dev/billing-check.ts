@@ -323,6 +323,129 @@ try {
   ok('a refund shows as a refund', first?.state_label === 'Refunded', String(first?.state_label));
   ok('...with the amount that went back', first?.note === '€20.00 refunded', String(first?.note));
 
+  // ── BUYING SOMETHING OUTRIGHT ────────────────────────────────
+  //
+  // A membership is asserted onto a row that already exists. A pass is the other
+  // shape: there is nothing in lyra until somebody has paid, and that is
+  // deliberate — an entitlement created when a member opened a card form would
+  // be a pass they could spend without paying, and no later event takes it back.
+  //
+  // So this is the one place the integration INSERTS, and it runs after money.
+  // THE EVENT AND THE SESSION ARE DIFFERENT IDENTIFIERS, and keeping them apart
+  // in the fixture is the whole point of it: one purchase arrives as several
+  // deliveries, so a fixture that minted a session per event would be testing
+  // several purchases and would agree with any amount of double-selling.
+  const purchaseEvent = (
+    eventId: string,
+    sessionId: string,
+    paymentStatus: string,
+    meta: Record<string, string>,
+    type = 'checkout.session.completed',
+  ): string =>
+    JSON.stringify({
+      id: eventId,
+      object: 'event',
+      type,
+      account: 'acct_probe',
+      data: { object: { id: sessionId, object: 'checkout.session', payment_status: paymentStatus, metadata: meta } },
+    });
+
+  const countOf = async (sql: string): Promise<number> =>
+    Number((await runtime.db.query<{ n: number }>(sql)).rows[0]?.n ?? -1);
+
+  const passesFor = async (personId: string): Promise<number> =>
+    Number(
+      (await runtime.db.query<{ n: number }>('SELECT count(*) n FROM passes WHERE person_id = $1', [personId])).rows[0]?.n ?? -1,
+    );
+
+  const buying = { purchase_kind: 'pass', target_id: 'of_nr_dropin', person_id: 'p_nina', studio_id: 'st_northrock' };
+  const heldBefore = await passesFor('p_nina');
+
+  // MONEY NOT IN YET. A session can complete with payment still in flight, and
+  // handing over a pass on 'unpaid' is handing over a pass for money that never
+  // arrives. Stripe sends the event again when it settles.
+  const unpaid = await deliver(purchaseEvent('evt_buy_pending', 'cs_slow', 'unpaid', buying));
+  ok('a completed checkout that is not PAID grants nothing', unpaid.status === 200 && unpaid.body['waiting'] === true, JSON.stringify(unpaid.body));
+  ok('...and the member holds no more than before', (await passesFor('p_nina')) === heldBefore, 'completed is not paid, and only paid buys anything');
+
+  const bought = await deliver(purchaseEvent('evt_buy', 'cs_one', 'paid', buying));
+  ok('a paid checkout hands over the pass', bought.status === 200 && bought.body['granted'] === true, JSON.stringify(bought.body));
+  ok('...as a real entitlement on the member', (await passesFor('p_nina')) === heldBefore + 1, 'one drop-in, bought online, spendable at the door');
+
+  const boughtRow = await runtime.db.query<{ paid_via: string; credits_total: number; purchase_ref: string }>(
+    "SELECT paid_via, credits_total, purchase_ref FROM passes WHERE person_id = 'p_nina' ORDER BY created_at DESC LIMIT 1",
+  );
+  ok('...marked as paid by card, not by the desk', boughtRow.rows[0]?.paid_via === 'stripe', String(boughtRow.rows[0]?.paid_via));
+  ok('...with the credits stamped from the offering', boughtRow.rows[0]?.credits_total === 1, `${String(boughtRow.rows[0]?.credits_total)} credit — a drop-in IS a one-credit pass`);
+
+  // THE REDELIVERY, which is the whole reason a purchase carries a name.
+  // Asserting a standing twice states it once; INSERTING a pass twice is two
+  // ten-packs.
+  //
+  // A DIFFERENT EVENT, THE SAME SESSION — the case the event claim cannot catch
+  // and the only one that matters, because it is not hypothetical: a slow
+  // payment method completes the session and settles later, and Stripe sends
+  // those as two events about one purchase.
+  const again = await deliver(purchaseEvent('evt_buy_again', 'cs_one', 'paid', buying));
+  ok('the same purchase arriving again buys nothing more', (await passesFor('p_nina')) === heldBefore + 1, `${String(await passesFor('p_nina'))} passes — a second delivery is not a second sale`);
+  ok('...and still reports success, because the member does hold it', again.body['granted'] === true, JSON.stringify(again.body).slice(0, 120));
+
+  // AND THE SLOW ONE FINALLY LANDS. The session that completed unpaid settles
+  // under a different event type entirely — unhandled until this build, so a
+  // member paying by anything slower than a card was charged and given nothing.
+  const settled = await deliver(purchaseEvent('evt_slow_ok', 'cs_slow', 'paid', buying, 'checkout.session.async_payment_succeeded'));
+  ok('a payment that settles later still buys the pass', settled.body['granted'] === true, JSON.stringify(settled.body).slice(0, 100));
+  ok('...and it is a second pass, because it was a second purchase', (await passesFor('p_nina')) === heldBefore + 2, 'one session, one pass — two sessions, two');
+
+  // AND NOBODY IS BOTHERED ABOUT IT. A redelivery is not a problem, so it must
+  // not write a task — the desk list is where real trouble goes, and a list that
+  // fills with non-events is a list nobody reads. Counted before anything has
+  // legitimately failed, so this is a zero rather than an unchanged number.
+  ok(
+    '...without troubling anybody about it',
+    (await countOf("SELECT count(*) n FROM notifications WHERE studio_id = 'st_northrock' AND source = 'purchase-failed'")) === 0,
+    'a second delivery of a finished purchase is not a task',
+  );
+
+  // ── SOMETHING SOLD ONCE THAT GRANTS NOTHING ──────────────────
+  //
+  // The joining fee. It lands on its own table, and the assertion that matters
+  // is the NEGATIVE one: it must not become a pass, because a pass is a class.
+  // Recording it as a one-credit pass was the obvious shortcut, and it would
+  // have handed a free session to everybody who ever paid to join.
+  const feePassesBefore = await passesFor('p_hana');
+
+  // FIRST, THE MISTAKE — an event claiming the joining fee is a pass. In the
+  // built path this cannot arise (checkout stamps what lyra answered), so the
+  // fence is not the integration's care: it is a trigger, and this is delivered
+  // wrong on purpose to prove the trigger is what refuses.
+  const lying = { purchase_kind: 'pass', target_id: 'of_nr_joining', person_id: 'p_hana', studio_id: 'st_northrock' };
+  const refusedFee = await deliver(purchaseEvent('evt_fee_wrong', 'cs_fee_wrong', 'paid', lying));
+  ok('a one-off cannot be sold as a pass', refusedFee.body['granted'] === false, JSON.stringify(refusedFee.body).slice(0, 110));
+  ok('...and nobody gains a class from paying to join', (await passesFor('p_hana')) === feePassesBefore, 'the database refused, not the caller');
+  // The money was taken and nothing landed, so somebody is told — the one case
+  // where a task on the desk's list is exactly right.
+  ok(
+    '...but somebody IS told, because they were charged',
+    (await countOf("SELECT count(*) n FROM notifications WHERE studio_id = 'st_northrock' AND source = 'purchase-failed'")) === 1,
+    'a paid purchase that did not land is a task, not a log line',
+  );
+
+  // AND NOW THE REAL ONE, stamped the way checkout stamps it.
+  const buyingFee = { purchase_kind: 'one_off', target_id: 'of_nr_joining', person_id: 'p_hana', studio_id: 'st_northrock' };
+  const fee = await deliver(purchaseEvent('evt_fee', 'cs_fee', 'paid', buyingFee));
+  ok('a one-off is bought like anything else', fee.body['granted'] === true, JSON.stringify(fee.body).slice(0, 100));
+  ok('...and lands as a purchase', (await countOf("SELECT count(*) n FROM purchases WHERE person_id = 'p_hana'")) === 1, 'its own table, because it entitles nobody to anything');
+  ok('...still without granting a class', (await passesFor('p_hana')) === feePassesBefore, 'a joining fee is not a session');
+
+  const feeRow = await runtime.db.query<{ price_cents: number; paid_via: string }>(
+    "SELECT price_cents, paid_via FROM purchases WHERE person_id = 'p_hana'",
+  );
+  // THE AMOUNT IS STAMPED AT THE SALE, so a price list edited next spring cannot
+  // rewrite what somebody paid last autumn.
+  ok('...with the price they actually paid', feeRow.rows[0]?.price_cents === 3000, `${String(feeRow.rows[0]?.price_cents)} cents, from the offering at the moment of sale`);
+  ok('...and how they paid it', feeRow.rows[0]?.paid_via === 'stripe', String(feeRow.rows[0]?.paid_via));
+
   // ── AND A STUDIO READS ITS OWN ───────────────────────────────
   const otherStudio = await server.request('/integrations/stripe/ledger', {
     method: 'POST',

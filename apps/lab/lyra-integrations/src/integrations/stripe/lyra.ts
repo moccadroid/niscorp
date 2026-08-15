@@ -94,6 +94,101 @@ export type Billable = {
   personName: string;
 };
 
+// ── BUYING ONE THING, ONCE ───────────────────────────────────
+//
+// A subscription is a standing this integration restates. A pass and a course
+// seat are the other shape: a price, paid once, and an entitlement that must not
+// exist until the money does. Until these read a price, exactly one of the three
+// things a studio sells could be bought through the app — a drop-in at €18 and a
+// course block at €240 had no path to any money but cash at the desk.
+//
+// THE AMOUNT IS LYRA'S, ALWAYS. A caller names WHICH thing; a caller who could
+// also name its price would be naming their own price.
+export type Purchase = { kind: 'pass' | 'course' | 'one_off'; targetId: string; name: string; amount: number; currency: string };
+
+/**
+ * What one purchasable thing costs at this studio.
+ *
+ * The studio is the assertion's, never the caller's, so an id from somebody
+ * else's price list resolves to nothing rather than to their price. Retired
+ * offerings and full courses answer nothing too, and both refusals are lyra's
+ * own — made by the same reads its screens use.
+ */
+export const purchaseFor = async (env: IntegrationEnv, studioId: string, kind: string, targetId: string): Promise<Purchase | undefined> => {
+  if (targetId === '') return undefined;
+
+  if (kind === 'course') {
+    const answer = await callLyra(env, { studioId, resource: 'member', fingerprint: 'courses/price', context: { courseId: targetId } });
+    const row = answer.result;
+    if (!answer.ok || row === undefined || String(row['course_id'] ?? '') === '') return undefined;
+    // A SEAT HAS TO EXIST BEFORE IT IS SOLD. Checked here and not only at
+    // enrolment, because the alternative is taking somebody's money for a block
+    // that filled while they were deciding.
+    if (Number(row['seats_left'] ?? 0) <= 0) return undefined;
+    return { kind: 'course', targetId, name: String(row['name'] ?? 'Course'), amount: Number(row['amount'] ?? 0), currency: String(row['currency'] ?? 'EUR') };
+  }
+
+  const answer = await callLyra(env, { studioId, resource: 'member', fingerprint: 'offerings/price', context: { offeringId: targetId } });
+  const row = answer.result;
+  if (!answer.ok || row === undefined || String(row['offering_id'] ?? '') === '') return undefined;
+  // A PASS OR A ONE-OFF, and NOT a recurring plan. A plan has its own path —
+  // `subscriptions/billable` and a subscription-mode checkout — and selling one
+  // as a single payment would charge a member once for something the studio
+  // meant to bill forever.
+  //
+  // The KIND is read from lyra rather than taken from the caller, which matters
+  // because it decides which table the thing lands on: a caller who could say
+  // "this pass is a one-off" would be choosing whether their purchase grants
+  // classes.
+  const kindHere = String(row['kind'] ?? '');
+  if (kindHere !== 'pass' && kindHere !== 'one_off') return undefined;
+  return {
+    kind: kindHere,
+    targetId,
+    name: String(row['name'] ?? 'Pass'),
+    amount: Number(row['amount'] ?? 0),
+    currency: String(row['currency'] ?? 'EUR'),
+  };
+};
+
+/**
+ * Hand the entitlement over, now that it has been paid for.
+ *
+ * The ONLY inserts this integration makes, and they are inserts rather than
+ * assertions because there was nothing to assert onto: a pass that existed
+ * before the money would be a pass somebody could spend without paying.
+ *
+ * IDEMPOTENT BY CONSTRAINT, not by care here — `passes` is unique on
+ * (studio, purchase_ref) and `enrolments` on (course, person). A redelivered
+ * checkout lands on the row the first delivery made.
+ */
+export const grantPurchase = async (
+  env: IntegrationEnv,
+  args: { studioId: string; personId: string; kind: string; targetId: string; purchaseRef: string },
+): Promise<LyraCall> =>
+  args.kind === 'course'
+    ? callLyra(env, {
+        studioId: args.studioId,
+        resource: 'member',
+        fingerprint: 'enrolments/enrol',
+        context: { personId: args.personId, courseId: args.targetId, paidVia: 'stripe' },
+      })
+    : args.kind === 'one_off'
+    ? callLyra(env, {
+        studioId: args.studioId,
+        resource: 'member',
+        // ITS OWN TABLE, because it grants nothing. A joining fee recorded as a
+        // pass would hand somebody a free class for paying to join.
+        fingerprint: 'purchases/record',
+        context: { personId: args.personId, offeringId: args.targetId, paidVia: 'stripe', purchaseRef: args.purchaseRef },
+      })
+    : callLyra(env, {
+        studioId: args.studioId,
+        resource: 'member',
+        fingerprint: 'passes/sell',
+        context: { personId: args.personId, offeringId: args.targetId, paidVia: 'stripe', purchaseRef: args.purchaseRef },
+      });
+
 /** What a person should be charged — the numbers, not the words a screen shows. */
 export const billableFor = async (env: IntegrationEnv, studioId: string, personId: string): Promise<Billable | undefined> => {
   const answer = await callLyra(env, {

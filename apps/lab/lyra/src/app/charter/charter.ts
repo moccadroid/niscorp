@@ -210,6 +210,11 @@ export const CHARTER: Charter = {
       'subscription_pauses.read',
       'subscription_pauses.write.insert',
       'subscription_pauses.write.update',
+      // Things sold once and granting nothing — the joining fee, the deposit,
+      // the gi. No update: a sale that happened is a thing that happened, and
+      // correcting one is a refund somebody decides on, not an edit.
+      'purchases.read',
+      'purchases.write.insert',
       // No delete verb anywhere in this app — retiring and cancelling are both
       // status changes.
     ],
@@ -317,6 +322,33 @@ export const CHARTER: Charter = {
       'people.read',
       // Dunning outcomes land on the desk's list, where somebody looks.
       'notifications.write.insert',
+
+      // ── WHAT A MEMBER BOUGHT, ONCE ─────────────────────────
+      //
+      // A subscription is asserted: the row exists before any money moves and
+      // this rung only ever restates its standing. A pass and a course seat are
+      // the other shape — there is nothing to assert onto until somebody has
+      // paid, and an entitlement created BEFORE the money would be a usable
+      // pass nobody paid for. So these are inserts, and they are the only ones
+      // on this rung.
+      //
+      // WHY THAT IS NOT THE HOLE IT LOOKS LIKE. An insert here cannot alter
+      // anything a person wrote: it can only add an entitlement, for a person
+      // named in metadata this integration stamped itself, at a studio the
+      // engine stamps from its own key. The failure it could cause is a spare
+      // pass, and the two constraints below make even that unreachable —
+      // `passes` is unique on (studio, purchase_ref) and `enrolments` on
+      // (course, person), so a redelivered webhook lands on the row it made
+      // last time.
+      //
+      // WHAT IS STILL ABSENT and should stay so: no update and no delete on
+      // either. Refunding a pass, withdrawing a seat and cancelling a
+      // membership are decisions about a relationship, and a card issuer does
+      // not get to make one.
+      'courses.read',
+      'passes.write.insert',
+      'enrolments.write.insert',
+      'purchases.write.insert',
     ],
   },
 };

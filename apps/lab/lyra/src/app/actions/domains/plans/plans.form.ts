@@ -19,6 +19,10 @@ const planFormLayout: LayoutNode = {
           options: [
             { value: 'recurring', label: 'A plan — billed on repeat' },
             { value: 'pass', label: 'A pass — classes bought up front' },
+            // Sold once and granting nothing: the joining fee, the deposit, the
+            // workshop ticket, the gi. It asks no further questions, because
+            // there are none — no period, no terms, no credits.
+            { value: 'one_off', label: 'A one-off — sold once, grants nothing' },
           ],
         },
         ref: 'kind',
@@ -26,7 +30,7 @@ const planFormLayout: LayoutNode = {
       },
     },
     { component: 'Input', props: { label: 'Name', placeholder: 'Unlimited' }, ref: 'name', model: '$.name' },
-    { component: 'Money', props: { label: 'Price', hint: 'What a member pays each period — or once, for a pass.' }, ref: 'priceCents', model: '$.priceCents' },
+    { component: 'Money', props: { label: 'Price', hint: 'What a member pays each period — or once, for a pass or a one-off.' }, ref: 'priceCents', model: '$.priceCents' },
     {
       if: { $eq: ['$.kind', 'pass'] },
       then: {
@@ -55,7 +59,11 @@ const planFormLayout: LayoutNode = {
           },
         ],
       },
+      // A one-off has no period and no allowance — it is a name and a price.
       else: {
+        if: { $eq: ['$.kind', 'one_off'] },
+        then: '',
+        else: {
         component: 'Stack',
         props: { gap: 16 },
         children: [
@@ -113,6 +121,7 @@ const planFormLayout: LayoutNode = {
             model: '$.classAllowance',
           },
         ],
+        },
       },
     },
 
@@ -122,11 +131,11 @@ const planFormLayout: LayoutNode = {
     // "rolling, cancel any time" are different products at the same number, and
     // the difference is most of what a studio is actually selling — revenue
     // inside a minimum term is money it HAS; outside one it is money it hopes
-    // for. A pass commits nobody to anything, so neither question is asked.
+    // for. Neither a pass nor a one-off commits anybody to anything, so neither
+    // question is asked of them.
     {
-      if: { $eq: ['$.kind', 'pass'] },
-      then: '',
-      else: {
+      if: { $eq: ['$.kind', 'recurring'] },
+      then: {
         component: 'Stack',
         props: { gap: 16 },
         children: [
@@ -152,6 +161,7 @@ const planFormLayout: LayoutNode = {
           },
         ],
       },
+      else: '',
     },
     {
       component: 'Row',

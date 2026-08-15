@@ -58,11 +58,12 @@ try {
   // ── intake accepts what the bundle declares ──────────────────
   const registered = await operator('/operator/integrations', { id: 'stripe', url: `http://127.0.0.1:${PORT}/stripe` });
   ok('the payments bundle is accepted', registered.status === 200, JSON.stringify({ ...registered.json, key: '…' }).slice(0, 110));
-  // Setup and the money hub for the studio, payment for the member. The count
+  // Setup and the money hub for the studio; paying for a membership and buying
+  // a pass for the member. The count
   // is asserted rather than the names because intake is what decides whether
   // an action lands at all — a screen refused for a bad layout would otherwise
   // just be a screen nobody noticed was missing.
-  ok('...with its three screens', registered.json['actions'] === 3, `${String(registered.json['actions'])} actions`);
+  ok('...with its four screens', registered.json['actions'] === 4, `${String(registered.json['actions'])} actions`);
 
   // `hub.money` had to be OFFERED by lyra before this bundle could name it —
   // intake refuses a placement into a hub the host does not advertise. This is

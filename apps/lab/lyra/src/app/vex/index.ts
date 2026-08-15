@@ -5,7 +5,7 @@ import { sessionsToday, sessionsUpcoming, programsList } from './schedule.entrie
 import { sessionAttending, sessionDetail } from './session.entries';
 import { peopleList, peopleCount, personById, offeringsList, offeringOptions, offeringsOnSale } from './member.entries';
 import { personAnchorUpdate, personConsentSet } from './member.mutations';
-import { subscriptionAssert, subscriptionBillable, subscriptionForMember, subscriptionGiveNotice, subscriptionWithdrawNotice, subscriptionStart, subscriptionRecordPayment, subscriptionEnd, subscriptionPause, subscriptionResume, myMembership, passSell, passesForPerson } from './subscription.entries';
+import { subscriptionAssert, subscriptionBillable, subscriptionForMember, subscriptionGiveNotice, subscriptionWithdrawNotice, subscriptionStart, subscriptionRecordPayment, subscriptionEnd, subscriptionPause, subscriptionResume, myMembership, passSell, passesForPerson, enrolPerson, offeringPrice, coursePrice, offeringsPurchasable, purchaseRecord, purchasesForPerson } from './subscription.entries';
 import { localeCurrent, studioSetLocale, studioSetTheme, themeCurrent, themesList } from './theme.entries';
 import { bookableForSession, bookingCancel, bookingCreate, checkInMark, rosterForSession, walkInsToday } from './desk.entries';
 import {
@@ -101,6 +101,10 @@ export const ENTRIES: CacheEntry[] = [
   planUptake,
   subscriptionForMember,
   subscriptionBillable,
+  offeringsPurchasable,
+  purchasesForPerson,
+  offeringPrice,
+  coursePrice,
   // The session's own facts, self-pinned at the identity reach. The licensed
   // pre-auth entries (identity/roles, identity/actor, and friends) are
   // DELIBERATELY not here: a pre-auth read on the wire is the hole D4 refused,
@@ -139,6 +143,8 @@ export const MUTATION_ENTRIES: MutationEntry[] = [
   subscriptionRecordPayment,
   subscriptionEnd,
   passSell,
+  enrolPerson,
+  purchaseRecord,
   subscriptionGiveNotice,
   subscriptionPause,
   subscriptionResume,
