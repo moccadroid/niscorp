@@ -235,12 +235,29 @@ const truth = async (cutoff: string): Promise<number> => {
   return Number(r.rows[0]?.n ?? -1);
 };
 
+// CUTOFFS ARE OFFSETS FROM THE STUDIO'S TODAY, never dates written out.
+//
+// They were three literal days in August, against a seed that builds its
+// sessions relative to today — so the check passed for about a week and then
+// answered nobody at all three, because the calendar had walked past them. A
+// fixture that moves needs a cutoff that moves with it.
+//
+// -49 sits inside the seeded window and BEFORE Jonas stopped; -14 and -7 sit
+// after. That is what makes the window move the answer rather than three
+// cutoffs agreeing by accident.
+const dayOff = async (days: number): Promise<string> => {
+  const r = await runtime.db.query<{ d: string }>("SELECT (studio_today('st_lumen') - $1::int)::text AS d", [days]);
+  return String(r.rows[0]?.d ?? '');
+};
+const [longAgo, recently, lately] = [await dayOff(49), await dayOff(14), await dayOff(7)];
+
 // ── AND THE ONE IT MUST NOT FIND ─────────────────────────────
 //
 // Jonas is an active member who has stopped coming — the exact shape this
 // automation exists to catch — and he never opted in. He is seeded that way on
-// purpose: an opt-in nobody has ever refused proves nothing.
-const missed = await quiet('2026-08-09');
+// purpose (bookings, in seed.ts, stop three weeks back for him and nobody
+// else): an opt-in nobody has ever refused proves nothing.
+const missed = await quiet(recently);
 ok(
   'a marketing automation skips somebody who never opted in',
   !missed.some((name) => name.includes('Jonas')),
@@ -252,13 +269,13 @@ ok(
 await asPrincipal(CAST.lumen.owner, '/api/member/vex', { fingerprint: 'people/consent', context: { personId: 'p_jonas', marketingOk: true } });
 ok(
   '...and reaches him the moment he says yes',
-  (await quiet('2026-08-09')).some((name) => name.includes('Jonas')),
+  (await quiet(recently)).some((name) => name.includes('Jonas')),
   'consent is a column, not a code path',
 );
 await asPrincipal(CAST.lumen.owner, '/api/member/vex', { fingerprint: 'people/consent', context: { personId: 'p_jonas', marketingOk: false } });
 
 const spread = new Set<number>();
-for (const cutoff of ['2026-08-04', '2026-08-06', '2026-08-09']) {
+for (const cutoff of [longAgo, recently, lately]) {
   const got = await quiet(cutoff);
   const want = await truth(cutoff);
   spread.add(want);

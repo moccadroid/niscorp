@@ -462,7 +462,31 @@ const bookings = /* sql */ `
     ON m.studio_id = s.studio_id
   WHERE s.status = 'scheduled'
     AND s.held_on BETWEEN studio_today(s.studio_id) - 56 AND studio_today(s.studio_id) + 7
-    AND ((('x' || substr(md5(m.person_id || s.id), 1, 7))::bit(28)::int) % 100) < 34;
+    AND ((('x' || substr(md5(m.person_id || s.id), 1, 7))::bit(28)::int) % 100) < 34
+    -- AND TWO PEOPLE STOPPED COMING — in the data, not only in a note.
+    --
+    -- studio_people calls Jonas "an active member who has stopped coming", but
+    -- only the opt-out half of that was ever seeded; his attendance came from
+    -- the same 34% lottery as everybody else's, over a window that moves with
+    -- the calendar. So whether the one automation that hunts for quiet members
+    -- had anything to find was luck, and it ran out: every active Lumen member
+    -- had attended within three days, "who has stopped coming" answered nobody
+    -- at every cutoff, and automations-check failed on the guard that exists to
+    -- catch exactly that — three answers agreeing on a constant.
+    --
+    -- THEY ARE THE TWO HALVES OF THE SAME QUESTION, and one alone cannot pose
+    -- it. Jonas is quiet and opted OUT, so the selection must skip him — but
+    -- being skipped, he can never move the count either. Sofia is quiet and
+    -- opted IN, so she is the one it must find, and the one whose last class
+    -- makes the answer depend on where the cutoff falls.
+    --
+    -- Sofia is the honest shape for this: a yearly plan does not lapse, so
+    -- nothing else in the app would ever raise its hand about her. Three weeks
+    -- for Jonas and ten days for Sofia keep both unambiguous at the cutoffs
+    -- automations-check uses, and leave both plenty of older classes — a member
+    -- who never came is a different shape from one who stopped.
+    AND NOT (m.person_id = 'p_jonas' AND s.held_on > studio_today(s.studio_id) - 21)
+    AND NOT (m.person_id = 'p_sofia' AND s.held_on > studio_today(s.studio_id) - 10);
 `;
 
 const todayClass = /* sql */ `
