@@ -155,10 +155,16 @@ export const GERMAN: Record<string, string> = {
   'Committed until': 'Gebunden bis',
   Complimentary: 'Kostenfrei',
   'Confirmed places first, then the queue.': 'Zuerst die festen Plätze, dann die Warteliste.',
+  Calendar: 'Kalender',
   Contact: 'Kontakt',
+  Contacts: 'Kontakte',
   Course: 'Kursblock',
   Courses: 'Kursblöcke',
   'Courses you are on': 'Deine Kursblöcke',
+  // The People lens: everybody the studio deals with right now, whatever the
+  // relationship. Not "aktuelle Mitglieder" — the whole point of the lens is
+  // that it is wider than membership.
+  Current: 'Aktuell',
   'Currently wearing': 'Aktuell',
 
   Date: 'Datum',
@@ -184,6 +190,7 @@ export const GERMAN: Record<string, string> = {
     'Jeder Kurstermin der nächsten zwei Wochen — erzeugt aus allem, was läuft.',
   'Everybody has been in.': 'Alle waren da.',
   'Everybody who holds a place on this block.': 'Alle mit einem Platz in diesem Kursblock.',
+  Everyone: 'Alle',
   'Everyone — members, prospects, pass holders, contacts — one list, worn through lenses.':
     'Alle — Mitglieder, Interessenten, Blockkarten, Kontakte — eine Liste, durch Filter betrachtet.',
   'Everyone the studio deals with, lensed by relationship.':
@@ -259,6 +266,7 @@ export const GERMAN: Record<string, string> = {
   Leaving: 'Austritte',
   Left: 'Ausgetreten',
   Lime: 'Limette',
+  List: 'Liste',
 
   Manager: 'Leitung',
   Member: 'Mitglied',
@@ -357,6 +365,9 @@ export const GERMAN: Record<string, string> = {
   Pass: 'Blockkarte',
   'Pass holder': 'Blockkarte',
   Passes: 'Blockkarten',
+  // The lens for people the studio no longer deals with — former members and
+  // lapsed contacts alike, so the word is about the person and not the tense.
+  Past: 'Ehemalige',
   Pause: 'Pausieren',
   Paused: 'Pausiert',
   'Paused. It will not fire on its own; you still can.':
@@ -387,6 +398,7 @@ export const GERMAN: Record<string, string> = {
   Pricing: 'Preise',
   Program: 'Kursart',
   Prospect: 'Interessent',
+  Prospects: 'Interessenten',
   'Put back on': 'Wieder aktivieren',
   'Put back on staff': 'Wieder ins Team aufnehmen',
   'Put it on': 'Aktivieren',
@@ -401,6 +413,9 @@ export const GERMAN: Record<string, string> = {
   'Ran it. Anything it produced is on the follow-up list or in the outbox.':
     'Ausgeführt. Alles Entstandene steht in den Mitteilungen oder im Postausgang.',
   'Read them': 'Lesen',
+  // The metaphor survives the translation: a recipe is a ready-made pairing a
+  // studio can cook as it is. "Vorlagen" would say template and lose it.
+  Recipes: 'Rezepte',
   'Record payment': 'Zahlung erfassen',
   Remove: 'Entfernen',
   'Remove from staff': 'Aus dem Team entfernen',
@@ -599,6 +614,21 @@ export const GERMAN: Record<string, string> = {
   'somebody stops coming': 'jemand nicht mehr kommt',
   'a trial is about to run out': 'ein Probetraining bald ausläuft',
   "it is the day before somebody's class": 'es der Tag vor jemandes Kurs ist',
+
+  // THE SAME FIVE MOMENTS, WELDED. The form's picker builds its labels as
+  // `When ${moment.label}` in TypeScript, so each pairing reaches the screen as
+  // one finished English sentence rather than as the fragment above. A pattern
+  // would be wrong here rather than merely verbose: German moves the verb to
+  // the end after "wenn", so "Wenn " + "jemand tritt bei" is not a sentence
+  // anybody would write. Five rows, one per moment — and the harvest now sees
+  // this array, so a sixth moment turns the gate red instead of shipping
+  // English.
+  'When somebody joins': 'Wenn jemand beitritt',
+  'When somebody enquires': 'Wenn jemand anfragt',
+  'When somebody stops coming': 'Wenn jemand nicht mehr kommt',
+  'When a trial is about to run out': 'Wenn ein Probetraining bald ausläuft',
+  "When it is the day before somebody's class": 'Wenn es der Tag vor jemandes Kurs ist',
+
   'Days of notice': 'Tage Vorlauf',
   'Days without a visit': 'Tage ohne Besuch',
   'The moment somebody new is written down. Replying within minutes is the difference between a member and a lost one.':

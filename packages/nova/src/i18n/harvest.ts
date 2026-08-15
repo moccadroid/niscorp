@@ -170,8 +170,23 @@ export const harvestDefinition = (definition: ActionDefinition, keys?: PhraseKey
 
   // Defaulted data is a screen's opening text: the 'Stock' in a theme name, the
   // placeholder a list shows before its first read lands.
+  //
+  // TWO RULES, because `data` is two things at once.
+  //
+  // A top-level string is taken WHOLE, whatever its key. Where it lands decides
+  // whether it is prose, and only the LAYOUT knows that: `runningHint` is not a
+  // prose key and reaches the glass as a text child, so a matcher applied here
+  // would drop a sentence the pass goes on to translate. The cost of taking
+  // them all is enum values and ids in the report, which a host filters by name.
+  //
+  // Anything NESTED is walked by the matcher instead, and that is the rule that
+  // reaches an options array — `views: [{ value: 'running', label: 'Running' }]`
+  // yields `Running` and never `running`. Without it a tab strip built in data
+  // is not merely untranslatable but UNCOUNTED, which is the worse half: the
+  // harvest reports a full book while the words are missing from the screen.
   for (const [key, value] of Object.entries(definition.data ?? {})) {
     if (typeof value === 'string') sink.add(value, `${id}.data.${key}`);
+    else if (isObject(value) || isArray(value)) harvestNested(value, `${id}.data.${key}`, sink);
   }
 
   if (definition.layout !== undefined) harvestNode(definition.layout, id, sink);

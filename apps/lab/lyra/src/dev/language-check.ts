@@ -116,4 +116,46 @@ await settle(12);
 const classesFrame = await servedTo(CAST.lumen.member);
 ok('a German count reads 1 von 12 — one book row, filled', /\d+ von \d+/.test(classesFrame), classesFrame.match(/\d+ von \d+/)?.[0] ?? '(no filled pattern in the frame)');
 
+// ── words that live in an action's DATA ──────────────────────
+//
+// A tab strip is authored as `data.views` and bound into the layout, so its
+// labels are on a screen without being in one. The pass always translated
+// them — `label` is a prose key at any depth — but the HARVEST could not see
+// them, so the book was missing rows while the gate read 548/548 green.
+// A count that cannot see a screen is worse than a low count, and these three
+// screens are the ones it could not see.
+//
+// Asserted through the served frame rather than through the harvest on
+// purpose: the harvest proves the words are COUNTED, and only a rendered
+// German screen proves they are SWAPPED.
+const screenFor = async (action: string): Promise<string> => {
+  maren.dispatch({ type: 'ui:click', ref: 'nav', payload: action });
+  await settle(12);
+  return servedTo(CAST.lumen.owner);
+};
+
+// Probed at the LABEL position rather than anywhere in the frame: `Calendar`
+// is also a component's name, and a check that greps the whole payload for a
+// word fails on the kit rather than on the copy.
+const englishLabel = (frame: string, ...words: string[]): boolean => words.some((word) => frame.includes(`"label":"${word}"`));
+
+const people = await screenFor('people.list');
+ok(
+  'the People lenses are German — all nine of them',
+  ['Aktuell', 'Interessenten', 'Kontakte', 'Ehemalige', 'Alle'].every((word) => people.includes(word)),
+  'Current · Prospects · Contacts · Past · Everyone — the five that rendered English while the harvest read green',
+);
+ok('...with no English left in the strip', !englishLabel(people, 'Current', 'Prospects', 'Contacts', 'Past', 'Everyone'));
+// THE OTHER HALF OF THE SAME RULE: the option's `value` is machine vocabulary
+// and must survive untouched, or picking a lens stops working in German.
+ok('...and the lens VALUES are untouched', people.includes('"current"') && people.includes('"prospects"'), 'proseness is the key, not the neighbourhood');
+
+const automations = await screenFor('automations.list');
+ok('the Automations tabs are German', automations.includes('Rezepte') && automations.includes('Läuft'), 'Recipes → Rezepte, beside a Running that was in the book all along');
+ok('...with no English left in the strip', !englishLabel(automations, 'Recipes', 'Running'));
+
+const schedule = await screenFor('schedule.timetable');
+ok('the Schedule views are German', schedule.includes('Kalender') && schedule.includes('Liste'), 'the third screen — found by the widened harvest, not by the review');
+ok('...with no English left in the strip', !englishLabel(schedule, 'Calendar', 'List'));
+
 report('one deployment, two languages, nothing shared but the rows');

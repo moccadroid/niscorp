@@ -28,7 +28,18 @@ const layout: LayoutNode = {
 const definition: ActionDefinition = {
   id: 'people.list',
   title: 'People',
-  data: { rows: [], error: '', status: 'Loading…' },
+  // `views` is a tab strip authored as DATA and bound into the layout — words
+  // on a screen that no walk over layouts can see.
+  data: {
+    rows: [],
+    error: '',
+    status: 'Loading…',
+    view: 'running',
+    views: [
+      { value: 'running', label: 'Running' },
+      { value: 'recipes', label: 'Recipes' },
+    ],
+  },
   layout,
   triggers: [{ event: 'ui:click', ref: 'add', do: [{ set: 'error', value: 'Could not open the form.' }] }],
 };
@@ -67,6 +78,24 @@ describe('harvest', () => {
     expect(phrases).not.toContain('solid');
     expect(phrases).not.toContain('avatar');
     expect(phrases).not.toContain('person_name');
+  });
+
+  it('reaches labels nested in data, and takes the label rather than the value', () => {
+    // The failure this rule exists for is not a missing translation — it is a
+    // missing translation the count does not know about. A screen whose tabs
+    // live in `data` renders English while the harvest reports a full book.
+    expect(phrases).toContain('Running');
+    expect(phrases).toContain('Recipes');
+    // The value BESIDE each label is machine vocabulary, and nested strings are
+    // taken by the matcher — so `recipes`, which exists only inside the array,
+    // is left where it is.
+    expect(phrases).not.toContain('recipes');
+    // Whereas `running` IS taken: it is also a top-level data string, and those
+    // come whole because only the layout knows where one lands. The two rules
+    // are visible here in one fixture, which is the point of pinning them
+    // together — a host filters the enum out of its report by name.
+    expect(phrases).toContain('running');
+    expect(found.find((entry) => entry.phrase === 'running')?.where).toEqual(['people.list.data.view']);
   });
 
   it('records every author site for a phrase used twice', () => {
