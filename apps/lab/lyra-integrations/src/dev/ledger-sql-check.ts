@@ -60,7 +60,7 @@ try {
   ok('...and the sweep can list them', (await allAccounts(store)).length === 1);
 
   // ── the ledger mirror ───────────────────────────────────────
-  const invoice = { invoiceId: 'in_1', accountId: 'acct_a', studioId: 'st_a', subscriptionId: 'sub_1', status: 'paid', amountCents: 8900, refundedCents: 0, currency: 'eur', disputed: false, invoicedOn: '2026-03-01' };
+  const invoice = { invoiceId: 'in_1', accountId: 'acct_a', studioId: 'st_a', subscriptionId: 'sub_1', status: 'paid', amountCents: 8900, refundedCents: 0, currency: 'eur', disputed: false, invoicedOn: '2026-03-01', hostedUrl: 'https://invoice.stripe.test/in_1', pdfUrl: 'https://invoice.stripe.test/in_1.pdf' };
   await recordInvoice(store, invoice);
   await recordInvoice(store, invoice);
   ok('an invoice mirrors once, however many times it arrives', (await invoicesFor(store, 'st_a')).length === 1);
@@ -73,6 +73,14 @@ try {
   const after = (await invoicesFor(store, 'st_a'))[0];
   ok('a refund is not forgotten by the next event about the same invoice', after?.refundedCents === 2000, `${String(after?.refundedCents)} — GREATEST, not EXCLUDED`);
   ok('...nor is a dispute', after?.disputed === true, 'OR, not EXCLUDED');
+  ok('...and the document is kept', after?.pdfUrl === 'https://invoice.stripe.test/in_1.pdf', String(after?.pdfUrl));
+
+  // AN EVENT THAT CARRIES NO DOCUMENT is not an event saying there is none —
+  // `invoice.payment_failed` arrives without one, and it must not blank the
+  // link a paid invoice already had.
+  await recordInvoice(store, { ...invoice, hostedUrl: '', pdfUrl: '' });
+  const stillThere = (await invoicesFor(store, 'st_a'))[0];
+  ok('...and an event with no document does not erase it', stillThere?.pdfUrl === 'https://invoice.stripe.test/in_1.pdf', String(stillThere?.pdfUrl));
   ok('...and it is the studio own', (await invoicesFor(store, 'st_b')).length === 0);
 
   // ── prices, content-addressed ───────────────────────────────

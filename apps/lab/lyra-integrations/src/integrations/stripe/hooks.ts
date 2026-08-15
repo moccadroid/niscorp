@@ -193,6 +193,12 @@ const mirrorInvoice = async (db: IntegrationStore | undefined, accountId: string
     currency: String(invoice['currency'] ?? 'eur'),
     disputed: false,
     invoicedOn: asDay(invoice['created']) ?? '',
+    // WHERE THE DOCUMENT IS, mirrored as a pointer. Stripe numbers and issues
+    // the invoice under the studio's own identity; this side keeps no number and
+    // no copy, because §11 UStG sequencing is not a thing for two systems to
+    // both believe they own.
+    hostedUrl: String(invoice['hosted_invoice_url'] ?? ''),
+    pdfUrl: String(invoice['invoice_pdf'] ?? ''),
   });
 };
 

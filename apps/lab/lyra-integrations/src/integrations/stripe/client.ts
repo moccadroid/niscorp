@@ -238,3 +238,32 @@ export const createPortalSession = async (
   );
   return session.url;
 };
+
+
+// ── GIVING MONEY BACK ────────────────────────────────────────
+//
+// The owner could read what had been charged and do nothing about it: a refund
+// meant logging in to Stripe, which is the trip S1 said a studio would never
+// make. So it is a verb on the money screen now.
+//
+// A REFUND IS NOT A STATUS CHANGE, and the mirror already knew that — a refunded
+// invoice is still `paid` at Stripe, with the money going back recorded beside
+// the amount rather than instead of it. Nothing here writes the mirror: the
+// `charge.refunded` webhook does, exactly as it does when somebody refunds from
+// Stripe's own dashboard. One writer, whoever pressed the button.
+//
+// WHOLE ONLY, deliberately. A partial refund is a different conversation — how
+// much, and why — and a number typed into a list is the shape of a mistake
+// nobody can undo. Stripe's own screens do partials; this does the one a studio
+// actually asks for.
+export const refundInvoice = async (stripe: Stripe, accountId: string, invoiceId: string): Promise<{ refunded: number }> => {
+  const onAccount = { stripeAccount: accountId };
+  const invoice = (await stripe.invoices.retrieve(invoiceId, {}, onAccount)) as unknown as { charge?: string; payments?: { data?: { payment?: { charge?: string } }[] } };
+  // The charge moved under `payments` on newer API versions and is a bare field
+  // on older ones — the same shape of move `current_period_end` made, and the
+  // same reason to read both rather than trust the pin.
+  const charge = invoice.payments?.data?.[0]?.payment?.charge ?? invoice.charge ?? '';
+  if (charge === '') throw new Error('this invoice has no payment to refund');
+  const refund = await stripe.refunds.create({ charge }, onAccount);
+  return { refunded: refund.amount };
+};

@@ -1,7 +1,7 @@
 import type { Integration } from '../../integration';
 import { STRIPE_BUNDLE } from './bundle';
 import { accountFor, rememberAccount, storeIsDurable, stripeSubscriptionFor } from './store';
-import { accountStanding, createAccountSession, createConnectedAccount, createOnboardingLink, createPortalSession, stripeFor } from './client';
+import { accountStanding, createAccountSession, createConnectedAccount, createOnboardingLink, createPortalSession, refundInvoice, stripeFor } from './client';
 import { embedPage, notOnboardedPage, unavailablePage } from './onboarding';
 import { createCheckout, createPurchase, customerFor } from './checkout';
 import { billableFor, namesForSubscriptions, purchaseFor } from './lyra';
@@ -319,6 +319,42 @@ export const stripeIntegration: Integration = {
       const invoices = await invoicesFor(ctx.db, who.studioId);
       const named = await namesForSubscriptions(ctx.env, who.studioId, invoices.map((i) => i.subscriptionId));
       return c.json(ledgerRows(invoices, named));
+    });
+
+    // ── GIVING MONEY BACK ──────────────────────────────────────
+    //
+    // Reached only from the money screen, which is a desk action — so the
+    // perimeter is what keeps a member off it, and this handler needs no opinion
+    // about who is asking beyond the studio in the assertion.
+    //
+    // THE INVOICE MUST BE THIS STUDIO'S, checked against this integration's own
+    // mirror rather than taken from the body. Without that, an id from another
+    // studio's ledger would refund another studio's customer with this studio's
+    // money.
+    r.post('/refund', async (c) => {
+      const who = ctx.identity(c);
+      if (who === undefined) return c.json({ message: 'Who are you?' }, 401);
+      const held = await accountFor(ctx.db, who.studioId);
+      if (held === undefined) return c.json({ message: 'This studio is not taking payments yet.' }, 409);
+      const stripe = stripeFor(ctx.env);
+      if (stripe === undefined) return c.json({ message: 'This deployment holds no Stripe key.' }, 503);
+
+      const body = (await c.req.json().catch(() => ({}))) as { invoiceId?: unknown };
+      const invoiceId = typeof body.invoiceId === 'string' ? body.invoiceId : '';
+      const mine = (await invoicesFor(ctx.db, who.studioId)).find((i) => i.invoiceId === invoiceId);
+      if (mine === undefined) return c.json({ message: 'No such invoice at this studio.' }, 404);
+      if (mine.refundedCents > 0) return c.json({ message: 'That has already been refunded.' }, 409);
+
+      try {
+        const { refunded } = await refundInvoice(stripe, held.accountId, invoiceId);
+        // NOT WRITTEN HERE. The `charge.refunded` webhook records it, the same
+        // way it does when somebody refunds from Stripe's own dashboard — so
+        // there is one writer whoever pressed the button, and the screen shows
+        // the same thing either way.
+        return c.json({ refunded, message: 'Refunded. It will show here once Stripe confirms.' });
+      } catch (err) {
+        return c.json({ message: `Stripe refused: ${String(err).slice(0, 200)}` }, 502);
+      }
     });
 
     // ── THE FRAMED PAGE ────────────────────────────────────────

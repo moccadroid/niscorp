@@ -227,7 +227,7 @@ const setupAction: ActionDefinition = {
 const ledgerAction: ActionDefinition = {
   id: 'ext.desk.stripe.ledger',
   title: 'Money',
-  data: { account: {}, invoices: [], loading: true, error: '' },
+  data: { account: {}, invoices: [], refundingId: '', refunded: {}, loading: true, error: '' },
   layout: {
     component: 'Stack',
     props: { gap: 22 },
@@ -258,6 +258,15 @@ const ledgerAction: ActionDefinition = {
                 { label: 'Amount', px: 120, cell: { kind: 'primary', key: 'amount_display' } },
                 { label: 'State', px: 130, cell: { kind: 'badge', key: 'state_label', toneKey: 'state_tone' } },
                 { label: '', w: 1, cell: { kind: 'text', key: 'note', color: 'soft' } },
+                // THE INVOICE ITSELF. A studio asked for a copy and there was
+                // nothing to give them — the mirror held the amount and not the
+                // document. Stripe issues it, numbered, under the studio's own
+                // identity; this is a link to it.
+                { label: '', px: 96, align: 'right', cell: { kind: 'link', key: 'document_url', label: 'Invoice' } },
+                // GIVING MONEY BACK, from the screen that shows it was taken.
+                // Hidden once it has been: a refunded invoice is finished, and a
+                // second press is a question with no good answer.
+                { label: '', px: 96, align: 'right', cell: { kind: 'action', label: 'Refund', ref: 'refund', variant: 'ghost', hideKey: 'refunded' } },
               ],
             },
           },
@@ -272,8 +281,36 @@ const ledgerAction: ActionDefinition = {
   endpoints: {
     account: { url: `${OWN}/account`, method: 'POST', request: {}, target: 'account' },
     invoices: { url: `${OWN}/ledger`, method: 'POST', request: {}, target: 'invoices', errorTarget: 'error' },
+    refund: { url: `${OWN}/refund`, method: 'POST', request: { invoiceId: { $ref: '$.refundingId' } }, target: 'refunded', errorTarget: 'error' },
   },
   lifecycle: { mount: [{ call: 'account' }, { call: 'invoices', onSuccess: [{ set: 'loading', value: false }] }] },
+  triggers: [
+    {
+      // MONEY GOING BACK IS NOT A CLICK, it is a decision — so it goes through
+      // the host's own confirm sheet, the same one every reversible-looking act
+      // in this application pushes, and fires only on yes.
+      event: 'ui:click',
+      ref: 'refund',
+      do: [
+        { set: 'error', value: '' },
+        { set: 'refundingId', value: '@event.payload.invoice_id' },
+        {
+          push: {
+            action: 'confirm',
+            canvas: 'sheet',
+            with: ['sheet'],
+            input: {
+              heading: 'Refund this payment?',
+              body: 'The whole amount goes back to the member. It can take a few days to reach them, and it cannot be undone from here.',
+              confirmLabel: 'Refund',
+              message: 'stripe-refund',
+            },
+          },
+        },
+      ],
+    },
+    { message: 'stripe-refund', do: [{ call: 'refund', onSuccess: [{ call: 'invoices' }] }] },
+  ],
 };
 
 // ── THE MEMBER'S OWN SIDE ────────────────────────────────────
@@ -492,6 +529,11 @@ export const STRIPE_BUNDLE = {
   phrasebook: {
     de: {
       Amount: 'Betrag',
+      Refund: 'Erstatten',
+      'Refund this payment?': 'Diese Zahlung erstatten?',
+      'The whole amount goes back to the member. It can take a few days to reach them, and it cannot be undone from here.':
+        'Der volle Betrag geht an das Mitglied zurück. Das kann ein paar Tage dauern und lässt sich hier nicht rückgängig machen.',
+      Invoice: 'Rechnung',
       Member: 'Mitglied',
       // ── the member's own card ──
       'Manage payment method': 'Zahlungsmittel verwalten',

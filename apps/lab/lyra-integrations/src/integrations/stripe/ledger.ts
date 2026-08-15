@@ -28,6 +28,12 @@ export type MirroredInvoice = {
   currency: string;
   disputed: boolean;
   invoicedOn: string;
+  // WHERE THE DOCUMENT IS. Stripe issues the invoice — numbered and sequenced
+  // under the studio's own identity — so this holds a pointer to it and never a
+  // number or a copy of our own. Two systems both believing they own §11 UStG
+  // numbering is the failure worth avoiding by not participating.
+  hostedUrl: string;
+  pdfUrl: string;
 };
 
 // The same fallback the rest of this integration keeps, for the same reason: the checks
@@ -44,18 +50,27 @@ export const recordInvoice = async (db: IntegrationStore | undefined, invoice: M
       // facts that do not un-happen because a later event did not mention them.
       refundedCents: Math.max(held?.refundedCents ?? 0, invoice.refundedCents),
       disputed: (held?.disputed ?? false) || invoice.disputed,
+      // Same monotonic instinct: a later event that does not carry the document
+      // must not erase the one we already had.
+      hostedUrl: invoice.hostedUrl === '' ? (held?.hostedUrl ?? '') : invoice.hostedUrl,
+      pdfUrl: invoice.pdfUrl === '' ? (held?.pdfUrl ?? '') : invoice.pdfUrl,
     });
     return;
   }
   await db.query(
     `INSERT INTO ${db.table('invoices')}
-       (invoice_id, account_id, studio_id, subscription_id, status, amount_cents, refunded_cents, currency, disputed, invoiced_on)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+       (invoice_id, account_id, studio_id, subscription_id, status, amount_cents, refunded_cents, currency, disputed, invoiced_on, hosted_url, pdf_url)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
      ON CONFLICT (invoice_id) DO UPDATE SET
        status = EXCLUDED.status,
        amount_cents = EXCLUDED.amount_cents,
        refunded_cents = GREATEST(${db.table('invoices')}.refunded_cents, EXCLUDED.refunded_cents),
        disputed = ${db.table('invoices')}.disputed OR EXCLUDED.disputed,
+       -- Kept unless the new event actually carries one, for the same reason
+       -- the refund is GREATEST: an event that says nothing about the document
+       -- is not an event saying there is none.
+       hosted_url = CASE WHEN EXCLUDED.hosted_url = '' THEN ${db.table('invoices')}.hosted_url ELSE EXCLUDED.hosted_url END,
+       pdf_url = CASE WHEN EXCLUDED.pdf_url = '' THEN ${db.table('invoices')}.pdf_url ELSE EXCLUDED.pdf_url END,
        updated_at = now()`,
     [
       invoice.invoiceId,
@@ -68,6 +83,8 @@ export const recordInvoice = async (db: IntegrationStore | undefined, invoice: M
       invoice.currency,
       invoice.disputed,
       invoice.invoicedOn === '' ? null : invoice.invoicedOn,
+      invoice.hostedUrl,
+      invoice.pdfUrl,
     ],
   );
 };
@@ -99,7 +116,7 @@ export const invoicesFor = async (db: IntegrationStore | undefined, studioId: st
     return [...MEMORY.values()].filter((i) => i.studioId === studioId).sort((a, b) => b.invoicedOn.localeCompare(a.invoicedOn));
   }
   const rows = await db.query<Record<string, unknown>>(
-    `SELECT invoice_id, account_id, studio_id, subscription_id, status, amount_cents, refunded_cents, currency, disputed, invoiced_on
+    `SELECT invoice_id, account_id, studio_id, subscription_id, status, amount_cents, refunded_cents, currency, disputed, invoiced_on, hosted_url, pdf_url
        FROM ${db.table('invoices')} WHERE studio_id = $1 ORDER BY invoiced_on DESC NULLS LAST LIMIT 100`,
     [studioId],
   );
@@ -114,6 +131,8 @@ export const invoicesFor = async (db: IntegrationStore | undefined, studioId: st
     currency: String(row['currency'] ?? 'eur'),
     disputed: row['disputed'] === true,
     invoicedOn: String(row['invoiced_on'] ?? '').slice(0, 10),
+    hostedUrl: String(row['hosted_url'] ?? ''),
+    pdfUrl: String(row['pdf_url'] ?? ''),
   }));
 };
 
@@ -152,5 +171,11 @@ export const ledgerRows = (invoices: readonly MirroredInvoice[], names: Readonly
       state_label: state.label,
       state_tone: state.tone,
       note: invoice.refundedCents > 0 ? `${money(invoice.refundedCents)} refunded` : '',
+      // The PDF where there is one, the hosted page otherwise. A row with
+      // neither draws no control at all rather than a link to nowhere.
+      document_url: invoice.pdfUrl === '' ? invoice.hostedUrl : invoice.pdfUrl,
+      // What the refund control hides on. A row, not a screen, decides — the
+      // list is drawn from data and nothing branches on who is looking.
+      refunded: invoice.refundedCents > 0 || invoice.disputed,
     };
   });

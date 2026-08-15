@@ -19,6 +19,15 @@ const CellSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('primary'), key: z.string(), subKey: z.string().optional(), dotKey: z.string().optional().describe('Row key holding a tone token — the stream marker') }).strict(),
   z.object({ kind: z.literal('badge'), key: z.string(), toneKey: z.string().optional(), hueKey: z.string().optional(), showKey: z.string().optional().describe('Row key that must be true for the badge to appear') }).strict(),
   z.object({ kind: z.literal('bands'), key: z.string() }).strict(),
+  // A DOCUMENT THIS ROW IS ABOUT, somewhere else. An `action` cell dispatches a
+  // click; this one is a link, because an invoice PDF is a thing to open rather
+  // than a verb to perform.
+  //
+  // The URL comes from the ROW, which on an integration's screen came from the
+  // integration — so it is not followed blindly: anything that is not plain
+  // http(s) renders as nothing at all, and the link opens detached from this
+  // document. A `javascript:` or `data:` href in a list is the shape of that bug.
+  z.object({ kind: z.literal('link'), key: z.string(), label: z.string(), showKey: z.string().optional() }).strict(),
   // An icon by name, from the row or fixed on the column. For the leading
   // glyph a list of kinds wants — a class type, a source, a channel.
   z.object({ kind: z.literal('icon'), key: z.string().optional(), icon: z.string().optional(), hueKey: z.string().optional() }).strict(),
@@ -463,6 +472,26 @@ const renderCell = (cell: z.infer<typeof CellSchema>, row: Row, dispatch: Return
           {cell.suffix === undefined ? null : <span style={{ color: COLOR['mute'] }}> {cell.suffix}</span>}
         </span>
       );
+    case 'link': {
+      if (cell.showKey !== undefined && row[cell.showKey] !== true) return null;
+      const href = typeof row[cell.key] === 'string' ? String(row[cell.key]) : '';
+      // Only the two schemes a document can honestly live at. Everything else —
+      // including an empty cell — draws nothing, so a row with no document has
+      // no dead control on it.
+      if (!/^https?:\/\//i.test(href)) return null;
+      return (
+        <a
+          className={cx('ly-btn', 'ly-btn--outline')}
+          style={{ padding: '5px 11px', fontSize: SIZE['sm'], textDecoration: 'none' }}
+          href={href}
+          target="_blank"
+          rel="noreferrer noopener"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {cell.label}
+        </a>
+      );
+    }
     case 'action':
       if (cell.hideKey !== undefined && row[cell.hideKey] === true) return null;
       if (cell.showKey !== undefined && row[cell.showKey] !== true) return null;
