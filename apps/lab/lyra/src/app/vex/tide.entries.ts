@@ -16,29 +16,26 @@ export const trialsDue: CacheEntry = {
       'studio_people.trial_ends_on',
       { field: 'people.id', as: 'person_id' },
       { field: 'people.name', as: 'person_name' },
-      'people.email',
+      { field: 'studio_people.mail_to', as: 'mail_to' },
     ],
     filter: {
       and: [
       // ── A REACHABLE ADDRESS IS PART OF THE QUESTION ─────────
       //
-      // `people.email` is nullable, because a child has no address and is a
-      // record rather than a user (db/schema/people.ts). Every selection here
-      // hands its `email` straight to the mail effect, and `outbox.to_address`
-      // is NOT NULL — so without this a child selected by any moment does not
-      // mail the wrong person, it throws, and the whole run dies with them.
+      // `studio_people.mail_to` is where mail for this person at this studio
+      // goes: their own address, or their guardian's when they have none. A
+      // child is a record with no way in, so everything a studio would write
+      // to them has to reach an adult — and that resolution is a trigger's,
+      // not a selection's, because it needs `people` twice in one query and
+      // the read grammar cannot alias one entity into two sources.
       //
       // Stated as a FILTER rather than fixed at the effect, for the reason the
-      // consent test above is: "who should hear this" is the question, and
-      // somebody nobody can write to is not part of the answer. Zero rows is a
-      // message that correctly never exists.
-      //
-      // WHAT THIS DOES NOT YET DO is route a child's mail to their guardian,
-      // which is the other half of R6. It needs `people` joined twice in one
-      // selection — the subject and the guardian — and the resolver does not
-      // alias one entity into two sources. Until then a child's studio hears
-      // nothing about them by mail, which is quiet and safe rather than wrong.
-      { isNotNull: 'people.email' },
+      // consent test is: "who should hear this" is the question, and somebody
+      // nobody can write to is not part of the answer. Zero rows is a message
+      // that correctly never exists — and `outbox.to_address` is NOT NULL, so
+      // without this a child selected by any moment did not mail the wrong
+      // person, it threw and took the whole run with it.
+      { isNotNull: 'studio_people.mail_to' },
         { isNotNull: 'studio_people.trial_ends_on' },
         { lte: ['studio_people.trial_ends_on', { $context: 'cutoff' }] },
         // A window, so "ending soon" and "just ended" are two settings of one
@@ -60,38 +57,42 @@ export const trialsDue: CacheEntry = {
 export const joinedSubscription: CacheEntry = {
   fingerprint: 'automation/joined-subscription',
   intent: 'One new subscription, with the person behind it',
-  shape: [{ subscription_id: '', person_name: '', person_id: '', email: '' }],
+  shape: [{ subscription_id: '', person_name: '', person_id: '', mail_to: '' }],
   dsl: {
-    from: ['subscriptions', 'people'],
+    // `studio_people` joins for the ADDRESS, and the pair is stated rather
+    // than assumed: a join derived from `people` alone would pair a member
+    // with their anchor at another studio. The tenant rule the engine ANDs on
+    // makes that unreachable in practice; saying it here means the entry does
+    // not depend on that for its correctness.
+    from: ['subscriptions', 'people', 'studio_people'],
     fields: [
       { field: 'subscriptions.id', as: 'subscription_id' },
       { field: 'people.id', as: 'person_id' },
       { field: 'people.name', as: 'person_name' },
-      'people.email',
+      { field: 'studio_people.mail_to', as: 'mail_to' },
     ],
     filter: {
       and: [
       // ── A REACHABLE ADDRESS IS PART OF THE QUESTION ─────────
       //
-      // `people.email` is nullable, because a child has no address and is a
-      // record rather than a user (db/schema/people.ts). Every selection here
-      // hands its `email` straight to the mail effect, and `outbox.to_address`
-      // is NOT NULL — so without this a child selected by any moment does not
-      // mail the wrong person, it throws, and the whole run dies with them.
+      // `studio_people.mail_to` is where mail for this person at this studio
+      // goes: their own address, or their guardian's when they have none. A
+      // child is a record with no way in, so everything a studio would write
+      // to them has to reach an adult — and that resolution is a trigger's,
+      // not a selection's, because it needs `people` twice in one query and
+      // the read grammar cannot alias one entity into two sources.
       //
       // Stated as a FILTER rather than fixed at the effect, for the reason the
-      // consent test above is: "who should hear this" is the question, and
-      // somebody nobody can write to is not part of the answer. Zero rows is a
-      // message that correctly never exists.
-      //
-      // WHAT THIS DOES NOT YET DO is route a child's mail to their guardian,
-      // which is the other half of R6. It needs `people` joined twice in one
-      // selection — the subject and the guardian — and the resolver does not
-      // alias one entity into two sources. Until then a child's studio hears
-      // nothing about them by mail, which is quiet and safe rather than wrong.
-      { isNotNull: 'people.email' },
+      // consent test is: "who should hear this" is the question, and somebody
+      // nobody can write to is not part of the answer. Zero rows is a message
+      // that correctly never exists — and `outbox.to_address` is NOT NULL, so
+      // without this a child selected by any moment did not mail the wrong
+      // person, it threw and took the whole run with it.
+      { isNotNull: 'studio_people.mail_to' },
         { eq: ['subscriptions.id', { $context: 'subscriptionId' }] },
         { eq: ['subscriptions.status', 'active'] },
+        { eq: ['studio_people.person_id', 'subscriptions.person_id'] },
+        { eq: ['studio_people.studio_id', 'subscriptions.studio_id'] },
       ],
     },
   },
@@ -106,14 +107,14 @@ export const joinedSubscription: CacheEntry = {
 export const enquiredPerson: CacheEntry = {
   fingerprint: 'automation/enquired-person',
   intent: 'One newly written-down person, if they still hold nothing',
-  shape: [{ studio_person_id: '', person_name: '', person_id: '', email: '' }],
+  shape: [{ studio_person_id: '', person_name: '', person_id: '', mail_to: '' }],
   dsl: {
     from: ['studio_people', 'people'],
     fields: [
       { field: 'studio_people.id', as: 'studio_person_id' },
       { field: 'people.id', as: 'person_id' },
       { field: 'people.name', as: 'person_name' },
-      'people.email',
+      { field: 'studio_people.mail_to', as: 'mail_to' },
     ],
     // Holding nothing, read off the anchor's own mirrors (schema.ts) — no
     // reach into tables this rung has no business reading.
@@ -121,23 +122,20 @@ export const enquiredPerson: CacheEntry = {
       and: [
       // ── A REACHABLE ADDRESS IS PART OF THE QUESTION ─────────
       //
-      // `people.email` is nullable, because a child has no address and is a
-      // record rather than a user (db/schema/people.ts). Every selection here
-      // hands its `email` straight to the mail effect, and `outbox.to_address`
-      // is NOT NULL — so without this a child selected by any moment does not
-      // mail the wrong person, it throws, and the whole run dies with them.
+      // `studio_people.mail_to` is where mail for this person at this studio
+      // goes: their own address, or their guardian's when they have none. A
+      // child is a record with no way in, so everything a studio would write
+      // to them has to reach an adult — and that resolution is a trigger's,
+      // not a selection's, because it needs `people` twice in one query and
+      // the read grammar cannot alias one entity into two sources.
       //
       // Stated as a FILTER rather than fixed at the effect, for the reason the
-      // consent test above is: "who should hear this" is the question, and
-      // somebody nobody can write to is not part of the answer. Zero rows is a
-      // message that correctly never exists.
-      //
-      // WHAT THIS DOES NOT YET DO is route a child's mail to their guardian,
-      // which is the other half of R6. It needs `people` joined twice in one
-      // selection — the subject and the guardian — and the resolver does not
-      // alias one entity into two sources. Until then a child's studio hears
-      // nothing about them by mail, which is quiet and safe rather than wrong.
-      { isNotNull: 'people.email' },
+      // consent test is: "who should hear this" is the question, and somebody
+      // nobody can write to is not part of the answer. Zero rows is a message
+      // that correctly never exists — and `outbox.to_address` is NOT NULL, so
+      // without this a child selected by any moment did not mail the wrong
+      // person, it threw and took the whole run with it.
+      { isNotNull: 'studio_people.mail_to' },
         { eq: ['studio_people.id', { $context: 'studioPersonId' }] },
         { eq: ['studio_people.held_subscriptions', 0] },
         { eq: ['studio_people.works_here', false] },
@@ -167,29 +165,26 @@ export const membersLapsedAway: CacheEntry = {
       'subscriptions.started_on',
       { field: 'people.id', as: 'person_id' },
       { field: 'people.name', as: 'person_name' },
-      'people.email',
+      { field: 'studio_people.mail_to', as: 'mail_to' },
     ],
     filter: {
       and: [
       // ── A REACHABLE ADDRESS IS PART OF THE QUESTION ─────────
       //
-      // `people.email` is nullable, because a child has no address and is a
-      // record rather than a user (db/schema/people.ts). Every selection here
-      // hands its `email` straight to the mail effect, and `outbox.to_address`
-      // is NOT NULL — so without this a child selected by any moment does not
-      // mail the wrong person, it throws, and the whole run dies with them.
+      // `studio_people.mail_to` is where mail for this person at this studio
+      // goes: their own address, or their guardian's when they have none. A
+      // child is a record with no way in, so everything a studio would write
+      // to them has to reach an adult — and that resolution is a trigger's,
+      // not a selection's, because it needs `people` twice in one query and
+      // the read grammar cannot alias one entity into two sources.
       //
       // Stated as a FILTER rather than fixed at the effect, for the reason the
-      // consent test above is: "who should hear this" is the question, and
-      // somebody nobody can write to is not part of the answer. Zero rows is a
-      // message that correctly never exists.
-      //
-      // WHAT THIS DOES NOT YET DO is route a child's mail to their guardian,
-      // which is the other half of R6. It needs `people` joined twice in one
-      // selection — the subject and the guardian — and the resolver does not
-      // alias one entity into two sources. Until then a child's studio hears
-      // nothing about them by mail, which is quiet and safe rather than wrong.
-      { isNotNull: 'people.email' },
+      // consent test is: "who should hear this" is the question, and somebody
+      // nobody can write to is not part of the answer. Zero rows is a message
+      // that correctly never exists — and `outbox.to_address` is NOT NULL, so
+      // without this a child selected by any moment did not mail the wrong
+      // person, it threw and took the whole run with it.
+      { isNotNull: 'studio_people.mail_to' },
         { eq: ['subscriptions.status', 'active'] },
         // ── THE OPT-IN, AND IT IS PART OF THE QUESTION ──────────
         //
@@ -238,12 +233,12 @@ export const bookingsOnDay: CacheEntry = {
   intent: 'Booked classes at this studio on a given day, with who is coming',
   shape: [{ booking_id: '', person_id: '', person_name: '', class_name: '', starts_at: '' }],
   dsl: {
-    from: ['bookings', 'class_sessions', 'people'],
+    from: ['bookings', 'class_sessions', 'people', 'studio_people'],
     fields: [
       { field: 'bookings.id', as: 'booking_id' },
       { field: 'people.id', as: 'person_id' },
       { field: 'people.name', as: 'person_name' },
-      'people.email',
+      { field: 'studio_people.mail_to', as: 'mail_to' },
       { field: 'class_sessions.name', as: 'class_name' },
       'class_sessions.starts_at',
     ],
@@ -251,26 +246,25 @@ export const bookingsOnDay: CacheEntry = {
       and: [
       // ── A REACHABLE ADDRESS IS PART OF THE QUESTION ─────────
       //
-      // `people.email` is nullable, because a child has no address and is a
-      // record rather than a user (db/schema/people.ts). Every selection here
-      // hands its `email` straight to the mail effect, and `outbox.to_address`
-      // is NOT NULL — so without this a child selected by any moment does not
-      // mail the wrong person, it throws, and the whole run dies with them.
+      // `studio_people.mail_to` is where mail for this person at this studio
+      // goes: their own address, or their guardian's when they have none. A
+      // child is a record with no way in, so everything a studio would write
+      // to them has to reach an adult — and that resolution is a trigger's,
+      // not a selection's, because it needs `people` twice in one query and
+      // the read grammar cannot alias one entity into two sources.
       //
       // Stated as a FILTER rather than fixed at the effect, for the reason the
-      // consent test above is: "who should hear this" is the question, and
-      // somebody nobody can write to is not part of the answer. Zero rows is a
-      // message that correctly never exists.
-      //
-      // WHAT THIS DOES NOT YET DO is route a child's mail to their guardian,
-      // which is the other half of R6. It needs `people` joined twice in one
-      // selection — the subject and the guardian — and the resolver does not
-      // alias one entity into two sources. Until then a child's studio hears
-      // nothing about them by mail, which is quiet and safe rather than wrong.
-      { isNotNull: 'people.email' },
+      // consent test is: "who should hear this" is the question, and somebody
+      // nobody can write to is not part of the answer. Zero rows is a message
+      // that correctly never exists — and `outbox.to_address` is NOT NULL, so
+      // without this a child selected by any moment did not mail the wrong
+      // person, it threw and took the whole run with it.
+      { isNotNull: 'studio_people.mail_to' },
         { eq: ['bookings.status', 'booked'] },
         { eq: ['class_sessions.status', 'scheduled'] },
         { eq: ['class_sessions.held_on', { $context: 'day' }] },
+        { eq: ['studio_people.person_id', 'bookings.person_id'] },
+        { eq: ['studio_people.studio_id', 'bookings.studio_id'] },
       ],
     },
     sort: [{ field: 'class_sessions.starts_at', dir: 'asc' }],

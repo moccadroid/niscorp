@@ -126,6 +126,30 @@ export const PEOPLE_DDL = /* sql */ `
     works_here           BOOLEAN NOT NULL DEFAULT false,
     deals_here           BOOLEAN NOT NULL DEFAULT false,
 
+    -- WHERE MAIL FOR THIS PERSON AT THIS STUDIO GOES. Their own address, or
+    -- their guardian's when they have none — a child is a record with no way
+    -- in, and everything a studio would write to them has to reach an adult.
+    --
+    -- A MIRROR, on the same terms as the counters above: recomputed by
+    -- trigger, never assembled at read. It is here rather than derived in each
+    -- selection because the derivation needs people TWICE in one query —
+    -- the subject and the guardian — and the read grammar cannot alias one
+    -- entity into two sources (vex resolver). Five automation selections would
+    -- each have had to express that, and the one that got it wrong would have
+    -- mailed a child's address to nobody or a guardian's to the wrong family.
+    --
+    -- NOT A CONCLUSION, so the paid_until doctrine is intact: this is a FACT
+    -- (an address), the same class as pass_live_until's horizon date, and it
+    -- changes only when a write changes it. What is still decided at read is
+    -- whether to write to somebody at all — consent, suppression, and the
+    -- moment's own question.
+    --
+    -- NULL means UNREACHABLE, and a selection tests for that rather than for
+    -- an email column: a child whose guardian has no address is exactly as
+    -- unreachable as an adult with none, and both should select zero rows
+    -- rather than throw at the outbox's NOT NULL.
+    mail_to              TEXT,
+
     created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
     UNIQUE (studio_id, person_id)
   );
@@ -149,7 +173,21 @@ export const PEOPLE_DDL = /* sql */ `
       enrolled_until       = (SELECT MAX(c.ends_on) FROM enrolments e JOIN courses c ON c.id = e.course_id
                                WHERE e.studio_id = p_studio AND e.person_id = p_person AND e.status = 'enrolled'),
       works_here           = EXISTS (SELECT 1 FROM staff st WHERE st.studio_id = p_studio AND st.person_id = p_person AND st.active),
-      deals_here           = EXISTS (SELECT 1 FROM connections c WHERE c.studio_id = p_studio AND c.person_id = p_person AND c.active)
+      deals_here           = EXISTS (SELECT 1 FROM connections c WHERE c.studio_id = p_studio AND c.person_id = p_person AND c.active),
+      -- Their own address, or the guardian's when they have none. ONE
+      -- guardian is chosen and the order is stated rather than left to the
+      -- planner: oldest guardianship first, ties broken by id, so a child
+      -- with two guardians resolves to the same adult on every run. Which
+      -- adult that SHOULD be is a decision nobody has made yet — this is a
+      -- deterministic holding position, not an answer (docs/plans/lyra-families.md).
+      mail_to              = COALESCE(
+                               (SELECT NULLIF(pp.email, '') FROM people pp WHERE pp.id = p_person),
+                               (SELECT NULLIF(gp.email, '') FROM guardianships gd
+                                  JOIN people gp ON gp.id = gd.guardian_person_id
+                                 WHERE gd.child_person_id = p_person AND gd.studio_id = p_studio
+                                 ORDER BY gd.created_on, gd.id
+                                 LIMIT 1)
+                             )
     WHERE sp.studio_id = p_studio AND sp.person_id = p_person;
   END;
   $rel$ LANGUAGE plpgsql;
@@ -263,6 +301,45 @@ export const PEOPLE_DDL = /* sql */ `
   -- guards this child" is the desk's and the mail system's.
   CREATE INDEX guardianships_guardian ON guardianships (studio_id, guardian_person_id);
   CREATE INDEX guardianships_child ON guardianships (studio_id, child_person_id);
+
+  -- A guardianship landing or leaving changes where the CHILD's mail goes.
+  -- The shared row shim cannot carry this: it resyncs NEW.person_id, and
+  -- this table has no such column — it has two, and the one that matters is
+  -- the child's.
+  CREATE OR REPLACE FUNCTION resync_guarded_child() RETURNS TRIGGER AS $guarded$
+  BEGIN
+    IF TG_OP <> 'DELETE' THEN PERFORM resync_relationships(NEW.studio_id, NEW.child_person_id); END IF;
+    IF TG_OP <> 'INSERT' THEN PERFORM resync_relationships(OLD.studio_id, OLD.child_person_id); END IF;
+    RETURN NULL;
+  END;
+  $guarded$ LANGUAGE plpgsql;
+
+  CREATE TRIGGER guardianships_resync_child
+    AFTER INSERT OR UPDATE OR DELETE ON guardianships
+    FOR EACH ROW EXECUTE FUNCTION resync_guarded_child();
+
+  -- AND THE OTHER DIRECTION: a guardian's own address changing moves every
+  -- child of theirs. people is not a relationship table and has no studio,
+  -- so this walks the anchors that actually depend on the row — the person
+  -- themselves, and anybody they guard.
+  CREATE OR REPLACE FUNCTION resync_reachable_by() RETURNS TRIGGER AS $reach$
+  DECLARE
+    r RECORD;
+  BEGIN
+    IF NEW.email IS NOT DISTINCT FROM OLD.email THEN RETURN NULL; END IF;
+    FOR r IN SELECT studio_id, person_id FROM studio_people WHERE person_id = NEW.id LOOP
+      PERFORM resync_relationships(r.studio_id, r.person_id);
+    END LOOP;
+    FOR r IN SELECT gd.studio_id, gd.child_person_id AS person_id FROM guardianships gd WHERE gd.guardian_person_id = NEW.id LOOP
+      PERFORM resync_relationships(r.studio_id, r.person_id);
+    END LOOP;
+    RETURN NULL;
+  END;
+  $reach$ LANGUAGE plpgsql;
+
+  CREATE TRIGGER people_resync_reachable
+    AFTER UPDATE OF email ON people
+    FOR EACH ROW EXECUTE FUNCTION resync_reachable_by();
 
   -- Who works here, and as what. A person can be staff at a studio and hold a
   -- membership there too — an instructor who also trains.

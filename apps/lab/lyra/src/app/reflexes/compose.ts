@@ -169,7 +169,11 @@ export const EFFECTS: readonly Effect[] = [
     fingerprint: queueMessage.fingerprint,
     input: (row, moment) => ({
       personId: { $ref: '$.row.person_id' },
-      toAddress: { $ref: '$.row.email' },
+      // WHERE IT ACTUALLY GOES — the anchor's resolved address, not the
+      // person's own column. For an adult they are the same value; for a
+      // child, `people.email` is NULL and this is their guardian's. The
+      // selection has already refused anybody unreachable.
+      toAddress: { $ref: '$.row.mail_to' },
       subject: row.subject,
       body: withFacts(row.body, moment),
       source: row.id,

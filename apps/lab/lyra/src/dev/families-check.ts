@@ -18,7 +18,11 @@ import { asPrincipal, mintToken, ok, report, runtime } from './world';
 // new entries at a new reach, so nothing a childless member touches changed.
 // ═══════════════════════════════════════════════════════════════
 
-const count = async (sql: string): Promise<number> => Number((await runtime.db.query<{ n: string }>(sql)).rows[0]?.n ?? -1);
+// Params, never interpolation — `sql-check` enforces it here as well as in the
+// application, and a check that splices values is a check teaching the habit
+// it exists to catch.
+const count = async (sql: string, params: unknown[] = []): Promise<number> =>
+  Number((await runtime.db.query<{ n: string }>(sql, params)).rows[0]?.n ?? -1);
 const rows = <T>(v: unknown): T[] => (Array.isArray(v) ? (v as T[]) : []);
 
 // ── the seed says what it should ─────────────────────────────
@@ -64,7 +68,7 @@ const avaBefore = await count("SELECT count(*) n FROM bookings WHERE person_id =
 
 await asPrincipal(CAST.lumen.member, '/api/me/vex', { fingerprint: 'me/book-for', context: { sessionId: freeSession, subjectId: 'p_emma' } });
 
-const emmasBooking = await count(`SELECT count(*) n FROM bookings WHERE session_id = '${freeSession}' AND person_id = 'p_emma'`);
+const emmasBooking = await count('SELECT count(*) n FROM bookings WHERE session_id = $1 AND person_id = $2', [freeSession, 'p_emma']);
 const avaAfter = await count("SELECT count(*) n FROM bookings WHERE person_id = 'p_ava'");
 
 ok(
@@ -145,5 +149,51 @@ ok(
   crossed.length === 0,
   'the studio pin ANDs onto the household rule, it does not replace it',
 );
+
+// ── where a child's mail goes ────────────────────────────────
+//
+// R6's routing half. A child has no address of their own, and everything a
+// studio would write to them has to reach an adult — so the anchor carries the
+// RESOLVED one, recomputed by trigger, and every automation selection reads
+// that rather than `people.email`.
+
+const mailTo = async (person: string): Promise<string> =>
+  String(
+    (await runtime.db.query<{ mail_to: string | null }>('SELECT mail_to FROM studio_people WHERE person_id = $1 AND studio_id = $2', [person, 'st_lumen'])).rows[0]?.mail_to ?? '',
+  );
+
+ok(
+  "a child's mail goes to their guardian",
+  (await mailTo('p_emma')) === 'ava.klein@example.com' && (await mailTo('p_tomk')) === 'ava.klein@example.com',
+  `Emma → ${await mailTo('p_emma')}`,
+);
+
+ok(
+  '...and an adult still goes to their own address',
+  (await mailTo('p_ava')) === 'ava.klein@example.com' && (await mailTo('p_jonas')) === 'jonas.weber@example.com',
+  'the fallback only applies where there is nothing to fall back from',
+);
+
+// THE MIRROR IS A MIRROR, not a value somebody wrote once. A guardian changing
+// their address moves every child of theirs, and that is a trigger on `people`
+// rather than something the desk has to remember.
+await runtime.db.query('UPDATE people SET email = $1 WHERE id = $2', ['ava.new@example.com', 'p_ava']);
+ok(
+  "a guardian changing their address moves their children's mail with it",
+  (await mailTo('p_emma')) === 'ava.new@example.com',
+  `Emma → ${await mailTo('p_emma')} — recomputed, never assembled at read`,
+);
+await runtime.db.query('UPDATE people SET email = $1 WHERE id = $2', ['ava.klein@example.com', 'p_ava']);
+
+// AND UNREACHABLE IS A REAL STATE. A child whose guardian has no address is
+// exactly as unreachable as an adult with none: the selections test for this,
+// so both select zero rows rather than throwing at `outbox.to_address`.
+await runtime.db.query('UPDATE people SET email = NULL WHERE id = $1', ['p_ava']);
+ok(
+  'a child whose guardian has no address is unreachable, not a crash',
+  (await mailTo('p_emma')) === '',
+  'NULL means nobody can be written to — the selections refuse them by name',
+);
+await runtime.db.query('UPDATE people SET email = $1 WHERE id = $2', ['ava.klein@example.com', 'p_ava']);
 
 report('a parent sees and acts for their children, the booking belongs to the child, and nobody else moved');

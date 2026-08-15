@@ -9,6 +9,11 @@
 > a member who guards nobody reads precisely what they read before. The child
 > is on the roll, derives standing, and cannot be signed in as.
 >
+> **R6's routing half landed too** (§8.8) — a child's mail reaches their
+> guardian, via a resynced `mail_to` mirror on the anchor. Its CONSENT half is
+> open and needs a human: whose consent governs for a child, which guardian
+> when there are two, and what the unsubscribe door acts on.
+>
 > **Two departures from §8 worth reading before trusting it** — both forced
 > by the code and both argued where they landed:
 >
@@ -875,35 +880,57 @@ unrelated member; the member and me-surface checks pass **unchanged**.
 
 ### 8.8 R6 — consent, minors, and whose mailbox *(option-independent)*
 
-Sized as asked, and it lands in commit 1 rather than later, because it is
-needed under every option and is otherwise invisible until a studio's first
-kids' class produces a crash.
+**ROUTING: BUILT. CONSENT: OPEN, and deliberately so.**
 
-**The defect, precisely.** The automation selections read `people.email`
-straight into the mail effect
-([tide.entries.ts:108](../../apps/lab/lyra/src/app/vex/tide.entries.ts#L108),
-[compose.ts:172](../../apps/lab/lyra/src/app/reflexes/compose.ts#L172)) and
-`to_address` is `NOT NULL`
-([mail.ts:8](../../apps/lab/lyra/src/db/schema/mail.ts#L8)). A selected child
-throws. **The fix belongs in the SELECTION, not the effect** — the selection
-is where consent is already enforced, deliberately and for the reason
-`tide.entries.ts` states at length, and a child's address is the same kind of
-fact as a child's consent.
+**The defect, as it was.** The automation selections read `people.email`
+straight into the mail effect and `outbox.to_address` is `NOT NULL`
+([mail.ts:8](../../apps/lab/lyra/src/db/schema/mail.ts#L8)) — so a child
+selected by any moment did not mail the wrong person, it **threw and took the
+whole run down with it**.
 
-**What a consent row means when the subject is a child.** `marketing_ok` sits
-on the anchor ([people.ts:73](../../apps/lab/lyra/src/db/schema/people.ts#L73))
-because consent is given to a studio, not to Lyra. For a child it is the
-guardian's to give and withdraw (GDPR Art. 8; the age is member-state law —
-14 in Austria, 16 in Germany; the seed studios are AT). Nothing about the
-column changes; what changes is **who is asked at the desk** and **whose
-address the send resolves to**.
+**What landed.** `studio_people.mail_to` — where mail for this person at this
+studio goes: their own address, or their guardian's when they have none.
+Recomputed by trigger on the same terms as the counters beside it, and every
+mail selection now reads it and tests `isNotNull` on it rather than on
+`people.email`.
 
-**Scope, roughly commit-1-sized:** route a child's send to the guardian's
-address inside the selection; decide which guardian when there are two (first
-by `created_on` is defensible and is what commit 1 should do, stated rather
-than defaulted into); and make the unsubscribe door act on the **anchor of the
-subject**, not of the recipient — a guardian unsubscribing from their child's
-studio mail must not silently opt themselves out too.
+**Why a mirror rather than a join, since the first instinct is that this
+belongs in the selection.** The derivation needs `people` TWICE in one query —
+the subject and the guardian — and the read grammar cannot express it: entity
+sources are keyed by name so `['people','people']` collides, the `as` form is
+subquery-only, a subquery source compiles to `CROSS JOIN` (so correlating it
+is an INNER join and every adult without a guardian would vanish), and views
+are invisible to introspection (`table_type = 'BASE TABLE'`). Five selections
+would each have had to express it, and the one that got it wrong would have
+mailed a guardian's address to the wrong family. So the complexity sits in one
+plpgsql function, and the selections read a column.
+
+**It is a fact, not a conclusion**, so the paid_until doctrine holds: an
+address is the same class as `pass_live_until`'s horizon date. What is still
+decided at read is whether to write to somebody at all.
+
+**Two triggers, because it changes from both ends** — a guardianship landing or
+leaving moves the child, and a guardian's own address changing moves every
+child of theirs. `families-check` asserts both, plus that a child whose
+guardian has no address is *unreachable* rather than a crash.
+
+**WHAT IS STILL OPEN, and needs a human:**
+
+1. **Whose consent governs when the subject is a child.** `marketing_ok` sits
+   on the child's own anchor and ships `false`, so a child is in no marketing
+   selection today. That is the safe default and it is not an answer: under
+   GDPR Art. 8 the consent is the guardian's to give (14 in AT, 16 in DE), and
+   nothing yet lets them give it *for* the child, nor decides whether the
+   guardian's own `marketing_ok` should stand in.
+2. **Which guardian, when there are two.** The resync picks the oldest
+   guardianship, ties broken by id — stated in SQL so it is deterministic, and
+   flagged in the function's own comment as **a holding position, not an
+   answer**. Both parents? The one who pays? The one who enrolled them?
+3. **The unsubscribe door** still acts on the anchor of the RECIPIENT. When a
+   guardian unsubscribes from mail sent about their child, that should act on
+   the child's anchor, not theirs — otherwise a parent silently opts
+   themselves out of their own studio's mail. Unbuilt, and the smallest of the
+   three.
 
 ### 8.9 Amendments to §1–§7
 

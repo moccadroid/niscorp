@@ -113,7 +113,7 @@ for (const moment of MOMENTS) {
     const rows = Array.isArray(answer) ? (answer as Record<string, unknown>[]) : [];
     best = rows.length;
     if (best === 0) refusal = JSON.stringify(answer).slice(0, 70);
-    else sample = `${String(rows[0]?.['person_name'] ?? '?')} <${String(rows[0]?.['email'] ?? '?')}>`;
+    else sample = `${String(rows[0]?.['person_name'] ?? '?')} <${String(rows[0]?.['mail_to'] ?? '?')}>`;
   } else {
     // A clock moment is a window on the calendar, so it is asked across a
     // fortnight rather than at one instant — "never, on any day" is the
@@ -124,11 +124,14 @@ for (const moment of MOMENTS) {
       if (report.selected > best) {
         best = report.selected;
         const row = (report.units[0]?.env as { row?: Record<string, unknown> } | undefined)?.row ?? {};
-        sample = `${String(row['person_name'] ?? '?')} <${String(row['email'] ?? '?')}>`;
+        sample = `${String(row['person_name'] ?? '?')} <${String(row['mail_to'] ?? '?')}>`;
       }
     }
   }
   ok(`"when ${moment.label}" finds somebody`, best > 0, refusal !== '' ? `REFUSED — ${refusal}` : `${best} selected, e.g. ${sample}`);
+  // `mail_to`, not `people.email` — the anchor's RESOLVED address, which for a
+  // child is their guardian's. A moment that selects somebody it cannot write
+  // to is a run that dies at the outbox's NOT NULL.
   ok(`...and hands the effect a person to write to`, best === 0 || sample.includes('@'), sample);
 }
 ok('...and they all load', loaded.loaded === reflexes.length, JSON.stringify(loaded.warnings ?? []).slice(0, 90));
