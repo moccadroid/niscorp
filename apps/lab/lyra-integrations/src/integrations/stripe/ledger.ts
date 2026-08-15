@@ -192,3 +192,27 @@ export const ledgerRows = (invoices: readonly MirroredInvoice[], names: Readonly
       refunded: invoice.refundedCents > 0 || invoice.disputed,
     };
   });
+
+
+/** The words a payout screen shows. Made here for the same reason the invoice
+ *  rows are: the host's kit paints a badge and does not know what `in_transit`
+ *  means, and teaching it would be teaching an app about a payment provider. */
+export const payoutRows = (payouts: readonly { id: string; amount: number; currency: string; status: string; arrivesOn: string }[]): Record<string, unknown>[] =>
+  payouts.map((payout) => {
+    const symbol = SYMBOL[payout.currency.toLowerCase()] ?? `${payout.currency.toUpperCase()} `;
+    const state =
+      payout.status === 'paid'
+        ? { label: 'Arrived', tone: 'good' }
+        : payout.status === 'in_transit'
+          ? { label: 'On its way', tone: 'calm' }
+          : payout.status === 'failed' || payout.status === 'canceled'
+            ? { label: 'Did not arrive', tone: 'alert' }
+            : { label: 'Scheduled', tone: 'neutral' };
+    return {
+      payout_id: payout.id,
+      amount_display: `${symbol}${(payout.amount / 100).toFixed(2)}`,
+      state_label: state.label,
+      state_tone: state.tone,
+      arrives_display: payout.arrivesOn,
+    };
+  });

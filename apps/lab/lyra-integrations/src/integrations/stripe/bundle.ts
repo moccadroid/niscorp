@@ -227,13 +227,58 @@ const setupAction: ActionDefinition = {
 const ledgerAction: ActionDefinition = {
   id: 'ext.desk.stripe.ledger',
   title: 'Money',
-  data: { account: {}, invoices: [], refundingId: '', refunded: {}, loading: true, error: '' },
+  data: { account: {}, invoices: [], money: {}, refundingId: '', refunded: {}, loading: true, error: '' },
   layout: {
     component: 'Stack',
     props: { gap: 22 },
     children: [
       heading('Money', 'What has been charged, refunded and disputed at this studio.'),
       { if: '$.error', then: { component: 'Notice', props: { tone: 'alert', message: '$.error.message' } }, else: '' },
+      // ── WHERE THE MONEY GOES NEXT ──────────────────────────
+      //
+      // The question the invoice list could not answer: what has been taken is
+      // not the same as what has arrived, and an owner plans around the second.
+      {
+        if: '$.account.account_id',
+        then: {
+          component: 'Card',
+          props: { pad: 18 },
+          children: {
+            component: 'Stack',
+            props: { gap: 12 },
+            children: [
+              { component: 'Text', props: { size: 'lg', weight: 'semi' }, children: 'Payouts' },
+              {
+                component: 'Row',
+                props: { gap: 22, wrap: true },
+                children: [
+                  { component: 'Field', props: { label: 'On the way', value: '$.money.pending_display' } },
+                  { component: 'Field', props: { label: 'Ready to pay out', value: '$.money.available_display' } },
+                ],
+              },
+              { if: '$.money.detail', then: { component: 'Text', props: { size: 'sm', color: 'mute' }, children: '$.money.detail' }, else: '' },
+              {
+                component: 'Card',
+                props: { flush: true },
+                children: {
+                  component: 'Rows',
+                  props: {
+                    rows: '$.money.payouts',
+                    rowKey: 'payout_id',
+                    empty: 'Nothing paid out yet.',
+                    columns: [
+                      { label: 'Arrives', px: 130, cell: { kind: 'text', key: 'arrives_display', color: 'soft' } },
+                      { label: 'Amount', px: 120, cell: { kind: 'primary', key: 'amount_display' } },
+                      { label: '', w: 1, cell: { kind: 'badge', key: 'state_label', toneKey: 'state_tone' } },
+                    ],
+                  },
+                },
+              },
+            ],
+          },
+        },
+        else: '',
+      },
       {
         if: '$.account.account_id',
         // THE INTEGRATION'S OWN MIRROR, not a call to Stripe on every page load (S4).
@@ -281,9 +326,10 @@ const ledgerAction: ActionDefinition = {
   endpoints: {
     account: { url: `${OWN}/account`, method: 'POST', request: {}, target: 'account' },
     invoices: { url: `${OWN}/ledger`, method: 'POST', request: {}, target: 'invoices', errorTarget: 'error' },
+    money: { url: `${OWN}/payouts`, method: 'POST', request: {}, target: 'money' },
     refund: { url: `${OWN}/refund`, method: 'POST', request: { invoiceId: { $ref: '$.refundingId' } }, target: 'refunded', errorTarget: 'error' },
   },
-  lifecycle: { mount: [{ call: 'account' }, { call: 'invoices', onSuccess: [{ set: 'loading', value: false }] }] },
+  lifecycle: { mount: [{ call: 'account' }, { call: 'money' }, { call: 'invoices', onSuccess: [{ set: 'loading', value: false }] }] },
   triggers: [
     {
       // MONEY GOING BACK IS NOT A CLICK, it is a decision — so it goes through
@@ -578,6 +624,11 @@ export const STRIPE_BUNDLE = {
   phrasebook: {
     de: {
       Amount: 'Betrag',
+      Payouts: 'Auszahlungen',
+      Arrives: 'Ankunft',
+      'On the way': 'Unterwegs',
+      'Ready to pay out': 'Auszahlbar',
+      'Nothing paid out yet.': 'Noch nichts ausgezahlt.',
       Payments: 'Zahlungen',
       'Nothing charged to this person yet.': 'Für diese Person wurde noch nichts abgerechnet.',
       Refund: 'Erstatten',

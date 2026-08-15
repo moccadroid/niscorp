@@ -303,3 +303,38 @@ export const notReadyToCharge = async (stripe: Stripe, accountId: string): Promi
     return undefined;
   }
 };
+
+
+// ── WHEN DOES THIS REACH MY BANK ─────────────────────────────
+//
+// The last question the money screen could not answer. It showed what members
+// had been charged and nothing about where that money then went — and "what is
+// on the way to me, and when" is most of what an owner actually wants from a
+// payments screen.
+//
+// ASKED LIVE, unlike the invoice mirror. A balance is a number that changes by
+// the minute and would be stale the moment it was stored; a payout is a handful
+// of rows a few times a month. Neither is worth a table, and a mirror of either
+// would be a second opinion about somebody else's money.
+export type Money = { amount: number; currency: string };
+export type Payout = { id: string; amount: number; currency: string; status: string; arrivesOn: string };
+
+export const balanceFor = async (stripe: Stripe, accountId: string): Promise<{ pending: Money[]; available: Money[] }> => {
+  const balance = await stripe.balance.retrieve({}, { stripeAccount: accountId });
+  const shape = (rows: { amount: number; currency: string }[]): Money[] =>
+    rows.map((row) => ({ amount: row.amount, currency: row.currency }));
+  return { pending: shape(balance.pending ?? []), available: shape(balance.available ?? []) };
+};
+
+export const payoutsFor = async (stripe: Stripe, accountId: string): Promise<Payout[]> => {
+  const payouts = await stripe.payouts.list({ limit: 12 }, { stripeAccount: accountId });
+  return payouts.data.map((payout) => ({
+    id: payout.id,
+    amount: payout.amount,
+    currency: payout.currency,
+    status: payout.status,
+    // Stripe's own estimate of the day it lands. A date rather than a
+    // timestamp: nobody plans around the hour a bank transfer clears.
+    arrivesOn: new Date(payout.arrival_date * 1000).toISOString().slice(0, 10),
+  }));
+};

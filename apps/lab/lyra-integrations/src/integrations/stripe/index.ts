@@ -1,12 +1,16 @@
 import type { Integration } from '../../integration';
 import { STRIPE_BUNDLE } from './bundle';
 import { accountFor, rememberAccount, storeIsDurable, stripeSubscriptionFor } from './store';
-import { accountStanding, createAccountSession, createConnectedAccount, createOnboardingLink, createPortalSession, notReadyToCharge, refundInvoice, stripeFor } from './client';
+import { accountStanding, balanceFor, createAccountSession, createConnectedAccount, createOnboardingLink, createPortalSession, notReadyToCharge, payoutsFor, refundInvoice, stripeFor } from './client';
 import { embedPage, notOnboardedPage, unavailablePage } from './onboarding';
 import { createCheckout, createPurchase, customerFor } from './checkout';
 import { billableFor, namesForSubscriptions, purchaseFor, subscriptionsOfPerson } from './lyra';
 import { handleStripeEvent } from './hooks';
-import { invoicesFor, invoicesForSubscriptions, ledgerRows } from './ledger';
+import { invoicesFor, invoicesForSubscriptions, ledgerRows, payoutRows } from './ledger';
+
+// The same glyphs the ledger uses, for the two balance figures that belong to no
+// row and so cannot borrow a row's currency.
+const SYMBOLS: Record<string, string> = { eur: '€', usd: '$', gbp: '£' };
 import { sweepLeaving } from './leaving';
 
 // ═══════════════════════════════════════════════════════════════
@@ -329,6 +333,40 @@ export const stripeIntegration: Integration = {
       const invoices = await invoicesFor(ctx.db, who.studioId);
       const named = await namesForSubscriptions(ctx.env, who.studioId, invoices.map((i) => i.subscriptionId));
       return c.json(ledgerRows(invoices, named));
+    });
+
+    // ── WHAT IS ON ITS WAY TO THE BANK ─────────────────────────
+    //
+    // Asked live rather than mirrored: a balance changes by the minute and would
+    // be stale the moment it was stored, and a payout is a handful of rows a few
+    // times a month. Neither is worth a table, and a mirror of either would be a
+    // second opinion about somebody else's money.
+    //
+    // A provider being unreachable answers empty with a sentence, exactly like
+    // the account read — a slow vendor is an ordinary condition, not an outage
+    // here.
+    r.post('/payouts', async (c) => {
+      const who = ctx.identity(c);
+      if (who === undefined) return c.json({ message: 'Who are you?' }, 401);
+      const held = await accountFor(ctx.db, who.studioId);
+      const stripe = stripeFor(ctx.env);
+      if (held === undefined || stripe === undefined) return c.json({ payouts: [], pending_display: '', available_display: '', detail: '' });
+      try {
+        const [balance, payouts] = await Promise.all([balanceFor(stripe, held.accountId), payoutsFor(stripe, held.accountId)]);
+        const money = (rows: { amount: number; currency: string }[]): string =>
+          rows.length === 0 ? '—' : rows.map((row) => `${SYMBOLS[row.currency.toLowerCase()] ?? `${row.currency.toUpperCase()} `}${(row.amount / 100).toFixed(2)}`).join(' · ');
+        return c.json({
+          payouts: payoutRows(payouts),
+          // TWO NUMBERS, because they mean different things and a studio owner
+          // has to know which is which: `pending` is money taken and not yet
+          // clear, `available` is money a payout can be made from today.
+          pending_display: money(balance.pending),
+          available_display: money(balance.available),
+          detail: '',
+        });
+      } catch (err) {
+        return c.json({ payouts: [], pending_display: '—', available_display: '—', detail: `Stripe did not answer: ${String(err).slice(0, 120)}` });
+      }
     });
 
     // ── ONE PERSON'S OWN PAYMENTS ──────────────────────────────
