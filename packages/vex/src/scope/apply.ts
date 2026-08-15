@@ -2,6 +2,7 @@ import type { Query } from '../schemas/query.schema.js';
 import type { Filter } from '../schemas/filter.schema.js';
 import type { ResolvedQuery, ResolvedFilter, ResolvedSource, ResolvedJoin } from '../engine/engine.types.js';
 import type { ScopePolicy, ScopeEntityRule, ScopeMatch } from './scope.types.js';
+import { isSetMatch } from './scope.types.js';
 import { VexError } from '../errors.js';
 
 // ───────────────────────────────────────────────────────────────
@@ -96,7 +97,13 @@ const predicateFor = (
   // request bug — but failing the read closed is the only safe reading of it.
   if (field === undefined) throw new VexScopeError(entityName, `Scope rule for "${entityName}" names column "${match.match}", which the table does not have`);
   const path = `${entityName}.${match.match}`;
-  const original: Filter = { eq: [path, { $scope: match.to }] };
+  // The set-valued form compiles to `col = ANY($n)`, which the operator table
+  // already emits for `in` against a scope ref — so a reach covering several
+  // rows needs no compile branch of its own, and binds through the same slot
+  // machinery. An absent or empty set matches nothing (see scope.types.ts).
+  const original: Filter = isSetMatch(match)
+    ? { in: [path, { $scope: match.in }] }
+    : { eq: [path, { $scope: match.to }] };
   return { original, resolvedPaths: new Map([[path, { alias, column: match.match, schema: field as never }]]) as never };
 };
 

@@ -3,7 +3,8 @@ import type { CompilationContext } from '../adapters/postgres/operators.js';
 import type { ParamSlot, Row } from '../adapters/adapter.types.js';
 import type { Filter } from '../schemas/filter.schema.js';
 import type { DatabaseSchema } from '../schemas/database.schema.js';
-import type { ScopePolicy, ScopeValues } from '../scope/scope.types.js';
+import type { ScopePolicy, ScopeValues, ScopeMatch, ScopeRule } from '../scope/scope.types.js';
+import { isSetMatch } from '../scope/scope.types.js';
 import { VexScopeError } from '../scope/apply.js';
 import { VexError } from '../errors.js';
 import { resolveParams } from '../utils/context.js';
@@ -114,7 +115,7 @@ const assertWritableColumns = (m: ResolvedMutation, schema: DatabaseSchema): voi
 // A `$lookup` READS its table, so the read-phase rules of THAT table apply —
 // a mutation entry is never a read-scope bypass. Match rules AND into the
 // lookup's WHERE; a table the principal cannot read refuses the whole write.
-const readMatchesFor = (table: string, policy: ScopePolicy): { match: string; to: string }[] => {
+const readMatchesFor = (table: string, policy: ScopePolicy): ScopeMatch[] => {
   const rule = policy.entities[table];
   if (rule === undefined) {
     if (policy.default === 'deny') throw new VexScopeError(table, `A $lookup reads "${table}", which is not allowed by scope policy (default: deny).`);
@@ -129,6 +130,13 @@ const readMatchesFor = (table: string, policy: ScopePolicy): { match: string; to
   return rule.read;
 };
 
+// ONE SPELLING of the RLS boundary, for every place a match rule becomes a
+// WHERE — a `$lookup`'s filter, an ON CONFLICT DO UPDATE, an UPDATE and a
+// DELETE. Four copies of `{ eq: [...] }` is four places a new match shape has
+// to be remembered, and the one that was forgotten would be the hole.
+const boundaryOf = (table: string, r: ScopeMatch): Filter =>
+  isSetMatch(r) ? { in: [`${table}.${r.match}`, { $scope: r.in }] } : { eq: [`${table}.${r.match}`, { $scope: r.to }] };
+
 const scopeLookups = <V extends MutationValue | ItemRef>(cols: Record<string, V>, policy: ScopePolicy): Record<string, V> => {
   const out: Record<string, V> = {};
   for (const [k, v] of Object.entries(cols)) {
@@ -138,7 +146,7 @@ const scopeLookups = <V extends MutationValue | ItemRef>(cols: Record<string, V>
     }
     let where: Filter = v.$lookup.where;
     for (const r of readMatchesFor(v.$lookup.from, policy)) {
-      where = { and: [where, { eq: [`${v.$lookup.from}.${r.match}`, { $scope: r.to }] }] };
+      where = { and: [where, boundaryOf(v.$lookup.from, r)] };
     }
     // A scoped lookup is still a lookup — the transform is type-preserving.
     out[k] = { $lookup: { ...v.$lookup, where } } as V;
@@ -149,7 +157,7 @@ const scopeLookups = <V extends MutationValue | ItemRef>(cols: Record<string, V>
 // The gate every write passes: throws when denied, returns `undefined` when
 // the table is ungoverned (public / default allow), else the entity rule and
 // the applicable phase rules (umbrella + specific).
-type WriteGate = { rule: Extract<ScopePolicy['entities'][string], { read?: unknown }>; rules: readonly ({ set: string; to: string } | { match: string; to: string })[] };
+type WriteGate = { rule: Extract<ScopePolicy['entities'][string], { read?: unknown }>; rules: readonly ScopeRule[] };
 
 const writeGate = (table: string, op: 'insert' | 'update' | 'delete', policy: ScopePolicy): WriteGate | undefined => {
   const rule = policy.entities[table];
@@ -188,7 +196,25 @@ const scopeInsertParts = <V extends MutationValue | ItemRef>(
   if (gate === undefined) return { values, conflict };
 
   for (const r of gate.rules) {
-    // A `set` writes identity; a `match` pins the RLS boundary — on an
+    // A WRITE'S SUBJECT IS ONE VALUE, AND THIS IS WHERE THAT IS ENFORCED.
+    //
+    // A `match` on an INSERT does not filter — there is no row yet — it WRITES
+    // the column, which is what makes "insert outside your boundary"
+    // unsayable rather than merely refused. A set has no single value to
+    // write, so there is no honest thing to do with one here.
+    //
+    // Throwing rather than picking, ignoring, or compiling a guard: a reach
+    // that covers several rows for READING must not silently become a reach
+    // that lets a caller CHOOSE which of them to write as. A write's subject
+    // comes from scope (one value) or through a `$lookup` whose own read
+    // rules the engine applies — never from a set the caller indexes into.
+    if ('match' in r && isSetMatch(r)) {
+      throw new VexScopeError(
+        table,
+        `Scope rule for "${table}" is set-valued ("${r.match}" in "${r.in}") and cannot pin an INSERT — a write's subject must be a single value. Use a scalar match, or carry the subject in a $lookup whose own read rules bound it.`,
+      );
+    }
+    // A `set` writes identity; a scalar `match` pins the RLS boundary — on an
     // INSERT both land in the values.
     values = { ...values, ['set' in r ? r.set : r.match]: { $scope: r.to } };
   }
@@ -201,7 +227,7 @@ const scopeInsertParts = <V extends MutationValue | ItemRef>(
       if ('set' in r) {
         conflict = { ...conflict, set: { ...(conflict.set ?? {}), [r.set]: { $scope: r.to } } };
       } else if (!conflict.target.includes(r.match)) {
-        const boundary: Filter = { eq: [`${table}.${r.match}`, { $scope: r.to }] };
+        const boundary = boundaryOf(table, r);
         conflict = { ...conflict, where: conflict.where === undefined ? boundary : { and: [conflict.where, boundary] } };
       }
     }
@@ -227,8 +253,10 @@ const scopeMutation = (m: CoreMutation, policy: ScopePolicy): ResolvedMutation =
       for (const r of gate.rules) {
         // The column is written from scope on insert AND update alike.
         if ('set' in r) set = { ...set, [r.set]: { $scope: r.to } };
-        // RLS boundary on update — AND the scope filter into WHERE.
-        else where = { and: [where, { eq: [`${m.table}.${r.match}`, { $scope: r.to }] }] };
+        // RLS boundary on update — AND the scope filter into WHERE. A set is
+        // safe HERE, unlike on insert: the rows already exist and this only
+        // narrows which of them may be touched.
+        else where = { and: [where, boundaryOf(m.table, r)] };
       }
     }
     return { op: 'update', table: m.table, set, where };
@@ -238,7 +266,7 @@ const scopeMutation = (m: CoreMutation, policy: ScopePolicy): ResolvedMutation =
   const gate = writeGate(m.table, 'delete', policy);
   if (gate !== undefined) {
     for (const r of gate.rules) {
-      if ('match' in r) where = { and: [where, { eq: [`${m.table}.${r.match}`, { $scope: r.to }] }] };
+      if ('match' in r) where = { and: [where, boundaryOf(m.table, r)] };
     }
   }
   return { op: 'delete', table: m.table, where };

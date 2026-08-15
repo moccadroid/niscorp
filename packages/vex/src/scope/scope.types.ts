@@ -14,8 +14,28 @@
 // (e.g. { userId, accountId }). A rule's `to` names one of these keys.
 export type ScopeValues = Record<string, unknown>;
 
-// RLS filter: `<entity>.<match>` must equal the `to` scope value.
-export type ScopeMatch = { match: string; to: string };
+// RLS filter: `<entity>.<match>` must equal the `to` scope value — or, in the
+// set-valued form, must be ONE OF the `in` scope value.
+//
+// THE SET IS FOR READS. A reach that covers several rows is a real concept —
+// "mine, and the people I am answerable for" — and the scalar form cannot say
+// it. What the set deliberately CANNOT do is pin a write: a `match` on an
+// INSERT writes the column (engine.ts), and a set has no single value to
+// write. That is not a gap to fill later; it is the property that keeps a
+// write's subject unforgeable. The mutation engine throws rather than
+// guessing, so a set-valued write rule is unauthorable rather than merely
+// discouraged.
+//
+// Fail-closed comes from SQL rather than from a guard here: the set compiles
+// to `col = ANY($n)`, an absent scope value binds NULL (`= ANY(NULL)` is NULL,
+// so the row drops) and an empty one binds `{}` (false). Neither can be
+// forgotten, because neither was written.
+export type ScopeMatchOne = { match: string; to: string };
+export type ScopeMatchAny = { match: string; in: string };
+export type ScopeMatch = ScopeMatchOne | ScopeMatchAny;
+
+/** The set-valued form, told apart by its key — `to` and `in` never coexist. */
+export const isSetMatch = (m: ScopeMatch): m is ScopeMatchAny => 'in' in m;
 
 // Identity write: `<set>` is filled from the `to` scope value on every
 // column-writing mutation (INSERT and UPDATE).
