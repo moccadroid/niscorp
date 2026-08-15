@@ -102,6 +102,7 @@ const reachingIn = lyraFiles
         'src/dev/frame-check.ts',
         'src/dev/stripe-check.ts',
         'src/dev/billing-check.ts',
+        'src/dev/role-perimeter-check.ts',
         // Reads the other services' SOURCE AS TEXT, looking for fingerprint
         // literals — consumption evidence for the entry-caller rule. It
         // imports nothing across the wire.

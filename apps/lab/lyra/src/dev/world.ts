@@ -127,17 +127,34 @@ export const envelopeOf = async (email: string, path: string, body: unknown): Pr
   return await response.json() as Record<string, unknown>;
 };
 
-export const treeOf = (shell: Shell): string => JSON.stringify(shell.flattenRenderTree(shell.getShellRenderTree()));
+/** THE SHELL'S STRUCTURE, in the language the application was authored in.
+ *
+ *  Read with the book deliberately off, and restored before returning. It used
+ *  to come out in the source language for free — the language pass lived in
+ *  moss, between flatten and serialize, so a tree read straight from nova had
+ *  never been through it. The pass moved into the renderer, so a shell now
+ *  renders in its reader's language and every structural check in this harness
+ *  would be spelling its probes in a language half the seed does not read.
+ *
+ *  Which is the right trade: a check asking "does the roll open" should not
+ *  have to know what "People" is in German, and a check asking "what does this
+ *  person SEE" should never have been reading this function. That one is
+ *  `servedTo`. */
+export const treeOf = (shell: Shell): string => {
+  const held = shell.getPhrases();
+  shell.setPhrases(undefined);
+  try {
+    return JSON.stringify(shell.flattenRenderTree(shell.getShellRenderTree()));
+  } finally {
+    shell.setPhrases(held);
+  }
+};
 
 /** EVERYTHING A TERMINAL IS ACTUALLY SENT, as one string.
  *
- *  `treeOf` reads the shell directly, which is right for structure and WRONG
- *  for anything moss does on the way out — the language pass, in particular,
- *  runs between flatten and serialize (`shells.ts`), so a tree read from nova
- *  is always in the source language no matter what the principal reads in.
- *
- *  This attaches a real connection and keeps what comes down it, which is the
- *  only honest answer to "what does this person see". */
+ *  Attaches a real connection and keeps what comes down it — the only honest
+ *  answer to "what does this person see", and the one to reach for whenever a
+ *  check is about words rather than about structure. */
 export const servedTo = async (email: string): Promise<string> => {
   const session = await sessionFor(email);
   const sent: string[] = [];

@@ -1,7 +1,5 @@
 import { createShell, createComponentRegistry, CANVAS_SLOT_NAME, ACTION_SLOT_NAME } from '@niscorp/nova';
 import { componentsOf, snapshotShell } from '@niscorp/nova/reflect';
-import { translateRenderTree } from '@niscorp/nova/i18n';
-import type { Phrasebook } from '@niscorp/nova/i18n';
 import type { Shell, CanvasConfig, FetchFn, LayoutNode, RenderNode } from '@niscorp/nova';
 import { evaluate } from '@niscorp/prism';
 import type { ScopePolicy } from '@niscorp/vex';
@@ -253,9 +251,6 @@ export const createShellHost = (ctx: ShellHostContext): ShellHost => {
     // built at; and when the last connection left (null while attached)
     since: number;
     idleSince: number | null;
-    // The words this shell wears, resolved once at build. Empty = the source
-    // language, and the pass short-circuits on it.
-    phrases: Phrasebook;
   };
 
   // The indirection `reset` needs. A session, a socket and the durable map all
@@ -280,19 +275,14 @@ export const createShellHost = (ctx: ShellHostContext): ShellHost => {
       return true;
     });
 
-  // Flatten, then translate, then serialize. THIS is the point where a
-  // language is applied and the only one that works: before flattening the
-  // words are still behind slot markers, and after serializing they are bytes.
-  // Everything downstream — the delta encoder, the socket, the terminal — is
-  // handed a finished frame and never learns a language was involved.
-  const rendered = (live: Live, tree: RenderNode[]): RenderNode[] =>
-    translateRenderTree(tree, {
-      phrases: live.phrases,
-      ...(ctx.app.phraseKeys === undefined ? {} : { keys: ctx.app.phraseKeys }),
-    });
-
+  // Flatten, then serialize. No language step here any more: the shell was
+  // built with its book, and nova applies it where a RenderNode is minted, so
+  // what comes out of `getCanvasRenderTree` is already in the reader's
+  // language. Everything downstream — the delta encoder, the socket, the
+  // terminal — is handed a finished frame and never learns a language was
+  // involved, exactly as before; there is simply one fewer walk to get there.
   const frame = (live: Live, canvasId: string): string => {
-    const tree = rendered(live, live.shell.flattenRenderTree(live.shell.getCanvasRenderTree(canvasId)));
+    const tree = live.shell.flattenRenderTree(live.shell.getCanvasRenderTree(canvasId));
     const message: ServerMessage = {
       type: 'render',
       canvas: canvasId,
@@ -437,6 +427,17 @@ export const createShellHost = (ctx: ShellHostContext): ShellHost => {
     const functions = ctx.app.functions?.(session) ?? {};
     ctx.app.onSession?.(session);
 
+    // THE WORDS THIS SHELL WEARS, resolved before it exists — because they are
+    // a property of the shell now, not of the frames it emits. Nova's renderer
+    // applies them where a RenderNode is minted, so moss hands the book over
+    // once and never touches a tree again.
+    //
+    // Resolved with the rest of the per-principal derivation. A principal whose
+    // language changes gets a `rebuild`, which re-reads this alongside their
+    // catalog and inputs — one path, so a language can never be a release
+    // behind the screen it is painting.
+    const phrases = (await ctx.app.phrases?.({ principal, identity: who.scope, wire: ctx.wire(token) })) ?? {};
+
     const shell = createShell({
       registry,
       canvases,
@@ -466,18 +467,19 @@ export const createShellHost = (ctx: ShellHostContext): ShellHost => {
         ),
       fetch: wire,
       functions,
+      // An EMPTY book is withheld rather than passed: the pass is active when
+      // either of these is present, and an app that does no i18n at all should
+      // not pay a matcher per render for a dictionary with nothing in it.
+      // `phraseKeys` alone is the source language, which still fills counted
+      // phrases — the one job that survives having nothing to translate.
+      ...(Object.keys(phrases).length === 0 ? {} : { phrases }),
+      ...(ctx.app.phraseKeys === undefined ? {} : { phraseKeys: ctx.app.phraseKeys }),
     });
     built = shell;
 
     // Born idle: a shell exists before anything attaches to it, and a shell
     // nothing ever attaches to is exactly what the sweep should collect.
-    // Resolved with the rest of the per-principal derivation. A principal whose
-    // language changes gets a `rebuild`, which re-reads this alongside their
-    // catalog and inputs — one path, so a language can never be a release
-    // behind the screen it is painting.
-    const phrases = (await ctx.app.phrases?.({ principal, identity: who.scope, wire: ctx.wire(token) })) ?? {};
-
-    const live: Live = { shell, connections: new Set(), sent: new Map(), deltaReady: new Set(), flushing: false, ended: false, since: Date.now(), idleSince: Date.now(), phrases };
+    const live: Live = { shell, connections: new Set(), sent: new Map(), deltaReady: new Set(), flushing: false, ended: false, since: Date.now(), idleSince: Date.now() };
     liveRef = live;
 
     // Per-principal canvas SEEDING — the instance twin of `inputs`. The app
@@ -560,8 +562,8 @@ export const createShellHost = (ctx: ShellHostContext): ShellHost => {
     let frameTree: RenderNode[] = [];
     try {
       // The arrangement carries words too — a canvas's own chrome, a Sheet's
-      // title. Same pass, same book.
-      frameTree = rendered(live, live.shell.getShellRenderTree());
+      // title — and gets them from the same place: the shell it was rendered by.
+      frameTree = live.shell.getShellRenderTree();
     } catch (error) {
       console.error('[moss/shells] the shell frame failed to render — serving an empty arrangement:', error);
     }

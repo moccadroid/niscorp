@@ -13,7 +13,11 @@ import type { Story as BaseStory } from '@showroom/modules/types';
 // decide which extra tabs to show (RenderTree / Canvas / Registry)
 // and derives any other surfaces from these (e.g. shell.registry).
 
-export type NovaStoryKind = 'layout' | 'action' | 'shell';
+// `i18n` is a kind rather than a category so the whole area lands in ONE
+// sidebar segment: the chrome groups by kind first, and these stories are a
+// mix of shell- and layout-driven demos that would otherwise be split across
+// two headings by an implementation detail nobody reading them cares about.
+export type NovaStoryKind = 'layout' | 'action' | 'shell' | 'i18n';
 
 export type NovaStory = BaseStory & {
   kind: NovaStoryKind;
@@ -29,5 +33,5 @@ export const isNovaStory = (value: unknown): value is NovaStory => {
   const v = value as Record<string, unknown>;
   if (typeof v['id'] !== 'string') return false;
   if (typeof v['Demo'] !== 'function') return false;
-  return v['kind'] === 'layout' || v['kind'] === 'action' || v['kind'] === 'shell';
+  return v['kind'] === 'layout' || v['kind'] === 'action' || v['kind'] === 'shell' || v['kind'] === 'i18n';
 };

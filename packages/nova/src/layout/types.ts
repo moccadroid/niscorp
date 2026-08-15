@@ -1,6 +1,7 @@
 import type { z } from 'zod';
 import type { DataStore } from '../shared/data-store';
 import type { NovaError } from '../shared/errors';
+import type { PhraseKeys, Phrasebook } from '../i18n/phrases';
 import type { LayoutNode } from './schemas';
 
 // ═══════════════════════════════════════════════════════════
@@ -109,10 +110,32 @@ export type DataStoreView = Pick<DataStore, 'get'>;
 
 export type RenderOnError = (error: NovaError) => void;
 
+// THE WORDS THIS RENDER WEARS — injected, exactly like the store and the
+// registry, and for the same reason: nova holds no dictionary and knows no
+// languages.
+//
+// This is where a language enters, and the only place. A RenderNode is minted
+// here and nowhere else, so every consumer downstream — react, dom, tty, ink,
+// moss's wire, a renderer nobody has written yet — receives words already in
+// the reader's language and never learns that a second one exists. An adapter
+// that had to translate would be an adapter every future adapter has to copy.
+//
+// Absent `phrases` AND absent `phraseKeys` is not doing i18n at all, and costs
+// nothing. Keys without a book is the SOURCE language, which still has one job:
+// filling counted phrases (`{ phrase, slots }`) that would otherwise reach the
+// glass as a structure nobody downstream can read.
 export type RenderContext = {
   store: LayoutStore;
   registry: ComponentRegistry;
   dataStore?: DataStoreView;
   strict?: boolean;
   onError?: RenderOnError;
+  // Source phrase → the words a reader of this locale should see.
+  phrases?: Phrasebook;
+  // Which keys in a tree carry prose. Absent = nova's default prop set.
+  phraseKeys?: PhraseKeys;
+  // Called once per phrase with no entry in the book, with a coarse location
+  // (`Button.label`). A reporting seam for "what did we forget" — never wire it
+  // to anything expensive; it fires during render.
+  onPhraseMiss?: (phrase: string, where: string) => void;
 };

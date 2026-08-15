@@ -77,7 +77,8 @@ export type CheckoutArgs = {
   planName: string;
   amount: number;
   currency: string;
-  interval: 'month' | 'year';
+  interval: 'day' | 'week' | 'month' | 'year';
+  intervalCount: number;
   returnUrl: string;
 };
 
@@ -99,7 +100,7 @@ export const createCheckout = async (stripe: Stripe, db: PackStore | undefined, 
   const priceId = await ensurePrice(
     stripe,
     db,
-    { accountId: args.accountId, amount: args.amount, currency: args.currency, interval: args.interval },
+    { accountId: args.accountId, amount: args.amount, currency: args.currency, interval: args.interval, intervalCount: args.intervalCount },
     args.planName,
   );
   const customerId = await ensureCustomer(stripe, db, {

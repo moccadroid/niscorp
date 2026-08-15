@@ -45,7 +45,15 @@ ok(
 );
 
 // ── what is on sale ──
-ok('eight offerings', (await count('SELECT count(*) n FROM offerings')) === 8, 'five plans, three passes');
+ok('nine offerings', (await count('SELECT count(*) n FROM offerings')) === 9, 'six plans, three passes');
+// A PERIOD THAT IS NOT ONE MONTH, in the dataset rather than only in a test.
+// Every revenue figure in this app sums `monthly_cents`, and a seed where every
+// plan bills monthly makes an arithmetic that ignores the period look correct.
+ok(
+  '...one of them billed quarterly',
+  (await count("SELECT count(*) n FROM offerings WHERE interval = 'month' AND interval_count = 3")) === 1,
+  'the shape the price list could not express until the interval became a pair',
+);
 ok('...three of them passes', (await count("SELECT count(*) n FROM offerings WHERE kind = 'pass'")) === 3);
 ok('...including a drop-in at each studio', (await count("SELECT count(DISTINCT studio_id) n FROM offerings WHERE kind = 'pass' AND credits = 1")) === 2, 'a drop-in is a one-credit pass');
 ok('...and a pass cannot be creditless', (await count("SELECT count(*) n FROM offerings WHERE kind = 'pass' AND credits IS NULL")) === 0, 'a CHECK, not a convention');

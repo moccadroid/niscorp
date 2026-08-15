@@ -52,6 +52,7 @@ export type {
   ActionRuntime,
   PublicActionRuntime,
   ActionRuntimeConfig,
+  LanguageOptions,
   TransformFn,
   FetchFn,
   FetchInit,

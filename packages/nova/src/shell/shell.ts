@@ -1,8 +1,9 @@
-import type { ActionDefinition, ActionFragment, ActionInstance, ActionRuntime, EndpointHandler, PublicActionRuntime } from '../action';
+import type { ActionDefinition, ActionFragment, ActionInstance, ActionRuntime, EndpointHandler, LanguageOptions, PublicActionRuntime } from '../action';
 // Note: ActionRuntime is used as the internal runtime type returned by spawn/registry.
 import { composeAction } from '../action';
 import { createScopeChain, resolve } from '../shared/bindings';
 import type { LayoutNode, RenderNode } from '../layout';
+import type { Phrasebook } from '../i18n/phrases';
 import { createComponentRegistry, createLayoutStore, renderLayoutFromStore } from '../layout';
 import { createEventBus } from '../shared/event-bus';
 import { createMessageBus } from '../shared/message-bus';
@@ -117,6 +118,36 @@ export const createShell = (config: ShellConfig): Shell => {
   // through this, not config.actions).
   const actions: Record<string, ActionDefinition> = { ...config.actions };
 
+  // ONE CELL FOR THE LANGUAGE, read at every render by everything that renders.
+  // Mutable so `setPhrases` reaches instances that are already mounted; the key
+  // set and the miss handler are fixed at build, because they describe the
+  // application rather than the reader.
+  let phrases = config.phrases;
+
+  // WITHDRAWING A BOOK IS THE SOURCE LANGUAGE, NOT SWITCHING i18n OFF — and the
+  // difference is not cosmetic. A shell that has stopped doing i18n leaves a
+  // counted phrase as the `{ phrase, slots }` object it travels as, and the
+  // renderer below has nobody left to close its holes; the object reaches the
+  // adapter, which is handed a structure where a word should be and throws.
+  //
+  // So the question "is this shell language-bearing" is answered ONCE, by
+  // whether it was ever given a book or a key set, and `setPhrases(undefined)`
+  // cannot un-answer it. Only a shell that never mentioned language at all pays
+  // nothing — which is still the common case, and still free.
+  let bearing = config.phrases !== undefined || config.phraseKeys !== undefined;
+  const SOURCE: Phrasebook = {};
+
+  const language = (): LanguageOptions | undefined => {
+    if (!bearing) return undefined;
+    return {
+      // An empty book translates nothing and still fills patterns, which is
+      // exactly what the source language needs.
+      phrases: phrases ?? SOURCE,
+      ...(config.phraseKeys === undefined ? {} : { phraseKeys: config.phraseKeys }),
+      ...(config.onPhraseMiss === undefined ? {} : { onPhraseMiss: config.onPhraseMiss }),
+    };
+  };
+
   // Reusable partial actions, composed into a concrete action at push/replace
   // time via the effect's `with: [...]`. Abstract — never instantiated alone.
   const fragments: Record<string, ActionFragment> = { ...(config.fragments ?? {}) };
@@ -230,6 +261,7 @@ export const createShell = (config: ShellConfig): Shell => {
     ...(config.functions === undefined ? {} : { functions: config.functions }),
     strict,
     ...(config.onError === undefined ? {} : { onError: config.onError }),
+    i18n: language,
     instanceIdFn,
     onNavigate: (cid, effect) => navigationHandler(cid, effect),
     // Every endpoint call an action makes flows to telemetry — the shell's one
@@ -404,6 +436,27 @@ export const createShell = (config: ShellConfig): Shell => {
     fireState();
   };
 
+  // Swap the book. Every tree this shell renders from here on wears the new
+  // words, including the instances already mounted — they ask for the book at
+  // render rather than holding one from spawn, which is the whole reason
+  // `i18n` is a function and not a value.
+  //
+  // A state change, not a rebuild: the words are the only thing that moved, so
+  // canvases keep their stacks and instances keep their data. An application
+  // whose SERVER-derived text was composed in the old language (a greeting, a
+  // seeded label) still needs its own rebuild — this reaches what nova renders,
+  // and nova does not know what a host built before handing it over.
+  const setPhrases = (next: Phrasebook | undefined): void => {
+    guard();
+    phrases = next;
+    // A host may build first and find its book later. Handing one over is the
+    // same declaration as naming one at build.
+    if (next !== undefined) bearing = true;
+    fireState();
+  };
+
+  const getPhrases = (): Phrasebook | undefined => phrases;
+
   const getCanvasState = (canvasId: string): CanvasState => {
     guardNoPendingStrictError();
     const canvas = canvases.get(canvasId);
@@ -464,6 +517,7 @@ export const createShell = (config: ShellConfig): Shell => {
   ): RenderNode[] => {
     const resolved = typeof layout === 'string' ? layoutStore.get(layout) : layout;
     if (resolved === undefined) return [];
+    const current = language();
     return renderLayoutFromStore(
       resolved,
       { get: () => data },
@@ -472,6 +526,9 @@ export const createShell = (config: ShellConfig): Shell => {
         registry: componentRegistry,
         strict,
         ...(config.onError === undefined ? {} : { onError: config.onError }),
+        ...(current?.phrases === undefined ? {} : { phrases: current.phrases }),
+        ...(current?.phraseKeys === undefined ? {} : { phraseKeys: current.phraseKeys }),
+        ...(current?.onPhraseMiss === undefined ? {} : { onPhraseMiss: current.onPhraseMiss }),
       },
     );
   };
@@ -536,6 +593,8 @@ export const createShell = (config: ShellConfig): Shell => {
     addCanvas,
     removeCanvas,
     setCanvasLayout,
+    setPhrases,
+    getPhrases,
     setLayout,
     getCanvasState,
     getRuntime,

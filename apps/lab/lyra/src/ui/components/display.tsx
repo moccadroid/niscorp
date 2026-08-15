@@ -2,7 +2,6 @@ import { z } from 'zod';
 import type { NovaComponent } from '@niscorp/nova/adapters/react';
 import { COLOR, HUE, RADIUS, SIZE, TONE, WEIGHT, colorToken, hueOf, hueToken, markColor, markToken, sizeToken, toneToken } from '../lib/tokens';
 import { ICON_PATHS } from '../lib/icons';
-import { fillPhrase } from '../lib/phrase';
 
 const TextProps = z
   .object({
@@ -14,10 +13,11 @@ const TextProps = z
     mono: z.boolean().optional(),
     truncate: z.boolean().optional(),
     tabular: z.boolean().optional().describe('Lining figures — for anything in a column that should line up'),
-    // A prose value bound as a PROP rather than as a text-node child: a bare
-    // child binding stringifies at resolve time, which turns a counted
-    // pattern into '[object Object]' before any pass can see it.
-    phrase: z.union([z.string(), z.object({ phrase: z.string(), slots: z.record(z.string(), z.unknown()) }).strict()]).optional(),
+    // A prose value bound as a PROP rather than as a text-node child, for two
+    // reasons that both come from the renderer: a bound TEXT CHILD is data and
+    // is never translated, and a counted pattern only gets filled at a prose
+    // key. Both rules are about the key, so the value has to travel under one.
+    phrase: z.string().optional(),
   })
   .strict();
 
@@ -37,7 +37,7 @@ export const Text: NovaComponent<z.infer<typeof TextProps>> = ({ size, color, we
       ...(size === 'display' || size === 'xxl' ? { letterSpacing: '-0.02em', lineHeight: 1.1 } : {}),
     }}
   >
-    {phrase === undefined ? children : String(fillPhrase(phrase))}
+    {phrase ?? children}
   </span>
 );
 Text.meta = { description: 'Text. Size and weight carry the hierarchy — there is no second typeface in this kit.', propsSchema: TextProps };
@@ -71,12 +71,11 @@ export const Badge: NovaComponent<z.infer<typeof BadgeProps>> = ({ tone, hue, la
 Badge.meta = { description: 'A small status pill. `tone` is a token, so a status never carries its own colour.', propsSchema: BadgeProps };
 
 // `phrase` beside `value` for the same reason Field has both — see Field.
-const StatPattern = z.object({ phrase: z.string(), slots: z.record(z.string(), z.unknown()) }).strict();
 const StatProps = z
   .object({
     label: z.string(),
     value: z.string().optional(),
-    phrase: z.union([z.string(), StatPattern]).optional().describe('A prose value: translated by the pass, patterns filled'),
+    phrase: z.string().optional().describe('A prose value: translated by the renderer, counted patterns filled'),
     hint: z.string().optional(),
     tone: toneToken,
   })
@@ -97,7 +96,7 @@ export const Stat: NovaComponent<Partial<z.infer<typeof StatProps>>> = ({ label,
         lineHeight: 1.25,
       }}
     >
-      {phrase === undefined ? value : String(fillPhrase(phrase))}
+      {phrase ?? value}
     </span>
     {hint === undefined ? null : <span style={{ fontSize: SIZE['sm'], color: COLOR['mute'] }}>{hint}</span>}
   </div>
@@ -192,19 +191,18 @@ Prose.meta = { description: 'A paragraph: real leading, a readable measure, and 
 // ── field ────────────────────────────────────────────────────
 //
 // `value` and `phrase` are the same slot with different CITIZENSHIP. A
-// binding's key dies at resolution — `$.x.paid_via_display` reaches the tree
-// as a prop named `value` — so proseness has to be declared by the prop the
-// author picks, not recovered from where the data came from. `value` is data
-// (a name, an amount) and the pass never touches it; `phrase` is vocabulary
-// (a closed-set word, a counted pattern) and translates. Deciding which is
-// which is the author's one job here, and it is the same decision the vex
-// mapping already made when it spelled the field `*_display`.
-const PatternValue = z.object({ phrase: z.string(), slots: z.record(z.string(), z.unknown()) }).strict();
+// binding's key dies at resolution — `$.x.paid_via_display` reaches the
+// renderer as a prop named `value` — so proseness has to be declared by the
+// prop the author picks, not recovered from where the data came from. `value`
+// is data (a name, an amount) and the pass never touches it; `phrase` is
+// vocabulary (a closed-set word, a counted pattern) and translates. Deciding
+// which is which is the author's one job here, and it is the same decision the
+// vex mapping already made when it spelled the field `*_display`.
 const FieldProps = z
   .object({
     label: z.string(),
     value: z.string().optional(),
-    phrase: z.union([z.string(), PatternValue]).optional().describe('A prose value: translated by the pass, patterns filled'),
+    phrase: z.string().optional().describe('A prose value: translated by the renderer, counted patterns filled'),
     hint: z.string().optional(),
     icon: z.string().optional(),
     empty: z.string().optional().describe('Shown when the value is blank — "Not given" beats a silent gap'),
@@ -212,7 +210,7 @@ const FieldProps = z
   .strict();
 
 export const Field: NovaComponent<Partial<z.infer<typeof FieldProps>>> = ({ label, value, phrase, hint, icon, empty }: Partial<z.infer<typeof FieldProps>>) => {
-  const held = phrase === undefined ? value : String(fillPhrase(phrase));
+  const held = phrase ?? value;
   const shown = held === undefined || held === '' ? undefined : held;
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 3, minWidth: 0 }}>

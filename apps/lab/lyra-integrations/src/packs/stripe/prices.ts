@@ -22,7 +22,11 @@ import type { PackStore } from '../../pack';
 // lives in lyra; what they are charged lives here.
 // ═══════════════════════════════════════════════════════════════
 
-export type PriceShape = { accountId: string; amount: number; currency: string; interval: 'month' | 'year' };
+// THE PERIOD IS A PAIR, and both halves are Stripe's own vocabulary: a unit and
+// a count, so quarterly is ('month', 3) rather than a fifth word. Lyra widened
+// its price list to say this because a studio billing quarterly is ordinary in
+// the countries these studios trade in; here it is simply passed through.
+export type PriceShape = { accountId: string; amount: number; currency: string; interval: 'day' | 'week' | 'month' | 'year'; intervalCount: number };
 
 /**
  * The address. Pure, total, and the only place the shape becomes a string —
@@ -30,9 +34,15 @@ export type PriceShape = { accountId: string; amount: number; currency: string; 
  *
  * Currency is lower-cased because Stripe's is: `EUR` and `eur` are one currency
  * and must not be two Prices.
+ *
+ * THE COUNT IS IN THE KEY, and leaving it out would have been the expensive kind
+ * of bug: €240 monthly and €240 quarterly are the same three other fields, so
+ * they would have addressed one Price and every quarterly subscriber would have
+ * been billed monthly. Content-addressing only works when the address holds the
+ * whole content.
  */
 export const priceKey = (shape: PriceShape): string =>
-  [shape.accountId, String(shape.amount), shape.currency.toLowerCase(), shape.interval].join(':');
+  [shape.accountId, String(shape.amount), shape.currency.toLowerCase(), shape.interval, String(shape.intervalCount)].join(':');
 
 export const priceFor = async (db: PackStore | undefined, key: string): Promise<string | undefined> => {
   if (db === undefined) return MEMORY.get(key);
@@ -52,9 +62,9 @@ const remember = async (db: PackStore | undefined, key: string, shape: PriceShap
   // The loser's Price is simply never used — an orphan object at a vendor is
   // cheap, and two rows claiming one address is not.
   await db.query(
-    `INSERT INTO ${db.table('prices')} (price_key, account_id, price_id, amount, currency, interval)
-     VALUES ($1, $2, $3, $4, $5, $6) ON CONFLICT (price_key) DO NOTHING`,
-    [key, shape.accountId, priceId, shape.amount, shape.currency.toLowerCase(), shape.interval],
+    `INSERT INTO ${db.table('prices')} (price_key, account_id, price_id, amount, currency, interval, interval_count)
+     VALUES ($1, $2, $3, $4, $5, $6, $7) ON CONFLICT (price_key) DO NOTHING`,
+    [key, shape.accountId, priceId, shape.amount, shape.currency.toLowerCase(), shape.interval, shape.intervalCount],
   );
   return (await priceFor(db, key)) ?? priceId;
 };
@@ -78,7 +88,11 @@ export const ensurePrice = async (stripe: Stripe, db: PackStore | undefined, sha
       product: product.id,
       unit_amount: shape.amount,
       currency: shape.currency.toLowerCase(),
-      recurring: { interval: shape.interval },
+      // Stripe caps a billing period at a year — 365 days, 52 weeks, 12 months,
+      // 1 year — and refuses anything longer with a message the setup screen
+      // prints. Not re-checked here: a second copy of somebody else's limit is
+      // a copy that goes stale, and the refusal already says what is wrong.
+      recurring: { interval: shape.interval, interval_count: shape.intervalCount },
       // GROSS, as decided: lyra's `price_cents` is what a member pays, so the
       // tax is inside it rather than added at checkout.
       tax_behavior: 'inclusive',

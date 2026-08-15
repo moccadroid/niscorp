@@ -235,11 +235,17 @@ export const createActionRuntime = (config: ActionRuntimeConfig): ActionRuntime 
   };
 
   const render = (): RenderNode[] => {
+    // Asked per render, not held: `shell.setPhrases` has to reach the screens
+    // that are already open, and a book captured at spawn could not.
+    const language = config.i18n?.();
     const out = renderRuntime(definition, dataStore, {
       store: config.layoutStore,
       registry: config.registry,
       strict,
       onError,
+      ...(language?.phrases === undefined ? {} : { phrases: language.phrases }),
+      ...(language?.phraseKeys === undefined ? {} : { phraseKeys: language.phraseKeys }),
+      ...(language?.onPhraseMiss === undefined ? {} : { onPhraseMiss: language.onPhraseMiss }),
     });
     reconcileModelBindings(out);
     return out;

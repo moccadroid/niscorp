@@ -45,12 +45,121 @@ ok('...and the list shows it', tree.includes('"name":"Drop-in"'), 'asserted on t
 ok('...formatted', /€\s?18/.test(tree));
 ok('the form closed itself', !tree.includes('In cents'));
 
+// ── THE TERMS ARE THE STUDIO'S, NOT OURS ─────────────────────
+//
+// Every one of these was a fixed menu: three, six, twelve or twenty-four months;
+// fourteen, thirty, sixty or ninety days; four, eight, twelve or sixteen
+// classes. A studio on a four-month term with forty-five days' notice could not
+// say so — not because anything refused it (the columns are plain integers with
+// a `>= 0` check) but because nobody had typed those numbers into a list.
+//
+// So the assertion is deliberately a shape none of those menus could produce.
+// It is not about 4 and 45; it is that we stopped having an opinion.
+const oddBefore = await count("SELECT count(*) n FROM offerings WHERE studio_id = 'st_lumen'");
+manager.dispatch({ type: 'ui:click', ref: 'add' });
+await settle();
+manager.dispatch({ type: 'ui:model', ref: 'name', payload: 'Four months, six weeks notice' });
+manager.dispatch({ type: 'ui:model', ref: 'priceCents', payload: 7250 });
+manager.dispatch({ type: 'ui:model', ref: 'interval', payload: 'month' });
+manager.dispatch({ type: 'ui:model', ref: 'classAllowance', payload: 6 });
+manager.dispatch({ type: 'ui:model', ref: 'minimumTermMonths', payload: 4 });
+manager.dispatch({ type: 'ui:model', ref: 'noticeDays', payload: 45 });
+await settle();
+manager.dispatch({ type: 'ui:click', ref: 'create' });
+await settle(10);
+
+ok('a studio can author terms no menu of ours offered', (await count("SELECT count(*) n FROM offerings WHERE studio_id = 'st_lumen'")) === oddBefore + 1, 'four months, forty-five days, six classes');
+ok(
+  '...and they land exactly as typed',
+  (await count("SELECT count(*) n FROM offerings WHERE name = 'Four months, six weeks notice' AND minimum_term_months = 4 AND notice_days = 45 AND class_allowance = 6")) === 1,
+  'no rounding to the nearest thing we had thought of',
+);
+
+// EMPTY IS A REAL ANSWER, and a different one per column — the difference a
+// Select never had to express, because a Select cannot be blank.
+manager.dispatch({ type: 'ui:click', ref: 'add' });
+await settle();
+manager.dispatch({ type: 'ui:model', ref: 'name', payload: 'Rolling, unlimited' });
+manager.dispatch({ type: 'ui:model', ref: 'priceCents', payload: 9900 });
+manager.dispatch({ type: 'ui:model', ref: 'interval', payload: 'month' });
+manager.dispatch({ type: 'ui:model', ref: 'classAllowance', payload: '' });
+manager.dispatch({ type: 'ui:model', ref: 'minimumTermMonths', payload: '' });
+manager.dispatch({ type: 'ui:model', ref: 'noticeDays', payload: '' });
+await settle();
+manager.dispatch({ type: 'ui:click', ref: 'create' });
+await settle(10);
+
+ok(
+  'a cleared allowance is unlimited, and a cleared term is rolling',
+  (await count("SELECT count(*) n FROM offerings WHERE name = 'Rolling, unlimited' AND class_allowance IS NULL AND minimum_term_months = 0 AND notice_days = 0")) === 1,
+  'NULL where absence is the answer, 0 where none is a term — not one rule for both',
+);
+
+// ── HOW OFTEN IS THE STUDIO'S TOO ────────────────────────────
+//
+// 'month' and 'year' were the whole vocabulary, so a studio billing quarterly —
+// ordinary in AT and DE — could not write its own price list down. The period is
+// a pair now: a unit and a count, which is also exactly what Stripe's Price
+// takes, so nothing between the two gets an opinion about which periods exist.
+//
+// The arithmetic is the part worth asserting. `monthly_cents` is SUMMED to make
+// every revenue figure in the app, so a quarterly plan that reported its whole
+// price as monthly would treble a studio's forecast — and it would look
+// plausible, which is the failure mode that survives a demo.
+manager.dispatch({ type: 'ui:click', ref: 'add' });
+await settle();
+manager.dispatch({ type: 'ui:model', ref: 'name', payload: 'Quarterly' });
+manager.dispatch({ type: 'ui:model', ref: 'priceCents', payload: 33000 });
+manager.dispatch({ type: 'ui:model', ref: 'interval', payload: 'month' });
+manager.dispatch({ type: 'ui:model', ref: 'intervalCount', payload: 3 });
+await settle();
+manager.dispatch({ type: 'ui:click', ref: 'create' });
+await settle(10);
+
+ok(
+  'a studio can bill on a period the app had no word for',
+  (await count("SELECT count(*) n FROM offerings WHERE name = 'Quarterly' AND interval = 'month' AND interval_count = 3")) === 1,
+  'every three months — a unit and a count, not a fifth named period',
+);
+
+// Somebody on it, so the trigger has something to stamp. Written directly for
+// the same reason the notice probe below is: the arithmetic under test is the
+// DATABASE's, and routing through a screen would put a second thing in the way
+// of finding out whether it is right.
+const quarterlyId = (await runtime.db.query<{ id: string }>("SELECT id FROM offerings WHERE name = 'Quarterly'")).rows[0]?.id ?? '';
+const anyLumen = await runtime.db.query<{ id: string }>("SELECT person_id AS id FROM studio_people WHERE studio_id = 'st_lumen' LIMIT 1");
+await runtime.db.query(
+  `INSERT INTO subscriptions (id, studio_id, person_id, offering_id, status)
+   VALUES ('sub_quarter_probe', 'st_lumen', $1, $2, 'active')`,
+  [anyLumen.rows[0]?.id, quarterlyId],
+);
+const quarterlyMonthly = await count("SELECT COALESCE(monthly_cents, 0) n FROM subscriptions WHERE id = 'sub_quarter_probe'");
+ok(
+  '...and €330 every three months is €110 a month, not €330',
+  quarterlyMonthly === 11000,
+  `${String(quarterlyMonthly)} cents — the figure every forecast in this app is a sum of`,
+);
+
+// REPRICING THE PERIOD MOVES IT TOO. The resync trigger fired on price and
+// interval and not on the count, so a plan moved from monthly to quarterly kept
+// reporting its old monthly value — a studio's forecast frozen at three times
+// the truth, with nothing on any screen to say so.
+await asPrincipal(CAST.lumen.owner, '/api/studio/vex', {
+  fingerprint: 'offerings/update',
+  context: { offeringId: quarterlyId, name: 'Quarterly', priceCents: 33000, interval: 'month', intervalCount: 1, classAllowance: null, minimumTermMonths: 0, noticeDays: 0, credits: null, validDays: null },
+});
+ok(
+  '...and moving it back to monthly moves the figure with it',
+  (await count("SELECT COALESCE(monthly_cents, 0) n FROM subscriptions WHERE id = 'sub_quarter_probe'")) === 33000,
+  'the resync trigger watches the count, not only the price and the unit',
+);
+
 // ── editing one ──
 const planId = (await runtime.db.query<{ id: string }>("SELECT id FROM offerings WHERE name = 'Drop-in'")).rows[0]?.id ?? '';
 // The payload IS the row the list hands over, so it carries the terms too —
 // without them the form opens with nothing in those fields and Save writes the
 // nothing back over a commitment somebody sold.
-manager.dispatch({ type: 'ui:click', ref: 'edit', payload: { offering_id: planId, kind: 'recurring', active: true, name: 'Drop-in', price_cents: 1800, interval: 'month', class_allowance: 4, minimum_term_months: 0, notice_days: 0, credits: null, valid_days: null } });
+manager.dispatch({ type: 'ui:click', ref: 'edit', payload: { offering_id: planId, kind: 'recurring', active: true, name: 'Drop-in', price_cents: 1800, interval: 'month', interval_count: 1, class_allowance: 4, minimum_term_months: 0, notice_days: 0, credits: null, valid_days: null } });
 await settle();
 ok('editing prefills from the row', treeOf(manager).includes('Edit offering'));
 manager.dispatch({ type: 'ui:model', ref: 'priceCents', payload: 2000 });
@@ -65,7 +174,7 @@ const unlimitedId = (await runtime.db.query<{ id: string }>("SELECT id FROM offe
 const subsBefore = await count('SELECT count(*) n FROM subscriptions WHERE offering_id = $1', [unlimitedId]);
 ok('the plan under test has subscribers', subsBefore > 0, `${subsBefore} of them`);
 
-manager.dispatch({ type: 'ui:click', ref: 'edit', payload: { offering_id: unlimitedId, kind: 'recurring', active: true, name: 'Unlimited', price_cents: 11900, interval: 'month', class_allowance: null } });
+manager.dispatch({ type: 'ui:click', ref: 'edit', payload: { offering_id: unlimitedId, kind: 'recurring', active: true, name: 'Unlimited', price_cents: 11900, interval: 'month', interval_count: 1, class_allowance: null } });
 await settle();
 manager.dispatch({ type: 'ui:click', ref: 'retire' });
 await settle(10);
@@ -78,7 +187,7 @@ tree = treeOf(manager);
 ok('...and the list still shows it, marked', tree.includes('Retired'), 'greyed rather than gone');
 
 // ── offering it again ──
-manager.dispatch({ type: 'ui:click', ref: 'edit', payload: { offering_id: unlimitedId, kind: 'recurring', active: false, name: 'Unlimited', price_cents: 11900, interval: 'month', class_allowance: null } });
+manager.dispatch({ type: 'ui:click', ref: 'edit', payload: { offering_id: unlimitedId, kind: 'recurring', active: false, name: 'Unlimited', price_cents: 11900, interval: 'month', interval_count: 1, class_allowance: null } });
 await settle();
 manager.dispatch({ type: 'ui:click', ref: 'restore' });
 await settle(10);
@@ -90,7 +199,7 @@ const deskWrite = await asPrincipal(CAST.lumen.desk, '/api/studio/vex', {
   // The terms travel too, so this is refused for the RIGHT reason — the rung —
   // rather than for a missing field, which would pass the assertion while
   // proving nothing about who may set prices.
-  context: { offeringId: unlimitedId, name: 'Free', priceCents: 0, interval: 'month', classAllowance: '', minimumTermMonths: 0, noticeDays: 0, credits: null, validDays: null },
+  context: { offeringId: unlimitedId, name: 'Free', priceCents: 0, interval: 'month', intervalCount: 1, classAllowance: '', minimumTermMonths: 0, noticeDays: 0, credits: null, validDays: null },
 });
 ok('the desk cannot reprice a plan', JSON.stringify(deskWrite).includes('status'), JSON.stringify(deskWrite).slice(0, 70));
 ok('...and the price is untouched', (await count('SELECT count(*) n FROM offerings WHERE id = $1 AND price_cents = 11900', [unlimitedId])) === 1, 'refused, not merely hidden');
@@ -144,7 +253,7 @@ ok('...nor can a subscription drift from it', wrongSub !== '', wrongSub.split('\
 // ever written a term, a notice period, or a notice — so it has never once run.
 const termPlan = await asPrincipal(CAST.lumen.owner, '/api/studio/vex', {
   fingerprint: 'offerings/create',
-  context: { name: 'Six months, two months notice', kind: 'recurring', priceCents: 9900, interval: 'month', classAllowance: null, minimumTermMonths: 6, noticeDays: 60, credits: null, validDays: null },
+  context: { name: 'Six months, two months notice', kind: 'recurring', priceCents: 9900, interval: 'month', intervalCount: 1, classAllowance: null, minimumTermMonths: 6, noticeDays: 60, credits: null, validDays: null },
 });
 const planRow = await runtime.db.query<{ id: string; minimum_term_months: number; notice_days: number }>(
   "SELECT id, minimum_term_months, notice_days FROM offerings WHERE name = 'Six months, two months notice'",

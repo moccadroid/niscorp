@@ -8,7 +8,7 @@ import { Avatar, Badge, Bands, Dot, Icon, Meter } from './display';
 import { Checkbox } from './forms';
 import { Skeleton, Empty } from './feedback';
 import { cx } from '../lib/cx';
-import { fillPhrase } from '../lib/phrase';
+
 
 type MenuItem = { label: string; ref: string; icon?: string; danger?: boolean; showKey?: string; hideKey?: string };
 
@@ -90,10 +90,10 @@ type Row = Record<string, unknown>;
 
 const str = (row: Row, key: string | undefined): string => {
   if (key === undefined) return '';
-  // `fillPhrase` first: a counted phrase reaches an untranslated session as
-  // its raw `{ phrase, slots }` shape (the pass that fills it only runs when
-  // a book exists), and every cell that shows text goes through here.
-  const v = fillPhrase(row[key]);
+  // A counted phrase arrives already filled. The renderer fills patterns at
+  // any prose key whether or not there is a book, so a source-language session
+  // no longer needs the kit to know what a `{ phrase, slots }` shape is.
+  const v = row[key];
   return v === undefined || v === null ? '' : String(v);
 };
 

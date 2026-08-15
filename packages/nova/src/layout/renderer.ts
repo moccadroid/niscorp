@@ -7,6 +7,9 @@ import {
 } from '../shared/errors';
 import { createScopeChain, getPath, pushScope, resolve } from '../shared/bindings';
 import type { ScopeChain } from '../shared/bindings';
+import { isBinding } from '../i18n/phrases';
+import { passFor, swap, walkValue } from '../i18n/swap';
+import type { Pass } from '../i18n/swap';
 import {
   isComponentNode,
   isConditionalNode,
@@ -42,6 +45,13 @@ type InternalRenderContext = {
   strict: boolean;
   onError: RenderOnError;
   scopePaths: string[];
+  // Undefined when the host named no book and no keys — the whole language
+  // apparatus is then absent rather than idling, and a `{ phrase, slots }`
+  // object passes through as the object it is.
+  pass: Pass | undefined;
+  // Where a miss was found, coarse: the chain of component names above it.
+  // Only maintained while a pass is active, since nothing else reads it.
+  where: string;
 };
 
 const textNode = (value: string): RenderNode => ({ type: 'text', value });
@@ -103,7 +113,14 @@ const renderNode = (
   if (typeof node === 'string') {
     const resolved = resolve(node, chain);
     if (resolved === undefined || resolved === null) return [textNode('')];
-    return [textNode(String(resolved))];
+    const value = String(resolved);
+    // A LITERAL text child is prose; a BOUND one is data wearing a text
+    // position, and offering it to the book is how a member called "Pass" gets
+    // renamed. Nothing but the renderer can tell those apart — by the time a
+    // tree exists both are the same plain string — which is why this rule
+    // could not be written in `translateRenderTree` and can be written here.
+    if (ctx.pass === undefined || !ctx.pass.text || isBinding(node)) return [textNode(value)];
+    return [textNode(swap(value, `${ctx.where}#text`, ctx.pass))];
   }
   if (isLayoutPrimitive(node)) {
     return [textNode(String(node))];
@@ -188,10 +205,25 @@ const renderComponent = (
       { name: node.component },
     );
   }
+  // THE ONE PLACE A PROP BECOMES A WORD ON A SCREEN. The swap belongs here
+  // rather than in a later walk over the finished tree: the value is already
+  // in hand, so translating it costs one lookup instead of a second traversal
+  // of everything that was just built.
+  //
+  // Unlike a text child, a BOUND prop is translated — that is the whole
+  // `_display` mechanism, where a query manufactures a closed-set word and a
+  // read puts it on the screen. What protects data here is the KEY: `label` is
+  // prose, `name` is not, and no value ever votes on the question.
+  const pass = ctx.pass;
+  const at = pass === undefined ? '' : `${ctx.where}/${node.component}`;
   const props: Record<string, unknown> = Object.fromEntries(
-    Object.entries(node.props ?? {}).map(([k, v]) => [k, resolve(v, chain)]),
+    Object.entries(node.props ?? {}).map(([k, v]) => {
+      const resolved = resolve(v, chain);
+      if (pass === undefined) return [k, resolved];
+      return [k, walkValue(resolved, pass.isProse(k), `${at}.${k}`, pass)];
+    }),
   );
-  const children = renderChildren(node.children, chain, ctx);
+  const children = renderChildren(node.children, chain, pass === undefined ? ctx : { ...ctx, where: at });
 
   let model: ModelBindingDescriptor | undefined;
   if (node.model !== undefined) {
@@ -263,6 +295,14 @@ const toInternal = (ctx: RenderContext): InternalRenderContext => ({
   strict: ctx.strict ?? false,
   onError: ctx.onError ?? noopOnError,
   scopePaths: [],
+  // Built once per render call. The matcher compiles a Set and a suffix list,
+  // and doing that per node would make the cheapest branch the expensive one.
+  pass: passFor({
+    ...(ctx.phrases === undefined ? {} : { phrases: ctx.phrases }),
+    ...(ctx.phraseKeys === undefined ? {} : { keys: ctx.phraseKeys }),
+    ...(ctx.onPhraseMiss === undefined ? {} : { onMiss: ctx.onPhraseMiss }),
+  }),
+  where: '',
 });
 
 export const renderLayout = (
@@ -285,6 +325,9 @@ export type RenderOptions = {
   registry: RenderContext['registry'];
   strict?: boolean;
   onError?: RenderOnError;
+  phrases?: RenderContext['phrases'];
+  phraseKeys?: RenderContext['phraseKeys'];
+  onPhraseMiss?: RenderContext['onPhraseMiss'];
 };
 
 export const render = (options: RenderOptions): RenderNode[] =>
@@ -293,6 +336,9 @@ export const render = (options: RenderOptions): RenderNode[] =>
     registry: options.registry,
     ...(options.strict === undefined ? {} : { strict: options.strict }),
     ...(options.onError === undefined ? {} : { onError: options.onError }),
+    ...(options.phrases === undefined ? {} : { phrases: options.phrases }),
+    ...(options.phraseKeys === undefined ? {} : { phraseKeys: options.phraseKeys }),
+    ...(options.onPhraseMiss === undefined ? {} : { onPhraseMiss: options.onPhraseMiss }),
   });
 
 // Render a layout reading its root data from a DataStore view. Used by the

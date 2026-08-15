@@ -11,13 +11,40 @@ export const plansPrism = {
 // The blanks are said HERE, once, so the form can hold both shapes without
 // either write carrying fields that mean nothing to its kind.
 const isPass = { $eq: [{ $ref: '$.kind' }, 'pass'] };
+
+// ── WHAT A CLEARED FIELD MEANS, and it differs per column ────
+//
+// These were fixed menus until the studio was given the pen — five Selects
+// holding our guesses about somebody else's business, which excluded the studio
+// billing on a 45-day notice period for no reason but that nobody had typed 45
+// into a list. A free field can be EMPTY, though, and a Select never could, so
+// the meaning of empty has to be stated rather than left to whatever the column
+// does with ''.
+//
+// Zero, for the two that are NOT NULL and where "none" is a real term: no
+// minimum is rolling, no notice ends it immediately. An empty box means the
+// same thing somebody typing 0 means, and the column spells it 0.
+const orZero = (path: string): unknown => ({ $case: { branches: [{ when: { $ref: path }, then: { $ref: path } }], else: 0 } });
+// NULL, for the two where absence is its own answer the schema already models:
+// no allowance is UNLIMITED, no validity NEVER EXPIRES. Neither is zero, and
+// writing zero would sell a plan that buys nothing.
+const orNull = (path: string): unknown => ({ $case: { branches: [{ when: { $ref: path }, then: { $ref: path } }], else: null } });
+
 const KIND_FIELDS = {
   interval: { $case: { branches: [{ when: isPass, then: 'month' }], else: { $ref: '$.interval' } } },
-  classAllowance: { $case: { branches: [{ when: isPass, then: null }], else: { $ref: '$.classAllowance' } } },
-  minimumTermMonths: { $case: { branches: [{ when: isPass, then: 0 }], else: { $ref: '$.minimumTermMonths' } } },
-  noticeDays: { $case: { branches: [{ when: isPass, then: 0 }], else: { $ref: '$.noticeDays' } } },
-  credits: { $case: { branches: [{ when: isPass, then: { $ref: '$.credits' } }], else: null } },
-  validDays: { $case: { branches: [{ when: isPass, then: { $case: { branches: [{ when: { $ref: '$.validDays' }, then: { $ref: '$.validDays' } }], else: null } } }], else: null } },
+  // A pass is bought once, so its period is the column's default rather than
+  // whatever the form happened to be holding when the kind was switched.
+  // Empty falls to 1: a unit with no count is that unit, once.
+  intervalCount: { $case: { branches: [{ when: isPass, then: 1 }], else: { $case: { branches: [{ when: { $ref: '$.intervalCount' }, then: { $ref: '$.intervalCount' } }], else: 1 } } } },
+  classAllowance: { $case: { branches: [{ when: isPass, then: null }], else: orNull('$.classAllowance') } },
+  minimumTermMonths: { $case: { branches: [{ when: isPass, then: 0 }], else: orZero('$.minimumTermMonths') } },
+  noticeDays: { $case: { branches: [{ when: isPass, then: 0 }], else: orZero('$.noticeDays') } },
+  // A pass with no credit count is not a pass, and the schema says so
+  // (`CHECK (kind <> 'pass' OR credits IS NOT NULL)`). Left as the database's
+  // refusal rather than defaulted here: guessing "one" for somebody who cleared
+  // the field would sell a drop-in they did not mean to price.
+  credits: { $case: { branches: [{ when: isPass, then: orNull('$.credits') }], else: null } },
+  validDays: { $case: { branches: [{ when: isPass, then: orNull('$.validDays') }], else: null } },
 };
 
 export const planCreatePrism = {

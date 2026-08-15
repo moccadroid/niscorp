@@ -41,7 +41,7 @@ const NORTHROCK = { principal: 'p_omar', scope: { studioId: 'st_northrock', pers
 
 // ── every pack answers at its own prefix, and nowhere else ───
 const bundle = await integrationsApp.request('/belts/bundle');
-const bundleJson = (await bundle.json()) as { integration?: string; frames?: string[] };
+const bundleJson = (await bundle.json()) as { integration?: string; frames?: Record<string, string> };
 ok('a pack is served at its own prefix', bundle.status === 200 && bundleJson.integration === 'belts', `${bundle.status} · ${bundleJson.integration}`);
 ok('...and the prefix is applied by the mounting, not written into the route', (await integrationsApp.request('/bundle')).status === 404, 'a pack mounts /bundle; only one place turns that into /belts/bundle');
 ok('...so a second pack does not collide with the first', (await integrationsApp.request('/hookclaim/bundle')).status === 200, 'two packs, two prefixes, one process');
@@ -188,13 +188,18 @@ ok('...and in_review is not offered a form, so nobody circles', review.actionabl
 // keep the first) was verified against the sandbox by hand. What must not drift
 // is the key itself: every field that changes the money has to change the
 // address, and nothing else may.
-const shape = { accountId: 'acct_one', amount: 8900, currency: 'EUR', interval: 'month' as const };
+const shape = { accountId: 'acct_one', amount: 8900, currency: 'EUR', interval: 'month' as const, intervalCount: 1 };
 
 ok('the same shape is the same price', priceKey(shape) === priceKey({ ...shape }), priceKey(shape));
 ok('...however the currency is spelled', priceKey(shape) === priceKey({ ...shape, currency: 'eur' }), 'EUR and eur are one currency, not two Prices');
 
 ok('a different amount is a different price', priceKey(shape) !== priceKey({ ...shape, amount: 9900 }), 'a plan edit produces a new Price at the next checkout, and nobody already on the old one moves');
 ok('...a different interval too', priceKey(shape) !== priceKey({ ...shape, interval: 'year' }), 'yearly at the same number is not the same price');
+// THE COUNT, which is the one that would have been silent and expensive.
+// €89 monthly and €89 quarterly differ in no other field, so a key without the
+// count addresses ONE Price — and every quarterly subscriber is billed monthly,
+// with the mirror agreeing and nothing to notice.
+ok('...and a different COUNT most of all', priceKey(shape) !== priceKey({ ...shape, intervalCount: 3 }), 'quarterly at the same number is not the same price as monthly');
 
 // THE ACCOUNT IS IN THE KEY, and this is the one that would be silent. Prices
 // live on the CONNECTED account — two studios charging €89 a month are two
@@ -205,7 +210,10 @@ ok('...and so is the studio it belongs to', priceKey(shape) !== priceKey({ ...sh
 // The plan id is deliberately absent: two plans at the same price on the same
 // interval ARE the same price, and giving them separate Stripe objects would
 // invent a distinction Stripe has no use for.
-ok('the key is made of the money and nothing else', priceKey(shape) === 'acct_one:8900:eur:month', priceKey(shape));
+// The period is TWO segments because it is two facts — a unit and a count. Spelled
+// out here rather than asserted by length, so a field added to the key without a
+// reason has to come and edit this line and say what it is.
+ok('the key is made of the money and nothing else', priceKey(shape) === 'acct_one:8900:eur:month:1', priceKey(shape));
 
 // ── ONE DATABASE, ONE PREFIX PER PACK ────────────────────────
 //
@@ -249,6 +257,11 @@ const CAUGHT = [...'SELECT * FROM belts_records'.matchAll(TABLE_IN_SQL)].map((m)
 ok('...and the rule would catch one', CAUGHT.includes('belts'), 'a bare table name carrying somebody else’s prefix');
 
 // ── what the bundle promises about itself ────────────────────
-ok('a framed page is declared, not conjured', (bundleJson.frames ?? []).every((f) => f.startsWith('/integrations/belts/')), JSON.stringify(bundleJson.frames ?? []));
+const frames = Object.entries(bundleJson.frames ?? {});
+ok('a framed page is declared, not conjured', frames.every(([path]) => path.startsWith('/integrations/belts/')), JSON.stringify(bundleJson.frames ?? {}));
+// A page with no owning screen is one the host can only gate on "signed in and
+// installed" — which is what let a member reach a desk page. The owner is the
+// declaration that makes the grant answerable to the charter.
+ok('...and belongs to a screen, so a grant can be refused', frames.every(([, actionId]) => actionId.startsWith('ext.')), frames.map(([, a]) => a).join(', ') || 'none declared');
 
 report('one process, several packs: each at its own prefix, with its own audience, its own env, and its own door.');

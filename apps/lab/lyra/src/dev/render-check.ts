@@ -18,7 +18,7 @@
 import { anonymous, app, login, ok, report, settle } from './world';
 import { CAST } from '@lyra/db/seed';
 import { COMPONENT_NAMES } from '@lyra/ui/registry';
-import { fillPhrase } from '@lyra/ui/lib/phrase';
+import { fillPhrase } from '@niscorp/nova/i18n';
 import type { RenderNode } from '@niscorp/nova';
 import { all, click, draw, errorMarkers, events, find, namesIn, resize, show, text } from './surface';
 

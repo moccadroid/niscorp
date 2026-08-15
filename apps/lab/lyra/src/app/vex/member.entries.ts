@@ -1,6 +1,6 @@
 import type { CacheEntry } from './index';
 import type { Filter } from '@niscorp/vex';
-import { dateText, pattern, priceText } from '@lyra/app/prisms/format.prism';
+import { dateText, intervalText, pattern, perIntervalText, priceText } from '@lyra/app/prisms/format.prism';
 import { STANDING, standingLabel, standingTone, hasSubscription, hasLivePass, onACourse, isStaff, isContact, holdsAnySubscription } from './standing';
 
 const row = (name: string) => ({ $get: { from: { $var: 'm' }, path: [name] } });
@@ -365,7 +365,7 @@ export const offeringsOnSale: CacheEntry = {
   shape: [{ offering_id: '', name: '', price_display: '', interval_display: '', allowance_display: '', term_display: '' }],
   dsl: {
     from: ['offerings'],
-    fields: [{ field: 'offerings.id', as: 'offering_id' }, 'offerings.name', 'offerings.price_cents', 'offerings.currency', 'offerings.interval', 'offerings.class_allowance', 'offerings.minimum_term_months', 'offerings.notice_days'],
+    fields: [{ field: 'offerings.id', as: 'offering_id' }, 'offerings.name', 'offerings.price_cents', 'offerings.currency', 'offerings.interval', 'offerings.interval_count', 'offerings.class_allowance', 'offerings.minimum_term_months', 'offerings.notice_days'],
     filter: { and: [{ eq: ['offerings.kind', 'recurring'] }, { eq: ['offerings.active', true] }] },
     sort: [{ field: 'offerings.price_cents', dir: 'asc' }],
   },
@@ -377,8 +377,19 @@ export const offeringsOnSale: CacheEntry = {
         offering_id: row('offering_id'),
         name: row('name'),
         price_display: priceText(row('price_cents'), row('currency')),
-        interval_display: { $case: { branches: [{ when: { $eq: [row('interval'), 'year'] }, then: 'a year' }], else: 'a month' } },
-        allowance_display: { $case: { branches: [{ when: row('class_allowance'), then: pattern('{n} classes a month', { n: row('class_allowance') }) }], else: 'Unlimited classes' } },
+        interval_display: perIntervalText(row('interval'), row('interval_count')),
+        // A PERIOD IS NOT A MONTH ANY MORE, so an allowance cannot say it is.
+        // "8 classes a month" on a quarterly plan is a different offer from the
+        // one the studio priced, and the member reading it is the person who
+        // would find out last.
+        allowance_display: {
+          $case: {
+            branches: [
+              { when: row('class_allowance'), then: pattern('{n} classes {per}', { n: row('class_allowance'), per: perIntervalText(row('interval'), row('interval_count')) }) },
+            ],
+            else: 'Unlimited classes',
+          },
+        },
         // Whole patterns per shape, never an optional tail glued on — half a
         // sentence translates like half a sentence.
         term_display: {
@@ -401,10 +412,10 @@ export const offeringsOnSale: CacheEntry = {
 export const offeringsList: CacheEntry = {
   fingerprint: 'offerings/list',
   intent: 'Everything this studio sells — plans and passes, retired ones last',
-  shape: [{ offering_id: '', name: '', kind: '', kind_label: '', price_cents: 0, price_display: '', interval: '', interval_display: '', class_allowance: 0, allowance_display: '', active: false, state_label: '', state_tone: '', minimum_term_months: 0, notice_days: 0, credits: 0, valid_days: 0, term_display: '' }],
+  shape: [{ offering_id: '', name: '', kind: '', kind_label: '', price_cents: 0, price_display: '', interval: '', interval_count: 0, interval_display: '', class_allowance: 0, allowance_display: '', active: false, state_label: '', state_tone: '', minimum_term_months: 0, notice_days: 0, credits: 0, valid_days: 0, term_display: '' }],
   dsl: {
     from: ['offerings'],
-    fields: [{ field: 'offerings.id', as: 'offering_id' }, 'offerings.name', 'offerings.kind', 'offerings.price_cents', 'offerings.currency', 'offerings.interval', 'offerings.class_allowance', 'offerings.active', 'offerings.minimum_term_months', 'offerings.notice_days', 'offerings.credits', 'offerings.valid_days'],
+    fields: [{ field: 'offerings.id', as: 'offering_id' }, 'offerings.name', 'offerings.kind', 'offerings.price_cents', 'offerings.currency', 'offerings.interval', 'offerings.interval_count', 'offerings.class_allowance', 'offerings.active', 'offerings.minimum_term_months', 'offerings.notice_days', 'offerings.credits', 'offerings.valid_days'],
     // Retired offerings sort last but stay on the list. A price a studio
     // stopped offering is still a price somebody is paying.
     sort: [{ field: 'offerings.active', dir: 'desc' }, { field: 'offerings.price_cents', dir: 'asc' }],
@@ -421,13 +432,14 @@ export const offeringsList: CacheEntry = {
         price_cents: row('price_cents'),
         price_display: priceText(row('price_cents'), row('currency')),
         interval: row('interval'),
+        // Carried so the edit form opens on what the row actually is — the
+        // payload IS the row, and a field the list drops is a field Save writes
+        // a blank over.
+        interval_count: row('interval_count'),
         interval_display: {
           $case: {
-            branches: [
-              { when: { $eq: [row('kind'), 'pass'] }, then: 'One-off' },
-              { when: { $eq: [row('interval'), 'year'] }, then: 'Yearly' },
-            ],
-            else: 'Monthly',
+            branches: [{ when: { $eq: [row('kind'), 'pass'] }, then: 'One-off' }],
+            else: intervalText(row('interval'), row('interval_count')),
           },
         },
         class_allowance: row('class_allowance'),
@@ -437,7 +449,7 @@ export const offeringsList: CacheEntry = {
           $case: {
             branches: [
               { when: { $eq: [row('kind'), 'pass'] }, then: { $case: { branches: [{ when: { $eq: [row('credits'), 1] }, then: 'Single class' }], else: pattern('{n} classes', { n: row('credits') }) } } },
-              { when: row('class_allowance'), then: pattern('{n} a month', { n: row('class_allowance') }) },
+              { when: row('class_allowance'), then: pattern('{n} {per}', { n: row('class_allowance'), per: perIntervalText(row('interval'), row('interval_count')) }) },
             ],
             else: 'Unlimited',
           },

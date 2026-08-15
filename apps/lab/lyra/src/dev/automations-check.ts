@@ -27,8 +27,8 @@ tree = treeOf(owner);
 
 ok(
   '...listing what each one DOES, as a sentence',
-  tree.includes('When {moment}, {effect}') && tree.includes('somebody joins') && tree.includes('email them'),
-  'a PATTERN and its vocabulary slots — the frame and the fragments each translate on their own',
+  tree.includes('When somebody joins, email them'),
+  'a PATTERN, closed at render — the frame and its slots are three dictionary entries, and the holes shut after each one translates',
 );
 // The card body is read at a glance: it says what the MOMENT is, not what
 // email is like. ⟲ Joining both blurbs put "Nothing is delivered yet…" on

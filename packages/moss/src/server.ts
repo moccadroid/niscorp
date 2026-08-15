@@ -23,10 +23,13 @@ import {
   integrationByKey,
   listIntegrations,
   loadIntegrationActions,
+  frameAdmits,
   reachAdmits,
+  reachDeclares,
   reachOf,
   runIntake,
 } from './integrations';
+import type { Reach } from './integrations';
 import { createAssertionSigner, hashIntegrationKey, mintIntegrationKey } from './assert';
 import { createSocket, DEFAULT_REVALIDATE_MS } from './socket';
 import type { SocketAccept } from './socket';
@@ -766,7 +769,7 @@ export const createServer = async (app: NiscApp, runtime: NiscRuntime): Promise<
     // The declaration holds lyra-side paths (`/integrations/<id>/roster`); a
     // probe names the integration-side tail (`roster`), the same tail the proxy
     // forwards. One spelling to compare, derived rather than stored twice.
-    if (path !== 'bundle' && !reachAdmits((found?.reach ?? []) as string[], `/integrations/${id}/${path}`)) {
+    if (path !== 'bundle' && !reachDeclares((found?.reach ?? {}) as Reach, `/integrations/${id}/${path}`)) {
       return c.json({ message: 'That path is not one this integration declared.' }, 404);
     }
     const started = Date.now();
@@ -833,12 +836,21 @@ export const createServer = async (app: NiscApp, runtime: NiscRuntime): Promise<
     const row = await runtime.pool.query('SELECT status, frames FROM integrations WHERE id = $1', [id]);
     const found = row.rows[0] as { status?: string; frames?: unknown } | undefined;
     if (found === undefined || found.status !== 'approved') return c.json({ message: 'No such integration.' }, 404);
-    const installed = (await resolveIdentity(principal)).installed;
-    if (installed !== undefined && !installed.includes(id)) return c.json({ message: 'Not installed here.' }, 404);
+    const resolved = await resolveIdentity(principal);
+    if (resolved.installed !== undefined && !resolved.installed.includes(id)) return c.json({ message: 'Not installed here.' }, 404);
     // THE DECLARATION IS THE PERIMETER HERE TOO. A grant is only ever minted
     // for a page the bundle named at intake, so a screen cannot frame a path
     // the integration never published — including one it serves but did not declare.
-    if (!((found.frames ?? []) as string[]).includes(path)) return c.json({ message: 'No such frame.' }, 404);
+    //
+    // AND FOR THE SCREEN THAT OWNS IT. This door had the same hole the proxy
+    // did, and a worse one to have: `frames` was a bare list of paths with no
+    // owner at all, so the only questions askable were "signed in?" and
+    // "installed here?". A member of the gym passed both and could be served the
+    // page that mounts a payment provider's onboarding form against the
+    // studio's merchant account. The bundle names the owning action now, and a
+    // grant is minted only for somebody who holds it.
+    const held = new Set(catalog(resolved).ids);
+    if (!frameAdmits((found.frames ?? {}) as Record<string, string>, path, held)) return c.json({ message: 'No such frame.' }, 404);
 
     const now = Date.now();
     sweepGrants(now);
@@ -1045,8 +1057,8 @@ export const createServer = async (app: NiscApp, runtime: NiscRuntime): Promise<
     const row = await runtime.pool.query('SELECT url, status, reach FROM integrations WHERE id = $1', [id]);
     const found = row.rows[0] as { url?: string; status?: string; reach?: unknown } | undefined;
     if (found === undefined || found.status !== 'approved') return c.json({ message: 'No such integration.' }, 404);
-    const installed = (await resolveIdentity(principal)).installed;
-    if (installed !== undefined && !installed.includes(id)) return c.json({ message: 'Not installed here.' }, 404);
+    const resolved = await resolveIdentity(principal);
+    if (resolved.installed !== undefined && !resolved.installed.includes(id)) return c.json({ message: 'Not installed here.' }, 404);
 
     // THE DECLARATION IS THE PERIMETER (integrations.ts, reachOf). Before this,
     // being signed in at a studio that installed an integration was permission to call
@@ -1054,10 +1066,20 @@ export const createServer = async (app: NiscApp, runtime: NiscRuntime): Promise<
     // admin verbs, whatever it grew next release. Now it is permission to call
     // the paths the integration declared, and nothing is forwarded for the rest.
     //
-    // Checked BEFORE the assertion is minted: an undeclared path gets no
-    // credential, not even one that would have died at the other end.
-    const reach = (found.reach ?? []) as string[];
-    if (!reachAdmits(reach, c.req.path)) return c.json({ message: 'No such integration.' }, 404);
+    // AND ONLY THE ONES THIS CALLER'S OWN SCREENS DECLARE. The path check alone
+    // was half the fence: reach is the union over every action in the bundle, so
+    // a member at a studio with payments installed reached the merchant
+    // onboarding endpoint — the charter's `ext.desk.*` fence decided which
+    // SCREENS rendered and nothing about which endpoints answered. The catalog
+    // is the same one the shell is built from, so a door and the screen that
+    // opens it can no longer disagree.
+    //
+    // Checked BEFORE the assertion is minted: an inadmissible path gets no
+    // credential, not even one that would have died at the other end. And 404
+    // rather than 403, like the branches above it — what somebody may not reach,
+    // they do not learn the existence of.
+    const held = new Set(catalog(resolved).ids);
+    if (!reachAdmits((found.reach ?? {}) as Reach, c.req.path, held)) return c.json({ message: 'No such integration.' }, 404);
 
     const scope = await scopeValuesFor(principal);
     // The QUERY TRAVELS. `c.req.path` drops it, so an endpoint declared with

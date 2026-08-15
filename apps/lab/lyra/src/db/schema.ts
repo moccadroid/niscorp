@@ -323,7 +323,23 @@ export const DDL = /* sql */ `
     price_cents      INTEGER NOT NULL CHECK (price_cents >= 0),
     currency         TEXT NOT NULL DEFAULT 'EUR',
     -- ── recurring ──
-    interval         TEXT NOT NULL DEFAULT 'month' CHECK (interval IN ('month', 'year')),
+    --
+    -- HOW OFTEN, IN THE STUDIO'S OWN WORDS. Month and year were the whole
+    -- vocabulary, which quietly excluded every studio that bills quarterly —
+    -- ordinary in AT and DE — and every one that runs a weekly subscription.
+    -- Neither was refused by anything; nobody had written the other words down.
+    --
+    -- The pair is the period: ('month', 3) is quarterly, ('week', 2) is
+    -- fortnightly, ('month', 1) is what everything was before this column
+    -- existed and is what every existing row defaults to.
+    --
+    -- These four are Stripe's set, and that is the one constraint here that is
+    -- not ours to widen: a price with a period a processor cannot express is a
+    -- price nobody can be charged. Stripe also caps a period at a year
+    -- (365 days, 52 weeks, 12 months, 1 year), which the integration surfaces
+    -- rather than this column guessing at.
+    interval         TEXT NOT NULL DEFAULT 'month' CHECK (interval IN ('day', 'week', 'month', 'year')),
+    interval_count   INTEGER NOT NULL DEFAULT 1 CHECK (interval_count > 0),
     class_allowance  INTEGER,
     minimum_term_months INTEGER NOT NULL DEFAULT 0 CHECK (minimum_term_months >= 0),
     -- How long before leaving takes effect. Notice given today on 30 days ends
@@ -429,22 +445,46 @@ export const DDL = /* sql */ `
     FOREIGN KEY (offering_id, studio_id) REFERENCES offerings (id, studio_id)
   );
 
+  -- ─── WHAT A PERIOD IS WORTH IN A MONTH ──────────────────────
+  --
+  -- monthly_cents is SUMMED across a studio's subscriptions to make every
+  -- revenue figure in the app, so a yearly plan and a weekly one have to arrive
+  -- in the same unit or the total is not an amount of money. This is the one
+  -- place that conversion is decided.
+  --
+  -- It exists as a function because TWO triggers need it — one when a
+  -- subscription is written, one when the offering under it is repriced — and
+  -- they used to hold the same CASE expression twice. Two copies of arithmetic
+  -- is one copy and a future disagreement.
+  --
+  -- 30.436875 is 365.25 / 12: the average month, which is what a weekly plan
+  -- has to be measured against. It is not the length of any particular month
+  -- and does not need to be — a forecast is not a ledger, and the alternative
+  -- (a figure that changes in February) is worse.
+  CREATE OR REPLACE FUNCTION months_per_period(unit TEXT, periods INTEGER) RETURNS NUMERIC AS $mpp$
+    SELECT CASE unit
+      WHEN 'day'  THEN periods / 30.436875
+      WHEN 'week' THEN periods * 7 / 30.436875
+      WHEN 'year' THEN periods * 12
+      ELSE periods
+    END::numeric;
+  $mpp$ LANGUAGE sql IMMUTABLE;
+
   CREATE OR REPLACE FUNCTION stamp_subscription_terms() RETURNS TRIGGER AS $sub$
   DECLARE
     p RECORD;
   BEGIN
-    SELECT price_cents, interval, minimum_term_months, notice_days, currency INTO p FROM offerings WHERE id = NEW.offering_id;
+    SELECT price_cents, interval, interval_count, minimum_term_months, notice_days, currency INTO p FROM offerings WHERE id = NEW.offering_id;
 
     -- The offering's currency, always — a subscription does not get its own.
     -- The override beside it is an AMOUNT, not a price in another currency.
     NEW.currency := p.currency;
 
-    -- Normalised to a month so intervals can be added together. Integer
-    -- division rounds down by a few cents a year; a forecast is not a ledger.
-    NEW.monthly_cents := CASE
-      WHEN p.interval = 'year' THEN COALESCE(NEW.price_cents, p.price_cents) / 12
-      ELSE COALESCE(NEW.price_cents, p.price_cents)
-    END;
+    -- Normalised to a month so periods can be added together. ROUND rather than
+    -- integer division, which used to lose a few cents on every yearly plan in
+    -- the same direction — a systematic undercount across a whole roll, which is
+    -- the shape of error a forecast should not have.
+    NEW.monthly_cents := ROUND(COALESCE(NEW.price_cents, p.price_cents) / months_per_period(p.interval, p.interval_count));
 
     -- A subscription starts the day it is written unless a caller with a
     -- reason says otherwise — and the desk's mutation sends no date at all.
@@ -653,14 +693,17 @@ export const DDL = /* sql */ `
   CREATE OR REPLACE FUNCTION resync_subscription_value() RETURNS TRIGGER AS $planval$
   BEGIN
     UPDATE subscriptions s
-       SET monthly_cents = CASE WHEN NEW.interval = 'year' THEN NEW.price_cents / 12 ELSE NEW.price_cents END
+       SET monthly_cents = ROUND(NEW.price_cents / months_per_period(NEW.interval, NEW.interval_count))
      WHERE s.offering_id = NEW.id AND s.price_cents IS NULL;
     RETURN NULL;
   END;
   $planval$ LANGUAGE plpgsql;
 
+  -- interval_count joins the columns that fire this: a plan moved from monthly
+  -- to quarterly at the same price is a third of the monthly revenue it was, and
+  -- a forecast that did not hear about it would keep reporting the old figure.
   CREATE TRIGGER offerings_resync_value
-    AFTER UPDATE OF price_cents, interval ON offerings
+    AFTER UPDATE OF price_cents, interval, interval_count ON offerings
     FOR EACH ROW EXECUTE FUNCTION resync_subscription_value();
 
   CREATE INDEX subscriptions_forecast ON subscriptions (studio_id, status, ends_on);

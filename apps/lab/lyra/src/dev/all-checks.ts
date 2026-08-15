@@ -36,6 +36,7 @@ const CHECKS = [
   ['bounce-check', 'a bounce is signed, scoped and acted on — and a forged one is a 200 that changed nothing'],
   ['mail-check', 'mail leaves by one door: one vendor, one secret, one verb, and no database behind it'],
   ['perimeter-check', 'the integration authenticates its caller, not just the identity claimed'],
+  ['role-perimeter-check', 'a declared path is not a door: an integration answers the screens a caller actually holds'],
   ['admin-check', 'the administration tool administers Lyra and can reach nothing inside it'],
   ['integrations-check', 'an application arrives over a wire, for one tenant, and leaves again'],
   ['webhook-check', 'the one door that asks for nothing: forwarded, byte-faithful, and the integration still decides'],

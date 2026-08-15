@@ -4,6 +4,7 @@ import type {
   ActionRuntime,
   EndpointHandler,
   FunctionHandler,
+  LanguageOptions,
   NavigationEffect,
   OnErrorHandler,
 } from '../action';
@@ -78,6 +79,8 @@ export type RuntimeFactoryDeps = {
   instanceIdFn: IdFactory;
   onNavigate: (canvasId: string, effect: NavigationEffect) => void;
   onEndpoint?: EndpointHandler;
+  // The shell's language cell, read per render. See ActionRuntimeConfig.i18n.
+  i18n?: () => LanguageOptions | undefined;
 };
 
 export const createRuntimeFactory = (deps: RuntimeFactoryDeps) => (
@@ -100,6 +103,7 @@ export const createRuntimeFactory = (deps: RuntimeFactoryDeps) => (
     ...(deps.onEndpoint === undefined ? {} : { onEndpoint: deps.onEndpoint }),
     strict: deps.strict,
     ...(deps.onError === undefined ? {} : { onError: deps.onError }),
+    ...(deps.i18n === undefined ? {} : { i18n: deps.i18n }),
     instanceIdFn: deps.instanceIdFn,
   });
 

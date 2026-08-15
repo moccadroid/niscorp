@@ -5,14 +5,14 @@ import { COLOR, HUE, SIZE, TONE, WEIGHT, hueOf, hueToken, toneToken } from '../l
 import { Badge, Icon } from './display';
 import { Empty } from './feedback';
 import { cx } from '../lib/cx';
-import { fillPhrase } from '../lib/phrase';
 
 type Row = Record<string, unknown>;
 const str = (row: Row, key: string | undefined): string => {
   if (key === undefined) return '';
-  // Counted phrases reach an untranslated session as `{ phrase, slots }` —
-  // the kit fills them; see ../lib/phrase.ts.
-  const v = fillPhrase(row[key]);
+  // A counted phrase arrives already filled: the renderer fills patterns at
+  // any prose key, in every language including the source one, so nothing that
+  // reaches a cell is still a `{ phrase, slots }` shape.
+  const v = row[key];
   return v === undefined || v === null ? '' : String(v);
 };
 

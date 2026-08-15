@@ -1,20 +1,28 @@
-import { isArray, isObject } from '../shared/common';
 import type { RenderNode } from '../layout';
-import { isPhrase, matcherFor } from './phrases';
+import { passFor, swap, walkValue } from './swap';
+import type { Pass } from './swap';
 import type { PhraseKeys, Phrasebook } from './phrases';
 
 // ═══════════════════════════════════════════════════════════
-// translateRenderTree — the late pass.
+// translateRenderTree — the late pass, for whoever holds a tree they did not
+// render.
 //
-// Structure in, same structure out, with prose swapped. It runs AFTER
-// `flattenRenderTree` and before serialization, which is the one point where
-// every word the reader will see is present at once: layout literals, action
-// titles that arrived as props, component fallbacks, and the closed-set display
-// fields a query manufactured.
+// NOT the main road any more. Since the swap moved into the renderer
+// (`layout/renderer.ts`), a tree that came out of a nova shell is already in
+// the reader's language and this pass would find nothing to do. What is left
+// for it is every tree that arrived from somewhere else: a frame replayed from
+// a cache, an exporter's fixture, a test that builds nodes by hand.
 //
-// A phrase with no entry passes through unchanged. That is the only sane
-// failure: a missing translation should show the source language, never an
-// empty box and never a key. `onMiss` is how a check turns those into a list.
+// Structure in, same structure out, with prose swapped. A phrase with no entry
+// passes through unchanged — the only sane failure, since a missing
+// translation should show the source language, never an empty box and never a
+// key. `onMiss` is how a check turns those into a list.
+//
+// One deliberate difference from the renderer: an EMPTY book short-circuits
+// here and returns the very same tree, patterns included. The renderer fills
+// patterns even with no book, because a source-language session has nobody
+// else to do it; a tree-holder with no book has nothing to say about a tree it
+// did not make.
 // ═══════════════════════════════════════════════════════════
 
 export type TranslateOptions = {
@@ -24,77 +32,6 @@ export type TranslateOptions = {
   // check that has to answer "what did we forget" without a human reading every
   // screen. Never call it from a hot path — it is a reporting seam.
   onMiss?: (phrase: string, where: string) => void;
-};
-
-type Pass = {
-  phrases: Phrasebook;
-  isProse: (key: string) => boolean;
-  text: boolean;
-  onMiss: ((phrase: string, where: string) => void) | undefined;
-};
-
-const swap = (value: string, where: string, pass: Pass): string => {
-  if (!isPhrase(value)) return value;
-  const hit = pass.phrases[value];
-  if (hit !== undefined) return hit;
-  // Trailing/leading whitespace is a layout accident, not part of the phrase.
-  // Trying the trimmed form keeps `'Save '` from being a second dictionary
-  // entry nobody remembers to fill in.
-  const trimmed = value.trim();
-  if (trimmed !== value) {
-    const onTrimmed = pass.phrases[trimmed];
-    if (onTrimmed !== undefined) return value.replace(trimmed, onTrimmed);
-  }
-  pass.onMiss?.(trimmed, where);
-  return value;
-};
-
-// A PATTERN: a counted phrase, translated WHOLE and filled here — the one
-// point that has the book. `{ phrase: '{n} of {total}', slots: { n: 1,
-// total: 12 } }` becomes `'1 von 12'`: the pattern is a dictionary row like
-// any other, so cardinality stays out of the book. A string slot is offered
-// to the book too — a composed sentence's fragments ("somebody enquires")
-// are vocabulary in their own right — and everything else interpolates as
-// itself. Sessions in the source language never reach this code (the empty
-// book skips the walk), so the host's kit fills the same shape at the glass.
-const isPattern = (value: Record<string, unknown>): value is { phrase: string; slots: Record<string, unknown> } =>
-  typeof value['phrase'] === 'string' && isObject(value['slots']);
-
-const fillPattern = (pattern: { phrase: string; slots: Record<string, unknown> }, where: string, pass: Pass): string =>
-  swap(pattern.phrase, where, pass).replace(/\{([A-Za-z_][A-Za-z0-9_]*)\}/g, (hole, name: string) => {
-    const slot = pattern.slots[name];
-    if (slot === undefined || slot === null) return hole;
-    return typeof slot === 'string' && isPhrase(slot) ? swap(slot, `${where}.${name}`, pass) : String(slot);
-  });
-
-// Walk a prop VALUE. Depth matters: a spec prop is where the repeated structure
-// of a screen lives (`columns: [{ label }]`, `options: [{ label }]`), so the
-// rule cannot be "top-level props only" without missing most of a table.
-const walkValue = (value: unknown, prose: boolean, where: string, pass: Pass): unknown => {
-  if (typeof value === 'string') return prose ? swap(value, where, pass) : value;
-  if (isArray(value)) {
-    let changed = false;
-    const out = value.map((entry, index) => {
-      // An array inherits its key's proseness — `options: ['Yes', 'No']` is as
-      // much prose as `options: [{ label: 'Yes' }]`.
-      const next = walkValue(entry, prose, `${where}[${String(index)}]`, pass);
-      if (next !== entry) changed = true;
-      return next;
-    });
-    return changed ? out : value;
-  }
-  if (isObject(value)) {
-    if (prose && isPattern(value)) return fillPattern(value, where, pass);
-    let changed = false;
-    const out: Record<string, unknown> = {};
-    for (const [key, entry] of Object.entries(value)) {
-      const next = walkValue(entry, pass.isProse(key), `${where}.${key}`, pass);
-      if (next !== entry) changed = true;
-      out[key] = next;
-    }
-    return changed ? out : value;
-  }
-  return value;
 };
 
 const walkNode = (node: RenderNode, where: string, pass: Pass): RenderNode => {
@@ -147,11 +84,11 @@ export const translateRenderTree = (tree: RenderNode[], options: TranslateOption
   // An empty phrasebook is the source language. Skip the walk entirely rather
   // than doing it and finding nothing.
   if (Object.keys(options.phrases).length === 0) return tree;
-  const matcher = matcherFor(options.keys);
-  return walkNodes(tree, '', {
+  const pass = passFor({
     phrases: options.phrases,
-    isProse: matcher.isProse,
-    text: matcher.text,
-    onMiss: options.onMiss,
+    ...(options.keys === undefined ? {} : { keys: options.keys }),
+    ...(options.onMiss === undefined ? {} : { onMiss: options.onMiss }),
   });
+  if (pass === undefined) return tree;
+  return walkNodes(tree, '', pass);
 };

@@ -174,6 +174,7 @@ export const stripePack: Pack = {
           amount: billable.amount,
           currency: billable.currency,
           interval: billable.interval,
+          intervalCount: billable.intervalCount,
           returnUrl,
         });
         return c.json({ url: session.url, plan_name: billable.planName });

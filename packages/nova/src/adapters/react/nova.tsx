@@ -7,6 +7,7 @@ import {
   type LayoutNode,
   type LayoutStore,
   type RegistrationInput,
+  type RenderContext,
   type RenderOnError,
 } from '@layout';
 import type { Shell } from '@shell';
@@ -66,6 +67,12 @@ export type NovaLayoutProps = {
   builtins?: boolean;
   strict?: boolean;
   onError?: RenderOnError;
+  // The words this layout wears. Forwarded to the renderer, which is where a
+  // language enters — this component translates nothing itself, and neither
+  // does any other adapter.
+  phrases?: RenderContext['phrases'];
+  phraseKeys?: RenderContext['phraseKeys'];
+  onPhraseMiss?: RenderContext['onPhraseMiss'];
   children?: ReactNode;
 };
 
@@ -78,6 +85,9 @@ export const NovaLayout: FC<NovaLayoutProps> = ({
   builtins = true,
   strict,
   onError,
+  phrases,
+  phraseKeys,
+  onPhraseMiss,
   children,
 }) => {
   // A registry and store are stable for the lifetime of this component
@@ -100,8 +110,11 @@ export const NovaLayout: FC<NovaLayoutProps> = ({
       registry,
       ...(strict === undefined ? {} : { strict }),
       ...(onError === undefined ? {} : { onError }),
+      ...(phrases === undefined ? {} : { phrases }),
+      ...(phraseKeys === undefined ? {} : { phraseKeys }),
+      ...(onPhraseMiss === undefined ? {} : { onPhraseMiss }),
     });
-  }, [layout, data, store, registry, strict, onError]);
+  }, [layout, data, store, registry, strict, onError, phrases, phraseKeys, onPhraseMiss]);
 
   return (
     <NovaRenderProvider registry={registry}>

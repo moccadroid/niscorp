@@ -130,6 +130,9 @@ export const offeringCreate: MutationEntry = {
       kind: { $context: 'kind' },
       price_cents: { $context: 'priceCents' },
       interval: { $context: 'interval' },
+      // The COUNT beside the unit: the pair is the period, and a write carrying
+      // only half of it would quietly reprice a quarterly plan as a monthly one.
+      interval_count: { $context: 'intervalCount' },
       class_allowance: { $context: 'classAllowance' },
       // WHAT A PLAN COMMITS SOMEBODY TO — the half of a plan that sat in the
       // schema, seeded with real terms, read by the retention screen, and
@@ -155,6 +158,9 @@ export const offeringUpdate: MutationEntry = {
       name: { $context: 'name' },
       price_cents: { $context: 'priceCents' },
       interval: { $context: 'interval' },
+      // The COUNT beside the unit: the pair is the period, and a write carrying
+      // only half of it would quietly reprice a quarterly plan as a monthly one.
+      interval_count: { $context: 'intervalCount' },
       class_allowance: { $context: 'classAllowance' },
       // Editing the terms changes what is ON SALE. Nobody already signed moves:
       // `committed_until` was stamped onto their subscription at sign-up and the

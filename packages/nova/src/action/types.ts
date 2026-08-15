@@ -5,6 +5,7 @@ import type { NovaError } from '../shared/errors';
 import type { IdFactory } from '../shared/ids';
 import type { MessageBus } from '../shared/message-bus';
 import type { ComponentRegistry, LayoutStore, RenderNode } from '../layout/types';
+import type { PhraseKeys, Phrasebook } from '../i18n/phrases';
 import type { ActionDefinition, Mutation, PopEffect, PopToEffect, PushEffect, RemoveInstanceEffect, RemoveSelfEffect, ReplaceEffect, ResetToEffect, Step } from './schemas';
 
 // ═══════════════════════════════════════════════════════════
@@ -114,6 +115,22 @@ export type ActionRuntimeConfig = {
   onEndpoint?: EndpointHandler;
   strict?: boolean;
   onError?: OnErrorHandler;
+  // THE WORDS THIS INSTANCE RENDERS IN — asked for, rather than held.
+  //
+  // A function and not a value because the book outlives the instance: a shell
+  // whose language changes must reach the screens that are already open, and an
+  // instance handed a book at spawn would go on rendering the old one until
+  // somebody navigated. Called once per render; the shell answers from the one
+  // cell `setPhrases` writes.
+  i18n?: () => LanguageOptions | undefined;
+};
+
+// What a render needs to know about language — the shell's cell, the runtime's
+// question, and the renderer's context all speak this one shape.
+export type LanguageOptions = {
+  phrases?: Phrasebook;
+  phraseKeys?: PhraseKeys;
+  onPhraseMiss?: (phrase: string, where: string) => void;
 };
 
 // Narrow public surface — what an external consumer (adapter, telemetry,

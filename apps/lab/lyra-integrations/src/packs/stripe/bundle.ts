@@ -395,8 +395,14 @@ export const STRIPE_BUNDLE = {
     [payAction.id]: payAction,
   },
   placements: { [ledgerAction.id]: 'hub.money', [payAction.id]: 'hub.me' },
-  // PAGES THE HOST MAY FRAME. Declared, so lyra will not open one this pack did
-  // not publish — including a path it happens to serve.
-  frames: [`${OWN}/embed/onboarding`],
+  // PAGES THE HOST MAY FRAME. Declared, so lyra will not open one this
+  // integration did not publish — including a path it happens to serve.
+  //
+  // NAMED AGAINST THE SCREEN THAT OPENS IT. The onboarding page belongs to the
+  // setup screen, which is a desk action, so a grant for it is mintable by
+  // somebody who holds that screen and by nobody else. Without the owner, a
+  // member of the studio could be served the form that changes where this
+  // studio's money is paid out.
+  frames: { [`${OWN}/embed/onboarding`]: setupAction.id },
   settings: setupAction.id,
 };

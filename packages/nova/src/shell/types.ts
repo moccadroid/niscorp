@@ -16,6 +16,7 @@ import type {
   RegistrationInput,
   RenderNode,
 } from '../layout';
+import type { PhraseKeys, Phrasebook } from '../i18n/phrases';
 import type { Unsubscribe } from '../shared/common';
 import type { EventBus, NovaEvent } from '../shared/event-bus';
 import type { MessageBus } from '../shared/message-bus';
@@ -155,6 +156,18 @@ export type ShellConfig = {
   // other events into the shell. Defaults to fresh per-shell buses.
   eventBus?: EventBus;
   messageBus?: MessageBus;
+  // THE WORDS EVERY TREE THIS SHELL RENDERS WEARS.
+  //
+  // Handed to the renderer, which is where a language enters — so no canvas, no
+  // action, no component and no adapter below this line learns that a second
+  // language exists. `setPhrases` replaces the book live.
+  //
+  // Both absent = not doing i18n, and free. `phraseKeys` alone is the SOURCE
+  // language: nothing is translated, but counted phrases (`{ phrase, slots }`)
+  // are still filled, which no consumer downstream knows how to do.
+  phrases?: Phrasebook;
+  phraseKeys?: PhraseKeys;
+  onPhraseMiss?: (phrase: string, where: string) => void;
 };
 
 export type Shell = {
@@ -205,6 +218,19 @@ export type Shell = {
   addCanvas: (config: CanvasConfig) => void;
   removeCanvas: (canvasId: string) => void;
   setCanvasLayout: (layout: LayoutNode | string) => void;
+
+  // Replace the book every subsequent render reads — a language switch, or a
+  // per-tenant vocabulary landing after the shell was built. Reaches the
+  // screens already open, because a runtime asks for the book at render rather
+  // than holding one from spawn. Passing undefined returns the shell to the
+  // source language. Fires a state change so mounted adapters re-render.
+  setPhrases: (phrases: Phrasebook | undefined) => void;
+
+  // The book in force. Symmetric with `setPhrases`, and needed by anyone
+  // OVERLAYING rather than replacing — a studio that calls its members
+  // "athletes" is the same mechanism as a language, spread over the words the
+  // deployment already had, and it cannot spread over a book it cannot read.
+  getPhrases: () => Phrasebook | undefined;
 
   // Swap the target of a LayoutRef in the layout store. The canvasLayout
   // (frame) embeds `{ ref: id }` placeholders for dynamic regions; this

@@ -3,7 +3,7 @@ import { CAST } from '@lyra/db/seed';
 import { areasFor } from '@lyra/app/nav/sections';
 import { resolveCatalog } from '@niscorp/moss';
 import { app, asPrincipal, idFor, idsFor, ok, report, runtime } from './world';
-import { fillPhrase } from '@lyra/ui/lib/phrase';
+import { fillPhrase } from '@niscorp/nova/i18n';
 
 const read = (email: string, fingerprint: string, context: Record<string, unknown> = {}): Promise<unknown> =>
   asPrincipal(email, '/api/schedule/vex', { fingerprint, context });

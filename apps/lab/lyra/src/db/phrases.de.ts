@@ -228,10 +228,38 @@ export const GERMAN: Record<string, string> = {
   'Good morning': 'Guten Morgen',
 
   Hour: 'Stunde',
+  'Daily': 'Täglich',
+  'Weekly': 'Wöchentlich',
+  'Every {n} days': 'Alle {n} Tage',
+  'Every {n} weeks': 'Alle {n} Wochen',
+  'Every {n} months': 'Alle {n} Monate',
+  'Every {n} years': 'Alle {n} Jahre',
+  'a day': 'pro Tag',
+  'a week': 'pro Woche',
+  'every {n} days': 'alle {n} Tage',
+  'every {n} weeks': 'alle {n} Wochen',
+  'every {n} months': 'alle {n} Monate',
+  'every {n} years': 'alle {n} Jahre',
+  '{n} {per}': '{n} {per}',
+  '{n} classes {per}': '{n} Kurse {per}',
+  'Billed every': 'Abgerechnet alle',
+  'Leave it empty for every one.': 'Leer lassen für jede einzelne.',
+  'Days': 'Tage',
+  'Weeks': 'Wochen',
+  'Months': 'Monate',
+  'Years': 'Jahre',
   'How long before leaving takes effect. Notice inside a minimum term still runs to the end of it.':
     'Wie lange es bis zum Austritt dauert. Eine Kündigung innerhalb der Mindestlaufzeit läuft bis zu deren Ende.',
+  'How long before leaving takes effect. Notice inside a minimum term still runs to the end of it. Empty or 0 ends it immediately.':
+    'Wie lange es bis zum Austritt dauert. Eine Kündigung innerhalb der Mindestlaufzeit läuft bis zu deren Ende. Leer oder 0 beendet sie sofort.',
+  'How long the pack lives once it is bought. Leave it empty and it never expires.':
+    'Wie lange die Blockkarte nach dem Kauf gültig ist. Leer lassen, dann verfällt sie nie.',
   'How long they commit for. Leaving early does not end the obligation.':
     'Wie lange die Bindung dauert. Ein früherer Austritt beendet die Verpflichtung nicht.',
+  'How long they commit for. Leaving early does not end the obligation. Empty or 0 is rolling.':
+    'Wie lange die Bindung dauert. Ein früherer Austritt beendet die Verpflichtung nicht. Leer oder 0 heißt laufend.',
+  'How many classes a period buys. Leave it empty for unlimited.':
+    'Wie viele Kurse ein Zeitraum umfasst. Leer lassen für unbegrenzt.',
   'How the membership base splits.': 'Wie sich die Mitglieder aufteilen.',
   'How they sign in. A member who starts teaching keeps the address — and the same person record.':
     'Womit sie sich anmelden. Wer vom Mitglied zur Kursleitung wird, behält die Adresse — und denselben Personendatensatz.',
@@ -274,6 +302,7 @@ export const GERMAN: Record<string, string> = {
   Members: 'Mitglieder',
   Message: 'Nachricht',
   'Minimum term': 'Mindestlaufzeit',
+  'Minimum term (months)': 'Mindestlaufzeit (Monate)',
   Minutes: 'Minuten',
   Mon: 'Mo',
   Money: 'Finanzen',
@@ -342,6 +371,7 @@ export const GERMAN: Record<string, string> = {
   'Notice given': 'Gekündigt',
   'notice given, date already fixed': 'gekündigt, Datum steht bereits fest',
   'Notice period': 'Kündigungsfrist',
+  'Notice period (days)': 'Kündigungsfrist (Tage)',
   'Notice runs its course — a commitment outlives notice given inside it.':
     'Die Kündigungsfrist läuft ab — eine Bindung überdauert eine Kündigung innerhalb der Laufzeit.',
   Notices: 'Mitteilungen',
@@ -530,6 +560,7 @@ export const GERMAN: Record<string, string> = {
   'Use a different address': 'Andere Adresse verwenden',
 
   'Valid for': 'Gültig für',
+  'Valid for (days)': 'Gültig für (Tage)',
   Violet: 'Violett',
 
   'Walk-ins can still be checked in from the member record.':

@@ -34,33 +34,21 @@ const planFormLayout: LayoutNode = {
         props: { gap: 16 },
         children: [
           {
-            component: 'Select',
+            component: 'Input',
             props: {
               label: 'Classes in the pack',
-              numeric: true,
+              type: 'number',
               hint: 'One class IS the drop-in — no separate thing to set up.',
-              options: [
-                { value: '1', label: 'One — a drop-in' },
-                { value: '5', label: 'Five' },
-                { value: '10', label: 'Ten' },
-                { value: '20', label: 'Twenty' },
-              ],
             },
             ref: 'credits',
             model: '$.credits',
           },
           {
-            component: 'Select',
+            component: 'Input',
             props: {
-              label: 'Valid for',
-              numeric: true,
-              emptyLabel: 'Never expires',
-              options: [
-                { value: '30', label: 'Thirty days' },
-                { value: '90', label: 'Three months' },
-                { value: '180', label: 'Six months' },
-                { value: '365', label: 'A year' },
-              ],
+              label: 'Valid for (days)',
+              type: 'number',
+              hint: 'How long the pack lives once it is bought. Leave it empty and it never expires.',
             },
             ref: 'validDays',
             model: '$.validDays',
@@ -71,32 +59,55 @@ const planFormLayout: LayoutNode = {
         component: 'Stack',
         props: { gap: 16 },
         children: [
+          // ── HOW OFTEN, AS A PAIR ───────────────────────────────
+          //
+          // A unit and a count, because "quarterly" is not a fifth word — it is
+          // every three months, and a studio billing every ten weeks is doing
+          // the same thing with different numbers. Two fields say all of it;
+          // a menu of named periods would be back to guessing which ones exist.
+          //
+          // The four units are Stripe's, and that is the one limit here that is
+          // not ours: a period a processor cannot express is one nobody can be
+          // charged.
           {
-            component: 'Select',
-            props: {
-              label: 'Billed',
-              options: [
-                { value: 'month', label: 'Monthly' },
-                { value: 'year', label: 'Yearly' },
-              ],
-            },
-            ref: 'interval',
-            model: '$.interval',
+            component: 'Row',
+            props: { gap: 12, align: 'end', wrap: true },
+            children: [
+              {
+                component: 'Input',
+                props: {
+                  label: 'Billed every',
+                  type: 'number',
+                  hint: 'Leave it empty for every one.',
+                },
+                ref: 'intervalCount',
+                model: '$.intervalCount',
+              },
+              {
+                component: 'Select',
+                props: {
+                  label: ' ',
+                  options: [
+                    { value: 'day', label: 'Days' },
+                    { value: 'week', label: 'Weeks' },
+                    { value: 'month', label: 'Months' },
+                    { value: 'year', label: 'Years' },
+                  ],
+                },
+                ref: 'interval',
+                model: '$.interval',
+              },
+            ],
           },
           {
-            component: 'Select',
+            component: 'Input',
             props: {
               label: 'Classes included',
-              numeric: true,
-              // Empty is a real answer here — NULL means unlimited, and the list
-              // says so in words rather than leaving a blank cell.
-              emptyLabel: 'Unlimited',
-              options: [
-                { value: '4', label: 'Four a month' },
-                { value: '8', label: 'Eight a month' },
-                { value: '12', label: 'Twelve a month' },
-                { value: '16', label: 'Sixteen a month' },
-              ],
+              type: 'number',
+              // Empty is a real answer here — NULL means unlimited — so the
+              // hint says so rather than leaving somebody guessing what a blank
+              // field will do to their price list.
+              hint: 'How many classes a period buys. Leave it empty for unlimited.',
             },
             ref: 'classAllowance',
             model: '$.classAllowance',
@@ -120,35 +131,21 @@ const planFormLayout: LayoutNode = {
         props: { gap: 16 },
         children: [
           {
-            component: 'Select',
+            component: 'Input',
             props: {
-              label: 'Minimum term',
-              numeric: true,
-              hint: 'How long they commit for. Leaving early does not end the obligation.',
-              options: [
-                { value: '0', label: 'No minimum — rolling' },
-                { value: '3', label: 'Three months' },
-                { value: '6', label: 'Six months' },
-                { value: '12', label: 'Twelve months' },
-                { value: '24', label: 'Twenty-four months' },
-              ],
+              label: 'Minimum term (months)',
+              type: 'number',
+              hint: 'How long they commit for. Leaving early does not end the obligation. Empty or 0 is rolling.',
             },
             ref: 'minimumTermMonths',
             model: '$.minimumTermMonths',
           },
           {
-            component: 'Select',
+            component: 'Input',
             props: {
-              label: 'Notice period',
-              numeric: true,
-              hint: 'How long before leaving takes effect. Notice inside a minimum term still runs to the end of it.',
-              options: [
-                { value: '0', label: 'None — ends immediately' },
-                { value: '14', label: 'Two weeks' },
-                { value: '30', label: 'One month' },
-                { value: '60', label: 'Two months' },
-                { value: '90', label: 'Three months' },
-              ],
+              label: 'Notice period (days)',
+              type: 'number',
+              hint: 'How long before leaving takes effect. Notice inside a minimum term still runs to the end of it. Empty or 0 ends it immediately.',
             },
             ref: 'noticeDays',
             model: '$.noticeDays',
@@ -201,6 +198,7 @@ export const planFormAction: ActionDefinition = {
     name: '',
     priceCents: 0,
     interval: 'month',
+    intervalCount: 1,
     classAllowance: '',
     minimumTermMonths: 0,
     noticeDays: 0,
@@ -235,6 +233,7 @@ export const planFormInputSchema = z.toJSONSchema(
     name: z.string().optional(),
     priceCents: z.number().optional(),
     interval: z.string().optional(),
+    intervalCount: z.union([z.string(), z.number()]).optional(),
     classAllowance: z.union([z.string(), z.number()]).optional(),
     minimumTermMonths: z.union([z.string(), z.number()]).optional(),
     noticeDays: z.union([z.string(), z.number()]).optional(),

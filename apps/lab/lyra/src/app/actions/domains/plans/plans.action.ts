@@ -34,6 +34,7 @@ export const plansAction: ActionDefinition = {
               name: '@event.payload.name',
               priceCents: '@event.payload.price_cents',
               interval: '@event.payload.interval',
+              intervalCount: '@event.payload.interval_count',
               classAllowance: '@event.payload.class_allowance',
               // Seeded because the form SAVES them. Without these the edit
               // opens with empty terms and Save writes the emptiness back — a

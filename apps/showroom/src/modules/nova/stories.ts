@@ -59,6 +59,15 @@ import { story as slotWrapperAnimation } from './stories/shell/slot-wrapper-anim
 import { story as slotWrapperAuthGate } from './stories/shell/slot-wrapper-auth-gate.story';
 import { story as suspendResumeOnNav } from './stories/shell/suspend-resume-on-nav.story';
 
+// i18n — the swap lives in nova's RENDERER, so every one of these runs on
+// pure nova: no moss, no server, no wire, and no i18n code in any adapter.
+import { story as i18nSwitch } from './stories/i18n/switch.story';
+import { story as i18nKeys } from './stories/i18n/keys.story';
+import { story as i18nDepth } from './stories/i18n/depth.story';
+import { story as i18nPatterns } from './stories/i18n/patterns.story';
+import { story as i18nHarvest } from './stories/i18n/harvest.story';
+import { story as i18nFormatting } from './stories/i18n/formatting.story';
+
 export const stories: readonly NovaStory[] = [
   // Bindings
   bindingsConditional,
@@ -113,4 +122,11 @@ export const stories: readonly NovaStory[] = [
   conditionalDetail,
   slotWrapperAnimation,
   slotWrapperAuthGate,
+  // i18n
+  i18nSwitch,
+  i18nKeys,
+  i18nDepth,
+  i18nPatterns,
+  i18nHarvest,
+  i18nFormatting,
 ];

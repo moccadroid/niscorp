@@ -114,7 +114,14 @@ const BundleSchema = z
     // Named lyra-side, like `preview`, and under the integration's own prefix. What is
     // inside a frame the host does NOT validate — that is the real cost, and it
     // is why this is a declaration rather than an iframe a layout can conjure.
-    frames: z.array(z.string()).default([]),
+    //
+    // PATH → THE ACTION IT BELONGS TO, and the second half is not decoration.
+    // A grant is minted for whoever asks, so without an owner the only questions
+    // this door could ask were "signed in?" and "installed here?" — which a
+    // member of the gym passes. Naming the action makes the grant answerable
+    // against the charter: a page belonging to a desk screen is mintable by
+    // somebody who holds that desk screen, and by nobody else.
+    frames: z.record(z.string(), z.string()).default({}),
     // The ONE action allowed to surface in the store: this integration's own
     // settings screen, reachable from its tile and from nowhere else. Add-ons
     // is a store; nothing functional lives there.
@@ -151,30 +158,70 @@ export type IntakeResult = { ok: true; bundle: Bundle } | { ok: false; reasons: 
 // moves it — the same call an operator already makes.
 const normalizeReach = (path: string): string => (path.split('?')[0] ?? '').replace(/\/+$/, '');
 
-export const reachOf = (bundle: Bundle, integrationId: string): string[] => {
+// ENDPOINT → THE ACTIONS THAT DECLARE IT, and the second half is the whole
+// point of this shape.
+//
+// This used to be a flat list of paths, and the loop below threw the action id
+// away — which made "is this path declared?" the only question the proxy could
+// ask. It is the wrong question. The charter draws its fences per ACTION
+// (`ext.desk.*` for a desk, `ext.member.*` for a member), so a perimeter that
+// cannot name the action cannot enforce them, and being signed in at a studio
+// that installed a payments integration was permission to call its merchant
+// onboarding endpoint.
+//
+// Several actions may name one endpoint, which is why the value is a list. Any
+// held action admits the call — the union, exactly as the charter itself
+// resolves — and the integration's own declaration is what states it, printed
+// on the approval card before anybody turns it on.
+export type Reach = Record<string, string[]>;
+
+export const reachOf = (bundle: Bundle, integrationId: string): Reach => {
   const own = `/integrations/${integrationId}/`;
-  const reach = new Set<string>();
-  for (const raw of Object.values(bundle.actions)) {
-    const action = raw as ActionDefinition;
-    for (const endpoint of Object.values(action.endpoints ?? {})) {
-      const url = (endpoint as { url?: string }).url ?? '';
-      // A `/api/*/vex` endpoint is a call to the HOST, checked against the
-      // fingerprints above. Only the integration's own prefix is reach.
-      if (url.startsWith(own)) reach.add(normalizeReach(url));
+  const reach: Reach = {};
+  const admit = (url: string, actionId: string): void => {
+    // A `/api/*/vex` endpoint is a call to the HOST, checked against the
+    // fingerprints above. Only the integration's own prefix is reach.
+    if (!url.startsWith(own)) return;
+    const key = normalizeReach(url);
+    const held = (reach[key] ??= []);
+    if (!held.includes(actionId)) held.push(actionId);
+  };
+  for (const [actionId, raw] of Object.entries(bundle.actions)) {
+    for (const endpoint of Object.values((raw as ActionDefinition).endpoints ?? {})) {
+      admit((endpoint as { url?: string }).url ?? '', actionId);
     }
   }
-  for (const binding of Object.values(bundle.attachments)) {
-    const preview = typeof binding === 'string' ? '' : binding.preview;
-    if (preview.startsWith(own)) reach.add(normalizeReach(preview));
+  // A preview belongs to the action that rides the strip, so it inherits that
+  // action's audience rather than being reachable by everybody who can see the
+  // host screen it hangs off.
+  for (const [actionId, binding] of Object.entries(bundle.attachments)) {
+    if (typeof binding !== 'string') admit(binding.preview, actionId);
   }
-  return [...reach].sort();
+  return Object.fromEntries(Object.entries(reach).sort(([a], [b]) => a.localeCompare(b)));
 };
 
-// Exact match, and FAIL CLOSED: a row with no reach — one written before this
-// column existed — forwards nothing. A silent widening is the failure mode worth
-// paying a re-import to avoid, and re-importing is one operator call.
-export const reachAdmits = (reach: readonly string[], path: string): boolean =>
-  reach.includes(normalizeReach(path));
+// FAIL CLOSED TWICE: a path this integration never declared, and a path no
+// action the CALLER HOLDS declares. A row with no reach — one written before
+// this column existed — still forwards nothing, because an empty object admits
+// nothing either. A silent widening is the failure mode worth paying a
+// re-import to avoid, and re-importing is one operator call.
+export const reachAdmits = (reach: Reach, path: string, held: ReadonlySet<string>): boolean =>
+  (reach[normalizeReach(path)] ?? []).some((actionId) => held.has(actionId));
+
+// WITHOUT A CALLER. The operator's probe asks whether this integration declared
+// a path at all, which is a question about the bundle rather than about
+// anybody's grants — an operator holds no catalog and needs none, and filtering
+// their diagnostic by a member's screens would make "the screen is empty"
+// harder to answer rather than safer.
+export const reachDeclares = (reach: Reach, path: string): boolean => reach[normalizeReach(path)] !== undefined;
+
+// The same question at the other door. A frame names one owner rather than a
+// list: a page is served by the screen that opens it, and two screens wanting
+// one page is a bundle that should say so twice.
+export const frameAdmits = (frames: Readonly<Record<string, string>>, path: string, held: ReadonlySet<string>): boolean => {
+  const owner = frames[path];
+  return owner !== undefined && held.has(owner);
+};
 
 // ── the gate ──────────────────────────────────────────────────
 //
@@ -307,11 +354,17 @@ export const runIntake = (payload: unknown, ctx: IntakeContext): IntakeResult =>
   // `/frame/` is where a grant is spent, so a page served at either would be
   // reachable by something other than the grant that was minted for it.
   const ownPrefix = `/integrations/${ctx.integrationId}/`;
-  for (const path of bundle.frames) {
+  for (const [path, actionId] of Object.entries(bundle.frames)) {
     if (!path.startsWith(ownPrefix)) {
       reasons.push(`frame "${path}": not under this integration's own prefix`);
     } else if (path.startsWith(`${ownPrefix}hook/`) || path.startsWith(`${ownPrefix}frame/`)) {
       reasons.push(`frame "${path}": /hook/ and /frame/ are reserved`);
+    }
+    // The owner has to be real, or the grant check below it can never pass and
+    // the page is simply unreachable — a refusal at intake beats a screen that
+    // opens onto nothing.
+    if (bundle.actions[actionId] === undefined) {
+      reasons.push(`frame "${path}": belongs to "${actionId}", which is not an action in this bundle`);
     }
   }
   if (bundle.settings !== '' && bundle.actions[bundle.settings] === undefined) {

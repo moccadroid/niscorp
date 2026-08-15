@@ -85,7 +85,11 @@ export type Billable = {
   planName: string;
   amount: number;
   currency: string;
-  interval: 'month' | 'year';
+  // A UNIT AND A COUNT. Quarterly is ('month', 3) — lyra's price list says so
+  // and Stripe's Price takes exactly this pair, so nothing in between gets to
+  // have an opinion about which periods exist.
+  interval: 'day' | 'week' | 'month' | 'year';
+  intervalCount: number;
   personId: string;
   personName: string;
 };
@@ -108,9 +112,15 @@ export const billableFor = async (env: PackEnv, studioId: string, personId: stri
     currency: String(row['currency'] ?? 'EUR'),
     personId: String(row['person_id'] ?? ''),
     personName: String(row['person_name'] ?? ''),
-    // Stripe knows two words here and lyra's CHECK constraint allows the same
-    // two. Anything else is a bug upstream, and defaulting quietly would bill
-    // somebody monthly for a yearly plan.
-    interval: interval === 'year' ? 'year' : 'month',
+    // FOUR WORDS, and they are Stripe's own — lyra's CHECK constraint allows
+    // exactly this set, so anything else is a bug upstream. Still narrowed
+    // rather than trusted: an unrecognised unit falling through to 'month' is
+    // the one defaulting that is safe here, because month is also the column's
+    // default and so is what the row would have meant.
+    interval: interval === 'day' || interval === 'week' || interval === 'year' ? interval : 'month',
+    // A count that did not arrive is one, which is what every period meant
+    // before lyra could say otherwise. Floored at 1: Stripe refuses zero, and a
+    // zero here would mean a price nobody could be charged on.
+    intervalCount: Math.max(1, Math.trunc(Number(row['interval_count'] ?? 1)) || 1),
   };
 };

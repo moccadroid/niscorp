@@ -103,9 +103,11 @@ export const timeText = (value: unknown) => ({
 // "12 of 20" carries two numbers, so its cardinality is unbounded and no
 // book can hold the sentence. What a book CAN hold is the PATTERN: '{n} of
 // {total}' is one row, translated whole, and the holes are filled in the
-// reader's language — by the render pass where a book exists, by the kit's
-// `fillPhrase` in the source language. A string slot is offered to the book
-// too, so a composed sentence's fragments translate with their frame.
+// reader's language by the renderer — in EVERY language, the source one
+// included, so no component ever meets the raw shape. A string slot is offered
+// to the book too, so a composed sentence's fragments translate with their
+// frame. A pattern must land on a prose key (`*_display`, `sentence`); at any
+// other key the renderer leaves it alone, deliberately.
 //
 // This replaced a per-word `byLanguage` table that taught ONE mapping the
 // difference between 'of' and 'von' — the two-entry table the old comment
@@ -125,6 +127,69 @@ export const fillTone = (booked: unknown, capacity: unknown) => ({
     else: 'good',
   },
 });
+
+// ── HOW OFTEN SOMETHING IS BILLED ────────────────────────────
+//
+// An offering's period is a PAIR — a unit and a count — because a studio may
+// bill quarterly, fortnightly or every ten weeks, and the two columns that were
+// there before ('month' | 'year') held our guess about somebody else's
+// business rather than a limit anything imposed.
+//
+// A pair does not render itself, and two reads spell it: the price list a desk
+// edits and the plan list a member chooses from. They said 'Monthly' and
+// 'a month' respectively — different registers for the same fact, which is
+// right — so both live here and neither screen invents a third wording.
+//
+// COUNT OF ONE GETS ITS OWN WORD, in both. "Every 1 month" is not something a
+// person writes, and a price list full of it reads as a machine's output. So
+// four fixed words at n = 1, and a counted pattern beyond it — the pattern
+// being the only shape a book can hold for an unbounded number (see `pattern`
+// above).
+const periodWords = (unit: unknown, count: unknown, single: Record<string, string>, many: Record<string, string>) => {
+  const isUnit = (name: string) => ({ $eq: [unit, name] });
+  const once = { $or: [{ $eq: [count, 1] }, { $not: count }] };
+  const branch = (name: string) => ({
+    when: isUnit(name),
+    then: {
+      $case: {
+        branches: [{ when: once, then: single[name] ?? '' }],
+        else: pattern(many[name] ?? '', { n: count }),
+      },
+    },
+  });
+  return {
+    $case: {
+      branches: [branch('day'), branch('week'), branch('year')],
+      // Month is the else rather than a fourth branch: it is the column's
+      // default, so it is also what an unreadable value falls back to.
+      else: {
+        $case: {
+          branches: [{ when: once, then: single['month'] ?? '' }],
+          else: pattern(many['month'] ?? '', { n: count }),
+        },
+      },
+    },
+  };
+};
+
+/** The desk's register, for a price-list column: "Monthly", "Every 3 months". */
+export const intervalText = (unit: unknown, count: unknown) =>
+  periodWords(
+    unit,
+    count,
+    { day: 'Daily', week: 'Weekly', month: 'Monthly', year: 'Yearly' },
+    { day: 'Every {n} days', week: 'Every {n} weeks', month: 'Every {n} months', year: 'Every {n} years' },
+  );
+
+/** The member's register, which reads after a price: "€89 a month",
+ *  "€240 every 3 months". */
+export const perIntervalText = (unit: unknown, count: unknown) =>
+  periodWords(
+    unit,
+    count,
+    { day: 'a day', week: 'a week', month: 'a month', year: 'a year' },
+    { day: 'every {n} days', week: 'every {n} weeks', month: 'every {n} months', year: 'every {n} years' },
+  );
 
 /** A cancelled session says so; everything else says when it starts. A fixed
  *  word against an open-ended one — so 'Cancelled' stays English here and the

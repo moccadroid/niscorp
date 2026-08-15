@@ -169,7 +169,7 @@ export const myMembership: CacheEntry = {
 export const subscriptionBillable: CacheEntry = {
   fingerprint: 'subscriptions/billable',
   intent: 'What a person should be charged, as numbers a payment provider can use',
-  shape: { subscription_id: '', offering_id: '', plan_name: '', amount: 0, currency: '', interval: '', status: '', paid_via: '', person_id: '', person_name: '' },
+  shape: { subscription_id: '', offering_id: '', plan_name: '', amount: 0, currency: '', interval: '', interval_count: 0, status: '', paid_via: '', person_id: '', person_name: '' },
   dsl: {
     // The person joins because a billing integration has to be able to say WHO
     // — a follow-up reading "a payment failed" with nobody attached is a note
@@ -183,6 +183,10 @@ export const subscriptionBillable: CacheEntry = {
       { field: 'offerings.id', as: 'offering_id' },
       { field: 'offerings.name', as: 'plan_name' },
       'offerings.interval',
+      // The period is a PAIR. Sending only the unit would charge a quarterly
+      // member every month, and the provider would be right to — nobody told it
+      // otherwise.
+      'offerings.interval_count',
       { field: 'people.id', as: 'person_id' },
       { field: 'people.name', as: 'person_name' },
     ],
@@ -207,6 +211,7 @@ export const subscriptionBillable: CacheEntry = {
         amount: one('amount', 0),
         currency: one('currency'),
         interval: one('interval'),
+        interval_count: one('interval_count', 1),
         status: one('status'),
         paid_via: one('paid_via'),
         person_id: one('person_id'),

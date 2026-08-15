@@ -8,6 +8,7 @@ import layoutDocsContent from '../../../../../packages/nova/LAYOUT_DOCS.md?raw';
 import actionDocsContent from '../../../../../packages/nova/ACTION_DOCS.md?raw';
 import shellDocsContent from '../../../../../packages/nova/SHELL_DOCS.md?raw';
 import reactDocsContent from '../../../../../packages/nova/REACT_DOCS.md?raw';
+import i18nDocsContent from '../../../../../packages/nova/I18N_DOCS.md?raw';
 
 const docs: readonly DocPage[] = [
   { id: 'readme', title: 'README', content: readmeContent },
@@ -16,14 +17,16 @@ const docs: readonly DocPage[] = [
   { id: 'action', title: 'Action Guide', content: actionDocsContent },
   { id: 'shell', title: 'Shell Guide', content: shellDocsContent },
   { id: 'react', title: 'React Guide', content: reactDocsContent },
+  { id: 'i18n', title: 'i18n Guide', content: i18nDocsContent },
 ];
 
-const KIND_ORDER: readonly string[] = ['layout', 'action', 'shell'];
+const KIND_ORDER: readonly string[] = ['layout', 'action', 'shell', 'i18n'];
 
 const KIND_LABELS: Record<string, string> = {
   layout: 'Layouts',
   action: 'Actions',
   shell: 'Shells',
+  i18n: 'i18n',
 };
 
 export const novaModule: LibraryModule = {
