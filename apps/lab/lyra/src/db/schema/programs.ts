@@ -19,9 +19,9 @@ export const PROGRAMS_DDL = /* sql */ `
     ends_on        DATE NOT NULL,
     capacity       INTEGER NOT NULL DEFAULT 12,
     price_cents    INTEGER NOT NULL DEFAULT 0,
-    -- A block has a price, so a block has a currency — the same pair rule as a
-    -- plan. Every table holding money names what the money is, so no read has to
-    -- infer it from a constraint holding somewhere else.
+    -- A block has a price, so a block has a currency — the pair target, as a
+    -- plan carries it. Every table holding money names what the money is, so no
+    -- read has to infer it from a constraint holding somewhere else.
     currency       TEXT NOT NULL DEFAULT 'EUR',
     active         BOOLEAN NOT NULL DEFAULT true,
 

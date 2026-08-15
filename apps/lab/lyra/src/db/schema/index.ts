@@ -18,6 +18,37 @@
 // (passes.ts) reads a check-in row from a table two fragments further down.
 // A `LANGUAGE sql` function has no such licence — studio_today is validated
 // against studios the moment it is created, which is why it sits beside it.
+//
+// ─── THE FIVE RULES THIS SCHEMA KEEPS ───────────────────────
+//
+// Each of these was written out in full at three or four different tables, in
+// slightly different words — which is four things that can drift apart and no
+// authority to settle which of them is right. Each is now stated ONCE, at the
+// table where it bites hardest, and named everywhere else. This is the index
+// of them, not their home.
+//
+//   THE PAID_UNTIL DOCTRINE  No conclusion is stored. A date or a count, and
+//     the comparison happens at read — because a stored "is live" is wrong for
+//     the whole of the day it lapsed, and wrong forever if whatever updated it
+//     were switched off.                     Stated at subscriptions.paid_until
+//
+//   THE PAIR TARGET  A UNIQUE that is redundant as a constraint and load-
+//     bearing as a target: (studio, currency), (offering, studio). It is what
+//     lets another table reference the PAIR, which is the only fence that
+//     stops one studio's row pointing at another studio's.
+//                                                Stated at offerings, in full
+//
+//   THE COUNTER CACHE  Recomputed by trigger, never incremented — because the
+//     mutation grammar cannot say "+ 1", vex cannot make the join that would
+//     replace it, and a counter its writers maintain drifts.
+//                                       Stated at class_sessions.booked_count
+//
+//   THE STUDIO'S CLOCK  A browser never says what today is. Every date here is
+//     stamped by a trigger from studio_today().        Stated at studio_today
+//
+//   THE TERMS THEY WERE SOLD  An entitlement carries the terms it was sold on,
+//     not the ones on sale today: a price list edited next spring must not
+//     rewrite what somebody paid last autumn.           Stated at offerings
 import { THEMES_DDL } from './themes';
 import { PHRASES_DDL } from './phrases';
 import { STUDIOS_DDL } from './studios';

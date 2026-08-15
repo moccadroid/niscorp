@@ -156,10 +156,10 @@ export const identityStudio: CacheEntry = {
   fingerprint: 'identity/studio',
   intent: "The session's studio, as it trades: name, clock zone, country, language, currency",
   reach: 'identity',
-  shape: { studioName: '', timezone: '', country: '', locale: '', currency: '' },
+  shape: { studioName: '', timezone: '', country: '', legalForm: '', locale: '', currency: '' },
   dsl: {
     from: ['studios'],
-    fields: [{ field: 'studios.name', as: 'studio_name' }, 'studios.timezone', 'studios.country', 'studios.locale', 'studios.currency'],
+    fields: [{ field: 'studios.name', as: 'studio_name' }, 'studios.timezone', 'studios.country', 'studios.legal_form', 'studios.locale', 'studios.currency'],
     limit: 1,
   },
   mapping: emptyWhenNoRow({
@@ -168,6 +168,10 @@ export const identityStudio: CacheEntry = {
     // this zone by the `scope` hook — never held for a session.
     timezone: { $get: { from: { $ref: '$.result' }, path: ['timezone'], fallback: { $const: '' } } },
     country: { $get: { from: { $ref: '$.result' }, path: ['country'], fallback: { $const: '' } } },
+    // Rides beside `country` for the same reason: both decide what a payment
+    // provider asks this business for, both are the studio's own fact, and
+    // neither is a question an integration should have to put to a caller.
+    legalForm: { $get: { from: { $ref: '$.result' }, path: ['legal_form'], fallback: { $const: '' } } },
     locale: { $get: { from: { $ref: '$.result' }, path: ['locale'], fallback: { $const: '' } } },
     currency: { $get: { from: { $ref: '$.result' }, path: ['currency'], fallback: { $const: '' } } },
   }),

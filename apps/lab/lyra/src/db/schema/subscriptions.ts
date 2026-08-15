@@ -45,12 +45,15 @@ export const SUBSCRIPTIONS_DDL = /* sql */ `
     -- HOW FAR THEIR MONEY REACHES. The one fact a payment provider knows that
     -- this app cannot derive, and the whole of what billing writes back here.
     --
-    -- Deliberately NOT a status. "Past due" is this date compared to today, and
-    -- a status column holding it would be wrong for the whole of the day it
-    -- lapsed and wrong forever if whatever updated it were switched off — the
-    -- same argument that took "trialling" and "lapsed" out of
-    -- the old memberships.status before that table was retired for it.
-    -- Screens that care compare it; nobody stores the answer.
+    -- THE PAID_UNTIL DOCTRINE takes its name from this column, and this is
+    -- where it is stated. Deliberately NOT a status: "past due" is this date
+    -- compared to today, and a status column holding that answer would be
+    -- wrong for the whole of the day it lapsed and wrong forever if whatever
+    -- updated it were switched off — the same argument that took "trialling"
+    -- and "lapsed" out of the old memberships.status before that table was
+    -- retired for it. Screens that care compare it; nobody stores the answer.
+    -- Every lapse in this schema is derived the same way, from a date or a
+    -- count: a pass expiring, a trial closing, a horizon on the anchor.
     paid_until       DATE,
 
     -- When the ROW appeared, distinct from when the subscription started:

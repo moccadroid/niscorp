@@ -385,6 +385,85 @@ export const coursePrice: CacheEntry = {
   },
 };
 
+// ── WHOSE ROW IS THIS ────────────────────────────────────────
+//
+// The payments integration keeps a mirror of invoices and no names — that split
+// is S4 and it stands. It left the money screen a list of amounts and dates with
+// nobody attached, which is not a screen anybody can act on: the first question
+// about a disputed €89 is whose.
+//
+// So the names are BORROWED. The integration asks for the ones on the page it is
+// rendering, the engine answers only this studio's, and nothing crosses that is
+// not already on a screen the same person is entitled to read.
+export const subscriptionNames: CacheEntry = {
+  fingerprint: 'subscriptions/names',
+  intent: 'Who these subscriptions belong to, for a screen that holds only their ids',
+  shape: [{ subscription_id: '', person_name: '' }],
+  dsl: {
+    from: ['subscriptions', 'people'],
+    fields: [{ field: 'subscriptions.id', as: 'subscription_id' }, { field: 'people.name', as: 'person_name' }],
+    // ASKED FOR BY NAME, so this cannot be used to walk the roll: a caller gets
+    // back exactly the ids it already held, and holding an id is what the
+    // mirror's own rows gave it.
+    filter: { in: ['subscriptions.id', { $context: 'subscriptionIds' }] },
+  },
+  mapping: {
+    $map: {
+      over: { $ref: '$.result' },
+      as: 'n',
+      body: {
+        subscription_id: { $get: { from: { $var: 'n' }, path: ['subscription_id'] } },
+        person_name: { $get: { from: { $var: 'n' }, path: ['person_name'] } },
+      },
+    },
+  },
+};
+
+// ── WHO IS LEAVING, AND WHEN ─────────────────────────────────
+//
+// The read that closes S6. A member gives notice, the trigger computes
+// `ends_on` from GREATEST(committed_until, notice + notice_days), and the screen
+// tells them their last day — and until this existed, nothing ever told the
+// payment provider. They kept being charged, forever, on a membership this app
+// had already ended. §312k requires the cancel button to mean something.
+//
+// Stripe has no notion of a notice period and must not be given one: the DATE is
+// lyra's arithmetic, and all a provider needs is the day to stop.
+//
+// Only the ones a provider is actually billing. A membership the studio settles
+// itself has no `cancel_at` to set anywhere, and asking about it every sweep
+// would be a question with no possible answer.
+export const subscriptionsLeaving: CacheEntry = {
+  fingerprint: 'subscriptions/leaving',
+  intent: 'Subscriptions billed by a provider that have a leaving date, so the provider can be told to stop',
+  shape: [{ subscription_id: '', ends_on: '', status: '' }],
+  dsl: {
+    from: ['subscriptions'],
+    fields: [{ field: 'subscriptions.id', as: 'subscription_id' }, 'subscriptions.ends_on', 'subscriptions.status'],
+    filter: {
+      and: [
+        { eq: ['subscriptions.paid_via', 'stripe'] },
+        { isNotNull: 'subscriptions.ends_on' },
+      ],
+    },
+    sort: [{ field: 'subscriptions.ends_on', dir: 'asc' }],
+  },
+  mapping: {
+    $map: {
+      over: { $ref: '$.result' },
+      as: 'l',
+      body: {
+        subscription_id: { $get: { from: { $var: 'l' }, path: ['subscription_id'] } },
+        // The DAY, as a day. Not a display string: a provider needs a date and
+        // parsing one back out of "Fri 14 Mar" would be inventing a second
+        // source of truth out of something written for a person to read.
+        ends_on: { $get: { from: { $var: 'l' }, path: ['ends_on'] } },
+        status: { $get: { from: { $var: 'l' }, path: ['status'] } },
+      },
+    },
+  },
+};
+
 // ── STARTING ONE ─────────────────────────────────────────────
 //
 // THE WRITE THE OLD MODEL DID NOT HAVE, which is why Tom Vogel "just had a
@@ -513,6 +592,31 @@ export const subscriptionAssert: MutationEntry = {
       // exists: a member can be on a price their offering never had.
       price_cents: { $context: 'priceCents' },
     },
+    where: { eq: ['subscriptions.id', { $context: 'subscriptionId' }] },
+  },
+};
+
+// ── WHO IS ACTUALLY COLLECTING THE MONEY ─────────────────────
+//
+// `paid_via` is chosen when a subscription starts, and a member starting one
+// themselves has no processor in the path yet — so it is written `manual`,
+// meaning "the studio settles this". If they then set up a card, nothing moved
+// it: `assert` states standing and deliberately never touches this column, so a
+// member paying by card every month read "Billed by the studio" on their own
+// screen and on the desk's, and the desk chased them for money already taken.
+//
+// Its own fingerprint rather than a field on `assert`, because it is a different
+// fact with a different moment: standing is asserted continuously, and this
+// happens once, when a checkout completes. Keeping them apart is also what keeps
+// `assert` unable to write it — a provider states what the money DID, and
+// "who collects" is a decision about the arrangement.
+export const subscriptionPaidByProvider: MutationEntry = {
+  fingerprint: 'subscriptions/paid-by-provider',
+  intent: 'Record that a payment provider now collects this subscription',
+  mutation: {
+    op: 'update',
+    table: 'subscriptions',
+    set: { paid_via: 'stripe' },
     where: { eq: ['subscriptions.id', { $context: 'subscriptionId' }] },
   },
 };

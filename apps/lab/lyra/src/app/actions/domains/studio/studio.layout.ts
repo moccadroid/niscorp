@@ -43,6 +43,38 @@ export const studioSettingsLayout: LayoutNode = {
       children: 'Colours for now. Studio-specific layouts are coming.',
     },
 
+    // ── the business ────────────────────────────────────────
+    //
+    // Not a look and not a preference: what a payment provider will demand of
+    // this studio before any money moves. It sat as a constant in the payments
+    // integration — 'company' — which is right for a GmbH and wrong for every
+    // sole trader, and on a merchant account it is close to irreversible.
+    {
+      component: 'Card',
+      props: { pad: 18 },
+      children: {
+        component: 'Stack',
+        props: { gap: 12 },
+        children: [
+          { component: 'Text', props: { size: 'lg', weight: 'semi' }, children: 'Business' },
+          {
+            component: 'Select',
+            props: {
+              label: 'What kind of business this is',
+              hint: 'Decides what a payment provider asks you for. Hard to change once an account exists, so it is worth getting right now.',
+              value: '$.studioRow.legal_form',
+              options: [
+                { value: 'company', label: 'A company' },
+                { value: 'individual', label: 'A sole trader' },
+              ],
+            },
+            ref: 'legalForm',
+          },
+          { if: '$.legalSaved', then: { component: 'Notice', props: { tone: 'good', message: 'Saved.' } }, else: '' },
+        ],
+      },
+    },
+
     // ── the language ────────────────────────────────────────
     {
       component: 'Card',

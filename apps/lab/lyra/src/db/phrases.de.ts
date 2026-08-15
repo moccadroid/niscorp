@@ -228,6 +228,12 @@ export const GERMAN: Record<string, string> = {
   'Good morning': 'Guten Morgen',
 
   Hour: 'Stunde',
+  'Nothing recorded yet': 'Noch nichts erfasst',
+  'A company': 'Ein Unternehmen',
+  'A sole trader': 'Ein Einzelunternehmen',
+  Business: 'Unternehmen',
+  'Decides what a payment provider asks you for. Hard to change once an account exists, so it is worth getting right now.': 'Bestimmt, was ein Zahlungsanbieter von dir verlangt. Nach dem Anlegen eines Kontos kaum noch änderbar — jetzt lohnt es sich, es richtig zu setzen.',
+  'What kind of business this is': 'Um welche Art von Unternehmen es sich handelt',
   'A one-off — sold once, grants nothing': 'Ein Einzelposten — einmal verkauft, berechtigt zu nichts',
   'Grants nothing': 'Berechtigt zu nichts',
   'Nothing bought outright.': 'Nichts einzeln gekauft.',

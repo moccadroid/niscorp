@@ -252,6 +252,9 @@ const ledgerAction: ActionDefinition = {
               empty: 'Nothing charged yet. Invoices appear here as members pay.',
               columns: [
                 { label: 'Date', px: 130, cell: { kind: 'text', key: 'date_display', color: 'soft' } },
+                // WHOSE. A money screen without it is a list of amounts nobody
+                // can act on — the first question about any row here is who.
+                { label: 'Member', w: 2, cell: { kind: 'primary', key: 'person_name' } },
                 { label: 'Amount', px: 120, cell: { kind: 'primary', key: 'amount_display' } },
                 { label: 'State', px: 130, cell: { kind: 'badge', key: 'state_label', toneKey: 'state_tone' } },
                 { label: '', w: 1, cell: { kind: 'text', key: 'note', color: 'soft' } },
@@ -463,6 +466,7 @@ export const STRIPE_BUNDLE = {
   phrasebook: {
     de: {
       Amount: 'Betrag',
+      Member: 'Mitglied',
       // ── the member's own card ──
       'Manage payment method': 'Zahlungsmittel verwalten',
       'Open payment settings': 'Zahlungseinstellungen öffnen',

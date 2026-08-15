@@ -51,13 +51,18 @@ export const stripeFor = (env: IntegrationEnv): Stripe | undefined => {
 // The country is the STUDIO'S, not the platform's: an Austrian studio is an
 // Austrian merchant, and the entity type decides which verification fields
 // Stripe will ask that studio for.
-export type OnboardArgs = { studioName: string; country: string; email?: string };
+export type OnboardArgs = { studioName: string; country: string; entityType: 'company' | 'individual'; email?: string };
 
 export const createConnectedAccount = async (stripe: Stripe, args: OnboardArgs): Promise<string> => {
   const account = await stripe.v2.core.accounts.create({
     display_name: args.studioName,
     ...(args.email !== undefined && args.email !== '' ? { contact_email: args.email } : {}),
-    identity: { country: args.country.toLowerCase(), entity_type: 'company' },
+    // THE STUDIO'S OWN, both of them. `entity_type` was hardcoded 'company',
+    // which is wrong for every Einzelunternehmen — the commonest shape for a
+    // small studio in the countries these trade in — and it decides which
+    // documents Stripe demands. It is near-irreversible on a live account, so it
+    // is the owner's answer rather than ours.
+    identity: { country: args.country.toLowerCase(), entity_type: args.entityType },
     configuration: { merchant: { capabilities: { card_payments: { requested: true } } } },
     defaults: { responsibilities: { fees_collector: 'stripe', losses_collector: 'stripe' } },
     dashboard: 'none',

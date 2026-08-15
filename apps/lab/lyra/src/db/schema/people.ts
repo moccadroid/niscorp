@@ -74,19 +74,17 @@ export const PEOPLE_DDL = /* sql */ `
 
     -- ── THE RELATIONSHIP MIRRORS ─────────────────────────────
     --
-    -- Counter caches, kept by the database like every other one here
-    -- (booked_count, enrolled_count): counts and HORIZON DATES from the
-    -- entitlement tables, resynced by triggers whenever those rows move.
-    -- They exist so the roll can derive standing from the anchor row alone —
-    -- a desk may know somebody holds a live subscription without holding the
-    -- grant that reads what anybody pays, and the access model needs no new
-    -- vocabulary to say so.
+    -- COUNTER CACHES, the rule as class_sessions.booked_count states it:
+    -- counts and HORIZON DATES from the entitlement tables, resynced by
+    -- triggers whenever those rows move. They exist so the roll can derive
+    -- standing from the anchor row alone — a desk may know somebody holds a
+    -- live subscription without holding the grant that reads what anybody
+    -- pays, and the access model needs no new vocabulary to say so.
     --
-    -- NO CONCLUSION IS STORED. These are counts and dates, compared against
-    -- the studio's own day at read (standing.ts) — the paid_until doctrine:
-    -- a stored "is live" would be wrong for the whole of the day it lapsed;
-    -- a stored "live until the 14th" cannot rot, because which rows carry
-    -- credits changes only at writes, and writes resync.
+    -- NO CONCLUSION IS STORED — the paid_until doctrine, and the reason a
+    -- horizon date can be cached at all: which rows carry credits changes
+    -- only at writes, and writes resync. The comparison against the studio's
+    -- own day happens at read (standing.ts).
     active_subscriptions INTEGER NOT NULL DEFAULT 0,
     paused_subscriptions INTEGER NOT NULL DEFAULT 0,
     held_subscriptions   INTEGER NOT NULL DEFAULT 0,

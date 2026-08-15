@@ -170,6 +170,12 @@ export const meMembershipLayout: LayoutNode = page([
               { component: 'Field', props: { label: 'Notice', phrase: '$.membership.notice_display' } },
               { component: 'Field', props: { label: 'Committed until', value: '$.membership.committed_display', empty: 'No commitment' } },
               { component: 'Field', props: { label: 'Paid', phrase: '$.membership.paid_via_display' } },
+              // HOW FAR THEIR MONEY REACHES. The read has returned this since
+              // the beginning and this screen dropped it, so a member could see
+              // WHO collects and never WHEN it runs out — which is the one
+              // number they came to this screen for, and the one that tells them
+              // a card has quietly stopped working.
+              { component: 'Field', props: { label: 'Paid until', value: '$.membership.paid_until_display', empty: 'Nothing recorded yet' } },
             ],
           },
           // ── their own way out, and their own hold ────────────

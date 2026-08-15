@@ -1,11 +1,11 @@
 import type { SeedEntry, SeedMutation } from '@niscorp/vex';
-import { studioCurrent, studioTheme, membersActiveCount, checkInsTodayCount, studioSetReplyTo, studioSetDomain, outboxSentToday } from './studio.entries';
+import { studioCurrent, studioTheme, membersActiveCount, checkInsTodayCount, studioSetReplyTo, studioSetLegalForm, studioSetDomain, outboxSentToday } from './studio.entries';
 import { revenueAtRisk, revenueCommitted, revenueExpected, revenueLeaving } from './forecast.entries';
 import { sessionsToday, sessionsUpcoming, programsList } from './schedule.entries';
 import { sessionAttending, sessionDetail } from './session.entries';
 import { peopleList, peopleCount, personById, offeringsList, offeringOptions, offeringsOnSale } from './member.entries';
 import { personAnchorUpdate, personConsentSet } from './member.mutations';
-import { subscriptionAssert, subscriptionBillable, subscriptionForMember, subscriptionGiveNotice, subscriptionWithdrawNotice, subscriptionStart, subscriptionRecordPayment, subscriptionEnd, subscriptionPause, subscriptionResume, myMembership, passSell, passesForPerson, enrolPerson, offeringPrice, coursePrice, offeringsPurchasable, purchaseRecord, purchasesForPerson } from './subscription.entries';
+import { subscriptionAssert, subscriptionBillable, subscriptionForMember, subscriptionGiveNotice, subscriptionWithdrawNotice, subscriptionStart, subscriptionRecordPayment, subscriptionEnd, subscriptionPause, subscriptionResume, myMembership, passSell, passesForPerson, enrolPerson, offeringPrice, coursePrice, offeringsPurchasable, purchaseRecord, purchasesForPerson, subscriptionsLeaving, subscriptionPaidByProvider, subscriptionNames } from './subscription.entries';
 import { localeCurrent, studioSetLocale, studioSetTheme, themeCurrent, themesList } from './theme.entries';
 import { bookableForSession, bookingCancel, bookingCreate, checkInMark, rosterForSession, walkInsToday } from './desk.entries';
 import {
@@ -101,6 +101,8 @@ export const ENTRIES: CacheEntry[] = [
   planUptake,
   subscriptionForMember,
   subscriptionBillable,
+  subscriptionsLeaving,
+  subscriptionNames,
   offeringsPurchasable,
   purchasesForPerson,
   offeringPrice,
@@ -150,9 +152,11 @@ export const MUTATION_ENTRIES: MutationEntry[] = [
   subscriptionResume,
   subscriptionWithdrawNotice,
   subscriptionAssert,
+  subscriptionPaidByProvider,
   studioSetTheme,
   studioSetLocale,
   studioSetReplyTo,
+  studioSetLegalForm,
   studioSetDomain,
   checkInMark,
   bookingCreate,

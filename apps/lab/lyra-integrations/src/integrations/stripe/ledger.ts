@@ -126,7 +126,7 @@ const SYMBOL: Record<string, string> = { eur: '€', usd: '$', gbp: '£' };
  * badge; it does not know what "uncollectible" means, and teaching it would be
  * teaching an app about a payment provider.
  */
-export const ledgerRows = (invoices: readonly MirroredInvoice[]): Record<string, unknown>[] =>
+export const ledgerRows = (invoices: readonly MirroredInvoice[], names: Readonly<Record<string, string>> = {}): Record<string, unknown>[] =>
   invoices.map((invoice) => {
     const symbol = SYMBOL[invoice.currency.toLowerCase()] ?? `${invoice.currency.toUpperCase()} `;
     const money = (cents: number): string => `${symbol}${(cents / 100).toFixed(2)}`;
@@ -143,6 +143,10 @@ export const ledgerRows = (invoices: readonly MirroredInvoice[]): Record<string,
             : { label: invoice.status, tone: 'neutral' };
     return {
       invoice_id: invoice.invoiceId,
+      // BORROWED FOR THE RENDER, held nowhere. A studio reading its own money
+      // needs to know whose it is; this service still keeps no column for a
+      // person, and an unresolvable row says so rather than showing a raw id.
+      person_name: names[invoice.subscriptionId] ?? '—',
       date_display: invoice.invoicedOn === '' ? '—' : invoice.invoicedOn,
       amount_display: money(invoice.amountCents),
       state_label: state.label,

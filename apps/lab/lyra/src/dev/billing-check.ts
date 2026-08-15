@@ -16,7 +16,9 @@ import { createHmac } from 'node:crypto';
 import { serve as listen } from '@hono/node-server';
 import { startIntegrations } from '../../../lyra-integrations/src/serve';
 import { CAST } from '@lyra/db/seed';
-import { login, mintToken, ok, report, runtime, server, settle } from './world';
+import { asPrincipal, login, mintToken, ok, report, runtime, server, settle } from './world';
+import { sweepLeaving } from '../../../lyra-integrations/src/integrations/stripe/leaving';
+import { rememberAccount } from '../../../lyra-integrations/src/integrations/stripe/store';
 
 const KEY = 'lab-operator-key';
 runtime.operatorKey = KEY;
@@ -104,6 +106,11 @@ const deliver = async (payload: string, secret = HOOK_SECRET): Promise<{ status:
   });
   return { status: response.status, body: (await response.json().catch(() => ({}))) as Record<string, unknown> };
 };
+
+// The sweep is called directly rather than through a timer: a background
+// interval inside a check reaches across a suite, and what is under test is the
+// work, not the clock that would have started it.
+const readEnv = (name: string): string => process.env[name] ?? '';
 
 const closeLyra = (): Promise<void> =>
   new Promise((resolve) => {
@@ -297,6 +304,10 @@ try {
   });
   const rows = (await ledger.json()) as { invoice_id: string; amount_display: string; state_label: string; note: string }[];
   ok('the money screen reads the integration’s own mirror', rows.length === 2, `${rows.length} invoices, newest first`);
+  // WHOSE. The mirror holds no names and never will (S4) — it keys on lyra's
+  // subscription id — so a screen of amounts with nobody attached was not a
+  // screen anybody could act on. The names are borrowed for the render.
+  ok('...saying whose money it is', rows.every((r) => (r as { person_name?: string }).person_name === 'Omar Haddad'), rows.map((r) => (r as { person_name?: string }).person_name).join(', '));
   ok('...in the studio’s money, not in cents', rows[0]?.amount_display === '€89.00', String(rows[0]?.amount_display));
   ok('...saying what each one is', rows.map((r) => r.state_label).join(', ') === 'Unpaid, Paid', rows.map((r) => r.state_label).join(', '));
 
@@ -445,6 +456,59 @@ try {
   // rewrite what somebody paid last autumn.
   ok('...with the price they actually paid', feeRow.rows[0]?.price_cents === 3000, `${String(feeRow.rows[0]?.price_cents)} cents, from the offering at the moment of sale`);
   ok('...and how they paid it', feeRow.rows[0]?.paid_via === 'stripe', String(feeRow.rows[0]?.paid_via));
+
+  // ── NOTICE GIVEN IN LYRA REACHES THE PROVIDER (S6) ───────────
+  //
+  // The gap that made this app tell a member something untrue. They give notice,
+  // the trigger computes the last day from the longer of their notice period and
+  // their minimum term, the screen says so — and Stripe, which knows about
+  // neither, kept charging them. §312k requires the button to mean something.
+  //
+  // Stripe is not reachable from a check, so what is proven here is everything
+  // up to the call: the reverse index filled itself from ordinary events, lyra
+  // answers who is leaving, and the sweep resolves the pair. The `cancel_at`
+  // call itself is one line past this and needs a key.
+  const leavingSub = 'sub_omar';
+  await runtime.db.query("UPDATE subscriptions SET paid_via = 'stripe' WHERE id = $1", [leavingSub]);
+  // The sweep asks every CONNECTED studio, and connecting needs a key this check
+  // does not have — so the account is put in the store directly. It is the one
+  // fact this check cannot produce through the app, and the sweep's own logic is
+  // what is under test rather than how the row arrived.
+  await rememberAccount(undefined, {
+    studioId: 'st_northrock',
+    accountId: 'acct_probe',
+    studioName: 'North Rock BJJ',
+    country: 'AT',
+    createdAt: new Date().toISOString(),
+  });
+
+  // The index is a CACHE filled by traffic, so it is filled by traffic here too —
+  // the same subscription events delivered above, not a hand-written row.
+  const indexed = await server.request('/integrations/stripe/hook/events', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', 'stripe-signature': signPayload(subscriptionEvent('evt_index', 'active', paidUntil, { subscription_id: leavingSub, person_id: 'p_omar', studio_id: 'st_northrock' }), HOOK_SECRET) },
+    body: subscriptionEvent('evt_index', 'active', paidUntil, { subscription_id: leavingSub, person_id: 'p_omar', studio_id: 'st_northrock' }),
+  });
+  ok('an ordinary event teaches which provider subscription is which membership', indexed.status === 200, 'the reverse index fills from traffic, not from a second fetch');
+
+  // Nobody is leaving yet, so the sweep has nothing to say.
+  const quiet = await sweepLeaving(readEnv, undefined);
+  ok('a sweep with nobody leaving stops nothing', quiet.leaving === 0, JSON.stringify(quiet));
+
+  // THE ACT: notice, through the app's own surface, dated by the studio's clock.
+  await asPrincipal(CAST.northrock.owner, '/api/member/vex', {
+    fingerprint: 'subscriptions/give-notice',
+    context: { subscriptionId: leavingSub },
+  });
+  const ends = await runtime.db.query<{ ends_on: unknown }>('SELECT ends_on FROM subscriptions WHERE id = $1', [leavingSub]);
+  ok('giving notice sets a leaving date', ends.rows[0]?.ends_on !== null, `${day(ends.rows[0]?.ends_on)} — the longer of notice and the minimum term`);
+
+  const sweep = await sweepLeaving(readEnv, undefined);
+  ok('...and the sweep finds them', sweep.leaving === 1, JSON.stringify(sweep));
+  // `stopped` counts calls that reached Stripe; with no key none do, and the
+  // assertion that matters is that the pair RESOLVED rather than falling into
+  // `missing` — which is what a broken index would look like.
+  ok('...with the provider subscription resolved, not missing', sweep.missing === 0, `${sweep.missing} unresolved — a membership marked stripe that this service cannot name`);
 
   // ── AND A STUDIO READS ITS OWN ───────────────────────────────
   const otherStudio = await server.request('/integrations/stripe/ledger', {

@@ -6,11 +6,10 @@ export const PASSES_DDL = /* sql */ `
   -- in the pack.
   --
   -- "expired" is NOT a stored status: it is expires_on compared to the
-  -- studio's day, derived at read like every other lapse in this schema — a
-  -- stored one would be wrong for the whole of the day it lapsed and wrong
-  -- forever if whatever updated it were switched off. "used_up" IS stored,
-  -- because it is a fact the decrement trigger makes true in the same
-  -- transaction that makes it so.
+  -- studio's day, derived at read — the paid_until doctrine. "used_up" IS
+  -- stored, and the contrast is the whole of what that doctrine says: it is a
+  -- fact the decrement trigger makes true in the same transaction that makes
+  -- it so, so there is no day on which it can be wrong.
   CREATE TABLE passes (
     id            TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
     studio_id     TEXT NOT NULL REFERENCES studios(id),
@@ -43,14 +42,14 @@ export const PASSES_DDL = /* sql */ `
     -- redelivery being a quiet no-op and being an error somebody has to read.
     purchase_ref  TEXT,
     UNIQUE (studio_id, purchase_ref),
-    -- The same pair rule subscriptions carry: a pass is sold off THIS studio's
-    -- price list, whatever id the caller named.
+    -- The pair target: a pass is sold off THIS studio's price list, whatever
+    -- id the caller named.
     FOREIGN KEY (offering_id, studio_id) REFERENCES offerings (id, studio_id)
   );
 
-  -- Stamped like every other date here: the studio's clock, and the expiry
-  -- copied from the offering's validity window at the moment of sale — the
-  -- terms they were SOLD, not the terms on sale later.
+  -- The studio's clock, and the terms they were sold: the expiry is copied
+  -- from the offering's validity window at the moment of sale, so a validity
+  -- window edited later does not move a pass somebody already holds.
   CREATE OR REPLACE FUNCTION stamp_pass_terms() RETURNS TRIGGER AS $pass$
   DECLARE
     o RECORD;

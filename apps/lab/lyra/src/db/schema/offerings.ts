@@ -10,9 +10,13 @@ export const OFFERINGS_DDL = /* sql */ `
   --   recurring  a membership plan: interval, term, notice, allowance
   --   pass       N class credits; credits = 1 IS the drop-in — no third kind
   --
-  -- Retiring an offering keeps everyone already on it, exactly as plans always
-  -- worked: subscriptions and passes reference the offering they were SOLD on,
-  -- never the current price list.
+  -- THE TERMS THEY WERE SOLD, and where that rule is stated. Retiring an
+  -- offering keeps everyone already on it, exactly as plans always worked:
+  -- subscriptions and passes reference the offering they were SOLD on, never
+  -- the current price list, and every term that could move — a price, a
+  -- notice period, a validity window — is stamped onto the entitlement at the
+  -- sale. A price list edited next spring must not rewrite what somebody paid
+  -- last autumn.
   CREATE TABLE offerings (
     id               TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
     studio_id        TEXT NOT NULL REFERENCES studios(id),
@@ -61,9 +65,12 @@ export const OFFERINGS_DDL = /* sql */ `
     valid_days       INTEGER CHECK (valid_days IS NULL OR valid_days > 0),
     CHECK (kind <> 'pass' OR credits IS NOT NULL),
     active           BOOLEAN NOT NULL DEFAULT true,
-    -- Redundant as a constraint — "id" is already unique — and load-bearing as
-    -- a TARGET: it is what lets an entitlement reference (offering, studio) as
-    -- a pair, so one studio's desk cannot sell another studio's price.
+    -- THE PAIR TARGET, and where that rule is stated. Redundant as a
+    -- constraint — "id" is already unique — and load-bearing as a TARGET: it
+    -- is what lets an entitlement reference (offering, studio) as a PAIR
+    -- rather than as an id, so one studio's desk cannot sell another studio's
+    -- price however the id arrived. Every table that holds an entitlement or
+    -- an amount carries the matching composite key back to here or to studios.
     UNIQUE (id, studio_id),
     -- ONE CURRENCY PER STUDIO, ENFORCED BY THE DATABASE.
     --

@@ -8,10 +8,10 @@ const rowNum = (name: string) => ({ $get: { from: { $var: 'r' }, path: [name], f
 export const studioCurrent: CacheEntry = {
   fingerprint: 'studio/current',
   intent: "The signed-in principal's own studio",
-  shape: { studio_id: '', name: '', slug: '', kind: '', timezone: '', reply_to: '', daily_mail_cap: 0, sending_domain: '', sending_domain_id: '', sending_domain_ok: false },
+  shape: { studio_id: '', name: '', slug: '', kind: '', timezone: '', legal_form: '', reply_to: '', daily_mail_cap: 0, sending_domain: '', sending_domain_id: '', sending_domain_ok: false },
   dsl: {
     from: ['studios'],
-    fields: [{ field: 'studios.id', as: 'studio_id' }, 'studios.name', 'studios.slug', 'studios.kind', 'studios.timezone', 'studios.reply_to', 'studios.daily_mail_cap', 'studios.sending_domain', 'studios.sending_domain_id', 'studios.sending_domain_ok'],
+    fields: [{ field: 'studios.id', as: 'studio_id' }, 'studios.name', 'studios.slug', 'studios.kind', 'studios.timezone', 'studios.legal_form', 'studios.reply_to', 'studios.daily_mail_cap', 'studios.sending_domain', 'studios.sending_domain_id', 'studios.sending_domain_ok'],
   },
   mapping: {
     $with: {
@@ -74,6 +74,27 @@ export const studioSetReplyTo: MutationEntry = {
     set: { reply_to: { $context: 'replyTo' }, daily_mail_cap: { $context: 'dailyCap' } },
     // The engine ANDs the caller's own studio onto this, so a forged id
     // selects nothing — the same shape the theme and locale writes take.
+    where: { eq: ['studios.id', { $context: 'studioId' }] },
+  },
+};
+
+// ── WHAT KIND OF BUSINESS THIS IS ────────────────────────────
+//
+// Company or sole trader. It reads like a detail and it is the field that
+// decides what a payment provider demands of the studio before any money can
+// move — and on a merchant account it is close to irreversible, so getting it
+// wrong is not a form to re-submit.
+//
+// It was a constant in the payments integration ('company'), which is right for
+// a GmbH and wrong for every Einzelunternehmen, which is most small studios in
+// the countries these trade in. The owner answers it.
+export const studioSetLegalForm: MutationEntry = {
+  fingerprint: 'studio/set-legal-form',
+  intent: 'Say whether this studio is a company or a sole trader',
+  mutation: {
+    op: 'update',
+    table: 'studios',
+    set: { legal_form: { $context: 'legalForm' } },
     where: { eq: ['studios.id', { $context: 'studioId' }] },
   },
 };

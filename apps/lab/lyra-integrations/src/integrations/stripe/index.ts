@@ -4,9 +4,10 @@ import { accountFor, rememberAccount, storeIsDurable } from './store';
 import { accountStanding, createAccountSession, createConnectedAccount, createOnboardingLink, createPortalSession, stripeFor } from './client';
 import { embedPage, notOnboardedPage, unavailablePage } from './onboarding';
 import { createCheckout, createPurchase, customerFor } from './checkout';
-import { billableFor, purchaseFor } from './lyra';
+import { billableFor, namesForSubscriptions, purchaseFor } from './lyra';
 import { handleStripeEvent } from './hooks';
 import { invoicesFor, ledgerRows } from './ledger';
+import { sweepLeaving } from './leaving';
 
 // ═══════════════════════════════════════════════════════════════
 // STRIPE — payments, as an integration.
@@ -25,7 +26,7 @@ export const stripeIntegration: Integration = {
   id: 'stripe',
   // Named, and therefore fenced: this integration cannot read another's secret even
   // knowing its name, and Belts cannot read STRIPE_SECRET (integration.ts).
-  env: ['STRIPE_SECRET', 'STRIPE_PUBLISHABLE', 'STRIPE_WEBHOOK_SECRET', 'LYRA_BASE', 'STRIPE_KEY'],
+  env: ['STRIPE_SECRET', 'STRIPE_PUBLISHABLE', 'STRIPE_WEBHOOK_SECRET', 'LYRA_BASE', 'STRIPE_KEY', 'STRIPE_SWEEP_MS'],
   bundle: () => STRIPE_BUNDLE,
 
   mount: (r, ctx) => {
@@ -125,8 +126,21 @@ export const stripeIntegration: Integration = {
       if (who.country === '') return c.json({ message: 'This studio has no country set, so no merchant account can be created for it.' }, 409);
 
       try {
-        const accountId = await createConnectedAccount(stripe, { studioName: who.studioId, country: who.country });
-        await rememberAccount(ctx.db, { studioId: who.studioId, accountId, studioName: who.studioId, country: who.country, createdAt: new Date().toISOString() });
+        // THE STUDIO'S NAME, not its id. This said `who.studioId`, so North Rock
+        // became a merchant called `st_northrock` — the name Stripe then uses in
+        // its own correspondence with the business.
+        const accountId = await createConnectedAccount(stripe, {
+          studioName: who.studioName === '' ? who.studioId : who.studioName,
+          country: who.country,
+          entityType: who.legalForm === 'individual' ? 'individual' : 'company',
+        });
+        await rememberAccount(ctx.db, {
+          studioId: who.studioId,
+          accountId,
+          studioName: who.studioName === '' ? who.studioId : who.studioName,
+          country: who.country,
+          createdAt: new Date().toISOString(),
+        });
         const standing = await accountStanding(stripe, accountId);
         return c.json({ account_id: accountId, state_label: 'Needs details', state_tone: 'warn', detail: standing.detail });
       } catch (err) {
@@ -289,7 +303,9 @@ export const stripeIntegration: Integration = {
     r.post('/ledger', async (c) => {
       const who = ctx.identity(c);
       if (who === undefined) return c.json({ message: 'Who are you?' }, 401);
-      return c.json(ledgerRows(await invoicesFor(ctx.db, who.studioId)));
+      const invoices = await invoicesFor(ctx.db, who.studioId);
+      const named = await namesForSubscriptions(ctx.env, who.studioId, invoices.map((i) => i.subscriptionId));
+      return c.json(ledgerRows(invoices, named));
     });
 
     // ── THE FRAMED PAGE ────────────────────────────────────────
@@ -340,6 +356,23 @@ export const stripeIntegration: Integration = {
         return c.json({ message: String(err).slice(0, 200) }, 502);
       }
     });
+  },
+
+  // ── WHAT LYRA HAS ENDED, TOLD TO THE PROVIDER ──────────────
+  //
+  // A sweep rather than a reaction, because lyra cannot call this service: the
+  // proxy is person-driven and inbound-only. So this asks, on a timer, who is
+  // leaving — and states a date rather than firing an event, which is what makes
+  // running it twice free.
+  //
+  // THE TIMER IS OPT-IN. A check boots this service in-process dozens of times;
+  // a background interval firing during one would reach across a suite and make
+  // it order-dependent. Set the period to run it; leave it unset and the sweep
+  // is only ever what somebody calls.
+  sweep: (ctx) => {
+    const every = Number(ctx.env('STRIPE_SWEEP_MS'));
+    if (!Number.isFinite(every) || every <= 0) return undefined;
+    return { everyMs: every, run: async () => { await sweepLeaving(ctx.env, ctx.db); } };
   },
 
   // ── WHAT STRIPE TELLS US ─────────────────────────────────────

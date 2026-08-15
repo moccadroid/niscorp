@@ -87,3 +87,67 @@ export const forgetAccounts = async (db: IntegrationStore | undefined): Promise<
 
 /** Whether this integration is holding its data somewhere that survives a restart. */
 export const storeIsDurable = (db: IntegrationStore | undefined): boolean => db !== undefined;
+
+/**
+ * Every studio this deployment has connected.
+ *
+ * The sweep needs it: "who is leaving" is a question per studio, and there is no
+ * other list of which studios this integration acts for — lyra knows its own
+ * tenants and this side knows only the ones that connected an account.
+ */
+export const allAccounts = async (db: IntegrationStore | undefined): Promise<ConnectedAccount[]> => {
+  if (db === undefined) return [...MEMORY.values()];
+  const rows = await db.query<Record<string, unknown>>(
+    `SELECT studio_id, account_id, studio_name, country, created_at FROM ${db.table('accounts')} ORDER BY created_at`,
+  );
+  return rows.rows.map((row) => ({
+    studioId: String(row['studio_id']),
+    accountId: String(row['account_id']),
+    studioName: String(row['studio_name'] ?? ''),
+    country: String(row['country'] ?? ''),
+    createdAt: String(row['created_at'] ?? ''),
+  }));
+};
+
+// ── WHICH PROVIDER SUBSCRIPTION IS WHICH MEMBERSHIP ──────────
+//
+// The metadata carries lyra's ids TO Stripe, which is all a webhook needs: an
+// event arrives holding the subscription it is about. Going the other way had no
+// answer at all — given a membership in lyra that is leaving, there was nothing
+// that could name the Stripe subscription to stop.
+//
+// So the mapping is recorded as events arrive. It is a CACHE and not a source:
+// every row in it is rebuildable from Stripe, because every subscription there
+// carries the metadata this was derived from.
+const SUBSCRIPTION_MEMORY = new Map<string, string>();
+const subKey = (studioId: string, subscriptionId: string): string => `${studioId}:${subscriptionId}`;
+
+export const rememberSubscription = async (
+  db: IntegrationStore | undefined,
+  args: { studioId: string; subscriptionId: string; accountId: string; stripeSubscriptionId: string },
+): Promise<void> => {
+  if (args.subscriptionId === '' || args.stripeSubscriptionId === '') return;
+  if (db === undefined) {
+    SUBSCRIPTION_MEMORY.set(subKey(args.studioId, args.subscriptionId), args.stripeSubscriptionId);
+    return;
+  }
+  await db.query(
+    `INSERT INTO ${db.table('subscriptions')} (studio_id, subscription_id, account_id, stripe_subscription_id)
+     VALUES ($1, $2, $3, $4)
+     ON CONFLICT (studio_id, subscription_id) DO UPDATE SET stripe_subscription_id = EXCLUDED.stripe_subscription_id`,
+    [args.studioId, args.subscriptionId, args.accountId, args.stripeSubscriptionId],
+  );
+};
+
+export const stripeSubscriptionFor = async (
+  db: IntegrationStore | undefined,
+  studioId: string,
+  subscriptionId: string,
+): Promise<string | undefined> => {
+  if (db === undefined) return SUBSCRIPTION_MEMORY.get(subKey(studioId, subscriptionId));
+  const rows = await db.query<{ stripe_subscription_id: string }>(
+    `SELECT stripe_subscription_id FROM ${db.table('subscriptions')} WHERE studio_id = $1 AND subscription_id = $2`,
+    [studioId, subscriptionId],
+  );
+  return rows.rows[0]?.stripe_subscription_id;
+};

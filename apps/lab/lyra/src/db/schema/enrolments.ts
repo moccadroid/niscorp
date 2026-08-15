@@ -24,8 +24,7 @@ export const ENROLMENTS_DDL = /* sql */ `
     BEFORE INSERT ON enrolments
     FOR EACH ROW EXECUTE FUNCTION stamp_enrolments_enrolled_on();
 
-  -- The counter cache, kept by the database like every other one here: a closed
-  -- mutation grammar cannot say "enrolled_count + 1".
+  -- The counter cache, as class_sessions.booked_count states the rule.
   CREATE OR REPLACE FUNCTION sync_enrolled_count() RETURNS TRIGGER AS $ec$
   BEGIN
     UPDATE courses c

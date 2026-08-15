@@ -94,6 +94,34 @@ export type Billable = {
   personName: string;
 };
 
+// ── PUTTING A NAME TO A ROW ──────────────────────────────────
+//
+// The money screen was a list of amounts and dates with nobody attached: "€89.00
+// · Disputed" and no way to tell whose. This service holds no names by design
+// (S4) — the mirror keys on lyra's subscription id — so the names are borrowed
+// for the length of one render and stored nowhere.
+//
+// One call for the whole page rather than one per row, and the host answers with
+// only the people this studio knows, because the assertion says which studio.
+export const namesForSubscriptions = async (
+  env: IntegrationEnv,
+  studioId: string,
+  subscriptionIds: readonly string[],
+): Promise<Record<string, string>> => {
+  const wanted = [...new Set(subscriptionIds.filter((id) => id !== ''))];
+  if (wanted.length === 0) return {};
+  const answer = await callLyra(env, {
+    studioId,
+    resource: 'member',
+    fingerprint: 'subscriptions/names',
+    context: { subscriptionIds: wanted },
+  });
+  const rows = (answer.result as unknown as { subscription_id?: string; person_name?: string }[] | undefined) ?? [];
+  const named: Record<string, string> = {};
+  for (const row of rows) named[String(row.subscription_id ?? '')] = String(row.person_name ?? '');
+  return named;
+};
+
 // ── BUYING ONE THING, ONCE ───────────────────────────────────
 //
 // A subscription is a standing this integration restates. A pass and a course

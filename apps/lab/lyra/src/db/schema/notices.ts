@@ -22,9 +22,9 @@ export const NOTICES_DDL = /* sql */ `
     -- a member can end their own contract and can never end anybody else's,
     -- with the fence in the database rather than in a screen.
     person_id       TEXT REFERENCES people(id),
-    -- Stamped by the trigger below from the studio's own clock. A browser never
-    -- says what today is, and backdating notice past a commitment is precisely
-    -- the number a minimum term exists to protect.
+    -- The studio's clock, stamped by the trigger below — and the table where
+    -- that rule earns its keep: backdating notice past a commitment is
+    -- precisely the number a minimum term exists to protect.
     given_on        DATE,
     withdrawn       BOOLEAN NOT NULL DEFAULT false,
     created_at      TIMESTAMPTZ NOT NULL DEFAULT now()

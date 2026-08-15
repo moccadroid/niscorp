@@ -80,6 +80,21 @@ export type Integration = {
   mount: (router: Hono, ctx: IntegrationContext) => void;
   /** Unauthenticated vendor callbacks, mounted under `/<id>/hook/`. */
   hooks?: (router: Hono, ctx: HookContext) => void;
+  /**
+   * WORK NOBODY ASKED FOR, on a clock.
+   *
+   * The host cannot call in — the proxy is person-driven and inbound-only — so
+   * an integration that has to act on something lyra decided has no event to
+   * wait for. Payments needs exactly one such thing: a membership given notice
+   * has a leaving date, and a provider has to be told to stop on it.
+   *
+   * OPT-IN BY RETURNING SOMETHING. A check boots this service in-process dozens
+   * of times; an interval that started itself would fire across a suite and make
+   * it order-dependent. So an integration reads its own env and returns nothing
+   * when it is not configured to sweep — and the sweep stays callable directly,
+   * which is how a check exercises it without a timer at all.
+   */
+  sweep?: (ctx: HookContext) => { everyMs: number; run: () => Promise<void> } | undefined;
 };
 
 // The prefix is APPLIED here, not asked for. An integration names 'accounts' and gets
@@ -102,6 +117,14 @@ const envFor = (integration: Integration): IntegrationEnv => {
     }
     return process.env[name] ?? '';
   };
+};
+
+// Held so a deployment shutting down — or a check that mounted a sweeping
+// integration — can stop them. Nothing else reads this.
+const SWEEPS: ReturnType<typeof setInterval>[] = [];
+
+export const stopSweeps = (): void => {
+  for (const timer of SWEEPS.splice(0)) clearInterval(timer);
 };
 
 export const mountIntegration = (app: Hono, integration: Integration): void => {
@@ -129,5 +152,23 @@ export const mountIntegration = (app: Hono, integration: Integration): void => {
   }
 
   integration.mount(router, { id: integration.id, identity: (c) => readIdentity(c, integration.id), env, db });
+
+  // UNREF'D, so a sweep never holds the process open. A service whose only
+  // remaining work is a timer should be allowed to exit, and a check that forgot
+  // to stop one should not hang a suite.
+  const sweep = integration.sweep?.({ id: integration.id, env, db });
+  if (sweep !== undefined) {
+    const timer = setInterval(() => {
+      void sweep.run().catch((err: unknown) => {
+        // Nothing above this catches, and a rejection here would be an unhandled
+        // one that takes the process down — over work that will simply run again
+        // in a minute.
+        console.warn(`[${integration.id}] sweep failed: ${String(err).slice(0, 200)}`);
+      });
+    }, sweep.everyMs);
+    timer.unref?.();
+    SWEEPS.push(timer);
+  }
+
   app.route(`/${integration.id}`, router);
 };

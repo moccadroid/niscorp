@@ -2,6 +2,7 @@ import type Stripe from 'stripe';
 import type { IntegrationEnv, IntegrationStore } from '../../integration';
 import { billableFor, callLyra, grantPurchase, notifyDesk } from './lyra';
 import { recordDispute, recordInvoice, recordRefund } from './ledger';
+import { rememberSubscription } from './store';
 
 // ═══════════════════════════════════════════════════════════════
 // WHAT STRIPE TELLS US, AND WHAT WE DO ABOUT IT.
@@ -238,6 +239,22 @@ export const handleStripeEvent = async (
       case 'customer.subscription.deleted': {
         const applied = await assertStanding(env, object as never);
 
+        // WHICH PROVIDER SUBSCRIPTION THIS MEMBERSHIP IS, recorded as it goes
+        // past. Every other direction was already answered — the metadata
+        // carries lyra's ids here — but "this member is leaving on the 14th,
+        // stop charging them" needs the reverse, and had no way to ask it.
+        //
+        // A cache, filled from events rather than fetched: every subscription at
+        // the provider carries the metadata this is derived from, so it rebuilds
+        // itself from ordinary traffic.
+        const held = ((object as { metadata?: Meta }).metadata ?? {}) as Meta;
+        await rememberSubscription(db, {
+          studioId: held.studio_id ?? '',
+          subscriptionId: held.subscription_id ?? '',
+          accountId,
+          stripeSubscriptionId: String(object['id'] ?? ''),
+        });
+
         // ── DUNNING: THE OUTCOME, NOT THE RETRIES ──────────────
         //
         // Stripe's own retry schedule is not replaced — where it already does
@@ -290,8 +307,28 @@ export const handleStripeEvent = async (
         const purchase = (object['metadata'] as Meta | undefined) ?? {};
         const kind = purchase.purchase_kind ?? '';
         if (kind === '') {
+          // A SUBSCRIPTION CHECKOUT. The subscription events carry the standing
+          // and Stripe sends them too, so nothing is asserted here — but this is
+          // the one moment that says WHO COLLECTS, and nothing else ever could.
+          //
+          // `paid_via` is chosen when the subscription starts, and a member
+          // starting one themselves has no processor in the path yet, so it says
+          // `manual`. `assert` never touches it, by design. Without this line a
+          // member paying by card read "Billed by the studio" on their own
+          // screen, and the desk chased them for money already taken.
+          const started = (object['subscription_details'] as { metadata?: Meta } | undefined)?.metadata ?? purchase;
+          const startedId = started.subscription_id ?? '';
+          const startedStudio = started.studio_id ?? '';
+          if (startedId !== '' && startedStudio !== '') {
+            await callLyra(env, {
+              studioId: startedStudio,
+              resource: 'member',
+              fingerprint: 'subscriptions/paid-by-provider',
+              context: { subscriptionId: startedId },
+            });
+          }
           await settleEvent(db, event.id, 'noted', String(object['subscription'] ?? ''));
-          return { status: 200, body: { ok: true, noted: 'checkout' } };
+          return { status: 200, body: { ok: true, noted: 'checkout', collects: startedId !== '' } };
         }
 
         // PAID, not merely completed. A session can complete with payment still

@@ -69,11 +69,18 @@ export const STUDIOS_DDL = /* sql */ `
     sending_domain_ok   BOOLEAN NOT NULL DEFAULT false,
     theme_id    TEXT REFERENCES themes(id),
     created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
-    -- Redundant as a constraint — "id" is already unique — and load-bearing as a
-    -- TARGET: it is what lets a plan reference (studio, currency) as a pair.
+    -- The pair target: what lets a plan reference (studio, currency) as a
+    -- pair. The rule is stated at offerings.
     UNIQUE (id, currency)
   );
 
+  -- THE STUDIO'S CLOCK, and the rule every date in this schema keeps: a
+  -- browser never says what today is. A screen may say THAT something happened
+  -- — notice given, a class attended, somebody resumed — and a trigger stamps
+  -- WHEN from here. Backdating is then not something a caller can do by
+  -- sending a different number, which matters most where a date is the number
+  -- a contract turns on.
+  --
   -- STABLE, not IMMUTABLE, because it reads now(). Stable lets Postgres call it
   -- once per statement, which is what makes it safe inside a trigger: the day
   -- cannot change halfway through generating a term of classes.

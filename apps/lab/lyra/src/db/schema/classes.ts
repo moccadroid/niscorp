@@ -46,10 +46,13 @@ export const CLASSES_DDL = /* sql */ `
     week_key       TEXT NOT NULL,          -- '2026-W32', for grouping
     hour_key       INTEGER NOT NULL,       -- 0..23, for peak-hour reporting
 
-    -- A counter cache, because vex only LEFT-joins nullable foreign keys: a
-    -- sessions x bookings join is INNER and drops every class nobody has booked.
-    -- Maintained by TRIGGER — "booked_count + 1" is not expressible in the
-    -- mutation grammar, and a counter its writers maintain drifts.
+    -- THE COUNTER CACHE, and where that rule is stated for the several tables
+    -- that keep one. It exists because vex only LEFT-joins nullable foreign
+    -- keys: a sessions x bookings join is INNER and drops every class nobody
+    -- has booked. Maintained by TRIGGER, and RECOMPUTED rather than
+    -- incremented — "booked_count + 1" is not expressible in the mutation
+    -- grammar, and a counter its writers maintain drifts the first time two
+    -- of them race.
     booked_count   INTEGER NOT NULL DEFAULT 0
   );
 

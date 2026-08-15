@@ -18,8 +18,9 @@ export const PAUSES_DDL = /* sql */ `
     -- member's reach, verified against the subscription's owner either way.
     person_id       TEXT REFERENCES people(id),
     paused_on       DATE,
-    -- The screen may only say "resume" (the flag); the date is the studio
-    -- clock's, stamped below — the split every date in this schema keeps.
+    -- The screen may only say "resume" (the flag); the date is the studio's
+    -- clock, stamped below — and the split matters here more than anywhere,
+    -- because the resume date is what the term extension is measured from.
     resumed         BOOLEAN NOT NULL DEFAULT false,
     resumed_on      DATE,
     created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
