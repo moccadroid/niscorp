@@ -328,6 +328,52 @@ const payAction: ActionDefinition = {
 
 export const STRIPE_BUNDLE = {
   integration: 'stripe',
+  // THIS INTEGRATION'S OWN WORDS, in the languages it speaks — the host merges
+  // them UNDER its own book, so a word lyra already owns keeps lyra's spelling
+  // and this file cannot rename it. Keyed by LANGUAGE; a full locale here
+  // refuses the whole bundle at intake.
+  //
+  // The glossary is the host's, not this file's: `State` is Status because
+  // that is what a standing reads as everywhere else in the application, and
+  // `Money` is Finanzen because that is the hub this screen is placed in. An
+  // integration that invents its own vocabulary is a screen that reads like a
+  // different product.
+  phrasebook: {
+    de: {
+      Amount: 'Betrag',
+      Date: 'Datum',
+      State: 'Status',
+      Money: 'Finanzen',
+      Payment: 'Zahlung',
+      Refresh: 'Aktualisieren',
+      'Not connected yet': 'Noch nicht verbunden',
+      'Payments are not connected': 'Zahlungen sind nicht verbunden',
+      'An owner can connect this studio from the Payments settings.':
+        'Ein Inhaber kann dieses Studio in den Zahlungs-Einstellungen verbinden.',
+      'Checking this studio’s payment status…': 'Zahlungsstatus dieses Studios wird geprüft…',
+      'Connect this studio': 'Dieses Studio verbinden',
+      'Connecting creates this studio’s own Stripe account. Stripe will ask for the business details it needs before any money can move.':
+        'Beim Verbinden entsteht ein eigenes Stripe-Konto für dieses Studio. Stripe fragt die nötigen Geschäftsdaten ab, bevor Geld fließen kann.',
+      'Continue on Stripe': 'Bei Stripe fortfahren',
+      'Continue to payment': 'Weiter zur Zahlung',
+      'Enter business details': 'Geschäftsdaten eingeben',
+      'Manage on Stripe': 'Bei Stripe verwalten',
+      'Nothing charged yet. Invoices appear here as members pay.':
+        'Noch nichts abgerechnet. Rechnungen erscheinen hier, sobald Mitglieder zahlen.',
+      'Set up payment': 'Zahlung einrichten',
+      'Set up your membership payment. You will be taken to a secure page to enter your card or bank details.':
+        'Richte die Zahlung für deine Mitgliedschaft ein. Du wirst auf eine sichere Seite weitergeleitet, um Karten- oder Bankdaten einzugeben.',
+      'Setting up with Stripe can take a few passes: it asks for some details, brings you back here, and the next tap asks for the next set. Keep going until this says Ready — you can stop and come back any time.':
+        'Die Einrichtung bei Stripe kann mehrere Durchgänge brauchen: Stripe fragt einige Daten ab, bringt dich hierher zurück, und der nächste Tipp fragt den nächsten Satz ab. Mach weiter, bis hier Bereit steht — du kannst jederzeit aufhören und zurückkommen.',
+      'Take card and SEPA payments for memberships through Stripe. The studio is the merchant; money goes to the studio’s own account.':
+        'Karten- und SEPA-Zahlungen für Mitgliedschaften über Stripe. Das Studio ist der Händler; das Geld geht auf das eigene Konto des Studios.',
+      'What has been charged, refunded and disputed at this studio.':
+        'Was in diesem Studio abgerechnet, erstattet und reklamiert wurde.',
+      'Card and SEPA payments for memberships': 'Karten- und SEPA-Zahlungen für Mitgliedschaften',
+      'Card and SEPA payments for memberships, with the studio as the merchant. Invoices and refunds stay with Stripe; this studio keeps standing.':
+        'Karten- und SEPA-Zahlungen für Mitgliedschaften, mit dem Studio als Händler. Rechnungen und Erstattungen bleiben bei Stripe; das Studio behält den Status.',
+    },
+  },
   meta: {
     // THE PROVIDER, not the function. A studio installs "Stripe", and one day
     // "PayPal" or "Mollie" beside it — the store lists WHO processes the money,

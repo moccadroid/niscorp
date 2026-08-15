@@ -1,7 +1,13 @@
 // Run: pnpm --filter lyra exec tsx src/dev/integrations-check.ts
 import { resolveCatalog } from '@niscorp/moss';
+import { harvestDefinitions } from '@niscorp/nova/i18n';
+import type { ActionDefinition } from '@niscorp/nova';
 import { serve as listen } from '@hono/node-server';
 import { startIntegrations } from '../../../lyra-integrations/src/serve';
+import { BELTS_BUNDLE } from '../../../lyra-integrations/src/packs/belts/bundle';
+import { STRIPE_BUNDLE } from '../../../lyra-integrations/src/packs/stripe/bundle';
+import { PHRASE_KEYS } from '@lyra/app/phrase-keys';
+import { GERMAN } from '@lyra/db/phrases.de';
 import { CAST } from '@lyra/db/seed';
 import { app, idFor, idsFor, login, mintToken, ok, report, runtime, server, servedTo, settle, treeOf } from './world';
 
@@ -123,6 +129,47 @@ try {
   ok('...through the same pass as the host’s words', germanMember.includes('Heute'), 'host and integration words in ONE German shell');
   await runtime.db.query("UPDATE studios SET locale = 'en-GB' WHERE id = $1", ['st_northrock']);
   server.invalidateTenant('st_northrock');
+
+  // ── every word an integration ships, counted ─────────────────
+  //
+  // The German member above proves Belts' book REACHES the glass. It never
+  // proved the book was complete, and Stripe shipped none at all — so a German
+  // studio read `… Meine Mitgliedschaft · Payment` with every screen behind it
+  // in English, and nothing anywhere was red.
+  //
+  // `phrase-harvest` cannot see this: it walks the host's own catalog, and a
+  // bundle's actions arrive over a wire at intake. So the same harvester runs
+  // here instead, over the artifacts each integration ships.
+  //
+  // THE BAR IS THE FOLD, not the file. The host's book merges OVER the
+  // integration's, so a word lyra already owns is covered and needs no second
+  // spelling. Which side covers a word is printed rather than implied: one
+  // leaning on the host is one that goes English the day the host stops saying
+  // it, and that is worth being able to read off a check.
+  const SHIPPED: { integration: string; phrasebook: Record<string, Record<string, string>>; meta: Record<string, string>; actions: Record<string, ActionDefinition> }[] = [
+    BELTS_BUNDLE,
+    STRIPE_BUNDLE,
+  ];
+  for (const bundle of SHIPPED) {
+    const own = bundle.phrasebook['de'] ?? {};
+    // The store tile is prose too — what a studio reads BEFORE installing, and
+    // the one screen an integration shows to somebody who has not got it yet.
+    const shown = [...harvestDefinitions(bundle.actions, PHRASE_KEYS).map((entry) => entry.phrase), bundle.meta['tagline'] ?? '', bundle.meta['description'] ?? ''];
+    // Its own product name reads the same in every language. Translating one is
+    // allowed — Belts does, because a belt is a common noun — but never asked
+    // for, because demanding `Stripe: 'Stripe'` is demanding a row that says
+    // nothing and invites somebody to "fix" it later.
+    const needed = shown.filter((phrase) => phrase !== '' && phrase !== bundle.meta['title']);
+    const missing = needed.filter((phrase) => own[phrase] === undefined && GERMAN[phrase] === undefined);
+    const leaning = needed.filter((phrase) => own[phrase] === undefined && GERMAN[phrase] !== undefined);
+    ok(
+      `${bundle.integration} can say every word it ships, in German`,
+      missing.length === 0,
+      missing.length === 0
+        ? `${String(needed.length)} words, ${String(leaning.length)} of them the host's: ${leaning.join(' · ') || 'none'}`
+        : missing.map((phrase) => JSON.stringify(phrase)).join(', '),
+    );
+  }
 
   // ── the proxy carries identity the caller cannot forge ───────
   const mine = await asIntegration(CAST.northrock.member, '/integrations/belts/mine', {});

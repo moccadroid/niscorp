@@ -439,12 +439,20 @@ export const BELTS_BUNDLE = {
       Promote: 'Befördern',
       Undo: 'Rückgängig',
       'No gradings recorded.': 'Noch keine Graduierungen erfasst.',
+      'Belts are recorded here and stay here.': 'Gürtel werden hier erfasst und bleiben hier.',
+      'Where they are, and what is next.': 'Wo sie stehen — und was als Nächstes kommt.',
+      'Where you are, and what is next.': 'Wo du stehst — und was als Nächstes kommt.',
+      // The example rank in a placeholder, a colour like the host's own Lime.
+      Coral: 'Koralle',
+      Member: 'Mitglied',
       'Nobody graded yet.': 'Noch niemand graduiert.',
       'The ranks this pack grades through, in order.': 'Die Ränge, die dieses Add-on vergibt, in Reihenfolge.',
       'No ranks defined.': 'Keine Ränge definiert.',
       'New rank': 'Neuer Rang',
       'Add rank': 'Rang hinzufügen',
       'Rank tracking for grappling gyms': 'Gürtel und Grade für Kampfsport-Studios',
+      'Belts, promotion dates and class counts, kept in the pack’s own storage. Promotions land in the studio’s notifications.':
+        'Gürtel, Graduierungsdaten und Kurszahlen, im eigenen Speicher des Add-ons. Graduierungen landen in den Mitteilungen des Studios.',
     },
   },
   // WORDS, for the store tile and the approval card. Never parsed, never
