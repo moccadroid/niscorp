@@ -7,7 +7,7 @@
 // question: does a language reach the glass without any action, layout or
 // component knowing it exists?
 import { CAST } from '@lyra/db/seed';
-import { bookOverWire } from '@lyra/app/app';
+import { bookOverWire, forgetBooks } from '@lyra/app/app';
 import { asPrincipal, login, ok, report, runtime, servedTo, settle, wireFor } from './world';
 
 const maren = await login(CAST.lumen.owner); // de-AT
@@ -70,6 +70,31 @@ const bookOf = async (locale: string): Promise<number> => Object.keys(await book
 ok('de-AT falls back to the de book', (await bookOf('de-AT')) > 400, `${String(await bookOf('de-AT'))} phrases`);
 ok('an unknown language gets the source, not a mixture', (await bookOf('fr-FR')) === 0);
 ok('the source language holds no rows', (await bookOf('en-GB')) === 0, 'nothing about it needs translating');
+
+// ── one book per language, not one per shell ─────────────────
+//
+// Every de-AT shell used to fold and KEEP its own copy of ~560 rows: 66 KB of
+// strings identical in every shell in the deployment, which is most of what
+// took per-shell birth cost from 80.6 to 138.8 KB when this application learned
+// a second language. The fold is derived from the language alone, so the answer
+// is shared — and the assertion is object IDENTITY, because "same contents" is
+// what the code did before and it is exactly what cost the memory.
+const oneWire = wireFor(CAST.northrock.owner);
+const otherWire = wireFor(CAST.lumen.owner);
+const first = await bookOverWire(oneWire, 'de-AT');
+const second = await bookOverWire(otherWire, 'de-AT');
+ok('two shells reading German get the SAME book, not a copy each', first === second, `${String(Object.keys(first).length)} rows, one object`);
+ok('...and a different language is a different book', (await bookOverWire(oneWire, 'fr-FR')) !== first);
+
+// Shared means every reader holds this exact object, so a mutation would edit a
+// language for everybody at once. Frozen, so that is a throw and not a mystery.
+ok('...and it is frozen, because it is shared', Object.isFrozen(first));
+
+// Held, but never stale: dropping it must rebuild from the rows rather than
+// hand back the same object forever.
+forgetBooks();
+const refolded = await bookOverWire(oneWire, 'de-AT');
+ok('...and dropping it refolds from the rows', refolded !== first && Object.keys(refolded).length === Object.keys(first).length, `${String(Object.keys(refolded).length)} rows again, a new object`);
 
 // ── switching ────────────────────────────────────────────────
 const before = String((await runtime.db.query<{ l: string }>("SELECT locale l FROM studios WHERE id='st_northrock'")).rows[0]?.l ?? '');

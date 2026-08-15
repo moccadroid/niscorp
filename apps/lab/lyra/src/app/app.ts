@@ -18,6 +18,11 @@ import { identityFor } from '@lyra/server/identity';
 import { clockScope } from '@lyra/server/clock';
 import { readDevLoginRoster } from '@lyra/server/dev-login';
 import { greetingFrom } from '@lyra/server/phrases';
+import type { Phrasebook } from '@lyra/server/phrases';
+
+// The source language, which needs no rows. One frozen object rather than a
+// fresh `{}` per call: it is handed out on every English shell build.
+const EMPTY_BOOK: Phrasebook = Object.freeze({});
 
 export type ServerDeps = {
   pool: import('@niscorp/vex').PgPool;
@@ -53,20 +58,86 @@ export const readEntry = async (wire: Wire, fingerprint: string, context: Record
 /** One language's book, folded: approved integrations' words first (`phrases/integrations`),
  *  the app's own rows OVER them (`phrases/book`) — so an integration can never rename
  *  a word the host already owns. */
-export const bookOverWire = async (wire: Wire, locale: string): Promise<Record<string, string>> => {
-  const language = locale.split('-')[0] ?? '';
-  if (language === '' || language === 'en') return {};
-  const book: Record<string, string> = {};
-  const integrations = await readEntry(wire, 'phrases/integrations', { locale: language });
-  if (Array.isArray(integrations)) {
-    for (const held of integrations) {
-      if (held === null || typeof held !== 'object' || Array.isArray(held)) continue;
-      for (const [source, text] of Object.entries(held as Record<string, unknown>)) book[source] = String(text);
-    }
+const integrationWords = (held: unknown): Record<string, string> => {
+  const words: Record<string, string> = {};
+  if (!Array.isArray(held)) return words;
+  for (const one of held) {
+    if (one === null || typeof one !== 'object' || Array.isArray(one)) continue;
+    for (const [source, text] of Object.entries(one as Record<string, unknown>)) words[source] = String(text);
   }
+  return words;
+};
+
+const foldOverWire = async (wire: Wire, language: string, words: Record<string, string>): Promise<Phrasebook> => {
+  const book: Record<string, string> = { ...words };
   const rows = await readEntry(wire, 'phrases/book', { locale: language });
   if (Array.isArray(rows)) for (const row of rows as { source?: unknown; text?: unknown }[]) book[String(row.source ?? '')] = String(row.text ?? '');
-  return book;
+  // FROZEN BECAUSE IT IS SHARED. Every shell reading this language holds this
+  // very object, so a caller mutating it would edit a language for everybody
+  // at once. Freezing turns that from a bug somebody finds in production into
+  // a throw in the line that wrote it.
+  return Object.freeze(book);
+};
+
+// ONE BOOK PER LANGUAGE, not one per shell.
+//
+// This answers a measurement rather than a hunch. `moss-bench` put per-shell
+// birth cost at 80.6 KB before this application spoke a second language and
+// 138.8 KB after, with build time up from 20.7 to 50.5 ms each — and both
+// numbers were this fold. Every de-AT shell ran two engine reads and then kept
+// its own copy of ~560 rows: 66 KB of strings that are byte-identical across
+// every shell in the deployment, because a book is derived from the LANGUAGE
+// and nothing else. `phrases` is release vocabulary owned by no tenant, and
+// `phrases/integrations` filters on `status = 'approved'` rather than on who
+// installed what (language.entries.ts says so and means it), so two studios
+// reading German cannot be handed different books.
+//
+// WHAT IS SHARED IS THE ANSWER, NEVER THE PATH TO IT — the fair question here
+// being whether `BY_LOCALE` is walking back in, since that cache is on
+// held-state-check's deletion list and this file is in its scan. BY_LOCALE held
+// every language eagerly at boot so a SYNCHRONOUS seam could answer, and that
+// seam is what put the rows out of vex's reach. This holds one language,
+// lazily, folded THROUGH the entries over the caller's own wire and under the
+// caller's own policy. It is the fourth kind the check names: keyed over a
+// space bounded by a standard rather than by the population.
+//
+// AND IT CANNOT SERVE A STALE INTEGRATION SET, which is the part worth paying
+// for. The integration half is re-read on every call — a handful of rows — and
+// its content IS the memo key, so an operator approving Stripe at 09:00 gets a
+// refold on the next shell rather than English until somebody restarts the
+// process. Only the app's own ~560 rows are held, and those have no runtime
+// write path at all: `phrases` is written by the seed and by nothing else. If
+// one is ever added, this is the line that needs a reaction on that table.
+//
+// The PROMISE is held rather than the book, so 250 shells opening at once share
+// one fold instead of starting 250 — which is where the 50.5 ms went.
+const FOLDED: Record<string, { key: string; book: Promise<Phrasebook> }> = {};
+
+export const bookOverWire = async (wire: Wire, locale: string): Promise<Phrasebook> => {
+  const language = locale.split('-')[0] ?? '';
+  if (language === '' || language === 'en') return EMPTY_BOOK;
+  const words = integrationWords(await readEntry(wire, 'phrases/integrations', { locale: language }));
+  // ONE ENTRY PER LANGUAGE, always the current one: a changed integration set
+  // REPLACES the fold rather than adding a second, so this cannot grow a
+  // generation of dead books behind it.
+  const key = JSON.stringify(words);
+  const held = FOLDED[language];
+  const folding = held !== undefined && held.key === key ? held.book : foldOverWire(wire, language, words);
+  FOLDED[language] = { key, book: folding };
+  try {
+    return await folding;
+  } catch (err) {
+    // A FAILED READ MUST NOT BECOME THE LANGUAGE. Caching the rejection would
+    // serve one bad moment for the life of the process, so the slot goes on the
+    // way out and the next shell tries again.
+    if (FOLDED[language]?.book === folding) delete FOLDED[language];
+    throw err;
+  }
+};
+
+/** Drop the folded books — for a check that needs to watch one being rebuilt. */
+export const forgetBooks = (): void => {
+  for (const language of Object.keys(FOLDED)) delete FOLDED[language];
 };
 
 /** The session studio's look — `studio/theme`, stock when it names none. */

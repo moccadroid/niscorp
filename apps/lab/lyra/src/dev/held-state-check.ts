@@ -123,6 +123,19 @@ const writesTo = (source: ts.SourceFile, name: string): ts.Node[] => {
   return writes;
 };
 
+/** Is this write a DROP rather than a fill — `delete x[k]`, `x.clear()`?
+ *
+ *  A cache that can be emptied is not a different KIND of cache, so a drop must
+ *  not decide the classification. It usually cannot even be keyed: an
+ *  invalidation hook takes no arguments and empties everything, which is
+ *  exactly the shape `fromArgument` reads as "not keyed" — so counting drops as
+ *  fills demoted a live per-language memo to inert authored data, and the one
+ *  binding worth watching stopped being watched. What fills a cache decides
+ *  what it is; what empties it is hygiene. */
+const isDrop = (write: ts.Node): boolean =>
+  ts.isDeleteExpression(write) ||
+  (ts.isCallExpression(write) && ts.isPropertyAccessExpression(write.expression) && ['clear', 'delete'].includes(write.expression.name.text));
+
 /** Does this write take its value from a function ARGUMENT rather than a row? */
 const fromArgument = (write: ts.Node, source: ts.SourceFile): boolean => {
   const fn = enclosingFunction(write);
@@ -152,7 +165,7 @@ export const heldStateIn = (text: string, file = 'inline.ts'): Finding[] => {
       if (!ts.isIdentifier(decl.name)) continue;
       const name = decl.name.text;
       const isLet = (statement.declarationList.flags & ts.NodeFlags.Const) === 0;
-      const writes = writesTo(source, name);
+      const writes = writesTo(source, name).filter((w) => !isDrop(w));
 
       if (writes.length === 0 && !isLet) continue; // a const literal nobody rewrites: authored data
 
@@ -233,6 +246,19 @@ let driver: Driver | undefined;
 export const start = (): void => { driver = createDriver(); };
 `;
 
+// A MEMO THAT CAN BE INVALIDATED — the shape `BOOK` is written in (app.ts).
+// Filled by a key, emptied by a hook that takes no arguments. Before drops were
+// separated from fills this classified as `authored`, because "every write is
+// keyed by a parameter" is false the moment one write is a `delete` in a
+// parameterless function — so the check quietly stopped watching the one
+// binding in the file that holds anything.
+const GOOD_MEMO_DROPPED = `
+const BOOK: Record<string, Promise<Phrasebook>> = {};
+export const bookOverWire = async (wire: Wire, language: string): Promise<Phrasebook> =>
+  (BOOK[language] ??= foldOverWire(wire, language));
+export const forgetBooks = (): void => { for (const language of Object.keys(BOOK)) delete BOOK[language]; };
+`;
+
 const kindOf = (src: string, name: string): Kind | undefined => heldStateIn(src).find((f) => f.name === name)?.kind;
 
 ok('the rule catches a row-backed cache', kindOf(BAD, 'DIRECTORY') === 'row-backed', String(kindOf(BAD, 'DIRECTORY')));
@@ -240,6 +266,10 @@ ok('...including one laundered through a local first', kindOf(BAD_LAUNDERED, 'DI
 ok('...and does not condemn an authored constant', kindOf(GOOD_CONST, 'AUDIENCE_OF') !== 'row-backed', String(kindOf(GOOD_CONST, 'AUDIENCE_OF')));
 ok('...nor a memo keyed by an argument', kindOf(GOOD_MEMO, 'DAY_FORMAT') === 'memo', String(kindOf(GOOD_MEMO, 'DAY_FORMAT')));
 ok('...nor a late-bound singleton', kindOf(GOOD_SINGLETON, 'driver') === 'singleton', String(kindOf(GOOD_SINGLETON, 'driver')));
+ok('...and a memo stays a memo when something can empty it', kindOf(GOOD_MEMO_DROPPED, 'BOOK') === 'memo', String(kindOf(GOOD_MEMO_DROPPED, 'BOOK')));
+// The drop rule must not become a way to launder a row-backed cache: emptying
+// one somewhere else says nothing about where it was filled from.
+ok('...while a drop does not launder a row-backed cache', kindOf(`${BAD}\nexport const forget = (): void => { for (const k of Object.keys(DIRECTORY)) delete DIRECTORY[k]; };`, 'DIRECTORY') === 'row-backed');
 
 // ─── the application, measured ───────────────────────────────
 
