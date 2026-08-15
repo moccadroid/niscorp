@@ -52,7 +52,7 @@ export const priceFor = async (db: IntegrationStore | undefined, key: string): P
 
 const MEMORY = new Map<string, string>();
 
-const remember = async (db: IntegrationStore | undefined, key: string, shape: PriceShape, priceId: string): Promise<string> => {
+export const rememberPrice = async (db: IntegrationStore | undefined, key: string, shape: PriceShape, priceId: string): Promise<string> => {
   if (db === undefined) {
     if (!MEMORY.has(key)) MEMORY.set(key, priceId);
     return MEMORY.get(key) ?? priceId;
@@ -99,5 +99,5 @@ export const ensurePrice = async (stripe: Stripe, db: IntegrationStore | undefin
     },
     onAccount,
   );
-  return remember(db, key, shape, price.id);
+  return rememberPrice(db, key, shape, price.id);
 };

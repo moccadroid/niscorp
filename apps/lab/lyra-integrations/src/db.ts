@@ -23,7 +23,29 @@ export type IntegrationDb = {
 
 let pool: Pool | undefined;
 
+// ── A DATABASE SOMEBODY ELSE BROUGHT ─────────────────────────
+//
+// The SQL in this service — the ledger, the event claim, the price and customer
+// maps — ran nowhere. Every check deletes `DATABASE_URL` on purpose, so all of
+// it exercised only the in-memory fallbacks, and a column renamed in a migration
+// would have been found by a deployment rather than by a suite.
+//
+// Pointing a check at the Docker Postgres would trade that for a check that
+// needs Docker, which is a check that gets skipped. So a caller may LEND one
+// instead — `ledger-sql-check` boots PGlite in-process, runs the migrations into
+// it, and hands it over here. Same statements, same constraints, no daemon.
+//
+// Deliberately not a fallback and not a default: a deployment reads its own
+// `DATABASE_URL` and nothing else, and this is undefined the moment the check
+// gives it back.
+let lent: IntegrationDb | undefined;
+
+export const lendDatabase = (db: IntegrationDb | undefined): void => {
+  lent = db;
+};
+
 export const database = (): IntegrationDb | undefined => {
+  if (lent !== undefined) return lent;
   const url = process.env['DATABASE_URL'] ?? '';
   if (url === '') return undefined;
   // Lazily, and once: `serve.ts` mounts integrations at import time, and a pool built

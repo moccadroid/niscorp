@@ -5,7 +5,7 @@
   "scripts": {
     "serve": "tsx src/serve.ts",
     "typecheck": "tsc --noEmit",
-    "check": "turbo run build --filter=lyra-integrations^... && tsx src/dev/integration-check.ts",
+    "check": "turbo run build --filter=lyra-integrations^... && tsx src/dev/integration-check.ts && tsx src/dev/ledger-sql-check.ts",
     "db:up": "docker compose up -d --wait",
     "db:down": "docker compose down",
     "db:reset": "docker compose down -v && docker compose up -d --wait && pnpm migrate",
@@ -21,6 +21,7 @@
     "stripe": "^22.5.0"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "^0.5.1",
     "@hono/node-server": "^2.0.4",
     "@types/node": "^24.10.1",
     "@types/pg": "^8.15.4",

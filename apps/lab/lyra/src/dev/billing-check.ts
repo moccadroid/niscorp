@@ -510,6 +510,20 @@ try {
   // `missing` — which is what a broken index would look like.
   ok('...with the provider subscription resolved, not missing', sweep.missing === 0, `${sweep.missing} unresolved — a membership marked stripe that this service cannot name`);
 
+  // ── PAYING TWICE FOR ONE MEMBERSHIP ──────────────────────────
+  //
+  // One button, and a redirect that races the webhook: somebody who came back
+  // unsure whether it worked pressed it again, and a second checkout for a
+  // membership already being billed is a second subscription and a second charge
+  // every month. The reverse index above is what makes this answerable at all.
+  const secondGo = await server.request('/integrations/stripe/checkout', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${String(await mintToken('omar.haddad@example.com'))}`, 'content-type': 'application/json' },
+    body: '{}',
+  });
+  const secondBody = await secondGo.text();
+  ok('a member already being billed cannot start a second subscription', secondGo.status === 409 && secondBody.includes('already set up'), `${secondGo.status} ${secondBody.slice(0, 90)}`);
+
   // ── AND A STUDIO READS ITS OWN ───────────────────────────────
   const otherStudio = await server.request('/integrations/stripe/ledger', {
     method: 'POST',

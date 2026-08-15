@@ -285,13 +285,21 @@ const ledgerAction: ActionDefinition = {
 const payAction: ActionDefinition = {
   id: 'ext.member.stripe.pay',
   title: 'Payment',
-  data: { checkout: {}, portal: {}, error: '', starting: false, managing: false },
+  data: { checkout: {}, portal: {}, membership: {}, error: '', starting: false, managing: false },
   layout: {
     component: 'Stack',
     props: { gap: 18 },
     children: [
       heading('Payment', 'Set up your membership payment. You will be taken to a secure page to enter your card or bank details.'),
       { if: '$.error', then: { component: 'Notice', props: { tone: 'alert', message: '$.error.message' } }, else: '' },
+      // HOW FAR THE MONEY REACHES, said here as well as on the membership
+      // screen — this is where somebody lands back from paying, and "did that
+      // work?" is the only question they have.
+      {
+        if: '$.membership.paid_until_display',
+        then: { component: 'Notice', props: { tone: 'good', message: 'Paid up to {{$.membership.paid_until_display}}.' } },
+        else: '',
+      },
       {
         if: '$.checkout.url',
         // The URL is NOT followed automatically. A redirect that happens without
@@ -346,6 +354,10 @@ const payAction: ActionDefinition = {
   endpoints: {
     start: { url: `${OWN}/checkout`, method: 'POST', request: {}, target: 'checkout', errorTarget: 'error' },
     manage: { url: `${OWN}/portal`, method: 'POST', request: {}, target: 'portal', errorTarget: 'error' },
+    // THE HOST'S OWN READ. Whether the money landed is lyra's fact, not this
+    // integration's — the webhook writes it there — so the screen asks lyra
+    // rather than this service guessing from a redirect it cannot verify.
+    membership: { url: '/api/member/vex', method: 'POST', request: { fingerprint: 'me/membership', context: {} }, target: 'membership' },
   },
   triggers: [
     {
@@ -367,10 +379,24 @@ const payAction: ActionDefinition = {
       ],
     },
   ],
-  // Coming back from the portal: DROP the used link. A portal session is
-  // short-lived and single-purpose, so a stale one behind the button is a dead
-  // control — the same rule the setup screen keeps about onboarding links.
-  lifecycle: { resume: [{ set: 'portal', value: {} }] },
+  // COMING BACK FROM A CARD FORM, which is the moment this screen was worst at.
+  //
+  // The redirect races the webhook by design — Stripe returns the member here
+  // the instant they pay, and the standing arrives a second or two later — so
+  // the screen said nothing, and somebody unsure whether it had worked pressed
+  // the button again. That is now refused on the way in, but a refusal is a poor
+  // answer to a fair question.
+  //
+  // So the used checkout link is dropped and the membership re-read: if the
+  // money has landed the screen says so, and if it has not yet it says THAT
+  // rather than looking like nothing happened.
+  lifecycle: {
+    resume: [
+      { set: 'portal', value: {} },
+      { set: 'checkout', value: {} },
+      { call: 'membership' },
+    ],
+  },
 };
 
 // ── BUYING A PASS OR A PLACE ─────────────────────────────────

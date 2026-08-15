@@ -1,6 +1,6 @@
 import type { Integration } from '../../integration';
 import { STRIPE_BUNDLE } from './bundle';
-import { accountFor, rememberAccount, storeIsDurable } from './store';
+import { accountFor, rememberAccount, storeIsDurable, stripeSubscriptionFor } from './store';
 import { accountStanding, createAccountSession, createConnectedAccount, createOnboardingLink, createPortalSession, stripeFor } from './client';
 import { embedPage, notOnboardedPage, unavailablePage } from './onboarding';
 import { createCheckout, createPurchase, customerFor } from './checkout';
@@ -167,6 +167,19 @@ export const stripeIntegration: Integration = {
 
       const billable = await billableFor(ctx.env, who.studioId, who.personId);
       if (billable === undefined) return c.json({ message: 'There is nothing to pay for on this membership.' }, 409);
+
+      // ALREADY PAYING. A second checkout for a membership a provider is already
+      // billing is a second subscription and a second charge every month — and
+      // it is not a hypothetical mistake: this screen offers one button, the
+      // redirect races the webhook, and somebody who came back unsure whether it
+      // worked pressed it again.
+      //
+      // The reverse index is what makes this answerable: it names the provider
+      // subscription behind a membership, which nothing could do before.
+      const already = await stripeSubscriptionFor(ctx.db, who.studioId, billable.subscriptionId);
+      if (already !== undefined) {
+        return c.json({ message: 'Your payment is already set up. Use Manage payment method to change the card it comes off.' }, 409);
+      }
 
       const body = (await c.req.json().catch(() => ({}))) as { email?: unknown };
       // The return address is the HOST's, and neither this integration nor its caller

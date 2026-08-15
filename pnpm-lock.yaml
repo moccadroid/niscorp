@@ -280,6 +280,9 @@ importers:
         specifier: ^22.5.0
         version: 22.5.0(@types/node@24.13.3)
     devDependencies:
+      '@electric-sql/pglite':
+        specifier: ^0.5.1
+        version: 0.5.1
       '@hono/node-server':
         specifier: ^2.0.4
         version: 2.0.4(hono@4.12.23)

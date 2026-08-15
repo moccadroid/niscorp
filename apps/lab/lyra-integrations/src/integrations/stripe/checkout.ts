@@ -30,6 +30,23 @@ export const customerFor = async (db: IntegrationStore | undefined, studioId: st
   return result.rows[0]?.customer_id;
 };
 
+/** The row, written. Its own function so the SQL has a caller a check can reach
+ *  without creating a customer at a vendor first. */
+export const rememberCustomer = async (
+  db: IntegrationStore | undefined,
+  who: { personId: string; studioId: string; accountId: string; customerId: string },
+): Promise<void> => {
+  if (db === undefined) {
+    MEMORY.set(customerKey(who.studioId, who.personId), who.customerId);
+    return;
+  }
+  await db.query(
+    `INSERT INTO ${db.table('customers')} (person_id, studio_id, account_id, customer_id)
+     VALUES ($1, $2, $3, $4) ON CONFLICT (studio_id, person_id) DO NOTHING`,
+    [who.personId, who.studioId, who.accountId, who.customerId],
+  );
+};
+
 /**
  * The member's customer on this studio's account, made once.
  *
@@ -60,11 +77,7 @@ export const ensureCustomer = async (
     MEMORY.set(customerKey(who.studioId, who.personId), customer.id);
     return customer.id;
   }
-  await db.query(
-    `INSERT INTO ${db.table('customers')} (person_id, studio_id, account_id, customer_id)
-     VALUES ($1, $2, $3, $4) ON CONFLICT (studio_id, person_id) DO NOTHING`,
-    [who.personId, who.studioId, who.accountId, customer.id],
-  );
+  await rememberCustomer(db, { personId: who.personId, studioId: who.studioId, accountId: who.accountId, customerId: customer.id });
   return (await customerFor(db, who.studioId, who.personId)) ?? customer.id;
 };
 
