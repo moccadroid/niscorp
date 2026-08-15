@@ -252,6 +252,29 @@ console.log(`  ${'heap delta'.padEnd(34)} ${(((after - before) / KB / KB)).toFix
 console.log(`  ${'per shell'.padEnd(34)} ${(perShell / KB).toFixed(1).padStart(7)} KB`);
 console.log(`  ${'build + settle'.padEnd(34)} ${buildMs.toFixed(0).padStart(7)} ms  ${dim(`${(buildMs / Math.max(1, shells.length)).toFixed(1)} ms each`)}`);
 
+// WHAT IS IN ONE, beside what it weighs.
+//
+// Per-shell birth cost went 80.6 → 138.8 KB between two runs on one machine in
+// one day, and nothing in this output could say why. It was the phrasebook —
+// every German shell had folded and kept its own copy of ~560 rows — but the
+// bench printed a number with no composition beside it, so the jump read as
+// noise and got filed as undiagnosed.
+//
+// A figure nobody can attribute is a figure nobody acts on. These are the two
+// quantities a shell's weight is actually made of, printed next to the weight.
+const wornPhrases = Object.keys(owner.shell.getPhrases() ?? {}).length;
+const mounted = (server.shells?.list() ?? []).find((live) => live.principal === idFor(CAST.lumen.owner));
+const mountedActions = (mounted?.canvases ?? []).reduce((n, canvas) => n + canvas.actions.length, 0);
+console.log(
+  `  ${'what one is made of'.padEnd(34)} ${dim(`${String(Object.keys(app.actions).length)} actions served · ${String(mountedActions)} mounted on ${String(mounted?.canvases.length ?? 0)} canvases · ${String(wornPhrases)} phrases worn`)}`,
+);
+if (wornPhrases > 0) {
+  // The book is SHARED across every shell of a language (app.ts), so it is a
+  // deployment cost paid once — named here so nobody reads it as per-shell and
+  // multiplies it by the projection below.
+  console.log(`  ${''.padEnd(34)} ${dim('the book is one object for the whole deployment, not per shell')}`);
+}
+
 // ─── 3. extrapolation, stated as such ────────────────────────
 console.log(`\n${bold('  What that projects to')} ${dim('(linear extrapolation from 250 — not measured at scale)')}`);
 for (const n of [1_000, 10_000, 100_000]) {
@@ -291,6 +314,14 @@ if (walker !== undefined) {
   await settle(20);
   const grown = heap();
   const perNav = (grown - settled) / (LOOP * 3);
+  // THE CEILING — a bench that only prints is a number nobody has to act on.
+  // 8 KB sits far above the measured residual (database + jit noise, 2–6 KB
+  // warm) and far below what real retention looks like: a held instance or data
+  // store is tens of KB per navigation. Breaching it is the OOM-after-week-one
+  // class of defect, so it is a failure rather than a figure. Named here
+  // because the printed verdict and the assertion below must read the SAME
+  // number — see the verdict.
+  const CEILING = 8 * KB;
   // Judged against what a shell COSTS, not against a round number. "2 KB per
   // navigation" means nothing on its own; "the shell grew to four times its own
   // weight in 120 navigations" is the sentence that decides whether a session
@@ -301,24 +332,32 @@ if (walker !== undefined) {
   // "flat" there would be reporting a measurement that wasn't made.
   const growth = grown - settled;
   const ratio = growth / Math.max(1, perShell);
+  // THE WORD AND THE GATE AGREE, because they read the same number.
+  //
+  // The verdict used to be decided by `growth / perShell`, which put GROWING on
+  // a run the 8 KB ceiling passed — not because anything grew, but because the
+  // DENOMINATOR moved: per-shell birth cost had risen for an unrelated reason
+  // and dragged the ratio over 1 with it. A defect marked landed reads as
+  // reopened the next time somebody runs this, which is worse than printing
+  // nothing.
+  //
+  // So the verdict is decided by the same per-navigation figure the assertion
+  // is, and the ratio stays as the sentence that makes it mean something —
+  // reported, never load-bearing.
+  const against = `${ratio.toFixed(1)}× one shell's own cost over ${LOOP * 3} navigations`;
   const verdict =
     growth < 0
       ? 'below the noise floor — GC reclaimed more than the loop allocated'
-      : ratio < 1
-        ? `flat — ${(ratio * 100).toFixed(0)}% of one shell over ${LOOP * 3} navigations`
-        : `GROWING — ${ratio.toFixed(1)}× one shell's own cost over ${LOOP * 3} navigations`;
+      : perNav <= CEILING
+        ? `flat — ${(perNav / KB).toFixed(2)} KB per navigation, under the ${String(CEILING / KB)} KB ceiling; ${against}`
+        : `GROWING — ${against}`;
   console.log(`  ${`${LOOP * 3} navigations on one shell`.padEnd(34)} ${(growth / KB).toFixed(0).padStart(7)} KB total`);
   console.log(`  ${'per navigation'.padEnd(34)} ${(perNav / KB).toFixed(2).padStart(7)} KB  ${dim(verdict)}`);
   console.log(`  ${'its tree after the loop'.padEnd(34)} ${(allCanvases(walker) / KB).toFixed(1).padStart(7)} KB`);
 
-  // THE CEILING, ASSERTED — a bench that only prints is a number nobody has
-  // to act on. 8 KB sits far above the measured residual (database + jit
-  // noise, 2–6 KB warm) and far below what real retention looks like: a
-  // held instance or data store is tens of KB per navigation. Breaching
-  // this is the OOM-after-week-one class of defect, so it is a failure,
-  // not a figure.
-  if (perNav > 8 * KB) {
-    console.error(`\n  \x1b[31m✗ per-navigation growth ${(perNav / KB).toFixed(2)} KB exceeds the 8 KB ceiling — something retains per navigation.\x1b[0m\n`);
+  // ASSERTED, against the same number the verdict above reads.
+  if (perNav > CEILING) {
+    console.error(`\n  \x1b[31m✗ per-navigation growth ${(perNav / KB).toFixed(2)} KB exceeds the ${String(CEILING / KB)} KB ceiling — something retains per navigation.\x1b[0m\n`);
     process.exit(1);
   }
 }
