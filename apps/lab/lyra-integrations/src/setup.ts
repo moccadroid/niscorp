@@ -15,8 +15,8 @@ try {
   /* no .env — the report below says what is missing */
 }
 
-import { stripeFor } from './packs/stripe/client';
-import { HANDLED_EVENTS, ensureDestination, listDestinations } from './packs/stripe/setup';
+import { stripeFor } from './integrations/stripe/client';
+import { HANDLED_EVENTS, ensureDestination, listDestinations } from './integrations/stripe/setup';
 
 const env = (name: string): string => process.env[name] ?? '';
 const bold = (text: string): string => `[1m${text}[0m`;
@@ -64,7 +64,7 @@ if (url === undefined) {
   console.log(`  stripe listen --forward-to localhost:5180/integrations/stripe/hook/events\n`);
   console.log(dim('  That prints a whsec_… of its own, per session. Put it in .env as'));
   console.log(dim('  STRIPE_WEBHOOK_SECRET and expect it to change — never bake one in.\n'));
-  console.log(`${bold('Events this pack handles')} ${dim(`(${HANDLED_EVENTS.length})`)}`);
+  console.log(`${bold('Events this integration handles')} ${dim(`(${HANDLED_EVENTS.length})`)}`);
   for (const event of HANDLED_EVENTS) console.log(`  ${dim('·')} ${event}`);
   console.log('');
   process.exit(0);

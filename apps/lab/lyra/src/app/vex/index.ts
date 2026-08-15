@@ -28,7 +28,7 @@ import { enquiredPerson, membersLapsedAway, automationArm, automationCreate, aut
 import { courseCreate, courseSetActive, courseRoster, courseUpdate, coursesList, enrolMember, enrolmentsForMember, joinCourse, leaveCourse, myEnrolments, withdrawMember } from './course.entries';
 import { studioPersonCreate, peopleEnroll, personByEmail, personCreate } from './intake.entries';
 import { identityPerson, identityStudio, identityInstalled } from './identity.entries';
-import { phrasesBook, phrasesLocales, phrasesPacks } from './language.entries';
+import { phrasesBook, phrasesLocales, phrasesIntegrations } from './language.entries';
 import { credentialPrincipalByEmail, credentialSweepLinks, credentialMintLink, credentialRedeemLink, mailerRecordDelivered, mailerRecordFailed, mailerOutboxOrigin, mailerSuppress, mailerOptOut, transportStaffRoster, transportMemberRoster, schedulerReflexRows, schedulerStudioZones } from './machinery.entries';
 import { addonInstall, addonUninstall, addonsInstalled, addonsList } from './addon.entries';
 import { attendanceByHour, attendanceByProgram, attendanceByWeek, membersByStatus, offeringCreate, offeringSetActive, offeringUpdate, planUptake } from './reports.entries';
@@ -111,7 +111,7 @@ export const ENTRIES: CacheEntry[] = [
   studioTheme,
   phrasesBook,
   phrasesLocales,
-  phrasesPacks,
+  phrasesIntegrations,
   credentialPrincipalByEmail,
   mailerOutboxOrigin,
   transportStaffRoster,

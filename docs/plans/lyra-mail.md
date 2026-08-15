@@ -10,7 +10,7 @@
 > This header said four different things at once for a while; the one line
 > above is current, and the history lives in git rather than stacked here.
 >
-> **Revision.** The first draft of this document put mail in a pack. It is
+> **Revision.** The first draft of this document put mail in an integration. It is
 > platform now, and the section that argues why is the one to read first — the
 > decision changes what gets built more than anything else here.
 >
@@ -118,25 +118,25 @@ owner screen — not a code change, and not a prerequisite for shipping.
 
 ---
 
-## Where it goes: the platform, not a pack
+## Where it goes: the platform, not an integration
 
-`apps/lab/lyra-integrations` runs several packs in one process, and the first
+`apps/lab/lyra-integrations` runs several integrations in one process, and the first
 draft of this document put mail beside them. That was wrong. **Delivery,
 the provider credential and the sender reputation are platform. Sender
 identity, the words and consent are tenant rows.** The line is worth
 memorising in that form, because everything below follows from it.
 
-### Why a pack cannot hold this
+### Why an integration cannot hold this
 
 **Auth mail happens before a principal exists.** You have an email address, not
 a person — so there is no tenant to resolve an install against. The proxy is
-the only host→pack path there is, and it answers `Sign in first.` before
+the only host→integration path there is, and it answers `Sign in first.` before
 anything else runs ([server.ts:813](../../packages/moss/src/server.ts:813));
 `installedFor` resolves through `personById` and returns nothing for anyone
-anonymous ([users.ts:57](../../apps/lab/lyra/src/server/users.ts:57)). A pack is
+anonymous ([users.ts:57](../../apps/lab/lyra/src/server/users.ts:57)). An integration is
 not an awkward home for sign-in mail, it is an unreachable one.
 
-**A studio uninstalling it would lock its own users out.** Packs are per-studio
+**A studio uninstalling it would lock its own users out.** Integrations are per-studio
 installs by design. Login is not a feature a tenant opts into.
 
 **It would couple the login path to two seams that are being replaced.**
@@ -157,30 +157,30 @@ Auth mail is from the platform: `Lyra <no-reply@mail.lyra.app>`, no reply-to.
 principal, so the proxy could serve it — but only with a per-studio install and
 a `reach` entry no action declares
 ([integrations.ts:146](../../packages/moss/src/integrations.ts:146), fail-closed).
-Keeping delivery in a pack for that path alone costs a new moss seam, an
+Keeping delivery in an integration for that path alone costs a new moss seam, an
 integration key, a charter rung and an HTTP callback. And it would put the
 provider credential in two places: two components holding one secret, owning
 one sender reputation, maintaining one suppression list. One credential means
 one delivery component.
 
-**What is left for a pack is nothing.** Domain verification calls the provider's
+**What is left for an integration is nothing.** Domain verification calls the provider's
 API, so it lands platform-side too; the remainder is a settings screen over
-rows Lyra owns, which is a Lyra screen. Build no mail pack. If BYO-domain is
+rows Lyra owns, which is a Lyra screen. Build no mail integration. If BYO-domain is
 ever something to package and price as an add-on, revisit it then — and even
 then it calls a host fingerprint, never the provider.
 
 ### What this costs, so nobody rediscovers it as a surprise
 
-The pack boundary was buying three things, and in-house each gets weaker:
+The integration boundary was buying three things, and in-house each gets weaker:
 
 - **`separation-check` proved no provider vocabulary could reach Lyra.** It
   becomes a module boundary enforced by a check
   ([mail-check](#the-three-fences) below) rather than by a process. Weaker.
   Say so in the file header.
 - **The env fence made the secret unreachable from undeclared code**
-  ([pack.ts:93](../../apps/lab/lyra-integrations/src/pack.ts:93)). In Lyra it is
+  ([integration.ts:93](../../apps/lab/lyra-integrations/src/integration.ts:93)). In Lyra it is
   `process.env` like everything else.
-- **A pack brought its own storage.** The per-attempt log folds into columns on
+- **An integration brought its own storage.** The per-attempt log folds into columns on
   `outbox`, which is arguably better: one row per message instead of two.
 
 ### The rule that keeps it a file instead of a subsystem
@@ -290,7 +290,7 @@ MAIL_FROM_DOMAIN     the verified sending domain
 MAIL_SINK=log        the lab's transport — off unless named
 ```
 
-`MAIL_SINK` is the same posture as `LYRA_DEV_PACKS`: unreachable unless a
+`MAIL_SINK` is the same posture as `LYRA_DEV_INTEGRATIONS`: unreachable unless a
 deployment names it, and it exists because a development database is replayed
 from seed on every save. An automation that can only ever report `Failed`
 teaches nobody whether the automation worked. The sink makes the mail **visible

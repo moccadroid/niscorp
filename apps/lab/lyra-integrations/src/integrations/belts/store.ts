@@ -1,17 +1,17 @@
-// ── THE STORAGE THIS PACK BRINGS WITH IT ─────────────────────
+// ── THE STORAGE THIS INTEGRATION BRINGS WITH IT ──────────────
 //
 // In-memory here because it is a lab; a real one would have a database. What
 // matters is that it is NOT Lyra's: rows are keyed by the membership id handed
 // over at the wire, and Lyra has no column for any of this.
 //
-// NOTHING OUTSIDE THIS PACK IMPORTS THIS FILE. That is the isolation rule, and
-// it is why the state moved out of the shared serve.ts: two packs sharing a
-// module is two packs sharing a bug.
+// NOTHING OUTSIDE THIS INTEGRATION IMPORTS THIS FILE. That is the isolation rule, and
+// it is why the state moved out of the shared serve.ts: two integrations sharing a
+// module is two integrations sharing a bug.
 //
-// RANKS are configuration — the pack's own settings screen edits them, which is
-// what a settings screen IS: rows in the pack's storage, never Lyra's.
+// RANKS are configuration — the integration's own settings screen edits them, which is
+// what a settings screen IS: rows in the integration's storage, never Lyra's.
 //
-// A rank carries its COLOR, because what a belt looks like is this pack's
+// A rank carries its COLOR, because what a belt looks like is this integration's
 // domain knowledge: Lyra's kit knows how to paint colored bands, never what a
 // grappling belt is. `bandsFor` is the whole tradition in one line — the belt
 // body with the rank bar near the end (color·color·color·bar·color), the bar
@@ -19,7 +19,7 @@
 export type Rank = { name: string; tone: string; color: string };
 
 // A RANK IS AN IDENTITY. These carried status tones — brown was 'alert', black
-// was 'good' — so the pack was telling the host app that a brown belt is a
+// was 'good' — so the integration was telling the host app that a brown belt is a
 // problem and a black belt is a success. The bands are the real colour; the
 // token is only for a badge, and it names a hue now.
 export const RANKS: Rank[] = [

@@ -4,8 +4,8 @@
 // losses — onboarding, account management, and the notification banner — and
 // they are browser UI from `@stripe/connect-js`. Lyra validates every layout
 // against a fixed component vocabulary and refuses a bundle naming anything
-// else, so a pack cannot ship a component. The way through is not to teach
-// lyra's kit about Stripe: the pack serves a page and lyra frames it, at lyra's
+// else, so an integration cannot ship a component. The way through is not to teach
+// lyra's kit about Stripe: the integration serves a page and lyra frames it, at lyra's
 // own origin, through a declared path and a short-lived grant (moss: the frames
 // seam).
 //
@@ -22,7 +22,7 @@
 export type EmbedPage = {
   publishableKey: string;
   clientSecret: string;
-  /** Which of Stripe's components to mount — the pack's screens each frame one. */
+  /** Which of Stripe's components to mount — the integration's screens each frame one. */
   component: 'account-onboarding' | 'account-management' | 'notification-banner';
   /** Where the page re-fetches a session when the one it holds expires. */
   refreshPath: string;
@@ -64,7 +64,7 @@ export const embedPage = (page: EmbedPage): string => `<!doctype html>
         // same-origin to THIS page, so it rides the frame grant already spent.
         fetchClientSecret: function () {
           // FROM THIS DOCUMENT'S OWN PATH, not a relative string. The page is
-          // served at /integrations/<pack>/frame/<token>, and a bare 'session'
+          // served at /integrations/<integration>/frame/<token>, and a bare 'session'
           // resolves by REPLACING the last segment — landing on
           // /frame/session, which is not a grant and 404s. The component then
           // renders nothing at all, with no error anybody sees.
@@ -81,7 +81,7 @@ export const embedPage = (page: EmbedPage): string => `<!doctype html>
       mount.innerHTML = '';
       mount.appendChild(instance.create(${JSON.stringify(page.component)}));
 
-      // THE HEIGHT HANDSHAKE, the pack's half. An iframe does not size to its
+      // THE HEIGHT HANDSHAKE, the integration's half. An iframe does not size to its
       // content and an onboarding form's height is not predictable — it grows a
       // validation error, a country changes its fields. So the page says, and
       // keeps saying.

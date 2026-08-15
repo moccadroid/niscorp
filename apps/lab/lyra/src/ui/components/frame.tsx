@@ -7,18 +7,18 @@ import type { NovaComponent } from '@niscorp/nova/adapters/react';
 //
 // Everything else in this kit is a named component with a props schema, and a
 // bundle naming anything outside that vocabulary is refused at intake. That is
-// what stops a pack shipping arbitrary UI. Inside a frame, none of it applies —
-// the page is the pack's, and this app checks nothing about it.
+// what stops an integration shipping arbitrary UI. Inside a frame, none of it
+// applies — the page is the integration's, and this app checks nothing about it.
 //
 // It is bounded by three things, and they are the whole argument: the src is
 // SAME-ORIGIN (moss serves it, and only for a path the bundle declared), the
-// pack is approved, and it is installed at this studio. The alternative was
-// this app importing a payment provider's SDK, which every app that ever
-// installs the pack would then carry.
+// integration is approved, and it is installed at this studio. The alternative
+// was this app importing a payment provider's SDK, which every app that ever
+// installs the integration would then carry.
 //
 // GENERIC ON PURPOSE. It is `Frame`, not `StripeEmbed`; it renders a URL and
-// knows nothing about any pack. The day a second pack needs one, it needs no
-// change here.
+// knows nothing about any integration. The day a second one needs a frame, it
+// needs no change here.
 //
 // It does NOT mint its own src. A grant is fetched by the action, over the
 // session's own wire, and arrives as data — because a component that fetches is
@@ -28,7 +28,7 @@ import type { NovaComponent } from '@niscorp/nova/adapters/react';
 const FrameProps = z
   .object({
     src: z.string().optional().describe('A grant URL from /api/integrations/frame. Empty renders nothing — a frame with no grant is not an error, it is a screen still asking.'),
-    title: z.string().optional().describe('Accessible name for the frame. Screen readers announce it; give it the words the pack would.'),
+    title: z.string().optional().describe('Accessible name for the frame. Screen readers announce it; give it the words the integration would.'),
     height: z.union([z.string(), z.number()]).optional().describe('Opening height. The page inside can grow it by posting {type:"frame:height"}.'),
     minHeight: z.union([z.string(), z.number()]).optional(),
   })
@@ -91,12 +91,12 @@ export const Frame: NovaComponent<z.infer<typeof FrameProps>> = ({ src, title, h
       // with the page served at this app's own origin, this sandbox is
       // ADVISORY — a same-origin document with scripts can reach the parent.
       // The real fence around a framed page is that the path was DECLARED at
-      // intake, the pack was APPROVED by an operator, the studio INSTALLED it,
-      // and the grant is short-lived. A pack framing a page is trusted with
+      // intake, the integration was APPROVED by an operator, the studio INSTALLED it,
+      // and the grant is short-lived. An integration framing a page is trusted with
       // the session of whoever is looking at it; that is what approval means.
       //
       // The browser-level fence comes back when framed pages move to the
-      // pack's OWN origin (a redirect handshake instead of a proxy) — worth
+      // integration's OWN origin (a redirect handshake instead of a proxy) — worth
       // doing before live, and a moss change rather than one here.
       sandbox="allow-same-origin allow-scripts allow-forms allow-popups"
       referrerPolicy="no-referrer"
@@ -113,6 +113,6 @@ export const Frame: NovaComponent<z.infer<typeof FrameProps>> = ({ src, title, h
 };
 
 Frame.meta = {
-  description: 'Frames a page an installed pack serves, at this app’s own origin, from a declared path and a short-lived grant. What is inside it is not validated by this app — the only component of which that is true.',
+  description: 'Frames a page an installed integration serves, at this app’s own origin, from a declared path and a short-lived grant. What is inside it is not validated by this app — the only component of which that is true.',
   propsSchema: FrameProps,
 };

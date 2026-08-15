@@ -266,16 +266,16 @@ and it stays.
 | One-off events | ✓ | ✓ |
 | Waitlists, self-promoting | ✓ | ✓ |
 | Add-ons: store (meta tiles, toggle, settings door) | ✓ | ✓ |
-| Placements: pack screens in domain hubs · panel on member detail | ✓ | ✓ |
+| Placements: integration screens in domain hubs · panel on member detail | ✓ | ✓ |
 
 **Add-ons is a store, full stop.** Its menu entry (manager and up, a leaf like
 Check in) opens tiles built from each bundle's `meta` — title, tagline, and a
 derived "Adds …" sentence saying what appears where, printed identically on the
 approval card — with Install/Remove and, when installed and declared, the one
-integration action a store may open: that pack's own settings screen. Nothing
+integration action a store may open: that integration's own settings screen. Nothing
 functional ever lists under Add-ons.
 
-**Pack screens go where their domain lives**, by bundle-declared bindings kept
+**Integration screens go where their domain lives**, by bundle-declared bindings kept
 beside the actions and never on them (nova's schema untouched): `attachments`
 (a panel riding a host action that declared `attachable` offers — the member
 detail offers `membership_id` and `person_name`), `placements` (a screen under
@@ -429,7 +429,7 @@ for what a database cannot do — telling somebody.
   the chosen effect out of the picker while the model still held it, are gone by
   construction rather than by a hand-kept list.
 
-Parked deliberately: bundle-declared effects, and packs subscribing to the fact
+Parked deliberately: bundle-declared effects, and integrations subscribing to the fact
 stream (a Mailchimp audience is a continuous mirror, not an effect fired once).
 Email stays an honest placeholder until that lands.
 
@@ -486,7 +486,7 @@ The deployment half is a rule, and it will rot if nobody writes it down:
 
 Payments and Stripe (now planned — below) · automations and scheduled work (see
 `docs/archive/automation-requirements.md`) · email and SMS · POS and inventory · rank and belt
-tracking (a good later test of the theming and bundle story as a discipline pack) ·
+tracking (a good later test of the theming and bundle story as a discipline integration) ·
 the public marketing site and its SSR adapter · native mobile · door access.
 
 ## Stripe — the plan
@@ -535,14 +535,14 @@ off it (moss `assert.ts`; nothing Stripe-specific):
    nobody, uninstalling orphans the key, and deleting the integration kills
    it — one act, both directions.
 
-The key has its first real consumer: Belts' Promote writes the pack's own
+The key has its first real consumer: Belts' Promote writes the integration's own
 storage, then presents `BELTS_KEY` with `acts-for` to replay
 `automation/notify` — a grading lands in the studio's inbox by name, and Lyra
-never grew a belt column. Belts is now a rounded reference pack: real belts
+never grew a belt column. Belts is now a rounded reference integration: real belts
 painted by a generic `Bands` kit component (segments carry tick marks; colors
-are the pack's data, never theme), BJJ stripes as state with the four-wall,
+are the integration's data, never theme), BJJ stripes as state with the four-wall,
 promotion resetting the bar, and — the general lesson — **every edit
-reversible because the pack's history is a ledger**: one `undo` pops the
+reversible because the integration's history is a ledger**: one `undo` pops the
 newest event and the record becomes whatever the ledger then says, down to the
 white-belt floor. All three verbs (stripe, promote, undo) push Lyra's shared
 `confirm` sheet and fire only on yes.

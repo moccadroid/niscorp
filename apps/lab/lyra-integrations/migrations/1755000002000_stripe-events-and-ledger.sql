@@ -33,7 +33,7 @@ CREATE INDEX stripe_events_received ON stripe_events (received_at DESC);
 -- Lyra's subscription row holds STANDING — active, and how far the money
 -- reaches. It never learns a Stripe id. Everything else about the money —
 -- individual invoices, what was refunded, what is disputed — is this service's
--- own mirror, surfaced through the pack's own screens.
+-- own mirror, surfaced through the integration's own screens.
 --
 -- That split is what makes cash at the desk and a second provider the same
 -- change: they write the same standing through the same mutation, and neither

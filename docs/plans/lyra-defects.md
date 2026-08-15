@@ -27,12 +27,12 @@
 > shell over 120 navigations. 4.4: every vex entry must have a caller or a
 > reason on the DELIBERATE list — first run found nineteen, eight of which
 > are now recorded decisions (including sessions/cancel, which no screen
-> offers). 4.1: pack throws wrap into `{ message }`, the session wire floors
-> silent and generic failures with a sentence naming the pack, and the
+> offers). 4.1: integration throws wrap into `{ message }`, the session wire floors
+> silent and generic failures with a sentence naming the integration, and the
 > bundles bind `$.error.message` instead of the whole error object. 4.2:
 > bundles carry a phrasebook (keyed by LANGUAGE, refused otherwise at
 > intake), stored on the integrations row, merged UNDER the host's book —
-> `Mein Gürtel` renders from the pack's own rows through the same pass as
+> `Mein Gürtel` renders from the integration's own rows through the same pass as
 > everything else.
 >
 > **Every part of this document is now landed or explicitly decided.** The
@@ -430,14 +430,14 @@ booking, checks them in, and asserts both the booking and the check-in landed.
 
 ---
 
-## Part 4 — the pack seam
+## Part 4 — the integration seam
 
-Three issues that surfaced from running both packs installed. One needs a
+Three issues that surfaced from running both integrations installed. One needs a
 decision.
 
-### 4.1 A failing pack shows the studio owner `HTTP 500` — **[seen]**
+### 4.1 A failing integration shows the studio owner `HTTP 500` — **[seen]**
 
-With the Stripe pack's store unreachable, its settings screen renders a red
+With the Stripe integration's store unreachable, its settings screen renders a red
 banner reading exactly `HTTP 500`. That string is nova's fallback when a
 non-OK response carries no `message`:
 
@@ -452,26 +452,26 @@ at **call** time. A third-party service being down is the steady state of a
 marketplace, not an exception.
 
 **Fix.** Two halves.
-1. The contract requires a pack's error responses to carry a `message`;
-   `pack.ts` wraps handler throws into that shape so a pack cannot forget.
-2. The host still needs a floor for the case where a pack returns nothing
-   usable, or is unreachable entirely — a sentence naming the pack, not a
+1. The contract requires an integration's error responses to carry a `message`;
+   `integration.ts` wraps handler throws into that shape so an integration cannot forget.
+2. The host still needs a floor for the case where an integration returns nothing
+   usable, or is unreachable entirely — a sentence naming the integration, not a
    status code. Decide where it lives: nova's fallback is generic, so this
    probably belongs in the app's endpoint error handling rather than in nova.
 
-**Done when.** `integrations-check` points an installed pack's endpoint at a
+**Done when.** `integrations-check` points an installed integration's endpoint at a
 dead port and asserts the rendered notice contains no bare status code.
 
-### 4.2 Packs cannot be translated at all — **[seen]**
+### 4.2 Integrations cannot be translated at all — **[seen]**
 
-Both packs render English on a German studio, in the most visible place there
+Both integrations render English on a German studio, in the most visible place there
 is. The member's own navigation:
 
 ```
 Kurs buchen · Meine Kurse · Meine Mitgliedschaft · My belt · Payment
 ```
 
-And the Belts roster header mixes host and pack in one row:
+And the Belts roster header mixes host and integration in one row:
 `MITGLIED | BELT | SINCE`.
 
 The store tiles, the taglines and the derived "Adds …" sentences are all
@@ -479,12 +479,12 @@ English too.
 
 **Fix.** The bundle contract gains an optional phrasebook — the same
 `(locale, source, text)` shape the app already uses — and intake stores it
-alongside the pack's actions. The pass already runs over the whole served
-tree, so a pack's words translate with everything else once the book is
+alongside the integration's actions. The pass already runs over the whole served
+tree, so an integration's words translate with everything else once the book is
 reachable. Refuse a phrasebook keyed to a locale the deployment does not
 serve, the same way placements outside the vocabulary are refused.
 
-**Done when.** `integrations-check` installs a pack carrying a `de` book and
+**Done when.** `integrations-check` installs an integration carrying a `de` book and
 asserts its placed screen's nav label renders German.
 
 ### 4.3 **DECISION** — a fingerprint rename is a silent breaking change
@@ -579,7 +579,7 @@ login picker is behind a transport flag" and only half the code moved.
 **Fix.** One name. `LYRA_DEV_LOGIN`, since that is what the identity plan and
 `identity-check` assert against. Delete the other read.
 
-### 6.2 `LYRA_DEV_PACKS` pointed at a dead port — **fixed during the review**
+### 6.2 `LYRA_DEV_INTEGRATIONS` pointed at a dead port — **fixed during the review**
 
 `.env` had `stripe@http://127.0.0.1:8781/stripe`; the integrations service
 listens on `8799` (`apps/lab/lyra-integrations/src/serve.ts:45`), and `belts`
@@ -589,7 +589,7 @@ least two sessions.
 
 Changed to `stripe@…:8799/stripe,belts@…:8799/belts`; backup at
 `apps/lab/lyra/.env.bak`. **Left for this plan:** the example in the code
-comment (`apps/lab/lyra/src/server/dev-packs.ts:17`) still says `8781`, while
+comment (`apps/lab/lyra/src/server/dev-integrations.ts:17`) still says `8781`, while
 the admin screen's placeholder says `8799`
 (`apps/lab/lyra-admin/src/app/actions/integrations.action.ts:77`). Make them
 agree.
@@ -598,7 +598,7 @@ Related and worth a line in whatever README covers the dev loop: the
 integrations service runs under `tsx` with no watch, so it serves whatever
 bundle it started with. It had been running since before the parameter
 collapse and was serving a fingerprint that no longer exists — which presents
-as a 422 at registration and looks like a broken pack.
+as a 422 at registration and looks like a broken integration.
 
 ### 6.3 The plans shelf contradicts the plans
 
@@ -659,14 +659,14 @@ leaves that hole open for the next component.*
 **D2 — versioning the fingerprint contract (blocks 4.3).**
 (a) Fingerprints are forever: never rename, only add, deprecate by
 documentation.
-(b) The contract carries a version; packs declare which they build against;
+(b) The contract carries a version; integrations declare which they build against;
 intake refuses a mismatch.
 (c) Aliases: a renamed fingerprint keeps its old name as a served alias for N
 releases.
 *Recommend (c) plus a check that diffs the published fingerprint list against
 the previous release and fails on a disappearance without an alias — it costs
 almost nothing now and is the only option that does not either freeze the read
-layer or break every pack on a release.*
+layer or break every integration on a release.*
 
 **D3 — do `body_label` and `subject_label` translate? (blocks 2.1).**
 They carry a studio's own composed mail copy. Translating them would show
@@ -689,8 +689,8 @@ suffix rule subtractive with a declared exception list.
 6. **Part 5** — the shell leak. Independent of everything above; start it in
    parallel if there is a second pair of hands, because it is a hunt with a
    measurable target rather than a list.
-7. **Part 4.1, 4.4** — the pack error contract and the reachability check.
-8. **Part 4.2** — pack phrasebooks, once the app's own i18n is closed.
+7. **Part 4.1, 4.4** — the integration error contract and the reachability check.
+8. **Part 4.2** — integration phrasebooks, once the app's own i18n is closed.
 9. **Part 4.3** — after D2.
 
 **Done, for the whole document:** `pnpm check` is green with

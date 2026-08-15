@@ -14,14 +14,14 @@ import { createPublicKey, verify as cryptoVerify } from 'node:crypto';
 // forgetting a guard cannot open anything: an unverified request has no
 // identity to scope by. On the webhook door, where the host mints no assertion
 // at all, this returns nothing — which is why a hook router is handed no
-// identity function to call in the first place (pack.ts).
+// identity function to call in the first place (integration.ts).
 //
 // READ PER REQUEST, not at import: an operator pastes the value and restarts,
 // and a check sets it after boot without restarting a process it holds.
 const verifyKey = (): string => process.env['LYRA_VERIFY_KEY'] ?? '';
 
 // `personId` is set only for callers the studio KNOWS (lyra's anchor row) —
-// staff-only principals arrive with it empty, which is what a pack's "only
+// staff-only principals arrive with it empty, which is what an integration's "only
 // somebody the studio knows can pay" check keys on.
 export type Identity = { principal: string; studioId: string; personId: string; country: string };
 
@@ -48,7 +48,7 @@ export const readIdentity = (
     if (typeof parsed.exp !== 'number' || parsed.exp <= Date.now()) return undefined;
     // FOR US, not just BY them. A token minted for another integration on the
     // same deployment is somebody replaying credentials sideways — and with
-    // several packs in one process, this is the line that keeps them apart.
+    // several integrations in one process, this is the line that keeps them apart.
     if (parsed.integration !== integration || typeof parsed.principal !== 'string') return undefined;
     const scope = parsed.scope ?? {};
     return {
@@ -56,7 +56,7 @@ export const readIdentity = (
       studioId: String(scope['studioId'] ?? ''),
       personId: String(scope['personId'] ?? ''),
       // Where the studio trades. It arrives in the envelope like everything else
-      // about who is calling, so a pack never has to ask and a caller can never
+      // about who is calling, so an integration never has to ask and a caller can never
       // say — which matters here because it decides what a payment provider
       // asks a business for.
       country: String(scope['country'] ?? ''),

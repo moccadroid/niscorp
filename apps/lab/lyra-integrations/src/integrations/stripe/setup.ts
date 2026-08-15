@@ -12,7 +12,7 @@ import type Stripe from 'stripe';
 // configures one, run it against a configured one and it says so.
 // ═══════════════════════════════════════════════════════════════
 
-// The events this pack actually handles (hooks.ts). Asking for more would mean
+// The events this integration actually handles (hooks.ts). Asking for more would mean
 // paying delivery attempts for events nothing acts on, and asking for fewer
 // means a handler that never runs — so the list is the handler's, not a guess.
 //
@@ -82,7 +82,7 @@ export const ensureDestination = async (
       type: 'webhook_endpoint',
       // v1 events, so the payload carries the object rather than just its id.
       event_payload: 'snapshot',
-      // Pinned to the version this pack is written against, so a Stripe upgrade
+      // Pinned to the version this integration is written against, so a Stripe upgrade
       // does not silently change the shape of what arrives.
       snapshot_api_version: '2026-07-29.dahlia',
       events_from: ['@accounts'],

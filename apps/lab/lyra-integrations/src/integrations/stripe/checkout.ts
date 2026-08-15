@@ -1,5 +1,5 @@
 import type Stripe from 'stripe';
-import type { PackStore } from '../../pack';
+import type { IntegrationStore } from '../../integration';
 import { ensurePrice } from './prices';
 
 // ═══════════════════════════════════════════════════════════════
@@ -21,7 +21,7 @@ const MEMORY = new Map<string, string>();
 
 const customerKey = (studioId: string, personId: string): string => `${studioId}:${personId}`;
 
-export const customerFor = async (db: PackStore | undefined, studioId: string, personId: string): Promise<string | undefined> => {
+export const customerFor = async (db: IntegrationStore | undefined, studioId: string, personId: string): Promise<string | undefined> => {
   if (db === undefined) return MEMORY.get(customerKey(studioId, personId));
   const result = await db.query<{ customer_id: string }>(
     `SELECT customer_id FROM ${db.table('customers')} WHERE studio_id = $1 AND person_id = $2`,
@@ -39,7 +39,7 @@ export const customerFor = async (db: PackStore | undefined, studioId: string, p
  */
 export const ensureCustomer = async (
   stripe: Stripe,
-  db: PackStore | undefined,
+  db: IntegrationStore | undefined,
   who: { personId: string; studioId: string; accountId: string; email: string },
 ): Promise<string> => {
   const held = await customerFor(db, who.studioId, who.personId);
@@ -88,14 +88,14 @@ export type CheckoutArgs = {
  * shape (prices.ts) — which is what makes a plan edit in lyra cost nothing until
  * somebody actually checks out.
  *
- * THE METADATA IS THE WIRE HOME. Everything this pack needs to assert a standing
+ * THE METADATA IS THE WIRE HOME. Everything this integration needs to assert a standing
  * back to lyra — WHICH subscription (the assert key), who it is about, whose
  * studio — travels on the provider's subscription so a webhook arriving later
  * resolves without a lookup that could be stale. The two halves of this
  * contract — what is stamped here, what `assert` is keyed on — change together
  * or not at all; billing-check proves the loop.
  */
-export const createCheckout = async (stripe: Stripe, db: PackStore | undefined, args: CheckoutArgs): Promise<{ url: string; sessionId: string }> => {
+export const createCheckout = async (stripe: Stripe, db: IntegrationStore | undefined, args: CheckoutArgs): Promise<{ url: string; sessionId: string }> => {
   const priceId = await ensurePrice(
     stripe,
     db,

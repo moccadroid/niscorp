@@ -50,7 +50,7 @@ const setupAction: ActionDefinition = {
         else: {
           if: '$.account.account_id',
           // CONNECTED. `$.account.state` is 'ready' | 'needs_info' | 'in_review',
-          // set by the pack from what Stripe actually reports.
+          // set by the integration from what Stripe actually reports.
           then: {
             component: 'Stack',
             props: { gap: 16 },
@@ -123,7 +123,7 @@ const setupAction: ActionDefinition = {
             ],
           },
           // NOT CONNECTED: one button. Everything Stripe needs to know about the
-          // studio, this pack already knows from the assertion.
+          // studio, this integration already knows from the assertion.
           else: {
             component: 'Stack',
             props: { gap: 14 },
@@ -154,13 +154,13 @@ const setupAction: ActionDefinition = {
     account: { url: `${OWN}/account`, method: 'POST', request: {}, target: 'account', errorTarget: 'error' },
     connect: { url: `${OWN}/connect`, method: 'POST', request: {}, target: 'account', errorTarget: 'error' },
     // Mints a hosted-onboarding link for THIS studio's account, returning to
-    // lyra when the owner is done. The return address is the host's — the pack
+    // lyra when the owner is done. The return address is the host's — the integration
     // does not let a caller choose where a payment flow lands.
     onboard: { url: `${OWN}/onboarding-link`, method: 'POST', request: {}, target: 'onboarding', errorTarget: 'error' },
   },
   lifecycle: {
     // LOADING CLEARS EITHER WAY. It gates the Connect button, so tying it to
-    // success alone means any failure — the pack unreachable, the studio not
+    // success alone means any failure — the integration unreachable, the studio not
     // installed, a network blip — hands somebody a dead control and no reason.
     // A screen that cannot read its state should still let you act on it.
     mount: [
@@ -222,7 +222,7 @@ const setupAction: ActionDefinition = {
 //
 // The ledger itself (invoices, refunds, disputes) is NOT here yet. Stripe
 // compels three embedded components and this is not one of them, so it is ours
-// to build from the pack's own mirror — S4 — and it arrives with the hook
+// to build from the integration's own mirror — S4 — and it arrives with the hook
 // handlers that fill that mirror.
 const ledgerAction: ActionDefinition = {
   id: 'ext.desk.stripe.ledger',
@@ -236,7 +236,7 @@ const ledgerAction: ActionDefinition = {
       { if: '$.error', then: { component: 'Notice', props: { tone: 'alert', message: '$.error.message' } }, else: '' },
       {
         if: '$.account.account_id',
-        // THE PACK'S OWN MIRROR, not a call to Stripe on every page load (S4).
+        // THE INTEGRATION'S OWN MIRROR, not a call to Stripe on every page load (S4).
         // Lyra holds standing and never learns an invoice; this side holds the
         // invoices and never learns a member's name. Anything here disagreeing
         // with Stripe is this table being stale, and the fix is a redelivery.
@@ -395,7 +395,7 @@ export const STRIPE_BUNDLE = {
     [payAction.id]: payAction,
   },
   placements: { [ledgerAction.id]: 'hub.money', [payAction.id]: 'hub.me' },
-  // PAGES THE HOST MAY FRAME. Declared, so lyra will not open one this pack did
+  // PAGES THE HOST MAY FRAME. Declared, so lyra will not open one this integration did
   // not publish — including a path it happens to serve.
   frames: [`${OWN}/embed/onboarding`],
   settings: setupAction.id,

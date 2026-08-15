@@ -50,7 +50,7 @@ ok(
 // ── two: the secrets are read in one file ────────────────────
 //
 // An integration declares its environment and the accessor throws on anything
-// undeclared (pack.ts). In-house there is no accessor, so the equivalent claim
+// undeclared (integration.ts). In-house there is no accessor, so the equivalent claim
 // is this one: `MAIL_*` is read where mail policy lives and nowhere else.
 // READING is what this forbids, and SETTING is not reading. A file that reads
 // `MAIL_*` holds an opinion about whether we are configured to send, and there

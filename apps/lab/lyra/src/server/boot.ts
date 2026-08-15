@@ -8,7 +8,7 @@ import { buildLyra } from '@lyra/app/app';
 import { COMPONENT_NAMES } from '@lyra/ui/registry';
 // The lab's integration registrar is HARNESS — it seeds the lab world the way
 // db/seed.ts seeds rows — and lives with the rest of the harness in dev/.
-import { registerDevPacks } from '../dev/dev-packs';
+import { registerDevIntegrations } from '../dev/dev-integrations';
 import { devRuntime } from './runtime';
 import { reflexesForEveryStudio, wireTide } from './tide';
 import type { DevRuntime } from './runtime';
@@ -177,14 +177,14 @@ export const boot = async (): Promise<{ server: MossServer; runtime: DevRuntime;
 // `boot()` is shared: the dev server calls it, and so does every check (via
 // world.ts). Auto-registering integrations inside it leaked into the checks — a check
 // imports the integrations service, whose module load reads THIS app's `.env`,
-// so `LYRA_DEV_PACKS` was set by the time boot ran and the store came up
+// so `LYRA_DEV_INTEGRATIONS` was set by the time boot ran and the store came up
 // pre-registered, breaking the check's own registration.
 //
 // So it lives here, called only by the two real dev entry points (the vite
 // plugin and the standalone listener). A check never calls it. No-op unless
-// `LYRA_DEV_PACKS` is set — see dev-packs.ts.
+// `LYRA_DEV_INTEGRATIONS` is set — see dev-integrations.ts.
 export const bootDevServer = async (): Promise<Awaited<ReturnType<typeof boot>>> => {
   const booted = await boot();
-  await registerDevPacks(booted.server, booted.runtime.pool, booted.runtime.operatorKey ?? '', async () => { booted.server.refresh(); });
+  await registerDevIntegrations(booted.server, booted.runtime.pool, booted.runtime.operatorKey ?? '', async () => { booted.server.refresh(); });
   return booted;
 };

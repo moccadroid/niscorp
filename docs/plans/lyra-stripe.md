@@ -1,7 +1,7 @@
 # Lyra — payments, as an integration
 
-**Status: PARTIALLY BUILT.** The pack exists and ships
-(`apps/lab/lyra-integrations/src/packs/stripe/` — checkout, hooks, ledger,
+**Status: PARTIALLY BUILT.** The integration exists and ships
+(`apps/lab/lyra-integrations/src/integrations/stripe/` — checkout, hooks, ledger,
 onboarding, prices, store) and the trust story is done and proven by
 `integrations-check`, `perimeter-check`, `stripe-check` and `billing-check`.
 **Part 7 is the authority on what not to rebuild.** What money still cannot do
@@ -111,38 +111,38 @@ and the secret belongs to the environment. **Do not add a config field to the bu
 Stripe requires three **embedded components** (§4.1c). They are browser UI from
 `@stripe/connect-js`. Lyra validates every layout against a fixed component vocabulary
 (`app.shell.components`, set from `COMPONENT_NAMES` at `src/server/boot.ts:59-61`) and
-**refuses a bundle naming an unknown component** — a live, tested refusal. So a pack
+**refuses a bundle naming an unknown component** — a live, tested refusal. So an integration
 cannot ship a React component, and the naive fix is for lyra's kit to import
 `@stripe/connect-js`.
 
-**Do not do that.** Instead: **the pack serves the page and lyra frames it.**
+**Do not do that.** Instead: **the integration serves the page and lyra frames it.**
 
 ```
 { component: 'Frame', props: { src: 'embed/onboarding', height: '$.frameHeight' } }
    →  GET /integrations/stripe/embed/onboarding  (same origin as lyra)
    →  moss proxy: session → assertion → forwarded to <bundle.url>/embed/onboarding
-   →  the pack returns HTML that loads @stripe/connect-js and mounts the component
+   →  the integration returns HTML that loads @stripe/connect-js and mounts the component
 ```
 
 **The auth problem solves itself.** The iframe `src` is same-origin, so the browser sends
 lyra's session; the existing proxy (`packages/moss/src/server.ts:485-513`) mints the
 assertion and forwards, and it already returns the response verbatim so HTML passes.
-**No new authentication mechanism.** The frame is gated by exactly what every other pack
+**No new authentication mechanism.** The frame is gated by exactly what every other integration
 call is gated by: approved bundle, installed at this studio, real principal.
 
 **Build:**
 1. **moss** — a `frames` declaration in `BundleSchema` beside `actions`/`attachments`/
-   `placements`, holding relative paths under the pack's own prefix. Intake validates the
+   `placements`, holding relative paths under the integration's own prefix. Intake validates the
    prefix the same way it validates action endpoints (`integrations.ts:177-199`), and the
    §1.1 allow-list admits them.
 2. **lyra's kit** — one **generic** `Frame` component. Not `StripeEmbed`. It renders an
-   iframe at `/integrations/<id>/<declared path>` and knows nothing about any pack.
-3. **Theme** — lyra's tokens ride the proxy request the way scope does, so the pack's page
+   iframe at `/integrations/<id>/<declared path>` and knows nothing about any integration.
+3. **Theme** — lyra's tokens ride the proxy request the way scope does, so the integration's page
    is not visibly foreign. Stripe's components take an appearance object.
 4. **Height** — a `postMessage` resize handshake. Must not fight the mobile layout or the
    thumb bar.
 5. **CSP** — lyra permits framing its own origin; Stripe's inner frame has its own
-   `frame-ancestors` requirements. There are two nested frames: lyra → pack → Stripe.
+   `frame-ancestors` requirements. There are two nested frames: lyra → integration → Stripe.
 
 **What it costs, stated plainly:** lyra validates layouts precisely so an untrusted
 bundle cannot render arbitrary UI, and **inside a frame lyra validates nothing.** That is
@@ -150,12 +150,12 @@ a real weakening. It is bounded by same-origin, by approval, and by per-studio i
 and the alternative (lyra importing a payment provider's SDK) is worse. Make it a
 **named seam with its own check**, not an iframe that quietly appeared.
 
-**Check:** a new `frame-check.ts` — an undeclared frame path 404s; an uninstalled pack's
-frame 404s; the assertion reaches the pack; a bundle declaring a frame outside its own
+**Check:** a new `frame-check.ts` — an undeclared frame path 404s; an uninstalled integration's
+frame 404s; the assertion reaches the integration; a bundle declaring a frame outside its own
 prefix is refused at intake.
 
 **Why this is Part 1 and not Part 4:** it is the third piece of integration machinery,
-beside the proxy allow-list and the webhook route. Belts could have used it. Any pack can.
+beside the proxy allow-list and the webhook route. Belts could have used it. Any integration can.
 It is not a Stripe concession.
 
 ---
@@ -268,9 +268,9 @@ boundary must be built for Stripe's benefit, not retrofitted around belts'.**
 
 ```
 apps/lab/lyra-integrations/src/
-  serve.ts                  ← ~40 lines: create Hono, mount(PACKS), listen
-  pack.ts                   ← the contract every pack implements
-  packs/
+  serve.ts                  ← ~40 lines: create Hono, mount(INTEGRATIONS), listen
+  integration.ts                   ← the contract every integration implements
+  integrations/
     belts/
       index.ts              ← { id, bundle, mount, hooks?, env }
       store.ts              ← belts' own state. Nothing else may import it.
@@ -282,10 +282,10 @@ apps/lab/lyra-integrations/src/
       onboarding.ts · checkout.ts · ledger.ts · hooks.ts
 ```
 
-**The contract (`pack.ts`):**
+**The contract (`integration.ts`):**
 
 ```ts
-export type Pack = {
+export type Integration = {
   id: string;                                  // 'stripe' — the URL prefix AND the assertion audience
   bundle: () => Bundle;                        // served at GET /<id>/bundle
   env: readonly string[];                      // names it requires; startup fails loudly if unset
@@ -296,20 +296,20 @@ export type Pack = {
 
 **Isolation rules — enforce these, they are the point:**
 
-1. **A pack may not import another pack.** Nothing outside `packs/stripe/**` imports
-   anything inside it. Add a check that greps for cross-pack imports.
-2. **A pack owns its own store.** No shared state module. Belts' array and Stripe's
+1. **An integration may not import another integration.** Nothing outside `integrations/stripe/**` imports
+   anything inside it. Add a check that greps for cross-integration imports.
+2. **An integration owns its own store.** No shared state module. Belts' array and Stripe's
    account map never meet.
-3. **A pack never sees another pack's env.** `env` is declared; `mount` receives only
+3. **An integration never sees another integration's env.** `env` is declared; `mount` receives only
    those values. `STRIPE_SECRET` must be unreachable from belts.
-4. **The audience is the pack id**, derived — not a literal at each call site.
-   `identity(c)` inside a pack's router knows which pack it is. The current
+4. **The audience is the integration id**, derived — not a literal at each call site.
+   `identity(c)` inside an integration's router knows which integration it is. The current
    `identity(c, 'belts')` repeated nine times is exactly the bug shape where one call site
    is missed.
-5. **Routes are relative.** A pack mounts `r.post('/checkout')`, never
+5. **Routes are relative.** An integration mounts `r.post('/checkout')`, never
    `app.post('/stripe/checkout')`. The prefix is applied once, by `serve.ts`.
 6. **Hooks are a separate router** with its own middleware — no assertion verification, a
-   raw body, and a rate limit. A pack cannot accidentally put an authenticated route
+   raw body, and a rate limit. An integration cannot accidentally put an authenticated route
    under `/hook/` or an unauthenticated one outside it.
 
 **Do this as its own change**, with belts migrated onto it and `integrations-check`
@@ -326,7 +326,7 @@ POST /integrations/:id/hook/*   →   <bundle.url>/hook/*
 So Stripe's endpoint is `POST /integrations/stripe/hook/events` and belts', if it ever
 had one, would be `/integrations/belts/hook/*`. **The `:id` segment is what isolates
 them** — a signature secret, a rate limit and a failure are all per-integration, and one
-pack's webhook cannot reach another's handler.
+integration's webhook cannot reach another's handler.
 
 `/hook/` is reserved: the intake endpoint checks (`packages/moss/src/integrations.ts:187-188`)
 must refuse a bundle that declares an *action* endpoint under it, or an authenticated
@@ -483,7 +483,7 @@ or not payments ship.
 `apps/lab/lyra-integrations/.env` already holds `STRIPE_SECRET` and `STRIPE_PUBLISHABLE`
 (sandbox, full access), alongside `LYRA_VERIFY_KEY`, `LYRA_BASE` and `BELTS_KEY`.
 **Note the names differ from S3's guess** — use `STRIPE_SECRET`, not
-`STRIPE_SECRET_KEY`, and declare both in the Stripe pack's `env` list (§3.1).
+`STRIPE_SECRET_KEY`, and declare both in the Stripe integration's `env` list (§3.1).
 
 **Currency is decided: EUR.** So §2.1 is: read `plans.currency`, add
 `subscriptions.currency`, and **refuse multi-currency per studio with a CHECK** —
@@ -553,8 +553,8 @@ Stripe-hosted UI **inside** lyra's own page, styled to lyra's branding.
 - **An Account Session is the server-side grant.** `POST /v1/account_sessions` — created
   on the server for one connected account, enabling a **named list of `components`**. The
   client library exchanges it for a live session. A component not named in the session
-  cannot render. **This is the integration's job**, not lyra's: the Stripe pack creates
-  the session and lyra's screen asks the pack for one over the proxy.
+  cannot render. **This is the integration's job**, not lyra's: the Stripe integration creates
+  the session and lyra's screen asks the integration for one over the proxy.
 - Sessions are short-lived — build a refresh path, not a one-shot.
 
 **The three we are required to embed** (§4.1, because Stripe carries losses):
@@ -586,7 +586,7 @@ requirement attached to Stripe carrying the risk, not an absolute one.
 > verwenden **oder eine eigene Benutzeroberfläche erstellen**."*
 
 Payments, payouts, disputes, balances, documents, tax — build them as ordinary lyra
-actions over the pack's mirror. **S4 stands**; the earlier "revisit whether to embed the
+actions over the integration's mirror. **S4 stands**; the earlier "revisit whether to embed the
 ledger" note is withdrawn. Embed only the three that are compelled.
 
 **The lever, if the three are unacceptable:** take loss liability yourself and the mandate
@@ -602,11 +602,11 @@ one component.
 
 **Where the SDK lives:**
 
-- `@stripe/connect-js` → `apps/lab/lyra-integrations/packs/stripe/` **only**, enforced by
-  the cross-pack import check (§3.1).
+- `@stripe/connect-js` → `apps/lab/lyra-integrations/integrations/stripe/` **only**, enforced by
+  the cross-integration import check (§3.1).
 - **Lyra takes no Stripe dependency at all** — it gains the generic `Frame` component
   from §1.4 and never learns what Stripe is.
-- The pack serves `embed/onboarding`, `embed/account`, `embed/banner`; it mints the
+- The integration serves `embed/onboarding`, `embed/account`, `embed/banner`; it mints the
   Account Session server-side (`POST /v1/account_sessions`) and mounts the component in
   its own page. Sessions are short-lived — build refresh into the page, not into lyra.
 

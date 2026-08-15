@@ -11,10 +11,10 @@ try {
 
 import { Hono } from 'hono';
 import { serve } from '@hono/node-server';
-import { mountPack } from './pack';
-import { beltsPack } from './packs/belts';
-import { stripePack } from './packs/stripe';
-import { brokenPack, hookClaimPack } from './packs/fixtures';
+import { mountIntegration } from './integration';
+import { beltsIntegration } from './integrations/belts';
+import { stripeIntegration } from './integrations/stripe';
+import { brokenIntegration, hookClaimIntegration } from './integrations/fixtures';
 
 // THE INTEGRATIONS SERVICE.
 //
@@ -24,14 +24,15 @@ import { brokenPack, hookClaimPack } from './packs/fixtures';
 //
 // This file used to BE the integration: one Hono app, every route written out
 // with its prefix, the audience a literal at each call site, state in a
-// module-level array. It hosts packs now and knows nothing about any of them —
-// what a pack is lives in `pack.ts`, and what Belts is lives in `packs/belts`.
+// module-level array. It hosts integrations now and knows nothing about any of
+// them — what an integration is lives in `integration.ts`, and what Belts is
+// lives in `integrations/belts`.
 //
 // Adding one is one line in the list below.
-const PACKS = [beltsPack, stripePack, brokenPack, hookClaimPack];
+const INTEGRATIONS = [beltsIntegration, stripeIntegration, brokenIntegration, hookClaimIntegration];
 
 const app = new Hono();
-for (const pack of PACKS) mountPack(app, pack);
+for (const integration of INTEGRATIONS) mountIntegration(app, integration);
 
 // THE PORT IS AN ARGUMENT, and read lazily when it is not given.
 //

@@ -55,7 +55,7 @@ export const phrasesLocales: CacheEntry = {
 // would put the tenant back into a language fact. The FOLD ORDER lives in the
 // one consumer (`bookOverWire`): integration words first, the app's own over them, so
 // an integration can never rename a word the host already owns.
-export const phrasesPacks: CacheEntry = {
+export const phrasesIntegrations: CacheEntry = {
   fingerprint: 'phrases/integrations',
   intent: "Approved integrations' words for one language — folded under the app's own book",
   shape: [{}],

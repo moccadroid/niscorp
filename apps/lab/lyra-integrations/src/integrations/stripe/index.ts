@@ -1,4 +1,4 @@
-import type { Pack } from '../../pack';
+import type { Integration } from '../../integration';
 import { STRIPE_BUNDLE } from './bundle';
 import { accountFor, rememberAccount, storeIsDurable } from './store';
 import { accountStanding, createAccountSession, createConnectedAccount, createOnboardingLink, stripeFor } from './client';
@@ -9,11 +9,11 @@ import { handleStripeEvent } from './hooks';
 import { invoicesFor, ledgerRows } from './ledger';
 
 // ═══════════════════════════════════════════════════════════════
-// STRIPE — payments, as a pack.
+// STRIPE — payments, as an integration.
 //
 // Every route is relative and every one asks `ctx.identity(c)` with no audience
-// argument: the mounting bound this pack's id to both, so a token minted for
-// another pack on this deployment cannot be read here even by a handler that
+// argument: the mounting bound this integration's id to both, so a token minted for
+// another integration on this deployment cannot be read here even by a handler that
 // never thought about it.
 //
 // THE STUDIO IN THE ASSERTION IS THE ONLY STUDIO THIS TOUCHES. Nothing reads a
@@ -21,15 +21,15 @@ import { invoicesFor, ledgerRows } from './ledger';
 // which is what makes "connect THIS studio" unable to mean somebody else's.
 // ═══════════════════════════════════════════════════════════════
 
-export const stripePack: Pack = {
+export const stripeIntegration: Integration = {
   id: 'stripe',
-  // Named, and therefore fenced: this pack cannot read another's secret even
-  // knowing its name, and Belts cannot read STRIPE_SECRET (pack.ts).
+  // Named, and therefore fenced: this integration cannot read another's secret even
+  // knowing its name, and Belts cannot read STRIPE_SECRET (integration.ts).
   env: ['STRIPE_SECRET', 'STRIPE_PUBLISHABLE', 'STRIPE_WEBHOOK_SECRET', 'LYRA_BASE', 'STRIPE_KEY'],
   bundle: () => STRIPE_BUNDLE,
 
   mount: (r, ctx) => {
-    // SAID OUT LOUD, ONCE, AT BOOT. With no database this pack keeps connected
+    // SAID OUT LOUD, ONCE, AT BOOT. With no database this integration keeps connected
     // account ids in memory, and a restart loses the only mapping between a
     // studio and a live merchant account at Stripe. That is fine for a check
     // and unacceptable for a deployment, and the difference between those two
@@ -83,7 +83,7 @@ export const stripePack: Pack = {
     // component needs platform-side Connect config that is not in place, so it
     // renders blank; hosted onboarding needs none.
     //
-    // The return address is the HOST's, and neither this pack nor its caller
+    // The return address is the HOST's, and neither this integration nor its caller
     // chooses it — a caller-supplied return on a payment onboarding flow is an
     // open redirect that lands somebody on a page that looks like Stripe and is
     // not.
@@ -138,7 +138,7 @@ export const stripePack: Pack = {
     //
     // The membership comes from the ASSERTION, never the body: a member cannot
     // ask to pay for somebody else's membership because there is nowhere to say
-    // whose. What to charge comes from lyra over this pack's own key — the
+    // whose. What to charge comes from lyra over this integration's own key — the
     // price list is the studio's, and a payment provider does not get to have
     // an opinion about it.
     r.post('/checkout', async (c) => {
@@ -155,7 +155,7 @@ export const stripePack: Pack = {
       if (billable === undefined) return c.json({ message: 'There is nothing to pay for on this membership.' }, 409);
 
       const body = (await c.req.json().catch(() => ({}))) as { email?: unknown };
-      // The return address is the HOST's, and neither this pack nor its caller
+      // The return address is the HOST's, and neither this integration nor its caller
       // gets to choose it — a caller-supplied return on a payment flow is an
       // open redirect, and it lands somebody on a page that looks like a receipt
       // and is not.
@@ -182,14 +182,14 @@ export const stripePack: Pack = {
       }
     });
 
-    // ── THE LEDGER, FROM THIS PACK'S OWN MIRROR ────────────────
+    // ── THE LEDGER, FROM THIS INTEGRATION'S OWN MIRROR ─────────
     //
     // Read from what the webhooks recorded, not from Stripe. A screen that
     // called a vendor on every open would be slow, rate-limited and broken
     // whenever they were — and S4 puts the ledger on this side precisely so it
     // is answerable without them.
     //
-    // Scoped by the ASSERTION. Two studios install this pack and each reads its
+    // Scoped by the ASSERTION. Two studios install this integration and each reads its
     // own; there is nowhere for a caller to say whose.
     r.post('/ledger', async (c) => {
       const who = ctx.identity(c);

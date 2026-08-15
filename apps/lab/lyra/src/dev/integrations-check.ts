@@ -4,8 +4,8 @@ import { harvestDefinitions } from '@niscorp/nova/i18n';
 import type { ActionDefinition } from '@niscorp/nova';
 import { serve as listen } from '@hono/node-server';
 import { startIntegrations } from '../../../lyra-integrations/src/serve';
-import { BELTS_BUNDLE } from '../../../lyra-integrations/src/packs/belts/bundle';
-import { STRIPE_BUNDLE } from '../../../lyra-integrations/src/packs/stripe/bundle';
+import { BELTS_BUNDLE } from '../../../lyra-integrations/src/integrations/belts/bundle';
+import { STRIPE_BUNDLE } from '../../../lyra-integrations/src/integrations/stripe/bundle';
 import { PHRASE_KEYS } from '@lyra/app/phrase-keys';
 import { GERMAN } from '@lyra/db/phrases.de';
 import { CAST } from '@lyra/db/seed';
@@ -383,7 +383,7 @@ try {
 
   owner.dispatch({ type: 'ui:click', ref: 'openSettings', payload: { settings_action: 'ext.desk.belts.settings' } });
   await settle(16);
-  ok('the integration’s settings open from the store', treeOf(owner).includes('The ranks this pack grades through'), 'configuration, not a workspace');
+  ok('the integration’s settings open from the store', treeOf(owner).includes('The ranks this add-on grades through'), 'configuration, not a workspace');
 
   owner.dispatch({ type: 'ui:model', ref: 'newRank', payload: 'Coral' });
   owner.dispatch({ type: 'ui:click', ref: 'add', payload: {} });
@@ -396,7 +396,7 @@ try {
   // The screen in front of it belongs to a studio owner: the floor under a
   // integration that answers nothing usable is a sentence naming the integration, and a
   // bare `HTTP 500` reaching the glass is the defect. The integration's own words,
-  // when it manages any, always win — the throw-wrapper in pack.ts is the
+  // when it manages any, always win — the throw-wrapper in integration.ts is the
   // other half of the same contract.
   // The raw UPDATE rides no write path, so the derivations must be dropped
   // the way an install write drops them.

@@ -1,5 +1,5 @@
 import type Stripe from 'stripe';
-import type { PackEnv, PackStore } from '../../pack';
+import type { IntegrationEnv, IntegrationStore } from '../../integration';
 import { billableFor, callLyra, notifyDesk } from './lyra';
 import { recordDispute, recordInvoice, recordRefund } from './ledger';
 
@@ -31,7 +31,7 @@ const MEMORY_EVENTS = new Set<string>();
  * is the same question with a race in the middle: two deliveries arriving
  * together would both read "not seen" and both act.
  */
-const claimEvent = async (db: PackStore | undefined, event: { id: string; type: string; account?: string }): Promise<boolean> => {
+const claimEvent = async (db: IntegrationStore | undefined, event: { id: string; type: string; account?: string }): Promise<boolean> => {
   if (db === undefined) {
     if (MEMORY_EVENTS.has(event.id)) return false;
     MEMORY_EVENTS.add(event.id);
@@ -45,7 +45,7 @@ const claimEvent = async (db: PackStore | undefined, event: { id: string; type: 
   return result.rows.length > 0;
 };
 
-const settleEvent = async (db: PackStore | undefined, id: string, outcome: string, detail: string): Promise<void> => {
+const settleEvent = async (db: IntegrationStore | undefined, id: string, outcome: string, detail: string): Promise<void> => {
   if (db === undefined) return;
   await db.query(`UPDATE ${db.table('events')} SET outcome = $2, detail = $3 WHERE event_id = $1`, [id, outcome, detail.slice(0, 400)]);
 };
@@ -141,7 +141,7 @@ const periodEnd = (subscription: {
 }): number | undefined => subscription.items?.data?.[0]?.current_period_end ?? subscription.current_period_end;
 
 const assertStanding = async (
-  env: PackEnv,
+  env: IntegrationEnv,
   subscription: {
     status?: string;
     metadata?: Meta;
@@ -153,7 +153,7 @@ const assertStanding = async (
   const subscriptionId = meta.subscription_id ?? '';
   const studioId = meta.studio_id ?? '';
   if (subscriptionId === '' || studioId === '') {
-    // A subscription created outside this pack — by hand in the dashboard, or by
+    // A subscription created outside this integration — by hand in the dashboard, or by
     // an older version — has nothing to point at. Recorded and skipped rather
     // than guessed: writing a standing onto the wrong subscription is worse than
     // writing none.
@@ -176,7 +176,7 @@ const assertStanding = async (
 
 // Stripe's invoice shape → the mirror's. The metadata rides on the subscription
 // the invoice belongs to, which is where checkout stamped it.
-const mirrorInvoice = async (db: PackStore | undefined, accountId: string, invoice: Record<string, unknown>): Promise<void> => {
+const mirrorInvoice = async (db: IntegrationStore | undefined, accountId: string, invoice: Record<string, unknown>): Promise<void> => {
   const meta = (invoice['subscription_details'] as { metadata?: Meta } | undefined)?.metadata ?? (invoice['metadata'] as Meta | undefined) ?? {};
   await recordInvoice(db, {
     invoiceId: String(invoice['id'] ?? ''),
@@ -203,8 +203,8 @@ export type HookOutcome = { status: number; body: Record<string, unknown> };
  */
 export const handleStripeEvent = async (
   stripe: Stripe,
-  db: PackStore | undefined,
-  env: PackEnv,
+  db: IntegrationStore | undefined,
+  env: IntegrationEnv,
   raw: Buffer,
   signature: string,
 ): Promise<HookOutcome> => {
