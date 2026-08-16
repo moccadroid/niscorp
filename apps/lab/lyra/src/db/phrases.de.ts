@@ -329,6 +329,8 @@ export const GERMAN: Record<string, string> = {
   // Reads under the new person's name, which is the Hero's title above it.
   'is on the roll and can be booked from today.':
     'steht in der Kartei und kann ab heute gebucht werden.',
+  // The other half of the same sentence: what they became once a plan started.
+  'is a member from today.': 'ist ab heute Mitglied.',
 
   Join: 'Beitreten',
   'Join once and your place is held for every week of the block.':
@@ -484,6 +486,8 @@ export const GERMAN: Record<string, string> = {
   'Put it on': 'Aktivieren',
   'Put somebody on staff': 'Jemanden ins Team aufnehmen',
   'Put them on': 'Aufnehmen',
+  'Put them on something now, or leave it — they are on the roll either way.':
+    'Nimm sie jetzt in einen Tarif auf oder lass es — in der Kartei stehen sie so oder so.',
 
   'Sent in your studio’s name. Every message is kept in the outbox, so you can see what went and what did not.':
     'Wird im Namen Ihres Studios gesendet. Jede Nachricht bleibt im Postausgang, damit Sie sehen, was gesendet wurde und was nicht.',
@@ -537,6 +541,7 @@ export const GERMAN: Record<string, string> = {
     'Nächste zuerst — wer noch ansprechbar ist, steht oben.',
   Staff: 'Team',
   Standing: 'Status',
+  'Start it': 'Starten',
   'Start plan': 'Tarif starten',
   Starts: 'Beginnt',
   'Starts at': 'Beginnt um',
@@ -561,6 +566,7 @@ export const GERMAN: Record<string, string> = {
   'The four roles the charter defines. Nothing here can invent a fifth.':
     'Die vier Rollen, die die Charta definiert. Hier lässt sich keine fünfte erfinden.',
   'The instant this reacts to.': 'Der Moment, auf den das reagiert.',
+  'The studio bills them': 'Das Studio stellt in Rechnung',
   'The kinds of class this studio teaches — Vinyasa, Fundamentals, Competition. Each carries a colour the timetable uses.':
     'Die Kursarten, die dieses Studio anbietet — Vinyasa, Fundamentals, Competition. Jede trägt eine Farbe, die der Stundenplan verwendet.',
   'The look every member and every member of staff sees.':

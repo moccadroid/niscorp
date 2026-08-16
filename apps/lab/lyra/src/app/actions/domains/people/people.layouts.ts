@@ -484,7 +484,18 @@ export const peopleSignupLayout: LayoutNode = page([
       component: 'Stack',
       props: { gap: 22 },
       children: [
-        { component: 'Hero', props: { title: '$.signedUpName', lead: 'is on the roll and can be booked from today.' } },
+        {
+          component: 'Hero',
+          props: {
+            title: '$.signedUpName',
+            // WHAT THEY ARE, said out loud. Standing is derived — the moment an
+            // active subscription exists they read as a member on every screen —
+            // and that was completely invisible: the app knew and never told
+            // anybody. Two sentences, because "on the roll" and "a member" are
+            // different states and the desk has to be able to tell them apart.
+            lead: '$.standingLine',
+          },
+        },
         {
           component: 'Card',
           props: { pad: 22 },
@@ -492,6 +503,54 @@ export const peopleSignupLayout: LayoutNode = page([
             component: 'Stack',
             props: { gap: 16, maxWidth: 480 },
             children: [
+              // ── AND WHAT ARE THEY ON? ────────────────────────
+              //
+              // The step that did not exist. Somebody standing at a desk with a
+              // new customer had to add them, find them again on the roll, open
+              // their record, and start a plan from there — three screens for
+              // one errand, and the fourth thing they needed (a joining fee) had
+              // nowhere to happen at all.
+              //
+              // Offered here, once, while the person is still in front of them.
+              // Skipping it is a real answer: a prospect who has not decided is
+              // exactly who the roll's "holding nothing yet" is for.
+              {
+                if: '$.onAPlan',
+                then: '',
+                else: {
+                  component: 'Stack',
+                  props: { gap: 12 },
+                  children: [
+                    { component: 'Text', props: { size: 'sm', color: 'mute' }, children: 'Put them on something now, or leave it — they are on the roll either way.' },
+                    // The error Notice used to live only in the form, which is
+                    // the OTHER branch of this screen — so a failure here had
+                    // nowhere to appear and the button simply did nothing.
+                    { if: '$.error', then: { component: 'Notice', props: { tone: 'alert', message: '$.error' } }, else: '' },
+                    {
+                      component: 'Row',
+                      props: { gap: 10, align: 'end', wrap: true },
+                      children: [
+                        { component: 'Select', props: { label: 'Plan', options: '$.planOptions', placeholder: 'Choose a plan' }, ref: 'signupOffering', model: '$.signupOfferingId' },
+                        {
+                          component: 'Select',
+                          props: {
+                            label: 'Paid',
+                            options: [
+                              { value: 'manual', label: 'The studio bills them' },
+                              { value: 'stripe', label: 'Card, online' },
+                              { value: 'comp', label: 'Complimentary' },
+                              { value: 'free', label: 'Free' },
+                            ],
+                          },
+                          ref: 'signupPaidVia',
+                          model: '$.signupPaidVia',
+                        },
+                        { component: 'Button', props: { variant: 'solid', label: 'Start it', disabled: '$.starting' }, ref: 'startAtSignup' },
+                      ],
+                    },
+                  ],
+                },
+              },
               {
                 component: 'Row',
                 props: { gap: 10, wrap: true },

@@ -142,4 +142,55 @@ ok('...creating NO new person', afterPeople === beforePeople, `${beforePeople} b
 ok('...and NO new anchor', afterAnchors === beforeAnchors, 'the same human who asked, kept forever');
 ok('...and where they came from survives', (await count("SELECT count(*) n FROM studio_people WHERE person_id = 'p_priya' AND source = 'website'")) === 1, 'the question the old dead column existed for');
 
+// ── ONE ERRAND, ONE SCREEN ───────────────────────────────────
+//
+// Every piece of signing somebody up existed, in a different place: write the
+// person down here, find them again on the roll, open their record, start a
+// plan. Three screens for one errand, with somebody standing at the desk
+// waiting — and nothing ever said "they are a member now", though the app knew
+// the moment the row existed.
+//
+// The same two mutations as before. What changed is that they can be reached in
+// one order, in one place, and that the ending is said out loud.
+// THE MANAGER, and the reason is the charter rather than the screen. The front
+// desk writes people down and sells passes; it deliberately holds no
+// `subscriptions.write.insert`, because with `offerings.read` beside it that IS
+// the revenue query. So the plan step is offered on this screen and refused for
+// somebody who may not take it — the same refusal the record's own Plan section
+// gives, drawn from data rather than from a capability check.
+const front2 = await login(CAST.lumen.owner);
+await settle();
+front2.dispatch({ type: 'ui:click', ref: 'nav', payload: 'people.signup' });
+await settle(8);
+front2.dispatch({ type: 'ui:model', ref: 'newName', payload: 'Wanda Fischer' });
+front2.dispatch({ type: 'ui:model', ref: 'newEmail', payload: 'wanda.fischer@example.com' });
+await settle(6);
+front2.dispatch({ type: 'ui:click', ref: 'create' });
+await settle(12);
+
+// ON THE ROLL, NOT A MEMBER — and the sentence says which. Standing derives from
+// what somebody holds, so flattering this would be lying about a prospect.
+ok('somebody written down is on the roll', treeOf(front2).includes('is on the roll'), 'a person, holding nothing — which is a real state and the roll has a lens for it');
+
+const wanda = await runtime.db.query<{ id: string }>("SELECT id FROM people WHERE email = 'wanda.fischer@example.com'");
+ok('...and exists once', wanda.rows.length === 1, `${wanda.rows.length} row`);
+
+// AND THE STEP THAT DID NOT EXIST: onto a plan, without leaving the screen.
+const anyPlan = await runtime.db.query<{ id: string }>("SELECT id FROM offerings WHERE studio_id = 'st_lumen' AND kind = 'recurring' AND active LIMIT 1");
+front2.dispatch({ type: 'ui:model', ref: 'signupOffering', payload: anyPlan.rows[0]?.id });
+front2.dispatch({ type: 'ui:model', ref: 'signupPaidVia', payload: 'manual' });
+await settle(6);
+front2.dispatch({ type: 'ui:click', ref: 'startAtSignup' });
+await settle(12);
+
+ok(
+  'and they can be put on a plan without leaving it',
+  (await count("SELECT count(*) n FROM subscriptions s JOIN people p ON p.id = s.person_id WHERE p.email = 'wanda.fischer@example.com'")) === 1,
+  'the same mutation the record replays — one write, two places it is reachable from',
+);
+// THE ENDING, SAID. The row is what makes them a member and every screen already
+// derived it; the person who did it was the only one not told.
+ok('...and the screen says what they now are', treeOf(front2).includes('is a member from today'), 'standing is derived, and it was invisible');
+
 report('a desk writes people down once, and joining is a subscription starting on the same human — no retype, no category flip.');
+

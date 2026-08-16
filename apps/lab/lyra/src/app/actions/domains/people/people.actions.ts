@@ -13,6 +13,8 @@ import {
   endSubscriptionPrism,
   enrolPrism,
   enrollPrism,
+  findSignedUpPrism,
+  startAtSignupPrism,
   giveNoticePrism,
   memberEnrolmentsPrism,
   memberSubscriptionPrism,
@@ -500,6 +502,14 @@ export const peopleSignupAction: ActionDefinition = {
   title: 'New person',
   data: {
     newName: '',
+    signedUpEmail: '',
+    signedUpRows: [],
+    standingLine: '',
+    onAPlan: false,
+    planOptions: [],
+    signupOfferingId: '',
+    signupPaidVia: 'manual',
+    starting: false,
     newEmail: '',
     newPhone: '',
     newTrialEndsOn: '',
@@ -516,7 +526,13 @@ export const peopleSignupAction: ActionDefinition = {
   // the person and anchors them to the studio in a single transaction. Signing
   // up somebody already on the roll lands on the same done screen ("is on the
   // roll") without minting a duplicate — the DB arbitrates, not a lookup race.
-  endpoints: { create: { url: '/api/member/vex', method: 'POST', request: enrollPrism, errorTarget: 'error' } },
+  endpoints: {
+    create: { url: '/api/member/vex', method: 'POST', request: enrollPrism, errorTarget: 'error' },
+    findSignedUp: { url: '/api/member/vex', method: 'POST', request: findSignedUpPrism, target: 'signedUpRows', errorTarget: 'error' },
+    plans: { url: '/api/member/vex', method: 'POST', request: planOptionsPrism, target: 'planOptions' },
+    startPlan: { url: '/api/member/vex', method: 'POST', request: startAtSignupPrism, errorTarget: 'error' },
+  },
+  lifecycle: { mount: [{ call: 'plans' }] },
   triggers: [
     // The first trigger writes the value; the SECOND re-answers "may this be
     // submitted yet". Two triggers, not two steps: buffered sets in one
@@ -540,6 +556,16 @@ export const peopleSignupAction: ActionDefinition = {
           onSuccess: [
             { set: 'saving', value: false },
             { set: 'signedUpName', value: '$.newName' },
+            // CAPTURED BEFORE THE FIELDS ARE CLEARED, like the name beside it:
+            // the steps run in order, and reading it afterwards would search for
+            // an empty string.
+            { set: 'signedUpEmail', value: '$.newEmail' },
+            // ON THE ROLL, not a member — and the difference is the whole point
+            // of saying it. Standing is derived from what somebody HOLDS, so
+            // until a plan starts they are a prospect, and the sentence should
+            // not flatter the situation.
+            { set: 'standingLine', value: 'is on the roll and can be booked from today.' },
+            { set: 'onAPlan', value: false },
             { set: 'done', value: true },
             { set: 'newName', value: '' },
             { set: 'newEmail', value: '' },
@@ -551,7 +577,45 @@ export const peopleSignupAction: ActionDefinition = {
         },
       ],
     },
-    { event: 'ui:click', ref: 'again', do: [{ set: 'done', value: false }, { set: 'error', value: '' }] },
+    {
+      // WHO WAS JUST WRITTEN DOWN IS LOOKED UP WHEN A PLAN IS CHOSEN, one beat
+      // before it is needed. Not on the click, and not chained onto the signup:
+      // buffered steps in one trigger all resolve against the same pre-write
+      // snapshot (see the two triggers above), and an `emit` is dispatched in
+      // that same flush -- so a call waiting on the answer would read the field
+      // as it was before the answer landed.
+      //
+      // Asked at all because `people/enroll` is a mutation ARRAY -- ensure the
+      // human, then anchor them -- and what an endpoint target holds after one
+      // is not a row shape a prism can walk. Asking the roll uses a read that
+      // already exists, and answers the same way whether the person was new or
+      // already known, which is the case `people/enroll` exists to make
+      // identical.
+      event: 'ui:model',
+      ref: 'signupOffering',
+      do: [{ set: 'signupOfferingId', value: '@event.payload' }, { call: 'findSignedUp' }],
+    },
+    {
+      event: 'ui:click',
+      ref: 'startAtSignup',
+      do: [
+        { set: 'error', value: '' },
+        { set: 'starting', value: true },
+        {
+          call: 'startPlan',
+          onSuccess: [
+            { set: 'starting', value: false },
+            { set: 'onAPlan', value: true },
+            // THE ENDING, SAID. The moment that row exists they read as a member
+            // everywhere -- and nothing ever told the person who did it.
+            { set: 'standingLine', value: 'is a member from today.' },
+            { emit: { channel: 'members-changed' } },
+          ],
+          onError: [{ set: 'starting', value: false }],
+        },
+      ],
+    },
+    { event: 'ui:click', ref: 'again', do: [{ set: 'done', value: false }, { set: 'onAPlan', value: false }, { set: 'signupOfferingId', value: '' }, { set: 'error', value: '' }] },
   ],
 };
 

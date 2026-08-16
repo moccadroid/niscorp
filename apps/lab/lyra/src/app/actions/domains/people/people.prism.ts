@@ -114,6 +114,42 @@ export const enrollPrism = {
   },
 };
 
+// WHO WAS JUST WRITTEN DOWN, found by the address that wrote them.
+//
+// Not read off the write's own answer: `people/enroll` is a mutation ARRAY —
+// ensure the human, then anchor them — and what an endpoint target holds after
+// one is not the row shape a prism can walk. Asking the roll is one call, uses
+// a read that already exists, and gives the same answer whether the person was
+// new or already known, which is the case `people/enroll` exists to make
+// identical.
+export const findSignedUpPrism = {
+  fingerprint: peopleList.fingerprint,
+  context: {
+    q: { $join: { parts: ['%', { $ref: '$.signedUpEmail' }, '%'], sep: '' } },
+    // The whole roll, in its default order: somebody just written down holds
+    // nothing yet, so a narrowing lens would answer nobody.
+    lens: 'everyone',
+    holding: 'any',
+    sortBy: 'people.name',
+    sortDir: 'asc',
+  },
+};
+
+// Putting them onto a plan without leaving the screen. The SAME mutation the
+// record replays — one write, two places it can be reached from.
+// The id is walked out of the answer HERE, and that is not a style choice: a
+// request prism is evaluated and a trigger's `set` is not (see the top of this
+// file), so lifting the id into a field first would store the expression and
+// then bind the expression.
+export const startAtSignupPrism = {
+  fingerprint: subscriptionStart.fingerprint,
+  context: {
+    personId: { $ref: '$.signedUpRows[0].person_id' },
+    offeringId: { $ref: '$.signupOfferingId' },
+    paidVia: { $ref: '$.signupPaidVia' },
+  },
+};
+
 export const personUpdatePrism = {
   fingerprint: personAnchorUpdate.fingerprint,
   context: {
