@@ -51,9 +51,8 @@ export const plansAction: ActionDefinition = {
               joiningFeeId: '@event.payload.joining_fee_id',
               // A row that exists has a name, so Save is live from the start.
               blocked: false,
-              // Which way out this row gets, and the sentence explaining it.
+              // Which way out this row gets, and the sentence beside it.
               planHeld: '@event.payload.held_count',
-              planHeldLine: '@event.payload.held_display',
             },
           },
         },

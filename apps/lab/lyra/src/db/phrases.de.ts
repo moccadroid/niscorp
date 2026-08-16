@@ -201,7 +201,7 @@ export const GERMAN: Record<string, string> = {
   'Everyone the studio deals with, filtered by relationship.':
     'Alle, mit denen das Studio zu tun hat, nach Beziehung gefiltert.',
   'Everything on sale — plans and passes. Retiring one keeps everybody already paying for it.':
-    'Alles im Verkauf — Tarife und Blockkarten. Ein eingestellter Tarif bleibt für alle bestehen, die ihn schon zahlen.',
+    'Alles im Verkauf — Tarife und Blockkarten. Ein Tarif, den du nicht mehr anbietest, bleibt für alle bestehen, die ihn schon zahlen.',
   'Everything on the timetable, and the courses you can join.':
     'Alles im Stundenplan, und die Kursblöcke, denen du beitreten kannst.',
   'Everything that runs — weekly classes and bounded courses, in one list.':
@@ -209,7 +209,7 @@ export const GERMAN: Record<string, string> = {
   'Everything this studio runs. A class repeats every week; a course runs between two dates for a price. The calendar is generated from both.':
     'Alles, was dieses Studio anbietet. Ein Kurs wiederholt sich wöchentlich; ein Kursblock läuft zwischen zwei Terminen zu einem Preis. Der Kalender wird aus beidem erzeugt.',
   'Everything this studio sells — plans and passes. Retiring one keeps everybody already on it.':
-    'Alles, was dieses Studio verkauft — Tarife und Blockkarten. Ein eingestellter Tarif bleibt für alle bestehen, die ihn schon haben.',
+    'Alles, was dieses Studio verkauft — Tarife und Blockkarten. Ein Tarif, den du nicht mehr anbietest, bleibt für alle bestehen, die ihn schon haben.',
   'Everything you are booked into.': 'Alles, wofür du gebucht bist.',
   'Expected monthly': 'Erwartet pro Monat',
 
@@ -250,8 +250,8 @@ export const GERMAN: Record<string, string> = {
   'Colours and words for now. Studio-specific layouts are coming.': 'Farben und Sprache vorerst. Studio-eigene Layouts kommen noch.',
   'Course blocks': 'Kursblöcke',
   'Everything a member can pay for.': 'Alles, wofür ein Mitglied zahlen kann.',
-  'Everything a member can pay for. Retiring one keeps everybody already on it.': 'Alles, wofür ein Mitglied zahlen kann. Ein eingestelltes Angebot bleibt für alle bestehen, die es schon haben.',
-  'Memberships, class passes, drop-ins and one-offs. Retiring one keeps everybody already on it.': 'Mitgliedschaften, Blockkarten, Einzelstunden und Einzelposten. Ein eingestelltes Angebot bleibt für alle bestehen, die es schon haben.',
+  'Everything a member can pay for. Retiring one keeps everybody already on it.': 'Alles, wofür ein Mitglied zahlen kann. Was du nicht mehr anbietest, bleibt für alle bestehen, die es schon haben.',
+  'Memberships, class passes, drop-ins and one-offs. Retiring one keeps everybody already on it.': 'Mitgliedschaften, Blockkarten, Einzelstunden und Einzelposten. Was du nicht mehr anbietest, bleibt für alle bestehen, die es schon haben.',
   'No course blocks. Add one under Schedule → Classes.': 'Keine Kursblöcke. Leg einen unter Plan → Kurse an.',
   Offers: 'Angebote',
   Selling: 'Verkauf',
@@ -279,11 +279,9 @@ export const GERMAN: Record<string, string> = {
   // stopped selling; this is for the row that was never one.
   Delete: 'Löschen',
   'Nobody has ever taken this — deleting it removes it for good.':
-    'Das hat nie jemand genommen — löschen entfernt es endgültig.',
-  'One person holds this. Retiring keeps them on it.':
-    'Eine Person hat das. Beim Einstellen behält sie es.',
-  '{n} people hold this. Retiring keeps them on it.':
-    '{n} Personen haben das. Beim Einstellen behalten sie es.',
+    'Das hat noch nie jemand gekauft — Löschen entfernt es endgültig.',
+  'Somebody is already on this. Retiring keeps everybody who has it.':
+    'Das nutzt bereits jemand. Wer es hat, behält es, auch wenn du es nicht mehr anbietest.',
   'Decides what a payment provider asks you for. Hard to change once an account exists, so it is worth getting right now.': 'Bestimmt, was ein Zahlungsanbieter von dir verlangt. Nach dem Anlegen eines Kontos kaum noch änderbar — jetzt lohnt es sich, es richtig zu setzen.',
   'What kind of business this is': 'Um welche Art von Unternehmen es sich handelt',
   'A one-off — sold once, grants nothing': 'Ein Einzelposten — einmal verkauft, berechtigt zu nichts',
@@ -523,7 +521,12 @@ export const GERMAN: Record<string, string> = {
   Reports: 'Berichte',
   Resume: 'Fortsetzen',
   Retention: 'Bindung',
-  Retire: 'Einstellen',
+  // NOT 'Einstellen'. That word means to HIRE somebody before it means to
+  // discontinue a product, it sits next to a person's name on half these
+  // screens, and this app already spells Settings 'Einstellungen'. Said as the
+  // exact counterpart of 'Wieder anbieten', which is the control it toggles
+  // with.
+  Retire: 'Nicht mehr anbieten',
   Role: 'Rolle',
   'Role changed. Their application has already adopted it.':
     'Rolle geändert. Die Anwendung hat sie bereits übernommen.',
@@ -659,7 +662,7 @@ export const GERMAN: Record<string, string> = {
   'What kind of class this is. The type carries the colour the timetable uses.':
     'Welche Kursart das ist. Die Art trägt die Farbe, die der Stundenplan verwendet.',
   'What people are actually on — and why a retired plan keeps its subscribers.':
-    'Was tatsächlich genutzt wird — und warum ein eingestellter Tarif seine Mitglieder behält.',
+    'Was tatsächlich genutzt wird — und warum ein Tarif, den du nicht mehr anbietest, seine Mitglieder behält.',
   'Every message the automations have sent, and every one that did not go — with the reason beside it.':
     'Jede Nachricht, die die Automatisierungen gesendet haben, und jede, die nicht ankam — mit dem Grund daneben.',
   'What the desk has written down. Members never see this.':
@@ -812,7 +815,9 @@ export const GERMAN: Record<string, string> = {
   On: 'Aktiv',
   'One-off': 'Einmalig',
   Refunded: 'Erstattet',
-  Retired: 'Eingestellt',
+  // One word for two screens: a price withdrawn from the list, and a weekly
+  // class withdrawn from the timetable. 'Eingestellt' read as 'hired' on both.
+  Retired: 'Zurückgezogen',
   'Rolling — cancel any time': 'Laufend — jederzeit kündbar',
   Running: 'Läuft',
   Saturday: 'Samstag',

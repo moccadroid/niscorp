@@ -490,7 +490,7 @@ export const offeringsOnSale: CacheEntry = {
 export const offeringsList: CacheEntry = {
   fingerprint: 'offerings/list',
   intent: 'Everything this studio sells — plans and passes, retired ones last',
-  shape: [{ offering_id: '', name: '', kind: '', kind_label: '', price_cents: 0, price_display: '', interval: '', interval_count: 0, interval_display: '', class_allowance: 0, allowance_display: '', active: false, state_label: '', state_tone: '', minimum_term_months: 0, notice_days: 0, credits: 0, valid_days: 0, joining_fee_id: '', term_display: '', held_count: 0, held_display: '' }],
+  shape: [{ offering_id: '', name: '', kind: '', kind_label: '', price_cents: 0, price_display: '', interval: '', interval_count: 0, interval_display: '', class_allowance: 0, allowance_display: '', active: false, state_label: '', state_tone: '', minimum_term_months: 0, notice_days: 0, credits: 0, valid_days: 0, joining_fee_id: '', term_display: '', held_count: 0 }],
   dsl: {
     from: ['offerings'],
     fields: [{ field: 'offerings.id', as: 'offering_id' }, 'offerings.name', 'offerings.kind', 'offerings.price_cents', 'offerings.currency', 'offerings.interval', 'offerings.interval_count', 'offerings.class_allowance', 'offerings.active', 'offerings.minimum_term_months', 'offerings.notice_days', 'offerings.credits', 'offerings.valid_days', 'offerings.joining_fee_id', 'offerings.held_count'],
@@ -569,15 +569,18 @@ export const offeringsList: CacheEntry = {
         // should be able to delete a typo rather than retiring it and reading it
         // forever. Travels with the row because the form opens FROM the row.
         held_count: row('held_count'),
-        held_display: {
-          $case: {
-            branches: [
-              { when: { $eq: [row('held_count'), 0] }, then: 'Nobody has ever taken this — deleting it removes it for good.' },
-              { when: { $eq: [row('held_count'), 1] }, then: 'One person holds this. Retiring keeps them on it.' },
-            ],
-            else: pattern('{n} people hold this. Retiring keeps them on it.', { n: row('held_count') }),
-          },
-        },
+        // A NUMBER, NOT A SENTENCE. This carried the whole line at first, built
+        // with a pattern — and a pattern is an object the phrase book resolves
+        // at a _display position. Copied into an action's plain data field and
+        // drawn as text it stringified, so every offering with two holders or
+        // more said "[object Object]" to its owner.
+        //
+        // The words moved to the layout, where prose belongs and where a
+        // translator can find them — and they dropped the count, because a
+        // sentence carrying a number needs one phrasing for one holder and
+        // another for several, and neither the count nor the plural was worth
+        // what saying them cost. What the owner needs to know is that somebody
+        // is on it. The number, if it is ever wanted, is right here.
         // And the terms as a phrase, because "6 months · 60 days notice" is what
         // a studio is selling and a price list that omits it is not a price list.
         term_display: {

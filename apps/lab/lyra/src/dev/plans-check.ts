@@ -1,6 +1,6 @@
 // Run: pnpm --filter lyra exec tsx src/dev/plans-check.ts
 import { CAST } from '@lyra/db/seed';
-import { asPrincipal, login, ok, report, runtime, settle, treeOf } from './world';
+import { asPrincipal, login, ok, report, runtime, servedTo, settle, treeOf } from './world';
 
 const count = async (sql: string, params: unknown[] = []): Promise<number> => {
   const result = await runtime.db.query<{ n: number }>(sql, params);
@@ -387,7 +387,27 @@ manager.dispatch({ type: 'ui:click', ref: 'edit', payload: await rowFor('Unlimit
 await settle(8);
 const heldOpen = treeOf(manager);
 ok('a row somebody holds offers Retire, not Delete', heldOpen.includes('"label":"Retire"') && !heldOpen.includes('"label":"Delete"'));
-ok('...counting them out loud', heldOpen.includes('people hold this'), 'the number is the reason, so the screen says the number');
+ok('...and says why', heldOpen.includes('Somebody is already on this'), 'a danger button with no sentence beside it makes somebody guess');
+
+// AND IT SAYS IT IN GERMAN, which is the half the English tree cannot see.
+//
+// This sentence shipped reading "Beim Einstellen behält sie es" — einstellen is
+// to HIRE somebody before it is to discontinue anything, and this app already
+// spells Settings "Einstellungen". Its plural rendered "[object Object]",
+// because the line was assembled as a phrase-book pattern in the mapping and
+// then copied into a plain data field. Both are invisible to a check reading
+// the source language, so this one reads what the owner is actually served.
+const germanSheet = await servedTo(CAST.lumen.owner);
+ok(
+  '...in German, on the wire, in words that mean what they say',
+  germanSheet.includes('Nicht mehr anbieten') && !germanSheet.includes('Einstellen'),
+  'the button is the counterpart of "Wieder anbieten", not the word for hiring somebody',
+);
+ok(
+  '...and the sentence beside it is a sentence',
+  germanSheet.includes('Das nutzt bereits jemand') && !germanSheet.includes('[object Object]'),
+  'a pattern copied out of a _display field stringifies, and only a rendered German screen shows it',
+);
 
 // THE BUTTON IS A HINT; THE DATABASE IS THE ANSWER. Clicked anyway, past a
 // control this screen did not draw — because a count read a moment ago is a

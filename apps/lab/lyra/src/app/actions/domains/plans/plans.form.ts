@@ -230,11 +230,30 @@ const planFormLayout: LayoutNode = {
         },
       ],
     },
-    // WHAT EITHER BUTTON WILL DO, in the words the list already computed. A
-    // danger button with no sentence beside it makes somebody guess whether
-    // they are about to take a price off the list or take it away from the
-    // people paying it.
-    { if: '$.planId', then: { component: 'Text', props: { size: 'sm', color: 'mute' }, children: '$.planHeldLine' }, else: '' },
+    // WHAT EITHER BUTTON WILL DO. A danger button with no sentence beside it
+    // makes somebody guess whether they are about to take a price off the list
+    // or take it away from the people paying it.
+    //
+    // THE WORDS LIVE HERE, and the query answers only the number they turn on.
+    // They used to be assembled in the mapping, which put a phrase-book pattern
+    // into a plain data field: every offering with two holders or more said
+    // "[object Object]" to its owner. Prose in a layout is also prose a
+    // translator can find.
+    //
+    // And it says SOMEBODY rather than how many, which is the whole reason this
+    // now fits in two strings: a sentence carrying a count needs one phrasing
+    // for one holder and another for several, in every language it is ever
+    // written in. What the owner has to know here is that this is not a mistake
+    // they can delete.
+    {
+      if: '$.planId',
+      then: {
+        if: '$.planHeld',
+        then: { component: 'Text', props: { size: 'sm', color: 'mute' }, children: 'Somebody is already on this. Retiring keeps everybody who has it.' },
+        else: { component: 'Text', props: { size: 'sm', color: 'mute' }, children: 'Nobody has ever taken this — deleting it removes it for good.' },
+      },
+      else: '',
+    },
   ],
 };
 
@@ -269,11 +288,10 @@ export const planFormAction: ActionDefinition = {
     oneOffOptions: [],
     // Nothing is typed yet, so nothing can be saved yet.
     blocked: true,
-    // How many things hold this, and the sentence saying so. Zero is what makes
-    // the row deletable; the create case is zero because it does not exist yet,
-    // and the Delete button is behind `planId` anyway.
+    // How many things hold this. Zero is what makes the row deletable; the
+    // create case is zero because it does not exist yet, and the Delete button
+    // is behind `planId` anyway.
     planHeld: 0,
-    planHeldLine: '',
     saving: false,
     error: '',
   },
@@ -320,7 +338,6 @@ export const planFormInputSchema = z.toJSONSchema(
     validDays: z.union([z.string(), z.number()]).optional(),
     joiningFeeId: z.string().optional().describe('Another offering, of kind one_off, charged once when somebody joins.'),
     planHeld: z.number().optional().describe('How many subscriptions, passes, purchases and plans point at this. Zero means it was never a product and can be deleted.'),
-    planHeldLine: z.string().optional(),
     blocked: z.boolean().optional(),
   }),
 );

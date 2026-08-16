@@ -42,7 +42,10 @@ export const plansLayout: LayoutNode = page([
           { label: 'Price', px: 120, align: 'right', sortable: 'offerings.price_cents', cell: { kind: 'text', key: 'price_display', color: 'ink' } },
           { label: 'Billed', px: 96, sortable: 'offerings.interval', cell: { kind: 'text', key: 'interval_display' } },
           { label: 'Terms', px: 150, cell: { kind: 'text', key: 'term_display', color: 'mute' } },
-          { label: '', px: 104, align: 'right', cell: { kind: 'badge', key: 'state_label', toneKey: 'state_tone' } },
+          // Wide enough for the German, which is what the badge actually says
+          // for most of this app's users: 'Zurückgezogen' is half again as long
+          // as 'Retired', and a column sized to the English clips it.
+          { label: '', px: 132, align: 'right', cell: { kind: 'badge', key: 'state_label', toneKey: 'state_tone' } },
         ],
       },
     },
