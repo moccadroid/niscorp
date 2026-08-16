@@ -6,9 +6,13 @@ const row = (name: string) => ({ $get: { from: { $var: 'r' }, path: [name] } });
 export const coursesList: CacheEntry = {
   fingerprint: 'courses/list',
   intent: 'The courses this studio runs, with how full each one is',
-  shape: [{ course_id: '', name: '', blurb: '', program_name: '', tone: '', dates_display: '', price_display: '', places_display: '', full: false, active: false, starts_on: '', ends_on: '', capacity: 0, price_cents: 0, program_id: '' }],
+  shape: [{ course_id: '', name: '', blurb: '', program_name: '', tone: '', dates_display: '', price_display: '', places_display: '', full: false, active: false, starts_on: '', ends_on: '', capacity: 0, price_cents: 0, offering_id: '', program_id: '' }],
   dsl: {
-    from: ['courses', 'programs'],
+    // THE PRICE COMES FROM THE CATALOGUE, not from a column here — a block is a
+    // dated thing with a roster, and what it costs is an offerings row like
+    // every other price in the app. One join, and one answer to "what can
+    // somebody pay for at this studio".
+    from: ['courses', 'programs', 'offerings'],
     fields: [
       { field: 'courses.id', as: 'course_id' },
       'courses.name',
@@ -17,8 +21,9 @@ export const coursesList: CacheEntry = {
       'courses.ends_on',
       'courses.capacity',
       'courses.enrolled_count',
-      'courses.price_cents',
-      'courses.currency',
+      'courses.offering_id',
+      { field: 'offerings.price_cents', as: 'price_cents' },
+      'offerings.currency',
       'courses.active',
       'courses.program_id',
       { field: 'programs.name', as: 'program_name' },
@@ -41,6 +46,9 @@ export const coursesList: CacheEntry = {
         ends_on: row('ends_on'),
         capacity: row('capacity'),
         price_cents: row('price_cents'),
+        // Carried so the form can round-trip the price back onto the row that
+        // holds it — the block names its price, and Save writes both.
+        offering_id: row('offering_id'),
         active: row('active'),
         dates_display: { $join: { parts: [dateText(row('starts_on')), ' – ', dateText(row('ends_on'))], sep: '' } },
         price_display: priceText(row('price_cents'), row('currency')),
@@ -91,9 +99,15 @@ export const courseRoster: CacheEntry = {
 
 // ─── running a course ────────────────────────────────────────
 
+// THE BLOCK, POINTING AT ITS PRICE. The price is written first, by
+// `offerings/create` — the same write every other price on the list goes
+// through — and its id arrives here. Two calls rather than one artifact for the
+// reason `people/enroll` and `childCreate` document: the statements of a
+// multi-statement write are compiled together, and the second needs an id the
+// first has not minted yet.
 export const courseCreate: MutationEntry = {
   fingerprint: 'courses/create',
-  intent: 'Put a course on sale',
+  intent: 'Put a course on sale, against a price already in the catalogue',
   mutation: {
     op: 'insert',
     table: 'courses',
@@ -104,28 +118,42 @@ export const courseCreate: MutationEntry = {
       starts_on: { $context: 'startsOn' },
       ends_on: { $context: 'endsOn' },
       capacity: { $context: 'capacity' },
-      price_cents: { $context: 'priceCents' },
+      offering_id: { $context: 'offeringId' },
     },
   },
 };
 
+// EDITING ONE IS TWO STATEMENTS AND ONE ARTIFACT, because both ids are already
+// known — unlike the create above. An array, so a save that renames the block
+// but fails to reprice it is not a state this app can be left in.
+//
+// The NAME is written to both, deliberately: the block's name is what a roster
+// prints and the catalogue's name is what a receipt prints, and a studio that
+// renamed one and not the other would have two names for one thing.
 export const courseUpdate: MutationEntry = {
   fingerprint: 'courses/update',
-  intent: 'Change a course',
-  mutation: {
-    op: 'update',
-    table: 'courses',
-    set: {
-      program_id: { $context: 'programId' },
-      name: { $context: 'name' },
-      blurb: { $context: 'blurb' },
-      starts_on: { $context: 'startsOn' },
-      ends_on: { $context: 'endsOn' },
-      capacity: { $context: 'capacity' },
-      price_cents: { $context: 'priceCents' },
+  intent: 'Change a course and the price it is sold at',
+  mutation: [
+    {
+      op: 'update',
+      table: 'offerings',
+      set: { name: { $context: 'name' }, price_cents: { $context: 'priceCents' } },
+      where: { eq: ['offerings.id', { $context: 'offeringId' }] },
     },
-    where: { eq: ['courses.id', { $context: 'courseId' }] },
-  },
+    {
+      op: 'update',
+      table: 'courses',
+      set: {
+        program_id: { $context: 'programId' },
+        name: { $context: 'name' },
+        blurb: { $context: 'blurb' },
+        starts_on: { $context: 'startsOn' },
+        ends_on: { $context: 'endsOn' },
+        capacity: { $context: 'capacity' },
+      },
+      where: { eq: ['courses.id', { $context: 'courseId' }] },
+    },
+  ],
 };
 
 // Closed, never deleted — people are enrolled on it, and a studio asking "how

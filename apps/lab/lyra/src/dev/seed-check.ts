@@ -58,7 +58,7 @@ ok(
 );
 
 // ── what is on sale ──
-ok('eleven offerings', (await count('SELECT count(*) n FROM offerings')) === 11, 'six plans, three passes, two one-offs');
+ok('thirteen offerings', (await count('SELECT count(*) n FROM offerings')) === 13, 'six plans, three passes, two one-offs, two course blocks — one catalogue, four kinds');
 // SOLD ONCE AND GRANTING NOTHING — seeded rather than only tested, because the
 // screens that derive what somebody IS read this dataset, and a joining fee
 // must not make anybody a pass holder.
@@ -121,7 +121,13 @@ ok('...and no blurb smuggles a schedule in', (await count("SELECT count(*) n FRO
 
 ok('two courses, one per studio', (await count('SELECT count(*) n FROM courses')) === 2);
 ok('...each with a start and an end', (await count('SELECT count(*) n FROM courses WHERE starts_on IS NOT NULL AND ends_on IS NOT NULL')) === 2);
-ok('...and a price to charge later', (await count('SELECT count(*) n FROM courses WHERE price_cents > 0')) === 2);
+// PRICED FROM THE CATALOGUE, not from a column of its own. A block used to
+// carry price_cents, which made courses a second price list; the join is the
+// claim that there is only one now.
+ok(
+  '...and a price to charge later, in the one catalogue',
+  (await count("SELECT count(*) n FROM courses c JOIN offerings o ON o.id = c.offering_id WHERE o.kind = 'course' AND o.price_cents > 0")) === 2,
+);
 
 ok('a course slot is bounded', (await count('SELECT count(*) n FROM class_templates WHERE course_id IS NOT NULL AND starts_on IS NOT NULL AND ends_on IS NOT NULL')) === 2);
 ok('...and an ordinary class is not', (await count('SELECT count(*) n FROM class_templates WHERE course_id IS NULL AND starts_on IS NULL')) === 14, 'both NULL is an ongoing class');

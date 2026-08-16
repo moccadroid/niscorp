@@ -48,40 +48,47 @@ export const plansLayout: LayoutNode = page([
     },
   },
 
-  // ── COURSE BLOCKS, WHICH ARE ALSO SOLD ─────────────────────
+  // ── COURSE BLOCKS, AUTHORED HERE LIKE EVERYTHING ELSE ──────
   //
-  // A course carries its own price and is absolutely a thing a member pays for —
-  // but it is a dated block with a capacity and a timetable, not a price-list
-  // row, so it keeps its own table and is edited under Schedule. That split
-  // follows the model and the model is right.
+  // A block's PRICE is a catalogue row now, the same as a plan's or a pass's —
+  // see courses.offering_id. What stays its own table is what makes a block a
+  // block: dates, a capacity, a roster, a timetable.
   //
-  // What was wrong is that NEITHER SCREEN MENTIONED THE OTHER. You had to
-  // already know why a course is different in order to guess which hub to open.
-  // So they are listed here, read-only, with the way to edit one said out loud:
-  // one list answers "what can somebody pay for", and nothing had to move.
+  // Which is why it keeps its own section rather than joining the list above.
+  // The columns are different because the thing is different, and a block
+  // squeezed into "Price / Billed / Terms" would be three empty cells and a
+  // date hidden in a subtitle. Two sections, one screen, one place to author
+  // anything a member can pay for.
+  //
+  // Both controls used to be somewhere else, and the edit one existed nowhere
+  // at all: a block could be created and its roster read, and never changed.
   {
     component: 'Section',
     props: {
       title: 'Course blocks',
-      subtitle: 'Bounded blocks with their own price. Edited under Schedule → Classes, because they carry a timetable.',
+      subtitle: 'Bounded blocks with dates and a roster. Priced here; the timetable they generate is under Schedule.',
     },
-    children: {
-      component: 'Card',
-      props: { flush: true },
-      children: {
-        component: 'Rows',
-        props: {
-          rows: '$.courses',
-          rowKey: 'course_id',
-          empty: 'No course blocks. Add one under Schedule → Classes.',
-          columns: [
-            { label: 'Block', w: 2, cell: { kind: 'primary', key: 'name', subKey: 'dates_display' } },
-            { label: 'Price', px: 120, align: 'right', cell: { kind: 'text', key: 'price_display', color: 'ink' } },
-            { label: 'Places', px: 110, cell: { kind: 'text', key: 'places_display', color: 'mute' } },
-          ],
+    children: [
+      {
+        component: 'Card',
+        props: { flush: true },
+        children: {
+          component: 'Rows',
+          props: {
+            rows: '$.courses',
+            rowKey: 'course_id',
+            onRowRef: 'editCourse',
+            empty: 'No course blocks yet. A block is a run of classes somebody joins once and holds a seat in.',
+            columns: [
+              { label: 'Block', w: 2, cell: { kind: 'primary', key: 'name', subKey: 'dates_display' } },
+              { label: 'Price', px: 120, align: 'right', cell: { kind: 'text', key: 'price_display', color: 'ink' } },
+              { label: 'Places', px: 110, cell: { kind: 'text', key: 'places_display', color: 'mute' } },
+            ],
+          },
         },
       },
-    },
+      { component: 'Button', props: { variant: 'ghost', label: 'Add a course block' }, ref: 'addCourse' },
+    ],
   },
 
 ]);

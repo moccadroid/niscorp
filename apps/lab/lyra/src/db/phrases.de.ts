@@ -54,6 +54,11 @@ export const GERMAN: Record<string, string> = {
   Add: 'Hinzufügen',
   'Add a class': 'Kurs anlegen',
   'Add a class type': 'Kursart anlegen',
+  'Add a course block': 'Kursblock anlegen',
+  'Bounded blocks with dates and a roster. Priced here; the timetable they generate is under Schedule.':
+    'Begrenzte Blöcke mit Terminen und Teilnehmerliste. Preis hier; den Stundenplan, den sie erzeugen, findest du unter Plan.',
+  'No course blocks yet. A block is a run of classes somebody joins once and holds a seat in.':
+    'Noch keine Kursblöcke. Ein Block ist eine Reihe von Stunden, der man einmal beitritt und in der man einen Platz behält.',
   'Add a course': 'Kursblock anlegen',
   'Add a one-off': 'Einzeltermin anlegen',
   'Add a person': 'Person hinzufügen',

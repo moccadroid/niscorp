@@ -3,12 +3,18 @@ export const OFFERINGS_DDL = /* sql */ `
   -- Studios sell more than recurring plans: a drop-in class, a ten-class pass,
   -- a course. One table, a kind — because "what is on sale here" is one
   -- question, and the price list that cannot say "single class €18" is not the
-  -- price list of a yoga studio. Courses stay their own dated, bounded table
-  -- (a course is an EVENT with a capacity and a roster, not a product
-  -- template); its price lives there.
+  -- price list of a yoga studio.
+  --
+  -- ONE TABLE ANSWERS IT, INCLUDING FOR COURSES. A course is still an EVENT
+  -- with dates, a capacity and a roster, and that stays in courses — but its
+  -- PRICE is a row here, named by courses.offering_id. It used to live over
+  -- there, which meant a studio had two price lists, an owner had two screens to
+  -- author them on, and anything that publishes a catalogue had to know both.
   --
   --   recurring  a membership plan: interval, term, notice, allowance
   --   pass       N class credits; credits = 1 IS the drop-in — no third kind
+  --   one_off    sold once, grants nothing
+  --   course     a seat in a dated block; the block is in courses
   --
   -- THE TERMS THEY WERE SOLD, and where that rule is stated. Retiring an
   -- offering keeps everyone already on it, exactly as plans always worked:
@@ -35,12 +41,24 @@ export const OFFERINGS_DDL = /* sql */ `
     --   recurring  a membership: bills on a period, carries terms
     --   pass       classes bought up front: credits, spent by attending
     --   one_off    sold once and grants no attendance at all
+    --   course     a seat in a dated block, priced here and scheduled in courses
     --
     -- A joining fee, a deposit, a workshop ticket, a gi off the shelf. Every one
     -- of them was unsellable here, and the workaround — a one-credit pass — was
     -- a lie the whole app would then believe: it would grant a class, count as
     -- an entitlement, and make somebody a pass holder for buying a T-shirt.
-    kind             TEXT NOT NULL DEFAULT 'recurring' CHECK (kind IN ('recurring', 'pass', 'one_off')),
+    --
+    -- THE FOURTH IS WHY THIS TABLE IS THE CATALOGUE. A course block carried its
+    -- own price_cents and its own currency, so "what can somebody pay for here"
+    -- had two answers in two tables — and every future sellable thing (a
+    -- voucher, a workshop, a shirt) was going to be a third. The block keeps its
+    -- table, because dates, capacity and a roster are not a price; what moved is
+    -- the PRICE, which is the only part that was duplicated.
+    --
+    -- This settles D5, which named both options and picked the other one. The
+    -- new information is the store: a catalogue split across two tables is one
+    -- every publisher, checkout and integration has to know is split.
+    kind             TEXT NOT NULL DEFAULT 'recurring' CHECK (kind IN ('recurring', 'pass', 'one_off', 'course')),
     price_cents      INTEGER NOT NULL CHECK (price_cents >= 0),
     currency         TEXT NOT NULL DEFAULT 'EUR',
     -- ── recurring ──
@@ -185,6 +203,7 @@ export const OFFERINGS_DDL = /* sql */ `
          + (SELECT count(*) FROM passes p WHERE p.offering_id = which)
          + (SELECT count(*) FROM purchases u WHERE u.offering_id = which)
          + (SELECT count(*) FROM offerings f WHERE f.joining_fee_id = which)
+         + (SELECT count(*) FROM courses c WHERE c.offering_id = which)
       INTO held;
     RETURN held;
   END;

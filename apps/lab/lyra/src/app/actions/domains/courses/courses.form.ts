@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import type { ActionDefinition, LayoutNode, Step } from '@niscorp/nova';
-import { courseCreatePrism, courseRetirePrism, courseSlotsPrism, courseUpdatePrism, programsPrism } from './courses.prism';
+import { coursePricePrism, courseCreatePrism, courseRetirePrism, courseSlotsPrism, courseUpdatePrism, programsPrism } from './courses.prism';
 import { teachersPrism } from '@lyra/app/actions/domains/timetable/timetable.prism';
 
 // THE CHECK THAT WAS ONCE MISSING ENTIRELY, now held by the button instead of
@@ -145,6 +145,10 @@ export const courseFormAction: ActionDefinition = {
     // name and dates are blank. Edit mode never reads it (Save has its own).
     blocked: true,
     created: {},
+    // The price row this block names — minted by the call before the block on
+    // create, and carried in from the row on edit.
+    createdPrice: {},
+    offeringId: '',
     error: '',
   },
   layout: courseFormLayout,
@@ -154,6 +158,7 @@ export const courseFormAction: ActionDefinition = {
     // Two replays where a server function used to loop: the course row first
     // (RETURNING hands back the DB-minted id as `$.created`), then every
     // chosen day's slot in ONE `insertEach` statement.
+    priceIt: { url: '/api/schedule/vex', method: 'POST', request: coursePricePrism, target: 'createdPrice', errorTarget: 'error' },
     create: { url: '/api/schedule/vex', method: 'POST', request: courseCreatePrism, target: 'created', errorTarget: 'error' },
     slots: { url: '/api/schedule/vex', method: 'POST', request: courseSlotsPrism, errorTarget: 'error' },
     update: { url: '/api/schedule/vex', method: 'POST', request: courseUpdatePrism, errorTarget: 'error' },
@@ -199,6 +204,12 @@ export const courseFormAction: ActionDefinition = {
         { set: 'saving', value: true },
         { set: 'blocked', value: true },
         {
+          // THE PRICE FIRST, because the block names it and a foreign key does
+          // not wait. Same write every other price on the Offers list goes
+          // through — a block is a thing in the catalogue, not a second one.
+          call: 'priceIt',
+          onSuccess: [
+            {
           call: 'create',
           onSuccess: [
             {
@@ -206,6 +217,9 @@ export const courseFormAction: ActionDefinition = {
               onSuccess: [{ set: 'saving', value: false }, { emit: { channel: 'courses-changed' } }, { pop: true }],
               onError: [{ set: 'saving', value: false }, { set: 'blocked', value: createBlocked }],
             },
+          ],
+          onError: [{ set: 'saving', value: false }, { set: 'blocked', value: createBlocked }],
+        },
           ],
           onError: [{ set: 'saving', value: false }, { set: 'blocked', value: createBlocked }],
         },
@@ -219,6 +233,7 @@ export const courseFormAction: ActionDefinition = {
 export const courseFormInputSchema = z.toJSONSchema(
   z.object({
     heading: z.string().optional(),
+    offeringId: z.string().optional().describe('The catalogue row holding this block price. Comes off the row the list handed over.'),
     courseId: z.string().optional().describe('Empty means create. Set means edit that course.'),
     programId: z.string().optional(),
     name: z.string().optional(),

@@ -59,8 +59,46 @@ export const plansAction: ActionDefinition = {
         },
       ],
     },
+    // ── AND THE BLOCKS, ON THE SAME SCREEN ─────────────────
+    //
+    // The course form, opened from here. It lives under Schedule too, because a
+    // block generates a timetable — but "what do we sell" is this screen's
+    // question and a block is one of the answers, so an owner should never have
+    // to work out which hub prices a thing.
+    //
+    // Editing one was reachable from NOWHERE before this: the roster could be
+    // read and the block could be created, and nothing could change it.
+    { event: 'ui:click', ref: 'addCourse', do: [{ push: { action: 'courses.form', canvas: 'sheet', with: ['sheet'], input: { heading: 'Add a course block' } } }] },
+    {
+      event: 'ui:click',
+      ref: 'editCourse',
+      do: [
+        {
+          push: {
+            action: 'courses.form',
+            canvas: 'sheet',
+            with: ['sheet'],
+            input: {
+              heading: 'Edit course block',
+              courseId: '@event.payload.course_id',
+              // The catalogue row holding its price. Save writes both, so a row
+              // arriving without this is a save with nowhere to put the money.
+              offeringId: '@event.payload.offering_id',
+              programId: '@event.payload.program_id',
+              name: '@event.payload.name',
+              blurb: '@event.payload.blurb',
+              startsOn: '@event.payload.starts_on',
+              endsOn: '@event.payload.ends_on',
+              capacity: '@event.payload.capacity',
+              priceCents: '@event.payload.price_cents',
+            },
+          },
+        },
+      ],
+    },
     // The form announces; this listens. Neither names the other.
     { message: 'plans-changed', do: [{ call: 'load' }] },
+    { message: 'courses-changed', do: [{ call: 'courses' }] },
   ],
 };
 

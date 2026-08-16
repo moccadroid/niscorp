@@ -17,11 +17,24 @@ export const PROGRAMS_SQL = insert(
 );
 
 // ─── the blocks ──────────────────────────────────────────────
+//
+// A block's PRICE is a catalogue row like every other price — see
+// courses.offering_id. Seeded as its own statement first, because the block
+// names it and a foreign key does not wait.
+export const COURSE_OFFERINGS_SQL = insert(
+  'offerings',
+  ['id', 'studio_id', 'name', 'kind', 'price_cents', 'currency'],
+  [
+    ['of_lumen_found', LUMEN, 'Foundations — autumn block', 'course', 12000, 'EUR'],
+    ['of_rock_intake', NORTHROCK, 'Fundamentals intake', 'course', 9000, 'EUR'],
+  ],
+);
+
 export const COURSES_SQL = insert(
   'courses',
-  ['id', 'studio_id', 'program_id', 'name', 'blurb', 'starts_on', 'ends_on', 'capacity', 'price_cents'],
+  ['id', 'studio_id', 'program_id', 'name', 'blurb', 'starts_on', 'ends_on', 'capacity', 'offering_id'],
   [
-    ['co_lumen_found', LUMEN, 'pr_beginners', 'Foundations — autumn block', 'Six weeks, from nothing. Every posture from the beginning, in a room where everybody else is new too.', day(3, LUMEN), day(3 + 35, LUMEN), 12, 12000],
-    ['co_rock_intake', NORTHROCK, 'pr_fundamentals', 'Fundamentals intake', 'Four weeks of the basics before you step onto the main mat. No sparring.', day(2, NORTHROCK), day(2 + 21, NORTHROCK), 16, 9000],
+    ['co_lumen_found', LUMEN, 'pr_beginners', 'Foundations — autumn block', 'Six weeks, from nothing. Every posture from the beginning, in a room where everybody else is new too.', day(3, LUMEN), day(3 + 35, LUMEN), 12, 'of_lumen_found'],
+    ['co_rock_intake', NORTHROCK, 'pr_fundamentals', 'Fundamentals intake', 'Four weeks of the basics before you step onto the main mat. No sparring.', day(2, NORTHROCK), day(2 + 21, NORTHROCK), 16, 'of_rock_intake'],
   ],
 );

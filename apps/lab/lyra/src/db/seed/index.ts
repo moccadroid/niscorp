@@ -19,7 +19,7 @@ import { OFFERINGS_SQL } from './offerings';
 import { SUBSCRIPTIONS_SQL } from './subscriptions';
 import { NOTICES_SQL } from './notices';
 import { PASSES_SQL } from './passes';
-import { COURSES_SQL, PROGRAMS_SQL } from './programs';
+import { COURSES_SQL, COURSE_OFFERINGS_SQL, PROGRAMS_SQL } from './programs';
 import { CANCELLATION_SQL, COURSE_TEMPLATES_SQL, SESSIONS_SQL, TEMPLATES_SQL, TODAY_CLASS_SQL } from './classes';
 import { ATTENDANCE_SQL, BOOKINGS_SQL, CHECK_INS_SQL, MEMBER_DIARY_SQL, WALK_IN_SQL } from './bookings';
 import { ENROLMENTS_SQL } from './enrolments';
@@ -41,6 +41,7 @@ export const buildSeedSql = (): string =>
     PASSES_SQL,
     NOTICES_SQL, //           derives the leaving dates on the subscriptions above
     PROGRAMS_SQL,
+    COURSE_OFFERINGS_SQL, // the blocks' prices, in the one catalogue
     COURSES_SQL,
     TEMPLATES_SQL,
     COURSE_TEMPLATES_SQL,

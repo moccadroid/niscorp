@@ -67,7 +67,20 @@ owner.dispatch({ type: 'ui:click', ref: 'create' });
 await settle(14);
 
 ok('a course can be created', (await count("SELECT count(*) n FROM courses WHERE studio_id = 'st_lumen'")) === before + 1);
-ok('...with its dates and size', (await count("SELECT count(*) n FROM courses WHERE name = 'Winter beginners' AND capacity = 10 AND price_cents = 14000 AND starts_on = '2026-11-02'")) === 1);
+ok('...with its dates and size', (await count("SELECT count(*) n FROM courses WHERE name = 'Winter beginners' AND capacity = 10 AND starts_on = '2026-11-02'")) === 1);
+// AND ITS PRICE IN THE ONE CATALOGUE. A block used to carry price_cents, which
+// made `courses` a second price list nothing else read. The join is the claim
+// that creating a block writes a catalogue row and points the block at it.
+ok(
+  '...and its price is a catalogue row, not a column of its own',
+  (await count("SELECT count(*) n FROM courses c JOIN offerings o ON o.id = c.offering_id WHERE c.name = 'Winter beginners' AND o.kind = 'course' AND o.price_cents = 14000")) === 1,
+  'one table answers what a studio sells, so a store has one place to publish from',
+);
+ok(
+  '...and that price cannot be deleted out from under the block',
+  (await count("SELECT held_count n FROM offerings o JOIN courses c ON c.offering_id = o.id WHERE c.name = 'Winter beginners'")) === 1,
+  'a block holds its price exactly as a member holds a plan',
+);
 
 ok(
   '...and it MEETS on days, not just between dates',

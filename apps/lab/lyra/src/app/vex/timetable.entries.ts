@@ -43,8 +43,14 @@ export const templatesList: CacheEntry = {
       'class_templates.course_id',
       'class_templates.starts_on',
       'class_templates.ends_on',
-      { field: 'courses.price_cents', as: 'course_price' },
-      { field: 'courses.currency', as: 'course_currency' },
+      // NO PRICE HERE ANY MORE, and not because it could not be reached: a
+      // block's price is a catalogue row (courses.offering_id), which is NOT
+      // NULL, so joining it turns this read's LEFT JOIN to courses into an inner
+      // one and every weekly class without a block falls out of the timetable.
+      //
+      // Which is the right outcome anyway. This screen answers WHEN things run.
+      // What a block costs is authored on Offers, beside every other price, and
+      // a second place showing it is a second place for it to go stale.
       { field: 'courses.enrolled_count', as: 'course_enrolled' },
     ],
     sort: [
@@ -94,7 +100,7 @@ export const templatesList: CacheEntry = {
             else: 'Every week',
           },
         },
-        price_display: { $case: { branches: [{ when: row('course_id'), then: priceText(row('course_price'), row('course_currency')) }], else: '' } },
+        price_display: '',
         state_label: { $case: { branches: [{ when: row('active'), then: 'On' }], else: 'Retired' } },
         state_tone: { $case: { branches: [{ when: row('active'), then: 'good' }], else: 'neutral' } },
       },

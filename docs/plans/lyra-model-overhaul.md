@@ -185,6 +185,19 @@ offerings (
   capacity) and should stay its own table — but a course *offering* (its price
   and whether it needs membership) can be an `offerings` row of `kind='course'`
   pointing at a `course`, OR the course keeps its own price. **Decision D5.**
+
+  > **D5 was answered "keeps its own price", and reversed on 2026-08-16.** The
+  > table stays; `courses.price_cents` and `courses.currency` are gone and
+  > `courses.offering_id` (NOT NULL, UNIQUE) names an `offerings` row of
+  > `kind='course'`. What changed is not the argument but the requirement: a
+  > **store add-on** publishes a catalogue, and a catalogue split across two
+  > tables is one every publisher, checkout and integration has to know is
+  > split — with a voucher, a workshop and a retail item each queued to become a
+  > third. The owner-facing half was already broken by the split: blocks were
+  > priced under Schedule, plans under Offers, and *editing a block was
+  > reachable from no screen at all.* Both are authored on Offers now. Gate:
+  > `course-check` asserts the block's price is a catalogue row; `plans-check`
+  > asserts a block opens and reprices from the Offers screen.
 - Retiring an offering keeps everyone already on it — the existing plan-retire
   rule, generalised. `subscriptions`/`passes` reference the offering they were
   sold on, never "the current price list".

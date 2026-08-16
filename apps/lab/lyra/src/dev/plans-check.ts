@@ -420,4 +420,34 @@ ok(
   'every column Save writes has to travel on the row Save opened from',
 );
 
+
+// ── AND THE BLOCKS ARE HERE TOO ──────────────────────────────
+//
+// A course block is a thing a member pays for, and it was authored on a
+// different screen under a different hub — an owner had to already know why a
+// block is different in order to guess where to price one. Editing one was
+// reachable from NOWHERE: it could be created, and its roster read, and nothing
+// could change it afterwards.
+manager.dispatch({ type: 'ui:click', ref: 'nav', payload: 'plans.list' });
+await settle(12);
+const offers = treeOf(manager);
+ok('the offers screen lists the course blocks', offers.includes('Course blocks') && offers.includes('Foundations'));
+ok('...and offers to add one without leaving', offers.includes('Add a course block'));
+
+const blockRow = (await runtime.db.query<Record<string, unknown>>(
+  "SELECT c.id AS course_id, c.offering_id, c.program_id, c.name, c.blurb, c.starts_on, c.ends_on, c.capacity, o.price_cents FROM courses c JOIN offerings o ON o.id = c.offering_id WHERE c.studio_id = 'st_lumen' LIMIT 1",
+)).rows[0] ?? {};
+manager.dispatch({ type: 'ui:click', ref: 'editCourse', payload: blockRow });
+await settle(12);
+ok('...and a block opens for editing, which nothing anywhere did before', treeOf(manager).includes('Edit course block'));
+manager.dispatch({ type: 'ui:model', ref: 'priceCents', payload: 13500 });
+await settle(4);
+manager.dispatch({ type: 'ui:click', ref: 'save' });
+await settle(14);
+ok(
+  '...and repricing it writes the catalogue, because that is where its price lives',
+  (await count("SELECT count(*) n FROM courses c JOIN offerings o ON o.id = c.offering_id WHERE c.studio_id = 'st_lumen' AND o.price_cents = 13500")) === 1,
+  'one catalogue: the same table a plan, a pass and a joining fee are priced in',
+);
+
 report('the price list edits, retiring keeps everybody who is paying, a studio charges in one currency, and a commitment outlives the notice given inside it.');

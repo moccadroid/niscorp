@@ -350,22 +350,26 @@ export const offeringsPurchasable: CacheEntry = {
   },
 };
 
-// A course keeps its own table and its own price (Decision D5, and it stands):
-// a dated block with a capacity and a schedule is not a price-list row, and
-// making it one would have been a migration in service of a join. What
-// generalises is BILLABLE, not offering — so this is a second read of the same
-// shape rather than a second kind of thing.
+// A course keeps its own table — a dated block with a capacity and a roster is
+// not a price-list row — but its PRICE is a catalogue row like every other, so
+// this reads the same `offerings` every other price comes from. D5 named both
+// options and picked the column; the store settled it the other way, because a
+// catalogue split across two tables is one every reader has to know is split.
+//
+// Still its own fingerprint rather than `offerings/price`: what a checkout needs
+// to know about a block is the price AND whether there is a seat, and seats are
+// a fact about the block.
 export const coursePrice: CacheEntry = {
   fingerprint: 'courses/price',
   intent: 'What a course block costs, and whether there is still a seat',
   shape: { course_id: '', name: '', amount: 0, currency: '', capacity: 0, enrolled_count: 0, seats_left: 0 },
   dsl: {
-    from: ['courses'],
+    from: ['courses', 'offerings'],
     fields: [
       { field: 'courses.id', as: 'course_id' },
       'courses.name',
-      { field: 'courses.price_cents', as: 'amount' },
-      'courses.currency',
+      { field: 'offerings.price_cents', as: 'amount' },
+      'offerings.currency',
       'courses.capacity',
       'courses.enrolled_count',
     ],
