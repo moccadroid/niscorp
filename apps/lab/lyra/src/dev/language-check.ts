@@ -9,7 +9,7 @@
 // action, layout or component knowing it exists?
 import { CAST } from '@lyra/db/seed';
 import { bookOverWire, forgetBooks } from '@lyra/app/app';
-import { asPrincipal, login, ok, report, runtime, servedTo, settle, treeOf, wireFor } from './world';
+import { asPrincipal, login, ok, report, runtime, servedTo, sessionFor, settle, treeOf, wireFor } from './world';
 
 const maren = await login(CAST.lumen.owner); // de
 const dario = await login(CAST.northrock.owner); // en
@@ -216,5 +216,37 @@ ok('...with no English left in the strip', !englishLabel(automations, 'Recipes',
 const schedule = await screenFor('schedule.timetable');
 ok('the Schedule views are German', schedule.includes('Kalender') && schedule.includes('Liste'), 'the third screen — found by the widened harvest, not by the review');
 ok('...with no English left in the strip', !englishLabel(schedule, 'Calendar', 'List'));
+
+// ── SWITCHING IT, OVER A CONNECTION THAT STAYS ATTACHED ──────
+//
+// The half that was missing, and the half that broke. Every assertion above
+// asks a FRESH attachment what it is served, and a fresh attachment gets a
+// fresh shell — so the whole language mechanism could be, and for a while was,
+// broken for the only case anybody actually meets: a person sitting on an open
+// socket who changes the language and waits.
+//
+// What broke it: the locale rides on the identity record, moss caches those,
+// and `reset` rebuilds a shell from the cache. The write landed, the shells
+// were faithfully rebuilt, and every one of them re-read the old language.
+// Nothing threw and nothing looked wrong.
+const session = await sessionFor(CAST.lumen.owner);
+const sent: string[] = [];
+const wire = { send: (text: string) => sent.push(text), close: () => undefined, onMessage: () => undefined, onClose: () => undefined };
+session.attach(wire);
+await settle(15);
+const seen = (): string => sent.join(String.fromCharCode(10));
+ok('an attached terminal is served German to begin with', seen().includes('Personen'));
+
+session.shell.dispatch({ type: 'ui:click', ref: 'nav', payload: 'studio.settings' });
+await settle(20);
+sent.length = 0;
+session.shell.dispatch({ type: 'ui:model', ref: 'language', payload: 'en' });
+await settle(60);
+
+const after = seen();
+const locale = await runtime.db.query<{ locale: string }>("SELECT locale FROM studios WHERE id='st_lumen'");
+ok('...the write lands', String(locale.rows[0]?.locale ?? '') === 'en');
+ok('...and the SAME socket is served the new language', after.includes('"People"'), `${String(sent.length)} frames after the switch`);
+ok('...with the old one gone from it', !after.includes('Personen'), 'a rebuild that kept the cached identity would send German again and report success');
 
 report('one deployment, two languages, nothing shared but the rows');

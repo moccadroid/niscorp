@@ -128,14 +128,28 @@ export const worldFunctions = (
     // already keeps is the honest set to walk. WHOSE studio each live shell
     // belongs to is read off the records moss resolved — the app reading back
     // what its own seam produced, one principal at a time.
+    //
+    // EACH ONE GUARDED, because this loop awaits inside itself and the set it
+    // walks is every shell in the deployment: an anonymous shell, a principal
+    // whose row went away, anybody whose identity read throws for a reason that
+    // has nothing to do with language. Unguarded, the first of those ends the
+    // loop, and every shell after it keeps the old words while the endpoint
+    // reports the count it had reached — the failure looks like a smaller
+    // studio rather than like an error.
     let rebuilt = 0;
+    const failed: string[] = [];
     for (const live of deps.server().shells?.list() ?? []) {
-      const record = await deps.server().identity(live.principal);
-      if (String(record.scope['studioId'] ?? '') !== studioId) continue;
-      if (deps.server().shells?.reset(live.principal) === true) rebuilt += 1;
+      try {
+        const record = await deps.server().identity(live.principal);
+        if (String(record.scope['studioId'] ?? '') !== studioId) continue;
+        if (deps.server().shells?.reset(live.principal) === true) rebuilt += 1;
+      } catch (error) {
+        failed.push(live.principal);
+        console.error('[lyra:relanguage] could not re-language a shell:', live.principal, error);
+      }
     }
-    // Reported rather than silent: "nothing happened" and "nobody was connected"
-    // look identical from the screen otherwise.
-    return { phrases: reloaded, shells: rebuilt };
+    // Reported rather than silent: "nothing happened", "nobody was connected"
+    // and "it threw" look identical from the screen otherwise.
+    return { phrases: reloaded, shells: rebuilt, failed: failed.length };
   },
 });
