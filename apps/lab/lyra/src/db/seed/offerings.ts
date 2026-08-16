@@ -10,7 +10,7 @@ export const OFFERINGS_SQL = insert(
   ['id', 'studio_id', 'name', 'kind', 'price_cents', 'currency', 'interval', 'interval_count', 'class_allowance', 'active', 'minimum_term_months', 'notice_days', 'credits', 'valid_days', 'joining_fee_id'],
   [
     // Rolling, a month's notice — the commonest shape.
-    ['pl_lumen_unlimited', LUMEN, 'Unlimited', 'recurring', 11900, 'EUR', 'month', 1, null, true, 0, 30, null, null, null],
+    ['pl_lumen_unlimited', LUMEN, 'Unlimited', 'recurring', 11900, 'EUR', 'month', 1, null, true, 0, 30, null, null, 'of_lumen_joining'],
     // Cancel any time: the plan a studio sells to hesitant people.
     ['pl_lumen_eight', LUMEN, 'Eight a month', 'recurring', 8900, 'EUR', 'month', 1, 8, true, 0, 0, null, null, null],
     // Twelve months up front, so its monthly value is a twelfth of the price.
@@ -34,5 +34,10 @@ export const OFFERINGS_SQL = insert(
     // fee is not a class and not a membership, and recording it as a one-credit
     // pass would have handed everybody who paid it a free session.
     ['of_nr_joining', NORTHROCK, 'Joining fee', 'one_off', 3000, 'EUR', 'month', 1, null, true, 0, 0, null, null, null],
+    // AT THE STUDIO YOU LAND IN, not only the other one. A joining fee that
+    // exists solely at Northrock is a mechanism nobody meets: the flagship plan
+    // at Lumen now carries one, so the charge shows up on the first signup
+    // anybody tries.
+    ['of_lumen_joining', LUMEN, 'Joining fee', 'one_off', 5000, 'EUR', 'month', 1, null, true, 0, 0, null, null, null],
   ],
 );

@@ -58,14 +58,22 @@ ok(
 );
 
 // ── what is on sale ──
-ok('ten offerings', (await count('SELECT count(*) n FROM offerings')) === 10, 'six plans, three passes, one one-off');
+ok('eleven offerings', (await count('SELECT count(*) n FROM offerings')) === 11, 'six plans, three passes, two one-offs');
 // SOLD ONCE AND GRANTING NOTHING — seeded rather than only tested, because the
 // screens that derive what somebody IS read this dataset, and a joining fee
 // must not make anybody a pass holder.
 ok(
-  '...one of them sold once and granting nothing',
-  (await count("SELECT count(*) n FROM offerings WHERE kind = 'one_off'")) === 1,
+  '...two of them sold once and granting nothing',
+  (await count("SELECT count(*) n FROM offerings WHERE kind = 'one_off'")) === 2,
   'the shape that had no home until it had its own kind',
+);
+// ONE AT EACH STUDIO, and the first one matters more than the second: a
+// mechanism seeded only at Northrock is one nobody meets, because Lumen is the
+// studio every screenshot and every first signup lands in.
+ok(
+  '...one at each studio, charged because a plan names it',
+  (await count('SELECT count(*) n FROM offerings WHERE joining_fee_id IS NOT NULL')) === 2,
+  'a joining fee nothing points at is a price list entry, not a charge',
 );
 // A PERIOD THAT IS NOT ONE MONTH, in the dataset rather than only in a test.
 // Every revenue figure in this app sums `monthly_cents`, and a seed where every
