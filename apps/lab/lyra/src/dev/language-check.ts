@@ -187,15 +187,27 @@ const screenFor = async (action: string): Promise<string> => {
 const englishLabel = (frame: string, ...words: string[]): boolean => words.some((word) => frame.includes(`"label":"${word}"`));
 
 const people = await screenFor('people.list');
+// TWO CONTROLS NOW, and both are built from the same constants the query is —
+// so both have to arrive translated, and the check reads both.
 ok(
-  'the People lenses are German — all nine of them',
-  ['Aktuell', 'Interessenten', 'Kontakte', 'Ehemalige', 'Alle'].every((word) => people.includes(word)),
-  'Current · Prospects · Contacts · Past · Everyone — the five that rendered English while the harvest read green',
+  'the People lenses are German',
+  ['Aktuell', 'Ehemalige', 'Alle'].every((word) => people.includes(word)),
+  'Current · Past · Everyone — the strip, once it stopped carrying three axes at once',
 );
-ok('...with no English left in the strip', !englishLabel(people, 'Current', 'Prospects', 'Contacts', 'Past', 'Everyone'));
+ok('...with no English left in the strip', !englishLabel(people, 'Current', 'Past', 'Everyone'));
+ok(
+  'and so is what they hold',
+  ['Eine Mitgliedschaft', 'Eine Blockkarte', 'Noch nichts'].every((word) => people.includes(word)),
+  'A membership · A pass · Nothing yet — the second question, in the reader’s language',
+);
+ok('...with no English left there either', !englishLabel(people, 'A membership', 'A pass', 'Nothing yet', 'Anything'));
 // THE OTHER HALF OF THE SAME RULE: the option's `value` is machine vocabulary
-// and must survive untouched, or picking a lens stops working in German.
-ok('...and the lens VALUES are untouched', people.includes('"current"') && people.includes('"prospects"'), 'proseness is the key, not the neighbourhood');
+// and must survive untouched, or picking one stops working in German.
+ok(
+  '...and the VALUES are untouched',
+  people.includes('"current"') && people.includes('"membership"'),
+  'proseness is the key, not the neighbourhood — and it holds on both controls',
+);
 
 const automations = await screenFor('automations.list');
 ok('the Automations tabs are German', automations.includes('Rezepte') && automations.includes('Läuft'), 'Recipes → Rezepte, beside a Running that was in the book all along');

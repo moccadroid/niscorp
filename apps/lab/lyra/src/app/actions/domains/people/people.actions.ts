@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import type { ActionDefinition, Step } from '@niscorp/nova';
 import { peopleListLayout, peopleDetailLayout, peopleFormLayout, peopleSignupLayout } from './people.layouts';
-import { LENSES, ROLL_PAGE, ROLL_ORDERS } from '@lyra/app/vex/member.entries';
+import { HOLDINGS, LENSES, ROLL_PAGE, ROLL_ORDERS } from '@lyra/app/vex/member.entries';
 
 // The order the roll opens in — first in the entry's own declaration, so the
 // screen and the query agree about the default without either naming it twice.
@@ -37,6 +37,10 @@ import {
 // the reads are one read taking `lens`, so the option carries the lens name and
 // the request prism sends it like any other context.
 const LENS_OPTIONS = LENSES.map((l) => ({ value: l.lens, label: l.label }));
+// The second question, built from the same constant the query is — so the
+// control and the filter cannot drift apart, which is the property the old
+// single strip had and the reason it was worth keeping.
+const HOLDING_OPTIONS = HOLDINGS.map((h) => ({ value: h.holding, label: h.label }));
 
 // The last row of a just-arrived page, which is the next page's seek. Read off
 // the PAGE (`$.more`) rather than off the appended list, because a `$prism`
@@ -96,6 +100,8 @@ export const peopleListAction: ActionDefinition = {
     // is why there is no branch anywhere below.
     scope: 'current',
     scopes: LENS_OPTIONS,
+    holdings: HOLDING_OPTIONS,
+    holding: 'any',
 
     countRow: {},
     search: '',
@@ -136,6 +142,10 @@ export const peopleListAction: ActionDefinition = {
   },
   triggers: [
     { event: 'ui:click', ref: 'scope', do: [{ set: 'scope', value: '@event.payload.value' }, { set: 'loading', value: true }, ...REWIND, { call: 'load', onSuccess: [{ set: 'loading', value: false }, ...AFTER_FIRST_PAGE] }, { call: 'count', onSuccess: [{ set: 'totalDisplay', value: '$.countRow.total_display' }] }] },
+
+    // A new holding is a new list, so the cursor goes with it — REWIND first,
+    // exactly like a lens change or a keystroke.
+    { event: 'ui:model', ref: 'holding', do: [{ set: 'holding', value: '@event.payload' }, { set: 'loading', value: true }, ...REWIND, { call: 'load', onSuccess: [{ set: 'loading', value: false }, ...AFTER_FIRST_PAGE] }, { call: 'count', onSuccess: [{ set: 'totalDisplay', value: '$.countRow.total_display' }] }] },
 
     // A new order is a new list, so the cursor goes with it — REWIND first,
     // exactly like a lens change or a keystroke.

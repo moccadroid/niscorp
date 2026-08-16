@@ -102,10 +102,10 @@ const rollNames = async (context: Record<string, unknown>): Promise<string[]> =>
 const wholeRoll = await rollNames({});
 ok('the roll answers an empty context', wholeRoll.length > 0, `${wholeRoll.length} people, no lens, no search, no cursor`);
 
-const lensed = await rollNames({ lens: 'members' });
+const lensed = await rollNames({ holding: 'membership' });
 ok('...a lens narrows it', lensed.length > 0 && lensed.length < wholeRoll.length, `${lensed.length} members of ${wholeRoll.length}`);
 
-const lensedAndSearched = await rollNames({ lens: 'members', q: '%ava%' });
+const lensedAndSearched = await rollNames({ holding: 'membership', q: '%ava%' });
 ok('...and a search narrows that again', lensedAndSearched.length > 0 && lensedAndSearched.length < lensed.length, lensedAndSearched.join(', '));
 
 ok('an invented lens still selects nobody', (await rollNames({ lens: 'everyone-and-north-rock' })).length === 0, 'a lens is chosen from the arms, never written');
@@ -118,7 +118,7 @@ const countOf = async (context: Record<string, unknown>): Promise<number> => {
   return Number((value as { total?: number } | null)?.total ?? -1);
 };
 ok('the count agrees with the unfiltered roll', (await countOf({})) === wholeRoll.length, `${await countOf({})} vs ${wholeRoll.length}`);
-ok('...and with the lensed one', (await countOf({ lens: 'members' })) === lensed.length, `${await countOf({ lens: 'members' })} vs ${lensed.length}`);
+ok('...and with the lensed one', (await countOf({ holding: 'membership' })) === lensed.length, `${await countOf({ holding: 'membership' })} vs ${lensed.length}`);
 
 // ── sorting the roll, which the seek used to forbid ──
 //

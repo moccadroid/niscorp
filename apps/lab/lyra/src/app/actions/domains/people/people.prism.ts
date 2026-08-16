@@ -46,6 +46,7 @@ export const peopleListPrism = {
   fingerprint: peopleList.fingerprint,
   context: {
     lens: { $ref: '$.scope' },
+    holding: { $ref: '$.holding' },
     q: SEARCH_OR_NOTHING,
     afterId: CURSOR_OR_NOTHING('$.afterId'),
     // ONE CURSOR KEY PER ORDER, and only the live one carries a value.
@@ -81,6 +82,7 @@ export const peopleCountPrism = {
   fingerprint: peopleCount.fingerprint,
   context: {
     lens: { $ref: '$.scope' },
+    holding: { $ref: '$.holding' },
     q: SEARCH_OR_NOTHING,
   },
 };

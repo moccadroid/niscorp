@@ -228,6 +228,14 @@ export const GERMAN: Record<string, string> = {
   'Good morning': 'Guten Morgen',
 
   Hour: 'Stunde',
+  'A contact tag': 'Ein Kontakt-Tag',
+  'A course place': 'Ein Kursblock-Platz',
+  'A membership': 'Eine Mitgliedschaft',
+  'A pass': 'Eine Blockkarte',
+  'A staff role': 'Eine Team-Rolle',
+  Anything: 'Alles',
+  Holding: 'Hält',
+  'Nothing yet': 'Noch nichts',
   'Joining fee': 'Aufnahmegebühr',
   'Charged once, with the first payment. Create it as a one-off first and it appears here.':
     'Einmalig berechnet, mit der ersten Zahlung. Leg sie zuerst als Einzelposten an, dann erscheint sie hier.',

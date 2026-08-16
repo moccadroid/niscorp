@@ -135,7 +135,7 @@ ok(
 ok('...on the offering’s own terms', Number(standing.rows[0]?.monthly_cents) === 9500, 'stamped by the trigger, exactly as a checkout start would be');
 
 // And the standing derives: she reads as a member now, not trial-over.
-const roll = await asPrincipal(rock, '/api/member/vex', { fingerprint: 'people/list', context: { q: '%hana%', lens: 'members', after: '', afterId: '' } });
+const roll = await asPrincipal(rock, '/api/member/vex', { fingerprint: 'people/list', context: { q: '%hana%', holding: 'membership', after: '', afterId: '' } });
 ok('...and the roll derives her as a member', JSON.stringify(roll).includes('Hana Oksana') && JSON.stringify(roll).includes('"standing":"active"'), 'nothing was stored; the rows speak');
 
 // ── THE STUDIO IS TOLD, LIVE ─────────────────────────────────

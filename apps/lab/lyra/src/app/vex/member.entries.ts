@@ -203,16 +203,39 @@ const seekArm = (order: RollOrder): Filter => ({
 // to that arm alone.
 const AFTER: Filter = { or: ROLL_ORDERS.map(seekArm) };
 
+// ── TWO QUESTIONS, NOT NINE CHIPS ────────────────────────────
+//
+// This was one strip of nine, and the nine sat on THREE DIFFERENT AXES flattened
+// into a single row: time (Current, Past, Everyone), relationship (Members,
+// Prospects, Staff, Contacts) and what somebody holds (Passes, On a course).
+//
+// So "Current" and "Passes" were offered as alternatives to each other while
+// being answers to different questions, and the ordinary thing a desk wants to
+// ask — *members who hold a pass* — could not be said at all, because the strip
+// could only ever answer one axis at a time.
+//
+// Now it is two closed vocabularies rather than one flattened list. Both are
+// still a CHOICE FROM A LIST and not a filter anybody writes: the guard is still
+// `{ $context } = literal`, a name that is not on the list matches no arm, and
+// the chips are still built from the same constants as the query so they cannot
+// drift apart.
 export const LENSES: ReadonlyArray<{ lens: string; label: string; condition: Filter | undefined }> = [
   { lens: 'current', label: 'Current', condition: CURRENT },
-  { lens: 'members', label: 'Members', condition: MEMBERS },
-  { lens: 'prospects', label: 'Prospects', condition: PROSPECTS },
-  { lens: 'passes', label: 'Passes', condition: PASSES },
-  { lens: 'course', label: 'On a course', condition: ON_A_COURSE },
-  { lens: 'staff', label: 'Staff', condition: STAFF_LENS },
-  { lens: 'contacts', label: 'Contacts', condition: CONTACTS },
   { lens: 'past', label: 'Past', condition: PAST },
   { lens: 'everyone', label: 'Everyone', condition: undefined },
+];
+
+// WHAT THEY HOLD — the second question, asked alongside the first rather than
+// instead of it. `any` is the arm that guards nothing, so not asking is the
+// default and costs no condition.
+export const HOLDINGS: ReadonlyArray<{ holding: string; label: string; condition: Filter | undefined }> = [
+  { holding: 'any', label: 'Anything', condition: undefined },
+  { holding: 'membership', label: 'A membership', condition: MEMBERS },
+  { holding: 'pass', label: 'A pass', condition: PASSES },
+  { holding: 'course', label: 'A course place', condition: ON_A_COURSE },
+  { holding: 'nothing', label: 'Nothing yet', condition: PROSPECTS },
+  { holding: 'staff', label: 'A staff role', condition: STAFF_LENS },
+  { holding: 'contact', label: 'A contact tag', condition: CONTACTS },
 ];
 
 // ── NINE LENSES, ONE ENTRY ───────────────────────────────────
@@ -238,6 +261,16 @@ const lensArm = (lens: string, condition: Filter | undefined): Filter => {
 
 const LENS: Filter = { or: LENSES.map((l) => lensArm(l.lens, l.condition)) };
 
+// The same construction on its own key, so the two are ANDed by the entry rather
+// than multiplied into one list of combinations — three lenses and seven
+// holdings is twenty-one questions from ten arms.
+const holdingArm = (holding: string, condition: Filter | undefined): Filter => {
+  const guard: Filter = { eq: [{ $context: 'holding' }, holding] };
+  return condition === undefined ? guard : { and: [guard, condition] };
+};
+
+const HOLDING: Filter = { or: HOLDINGS.map((h) => holdingArm(h.holding, h.condition)) };
+
 export const peopleList: CacheEntry = {
   fingerprint: 'people/list',
   intent: 'The studio roll seen through one lens, searched, a page at a time',
@@ -262,6 +295,7 @@ export const peopleList: CacheEntry = {
     filter: {
       and: [
         { optional: { key: 'lens', then: LENS } },
+        { optional: { key: 'holding', then: HOLDING } },
         { optional: { key: 'q', then: SEARCH } },
         // The seek: one arm per order, each gating on its own cursor. Nothing
         // wraps it, because the arms gate themselves — see `seekArm`.
@@ -311,7 +345,7 @@ export const peopleCount: CacheEntry = {
     from: ['studio_people', 'people'],
     aggregate: { total: { count: 'studio_people.id' } },
     // The same two questions the list takes, minus the cursor — see above.
-    filter: { and: [{ optional: { key: 'lens', then: LENS } }, { optional: { key: 'q', then: SEARCH } }] },
+    filter: { and: [{ optional: { key: 'lens', then: LENS } }, { optional: { key: 'holding', then: HOLDING } }, { optional: { key: 'q', then: SEARCH } }] },
   },
   mapping: {
     $with: {

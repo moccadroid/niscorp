@@ -97,9 +97,16 @@ const front = await login(CAST.lumen.desk);
 await settle();
 front.dispatch({ type: 'ui:click', ref: 'nav', payload: 'people.list' });
 await settle(6);
-front.dispatch({ type: 'ui:click', ref: 'scope', payload: { value: 'prospects', label: 'Prospects' } });
+// WHO is the strip; WHAT THEY HOLD is its own control — and "prospects" needs
+// BOTH, which is the point of the split. Somebody holding nothing is by
+// definition not Current (current means live access or a live trial), so asking
+// on one axis alone answered nobody. It reads as two questions now because it
+// always was two.
+front.dispatch({ type: 'ui:click', ref: 'scope', payload: { value: 'everyone', label: 'Everyone' } });
+await settle(6);
+front.dispatch({ type: 'ui:model', ref: 'holding', payload: 'nothing' });
 await settle(10);
-ok('the desk reaches the prospects lens', treeOf(front).includes('Priya Anand'), 'people, not shadow rows — the word "enquiries" is gone');
+ok('the desk reaches the prospects', treeOf(front).includes('Priya Anand'), 'people, not shadow rows — the word "enquiries" is gone');
 
 // Opening her record and starting a plan is the whole conversion.
 front.dispatch({ type: 'ui:click', ref: 'open', payload: { person_id: 'p_priya' } });

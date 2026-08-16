@@ -36,15 +36,37 @@ ok('...and keeps the current ones', tree.includes('Ava Klein'));
 ok('...and a trial that ran out reads as such', tree.includes('Trial over'), 'computed against the studio’s own day');
 ok('...and the milkman is on it', tree.includes('Bo Lindqvist'), 'somebody the studio deals with, resolved at last');
 
-shell.dispatch({ type: 'ui:click', ref: 'scope', payload: { value: 'contacts', label: 'Contacts' } });
+// ── TWO QUESTIONS, ASKED SEPARATELY ──────────────────────────
+//
+// These were chips in one strip of nine, which put "Current" and "Passes"
+// side by side as if they were alternatives — they are answers to different
+// questions, and one strip could only ever carry one of them.
+//
+// WHO is the strip; WHAT THEY HOLD is its own control. Everyone, so the second
+// question is doing the work rather than the first.
+shell.dispatch({ type: 'ui:click', ref: 'scope', payload: { value: 'everyone', label: 'Everyone' } });
+await settle();
+shell.dispatch({ type: 'ui:model', ref: 'holding', payload: 'contact' });
 await settle();
 tree = treeOf(shell);
-ok('the contacts lens is just the dealt-with', tree.includes('Bo Lindqvist') && !tree.includes('Ava Klein'));
+ok('holding a contact tag is just the dealt-with', tree.includes('Bo Lindqvist') && !tree.includes('Ava Klein'));
 
-shell.dispatch({ type: 'ui:click', ref: 'scope', payload: { value: 'passes', label: 'Passes' } });
+shell.dispatch({ type: 'ui:model', ref: 'holding', payload: 'pass' });
 await settle();
 tree = treeOf(shell);
-ok('the passes lens holds the drop-in', tree.includes('Ida Brandt') && !tree.includes('Ava Klein'), 'a person with credits, not a member');
+ok('holding a pass finds the drop-in', tree.includes('Ida Brandt') && !tree.includes('Ava Klein'), 'a person with credits, not a member');
+
+// THE QUESTION THE OLD STRIP COULD NOT ASK. Both axes at once — current people
+// who hold a membership — which nine flattened chips had no way to express.
+shell.dispatch({ type: 'ui:click', ref: 'scope', payload: { value: 'current', label: 'Current' } });
+await settle();
+shell.dispatch({ type: 'ui:model', ref: 'holding', payload: 'membership' });
+await settle();
+tree = treeOf(shell);
+ok('and the two combine', tree.includes('Ava Klein') && !tree.includes('Bo Lindqvist'), 'current AND holding a membership — unaskable when it was one strip');
+
+shell.dispatch({ type: 'ui:model', ref: 'holding', payload: 'any' });
+await settle();
 
 shell.dispatch({ type: 'ui:click', ref: 'scope', payload: { value: 'current', label: 'Current' } });
 await settle();

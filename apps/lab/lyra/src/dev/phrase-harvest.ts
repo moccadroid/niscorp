@@ -180,7 +180,7 @@ const APP_COMPOSED: string[] = [
 // in it stops being read.
 const NOT_PROSE = new Set([
   // enum values and design tokens sitting in `data`
-  'accent', 'calendar', 'confirmed', 'current', 'email', 'instructor', 'manual',
+  'accent', 'any', 'calendar', 'confirmed', 'current', 'email', 'instructor', 'manual',
   'month', 'recipes', 'recurring', 'solid',
   // sort keys — machine values that leak from `data` defaults
   'asc', 'people.name',

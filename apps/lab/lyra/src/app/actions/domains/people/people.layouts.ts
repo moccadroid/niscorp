@@ -14,6 +14,11 @@ export const peopleListLayout: LayoutNode = page([
       { component: 'Hero', props: { title: 'People' } },
       { component: 'Button', props: { variant: 'solid', label: 'Add a person' }, ref: 'add' },
       { component: 'Tabs', props: { value: '$.scope', options: '$.scopes' }, ref: 'scope' },
+      // THE SECOND QUESTION. It used to be four more chips in the strip above,
+      // which offered "Current" and "Passes" as alternatives to each other while
+      // they answer different things — and made "members who hold a pass"
+      // unaskable, because one strip can only carry one axis.
+      { component: 'Select', props: { label: 'Holding', options: '$.holdings', value: '$.holding' }, ref: 'holding' },
     ],
   },
 

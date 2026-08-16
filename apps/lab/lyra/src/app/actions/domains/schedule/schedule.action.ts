@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import type { ActionDefinition } from '@niscorp/nova';
 import { timetableLayout } from './schedule.layout';
-import { programsPrism, upcomingPrism } from './schedule.prism';
+import { localePrism, programsPrism, upcomingPrism } from './schedule.prism';
 
 export const scheduleTimetableAction: ActionDefinition = {
   id: 'schedule.timetable',
@@ -19,15 +19,19 @@ export const scheduleTimetableAction: ActionDefinition = {
       { value: 'list', label: 'List', calendar: false },
     ],
     weekSkip: 0,
+    // The tag the calendar formats its day names with — see schedule.prism.ts.
+    currentLocale: '',
   },
   layout: timetableLayout,
   endpoints: {
     load: { url: '/api/schedule/vex', method: 'POST', request: upcomingPrism, target: 'sessions' },
     loadPrograms: { url: '/api/schedule/vex', method: 'POST', request: programsPrism, target: 'programs' },
+    locale: { url: '/api/schedule/vex', method: 'POST', request: localePrism, target: 'localeRow' },
   },
   lifecycle: {
     mount: [
       { call: 'loadPrograms' },
+      { call: 'locale', onSuccess: [{ set: 'currentLocale', value: '$.localeRow.locale' }] },
       { call: 'load', onSuccess: [{ set: 'loading', value: false }] },
     ],
   },

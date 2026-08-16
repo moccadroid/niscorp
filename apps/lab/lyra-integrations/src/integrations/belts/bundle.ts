@@ -246,13 +246,14 @@ const rosterAction: ActionDefinition = {
     // OURS. A URL under our own prefix — intake refuses anything else.
     belts: { url: '/integrations/belts/roster', method: 'POST', request: {}, target: 'belts' },
     // THEIRS. A fingerprint the contract listed. We do not know what table it
-    // reads and cannot ask. The lens is a CONTEXT VALUE now rather than part of
-    // the name, and the search is optional — an integration asking for the members
-    // lens sends the lens and nothing else, with no wildcard to know about.
+    // reads and cannot ask. The roll takes TWO closed vocabularies now — who,
+    // and what they hold — and both are context values rather than part of the
+    // name. An integration wanting everybody with a membership asks for exactly
+    // that: no lens, no search, no wildcard to know about.
     members: {
       url: '/api/member/vex',
       method: 'POST',
-      request: { fingerprint: 'people/list', context: { lens: 'members' } },
+      request: { fingerprint: 'people/list', context: { holding: 'membership' } },
       target: 'members',
     },
   },

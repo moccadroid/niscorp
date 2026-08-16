@@ -32,7 +32,7 @@ export const timetableLayout: LayoutNode = {
       if: '$.calendar',
       then: {
         component: 'Calendar',
-        props: { sessions: '$.sessions', days: 7, skip: '$.weekSkip', stepRef: 'stepWeek', loading: '$.loading', empty: 'Nothing scheduled in the next five weeks.' },
+        props: { sessions: '$.sessions', days: 7, skip: '$.weekSkip', stepRef: 'stepWeek', loading: '$.loading', locale: '$.currentLocale', empty: 'Nothing scheduled in the next five weeks.' },
         ref: 'openSession',
       },
       else: {

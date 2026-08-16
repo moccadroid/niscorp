@@ -45,7 +45,7 @@ ok('a prospect appears with derived standing', lumenText.includes('Priya Anand')
 ok('...and the milkman resolves as a contact', lumenText.includes('Bo Lindqvist') && /Bo Lindqvist[^}]*Contact/.test(lumenText), 'a supplier is somebody the studio deals with');
 
 // The members lens carries only people with a live or paused subscription.
-const lumenMembers = await read(CAST.lumen.owner, 'member', 'people/list', { q: '%', lens: 'members' });
+const lumenMembers = await read(CAST.lumen.owner, 'member', 'people/list', { q: '%', holding: 'membership' });
 const membersText = JSON.stringify(lumenMembers);
 ok('the members lens holds the subscribed', membersText.includes('Ava Klein'));
 ok('...and not the prospect', !membersText.includes('Priya Anand'));
@@ -96,7 +96,7 @@ ok('a member cannot read the roll', refused(memberSees), JSON.stringify(memberSe
 // The desk derives standing off the anchor's own mirrors (schema.ts), so the
 // members lens answers without any grant on `subscriptions` — the boolean the
 // desk always had, without the row it never did.
-const deskRoll = await read(CAST.lumen.desk, 'member', 'people/list', { q: '%', lens: 'members' });
+const deskRoll = await read(CAST.lumen.desk, 'member', 'people/list', { q: '%', holding: 'membership' });
 ok('the desk reads the members lens — standing lives on the anchor', Array.isArray(deskRoll) && JSON.stringify(deskRoll).includes('Ava Klein'), JSON.stringify(deskRoll).slice(0, 100));
 const deskRevenue = await read(CAST.lumen.desk, 'member', 'subscriptions/for-member', { personId: 'p_ava' });
 ok('...while a subscription READ is still refused', refused(deskRevenue), JSON.stringify(deskRevenue).slice(0, 100));
