@@ -198,7 +198,7 @@ export const CHARTER: Charter = {
   // ── the manager ──────────────────────────────────────────
   manager: {
     extends: ['instructor', 'desk'],
-    actions: ['home.overview', 'plans.*', 'programs.*', 'courses.*', 'timetable.*', 'reports.*', 'automations.*', 'studio.addons'],
+    actions: ['home.overview', 'plans.*', 'programs.*', 'courses.*', 'timetable.*', 'reports.*', 'automations.*', 'campaigns.*', 'hub.marketing', 'studio.addons'],
     data: [
       // The read that makes revenue answerable, held here and no lower.
       'subscriptions.read',
@@ -249,6 +249,33 @@ export const CHARTER: Charter = {
       // correcting one is a refund somebody decides on, not an edit.
       'purchases.read',
       'purchases.write.insert',
+      // ── WRITING TO EVERYBODY AT ONCE ───────────────────────
+      //
+      // Beside `automations.*` and for the same reason: the desk selects and
+      // serves the person in front of them, and deciding what the studio
+      // BROADCASTS is a different job from serving somebody.
+      //
+      // AND NOTHING ON `outbox`, WHICH IS THE POINT. A campaign is a row
+      // saying what the studio decided to say and to which question; the mail
+      // is written by machinery that reads it (reflexes/compose.ts). So the
+      // sentence at the automation rung below stays literally true — no human
+      // writes that table — and the consent question gets asked at the moment
+      // of WRITING rather than trusted from a sheet somebody left open.
+      'campaign_audiences.read',
+      'campaigns.read',
+      'campaigns.write.insert',
+      // WHY A MANAGER MAY READ THE SUPPRESSION LIST. The compose sheet's whole
+      // job is saying who will NOT be written to and why — "2 have opted out,
+      // 1 reported us" — and the third reason is only knowable from here.
+      // Read-only: the provider's webhook writes this table and a person never
+      // does, which is the same split the automation rung keeps.
+      //
+      // The grant does not hand anybody the list. Reads are replay-only, so it
+      // reaches exactly the entries that exist, and the only one on this rung
+      // correlates on the person's own address and on this studio's id or the
+      // empty one — a dead address is a fact about the address, a complaint is
+      // a fact about a relationship, and neither is another studio's to see.
+      'mail_suppressions.read',
       // No delete verb anywhere in this app — retiring and cancelling are both
       // status changes.
     ],
@@ -307,6 +334,22 @@ export const CHARTER: Charter = {
       // Telling the studio something is an ADD onto the notices list — the
       // same published fingerprint the integrations replay, on the same discipline.
       'notifications.write.insert',
+      // ── WHAT A HUMAN DECIDED TO BROADCAST ──────────────────
+      //
+      // READ, so the fan-out can work from the row a manager wrote; UPDATE, so
+      // it can say what became of it — queued to this many people, or refused
+      // because the day's ceiling would not hold it. NO INSERT: composing a
+      // campaign is a person's act, and machinery that could author one could
+      // decide by itself to write to everybody.
+      //
+      // This is the grant that keeps the sentence above true. A campaign's
+      // mail reaches `outbox` through the same `outbox.write.insert` every
+      // automation uses, so the highest-volume mail in the product goes
+      // through the claim, the cap, the suppression list and the sweep like
+      // everything else — and there is still no human with a pen on that table.
+      'campaigns.read',
+      'campaigns.write.update',
+      'campaign_audiences.read',
     ],
   },
 

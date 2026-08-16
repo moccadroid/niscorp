@@ -2,6 +2,7 @@
 import { insert } from '../sql';
 import { EFFECTS, MOMENTS } from '@lyra/app/reflexes/compose';
 import { RECIPES } from '@lyra/app/reflexes/recipes';
+import { AUDIENCES } from '@lyra/app/vex/campaign.entries';
 
 // PROJECTED FROM THE SHIPPED CONSTANTS, never typed twice. A moment's
 // behaviour is code — its `watch` anchor and its `context` are functions —
@@ -48,5 +49,15 @@ export const VOCABULARY_SQL = [
       recipe.body,
       index,
     ]),
+  ),
+  // THE QUESTIONS A STUDIO MAY ASK OF ITS OWN ROLL, from the same declaration
+  // the queries are built from — so the dropdown an owner chooses from and the
+  // filter that decides who receives the mail cannot come apart. A campaign's
+  // foreign key lands on these rows, which is what makes an audience nobody
+  // shipped unstorable rather than merely unselectable.
+  insert(
+    'campaign_audiences',
+    ['id', 'phrase', 'blurb', 'windowed', 'sort'],
+    AUDIENCES.map((audience, index) => [audience.id, audience.phrase, audience.blurb, audience.windowed, index]),
   ),
 ].join('\n');

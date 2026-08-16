@@ -6,7 +6,8 @@ import type { MossServer } from '@niscorp/moss';
 import { mutationEffect } from '@niscorp/vex';
 import type { PgPool } from '@niscorp/vex';
 import { MUTATION_ENTRIES } from '@lyra/app/vex';
-import { MAIL_ATTEMPTS, STUCK_AFTER_MS, dispatchReflex, reflexesFor, sweepReflex } from '@lyra/app/reflexes/compose';
+import { MAIL_ATTEMPTS, STUCK_AFTER_MS, campaignReflex, dispatchReflex, reflexesFor, sweepReflex } from '@lyra/app/reflexes/compose';
+import { RESOLVE_PAGE } from '@lyra/app/vex/campaign.entries';
 import type { AutomationRow } from '@lyra/app/reflexes/compose';
 import { sendMail } from './mail/send';
 import { unsubscribeUrl } from './unsubscribe';
@@ -199,9 +200,136 @@ const mailEffect = (deps: Deps, as: string | undefined) => ({
   },
 });
 
+// ── THE SECOND EFFECT THAT IS NOT ONE WRITE ──────────────────
+//
+// A campaign becomes mail here, and nowhere else. Four steps, and the order is
+// the design:
+//
+//   ASK THE QUESTION AGAIN, as the studio's own machinery. Not "who did the
+//   screen say" — the screen said something ninety seconds ago and consent can
+//   have moved since. `campaigns/audience-resolve` answers only the people who
+//   can honestly be written to, through the same filter the sheet's number was
+//   counted through.
+//
+//   FIT UNDER THE CEILING, or refuse the whole thing with the number in it. A
+//   capped message FAILS at dispatch rather than waiting (see above), which is
+//   right for a reminder about tomorrow's class and wrong for a newsletter —
+//   half a newsletter is worse than none, and an owner who can read "your
+//   daily limit is 1000 and this needed 1200" can do something about it.
+//
+//   ONE STATEMENT for however many people, ON CONFLICT DO NOTHING, so the
+//   retry this task is allowed to have costs nobody a second copy.
+//
+//   SAY WHAT HAPPENED on the campaign row, because a screen that cannot tell
+//   "went to 397" from "did nothing" is a screen an owner cannot trust.
+//
+// It does not send. Every row it writes wakes the dispatcher exactly like an
+// automation's would.
+const campaignEffect = (deps: Deps, as: string | undefined) => ({
+  writes: ['outbox', 'campaigns'],
+  run: async (input: unknown, ctx: import('@niscorp/tide').TideCtx) => {
+    if (as === undefined) throw new Error('tide: a campaign ran with no identity');
+    const row = (input ?? {}) as Record<string, unknown>;
+    const campaignId = String(row['campaignId'] ?? '');
+    if (campaignId === '') throw new Error('tide: a campaign ran with no campaign');
+    const chain = { cause: `task:${ctx.taskId}`, depth: ctx.depth };
+
+    const excluded = Array.isArray(row['excluded']) ? row['excluded'].map((id) => String(id)) : [];
+    const days = Number(row['audienceDays'] ?? 0);
+    // The window as a date, from the studio's own clock via tide's. A question
+    // that takes no window ignores this, and its arm never reads it.
+    const cutoff = new Date(deps.now() - Math.max(days, 0) * 86_400_000).toISOString().slice(0, 10);
+
+    const question = {
+      audience: String(row['audience'] ?? ''),
+      cutoff,
+      // Absent rather than empty: the entry's exclusion is an optional key,
+      // and an empty list is not a filter.
+      ...(excluded.length === 0 ? {} : { except: excluded }),
+    };
+
+    const refuse = async (reason: string): Promise<{ queued: number; reason: string }> => {
+      await callVex(deps, as, 'campaigns/refuse', { campaignId, reason }, chain);
+      return { queued: 0, reason };
+    };
+
+    // ── HOW MANY, BEFORE HOW ─────────────────────────────────
+    //
+    // Counted through the same filter the pages are read through, because the
+    // ceiling is a question about the WHOLE campaign and a page cannot answer
+    // it. Asking first is also what keeps the refusal honest: a cap checked
+    // per page would queue four hundred messages and then discover it should
+    // have queued none.
+    const counted = await callVex(deps, as, 'campaigns/audience-writable', question, chain);
+    const total = Number((counted as { result?: { ok?: unknown } } | null)?.result?.ok ?? 0);
+
+    // NOBODY IS A REFUSAL, NOT A SEND OF NOTHING. "Sent — 0 people" is a row
+    // an owner reads as success; this one says what actually happened.
+    if (total === 0) return refuse('nobody in this list can be written to');
+
+    const cap = Number(row['dailyCap'] ?? 0);
+    if (cap > 0) {
+      const sent = await callVex(deps, as, 'automation/sent-today', { today: new Date(deps.now()).toISOString().slice(0, 10) }, chain);
+      const used = Number((sent as { result?: { total?: unknown } } | null)?.result?.total ?? 0);
+      const left = cap - used;
+      // In the provider-words tradition of `failed_reason` beside it: the one
+      // thing an owner needs is the arithmetic, in an order that reads the
+      // same whichever way the numbers fall.
+      if (total > left) return refuse(`this needed ${total} messages — today's ceiling of ${cap} had room for ${left}`);
+    }
+
+    // ── A PAGE AT A TIME, AND NEVER A TRUNCATION ─────────────
+    //
+    // The pipeline gives every limitless read a limit of its own (100, and
+    // 1000 at the ceiling), which is right for every other entry here and
+    // catastrophic for this one: the hundred-and-first member would simply
+    // never be written to, and the campaign would say it had gone. So the
+    // read declares its page size and this walks it — seeking on `person_id`,
+    // which the entry sorts by and which is unique, so the cursor cannot skip
+    // or repeat a row.
+    //
+    // Each page is inserted as it arrives rather than after the walk: memory
+    // stays flat at a studio of any size, and a process that dies mid-walk has
+    // durably queued what it already read. The re-run writes the same rows and
+    // the unique index swallows them.
+    let after = '';
+    let queued = 0;
+    for (;;) {
+      const answered = await callVex(deps, as, 'campaigns/audience-resolve', { ...question, ...(after === '' ? {} : { after }) }, chain);
+      const resolved = answered !== null && typeof answered === 'object' && 'result' in answered ? (answered as { result: unknown }).result : answered;
+      const page = (Array.isArray(resolved) ? resolved : []) as { person_id?: unknown; to_address?: unknown }[];
+      if (page.length === 0) break;
+
+      await callVex(
+        deps,
+        as,
+        'campaigns/fan-out',
+        {
+          recipients: page.map((r) => ({ person_id: String(r.person_id ?? ''), to_address: String(r.to_address ?? '') })),
+          campaignId,
+          subject: String(row['subject'] ?? ''),
+          body: String(row['body'] ?? ''),
+          source: 'campaign',
+        },
+        chain,
+      );
+
+      queued += page.length;
+      after = String(page[page.length - 1]?.person_id ?? '');
+      // A short page is the last page. Asking again would cost a round trip to
+      // be told what this already knows.
+      if (page.length < RESOLVE_PAGE) break;
+    }
+
+    await callVex(deps, as, 'campaigns/stamp-sent', { campaignId, queuedCount: queued, sentAt: new Date(deps.now()).toISOString() }, chain);
+    return { queued };
+  },
+});
+
 export const wireTide = (deps: Deps): Tide => {
   const effects = (as: string | undefined) => ({
     'mail.send': mailEffect(deps, as),
+    'campaign.fanOut': campaignEffect(deps, as),
     ...Object.fromEntries(
       MUTATION_ENTRIES.map((entry) => [
         entry.fingerprint,
@@ -269,6 +397,10 @@ export const reflexesForEveryStudio = (studios: { id: string; timezone: string }
     // standing.
     dispatchReflex(studio.id),
     sweepReflex(studio.id, studio.timezone),
+    // Also infrastructure rather than an automation: a studio that has armed
+    // nothing can still write to its people, and the thing that turns that
+    // decision into mail is already standing when they do.
+    campaignReflex(studio.id),
     ...reflexesFor(
       studio.id,
       studio.timezone,

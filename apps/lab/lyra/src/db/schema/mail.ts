@@ -42,12 +42,37 @@ export const MAIL_DDL = /* sql */ `
     -- List-Unsubscribe headers the large mailbox providers now expect. A class
     -- reminder is not marketing and gets neither.
     marketing   BOOLEAN NOT NULL DEFAULT false,
+    -- WHICH BROADCAST THIS ROW BELONGS TO, and nothing when it belongs to
+    -- none — an automation's mail has no campaign. One nullable column is
+    -- what makes a campaign's report an aggregate over rows that already
+    -- exist, which is why there is no recipient table anywhere: the rows in
+    -- here ARE the record of who was written to.
+    campaign_id TEXT REFERENCES campaigns(id),
     source      TEXT NOT NULL DEFAULT '',
     created_on  DATE NOT NULL DEFAULT CURRENT_DATE,
     created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
   );
 
   CREATE INDEX outbox_studio ON outbox (studio_id, created_on);
+
+  -- ── WHAT MAKES A FAN-OUT SAFE TO RUN TWICE ──────────────────
+  --
+  -- A campaign becomes N rows in ONE statement, and the campaign is stamped
+  -- 'sent' in the statement after it. A process that dies between the two is
+  -- a process that runs the first one again — and the alternative to this
+  -- index is a second claim state machine on \`campaigns\`, duplicating the
+  -- one \`outbox\` already has for exactly this reason.
+  --
+  -- With it, the retry inserts nothing (the fan-out writes ON CONFLICT DO
+  -- NOTHING) and nobody receives a second copy.
+  --
+  -- NOT PARTIAL, though "WHERE campaign_id IS NOT NULL" is what it means.
+  -- Automation mail carries no campaign, and NULLs are distinct to a unique
+  -- index already, so the predicate would buy nothing — while costing the one
+  -- thing this index exists for: Postgres cannot INFER a partial index from
+  -- ON CONFLICT (campaign_id, person_id) alone, and the fan-out would fail
+  -- with "no unique constraint matching" rather than doing nothing.
+  CREATE UNIQUE INDEX outbox_campaign_person ON outbox (campaign_id, person_id);
 
   -- ── WHO WE MUST NOT WRITE TO AGAIN ──────────────────────────
   --

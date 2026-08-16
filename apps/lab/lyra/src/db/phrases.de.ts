@@ -902,4 +902,52 @@ export const GERMAN: Record<string, string> = {
     'Alles, wofür deine Kinder eingetragen sind.',
   'Anything you book for them will show up here.':
     'Alles, was du für sie buchst, erscheint hier.',
+  // ── campaigns ──
+  //
+  // The audience PHRASES are the same words the People screen wears for its
+  // own lenses, deliberately: an owner picking "Membership holders" here is
+  // picking the list they already know by that name.
+  Campaigns: 'Kampagnen',
+  Marketing: 'Marketing',
+  'What you say to your people, and who hears it.':
+    'Was du deinen Leuten sagst — und wer es hört.',
+  'Pick who it goes to, type three sentences, send. Nothing to import first.':
+    'Wähle, wer es bekommt, schreib drei Sätze, schick es ab. Nichts zu importieren.',
+  'What you have written to your people, and what became of it.':
+    'Was du deinen Leuten geschrieben hast — und was daraus wurde.',
+  'Write to your people': 'Schreib deinen Leuten',
+  'Nothing has gone out yet.': 'Es ist noch nichts rausgegangen.',
+  'Pick a question, type three sentences, send.':
+    'Wähle eine Frage, schreib drei Sätze, schick es ab.',
+  'Went to': 'Ging an',
+  'Some of these did not go out.': 'Einiges davon ist nicht rausgegangen.',
+  Draft: 'Entwurf',
+  'Going out': 'Geht raus',
+  // the questions a studio may ask of its own roll
+  'A question about your own people. Nothing to import.':
+    'Eine Frage über deine eigenen Leute. Nichts zu importieren.',
+  'Everyone current': 'Alle Aktiven',
+  'Membership holders': 'Mitglieder',
+  'Pass holders': 'Blockkarten-Inhaber',
+  'Past members': 'Ehemalige',
+  'Quiet for how many days': 'Seit wie vielen Tagen inaktiv',
+  // the honest partition
+  '{n} will be written to': '{n} werden angeschrieben',
+  '{n} in this list': '{n} in dieser Liste',
+  '{n} sent today': '{n} heute verschickt',
+  'Who gets it': 'Wer es bekommt',
+  'Everybody ticked. Untick anyone you would rather leave out.':
+    'Alle sind angehakt. Nimm den Haken bei allen weg, die du lieber auslässt.',
+  // what a studio writes
+  'Send it': 'Abschicken',
+  // the compose page and the sheet that says who gets it
+  'Who it goes to': 'Wer es bekommt',
+  'Pick who it goes to, say your piece, send.':
+    'Wähle, wer es bekommt, sag was du zu sagen hast, schick es ab.',
+  'See who gets it': 'Ansehen, wer es bekommt',
+  'Nobody in this list can be written to.':
+    'In dieser Liste kann niemand angeschrieben werden.',
+  'Everybody here has either not opted in or has no address.':
+    'Alle hier haben entweder nicht zugestimmt oder keine Adresse.',
+  Done: 'Fertig',
 };

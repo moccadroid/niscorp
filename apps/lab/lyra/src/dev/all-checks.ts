@@ -37,6 +37,7 @@ const CHECKS = [
   ['consent-check', 'consent is part of the question, and the way out of it needs no session'],
   ['bounce-check', 'a bounce is signed, scoped and acted on — and a forged one is a 200 that changed nothing'],
   ['mail-check', 'mail leaves by one door: one vendor, one secret, one verb, and no database behind it'],
+  ['campaigns-check', 'the studio writes to its people: the question is answered rather than filtered, and no human queues the mail'],
   ['perimeter-check', 'the integration authenticates its caller, not just the identity claimed'],
   ['role-perimeter-check', 'a declared path is not a door: an integration answers the screens a caller actually holds'],
   ['admin-check', 'the administration tool administers Lyra and can reach nothing inside it'],

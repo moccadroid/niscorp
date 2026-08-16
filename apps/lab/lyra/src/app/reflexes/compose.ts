@@ -346,6 +346,65 @@ export const dispatchReflex = (studioId: string): ReflexInput => ({
   enabled: true,
 });
 
+// ── WHAT TURNS A DECISION INTO MAIL ──────────────────────────
+//
+// A manager presses Send and ONE row lands: the campaign, saying what the
+// studio decided to say and to which question. This is what reads it.
+//
+// WHY MACHINERY RATHER THAN THE BUTTON. Three reasons, and the first is the
+// one that would be hard to add back later:
+//
+//   CONSENT IS ASKED WHEN THE MAIL IS WRITTEN, not when a sheet was drawn. The
+//   effect re-asks the audience question here, so somebody who opted out in
+//   the ninety seconds it took to type three sentences is somebody this send
+//   does not reach. A recipient list captured by a screen could not do that.
+//
+//   `outbox` KEEPS ITS PROPERTY. No human writes that table — the sentence the
+//   automation rung's grant is justified by (charter.ts). A campaign's mail
+//   goes in through the same `outbox.write.insert` every automation uses, so
+//   the claim, the cap, the suppression list and the sweep all still apply to
+//   the highest-volume mail in the product.
+//
+//   TWO THOUSAND RECIPIENTS IS NOT A REQUEST. It is a task, with a retry
+//   policy and somewhere to record what happened.
+//
+// It arms on any insert and lets the SELECTION decide: `campaigns/pending`
+// answers only for `state = 'sending'`, so a draft wakes this and selects
+// nothing. The state is the guard, in one place, on the read.
+export const campaignReflex = (studioId: string): ReflexInput => ({
+  id: `${studioId}:campaign-fanout`,
+  intent: 'Turn what the studio decided to say into mail for the people it reaches.',
+  as: `automation@${studioId}`,
+  on: { fact: { entity: 'campaigns', op: 'insert' } },
+  select: {
+    query: { fingerprint: 'campaigns/pending', context: { campaignId: { $ref: '$.fact.row.id' } } },
+    mode: 'each',
+    unitKey: 'campaign_id',
+  },
+  effect: {
+    name: 'campaign.fanOut',
+    input: {
+      campaignId: { $ref: '$.row.campaign_id' },
+      studioId: { $ref: '$.row.studio_id' },
+      audience: { $ref: '$.row.audience' },
+      // The window arrives as a NUMBER OF DAYS and becomes a date in the
+      // effect: `$dateAdd` takes a literal amount, and this one is the
+      // campaign's own.
+      audienceDays: { $ref: '$.row.audience_days' },
+      excluded: { $ref: '$.row.excluded' },
+      subject: { $ref: '$.row.subject' },
+      body: { $ref: '$.row.body' },
+      dailyCap: { $ref: '$.row.daily_cap' },
+    },
+  },
+  // The same policy the mail reflexes carry. A retry is SAFE here, which is
+  // not a hope: the fan-out inserts ON CONFLICT DO NOTHING against
+  // `outbox_campaign_person`, so a second run over the same campaign writes
+  // nothing and nobody receives twice.
+  policy: { retry: { max: MAIL_RETRIES, backoff: 'fixed', baseMs: 30_000 }, timeoutMs: 30_000, overlap: 'skip' },
+  enabled: true,
+});
+
 // ── THE COMPOSITION ──────────────────────────────────────────
 export const reflexesFor = (studioId: string, timezone: string, rows: readonly AutomationRow[] = []): ReflexInput[] => {
   const as = `automation@${studioId}`;

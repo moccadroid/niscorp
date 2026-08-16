@@ -123,7 +123,7 @@ for (const [who, email, expected] of PRINCIPALS) {
 // The tree is the promise; the DOM is the delivery. A component that quietly
 // drops its children — or renders them into an attribute — passes every JSON
 // assertion in this directory and fails here.
-const DESTINATIONS = ['people.list', 'staff.list', 'plans.list', 'timetable.list', 'schedule.timetable', 'reports.overview', 'studio.settings', 'automations.list', 'desk.checkin', 'programs.list'].filter(
+const DESTINATIONS = ['people.list', 'staff.list', 'plans.list', 'timetable.list', 'schedule.timetable', 'reports.overview', 'studio.settings', 'automations.list', 'campaigns.list', 'desk.checkin', 'programs.list'].filter(
   (id) => app.actions[id] !== undefined,
 );
 

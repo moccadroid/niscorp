@@ -185,6 +185,12 @@ export const scopeBehaviors: ScopeBehaviors = {
     // The engine loads every studio's reflex rows; it schedules for all.
     scheduler: { read: [] },
   },
+  // What a studio decided to say. Tenant-scoped like everything a studio
+  // authors — and the scope is what makes the fan-out safe to be machinery:
+  // the reflex runs as the studio's own automation principal, so `studioId` is
+  // established before it reads, and a campaign id from anywhere else resolves
+  // no row rather than another studio's newsletter.
+  campaigns: tenantWrite,
 
   // Scoped on `id` rather than `studio_id`, because it IS the studio. The
   // `identity` reach carries the same pin: by the time moss reads
@@ -210,6 +216,10 @@ export const scopeBehaviors: ScopeBehaviors = {
   // scoping it would mean inventing a tenant column for a constant. What IS
   // scoped is every row that points at it (`automations`), which is where a
   // studio's own words and hours live.
+  //
+  // `campaign_audiences` is the same kind of thing for the same reason: the
+  // questions a studio may ask of its own roll are what the release ships, and
+  // the row that points at one (`campaigns`) is the scoped half.
   //
   // `people` carries ONE named reach: identity, pinned to the caller's own
   // row — the engine-enforced answer to "who am I", and the pin that makes the

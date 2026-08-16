@@ -32,6 +32,7 @@ import { phrasesBook, phrasesLocales, phrasesIntegrations } from './language.ent
 import { credentialPrincipalByEmail, credentialSweepLinks, credentialMintLink, credentialRedeemLink, mailerRecordDelivered, mailerRecordFailed, mailerOutboxOrigin, mailerSuppress, mailerOptOut, transportStaffRoster, transportMemberRoster, schedulerReflexRows, schedulerStudioZones } from './machinery.entries';
 import { addonInstall, addonUninstall, addonsInstalled, addonsList } from './addon.entries';
 import { attendanceByHour, attendanceByProgram, attendanceByWeek, membersByStatus, offeringCreate, offeringDelete, offeringSetActive, offeringUpdate, planUptake } from './reports.entries';
+import { campaignAudienceCount, campaignAudienceWritable, campaignAudiencePage, campaignAudienceResolve, campaignCreate, campaignFanOut, campaignPending, campaignRefuse, campaignStampSent, campaignsList, campaignsSentToday } from './campaign.entries';
 
 export type CacheEntry = SeedEntry;
 export type MutationEntry = SeedMutation;
@@ -129,6 +130,13 @@ export const ENTRIES: CacheEntry[] = [
   transportMemberRoster,
   schedulerReflexRows,
   schedulerStudioZones,
+  campaignAudienceCount,
+  campaignAudienceWritable,
+  campaignAudiencePage,
+  campaignAudienceResolve,
+  campaignsSentToday,
+  campaignsList,
+  campaignPending,
 ];
 
 // Every write the app can make. Replay-only forever: never generated, linted at
@@ -211,4 +219,8 @@ export const MUTATION_ENTRIES: MutationEntry[] = [
   offeringUpdate,
   offeringSetActive,
   offeringDelete,
+  campaignCreate,
+  campaignFanOut,
+  campaignStampSent,
+  campaignRefuse,
 ];

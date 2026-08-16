@@ -13,5 +13,18 @@ export const RESOURCES: Record<string, { entities: readonly string[] }> = {
 
   // A resource of its own, so the surface an unattended principal uses is one
   // visible thing and nothing a person browses carries these along by accident.
-  automation: { entities: ['studio_people', 'people', 'subscriptions', 'bookings', 'class_sessions', 'notifications', 'outbox', 'automations'] },
+  automation: { entities: ['studio_people', 'people', 'subscriptions', 'bookings', 'class_sessions', 'notifications', 'outbox', 'campaigns', 'campaign_audiences', 'automations'] },
+
+  // WRITING TO EVERYBODY AT ONCE, and its own surface because the question it
+  // asks spans four others: an audience is the roll (studio_people, people)
+  // tested against what people hold (subscriptions, bookings) and against what
+  // the mail provider has told us (mail_suppressions). Answering that from the
+  // People surface would mean widening People with the mail tables, which is
+  // how a roll read comes to carry a suppression list.
+  //
+  // `outbox` is here for the day's ceiling and for nothing else on this
+  // surface: the charter gives a manager `outbox.read` and no pen.
+  campaigns: {
+    entities: ['campaigns', 'campaign_audiences', 'studio_people', 'people', 'subscriptions', 'bookings', 'class_sessions', 'mail_suppressions', 'outbox'],
+  },
 };

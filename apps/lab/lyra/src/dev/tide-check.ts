@@ -49,14 +49,16 @@ const reflexes = reflexesForEveryStudio(studios.rows, automationRows.rows as nev
 const derivedDigests = 0;
 const loaded = await tide.load(reflexes, { at: boot });
 
-// ONE PER ROW, PLUS TWO PER STUDIO. The extras are infrastructure rather than
-// a studio's automations: the outbox DISPATCHER, which wakes on the write, and
-// the SWEEP, which is the net under it — a delivered-once fact cannot wake
-// anything for a row whose process died mid-send.
+// ONE PER ROW, PLUS THREE PER STUDIO. The extras are infrastructure rather
+// than a studio's automations: the outbox DISPATCHER, which wakes on the
+// write; the SWEEP, which is the net under it — a delivered-once fact cannot
+// wake anything for a row whose process died mid-send; and the campaign
+// FAN-OUT, which turns a manager's one decision into a message per person.
+// All three stand for a studio that has armed nothing at all.
 ok(
-  'each studio runs its own automations, and the thing that sends them',
-  reflexes.length === automationRows.rows.length + studios.rows.length * 2 + derivedDigests,
-  `${reflexes.length} reflexes from ${automationRows.rows.length} rows, ${studios.rows.length} studios × 2 (dispatch + sweep) plus ${derivedDigests} derived digest(s)`,
+  'each studio runs its own automations, and the things that send them',
+  reflexes.length === automationRows.rows.length + studios.rows.length * 3 + derivedDigests,
+  `${reflexes.length} reflexes from ${automationRows.rows.length} rows, ${studios.rows.length} studios × 3 (dispatch + sweep + campaign fan-out) plus ${derivedDigests} derived digest(s)`,
 );
 ok(
   '...and they differ per studio',

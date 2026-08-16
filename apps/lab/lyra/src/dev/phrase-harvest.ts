@@ -186,6 +186,8 @@ const NOT_PROSE = new Set([
   'asc', 'people.name',
   // ids and fingerprints
   'desk.followups', 'member.joined', 'people.detail', 'people/count', 'people/list',
+  // the audience a compose sheet opens on — a question's id, not its phrase
+  'roll/current',
 ]);
 
 // Reads the same in every language: product names, proper nouns, and the

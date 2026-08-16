@@ -122,9 +122,11 @@ it back up, is **[`/docs/I18N.md`](../../../docs/I18N.md)** — this is the summ
 - **Proseness is decided by the KEY, never the value.** The app declares which keys
   carry prose (`phraseKeys`), including the `*_display` suffix its vex entries
   already used. This is what stops a member called "Pass" being renamed.
-- **Words are per language; formatting is per region.** One `de` book serves
-  `de-AT`, `de-DE` and `de-CH`; `Intl` supplies the rest from the full tag. Vienna
-  writes `€ 45,00`, Hamburg `45,00 €`, Zürich `EUR 45.00`.
+- **One offer per language.** A locale is a bare language tag (`de`, `en`) —
+  stored, seeded and offered once. The picker used to fan `de` out into `de-AT`,
+  `de-DE` and `de-CH`, which asked a studio owner to choose between three
+  Germans that differ only in where a currency symbol sits. `Intl` still does
+  the money and the dates, from the language's own convention (`89,00 €`).
 - **Locale sits on the studio**, beside `currency` and `country`. Per-person is one
   column and a `COALESCE` away and is the obvious next move.
 - **Switching rebuilds the shell**, because `inputs` composed the greeting and the

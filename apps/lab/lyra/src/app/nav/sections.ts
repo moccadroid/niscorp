@@ -64,6 +64,23 @@ export const AREAS: NavArea[] = [
     ],
   },
   {
+    // ── WRITING TO EVERYBODY AT ONCE ─────────────────────────
+    //
+    // Its own area rather than a screen under Money or Studio, because of what
+    // it IS rather than where it fits: Money is analysis, Studio is setup, and
+    // this is a job an owner does twice a week. It also gives the outbox a
+    // home — every message the product sends has been visible only from inside
+    // the Automations screen, which is the wrong place to look for the mail a
+    // human decided to send.
+    id: 'hub.marketing',
+    icon: 'mail',
+    label: 'Marketing',
+    blurb: 'What you say to your people, and who hears it.',
+    items: [
+      { icon: 'mail', action: 'campaigns.list', label: 'Campaigns', blurb: 'Pick who it goes to, type three sentences, send. Nothing to import first.' },
+    ],
+  },
+  {
     // ── THE STUDIO ITSELF ────────────────────────────────────
     //
     // Was "Settings", holding a look, some automations and a mail address —

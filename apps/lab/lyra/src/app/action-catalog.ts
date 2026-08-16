@@ -14,6 +14,9 @@ import { studioMailAction } from './actions/domains/studio/mail.action';
 import { deskCheckInAction, deskCheckInInputSchema } from './actions/domains/desk/desk.action';
 import { followUpsAction, followUpsInputSchema } from './actions/domains/desk/followups.action';
 import { automationsAction, automationsInputSchema } from './actions/domains/automations/automations.action';
+import { campaignsAction, campaignsInputSchema } from './actions/domains/campaigns/campaigns.action';
+import { campaignComposeAction, campaignComposeInputSchema } from './actions/domains/campaigns/campaigns.compose';
+import { campaignRecipientsAction, campaignRecipientsInputSchema } from './actions/domains/campaigns/campaigns.recipients';
 import { automationFormAction, automationFormInputSchema } from './actions/domains/automations/automations.form';
 import { courseFormAction, courseFormInputSchema } from './actions/domains/courses/courses.form';
 import { courseRosterAction, courseRosterInputSchema } from './actions/domains/courses/courses.roster';
@@ -58,6 +61,9 @@ export const CATALOG_DEFINITIONS: Record<string, ActionDefinition> = {
   'courses.form': { ...courseFormAction, input: courseFormInputSchema },
   'automations.form': { ...automationFormAction, input: automationFormInputSchema },
   'automations.list': { ...automationsAction, input: automationsInputSchema },
+  'campaigns.list': { ...campaignsAction, input: campaignsInputSchema },
+  'campaigns.compose': { ...campaignComposeAction, input: campaignComposeInputSchema },
+  'campaigns.recipients': { ...campaignRecipientsAction, input: campaignRecipientsInputSchema },
   'staff.form': { ...staffFormAction, input: staffFormInputSchema },
   'staff.list': { ...staffListAction, input: staffListInputSchema },
   'reports.overview': { ...reportsAction, input: reportsInputSchema },

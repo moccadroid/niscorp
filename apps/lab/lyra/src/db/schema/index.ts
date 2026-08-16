@@ -66,6 +66,7 @@ import { BOOKINGS_DDL } from './bookings';
 import { ENROLMENTS_DDL } from './enrolments';
 import { AUTOMATIONS_DDL } from './automations';
 import { NOTIFICATIONS_DDL } from './notifications';
+import { CAMPAIGNS_DDL } from './campaigns';
 import { MAIL_DDL } from './mail';
 
 export const DDL = [
@@ -86,5 +87,6 @@ export const DDL = [
   ENROLMENTS_DDL, //     joining a course
   AUTOMATIONS_DDL, //    the vocabulary, and the automations built from it
   NOTIFICATIONS_DDL, //  the studio being told things
+  CAMPAIGNS_DDL, //      what the studio decided to say, and to which question
   MAIL_DDL, //           what goes out, and who must not be written to
 ].join('\n');
