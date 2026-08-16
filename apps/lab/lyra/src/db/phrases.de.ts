@@ -5,11 +5,11 @@
 // harvests from the layouts and swaps on the way out. Regenerate the list of
 // what is still missing with:
 //
-//   pnpm --filter lyra exec tsx src/dev/phrase-harvest.ts de-AT
+//   pnpm --filter lyra exec tsx src/dev/phrase-harvest.ts de
 //
-// Keyed `de`, not `de-AT`: Vienna and Hamburg read the same sentences. What
-// differs between them is money and dates, and that half never comes from
-// here — `Intl` derives it from the full tag (`prisms/format.prism.ts`).
+// Keyed `de`, and there is no `de-AT` to be keyed on: this application offers
+// one German, not one per country. What is not in here is money and dates —
+// `Intl` derives those from the same tag (`prisms/format.prism.ts`).
 //
 // REGISTER: du, not Sie. The English voice is plain and warm ("Nobody here
 // yet.", "Quiet day.") and Sie would make it stiff in a way the original is
@@ -228,6 +228,23 @@ export const GERMAN: Record<string, string> = {
   'Good morning': 'Guten Morgen',
 
   Hour: 'Stunde',
+  'Add something to sell': 'Etwas zum Verkauf anlegen',
+  Block: 'Block',
+  'Bounded blocks with their own price. Edited under Schedule → Classes, because they carry a timetable.': 'Begrenzte Blöcke mit eigenem Preis. Bearbeitet unter Stundenplan → Kurse, weil sie einen Zeitplan haben.',
+  'Colours and words for now. Studio-specific layouts are coming.': 'Farben und Sprache vorerst. Studio-eigene Layouts kommen noch.',
+  'Course blocks': 'Kursblöcke',
+  'Everything a member can pay for.': 'Alles, wofür ein Mitglied zahlen kann.',
+  'Everything a member can pay for. Retiring one keeps everybody already on it.': 'Alles, wofür ein Mitglied zahlen kann. Ein eingestelltes Angebot bleibt für alle bestehen, die es schon haben.',
+  'Memberships, class passes, drop-ins and one-offs. Retiring one keeps everybody already on it.': 'Mitgliedschaften, Blockkarten, Einzelstunden und Einzelposten. Ein eingestelltes Angebot bleibt für alle bestehen, die es schon haben.',
+  'No course blocks. Add one under Schedule → Classes.': 'Keine Kursblöcke. Leg einen unter Stundenplan → Kurse an.',
+  Offers: 'Angebote',
+  Selling: 'Verkauf',
+  'The look and the language every member and every member of staff sees.': 'Das Erscheinungsbild und die Sprache, die jedes Mitglied und jedes Teammitglied sieht.',
+  'What has come in, and what is on its way.': 'Was eingegangen ist, und was unterwegs ist.',
+  'What this studio can turn on — payments, and anything else on offer.': 'Was dieses Studio aktivieren kann — Zahlungen und alles andere im Angebot.',
+  'Who this studio is on paper — the name, the address and the number a payment provider asks for.': 'Wer dieses Studio auf dem Papier ist — der Name, die Adresse und die Nummer, nach der ein Zahlungsanbieter fragt.',
+  'Who this studio is on paper. A payment provider asks for these before it will take money, and they appear on what your members are sent.': 'Wer dieses Studio auf dem Papier ist. Ein Zahlungsanbieter fragt danach, bevor er Geld annimmt, und es erscheint auf dem, was deine Mitglieder erhalten.',
+  'Who this studio is, and how it is set up.': 'Wer dieses Studio ist und wie es eingerichtet ist.',
   Address: 'Adresse',
   'As it appears on the register — not the name above the door, if they differ.': 'Wie im Register eingetragen — nicht der Name über der Tür, falls sie sich unterscheiden.',
   'Registered name': 'Eingetragener Name',

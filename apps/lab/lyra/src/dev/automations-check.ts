@@ -15,7 +15,7 @@ await settle(16);
 let tree = treeOf(owner);
 
 ok('an owner reaches Automations', tree.includes('The things that happen without anybody doing them'));
-ok('...and it is reachable, through Settings', tree.includes('"label":"Settings"'), 'the menu holds areas; a hub holds screens');
+ok('...and it is reachable, through the Studio hub', tree.includes('"label":"Studio"'), 'the menu holds areas; a hub holds screens');
 
 ok('...opening on recipes, not an empty form', tree.includes('Welcome somebody the day they join') && tree.includes('Catch a trial before it runs out'));
 ok('...and every one of them leaves the building', !tree.includes('desk’s list') && !tree.includes('tag them') && !tree.includes('tell the studio'), 'an effect that writes where the trigger read is a query');

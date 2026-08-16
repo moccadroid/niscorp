@@ -1,7 +1,13 @@
 import { offeringsList } from '@lyra/app/vex/member.entries';
+import { coursesList } from '@lyra/app/vex/course.entries';
 import { offeringCreate, offeringSetActive, offeringUpdate } from '@lyra/app/vex/reports.entries';
 
 // The reserved sort keys — see `staff.prism` for why this costs no fingerprint.
+// The blocks a member can also pay for. Read-only here and edited under
+// Schedule, because a course is a dated thing with a timetable — but a studio
+// asking "what do we sell" means both, and one list is what it should get.
+export const coursesOnSalePrism = { fingerprint: coursesList.fingerprint, context: {} };
+
 export const plansPrism = {
   fingerprint: offeringsList.fingerprint,
   context: { sortBy: { $ref: '$.sortBy' }, sortDir: { $ref: '$.sortDir' } },

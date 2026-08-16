@@ -55,7 +55,7 @@ export const STUDIOS_DDL = /* sql */ `
     -- them refuses a real business, which is worse than accepting a typo the
     -- provider will catch.
     vat_id      TEXT NOT NULL DEFAULT '',
-    -- WHAT LANGUAGE THIS STUDIO READS IN, as a BCP-47 tag.
+    -- WHAT LANGUAGE THIS STUDIO READS IN, as a bare language tag.
     --
     -- Sits beside "country" and "currency" rather than on a person, and that
     -- is a decision worth stating: language is the more personal of the two,
@@ -63,10 +63,14 @@ export const STUDIOS_DDL = /* sql */ `
     -- people share, the words on a member's notice. Per-person is the obvious
     -- next move and needs only a second column and a COALESCE here.
     --
-    -- The full tag matters. "de-AT" writes "€ 45,00" where "de-DE" writes
-    -- "45,00 €" and "de-CH" writes "EUR 45.00" — three countries, one
-    -- language, three answers, and a bare "de" would silently pick one.
-    locale      TEXT NOT NULL DEFAULT 'en-GB' CHECK (locale ~ '^[a-z]{2}(-[A-Z]{2})?$'),
+    -- LANGUAGE, NOT REGION. A regional tag would let one language be picked
+    -- three ways — "de-AT", "de-DE", "de-CH" — for a difference nobody comes
+    -- to a studio app to choose: the same book of words, three placements of
+    -- a currency symbol. One offer per language is what a person picking one
+    -- means, so the region half is not stored, not offered, and not asked for.
+    -- Intl still formats from this tag; it simply takes the language's own
+    -- convention ("89,00 €") instead of a country's.
+    locale      TEXT NOT NULL DEFAULT 'en' CHECK (locale ~ '^[a-z]{2}$'),
     -- WHERE A REPLY GOES, and the first contact detail this table has ever
     -- carried. Every studio sends from one shared, verified deployment domain
     -- wearing its OWN name — "Lumen Yoga" <lumen@mail.lyra.app> — so the member

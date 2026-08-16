@@ -17,7 +17,11 @@ export const PHRASES_DDL = /* sql */ `
   -- person who can deploy.
   CREATE TABLE phrases (
     id          TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
-    locale      TEXT NOT NULL CHECK (locale ~ '^[a-z]{2}(-[A-Z]{2})?$'),
+    -- A LANGUAGE, never a region: what a row holds is words, and Vienna and
+    -- Hamburg read the same ones. The column is the same shape as the one on
+    -- "studios", so a studio's tag selects a book by equality and no caller
+    -- has to know how to widen a tag into a language first.
+    locale      TEXT NOT NULL CHECK (locale ~ '^[a-z]{2}$'),
     source      TEXT NOT NULL,
     text        TEXT NOT NULL,
     -- Reserved: which SENSE of the source this is. NULL is "the only sense".

@@ -116,7 +116,7 @@ try {
   // `Kurs buchen · Meine Kurse · My belt` — the mixed row the product review
   // photographed. Flipped before this member's first shell exists, so the
   // build reads the German book; flipped back before anybody else logs in.
-  await runtime.db.query("UPDATE studios SET locale = 'de-AT' WHERE id = $1", ['st_northrock']);
+  await runtime.db.query("UPDATE studios SET locale = 'de' WHERE id = $1", ['st_northrock']);
   // The raw UPDATE rides no write path, and the member's identity — locale
   // included — is resolved and held; drop it the way the language switch does.
   server.invalidateTenant('st_northrock');
@@ -127,7 +127,7 @@ try {
   const germanMember = await servedTo(CAST.northrock.member);
   ok("an integration's screen renders German", germanMember.includes('Mein Gürtel'), 'My belt → Mein Gürtel, from the bundle’s own book');
   ok('...through the same pass as the host’s words', germanMember.includes('Heute'), 'host and integration words in ONE German shell');
-  await runtime.db.query("UPDATE studios SET locale = 'en-GB' WHERE id = $1", ['st_northrock']);
+  await runtime.db.query("UPDATE studios SET locale = 'en' WHERE id = $1", ['st_northrock']);
   server.invalidateTenant('st_northrock');
 
   // ── every word an integration ships, counted ─────────────────

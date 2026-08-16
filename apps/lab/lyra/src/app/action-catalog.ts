@@ -8,6 +8,7 @@ import { peopleDetailAction, peopleDetailInputSchema, peopleFormAction, peopleFo
 import { scheduleTimetableAction, scheduleTimetableInputSchema } from './actions/domains/schedule/schedule.action';
 import { scheduleSessionAction, scheduleSessionInputSchema } from './actions/domains/schedule/session.action';
 import { studioSettingsAction, studioSettingsInputSchema } from './actions/domains/studio/studio.action';
+import { studioBusinessAction, studioBusinessInputSchema } from './actions/domains/studio/business.action';
 import { addonsAction, addonsInputSchema } from './actions/domains/studio/addons.action';
 import { studioMailAction } from './actions/domains/studio/mail.action';
 import { deskCheckInAction, deskCheckInInputSchema } from './actions/domains/desk/desk.action';
@@ -41,6 +42,7 @@ export const CATALOG_DEFINITIONS: Record<string, ActionDefinition> = {
   'schedule.timetable': { ...scheduleTimetableAction, input: scheduleTimetableInputSchema },
   'schedule.session': { ...scheduleSessionAction, input: scheduleSessionInputSchema },
   'studio.settings': { ...studioSettingsAction, input: studioSettingsInputSchema },
+  'studio.business': { ...studioBusinessAction, input: studioBusinessInputSchema },
   'studio.addons': { ...addonsAction, input: addonsInputSchema },
   'studio.mail': studioMailAction,
   'desk.checkin': { ...deskCheckInAction, input: deskCheckInInputSchema },

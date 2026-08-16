@@ -44,10 +44,10 @@ const ownerShell = await login(OWNER);
 await settle();
 const ownerTree = treeOf(ownerShell);
 ok('the owner does get the figures', ownerTree.includes('Expected monthly'));
-// `€ 89,00` in Austria, `€89.00` in Ireland — the space is the locale's, so the
-// assertion allows for it. What is being claimed is that an AMOUNT rendered,
-// not that it rendered the way one country writes it.
-ok('...with a real amount, not a blank', /€\s?\d/.test(ownerTree), 'revenue rendered');
+// `89,00 €` in German, `€89.00` in English — which side the symbol sits on is
+// the language's, so the assertion allows for either. What is being claimed is
+// that an AMOUNT rendered, not that it rendered the way one language writes it.
+ok('...with a real amount, not a blank', /€\s?\d|\d\s?€/.test(ownerTree), 'revenue rendered');
 
 const deskShell = await login(DESK);
 await settle();

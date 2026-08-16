@@ -46,7 +46,7 @@ export const localeCurrent: CacheEntry = {
   intent: 'The language this studio reads in',
   shape: { locale: '' },
   dsl: { from: ['studios'], fields: ['studios.locale'] },
-  mapping: { $with: { let: { r: { $ref: '$.result' } }, value: { locale: one('locale', 'en-GB') } } },
+  mapping: { $with: { let: { r: { $ref: '$.result' } }, value: { locale: one('locale', 'en') } } },
 };
 
 // WHICH LANGUAGES ARE ON OFFER is deliberately NOT an entry here.

@@ -14,10 +14,12 @@ await settle();
 manager.dispatch({ type: 'ui:click', ref: 'nav', payload: 'plans.list' });
 await settle(8);
 let tree = treeOf(manager);
-ok('a manager reaches the price list', tree.includes('Everything this studio sells'));
-// Not `€89`: a de-AT studio writes `€ 89,00`. The claim is cents became money,
-// so the assertion is the symbol and the major units, whatever sits between.
-ok('...with prices formatted, not in cents', /€\s?89/.test(tree), 'the mapping does the money');
+ok('a manager reaches the offers list', tree.includes('Everything a member can pay for'));
+// Not `€89`: a German studio writes `89,00 €`, symbol last. The claim is cents
+// became money, so the assertion is the major units and the symbol, in either
+// order — which side it lands on is the language's business, not this check's.
+const money = (amount: number, tree: string): boolean => new RegExp(`€\\s?${String(amount)}\\b|\\b${String(amount)}[.,]\\d\\d\\s?€`).test(tree);
+ok('...with prices formatted, not in cents', money(89, tree), 'the mapping does the money');
 ok('...and billing said in words', tree.includes('Monthly'));
 ok('...and an unlimited plan says so', tree.includes('Unlimited'));
 
@@ -42,7 +44,7 @@ ok('...stamped with this studio by the engine', (await count("SELECT count(*) n 
 
 tree = treeOf(manager);
 ok('...and the list shows it', tree.includes('"name":"Drop-in"'), 'asserted on the ROW, not the form field');
-ok('...formatted', /€\s?18/.test(tree));
+ok('...formatted', money(18, tree));
 ok('the form closed itself', !tree.includes('In cents'));
 
 // ── THE TERMS ARE THE STUDIO'S, NOT OURS ─────────────────────

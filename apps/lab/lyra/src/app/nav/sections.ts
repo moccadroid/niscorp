@@ -38,33 +38,52 @@ export const AREAS: NavArea[] = [
     ],
   },
   {
+    // ── WHAT THE STUDIO SELLS ────────────────────────────────
+    //
+    // Its own hub, and the reason is a job rather than a noun: deciding what is
+    // on offer is SETUP, and it sat beside Reports and Retention, which are
+    // analysis. They shared a roof because they all involve numbers, which is
+    // not a reason — and the practical cost was that the commonest task a new
+    // studio has ("create my membership") lived behind the least likely word.
+    id: 'hub.selling',
+    icon: 'plan',
+    label: 'Selling',
+    blurb: 'Everything a member can pay for.',
+    items: [
+      { icon: 'plan', action: 'plans.list', label: 'Offers', blurb: 'Memberships, class passes, drop-ins and one-offs. Retiring one keeps everybody already on it.' },
+    ],
+  },
+  {
     id: 'hub.money',
     icon: 'money',
     label: 'Money',
-    blurb: 'What the studio charges, and what it earns.',
+    blurb: 'What has come in, and what is on its way.',
     items: [
-      { icon: 'plan', action: 'plans.list', label: 'Pricing', blurb: 'Everything on sale — plans and passes. Retiring one keeps everybody already paying for it.' },
       { icon: 'reports', action: 'reports.overview', label: 'Reports', blurb: 'Attendance, the roll by status, and which plans people are actually on.' },
       { icon: 'star', action: 'reports.retention', label: 'Retention', blurb: 'Who has stopped coming, who has given notice, and what both are worth a month.' },
     ],
   },
   {
+    // ── THE STUDIO ITSELF ────────────────────────────────────
+    //
+    // Was "Settings", holding a look, some automations and a mail address —
+    // while the studio's legal identity sat inside the APPEARANCE screen, under
+    // a heading that says "Pick a look". Those fields decide what a payment
+    // provider demands before money can move; they are not a look.
+    //
+    // Add-ons joins them: turning an integration on is configuration, not a peer
+    // of People.
     id: 'hub.settings',
     icon: 'settings',
-    label: 'Settings',
-    blurb: 'How this studio is set up.',
+    label: 'Studio',
+    blurb: 'Who this studio is, and how it is set up.',
     items: [
-      { icon: 'building', action: 'studio.settings', label: 'Appearance', blurb: 'The look every member and every member of staff sees.' },
-      { icon: 'automation', action: 'automations.list', label: 'Automations', blurb: 'What happens overnight, and what it has done lately.' },
+      { icon: 'building', action: 'studio.business', label: 'Business', blurb: 'Who this studio is on paper — the name, the address and the number a payment provider asks for.' },
+      { icon: 'palette', action: 'studio.settings', label: 'Appearance', blurb: 'The look and the language every member and every member of staff sees.' },
       { icon: 'mail', action: 'studio.mail', label: 'Mail', blurb: 'Your studio’s name on what goes out, and where an answer comes back to.' },
+      { icon: 'automation', action: 'automations.list', label: 'Automations', blurb: 'What happens overnight, and what it has done lately.' },
+      { icon: 'addons', action: 'studio.addons', label: 'Add-ons', blurb: 'What this studio can turn on — payments, and anything else on offer.' },
     ],
-  },
-  {
-    id: 'studio.addons',
-    icon: 'addons',
-    label: 'Add-ons',
-    blurb: 'What this studio can turn on.',
-    items: [],
   },
   {
     // One question ("what about me") with several answers, which is also where a

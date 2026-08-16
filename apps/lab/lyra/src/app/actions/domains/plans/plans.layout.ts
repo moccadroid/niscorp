@@ -11,8 +11,11 @@ export const plansLayout: LayoutNode = page([
     component: 'Row',
     props: { justify: 'between', align: 'center', wrap: true, gap: 12 },
     children: [
-      { component: 'Hero', props: { title: 'Pricing', lead: 'Everything this studio sells — plans and passes. Retiring one keeps everybody already on it.' } },
-      { component: 'Button', props: { variant: 'solid', label: 'Add' }, ref: 'add' },
+      { component: 'Hero', props: { title: 'Offers', lead: 'Everything a member can pay for. Retiring one keeps everybody already on it.' } },
+      // NAMED, not 'Add'. One unlabelled word at the top of a table already full
+      // of rows is the easiest control in this application to slide past — and
+      // it is the first thing a new studio has to find.
+      { component: 'Button', props: { variant: 'solid', label: 'Add something to sell' }, ref: 'add' },
     ],
   },
 
@@ -41,6 +44,42 @@ export const plansLayout: LayoutNode = page([
           { label: 'Terms', px: 150, cell: { kind: 'text', key: 'term_display', color: 'mute' } },
           { label: '', px: 104, align: 'right', cell: { kind: 'badge', key: 'state_label', toneKey: 'state_tone' } },
         ],
+      },
+    },
+  },
+
+  // ── COURSE BLOCKS, WHICH ARE ALSO SOLD ─────────────────────
+  //
+  // A course carries its own price and is absolutely a thing a member pays for —
+  // but it is a dated block with a capacity and a timetable, not a price-list
+  // row, so it keeps its own table and is edited under Schedule. That split
+  // follows the model and the model is right.
+  //
+  // What was wrong is that NEITHER SCREEN MENTIONED THE OTHER. You had to
+  // already know why a course is different in order to guess which hub to open.
+  // So they are listed here, read-only, with the way to edit one said out loud:
+  // one list answers "what can somebody pay for", and nothing had to move.
+  {
+    component: 'Section',
+    props: {
+      title: 'Course blocks',
+      subtitle: 'Bounded blocks with their own price. Edited under Schedule → Classes, because they carry a timetable.',
+    },
+    children: {
+      component: 'Card',
+      props: { flush: true },
+      children: {
+        component: 'Rows',
+        props: {
+          rows: '$.courses',
+          rowKey: 'course_id',
+          empty: 'No course blocks. Add one under Schedule → Classes.',
+          columns: [
+            { label: 'Block', w: 2, cell: { kind: 'primary', key: 'name', subKey: 'dates_display' } },
+            { label: 'Price', px: 120, align: 'right', cell: { kind: 'text', key: 'price_display', color: 'ink' } },
+            { label: 'Places', px: 110, cell: { kind: 'text', key: 'places_display', color: 'mute' } },
+          ],
+        },
       },
     },
   },

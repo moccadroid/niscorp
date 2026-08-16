@@ -228,8 +228,8 @@ const all = merge([fromActions, fromNav, fromVocabulary, entryWords, listed(APP_
 const fixed = all.filter((entry) => !/\d/.test(entry.phrase));
 const assembled = all.filter((entry) => /\d/.test(entry.phrase));
 
-const locale = process.argv.find((arg) => /^[a-z]{2}(-[A-Z]{2})?$/.test(arg)) ?? 'de-AT';
-const book: Record<string, string> = locale.startsWith('de') ? GERMAN : {};
+const locale = process.argv.find((arg) => /^[a-z]{2}$/.test(arg)) ?? 'de';
+const book: Record<string, string> = locale === 'de' ? GERMAN : {};
 const missing = missingFrom(fixed, book);
 
 if (process.argv.includes('--emit')) {

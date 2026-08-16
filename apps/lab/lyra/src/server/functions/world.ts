@@ -7,26 +7,24 @@ import { readEntry } from '@lyra/app/app';
 // `phrases` table says what each of them reads as elsewhere. It is a constant
 // rather than a row because it is not a preference — it is a property of the
 // source, and changing it means retranslating the source.
-const SOURCE_LOCALE = 'en-GB';
+const SOURCE_LOCALE = 'en';
 
-// WORDS ARE PER LANGUAGE; FORMATTING IS PER REGION. The phrase table is keyed
-// `de` because Vienna and Hamburg read the same sentences — but they do not
-// write the same numbers (`€ 45,00` against `45,00 €`), and that half never
-// comes from the table at all, it comes from `Intl` given the full tag.
+// ONE OFFER PER LANGUAGE. This list used to fan `de` out into `de-AT`, `de-DE`
+// and `de-CH` on the way to the picker, on the argument that words are per
+// language but number formatting is per region. True, and beside the point:
+// what it put in front of a studio owner was four languages, three of them
+// German, differing only in where a currency symbol sits. A picker is a
+// question, and that one has no answer anybody wants to give.
 //
-// So one book yields several offers. Seeding three near-identical copies of
-// 450 rows to make the picker work would be the alternative, and the first
-// wording fix would then have to land in three places.
-const REGIONS: Record<string, readonly string[]> = {
-  de: ['de-AT', 'de-DE', 'de-CH'],
-};
-
-const autonym = (locale: string): string => {
+// So a language is offered once and named once. The region half is gone rather
+// than hidden — nothing stores a country tag, so nothing can drift back into
+// offering one.
+const autonym = (language: string): string => {
   try {
-    return new Intl.DisplayNames([locale], { type: 'language' }).of(locale) ?? locale;
+    return new Intl.DisplayNames([language], { type: 'language' }).of(language) ?? language;
   } catch {
     // An unknown tag prints itself. Ugly and findable beats blank.
-    return locale;
+    return language;
   }
 };
 
@@ -96,11 +94,13 @@ export const worldFunctions = (
     // own wire like every other read a screen makes.
     const raw = await readEntry(session.wire, 'phrases/locales', {});
     const loaded = Array.isArray(raw) ? raw.map(String) : [];
-    const offered = [SOURCE_LOCALE, ...loaded.flatMap((language) => REGIONS[language] ?? [language])];
+    // The source can also be a language rows exist for one day; offering it
+    // twice would be the picker's own bug rather than the table's.
+    const offered = [SOURCE_LOCALE, ...loaded.filter((language) => language !== SOURCE_LOCALE)];
     // `{ value, label }` because that is the shape the Select primitive takes —
     // the endpoint answers in the kit's vocabulary rather than making the
     // screen reshape it, which would be a transform with one caller.
-    return offered.map((locale) => ({ value: locale, label: autonym(locale) }));
+    return offered.map((language) => ({ value: language, label: autonym(language) }));
   },
 
   'world.relanguage': async () => {

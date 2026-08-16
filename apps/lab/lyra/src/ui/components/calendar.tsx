@@ -51,7 +51,11 @@ export const Calendar: NovaComponent<Partial<z.infer<typeof CalendarProps>>> = (
     return { date, sessions: rows.filter((row) => dayKey(str(row as Record<string, unknown>, 'held_on')) === date) };
   });
 
-  const monthOf = (iso: string): string => new Date(`${iso}T00:00:00Z`).toLocaleDateString('en-GB', { month: 'short', timeZone: 'UTC' });
+  // The SOURCE language, and a known hole: this header is the one date in the
+  // app the reader's own language never reaches, because a component is handed
+  // rows and not a locale. Written bare (`en`, not `en-GB`) so no region tag
+  // survives anywhere in the app — the fix is a locale prop, not a country.
+  const monthOf = (iso: string): string => new Date(`${iso}T00:00:00Z`).toLocaleDateString('en', { month: 'short', timeZone: 'UTC' });
   const firstDay = columns[0]?.date ?? '';
   const lastDay = columns[columns.length - 1]?.date ?? '';
   const range = firstDay === '' ? '' : `${dayNumber(firstDay)} ${monthOf(firstDay)} – ${dayNumber(lastDay)} ${monthOf(lastDay)}`;

@@ -84,7 +84,7 @@ const foldOverWire = async (wire: Wire, language: string, words: Record<string, 
 // This answers a measurement rather than a hunch. `moss-bench` put per-shell
 // birth cost at 80.6 KB before this application spoke a second language and
 // 138.8 KB after, with build time up from 20.7 to 50.5 ms each — and both
-// numbers were this fold. Every de-AT shell ran two engine reads and then kept
+// numbers were this fold. Every German shell ran two engine reads and then kept
 // its own copy of ~560 rows: 66 KB of strings that are byte-identical across
 // every shell in the deployment, because a book is derived from the LANGUAGE
 // and nothing else. `phrases` is release vocabulary owned by no tenant, and
@@ -113,8 +113,10 @@ const foldOverWire = async (wire: Wire, language: string, words: Record<string, 
 // one fold instead of starting 250 — which is where the 50.5 ms went.
 const FOLDED: Record<string, { key: string; book: Promise<Phrasebook> }> = {};
 
-export const bookOverWire = async (wire: Wire, locale: string): Promise<Phrasebook> => {
-  const language = locale.split('-')[0] ?? '';
+export const bookOverWire = async (wire: Wire, language: string): Promise<Phrasebook> => {
+  // No tag to widen: what a studio stores IS the language, so a book is
+  // selected by equality. The `de-AT` → `de` fold that used to happen here was
+  // the last thing in the app that had to know regions existed.
   if (language === '' || language === 'en') return EMPTY_BOOK;
   const words = integrationWords(await readEntry(wire, 'phrases/integrations', { locale: language }));
   // ONE ENTRY PER LANGUAGE, always the current one: a changed integration set

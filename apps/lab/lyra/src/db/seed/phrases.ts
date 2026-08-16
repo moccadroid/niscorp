@@ -2,9 +2,9 @@
 import { insert } from '../sql';
 import { GERMAN } from '../phrases.de';
 
-// Keyed `de`: Vienna and Hamburg read the same sentences. What differs is the
-// money and the dates, and `Intl` derives that from the studio's full tag —
-// so Lumen's `de-AT` gets these words and Austrian formatting from one row set.
+// Keyed `de`, which is also what a studio stores: Vienna and Hamburg read the
+// same sentences, and the app offers ONE German rather than three. What is not
+// in here is money and dates — `Intl` derives those from the same tag.
 export const PHRASES_SQL = insert(
   'phrases',
   ['locale', 'source', 'text'],

@@ -1,18 +1,19 @@
 import { z } from 'zod';
 import type { ActionDefinition } from '@niscorp/nova';
 import { plansLayout } from './plans.layout';
-import { plansPrism } from './plans.prism';
+import { coursesOnSalePrism, plansPrism } from './plans.prism';
 
 export const plansAction: ActionDefinition = {
   id: 'plans.list',
-  title: 'Pricing',
+  title: 'Offers',
   // Empty `sortBy` keeps the entry's own order: offered first, then by price.
-  data: { plans: [], loading: true, sortBy: '', sortDir: 'asc' },
+  data: { plans: [], courses: [], loading: true, sortBy: '', sortDir: 'asc' },
   layout: plansLayout,
   endpoints: {
     load: { url: '/api/studio/vex', method: 'POST', request: plansPrism, target: 'plans' },
+    courses: { url: '/api/studio/vex', method: 'POST', request: coursesOnSalePrism, target: 'courses' },
   },
-  lifecycle: { mount: [{ call: 'load', onSuccess: [{ set: 'loading', value: false }] }] },
+  lifecycle: { mount: [{ call: 'load', onSuccess: [{ set: 'loading', value: false }] }, { call: 'courses' }] },
   triggers: [
     // The database owns the order — a header click is a re-read.
     { event: 'ui:click', ref: 'sort', do: [{ set: 'sortBy', value: '@event.payload.key' }, { set: 'sortDir', value: '@event.payload.dir' }, { call: 'load' }] },

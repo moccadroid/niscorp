@@ -17,7 +17,7 @@ export const STUDIOS_SQL = insert(
   'studios',
   ['id', 'name', 'slug', 'kind', 'timezone', 'locale', 'theme_id', 'reply_to'],
   [
-    [LUMEN, 'Lumen Yoga', 'lumen', 'yoga', 'Europe/Vienna', 'de-AT', 'th_sand', 'hallo@lumenyoga.at'],
-    [NORTHROCK, 'North Rock BJJ', 'northrock', 'bjj', 'Europe/Vienna', 'en-GB', 'th_charcoal', 'hello@northrockbjj.at'],
+    [LUMEN, 'Lumen Yoga', 'lumen', 'yoga', 'Europe/Vienna', 'de', 'th_sand', 'hallo@lumenyoga.at'],
+    [NORTHROCK, 'North Rock BJJ', 'northrock', 'bjj', 'Europe/Vienna', 'en', 'th_charcoal', 'hello@northrockbjj.at'],
   ],
 );
