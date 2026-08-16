@@ -309,12 +309,19 @@ export const offeringsPurchasable: CacheEntry = {
     // something away does it at the desk.
     filter: {
       and: [
-        // Passes AND one-offs: both are bought outright, and a member should be
-        // able to pay the joining fee or the workshop ticket in the same place
-        // they buy a ten-pack. A recurring plan is absent on purpose — it is
-        // chosen on the membership screen, where the terms are spelled out
-        // before anybody commits (D2).
-        { neq: ['offerings.kind', 'recurring'] },
+        // NAMED, NOT "everything except recurring". Passes AND one-offs: both
+        // are bought outright, and a member should be able to pay the joining
+        // fee or the workshop ticket in the same place they buy a ten-pack. A
+        // recurring plan is absent on purpose — it is chosen on the membership
+        // screen, where the terms are spelled out before anybody commits (D2).
+        //
+        // Spelled as a LIST because "not recurring" is a filter that admits
+        // every kind nobody has invented yet: the moment 'course' existed it
+        // put course blocks on this screen as things to buy outright, which
+        // takes the money and hands back no seat — a block is joined through
+        // the course, where the roster and the capacity are. A fifth kind will
+        // have to be added here on purpose, which is the point.
+        { in: ['offerings.kind', ['pass', 'one_off']] },
         { eq: ['offerings.active', true] },
         { gt: ['offerings.price_cents', 0] },
       ],

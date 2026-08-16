@@ -450,4 +450,23 @@ ok(
   'one catalogue: the same table a plan, a pass and a joining fee are priced in',
 );
 
+// AND A BLOCK IS NOT A THING YOU BUY OFF A SHELF. The member's own buy screen
+// asks for everything that is not a recurring plan, which was a filter that
+// admitted every kind nobody had invented yet — so the moment course blocks
+// became catalogue rows they appeared there as outright purchases, taking money
+// and handing back no seat. A block is joined through the course, where the
+// roster and the capacity are.
+const onSale = await asPrincipal(CAST.lumen.member, '/api/me/vex', { fingerprint: 'offerings/purchasable', context: {} });
+const kinds = new Set((Array.isArray(onSale) ? (onSale as Record<string, unknown>[]) : []).map((r) => String(r['kind'])));
+ok(
+  'a member can buy a pass or a one-off',
+  kinds.has('pass') && kinds.has('one_off'),
+  [...kinds].join(', ') || 'nothing on sale',
+);
+ok(
+  '...and NOT a course block, which is joined rather than bought off a shelf',
+  !kinds.has('course'),
+  'the read names the kinds it means, so a fifth one has to be added on purpose',
+);
+
 report('the price list edits, retiring keeps everybody who is paying, a studio charges in one currency, and a commitment outlives the notice given inside it.');
