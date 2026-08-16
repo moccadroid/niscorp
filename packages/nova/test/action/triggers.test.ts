@@ -40,6 +40,41 @@ describe('attachTriggers', () => {
     expect(dataStore.get()).toEqual({ n: 1 });
   });
 
+  it('exposes an announced payload to steps as @event.payload', async () => {
+    const eventBus = createEventBus();
+    const messageBus = createMessageBus();
+    const dataStore = createDataStore<Record<string, unknown>>({ chosen: [] });
+    attachTriggers(
+      [{ message: 'chosen', do: [{ set: 'chosen', value: '@event.payload' }] }],
+      eventBus,
+      messageBus,
+      makeBuild(dataStore, eventBus, messageBus),
+      'inst',
+    );
+    // `emit` takes a payload and the bus delivers one; a listener reads it the
+    // same way it reads a click's. Without this, an overlay handing its result
+    // back to the screen underneath could only ever say "something happened".
+    messageBus.publish('chosen', ['a', 'b']);
+    await tick();
+    expect(dataStore.get()).toEqual({ chosen: ['a', 'b'] });
+  });
+
+  it('fires a message trigger that reads no payload', async () => {
+    const eventBus = createEventBus();
+    const messageBus = createMessageBus();
+    const dataStore = createDataStore<Record<string, unknown>>({ n: 0 });
+    attachTriggers(
+      [{ message: 'ping', do: [{ increment: 'n' }] }],
+      eventBus,
+      messageBus,
+      makeBuild(dataStore, eventBus, messageBus),
+      'inst',
+    );
+    messageBus.publish('ping');
+    await tick();
+    expect(dataStore.get()).toEqual({ n: 1 });
+  });
+
   it('exposes the firing event to steps as @event (e.g. a clicked list index)', async () => {
     const eventBus = createEventBus();
     const messageBus = createMessageBus();

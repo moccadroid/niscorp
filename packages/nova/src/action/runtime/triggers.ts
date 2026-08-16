@@ -96,8 +96,15 @@ export const attachTriggers = (
       continue;
     }
     if (trigger.message !== undefined) {
-      const off = messageBus.subscribe(trigger.message, () => {
-        fireTrigger(trigger, buildContext);
+      // A MESSAGE CARRIES ITS PAYLOAD THE SAME WAY A UI EVENT DOES. `emit`
+      // takes one, steps resolve it, and the bus delivers it — so dropping it
+      // here made `{ emit: { channel, payload } }` a declaration with no
+      // reader, and an announcement that could only ever say "something
+      // happened". Wrapped as `{ payload }` so a listener writes
+      // `@event.payload` whether it was woken by a click or by an
+      // announcement; `@event` is the firing thing in both cases.
+      const off = messageBus.subscribe(trigger.message, (payload: unknown) => {
+        fireTrigger(trigger, buildContext, { payload });
       });
       unsubscribes.push(off);
     }
