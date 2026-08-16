@@ -131,7 +131,7 @@ const asDay = (seconds: unknown): string | null => {
 // A one-off carries three more: WHICH kind of thing, and WHICH one — stamped
 // on the session rather than on a subscription, because a single payment has no
 // subscription object to hang anything on.
-type Meta = { subscription_id?: string; person_id?: string; studio_id?: string; purchase_kind?: string; target_id?: string };
+type Meta = { subscription_id?: string; person_id?: string; studio_id?: string; purchase_kind?: string; target_id?: string; joining_fee_id?: string };
 
 /**
  * State a subscription's standing in lyra.
@@ -354,8 +354,23 @@ export const handleStripeEvent = async (
               context: { subscriptionId: startedId },
             });
           }
+          // THE JOINING FEE, recorded as the purchase it is. It was charged on
+          // the same card form as the first period, so it lands here — and it is
+          // a purchase rather than a line on the subscription, because
+          // cancelling the membership next year must not look like un-buying it.
+          let joined = false;
+          if ((started.joining_fee_id ?? '') !== '' && startedStudio !== '') {
+            const granted = await grantPurchase(env, {
+              studioId: startedStudio,
+              personId: started.person_id ?? '',
+              kind: 'one_off',
+              targetId: started.joining_fee_id ?? '',
+              purchaseRef: String(object['id'] ?? ''),
+            });
+            joined = granted.ok;
+          }
           await settleEvent(db, event.id, 'noted', String(object['subscription'] ?? ''));
-          return { status: 200, body: { ok: true, noted: 'checkout', collects: startedId !== '' } };
+          return { status: 200, body: { ok: true, noted: 'checkout', collects: startedId !== '', joiningFee: joined } };
         }
 
         // PAID, not merely completed. A session can complete with payment still

@@ -144,6 +144,9 @@ export const offeringCreate: MutationEntry = {
       // recurring plan.
       credits: { $context: 'credits' },
       valid_days: { $context: 'validDays' },
+      // Points at another offering, or nothing. The trigger keeps it a one-off
+      // and the pair FK keeps it inside this studio.
+      joining_fee_id: { $context: 'joiningFeeId' },
     },
   },
 };
@@ -170,6 +173,9 @@ export const offeringUpdate: MutationEntry = {
       notice_days: { $context: 'noticeDays' },
       credits: { $context: 'credits' },
       valid_days: { $context: 'validDays' },
+      // Points at another offering, or nothing. The trigger keeps it a one-off
+      // and the pair FK keeps it inside this studio.
+      joining_fee_id: { $context: 'joiningFeeId' },
     },
     where: { eq: ['offerings.id', { $context: 'offeringId' }] },
   },

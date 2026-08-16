@@ -64,6 +64,23 @@ export const OFFERINGS_DDL = /* sql */ `
     credits          INTEGER CHECK (credits IS NULL OR credits > 0),
     valid_days       INTEGER CHECK (valid_days IS NULL OR valid_days > 0),
     CHECK (kind <> 'pass' OR credits IS NOT NULL),
+    -- ── WHAT JOINING COSTS ON TOP ────────────────────────────
+    --
+    -- A joining fee is a one-off that is not chosen — it is charged BECAUSE
+    -- somebody joined. Until this column existed a studio could create one and
+    -- price it, and nothing ever charged it: it appeared on the member's Buy
+    -- screen as something they might voluntarily purchase, which nobody will
+    -- ever do.
+    --
+    -- It POINTS AT AN OFFERING rather than holding an amount, so the fee is a
+    -- thing with a name and a price that a studio can retire, reprice and see on
+    -- its own list — and so two plans can share one fee without it being typed
+    -- twice.
+    --
+    -- Only meaningful on a recurring plan; the pair FK keeps the fee inside this
+    -- studio, and the trigger below keeps it a one-off rather than, say, a
+    -- membership that would silently be sold twice.
+    joining_fee_id   TEXT,
     active           BOOLEAN NOT NULL DEFAULT true,
     -- THE PAIR TARGET, and where that rule is stated. Redundant as a
     -- constraint — "id" is already unique — and load-bearing as a TARGET: it
@@ -84,8 +101,39 @@ export const OFFERINGS_DDL = /* sql */ `
     -- subscriptions with no currency predicate. Two currencies in one studio
     -- would not have failed; they would have quietly added together and reported
     -- a revenue figure that was not any amount of money.
-    FOREIGN KEY (studio_id, currency) REFERENCES studios (id, currency)
+    FOREIGN KEY (studio_id, currency) REFERENCES studios (id, currency),
+    -- The same pair rule everything else here carries: a plan cannot name
+    -- another studio's fee, however the id arrived.
+    FOREIGN KEY (joining_fee_id, studio_id) REFERENCES offerings (id, studio_id)
   );
 
   CREATE INDEX offerings_studio ON offerings (studio_id, active);
+
+  -- A JOINING FEE IS A ONE-OFF, and the database is what says so.
+  --
+  -- A CHECK cannot see another row, so this is a trigger. Pointing a plan at
+  -- another PLAN would put a second recurring subscription on every checkout;
+  -- pointing it at a PASS would hand out classes with every signup. Both are
+  -- the kind of mistake that looks like a working screen.
+  CREATE OR REPLACE FUNCTION check_joining_fee() RETURNS TRIGGER AS $jf$
+  DECLARE
+    fee_kind TEXT;
+  BEGIN
+    IF NEW.joining_fee_id IS NULL THEN
+      RETURN NEW;
+    END IF;
+    IF NEW.kind <> 'recurring' THEN
+      RAISE EXCEPTION 'only a recurring plan can carry a joining fee';
+    END IF;
+    SELECT kind INTO fee_kind FROM offerings WHERE id = NEW.joining_fee_id;
+    IF fee_kind <> 'one_off' THEN
+      RAISE EXCEPTION 'a joining fee must be a one-off, not a %', COALESCE(fee_kind, 'missing offering');
+    END IF;
+    RETURN NEW;
+  END;
+  $jf$ LANGUAGE plpgsql;
+
+  CREATE TRIGGER offerings_check_joining_fee
+    BEFORE INSERT OR UPDATE OF joining_fee_id, kind ON offerings
+    FOR EACH ROW EXECUTE FUNCTION check_joining_fee();
 `;

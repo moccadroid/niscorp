@@ -6,6 +6,10 @@ import { offeringCreate, offeringSetActive, offeringUpdate } from '@lyra/app/vex
 // The blocks a member can also pay for. Read-only here and edited under
 // Schedule, because a course is a dated thing with a timetable — but a studio
 // asking "what do we sell" means both, and one list is what it should get.
+// The one-offs a plan may name as its joining fee. Same read the desk's pass
+// picker uses, asked for a different kind.
+export const oneOffOptionsPrism = { fingerprint: 'offerings/options', context: { kind: 'one_off' } };
+
 export const coursesOnSalePrism = { fingerprint: coursesList.fingerprint, context: {} };
 
 export const plansPrism = {
@@ -57,6 +61,9 @@ const KIND_FIELDS = {
   // the field would sell a drop-in they did not mean to price.
   credits: { $case: { branches: [{ when: isPass, then: orNull('$.credits') }], else: null } },
   validDays: { $case: { branches: [{ when: isPass, then: orNull('$.validDays') }], else: null } },
+  // ONLY A PLAN CAN CARRY ONE. A pass and a one-off are bought once; there is no
+  // "joining" to charge for.
+  joiningFeeId: { $case: { branches: [{ when: notRecurring, then: null }], else: orNull('$.joiningFeeId') } },
 };
 
 export const planCreatePrism = {

@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import type { ActionDefinition, LayoutNode, Step } from '@niscorp/nova';
-import { planCreatePrism, planRestorePrism, planRetirePrism, planUpdatePrism } from './plans.prism';
+import { oneOffOptionsPrism, planCreatePrism, planRestorePrism, planRetirePrism, planUpdatePrism } from './plans.prism';
 
 const planFormLayout: LayoutNode = {
   component: 'Stack',
@@ -159,6 +159,27 @@ const planFormLayout: LayoutNode = {
             ref: 'noticeDays',
             model: '$.noticeDays',
           },
+          // ── WHAT JOINING COSTS ON TOP ────────────────────────
+          //
+          // A joining fee is a one-off that is not CHOSEN — it is charged
+          // because somebody joined. A studio could create one and price it and
+          // nothing ever charged it: it appeared on the member's Buy screen as
+          // something they might voluntarily purchase, which nobody does.
+          //
+          // It names another offering rather than holding an amount, so the fee
+          // has a name and a price of its own, shows on this same list, and can
+          // be shared by two plans without being typed twice.
+          {
+            component: 'Select',
+            props: {
+              label: 'Joining fee',
+              emptyLabel: 'None',
+              hint: 'Charged once, with the first payment. Create it as a one-off first and it appears here.',
+              options: '$.oneOffOptions',
+            },
+            ref: 'joiningFeeId',
+            model: '$.joiningFeeId',
+          },
         ],
       },
       else: '',
@@ -214,6 +235,8 @@ export const planFormAction: ActionDefinition = {
     noticeDays: 0,
     credits: 1,
     validDays: '',
+    joiningFeeId: '',
+    oneOffOptions: [],
     saving: false,
     error: '',
   },
@@ -223,7 +246,9 @@ export const planFormAction: ActionDefinition = {
     update: { url: '/api/studio/vex', method: 'POST', request: planUpdatePrism, errorTarget: 'error' },
     retire: { url: '/api/studio/vex', method: 'POST', request: planRetirePrism, errorTarget: 'error' },
     restore: { url: '/api/studio/vex', method: 'POST', request: planRestorePrism, errorTarget: 'error' },
+    oneOffs: { url: '/api/studio/vex', method: 'POST', request: oneOffOptionsPrism, target: 'oneOffOptions' },
   },
+  lifecycle: { mount: [{ call: 'oneOffs' }] },
   triggers: [
     { event: 'ui:click', ref: 'create', do: [{ set: 'error', value: '' }, { set: 'saving', value: true }, done('create')] },
     { event: 'ui:click', ref: 'save', do: [{ set: 'error', value: '' }, { set: 'saving', value: true }, done('update')] },
@@ -249,5 +274,6 @@ export const planFormInputSchema = z.toJSONSchema(
     noticeDays: z.union([z.string(), z.number()]).optional(),
     credits: z.union([z.string(), z.number()]).optional(),
     validDays: z.union([z.string(), z.number()]).optional(),
+    joiningFeeId: z.string().optional().describe('Another offering, of kind one_off, charged once when somebody joins.'),
   }),
 );

@@ -131,6 +131,10 @@ export type Billable = {
   intervalCount: number;
   personId: string;
   personName: string;
+  // WHAT JOINING COSTS ON TOP, as a pointer. Resolved by asking
+  // `offerings/price` — the read that already answers "what does this cost" —
+  // rather than by growing the billable read a self-join.
+  joiningFeeId: string;
 };
 
 // ── PUTTING A NAME TO A ROW ──────────────────────────────────
@@ -299,5 +303,6 @@ export const billableFor = async (env: IntegrationEnv, studioId: string, personI
     // before lyra could say otherwise. Floored at 1: Stripe refuses zero, and a
     // zero here would mean a price nobody could be charged on.
     intervalCount: Math.max(1, Math.trunc(Number(row['interval_count'] ?? 1)) || 1),
+    joiningFeeId: String(row['joining_fee_id'] ?? ''),
   };
 };

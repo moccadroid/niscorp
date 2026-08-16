@@ -169,7 +169,7 @@ export const myMembership: CacheEntry = {
 export const subscriptionBillable: CacheEntry = {
   fingerprint: 'subscriptions/billable',
   intent: 'What a person should be charged, as numbers a payment provider can use',
-  shape: { subscription_id: '', offering_id: '', plan_name: '', amount: 0, currency: '', interval: '', interval_count: 0, status: '', paid_via: '', person_id: '', person_name: '' },
+  shape: { subscription_id: '', offering_id: '', plan_name: '', amount: 0, currency: '', interval: '', interval_count: 0, status: '', paid_via: '', person_id: '', person_name: '', joining_fee_id: '' },
   dsl: {
     // The person joins because a billing integration has to be able to say WHO
     // — a follow-up reading "a payment failed" with nobody attached is a note
@@ -183,6 +183,12 @@ export const subscriptionBillable: CacheEntry = {
       { field: 'offerings.id', as: 'offering_id' },
       { field: 'offerings.name', as: 'plan_name' },
       'offerings.interval',
+      // WHAT JOINING COSTS, as a POINTER rather than an amount. The fee is
+      // another offering, and `offerings/price` already answers "what does this
+      // cost" — so the integration asks that, once, rather than this read
+      // growing a self-join the grammar does not have. A checkout is not a hot
+      // path; a second question there is cheaper than a second way to ask one.
+      'offerings.joining_fee_id',
       // The period is a PAIR. Sending only the unit would charge a quarterly
       // member every month, and the provider would be right to — nobody told it
       // otherwise.
@@ -216,6 +222,7 @@ export const subscriptionBillable: CacheEntry = {
         paid_via: one('paid_via'),
         person_id: one('person_id'),
         person_name: one('person_name'),
+        joining_fee_id: one('joining_fee_id'),
       },
     },
   },

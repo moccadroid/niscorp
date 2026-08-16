@@ -385,7 +385,7 @@ ok('...and no run of one studio is filed under another', (await count(`SELECT co
 // ── what the automation may NOT do ───────────────────────────
 const robot = 'automation@lumen.studio';
 for (const [what, fingerprint, context] of [
-  ['change a price', 'offerings/update', { offeringId: 'x', name: 'Free', priceCents: 0, interval: 'month', intervalCount: 1, classAllowance: '', minimumTermMonths: 0, noticeDays: 0, credits: null, validDays: null }],
+  ['change a price', 'offerings/update', { offeringId: 'x', name: 'Free', priceCents: 0, interval: 'month', intervalCount: 1, classAllowance: '', minimumTermMonths: 0, noticeDays: 0, credits: null, validDays: null, joiningFeeId: null }],
   ['put somebody on staff', 'staff/create', { staffId: 'x', personId: 'p_ava', role: 'owner' }],
   ['check somebody in', 'check-ins/mark', { personId: 'p_ava', sessionId: 'x' }],
 ] as const) {

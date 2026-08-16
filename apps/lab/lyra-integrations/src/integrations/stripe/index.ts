@@ -204,6 +204,12 @@ export const stripeIntegration: Integration = {
       const returnUrl = base === '' ? '' : `${base}/`;
       if (returnUrl === '') return c.json({ message: 'This deployment has no address to return to.' }, 503);
 
+      // WHAT JOINING COSTS, resolved once. The plan points at another offering;
+      // `offerings/price` is the read that already answers what a thing costs,
+      // and a checkout is not a hot path — a second question here is cheaper
+      // than a second way to ask one.
+      const fee = billable.joiningFeeId === '' ? undefined : await purchaseFor(ctx.env, who.studioId, 'pass', billable.joiningFeeId);
+
       try {
         const session = await createCheckout(stripe, ctx.db, {
           accountId: held.accountId,
@@ -216,6 +222,12 @@ export const stripeIntegration: Integration = {
           currency: billable.currency,
           interval: billable.interval,
           intervalCount: billable.intervalCount,
+          // A fee that no longer resolves — retired since the plan named it — is
+          // simply not charged, rather than failing the whole checkout. The
+          // member gets their membership; the studio's price list is what needs
+          // looking at.
+          ...(fee === undefined || fee.amount <= 0 ? {} : { joiningFee: { name: fee.name, amount: fee.amount } }),
+          joiningFeeId: fee === undefined ? '' : billable.joiningFeeId,
           returnUrl,
         });
         return c.json({ url: session.url, plan_name: billable.planName });

@@ -228,6 +228,9 @@ export const GERMAN: Record<string, string> = {
   'Good morning': 'Guten Morgen',
 
   Hour: 'Stunde',
+  'Joining fee': 'Aufnahmegebühr',
+  'Charged once, with the first payment. Create it as a one-off first and it appears here.':
+    'Einmalig berechnet, mit der ersten Zahlung. Leg sie zuerst als Einzelposten an, dann erscheint sie hier.',
   'Add something to sell': 'Etwas zum Verkauf anlegen',
   Block: 'Block',
   'Bounded blocks with their own price. Edited under Schedule → Classes, because they carry a timetable.': 'Begrenzte Blöcke mit eigenem Preis. Bearbeitet unter Stundenplan → Kurse, weil sie einen Zeitplan haben.',

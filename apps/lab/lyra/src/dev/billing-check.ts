@@ -434,6 +434,33 @@ try {
     'a second delivery of a finished purchase is not a task',
   );
 
+  // ── WHAT JOINING COSTS, CHARGED BECAUSE THEY JOINED ──────────
+  //
+  // A studio could create a joining fee and price it, and nothing ever charged
+  // it — it sat on the member's Buy screen as something they might voluntarily
+  // purchase, which nobody does. A plan names one now, and it rides the same
+  // card form as the first period.
+  //
+  // Recorded as a PURCHASE rather than as a line on the subscription, because
+  // cancelling the membership next year must not look like un-buying it.
+  const feeBuying = {
+    subscription_id: 'sub_nina',
+    person_id: 'p_nina',
+    studio_id: 'st_northrock',
+    joining_fee_id: 'of_nr_joining',
+  };
+  const joined = await deliver(purchaseEvent('evt_joined', 'cs_joined', 'paid', feeBuying));
+  ok('a joining fee is charged because somebody joined', joined.body['joiningFee'] === true, JSON.stringify(joined.body).slice(0, 110));
+  ok(
+    '...and lands as a purchase on the member',
+    (await countOf("SELECT count(*) n FROM purchases WHERE person_id = 'p_nina' AND price_cents = 3000")) === 1,
+    'its own row, so ending the membership does not un-buy it',
+  );
+  // The same session again is the same joining — the purchase reference is the
+  // session, so a redelivery lands on the row the first one made.
+  await deliver(purchaseEvent('evt_joined_again', 'cs_joined', 'paid', feeBuying));
+  ok('...once, however many times the checkout is delivered', (await countOf("SELECT count(*) n FROM purchases WHERE person_id = 'p_nina'")) === 1, 'joining twice is not a thing that happened');
+
   // ── SOMETHING SOLD ONCE THAT GRANTS NOTHING ──────────────────
   //
   // The joining fee. It lands on its own table, and the assertion that matters

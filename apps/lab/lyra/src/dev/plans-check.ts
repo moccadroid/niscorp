@@ -148,7 +148,7 @@ ok(
 // the truth, with nothing on any screen to say so.
 await asPrincipal(CAST.lumen.owner, '/api/studio/vex', {
   fingerprint: 'offerings/update',
-  context: { offeringId: quarterlyId, name: 'Quarterly', priceCents: 33000, interval: 'month', intervalCount: 1, classAllowance: null, minimumTermMonths: 0, noticeDays: 0, credits: null, validDays: null },
+  context: { offeringId: quarterlyId, name: 'Quarterly', priceCents: 33000, interval: 'month', intervalCount: 1, classAllowance: null, minimumTermMonths: 0, noticeDays: 0, credits: null, validDays: null, joiningFeeId: null },
 });
 ok(
   '...and moving it back to monthly moves the figure with it',
@@ -201,7 +201,7 @@ const deskWrite = await asPrincipal(CAST.lumen.desk, '/api/studio/vex', {
   // The terms travel too, so this is refused for the RIGHT reason — the rung —
   // rather than for a missing field, which would pass the assertion while
   // proving nothing about who may set prices.
-  context: { offeringId: unlimitedId, name: 'Free', priceCents: 0, interval: 'month', intervalCount: 1, classAllowance: '', minimumTermMonths: 0, noticeDays: 0, credits: null, validDays: null },
+  context: { offeringId: unlimitedId, name: 'Free', priceCents: 0, interval: 'month', intervalCount: 1, classAllowance: '', minimumTermMonths: 0, noticeDays: 0, credits: null, validDays: null, joiningFeeId: null },
 });
 ok('the desk cannot reprice a plan', JSON.stringify(deskWrite).includes('status'), JSON.stringify(deskWrite).slice(0, 70));
 ok('...and the price is untouched', (await count('SELECT count(*) n FROM offerings WHERE id = $1 AND price_cents = 11900', [unlimitedId])) === 1, 'refused, not merely hidden');
@@ -255,7 +255,7 @@ ok('...nor can a subscription drift from it', wrongSub !== '', wrongSub.split('\
 // ever written a term, a notice period, or a notice — so it has never once run.
 const termPlan = await asPrincipal(CAST.lumen.owner, '/api/studio/vex', {
   fingerprint: 'offerings/create',
-  context: { name: 'Six months, two months notice', kind: 'recurring', priceCents: 9900, interval: 'month', intervalCount: 1, classAllowance: null, minimumTermMonths: 6, noticeDays: 60, credits: null, validDays: null },
+  context: { name: 'Six months, two months notice', kind: 'recurring', priceCents: 9900, interval: 'month', intervalCount: 1, classAllowance: null, minimumTermMonths: 6, noticeDays: 60, credits: null, validDays: null, joiningFeeId: null },
 });
 const planRow = await runtime.db.query<{ id: string; minimum_term_months: number; notice_days: number }>(
   "SELECT id, minimum_term_months, notice_days FROM offerings WHERE name = 'Six months, two months notice'",

@@ -92,6 +92,9 @@ export type CheckoutArgs = {
   currency: string;
   interval: 'day' | 'week' | 'month' | 'year';
   intervalCount: number;
+  // Charged ONCE, beside the recurring line. Absent for a plan with no fee.
+  joiningFee?: { name: string; amount: number };
+  joiningFeeId: string;
   returnUrl: string;
 };
 
@@ -127,7 +130,30 @@ export const createCheckout = async (stripe: Stripe, db: IntegrationStore | unde
     {
       mode: 'subscription',
       customer: customerId,
-      line_items: [{ price: priceId, quantity: 1 }],
+      // TWO LINES, ONE CARD FORM. A subscription session takes one-time items
+      // beside the recurring one, so a joining fee is charged with the first
+      // payment and never again — which is what a studio means by the words.
+      //
+      // Inline rather than a materialised Price: a fee is bought once, and
+      // content-addressing a Price (prices.ts) exists so everybody on a plan
+      // keeps the one they signed on. A single charge has nobody to keep
+      // anything for.
+      line_items: [
+        { price: priceId, quantity: 1 },
+        ...(args.joiningFee === undefined
+          ? []
+          : [
+              {
+                quantity: 1,
+                price_data: {
+                  currency: args.currency.toLowerCase(),
+                  unit_amount: args.joiningFee.amount,
+                  product_data: { name: args.joiningFee.name },
+                  tax_behavior: 'inclusive' as const,
+                },
+              },
+            ]),
+      ],
       success_url: args.returnUrl,
       cancel_url: args.returnUrl,
       // STRIPE TAX COMPUTES IT; WE DO NOT. Lyra's `price_cents` is GROSS — what
@@ -148,6 +174,17 @@ export const createCheckout = async (stripe: Stripe, db: IntegrationStore | unde
       customer_update: { address: 'auto', name: 'auto' },
       subscription_data: {
         metadata: { subscription_id: args.subscriptionId, person_id: args.personId, studio_id: args.studioId },
+      },
+      // ON THE SESSION TOO, because the fee is not a fact about the
+      // subscription — it is a thing bought once, and the completed-checkout
+      // event is where it gets recorded. The subscription's own metadata says
+      // nothing about it, which is right: cancelling the membership next year
+      // must not look like un-buying the joining fee.
+      metadata: {
+        subscription_id: args.subscriptionId,
+        person_id: args.personId,
+        studio_id: args.studioId,
+        ...(args.joiningFeeId === '' ? {} : { joining_fee_id: args.joiningFeeId }),
       },
     },
     { stripeAccount: args.accountId },
