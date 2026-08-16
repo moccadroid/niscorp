@@ -31,7 +31,7 @@ import { identityPerson, identityStudio, identityInstalled, identityGuarded, ide
 import { phrasesBook, phrasesLocales, phrasesIntegrations } from './language.entries';
 import { credentialPrincipalByEmail, credentialSweepLinks, credentialMintLink, credentialRedeemLink, mailerRecordDelivered, mailerRecordFailed, mailerOutboxOrigin, mailerSuppress, mailerOptOut, transportStaffRoster, transportMemberRoster, schedulerReflexRows, schedulerStudioZones } from './machinery.entries';
 import { addonInstall, addonUninstall, addonsInstalled, addonsList } from './addon.entries';
-import { attendanceByHour, attendanceByProgram, attendanceByWeek, membersByStatus, offeringCreate, offeringSetActive, offeringUpdate, planUptake } from './reports.entries';
+import { attendanceByHour, attendanceByProgram, attendanceByWeek, membersByStatus, offeringCreate, offeringDelete, offeringSetActive, offeringUpdate, planUptake } from './reports.entries';
 
 export type CacheEntry = SeedEntry;
 export type MutationEntry = SeedMutation;
@@ -210,4 +210,5 @@ export const MUTATION_ENTRIES: MutationEntry[] = [
   offeringCreate,
   offeringUpdate,
   offeringSetActive,
+  offeringDelete,
 ];

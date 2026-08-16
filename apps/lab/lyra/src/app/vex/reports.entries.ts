@@ -195,6 +195,23 @@ export const offeringSetActive: MutationEntry = {
   },
 };
 
+// DELETING IS FOR MISTAKES, and retiring is for products.
+//
+// The two verbs answer different situations and the screen had only one, so the
+// only way out of a typo was to retire it and leave it on the price list for
+// good. Nothing here decides which is which: the database refuses this write in
+// a sentence whenever anything at all holds the offering (offerings.held_count),
+// so the worst a wrong button can do is show a message.
+export const offeringDelete: MutationEntry = {
+  fingerprint: 'offerings/delete',
+  intent: 'Remove something nobody ever held — a mistake, not a product',
+  mutation: {
+    op: 'delete',
+    table: 'offerings',
+    where: { eq: ['offerings.id', { $context: 'offeringId' }] },
+  },
+};
+
 // How many people are on each offering — the other half of the price list, and
 // the reason retiring beats deleting.
 export const planUptake: CacheEntry = {

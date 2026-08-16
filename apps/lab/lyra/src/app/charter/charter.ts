@@ -210,6 +210,12 @@ export const CHARTER: Charter = {
       'programs.write.update',
       'offerings.write.insert',
       'offerings.write.update',
+      // The delete is held at the same rung as the insert on purpose: whoever
+      // can create a typo should be able to take it back. It is not the
+      // dangerous verb it looks like — the database refuses it outright for any
+      // offering anything has ever held (offerings.held_count), so what this
+      // grants is undoing a mistake, never removing a product.
+      'offerings.write.delete',
       'courses.write.insert',
       'courses.write.update',
       // Update but no insert: people tick follow-ups, automations write them.

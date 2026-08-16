@@ -45,6 +45,15 @@ export const plansAction: ActionDefinition = {
               noticeDays: '@event.payload.notice_days',
               credits: '@event.payload.credits',
               validDays: '@event.payload.valid_days',
+              // The same rule, and this one was already being broken: the fee a
+              // plan names is written by Save, so opening a plan to fix its
+              // name and pressing Save stopped it charging.
+              joiningFeeId: '@event.payload.joining_fee_id',
+              // A row that exists has a name, so Save is live from the start.
+              blocked: false,
+              // Which way out this row gets, and the sentence explaining it.
+              planHeld: '@event.payload.held_count',
+              planHeldLine: '@event.payload.held_display',
             },
           },
         },

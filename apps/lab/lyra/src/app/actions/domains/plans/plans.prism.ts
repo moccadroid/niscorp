@@ -1,6 +1,6 @@
 import { offeringsList } from '@lyra/app/vex/member.entries';
 import { coursesList } from '@lyra/app/vex/course.entries';
-import { offeringCreate, offeringSetActive, offeringUpdate } from '@lyra/app/vex/reports.entries';
+import { offeringCreate, offeringDelete, offeringSetActive, offeringUpdate } from '@lyra/app/vex/reports.entries';
 
 // The reserved sort keys — see `staff.prism` for why this costs no fingerprint.
 // The blocks a member can also pay for. Read-only here and edited under
@@ -83,3 +83,8 @@ export const planUpdatePrism = {
 // entries, so the pair cannot drift apart.
 export const planRetirePrism = { fingerprint: offeringSetActive.fingerprint, context: { offeringId: { $ref: '$.planId' }, active: false } };
 export const planRestorePrism = { fingerprint: offeringSetActive.fingerprint, context: { offeringId: { $ref: '$.planId' }, active: true } };
+
+// The third verb, for the row that was never a product. Offered only when the
+// row arrived saying nothing holds it — and refused by the database in a
+// sentence if that turns out to be stale.
+export const planDeletePrism = { fingerprint: offeringDelete.fingerprint, context: { offeringId: { $ref: '$.planId' } } };

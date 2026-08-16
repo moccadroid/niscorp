@@ -7,6 +7,19 @@ const count = async (sql: string, params: unknown[] = []): Promise<number> => {
   return Number(result.rows[0]?.n ?? -1);
 };
 
+// THE ROW THE LIST ACTUALLY HANDS OVER, not one written out here.
+//
+// A row typed into this file is a row that agrees with the screen only until
+// somebody adds a column, and that is not hypothetical: the opener was missing
+// `joining_fee_id` for as long as the column existed, so correcting a typo in a
+// plan's name quietly stopped its joining fee being charged, and a hand-written
+// payload in this check said everything was fine.
+const rowFor = async (name: string): Promise<Record<string, unknown>> => {
+  const answer = await asPrincipal(CAST.lumen.owner, '/api/studio/vex', { fingerprint: 'offerings/list', context: { sortBy: '', sortDir: 'asc' } });
+  const rows = Array.isArray(answer) ? (answer as Record<string, unknown>[]) : [];
+  return rows.find((r) => r['name'] === name) ?? {};
+};
+
 const manager = await login(CAST.lumen.owner);
 await settle();
 
@@ -161,7 +174,7 @@ const planId = (await runtime.db.query<{ id: string }>("SELECT id FROM offerings
 // The payload IS the row the list hands over, so it carries the terms too —
 // without them the form opens with nothing in those fields and Save writes the
 // nothing back over a commitment somebody sold.
-manager.dispatch({ type: 'ui:click', ref: 'edit', payload: { offering_id: planId, kind: 'recurring', active: true, name: 'Drop-in', price_cents: 1800, interval: 'month', interval_count: 1, class_allowance: 4, minimum_term_months: 0, notice_days: 0, credits: null, valid_days: null } });
+manager.dispatch({ type: 'ui:click', ref: 'edit', payload: await rowFor('Drop-in') });
 await settle();
 ok('editing prefills from the row', treeOf(manager).includes('Edit offering'));
 manager.dispatch({ type: 'ui:model', ref: 'priceCents', payload: 2000 });
@@ -337,5 +350,74 @@ ok('...and offers the way out', staying.includes('Give notice'), 'the write that
 const leaving = await openRecord(withNotice.rows[0]?.id);
 ok('somebody who gave notice reads as leaving', leaving.includes('"label":"Leaving"'), 'with the last day, derived');
 ok('...and is offered the way back, not a second way out', leaving.includes('changed their mind') && !leaving.includes('Give notice'), 'one decision, one control');
+
+
+// ── A MISTAKE IS NOT A PRODUCT ───────────────────────────────
+//
+// Retiring was the only way out of anything, so a mistyped price stayed on the
+// list forever wearing a "Retired" badge. Deleting exists for the row nobody
+// ever held; retiring still exists for the one somebody does.
+manager.dispatch({ type: 'ui:click', ref: 'nav', payload: 'plans.list' });
+await settle(10);
+manager.dispatch({ type: 'ui:click', ref: 'add' });
+await settle();
+manager.dispatch({ type: 'ui:model', ref: 'name', payload: '' });
+await settle(4);
+ok(
+  'a nameless price cannot be added',
+  treeOf(manager).includes('"label":"Add plan","disabled":true'),
+  'the sheet used to open with Add live, and pressing it wrote a nameless row at zero that could then only be retired',
+);
+manager.dispatch({ type: 'ui:model', ref: 'name', payload: 'Typo' });
+await settle(4);
+ok('...and a named one can', treeOf(manager).includes('"label":"Add plan","disabled":false'));
+manager.dispatch({ type: 'ui:click', ref: 'create' });
+await settle(12);
+
+manager.dispatch({ type: 'ui:click', ref: 'edit', payload: await rowFor('Typo') });
+await settle(8);
+const typoOpen = treeOf(manager);
+ok('a row nobody ever took offers Delete, not Retire', typoOpen.includes('"label":"Delete"') && !typoOpen.includes('"label":"Retire"'));
+ok('...and says what that means', typoOpen.includes('Nobody has ever taken this'), 'a danger button with no sentence beside it makes somebody guess');
+manager.dispatch({ type: 'ui:click', ref: 'delete' });
+await settle(12);
+ok('...and it goes', (await count("SELECT count(*) n FROM offerings WHERE name = 'Typo'")) === 0, 'gone, not retired');
+
+manager.dispatch({ type: 'ui:click', ref: 'edit', payload: await rowFor('Unlimited') });
+await settle(8);
+const heldOpen = treeOf(manager);
+ok('a row somebody holds offers Retire, not Delete', heldOpen.includes('"label":"Retire"') && !heldOpen.includes('"label":"Delete"'));
+ok('...counting them out loud', heldOpen.includes('people hold this'), 'the number is the reason, so the screen says the number');
+
+// THE BUTTON IS A HINT; THE DATABASE IS THE ANSWER. Clicked anyway, past a
+// control this screen did not draw — because a count read a moment ago is a
+// count that can be wrong by the time somebody acts on it, and the refusal has
+// to be a sentence rather than a constraint name either way.
+const heldId = (await runtime.db.query<{ id: string }>("SELECT id FROM offerings WHERE name = 'Unlimited' AND studio_id = 'st_lumen'")).rows[0]?.id ?? '';
+manager.dispatch({ type: 'ui:click', ref: 'delete' });
+await settle(12);
+ok(
+  'and deleting a held one is refused in words',
+  treeOf(manager).includes('Retire it instead'),
+  'three foreign keys already said no, unreadably — this is the sentence that replaces them',
+);
+ok('...leaving it exactly where it was', (await count('SELECT count(*) n FROM offerings WHERE id = $1', [heldId])) === 1);
+manager.dispatch({ type: 'ui:click', ref: 'close' });
+await settle(6);
+
+// AND THE FEE SURVIVES AN EDIT. The row the form opens on has to carry every
+// column Save writes, and this one was missing: the plan naming a joining fee
+// stopped naming it the moment somebody corrected its name.
+manager.dispatch({ type: 'ui:click', ref: 'edit', payload: await rowFor('Unlimited') });
+await settle(8);
+manager.dispatch({ type: 'ui:model', ref: 'name', payload: 'Unlimited ' });
+await settle(4);
+manager.dispatch({ type: 'ui:click', ref: 'save' });
+await settle(12);
+ok(
+  'renaming a plan does not stop it charging its joining fee',
+  (await count("SELECT count(*) n FROM offerings WHERE studio_id = 'st_lumen' AND btrim(name) = 'Unlimited' AND joining_fee_id IS NOT NULL")) === 1,
+  'every column Save writes has to travel on the row Save opened from',
+);
 
 report('the price list edits, retiring keeps everybody who is paying, a studio charges in one currency, and a commitment outlives the notice given inside it.');

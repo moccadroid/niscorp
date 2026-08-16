@@ -122,5 +122,12 @@ export const PASSES_DDL = /* sql */ `
     AFTER INSERT OR UPDATE OR DELETE ON passes
     FOR EACH ROW EXECUTE FUNCTION resync_relationships_row();
 
+  -- AND IT HOLDS THE OFFERING IT WAS SOLD ON, which is what stops the studio
+  -- deleting that price. See offerings.held_count for why a screen needs to
+  -- know the difference between a product and a typo.
+  CREATE TRIGGER passes_sync_offering_holds
+    AFTER INSERT OR UPDATE OF offering_id OR DELETE ON passes
+    FOR EACH ROW EXECUTE FUNCTION sync_offering_holds_of_row();
+
   CREATE INDEX passes_person ON passes (person_id, status);
 `;

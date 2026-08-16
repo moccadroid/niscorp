@@ -270,6 +270,15 @@ export const GERMAN: Record<string, string> = {
   'A company': 'Ein Unternehmen',
   'A sole trader': 'Ein Einzelunternehmen',
   Business: 'Unternehmen',
+  // The third verb on the price list. Retiring is for a product a studio
+  // stopped selling; this is for the row that was never one.
+  Delete: 'Löschen',
+  'Nobody has ever taken this — deleting it removes it for good.':
+    'Das hat nie jemand genommen — löschen entfernt es endgültig.',
+  'One person holds this. Retiring keeps them on it.':
+    'Eine Person hat das. Beim Einstellen behält sie es.',
+  '{n} people hold this. Retiring keeps them on it.':
+    '{n} Personen haben das. Beim Einstellen behalten sie es.',
   'Decides what a payment provider asks you for. Hard to change once an account exists, so it is worth getting right now.': 'Bestimmt, was ein Zahlungsanbieter von dir verlangt. Nach dem Anlegen eines Kontos kaum noch änderbar — jetzt lohnt es sich, es richtig zu setzen.',
   'What kind of business this is': 'Um welche Art von Unternehmen es sich handelt',
   'A one-off — sold once, grants nothing': 'Ein Einzelposten — einmal verkauft, berechtigt zu nichts',

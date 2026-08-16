@@ -20,7 +20,15 @@ export const OFFERINGS_DDL = /* sql */ `
   CREATE TABLE offerings (
     id               TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
     studio_id        TEXT NOT NULL REFERENCES studios(id),
-    name             TEXT NOT NULL,
+    -- A NAME IS THE ONE THING IT CANNOT BE SOLD WITHOUT. NOT NULL accepts the
+    -- empty string, and the form asked nothing, so opening the sheet and
+    -- pressing Add wrote a nameless row at zero — and the only way out of it was
+    -- to retire it, which is how a price list fills up with things that were
+    -- never products.
+    --
+    -- Zero stays legal: a free plan is a real thing a studio sells. Nameless
+    -- does not.
+    name             TEXT NOT NULL CHECK (btrim(name) <> ''),
     -- WHAT SORT OF THING THIS IS, and the third one is not a variation on the
     -- first two.
     --
@@ -81,6 +89,21 @@ export const OFFERINGS_DDL = /* sql */ `
     -- studio, and the trigger below keeps it a one-off rather than, say, a
     -- membership that would silently be sold twice.
     joining_fee_id   TEXT,
+    -- ── HOW MANY THINGS POINT AT THIS PRICE ──────────────────
+    --
+    -- Retiring exists because subscriptions, passes and purchases reference the
+    -- offering they were SOLD on, and a studio that drops a price still has
+    -- people paying it. That rule is right and it is not changing.
+    --
+    -- But an offering NOBODY EVER HELD is not history, it is a typo — and there
+    -- was no way to be rid of one, so the only exit from a mistake was to retire
+    -- it and let it sit on the list forever.
+    --
+    -- A counter cache, as courses.enrolled_count states the rule. It decides
+    -- which BUTTON the form offers and nothing more: the foreign keys below are
+    -- what actually refuse a delete, so a count that drifted would cost a
+    -- readable error and never a row somebody was paying for.
+    held_count       INTEGER NOT NULL DEFAULT 0,
     active           BOOLEAN NOT NULL DEFAULT true,
     -- THE PAIR TARGET, and where that rule is stated. Redundant as a
     -- constraint — "id" is already unique — and load-bearing as a TARGET: it
@@ -136,4 +159,88 @@ export const OFFERINGS_DDL = /* sql */ `
   CREATE TRIGGER offerings_check_joining_fee
     BEFORE INSERT OR UPDATE OF joining_fee_id, kind ON offerings
     FOR EACH ROW EXECUTE FUNCTION check_joining_fee();
+
+  -- THE RECOUNT, in one place, called by every table that can hold one.
+  --
+  -- A full recount rather than an increment: the same choice enrolments makes,
+  -- and for the same reason — a counter that adds and subtracts is a counter
+  -- that can be wrong forever after one missed path, and this one is read by a
+  -- screen deciding whether something is deletable.
+  --
+  -- The fourth term is the self-reference: a plan naming this one as its
+  -- joining fee holds it just as firmly as a member does.
+  -- THE COUNT ITSELF, as an expression with two callers: the cache below and
+  -- the refusal further down. Written once because a delete guard that counted
+  -- differently from the number on the screen would offer a button and then
+  -- refuse it.
+  -- plpgsql rather than sql, and not a style choice: a LANGUAGE sql body is
+  -- resolved against the catalog the moment it is created, and the three tables
+  -- it counts are declared after this one. A plpgsql body is not, which is why
+  -- every function in this schema is one.
+  CREATE OR REPLACE FUNCTION offering_holds(which TEXT) RETURNS INTEGER AS $oh$
+  DECLARE
+    held INTEGER;
+  BEGIN
+    SELECT (SELECT count(*) FROM subscriptions s WHERE s.offering_id = which)
+         + (SELECT count(*) FROM passes p WHERE p.offering_id = which)
+         + (SELECT count(*) FROM purchases u WHERE u.offering_id = which)
+         + (SELECT count(*) FROM offerings f WHERE f.joining_fee_id = which)
+      INTO held;
+    RETURN held;
+  END;
+  $oh$ LANGUAGE plpgsql STABLE;
+
+  CREATE OR REPLACE FUNCTION sync_offering_holds(which TEXT) RETURNS VOID AS $soh$
+  BEGIN
+    IF which IS NULL THEN RETURN; END IF;
+    UPDATE offerings SET held_count = offering_holds(which) WHERE id = which;
+  END;
+  $soh$ LANGUAGE plpgsql;
+
+  -- Every holder's table hangs this on itself — see subscriptions, passes and
+  -- purchases, each of which says so where it declares the column.
+  CREATE OR REPLACE FUNCTION sync_offering_holds_of_row() RETURNS TRIGGER AS $sohr$
+  BEGIN
+    PERFORM sync_offering_holds(COALESCE(NEW.offering_id, OLD.offering_id));
+    RETURN NULL;
+  END;
+  $sohr$ LANGUAGE plpgsql;
+
+  -- The self-reference gets its own, because the column it watches is not
+  -- called offering_id and the row it counts against is not this row.
+  CREATE OR REPLACE FUNCTION sync_joining_fee_holds() RETURNS TRIGGER AS $sjf$
+  BEGIN
+    PERFORM sync_offering_holds(NEW.joining_fee_id);
+    PERFORM sync_offering_holds(OLD.joining_fee_id);
+    RETURN NULL;
+  END;
+  $sjf$ LANGUAGE plpgsql;
+
+  CREATE TRIGGER offerings_sync_joining_fee_holds
+    AFTER INSERT OR UPDATE OF joining_fee_id OR DELETE ON offerings
+    FOR EACH ROW EXECUTE FUNCTION sync_joining_fee_holds();
+
+  -- DELETING IS FOR MISTAKES, and the database is what decides which is which.
+  --
+  -- It COUNTS rather than reading the cache — a cache is what a screen reads,
+  -- and this is the answer. It cannot refresh the cache either: updating the
+  -- row a BEFORE DELETE is about is Postgres refusing the whole statement with
+  -- a sentence about tuples, which is exactly the kind of error this exists to
+  -- replace.
+  --
+  -- Without it the refusal is still correct — three foreign keys see to that —
+  -- but it arrives as a constraint name, and somebody who mistyped a price
+  -- should be told what to do instead.
+  CREATE OR REPLACE FUNCTION refuse_to_delete_held() RETURNS TRIGGER AS $rdh$
+  BEGIN
+    IF offering_holds(OLD.id) > 0 THEN
+      RAISE EXCEPTION 'Somebody holds this, so it cannot be deleted. Retire it instead and everybody on it keeps it.';
+    END IF;
+    RETURN OLD;
+  END;
+  $rdh$ LANGUAGE plpgsql;
+
+  CREATE TRIGGER offerings_refuse_to_delete_held
+    BEFORE DELETE ON offerings
+    FOR EACH ROW EXECUTE FUNCTION refuse_to_delete_held();
 `;

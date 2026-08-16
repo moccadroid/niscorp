@@ -490,10 +490,10 @@ export const offeringsOnSale: CacheEntry = {
 export const offeringsList: CacheEntry = {
   fingerprint: 'offerings/list',
   intent: 'Everything this studio sells — plans and passes, retired ones last',
-  shape: [{ offering_id: '', name: '', kind: '', kind_label: '', price_cents: 0, price_display: '', interval: '', interval_count: 0, interval_display: '', class_allowance: 0, allowance_display: '', active: false, state_label: '', state_tone: '', minimum_term_months: 0, notice_days: 0, credits: 0, valid_days: 0, term_display: '' }],
+  shape: [{ offering_id: '', name: '', kind: '', kind_label: '', price_cents: 0, price_display: '', interval: '', interval_count: 0, interval_display: '', class_allowance: 0, allowance_display: '', active: false, state_label: '', state_tone: '', minimum_term_months: 0, notice_days: 0, credits: 0, valid_days: 0, joining_fee_id: '', term_display: '', held_count: 0, held_display: '' }],
   dsl: {
     from: ['offerings'],
-    fields: [{ field: 'offerings.id', as: 'offering_id' }, 'offerings.name', 'offerings.kind', 'offerings.price_cents', 'offerings.currency', 'offerings.interval', 'offerings.interval_count', 'offerings.class_allowance', 'offerings.active', 'offerings.minimum_term_months', 'offerings.notice_days', 'offerings.credits', 'offerings.valid_days'],
+    fields: [{ field: 'offerings.id', as: 'offering_id' }, 'offerings.name', 'offerings.kind', 'offerings.price_cents', 'offerings.currency', 'offerings.interval', 'offerings.interval_count', 'offerings.class_allowance', 'offerings.active', 'offerings.minimum_term_months', 'offerings.notice_days', 'offerings.credits', 'offerings.valid_days', 'offerings.joining_fee_id', 'offerings.held_count'],
     // Retired offerings sort last but stay on the list. A price a studio
     // stopped offering is still a price somebody is paying.
     sort: [{ field: 'offerings.active', dir: 'desc' }, { field: 'offerings.price_cents', dir: 'asc' }],
@@ -559,6 +559,25 @@ export const offeringsList: CacheEntry = {
         notice_days: row('notice_days'),
         credits: row('credits'),
         valid_days: row('valid_days'),
+        // AND THE FEE IT NAMES, for the same round-trip reason as the terms
+        // above — the form writes this column, so a row that arrives without it
+        // is a row whose Save clears it. Correcting a typo in a plan's name
+        // silently stopped its joining fee being charged.
+        joining_fee_id: row('joining_fee_id'),
+        // WHETHER ANYBODY HAS EVER HELD THIS, so the form can offer the right
+        // way out. Nothing held it means it was never a product, and a studio
+        // should be able to delete a typo rather than retiring it and reading it
+        // forever. Travels with the row because the form opens FROM the row.
+        held_count: row('held_count'),
+        held_display: {
+          $case: {
+            branches: [
+              { when: { $eq: [row('held_count'), 0] }, then: 'Nobody has ever taken this — deleting it removes it for good.' },
+              { when: { $eq: [row('held_count'), 1] }, then: 'One person holds this. Retiring keeps them on it.' },
+            ],
+            else: pattern('{n} people hold this. Retiring keeps them on it.', { n: row('held_count') }),
+          },
+        },
         // And the terms as a phrase, because "6 months · 60 days notice" is what
         // a studio is selling and a price list that omits it is not a price list.
         term_display: {

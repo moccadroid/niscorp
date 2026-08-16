@@ -1,6 +1,16 @@
 import { z } from 'zod';
 import type { ActionDefinition, LayoutNode, Step } from '@niscorp/nova';
-import { oneOffOptionsPrism, planCreatePrism, planRestorePrism, planRetirePrism, planUpdatePrism } from './plans.prism';
+import { oneOffOptionsPrism, planCreatePrism, planDeletePrism, planRestorePrism, planRetirePrism, planUpdatePrism } from './plans.prism';
+
+// A NAME IS THE ONLY ANSWER THIS FORM INSISTS ON, and it did not insist on it:
+// the sheet opened, Add was live, and pressing it wrote a nameless row at zero
+// that could then only be retired. The column refuses it now too — see the
+// CHECK on offerings.name — and this is what stops somebody meeting that
+// refusal as a database error.
+//
+// Zero is NOT blocked. A studio giving something away is a studio selling it
+// for nothing, and the form has no business arguing.
+const nameMissing = { $prism: { $eq: [{ $trim: { $ref: '$.name' } }, ''] } };
 
 const planFormLayout: LayoutNode = {
   component: 'Stack',
@@ -190,21 +200,41 @@ const planFormLayout: LayoutNode = {
       children: [
         {
           if: '$.planId',
-          then: { component: 'Button', props: { variant: 'solid', big: true, label: 'Save', disabled: '$.saving' }, ref: 'save' },
-          else: { component: 'Button', props: { variant: 'solid', big: true, label: 'Add plan', disabled: '$.saving' }, ref: 'create' },
+          then: { component: 'Button', props: { variant: 'solid', big: true, label: 'Save', disabled: '$.blocked' }, ref: 'save' },
+          else: { component: 'Button', props: { variant: 'solid', big: true, label: 'Add plan', disabled: '$.blocked' }, ref: 'create' },
         },
 
+        // ── THE WAY OUT, AND THERE ARE TWO OF THEM ───────────
+        //
+        // Retiring is for a product a studio has stopped selling: everybody on
+        // it stays on it, which is the whole reason the verb exists. Deleting is
+        // for a row that was never a product — the mistyped price, the sheet
+        // opened by accident — and it had no verb at all, so every mistake
+        // became another permanently retired line on the price list.
+        //
+        // Which one shows is decided by the row, which arrives carrying how
+        // many things hold it. If that count is stale the database refuses in a
+        // sentence, so the worst this can be is wrong about a button.
         {
           if: '$.planId',
           then: {
-            if: '$.planActive',
-            then: { component: 'Button', props: { variant: 'danger', big: true, label: 'Retire' }, ref: 'retire' },
-            else: { component: 'Button', props: { variant: 'ghost', big: true, label: 'Offer again' }, ref: 'restore' },
+            if: '$.planHeld',
+            then: {
+              if: '$.planActive',
+              then: { component: 'Button', props: { variant: 'danger', big: true, label: 'Retire' }, ref: 'retire' },
+              else: { component: 'Button', props: { variant: 'ghost', big: true, label: 'Offer again' }, ref: 'restore' },
+            },
+            else: { component: 'Button', props: { variant: 'danger', big: true, label: 'Delete' }, ref: 'delete' },
           },
           else: '',
         },
       ],
     },
+    // WHAT EITHER BUTTON WILL DO, in the words the list already computed. A
+    // danger button with no sentence beside it makes somebody guess whether
+    // they are about to take a price off the list or take it away from the
+    // people paying it.
+    { if: '$.planId', then: { component: 'Text', props: { size: 'sm', color: 'mute' }, children: '$.planHeldLine' }, else: '' },
   ],
 };
 
@@ -237,6 +267,13 @@ export const planFormAction: ActionDefinition = {
     validDays: '',
     joiningFeeId: '',
     oneOffOptions: [],
+    // Nothing is typed yet, so nothing can be saved yet.
+    blocked: true,
+    // How many things hold this, and the sentence saying so. Zero is what makes
+    // the row deletable; the create case is zero because it does not exist yet,
+    // and the Delete button is behind `planId` anyway.
+    planHeld: 0,
+    planHeldLine: '',
     saving: false,
     error: '',
   },
@@ -246,14 +283,21 @@ export const planFormAction: ActionDefinition = {
     update: { url: '/api/studio/vex', method: 'POST', request: planUpdatePrism, errorTarget: 'error' },
     retire: { url: '/api/studio/vex', method: 'POST', request: planRetirePrism, errorTarget: 'error' },
     restore: { url: '/api/studio/vex', method: 'POST', request: planRestorePrism, errorTarget: 'error' },
+    remove: { url: '/api/studio/vex', method: 'POST', request: planDeletePrism, errorTarget: 'error' },
     oneOffs: { url: '/api/studio/vex', method: 'POST', request: oneOffOptionsPrism, target: 'oneOffOptions' },
   },
   lifecycle: { mount: [{ call: 'oneOffs' }] },
   triggers: [
+    // The name decides whether anything can be saved, so every keystroke in it
+    // re-asks. Set from the event rather than read back from the field, for the
+    // buffered-snapshot reason people.actions.ts spells out.
+    { event: 'ui:model', ref: 'name', do: [{ set: 'name', value: '@event.payload' }] },
+    { event: 'ui:model', ref: 'name', do: [{ set: 'blocked', value: nameMissing }] },
     { event: 'ui:click', ref: 'create', do: [{ set: 'error', value: '' }, { set: 'saving', value: true }, done('create')] },
     { event: 'ui:click', ref: 'save', do: [{ set: 'error', value: '' }, { set: 'saving', value: true }, done('update')] },
     { event: 'ui:click', ref: 'retire', do: [{ set: 'error', value: '' }, done('retire')] },
     { event: 'ui:click', ref: 'restore', do: [{ set: 'error', value: '' }, done('restore')] },
+    { event: 'ui:click', ref: 'delete', do: [{ set: 'error', value: '' }, done('remove')] },
   ],
 };
 
@@ -275,5 +319,8 @@ export const planFormInputSchema = z.toJSONSchema(
     credits: z.union([z.string(), z.number()]).optional(),
     validDays: z.union([z.string(), z.number()]).optional(),
     joiningFeeId: z.string().optional().describe('Another offering, of kind one_off, charged once when somebody joins.'),
+    planHeld: z.number().optional().describe('How many subscriptions, passes, purchases and plans point at this. Zero means it was never a product and can be deleted.'),
+    planHeldLine: z.string().optional(),
+    blocked: z.boolean().optional(),
   }),
 );
