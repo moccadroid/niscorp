@@ -12,7 +12,7 @@ export const studioSettingsLayout: LayoutNode = {
       component: 'Row',
       props: { gap: 8, align: 'center' },
       children: [
-        { component: 'Text', props: { size: 'sm', color: 'mute' }, children: 'Currently wearing' },
+        { component: 'Text', props: { size: 'sm', color: 'mute' }, children: 'In use' },
         { component: 'Badge', props: { tone: 'accent', label: '$.currentThemeName' } },
       ],
     },

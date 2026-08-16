@@ -88,9 +88,9 @@ export const GERMAN: Record<string, string> = {
     'Gilt für alle hier und ändert, wie Datum und Preise geschrieben werden.',
   Apply: 'Anwenden',
   'Are you sure?': 'Bist du sicher?',
-  Arm: 'Scharfschalten',
-  'Armed.': 'Scharfgeschaltet.',
-  Arrived: 'Da',
+  Arm: 'Aktivieren',
+  'Armed.': 'Aktiviert.',
+  Arrived: 'Anwesend',
   'Ask at the desk about joining.': 'Frag am Empfang nach einer Anmeldung.',
   'At the desk': 'Am Empfang',
   'Attendance grouped on the week each class was written into.':
@@ -165,12 +165,12 @@ export const GERMAN: Record<string, string> = {
   // relationship. Not "aktuelle Mitglieder" — the whole point of the lens is
   // that it is wider than membership.
   Current: 'Aktuell',
-  'Currently wearing': 'Aktuell',
+  'In use': 'In Verwendung',
 
   Date: 'Datum',
   Day: 'Tag',
   'Direct debit': 'Lastschrift',
-  'Do this': 'Das tun',
+  'Do this': 'Ausführen',
   'Drop into anything on the timetable, or join a course and hold your place for the whole block.':
     'Nimm spontan an allem im Stundenplan teil, oder tritt einem Kursblock bei und sichere dir deinen Platz für den ganzen Zeitraum.',
   Due: 'Fällig',
@@ -191,9 +191,9 @@ export const GERMAN: Record<string, string> = {
   'Everybody has been in.': 'Alle waren da.',
   'Everybody who holds a place on this block.': 'Alle mit einem Platz in diesem Kursblock.',
   Everyone: 'Alle',
-  'Everyone — members, prospects, pass holders, contacts — one list, worn through lenses.':
-    'Alle — Mitglieder, Interessenten, Blockkarten, Kontakte — eine Liste, durch Filter betrachtet.',
-  'Everyone the studio deals with, lensed by relationship.':
+  'Everyone — members, prospects, pass holders, contacts — one list, filtered by relationship.':
+    'Alle — Mitglieder, Interessenten, Blockkarten-Inhaber, Kontakte — eine Liste, nach Beziehung gefiltert.',
+  'Everyone the studio deals with, filtered by relationship.':
     'Alle, mit denen das Studio zu tun hat, nach Beziehung gefiltert.',
   'Everything on sale — plans and passes. Retiring one keeps everybody already paying for it.':
     'Alles im Verkauf — Tarife und Blockkarten. Ein eingestellter Tarif bleibt für alle bestehen, die ihn schon zahlen.',
@@ -234,20 +234,20 @@ export const GERMAN: Record<string, string> = {
   'A pass': 'Eine Blockkarte',
   'A staff role': 'Eine Team-Rolle',
   Anything: 'Alles',
-  Holding: 'Hält',
+  'What they hold': 'Was jemand hat',
   'Nothing yet': 'Noch nichts',
   'Joining fee': 'Aufnahmegebühr',
   'Charged once, with the first payment. Create it as a one-off first and it appears here.':
     'Einmalig berechnet, mit der ersten Zahlung. Leg sie zuerst als Einzelposten an, dann erscheint sie hier.',
   'Add something to sell': 'Etwas zum Verkauf anlegen',
   Block: 'Block',
-  'Bounded blocks with their own price. Edited under Schedule → Classes, because they carry a timetable.': 'Begrenzte Blöcke mit eigenem Preis. Bearbeitet unter Stundenplan → Kurse, weil sie einen Zeitplan haben.',
+  'Bounded blocks with their own price. Edited under Schedule → Classes, because they carry a timetable.': 'Begrenzte Blöcke mit eigenem Preis. Bearbeitet unter Plan → Kurse, weil sie einen Zeitplan haben.',
   'Colours and words for now. Studio-specific layouts are coming.': 'Farben und Sprache vorerst. Studio-eigene Layouts kommen noch.',
   'Course blocks': 'Kursblöcke',
   'Everything a member can pay for.': 'Alles, wofür ein Mitglied zahlen kann.',
   'Everything a member can pay for. Retiring one keeps everybody already on it.': 'Alles, wofür ein Mitglied zahlen kann. Ein eingestelltes Angebot bleibt für alle bestehen, die es schon haben.',
   'Memberships, class passes, drop-ins and one-offs. Retiring one keeps everybody already on it.': 'Mitgliedschaften, Blockkarten, Einzelstunden und Einzelposten. Ein eingestelltes Angebot bleibt für alle bestehen, die es schon haben.',
-  'No course blocks. Add one under Schedule → Classes.': 'Keine Kursblöcke. Leg einen unter Stundenplan → Kurse an.',
+  'No course blocks. Add one under Schedule → Classes.': 'Keine Kursblöcke. Leg einen unter Plan → Kurse an.',
   Offers: 'Angebote',
   Selling: 'Verkauf',
   'The look and the language every member and every member of staff sees.': 'Das Erscheinungsbild und die Sprache, die jedes Mitglied und jedes Teammitglied sieht.',
@@ -274,7 +274,7 @@ export const GERMAN: Record<string, string> = {
   'What kind of business this is': 'Um welche Art von Unternehmen es sich handelt',
   'A one-off — sold once, grants nothing': 'Ein Einzelposten — einmal verkauft, berechtigt zu nichts',
   'Grants nothing': 'Berechtigt zu nichts',
-  'Nothing bought outright.': 'Nichts einzeln gekauft.',
+  'Nothing bought outright.': 'Nichts einmalig gekauft.',
   Once: 'Einmalig',
   'Paid at the studio': 'Im Studio bezahlt',
   'What a member pays each period — or once, for a pass or a one-off.': 'Was ein Mitglied je Zeitraum zahlt — oder einmalig, bei einer Blockkarte oder einem Einzelposten.',
@@ -359,7 +359,7 @@ export const GERMAN: Record<string, string> = {
   Mon: 'Mo',
   Money: 'Finanzen',
   Monthly: 'Monatlich',
-  'Monthly run rate': 'Monatliche Laufrate',
+  'Monthly run rate': 'Hochgerechnet pro Monat',
   More: 'Mehr',
   'My classes': 'Meine Kurse',
   'My membership': 'Meine Mitgliedschaft',
@@ -445,7 +445,7 @@ export const GERMAN: Record<string, string> = {
   Paid: 'Bezahlt',
   'Paid until': 'Bezahlt bis',
   Pass: 'Blockkarte',
-  'Pass holder': 'Blockkarte',
+  'Pass holder': 'Blockkarten-Inhaber',
   Passes: 'Blockkarten',
   // The lens for people the studio no longer deals with — former members and
   // lapsed contacts alike, so the word is about the person and not the tense.
@@ -490,16 +490,19 @@ export const GERMAN: Record<string, string> = {
     'Nimm sie jetzt in einen Tarif auf oder lass es — in der Kartei stehen sie so oder so.',
 
   'Sent in your studio’s name. Every message is kept in the outbox, so you can see what went and what did not.':
-    'Wird im Namen Ihres Studios gesendet. Jede Nachricht bleibt im Postausgang, damit Sie sehen, was gesendet wurde und was nicht.',
+    'Wird im Namen deines Studios gesendet. Jede Nachricht bleibt im Postausgang, damit du siehst, was gesendet wurde und was nicht.',
   'Quiet day. The timetable is where classes get added.':
     'Ruhiger Tag. Kurse werden im Stundenplan angelegt.',
 
   'Ran it. Anything it produced is on the follow-up list or in the outbox.':
     'Ausgeführt. Alles Entstandene steht in den Mitteilungen oder im Postausgang.',
   'Read them': 'Lesen',
-  // The metaphor survives the translation: a recipe is a ready-made pairing a
-  // studio can cook as it is. "Vorlagen" would say template and lose it.
-  Recipes: 'Rezepte',
+  // "Rezepte" kept the English metaphor and lost the argument to its own
+  // neighbours: every sentence ABOUT a recipe already said Vorlage ("Eine
+  // Vorlage füllt das Formular für dich aus", "Der Reiter Vorlagen"), so the
+  // tab was the only place the metaphor survived and it read as a different
+  // feature from the one described underneath it. One word wins; this is it.
+  Recipes: 'Vorlagen',
   'Record payment': 'Zahlung erfassen',
   Remove: 'Entfernen',
   'Remove from staff': 'Aus dem Team entfernen',
@@ -514,7 +517,7 @@ export const GERMAN: Record<string, string> = {
   Rose: 'Rosé',
   'Run at': 'Ausführen um',
   'Run now': 'Jetzt ausführen',
-  Runs: 'Läufe',
+  Runs: 'Ausführungen',
 
   Sat: 'Sa',
   Save: 'Speichern',
@@ -528,7 +531,7 @@ export const GERMAN: Record<string, string> = {
   'Show more': 'Mehr anzeigen',
   'Sign in': 'Anmelden',
   'Sign out': 'Abmelden',
-  'Sign somebody else up': 'Jemand anderen anmelden',
+  'Sign somebody else up': 'Eine andere Person anmelden',
   'Single classes': 'Einzelstunden',
   'Six months': 'Sechs Monate',
   'Six slots of one thing and one of another, to the same headcount, is a timetable problem.':
@@ -559,7 +562,7 @@ export const GERMAN: Record<string, string> = {
 
   'Take off': 'Entfernen',
   'Taught by': 'Kursleitung',
-  Teacher: 'Kursleitung',
+  Teacher: 'Trainer',
   Teal: 'Petrol',
   Ten: 'Zehn',
   Terms: 'Bedingungen',
@@ -579,13 +582,13 @@ export const GERMAN: Record<string, string> = {
     'Die nächsten zwei Wochen, erzeugt aus allem unter Kurse.',
   'The recipes tab has eight things studios usually want.':
     'Der Reiter Vorlagen enthält acht Dinge, die Studios üblicherweise brauchen.',
-  'The register, and what to do about who.': 'Die Anwesenheit, und was bei wem zu tun ist.',
+  'The register, and what to do about whom.': 'Die Anwesenheit, und was bei wem zu tun ist.',
   'The roll': 'Die Kartei',
   'The things that happen without anybody doing them. Preview one to see exactly what it would do before it does anything.':
     'Die Dinge, die ohne Zutun passieren. Sieh dir eine Vorschau an, um genau zu sehen, was sie täte, bevor sie etwas tut.',
   'The window closes on its own — nothing marks it.':
     'Der Zeitraum endet von selbst — nichts markiert das.',
-  'Their money reaches': 'Ihr Geld reicht bis',
+  'Covered until': 'Abgedeckt bis',
   Theme: 'Erscheinungsbild',
   'They changed their mind': 'Sie haben es sich anders überlegt',
   'Things an installed add-on has told the studio. Lyra’s own automations do not write here — anything Lyra can answer with a query is a screen, not a list.':
@@ -660,24 +663,24 @@ export const GERMAN: Record<string, string> = {
     'Wofür du gebucht bist, und worauf du wartest.',
   'What you are on, and since when.': 'Was du hast, und seit wann.',
   'What you have booked.': 'Was du gebucht hast.',
-  'What you hold, and since when.': 'Was du hältst, und seit wann.',
+  'What you hold, and since when.': 'Was du hast, und seit wann.',
   When: 'Wann',
   'When it meets': 'Wann er stattfindet',
   'When somebody joins, email them': 'Wenn jemand beitritt, ihnen schreiben',
   'When things happen, and what is on offer.': 'Wann was stattfindet, und was angeboten wird.',
   'When this happens': 'Wenn das passiert',
-  'Where the week actually goes.': 'Wohin die Woche tatsächlich geht.',
+  'Where the week actually goes.': 'Wofür die Woche draufgeht.',
   'Who has arrived, and who was expected.': 'Wer da ist, und wer erwartet wurde.',
   'Who has stopped coming, who has given notice, and what both are worth a month.':
     'Wer nicht mehr kommt, wer gekündigt hat, und was beides monatlich wert ist.',
   'Who is coming': 'Wer kommt',
-  'Who is drifting, and what it is worth.': 'Wer sich entfernt, und was das wert ist.',
+  'Who is drifting, and what it is worth.': 'Wer abspringt, und was das wert ist.',
   'Who is on it': 'Wer dabei ist',
   'Who is on this': 'Wer dabei ist',
   'Who works here and what they can do. Changing a role changes their whole application.':
-    'Wer hier arbeitet und was sie tun können. Eine geänderte Rolle ändert ihre gesamte Anwendung.',
+    'Wer hier arbeitet und was diese Personen tun können. Eine geänderte Rolle ändert ihre gesamte Anwendung.',
   'Who works here, and what they can do. Changing a role changes their whole application — no sign-out needed.':
-    'Wer hier arbeitet, und was sie tun können. Eine geänderte Rolle ändert ihre gesamte Anwendung — ohne Abmelden.',
+    'Wer hier arbeitet, und was diese Personen tun können. Eine geänderte Rolle ändert ihre gesamte Anwendung — ohne Abmelden.',
   'With us since': 'Dabei seit',
   'Withdrawn. Your places are free again.': 'Ausgetragen. Deine Plätze sind wieder frei.',
   Worth: 'Wert',
@@ -733,7 +736,7 @@ export const GERMAN: Record<string, string> = {
     'Die erste Woche entscheidet, ob es ein zweites Jahr gibt — und derzeit hört ein neues Mitglied überhaupt nichts vom Studio.',
   'Answer an enquiry while they are still interested': 'Auf eine Anfrage antworten, solange das Interesse da ist',
   'Somebody asked about joining and is waiting. An hour later they have asked somewhere else.':
-    'Jemand hat wegen einer Mitgliedschaft angefragt und wartet. Eine Stunde später fragt er woanders.',
+    'Jemand hat wegen einer Mitgliedschaft angefragt und wartet. Eine Stunde später fragt die Person woanders.',
   'Catch a trial before it runs out': 'Ein Probetraining abfangen, bevor es ausläuft',
   'A trial that ends quietly is a member you never had. This is the conversation, a few days early.':
     'Ein Probetraining, das still ausläuft, ist ein Mitglied, das du nie hattest. Das ist das Gespräch, ein paar Tage früher.',
@@ -776,7 +779,7 @@ export const GERMAN: Record<string, string> = {
 
   'a month': 'pro Monat',
   'a year': 'pro Jahr',
-  Armed: 'Scharfgeschaltet',
+  Armed: 'Aktiv',
   'As it happens': 'Sobald es passiert',
   'Card, online': 'Karte, online',
   'Every week': 'Jede Woche',
@@ -784,8 +787,8 @@ export const GERMAN: Record<string, string> = {
   Former: 'Ehemalig',
   Free: 'Gratis',
   Friday: 'Freitag',
-  Here: 'Da',
-  'Last run': 'Zuletzt gelaufen',
+  Here: 'Anwesend',
+  'Last run': 'Zuletzt ausgeführt',
   Monday: 'Montag',
   'No minimum': 'Keine Mindestlaufzeit',
   None: 'Keine',

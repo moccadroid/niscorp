@@ -8,7 +8,7 @@ export const AREAS: NavArea[] = [
     id: 'hub.desk',
     icon: 'checkin',
     label: 'Check in',
-    blurb: 'The register, and what to do about who.',
+    blurb: 'The register, and what to do about whom.',
     items: [
       { icon: 'checkin', action: 'desk.checkin', label: 'Check in', blurb: 'Who has arrived, and who was expected.' },
       { icon: 'inbox', action: 'desk.followups', label: 'Notices', blurb: 'What an installed add-on has told the studio.' },
@@ -18,11 +18,11 @@ export const AREAS: NavArea[] = [
     id: 'hub.people',
     icon: 'people',
     label: 'People',
-    blurb: 'Everyone the studio deals with, lensed by relationship.',
+    blurb: 'Everyone the studio deals with, filtered by relationship.',
     items: [
       // "Enquiries" is not a screen any more — a prospect is a lens on the
       // same roll, because an enquiry was never a different kind of human.
-      { icon: 'people', action: 'people.list', label: 'People', blurb: 'Everyone — members, prospects, pass holders, contacts — one list, worn through lenses.' },
+      { icon: 'people', action: 'people.list', label: 'People', blurb: 'Everyone — members, prospects, pass holders, contacts — one list, filtered by relationship.' },
       { icon: 'person', action: 'staff.list', label: 'Staff', blurb: 'Who works here and what they can do. Changing a role changes their whole application.' },
     ],
   },

@@ -210,7 +210,7 @@ ok(
 );
 
 const automations = await screenFor('automations.list');
-ok('the Automations tabs are German', automations.includes('Rezepte') && automations.includes('Läuft'), 'Recipes → Rezepte, beside a Running that was in the book all along');
+ok('the Automations tabs are German', automations.includes('Vorlagen') && automations.includes('Läuft'), 'Recipes → Vorlagen, the same word every sentence about them already used, beside a Running that was in the book all along');
 ok('...with no English left in the strip', !englishLabel(automations, 'Recipes', 'Running'));
 
 const schedule = await screenFor('schedule.timetable');

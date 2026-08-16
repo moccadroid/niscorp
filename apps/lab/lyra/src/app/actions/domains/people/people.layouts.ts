@@ -18,7 +18,7 @@ export const peopleListLayout: LayoutNode = page([
       // which offered "Current" and "Passes" as alternatives to each other while
       // they answer different things — and made "members who hold a pass"
       // unaskable, because one strip can only carry one axis.
-      { component: 'Select', props: { label: 'Holding', options: '$.holdings', value: '$.holding' }, ref: 'holding' },
+      { component: 'Select', props: { label: 'What they hold', options: '$.holdings', value: '$.holding' }, ref: 'holding' },
     ],
   },
 
@@ -247,7 +247,7 @@ export const peopleDetailLayout: LayoutNode = page([
             component: 'Row',
             props: { gap: 10, align: 'end', wrap: true },
             children: [
-              { component: 'Input', props: { label: 'Their money reaches', type: 'date' }, ref: 'paidUntil', model: '$.paidUntil' },
+              { component: 'Input', props: { label: 'Covered until', type: 'date' }, ref: 'paidUntil', model: '$.paidUntil' },
               { component: 'Button', props: { variant: 'outline', label: 'Record payment' }, ref: 'recordPayment' },
             ],
           },

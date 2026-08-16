@@ -111,6 +111,19 @@ export const worldFunctions = (
     const studioId = String(session.identity['studioId'] ?? '');
     if (studioId === '') return { locales: 0, shells: 0 };
 
+    // FORGET WHO EVERYBODY IS FIRST, or the rebuild below is a no-op that looks
+    // like a success. The locale rides on the IDENTITY record (`identity/studio`
+    // reads `studios.locale`), moss caches those per principal, and `reset`
+    // rebuilds a shell from whatever the cache still says. So the write landed,
+    // every shell was faithfully rebuilt, and every one of them re-read the old
+    // language and painted itself in it again.
+    //
+    // Tenant-local, like the add-on reaction in app.ts: a studio changing its
+    // language says nothing about anybody else's. The loop below then
+    // repopulates each record as it asks whose studio a shell belongs to, so
+    // the reset that follows is reading rows written a moment ago.
+    deps.server().invalidateTenant(studioId);
+
     // Only a LIVE shell can be wearing the old words, so the roster moss
     // already keeps is the honest set to walk. WHOSE studio each live shell
     // belongs to is read off the records moss resolved — the app reading back
