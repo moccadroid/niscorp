@@ -4,7 +4,7 @@
     {
       "name": "lyra",
       "runtimeExecutable": "pnpm",
-      "runtimeArgs": ["--filter", "lyra", "dev"],
+      "runtimeArgs": ["--filter", "lyra", "dev", "--port", "5180", "--strictPort", "--no-open"],
       "port": 5180
     },
     {
@@ -18,6 +18,30 @@
       "runtimeExecutable": "pnpm",
       "runtimeArgs": ["--filter", "lyra-integrations", "serve"],
       "port": 8799
+    },
+    {
+      "name": "atrium-integrations",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["--filter", "atrium", "integrations"],
+      "port": 8788
+    },
+    {
+      "name": "atrium",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["--filter", "atrium", "dev", "--port", "5175", "--strictPort", "--no-open"],
+      "port": 5175
+    },
+    {
+      "name": "atrium-admin",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["--filter", "atrium", "admin"],
+      "port": 8790
+    },
+    {
+      "name": "relay",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["--filter", "relay", "dev", "--port", "5174", "--strictPort", "--no-open"],
+      "port": 5174
     },
     {
       "name": "showroom",

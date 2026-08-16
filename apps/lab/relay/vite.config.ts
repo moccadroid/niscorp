@@ -33,17 +33,25 @@ import { dirname, resolve } from 'node:path';
 const here = dirname(fileURLToPath(import.meta.url));
 const workspaceRoot = resolve(here, '../../..');
 
+// @niscorp/vex's cache hashing imports createHash from `node:crypto` — a Node
+// builtin absent in the browser (its bundled dist normalizes the specifier to
+// bare `crypto`). The browser gets a tiny @noble/hashes-backed shim whose
+// SHA-256 is byte-identical. The swap is browser-only: the app server runs in
+// this same process and needs the real builtin (moss signs its assertions with
+// generateKeyPairSync), so an alias would take the shim's createHash-or-throw
+// surface down the SSR side too.
+const browserCrypto = (): Plugin => ({
+  name: 'relay-browser-crypto',
+  enforce: 'pre',
+  resolveId: (id, _importer, options) =>
+    (id === 'node:crypto' || id === 'crypto') && options.ssr !== true ? resolve(here, 'node-crypto-shim.ts') : null,
+});
+
 export default defineConfig({
-  plugins: [react(), appServer()],
+  plugins: [react(), browserCrypto(), appServer()],
   resolve: {
     alias: {
       '@relay': resolve(here, 'src'),
-      // @niscorp/vex's cache hashing imports createHash from `node:crypto`
-      // — a Node builtin absent in the browser (its bundled dist normalizes
-      // the specifier to bare `crypto`). Point both at a tiny
-      // @noble/hashes-backed shim whose SHA-256 is byte-identical.
-      'node:crypto': resolve(here, 'node-crypto-shim.ts'),
-      crypto: resolve(here, 'node-crypto-shim.ts'),
     },
   },
   server: {
