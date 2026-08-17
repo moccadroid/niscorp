@@ -47,7 +47,10 @@ const defOf = (schema: ZodType): ZodDef => schema.def as ZodDef;
 
 // While walking, the schemas currently on the stack (cycle detection) and the
 // schemas a `self` pointed back to (so the matching object is tagged recursive).
-type Walk = { stack: Set<ZodType>; targets: Set<ZodType> };
+// Keyed by def, not instance: `.describe()`/`.meta()` clone the wrapper but
+// share the def, so a described alias of a recursive schema must read as the
+// schema itself — or every back-edge re-expands the whole thing one more level.
+type Walk = { stack: Set<ZodDef>; targets: Set<ZodDef> };
 
 // ─── Reading Zod ─────────────────────────────────────────────
 
@@ -127,11 +130,12 @@ const patternLabel = (pattern: Pattern): string =>
 // branch passes through untouched. Unwrapping resolves lazies, so `seen` guards
 // a union that nests back into itself: once a union core is being flattened,
 // re-encountering it keeps the branch as a leaf rather than recursing forever.
-const flattenBranches = (branches: readonly ZodType[], seen: Set<ZodType> = new Set()): ZodType[] =>
+const flattenBranches = (branches: readonly ZodType[], seen: Set<ZodDef> = new Set()): ZodType[] =>
   branches.flatMap((branch) => {
     const { core } = unwrap(branch);
-    if (defOf(core).type !== 'union' || seen.has(core)) return [branch];
-    return flattenBranches(defOf(core).options ?? [], new Set(seen).add(core));
+    const def = defOf(core);
+    if (def.type !== 'union' || seen.has(def)) return [branch];
+    return flattenBranches(def.options ?? [], new Set(seen).add(def));
   });
 
 // A branch's editor. A tagged union owns its discriminant in the chooser, so it
@@ -153,10 +157,11 @@ const parseByType: Record<string, (schema: ZodType, walk: Walk) => Field> = {
   object: (schema, walk) => {
     // On the stack while its fields parse, so a self-reference re-entering it
     // is caught as a cycle. If one was, the object is a recursion anchor.
-    walk.stack.add(schema);
+    const def = defOf(schema);
+    walk.stack.add(def);
     const fields = objectFields(schema, walk);
-    walk.stack.delete(schema);
-    return walk.targets.has(schema) ? { kind: 'object', fields, recursive: true } : { kind: 'object', fields };
+    walk.stack.delete(def);
+    return walk.targets.has(def) ? { kind: 'object', fields, recursive: true } : { kind: 'object', fields };
   },
   array: (schema, walk) => {
     const element = defOf(schema).element;
@@ -180,14 +185,15 @@ const parseByType: Record<string, (schema: ZodType, walk: Walk) => Field> = {
     if (open.length === 1) patterns[open[0]!] = { kind: 'fallback' };
     // Parse the branch fields with the union on the stack, so a child that
     // re-enters it (a `children: LayoutNode[]`) is caught as a cycle.
-    walk.stack.add(schema);
+    const def = defOf(schema);
+    walk.stack.add(def);
     const variants: Variant[] = branches.map((branch, i) => ({
       label: readMeta(branch).title ?? patternLabel(patterns[i]!),
       field: branchField(branch, walk, tag),
       pattern: patterns[i]!,
     }));
-    walk.stack.delete(schema);
-    return walk.targets.has(schema) ? { kind: 'union', variants, recursive: true } : { kind: 'union', variants };
+    walk.stack.delete(def);
+    return walk.targets.has(def) ? { kind: 'union', variants, recursive: true } : { kind: 'union', variants };
   },
 };
 
@@ -201,15 +207,17 @@ const WRAPPERS = new Set(['optional', 'nullable', 'default', 'readonly']);
 
 // A `lazy` is a deferred reference to one schema, but its getter may *build* a
 // fresh instance on every call (`z.lazy(() => z.union([...]))`) rather than
-// close over a stable const. Identity-based cycle detection needs the same
-// instance each time, so resolve each lazy once and reuse it. Keyed by the lazy
-// schema's identity (a different parse of the same lazy is still that schema).
-const lazyResolved = new WeakMap<ZodType, ZodType>();
+// close over a stable const. Cycle detection needs the same resolution each
+// time, so resolve each lazy once and reuse it. Keyed by the lazy's def — the
+// def owns the getter, and a `.describe()` alias of the lazy shares it, so the
+// alias resolves to the same instance instead of a second copy of the tree.
+const lazyResolved = new WeakMap<ZodDef, ZodType>();
 const resolveLazy = (lazy: ZodType): ZodType | undefined => {
-  const cached = lazyResolved.get(lazy);
+  const def = defOf(lazy);
+  const cached = lazyResolved.get(def);
   if (cached !== undefined) return cached;
-  const resolved = defOf(lazy).getter?.();
-  if (resolved !== undefined) lazyResolved.set(lazy, resolved);
+  const resolved = def.getter?.();
+  if (resolved !== undefined) lazyResolved.set(def, resolved);
   return resolved;
 };
 
@@ -241,8 +249,8 @@ const parseField = (schema: ZodType, walk: Walk): Field => {
   const { core, default: fallback } = unwrap(schema);
   // A schema already on the stack is a recursion back-edge: stop and record
   // it, so the object it cycles to is tagged when its parse unwinds.
-  if (walk.stack.has(core)) {
-    walk.targets.add(core);
+  if (walk.stack.has(defOf(core))) {
+    walk.targets.add(defOf(core));
     return { kind: 'self' };
   }
   const body = (parseByType[defOf(core).type] ?? unknownField)(core, walk);
