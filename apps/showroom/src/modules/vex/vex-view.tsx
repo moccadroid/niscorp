@@ -8,7 +8,7 @@ import { startRecording, stopRecording } from './runtime/live-debug';
 import { ACCOUNTS } from './runtime/seed-data';
 import type { RecipeProvider } from '@showroom/modules/signal/openai-client';
 import type { VexScenario } from './scenarios';
-import type { Query, VexEvent } from '@niscorp/vex';
+import type { Query, ScopeRule, VexEvent } from '@niscorp/vex';
 
 // ═══════════════════════════════════════════════════════════
 // VexView — the showroom canvas for a Vex scenario. Runs the real
@@ -252,8 +252,8 @@ const scopeClauseText = (dsl: Query | undefined, scopeKey: string): string | und
     if (typeof src !== 'string') continue;
     const rule = scopePolicy.entities[src];
     if (rule && 'read' in rule) {
-      const m = rule.read?.find((r) => r.to === scopeKey);
-      if (m) return `${src}.${m.match} = $scope.${scopeKey}`;
+      const m = rule.read?.find((r) => ('to' in r ? r.to : r.in) === scopeKey);
+      if (m) return 'to' in m ? `${src}.${m.match} = $scope.${scopeKey}` : `${src}.${m.match} = ANY($scope.${scopeKey})`;
     }
   }
   return undefined;
@@ -270,12 +270,12 @@ const writeRulesText = (scenario: VexScenario): string => {
     lines.push(`entity rule: ${JSON.stringify(rule ?? '(unlisted)')}`);
     return lines.join('\n');
   }
-  const fmt = (rules: readonly ({ set: string; to: string } | { match: string; to: string })[] | undefined): string =>
+  const fmt = (rules: readonly ScopeRule[] | undefined): string =>
     rules === undefined
       ? 'ABSENT — no phase, no verb'
       : rules.length === 0
         ? 'granted (no row rules)'
-        : rules.map((r) => ('set' in r ? `set ${r.set} ← $scope.${r.to}` : `match ${r.match} = $scope.${r.to}`)).join('  +  ');
+        : rules.map((r) => ('set' in r ? `set ${r.set} ← $scope.${r.to}` : 'to' in r ? `match ${r.match} = $scope.${r.to}` : `match ${r.match} = ANY($scope.${r.in})`)).join('  +  ');
   if (rule.write !== undefined) lines.push(`write (umbrella): ${fmt(rule.write)}`);
   else {
     lines.push(`insert: ${fmt(rule.insert)}`);
