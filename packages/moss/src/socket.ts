@@ -1,3 +1,4 @@
+import { DefinitionValidationError } from '@niscorp/nova';
 import type { RenderNode } from '@niscorp/nova';
 import type { Catalog } from './principal';
 import type { DeltaOp } from './delta';
@@ -80,6 +81,12 @@ export const CLOSE_INVALID_TOKEN = 4401;
 // principal's terminals) — the terminal clears its token instead of
 // reconnecting.
 export const CLOSE_SIGNED_OUT = 4403;
+// Application close code: the server could not open a session for THIS
+// connection — commonest cause: a definition failing validation reached the
+// live catalog (a dev edit mid-reload). The refusal is this terminal's alone;
+// the process and every other session stay up, and reconnecting later is
+// reasonable — the next build is attempted fresh.
+export const CLOSE_SHELL_FAILED = 4500;
 
 export type SocketContext = {
   session: (token: string) => string | null | Promise<string | null>;
@@ -172,9 +179,38 @@ export const createSocket = (ctx: SocketContext): SocketAccept => {
     (sweeper as unknown as { unref?: () => void }).unref?.();
   }
 
+  // REFUSING ONE SESSION MUST NEVER COST THE OTHERS. Every await in the body
+  // below can throw — the verifier on a database blip, the shell build on a
+  // definition that fails validation — and the runtime transport calls accept
+  // without awaiting it, so an escaped rejection is an unhandled one and Node
+  // kills the whole process: one bad definition, every session on the box
+  // disconnected. So accept NEVER rejects. A failure to open this session is
+  // answered to this terminal — a sentence naming the failing definitions
+  // when there are any, then a 4500 close — and logged where somebody can
+  // read it. The durable map is only written after a successful build, so a
+  // refused terminal poisons nothing: the next connect builds fresh.
   const accept = async (url: string, connection: Connection): Promise<void> => {
     const send = (message: ServerMessage): void => connection.send(JSON.stringify(message));
+    try {
+      await open(url, connection, send);
+    } catch (error) {
+      console.error('[moss/socket] refused a session:', error);
+      live.delete(connection);
+      const failures =
+        error instanceof DefinitionValidationError
+          ? ((error.context as { failures?: { id: string }[] } | undefined)?.failures ?? []).map((f) => f.id)
+          : [];
+      const detail = failures.length > 0 ? `${String(error instanceof Error ? error.message : error)}: ${failures.join(', ')}` : String(error);
+      try {
+        send({ type: 'error', code: 'session_failed', message: `This session could not be opened — ${detail}. The refusal is this terminal's alone; the server is up.` });
+        connection.close(CLOSE_SHELL_FAILED, 'session failed');
+      } catch {
+        // The transport is already gone — there is nobody left to tell.
+      }
+    }
+  };
 
+  const open = async (url: string, connection: Connection, send: (message: ServerMessage) => void): Promise<void> => {
     const token = new URL(url, 'http://nisc.local').searchParams.get('token');
     let principal: string | null = null;
     if (token !== null && token !== '') {

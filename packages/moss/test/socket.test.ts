@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
-import { createSocket, CLOSE_INVALID_TOKEN, CLOSE_SIGNED_OUT } from '../src/socket';
+import { DefinitionValidationError } from '@niscorp/nova';
+import { createSocket, CLOSE_INVALID_TOKEN, CLOSE_SIGNED_OUT, CLOSE_SHELL_FAILED } from '../src/socket';
 import type { Connection, ServerMessage, SocketContext } from '../src/socket';
 import type { ShellHost, ShellSession } from '../src/shells';
 
@@ -365,5 +366,67 @@ describe('socket — revalidating a live connection', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════
+// Refusing one session must never cost the others. Every await in accept can
+// throw — a definition failing validation in the shell build, a verifier
+// dying mid-upgrade — and the transport calls accept without awaiting it, so
+// a rejection that escapes is an unhandled one and Node kills the process.
+// These hold the contract: accept RESOLVES on failure, the refused terminal
+// reads a sentence and a 4500, and the next connection is answered whole.
+// ═══════════════════════════════════════════════════════════════
+
+describe('socket — a refused session is one terminal, not the server', () => {
+  it('a shell build failing validation refuses that terminal, naming the definitions', async () => {
+    const session = recordingSession();
+    const shells = hostFor(session);
+    shells.session = async (_token, principal) => {
+      if (principal === 'usr_1') {
+        throw new DefinitionValidationError('2 action definition(s) failed validation', {
+          failures: [
+            { id: 'crm.deals', issues: [] },
+            { id: 'crm.notes', issues: [] },
+          ],
+        });
+      }
+      return session;
+    };
+    const accept = createSocket(ctxWith({ shells }));
+
+    const refused = new FakeConnection();
+    await expect(accept('/socket?token=good', refused)).resolves.toBeUndefined();
+    const error = refused.first('error');
+    expect(error?.code).toBe('session_failed');
+    expect(error?.message).toContain('crm.deals');
+    expect(error?.message).toContain('crm.notes');
+    expect(refused.closed?.code).toBe(CLOSE_SHELL_FAILED);
+
+    // The server still answers: an anonymous terminal gets its whole session.
+    const next = new FakeConnection();
+    await accept('/socket', next);
+    expect(next.first('hello')?.principal).toBeNull();
+    expect(session.calls).toContain('attach');
+    expect(next.closed).toBeUndefined();
+  });
+
+  it('a verifier dying mid-upgrade is the same refusal, not a process kill', async () => {
+    const accept = createSocket(
+      ctxWith({
+        session: () => {
+          throw new Error('the verifier is unreachable');
+        },
+      }),
+    );
+    const conn = new FakeConnection();
+    await expect(accept('/socket?token=good', conn)).resolves.toBeUndefined();
+    expect(conn.first('error')?.code).toBe('session_failed');
+    expect(conn.closed?.code).toBe(CLOSE_SHELL_FAILED);
+
+    // Anonymous never asks the verifier — the same server still answers it.
+    const next = new FakeConnection();
+    await accept('/socket', next);
+    expect(next.first('hello')?.principal).toBeNull();
   });
 });

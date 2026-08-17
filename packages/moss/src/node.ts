@@ -38,11 +38,22 @@ export const attachSocket = (
     // upgrade rides the same server in dev).
     if (new URL(url, 'http://nisc.local').pathname !== path) return;
     wss.handleUpgrade(req, socket, head, (ws) => {
-      void accept(url, {
+      // accept promises to handle its own failures (see socket.ts). This is
+      // the floor under that promise: an await added there without a guard
+      // degrades to one logged close here instead of an unhandled rejection
+      // taking every session on the box down with it.
+      accept(url, {
         send: (text) => ws.send(text),
         close: (code, reason) => ws.close(code, reason),
         onMessage: (fn) => ws.on('message', (data) => fn(String(data))),
         onClose: (fn) => ws.on('close', () => fn()),
+      }).catch((error: unknown) => {
+        console.error('[moss/node] a connection escaped accept:', error);
+        try {
+          ws.close(1011, 'accept failed');
+        } catch {
+          // already gone
+        }
       });
     });
   });

@@ -28,7 +28,7 @@ export type { TideDriver, TideDriverConfig } from './driver';
 export type { FactIntake } from './app';
 export { auditClosure } from './closure';
 export type { DataLayer } from './data';
-export { createSocket, CLOSE_INVALID_TOKEN, CLOSE_SIGNED_OUT, DEFAULT_REVALIDATE_MS } from './socket';
+export { createSocket, CLOSE_INVALID_TOKEN, CLOSE_SIGNED_OUT, CLOSE_SHELL_FAILED, DEFAULT_REVALIDATE_MS } from './socket';
 export { createShellHost, DEFAULT_IDLE_MS } from './shells';
 export { createIdentityCache, DEFAULT_IDENTITY_MAX, DEFAULT_IDENTITY_IDLE_MS } from './identity';
 export { createGeneration, GENERATION_DDL, DEFAULT_GENERATION_POLL_MS } from './generation';
