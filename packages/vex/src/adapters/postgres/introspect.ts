@@ -181,7 +181,7 @@ const INDEXES_QUERY = `
     i.indexname AS index_name,
     ix.indisunique AS is_unique,
     am.amname AS index_type,
-    array_agg(a.attname ORDER BY k.n) AS columns
+    array_agg(a.attname ORDER BY k.n)::text[] AS columns
   FROM pg_indexes i
   JOIN pg_class c ON c.relname = i.indexname
   JOIN pg_index ix ON ix.indexrelid = c.oid
