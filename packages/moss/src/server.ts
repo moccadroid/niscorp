@@ -331,7 +331,7 @@ export const createServer = async (app: NiscApp, runtime: NiscRuntime): Promise<
   // is: the documents are static for the process.
   const reachPolicies = new Map<string, ScopePolicy>();
   const policyAtReach = (resolved: Resolved, reach: string): ScopePolicy => {
-    const key = `${resolved.key} ${reach}`;
+    const key = `${resolved.key}\u0000${reach}`;
     const hit = reachPolicies.get(key);
     if (hit !== undefined) return hit;
     const compiled = resolvePolicyAtReachForRoles(app, data.grants, resolved.roles, reach);
