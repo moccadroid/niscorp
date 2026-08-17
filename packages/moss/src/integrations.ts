@@ -68,15 +68,26 @@ export type IntegrationRow = {
 const BundleSchema = z
   .object({
     integration: z.string().min(1),
-    // The store card's words. Title, a line, a paragraph. An icon URL joins
-    // later; nothing here is enforced beyond being text.
+    // The store card's words, and the listing page's long form. Title, a
+    // line, a paragraph — then the story (sections a page renders in order),
+    // the highlight lines, and the press images. Story and highlights are
+    // text, enforced as nothing more; press is the one field with teeth: each
+    // entry is a path under the integration's own prefix, fetched ONCE at
+    // intake and copied to the host (copyPress), never fetched at render
+    // time. Strict, unlike before: a typo'd key here used to strip silently,
+    // which is not what "intake refuses anything outside the vocabulary"
+    // means.
     meta: z
       .object({
         title: z.string().default(''),
         tagline: z.string().default(''),
         description: z.string().default(''),
+        story: z.array(z.object({ heading: z.string(), prose: z.string() }).strict()).default([]),
+        highlights: z.array(z.string()).default([]),
+        press: z.array(z.string()).default([]),
       })
-      .default({ title: '', tagline: '', description: '' }),
+      .strict()
+      .default({ title: '', tagline: '', description: '', story: [], highlights: [], press: [] }),
     // What it needs, which an operator approves once at registration. A bundle
     // asking for more than it was approved for goes back to pending rather than
     // silently keeping the old grants and half-working.
@@ -367,6 +378,17 @@ export const runIntake = (payload: unknown, ctx: IntakeContext): IntakeResult =>
       reasons.push(`frame "${path}": belongs to "${actionId}", which is not an action in this bundle`);
     }
   }
+  // PRESS IS FETCHED ONCE, AT INTAKE — it is never reach (reachOf sweeps
+  // declarations; these are deliberately not among them) and the proxy never
+  // forwards it. The paths still obey the same fences as every other
+  // declaration: the integration's own ground, neither reserved door.
+  for (const path of bundle.meta.press) {
+    if (!path.startsWith(ownPrefix)) {
+      reasons.push(`press "${path}": not under this integration's own prefix`);
+    } else if (path.startsWith(`${ownPrefix}hook/`) || path.startsWith(`${ownPrefix}frame/`)) {
+      reasons.push(`press "${path}": /hook/ and /frame/ are reserved`);
+    }
+  }
   if (bundle.settings !== '' && bundle.actions[bundle.settings] === undefined) {
     reasons.push(`settings: "${bundle.settings}" is not an action in this bundle`);
   }
@@ -398,6 +420,62 @@ export const describePlacements = (bundle: Bundle, names: Readonly<Record<string
   return parts.length === 0 ? '' : `Adds ${parts.join(' · ')}.`;
 };
 
+// ── press, copied at intake ──────────────────────────────────
+//
+// A listing sells with images, and the store never fetches from a service at
+// render time — a dead add-on degrades its screens (injection stays an
+// attempt), never its listing. So the bytes cross ONCE, here: each declared
+// path is fetched from the service through the same mapping the proxy uses,
+// handed to the host's seam (NiscApp.storePress), and the URL the host
+// answers with is what the row keeps.
+//
+// Refusal is whole-payload, like everything else at this gate: a dead path, a
+// non-image answer, a seam that throws — or press declared on a deployment
+// with no seam to hold it — refuses the bundle with a sentence naming the
+// path, and the last good import keeps serving. The engine invents no bounds
+// of its own: too big and too many are the seam's to refuse, and its refusal
+// arrives here as any other.
+//
+// The stored NAME is the path under the prefix, deterministic per
+// (integration, path): a re-import overwrites its own images rather than
+// accumulating copies.
+
+export type StorePress = (integrationId: string, name: string, bytes: Uint8Array, contentType: string) => Promise<string>;
+
+export type PressResult = { ok: true; urls: string[] } | { ok: false; reasons: string[] };
+
+export const copyPress = async (
+  bundle: Bundle,
+  integrationId: string,
+  serviceUrl: string,
+  store: StorePress | undefined,
+  fetchImpl: typeof fetch = fetch,
+): Promise<PressResult> => {
+  const declared = bundle.meta.press;
+  if (declared.length === 0) return { ok: true, urls: [] };
+  if (store === undefined) {
+    return { ok: false, reasons: [`press: the bundle declares ${declared.length} image(s), and this deployment has no storePress seam to hold them`] };
+  }
+  const own = `/integrations/${integrationId}/`;
+  const urls: string[] = [];
+  for (const path of declared) {
+    const rest = path.slice(own.length);
+    try {
+      const response = await fetchImpl(`${serviceUrl.replace(/\/$/, '')}/${rest}`);
+      if (!response.ok) return { ok: false, reasons: [`press "${path}": the service answered ${response.status}`] };
+      const contentType = (response.headers.get('content-type') ?? '').split(';')[0]?.trim() ?? '';
+      if (!contentType.startsWith('image/')) {
+        return { ok: false, reasons: [`press "${path}": answered "${contentType === '' ? 'nothing' : contentType}", which is not an image`] };
+      }
+      const bytes = new Uint8Array(await response.arrayBuffer());
+      urls.push(await store(integrationId, rest, bytes, contentType));
+    } catch (err) {
+      return { ok: false, reasons: [`press "${path}": ${String(err)}`] };
+    }
+  }
+  return { ok: true, urls };
+};
+
 // ── the tables moss owns ─────────────────────────────────────
 //
 // Defined here, on the app's pool, for the same reason vex defines `vex_cache`:
@@ -422,6 +500,13 @@ export const initIntegrations = async (pool: PgPool): Promise<void> => {
       title              text NOT NULL DEFAULT '',
       tagline            text NOT NULL DEFAULT '',
       description        text NOT NULL DEFAULT '',
+      -- The listing page's long form, re-imported whole like everything else
+      -- about a bundle. press holds the URLS THE HOST ANSWERED WITH at
+      -- intake (copyPress), never the paths the bundle declared — the listing
+      -- composes from host ground alone.
+      story              jsonb NOT NULL DEFAULT '[]'::jsonb,
+      highlights         jsonb NOT NULL DEFAULT '[]'::jsonb,
+      press              jsonb NOT NULL DEFAULT '[]'::jsonb,
       -- WHAT APPEARS WHERE, as one derived sentence (describePlacements) —
       -- printed by the approval card and the store tile from this one place.
       adds               text NOT NULL DEFAULT '',
@@ -447,6 +532,9 @@ export const initIntegrations = async (pool: PgPool): Promise<void> => {
   await pool.query(`ALTER TABLE integrations ADD COLUMN IF NOT EXISTS reach jsonb NOT NULL DEFAULT '[]'::jsonb`);
   await pool.query(`ALTER TABLE integrations ADD COLUMN IF NOT EXISTS frames jsonb NOT NULL DEFAULT '[]'::jsonb`);
   await pool.query(`ALTER TABLE integrations ADD COLUMN IF NOT EXISTS phrasebook jsonb NOT NULL DEFAULT '{}'::jsonb`);
+  await pool.query(`ALTER TABLE integrations ADD COLUMN IF NOT EXISTS story jsonb NOT NULL DEFAULT '[]'::jsonb`);
+  await pool.query(`ALTER TABLE integrations ADD COLUMN IF NOT EXISTS highlights jsonb NOT NULL DEFAULT '[]'::jsonb`);
+  await pool.query(`ALTER TABLE integrations ADD COLUMN IF NOT EXISTS press jsonb NOT NULL DEFAULT '[]'::jsonb`);
   await pool.query(`
     CREATE TABLE IF NOT EXISTS integration_actions (
       integration_id  text NOT NULL REFERENCES integrations(id) ON DELETE CASCADE,

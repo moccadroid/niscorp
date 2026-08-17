@@ -18,6 +18,7 @@ import type { LayoutNode } from '@niscorp/nova';
 import {
   buildContract,
   contractAsMarkdown,
+  copyPress,
   describePlacements,
   initIntegrations,
   integrationByKey,
@@ -634,6 +635,20 @@ export const createServer = async (app: NiscApp, runtime: NiscRuntime): Promise<
       return c.json({ message: 'Refused.', reasons: result.reasons }, 422);
     }
 
+    // Press crosses HERE — after the gate, before the dry-run below touches
+    // the live manifest — so a press refusal leaves the app exactly as it
+    // found it. Blobs written before a later refusal are orphans in the
+    // host's store, which is cheaper than any coherence they could buy.
+    const press = await copyPress(result.bundle, id, url, app.storePress);
+    if (!press.ok) {
+      await runtime.pool.query(
+        `INSERT INTO integrations (id, url, last_error) VALUES ($1, $2, $3)
+         ON CONFLICT (id) DO UPDATE SET url = EXCLUDED.url, last_error = EXCLUDED.last_error`,
+        [id, url, press.reasons.join('; ')],
+      );
+      return c.json({ message: 'Refused.', reasons: press.reasons }, 422);
+    }
+
     // The candidate manifest, verified BEFORE anything is written.
     const existing = await runtime.pool.query('SELECT status, key_hash FROM integrations WHERE id = $1', [id]);
     const existingRow = existing.rows[0] as { status?: unknown; key_hash?: unknown } | undefined;
@@ -652,8 +667,8 @@ export const createServer = async (app: NiscApp, runtime: NiscRuntime): Promise<
     }
 
     await runtime.pool.query(
-      `INSERT INTO integrations (id, url, title, tagline, description, adds, settings_action, requested_actions, requested_data, reach, frames, phrasebook, last_import_at, last_error)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9::jsonb, $10::jsonb, $11::jsonb, $12::jsonb, now(), NULL)
+      `INSERT INTO integrations (id, url, title, tagline, description, adds, settings_action, requested_actions, requested_data, reach, frames, phrasebook, story, highlights, press, last_import_at, last_error)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9::jsonb, $10::jsonb, $11::jsonb, $12::jsonb, $13::jsonb, $14::jsonb, $15::jsonb, now(), NULL)
        ON CONFLICT (id) DO UPDATE SET url = EXCLUDED.url,
          title = EXCLUDED.title, tagline = EXCLUDED.tagline, description = EXCLUDED.description,
          adds = EXCLUDED.adds, settings_action = EXCLUDED.settings_action,
@@ -661,6 +676,7 @@ export const createServer = async (app: NiscApp, runtime: NiscRuntime): Promise<
          requested_data = EXCLUDED.requested_data,
          reach = EXCLUDED.reach, frames = EXCLUDED.frames,
          phrasebook = EXCLUDED.phrasebook,
+         story = EXCLUDED.story, highlights = EXCLUDED.highlights, press = EXCLUDED.press,
          last_import_at = now(), last_error = NULL`,
       [
         id,
@@ -681,6 +697,11 @@ export const createServer = async (app: NiscApp, runtime: NiscRuntime): Promise<
         // its actions so the app's language pass can reach them, and
         // re-imported whole like everything else about a bundle.
         JSON.stringify(result.bundle.phrasebook),
+        JSON.stringify(result.bundle.meta.story),
+        JSON.stringify(result.bundle.meta.highlights),
+        // The urls the HOST answered with at copyPress — the declared paths
+        // died the moment the bytes crossed.
+        JSON.stringify(press.urls),
       ],
     );
     await runtime.pool.query('DELETE FROM integration_actions WHERE integration_id = $1', [id]);

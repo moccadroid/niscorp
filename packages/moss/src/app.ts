@@ -209,6 +209,14 @@ export type NiscApp = {
   // turning an integration on. Optional: without it the approval card and store tile
   // print ids, which is honest and unhelpful.
   placementNames?: Readonly<Record<string, string>>;
+  // WHERE PRESS IMAGES LAND. A bundle may declare listing images
+  // (meta.press); intake fetches the bytes once and hands them here, and the
+  // URL this answers with is what the store serves forever after — the host's
+  // blob store, its bounds, its refusals (throw, and the bundle is refused
+  // whole). Optional: a deployment without one refuses any bundle that
+  // declares press, which is a sentence at import rather than a hole in a
+  // listing.
+  storePress?: import('./integrations').StorePress;
   // the prewarmed API surface — every read and write the app serves, as
   // authored entries; seeded into the cache at boot (idempotent, protected).
   // Optional because a database may already carry its vex_cache rows.
