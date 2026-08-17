@@ -51,7 +51,7 @@ export const sweepCache = async (
   let evicted = 0;
   for (const { key, entry } of rows) {
     if (entry === undefined) continue;
-    if (entry.kind === 'ok' && entry.protected === true) continue;
+    if (entry.protected === true) continue;
     const lastAlive = entry.lastUsedAt ?? entry.createdAt;
     if (lastAlive < cutoff) {
       await cache.delete(key);

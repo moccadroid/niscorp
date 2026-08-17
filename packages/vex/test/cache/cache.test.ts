@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { normalizeShape, mintFingerprint, computeSchemaFingerprint, computeRequestHash } from '../../src/cache/hash.js';
 import type { DatabaseSchema } from '../../src/schemas/database.schema.js';
 import { createMemoryCache } from '../../src/cache/memory.js';
+import { sweepCache } from '../../src/cache/util.js';
 import type { CacheEntry, OkCacheEntry } from '../../src/cache/cache.types.js';
 
 // ───────────────────────────────────────────────────────────────
@@ -240,5 +241,44 @@ describe('createMemoryCache', () => {
 
     expect(okOf(result1).dsl.from).toEqual(['users']);
     expect(okOf(result2).dsl.from).toEqual(['orders']);
+  });
+});
+
+// ───────────────────────────────────────────────────────────────
+// sweepCache — lifetime is usage, and protection is absolute.
+// ───────────────────────────────────────────────────────────────
+
+describe('sweepCache', () => {
+  // createdAt far past any cutoff: idle unless something says otherwise.
+  const idle = { createdAt: 0 };
+
+  it('sweeps idle unprotected entries of every kind', async () => {
+    const cache = createMemoryCache();
+    await cache.set('stale-read', { kind: 'ok', dsl: { from: ['t'] }, ...idle });
+    await cache.set('stale-neg', { kind: 'unsatisfiable', reason: 'no', ...idle });
+    const evicted = await sweepCache(cache, { maxIdleMs: 1000 });
+    expect(evicted).toBe(2);
+    expect(await cache.keys()).toEqual([]);
+  });
+
+  it('never sweeps a protected entry, whatever its kind — a seeded write is API surface, not idle garbage', async () => {
+    const cache = createMemoryCache();
+    await cache.set('read', { kind: 'ok', dsl: { from: ['t'] }, protected: true, ...idle });
+    await cache.set('write', {
+      kind: 'mutation',
+      mutation: { op: 'delete', table: 't', where: { eq: ['t.id', { $context: 'id' }] } },
+      protected: true,
+      ...idle,
+    });
+    const evicted = await sweepCache(cache, { maxIdleMs: 1000 });
+    expect(evicted).toBe(0);
+    expect((await cache.keys()).sort()).toEqual(['read', 'write']);
+  });
+
+  it('a replay keeps an unprotected entry alive — lastUsedAt beats createdAt', async () => {
+    const cache = createMemoryCache();
+    await cache.set('replayed', { kind: 'ok', dsl: { from: ['t'] }, createdAt: 0, lastUsedAt: Date.now() });
+    const evicted = await sweepCache(cache, { maxIdleMs: 60_000 });
+    expect(evicted).toBe(0);
   });
 });
