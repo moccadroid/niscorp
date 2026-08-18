@@ -9,7 +9,7 @@ import { verifyCharter } from '@niscorp/charter';
 import { auditClosure } from './closure';
 import type { NiscApp } from './app';
 import type { NiscRuntime } from './runtime';
-import { devSession } from './runtime';
+import { initSessions, sessionVerifierOf } from './sessions';
 import { createDataLayer } from './data';
 import { mintWrites } from './tide';
 import { memoKey, memoKeyOf, resolveCatalogForRoles, resolvePolicyAtReachForRoles, resolvePolicyForRoles, resolveVariantsForRoles, verifyVariants, wearableOf } from './principal';
@@ -131,12 +131,21 @@ export type MossServer = Hono<Env> & {
 };
 
 export const createServer = async (app: NiscApp, runtime: NiscRuntime): Promise<MossServer> => {
+  // WHO A TOKEN IS, resolved before anything else boots: an unset verifier
+  // refuses HERE, with a sentence, instead of serving every forged principal
+  // silently (which is what the old `?? devSession` default did, for every
+  // app that never set the field). 'dev-open' announces itself on this line.
+  const session = sessionVerifierOf(runtime);
+
   // THE INTEGRATIONS TABLES EXIST BEFORE INTROSPECTION. The data layer's
   // introspected schema is the grant universe policies compile from — a table
   // created after it is a table no grant can reach, silently: an app granting
   // `integrations.read` compiled a policy that denied the very screen the
   // grant existed for, and nothing said so until somebody opened it.
   await initIntegrations(runtime.pool);
+  // The sessions table rides the same boot for the same reason, when the
+  // deployment chose moss's own credential.
+  if (runtime.session === 'sessions') await initSessions(runtime.pool);
   const data = await createDataLayer(runtime, app.entries ?? []);
 
   // ── Refuse to start incoherent — the charter engine verifies,
@@ -372,7 +381,6 @@ export const createServer = async (app: NiscApp, runtime: NiscRuntime): Promise<
   // what the shell already knows.
   const asRoles = (roles: readonly string[], installed: readonly string[] | undefined): Resolved => ({ roles, scope: {}, installed, key: memoKey(roles, installed) });
 
-  const session = runtime.session ?? devSession;
 
   // THE DEPLOYMENT'S SIGNING IDENTITY — how an integration knows a call is
   // ours. Generated at boot, never persisted; the public half is served below

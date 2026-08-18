@@ -108,7 +108,7 @@ type NiscRuntime = {
   pool: PgPool;                    // SQL
   db: MutationClient;              // writes
   cache?: CacheBackend;            // defaults to vex's postgres cache on `pool`
-  session?: (token) => string | null | Promise<string | null>;  // defaults to devSession
+  session: SessionVerifier | 'sessions' | 'dev-open';  // REQUIRED — no default
   shellIdleMs?: number;            // idle shell eviction; default 30 min, `0` disables
   sessionRevalidateMs?: number;    // live-socket re-verify; default 60s, `0` disables
   shellFrameDelta?: boolean;       // send changed canvases as deltas; default off
@@ -116,9 +116,22 @@ type NiscRuntime = {
 };
 ```
 
-`session` is the whole of what an app writes to give its tokens a lifetime:
-return `null` for a token that has expired or been revoked. moss never learns
-what expiry means — it only asks again, on both surfaces.
+`session` is required, deliberately — authentication is the one door that must
+not default open, and it used to. Three answers: `'sessions'` uses moss's own
+stored credential (below); `'dev-open'` trusts every well-formed token and says
+so at boot — harnesses and demo floors; a function is the app's own identity
+provider — return `null` for a token that has expired or been revoked. moss
+never learns what expiry means — it only asks again, on both surfaces.
+
+#### `mintSession(pool, principal, ttlMs)` / `sessionOf(pool, token)` / `revokeSession(pool, token)` / `revokeAllFor(pool, principal)`
+
+The stored credential behind `session: 'sessions'` — the integration key's
+standard, one table over: 256 bits behind an `st_` prefix, the row keeps only
+the hash, `expires_at` is enforced on every read, and revocation is deleting
+the row (one token, or every token a principal holds). The app mints at its
+own door after its own identity check and hands the token to the terminal;
+`initSessions` rides `createServer` boot automatically under `'sessions'`.
+Expired rows are swept on every mint — no timer to run.
 
 `shellFrameDelta` and `socketCompression` are the two wire-size knobs. They are
 environment settings, not manifest ones — an operational decision about a
@@ -127,8 +140,10 @@ deployment, never something an application is written against. See
 
 #### `mintDevToken(sub, claims?) : string` / `devSession(token) : string | null`
 
-The dev token pair — base64url JSON, `sub` is the principal. Real auth replaces
-both ends together; nothing else touches token mechanics.
+The dev token pair — base64url JSON, `sub` is the principal, no signature and
+no expiry. Reachable only through `session: 'dev-open'`, never by default:
+anybody who can spell a principal's id can be them, which is a property a
+harness wants and a deployment must opt into out loud.
 
 ### The server
 

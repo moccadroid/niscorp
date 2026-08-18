@@ -11,7 +11,8 @@
 export { defineApp } from './app';
 export type { NiscApp, ShellManifest, FunctionSession, LayoutVariant, RunRecord, RunTurn, RunSink } from './app';
 export { devSession, mintDevToken } from './runtime';
-export type { NiscRuntime } from './runtime';
+export type { NiscRuntime, SessionVerifier } from './runtime';
+export { initSessions, mintSession, sessionOf, revokeSession, revokeAllFor, sessionVerifierOf } from './sessions';
 export { createServer } from './server';
 export type { MossServer, ExecuteAs } from './server';
 export { runIntake, copyPress, initIntegrations, listIntegrations, loadIntegrationActions, integrationOfAction, integrationByKey, filterInstalled, buildContract, contractAsMarkdown, describePlacements, listAttachments, listPlacements } from './integrations';

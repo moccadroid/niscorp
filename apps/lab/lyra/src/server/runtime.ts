@@ -37,6 +37,9 @@ export const devRuntime = async (): Promise<DevRuntime> => {
     db,
     pool: createPglitePool(db, RAW_DATE_PARSERS),
     cache,
+    // A dev floor over an in-memory database: every token is trusted, and
+    // moss says so at boot. The honest label for what this always was.
+    session: 'dev-open',
     ...(operatorKey === '' ? {} : { operatorKey }),
     ...(signingSeed === '' ? {} : { signingSeed }),
   };

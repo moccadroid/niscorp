@@ -4,15 +4,27 @@ import type { MutationClient, PgPool, CacheBackend } from '@niscorp/vex';
 // What the app runs ON — the environment, not the application: a database
 // (pool for SQL, client for mutations), optionally a cache backend
 // (defaults to vex's postgres cache on the same pool — the seeded-cache
-// posture) and a session verifier (defaults to the dev token below; real
-// auth replaces that one function).
+// posture) and a session verifier, which has NO default: authentication is
+// the one door that must not default open.
 // ═══════════════════════════════════════════════════════════════
+
+// Token in, principal out — or null, which is a refusal. Asked on every HTTP
+// request and re-asked on live sockets every `sessionRevalidateMs`.
+export type SessionVerifier = (token: string) => string | null | Promise<string | null>;
 
 export type NiscRuntime = {
   pool: PgPool;
   db: MutationClient;
   cache?: CacheBackend;
-  session?: (token: string) => string | null | Promise<string | null>;
+  // WHO A TOKEN IS. Required, deliberately — every other door in moss fails
+  // closed, and this is the one where forgetting a field used to open it for
+  // everyone. Three answers:
+  //   'sessions' — moss's own stored credential (sessions.ts): 256-bit token,
+  //                hashed at rest, expiring, revoked by deleting its row.
+  //   'dev-open' — the dev stub below: every well-formed token is trusted and
+  //                the boot says so out loud. Harnesses and demo floors.
+  //   a function — the app's own identity provider.
+  session: SessionVerifier | 'sessions' | 'dev-open';
   // How long a durable server shell may sit with no terminal attached before
   // it is disposed (default: 30 minutes; `0` disables the sweep). An
   // environment knob rather than a manifest one, because it trades memory
@@ -90,8 +102,11 @@ export type NiscRuntime = {
 };
 
 // The dev token pair — mint on the client stub, verify on the server;
-// base64url JSON, `sub` is the principal. Real auth replaces both ends
-// together; nothing else in an app touches token mechanics.
+// base64url JSON, `sub` is the principal. No signature, no expiry: anybody
+// who can spell a principal's id can be them. Reachable ONLY through
+// `session: 'dev-open'`, which announces itself at boot — this used to be
+// the silent default, and one app ran production on it for its whole life
+// before a review noticed. Real credentials live in sessions.ts.
 export const mintDevToken = (sub: string, claims: Record<string, unknown> = {}): string =>
   btoa(JSON.stringify({ sub, ...claims, iat: Date.now() }))
     .replace(/\+/g, '-')

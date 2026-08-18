@@ -28,5 +28,7 @@ export const devRuntime = async (): Promise<DevRuntime> => {
   const cache = createPostgresCache({ pool: createPglitePool(db) });
   await cache.init(); // migration: CREATE TABLE vex_cache
 
-  return { db, pool: createPglitePool(db, RAW_DATE_PARSERS), cache };
+  // A dev floor over an in-memory database: every token is trusted, and
+  // moss says so at boot. The honest label for what this always was.
+  return { db, pool: createPglitePool(db, RAW_DATE_PARSERS), cache, session: 'dev-open' };
 };
