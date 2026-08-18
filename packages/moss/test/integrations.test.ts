@@ -1,6 +1,9 @@
 import { describe, it, expect, vi } from 'vitest';
-import { runIntake, reachOf, copyPress } from '../src/integrations';
+import { PGlite } from '@electric-sql/pglite';
+import { createPglitePool } from '@niscorp/vex/pglite';
+import { runIntake, reachOf, copyPress, callIntegrationWith, initIntegrations } from '../src/integrations';
 import type { IntakeContext, Bundle, StorePress } from '../src/integrations';
+import { createAssertionSigner, verifyAssertion } from '../src/assert';
 
 // The listing's long form travels WITH the bundle (story, highlights, press),
 // and press is the one field that moves bytes: copied at intake, never
@@ -152,5 +155,82 @@ describe('copyPress', () => {
     const result = await copyPress(b, 'acme', 'https://acme.example', seam, fetchImpl as unknown as typeof fetch);
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.reasons[0]).toContain('too big');
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════
+// callIntegration — the outbound act. The deployment calls an integration
+// with nobody driving; the gates are approved + installed, the credential is
+// a REAL assertion (verified here against the signer's public half, not just
+// inspected), and refusals throw sentences the orchestrator must see.
+// ═══════════════════════════════════════════════════════════════
+
+describe('callIntegration', () => {
+  const world = async (over: { status?: string; installed?: readonly string[] | undefined } = {}) => {
+    const pool = createPglitePool(new PGlite());
+    await initIntegrations(pool);
+    await pool.query(`INSERT INTO integrations (id, url, status) VALUES ('acme', 'https://acme.example', $1)`, [over.status ?? 'approved']);
+    const signer = createAssertionSigner();
+    const answered = new Response(JSON.stringify({ erased: true }), { status: 200 });
+    const fetchImpl = vi.fn(async () => answered);
+    const call = callIntegrationWith({
+      pool,
+      installedFor: async () => ('installed' in over ? over.installed : ['acme']),
+      scopeValuesFor: async () => ({ studio_id: 's_1', audience: 'owner' }),
+      mint: signer.mint,
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+    });
+    return { call, fetchImpl, signer, answered };
+  };
+
+  it('an unknown integration throws, before any credential exists', async () => {
+    const { call, fetchImpl } = await world();
+    await expect(call('ghost', 'lifecycle/erase-party', { principal: 'i_mara' })).rejects.toThrow(/no such integration/);
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
+  it('a pending or revoked integration throws — approval is the first gate', async () => {
+    const { call, fetchImpl } = await world({ status: 'pending' });
+    await expect(call('acme', 'lifecycle/erase-party', { principal: 'i_mara' })).rejects.toThrow(/not approved.*pending/);
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
+  it('not installed for the principal\'s tenant throws — the second gate', async () => {
+    const { call, fetchImpl } = await world({ installed: ['somebody-else'] });
+    await expect(call('acme', 'lifecycle/erase-party', { principal: 'i_mara' })).rejects.toThrow(/not installed/);
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
+  it('an app with no install seam admits — the proxy\'s rule, mirrored', async () => {
+    const { call } = await world({ installed: undefined });
+    const response = await call('acme', 'lifecycle/erase-party', { principal: 'i_mara' });
+    expect(response.status).toBe(200);
+  });
+
+  it('mints an assertion the other end can actually verify, and returns what it answered', async () => {
+    const { call, fetchImpl, signer, answered } = await world();
+    const response = await call('acme', '/lifecycle/erase-party', { principal: 'i_mara', body: { member: 'i_kade' }, scope: { audience: 'owner', reason: 'gdpr' } });
+
+    expect(response).toBe(answered);
+    const [url, init] = fetchImpl.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toBe('https://acme.example/lifecycle/erase-party');
+    expect(init.method).toBe('POST');
+    expect(init.body).toBe(JSON.stringify({ member: 'i_kade' }));
+
+    const token = String((init.headers as Record<string, string>)['authorization']).replace(/^Bearer /, '');
+    const claims = verifyAssertion(token, signer.verifyKey);
+    expect(claims?.integration).toBe('acme');
+    expect(claims?.principal).toBe('i_mara');
+    // Resolver values first, init.scope merged over them — the deployment's
+    // explicit word wins.
+    expect(claims?.scope).toEqual({ studio_id: 's_1', audience: 'owner', reason: 'gdpr' });
+  });
+
+  it('a GET travels without a body', async () => {
+    const { call, fetchImpl } = await world();
+    await call('acme', 'lifecycle/export', { principal: 'i_mara', method: 'GET' });
+    const [, init] = fetchImpl.mock.calls[0] as unknown as [string, RequestInit];
+    expect(init.method).toBe('GET');
+    expect('body' in init).toBe(false);
   });
 });

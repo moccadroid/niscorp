@@ -476,6 +476,80 @@ export const copyPress = async (
   return { ok: true, urls };
 };
 
+// ── the outbound act ─────────────────────────────────────────
+//
+// Call an installed integration when nobody is driving — the outbound mirror
+// of `executeAs`. Auth, the outbox sweep, an erase propagating across every
+// ledger: acts the DEPLOYMENT performs, with no request in flight and no
+// principal mid-click. The proxy cannot carry them (it needs both), and
+// handing an app the signer would hand it the two gates below to re-implement
+// wrongly once — so the narrow verb is the surface.
+//
+// Two deliberate differences from the proxy:
+//
+//   NOT GATED BY REACH. Reach fences what a screen may cause a browser to
+//   reach — a fence around actions — and a lifecycle verb is not an action
+//   and has no screen. Reach is derived from declared endpoints, so it could
+//   never admit an undeclared verb anyway; the integration gates the call
+//   itself, on the verified claims (principal and scope — there is no other
+//   field in the envelope; see assert.ts).
+//
+//   THE PRINCIPAL IS THE PERSON WHO ACTED, so the owner who pressed erase is
+//   who the other ledger sees. A machinery principal would make every
+//   integration's owner check pass or fail on a name that belongs to no one.
+//
+// The two gates that stay: approved, and installed for this principal's
+// tenant. Refusals THROW with a sentence — the caller is the deployment's own
+// orchestrator, and a state error is something it must see, not a status to
+// mistake for the integration's answer. What the integration answers comes
+// back as the Response, whatever it is; an unreachable service rejects, and a
+// sweep's whole job is to retry.
+//
+// One ordering the gate forces on the app: an erase retried after the
+// integration was UNINSTALLED refuses forever — rightly, no credential for an
+// uninstalled integration — so an orchestrator sequences erasure ahead of
+// uninstall's row retirement, or drains pending erases first.
+
+export type CallIntegration = (
+  id: string,
+  path: string,
+  init: { principal: string; method?: string; body?: unknown; scope?: Record<string, unknown> },
+) => Promise<Response>;
+
+export const callIntegrationWith = (deps: {
+  pool: PgPool;
+  // The app's install answer for this principal's tenant — undefined means
+  // the app has no install seam, which admits (the proxy's rule, mirrored).
+  installedFor: (principal: string) => Promise<readonly string[] | undefined>;
+  // The same scope values the resolver gives vex for `$scope`; `init.scope`
+  // merges OVER them — extras the deployment explicitly vouches for.
+  scopeValuesFor: (principal: string) => Promise<Record<string, unknown>>;
+  mint: (claims: { integration: string; principal: string; scope: Record<string, unknown> }) => string;
+  fetchImpl?: typeof fetch;
+}): CallIntegration => {
+  const fetchImpl = deps.fetchImpl ?? fetch;
+  return async (id, path, init) => {
+    const row = await deps.pool.query('SELECT url, status FROM integrations WHERE id = $1', [id]);
+    const found = row.rows[0] as { url?: string; status?: string } | undefined;
+    if (found === undefined) throw new Error(`moss: callIntegration("${id}"): no such integration.`);
+    if (found.status !== 'approved') throw new Error(`moss: callIntegration("${id}"): not approved (status "${String(found.status)}").`);
+    const installed = await deps.installedFor(init.principal);
+    if (installed !== undefined && !installed.includes(id)) {
+      throw new Error(`moss: callIntegration("${id}"): not installed for "${init.principal}".`);
+    }
+    const scope = { ...(await deps.scopeValuesFor(init.principal)), ...(init.scope ?? {}) };
+    const target = `${String(found.url).replace(/\/$/, '')}/${path.replace(/^\/+/, '')}`;
+    return fetchImpl(target, {
+      method: init.method ?? 'POST',
+      headers: {
+        'content-type': 'application/json',
+        authorization: `Bearer ${deps.mint({ integration: id, principal: init.principal, scope })}`,
+      },
+      ...(init.body === undefined ? {} : { body: JSON.stringify(init.body) }),
+    });
+  };
+};
+
 // ── the tables moss owns ─────────────────────────────────────
 //
 // Defined here, on the app's pool, for the same reason vex defines `vex_cache`:

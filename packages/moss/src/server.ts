@@ -17,6 +17,7 @@ import type { Catalog } from './principal';
 import type { LayoutNode } from '@niscorp/nova';
 import {
   buildContract,
+  callIntegrationWith,
   contractAsMarkdown,
   copyPress,
   describePlacements,
@@ -30,7 +31,7 @@ import {
   reachOf,
   runIntake,
 } from './integrations';
-import type { Reach } from './integrations';
+import type { Reach, CallIntegration } from './integrations';
 import { createAssertionSigner, hashIntegrationKey, mintIntegrationKey } from './assert';
 import { createSocket, DEFAULT_REVALIDATE_MS } from './socket';
 import type { SocketAccept } from './socket';
@@ -113,6 +114,14 @@ export type MossServer = Hono<Env> & {
   // no principal by nature. In-process, replay-only, charter-bounded; see the
   // construction inside `createServer`.
   executeAs: ExecuteAs;
+  // Call an installed integration when nobody is driving — the outbound half
+  // of `executeAs`. Resolves the row, refuses (throws) unless approved and
+  // installed for this principal's tenant, mints the assertion, returns what
+  // the integration answered — whatever it answered. Deliberately not gated
+  // by reach: a lifecycle verb is not an action and has no screen; the
+  // integration gates it itself, on the verified claims. The deployment's own
+  // act, not a screen's. See integrations.ts, callIntegrationWith.
+  callIntegration: CallIntegration;
   // FORGET ONE TENANT, not the deployment. The application tags each identity
   // record it resolves (`IdentityRecord.tag`); this drops every record wearing
   // one and answers how many it held. Moss never interprets the tag.
@@ -387,6 +396,17 @@ export const createServer = async (app: NiscApp, runtime: NiscRuntime): Promise<
   // and verifying it is all anybody can do with it. See assert.ts for the
   // credential rule this and the integration key both follow.
   const assertions = createAssertionSigner(runtime.signingSeed);
+
+  // The outbound act (integrations.ts, callIntegrationWith): the same row
+  // refusals and identity machinery the proxy uses, minus the request the
+  // proxy needs — because the signer never leaves this function, this is the
+  // one place the verb can be built.
+  const callIntegration = callIntegrationWith({
+    pool: runtime.pool,
+    installedFor: async (principal) => (await resolveIdentity(principal)).installed,
+    scopeValuesFor,
+    mint: assertions.mint,
+  });
 
   // ── The surfaces ──
   const server = new Hono<Env>();
@@ -1270,6 +1290,7 @@ export const createServer = async (app: NiscApp, runtime: NiscRuntime): Promise<
     refresh,
     generation: () => generation?.current() ?? -1,
     executeAs,
+    callIntegration,
     identity: async (principal: string | null) => {
       const resolved = await resolveIdentity(principal);
       return { roles: resolved.roles, scope: resolved.scope, ...(resolved.installed !== undefined ? { installed: resolved.installed } : {}) };
