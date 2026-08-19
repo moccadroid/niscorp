@@ -35,6 +35,10 @@ const recordingSession = (): ShellSession & { calls: string[] } => {
     dispatch: (canvas, event) => calls.push(`dispatch:${canvas}:${(event as { type?: string }).type}`),
     publish: (channel) => calls.push(`publish:${channel}`),
     reset: () => calls.push('reset'),
+    back: () => {
+      calls.push('back');
+      return true;
+    },
   };
 };
 
@@ -161,6 +165,28 @@ describe('socket — the authority channel', () => {
     await accept('/socket?token=good', conn);
     conn.sent.length = 0;
     conn.emit({ type: 'reset' });
+    expect(conn.first('error')?.code).toBe('no_shell');
+  });
+
+  // BACK — one gesture over the whole shell, so it names no canvas either.
+  it('a back envelope routes to the session back, carrying no canvas', async () => {
+    const session = recordingSession();
+    const accept = createSocket(ctxWith({ shells: hostFor(session) }));
+    const conn = new FakeConnection();
+    await accept('/socket?token=good', conn);
+    conn.sent.length = 0;
+    conn.emit({ type: 'back' });
+    expect(session.calls).toContain('back');
+    // Answered by whatever canvases moved, not by an envelope of its own.
+    expect(conn.first('error')).toBeUndefined();
+  });
+
+  it('a back without a shell host is answered no_shell, not invalid_message', async () => {
+    const accept = createSocket(ctxWith()); // no shells
+    const conn = new FakeConnection();
+    await accept('/socket?token=good', conn);
+    conn.sent.length = 0;
+    conn.emit({ type: 'back' });
     expect(conn.first('error')?.code).toBe('no_shell');
   });
 

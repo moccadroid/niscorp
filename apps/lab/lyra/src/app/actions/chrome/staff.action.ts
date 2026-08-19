@@ -1,6 +1,17 @@
 import type { ActionDefinition } from '@niscorp/nova';
+import { navigatedChannel } from '@niscorp/nova';
 import { staffChromeLayout } from './staff.layout';
 import { themeCurrentPrism, unseenPrism } from './chrome.prism';
+
+// What the answer from `nav.context` becomes on this screen. Written once
+// because it is now asked from exactly two places — boot, and the canvas
+// saying it moved — where it used to be copied into every click.
+const applyContext = [
+  { set: 'currentArea', value: '$.context.areaId' },
+  { set: 'tabs', value: '$.context.tabs' },
+  { set: 'tabCount', value: { $prism: { $length: { $ref: '$.context.tabs' } } } },
+  { set: 'moreValue', value: '$.context.moreValue' },
+];
 
 export const staffChromeAction: ActionDefinition = {
   id: 'chrome.staff',
@@ -50,18 +61,30 @@ export const staffChromeAction: ActionDefinition = {
       { call: 'theme', onSuccess: [{ set: 'themeTokens', value: '$.themeRow.tokens' }, { set: 'themeName', value: '$.themeRow.name' }] },
       { set: 'currentLeaf', value: '$.homeId' },
       { call: 'unseen', onSuccess: [{ set: 'unseen', value: '$.unseenRow.total' }] },
-      { call: 'context', onSuccess: [{ set: 'currentArea', value: '$.context.areaId' }, { set: 'tabs', value: '$.context.tabs' }, { set: 'tabCount', value: { $prism: { $length: { $ref: '$.context.tabs' } } } }, { set: 'moreValue', value: '$.context.moreValue' }] },
+      { call: 'context', onSuccess: applyContext },
     ],
   },
   triggers: [
+    // ── WHERE THE SIDEBAR LEARNS WHERE IT IS ──────────────────
+    //
+    // ⟲ THE CLICKS USED TO SAY. Each one set `currentLeaf` and re-read the
+    // context on its way to the `resetTo` — a copy of where you were going,
+    // written by the gesture that sent you. It agreed with the canvas until
+    // something moved the canvas without a click, and then the strip lit one
+    // screen while the canvas showed another. `back` was the first thing that
+    // did it; an agent opening a screen and a deep link are the next two.
+    //
+    // Now the canvas says, and this listens. The clicks below just go.
+    {
+      message: navigatedChannel('main'),
+      do: [{ set: 'currentLeaf', value: '@event.payload.action' }, { call: 'context', onSuccess: applyContext }],
+    },
     {
       event: 'ui:click',
       ref: 'nav',
       do: [
         { set: 'menuOpen', value: false },
-        { set: 'currentLeaf', value: '@event.payload' },
         { resetTo: { action: '@event.payload', canvas: 'main' } },
-        { call: 'context', onSuccess: [{ set: 'currentArea', value: '$.context.areaId' }, { set: 'tabs', value: '$.context.tabs' }, { set: 'tabCount', value: { $prism: { $length: { $ref: '$.context.tabs' } } } }, { set: 'moreValue', value: '$.context.moreValue' }] },
       ],
     },
     {
@@ -69,9 +92,7 @@ export const staffChromeAction: ActionDefinition = {
       ref: 'navLeaf',
       do: [
         { set: 'menuOpen', value: false },
-        { set: 'currentLeaf', value: '@event.payload.value' },
         { resetTo: { action: '@event.payload.value', canvas: 'main' } },
-        { call: 'context', onSuccess: [{ set: 'currentArea', value: '$.context.areaId' }, { set: 'tabs', value: '$.context.tabs' }, { set: 'tabCount', value: { $prism: { $length: { $ref: '$.context.tabs' } } } }, { set: 'moreValue', value: '$.context.moreValue' }] },
       ],
     },
     { event: 'ui:click', ref: 'openMenu', do: [{ set: 'menuOpen', value: true }] },
@@ -86,6 +107,6 @@ export const staffChromeAction: ActionDefinition = {
     // the right number. The bell click is the pull half.
     { message: 'notified', do: [{ call: 'unseen', onSuccess: [{ set: 'unseen', value: '$.unseenRow.total' }] }] },
     { message: 'notices-seen', do: [{ call: 'unseen', onSuccess: [{ set: 'unseen', value: '$.unseenRow.total' }] }] },
-    { event: 'ui:click', ref: 'bell', do: [{ set: 'menuOpen', value: false }, { set: 'currentLeaf', value: 'desk.followups' }, { resetTo: { action: 'desk.followups', canvas: 'main' } }, { call: 'context', onSuccess: [{ set: 'currentArea', value: '$.context.areaId' }, { set: 'tabs', value: '$.context.tabs' }, { set: 'tabCount', value: { $prism: { $length: { $ref: '$.context.tabs' } } } }, { set: 'moreValue', value: '$.context.moreValue' }] }] },
+    { event: 'ui:click', ref: 'bell', do: [{ set: 'menuOpen', value: false }, { resetTo: { action: 'desk.followups', canvas: 'main' } }] },
   ],
 };

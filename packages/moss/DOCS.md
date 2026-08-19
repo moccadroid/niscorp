@@ -272,7 +272,7 @@ the engine instead of waiting for somebody's beat.
   - `stop()` — stop the idle sweep (the timer is unref'd, so a plain process
     needn't call it).
 - `ShellSession` — what `ShellHost.session(token, principal)` returns:
-  `{ shell, attach, detach, dispatch, publish, reset }`. The living nova `Shell`,
+  `{ shell, attach, detach, resync, dispatch, publish, back, reset }`. The living nova `Shell`,
   for in-process hosts (dev checks, embedded tools) that drive it directly;
   remote clients ride `attach`/`dispatch`. `shell` is a **getter** — `reset`
   replaces the shell under a session already held, so a snapshot of the field
@@ -302,7 +302,7 @@ the engine instead of waiting for somebody's beat.
     interface whose every load silently fails.
 - `Connection` — the transport seam: `{ send, close, onMessage, onClose }`.
 - `ServerMessage` — `hello | catalog | frame | render | render-delta | session | error`.
-- `ClientMessage` — `event | publish | resync | reset`.
+- `ClientMessage` — `event | publish | resync | reset | back`.
 - `render-delta` is only ever sent to a connection that advertised `?delta=1`
   on the upgrade, and only when the server is configured for it. Everything
   else is served whole frames, unchanged. See [Wire size](#wire-size).
@@ -316,6 +316,13 @@ the engine instead of waiting for somebody's beat.
   protocol-level, not app-level — no action declares it and no charter grants
   it — and it is answered by the frames it produces, not by an envelope of its
   own.
+- `back` names no canvas either, and for a related reason: back is one gesture
+  over the whole shell, and the terminal that sends it has no idea which canvas
+  moved last — it is served trees, not stacks. The shell decides what back
+  means (nova's navigation journal, SHELL_DOCS § `back()`), and it is answered
+  by whatever canvases moved. Protocol-level, so a browser's back button, a
+  TUI's Escape and an app's own control are one message on one wire, and an app
+  authors nothing to receive it.
 - `CLOSE_INVALID_TOKEN = 4401`, `CLOSE_SIGNED_OUT = 4403`.
 - A canvas whose layout renders no visible content is served as an empty
   tree (`[]`), so a terminal collapses chrome on `length` alone. An
@@ -413,7 +420,7 @@ Correctness, which matters more than the saving:
   localStorage (`nisc.token`), url derived from `window.location`, the
   page's WebSocket.
 - `Wire` — `{ subscribe, snapshot, status, dispatch(canvas, event), publish,
-  reset, dispose }`. `snapshot()` is `{ frame, trees }`; `status()` is
+  reset, back, dispose }`. `snapshot()` is `{ frame, trees }`; `status()` is
   `'connecting' | 'open' | 'closed'` and changes notify subscribers like
   snapshot changes do (a renderer must be able to tell a dead socket from an
   empty app). Hand it to a renderer.
@@ -433,6 +440,13 @@ wreck. On an open socket it sends `{ type: 'reset' }` and the fresh frame
 arrives on that same socket — same session, same token, nothing signed out. On
 a dead one it reconnects immediately instead of waiting out the backoff, which
 is the same recovery a layer down.
+
+`back()` sends `{ type: 'back' }` and nothing else — no location is held here,
+so what comes back is whatever canvases moved, over the same stream every other
+change arrives on. It is dropped on a closed socket rather than queued: a back
+pressed during an outage is about a screen the person is no longer being served,
+and replaying it on reconnect would move them somewhere they asked to go one
+outage ago.
 
 ```typescript
 import { createWire } from '@niscorp/moss/client';
@@ -462,16 +476,30 @@ in the subpaths.
 - `createTerminal({ target, wire }): { destroy }` — the conductor: one
   target, one wire. Subscribes the target's `update` to the wire and routes
   events back.
-- `mountTerminal(config): { swap, reset, destroy }` — the switcher: hot-swaps
-  render targets over ONE wire, so the socket, session, and current trees
-  survive the swap. `config = { targets, swapKey?, resetKey?, initial?, wire?,
-  url? }` — targets by name, cycled in insertion order; `swapKey` (e.g.
-  `"ctrl+shift+y"`) binds the hotkey, and `swap` is returned for a host's own
-  control. Omit `wire` and the terminal makes (and owns) one; `url` seeds it.
-  `resetKey` binds `wire.reset()` — the escape hatch, on a keystroke because it
-  has to work when every surface on screen is dead. Both hotkeys are
+- `mountTerminal(config): { swap, reset, back, destroy }` — the switcher:
+  hot-swaps render targets over ONE wire, so the socket, session, and current
+  trees survive the swap. `config = { targets, swapKey?, resetKey?, trapBack?,
+  initial?, wire?, url? }` — targets by name, cycled in insertion order;
+  `swapKey` (e.g. `"ctrl+shift+y"`) binds the hotkey, and `swap` is returned for
+  a host's own control. Omit `wire` and the terminal makes (and owns) one; `url`
+  seeds it. `resetKey` binds `wire.reset()` — the escape hatch, on a keystroke
+  because it has to work when every surface on screen is dead. Both hotkeys are
   browser-only (they listen on `window`); a TTY or Node host binds `swap` and
   `reset` to its own control instead.
+- **The back gesture.** `trapBack` (default **on**) catches the browser's back
+  button and sends it up the wire instead of letting it unload the page. It
+  keeps one spare history entry ahead of the page and spends it on every press,
+  putting another straight back — so the URL never changes and the application
+  is never left. Nothing at all where there is no history to catch (a TTY, a
+  TUI, a plain process), so the conductor asks for it unconditionally. `back` is
+  returned for a host's own control, and `trapBack: false` leaves the page's
+  back button to the host.
+
+  It does not touch the address bar, and that is the honest position while
+  location lives on the server: a shell is keyed by principal, not by tab, so a
+  URL would be a per-tab claim on state two tabs share. Deep links, when they
+  come, are a projection of the shell's own location — and the gesture is
+  already here.
 - `TerminalApi` — what a target renders against: nova core's `RenderApi`
   (`frame`, `canvasTree`, `dispatch`, `publish`), aliased not redeclared — the
   DOM adapter, the React adapter, and the conductor share one contract. A

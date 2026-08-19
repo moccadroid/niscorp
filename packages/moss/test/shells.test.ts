@@ -253,6 +253,75 @@ describe('shells — reset', () => {
 // second, drifting note beside it.
 // ═══════════════════════════════════════════════════════════════
 
+// BACK — the gesture the socket routes here. moss owns none of the meaning:
+// nova's journal decides what the last navigation was, and the shell's own
+// state change flushes whatever moved.
+// Two screens that render differently, so "what the terminal was served"
+// is a question with an answer.
+const twoScreens = {
+  ...app,
+  charter: { public: ['counter', 'detail'] },
+  actions: {
+    counter: { ...counter, layout: { component: 'Text', children: 'the register' } },
+    detail: { id: 'detail', data: {}, layout: { component: 'Text', children: 'one person' } },
+  },
+} as unknown as NiscApp;
+
+const twoCtx: ShellHostContext = {
+  ...ctx,
+  app: twoScreens,
+  catalogFor: () => ({ ids: ['counter', 'detail'], hash: 'h' }),
+  resolve: async () => ({ roles: ['public'], scope: {}, installed: undefined, catalog: { ids: ['counter', 'detail'], hash: 'h' }, variants: new Map(), policy }),
+};
+
+describe('shells — back', () => {
+  it('undoes the session\'s last navigation and serves the result', async () => {
+    const host = createShellHost(twoCtx);
+    const session = await host.session('t', 'usr_1');
+    const conn = fakeConnection();
+    session.attach(conn);
+    await tick();
+
+    session.shell.push('main', 'detail');
+    await tick();
+    await tick();
+    expect(session.shell.getCanvasState('main').stack).toHaveLength(2);
+    conn.sent.length = 0;
+
+    expect(session.back()).toBe(true);
+    await tick();
+    await tick();
+
+    expect(session.shell.getCanvasState('main').stack).toHaveLength(1);
+    // Answered by a canvas frame, like every other change — no envelope of its
+    // own — and it is the screen underneath, not the one they left.
+    const served = conn.sent.filter((m) => m['type'] === 'render' && m['canvas'] === 'main').at(-1);
+    expect(JSON.stringify(served)).toContain('the register');
+    expect(JSON.stringify(served)).not.toContain('one person');
+  });
+
+  it('cannot undo the landing screen — a seeded canvas is the floor', async () => {
+    const host = createShellHost(ctx);
+    const session = await host.session('t', 'usr_1');
+    await tick();
+
+    expect(session.back()).toBe(false);
+    expect(session.shell.getCanvasState('main').stack).toHaveLength(1);
+  });
+
+  it('reads through the cell — a reset session backs the shell standing now', async () => {
+    const host = createShellHost(ctx);
+    const session = await host.session('t', 'usr_1');
+    await tick();
+    session.reset();
+    await tick();
+
+    session.shell.push('main', 'counter');
+    expect(session.back()).toBe(true);
+    expect(session.shell.getCanvasState('main').stack).toHaveLength(1);
+  });
+});
+
 describe('shells — list', () => {
   it('reports durable shells with their attachments and what is mounted', async () => {
     const host = createShellHost(ctx);

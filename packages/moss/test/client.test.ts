@@ -186,6 +186,38 @@ describe('the wire — reset', () => {
   });
 });
 
+describe('the wire — back', () => {
+  it('sends the gesture up, naming no canvas', () => {
+    const wire = createWire({ url: URL, env: env() });
+    FakeSocket.last().open();
+
+    wire.back();
+
+    expect(FakeSocket.last().envelopes()).toEqual([{ type: 'back' }]);
+  });
+
+  it('is dropped on a dead socket rather than queued for the reconnect', () => {
+    const wire = createWire({ url: URL, env: env() });
+    FakeSocket.last().open();
+    FakeSocket.last().serverClose(1006);
+
+    wire.back();
+
+    // A back pressed during an outage is about a screen the person is no longer
+    // being served. Replaying it on reconnect would move them somewhere they
+    // asked to go one outage ago.
+    expect(FakeSocket.last().envelopes()).toEqual([]);
+  });
+
+  it('does nothing after dispose', () => {
+    const wire = createWire({ url: URL, env: env() });
+    FakeSocket.last().open();
+    wire.dispose();
+    wire.back();
+    expect(FakeSocket.last().envelopes()).toEqual([]);
+  });
+});
+
 describe('the wire — session lifecycle (become)', () => {
   it('a session grant stores the token and reconnects authenticated, blanking the screen', () => {
     const wire = createWire({ url: URL, env: env() });

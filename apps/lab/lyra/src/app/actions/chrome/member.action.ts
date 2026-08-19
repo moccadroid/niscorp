@@ -1,6 +1,15 @@
 import type { ActionDefinition } from '@niscorp/nova';
+import { navigatedChannel } from '@niscorp/nova';
 import { staffChromeLayout } from './staff.layout';
 import { themeCurrentPrism } from './chrome.prism';
+
+// The staff chrome's twin — same reason it is written once there.
+const applyContext = [
+  { set: 'currentArea', value: '$.context.areaId' },
+  { set: 'tabs', value: '$.context.tabs' },
+  { set: 'tabCount', value: { $prism: { $length: { $ref: '$.context.tabs' } } } },
+  { set: 'moreValue', value: '$.context.moreValue' },
+];
 
 export const memberChromeAction: ActionDefinition = {
   id: 'chrome.member',
@@ -15,12 +24,15 @@ export const memberChromeAction: ActionDefinition = {
     theme: { url: '/api/studio/vex', method: 'POST', request: themeCurrentPrism, target: 'themeRow' },
     context: { fn: 'nav.context', target: 'context' },
   },
-  lifecycle: { mount: [{ call: 'theme', onSuccess: [{ set: 'themeTokens', value: '$.themeRow.tokens' }, { set: 'themeName', value: '$.themeRow.name' }] }, { set: 'currentLeaf', value: '$.homeId' }, { call: 'context', onSuccess: [{ set: 'currentArea', value: '$.context.areaId' }, { set: 'tabs', value: '$.context.tabs' }, { set: 'tabCount', value: { $prism: { $length: { $ref: '$.context.tabs' } } } }, { set: 'moreValue', value: '$.context.moreValue' }] }] },
+  lifecycle: { mount: [{ call: 'theme', onSuccess: [{ set: 'themeTokens', value: '$.themeRow.tokens' }, { set: 'themeName', value: '$.themeRow.name' }] }, { set: 'currentLeaf', value: '$.homeId' }, { call: 'context', onSuccess: applyContext }] },
   triggers: [
-    { event: 'ui:click', ref: 'nav', do: [{ set: 'menuOpen', value: false }, { set: 'currentLeaf', value: '@event.payload' }, { resetTo: { action: '@event.payload', canvas: 'main' } }, { call: 'context', onSuccess: [{ set: 'currentArea', value: '$.context.areaId' }, { set: 'tabs', value: '$.context.tabs' }, { set: 'tabCount', value: { $prism: { $length: { $ref: '$.context.tabs' } } } }, { set: 'moreValue', value: '$.context.moreValue' }] }] },
+    // The canvas says where it is; this listens. See the staff chrome for why
+    // the clicks stopped saying it.
+    { message: navigatedChannel('main'), do: [{ set: 'currentLeaf', value: '@event.payload.action' }, { call: 'context', onSuccess: applyContext }] },
+    { event: 'ui:click', ref: 'nav', do: [{ set: 'menuOpen', value: false }, { resetTo: { action: '@event.payload', canvas: 'main' } }] },
     // The member's menu opens the same way the staff one does — the drawer is
     // shared, so the refs have to be.
-    { event: 'ui:click', ref: 'navLeaf', do: [{ set: 'menuOpen', value: false }, { set: 'currentLeaf', value: '@event.payload.value' }, { resetTo: { action: '@event.payload.value', canvas: 'main' } }, { call: 'context', onSuccess: [{ set: 'currentArea', value: '$.context.areaId' }, { set: 'tabs', value: '$.context.tabs' }, { set: 'tabCount', value: { $prism: { $length: { $ref: '$.context.tabs' } } } }, { set: 'moreValue', value: '$.context.moreValue' }] }] },
+    { event: 'ui:click', ref: 'navLeaf', do: [{ set: 'menuOpen', value: false }, { resetTo: { action: '@event.payload.value', canvas: 'main' } }] },
     { event: 'ui:click', ref: 'openMenu', do: [{ set: 'menuOpen', value: true }] },
     { event: 'ui:click', ref: 'closeMenu', do: [{ set: 'menuOpen', value: false }] },
     { event: 'ui:click', ref: 'leave', do: [{ call: 'leave' }] },

@@ -51,4 +51,4 @@ const terminal = mountTerminal({
   wire: createWire(),
 });
 
-Object.assign(window, { swapTerminal: terminal.swap, resetShell: terminal.reset });
+Object.assign(window, { swapTerminal: terminal.swap, resetShell: terminal.reset, backTerminal: terminal.back });

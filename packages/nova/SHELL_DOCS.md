@@ -68,6 +68,9 @@ type ShellConfig = {
   // Strictness
   strict?: boolean;                      // throw vs route through onError (default false)
 
+  // Navigation history
+  historyDepth?: number;                 // how many navigations `back` can walk (default 50; 0 = off)
+
   // Test injection / advanced
   shellIdFn?: IdFactory;
   instanceIdFn?: IdFactory;
@@ -160,6 +163,7 @@ type Shell = {
   popTo: (canvasId: string, instanceId: string) => void;
   replace: (canvasId: string, actionId: string, input?: object, fragments?: string[]) => string;
   clear: (canvasId: string) => void;
+  back: () => boolean;                     // undo the last navigation, anywhere on the shell
 
   // Runtime registration
   registerAction: (definition: ActionDefinition) => void;
@@ -245,6 +249,42 @@ Unmount every action on a canvas. Each unmount runs `unmount` lifecycle hooks in
 ```ts
 shell.clear('main');
 ```
+
+#### `back()`
+
+Undo the shell's last navigation. Returns `false` when there was nothing left to
+undo — the answer a landing screen gives.
+
+```ts
+shell.back();
+```
+
+The shell keeps a **navigation journal**: before every `push`, `replace`,
+`clear` and `resetTo`, it writes down the canvas that is about to change. One
+entry is one position somebody can be returned to; `back` restores the newest.
+
+- **Global and ordered.** One journal across every canvas, each entry naming the
+  one canvas it describes — so back walks a person's own moves in the order they
+  made them, and never reverts a canvas that changed underneath them (a
+  delivered notice, an agent's card) while they were somewhere else.
+- **What survives.** An instance the recorded position still names is kept, with
+  everything it holds. One that is gone comes back derived from the action and
+  input that made it: back re-opens a screen, it does not resurrect the form
+  somebody replaced their way out of.
+- **A pop is a back.** `pop`, `popTo` and `removeInstance` spend a journal entry
+  instead of adding one — otherwise a person who used the app's own back button
+  would have to press the browser's twice.
+- **The floor.** Canvas seeds (`initial`, and any `push` passing `{ history:
+  false }`) are never recorded, so `back` cannot empty the screen somebody landed
+  on. A revoked action takes its entries with it: `removeAction` purges anything
+  that would hand it back, and `removeCanvas` drops what can no longer be
+  restored.
+- **Depth.** `ShellConfig.historyDepth` (default 50) bounds the journal;
+  `historyDepth: 0` switches it off and makes `back` a no-op.
+
+Nothing about the gesture lives here — a browser's back button, a TUI's Escape
+key and an app's own control all arrive as this one call. In moss it is
+protocol-level: see its `back` client message.
 
 ### Runtime registration and canvas mutation
 

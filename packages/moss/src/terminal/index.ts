@@ -2,6 +2,7 @@ import type { RenderApi } from '@niscorp/nova';
 import { createWire } from '../client';
 import type { Wire } from '../client';
 import { onHotkey } from './hotkey';
+import { trapBack } from './history';
 
 // ═══════════════════════════════════════════════════════════════
 // @niscorp/moss/terminal — the terminal, owned by the protocol that defines
@@ -68,6 +69,15 @@ export type MountTerminalConfig = {
   // reattaches to it. Without a key that says "throw it away", somebody
   // watching a dead screen has no move left.
   resetKey?: string;
+  // Catch the host's BACK gesture — the browser's back button — and send it up
+  // the wire instead of letting it unload the page. Default: on, wherever a
+  // history exists to catch (see ./history); nothing at all in a TTY or a TUI.
+  //
+  // Terminal chrome for the same reason the swap and reset keys are: back is
+  // the terminal's relationship to the surface it is painted on, and the app
+  // authors nothing to receive it. What back MEANS is decided a layer up, by
+  // the shell that owns the navigation.
+  trapBack?: boolean;
   // which target to mount first (default: the first key)
   initial?: string;
   // inject an existing wire (shared across swaps), or let the terminal make
@@ -81,7 +91,7 @@ export type MountTerminalConfig = {
 // session, and current trees survive the swap. The hotkey is the one legit
 // piece of imperative client chrome — a render target is not app state, so
 // it is not a nova action; it lives here, in the terminal.
-export const mountTerminal = (config: MountTerminalConfig): { swap: () => void; reset: () => void; destroy: () => void } => {
+export const mountTerminal = (config: MountTerminalConfig): { swap: () => void; reset: () => void; back: () => void; destroy: () => void } => {
   const keys = Object.keys(config.targets);
   if (keys.length === 0) throw new Error('mountTerminal: at least one target is required');
 
@@ -106,18 +116,22 @@ export const mountTerminal = (config: MountTerminalConfig): { swap: () => void; 
   };
 
   const reset = (): void => wire.reset();
+  const back = (): void => wire.back();
 
   const disposeSwapKey = config.swapKey === undefined ? undefined : onHotkey(config.swapKey, swap);
   const disposeResetKey = config.resetKey === undefined ? undefined : onHotkey(config.resetKey, reset);
+  const disposeBackTrap = config.trapBack === false ? undefined : trapBack(back);
 
-  // Both are returned so a host can bind its own control (a button, a console
-  // call) — the hotkeys are a convenience, not the only way in.
+  // All three are returned so a host can bind its own control (a button, a
+  // console call) — the keys and the trap are a convenience, not the only way in.
   return {
     swap,
     reset,
+    back,
     destroy: () => {
       disposeSwapKey?.();
       disposeResetKey?.();
+      disposeBackTrap?.();
       active.destroy();
       if (ownsWire) wire.dispose();
     },

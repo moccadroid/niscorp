@@ -64,6 +64,11 @@ export type PushOptions = {
   // whether an instance is still its own — the question any server-driven or
   // agent-driven layout must answer before it closes something.
   origin?: string;
+  // Is this push a PLACE somebody can come back from? Default true. Pass false
+  // for a push that furnishes the shell rather than moves through it — a host
+  // seeding the landing screen after build, say — so `back` cannot undo the
+  // floor and leave a canvas empty.
+  history?: boolean;
 };
 
 export type CanvasState = {
@@ -152,6 +157,9 @@ export type ShellConfig = {
   onError?: OnErrorHandler;
   shellIdFn?: IdFactory;
   instanceIdFn?: IdFactory;
+  // How many navigations `back` can walk. Default DEFAULT_HISTORY_DEPTH; `0`
+  // switches the journal off entirely and makes `back` a no-op.
+  historyDepth?: number;
   // Optional injection — primarily for tests that need to drive ui:model or
   // other events into the shell. Defaults to fresh per-shell buses.
   eventBus?: EventBus;
@@ -196,6 +204,18 @@ export type Shell = {
   removeInstance: (canvasId: string, instanceId: string) => void;
   replace: (canvasId: string, actionId: string, input?: Record<string, unknown>, fragments?: string[]) => string;
   clear: (canvasId: string) => void;
+
+  // UNDO THE LAST NAVIGATION — the whole shell's, not one canvas's. Walks the
+  // journal (see ./journal) newest-first and restores the first position that
+  // is not already on screen; `false` when there was nothing left to undo,
+  // which is the answer a landing screen gives.
+  //
+  // An instance the recorded position still names is KEPT, with everything it
+  // holds. One that is gone comes back derived from the action and input that
+  // made it — back re-opens a screen, it does not resurrect a half-filled form
+  // somebody replaced their way out of. Nothing here can walk below the shell
+  // as it was built: a seeded canvas is the floor, never an entry.
+  back: () => boolean;
 
   // Register an action definition at runtime, so a canvas can push/seed it. The
   // shell starts from createShell's `actions`; this adds (or replaces) one.

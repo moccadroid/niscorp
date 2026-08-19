@@ -20,8 +20,11 @@ import { rememberShellRegistry } from './shell-internals';
 import { createCanvas, type Canvas } from './canvas';
 import { DEFAULT_ACTION_LAYOUT, DEFAULT_SHELL_LAYOUT } from './default-layouts';
 import { flattenRenderTree } from './flatten-render-tree';
+import { createJournal, DEFAULT_HISTORY_DEPTH } from './journal';
+import type { HistoryEntry, HistoryFrame } from './journal';
 import { createLifecycleOps } from './lifecycle-ops';
-import { createNavigationHandler } from './navigation';
+import { createNavigationHandler, navigatedChannel } from './navigation';
+import type { NavigatedMessage } from './navigation';
 import { createRuntimeRegistry } from './runtime-registry';
 import { createRuntimeFactory, snapshotCanvas, validateActions, validateFragments } from './shell-internals';
 import { createTelemetry } from './telemetry';
@@ -88,11 +91,27 @@ export const createShell = (config: ShellConfig): Shell => {
   // nobody can answer by inspecting the screen. Dropped with the instance.
   const origins = new Map<string, string>();
 
+  // WHAT MADE THIS INSTANCE. The stack holds instances; an instance holds its
+  // data and no memory of the call that spawned it, so a canvas can say what is
+  // standing on it but not how to stand it up again. `back` needs the second
+  // question answered for anything a navigation destroyed — hence the birth
+  // details, kept beside the instance and dropped with it.
+  //
+  // `input` is held by REFERENCE, exactly as push already hands it to the
+  // runtime: cloning would quietly break an input carrying anything a structured
+  // clone cannot take, and would be a copy nobody asked for.
+  const births = new Map<string, { action: string; input?: Record<string, unknown>; with?: string[] }>();
+
+  const journal = createJournal(config.historyDepth ?? DEFAULT_HISTORY_DEPTH);
+
   const ops = createLifecycleOps({
     registry,
     telemetry,
     onLifecycleError: handleLifecycleRejection,
-    onUnmount: (instanceId) => origins.delete(instanceId),
+    onUnmount: (instanceId) => {
+      origins.delete(instanceId);
+      births.delete(instanceId);
+    },
   });
 
   const canvases = new Map<string, Canvas>();
@@ -198,6 +217,8 @@ export const createShell = (config: ShellConfig): Shell => {
     guard();
     if (actions[actionId] === undefined) return;
     delete actions[actionId];
+    // Revocation reaches the journal too, or back would hand the action back.
+    journal.forgetAction(actionId);
     let changed = false;
     for (const [, canvas] of canvases) {
       if (!canvas.stack.some((inst) => inst.definitionId === actionId)) continue;
@@ -234,19 +255,79 @@ export const createShell = (config: ShellConfig): Shell => {
     return composeAction(def, fragmentIds.map(getFragment));
   };
 
+  // The active screen last announced per canvas — see navigatedChannel. Absent
+  // and `undefined` mean the same thing (nothing was open), which is why an
+  // empty canvas at build announces nothing: there is no move to report.
+  const announced = new Map<string, string | undefined>();
+  let announcing = false;
+
+  // DEFERRED AND COALESCED, for two reasons. A listener woken mid-mutation runs
+  // steps against a half-moved shell, which is the re-entrancy `emit` already
+  // defers to avoid. And a burst — a resetTo is a clear and a push — should say
+  // where the canvas ENDED, once, not narrate every position it passed through.
+  // The message is state, not history.
+  const announceNavigation = (): void => {
+    if (announcing || disposed) return;
+    announcing = true;
+    queueMicrotask(() => {
+      announcing = false;
+      if (disposed) return;
+      for (const [canvasId, canvas] of canvases) {
+        const active = canvas.peek();
+        if (announced.get(canvasId) === active?.id) continue;
+        announced.set(canvasId, active?.id);
+        const message: NavigatedMessage =
+          active === undefined
+            ? { canvas: canvasId }
+            : { canvas: canvasId, action: active.definitionId, instance: active.id };
+        messageBus.publish(navigatedChannel(canvasId), message);
+      }
+    });
+  };
+
   const fireState = (): void => {
     if (disposed) return;
     const out: Record<string, CanvasState> = {};
     for (const [cid, c] of canvases) out[cid] = snapshotCanvas(c);
     const snapshot: StateSnapshot = { canvases: out };
     telemetry.fireStateChange(snapshot);
+    announceNavigation();
   };
+
+  // The canvas as the journal has to remember it: every instance standing on it
+  // paired with what would build it again. Taken BEFORE the navigation that
+  // displaces it — a position recorded afterwards is the place you already are.
+  const positionOf = (canvasId: string): readonly HistoryFrame[] => {
+    const canvas = canvases.get(canvasId);
+    if (canvas === undefined) return [];
+    return canvas.stack.map((inst) => {
+      const birth = births.get(inst.id);
+      return {
+        instance: inst.id,
+        action: birth?.action ?? inst.definitionId,
+        ...(birth?.input === undefined ? {} : { input: birth.input }),
+        ...(birth?.with === undefined ? {} : { with: birth.with }),
+      };
+    });
+  };
+
+  const record = (canvasId: string): void => journal.record(canvasId, positionOf(canvasId));
 
   const navigationHandler = createNavigationHandler({
     push: (cid, aid, input, frags) => push(cid, aid, input, frags),
     pop: (cid) => pop(cid),
     replace: (cid, aid, input, frags) => replace(cid, aid, input, frags),
     clear: (cid) => clear(cid),
+    // ONE position, then both halves — see ShellNavOps.resetTo. The record is
+    // taken outside the mute so the deck being thrown away is what back returns
+    // to; the calls inside it record nothing of their own.
+    resetTo: (cid, aid, input, frags) => {
+      record(cid);
+      journal.mute(() => {
+        clear(cid);
+        push(cid, aid, input, frags);
+      });
+    },
     popTo: (cid, iid) => popTo(cid, iid),
     removeInstance: (cid, iid) => removeInstance(cid, iid),
   });
@@ -292,12 +373,18 @@ export const createShell = (config: ShellConfig): Shell => {
     options?: PushOptions,
   ): string => {
     guard();
+    if (options?.history !== false) record(canvasId);
     const canvas = getCanvas(canvasId);
     const definition = resolveDefinition(actionId, fragmentIds);
     // A list canvas keeps its existing cards live; only a stack suspends the top.
     if (!listCanvases.has(canvasId)) ops.suspendTop(canvas);
     const runtime = spawn(canvasId, definition, input);
     canvas.pushInstance(runtime.instance);
+    births.set(runtime.instance.id, {
+      action: actionId,
+      ...(input === undefined ? {} : { input }),
+      ...(fragmentIds === undefined ? {} : { with: fragmentIds }),
+    });
     if (options?.origin !== undefined) origins.set(runtime.instance.id, options.origin);
     fireState();
     return runtime.instance.id;
@@ -318,6 +405,7 @@ export const createShell = (config: ShellConfig): Shell => {
       if (inst.id === instanceId) ops.unmountInstance(inst.id);
       else canvas.pushInstance(inst);
     }
+    journal.consume(canvasId);
     // Stack canvases resume a newly-exposed top; list canvases never suspended,
     // so there is nothing to resume.
     if (!listCanvases.has(canvasId) && canvas.peek() !== previousTop) ops.resumeTop(canvas);
@@ -330,7 +418,10 @@ export const createShell = (config: ShellConfig): Shell => {
     const canvas = canvases.get(canvasId);
     if (canvas === undefined) return;
     const top = canvas.popInstance();
-    if (top !== undefined) ops.unmountInstance(top.id);
+    if (top === undefined) return;
+    ops.unmountInstance(top.id);
+    // Going back by hand spends a journal entry — see Journal.consume.
+    journal.consume(canvasId);
     ops.resumeTop(canvas);
     fireState();
   };
@@ -354,6 +445,7 @@ export const createShell = (config: ShellConfig): Shell => {
       changed = true;
     }
     if (changed) {
+      journal.consume(canvasId);
       ops.resumeTop(canvas);
       fireState();
     }
@@ -366,12 +458,18 @@ export const createShell = (config: ShellConfig): Shell => {
     fragmentIds?: string[],
   ): string => {
     guard();
+    record(canvasId);
     const canvas = getCanvas(canvasId);
     const definition = resolveDefinition(actionId, fragmentIds);
     const old = canvas.popInstance();
     if (old !== undefined) ops.unmountInstance(old.id);
     const runtime = spawn(canvasId, definition, input);
     canvas.pushInstance(runtime.instance);
+    births.set(runtime.instance.id, {
+      action: actionId,
+      ...(input === undefined ? {} : { input }),
+      ...(fragmentIds === undefined ? {} : { with: fragmentIds }),
+    });
     fireState();
     return runtime.instance.id;
   };
@@ -381,8 +479,80 @@ export const createShell = (config: ShellConfig): Shell => {
     guardNoPendingStrictError();
     const canvas = canvases.get(canvasId);
     if (canvas === undefined) return;
+    // RECORDED, not consumed: emptying a canvas is somewhere you went, not a
+    // step you retraced, and back should put the deck back.
+    if (canvas.stack.length > 0) record(canvasId);
     for (const inst of canvas.clearStack()) ops.unmountInstance(inst.id);
     fireState();
+  };
+
+  // ── BACK ────────────────────────────────────────────────────
+  // Put one recorded position back. `false` means this entry had nothing left
+  // to undo — the canvas is gone, or somebody already popped their own way to
+  // exactly this — and `back` should walk on to the next one.
+  const restore = (entry: HistoryEntry): boolean => {
+    const canvas = canvases.get(entry.canvas);
+    if (canvas === undefined) return false;
+
+    // How far up the recorded position the LIVE instances still agree with it.
+    // Matched by instance id and nothing else: an instance is either the very
+    // one recorded — kept, with everything it holds — or it is not, and comes
+    // back derived. There is no third case worth guessing at, because two
+    // instances of one action with equal input are not interchangeable, as any
+    // half-filled form proves.
+    let common = 0;
+    while (
+      common < canvas.stack.length &&
+      common < entry.stack.length &&
+      canvas.stack[common]?.id === entry.stack[common]?.instance
+    ) {
+      common += 1;
+    }
+    if (common === canvas.stack.length && common === entry.stack.length) return false;
+
+    // Anything re-derived has to name an action this shell still serves. It
+    // normally does — a revoked action takes its entries with it — and when it
+    // does not, the whole entry is refused: a position half put back is a screen
+    // nobody authored.
+    for (let i = common; i < entry.stack.length; i += 1) {
+      const frame = entry.stack[i];
+      if (frame !== undefined && actions[frame.action] === undefined) return false;
+    }
+
+    journal.mute(() => {
+      const standing = canvas.clearStack();
+      for (let i = 0; i < standing.length; i += 1) {
+        const inst = standing[i];
+        if (inst === undefined) continue;
+        if (i < common) canvas.pushInstance(inst);
+        else ops.unmountInstance(inst.id);
+      }
+      if (common === entry.stack.length) {
+        // Nothing to build — the newly exposed top resumes, exactly as on a pop.
+        if (!listCanvases.has(entry.canvas)) ops.resumeTop(canvas);
+        return;
+      }
+      for (let i = common; i < entry.stack.length; i += 1) {
+        const frame = entry.stack[i];
+        if (frame === undefined) continue;
+        push(entry.canvas, frame.action, frame.input, frame.with);
+      }
+    });
+    fireState();
+    return true;
+  };
+
+  const back = (): boolean => {
+    if (disposed) return false;
+    guardNoPendingStrictError();
+    // Newest first, past the entries that have nothing to say. Terminates
+    // because every pass removes one — an empty journal is a shell standing on
+    // its landing screen, and the honest answer there is `false`.
+    for (;;) {
+      const entry = journal.take();
+      if (entry === undefined) return false;
+      if (restore(entry)) return true;
+    }
   };
 
   // Push a canvas's `initial` action(s), if any. Shared by createShell's seeding
@@ -390,10 +560,15 @@ export const createShell = (config: ShellConfig): Shell => {
   const seedCanvas = (cfg: CanvasConfig): void => {
     if (cfg.initial === undefined) return;
     const seeds = Array.isArray(cfg.initial) ? cfg.initial : [cfg.initial];
-    for (const seed of seeds) {
-      if (typeof seed === 'string') push(cfg.id, seed);
-      else push(cfg.id, seed.action, seed.input, seed.with);
-    }
+    // MUTED: a seed is the floor, not a place somebody navigated to. Recorded,
+    // it would make `back` able to empty the landing screen — the one move a
+    // back button must never have.
+    journal.mute(() => {
+      for (const seed of seeds) {
+        if (typeof seed === 'string') push(cfg.id, seed);
+        else push(cfg.id, seed.action, seed.input, seed.with);
+      }
+    });
   };
 
   const addCanvas = (cfg: CanvasConfig): void => {
@@ -413,6 +588,10 @@ export const createShell = (config: ShellConfig): Shell => {
     if (canvas === undefined) return;
     for (const inst of canvas.clearStack()) ops.unmountInstance(inst.id);
     canvases.delete(canvasId);
+    journal.forgetCanvas(canvasId);
+    // Or a canvas re-added under the same id would be silently held to the
+    // position its predecessor last announced.
+    announced.delete(canvasId);
     actionLayouts.delete(canvasId);
     const index = canvasOrder.indexOf(canvasId);
     if (index >= 0) canvasOrder.splice(index, 1);
@@ -587,6 +766,7 @@ export const createShell = (config: ShellConfig): Shell => {
     removeInstance,
     replace,
     clear,
+    back,
     registerAction,
     removeAction,
     registerFragment,

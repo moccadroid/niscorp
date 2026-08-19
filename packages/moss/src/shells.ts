@@ -150,6 +150,11 @@ export type ShellSession = {
   resync: (connection: Connection) => void;
   dispatch: (canvas: string, event: Record<string, unknown>) => void;
   publish: (channel: string, payload?: unknown) => void;
+  // Undo the shell's last navigation (nova's journal — see its `back`). Nothing
+  // is sent in answer: the shell's own state change flushes the canvases that
+  // moved, which is how every other change reaches a terminal. `false` when
+  // there was nothing left to undo — the answer a landing screen gives.
+  back: () => boolean;
   // Throw this shell away and build its replacement, carrying every attached
   // connection across. The session object stays valid; the terminals receive a
   // fresh frame and current trees, exactly as on (re)attach.
@@ -500,7 +505,10 @@ export const createShellHost = (ctx: ShellHostContext): ShellHost => {
               const input = typeof seed === 'string' ? undefined : seed.input;
               const withFragments = typeof seed === 'string' ? undefined : seed.with;
               try {
-                shell.push(canvasId, action, input, withFragments);
+                // NOT A NAVIGATION. A seed is the screen this principal arrives
+                // on, derived a tick late because it had to be read; `back`
+                // undoing it would empty the canvas somebody just landed on.
+                shell.push(canvasId, action, input, withFragments, { history: false });
               } catch {
                 // an unknown canvas or definition is a skipped seed, not a
                 // dead session
@@ -659,6 +667,7 @@ export const createShellHost = (ctx: ShellHostContext): ShellHost => {
       shell.dispatch(stamped as Parameters<Shell['dispatch']>[0]);
     },
     publish: (channel, payload) => cell.live.shell.publish(channel, payload),
+    back: () => cell.live.shell.back(),
     reset: () => void rebuild(cell).catch((err: unknown) => console.error('[moss/shells] a reset failed to rebuild', err)),
   });
 

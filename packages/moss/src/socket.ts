@@ -68,6 +68,13 @@ export type ClientMessage =
   // agree on. Distinct from `reset`: the SHELL is fine, only this connection's
   // copy of it drifted, so nothing is torn down.
   | { type: 'resync' }
+  // BACK: undo this session's last navigation. It names no canvas for the same
+  // reason `reset` does not — back is one gesture over the whole shell, and the
+  // terminal that sends it has no idea which canvas moved last (it is served
+  // trees, not stacks). Protocol-level, so a browser's back button, a TUI's
+  // Escape and a REPL word are the same message on one wire, and the app has to
+  // author nothing to receive it.
+  | { type: 'back' }
   // RESET: throw this session's shell away and serve its replacement. The one
   // message that names no canvas, deliberately — it is the recovery for a
   // shell whose canvases are the broken thing, so it must not have to travel
@@ -269,6 +276,14 @@ export const createSocket = (ctx: SocketContext): SocketAccept => {
           return;
         }
         session.resync(connection);
+        return;
+      }
+      if (message !== null && message['type'] === 'back') {
+        if (session === undefined) {
+          send({ type: 'error', code: 'no_shell', message: 'This app serves no shell.' });
+          return;
+        }
+        session.back();
         return;
       }
       if (message !== null && message['type'] === 'publish' && typeof message['channel'] === 'string') {

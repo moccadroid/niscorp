@@ -79,6 +79,10 @@ export type Wire = {
   // to the same wreck. On a dead socket this reconnects instead, which is the
   // same recovery one layer down.
   reset: () => void;
+  // Undo the shell's last navigation. Fire-and-forget by design: what comes
+  // back is whatever canvases moved, over the same stream every other change
+  // arrives on — the terminal never holds a location to keep in step.
+  back: () => void;
   dispose: () => void;
 };
 
@@ -86,7 +90,8 @@ type ClientMessage =
   | { type: 'event'; canvas: string; event: Record<string, unknown> }
   | { type: 'publish'; channel: string; payload?: unknown }
   | { type: 'resync' }
-  | { type: 'reset' };
+  | { type: 'reset' }
+  | { type: 'back' };
 
 const EMPTY: WireSnapshot = { frame: [], trees: new Map() };
 
@@ -291,6 +296,14 @@ export const createWire = (config: WireConfig = {}): Wire => {
     status: () => status,
     dispatch: (canvasId, event) => send({ type: 'event', canvas: canvasId, event: event as unknown as Record<string, unknown> }),
     publish: (channel, payload) => send(payload === undefined ? { type: 'publish', channel } : { type: 'publish', channel, payload }),
+    // Only on an open socket, and deliberately not queued: a back pressed while
+    // the connection is down is a gesture about a screen the person is no
+    // longer being served, and replaying it on reconnect would move them
+    // somewhere they asked to go some seconds and one outage ago.
+    back: () => {
+      if (socket === null || status !== 'open') return;
+      send({ type: 'back' });
+    },
     reset: () => {
       if (disposed) return;
       // Open: ask the server, and the fresh frame arrives on this same socket.

@@ -143,7 +143,8 @@ canvas arrangement — a served layout of `CanvasSlot` markers), `render` (a
 canvas's tree), `render-delta` (the same tree, against the last one — opt-in,
 see below), `session` (a login grant), `error`. **Up:** `event` (a
 canvas-tagged `NovaEvent`), `publish` (a channel message), `resync` (this
-connection's copy of a canvas drifted; send whole frames).
+connection's copy of a canvas drifted; send whole frames), `back` (undo the
+last navigation).
 
 Operational shape, all falling out of "the message is state, not history":
 
@@ -168,6 +169,16 @@ Operational shape, all falling out of "the message is state, not history":
   client can make alone — reloading reattaches to it, and so does signing out
   and back in. Without a verb the client can send, a person watching a dead
   screen has no move left.
+- **Going back.** `back` (up) undoes the last navigation. It names no canvas
+  either, and for a related reason: back is one gesture over the whole shell,
+  and a terminal is served trees, not stacks — it could not name the canvas that
+  moved last if it wanted to. What back MEANS is decided where the stacks live:
+  nova's shell keeps a journal of the positions its navigations displaced, and
+  `back` restores the newest one it can. So the browser's back button, a TUI's
+  Escape and an app's own control are one message, an app authors nothing to
+  receive it, and the terminal holds no location that could drift out of step
+  with the server's. It is also the answer to a real failure: with no history
+  integration at all, a browser's back button unloaded the application.
 - **Emptiness.** A canvas whose layout renders no visible content is served as
   `[]`, so a terminal collapses chrome on `length` alone. An `ActionSlot` is a
   boundary, not content — visibility is decided by what's inside it.

@@ -50,6 +50,12 @@ export const createLifecycleOps = (deps: LifecycleOpsDeps): LifecycleOps => {
   const suspendTop = (canvas: Canvas): void => {
     const top = canvas.peek();
     if (top === undefined) return;
+    // Already suspended is already done. A push onto a fresh stack always finds
+    // an active top, so this changes nothing there; `back` restoring a position
+    // ABOVE the one on screen finds a top that was suspended when the screen it
+    // is undoing went up, and re-firing that action's suspend hook would be a
+    // lifecycle event nothing happened to cause.
+    if (top.status === 'suspended') return;
     const runtime = registry.get(top.id);
     if (runtime !== undefined) runtime.suspend().catch(onLifecycleError);
   };
