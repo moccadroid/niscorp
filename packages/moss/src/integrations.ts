@@ -51,6 +51,8 @@ export type IntegrationRow = {
   requestedActions: readonly string[];
   requestedData: readonly string[];
   approvedData: readonly string[];
+  offers: readonly string[];
+  needs: readonly string[];
   lastImportAt: number | null;
   lastError: string | null;
   actionCount: number;
@@ -97,6 +99,15 @@ const BundleSchema = z
         data: z.array(z.string()).default([]),
       })
       .default({ actions: [], data: [] }),
+    // WHAT IT TELLS AND WHAT IT HEARS — the fact kinds this integration
+    // publishes and the kinds it consumes. moss validates shape and carries
+    // them; what a kind MEANS is the host's contract vocabulary, exactly as
+    // `meta` is words validated against nothing. There is no optional flag
+    // to declare: the host's laws forbid a hard dependency between
+    // integrations, so every need is soft by construction — absence
+    // degrades, and the store says so in a sentence the HOST prints.
+    offers: z.array(z.string()).default([]),
+    needs: z.array(z.string()).default([]),
     actions: z.record(z.string(), ActionDefinitionSchema),
     // action id → HOST action it rides on (a panel on the member detail). The
     // host must have declared itself attachable — see IntakeContext. The long
@@ -589,6 +600,12 @@ export const initIntegrations = async (pool: PgPool): Promise<void> => {
       requested_actions  jsonb NOT NULL DEFAULT '[]'::jsonb,
       requested_data     jsonb NOT NULL DEFAULT '[]'::jsonb,
       approved_data      jsonb NOT NULL DEFAULT '[]'::jsonb,
+      -- What it tells and hears (bundle offers/needs), beside the grants
+      -- because they are the same kind of thing: the integration's declared
+      -- statement, written at import, replaced on re-registration. moss
+      -- never reads them; the host's bus does.
+      offers             jsonb NOT NULL DEFAULT '[]'::jsonb,
+      needs              jsonb NOT NULL DEFAULT '[]'::jsonb,
       -- EVERY PATH THE PROXY MAY FORWARD, derived from the bundle at intake
       -- (reachOf). Beside the grants because it is one: a grant of reach, held
       -- by the same row, revoked by the same delete.
@@ -609,6 +626,8 @@ export const initIntegrations = async (pool: PgPool): Promise<void> => {
   await pool.query(`ALTER TABLE integrations ADD COLUMN IF NOT EXISTS story jsonb NOT NULL DEFAULT '[]'::jsonb`);
   await pool.query(`ALTER TABLE integrations ADD COLUMN IF NOT EXISTS highlights jsonb NOT NULL DEFAULT '[]'::jsonb`);
   await pool.query(`ALTER TABLE integrations ADD COLUMN IF NOT EXISTS press jsonb NOT NULL DEFAULT '[]'::jsonb`);
+  await pool.query(`ALTER TABLE integrations ADD COLUMN IF NOT EXISTS offers jsonb NOT NULL DEFAULT '[]'::jsonb`);
+  await pool.query(`ALTER TABLE integrations ADD COLUMN IF NOT EXISTS needs jsonb NOT NULL DEFAULT '[]'::jsonb`);
   await pool.query(`
     CREATE TABLE IF NOT EXISTS integration_actions (
       integration_id  text NOT NULL REFERENCES integrations(id) ON DELETE CASCADE,
@@ -674,6 +693,7 @@ export const listIntegrations = async (pool: PgPool): Promise<IntegrationRow[]> 
   const res = await pool.query(`
     SELECT i.id, i.url, i.status, i.title, i.tagline, i.adds, i.settings_action,
            i.requested_actions, i.requested_data, i.approved_data,
+           i.offers, i.needs,
            i.last_import_at, i.last_error,
            (SELECT count(*) FROM integration_actions a WHERE a.integration_id = i.id) AS action_count
       FROM integrations i ORDER BY i.id
@@ -696,6 +716,8 @@ export const listIntegrations = async (pool: PgPool): Promise<IntegrationRow[]> 
       requestedActions: (row['requested_actions'] ?? []) as string[],
       requestedData: (row['requested_data'] ?? []) as string[],
       approvedData: (row['approved_data'] ?? []) as string[],
+      offers: (row['offers'] ?? []) as string[],
+      needs: (row['needs'] ?? []) as string[],
       lastImportAt: at instanceof Date ? at.getTime() : typeof at === 'string' || typeof at === 'number' ? new Date(at).getTime() : null,
       lastError: (row['last_error'] as string | null) ?? null,
       actionCount: Number(row['action_count'] ?? 0),

@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { PGlite } from '@electric-sql/pglite';
 import { createPglitePool } from '@niscorp/vex/pglite';
-import { runIntake, reachOf, copyPress, callIntegrationWith, initIntegrations } from '../src/integrations';
+import { runIntake, reachOf, copyPress, callIntegrationWith, initIntegrations, listIntegrations } from '../src/integrations';
 import type { IntakeContext, Bundle, StorePress } from '../src/integrations';
 import { createAssertionSigner, verifyAssertion } from '../src/assert';
 
@@ -155,6 +155,41 @@ describe('copyPress', () => {
     const result = await copyPress(b, 'acme', 'https://acme.example', seam, fetchImpl as unknown as typeof fetch);
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.reasons[0]).toContain('too big');
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════
+// offers/needs — what an integration tells and what it hears. moss validates
+// shape and carries the declarations; what a kind means is the host's
+// contract vocabulary, and the host's bus is the only reader.
+// ═══════════════════════════════════════════════════════════════
+
+describe('offers and needs', () => {
+  it('a bundle declaring both lands whole', () => {
+    const result = runIntake({ integration: 'acme', actions: {}, offers: ['attendance'], needs: ['booking'] }, ctx());
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.bundle.offers).toEqual(['attendance']);
+      expect(result.bundle.needs).toEqual(['booking']);
+    }
+  });
+
+  it('a bundle saying nothing parses to empty arrays', () => {
+    const b = okBundle();
+    expect(b.offers).toEqual([]);
+    expect(b.needs).toEqual([]);
+  });
+
+  it('the row carries them, and a row predating the columns answers empty', async () => {
+    const pool = createPglitePool(new PGlite());
+    await initIntegrations(pool);
+    await pool.query(`INSERT INTO integrations (id, url, offers, needs) VALUES ('acme', 'https://acme.example', '["attendance"]'::jsonb, '["booking"]'::jsonb)`);
+    await pool.query(`INSERT INTO integrations (id, url) VALUES ('elder', 'https://elder.example')`);
+    const rows = await listIntegrations(pool);
+    expect(rows.find((r) => r.id === 'acme')?.offers).toEqual(['attendance']);
+    expect(rows.find((r) => r.id === 'acme')?.needs).toEqual(['booking']);
+    expect(rows.find((r) => r.id === 'elder')?.offers).toEqual([]);
+    expect(rows.find((r) => r.id === 'elder')?.needs).toEqual([]);
   });
 });
 
