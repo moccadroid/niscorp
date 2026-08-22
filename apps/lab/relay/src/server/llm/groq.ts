@@ -1,6 +1,7 @@
 import OpenAI from 'openai';
 import { createSignal } from '@niscorp/signal';
 import type { SignalClient } from '@niscorp/cortex';
+import type { ReasoningEffort } from './effort';
 
 // ═══════════════════════════════════════════════════════════
 // The Groq LLM adapter.
@@ -14,19 +15,28 @@ import type { SignalClient } from '@niscorp/cortex';
 // ═══════════════════════════════════════════════════════════
 
 export const GROQ_MODEL = 'openai/gpt-oss-120b';
+export const GROQ_ENV_KEY = 'GROQ_API_KEY';
 
-export const createGroqClient = (apiKey: string): SignalClient => {
+export const createGroqClient = (apiKey: string, reasoningEffort?: ReasoningEffort): SignalClient => {
   const client = new OpenAI({
     apiKey,
     baseURL: 'https://api.groq.com/openai/v1',
     dangerouslyAllowBrowser: true,
   });
-  return createSignal('groq', { client, model: GROQ_MODEL, apiKey });
+  return createSignal('groq', {
+    client,
+    model: GROQ_MODEL,
+    apiKey,
+    // temperature 0: build work is mechanical, and the provider default (~1.0)
+    // made the SAME prompt draw a 3-tool run or a 20-step wander by luck —
+    // measured across a day of suite logs. Determinism over creativity here.
+    options: { temperature: 0, ...(reasoningEffort !== undefined && { reasoningEffort }) },
+  });
 };
 
 // The Groq API key — server configuration (.env), never browser data. All
 // LLM calls run server-side since agents moved into moss.
 export const getKey = (): string | undefined => {
-  const k = process.env['GROQ_API_KEY'];
+  const k = process.env[GROQ_ENV_KEY];
   return k === undefined || k === '' ? undefined : k;
 };

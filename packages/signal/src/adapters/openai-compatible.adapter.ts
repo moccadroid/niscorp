@@ -218,6 +218,8 @@ export const createOpenAICompatibleAdapter = async (
     if (request.options?.topP !== undefined) params['top_p'] = request.options.topP;
     if (request.options?.stopSequences) params['stop'] = request.options.stopSequences;
     if (request.options?.seed !== undefined) params['seed'] = request.options.seed;
+    if (request.options?.reasoningEffort !== undefined)
+      params['reasoning_effort'] = request.options.reasoningEffort;
     return params;
   };
 

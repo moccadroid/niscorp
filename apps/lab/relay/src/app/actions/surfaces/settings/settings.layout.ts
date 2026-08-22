@@ -199,6 +199,162 @@ export const settingsLayout: LayoutNode = {
           },
         ],
       },
+      // ─── Models ────────────────────────────────────────────
+      // One row per agent: the model it runs on, and the reasoning rung it runs
+      // at. Both rosters come from the server (`$.models.*`) — the effort list
+      // is per ROLE, because which rungs are legal depends on the model that
+      // row is on. Server state, not a personal preference; the header says so.
+      {
+        component: 'Box',
+        props: { bg: 'surface', border: true, radius: 13 },
+        children: [
+          {
+            component: 'Box',
+            props: { px: 18, py: 14, border: 'bottom' },
+            children: {
+              component: 'Stack',
+              props: { gap: 2 },
+              children: [
+                { component: 'Text', props: { weight: 600 }, children: 'Models' },
+                { component: 'Text', props: { size: 'sm', color: 'mute' }, children: 'Which model each agent runs on, and how hard it thinks there. The effort rungs are the model’s own, so switching model re-offers them. Applies to this server — everyone, every session — and resets to the defaults on restart.' },
+              ],
+            },
+          },
+          {
+            component: 'Box',
+            props: { px: 18, py: 14, border: 'bottom' },
+            children: {
+              component: 'Row',
+              props: { justify: 'between', align: 'center', gap: 12 },
+              children: [
+                { component: 'Stack', props: { gap: 2 }, children: [{ component: 'Text', props: { weight: 500 }, children: 'Chat' }, { component: 'Text', props: { size: 'sm', color: 'mute' }, children: 'Ray in the panel — answers you, and calls every agent below' }] },
+                {
+                  component: 'Row',
+                  props: { gap: 8, align: 'center' },
+                  children: [
+                    { component: 'Box', props: { width: 240 }, children: { component: 'Select', ref: 'model-chat', model: '$.models.assignments.chat.model', props: { options: '$.models.options' } } },
+                    { component: 'Box', props: { width: 140 }, children: { component: 'Select', ref: 'effort-chat', model: '$.models.assignments.chat.effort', props: { options: '$.models.efforts.chat' } } },
+                  ],
+                },
+              ],
+            },
+          },
+          {
+            component: 'Box',
+            props: { px: 18, py: 14, border: 'bottom' },
+            children: {
+              component: 'Row',
+              props: { justify: 'between', align: 'center', gap: 12 },
+              children: [
+                { component: 'Stack', props: { gap: 2 }, children: [{ component: 'Text', props: { weight: 500 }, children: 'Chat visualiser' }, { component: 'Text', props: { size: 'sm', color: 'mute' }, children: 'Renders the last query result as a layout inside the chat' }] },
+                {
+                  component: 'Row',
+                  props: { gap: 8, align: 'center' },
+                  children: [
+                    { component: 'Box', props: { width: 240 }, children: { component: 'Select', ref: 'model-layout', model: '$.models.assignments.layout.model', props: { options: '$.models.options' } } },
+                    { component: 'Box', props: { width: 140 }, children: { component: 'Select', ref: 'effort-layout', model: '$.models.assignments.layout.effort', props: { options: '$.models.efforts.layout' } } },
+                  ],
+                },
+              ],
+            },
+          },
+          {
+            component: 'Box',
+            props: { px: 18, py: 14, border: 'bottom' },
+            children: {
+              component: 'Row',
+              props: { justify: 'between', align: 'center', gap: 12 },
+              children: [
+                { component: 'Stack', props: { gap: 2 }, children: [{ component: 'Text', props: { weight: 500 }, children: 'Screen builder' }, { component: 'Text', props: { size: 'sm', color: 'mute' }, children: 'Designs a whole screen from a description, then mounts it to check itself' }] },
+                {
+                  component: 'Row',
+                  props: { gap: 8, align: 'center' },
+                  children: [
+                    { component: 'Box', props: { width: 240 }, children: { component: 'Select', ref: 'model-architect', model: '$.models.assignments.architect.model', props: { options: '$.models.options' } } },
+                    { component: 'Box', props: { width: 140 }, children: { component: 'Select', ref: 'effort-architect', model: '$.models.assignments.architect.effort', props: { options: '$.models.efforts.architect' } } },
+                  ],
+                },
+              ],
+            },
+          },
+          {
+            component: 'Box',
+            props: { px: 18, py: 14, border: 'bottom' },
+            children: {
+              component: 'Row',
+              props: { justify: 'between', align: 'center', gap: 12 },
+              children: [
+                { component: 'Stack', props: { gap: 2 }, children: [{ component: 'Text', props: { weight: 500 }, children: 'Screen reviewer' }, { component: 'Text', props: { size: 'sm', color: 'mute' }, children: 'Reads a built screen against what was asked for, and writes the repair' }] },
+                {
+                  component: 'Row',
+                  props: { gap: 8, align: 'center' },
+                  children: [
+                    { component: 'Box', props: { width: 240 }, children: { component: 'Select', ref: 'model-validator', model: '$.models.assignments.validator.model', props: { options: '$.models.options' } } },
+                    { component: 'Box', props: { width: 140 }, children: { component: 'Select', ref: 'effort-validator', model: '$.models.assignments.validator.effort', props: { options: '$.models.efforts.validator' } } },
+                  ],
+                },
+              ],
+            },
+          },
+          {
+            component: 'Box',
+            props: { px: 18, py: 14, border: 'bottom' },
+            children: {
+              component: 'Row',
+              props: { justify: 'between', align: 'center', gap: 12 },
+              children: [
+                { component: 'Stack', props: { gap: 2 }, children: [{ component: 'Text', props: { weight: 500 }, children: 'Transform writer' }, { component: 'Text', props: { size: 'sm', color: 'mute' }, children: 'Writes the config that maps one shape into another' }] },
+                {
+                  component: 'Row',
+                  props: { gap: 8, align: 'center' },
+                  children: [
+                    { component: 'Box', props: { width: 240 }, children: { component: 'Select', ref: 'model-mapping', model: '$.models.assignments.mapping.model', props: { options: '$.models.options' } } },
+                    { component: 'Box', props: { width: 140 }, children: { component: 'Select', ref: 'effort-mapping', model: '$.models.assignments.mapping.effort', props: { options: '$.models.efforts.mapping' } } },
+                  ],
+                },
+              ],
+            },
+          },
+          {
+            component: 'Box',
+            props: { px: 18, py: 14, border: 'bottom' },
+            children: {
+              component: 'Row',
+              props: { justify: 'between', align: 'center', gap: 12 },
+              children: [
+                { component: 'Stack', props: { gap: 2 }, children: [{ component: 'Text', props: { weight: 500 }, children: 'Query writer' }, { component: 'Text', props: { size: 'sm', color: 'mute' }, children: 'Turns a request into a query when no cached shape matches' }] },
+                {
+                  component: 'Row',
+                  props: { gap: 8, align: 'center' },
+                  children: [
+                    { component: 'Box', props: { width: 240 }, children: { component: 'Select', ref: 'model-query', model: '$.models.assignments.query.model', props: { options: '$.models.options' } } },
+                    { component: 'Box', props: { width: 140 }, children: { component: 'Select', ref: 'effort-query', model: '$.models.assignments.query.effort', props: { options: '$.models.efforts.query' } } },
+                  ],
+                },
+              ],
+            },
+          },
+          {
+            component: 'Box',
+            props: { px: 18, py: 14 },
+            children: {
+              component: 'Row',
+              props: { justify: 'between', align: 'center', gap: 12 },
+              children: [
+                { component: 'Stack', props: { gap: 2 }, children: [{ component: 'Text', props: { weight: 500 }, children: 'Row mapper' }, { component: 'Text', props: { size: 'sm', color: 'mute' }, children: 'Maps the rows a query returned onto the shape asked for' }] },
+                {
+                  component: 'Row',
+                  props: { gap: 8, align: 'center' },
+                  children: [
+                    { component: 'Box', props: { width: 240 }, children: { component: 'Select', ref: 'model-shape', model: '$.models.assignments.shape.model', props: { options: '$.models.options' } } },
+                    { component: 'Box', props: { width: 140 }, children: { component: 'Select', ref: 'effort-shape', model: '$.models.assignments.shape.effort', props: { options: '$.models.efforts.shape' } } },
+                  ],
+                },
+              ],
+            },
+          },
+        ],
+      },
       // ─── Developer ─────────────────────────────────────────
       {
         component: 'Box',

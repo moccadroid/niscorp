@@ -234,7 +234,13 @@ const createSignalFromConfig = <T = string>(config: SignalConfig): Signal<T> => 
       ...(providerTools && { tools: providerTools }),
       ...(request.toolChoice !== undefined && { toolChoice: request.toolChoice }),
       ...(request.responseFormat !== undefined && { responseFormat: request.responseFormat }),
-      ...(request.options !== undefined && { options: request.options }),
+      // The client's own options are the floor; a request may override them
+      // field by field. `complete`/`stream` already run on config.options —
+      // step used to drop them, so a configured client behaved differently
+      // depending on which door the caller came through.
+      ...((config.options !== undefined || request.options !== undefined) && {
+        options: { ...config.options, ...request.options },
+      }),
     };
     const declared = new Set((request.tools ?? []).map((tool) => tool.name));
     let response: ProviderResponse;

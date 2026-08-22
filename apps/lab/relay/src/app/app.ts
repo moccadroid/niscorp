@@ -16,6 +16,7 @@ import { createDevtoolsFunctions, DEVTOOLS_CANVAS } from '@niscorp/nova/devtools
 import { USERS } from '@relay/server/users';
 import { authFunctions } from '@relay/server/functions/auth';
 import { rayFunctions } from '@relay/server/functions/ray';
+import { modelFunctions } from '@relay/server/functions/models';
 
 // ═══════════════════════════════════════════════════════════
 // Relay, the application, as data. Every field is an authored ARTIFACT —
@@ -36,12 +37,15 @@ export const relay = defineApp({
   entries: [...ENTRIES, ...MUTATION_ENTRIES],
   behaviors: scopeBehaviors,
   resources: RESOURCES,
-  // The `fn:` escape hatch, server-side: Ray, the magic-link pair, and nova's
-  // devtools fns (reflect over THIS session's shell — per-session-correct).
-  // Built per session; handlers close over the session's shell and policy.
+  // The `fn:` escape hatch, server-side: Ray, the magic-link pair, the model
+  // assignment, and nova's devtools fns (reflect over THIS session's shell —
+  // per-session-correct). Built per session; handlers close over the session's
+  // shell and policy. The model fns take no session: which model an agent runs
+  // on is the server's state, the same for every session (server/llm/index.ts).
   functions: (session) => ({
     ...rayFunctions(session),
     ...authFunctions(session),
+    ...modelFunctions(),
     ...createDevtoolsFunctions({ shell: () => session.shell, definitions: CATALOG_DEFINITIONS }),
   }),
   shell: {

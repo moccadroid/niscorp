@@ -102,6 +102,14 @@ export type SignalOptions = {
   stopSequences?: string[];
   seed?: number;
   signal?: AbortSignal;
+  // How hard a REASONING model thinks before it answers. The scale is the
+  // provider's, not ours (OpenAI stops at 'high'; OpenRouter routes models that
+  // also take 'max'), so the union is the union of what providers accept and an
+  // unsupported rung is the provider's to reject. Models whose reasoning is
+  // mandatory default to their own top rung — on a long agentic loop that is the
+  // difference between a run that finishes inside its budget and one that does
+  // not, so the caller gets to say.
+  reasoningEffort?: 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max';
 };
 
 // ═══════════════════════════════════════════════════════════
