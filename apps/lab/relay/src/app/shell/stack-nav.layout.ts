@@ -3,9 +3,9 @@ import { type LayoutNode, ACTION_SLOT_NAME } from '@niscorp/nova';
 // Per-canvas stack navigation — the `StackChip` (a small context chip) rendered
 // by the canvas `actionLayout`, which Nova hands the whole stack via
 // `{ instances, active, count }`. The chip reads `$.instances` (each instance
-// carries its resolved `title`) and navigates through the browser's BACK
-// GESTURE (history.back → the terminal's back trap → the wire's `back` → the
-// server shell's journal) — no triggers, no effects, no shell in the browser.
+// carries its resolved `title`) and navigates through the wire: `back` for one
+// level, `popTo` for a jump to any ancestor — one message the server shell
+// executes atomically. No triggers, no effects, no shell in the browser.
 // It self-hides until the canvas is drilled (depth ≥ 2), so a base screen
 // shows nothing.
 //
@@ -13,7 +13,7 @@ import { type LayoutNode, ACTION_SLOT_NAME } from '@niscorp/nova';
 //   aside — only when a record is loaded (so `.rl-aside:empty` collapses it).
 //   main  — always present; the chip inside decides whether to show.
 
-const chip: LayoutNode = { component: 'StackChip', props: { instances: '$.instances' } };
+const chip: LayoutNode = { component: 'StackChip', props: { instances: '$.instances', canvasId: '$.id' } };
 
 // The content area — one consistent inset for every screen/record on every canvas.
 const content: LayoutNode = {

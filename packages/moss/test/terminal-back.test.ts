@@ -151,6 +151,7 @@ const fakeWire = (): Wire & { calls: string[] } => {
     publish: () => calls.push('publish'),
     reset: () => calls.push('reset'),
     back: () => calls.push('back'),
+    popTo: (canvas: string, instance: string) => calls.push(`popTo:${canvas}:${instance}`),
     dispose: () => calls.push('dispose'),
   } as Wire & { calls: string[] };
 };

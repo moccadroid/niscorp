@@ -48,10 +48,22 @@ export const rayFunctions = (session: FunctionSession): Record<string, FunctionH
   // `edit` work across messages ("change the screen you built" is almost
   // always a later message).
   const buildTool = makeBuildActionTool(ray);
+  // THE STOP. A build can run for minutes, and until now the only way out was
+  // restarting the server — a runaway turn held the panel hostage. Cortex runs
+  // take an AbortSignal; this holds the controller for whatever turn is in
+  // flight so `ray.stop` can pull it. One per session: a person has one
+  // conversation, and the turn they can see is the turn they can stop.
+  let inFlight: AbortController | undefined;
 
   const run: FunctionHandler = async (data) => {
     const chat = llmFor('chat');
     if ('error' in chat) return { text: chat.error, trace: [], ms: 0 };
+
+    // A new turn supersedes an unfinished one — the old run is nobody's
+    // answer once a person has typed the next thing.
+    inFlight?.abort();
+    const controller = new AbortController();
+    inFlight = controller;
 
     const startedAt = Date.now();
     const turn: Turn = {};
@@ -89,8 +101,21 @@ export const rayFunctions = (session: FunctionSession): Record<string, FunctionH
       tools,
       onEvent: wiring.onEvent,
       onToolResult: [wiring.onToolResult],
+      signal: controller.signal,
     }).result;
     flushTrace();
+    if (inFlight === controller) inFlight = undefined;
+
+    // STOPPED IS AN ANSWER, NOT AN ERROR. The person asked for it, the trace
+    // they watched is real work, and it belongs in the transcript with what
+    // it got through — not thrown away as a failure.
+    if (!result.ok && controller.signal.aborted) {
+      const current = store.ensureCurrent();
+      const ms = Date.now() - startedAt;
+      const text = 'Stopped.';
+      store.setMessages(current.id, [...messages, { role: 'ray', text, trace, ms }]);
+      return { text, trace, ms };
+    }
     if (!result.ok) throw new Error(result.error.message);
 
     const current = store.ensureCurrent();
@@ -132,6 +157,14 @@ export const rayFunctions = (session: FunctionSession): Record<string, FunctionH
     'ray.setDebug': async (data) => {
       store.setDebug(data['rayDebug'] === true);
       return store.getDebug();
+    },
+    // Pull the in-flight turn's abort. Idempotent and safe when nothing is
+    // running: a stop pressed twice, or after the answer landed, is a no-op.
+    'ray.stop': async () => {
+      const running = inFlight !== undefined;
+      inFlight?.abort();
+      inFlight = undefined;
+      return running ? 'stopped' : 'nothing running';
     },
     'ray.storageSize': async () => store.estimate(),
     'ray.clearSessions': async () => {

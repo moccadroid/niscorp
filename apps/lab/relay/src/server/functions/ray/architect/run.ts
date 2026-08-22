@@ -292,10 +292,8 @@ export const makeBuildActionTool = (ray: RayContext): ToolDefinition => {
         description: builtAction.description ?? builtAction.name ?? 'Generated screen.',
         input: builtAction.input ?? {},
       });
-      ray.shell.push('main', builtAction.id);
-
       // Honest reporting: pass, pass-with-warts, unresolved blockers, or
-      // review unavailable — the screen ships either way, annotated.
+      // review unavailable.
       const remaining = blockers(verdict);
       const reviewNote =
         verdict === undefined
@@ -308,12 +306,28 @@ export const makeBuildActionTool = (ray: RayContext): ToolDefinition => {
             : verdict.findings.length > 0
               ? ` Verified with minor warts: ${verdict.findings.map((f) => f.claim).join('; ')}.`
               : ' Verified: does what was asked.';
+      // A SCREEN THE REVIEW FAILED IS NOT PLACED. It used to ship anyway,
+      // "honestly annotated" — and the annotation did not survive: the tool
+      // said UNRESOLVED, Ray summarised it as "Added the screen", and a
+      // person got a broken screen with a cheerful sentence over it. A
+      // screen that does not do what was asked is not a deliverable; it is
+      // registered (so `edit` can repair it) but the canvas stays as it was.
+      const shipped = remaining.length === 0;
+      if (shipped) ray.shell.push('main', builtAction.id);
+
       // Traced envelope: the model gets the summary; the trace panel gets
       // the full definition + findings, so "what did it actually build?"
       // is one click away instead of invisible.
+      //
+      // The failure sentence is written for a person and marked DO NOT
+      // SOFTEN, because the one time it mattered it was paraphrased away.
       return {
-        forModel: `${base !== undefined ? 'Updated' : 'Built and placed'} "${builtAction.id}" on main.${reviewNote}${buildResult.reasoning ? ` ${buildResult.reasoning}` : ''}`,
-        forTrace: { action: builtAction, ...(verdict !== undefined && { findings: verdict.findings }) },
+        forModel: shipped
+          ? `${base !== undefined ? 'Updated' : 'Built and placed'} "${builtAction.id}" on main.${reviewNote}${buildResult.reasoning ? ` ${buildResult.reasoning}` : ''}`
+          : `NOT PLACED — "${builtAction.id}" failed review and is NOT on the canvas.${reviewNote} ` +
+            'Report this to the user VERBATIM, including that the screen was not placed and what is unresolved. ' +
+            'Do not summarise it as success. To fix it, call build_action again with `edit` set to this id and the unresolved findings as the change request.',
+        forTrace: { action: builtAction, placed: shipped, ...(verdict !== undefined && { findings: verdict.findings }) },
       };
     },
   });

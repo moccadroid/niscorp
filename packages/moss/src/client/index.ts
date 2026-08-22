@@ -83,6 +83,9 @@ export type Wire = {
   // back is whatever canvases moved, over the same stream every other change
   // arrives on — the terminal never holds a location to keep in step.
   back: () => void;
+  // Jump to an ancestor already on a canvas's stack — one message the shell
+  // executes atomically, rather than N back gestures racing each other.
+  popTo: (canvas: string, instance: string) => void;
   dispose: () => void;
 };
 
@@ -91,7 +94,8 @@ type ClientMessage =
   | { type: 'publish'; channel: string; payload?: unknown }
   | { type: 'resync' }
   | { type: 'reset' }
-  | { type: 'back' };
+  | { type: 'back' }
+  | { type: 'popTo'; canvas: string; instance: string };
 
 const EMPTY: WireSnapshot = { frame: [], trees: new Map() };
 
@@ -303,6 +307,13 @@ export const createWire = (config: WireConfig = {}): Wire => {
     back: () => {
       if (socket === null || status !== 'open') return;
       send({ type: 'back' });
+    },
+    // Same posture as `back`: only on an open socket, never queued. A jump
+    // replayed on reconnect would move somebody to where they wanted to be
+    // one outage ago.
+    popTo: (canvas: string, instance: string) => {
+      if (socket === null || status !== 'open') return;
+      send({ type: 'popTo', canvas, instance });
     },
     reset: () => {
       if (disposed) return;

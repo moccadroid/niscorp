@@ -79,3 +79,36 @@ describe('$dateDiff', () => {
     expect(result).toBe(0);
   });
 });
+
+// ── the timezone regression ─────────────────────────────────
+//
+// A DATE IS NOT A TIMESTAMP. "2026-06-01" names a calendar day, and dayjs
+// parses a bare date at LOCAL midnight — so `+1 month, -1 day` used to come
+// back "2026-06-29T22:00:00.000Z" on a UTC+2 machine: the wrong day, wearing
+// an instant's clothes. Range filters built that way silently dropped their
+// boundary day. These run under a non-UTC TZ on purpose; under UTC the bug
+// is invisible.
+describe('$dateAdd keeps calendar days calendar days', () => {
+  it('end-of-month: first + 1 month - 1 day is the last day, not the night before', () => {
+    const monthEnd = {
+      $dateAdd: {
+        date: { $dateAdd: { date: { $ref: '$.first' }, unit: 'month', amount: 1 } },
+        unit: 'day',
+        amount: -1,
+      },
+    };
+    expect(evaluate(monthEnd, { first: '2026-06-01' })).toBe('2026-06-30');
+    expect(evaluate(monthEnd, { first: '2026-07-01' })).toBe('2026-07-31');
+    expect(evaluate(monthEnd, { first: '2026-02-01' })).toBe('2026-02-28');
+  });
+
+  it('a date-only input returns a date-only string', () => {
+    expect(evaluate({ $dateAdd: { date: { $ref: '$.d' }, unit: 'day', amount: 7 } }, { d: '2026-08-22' })).toBe('2026-08-29');
+  });
+
+  it('a full timestamp still returns an instant', () => {
+    const out = evaluate({ $dateAdd: { date: { $ref: '$.d' }, unit: 'hour', amount: 3 } }, { d: '2026-08-22T10:00:00.000Z' });
+    expect(String(out)).toContain('T');
+    expect(String(out)).toContain('13:00');
+  });
+});

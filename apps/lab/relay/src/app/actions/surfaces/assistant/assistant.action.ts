@@ -46,12 +46,17 @@ export const assistantAction: ActionDefinition = {
     load: { fn: 'ray.load', target: 'session' },
     newSession: { fn: 'ray.newSession', target: 'session' },
     switchSession: { fn: 'ray.switch', target: 'session' },
+    stop: { fn: 'ray.stop' },
   },
   // On open, restore the current session (history survives a close).
   lifecycle: { mount: [{ call: 'load', onSuccess: fromSession }] },
   triggers: [
     { event: 'ui:model', ref: 'ray-draft', do: [{ set: 'draft', value: '@event.payload' }] },
     { event: 'ui:click', ref: 'ray-close', do: [{ pop: true }] },
+    // Stop the running turn. `ask` returns on its own (aborted runs answer
+    // "Stopped."), so this only pulls the abort — the reply path clears
+    // status like any other completion.
+    { event: 'ui:click', ref: 'ray-stop', do: [{ call: 'stop' }] },
     { event: 'ui:click', ref: 'ray-new-session', do: [{ call: 'newSession', onSuccess: fromSession }] },
     { event: 'ui:model', ref: 'ray-session-select', do: [{ set: 'currentId', value: '@event.payload' }, { call: 'switchSession', onSuccess: fromSession }] },
     { event: 'ui:click', ref: 'ray-send', do: SEND },

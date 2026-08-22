@@ -75,6 +75,12 @@ export type ClientMessage =
   // Escape and a REPL word are the same message on one wire, and the app has to
   // author nothing to receive it.
   | { type: 'back' }
+  // POP TO: jump straight to an ancestor already on a canvas's stack. Back
+  // undoes ONE navigation; a breadcrumb that names a screen three levels down
+  // is one intention, not three gestures. Sending three `back`s instead raced
+  // the browser's own history repair and dropped presses — the shell can walk
+  // its own stack atomically, so it should be asked to.
+  | { type: 'popTo'; canvas: string; instance: string }
   // RESET: throw this session's shell away and serve its replacement. The one
   // message that names no canvas, deliberately — it is the recovery for a
   // shell whose canvases are the broken thing, so it must not have to travel
@@ -284,6 +290,19 @@ export const createSocket = (ctx: SocketContext): SocketAccept => {
           return;
         }
         session.back();
+        return;
+      }
+      if (
+        message !== null &&
+        message['type'] === 'popTo' &&
+        typeof message['canvas'] === 'string' &&
+        typeof message['instance'] === 'string'
+      ) {
+        if (session === undefined) {
+          send({ type: 'error', code: 'no_shell', message: 'This app serves no shell.' });
+          return;
+        }
+        session.popTo(message['canvas'], message['instance']);
         return;
       }
       if (message !== null && message['type'] === 'publish' && typeof message['channel'] === 'string') {

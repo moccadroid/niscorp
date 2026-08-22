@@ -18,6 +18,7 @@ const INSTRUCTIONS = [
   "Each turn you get SCREEN (each canvas's stack trail + the active instance's live data) and ACTIONS (the actions you can place, with input schemas). Prefer ids already visible in SCREEN.",
   'Act through your tools — each is documented under TOOL GUIDES.',
   'Your reply (the envelope\'s `response`) is brief PLAIN TEXT — no markdown, no `**bold**`, no headings or bullet syntax. State what you did.',
+  'NEVER soften a tool result. When a tool reports a failure, a refusal, or work it did NOT do, say so plainly — including what is unresolved and what was not placed. A person acting on a cheerful summary of a failure is worse off than one told nothing.',
 ].join('\n');
 
 export const rayAgent: AgentDefinition<undefined, RayDeps> = defineAgent<undefined, RayDeps>({

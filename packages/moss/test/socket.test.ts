@@ -39,6 +39,7 @@ const recordingSession = (): ShellSession & { calls: string[] } => {
       calls.push('back');
       return true;
     },
+    popTo: (canvas: string, instance: string) => calls.push(`popTo:${canvas}:${instance}`),
   };
 };
 

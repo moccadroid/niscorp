@@ -126,9 +126,8 @@ export const makeArchitectTools = (supportLlm: SignalClient, ray: RayContext): A
       '{ "fingerprint": ..., "context": { new values } } for every variation (a different month, a different search text). ' +
       'A replay is instant; re-sending the intent regenerates the query from scratch and wastes seconds per call.\n' +
       '- Call discover first, then write the intent with the real field names.\n' +
-      '- DATE RANGES: never compute dates in the endpoint request ($dateAdd there is timezone-shifted and silently drops boundary rows). ' +
-      'Carry LITERAL date strings instead: a month dropdown’s options each hold their own {start, end} literals ' +
-      '(June = 2026-06-01/2026-06-30), bound into context with $ref — and mind real month lengths (June has 30 days). ' +
+      '- DATE RANGES: prefer LITERAL date strings — a month dropdown carries its own start/end ' +
+      '(June = 2026-06-01/2026-06-30), bound into context with $ref. Mind real month lengths (June has 30 days). ' +
       'PROVE the query with the same literal dates, and every filter the intent names must be IN the proven query — a proof whose count ignores a filter is not a proof of the screen.\n' +
       '\nCONTEXT — carrying the proven query\'s context into your endpoint:\n' +
       '- The result\'s `context` lists the bound keys with kinds: "context" = every replay must supply it; ' +

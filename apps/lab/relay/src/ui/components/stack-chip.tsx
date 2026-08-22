@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { type NovaComponent } from '@niscorp/nova/adapters/react';
 import type { ActionInstance } from '@niscorp/nova';
 import { cx } from '../lib/cx';
+import { navBack, navPopTo } from '@relay/lib/nav';
 import { Icon } from './display';
 
 // The stack context chip — per-canvas trail rendered by a canvas's
@@ -18,12 +19,14 @@ import { Icon } from './display';
 const StackChipProps = z.object({
   // The canvas stack, passed from the actionLayout scope as `$.instances`.
   instances: z.array(z.any()).optional(),
+  // Which canvas this chip belongs to — a popTo names its stack.
+  canvasId: z.string().optional(),
 }).strict();
 
 type Inst = ActionInstance & { title?: string };
 const label = (i: Inst): string => i.title ?? i.definitionId;
 
-export const StackChip: NovaComponent<z.infer<typeof StackChipProps>> = ({ instances = [] }) => {
+export const StackChip: NovaComponent<z.infer<typeof StackChipProps>> = ({ instances = [], canvasId = 'main' }) => {
   const [open, setOpen] = useState(false);
   const stack = instances as Inst[];
   const parent = stack[stack.length - 2];
@@ -37,7 +40,7 @@ export const StackChip: NovaComponent<z.infer<typeof StackChipProps>> = ({ insta
         title={`Back to ${label(parent)}`}
         role="button"
         style={{ cursor: 'pointer' }}
-        onClick={() => window.history.back()}
+        onClick={() => navBack()}
       >
         <Icon name="chevron-left" size={15} />
         <span className="rl-chip__name">{label(parent)}</span>
@@ -52,7 +55,6 @@ export const StackChip: NovaComponent<z.infer<typeof StackChipProps>> = ({ insta
           <div className="rl-chip__menu">
             {stack.map((i, idx) => {
               const current = idx === stack.length - 1;
-              const steps = stack.length - 1 - idx;
               return (
                 <span
                   key={i.id}
@@ -64,29 +66,11 @@ export const StackChip: NovaComponent<z.infer<typeof StackChipProps>> = ({ insta
                         style: { cursor: 'pointer' },
                         onClick: () => {
                           setOpen(false);
-                          // One gesture per level, CHAINED on popstate: the back
-                          // trap keeps ONE spare entry and re-arms it inside its
-                          // own popstate handler (registered before ours, so by
-                          // the time we hear the event the spare is back). A
-                          // timer raced that re-arm and dropped presses — the
-                          // event itself is the only honest "ready" signal.
-                          let left = steps;
-                          const next = (): void => {
-                            left -= 1;
-                            if (left > 0) {
-                              // Not same-tick: pushState/back inside a popstate
-                              // dispatch do not commit synchronously, and a
-                              // back fired here targets history the trap has
-                              // not finished repairing. Measured: same-tick
-                              // chains delivered one step of N; a settle delay
-                              // delivers all of them.
-                              setTimeout(() => window.history.back(), 250);
-                            } else {
-                              window.removeEventListener('popstate', next);
-                            }
-                          };
-                          window.addEventListener('popstate', next);
-                          window.history.back();
+                          // ONE message, executed atomically by the shell that
+                          // owns the stack. This used to be `steps` chained
+                          // back gestures, which raced the browser's history
+                          // repair and delivered one of N.
+                          navPopTo(canvasId, i.id);
                         },
                       })}
                 >

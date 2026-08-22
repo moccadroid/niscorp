@@ -155,6 +155,9 @@ export type ShellSession = {
   // moved, which is how every other change reaches a terminal. `false` when
   // there was nothing left to undo — the answer a landing screen gives.
   back: () => boolean;
+  // Unmount everything above `instance` on `canvas` — the breadcrumb's jump,
+  // done in one step by the shell that owns the stack.
+  popTo: (canvas: string, instance: string) => void;
   // Throw this shell away and build its replacement, carrying every attached
   // connection across. The session object stays valid; the terminals receive a
   // fresh frame and current trees, exactly as on (re)attach.
@@ -668,6 +671,7 @@ export const createShellHost = (ctx: ShellHostContext): ShellHost => {
     },
     publish: (channel, payload) => cell.live.shell.publish(channel, payload),
     back: () => cell.live.shell.back(),
+    popTo: (canvas: string, instance: string) => cell.live.shell.popTo(canvas, instance),
     reset: () => void rebuild(cell).catch((err: unknown) => console.error('[moss/shells] a reset failed to rebuild', err)),
   });
 
