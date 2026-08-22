@@ -57,9 +57,10 @@ export const assistantLayout: LayoutNode = [
             },
             else: { component: 'Text', props: { size: 'sm', color: 'mute' }, children: 'Ask Ray to open something, find a record, or describe what’s on screen.' },
           },
-          // While thinking, the live trace streams in real time (debug on); with
-          // debug off it just reads "Ray is thinking…".
-          { if: { $eq: ['$.status', 'thinking'] }, then: { component: 'RayTrace', props: { live: true } } },
+          // While thinking: the run's tool calls as they happen, fed by the
+          // `ray:step` trigger above. Before the first call lands it is just the
+          // "Ray is thinking…" header.
+          { if: { $eq: ['$.status', 'thinking'] }, then: { component: 'RayTrace', props: { live: true, steps: '$.live', debug: '$.debug' } } },
         ],
       },
     },

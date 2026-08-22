@@ -4,15 +4,16 @@ import type { NovaComponent } from '@niscorp/nova/adapters/react';
 import { type TraceStep } from '@relay/server/functions/ray/trace';
 
 // RayTrace — shows the tools Ray is calling. Two modes:
-//   • live=true   → subscribes to the in-flight run; each call appears the moment
-//                   it fires and fills in when it completes ("Ray is thinking…").
+//   • live=true   → the in-flight run's calls, headed "Ray is thinking…". Same
+//                   `steps` prop; the chat keeps it current from the server's
+//                   `ray:step` announcements, so this stays a dumb renderer.
 //   • steps=[...] → a finished message's tool calls, headed by "Ray thought for X".
 // Tool names + timing are ALWAYS shown. The debug toggle (Settings → Ray) only
 // adds the expandable JSON input/output per step. Self-contained dark styling.
 const RayTraceProps = z
   .object({
     steps: z.array(z.unknown()).optional().describe("A finished message's recorded tool calls."),
-    live: z.boolean().optional().describe('Subscribe to the in-flight run and stream steps live.'),
+    live: z.boolean().optional().describe('Render as an in-flight run: the thinking header, and shown even with no steps yet.'),
     debug: z.boolean().optional().describe('Show the expandable JSON detail per step (the server-side per-user preference).'),
     ms: z.number().optional().describe('Total run duration for a finished message.'),
   })
@@ -126,15 +127,21 @@ export const RayTrace: NovaComponent<z.infer<typeof RayTraceProps>> = ({
   debug,
 }: z.infer<typeof RayTraceProps>) => {
   const [collapsed, setCollapsed] = useState(false);
-  // Live mode shows the header only — the run happens server-side; its
-  // steps arrive with the reply. (Streaming them mid-run is a later socket
-  // slice.)
-  const data: TraceStep[] = live === true ? [] : ((steps as TraceStep[] | undefined) ?? []);
+  const data: TraceStep[] = (steps as TraceStep[] | undefined) ?? [];
 
   if (live !== true && data.length === 0) return null;
 
   const showDetail = debug === true;
-  const head = live === true ? 'Ray is thinking…' : ms !== undefined ? `Ray thought for ${fmtDuration(ms)}` : `Ray · ${data.length} steps`;
+  // Live: say how far in we are. "Thinking…" for seven minutes with a step
+  // count that never moves is the thing this whole panel exists to avoid.
+  const head =
+    live === true
+      ? data.length === 0
+        ? 'Ray is thinking…'
+        : `Ray is working… ${data.length} step${data.length === 1 ? '' : 's'}`
+      : ms !== undefined
+        ? `Ray thought for ${fmtDuration(ms)}`
+        : `Ray · ${data.length} steps`;
 
   return (
     <div style={C.wrap}>

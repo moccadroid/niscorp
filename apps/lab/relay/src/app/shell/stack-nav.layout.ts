@@ -3,10 +3,11 @@ import { type LayoutNode, ACTION_SLOT_NAME } from '@niscorp/nova';
 // Per-canvas stack navigation — the `StackChip` (a small context chip) rendered
 // by the canvas `actionLayout`, which Nova hands the whole stack via
 // `{ instances, active, count }`. The chip reads `$.instances` (each instance
-// carries its resolved `title`) and drives navigation by dispatching
-// `nav:pop` / `nav:popTo` events — no triggers, no effects, no shell in the
-// browser. It self-hides until the canvas is drilled (depth ≥ 2), so a base
-// screen shows nothing.
+// carries its resolved `title`) and navigates through the browser's BACK
+// GESTURE (history.back → the terminal's back trap → the wire's `back` → the
+// server shell's journal) — no triggers, no effects, no shell in the browser.
+// It self-hides until the canvas is drilled (depth ≥ 2), so a base screen
+// shows nothing.
 //
 // Two variants differ only in WHEN the column appears:
 //   aside — only when a record is loaded (so `.rl-aside:empty` collapses it).

@@ -9,6 +9,9 @@ import { assistantLayout } from './assistant.layout';
 // exchange, and returns the reply. Keys are server .env — no key UI exists.
 const SEND = [
   { set: 'status', value: 'thinking' },
+  // A fresh run starts from an empty live trace — the last run's steps belong
+  // to its own message now.
+  { set: 'live', value: [] },
   { push: 'messages', value: { role: 'user', text: '$.draft' } },
   { set: 'draft', value: '' },
   {
@@ -34,7 +37,9 @@ const fromSession = [
 
 export const assistantAction: ActionDefinition = {
   id: 'assistant',
-  data: { messages: [], draft: '', status: 'idle', reply: '', sessions: [], currentId: '', session: {}, debug: false },
+  // `live` holds the in-flight run's tool calls, replaced wholesale each time
+  // the server announces on `ray:step` (see server/functions/ray/run.ts).
+  data: { messages: [], draft: '', status: 'idle', reply: '', sessions: [], currentId: '', session: {}, debug: false, live: [] },
   layout: assistantLayout,
   endpoints: {
     ask: { fn: 'ray.run', target: 'reply' },
@@ -51,5 +56,9 @@ export const assistantAction: ActionDefinition = {
     { event: 'ui:model', ref: 'ray-session-select', do: [{ set: 'currentId', value: '@event.payload' }, { call: 'switchSession', onSuccess: fromSession }] },
     { event: 'ui:click', ref: 'ray-send', do: SEND },
     { event: 'ui:key', ref: 'ray-draft', key: 'Enter', do: SEND },
+    // The run, as it happens. Ray's tools drive this session's shell directly,
+    // so the announcement is an ordinary message on its bus — no socket of its
+    // own, no polling, and nothing to keep in sync when a run dies.
+    { message: 'ray:step', do: [{ set: 'live', value: '@event.payload' }] },
   ],
 };

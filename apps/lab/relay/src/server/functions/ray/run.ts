@@ -2,11 +2,16 @@ import type { FunctionHandler } from '@niscorp/nova';
 import type { FunctionSession } from '@niscorp/moss';
 import type { Message } from '@niscorp/signal';
 import { makeTools, type Turn } from './tools';
+import { makeBuildActionTool } from './architect';
 import { rayAgent } from './agent';
-import { createLlmClient, getKey } from '@relay/server/llm';
+import { llmFor } from '@relay/server/llm';
 import { traceWiring, type TraceStep } from './trace';
 import { sessionStore, type ChatMessage } from './sessions';
 import { rayEngine, type RayContext } from './engine';
+
+// The channel the chat's live trace listens on. Named here because the server
+// is what announces on it; the action names the same string in its trigger.
+export const RAY_STEP_CHANNEL = 'ray:step';
 
 const messagesOf = (data: Record<string, unknown>): ChatMessage[] =>
   Array.isArray(data['messages']) ? (data['messages'] as ChatMessage[]) : [];
@@ -39,10 +44,14 @@ export const rayFunctions = (session: FunctionSession): Record<string, FunctionH
     policy: session.policy,
     engine: () => rayEngine(session.runtime, session.policy),
   };
+  // ONE build tool for the session: its builtActions memory is what makes
+  // `edit` work across messages ("change the screen you built" is almost
+  // always a later message).
+  const buildTool = makeBuildActionTool(ray);
 
   const run: FunctionHandler = async (data) => {
-    const key = getKey();
-    if (key === undefined) return { text: 'No LLM key configured — set GROQ_API_KEY in the server\'s .env.', trace: [], ms: 0 };
+    const chat = llmFor('chat');
+    if ('error' in chat) return { text: chat.error, trace: [], ms: 0 };
 
     const startedAt = Date.now();
     const turn: Turn = {};
@@ -51,15 +60,37 @@ export const rayFunctions = (session: FunctionSession): Record<string, FunctionH
     // Always capture the trace — tool calls are shown in the chat regardless of
     // the debug toggle (which only governs the expandable JSON detail).
     const trace: TraceStep[] = [];
-    const tools = makeTools(ray, turn);
-    const wiring = traceWiring(tools, trace);
+    const tools = makeTools(ray, turn, { buildTool });
+    // Announce the trace as it fills — THROTTLED. Publishing on every event
+    // re-rendered and re-flushed the whole chat frame inside the agent's event
+    // path; measured on one build: 21s plain vs 64-83s with per-event
+    // announces, plus stream starvation that turned into provider rejections.
+    // A trailing 400ms timer keeps the panel live (2-3 updates/s) at none of
+    // that cost; the final flush after the run makes the last state exact.
+    let pending: TraceStep[] | undefined;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const announce = (steps: TraceStep[]): void => {
+      pending = steps;
+      timer ??= setTimeout(() => {
+        timer = undefined;
+        if (pending !== undefined) ray.shell.publish(RAY_STEP_CHANNEL, pending);
+        pending = undefined;
+      }, 400);
+    };
+    const flushTrace = (): void => {
+      if (timer !== undefined) { clearTimeout(timer); timer = undefined; }
+      if (pending !== undefined) ray.shell.publish(RAY_STEP_CHANNEL, pending);
+      pending = undefined;
+    };
+    const wiring = traceWiring(tools, trace, announce);
     const result = await rayAgent.run(toTranscript(messages), {
-      llm: createLlmClient(key),
+      llm: chat.llm,
       deps: { shell: ray.shell },
       tools,
       onEvent: wiring.onEvent,
       onToolResult: [wiring.onToolResult],
     }).result;
+    flushTrace();
     if (!result.ok) throw new Error(result.error.message);
 
     const current = store.ensureCurrent();

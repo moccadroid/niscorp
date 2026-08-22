@@ -2,9 +2,13 @@ import type { CortexEvent, ToolDefinition, ToolObservation, ToolResultHook } fro
 
 // ═══════════════════════════════════════════════════════════
 // Ray's tool-call trace — the event wiring that captures each run's steps
-// into a per-message sink (persisted with the message, rendered by
-// RayTrace). Live step-STREAMING to a terminal is a socket slice that
-// arrives later; there is no store here.
+// into a per-message sink (persisted with the message, rendered by RayTrace).
+//
+// The sink is also announced as it fills: `onChange` fires after every step
+// added or settled, and run.ts publishes the snapshot onto the shell's message
+// bus. That is what makes a build visible WHILE it runs instead of only in the
+// reply — a screen that takes minutes was otherwise indistinguishable from a
+// hung one.
 //
 // v2: no tool wrapping. Cortex emits `tool-start` BEFORE a call runs and
 // `tool-end` with a typed observation when it settles; the wiring below maps
@@ -36,6 +40,10 @@ export type TraceWiring = {
   onToolResult: ToolResultHook<unknown>;
 };
 
+// Steps are mutated in place as they settle, so an announcement copies them —
+// a terminal must never be handed a row that changes under it.
+const snapshot = (sink: ReadonlyArray<TraceStep>): TraceStep[] => sink.map((step) => ({ ...step }));
+
 const observationOutput = (observation: ToolObservation): { output: unknown; error: boolean } => {
   switch (observation.kind) {
     case 'result':
@@ -54,7 +62,12 @@ const observationOutput = (observation: ToolObservation): { output: unknown; err
 // Nested runs (build_action forwards the builder's events) show up with their
 // agentPath as a prefix — `action.builder · action.query` — and their retries
 // as error lines, so a delegated build is never a black box.
-export const traceWiring = (tools: ReadonlyArray<ToolDefinition>, sink: TraceStep[]): TraceWiring => {
+export const traceWiring = (
+  tools: ReadonlyArray<ToolDefinition>,
+  sink: TraceStep[],
+  onChange?: (steps: TraceStep[]) => void,
+): TraceWiring => {
+  const announce = (): void => onChange?.(snapshot(sink));
   const nameOf = new Map(tools.map((tool) => [tool.config.id, tool.config.name]));
   const byCall = new Map<string, TraceStep>();
   const pathLabel = (event: CortexEvent): string =>
@@ -81,6 +94,7 @@ export const traceWiring = (tools: ReadonlyArray<ToolDefinition>, sink: TraceSte
         };
         byCall.set(event.call.id, step);
         sink.push(step);
+        announce();
         return;
       }
       if (event.type === 'retry') {
@@ -94,6 +108,7 @@ export const traceWiring = (tools: ReadonlyArray<ToolDefinition>, sink: TraceSte
           status: event.kind === 'provider' ? 'done' : 'error',
         };
         sink.push(step);
+        announce();
         return;
       }
       if (event.type === 'tool-end') {
@@ -106,6 +121,7 @@ export const traceWiring = (tools: ReadonlyArray<ToolDefinition>, sink: TraceSte
           step.ms = event.observation.durationMs;
         }
         step.status = error ? 'error' : 'done';
+        announce();
       }
     },
     // Unwrap the Traced envelope: route forInput/forTrace to the step,

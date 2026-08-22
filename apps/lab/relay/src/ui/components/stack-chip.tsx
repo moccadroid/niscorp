@@ -7,9 +7,13 @@ import { Icon } from './display';
 
 // The stack context chip — per-canvas trail rendered by a canvas's
 // actionLayout. It reads the canvas's own stack (the resolved `$.instances`,
-// each carrying its `title`). DISPLAY-ONLY for now: how stack navigation
-// serializes over the wire (the shell is server-side) is an open design —
-// until it is ruled, the trail shows where you are; it does not navigate.
+// each carrying its `title`) and NAVIGATES through the browser's own back
+// gesture: `history.back()` lands in the terminal's back trap (one spare
+// history entry, moss/terminal/history.ts), travels the wire as `back`, and
+// the SERVER shell — the owner of navigation — walks its journal. One press
+// per level: an ancestor jump is that many presses, spaced so each popstate
+// settles before the next. No shell in the browser, same as ever; the chip
+// borrows the gesture that already works instead of inventing a channel.
 
 const StackChipProps = z.object({
   // The canvas stack, passed from the actionLayout scope as `$.instances`.
@@ -28,7 +32,13 @@ export const StackChip: NovaComponent<z.infer<typeof StackChipProps>> = ({ insta
 
   return (
     <div className="rl-chip">
-      <span className="rl-chip__back" title={`Under ${label(parent)}`}>
+      <span
+        className="rl-chip__back"
+        title={`Back to ${label(parent)}`}
+        role="button"
+        style={{ cursor: 'pointer' }}
+        onClick={() => window.history.back()}
+      >
         <Icon name="chevron-left" size={15} />
         <span className="rl-chip__name">{label(parent)}</span>
       </span>
@@ -42,8 +52,44 @@ export const StackChip: NovaComponent<z.infer<typeof StackChipProps>> = ({ insta
           <div className="rl-chip__menu">
             {stack.map((i, idx) => {
               const current = idx === stack.length - 1;
+              const steps = stack.length - 1 - idx;
               return (
-                <span key={i.id} className={cx('rl-chip__row', current && 'rl-chip__row--current')}>
+                <span
+                  key={i.id}
+                  className={cx('rl-chip__row', current && 'rl-chip__row--current')}
+                  {...(current
+                    ? {}
+                    : {
+                        role: 'button',
+                        style: { cursor: 'pointer' },
+                        onClick: () => {
+                          setOpen(false);
+                          // One gesture per level, CHAINED on popstate: the back
+                          // trap keeps ONE spare entry and re-arms it inside its
+                          // own popstate handler (registered before ours, so by
+                          // the time we hear the event the spare is back). A
+                          // timer raced that re-arm and dropped presses — the
+                          // event itself is the only honest "ready" signal.
+                          let left = steps;
+                          const next = (): void => {
+                            left -= 1;
+                            if (left > 0) {
+                              // Not same-tick: pushState/back inside a popstate
+                              // dispatch do not commit synchronously, and a
+                              // back fired here targets history the trap has
+                              // not finished repairing. Measured: same-tick
+                              // chains delivered one step of N; a settle delay
+                              // delivers all of them.
+                              setTimeout(() => window.history.back(), 250);
+                            } else {
+                              window.removeEventListener('popstate', next);
+                            }
+                          };
+                          window.addEventListener('popstate', next);
+                          window.history.back();
+                        },
+                      })}
+                >
                   {label(i)}
                 </span>
               );

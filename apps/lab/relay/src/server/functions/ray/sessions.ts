@@ -14,7 +14,10 @@ const stores = new Map<string, Store>();
 const storeOf = (principal: string): Store => {
   const hit = stores.get(principal);
   if (hit !== undefined) return hit;
-  const fresh: Store = { sessions: [], currentId: null, debug: false };
+  // Debug ON by default: a run's tool calls are the only signal a person gets
+  // while a build takes minutes, and defaulting it off meant the honest answer
+  // to "is it doing anything?" was hidden behind a setting.
+  const fresh: Store = { sessions: [], currentId: null, debug: true };
   stores.set(principal, fresh);
   return fresh;
 };
