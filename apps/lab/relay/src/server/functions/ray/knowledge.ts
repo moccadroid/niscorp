@@ -59,5 +59,8 @@ export const channels = ((): string =>
 // app knowledge (nova itself is evaluator-agnostic).
 export const transformDsl = ((): string =>
   'TRANSFORM DSL — endpoint `request`/`response` configs are transforms in this language, evaluated per call ' +
-  '(request: over the action data; response: over the reply as { result: … }). Static JSON parts are literal; ' +
+  '(request: over the action data; response: over the reply — for /vex endpoints the reply IS the bare query result, ' +
+  'rows or record, no envelope). This language exists ONLY in endpoint request/response configs. It is NOT the layout ' +
+  'binding grammar: layout props bind with string paths ("$.deals") or moustache ("{{$.deals.length}}"); a transform ' +
+  'node like {"$ref": …} inside layout does not resolve and the component renders empty. Static JSON parts are literal; ' +
   `dynamic parts are ops. JSON Schema:\n${JSON.stringify(getConfigJsonSchema())}`) satisfies Producer;

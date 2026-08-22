@@ -4,7 +4,7 @@ import { createQueryDsl, createShapeMapper } from '@niscorp/vex/agent';
 import type { SignalClient } from '@niscorp/cortex';
 import type { Shell } from '@niscorp/nova';
 import type { NiscRuntime } from '@niscorp/moss';
-import { getKey, createLlmClient } from '@relay/server/llm';
+import { llmFor, type AgentRole } from '@relay/server/llm';
 
 // ═══════════════════════════════════════════════════════════
 // Ray's engine — dynamic vex over WHATEVER environment is handed in (the
@@ -30,12 +30,14 @@ export type RayContext = {
   engine: () => Promise<RayEngine>;
 };
 
-// The LLM, rebuilt per call from the environment key — a missing key
-// throws a readable error; warm cache replays never reach here.
-const buildLlm = (): SignalClient => {
-  const key = getKey();
-  if (key === undefined) throw new Error('No LLM key in the environment — set GROQ_API_KEY (or OPENROUTER_API_KEY) in .env.');
-  return createLlmClient(key);
+// The LLM for one of vex's two reference agents, rebuilt per call from the
+// role's CURRENT assignment — so changing it in Settings takes effect on the
+// next novel shape instead of waiting for the memoized engine to be rebuilt.
+// A missing key throws a readable error; warm cache replays never reach here.
+const buildLlm = (role: AgentRole): SignalClient => {
+  const resolved = llmFor(role);
+  if ('error' in resolved) throw new Error(resolved.error);
+  return resolved.llm;
 };
 
 const boot = async (runtime: NiscRuntime, policy: ScopePolicy): Promise<RayEngine> => {
@@ -50,8 +52,8 @@ const boot = async (runtime: NiscRuntime, policy: ScopePolicy): Promise<RayEngin
     scope: policy,
     cache,
     generateDsl: (request, schema) =>
-      createQueryDsl({ adapter, llm: buildLlm(), scopePolicy: policy, schema, queryJsonSchema: dslJsonSchema })(request, schema),
-    mapToShape: (rows, shape) => createShapeMapper(buildLlm())(rows, shape),
+      createQueryDsl({ adapter, llm: buildLlm('query'), scopePolicy: policy, schema, queryJsonSchema: dslJsonSchema })(request, schema),
+    mapToShape: (rows, shape) => createShapeMapper(buildLlm('shape'))(rows, shape),
   });
   await engine.introspect();
   return { engine, db: runtime.db };

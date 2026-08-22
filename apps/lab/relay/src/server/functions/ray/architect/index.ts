@@ -6,7 +6,7 @@
 // harness → review → at most one repair — plain code between free agents.
 // The only outside touches are Ray importing `makeBuildActionTool` and the
 // bench driving `runActionArchitect`.
-export { makeBuildActionTool, runActionArchitect, type BuildResult, type BuildOptions } from './run';
+export { makeBuildActionTool, runActionArchitect, architectLlms, queryIntentsOf, type BuildLlms, type BuildResult, type BuildOptions } from './run';
 export { makeArchitectAgent, type ActionAgentOutput } from './architect.agent';
 export { validatorAgent, type ValidatorVerdict } from './validator.agent';
 export { componentPalette, actionCatalog, editingGuide } from './producers';

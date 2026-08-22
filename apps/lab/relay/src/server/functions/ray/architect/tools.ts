@@ -44,10 +44,27 @@ const parseMaybeJson = (value: string): unknown => {
   }
 };
 
+// Canonical JSON for request identity — key order must not defeat the memo.
+const canonical = (v: unknown): unknown => {
+  if (Array.isArray(v)) return v.map(canonical);
+  if (v !== null && typeof v === 'object') {
+    const out: Record<string, unknown> = {};
+    for (const k of Object.keys(v as Record<string, unknown>).sort()) out[k] = canonical((v as Record<string, unknown>)[k]);
+    return out;
+  }
+  return v;
+};
+
 // The one genuine dependency: the LLM for support agents (Vex synthesis
 // inside `query` rides the app runtime; `map` runs the Prism mapping agent).
 export const makeArchitectTools = (supportLlm: SignalClient, ray: RayContext): ArchitectTools => {
   const proofs = new Map<string, QueryProof>();
+  // intent+shape → the fingerprint it minted. Models re-send a proven intent
+  // with new context values instead of replaying the fingerprint, and vex
+  // regenerates at full price — measured: 109 of 112 build queries were
+  // multi-second generations, 3 were replays; one run generated the SAME
+  // query seven times. The memo answers a repeat from the existing entry.
+  const provenRequests = new Map<string, string>();
 
   const discover = defineTool({
     id: 'action.discover',
@@ -92,7 +109,10 @@ export const makeArchitectTools = (supportLlm: SignalClient, ray: RayContext): A
       '\n\nUSING THE RESULT: the result has a `fingerprint`. It replays the exact query you just proved. ' +
       'To load this data in your action, add an endpoint:\n' +
       '{ "url": "/api/vex", "method": "POST", "request": { "fingerprint": "<paste it>", "context": { ... } }, ' +
-      '"response": { "$ref": "$.result" }, "target": "<data key>" }\n' +
+      '"target": "<data key>" }\n' +
+      'The reply IS the query result — the rows land in `target` directly. Do NOT add a `response` transform to ' +
+      'unwrap anything (there is no envelope; `$.result` does not exist and the endpoint will FAIL). ' +
+      'Only add `response` to RESHAPE rows, and then `$` is the rows array itself.\n' +
       'Rules:\n' +
       '- Copy the fingerprint from the query result, character for character. Never write your own. ' +
       'A fingerprint that did not come from a query result fails at mount with cache_miss and the screen loads nothing.\n' +
@@ -100,13 +120,25 @@ export const makeArchitectTools = (supportLlm: SignalClient, ray: RayContext): A
       '- Call the endpoint from lifecycle.mount.\n' +
       '- To re-run a query that already exists (its fingerprint came from discover or an earlier query call), ' +
       'pass ONLY `fingerprint` (+ `context` values it needs). Unknown fingerprint → error cache_miss.\n' +
+      '- OPTIONAL context keys: to prove the "everything" case, OMIT the key entirely — sending "" turns the ' +
+      'filter ON with an empty value and matches NOTHING (a count-0 proof of the wrong query).\n' +
+      '- NEVER re-send a proven intent. One query family = ONE generation: prove it once, then replay ' +
+      '{ "fingerprint": ..., "context": { new values } } for every variation (a different month, a different search text). ' +
+      'A replay is instant; re-sending the intent regenerates the query from scratch and wastes seconds per call.\n' +
       '- Call discover first, then write the intent with the real field names.\n' +
+      '- DATE RANGES: never compute dates in the endpoint request ($dateAdd there is timezone-shifted and silently drops boundary rows). ' +
+      'Carry LITERAL date strings instead: a month dropdown’s options each hold their own {start, end} literals ' +
+      '(June = 2026-06-01/2026-06-30), bound into context with $ref — and mind real month lengths (June has 30 days). ' +
+      'PROVE the query with the same literal dates, and every filter the intent names must be IN the proven query — a proof whose count ignores a filter is not a proof of the screen.\n' +
       '\nCONTEXT — carrying the proven query\'s context into your endpoint:\n' +
       '- The result\'s `context` lists the bound keys with kinds: "context" = every replay must supply it; ' +
       '"scope" = the server supplies it, never you; "semantic" = fixed from the intent.\n' +
       '- Your endpoint\'s request context supplies a value for every "context"-kind key. ' +
-      'A value that follows screen state is a binding over the action data (e.g. "q": { "$ref": "$.search" }); ' +
-      'a proven "%text%" pattern binds the % marks around it with $join.',
+      'A value that follows screen state is a binding over the action data (e.g. "q": { "$ref": "$.search" }).\n' +
+      '- SEARCH BOXES: the empty state must list EVERYTHING. Wrap the value in % marks — ' +
+      '"q": { "$join": { "parts": ["%", { "$ref": "$.search" }, "%"], "sep": "" } } — so an empty box sends "%%" (matches all) ' +
+      'and typing narrows. PROVE the query with a wrapped value too ("%a%", not "a"), and never send a bare search string: ' +
+      'an empty one matches nothing and the screen mounts blank.',
     input: z.object({
       fingerprint: z
         .string()
@@ -146,17 +178,37 @@ export const makeArchitectTools = (supportLlm: SignalClient, ray: RayContext): A
       // proving look like success in every trace (the v1 flail loop).
       const rt = await ray.engine();
       const ctx = (context ?? {}) as Record<string, unknown>;
-      // Vex's own request modes (QueryRequestSchema): fingerprint alone =
-      // replay-or-error; intent+shape = generate-or-hit. Pass through as-is.
+      // AUTO-REPLAY: an intent+shape this build already proved IS the same
+      // query — serve it from its fingerprint (instant) instead of letting
+      // vex regenerate it (seconds), and say so in the reply, so the model
+      // learns the replay form. Exact match on canonical intent+shape: safe,
+      // and it is the measured repeat class (same wording, new context).
+      const identity =
+        replayFingerprint == null && intent != null
+          ? `${intent.trim()}|${JSON.stringify(canonical(shape))}`
+          : undefined;
+      const memoFp = identity !== undefined ? provenRequests.get(identity) : undefined;
+      // REPLAY POSTURE, CLAMPED. Vex's named-slot posture (fingerprint +
+      // intent + shape) 409s on protected entries and silently REPLACES
+      // unprotected ones — and every model, told "pass ONLY fingerprint",
+      // still attaches shape and bounces off the 409 three times per build
+      // (measured). A fingerprint means replay; extras are dropped here so
+      // the wasteful posture cannot be expressed at all.
       const res = await rt.engine.execute(
         {
-          ...(replayFingerprint != null && { fingerprint: replayFingerprint }),
-          ...(intent != null && { intent }),
-          ...(shape !== undefined && { shape }),
+          ...(memoFp !== undefined || replayFingerprint != null
+            ? { fingerprint: memoFp ?? (replayFingerprint as string) }
+            : {
+                ...(intent != null && { intent }),
+                ...(shape !== undefined && { shape }),
+              }),
           context: ctx,
         },
         { scope: { userId: ray.userId } },
       );
+      if (identity !== undefined && memoFp === undefined && res.meta.cache.fingerprint !== undefined) {
+        provenRequests.set(identity, res.meta.cache.fingerprint);
+      }
       // The proven query's cache identity. The result stays QUERY-shaped
       // (rows + fingerprint) — assembling the endpoint is the agent's job,
       // taught by this tool's guide. The fingerprint replays THIS entry:
@@ -170,16 +222,31 @@ export const makeArchitectTools = (supportLlm: SignalClient, ray: RayContext): A
       const bindings = res.meta.context;
       const missing = res.meta.missingContext ?? [];
       const warnings = res.meta.warnings ?? [];
-      if (fingerprint !== undefined) {
+      // A result vex flags with missingContext ran WITHOUT required
+      // parameters — vex's own meta says it is wrong. It is not a proof:
+      // recording it would let the build cite an invalid run as ground
+      // truth, and the harness would then bless whatever matched it.
+      if (fingerprint !== undefined && missing.length === 0) {
         const requiredKeys = Object.entries(bindings)
           .filter(([, meta]) => meta.kind === 'context')
           .map(([key]) => key);
         proofs.set(fingerprint, { count: Array.isArray(rows) ? rows.length : 1, contextKeys: requiredKeys });
       }
+      // A run with missing context is WRONG, and handing back its fingerprint
+      // anyway was a trap: the model embedded it, the gate refused it as
+      // never-proven, and a build died five retries deep on a token the tool
+      // itself had supplied. Withhold it — the only usable fingerprint comes
+      // from a run with every required key present.
       const shared = {
-        fingerprint,
+        ...(missing.length === 0 && { fingerprint }),
+        ...(memoFp !== undefined && {
+          note: `You already proved this exact query as ${memoFp} — replayed it with your context. Next time pass { "fingerprint": "${memoFp}", "context": { ... } } directly instead of re-sending the intent.`,
+        }),
         context: bindings,
-        ...(missing.length > 0 && { missingContext: missing }),
+        ...(missing.length > 0 && {
+          missingContext: missing,
+          note: 'NOT PROVEN — required context keys were missing, so this result is wrong and no usable fingerprint exists. Re-run this exact query with a real value for EVERY key in missingContext; that run returns the fingerprint to use.',
+        }),
         ...(warnings.length > 0 && { warnings }),
       };
       if (Array.isArray(rows)) {

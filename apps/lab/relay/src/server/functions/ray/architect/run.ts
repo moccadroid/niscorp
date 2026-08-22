@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { defineTool, type CortexEvent, type SignalClient, type ToolDefinition } from '@niscorp/cortex';
 import { ActionDefinitionSchema, type Shell, type ActionDefinition } from '@niscorp/nova';
-import { createGroqClient, getKey as getGroqKey } from '@relay/server/llm/groq';
+import { llmFor } from '@relay/server/llm';
 import { registerCatalogEntry } from '../catalog';
 import { makeArchitectTools, type QueryProof } from './tools';
 import { makeArchitectAgent } from './architect.agent';
@@ -15,6 +15,24 @@ import { runAction } from './harness';
 // This is the ONLY code that leaves the architect folder (imported by
 // ray/tools.ts and the bench). Everything else is contained.
 // ═══════════════════════════════════════════════════════════
+
+// ═══ the build's three agents ═══
+// The architect REASONS (design the screen, read the harness back, repair it);
+// the reviewer reads the result against the intent; the transform writer does
+// the legwork inside the architect's `map` tool. Three jobs, so three roles —
+// which model each one runs on is the LLM seam's business (server/llm), set in
+// Settings → Models and read fresh on every build.
+export type BuildLlms = { agent: SignalClient; support: SignalClient; validator: SignalClient };
+
+export const architectLlms = (): BuildLlms | { error: string } => {
+  const agent = llmFor('architect');
+  if ('error' in agent) return agent;
+  const support = llmFor('mapping');
+  if ('error' in support) return support;
+  const validator = llmFor('validator');
+  if ('error' in validator) return validator;
+  return { agent: agent.llm, support: support.llm, validator: validator.llm };
+};
 
 export type BuildResult =
   // proofs: what the build's queries PROVED (fingerprint → count +
@@ -49,8 +67,18 @@ export const runActionArchitect = async (
   intent: string,
   opts: BuildOptions = {},
 ): Promise<BuildResult> => {
-  const architectAgent = makeArchitectAgent(ray);
   const tools = makeArchitectTools(supportLlm, ray);
+  // EDIT runs start from a definition whose fingerprints were proven when it
+  // was BUILT — demanding they be re-proven would make every small edit
+  // re-query untouched endpoints. Seed them as known (count 0: the load-diff
+  // stays silent about them; the fp-scan accepts them). New fingerprints the
+  // edit introduces still need real proofs from this run.
+  if (opts.base !== undefined) {
+    for (const [, fp] of JSON.stringify(opts.base).matchAll(/"(fp_[0-9a-f]{16})"/g)) {
+      if (fp !== undefined && !tools.proofs.has(fp)) tools.proofs.set(fp, { count: 0, contextKeys: [] });
+    }
+  }
+  const architectAgent = makeArchitectAgent(ray, tools.proofs);
 
   // Edit mode: the current definition rides the INPUT; the editing rules
   // ride the editingGuide PRODUCER (attached below only on edit runs), so
@@ -116,7 +144,29 @@ const namespaceActionId = (definition: ActionDefinition): ActionDefinition =>
 // findings' `fix` lines are written for the architect (the repair run's
 // change request). A validator failure is reported, never fatal: the screen
 // still ships, honestly annotated.
+// The proven queries behind a definition's fingerprints, as ENGLISH — the
+// cache stores each query's intent. The validator needs them because
+// ordering, limits and filters live INSIDE the query, invisible in the
+// definition: a reviewer without this list reads "top 10 by value", finds no
+// ORDER BY anywhere, and blocks a correct screen. Measured before the fix:
+// it blocked every good screen it saw, always over query-resident semantics.
+export const queryIntentsOf = async (
+  ray: RayContext,
+  action: ActionDefinition,
+): Promise<Record<string, string>> => {
+  const rt = await ray.engine();
+  const out: Record<string, string> = {};
+  const serialized = JSON.stringify(action);
+  const fps = new Set([...serialized.matchAll(/"((?:fp_[0-9a-f]{16})|(?:[a-z]+\/[A-Za-z]+))"/g)].map((m) => m[1] ?? ''));
+  for (const fp of fps) {
+    const entry = await rt.engine.cache.get(fp).catch(() => undefined);
+    if (entry !== undefined && entry.kind === 'ok' && entry.intent !== undefined) out[fp] = entry.intent;
+  }
+  return out;
+};
+
 const review = async (
+  ray: RayContext,
   llm: SignalClient,
   intent: string,
   action: ActionDefinition,
@@ -124,7 +174,7 @@ const review = async (
   opts: BuildOptions,
 ): Promise<ValidatorVerdict | undefined> => {
   const result = await validatorAgent.run(
-    { intent, action, report },
+    { intent, action, report: { ...report, queries: await queryIntentsOf(ray, action) } },
     {
       llm,
       ...(opts.agentPath && { agentPath: opts.agentPath }),
@@ -139,7 +189,8 @@ const review = async (
 // repair — composing whole agent runs deterministically; each agent is free
 // inside its own run and knows nothing of the pipeline. Every nested run
 // forwards into Ray's event stream (ctx.forward), so the chat trace shows
-// the build, the review, and the repair live. Runs on 120b end to end.
+// the build, the review, and the repair live. Each agent's model comes from
+// the seam (architectLlms, above), so Settings can move any of them.
 export const makeBuildActionTool = (ray: RayContext): ToolDefinition => {
   // Same-session memory of what this tool built, keyed by action id — the
   // edit path reads the CURRENT definition from here, so a fix request
@@ -175,9 +226,8 @@ export const makeBuildActionTool = (ray: RayContext): ToolDefinition => {
         .describe('The id of a screen this tool built earlier (e.g. "view.task-command-center") — modify that screen instead of building a new one.'),
     }),
     execute: async ({ intent, edit }, ctx) => {
-      const key = getGroqKey(); // 120b — the architect AND its support agents
-      if (key === undefined) return 'No Groq key configured (set GROQ_API_KEY in .env) — cannot build.';
-      const llm = createGroqClient(key);
+      const llms = architectLlms();
+      if ('error' in llms) return llms.error;
 
       // Models regularly send `edit: null` for "not editing" — same as absent.
       const editId = edit ?? undefined;
@@ -189,7 +239,7 @@ export const makeBuildActionTool = (ray: RayContext): ToolDefinition => {
 
       const pipelineOpts: BuildOptions = { onEvent: ctx.forward, agentPath: ctx.agentPath };
 
-      let buildResult = await runActionArchitect(ray, llm, llm, intent, {
+      let buildResult = await runActionArchitect(ray, llms.agent, llms.support, intent, {
         ...pipelineOpts,
         ...(base !== undefined && { base }),
       });
@@ -200,8 +250,8 @@ export const makeBuildActionTool = (ray: RayContext): ToolDefinition => {
         const problems = buildResult.issues?.length ? buildResult.issues.join('\n') : buildResult.error;
         buildResult = await runActionArchitect(
           ray,
-          llm,
-          llm,
+          llms.agent,
+          llms.support,
           `Fix these problems. Keep everything else exactly as it is:\n${problems}`,
           { ...pipelineOpts, base: buildResult.candidate },
         );
@@ -217,19 +267,19 @@ export const makeBuildActionTool = (ray: RayContext): ToolDefinition => {
 
       // ── review → at most ONE repair ──
       let report = await runAction(ray, builtAction, undefined, buildResult.proofs);
-      let verdict = await review(llm, intent, builtAction, { issues: report.issues, loaded: report.loaded }, pipelineOpts);
+      let verdict = await review(ray, llms.validator, intent, builtAction, { issues: report.issues, loaded: report.loaded }, pipelineOpts);
       const blockers = (v: ValidatorVerdict | undefined): string[] =>
         (v?.findings ?? []).filter((f) => f.severity === 'blocker').map((f) => `- ${f.fix} (intent: ${f.claim})`);
       const firstBlockers = blockers(verdict);
       if (firstBlockers.length > 0) {
-        const repairResult = await runActionArchitect(ray, llm, llm, `Fix these findings:\n${firstBlockers.join('\n')}`, {
+        const repairResult = await runActionArchitect(ray, llms.agent, llms.support, `Fix these findings:\n${firstBlockers.join('\n')}`, {
           ...pipelineOpts,
           base: builtAction,
         });
         if (repairResult.ok) {
           builtAction = { ...namespaceActionId(repairResult.action), id: builtAction.id };
           report = await runAction(ray, builtAction, undefined, repairResult.proofs);
-          verdict = await review(llm, intent, builtAction, { issues: report.issues, loaded: report.loaded }, pipelineOpts);
+          verdict = await review(ray, llms.validator, intent, builtAction, { issues: report.issues, loaded: report.loaded }, pipelineOpts);
         }
       }
 

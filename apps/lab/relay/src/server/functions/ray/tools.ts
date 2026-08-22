@@ -13,7 +13,7 @@ import { listCompaniesPrism } from '@relay/app/actions/domains/company';
 import { listDealsPrism } from '@relay/app/actions/domains/deal';
 import { catalogIds, VIZ_COMPONENTS, VIZ_OMIT_PROPS } from './catalog';
 import { styleGuide } from './knowledge';
-import { getKey, createLlmClient } from '@relay/server/llm';
+import { llmFor } from '@relay/server/llm';
 import { makeBuildActionTool } from './architect';
 
 // Per-turn scratch, passed in by run.ts: `query` stashes its result so `visualize`
@@ -50,7 +50,7 @@ const LOOKUPS: Record<string, Lookup> = {
 export const makeTools = (
   ray: RayContext,
   turn: Turn,
-  opts: { dataTools?: boolean } = {},
+  opts: { dataTools?: boolean; buildTool?: ToolDefinition } = {},
 ): ToolDefinition[] => {
   const { shell, userId } = ray;
   // A canvas is a stack; `stack` is the four stack operations. push/replace place
@@ -230,8 +230,8 @@ export const makeTools = (
         ),
     }),
     execute: async ({ intent, base }) => {
-      const key = getKey();
-      if (key === undefined) return 'No LLM key configured (set GROQ_API_KEY in .env) — cannot visualize.';
+      const visualiser = llmFor('layout');
+      if ('error' in visualiser) return `${visualiser.error} Cannot visualize.`;
       const last = turn.lastResult;
       if (last === undefined) return 'Nothing to visualize yet — run a query first.';
       // The app's own registry — the server shell's carries name-only stubs
@@ -250,7 +250,7 @@ export const makeTools = (
           styleGuide: styleGuide(),
           ...(base !== undefined ? { base } : {}),
         },
-        { llm: createLlmClient(key) },
+        { llm: visualiser.llm },
       ).result;
       if (!res.ok) return `visualize failed: ${res.error.message}`;
       const layout = res.output.data;
@@ -268,7 +268,14 @@ export const makeTools = (
     },
   });
 
+  // The build tool carries SESSION memory (which screens it built, for the
+  // edit path) — a per-turn instance forgets everything each message, so an
+  // edit request in any later message was refused with "not built in this
+  // session" while the screen sat right there. The caller passes a
+  // session-lived instance; the per-turn fallback survives only for the dev
+  // checks that build one turn and exit.
+  const buildTool = opts.buildTool ?? makeBuildActionTool(ray);
   return opts.dataTools === false
-    ? [stackTool, queryTool, makeBuildActionTool(ray)]
-    : [stackTool, queryTool, dataTool, visualizeTool, makeBuildActionTool(ray)];
+    ? [stackTool, queryTool, buildTool]
+    : [stackTool, queryTool, dataTool, visualizeTool, buildTool];
 };

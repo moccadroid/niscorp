@@ -3,6 +3,7 @@ import { defineAgent, duration, outputRetries, schemaDoc, stepCount, type AgentD
 import { ActionDefinitionSchema } from '@niscorp/nova';
 import { styleGuide, today, ambientContext, channels } from '../knowledge';
 import { componentPalette, actionCatalog } from './producers';
+import { workedExample } from './worked-example';
 
 // ═══════════════════════════════════════════════════════════
 // The action validator — a pure READER. Given the user's intent, the built
@@ -37,7 +38,9 @@ export const VerdictSchema = z.object({
 export type ValidatorVerdict = z.infer<typeof VerdictSchema>;
 
 const INSTRUCTIONS = [
-  'You are the action validator. You receive { intent, action, report }: what the user asked for, the built Nova ActionDefinition, and the harness report (mount issues, what each endpoint loaded). Judge whether the screen DOES what the intent says.',
+  'You are the action validator. You receive { intent, action, report }: what the user asked for, the built Nova ActionDefinition, and the harness report (mount issues, what each endpoint loaded, and `queries` — each data fingerprint’s PROVEN query in plain English). Judge whether the screen DOES what the intent says.',
+  '',
+  'THE QUERY DOES THE DATA WORK. Ordering, limits, filters, grouping and computed fields declared in a fingerprint’s entry in report.queries are REAL — the data layer enforces them on every replay. Their absence from the definition is CORRECT, never a finding. Flag a data claim only when the proven query’s own words contradict the intent.',
   '',
   'Read the definition — behavior is declarative:',
   '  - Every interaction the intent claims must be wired: find its layout node (ref/model), its trigger, and check the trigger DOES the claimed thing (the right endpoint re-called, the right action pushed with the right input keys, the right state set). Component props matter — a Table row click carries row[clickKey ?? rowKey]; check the RIGHT field rides the payload.',
@@ -55,6 +58,7 @@ export const validatorAgent: AgentDefinition<ValidatorVerdict> = defineAgent<Val
   // The same producers the architect designed with, plus the definition
   // language itself — a reader needs everything the writer had.
   context: [
+    workedExample,
     actionCatalog,
     componentPalette,
     () => `THE DEFINITION LANGUAGE you are reading:\n${schemaDoc(ActionDefinitionSchema)}`,
