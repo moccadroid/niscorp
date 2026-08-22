@@ -1,18 +1,30 @@
-// Bench: the architect over a graded prompt suite — same env, same
-// validation, 120b on Groq end to end. Run:
+// Bench: the architect over a graded prompt suite — same env, same validation,
+// the same models the app is set to. Run:
 //
-//   GROQ_API_KEY=... pnpm --filter relay exec tsx src/dev/architect-bench.ts
-//   ... [--only=<prompt-id>] [--edit]  (--edit runs the edit-drift probe)
+//   pnpm --filter relay exec tsx src/dev/architect-bench.ts
+//   ... [--only=<prompt-id>] [--edit] [--model=<id>]
+//
+// --edit runs the edit-drift probe; --model puts the ARCHITECT on one roster
+// model for this run (its reviewer and support agents stay where they are), so
+// two runs compare models over the same suite.
 //
 // Prints per run: ok, duration, tool calls, retries by kind (the events carry
 // the evidence), what each endpoint loaded at mount; writes every produced
 // ActionDefinition to a temp folder for eyeballing.
+// .env (the LLM keys) loads first — Node's own loader, same idiom as
+// server/boot.ts; the bench never reaches the server's composition.
+try {
+  process.loadEnvFile();
+} catch {
+  /* no .env present */
+}
+
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { CortexEvent } from '@niscorp/cortex';
-import { createGroqClient } from '@relay/server/llm/groq';
-import { runActionArchitect, runAction, type BuildResult } from '@relay/server/functions/ray/architect';
+import { assign, isModelId, MODELS } from '@relay/server/llm';
+import { architectLlms, runActionArchitect, runAction, type BuildLlms, type BuildResult } from '@relay/server/functions/ray/architect';
 import { devRayContext } from './engine';
 
 type PromptCase = { id: string; intent: string };
@@ -99,10 +111,10 @@ const statsLine = (label: string, stats: RunStats): string =>
 // becomes a measured verdict per section instead of a vibe. This is the
 // evidence that decides whether full-re-emit editing survives or
 // section-scoped merging replaces it.
-const editProbe = async (llm: Parameters<typeof runActionArchitect>[1], outDir: string): Promise<void> => {
+const editProbe = async (llms: BuildLlms, outDir: string): Promise<void> => {
   const buildIntent = PROMPTS.find((prompt) => prompt.id === 'list')?.intent ?? '';
   console.log(`\n═══ edit-drift ═══\n${buildIntent}`);
-  const build = await runActionArchitect(devRayContext(), llm, llm, buildIntent, {});
+  const build = await runActionArchitect(devRayContext(), llms.agent, llms.support, buildIntent, {});
   if (!build.ok) {
     console.log(`  base build failed (${build.error}) — probe skipped`);
     return;
@@ -113,8 +125,8 @@ const editProbe = async (llm: Parameters<typeof runActionArchitect>[1], outDir: 
   const t0 = Date.now();
   const edited = await runActionArchitect(
     devRayContext(),
-    llm,
-    llm,
+    llms.agent,
+    llms.support,
     'Change ONLY the row click: clicking a row must open the company FORM (company.form) seeded with the clicked company id, instead of the company detail. Everything else stays exactly as it is.',
     { base },
   );
@@ -140,10 +152,17 @@ const editProbe = async (llm: Parameters<typeof runActionArchitect>[1], outDir: 
 };
 
 const main = async (): Promise<void> => {
-  const keyArg = process.argv.find((arg) => arg.startsWith('--key='))?.slice(6);
-  const key = keyArg ?? process.env['GROQ_API_KEY'];
-  if (key === undefined || key === '') {
-    console.error('No Groq key. Set GROQ_API_KEY or pass --key=gsk_…');
+  const wanted = process.argv.find((arg) => arg.startsWith('--model='))?.slice(8);
+  if (wanted !== undefined) {
+    if (!isModelId(wanted)) {
+      console.error(`Unknown model "${wanted}". Known: ${Object.keys(MODELS).join(', ')}`);
+      process.exit(1);
+    }
+    assign('architect', wanted);
+  }
+  const llms = architectLlms();
+  if ('error' in llms) {
+    console.error(llms.error);
     process.exit(1);
   }
   const only = process.argv.find((arg) => arg.startsWith('--only='))?.slice(7);
@@ -152,7 +171,6 @@ const main = async (): Promise<void> => {
   const outDir = join(tmpdir(), 'relay-architect-bench', new Date().toISOString().replace(/[:.]/g, '-'));
   mkdirSync(outDir, { recursive: true });
 
-  const llm = createGroqClient(key);
   const cases = PROMPTS.filter((prompt) => only === undefined || prompt.id === only);
   const agents = [{ label: 'architect', run: runActionArchitect }];
 
@@ -163,7 +181,7 @@ const main = async (): Promise<void> => {
     for (const agent of agents) {
       const events: CortexEvent[] = [];
       const t0 = Date.now();
-      const result = await agent.run(devRayContext(), llm, llm, prompt.intent, { onEvent: (event) => events.push(event) });
+      const result = await agent.run(devRayContext(), llms.agent, llms.support, prompt.intent, { onEvent: (event) => events.push(event) });
       const ms = Date.now() - t0;
       const loaded = await loadedTargets(result);
       const stats = collectStats(events, result, ms, loaded);
@@ -177,7 +195,7 @@ const main = async (): Promise<void> => {
     }
   }
 
-  if (withEdit) await editProbe(llm, outDir);
+  if (withEdit) await editProbe(llms, outDir);
 
   console.log(`\n═══ summary ═══${summary.join('\n')}`);
   console.log(`\nactions written to ${outDir}`);

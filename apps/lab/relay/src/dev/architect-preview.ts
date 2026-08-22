@@ -5,12 +5,17 @@
 //   pnpm --filter relay exec tsx src/dev/architect-preview.ts
 //   ... [--agent=validator] [--edit] [--full] [--intent="..."]
 //
-// With GROQ_API_KEY set, capabilities come from the real client; without
-// one, from signal's registry entry for groq — either way the preview
-// resolves the strategy the browser run would (emit on Groq).
+// Capabilities come from the model the ARCHITECT is assigned to (the LLM
+// seam), because the output strategy is resolved from them and they differ
+// per model — so the preview shows the strategy the real run would use.
+try {
+  process.loadEnvFile();
+} catch {
+  /* no .env present */
+}
+
 import type { SignalClient } from '@niscorp/cortex';
-import { providerRegistry } from '@niscorp/signal';
-import { createGroqClient, GROQ_MODEL } from '@relay/server/llm/groq';
+import { assignmentOf, llmFor, MODELS } from '@relay/server/llm';
 import { makeArchitectAgent } from '@relay/server/functions/ray/architect/architect.agent';
 import { devRayContext } from './engine';
 import { validatorAgent } from '@relay/server/functions/ray/architect/validator.agent';
@@ -20,16 +25,14 @@ import { makeArchitectTools } from '@relay/server/functions/ray/architect/tools'
 const DEFAULT_INTENT =
   'A searchable table of all companies showing name, industry and size. Typing in the search box filters the list; clicking a row opens that company.';
 
-// preview() never calls the model — a describe-only client is enough to
-// resolve the strategy exactly as the browser's Groq client would.
-const describeOnlyGroq = (): SignalClient => ({
-  describe: () => ({ provider: 'groq', model: GROQ_MODEL, capabilities: providerRegistry['groq']!.capabilities }),
-  step: () => Promise.reject(new Error('preview-only client')),
-  stepStream: () => {
-    throw new Error('preview-only client');
-  },
-  count: (input) => Promise.resolve(typeof input === 'string' ? Math.ceil(input.length / 4) : input.length * 8),
-});
+// preview() never calls the model, so a key is optional: without one we build
+// the assigned model's client anyway and read nothing but its capabilities.
+const previewLlm = (): SignalClient => {
+  const resolved = llmFor('architect');
+  if ('llm' in resolved) return resolved.llm;
+  const { model, effort } = assignmentOf('architect');
+  return MODELS[model].create('preview-never-calls', effort);
+};
 
 const label = (content: string): string => {
   const first = content.split('\n', 1)[0] ?? '';
@@ -42,8 +45,7 @@ const main = async (): Promise<void> => {
   const edit = process.argv.includes('--edit');
   const intent = process.argv.find((arg) => arg.startsWith('--intent='))?.slice(9) ?? DEFAULT_INTENT;
 
-  const key = process.env['GROQ_API_KEY'];
-  const llm = key !== undefined && key !== '' ? createGroqClient(key) : describeOnlyGroq();
+  const llm = previewLlm();
   const ray = devRayContext();
   const architectAgent = makeArchitectAgent(ray);
   const tools = makeArchitectTools(llm, ray);

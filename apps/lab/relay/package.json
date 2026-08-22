@@ -12,6 +12,7 @@
     "tty": "tsx src/tty.ts",
     "ink": "tsx src/ink.ts",
     "console": "tsx src/dev/build-console.ts",
+    "architect": "tsx src/dev/architect-check.ts",
     "extension": "vite build --config vite.extension.config.ts"
   },
   "dependencies": {
