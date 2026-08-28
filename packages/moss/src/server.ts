@@ -133,6 +133,18 @@ export type MossServer = Hono<Env> & {
   // The generation this process has observed. Moves when any process calls
   // `refresh`; every process drops its derivations within one poll of it.
   generation: () => number;
+  // RETIRE EVERYTHING THIS SERVER STARTED that outlives a request — the
+  // generation poll, the identity idle sweep, the socket's revalidation, the
+  // shell idle sweep. ONE call, because the alternative is what leaked: a host
+  // retiring a runtime IN-PROCESS (a dev floor rebuilding on a server-file
+  // edit) had to enumerate moss's timers by reaching into each handle, and
+  // could only ever stop the ones it could see — the poller and the identity
+  // sweep were never surfaced, so a rebuild left them polling an ended pool.
+  // The thing that started a timer owns stopping it; the host calls this and
+  // learns nothing about how many there are. A deployment that boots ONCE
+  // needs none of this: nothing retires it in-process, and every timer here is
+  // `unref`'d, so the process carries them off on its own exit.
+  close: () => void;
   // Every identity resident right now, and what the cache is costing —
   // structural facts only, on the shell-roster model. Absent when the app
   // declares no `identity` seam.
@@ -1288,16 +1300,30 @@ export const createServer = async (app: NiscApp, runtime: NiscRuntime): Promise<
     },
   });
 
+  // Held in a local, not inlined below, because `close` has to reach its
+  // `stop` — the socket's revalidation timer is one of the four this server
+  // retires.
+  const socket = createSocket({
+    session,
+    catalog: async (principal) => catalog(await resolveIdentity(principal)),
+    ...(shells !== undefined ? { shells } : {}),
+    ...(runtime.sessionRevalidateMs !== undefined ? { revalidateMs: runtime.sessionRevalidateMs } : {}),
+  });
+
   return Object.assign(server, {
-    socket: createSocket({
-      session,
-      catalog: async (principal) => catalog(await resolveIdentity(principal)),
-      ...(shells !== undefined ? { shells } : {}),
-      ...(runtime.sessionRevalidateMs !== undefined ? { revalidateMs: runtime.sessionRevalidateMs } : {}),
-    }),
+    socket,
     ...(shells !== undefined ? { shells } : {}),
     refresh,
     generation: () => generation?.current() ?? -1,
+    // Every timer this server owns, stopped once. Absent pieces (an app with no
+    // identity seam, no shells) simply have nothing to stop — the `?.` is the
+    // whole guard. See the type above for why this is one call and not four.
+    close: () => {
+      generation?.stop();
+      identities?.stop();
+      socket.stop();
+      shells?.stop();
+    },
     executeAs,
     callIntegration,
     identity: async (principal: string | null) => {
