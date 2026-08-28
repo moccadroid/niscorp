@@ -53,6 +53,7 @@ export type IntegrationRow = {
   approvedData: readonly string[];
   offers: readonly string[];
   needs: readonly string[];
+  capabilities: readonly { id: string; title: string }[];
   lastImportAt: number | null;
   lastError: string | null;
   actionCount: number;
@@ -99,6 +100,32 @@ const BundleSchema = z
         data: z.array(z.string()).default([]),
       })
       .default({ actions: [], data: [] }),
+    // THE VERBS THIS INTEGRATION GATES ON — the other direction from `grants`.
+    // Grants are what it ASKS OF the host (surfaces it may call); a capability
+    // is what it OFFERS the host's role editor to grant to PEOPLE, and its own
+    // service is the code that checks the grant (`can(who, '<integration>.<id>')`).
+    // moss validates shape and carries them, nothing more: WHICH endpoints a
+    // capability gates is the integration's contract with its own service,
+    // exactly as a fact kind's meaning and `meta`'s words are checked against
+    // nothing here. The host composes the full grant string as `<integration>.
+    // <id>` — a bundle cannot claim another integration's namespace — which is
+    // why the id forbids a dot: it has to stay splittable, the same reason the
+    // action namespace does. A capability carries no statement about WHO should
+    // hold it: no face, no audience, no population marker. Every role grants it
+    // identically, and who holds one is authored data in the host (its role
+    // grants), never a declaration here. There is deliberately no gates list —
+    // moss could name-check one (it name-checks every other cross-reference
+    // below) but no consumer needs it; the field is additive if one appears.
+    capabilities: z
+      .array(
+        z
+          .object({
+            id: z.string().regex(/^[a-z][a-z0-9]*(-[a-z0-9]+)*$/, 'a capability id is lowercase words joined by single hyphens, and never a dot'),
+            title: z.string().min(1),
+          })
+          .strict(),
+      )
+      .default([]),
     // WHAT IT TELLS AND WHAT IT HEARS — the fact kinds this integration
     // publishes and the kinds it consumes. moss validates shape and carries
     // them; what a kind MEANS is the host's contract vocabulary, exactly as
@@ -400,6 +427,17 @@ export const runIntake = (payload: unknown, ctx: IntakeContext): IntakeResult =>
       reasons.push(`press "${path}": /hook/ and /frame/ are reserved`);
     }
   }
+  // TWO CAPABILITIES WITH ONE ID compose to the same grant string, so the
+  // host's role editor could never tell them apart — a bundle-coherence fault,
+  // caught here beside the other cross-reference checks. Shape is the schema's;
+  // uniqueness is the only thing about a capability moss can know is wrong.
+  const seenCapability = new Set<string>();
+  for (const capability of bundle.capabilities) {
+    if (seenCapability.has(capability.id)) {
+      reasons.push(`capability "${capability.id}": declared twice`);
+    }
+    seenCapability.add(capability.id);
+  }
   if (bundle.settings !== '' && bundle.actions[bundle.settings] === undefined) {
     reasons.push(`settings: "${bundle.settings}" is not an action in this bundle`);
   }
@@ -606,6 +644,11 @@ export const initIntegrations = async (pool: PgPool): Promise<void> => {
       -- never reads them; the host's bus does.
       offers             jsonb NOT NULL DEFAULT '[]'::jsonb,
       needs              jsonb NOT NULL DEFAULT '[]'::jsonb,
+      -- The verbs the integration gates on ({id, title}), for the host's role
+      -- editor to grant. Beside offers/needs because it is the same kind of
+      -- thing: a declaration written at import, replaced on re-registration,
+      -- that moss never reads — the host does.
+      capabilities       jsonb NOT NULL DEFAULT '[]'::jsonb,
       -- EVERY PATH THE PROXY MAY FORWARD, derived from the bundle at intake
       -- (reachOf). Beside the grants because it is one: a grant of reach, held
       -- by the same row, revoked by the same delete.
@@ -628,6 +671,7 @@ export const initIntegrations = async (pool: PgPool): Promise<void> => {
   await pool.query(`ALTER TABLE integrations ADD COLUMN IF NOT EXISTS press jsonb NOT NULL DEFAULT '[]'::jsonb`);
   await pool.query(`ALTER TABLE integrations ADD COLUMN IF NOT EXISTS offers jsonb NOT NULL DEFAULT '[]'::jsonb`);
   await pool.query(`ALTER TABLE integrations ADD COLUMN IF NOT EXISTS needs jsonb NOT NULL DEFAULT '[]'::jsonb`);
+  await pool.query(`ALTER TABLE integrations ADD COLUMN IF NOT EXISTS capabilities jsonb NOT NULL DEFAULT '[]'::jsonb`);
   await pool.query(`
     CREATE TABLE IF NOT EXISTS integration_actions (
       integration_id  text NOT NULL REFERENCES integrations(id) ON DELETE CASCADE,
@@ -693,7 +737,7 @@ export const listIntegrations = async (pool: PgPool): Promise<IntegrationRow[]> 
   const res = await pool.query(`
     SELECT i.id, i.url, i.status, i.title, i.tagline, i.adds, i.settings_action,
            i.requested_actions, i.requested_data, i.approved_data,
-           i.offers, i.needs,
+           i.offers, i.needs, i.capabilities,
            i.last_import_at, i.last_error,
            (SELECT count(*) FROM integration_actions a WHERE a.integration_id = i.id) AS action_count
       FROM integrations i ORDER BY i.id
@@ -718,6 +762,7 @@ export const listIntegrations = async (pool: PgPool): Promise<IntegrationRow[]> 
       approvedData: (row['approved_data'] ?? []) as string[],
       offers: (row['offers'] ?? []) as string[],
       needs: (row['needs'] ?? []) as string[],
+      capabilities: (row['capabilities'] ?? []) as { id: string; title: string }[],
       lastImportAt: at instanceof Date ? at.getTime() : typeof at === 'string' || typeof at === 'number' ? new Date(at).getTime() : null,
       lastError: (row['last_error'] as string | null) ?? null,
       actionCount: Number(row['action_count'] ?? 0),

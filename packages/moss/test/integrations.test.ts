@@ -194,6 +194,88 @@ describe('offers and needs', () => {
 });
 
 // ═══════════════════════════════════════════════════════════════
+// capabilities — the verbs an integration gates on, for the host's role
+// editor to grant. moss validates shape ({id, title}) and id uniqueness,
+// carries them, and reads nothing: the host composes `<integration>.<id>`,
+// and every role grants a capability identically.
+// ═══════════════════════════════════════════════════════════════
+
+describe('capabilities', () => {
+  it('a bundle declaring them lands whole, in order', () => {
+    const result = runIntake(
+      { integration: 'acme', actions: {}, capabilities: [{ id: 'desk', title: 'Front desk' }, { id: 'billing-view', title: 'See billing' }] },
+      ctx(),
+    );
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.bundle.capabilities).toEqual([
+        { id: 'desk', title: 'Front desk' },
+        { id: 'billing-view', title: 'See billing' },
+      ]);
+    }
+  });
+
+  it('a bundle saying nothing parses to an empty array', () => {
+    expect(okBundle().capabilities).toEqual([]);
+  });
+
+  it('a duplicate id refuses the bundle', () => {
+    const result = runIntake(
+      { integration: 'acme', actions: {}, capabilities: [{ id: 'desk', title: 'Front desk' }, { id: 'desk', title: 'Also desk' }] },
+      ctx(),
+    );
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.reasons.join(' ')).toContain('declared twice');
+  });
+
+  it('a malformed id refuses the bundle — no dots, no caps, no stray hyphens', () => {
+    for (const id of ['Desk', 'desk.view', 'desk-', '-desk', 'desk--view', '']) {
+      const result = runIntake({ integration: 'acme', actions: {}, capabilities: [{ id, title: 'x' }] }, ctx());
+      expect(result.ok, `id "${id}" should refuse`).toBe(false);
+    }
+  });
+
+  it('a titleless capability refuses the bundle — the title is all a person sees', () => {
+    const result = runIntake({ integration: 'acme', actions: {}, capabilities: [{ id: 'desk', title: '' }] }, ctx());
+    expect(result.ok).toBe(false);
+  });
+
+  it('an unknown key inside an entry refuses the bundle — strict, no silent gates list', () => {
+    const result = runIntake(
+      { integration: 'acme', actions: {}, capabilities: [{ id: 'desk', title: 'Front desk', gates: ['ext.desk.acme.x'] }] },
+      ctx(),
+    );
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.reasons.join(' ')).toContain('capabilities');
+  });
+
+  it('the row carries them, and a row predating the column answers empty', async () => {
+    const pool = createPglitePool(new PGlite());
+    await initIntegrations(pool);
+    await pool.query(`INSERT INTO integrations (id, url, capabilities) VALUES ('acme', 'https://acme.example', '[{"id":"desk","title":"Front desk"}]'::jsonb)`);
+    await pool.query(`INSERT INTO integrations (id, url) VALUES ('elder', 'https://elder.example')`);
+    const rows = await listIntegrations(pool);
+    expect(rows.find((r) => r.id === 'acme')?.capabilities).toEqual([{ id: 'desk', title: 'Front desk' }]);
+    expect(rows.find((r) => r.id === 'elder')?.capabilities).toEqual([]);
+  });
+
+  it('a re-import replaces rather than accumulates', async () => {
+    const pool = createPglitePool(new PGlite());
+    await initIntegrations(pool);
+    const upsert = (caps: string): Promise<unknown> =>
+      pool.query(
+        `INSERT INTO integrations (id, url, capabilities) VALUES ('acme', 'https://acme.example', $1::jsonb)
+         ON CONFLICT (id) DO UPDATE SET capabilities = EXCLUDED.capabilities`,
+        [caps],
+      );
+    await upsert('[{"id":"desk","title":"Front desk"}]');
+    await upsert('[{"id":"billing-view","title":"See billing"}]');
+    const rows = await listIntegrations(pool);
+    expect(rows.find((r) => r.id === 'acme')?.capabilities).toEqual([{ id: 'billing-view', title: 'See billing' }]);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════
 // callIntegration — the outbound act. The deployment calls an integration
 // with nobody driving; the gates are approved + installed, the credential is
 // a REAL assertion (verified here against the signer's public half, not just
