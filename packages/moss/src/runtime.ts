@@ -1,3 +1,4 @@
+import type { Context, Next } from 'hono';
 import type { MutationClient, PgPool, CacheBackend } from '@niscorp/vex';
 
 // ═══════════════════════════════════════════════════════════════
@@ -91,6 +92,20 @@ export type NiscRuntime = {
   // also what a wrong key gets: a tool cannot tell an unset key from a bad one,
   // and neither can anybody else.
   operatorKey?: string;
+
+  // A GATE THE APP RUNS OVER THE WHOLE OPERATOR PREFIX — its own authentication,
+  // rate limiting, and audit, wrapped AROUND moss's key check and its routes.
+  //
+  // It runs BEFORE the key check, so an app credential can refuse first; and it
+  // may `await next()` to observe the OUTCOME, so approving an integration —
+  // which decides what code the deployment mints assertions for — is auditable
+  // with its real result, not just the attempt. Returning a Response refuses;
+  // returning nothing falls through to the key check.
+  //
+  // It can only HARDEN the prefix: moss's key check still runs on every path the
+  // gate lets through, so a gate adds a second lock and never removes moss's.
+  // Absent, moss's key check is the only gate and the prefix behaves as it did.
+  operatorGate?: (c: Context, next: Next) => Response | void | Promise<Response | void>;
 
   // A FIXED SEED FOR THE ASSERTION SIGNING KEYPAIR — dev only, and off by
   // default (assert.ts). Without it the keypair regenerates every boot, which

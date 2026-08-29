@@ -162,6 +162,31 @@ export type MossServer = Hono<Env> & {
 export const secretsEqual = (a: string, b: string): boolean =>
   timingSafeEqual(createHash('sha256').update(a).digest(), createHash('sha256').update(b).digest());
 
+// THE TWO GATES GUARDING THE OPERATOR PREFIX, installed in the order they must
+// run. Registration order IS the security property: Hono composes matched
+// handlers in the order they were added, so the app's gate has to be added
+// before moss's key check to run before it, and both before the routes to wrap
+// them. Without this, an app that mounted its own `/operator/*` middleware got a
+// gate that ran AFTER moss's and, on moss's own routes, never — moss answered
+// every refusal and the app's gate was unreachable on the one path that matters.
+//
+// The app's gate (if any) runs first: returning a Response refuses; calling
+// `next()` and returning falls through to moss's key check. Either way moss's
+// own check still runs on every path the gate lets through, so the seam can only
+// HARDEN the prefix — add a second lock, never remove moss's. Awaiting `next()`
+// lets the gate observe the OUTCOME (moss's own 404, an approval's 422), which
+// is what makes auditing the consequential acts here honest rather than a log of
+// attempts.
+export const guardOperator = (operator: Hono<Env>, opts: { key: string; gate?: NiscRuntime['operatorGate'] }): void => {
+  const gate = opts.gate;
+  if (gate !== undefined) operator.use('*', (c, next) => Promise.resolve(gate(c, next)));
+  operator.use('*', async (c, next) => {
+    const presented = c.req.header('x-operator-key') ?? '';
+    if (opts.key === '' || !secretsEqual(presented, opts.key)) return c.json({ message: 'Not found.' }, 404);
+    return next();
+  });
+};
+
 export const createServer = async (app: NiscApp, runtime: NiscRuntime): Promise<MossServer> => {
   // WHO A TOKEN IS, resolved before anything else boots: an unset verifier
   // refuses HERE, with a sentence, instead of serving every forged principal
@@ -633,13 +658,9 @@ export const createServer = async (app: NiscApp, runtime: NiscRuntime): Promise<
   // tenant decision made by somebody signed in, so it lives on the app's own
   // surfaces under the charter, where it can be audited against a person.
   const operator = new Hono<Env>();
-  operator.use('*', async (c, next) => {
-    const key = runtime.operatorKey ?? '';
-    // Constant-time: a wrong or short key is refused no faster than a correct
-    // one. secretsEqual explains why the comparison must not branch on length.
-    if (key === '' || !secretsEqual(c.req.header('x-operator-key') ?? '', key)) return c.json({ message: 'Not found.' }, 404);
-    return next();
-  });
+  // The constant-time key check, plus the app's own gate over the whole prefix
+  // if it supplied one (runtime.operatorGate). See guardOperator.
+  guardOperator(operator, { key: runtime.operatorKey ?? '', gate: runtime.operatorGate });
 
   operator.get('/integrations', async (c) => c.json({ integrations: await listIntegrations(runtime.pool) }));
 
