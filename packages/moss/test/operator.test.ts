@@ -28,7 +28,7 @@ const prefix = (opts: Parameters<typeof guardOperator>[1]): Hono => {
   return server;
 };
 
-const call = (server: Hono, key?: string): Promise<Response> =>
+const call = async (server: Hono, key?: string): Promise<Response> =>
   server.request('/operator/integrations', key === undefined ? {} : { headers: { 'x-operator-key': key } });
 
 describe('secretsEqual — constant-time credential compare', () => {
