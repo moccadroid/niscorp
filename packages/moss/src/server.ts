@@ -1,4 +1,4 @@
-import { randomBytes } from 'node:crypto';
+import { randomBytes, createHash, timingSafeEqual } from 'node:crypto';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { Hono } from 'hono';
 import { vex } from '@niscorp/vex/hono';
@@ -150,6 +150,17 @@ export type MossServer = Hono<Env> & {
   // declares no `identity` seam.
   identities?: { list: () => IdentityReport[]; meter: () => { size: number; max: number; resolved: number; evicted: number; expired: number } };
 };
+
+// Constant-time credential comparison. Both sides are hashed to a fixed 32-byte
+// width first, so the compare never branches on length: a short guess is refused
+// in the same time as a correct-length one (a bare length check would leak the
+// key's length), and `timingSafeEqual` — which throws on a length mismatch — is
+// always handed two equal-width digests. The timing signal a REMOTE attacker
+// could read here is nanoseconds under microseconds of network jitter and is not
+// the point; D6 co-locates add-on containers on a shared network, and the least
+// -trusted code in the deployment facing far less jitter is.
+export const secretsEqual = (a: string, b: string): boolean =>
+  timingSafeEqual(createHash('sha256').update(a).digest(), createHash('sha256').update(b).digest());
 
 export const createServer = async (app: NiscApp, runtime: NiscRuntime): Promise<MossServer> => {
   // WHO A TOKEN IS, resolved before anything else boots: an unset verifier
@@ -624,7 +635,9 @@ export const createServer = async (app: NiscApp, runtime: NiscRuntime): Promise<
   const operator = new Hono<Env>();
   operator.use('*', async (c, next) => {
     const key = runtime.operatorKey ?? '';
-    if (key === '' || c.req.header('x-operator-key') !== key) return c.json({ message: 'Not found.' }, 404);
+    // Constant-time: a wrong or short key is refused no faster than a correct
+    // one. secretsEqual explains why the comparison must not branch on length.
+    if (key === '' || !secretsEqual(c.req.header('x-operator-key') ?? '', key)) return c.json({ message: 'Not found.' }, 404);
     return next();
   });
 
