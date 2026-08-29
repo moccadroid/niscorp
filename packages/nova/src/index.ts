@@ -107,6 +107,13 @@ export type {
   ModelBindingDescriptor,
 } from './layout';
 
+// The layout-agent palette, and the per-entry converter under it. Exported
+// because moss's integration contract builds the same author-facing view of a
+// component (name, description, props schema) from the same source — one
+// converter, so the palette and the contract cannot drift.
+export { paletteFromRegistry, paletteEntryOf } from './agent/palette';
+export type { LayoutPaletteEntry, PaletteFromRegistryOptions } from './agent/palette';
+
 // ═══════════════════════════════════════════════════════════
 // Action — authoring schemas + the narrow runtime type returned
 // by `shell.getRuntime`. Internal runtime helpers stay internal.

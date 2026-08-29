@@ -1,6 +1,6 @@
 import { z } from 'zod';
-import { ActionDefinitionSchema } from '@niscorp/nova';
-import type { ActionDefinition } from '@niscorp/nova';
+import { ActionDefinitionSchema, paletteEntryOf } from '@niscorp/nova';
+import type { ActionDefinition, ComponentMeta, LayoutPaletteEntry } from '@niscorp/nova';
 import { componentsOf } from '@niscorp/nova/reflect';
 import type { PgPool } from '@niscorp/vex';
 import { hashIntegrationKey } from './assert';
@@ -812,7 +812,11 @@ export const filterInstalled = (ids: readonly string[], installed: ReadonlySet<s
 // component name. This is what replaces those imports: the same information,
 // over the wire, in the two formats somebody might want it in.
 export type Contract = {
-  components: readonly string[];
+  // Each component the author may compose, with its description and — where the
+  // app carried one — its props as a draft-7 JSON Schema derived from the same
+  // Zod schema the renderer validates against. A component the app registered
+  // with no meta appears as its name alone, exactly as the whole list used to.
+  components: readonly LayoutPaletteEntry[];
   audiences: readonly string[];
   namespace: string;
   actionSchema: string;
@@ -823,7 +827,15 @@ export type Contract = {
 };
 
 export const buildContract = (app: NiscApp, integrationId: string): Contract => {
-  const components = Object.keys(app.shell?.components ?? {}).sort();
+  // Name + description + props schema per component, from the same converter the
+  // layout agent's palette uses — the contract is that palette asked for a
+  // person instead of an agent. Unfiltered on purpose: what intake will enforce
+  // (the sibling props check) is the whole schema, so the docs must show the
+  // whole schema, or an author reads one contract and is judged against another.
+  const registered = app.shell?.components ?? {};
+  const components = Object.keys(registered)
+    .sort()
+    .map((name) => paletteEntryOf(name, (registered[name]?.meta ?? {}) as ComponentMeta));
   // Every audience the charter has drawn an `ext.` fence for. An integration
   // may claim a namespace under these and nowhere else.
   const audiences = new Set<string>();
@@ -850,6 +862,42 @@ export const buildContract = (app: NiscApp, integrationId: string): Contract => 
   };
 };
 
+// One prop's TYPE column, from its JSON Schema node. The closed sets are the
+// point — an enum (`emphasis` is one of four) and a union of literals surface as
+// `enum` / `anyOf` of consts, neither of which is a bare `type`, so an author
+// told only "string" learns nothing about which strings. A numeric range (a kit
+// whose gaps are steps 0–6) rides along.
+const describeProp = (schema: Record<string, unknown>): string => {
+  const enumValues = schema['enum'];
+  if (Array.isArray(enumValues)) return `one of: ${enumValues.map((v) => String(v)).join(', ')}`;
+  const anyOf = schema['anyOf'];
+  if (Array.isArray(anyOf)) {
+    const consts = anyOf.map((s) => (s as Record<string, unknown>)['const']).filter((v) => v !== undefined);
+    if (consts.length === anyOf.length && consts.length > 0) return `one of: ${consts.map((v) => String(v)).join(', ')}`;
+  }
+  const type = schema['type'];
+  const base = typeof type === 'string' ? type : Array.isArray(type) ? type.map((t) => String(t)).join(' | ') : 'value';
+  const min = schema['minimum'];
+  const max = schema['maximum'];
+  if (typeof min === 'number' || typeof max === 'number') return `${base} (${typeof min === 'number' ? min : '…'}–${typeof max === 'number' ? max : '…'})`;
+  return base;
+};
+
+// One component: its name, its description, and — where it carried a schema — a
+// small table of props (name · type · required · meaning). A component with no
+// props renders as its name alone, which is what the whole list used to be.
+const componentAsMarkdown = (component: LayoutPaletteEntry): string => {
+  const head = component.description !== '' ? `**${component.name}** — ${component.description}` : `**${component.name}**`;
+  const schema = component.propsSchema as { properties?: Record<string, Record<string, unknown>>; required?: readonly string[] } | undefined;
+  const properties = schema?.properties;
+  if (properties === undefined || Object.keys(properties).length === 0) return head;
+  const required = new Set(schema?.required ?? []);
+  const rows = Object.entries(properties).map(
+    ([prop, spec]) => `| ${prop} | ${describeProp(spec)} | ${required.has(prop) ? 'yes' : 'no'} | ${String(spec['description'] ?? '')} |`,
+  );
+  return [head, ``, `| prop | type | required | meaning |`, `| --- | --- | --- | --- |`, ...rows].join('\n');
+};
+
 export const contractAsMarkdown = (contract: Contract, fingerprints: readonly string[]): string =>
   [
     `# What you can build against`,
@@ -862,7 +910,7 @@ export const contractAsMarkdown = (contract: Contract, fingerprints: readonly st
     ``,
     `## Components your layouts may use`,
     ``,
-    contract.components.map((c) => `- ${c}`).join('\n') || '(none)',
+    contract.components.map(componentAsMarkdown).join('\n\n') || '(none)',
     ``,
     `## Fingerprints you may call`,
     ``,

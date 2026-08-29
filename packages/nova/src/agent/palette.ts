@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { ComponentRegistry } from '../layout/types';
+import type { ComponentRegistry, ComponentMeta } from '../layout/types';
 
 // ───────────────────────────────────────────────────────────
 // Derive a layout-agent palette from a ComponentRegistry.
@@ -34,26 +34,32 @@ const stripProps = (schema: object, omit: readonly string[]): object => {
   return { ...s, properties, ...(required !== undefined ? { required } : {}) };
 };
 
+// ONE PALETTE ENTRY, from a component's meta — the conversion at the heart of a
+// palette, factored out so a second caller derives an author's props from the
+// SAME Zod schema and the SAME JSON-Schema target, never a fork that drifts.
+// moss's integration contract calls this to answer "what may I build against"
+// for a person, which is the same question the layout agent asks of the palette;
+// `omitProps` and binding-awareness stay the caller's concern. A component with
+// no schema yields name + description alone, exactly as a bare registration does.
+export const paletteEntryOf = (name: string, meta: ComponentMeta, omitProps?: readonly string[]): LayoutPaletteEntry => {
+  let propsSchema: object | undefined;
+  if (meta.propsSchema !== undefined) {
+    const js = z.toJSONSchema(meta.propsSchema, { target: 'draft-7' });
+    propsSchema = omitProps !== undefined && omitProps.length > 0 ? stripProps(js, omitProps) : js;
+  }
+  return { name, description: meta.description ?? '', ...(propsSchema === undefined ? {} : { propsSchema }) };
+};
+
 export const paletteFromRegistry = (
   registry: ComponentRegistry,
   options: PaletteFromRegistryOptions = {},
 ): LayoutPaletteEntry[] => {
   const names = options.include ?? registry.list();
-  const omit = options.omitProps;
   const out: LayoutPaletteEntry[] = [];
   for (const name of names) {
     const entry = registry.get(name);
     if (entry === undefined) continue;
-    let propsSchema: object | undefined;
-    if (entry.meta.propsSchema !== undefined) {
-      const js = z.toJSONSchema(entry.meta.propsSchema, { target: 'draft-7' });
-      propsSchema = omit !== undefined && omit.length > 0 ? stripProps(js, omit) : js;
-    }
-    out.push({
-      name,
-      description: entry.meta.description ?? '',
-      ...(propsSchema === undefined ? {} : { propsSchema }),
-    });
+    out.push(paletteEntryOf(name, entry.meta, options.omitProps));
   }
   return out;
 };
