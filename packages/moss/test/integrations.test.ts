@@ -13,7 +13,7 @@ import { createAssertionSigner, verifyAssertion } from '../src/assert';
 
 const ctx = (over: Partial<IntakeContext> = {}): IntakeContext => ({
   integrationId: 'acme',
-  components: new Set<string>(),
+  components: new Map<string, { propsSchema?: unknown }>(),
   fingerprints: new Set<string>(),
   attachable: new Set<string>(),
   menuSlots: new Set<string>(),

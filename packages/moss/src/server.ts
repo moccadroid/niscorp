@@ -695,7 +695,7 @@ export const createServer = async (app: NiscApp, runtime: NiscRuntime): Promise<
     const fingerprints = new Set((await data.engine.cache.keys?.()) ?? []);
     const result = runIntake(payload, {
       integrationId: id,
-      components: new Set(Object.keys(app.shell?.components ?? {})),
+      components: new Map(Object.entries(app.shell?.components ?? {}).map(([name, def]) => [name, { propsSchema: def.meta?.propsSchema }])),
       fingerprints,
       attachable: new Set(Object.keys(app.attachable ?? {})),
       menuSlots: new Set(app.menuSlots ?? []),

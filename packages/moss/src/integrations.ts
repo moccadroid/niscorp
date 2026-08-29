@@ -1,7 +1,8 @@
 import { z } from 'zod';
 import { ActionDefinitionSchema, paletteEntryOf } from '@niscorp/nova';
 import type { ActionDefinition, ComponentMeta, LayoutPaletteEntry } from '@niscorp/nova';
-import { componentsOf } from '@niscorp/nova/reflect';
+import { walkNodes, isRecord } from '@niscorp/nova/reflect';
+import { isBinding } from '@niscorp/nova/i18n';
 import type { PgPool } from '@niscorp/vex';
 import { hashIntegrationKey } from './assert';
 import type { NiscApp } from './app';
@@ -281,10 +282,14 @@ export const frameAdmits = (frames: Readonly<Record<string, string>>, path: stri
 
 export type IntakeContext = {
   integrationId: string;
-  // Component names the terminal can actually render. A layout naming anything
-  // else would render nothing, and it would do so at the moment somebody
-  // opened it rather than at the moment it arrived.
-  components: ReadonlySet<string>;
+  // Component names the terminal can render, each with the props SCHEMA the app
+  // carried for it (moss's strict Zod schema, filled from the kit) when it did.
+  // The name is the floor — a layout naming anything else renders nothing, and
+  // at the moment somebody opens it rather than the moment it arrived. The
+  // schema is what lets intake refuse a prop the component has no place for (see
+  // runIntake). A component with no schema is checked by name alone, exactly as
+  // this set used to be.
+  components: ReadonlyMap<string, { propsSchema?: unknown }>;
   // Fingerprints the app serves. An action calling one that does not exist is a
   // typo now and a 404 in front of a customer later.
   fingerprints: ReadonlySet<string>;
@@ -302,6 +307,15 @@ const AUDIENCE = /^[a-z][a-z0-9-]*$/;
 // here because intake admits it and the frame route serves it, and two spellings
 // of the same path is how a seam stops working for one caller.
 export const FRAME_GRANT_URL = '/api/integrations/frame';
+
+// A prop VALUE that resolves at RENDER time, so intake cannot know its type: a
+// binding string (`$.x`, `{{ }}`, `@scope` — nova's own isBinding), or a
+// directive object (`$if`, `$eq`, `$prism` — a record carrying a `$`-prefixed
+// key). Its KEY is still checked; only the value is skipped. Top-level by design
+// — a binding buried inside an otherwise-static object value is not unwound, the
+// same line the case draws.
+const isDeferred = (value: unknown): boolean =>
+  (typeof value === 'string' && isBinding(value)) || (isRecord(value) && Object.keys(value).some((key) => key.startsWith('$')));
 
 export const runIntake = (payload: unknown, ctx: IntakeContext): IntakeResult => {
   const parsed = BundleSchema.safeParse(payload);
@@ -331,10 +345,43 @@ export const runIntake = (payload: unknown, ctx: IntakeContext): IntakeResult =>
 
     if (action.id !== id) reasons.push(`action ${id}: its own id says "${action.id}"`);
 
-    // ── the layout composes what the kit has ──
-    for (const name of componentsOf(action.layout)) {
-      if (!ctx.components.has(name)) reasons.push(`action ${id}: layout uses "${name}", which this app has no component for`);
-    }
+    // ── the layout composes what the kit has, and sets props the kit knows ──
+    //
+    // The name is the floor: a component the terminal cannot render shows
+    // nothing, and at the moment somebody opens the screen rather than the moment
+    // it arrived. When the app carried a props schema for the component, the
+    // props are checked too — an unknown prop (`Choice` has no `submitRef`) is
+    // the failure that installs cleanly and does nothing under a customer's
+    // finger, and a strict schema is exactly what refuses it. A prop whose value
+    // is deferred (a binding or directive) has its KEY checked and its value
+    // skipped. Only authored layouts reach here — a served or flattened tree is
+    // never validated against an authoring schema (ADAPTER.md).
+    const layoutReasons = new Set<string>();
+    walkNodes(action.layout, (record) => {
+      const name = record['component'];
+      if (typeof name !== 'string') return;
+      const spec = ctx.components.get(name);
+      if (spec === undefined) {
+        layoutReasons.add(`action ${id}: layout uses "${name}", which this app has no component for`);
+        return;
+      }
+      const schema = spec.propsSchema;
+      const props = record['props'];
+      if (!(schema instanceof z.ZodObject) || !isRecord(props)) return; // name-only, as before
+      const shape = schema.shape as Record<string, z.ZodTypeAny>;
+      for (const [key, value] of Object.entries(props)) {
+        if (!(key in shape)) {
+          layoutReasons.add(`action ${id}: "${name}" has no prop "${key}"`);
+          continue;
+        }
+        if (isDeferred(value)) continue;
+        const check = shape[key]?.safeParse(value);
+        if (check !== undefined && !check.success) {
+          layoutReasons.add(`action ${id}: "${name}" prop "${key}" — ${check.error.issues[0]?.message ?? 'invalid'}`);
+        }
+      }
+    });
+    for (const reason of layoutReasons) reasons.push(reason);
 
     // ── it reaches two places and no others ──
     for (const [name, endpoint] of Object.entries(action.endpoints ?? {})) {
