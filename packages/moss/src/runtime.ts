@@ -1,6 +1,7 @@
 import type { Context, Next } from 'hono';
 import type { MutationClient, PgPool, CacheBackend } from '@niscorp/vex';
 import type { Telemetry } from './telemetry';
+import type { Fabric } from './fabric';
 
 // ═══════════════════════════════════════════════════════════════
 // What the app runs ON — the environment, not the application: a database
@@ -107,6 +108,16 @@ export type NiscRuntime = {
   // gate lets through, so a gate adds a second lock and never removes moss's.
   // Absent, moss's key check is the only gate and the prefix behaves as it did.
   operatorGate?: (c: Context, next: Next) => Response | void | Promise<Response | void>;
+
+  // THE CLUSTER FABRIC — how an invalidation or a nudge reaches a SECOND moss
+  // process (fabric.ts). Off by default, and needed only when a deployment
+  // grows past one process per service: a role change in process A resets the
+  // shell resident in B, a nudge in A wakes a channel subscriber in B. The seam
+  // takes functions, not a connection — `LISTEN/NOTIFY` on the pool moss holds
+  // is the expected implementation, but the transport (and its own dropped-
+  // connection monitoring) is the host's, never moss's. Unset, every path
+  // behaves exactly as it does in one process.
+  fabric?: Fabric;
 
   // WHERE STRUCTURED TELEMETRY GOES — the deployment's one observability sink,
   // and off by default. moss emits one span per vex execution, fn call,

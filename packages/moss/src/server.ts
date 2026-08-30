@@ -7,6 +7,7 @@ import { scopeProfiles } from '@niscorp/vex';
 import type { ScopePolicy, WriteEvent, ExecuteRecord } from '@niscorp/vex';
 import { emitterOf } from './telemetry';
 import type { TelemetrySpan } from './telemetry';
+import { wireFabric } from './fabric';
 import { verifyCharter } from '@niscorp/charter';
 import { auditClosure } from './closure';
 import type { NiscApp } from './app';
@@ -132,6 +133,13 @@ export type MossServer = Hono<Env> & {
   // the right hammer for a changed ARTIFACT, because artifacts are deployment
   // -wide; a tenant installing an integration is not.
   invalidateTenant: (tag: string) => number;
+  // WAKE ONE PRINCIPAL'S SHELL ON A CHANNEL — the outward, cross-process twin
+  // of a reaction's `deliver`. The shell, wherever it is resident, is published
+  // to payload-less so it re-reads under its own policy; the nudge crosses the
+  // fabric so it lands in whichever process holds that principal. No fabric, no
+  // second process: it is just the local `deliver`. Payload-less by the
+  // row-less doctrine — a nudge says a channel changed, never what to.
+  nudge: (principal: string, channel: string) => void;
   // The generation this process has observed. Moves when any process calls
   // `refresh`; every process drops its derivations within one poll of it.
   generation: () => number;
@@ -619,8 +627,17 @@ export const createServer = async (app: NiscApp, runtime: NiscRuntime): Promise<
                     mintWrites(tide, event, as, Date.now(), chain).catch((err) => console.error('[moss:facts]', err));
                   }
                   const tools = {
-                    deliver: (principal: string, channel: string, payload?: unknown) =>
-                      (server as MossServer).shells?.deliver(principal, channel, payload) ?? false,
+                    // Local delivery carries the payload — an optimisation for a
+                    // shell resident in THIS process. The cross-process nudge is
+                    // payload-less: a shell in another process re-reads under its
+                    // own policy, which is the row-less doctrine and the only safe
+                    // thing to send off-box. No fabric → the publish is a no-op and
+                    // this is exactly today's local deliver.
+                    deliver: (principal: string, channel: string, payload?: unknown) => {
+                      const local = (server as MossServer).shells?.deliver(principal, channel, payload) ?? false;
+                      publishFabric({ kind: 'nudge', principal, channel });
+                      return local;
+                    },
                   };
                   for (const write of event.writes) {
                     if (write.rows.length === 0) continue;
@@ -1303,6 +1320,35 @@ export const createServer = async (app: NiscApp, runtime: NiscRuntime): Promise<
       })
     : undefined;
 
+  // THE CLUSTER FABRIC. One origin per process, stamped on every signal so a
+  // process ignores its own echoes. The three appliers below are LOCAL-ONLY —
+  // they mutate what this process holds and never publish — and are shared by
+  // two callers: a remote signal (through `wireFabric`'s subscriber) and this
+  // server's own methods, which run the applier THEN publish. Absent a fabric,
+  // `publishFabric` is a no-op and nothing is subscribed. `refresh` is
+  // deliberately not here: it rides the generation pointer, which is persistent
+  // and survives a restart, because the manifest it guards has no other heal
+  // clock (fabric.ts, generation.ts).
+  const fabricOrigin = randomBytes(8).toString('hex');
+  const applyInvalidateIdentity = (principal: string): boolean => {
+    const held = identities?.invalidate(principal) ?? false;
+    shells?.reset(principal);
+    return held;
+  };
+  const applyInvalidateTenant = (tag: string): number => (identities?.invalidateTag(tag) ?? []).length;
+  // Wake one principal's shell, payload-less — the shell re-reads. If that
+  // principal is resident here it wakes; if not, this is a no-op and the process
+  // that holds them applies the same signal. No tag lookup: `deliver` is
+  // per-principal, and the identity cache is deliberately not a by-tenant index.
+  const applyNudge = (principal: string, channel: string): void => {
+    shells?.deliver(principal, channel);
+  };
+  const publishFabric = wireFabric(runtime.fabric, fabricOrigin, {
+    invalidateIdentity: applyInvalidateIdentity,
+    invalidateTenant: applyInvalidateTenant,
+    nudge: applyNudge,
+  });
+
   // Artifacts changed at runtime — an app that loads actions from rows and
   // just wrote new ones. Same gates as boot (an incoherent publish REFUSES and
   // the process keeps serving the old resolution), then the memos drop and
@@ -1418,16 +1464,30 @@ export const createServer = async (app: NiscApp, runtime: NiscRuntime): Promise<
       //
       // A caller who does mean "rebuild theirs" has `invalidateIdentity`, which
       // is what a role change uses.
-      return (identities?.invalidateTag(tag) ?? []).length;
+      //
+      // Applied locally, then published: a second process forgets the same
+      // tenant's records, and its live shells pick up the changed actions
+      // through the generation pointer's own adopt — the fabric carries the
+      // record-forget, generation carries the manifest.
+      const forgotten = applyInvalidateTenant(tag);
+      publishFabric({ kind: 'invalidate-tenant', tag });
+      return forgotten;
     },
     invalidateIdentity: (principal: string) => {
       // The compiled memos are keyed by (roles + installed), not by principal,
       // so they need no clearing here: a re-resolved record either lands on the
       // same key — in which case the memo was already right — or on a different
       // one, which was never this principal's to begin with.
-      const held = identities?.invalidate(principal) ?? false;
-      shells?.reset(principal);
+      //
+      // Applied locally, then published: the process where this principal's
+      // shell is resident resets it, whichever process that is.
+      const held = applyInvalidateIdentity(principal);
+      publishFabric({ kind: 'invalidate-identity', principal });
       return held;
+    },
+    nudge: (principal: string, channel: string) => {
+      applyNudge(principal, channel);
+      publishFabric({ kind: 'nudge', principal, channel });
     },
     ...(identities !== undefined ? { identities: { list: identities.list, meter: identities.meter } } : {}),
   });
