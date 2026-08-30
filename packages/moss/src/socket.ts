@@ -3,6 +3,8 @@ import type { RenderNode } from '@niscorp/nova';
 import type { Catalog } from './principal';
 import type { DeltaOp } from './delta';
 import type { ShellHost } from './shells';
+import { emitterOf, spanClock } from './telemetry';
+import type { Telemetry } from './telemetry';
 
 // ═══════════════════════════════════════════════════════════════
 // The socket — the authority channel (DESIGN.md § The socket), protocol layer.
@@ -111,6 +113,10 @@ export type SocketContext = {
   // `DEFAULT_REVALIDATE_MS`; `0` or `Infinity` disables it, and a token
   // checked once at upgrade is then trusted for the life of the connection.
   revalidateMs?: number;
+  // The deployment's telemetry sink, if any — a `socket.upgrade` span per
+  // connection admitted or refused, and a `socket.close` span carrying the
+  // whole connection's lifetime. See telemetry.ts.
+  telemetry?: Telemetry;
 };
 
 // ── Revalidation ──
@@ -150,6 +156,7 @@ const parse = (text: string): Record<string, unknown> | null => {
 };
 
 export const createSocket = (ctx: SocketContext): SocketAccept => {
+  const emit = emitterOf(ctx.telemetry);
   // Every live connection, with the credential it authenticated under (null =
   // anonymous, which has nothing that can expire). One structure: the future
   // catalog-push fan-out wants the keys, revalidation wants the values.
@@ -224,11 +231,17 @@ export const createSocket = (ctx: SocketContext): SocketAccept => {
   };
 
   const open = async (url: string, connection: Connection, send: (message: ServerMessage) => void): Promise<void> => {
+    // One clock stamped at the handshake serves both the short `socket.upgrade`
+    // span and the whole-connection `socket.close` span from the same origin.
+    const upClock = emit === undefined ? undefined : spanClock();
     const token = new URL(url, 'http://nisc.local').searchParams.get('token');
     let principal: string | null = null;
     if (token !== null && token !== '') {
       principal = await ctx.session(token);
       if (principal === null) {
+        if (emit !== undefined && upClock !== undefined) {
+          emit({ name: 'socket.upgrade', startUnixNano: upClock.startUnixNano, endUnixNano: upClock.endUnixNano(), status: 'refused', attributes: { hasPrincipal: false } });
+        }
         send({ type: 'error', code: 'invalid_token', message: 'The session token did not resolve to a principal.' });
         connection.close(CLOSE_INVALID_TOKEN, 'invalid token');
         return;
@@ -240,6 +253,13 @@ export const createSocket = (ctx: SocketContext): SocketAccept => {
     // recoverable from anything else here.
     live.set(connection, token !== null && token !== '' && principal !== null ? { token, principal } : null);
     connection.onClose(() => live.delete(connection));
+    // The connection's whole life, closed by the same clock — how long
+    // terminals stay, and under a principal or anonymous. Registered here so it
+    // fires however the connection ends (graceful, expiry, transport drop).
+    if (emit !== undefined && upClock !== undefined) {
+      const hadPrincipal = principal !== null;
+      connection.onClose(() => emit({ name: 'socket.close', startUnixNano: upClock.startUnixNano, endUnixNano: upClock.endUnixNano(), status: 'ok', attributes: { hasPrincipal: hadPrincipal } }));
+    }
 
     // The catalog channel: the application, resolved for YOU, on every
     // (re)connect — reconnect re-sends current state, no replay machinery.
@@ -260,6 +280,13 @@ export const createSocket = (ctx: SocketContext): SocketAccept => {
     if (session !== undefined) {
       session.attach(connection, { delta: wantsDelta });
       connection.onClose(() => session.detach(connection));
+    }
+
+    // Admitted: the handshake resolved a principal, said hello, and attached a
+    // shell. The span measures that, not the connection's life (that is
+    // `socket.close`).
+    if (emit !== undefined && upClock !== undefined) {
+      emit({ name: 'socket.upgrade', startUnixNano: upClock.startUnixNano, endUnixNano: upClock.endUnixNano(), status: 'ok', attributes: { hasPrincipal: principal !== null } });
     }
 
     connection.onMessage((text) => {

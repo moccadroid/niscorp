@@ -1,5 +1,6 @@
 import type { Context, Next } from 'hono';
 import type { MutationClient, PgPool, CacheBackend } from '@niscorp/vex';
+import type { Telemetry } from './telemetry';
 
 // ═══════════════════════════════════════════════════════════════
 // What the app runs ON — the environment, not the application: a database
@@ -106,6 +107,15 @@ export type NiscRuntime = {
   // gate lets through, so a gate adds a second lock and never removes moss's.
   // Absent, moss's key check is the only gate and the prefix behaves as it did.
   operatorGate?: (c: Context, next: Next) => Response | void | Promise<Response | void>;
+
+  // WHERE STRUCTURED TELEMETRY GOES — the deployment's one observability sink,
+  // and off by default. moss emits one span per vex execution, fn call,
+  // integration call, shell build, and socket upgrade/close, each shaped for an
+  // OTLP backend to ingest without translation (telemetry.ts). Unset, no span
+  // is built and no hot path pays anything; set, the substrate wires it to a
+  // ring buffer and/or an exporter. Operational, not application: a service is
+  // observed by virtue of running moss, never by anything it authors.
+  telemetry?: Telemetry;
 
   // A FIXED SEED FOR THE ASSERTION SIGNING KEYPAIR — dev only, and off by
   // default (assert.ts). Without it the keypair regenerates every boot, which

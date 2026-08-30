@@ -50,9 +50,48 @@ export type VexHandlerConfig = {
     // a committed write, so its error is contained, never the request's.
     onWrite?: (event: WriteEvent) => void;
   };
+  // The execution observer — the read/write twin of `mutations.onWrite`, and
+  // vex's whole telemetry surface. Fired once per `handleQuery`, AFTER the
+  // outcome is known, with vex-vocabulary facts (fingerprint, reach, cache,
+  // rows, status, timing) and the unforgeable scope. Vex knows nothing of spans
+  // or OTLP; a host maps this record to whatever it emits. Absent → not even the
+  // record is built (see `handleQuery`), so an unobserved endpoint pays nothing.
+  // A listener that throws is contained, never the request's.
+  onExecute?: (record: ExecuteRecord) => void;
 };
 
 export type WriteEvent = { fingerprint: string; writes: WriteResult[]; scope: ScopeValues };
+
+// What one execution DID, in vex's own vocabulary — the record `onExecute`
+// hands a host. Not a span: vex holds no telemetry model, so a host maps these
+// facts to whatever it emits. `startUnixNano`/`endUnixNano` are epoch nanos at
+// millisecond anchoring with a sub-millisecond monotonic span between them —
+// exact enough for durations, coarse in the low bits — copied through verbatim.
+export type ExecuteRecord = {
+  kind: 'query' | 'mutation';
+  status: 'ok' | 'error' | 'refused';
+  fingerprint?: string;
+  reach?: string;
+  // Reads: whether the entry was already compiled. Mutations always replay.
+  cacheHit?: boolean;
+  // Rows returned (reads) or written (mutations).
+  rows?: number;
+  startUnixNano: number;
+  endUnixNano: number;
+  // The scope the request could not forge, passed exactly as `onWrite` passes
+  // it — for a host to read principal PRESENCE from, never a value into a span.
+  scope: ScopeValues;
+};
+
+// The mutable half of the record, filled by `runQuery` as it goes and read once
+// by `handleQuery`. Built only when an observer is attached.
+type ExecuteProbe = {
+  kind: 'query' | 'mutation';
+  fingerprint?: string;
+  reach?: string;
+  cacheHit?: boolean;
+  rows?: number;
+};
 
 export type DiscoveryFingerprint = {
   fingerprint: string;
@@ -273,10 +312,55 @@ export type QueryResult = {
   body: unknown;
 };
 
+// Rows an execution touched, for the observer's `rows` — an array's length, a
+// single object as one, nothing as zero. Never inspects the values.
+const rowsOf = (result: unknown): number =>
+  Array.isArray(result) ? result.length : result === null || result === undefined ? 0 : 1;
+
 export const handleQuery = async (
   config: VexHandlerConfig,
   body: unknown,
   scope: ScopeValues,
+): Promise<QueryResult> => {
+  // Unobserved: the fast path builds no probe, takes no timestamps, allocates
+  // no record. An endpoint with no telemetry pays exactly nothing.
+  if (config.onExecute === undefined) return runQuery(config, body, scope, undefined);
+
+  const startUnixNano = Date.now() * 1e6;
+  const t0 = elapsedClock();
+  const probe: ExecuteProbe = { kind: 'query' };
+  const result = await runQuery(config, body, scope, probe);
+  const record: ExecuteRecord = {
+    kind: probe.kind,
+    // 200 succeeded; 403 is a policy/reach refusal (a normal outcome, not a
+    // fault); everything else is an error.
+    status: result.status === 200 ? 'ok' : result.status === 403 ? 'refused' : 'error',
+    startUnixNano,
+    endUnixNano: startUnixNano + (elapsedClock() - t0) * 1e6,
+    scope,
+    ...(probe.fingerprint !== undefined ? { fingerprint: probe.fingerprint } : {}),
+    ...(probe.reach !== undefined ? { reach: probe.reach } : {}),
+    ...(probe.cacheHit !== undefined ? { cacheHit: probe.cacheHit } : {}),
+    ...(probe.rows !== undefined ? { rows: probe.rows } : {}),
+  };
+  try {
+    config.onExecute(record);
+  } catch (err) {
+    console.error('[vex:onExecute]', err);
+  }
+  return result;
+};
+
+// Sub-millisecond monotonic reading in milliseconds. `performance` is present
+// on every runtime vex targets; the wall clock is the fallback that keeps the
+// duration honest (0) rather than throwing where it is not.
+const elapsedClock = (): number => (typeof performance !== 'undefined' ? performance.now() : Date.now());
+
+const runQuery = async (
+  config: VexHandlerConfig,
+  body: unknown,
+  scope: ScopeValues,
+  probe: ExecuteProbe | undefined,
 ): Promise<QueryResult> => {
   const { engine } = config;
 
@@ -302,6 +386,10 @@ export const handleQuery = async (
     };
   }
 
+  // Recorded before anything can refuse, so a refusal span still carries the
+  // fingerprint it refused. A read that mints one overwrites this from meta.
+  if (probe !== undefined && parsed.data.fingerprint !== undefined) probe.fingerprint = parsed.data.fingerprint;
+
   try {
     // ONE wire shape: `{ fingerprint, context }`. The entry's kind decides
     // the pipeline — a mutation fingerprint replays the write path; anything
@@ -310,7 +398,12 @@ export const handleQuery = async (
     if (parsed.data.fingerprint !== undefined) {
       const entry = await engine.cache.get(parsed.data.fingerprint);
       if (entry !== undefined && entry.kind === 'ok') entryReach = entry.reach;
+      if (probe !== undefined && entryReach !== undefined) probe.reach = entryReach;
       if (entry !== undefined && entry.kind === 'mutation') {
+        if (probe !== undefined) {
+          probe.kind = 'mutation';
+          if (entry.reach !== undefined) probe.reach = entry.reach;
+        }
         if (config.mutations === undefined) {
           return {
             status: 500,
@@ -365,6 +458,7 @@ export const handleQuery = async (
         // Lifetime = usage, for writes exactly as for reads: stamp
         // lastUsedAt (off the hot path) so the GC sweep sees replays.
         fireAndForget(engine.cache.set(parsed.data.fingerprint, { ...entry, lastUsedAt: Date.now() }));
+        if (probe !== undefined) probe.rows = rows.length;
         // A single statement returns its one affected row; a batch returns
         // the array — the same `{ result }` envelope a query reply uses.
         return { status: 200, body: { result: rows.length === 1 ? rows[0] : rows } };
@@ -407,6 +501,13 @@ export const handleQuery = async (
       ...(config.locked === true ? { locked: true } : {}),
       ...(readPolicy !== undefined ? { scopePolicy: readPolicy } : {}),
     });
+    if (probe !== undefined) {
+      probe.cacheHit = response.meta.cache.hit;
+      // The identity actually served — the caller's replay key, or the one just
+      // minted for a miss.
+      if (response.meta.cache.fingerprint !== undefined) probe.fingerprint = response.meta.cache.fingerprint;
+      probe.rows = rowsOf(response.result);
+    }
     return { status: 200, body: response };
   } catch (err) {
     if (err instanceof VexError) {

@@ -62,7 +62,7 @@ export { buildValidationContext, resolveParams } from './utils/context.js';
 
 // ─── Handler ────────────────────────────────────────────────
 export { handleDiscovery, handleQuery, handleFingerprintPatch, handleFingerprintDelete } from './handler.js';
-export type { VexHandlerConfig, DiscoveryResponse, DiscoveryFingerprint, QueryResult, WriteEvent } from './handler.js';
+export type { VexHandlerConfig, DiscoveryResponse, DiscoveryFingerprint, QueryResult, WriteEvent, ExecuteRecord } from './handler.js';
 
 // ─── Events ─────────────────────────────────────────────────
 export type { VexEvent, VexEventHandler } from './events.js';

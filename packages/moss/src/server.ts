@@ -4,7 +4,9 @@ import { Hono } from 'hono';
 import { vex } from '@niscorp/vex/hono';
 import { handleQuery } from '@niscorp/vex';
 import { scopeProfiles } from '@niscorp/vex';
-import type { ScopePolicy, WriteEvent } from '@niscorp/vex';
+import type { ScopePolicy, WriteEvent, ExecuteRecord } from '@niscorp/vex';
+import { emitterOf } from './telemetry';
+import type { TelemetrySpan } from './telemetry';
 import { verifyCharter } from '@niscorp/charter';
 import { auditClosure } from './closure';
 import type { NiscApp } from './app';
@@ -187,12 +189,41 @@ export const guardOperator = (operator: Hono<Env>, opts: { key: string; gate?: N
   });
 };
 
+// A vex execution record → a telemetry span. The one place a vex fact becomes
+// a span: vex reports in its own vocabulary (handler.ts, ExecuteRecord) and
+// knows nothing of OTLP; moss decides what of it is safe to name. Principal
+// PRESENCE is derived from the composed scope's `userId` (moss's own
+// convention — machinery carries none), never the value itself; no other scope
+// value crosses into the span.
+export const vexRecordToSpan = (rec: ExecuteRecord): TelemetrySpan => ({
+  name: 'vex.execute',
+  startUnixNano: rec.startUnixNano,
+  endUnixNano: rec.endUnixNano,
+  status: rec.status,
+  attributes: {
+    op: rec.kind,
+    hasPrincipal: (rec.scope['userId'] ?? 'anonymous') !== 'anonymous',
+    ...(rec.fingerprint !== undefined ? { fingerprint: rec.fingerprint } : {}),
+    ...(rec.reach !== undefined ? { reach: rec.reach } : {}),
+    ...(rec.cacheHit !== undefined ? { cache: rec.cacheHit ? 'hit' : 'miss' } : {}),
+    ...(rec.rows !== undefined ? { rows: rec.rows } : {}),
+  },
+});
+
 export const createServer = async (app: NiscApp, runtime: NiscRuntime): Promise<MossServer> => {
   // WHO A TOKEN IS, resolved before anything else boots: an unset verifier
   // refuses HERE, with a sentence, instead of serving every forged principal
   // silently (which is what the old `?? devSession` default did, for every
   // app that never set the field). 'dev-open' announces itself on this line.
   const session = sessionVerifierOf(runtime);
+
+  // The deployment's one safe emitter, derived once — `undefined` when no sink
+  // is configured, which every emission site below guards on to build nothing.
+  // `vexOnExecute` is moss wiring vex's execution observer to it: vex reports a
+  // record, moss maps it to a span and emits. Passed to every vex mount and to
+  // `executeAs`, so one seam covers the request path and all machinery.
+  const emit = emitterOf(runtime.telemetry);
+  const vexOnExecute = emit === undefined ? undefined : (rec: ExecuteRecord) => emit(vexRecordToSpan(rec));
 
   // THE INTEGRATIONS TABLES EXIST BEFORE INTROSPECTION. The data layer's
   // introspected schema is the grant universe policies compile from — a table
@@ -294,6 +325,10 @@ export const createServer = async (app: NiscApp, runtime: NiscRuntime): Promise<
         // Mutation replay under the same role policy — write gates and scope
         // pins apply exactly as they would for a person.
         mutations: { client: runtime.db, policy: resolvePolicyForRoles(app, data.grants, roles) },
+        // Machinery is observed too: a seeded entry run as a charter role is a
+        // vex execution, and its scope carries no principal, so it reports as
+        // `hasPrincipal: false` — which is the truth about it.
+        ...(vexOnExecute !== undefined ? { onExecute: vexOnExecute } : {}),
       },
       { fingerprint, context },
       scope,
@@ -454,6 +489,7 @@ export const createServer = async (app: NiscApp, runtime: NiscRuntime): Promise<
     installedFor: async (principal) => (await resolveIdentity(principal)).installed,
     scopeValuesFor,
     mint: assertions.mint,
+    ...(runtime.telemetry !== undefined ? { telemetry: runtime.telemetry } : {}),
   });
 
   // ── The surfaces ──
@@ -555,6 +591,9 @@ export const createServer = async (app: NiscApp, runtime: NiscRuntime): Promise<
         getPolicy: (c) => policy(c.get('resolved')),
         // An entry that names a reach is served at it, not at the caller's own.
         getPolicyForReach: (c, reach) => policyAtReach(c.get('resolved'), reach),
+        // One span per read and write on this surface — the busiest emission
+        // point, and the reason vex has an observer at all.
+        ...(vexOnExecute !== undefined ? { onExecute: vexOnExecute } : {}),
         mutations: {
           client: runtime.db,
           // Vex's write observer, fired once per committed mutation with
@@ -1342,6 +1381,7 @@ export const createServer = async (app: NiscApp, runtime: NiscRuntime): Promise<
     catalog: async (principal) => catalog(await resolveIdentity(principal)),
     ...(shells !== undefined ? { shells } : {}),
     ...(runtime.sessionRevalidateMs !== undefined ? { revalidateMs: runtime.sessionRevalidateMs } : {}),
+    ...(runtime.telemetry !== undefined ? { telemetry: runtime.telemetry } : {}),
   });
 
   return Object.assign(server, {

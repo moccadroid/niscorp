@@ -6,6 +6,8 @@ import { isBinding } from '@niscorp/nova/i18n';
 import type { PgPool } from '@niscorp/vex';
 import { hashIntegrationKey } from './assert';
 import type { NiscApp } from './app';
+import { emitterOf, spanClock } from './telemetry';
+import type { Telemetry } from './telemetry';
 
 // ═══════════════════════════════════════════════════════════════
 // INTEGRATIONS — actions and layouts that arrive from somewhere else.
@@ -622,27 +624,63 @@ export const callIntegrationWith = (deps: {
   scopeValuesFor: (principal: string) => Promise<Record<string, unknown>>;
   mint: (claims: { integration: string; principal: string; scope: Record<string, unknown> }) => string;
   fetchImpl?: typeof fetch;
+  // The deployment's telemetry sink, if any — one `integration.call` span per
+  // outbound call, naming the add-on, the path, and the answer's status. The
+  // operator surface's ad-hoc `watchCalls` tap is the proof this seam is the
+  // right one; this generalises it.
+  telemetry?: Telemetry;
 }): CallIntegration => {
   const fetchImpl = deps.fetchImpl ?? fetch;
+  const emit = emitterOf(deps.telemetry);
   return async (id, path, init) => {
+    const clock = emit === undefined ? undefined : spanClock();
+    // A refusal or answer, as one span. `httpStatus` is present only when the
+    // add-on actually answered; a guard refusal and an unreachable service both
+    // carry none, distinguished by `status`.
+    const done = (status: 'ok' | 'error' | 'refused', httpStatus?: number): void => {
+      if (emit === undefined || clock === undefined) return;
+      emit({
+        name: 'integration.call',
+        startUnixNano: clock.startUnixNano,
+        endUnixNano: clock.endUnixNano(),
+        status,
+        attributes: { addon: id, path, ...(httpStatus !== undefined ? { httpStatus } : {}) },
+      });
+    };
+
     const row = await deps.pool.query('SELECT url, status FROM integrations WHERE id = $1', [id]);
     const found = row.rows[0] as { url?: string; status?: string } | undefined;
-    if (found === undefined) throw new Error(`moss: callIntegration("${id}"): no such integration.`);
-    if (found.status !== 'approved') throw new Error(`moss: callIntegration("${id}"): not approved (status "${String(found.status)}").`);
+    if (found === undefined) {
+      done('refused');
+      throw new Error(`moss: callIntegration("${id}"): no such integration.`);
+    }
+    if (found.status !== 'approved') {
+      done('refused');
+      throw new Error(`moss: callIntegration("${id}"): not approved (status "${String(found.status)}").`);
+    }
     const installed = await deps.installedFor(init.principal);
     if (installed !== undefined && !installed.includes(id)) {
+      done('refused');
       throw new Error(`moss: callIntegration("${id}"): not installed for "${init.principal}".`);
     }
     const scope = { ...(await deps.scopeValuesFor(init.principal)), ...(init.scope ?? {}) };
     const target = `${String(found.url).replace(/\/$/, '')}/${path.replace(/^\/+/, '')}`;
-    return fetchImpl(target, {
-      method: init.method ?? 'POST',
-      headers: {
-        'content-type': 'application/json',
-        authorization: `Bearer ${deps.mint({ integration: id, principal: init.principal, scope })}`,
-      },
-      ...(init.body === undefined ? {} : { body: JSON.stringify(init.body) }),
-    });
+    let response: Response;
+    try {
+      response = await fetchImpl(target, {
+        method: init.method ?? 'POST',
+        headers: {
+          'content-type': 'application/json',
+          authorization: `Bearer ${deps.mint({ integration: id, principal: init.principal, scope })}`,
+        },
+        ...(init.body === undefined ? {} : { body: JSON.stringify(init.body) }),
+      });
+    } catch (err) {
+      done('error');
+      throw err;
+    }
+    done(response.ok ? 'ok' : 'error', response.status);
+    return response;
   };
 };
 

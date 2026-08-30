@@ -12,6 +12,8 @@ export { defineApp } from './app';
 export type { NiscApp, ShellManifest, FunctionSession, LayoutVariant, RunRecord, RunTurn, RunSink } from './app';
 export { devSession, mintDevToken } from './runtime';
 export type { NiscRuntime, SessionVerifier } from './runtime';
+export { emitterOf, spanClock } from './telemetry';
+export type { Telemetry, TelemetrySpan, Emit, SpanClock } from './telemetry';
 export { initSessions, mintSession, sessionOf, revokeSession, revokeAllFor, sessionVerifierOf } from './sessions';
 export { createServer } from './server';
 export type { MossServer, ExecuteAs } from './server';

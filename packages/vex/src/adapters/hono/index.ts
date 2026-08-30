@@ -4,7 +4,7 @@ import type { QueryEngine } from '../../types.js';
 import type { ScopePolicy, ScopeValues } from '../../scope/scope.types.js';
 import type { MutationClient } from '../../mutations/engine.js';
 import { handleDiscovery, handleQuery, handleFingerprintPatch, handleFingerprintDelete } from '../../handler.js';
-import type { WriteEvent } from '../../handler.js';
+import type { WriteEvent, ExecuteRecord } from '../../handler.js';
 
 // Generic over the hono Env so a host that mounts this under its own app
 // (with typed context variables — e.g. the resolved principal) reads them
@@ -34,6 +34,9 @@ export type VexHonoConfig<E extends Env = Env> = {
     policy?: ScopePolicy;
     onWrite?: (event: WriteEvent) => void;
   };
+  // The execution observer, passed through verbatim — fired once per query or
+  // mutation with vex-vocabulary facts. See `VexHandlerConfig.onExecute`.
+  onExecute?: (record: ExecuteRecord) => void;
 };
 
 // Fingerprints may contain '/' (named slots like "deals/table"), so
@@ -59,6 +62,7 @@ export const vex = <E extends Env = Env>(config: VexHonoConfig<E>): Hono<E> => {
       ...(config.getPolicyForReach !== undefined
         ? { policyForReach: (reach: string) => config.getPolicyForReach?.(c, reach) }
         : {}),
+      ...(config.onExecute !== undefined ? { onExecute: config.onExecute } : {}),
       ...(config.mutations !== undefined && mutationPolicy !== undefined
         ? {
             mutations: {

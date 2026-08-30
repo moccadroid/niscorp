@@ -1,6 +1,8 @@
 import { createShell, createComponentRegistry, CANVAS_SLOT_NAME, ACTION_SLOT_NAME } from '@niscorp/nova';
 import { componentsOf, snapshotShell } from '@niscorp/nova/reflect';
-import type { Shell, CanvasConfig, FetchFn, LayoutNode, RenderNode } from '@niscorp/nova';
+import type { Shell, CanvasConfig, FetchFn, FunctionHandler, LayoutNode, RenderNode } from '@niscorp/nova';
+import { emitterOf, spanClock } from './telemetry';
+import type { Emit } from './telemetry';
 import { evaluate } from '@niscorp/prism';
 import type { ScopePolicy } from '@niscorp/vex';
 import type { FunctionSession, NiscApp } from './app';
@@ -221,7 +223,40 @@ const SWEEP_EVERY_MS = 60 * 1000;
 
 const today = (): string => new Date().toISOString().slice(0, 10);
 
+// Each in-process function wrapped to emit one `fn.call` span — the fn name,
+// principal presence, duration, and whether it threw. The in-process dispatch
+// is where server functions run today (`/fns`, the URL layer, is still
+// unbuilt); a service written against either is observed the same way. Built
+// only when a sink is present (the caller guards), so an unobserved session
+// pays nothing per call. The span names the function, never its data.
+export const instrumentFunctions = (
+  fns: Record<string, FunctionHandler>,
+  emit: Emit,
+  principal: string | null,
+): Record<string, FunctionHandler> =>
+  Object.fromEntries(
+    Object.entries(fns).map(([name, handler]): [string, FunctionHandler] => [
+      name,
+      async (data, signal) => {
+        const clock = spanClock();
+        const hasPrincipal = principal !== null;
+        try {
+          const out = await handler(data, signal);
+          emit({ name: 'fn.call', startUnixNano: clock.startUnixNano, endUnixNano: clock.endUnixNano(), status: 'ok', attributes: { fn: name, hasPrincipal } });
+          return out;
+        } catch (err) {
+          emit({ name: 'fn.call', startUnixNano: clock.startUnixNano, endUnixNano: clock.endUnixNano(), status: 'error', attributes: { fn: name, hasPrincipal } });
+          throw err;
+        }
+      },
+    ]),
+  );
+
 export const createShellHost = (ctx: ShellHostContext): ShellHost => {
+  // The deployment's telemetry sink, if any — read off the runtime this host
+  // already carries, so no signature grows. `undefined` when unset, which the
+  // build and dispatch sites guard on.
+  const emit = emitterOf(ctx.runtime.telemetry);
   const manifest = ctx.app.shell;
   if (manifest === undefined) throw new Error('createShellHost: the app manifest has no `shell`.');
   const shellManifest = manifest;
@@ -342,7 +377,8 @@ export const createShellHost = (ctx: ShellHostContext): ShellHost => {
 
   const durable = new Map<string, Cell>(); // principal → the one living shell
 
-  const build = async (token: string | null, principal: string | null): Promise<Live> => {
+  const build = async (token: string | null, principal: string | null, reset = false): Promise<Live> => {
+    const buildClock = emit === undefined ? undefined : spanClock();
     const who = await ctx.resolve(principal);
     const { ids } = who.catalog;
     const granted = new Set(ids);
@@ -431,8 +467,10 @@ export const createShellHost = (ctx: ShellHostContext): ShellHost => {
     };
 
     // Endpoints first, then the non-endpoints. Both get the same session; only
-    // the first produces handlers.
-    const functions = ctx.app.functions?.(session) ?? {};
+    // the first produces handlers. Wrapped for telemetry when a sink is present
+    // — one `fn.call` span per invocation, transparently to the handler.
+    const rawFunctions = ctx.app.functions?.(session) ?? {};
+    const functions = emit === undefined ? rawFunctions : instrumentFunctions(rawFunctions, emit, principal);
     ctx.app.onSession?.(session);
 
     // THE WORDS THIS SHELL WEARS, resolved before it exists — because they are
@@ -557,6 +595,13 @@ export const createShellHost = (ctx: ShellHostContext): ShellHost => {
     shell.onStateChange(flush);
     shell.onDataChange(flush);
 
+    // Built — the per-principal derivation, inputs, phrases and shell all stood
+    // up. `reset` distinguishes a recovery rebuild from a first build; residency
+    // and eviction counts come from the identity/shell meters, not from here.
+    if (emit !== undefined && buildClock !== undefined) {
+      emit({ name: 'shell.build', startUnixNano: buildClock.startUnixNano, endUnixNano: buildClock.endUnixNano(), status: 'ok', attributes: { reset, hasPrincipal: principal !== null } });
+    }
+
     return live;
   };
 
@@ -613,7 +658,7 @@ export const createShellHost = (ctx: ShellHostContext): ShellHost => {
     // reset that had already disposed the old shell would leave the session
     // holding nothing at all: strictly worse than the wedged shell it was
     // called to fix. Built first, a failed reset changes nothing.
-    const next = await build(cell.token, cell.principal);
+    const next = await build(cell.token, cell.principal, true);
     const carried = [...old.connections].map((connection) => ({ connection, delta: old.deltaReady.has(connection) }));
     old.ended = true;
     old.connections.clear();
