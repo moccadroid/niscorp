@@ -301,6 +301,17 @@ export type CountInput = string | ReadonlyArray<StepInputMessage>;
 
 export type EmbedOptions = {
   dimensions?: number;
+  // Per-call usage sink — a sibling of `dimensions`, not one of the builder's
+  // persistent handlers (onRetry/onToolCall). The provider reports embedding
+  // usage on every call and the adapter parses it (EmbedResponse.usage), but
+  // `embed`'s whole ergonomic is vector-in/vector-out, so the number has
+  // nowhere to ride the return without breaking every caller. This hands it
+  // back instead: invoked after a successful call with the adapter's usage and
+  // the model that actually resolved (registry defaults mean the caller may not
+  // know which). A caller that meters model spend measures the embed exactly
+  // rather than re-counting it as a ~4-char/token guess. Not called when the
+  // adapter throws — there was no usage.
+  onUsage?: (usage: { inputTokens: number; totalTokens: number }, model: string) => void;
 };
 
 export type EmbedRequest = {

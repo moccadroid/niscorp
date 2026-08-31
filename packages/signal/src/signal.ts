@@ -412,6 +412,10 @@ const createSignalFromConfig = <T = string>(config: SignalConfig): Signal<T> => 
         input,
         dimensions: options?.dimensions,
       });
+      // The usage the adapter already parsed, handed back before the vector
+      // return narrows it away. After success only — a throw above never reaches
+      // here — and once for both the string and array shapes.
+      options?.onUsage?.(response.usage, resolved.model);
       if (typeof input === 'string') {
         const vector = response.embeddings[0];
         if (!vector) throw new SignalError('No embedding returned', ErrorCode.PROVIDER_ERROR);
