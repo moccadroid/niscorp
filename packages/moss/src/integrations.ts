@@ -57,6 +57,7 @@ export type IntegrationRow = {
   offers: readonly string[];
   needs: readonly string[];
   capabilities: readonly { id: string; title: string }[];
+  configuration: readonly ConfigurationField[];
   lastImportAt: number | null;
   lastError: string | null;
   actionCount: number;
@@ -71,6 +72,71 @@ export type IntegrationRow = {
 // wrong). Bindings live beside the artifacts, never on them: the binding names
 // the action, the action never names its bindings — the same direction layout
 // variants point.
+// WHAT A BUILDER MAY SET — the add-on's declaration of its own configurable
+// behaviour, so the host renders a settings form per add-on the way it renders
+// the role editor from `capabilities`. moss validates the DECLARATION and
+// carries it; the values a builder sets, where they are stored, how they are
+// checked against this on write, and how they reach the service are the host's,
+// exactly as with capability ids and fact kinds. moss never reads a value.
+//
+// EVERY FIELD IS A CLOSED SET — the kit's second law (kit/PRINCIPLES.md): a
+// toggle, a bounded integer, a choice from declared options, or short text with
+// a length ceiling. An open number or a free string is a hole with a nicer
+// name, and a service made to interpret one has to validate it itself.
+//
+// `default` is required on every kind: the form must show a value before a
+// builder has touched anything, and the absence of a stored value has to mean
+// something definite to the service — the declared default. A bundle that
+// declares a field declares what it is when nobody has set it.
+const configurationBase = {
+  key: z.string().regex(/^[a-z][a-z0-9]*(-[a-z0-9]+)*$/, 'a configuration key is lowercase words joined by single hyphens'),
+  title: z.string().min(1),
+  description: z.string().default(''),
+};
+
+const configurationSchema = z
+  .array(
+    z.discriminatedUnion('kind', [
+      z.object({ ...configurationBase, kind: z.literal('toggle'), default: z.boolean() }).strict(),
+      z.object({ ...configurationBase, kind: z.literal('number'), min: z.number().int(), max: z.number().int(), default: z.number().int() }).strict(),
+      z
+        .object({
+          ...configurationBase,
+          kind: z.literal('choice'),
+          options: z.array(z.object({ value: z.string().min(1), label: z.string().min(1) }).strict()).min(2),
+          default: z.string().min(1),
+        })
+        .strict(),
+      z.object({ ...configurationBase, kind: z.literal('text'), maxLength: z.number().int().positive().max(200), default: z.string() }).strict(),
+    ]),
+  )
+  // Coherence the shape alone cannot state — refused with a sentence, the same
+  // posture as the capability-id and settings-action checks, and surfaced
+  // through runIntake's own `safeParse` mapping. One key per bundle; a default
+  // that sits inside the thing it is a default FOR; options that do not repeat.
+  .superRefine((fields, ctx) => {
+    const seen = new Set<string>();
+    fields.forEach((field, i) => {
+      if (seen.has(field.key)) ctx.addIssue({ code: 'custom', path: [i, 'key'], message: `configuration "${field.key}": declared twice` });
+      seen.add(field.key);
+      if (field.kind === 'number') {
+        if (field.min >= field.max) ctx.addIssue({ code: 'custom', path: [i], message: `configuration "${field.key}": min ${field.min} is not below max ${field.max}` });
+        if (field.default < field.min || field.default > field.max) {
+          ctx.addIssue({ code: 'custom', path: [i, 'default'], message: `configuration "${field.key}": default ${field.default} is outside [${field.min}, ${field.max}]` });
+        }
+      } else if (field.kind === 'choice') {
+        const values = field.options.map((o) => o.value);
+        if (new Set(values).size !== values.length) ctx.addIssue({ code: 'custom', path: [i, 'options'], message: `configuration "${field.key}": option values repeat` });
+        if (!values.includes(field.default)) ctx.addIssue({ code: 'custom', path: [i, 'default'], message: `configuration "${field.key}": default "${field.default}" is not one of its options` });
+      } else if (field.kind === 'text') {
+        if (field.default.length > field.maxLength) ctx.addIssue({ code: 'custom', path: [i, 'default'], message: `configuration "${field.key}": default is longer than maxLength ${field.maxLength}` });
+      }
+    });
+  })
+  .default([]);
+
+export type ConfigurationField = z.infer<typeof configurationSchema>[number];
+
 const BundleSchema = z
   .object({
     integration: z.string().min(1),
@@ -186,6 +252,10 @@ const BundleSchema = z
     // placement outside the vocabulary does. The host merges these under its
     // own book, so an integration can never rename a host word.
     phrasebook: z.record(z.string().regex(/^[a-z]{2}$/, 'a phrasebook is keyed by LANGUAGE (`de`), never by locale (`de-AT`)'), z.record(z.string(), z.string())).default({}),
+    // WHAT A BUILDER MAY SET per product — a closed vocabulary of settings the
+    // host renders a form from. Carried, never read: the value's meaning is the
+    // integration's contract with its own service. See `configurationSchema`.
+    configuration: configurationSchema,
   })
   .strict();
 
@@ -734,6 +804,11 @@ export const initIntegrations = async (pool: PgPool): Promise<void> => {
       -- thing: a declaration written at import, replaced on re-registration,
       -- that moss never reads — the host does.
       capabilities       jsonb NOT NULL DEFAULT '[]'::jsonb,
+      -- WHAT A BUILDER MAY SET per product — the closed-set field declaration,
+      -- beside capabilities because it is the same kind of thing: a declaration
+      -- written at import, replaced on re-registration, that moss never reads.
+      -- The host renders a settings form from it and stores the values itself.
+      configuration      jsonb NOT NULL DEFAULT '[]'::jsonb,
       -- EVERY PATH THE PROXY MAY FORWARD, derived from the bundle at intake
       -- (reachOf). Beside the grants because it is one: a grant of reach, held
       -- by the same row, revoked by the same delete.
@@ -757,6 +832,7 @@ export const initIntegrations = async (pool: PgPool): Promise<void> => {
   await pool.query(`ALTER TABLE integrations ADD COLUMN IF NOT EXISTS offers jsonb NOT NULL DEFAULT '[]'::jsonb`);
   await pool.query(`ALTER TABLE integrations ADD COLUMN IF NOT EXISTS needs jsonb NOT NULL DEFAULT '[]'::jsonb`);
   await pool.query(`ALTER TABLE integrations ADD COLUMN IF NOT EXISTS capabilities jsonb NOT NULL DEFAULT '[]'::jsonb`);
+  await pool.query(`ALTER TABLE integrations ADD COLUMN IF NOT EXISTS configuration jsonb NOT NULL DEFAULT '[]'::jsonb`);
   await pool.query(`
     CREATE TABLE IF NOT EXISTS integration_actions (
       integration_id  text NOT NULL REFERENCES integrations(id) ON DELETE CASCADE,
@@ -822,7 +898,7 @@ export const listIntegrations = async (pool: PgPool): Promise<IntegrationRow[]> 
   const res = await pool.query(`
     SELECT i.id, i.url, i.status, i.title, i.tagline, i.adds, i.settings_action,
            i.requested_actions, i.requested_data, i.approved_data,
-           i.offers, i.needs, i.capabilities,
+           i.offers, i.needs, i.capabilities, i.configuration,
            i.last_import_at, i.last_error,
            (SELECT count(*) FROM integration_actions a WHERE a.integration_id = i.id) AS action_count
       FROM integrations i ORDER BY i.id
@@ -848,6 +924,7 @@ export const listIntegrations = async (pool: PgPool): Promise<IntegrationRow[]> 
       offers: (row['offers'] ?? []) as string[],
       needs: (row['needs'] ?? []) as string[],
       capabilities: (row['capabilities'] ?? []) as { id: string; title: string }[],
+      configuration: (row['configuration'] ?? []) as ConfigurationField[],
       lastImportAt: at instanceof Date ? at.getTime() : typeof at === 'string' || typeof at === 'number' ? new Date(at).getTime() : null,
       lastError: (row['last_error'] as string | null) ?? null,
       actionCount: Number(row['action_count'] ?? 0),

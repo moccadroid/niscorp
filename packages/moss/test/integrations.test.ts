@@ -275,6 +275,91 @@ describe('capabilities', () => {
   });
 });
 
+describe('configuration — what a builder may set', () => {
+  const withConfig = (configuration: unknown[]) => runIntake({ integration: 'acme', actions: {}, configuration }, ctx());
+
+  it('a bundle declaring the four kinds lands whole, in order', () => {
+    const configuration = [
+      { kind: 'toggle', key: 'waitlist', title: 'Waitlist full classes', description: 'Start a waitlist', default: true },
+      { kind: 'number', key: 'weeks-ahead', title: 'Weeks generated', description: '', min: 1, max: 52, default: 8 },
+      { kind: 'choice', key: 'rounding', title: 'Rounding', description: '', options: [{ value: 'exact', label: 'Exact' }, { value: 'nearest-5', label: 'Nearest 5' }], default: 'exact' },
+      { kind: 'text', key: 'sender-name', title: 'Sender name', description: '', maxLength: 40, default: 'The studio' },
+    ];
+    const result = withConfig(configuration);
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.bundle.configuration).toEqual(configuration);
+  });
+
+  it('a bundle saying nothing parses to an empty array', () => {
+    expect(okBundle().configuration).toEqual([]);
+  });
+
+  it('a duplicate key refuses the bundle', () => {
+    const result = withConfig([
+      { kind: 'toggle', key: 'waitlist', title: 'A', default: true },
+      { kind: 'toggle', key: 'waitlist', title: 'B', default: false },
+    ]);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.reasons.join(' ')).toContain('declared twice');
+  });
+
+  it('an unknown kind refuses the bundle', () => {
+    expect(withConfig([{ kind: 'slider', key: 'x', title: 'X', min: 0, max: 10, default: 5 }]).ok).toBe(false);
+  });
+
+  it('a malformed key refuses the bundle — lowercase words joined by single hyphens', () => {
+    for (const key of ['Waitlist', 'wait.list', 'waitlist-', '-waitlist', 'wait--list', '']) {
+      expect(withConfig([{ kind: 'toggle', key, title: 'X', default: true }]).ok, `key "${key}" should refuse`).toBe(false);
+    }
+  });
+
+  it('a number with min at or above max, or a default outside them, refuses', () => {
+    expect(withConfig([{ kind: 'number', key: 'n', title: 'N', min: 10, max: 10, default: 10 }]).ok).toBe(false);
+    expect(withConfig([{ kind: 'number', key: 'n', title: 'N', min: 1, max: 5, default: 9 }]).ok).toBe(false);
+  });
+
+  it('a choice with a repeated option value, or a default outside its options, refuses', () => {
+    expect(withConfig([{ kind: 'choice', key: 'c', title: 'C', options: [{ value: 'a', label: 'A' }, { value: 'a', label: 'A2' }], default: 'a' }]).ok).toBe(false);
+    expect(withConfig([{ kind: 'choice', key: 'c', title: 'C', options: [{ value: 'a', label: 'A' }, { value: 'b', label: 'B' }], default: 'c' }]).ok).toBe(false);
+  });
+
+  it('text whose default is longer than maxLength refuses', () => {
+    expect(withConfig([{ kind: 'text', key: 't', title: 'T', maxLength: 5, default: 'far too long' }]).ok).toBe(false);
+  });
+
+  it('an unknown key inside an entry refuses the bundle — strict', () => {
+    const result = withConfig([{ kind: 'toggle', key: 'waitlist', title: 'X', default: true, extra: 1 }]);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.reasons.join(' ')).toContain('configuration');
+  });
+
+  it('the row carries it, and a row predating the column answers empty', async () => {
+    const pool = createPglitePool(new PGlite());
+    await initIntegrations(pool);
+    const raw = '[{"kind":"toggle","key":"waitlist","title":"Waitlist","description":"","default":true}]';
+    await pool.query(`INSERT INTO integrations (id, url, configuration) VALUES ('acme', 'https://acme.example', $1::jsonb)`, [raw]);
+    await pool.query(`INSERT INTO integrations (id, url) VALUES ('elder', 'https://elder.example')`);
+    const rows = await listIntegrations(pool);
+    expect(rows.find((r) => r.id === 'acme')?.configuration).toEqual([{ kind: 'toggle', key: 'waitlist', title: 'Waitlist', description: '', default: true }]);
+    expect(rows.find((r) => r.id === 'elder')?.configuration).toEqual([]);
+  });
+
+  it('a re-import replaces rather than accumulates', async () => {
+    const pool = createPglitePool(new PGlite());
+    await initIntegrations(pool);
+    const upsert = (config: string): Promise<unknown> =>
+      pool.query(
+        `INSERT INTO integrations (id, url, configuration) VALUES ('acme', 'https://acme.example', $1::jsonb)
+         ON CONFLICT (id) DO UPDATE SET configuration = EXCLUDED.configuration`,
+        [config],
+      );
+    await upsert('[{"kind":"toggle","key":"a","title":"A","description":"","default":true}]');
+    await upsert('[{"kind":"toggle","key":"b","title":"B","description":"","default":false}]');
+    const rows = await listIntegrations(pool);
+    expect(rows.find((r) => r.id === 'acme')?.configuration).toEqual([{ kind: 'toggle', key: 'b', title: 'B', description: '', default: false }]);
+  });
+});
+
 // ═══════════════════════════════════════════════════════════════
 // callIntegration — the outbound act. The deployment calls an integration
 // with nobody driving; the gates are approved + installed, the credential is

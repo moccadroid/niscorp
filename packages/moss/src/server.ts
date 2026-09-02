@@ -797,8 +797,8 @@ export const createServer = async (app: NiscApp, runtime: NiscRuntime): Promise<
     }
 
     await runtime.pool.query(
-      `INSERT INTO integrations (id, url, title, tagline, description, adds, settings_action, requested_actions, requested_data, reach, frames, phrasebook, story, highlights, press, offers, needs, capabilities, last_import_at, last_error)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9::jsonb, $10::jsonb, $11::jsonb, $12::jsonb, $13::jsonb, $14::jsonb, $15::jsonb, $16::jsonb, $17::jsonb, $18::jsonb, now(), NULL)
+      `INSERT INTO integrations (id, url, title, tagline, description, adds, settings_action, requested_actions, requested_data, reach, frames, phrasebook, story, highlights, press, offers, needs, capabilities, configuration, last_import_at, last_error)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9::jsonb, $10::jsonb, $11::jsonb, $12::jsonb, $13::jsonb, $14::jsonb, $15::jsonb, $16::jsonb, $17::jsonb, $18::jsonb, $19::jsonb, now(), NULL)
        ON CONFLICT (id) DO UPDATE SET url = EXCLUDED.url,
          title = EXCLUDED.title, tagline = EXCLUDED.tagline, description = EXCLUDED.description,
          adds = EXCLUDED.adds, settings_action = EXCLUDED.settings_action,
@@ -809,6 +809,7 @@ export const createServer = async (app: NiscApp, runtime: NiscRuntime): Promise<
          story = EXCLUDED.story, highlights = EXCLUDED.highlights, press = EXCLUDED.press,
          offers = EXCLUDED.offers, needs = EXCLUDED.needs,
          capabilities = EXCLUDED.capabilities,
+         configuration = EXCLUDED.configuration,
          last_import_at = now(), last_error = NULL`,
       [
         id,
@@ -841,6 +842,9 @@ export const createServer = async (app: NiscApp, runtime: NiscRuntime): Promise<
         // The verbs it gates on — carried the same way; the host's role editor
         // is the consumer.
         JSON.stringify(result.bundle.capabilities),
+        // What a builder may set — carried the same way; the host's per-product
+        // settings form is the consumer, and the delivery is the assertion's.
+        JSON.stringify(result.bundle.configuration),
       ],
     );
     await runtime.pool.query('DELETE FROM integration_actions WHERE integration_id = $1', [id]);
