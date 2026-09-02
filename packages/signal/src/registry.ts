@@ -15,6 +15,14 @@ export type ProviderEntry = {
   // recovery/normalization, selected by id. The default repair ladder
   // runs everywhere; this list is only what is true of THIS provider.
   wire?: string[];
+  // EXTRA REQUEST PARAMS THAT ASK THIS PROVIDER TO STREAM ITS REASONING.
+  // Merged into a STREAMING request, and only when the caller set
+  // `reasoningEffort` — so a plain call, or a call to a non-reasoning model on
+  // this provider, is untouched. That opt-in is load-bearing: Groq's
+  // `reasoning_format` 400s on its non-reasoning models, so it must not ride
+  // every request. First-party, like `baseUrl` and `wire`: maintainer-authored
+  // constants reviewed in code, not an untrusted declaration.
+  reasoningRequest?: Record<string, unknown>;
 };
 
 export const providerRegistry: Record<string, ProviderEntry> = {
@@ -44,6 +52,10 @@ export const providerRegistry: Record<string, ProviderEntry> = {
     // tool_use_failed / json_validate_failed 400s carry the model's
     // attempt in failed_generation — recover and route it.
     wire: ['failed-generation'],
+    // gpt-oss and the other reasoning models stream their trace only when asked
+    // to parse it out; `reasoning_format` is rejected on the non-reasoning ones,
+    // which is why this is opt-in (see reasoningRequest above).
+    reasoningRequest: { reasoning_format: 'parsed' },
   },
   openai: {
     id: 'openai',
@@ -83,6 +95,9 @@ export const providerRegistry: Record<string, ProviderEntry> = {
       supportsEmbedding: false,
     },
     adapter: 'openai-compatible',
+    // OpenRouter unifies reasoning across the models it routes; `enabled` turns
+    // the trace on for those that have one and is ignored by those that don't.
+    reasoningRequest: { reasoning: { enabled: true } },
   },
   anthropic: {
     id: 'anthropic',

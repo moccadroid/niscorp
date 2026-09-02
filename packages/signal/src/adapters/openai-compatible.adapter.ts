@@ -200,6 +200,9 @@ export type OpenAICompatibleConfig = {
   apiKey: string;
   baseUrl: string;
   client?: unknown;
+  // Params that ask this provider to stream its reasoning, applied only on a
+  // streaming call the caller set `reasoningEffort` on (registry.ts).
+  reasoningRequest?: Record<string, unknown>;
 };
 
 export const createOpenAICompatibleAdapter = async (
@@ -270,6 +273,10 @@ export const createOpenAICompatibleAdapter = async (
   async function* chatStream(request: ProviderRequest, options?: RequestOptions): AsyncIterable<ProviderStreamDelta> {
     const streamParams = {
       ...buildParams(request),
+      // Ask for the reasoning trace only when the caller wants reasoning — the
+      // opt-in that keeps `reasoning_format` off a plain Groq call. Stream-only:
+      // the non-stream `chat` path never sees these, so its content is unmoved.
+      ...(request.options?.reasoningEffort !== undefined && config.reasoningRequest !== undefined ? config.reasoningRequest : {}),
       stream: true as const,
       stream_options: { include_usage: true },
     };

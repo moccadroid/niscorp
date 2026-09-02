@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import type { ProviderAdapter, ProviderStreamDelta, StepStreamEvent } from '../src/types';
 import { executeStepStream } from '../src/stream/execute-step-stream';
 import { createOpenAICompatibleAdapter } from '../src/adapters/openai-compatible.adapter';
+import { providerRegistry } from '../src/registry';
 
 // `noUncheckedIndexedAccess` is on, so an index read is `T | undefined`. Every
 // assertion below is about the LAST event of a stream, and a stream that
@@ -294,6 +295,36 @@ describe('reasoning', () => {
   it('the adapter yields a reasoning delta from choice.delta.reasoning_content (GLM, DeepSeek)', async () => {
     const deltas = await deltasOf(await streamingAdapter([{ choices: [{ delta: { reasoning_content: 'thinking too' } }] }]));
     expect(deltas).toContainEqual({ type: 'reasoning', text: 'thinking too' });
+  });
+
+  // Point 2 — asking the providers that need it, opt-in on reasoningEffort.
+  const captureParams = async (reasoningRequest?: Record<string, unknown>) => {
+    const captured: { params?: Record<string, unknown> } = {};
+    const adapter = await createOpenAICompatibleAdapter({
+      apiKey: 'k',
+      baseUrl: 'https://fake.api.com/v1',
+      ...(reasoningRequest ? { reasoningRequest } : {}),
+      client: { chat: { completions: { create: async (params: Record<string, unknown>) => { captured.params = params; return (async function* () { yield { choices: [{ finish_reason: 'stop' }] }; })(); } } } },
+    });
+    return { captured, adapter };
+  };
+  const drain = async (adapter: ProviderAdapter, options?: { reasoningEffort: 'high' }): Promise<void> => {
+    for await (const chunk of adapter.chatStream({ model: 'm', messages: [{ role: 'user', content: 'hi' }], ...(options ? { options } : {}) })) void chunk;
+  };
+
+  it('applies the provider reasoning-request params on a stream — only when reasoningEffort is set', async () => {
+    const asked = await captureParams({ reasoning_format: 'parsed' });
+    await drain(asked.adapter, { reasoningEffort: 'high' });
+    expect(asked.captured.params?.['reasoning_format']).toBe('parsed');
+
+    const plain = await captureParams({ reasoning_format: 'parsed' });
+    await drain(plain.adapter);
+    expect(plain.captured.params?.['reasoning_format']).toBeUndefined();
+  });
+
+  it('the registry declares the reasoning-request params per provider', () => {
+    expect(providerRegistry['groq']?.reasoningRequest).toEqual({ reasoning_format: 'parsed' });
+    expect(providerRegistry['openrouter']?.reasoningRequest).toEqual({ reasoning: { enabled: true } });
   });
 
   it('executeStepStream passes reasoning through and keeps it OUT of the content', async () => {

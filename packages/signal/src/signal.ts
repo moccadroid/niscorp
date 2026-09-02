@@ -85,6 +85,10 @@ type ResolvedProvider = {
   apiKey: string;
   baseUrl: string;
   adapterType: string;
+  // Per-provider params that ask for streamed reasoning (registry.ts). Carried
+  // to the adapter, which applies them only on a streaming call the caller
+  // asked reasoning of.
+  reasoningRequest?: Record<string, unknown>;
 };
 
 const resolveProvider = (config: SignalConfig): ResolvedProvider => {
@@ -93,7 +97,7 @@ const resolveProvider = (config: SignalConfig): ResolvedProvider => {
     if (!entry) throw new SignalError(`Unknown provider: ${config.provider}`, ErrorCode.PROVIDER_NOT_FOUND);
     const apiKey = resolveApiKey(entry.envKey, config.apiKey);
     if (!apiKey) throw new SignalError(`Missing API key for ${config.provider}. Set ${entry.envKey} or pass apiKey.`, ErrorCode.MISSING_API_KEY);
-    return { model: config.model ?? entry.defaultModel, apiKey, baseUrl: entry.baseUrl, adapterType: entry.adapter };
+    return { model: config.model ?? entry.defaultModel, apiKey, baseUrl: entry.baseUrl, adapterType: entry.adapter, ...(entry.reasoningRequest !== undefined && { reasoningRequest: entry.reasoningRequest }) };
   }
 
   const custom = config.provider;
@@ -128,7 +132,7 @@ const resolveCapabilities = (config: SignalConfig): Capabilities => {
 const createAdapter = async (resolved: ResolvedProvider, client: unknown): Promise<ProviderAdapter> => {
   switch (resolved.adapterType) {
     case 'openai-compatible':
-      return createOpenAICompatibleAdapter({ apiKey: resolved.apiKey, baseUrl: resolved.baseUrl, client });
+      return createOpenAICompatibleAdapter({ apiKey: resolved.apiKey, baseUrl: resolved.baseUrl, client, ...(resolved.reasoningRequest !== undefined && { reasoningRequest: resolved.reasoningRequest }) });
     case 'anthropic':
       return createAnthropicAdapter({ apiKey: resolved.apiKey, client });
     case 'google':
