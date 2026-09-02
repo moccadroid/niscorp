@@ -74,13 +74,19 @@ export async function* executeStepStream(
   // adding them reports double what was spent.
   let totalUsage = { inputTokens: 0, outputTokens: 0, totalTokens: 0, reported: false };
 
-  for await (const delta of config.adapter.chatStream(providerRequest)) {
+  try {
+  for await (const delta of config.adapter.chatStream(providerRequest, abortSignal ? { signal: abortSignal } : undefined)) {
     if (abortSignal?.aborted) return;
 
     switch (delta.type) {
       case 'text':
         contentBuffer += delta.text;
         yield { type: 'text', text: delta.text };
+        break;
+      // Reasoning is passed straight through and deliberately NOT added to
+      // contentBuffer: it is the model thinking, not its answer.
+      case 'reasoning':
+        yield { type: 'reasoning', text: delta.text };
         break;
       case 'tool_call':
         assembleToolCall(assembledToolCalls, delta);
@@ -106,6 +112,15 @@ export async function* executeStepStream(
         finishReason = delta.finishReason;
         break;
     }
+  }
+  } catch (error) {
+    // An aborted fetch rejects the iterator. Discriminate on the SIGNAL's state,
+    // not the error type: the adapter re-wraps every iteration error as a
+    // SignalError, so there is no AbortError to match on here. A caller who
+    // asked to stop gets the same clean early return as a between-delta abort —
+    // never a provider error surfaced up to cortex.
+    if (abortSignal?.aborted) return;
+    throw error;
   }
 
   const toolCalls: StepToolCall[] = [...assembledToolCalls.values()].map((tc) => {

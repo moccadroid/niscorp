@@ -36,15 +36,25 @@ type OpenAICompletion = {
 // Overloaded to mirror the SDK: a request with `stream: true` returns a
 // streaming async-iterable; otherwise a single completion. This lets the
 // streaming call site resolve to `OpenAIStream` with no cast.
+// The SDK's `create` takes request options as a second argument (RequestOptions);
+// `signal` is the one we use — it reaches the underlying fetch.
+type RequestOptions = { signal?: AbortSignal };
+
 type ChatCreateFn = {
-  (params: Record<string, unknown> & { stream: true }): Promise<OpenAIStream>;
-  (params: Record<string, unknown>): Promise<OpenAICompletion>;
+  (params: Record<string, unknown> & { stream: true }, options?: RequestOptions): Promise<OpenAIStream>;
+  (params: Record<string, unknown>, options?: RequestOptions): Promise<OpenAICompletion>;
 };
 
 type OpenAIStreamChunk = {
   choices?: Array<{
     delta?: {
       content?: string | null;
+      // Reasoning tokens. Two spellings across providers, both non-standard and
+      // absent from the SDK's own delta type — declared here so the parse can
+      // read them: OpenRouter and Groq's gpt-oss use `reasoning`, GLM and
+      // DeepSeek use `reasoning_content`.
+      reasoning?: string | null;
+      reasoning_content?: string | null;
       tool_calls?: Array<{
         index: number;
         id?: string;
@@ -257,7 +267,7 @@ export const createOpenAICompatibleAdapter = async (
     };
   };
 
-  async function* chatStream(request: ProviderRequest): AsyncIterable<ProviderStreamDelta> {
+  async function* chatStream(request: ProviderRequest, options?: RequestOptions): AsyncIterable<ProviderStreamDelta> {
     const streamParams = {
       ...buildParams(request),
       stream: true as const,
@@ -266,7 +276,9 @@ export const createOpenAICompatibleAdapter = async (
 
     let sseStream: OpenAIStream;
     try {
-      sseStream = await chatCreate(streamParams);
+      // The signal reaches the SDK's fetch here: an abort tears the HTTP request
+      // down at once, rather than waiting for the next delta to notice it.
+      sseStream = await chatCreate(streamParams, options);
     } catch (error) {
       throw new SignalError(
         `Provider stream error: ${error instanceof Error ? error.message : String(error)}`,
@@ -280,6 +292,11 @@ export const createOpenAICompatibleAdapter = async (
         const choice = chunk.choices?.[0];
         if (choice?.delta?.content) {
           yield { type: 'text', text: choice.delta.content };
+        }
+        // Whichever spelling the provider sent — never both on one delta.
+        const reasoning = choice?.delta?.reasoning ?? choice?.delta?.reasoning_content;
+        if (reasoning) {
+          yield { type: 'reasoning', text: reasoning };
         }
         if (choice?.delta?.tool_calls) {
           for (const tc of choice.delta.tool_calls) {

@@ -23,6 +23,9 @@ import type { SignalClient } from '../../src/types';
 export type ScriptedCall = { id: string; name: string; args: unknown };
 
 export type ScriptedTurn = {
+  // Reasoning streamed before the text — the model's thinking, which signal
+  // surfaces as `reasoning` stream events and never folds into the content.
+  reasoning?: string[];
   // Text streamed before the done event (joined = StepResult.content).
   text?: string[];
   toolCalls?: ScriptedCall[];
@@ -141,6 +144,9 @@ export const stubSignal = (
       const turn = nextTurn();
       return {
         [Symbol.asyncIterator]: async function* (): AsyncGenerator<StepStreamEvent> {
+          for (const chunk of turn.reasoning ?? []) {
+            yield { type: 'reasoning', text: chunk };
+          }
           for (const chunk of turn.text ?? []) {
             yield { type: 'text', text: chunk };
           }

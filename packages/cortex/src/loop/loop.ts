@@ -418,6 +418,13 @@ export const runLoop = async <TData, TDeps>(
           }
           continue;
         }
+        // The reasoning channel — shown in flight, never part of the output. It
+        // is not fed to `partials`: a caller reading the answer must not see the
+        // thinking bleed into it.
+        if (event.type === 'reasoning') {
+          cfg.emit({ type: 'model-delta', text: event.text, channel: 'reasoning' });
+          continue;
+        }
         if (event.type === 'tool_call_delta') {
           if (event.name !== undefined && event.name === cfg.resolved.outputToolName) respondIndices.add(event.index);
           if (respondIndices.has(event.index) && event.argsText.length > 0) {

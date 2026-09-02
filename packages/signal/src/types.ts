@@ -349,6 +349,11 @@ export type StreamEvent<T> =
 // parsing of function-call payloads possible (cortex → solid).
 export type StepStreamEvent =
   | { type: 'text'; text: string }
+  // The model's THINKING, streamed separately from its answer. Passed through
+  // untouched — never folded into StepResult.content — so a caller can show the
+  // reasoning in flight and keep it out of the output. Only providers that
+  // stream it (and are asked, where asking is needed) produce these.
+  | { type: 'reasoning'; text: string }
   | { type: 'tool_call_delta'; index: number; id?: string; name?: string; argsText: string }
   | { type: 'done'; result: StepResult };
 
@@ -366,6 +371,9 @@ export type StreamOptions = {
 
 export type ProviderStreamDelta =
   | { type: 'text'; text: string }
+  // Reasoning tokens, from `choice.delta.reasoning` or `.reasoning_content`
+  // depending on the provider. Normalized to one shape here.
+  | { type: 'reasoning'; text: string }
   | { type: 'tool_call'; index: number; id?: string; name?: string; argsFragment?: string }
   | { type: 'usage'; inputTokens: number; outputTokens: number; totalTokens: number }
   | { type: 'finish'; finishReason: string };
@@ -405,6 +413,9 @@ export type ProviderResponse = {
 export type ProviderAdapter = {
   id: string;
   chat: (request: ProviderRequest) => Promise<ProviderResponse>;
-  chatStream: (request: ProviderRequest) => AsyncIterable<ProviderStreamDelta>;
+  // `options.signal`, when given, is handed to the underlying fetch so an abort
+  // tears down the HTTP request itself — not just the delta loop above it. An
+  // adapter that does not forward it simply keeps aborting between deltas.
+  chatStream: (request: ProviderRequest, options?: { signal?: AbortSignal }) => AsyncIterable<ProviderStreamDelta>;
   embed?: (request: EmbedRequest) => Promise<EmbedResponse>;
 };

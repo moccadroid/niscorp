@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import type { ProviderAdapter, ProviderStreamDelta, StepStreamEvent } from '../src/types';
 import { executeStepStream } from '../src/stream/execute-step-stream';
+import { createOpenAICompatibleAdapter } from '../src/adapters/openai-compatible.adapter';
 
 // `noUncheckedIndexedAccess` is on, so an index read is `T | undefined`. Every
 // assertion below is about the LAST event of a stream, and a stream that
@@ -256,6 +257,95 @@ describe('stepStream — abort', () => {
 
     expect(events[0]).toEqual({ type: 'text', text: 'first' });
     // No done event after abort.
+    expect(events.find((e) => e.type === 'done')).toBeUndefined();
+  });
+});
+
+// ═══════════════════════════════════════════════════════════
+// Reasoning — the model's thinking, streamed apart from its answer
+// ═══════════════════════════════════════════════════════════
+
+// The openai-compatible adapter fed a canned SSE stream through an injected
+// client, so the real parse runs. Providers differ on the field name.
+const streamingAdapter = (chunks: unknown[]): Promise<ProviderAdapter> =>
+  createOpenAICompatibleAdapter({
+    apiKey: 'k',
+    baseUrl: 'https://fake.api.com/v1',
+    client: { chat: { completions: { create: async () => (async function* () { for (const c of chunks) yield c; })() } } },
+  });
+
+const deltasOf = async (adapter: ProviderAdapter): Promise<ProviderStreamDelta[]> => {
+  const out: ProviderStreamDelta[] = [];
+  for await (const d of adapter.chatStream({ model: 'm', messages: [{ role: 'user', content: 'hi' }] })) out.push(d);
+  return out;
+};
+
+describe('reasoning', () => {
+  it('the adapter yields a reasoning delta from choice.delta.reasoning (OpenRouter, gpt-oss)', async () => {
+    const deltas = await deltasOf(await streamingAdapter([
+      { choices: [{ delta: { reasoning: 'let me think' } }] },
+      { choices: [{ delta: { content: 'the answer' } }] },
+      { choices: [{ finish_reason: 'stop' }] },
+    ]));
+    expect(deltas).toContainEqual({ type: 'reasoning', text: 'let me think' });
+    expect(deltas).toContainEqual({ type: 'text', text: 'the answer' });
+  });
+
+  it('the adapter yields a reasoning delta from choice.delta.reasoning_content (GLM, DeepSeek)', async () => {
+    const deltas = await deltasOf(await streamingAdapter([{ choices: [{ delta: { reasoning_content: 'thinking too' } }] }]));
+    expect(deltas).toContainEqual({ type: 'reasoning', text: 'thinking too' });
+  });
+
+  it('executeStepStream passes reasoning through and keeps it OUT of the content', async () => {
+    const events = await collect(executeStepStream({
+      adapter: createMockAdapter([
+        { type: 'reasoning', text: 'let me think' },
+        { type: 'text', text: 'the answer' },
+        { type: 'finish', finishReason: 'stop' },
+      ]),
+      model: 'test',
+      request: { messages: [{ role: 'user', content: 'hi' }] },
+    }));
+    expect(events.some((e) => e.type === 'reasoning' && e.text === 'let me think')).toBe(true);
+    const done = lastOf(events);
+    expect(done.type).toBe('done');
+    if (done.type === 'done') expect(done.result.content).toBe('the answer');
+  });
+});
+
+// ═══════════════════════════════════════════════════════════
+// Abort — the fetch is torn down, not just the delta loop
+// ═══════════════════════════════════════════════════════════
+
+describe('abort while the provider is silent', () => {
+  it('returns promptly, keyed on the signal — not on the error type the adapter re-wraps', async () => {
+    const ac = new AbortController();
+    // Silent until aborted, then throws a NON-abort error on purpose: the real
+    // adapter re-wraps an aborted fetch as a SignalError, so executeStepStream
+    // must discriminate on `signal.aborted`, never on the error being AbortError.
+    const silent: ProviderAdapter = {
+      id: 'silent',
+      chat: async () => ({ content: '', usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 }, finishReason: 'stop', raw: null }),
+      chatStream: async function* (_request, options) {
+        await new Promise<void>((_resolve, reject) => {
+          options?.signal?.addEventListener('abort', () => reject(new Error('provider stream error')));
+        });
+      },
+    };
+
+    const events: StepStreamEvent[] = [];
+    const drained = (async () => {
+      for await (const e of executeStepStream({
+        adapter: silent,
+        model: 'test',
+        request: { messages: [{ role: 'user', content: 'go' }] },
+        streamOptions: { signal: ac.signal },
+      })) events.push(e);
+    })();
+    setTimeout(() => ac.abort(), 10);
+    // Resolves (returns) rather than hanging until a delta or rejecting. Before
+    // the fix the silent provider never yields, so this would time out.
+    await drained;
     expect(events.find((e) => e.type === 'done')).toBeUndefined();
   });
 });

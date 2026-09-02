@@ -468,3 +468,24 @@ describe('the loop — respond strategy', () => {
     expect([...seqs].sort((a, b) => a - b)).toEqual(seqs);
   });
 });
+
+describe('the loop — reasoning channel', () => {
+  it('emits reasoning on its own channel and keeps it out of the output', async () => {
+    const llm = stubSignal([
+      { reasoning: ['I should ', 'add them'], toolCalls: [{ id: 'c1', name: 'respond', args: { data: { answer: 4 } } }] },
+    ]);
+
+    const run = calcAgent.run('2+2', { llm });
+    const events = await collectEvents(run.events);
+    const result = await run.result;
+
+    const reasoning = events.flatMap((e) => (e.type === 'model-delta' && e.channel === 'reasoning' ? [e.text] : [])).join('');
+    expect(reasoning).toBe('I should add them');
+    // Never on the text channel, and never fed to the output stream — the
+    // thinking must not bleed into the answer a caller reads.
+    expect(events.some((e) => e.type === 'model-delta' && e.channel === 'text' && e.text.includes('add them'))).toBe(false);
+    expect(events.some((e) => e.type === 'output-delta' && e.text.includes('add them'))).toBe(false);
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.output.data.answer).toBe(4);
+  });
+});
