@@ -1,4 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
+import { z } from 'zod';
 import { PGlite } from '@electric-sql/pglite';
 import { createPglitePool } from '@niscorp/vex/pglite';
 import { runIntake, reachOf, copyPress, callIntegrationWith, initIntegrations, listIntegrations } from '../src/integrations';
@@ -362,6 +363,151 @@ describe('configuration — what a builder may set', () => {
     await upsert('[{"kind":"toggle","key":"b","title":"B","description":"","default":false}]');
     const rows = await listIntegrations(pool);
     expect(rows.find((r) => r.id === 'acme')?.configuration).toEqual([{ kind: 'toggle', key: 'b', title: 'B', description: '', default: false }]);
+  });
+});
+
+describe('documents — what an add-on lets a person edit', () => {
+  const docCtx = () =>
+    ctx({
+      components: new Map<string, { propsSchema?: unknown }>([
+        ['Text', {}],
+        ['Card', { propsSchema: z.object({ title: z.string() }).strict() }],
+      ]),
+      regions: new Set(['host-stage']),
+      checks: new Set(['readability']),
+    });
+  const okDoc = (): Record<string, unknown> => ({
+    id: 'website',
+    title: 'Website',
+    capability: 'build',
+    registry: [
+      { type: 'hero', label: 'Hero', fields: [{ key: 'title', label: 'Title', kind: 'line' }], fragment: { component: 'Text', children: '$.content.title' } },
+    ],
+    sections: { open: { max: 20 } },
+    publish: { path: '/integrations/acme/publish' },
+  });
+  const withDocs = (documents: unknown[], capabilities: unknown[] = [{ id: 'build', title: 'Build' }]) =>
+    runIntake({ integration: 'acme', actions: {}, capabilities, documents }, docCtx());
+
+  it('a bundle declaring a document lands whole', () => {
+    const result = withDocs([okDoc()]);
+    expect(result.ok, result.ok ? '' : result.reasons.join('; ')).toBe(true);
+    if (result.ok) expect(result.bundle.documents[0]?.id).toBe('website');
+  });
+
+  it('a bundle saying nothing parses to an empty array', () => {
+    expect(okBundle().documents).toEqual([]);
+  });
+
+  it('two documents with one id refuse', () => {
+    const r = withDocs([okDoc(), okDoc()]);
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.reasons.join(' ')).toContain('declared twice');
+  });
+
+  it('two fields with one key, or two section types with one type, refuse', () => {
+    const dupField = okDoc();
+    (dupField.registry as { fields: unknown[] }[])[0]!.fields = [
+      { key: 'title', label: 'A', kind: 'line' },
+      { key: 'title', label: 'B', kind: 'line' },
+    ];
+    expect(withDocs([dupField]).ok).toBe(false);
+
+    const dupType = okDoc();
+    (dupType as { registry: unknown[] }).registry = [
+      { type: 'hero', label: 'A', fields: [{ key: 'a', label: 'A', kind: 'line' }], fragment: { component: 'Text' } },
+      { type: 'hero', label: 'B', fields: [{ key: 'b', label: 'B', kind: 'line' }], fragment: { component: 'Text' } },
+    ];
+    expect(withDocs([dupType]).ok).toBe(false);
+  });
+
+  it('a fragment naming a component the app has no component for refuses', () => {
+    const d = okDoc();
+    (d.registry as { fragment: unknown }[])[0]!.fragment = { component: 'Nope' };
+    const r = withDocs([d]);
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.reasons.join(' ')).toContain('has no component for');
+  });
+
+  it('a fragment prop outside the component schema refuses; a binding value has its key checked and value skipped', () => {
+    const bad = okDoc();
+    (bad.registry as { fragment: unknown }[])[0]!.fragment = { component: 'Card', props: { bogus: 1 } };
+    expect(withDocs([bad]).ok).toBe(false);
+
+    const ok = okDoc();
+    // `title` is a real prop; its value is a binding, so the value is skipped —
+    // the same rule action layouts get.
+    (ok.registry as { fragment: unknown }[])[0]!.fragment = { component: 'Card', props: { title: '$.content.title' } };
+    expect(withDocs([ok]).ok).toBe(true);
+  });
+
+  it('a fixed section whose type is not in the registry, or whose extends names no sibling, refuses', () => {
+    const badType = okDoc();
+    badType.sections = { fixed: [{ id: 'base', type: 'ghost', label: 'Base' }] };
+    expect(withDocs([badType]).ok).toBe(false);
+
+    const badExtends = okDoc();
+    badExtends.sections = { fixed: [{ id: 'dark', type: 'hero', label: 'Dark', extends: 'nobody' }] };
+    expect(withDocs([badExtends]).ok).toBe(false);
+
+    const good = okDoc();
+    good.sections = { fixed: [{ id: 'base', type: 'hero', label: 'Base' }, { id: 'dark', type: 'hero', label: 'Dark', extends: 'base' }] };
+    expect(withDocs([good]).ok).toBe(true);
+  });
+
+  it('a capability not among the bundle’s own refuses', () => {
+    expect(withDocs([okDoc()], []).ok).toBe(false);
+  });
+
+  it('a region that is neither an own action nor one the host offers refuses; an own action or host region passes', () => {
+    const ghost = okDoc();
+    ghost.regions = { stage: 'ghost' };
+    expect(withDocs([ghost]).ok).toBe(false);
+
+    const hostRegion = okDoc();
+    hostRegion.regions = { stage: 'host-stage' };
+    expect(withDocs([hostRegion]).ok).toBe(true);
+  });
+
+  it('a check the host does not offer refuses', () => {
+    const d = okDoc();
+    d.checks = ['nope'];
+    expect(withDocs([d]).ok).toBe(false);
+  });
+
+  it('a publish path outside the integration’s own prefix refuses', () => {
+    const d = okDoc();
+    d.publish = { path: '/somewhere/else' };
+    expect(withDocs([d]).ok).toBe(false);
+  });
+
+  it('a pick field with fewer than two options, and a list field in a section, refuse', () => {
+    const pick = okDoc();
+    (pick.registry as { fields: unknown[] }[])[0]!.fields = [{ key: 'k', label: 'K', kind: 'pick', options: [{ value: 'a', label: 'A' }] }];
+    expect(withDocs([pick]).ok).toBe(false);
+
+    const list = okDoc();
+    (list.registry as { fields: unknown[] }[])[0]!.fields = [{ key: 'k', label: 'K', kind: 'list' }];
+    expect(withDocs([list]).ok).toBe(false);
+  });
+
+  it('the row carries it, and a re-import replaces rather than accumulates', async () => {
+    const pool = createPglitePool(new PGlite());
+    await initIntegrations(pool);
+    const one = '[{"id":"a","title":"A","capability":"build","registry":[{"type":"t","label":"T","fields":[{"key":"k","label":"K","kind":"line","hint":"","placeholder":"","group":"","advanced":false,"options":[]}],"starter":{},"fragment":{"component":"Text"}}],"sections":{"open":{"max":5}},"regions":{},"checks":[],"publish":{"path":"/integrations/acme/x"}}]';
+    const upsert = (documents: string): Promise<unknown> =>
+      pool.query(
+        `INSERT INTO integrations (id, url, documents) VALUES ('acme', 'https://acme.example', $1::jsonb)
+         ON CONFLICT (id) DO UPDATE SET documents = EXCLUDED.documents`,
+        [documents],
+      );
+    await upsert(one);
+    await upsert('[]');
+    const rows = await listIntegrations(pool);
+    expect(rows.find((r) => r.id === 'acme')?.documents).toEqual([]);
+    await upsert(one);
+    const after = await listIntegrations(pool);
+    expect(after.find((r) => r.id === 'acme')?.documents?.[0]?.id).toBe('a');
   });
 });
 

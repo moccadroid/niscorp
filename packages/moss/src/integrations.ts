@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { ActionDefinitionSchema, paletteEntryOf } from '@niscorp/nova';
+import { ActionDefinitionSchema, LayoutNodeSchema, paletteEntryOf } from '@niscorp/nova';
 import type { ActionDefinition, ComponentMeta, LayoutPaletteEntry } from '@niscorp/nova';
 import { walkNodes, isRecord } from '@niscorp/nova/reflect';
 import { isBinding } from '@niscorp/nova/i18n';
@@ -58,6 +58,7 @@ export type IntegrationRow = {
   needs: readonly string[];
   capabilities: readonly { id: string; title: string }[];
   configuration: readonly ConfigurationField[];
+  documents: readonly DocumentDeclaration[];
   lastImportAt: number | null;
   lastError: string | null;
   actionCount: number;
@@ -138,6 +139,96 @@ const configurationSchema = z
   .default([]);
 
 export type ConfigurationField = z.infer<typeof configurationSchema>[number];
+
+// ── WHAT AN ADD-ON LETS A PERSON EDIT ────────────────────────
+//
+// The host ships ONE editor and ONE assistant — generic machinery an add-on
+// cannot ship and must not copy. This declaration is where an add-on puts the
+// content those two read: a `document` is section types (each a set of fields
+// and a fragment that draws them over `$.content`) plus a section model. moss
+// validates the declaration against what the host holds — the kit registry, the
+// bundle's own capabilities and actions, the host's regions and checks — and
+// carries it; what the host does with a declared document (which rows hold its
+// draft, how publish is delivered) is the host's, exactly as with
+// `capabilities` and `configuration`. moss never reads it after intake.
+
+// THE ONE FIELD VOCABULARY. `configuration`'s kinds are the subset
+// `toggle | number | pick | line`; a document or block field may be any of
+// these. A field is a descriptor for the host's form — flat, unlike a
+// configuration entry, which additionally carries a default and per-kind
+// bounds because the host has to render a value before a builder sets one.
+const FieldKind = z.enum(['line', 'long', 'url', 'pick', 'asset', 'color', 'number', 'toggle', 'list']);
+
+const documentFieldSchema = z
+  .object({
+    // A data key, or a CSS custom property (`--color-brand`) for a theme token.
+    key: z.string().regex(/^[a-z][a-z0-9-]*$|^--[a-z][a-z0-9-]*$/, 'a field key is lowercase-hyphen, optionally a `--` custom property'),
+    label: z.string().min(1),
+    kind: FieldKind,
+    hint: z.string().default(''),
+    placeholder: z.string().default(''),
+    group: z.string().default(''),
+    advanced: z.boolean().default(false),
+    // Only meaningful for `pick`; intake refuses a `pick` with fewer than two.
+    options: z.array(z.object({ value: z.string().min(1), label: z.string().min(1) }).strict()).default([]),
+    max: z.number().int().positive().optional(),
+  })
+  .strict();
+
+const sectionTypeSchema = z
+  .object({
+    type: z.string().min(1),
+    label: z.string().min(1),
+    fields: z.array(documentFieldSchema).min(1),
+    // The default content a new section of this type starts with.
+    starter: z.record(z.string(), z.unknown()).default({}),
+    // The nova layout that draws this section over `$.content`. Typed as the
+    // real layout schema (not `unknown`) so a malformed fragment is refused at
+    // intake by SHAPE, and then walked by `validateLayout` for component/prop
+    // existence — the exact rigor an action's own layout gets.
+    fragment: LayoutNodeSchema,
+  })
+  .strict();
+
+// The section model: a FIXED list (the theme's base + dark halves, dark
+// extending base) or an OPEN list a person adds to, capped.
+const sectionsSchema = z.union([
+  z
+    .object({
+      fixed: z
+        .array(
+          z.object({ id: z.string().min(1), type: z.string().min(1), label: z.string().min(1), extends: z.string().optional() }).strict(),
+        )
+        .min(1),
+    })
+    .strict(),
+  z.object({ open: z.object({ max: z.number().int().positive().max(40) }).strict() }).strict(),
+]);
+
+const documentDeclarationSchema = z
+  .object({
+    id: z.string().regex(/^[a-z][a-z0-9-]*$/, 'a document id is lowercase words joined by single hyphens'),
+    title: z.string().min(1),
+    // The capability that opens the editor on this document — one of the
+    // bundle's own `capabilities`, so the host's charter can grant it.
+    capability: z.string().min(1),
+    registry: z.array(sectionTypeSchema).min(1),
+    sections: sectionsSchema,
+    // Region actions the editor wants when the host's defaults do not fit (a
+    // product's stage is a live shell, not fragments). Each is one of the
+    // bundle's own actions or a region the host offers.
+    regions: z.object({ bar: z.string().optional(), outline: z.string().optional(), stage: z.string().optional(), inspector: z.string().optional() }).strict().default({}),
+    // Checks that run before publish (the theme's readability floors), each one
+    // the host holds.
+    checks: z.array(z.string().min(1)).default([]),
+    // Where a published document is delivered: a route under the integration's
+    // own prefix. The add-on owns the live rows and the public renderer; the
+    // host owns the draft and the revisions.
+    publish: z.object({ path: z.string().min(1) }).strict(),
+  })
+  .strict();
+
+export type DocumentDeclaration = z.infer<typeof documentDeclarationSchema>;
 
 const BundleSchema = z
   .object({
@@ -258,6 +349,9 @@ const BundleSchema = z
     // host renders a form from. Carried, never read: the value's meaning is the
     // integration's contract with its own service. See `configurationSchema`.
     configuration: configurationSchema,
+    // WHAT AN ADD-ON LETS A PERSON EDIT in the host's editor — section types,
+    // fields, fragments, and a section model. See `documentDeclarationSchema`.
+    documents: z.array(documentDeclarationSchema).default([]),
   })
   .strict();
 
@@ -373,6 +467,15 @@ export type IntakeContext = {
   // Menu hubs that accept placed screens (`NiscApp.menuSlots`). Who owns a
   // menu is the host's question; this set is its answer.
   menuSlots: ReadonlySet<string>;
+  // Region actions the host's editor offers a document (`bar`, `outline`,
+  // `stage`, `inspector` defaults), the host's closed assistant tool set, and
+  // the publish checks the host runs. A document/assistant naming one the host
+  // does not hold fails at intake, not in front of a person. Optional and
+  // empty-by-default: a bundle declaring no documents/assistants needs none,
+  // and a host that has not enumerated them yet fails those names closed.
+  regions?: ReadonlySet<string>;
+  tools?: ReadonlySet<string>;
+  checks?: ReadonlySet<string>;
 };
 
 const AUDIENCE = /^[a-z][a-z0-9-]*$/;
@@ -398,6 +501,41 @@ export const runIntake = (payload: unknown, ctx: IntakeContext): IntakeResult =>
   }
   const bundle = parsed.data;
   const reasons: string[] = [];
+
+  // Validate a layout the way an action's own layout is validated: the
+  // component name against what the app can render, and each prop against the
+  // component's strict schema (a deferred binding/directive value has its key
+  // checked and its value skipped). Reused for section and block fragments — a
+  // fragment is a layout over `$.content` and earns the same refusal at the
+  // same moment as an action layout.
+  const validateLayout = (node: unknown, label: string): void => {
+    const found = new Set<string>();
+    walkNodes(node, (record) => {
+      const name = record['component'];
+      if (typeof name !== 'string') return;
+      const spec = ctx.components.get(name);
+      if (spec === undefined) {
+        found.add(`${label}: layout uses "${name}", which this app has no component for`);
+        return;
+      }
+      const schema = spec.propsSchema;
+      const props = record['props'];
+      if (!(schema instanceof z.ZodObject) || !isRecord(props)) return; // name-only
+      const shape = schema.shape as Record<string, z.ZodTypeAny>;
+      for (const [key, value] of Object.entries(props)) {
+        if (!(key in shape)) {
+          found.add(`${label}: "${name}" has no prop "${key}"`);
+          continue;
+        }
+        if (isDeferred(value)) continue;
+        const check = shape[key]?.safeParse(value);
+        if (check !== undefined && !check.success) {
+          found.add(`${label}: "${name}" prop "${key}" — ${check.error.issues[0]?.message ?? 'invalid'}`);
+        }
+      }
+    });
+    for (const reason of found) reasons.push(reason);
+  };
 
   if (bundle.integration !== ctx.integrationId) {
     reasons.push(`bundle says it is "${bundle.integration}" but was fetched as "${ctx.integrationId}"`);
@@ -430,32 +568,7 @@ export const runIntake = (payload: unknown, ctx: IntakeContext): IntakeResult =>
     // is deferred (a binding or directive) has its KEY checked and its value
     // skipped. Only authored layouts reach here — a served or flattened tree is
     // never validated against an authoring schema (ADAPTER.md).
-    const layoutReasons = new Set<string>();
-    walkNodes(action.layout, (record) => {
-      const name = record['component'];
-      if (typeof name !== 'string') return;
-      const spec = ctx.components.get(name);
-      if (spec === undefined) {
-        layoutReasons.add(`action ${id}: layout uses "${name}", which this app has no component for`);
-        return;
-      }
-      const schema = spec.propsSchema;
-      const props = record['props'];
-      if (!(schema instanceof z.ZodObject) || !isRecord(props)) return; // name-only, as before
-      const shape = schema.shape as Record<string, z.ZodTypeAny>;
-      for (const [key, value] of Object.entries(props)) {
-        if (!(key in shape)) {
-          layoutReasons.add(`action ${id}: "${name}" has no prop "${key}"`);
-          continue;
-        }
-        if (isDeferred(value)) continue;
-        const check = shape[key]?.safeParse(value);
-        if (check !== undefined && !check.success) {
-          layoutReasons.add(`action ${id}: "${name}" prop "${key}" — ${check.error.issues[0]?.message ?? 'invalid'}`);
-        }
-      }
-    });
-    for (const reason of layoutReasons) reasons.push(reason);
+    validateLayout(action.layout, `action ${id}`);
 
     // ── it reaches two places and no others ──
     for (const [name, endpoint] of Object.entries(action.endpoints ?? {})) {
@@ -561,6 +674,63 @@ export const runIntake = (payload: unknown, ctx: IntakeContext): IntakeResult =>
   }
   if (bundle.settings !== '' && bundle.actions[bundle.settings] === undefined) {
     reasons.push(`settings: "${bundle.settings}" is not an action in this bundle`);
+  }
+
+  // ── WHAT AN ADD-ON LETS A PERSON EDIT ────────────────────────
+  //
+  // Cross-references the host holds or the bundle itself declares — the same
+  // posture as every check above. Shape is the schema's; these are the things
+  // only the surrounding bundle and the host can know are wrong.
+  const ownActions = new Set(Object.keys(bundle.actions));
+  const ownCapabilities = new Set(bundle.capabilities.map((c) => c.id));
+  const hostRegions = ctx.regions ?? new Set<string>();
+  const hostChecks = ctx.checks ?? new Set<string>();
+  const seenDocument = new Set<string>();
+  for (const doc of bundle.documents) {
+    if (seenDocument.has(doc.id)) reasons.push(`document "${doc.id}": declared twice`);
+    seenDocument.add(doc.id);
+    if (!ownCapabilities.has(doc.capability)) {
+      reasons.push(`document "${doc.id}": capability "${doc.capability}" is not one this bundle declares`);
+    }
+    if (!doc.publish.path.startsWith(ownPrefix)) {
+      reasons.push(`document "${doc.id}": publish path "${doc.publish.path}" is not under this integration's own prefix`);
+    }
+    for (const [region, actionId] of Object.entries(doc.regions)) {
+      if (actionId === undefined) continue;
+      if (!ownActions.has(actionId) && !hostRegions.has(actionId)) {
+        reasons.push(`document "${doc.id}": region "${region}" names "${actionId}", which is neither an action in this bundle nor a region the host offers`);
+      }
+    }
+    for (const check of doc.checks) {
+      if (!hostChecks.has(check)) reasons.push(`document "${doc.id}": check "${check}" is not one the host offers`);
+    }
+    const registryTypes = new Set(doc.registry.map((s) => s.type));
+    const seenType = new Set<string>();
+    for (const section of doc.registry) {
+      if (seenType.has(section.type)) reasons.push(`document "${doc.id}": section type "${section.type}" declared twice`);
+      seenType.add(section.type);
+      const seenKey = new Set<string>();
+      for (const field of section.fields) {
+        if (seenKey.has(field.key)) reasons.push(`document "${doc.id}" section "${section.type}": field key "${field.key}" declared twice`);
+        seenKey.add(field.key);
+        if (field.kind === 'pick' && field.options.length < 2) {
+          reasons.push(`document "${doc.id}" section "${section.type}": pick field "${field.key}" needs at least two options`);
+        }
+        if (field.kind === 'list') {
+          reasons.push(`document "${doc.id}" section "${section.type}": a list field is only allowed inside an assistant block`);
+        }
+      }
+      validateLayout(section.fragment, `document "${doc.id}" section "${section.type}" fragment`);
+    }
+    if ('fixed' in doc.sections) {
+      const siblingIds = new Set(doc.sections.fixed.map((f) => f.id));
+      for (const f of doc.sections.fixed) {
+        if (!registryTypes.has(f.type)) reasons.push(`document "${doc.id}": fixed section "${f.id}" has type "${f.type}", which is not in the registry`);
+        if (f.extends !== undefined && !siblingIds.has(f.extends)) {
+          reasons.push(`document "${doc.id}": fixed section "${f.id}" extends "${f.extends}", which is not a sibling`);
+        }
+      }
+    }
   }
 
   return reasons.length > 0 ? { ok: false, reasons } : { ok: true, bundle };
@@ -811,6 +981,11 @@ export const initIntegrations = async (pool: PgPool): Promise<void> => {
       -- written at import, replaced on re-registration, that moss never reads.
       -- The host renders a settings form from it and stores the values itself.
       configuration      jsonb NOT NULL DEFAULT '[]'::jsonb,
+      -- WHAT AN ADD-ON LETS A PERSON EDIT — section types, fields, fragments,
+      -- and a section model the host's editor renders. Beside configuration
+      -- because it is the same kind of thing: a declaration written at import,
+      -- replaced on re-registration, that moss never reads — the host does.
+      documents          jsonb NOT NULL DEFAULT '[]'::jsonb,
       -- EVERY PATH THE PROXY MAY FORWARD, derived from the bundle at intake
       -- (reachOf). Beside the grants because it is one: a grant of reach, held
       -- by the same row, revoked by the same delete.
@@ -835,6 +1010,7 @@ export const initIntegrations = async (pool: PgPool): Promise<void> => {
   await pool.query(`ALTER TABLE integrations ADD COLUMN IF NOT EXISTS needs jsonb NOT NULL DEFAULT '[]'::jsonb`);
   await pool.query(`ALTER TABLE integrations ADD COLUMN IF NOT EXISTS capabilities jsonb NOT NULL DEFAULT '[]'::jsonb`);
   await pool.query(`ALTER TABLE integrations ADD COLUMN IF NOT EXISTS configuration jsonb NOT NULL DEFAULT '[]'::jsonb`);
+  await pool.query(`ALTER TABLE integrations ADD COLUMN IF NOT EXISTS documents jsonb NOT NULL DEFAULT '[]'::jsonb`);
   await pool.query(`
     CREATE TABLE IF NOT EXISTS integration_actions (
       integration_id  text NOT NULL REFERENCES integrations(id) ON DELETE CASCADE,
@@ -900,7 +1076,7 @@ export const listIntegrations = async (pool: PgPool): Promise<IntegrationRow[]> 
   const res = await pool.query(`
     SELECT i.id, i.url, i.status, i.title, i.tagline, i.adds, i.settings_action,
            i.requested_actions, i.requested_data, i.approved_data,
-           i.offers, i.needs, i.capabilities, i.configuration,
+           i.offers, i.needs, i.capabilities, i.configuration, i.documents,
            i.last_import_at, i.last_error,
            (SELECT count(*) FROM integration_actions a WHERE a.integration_id = i.id) AS action_count
       FROM integrations i ORDER BY i.id
@@ -927,6 +1103,7 @@ export const listIntegrations = async (pool: PgPool): Promise<IntegrationRow[]> 
       needs: (row['needs'] ?? []) as string[],
       capabilities: (row['capabilities'] ?? []) as { id: string; title: string }[],
       configuration: (row['configuration'] ?? []) as ConfigurationField[],
+      documents: (row['documents'] ?? []) as DocumentDeclaration[],
       lastImportAt: at instanceof Date ? at.getTime() : typeof at === 'string' || typeof at === 'number' ? new Date(at).getTime() : null,
       lastError: (row['last_error'] as string | null) ?? null,
       actionCount: Number(row['action_count'] ?? 0),
