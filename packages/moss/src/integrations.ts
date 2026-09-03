@@ -80,9 +80,11 @@ export type IntegrationRow = {
 // exactly as with capability ids and fact kinds. moss never reads a value.
 //
 // EVERY FIELD IS A CLOSED SET — the kit's second law (kit/PRINCIPLES.md): a
-// toggle, a bounded integer, a choice from declared options, or short text with
-// a length ceiling. An open number or a free string is a hole with a nicer
-// name, and a service made to interpret one has to validate it itself.
+// `toggle`, a bounded `number`, a `pick` from declared options, or a
+// length-capped `line`. An open number or a free string is a hole with a nicer
+// name, and a service made to interpret one has to validate it itself. The kind
+// names are the subset of the shared field vocabulary (FieldKind) a builder
+// setting may use.
 //
 // `default` is required on every kind: the form must show a value before a
 // builder has touched anything, and the absence of a stored value has to mean
@@ -102,12 +104,12 @@ const configurationSchema = z
       z
         .object({
           ...configurationBase,
-          kind: z.literal('choice'),
+          kind: z.literal('pick'),
           options: z.array(z.object({ value: z.string().min(1), label: z.string().min(1) }).strict()).min(2),
           default: z.string().min(1),
         })
         .strict(),
-      z.object({ ...configurationBase, kind: z.literal('text'), maxLength: z.number().int().positive().max(200), default: z.string() }).strict(),
+      z.object({ ...configurationBase, kind: z.literal('line'), maxLength: z.number().int().positive().max(200), default: z.string() }).strict(),
     ]),
   )
   // Coherence the shape alone cannot state — refused with a sentence, the same
@@ -124,11 +126,11 @@ const configurationSchema = z
         if (field.default < field.min || field.default > field.max) {
           ctx.addIssue({ code: 'custom', path: [i, 'default'], message: `configuration "${field.key}": default ${field.default} is outside [${field.min}, ${field.max}]` });
         }
-      } else if (field.kind === 'choice') {
+      } else if (field.kind === 'pick') {
         const values = field.options.map((o) => o.value);
         if (new Set(values).size !== values.length) ctx.addIssue({ code: 'custom', path: [i, 'options'], message: `configuration "${field.key}": option values repeat` });
         if (!values.includes(field.default)) ctx.addIssue({ code: 'custom', path: [i, 'default'], message: `configuration "${field.key}": default "${field.default}" is not one of its options` });
-      } else if (field.kind === 'text') {
+      } else if (field.kind === 'line') {
         if (field.default.length > field.maxLength) ctx.addIssue({ code: 'custom', path: [i, 'default'], message: `configuration "${field.key}": default is longer than maxLength ${field.maxLength}` });
       }
     });

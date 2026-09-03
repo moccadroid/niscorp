@@ -282,8 +282,8 @@ describe('configuration — what a builder may set', () => {
     const configuration = [
       { kind: 'toggle', key: 'waitlist', title: 'Waitlist full classes', description: 'Start a waitlist', default: true },
       { kind: 'number', key: 'weeks-ahead', title: 'Weeks generated', description: '', min: 1, max: 52, default: 8 },
-      { kind: 'choice', key: 'rounding', title: 'Rounding', description: '', options: [{ value: 'exact', label: 'Exact' }, { value: 'nearest-5', label: 'Nearest 5' }], default: 'exact' },
-      { kind: 'text', key: 'sender-name', title: 'Sender name', description: '', maxLength: 40, default: 'The studio' },
+      { kind: 'pick', key: 'rounding', title: 'Rounding', description: '', options: [{ value: 'exact', label: 'Exact' }, { value: 'nearest-5', label: 'Nearest 5' }], default: 'exact' },
+      { kind: 'line', key: 'sender-name', title: 'Sender name', description: '', maxLength: 40, default: 'The studio' },
     ];
     const result = withConfig(configuration);
     expect(result.ok).toBe(true);
@@ -318,13 +318,18 @@ describe('configuration — what a builder may set', () => {
     expect(withConfig([{ kind: 'number', key: 'n', title: 'N', min: 1, max: 5, default: 9 }]).ok).toBe(false);
   });
 
-  it('a choice with a repeated option value, or a default outside its options, refuses', () => {
-    expect(withConfig([{ kind: 'choice', key: 'c', title: 'C', options: [{ value: 'a', label: 'A' }, { value: 'a', label: 'A2' }], default: 'a' }]).ok).toBe(false);
-    expect(withConfig([{ kind: 'choice', key: 'c', title: 'C', options: [{ value: 'a', label: 'A' }, { value: 'b', label: 'B' }], default: 'c' }]).ok).toBe(false);
+  it('a pick with a repeated option value, or a default outside its options, refuses', () => {
+    expect(withConfig([{ kind: 'pick', key: 'c', title: 'C', options: [{ value: 'a', label: 'A' }, { value: 'a', label: 'A2' }], default: 'a' }]).ok).toBe(false);
+    expect(withConfig([{ kind: 'pick', key: 'c', title: 'C', options: [{ value: 'a', label: 'A' }, { value: 'b', label: 'B' }], default: 'c' }]).ok).toBe(false);
   });
 
-  it('text whose default is longer than maxLength refuses', () => {
-    expect(withConfig([{ kind: 'text', key: 't', title: 'T', maxLength: 5, default: 'far too long' }]).ok).toBe(false);
+  it('a line whose default is longer than maxLength refuses', () => {
+    expect(withConfig([{ kind: 'line', key: 't', title: 'T', maxLength: 5, default: 'far too long' }]).ok).toBe(false);
+  });
+
+  it('the retired kind names (choice, text) are refused after the rename to the shared vocabulary', () => {
+    expect(withConfig([{ kind: 'choice', key: 'c', title: 'C', options: [{ value: 'a', label: 'A' }, { value: 'b', label: 'B' }], default: 'a' }]).ok).toBe(false);
+    expect(withConfig([{ kind: 'text', key: 't', title: 'T', maxLength: 5, default: 'x' }]).ok).toBe(false);
   });
 
   it('an unknown key inside an entry refuses the bundle — strict', () => {
