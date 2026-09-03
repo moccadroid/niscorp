@@ -59,6 +59,7 @@ export type IntegrationRow = {
   capabilities: readonly { id: string; title: string }[];
   configuration: readonly ConfigurationField[];
   documents: readonly DocumentDeclaration[];
+  assistants: readonly AssistantDeclaration[];
   lastImportAt: number | null;
   lastError: string | null;
   actionCount: number;
@@ -230,6 +231,65 @@ const documentDeclarationSchema = z
 
 export type DocumentDeclaration = z.infer<typeof documentDeclarationSchema>;
 
+// ── WHAT AN ADD-ON'S ASSISTANT KNOWS ─────────────────────────
+//
+// The host ships ONE assistant — one thread on every screen, one `say` that
+// derives most of its context from the screen itself. What it cannot derive is
+// the add-on's own knowledge: its instructions, the reads it may run
+// (`grounding`, each a host vex fingerprint under a heading), the block types
+// it may render beyond the host's core, its opening offers, the host tools it
+// may call, and what it applies to. moss validates the declaration against the
+// host's fingerprints and tools and the bundle's own documents and actions, and
+// carries it; which thread and which `say` consume it is the host's.
+
+// A block type an assistant may render beyond the host's core — a palette with
+// swatches and a "Use this", a section proposal. Fields from the same
+// vocabulary as a document's (a `list` IS allowed here — that is the one place
+// it is), and a fragment drawn like any other, walked at intake.
+const blockTypeSchema = z
+  .object({
+    type: z.string().min(1),
+    label: z.string().min(1),
+    fields: z.array(documentFieldSchema).default([]),
+    // Data keys the block reads — carried, the block's own contract with its
+    // fragment; moss does not resolve them.
+    refs: z.array(z.string().min(1)).default([]),
+    fragment: LayoutNodeSchema,
+  })
+  .strict();
+
+const assistantDeclarationSchema = z
+  .object({
+    id: z.string().regex(/^[a-z][a-z0-9-]*$/, 'an assistant id is lowercase words joined by single hyphens'),
+    title: z.string().min(1),
+    intro: z.string().default(''),
+    instructions: z.string().min(1),
+    // The reads it may run — each a host vex fingerprint the session may already
+    // call, under a heading (`as`) the rows appear beneath. `upfront` fetches at
+    // thread start rather than on demand.
+    grounding: z
+      .array(
+        z.object({ as: z.string().min(1), fingerprint: z.string().min(1), context: z.record(z.string(), z.unknown()).default({}), upfront: z.boolean().default(false) }).strict(),
+      )
+      .default([]),
+    // Host tools it may call, from the host's closed set (`floors`, `derive`).
+    tools: z.array(z.string().min(1)).default([]),
+    blocks: z.array(blockTypeSchema).default([]),
+    starters: z.array(z.string().min(1)).max(6).default([]),
+    // One of the bundle's own documents, or one of its own screens (actions),
+    // so the host can find the row from what is on screen. An add-on attaches an
+    // assistant to its own surfaces only.
+    applies: z.object({ document: z.string().optional(), screen: z.string().optional() }).strict(),
+    modelRole: z.string().optional(),
+    // Data keys of the screen the thread is keyed by, and the keys sent to the
+    // model (absent = all). Carried; the host's `say` is the consumer.
+    subject: z.array(z.string().min(1)).default([]),
+    describe: z.array(z.string().min(1)).optional(),
+  })
+  .strict();
+
+export type AssistantDeclaration = z.infer<typeof assistantDeclarationSchema>;
+
 const BundleSchema = z
   .object({
     integration: z.string().min(1),
@@ -352,6 +412,9 @@ const BundleSchema = z
     // WHAT AN ADD-ON LETS A PERSON EDIT in the host's editor — section types,
     // fields, fragments, and a section model. See `documentDeclarationSchema`.
     documents: z.array(documentDeclarationSchema).default([]),
+    // WHAT AN ADD-ON'S ASSISTANT KNOWS AND MAY DO — instructions, grounding,
+    // blocks, tools, and what it applies to. See `assistantDeclarationSchema`.
+    assistants: z.array(assistantDeclarationSchema).default([]),
   })
   .strict();
 
@@ -733,6 +796,49 @@ export const runIntake = (payload: unknown, ctx: IntakeContext): IntakeResult =>
     }
   }
 
+  // ── WHAT AN ADD-ON'S ASSISTANT KNOWS ─────────────────────────
+  const documentIds = new Set(bundle.documents.map((d) => d.id));
+  const hostTools = ctx.tools ?? new Set<string>();
+  const seenAssistant = new Set<string>();
+  for (const assistant of bundle.assistants) {
+    if (seenAssistant.has(assistant.id)) reasons.push(`assistant "${assistant.id}": declared twice`);
+    seenAssistant.add(assistant.id);
+    // It attaches to its OWN ground: a document of this bundle or a screen
+    // (action) of this bundle, and it must attach to one of them.
+    if (assistant.applies.document === undefined && assistant.applies.screen === undefined) {
+      reasons.push(`assistant "${assistant.id}": applies to neither a document nor a screen`);
+    }
+    if (assistant.applies.document !== undefined && !documentIds.has(assistant.applies.document)) {
+      reasons.push(`assistant "${assistant.id}": applies to document "${assistant.applies.document}", which this bundle does not declare`);
+    }
+    if (assistant.applies.screen !== undefined && !ownActions.has(assistant.applies.screen)) {
+      reasons.push(`assistant "${assistant.id}": applies to screen "${assistant.applies.screen}", which is not an action in this bundle`);
+    }
+    for (const read of assistant.grounding) {
+      if (!ctx.fingerprints.has(read.fingerprint)) {
+        reasons.push(`assistant "${assistant.id}": grounding "${read.as}" reads "${read.fingerprint}", which this app does not serve`);
+      }
+    }
+    for (const tool of assistant.tools) {
+      if (!hostTools.has(tool)) reasons.push(`assistant "${assistant.id}": tool "${tool}" is not one the host offers`);
+    }
+    const seenBlock = new Set<string>();
+    for (const block of assistant.blocks) {
+      if (seenBlock.has(block.type)) reasons.push(`assistant "${assistant.id}": block type "${block.type}" declared twice`);
+      seenBlock.add(block.type);
+      const seenKey = new Set<string>();
+      for (const field of block.fields) {
+        if (seenKey.has(field.key)) reasons.push(`assistant "${assistant.id}" block "${block.type}": field key "${field.key}" declared twice`);
+        seenKey.add(field.key);
+        // A `list` field IS allowed in a block — this is the one place it is.
+        if (field.kind === 'pick' && field.options.length < 2) {
+          reasons.push(`assistant "${assistant.id}" block "${block.type}": pick field "${field.key}" needs at least two options`);
+        }
+      }
+      validateLayout(block.fragment, `assistant "${assistant.id}" block "${block.type}" fragment`);
+    }
+  }
+
   return reasons.length > 0 ? { ok: false, reasons } : { ok: true, bundle };
 };
 
@@ -986,6 +1092,10 @@ export const initIntegrations = async (pool: PgPool): Promise<void> => {
       -- because it is the same kind of thing: a declaration written at import,
       -- replaced on re-registration, that moss never reads — the host does.
       documents          jsonb NOT NULL DEFAULT '[]'::jsonb,
+      -- WHAT AN ADD-ON'S ASSISTANT KNOWS AND MAY DO — instructions, grounding,
+      -- blocks, tools, what it applies to. Same kind of thing, same lifecycle;
+      -- the host's assistant is the consumer.
+      assistants         jsonb NOT NULL DEFAULT '[]'::jsonb,
       -- EVERY PATH THE PROXY MAY FORWARD, derived from the bundle at intake
       -- (reachOf). Beside the grants because it is one: a grant of reach, held
       -- by the same row, revoked by the same delete.
@@ -1011,6 +1121,7 @@ export const initIntegrations = async (pool: PgPool): Promise<void> => {
   await pool.query(`ALTER TABLE integrations ADD COLUMN IF NOT EXISTS capabilities jsonb NOT NULL DEFAULT '[]'::jsonb`);
   await pool.query(`ALTER TABLE integrations ADD COLUMN IF NOT EXISTS configuration jsonb NOT NULL DEFAULT '[]'::jsonb`);
   await pool.query(`ALTER TABLE integrations ADD COLUMN IF NOT EXISTS documents jsonb NOT NULL DEFAULT '[]'::jsonb`);
+  await pool.query(`ALTER TABLE integrations ADD COLUMN IF NOT EXISTS assistants jsonb NOT NULL DEFAULT '[]'::jsonb`);
   await pool.query(`
     CREATE TABLE IF NOT EXISTS integration_actions (
       integration_id  text NOT NULL REFERENCES integrations(id) ON DELETE CASCADE,
@@ -1076,7 +1187,7 @@ export const listIntegrations = async (pool: PgPool): Promise<IntegrationRow[]> 
   const res = await pool.query(`
     SELECT i.id, i.url, i.status, i.title, i.tagline, i.adds, i.settings_action,
            i.requested_actions, i.requested_data, i.approved_data,
-           i.offers, i.needs, i.capabilities, i.configuration, i.documents,
+           i.offers, i.needs, i.capabilities, i.configuration, i.documents, i.assistants,
            i.last_import_at, i.last_error,
            (SELECT count(*) FROM integration_actions a WHERE a.integration_id = i.id) AS action_count
       FROM integrations i ORDER BY i.id
@@ -1104,6 +1215,7 @@ export const listIntegrations = async (pool: PgPool): Promise<IntegrationRow[]> 
       capabilities: (row['capabilities'] ?? []) as { id: string; title: string }[],
       configuration: (row['configuration'] ?? []) as ConfigurationField[],
       documents: (row['documents'] ?? []) as DocumentDeclaration[],
+      assistants: (row['assistants'] ?? []) as AssistantDeclaration[],
       lastImportAt: at instanceof Date ? at.getTime() : typeof at === 'string' || typeof at === 'number' ? new Date(at).getTime() : null,
       lastError: (row['last_error'] as string | null) ?? null,
       actionCount: Number(row['action_count'] ?? 0),

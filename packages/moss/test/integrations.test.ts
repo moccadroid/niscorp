@@ -511,6 +511,121 @@ describe('documents — what an add-on lets a person edit', () => {
   });
 });
 
+describe('assistants — what an add-on’s assistant knows', () => {
+  const minimalDoc = (): Record<string, unknown> => ({
+    id: 'website',
+    title: 'W',
+    capability: 'build',
+    registry: [{ type: 't', label: 'T', fields: [{ key: 'k', label: 'K', kind: 'line' }], fragment: { component: 'Text' } }],
+    sections: { open: { max: 5 } },
+    publish: { path: '/integrations/acme/x' },
+  });
+  const asstCtx = () =>
+    ctx({
+      components: new Map<string, { propsSchema?: unknown }>([['Text', {}]]),
+      fingerprints: new Set(['deals/table']),
+      tools: new Set(['floors', 'derive']),
+    });
+  const okAssistant = (): Record<string, unknown> => ({
+    id: 'brand',
+    title: 'Brand assistant',
+    instructions: 'Help write the page.',
+    applies: { document: 'website' },
+  });
+  const withAsst = (assistants: unknown[], documents: unknown[] = [minimalDoc()]) =>
+    runIntake({ integration: 'acme', actions: {}, capabilities: [{ id: 'build', title: 'Build' }], documents, assistants }, asstCtx());
+
+  it('a bundle declaring an assistant lands whole', () => {
+    const r = withAsst([okAssistant()]);
+    expect(r.ok, r.ok ? '' : r.reasons.join('; ')).toBe(true);
+    if (r.ok) expect(r.bundle.assistants[0]?.id).toBe('brand');
+  });
+
+  it('a bundle saying nothing parses to an empty array', () => {
+    expect(okBundle().assistants).toEqual([]);
+  });
+
+  it('two assistants with one id refuse', () => {
+    expect(withAsst([okAssistant(), okAssistant()]).ok).toBe(false);
+  });
+
+  it('applies with neither key, or naming a document/screen the bundle lacks, refuses', () => {
+    const neither = okAssistant();
+    neither.applies = {};
+    expect(withAsst([neither]).ok).toBe(false);
+
+    const ghostDoc = okAssistant();
+    ghostDoc.applies = { document: 'ghost' };
+    expect(withAsst([ghostDoc]).ok).toBe(false);
+
+    const ghostScreen = okAssistant();
+    ghostScreen.applies = { screen: 'ext.member.acme.thing' };
+    expect(withAsst([ghostScreen]).ok).toBe(false);
+  });
+
+  it('a grounding fingerprint the app does not serve refuses; a served one passes', () => {
+    const ghost = okAssistant();
+    ghost.grounding = [{ as: 'Deals', fingerprint: 'ghost' }];
+    expect(withAsst([ghost]).ok).toBe(false);
+
+    const served = okAssistant();
+    served.grounding = [{ as: 'Deals', fingerprint: 'deals/table' }];
+    expect(withAsst([served]).ok).toBe(true);
+  });
+
+  it('a tool the host does not offer refuses', () => {
+    const d = okAssistant();
+    d.tools = ['nope'];
+    expect(withAsst([d]).ok).toBe(false);
+  });
+
+  it('a block: a list field is allowed, but a duplicate type, a pick<2, or an unknown fragment component refuse', () => {
+    const listOk = okAssistant();
+    listOk.blocks = [{ type: 'palette', label: 'Palette', fields: [{ key: 'swatches', label: 'S', kind: 'list' }], fragment: { component: 'Text' } }];
+    expect(withAsst([listOk]).ok, 'a list field is allowed inside a block').toBe(true);
+
+    const dupType = okAssistant();
+    dupType.blocks = [
+      { type: 'p', label: 'P', fields: [], fragment: { component: 'Text' } },
+      { type: 'p', label: 'P2', fields: [], fragment: { component: 'Text' } },
+    ];
+    expect(withAsst([dupType]).ok).toBe(false);
+
+    const badPick = okAssistant();
+    badPick.blocks = [{ type: 'p', label: 'P', fields: [{ key: 'k', label: 'K', kind: 'pick', options: [{ value: 'a', label: 'A' }] }], fragment: { component: 'Text' } }];
+    expect(withAsst([badPick]).ok).toBe(false);
+
+    const badFragment = okAssistant();
+    badFragment.blocks = [{ type: 'p', label: 'P', fields: [], fragment: { component: 'Nope' } }];
+    expect(withAsst([badFragment]).ok).toBe(false);
+  });
+
+  it('more than six starters refuse', () => {
+    const d = okAssistant();
+    d.starters = ['1', '2', '3', '4', '5', '6', '7'];
+    expect(withAsst([d]).ok).toBe(false);
+  });
+
+  it('the row carries it, and a re-import replaces rather than accumulates', async () => {
+    const pool = createPglitePool(new PGlite());
+    await initIntegrations(pool);
+    const one = '[{"id":"brand","title":"Brand","intro":"","instructions":"help","grounding":[],"tools":[],"blocks":[],"starters":[],"applies":{"document":"website"},"subject":[]}]';
+    const upsert = (assistants: string): Promise<unknown> =>
+      pool.query(
+        `INSERT INTO integrations (id, url, assistants) VALUES ('acme', 'https://acme.example', $1::jsonb)
+         ON CONFLICT (id) DO UPDATE SET assistants = EXCLUDED.assistants`,
+        [assistants],
+      );
+    await upsert(one);
+    await upsert('[]');
+    const rows = await listIntegrations(pool);
+    expect(rows.find((r) => r.id === 'acme')?.assistants).toEqual([]);
+    await upsert(one);
+    const after = await listIntegrations(pool);
+    expect(after.find((r) => r.id === 'acme')?.assistants?.[0]?.id).toBe('brand');
+  });
+});
+
 // ═══════════════════════════════════════════════════════════════
 // callIntegration — the outbound act. The deployment calls an integration
 // with nobody driving; the gates are approved + installed, the credential is
