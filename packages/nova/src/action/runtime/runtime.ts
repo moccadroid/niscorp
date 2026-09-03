@@ -50,7 +50,16 @@ export const createActionRuntime = (config: ActionRuntimeConfig): ActionRuntime 
 
   const statusSubscribers: StatusChangeHandler[] = [];
   let triggerHandle: TriggerHandle | undefined;
-  const modelListeners = new Map<string, { path: string; off: Unsubscribe }>();
+  // The single `ui:model` write subscription, made in `attach()` BEFORE any
+  // trigger so the model write is always first in the bus's insertion order —
+  // a trigger listening to `ui:model` reads the value the event just wrote, not
+  // the one the field held before the keystroke. See `attach()`.
+  let modelWriteOff: Unsubscribe | undefined;
+  // ref → path, the model bindings the current render carries. Reconciled every
+  // render; consulted by the ONE subscription above at event time. Keeping this
+  // a map (not a subscription per binding) is what lets a binding appear or
+  // vanish across renders without ever touching the bus's ordering.
+  const modelListeners = new Map<string, string>();
 
   dataStore.subscribe((next) => {
     instance.data = next;
@@ -108,6 +117,26 @@ export const createActionRuntime = (config: ActionRuntimeConfig): ActionRuntime 
   };
 
   const attach = (): void => {
+    // FIRST, and unconditionally — before the trigger subscriptions below and
+    // before either early return, so it wins the bus's insertion order even for
+    // an action that has model bindings but no triggers (an inspector field
+    // that only previews). The handler resolves the ref against the render-time
+    // map at event time and applies the same origin/suspension checks and the
+    // same write the per-binding listener used to.
+    if (modelWriteOff === undefined) {
+      modelWriteOff = config.eventBus.on('ui:model', (event) => {
+        if (event.type !== 'ui:model' || instance.status === 'suspended') return;
+        // A stamped model event reaches its own instance only; an unstamped
+        // (global) one reaches every instance holding the ref.
+        if (event.origin !== undefined && event.origin !== instance.id) return;
+        if (event.ref === undefined) return;
+        const path = modelListeners.get(event.ref);
+        if (path === undefined) return;
+        dataStore.update((curr) =>
+          applyMutations(curr, [{ set: path, value: event.payload }], { initial: initialSnapshot, strict }),
+        );
+      });
+    }
     if (triggerHandle !== undefined) return;
     const triggers = definition.triggers;
     if (triggers === undefined || triggers.length === 0) return;
@@ -115,6 +144,10 @@ export const createActionRuntime = (config: ActionRuntimeConfig): ActionRuntime 
   };
 
   const detach = (): void => {
+    if (modelWriteOff !== undefined) {
+      modelWriteOff();
+      modelWriteOff = undefined;
+    }
     if (triggerHandle === undefined) return;
     triggerHandle.detach();
     triggerHandle = undefined;
@@ -192,45 +225,17 @@ export const createActionRuntime = (config: ActionRuntimeConfig): ActionRuntime 
     await runLifecycleHook('resume', definition, buildContext);
   };
 
-  const installModelListener = (ref: string, path: string): void => {
-    const off = config.eventBus.on('ui:model', (event) => {
-      if (instance.status === 'suspended') return;
-      if (event.type !== 'ui:model') return;
-      // Same origin scoping as triggers: a stamped model event is delivered to
-      // its own instance only; an unstamped (global) one reaches everyone.
-      if (event.origin !== undefined && event.origin !== instance.id) return;
-      if (event.ref !== ref) return;
-      dataStore.update((curr) =>
-        applyMutations(curr, [{ set: path, value: event.payload }], {
-          initial: initialSnapshot,
-          strict,
-        }),
-      );
-    });
-    modelListeners.set(ref, { path, off });
-  };
-
+  // The map the ONE `ui:model` subscription (see `attach()`) consults at event
+  // time. Rebuilt from the render tree every render — a binding inside a loop
+  // depends on the data, so the set is not knowable before a render. This only
+  // ever touches the map, never the bus, so the write's position ahead of the
+  // triggers is unaffected by a binding appearing or vanishing across renders.
   const reconcileModelBindings = (nodes: RenderNode[]): void => {
-    const bindings = collectModelBindings(nodes);
-    const next = new Map<string, string>();
-    for (const b of bindings) next.set(b.ref, b.path);
-    // Remove listeners that are no longer referenced OR whose path changed.
-    for (const [ref, entry] of modelListeners) {
-      const incoming = next.get(ref);
-      if (incoming === undefined || incoming !== entry.path) {
-        entry.off();
-        modelListeners.delete(ref);
-      }
-    }
-    // Install listeners for new bindings.
-    for (const [ref, path] of next) {
-      if (modelListeners.has(ref)) continue;
-      installModelListener(ref, path);
-    }
+    modelListeners.clear();
+    for (const b of collectModelBindings(nodes)) modelListeners.set(b.ref, b.path);
   };
 
   const teardownModelListeners = (): void => {
-    for (const entry of modelListeners.values()) entry.off();
     modelListeners.clear();
   };
 

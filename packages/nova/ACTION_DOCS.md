@@ -109,6 +109,8 @@ A trigger MUST have either `event` or `message`. Setting both is an error.
 
 Triggers attach when the action mounts and detach when it unmounts. While the action is **suspended** (another action is pushed on top), triggers stay attached but do **not** fire — a suspended action reacts to nothing until it resumes, and the runtime's abort signal prevents in-flight async work from completing. On resume the `mount` hook re-runs (see [Lifecycle hooks](#lifecycle-hooks)), so the action refreshes its own data instead of reacting while backgrounded.
 
+A `ui:model` trigger observes the value the event wrote: the runtime applies a `ui:model` to its own model bindings **before** it dispatches the event to triggers, so a trigger's steps read the just-typed value, not the one the field held before the keystroke.
+
 ---
 
 ## Steps
