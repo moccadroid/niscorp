@@ -647,3 +647,67 @@ describe('shells — a canvas that fails to render', () => {
     }
   });
 });
+
+describe('shells — the frame layout store and re-send', () => {
+  // A frame that is nothing but a ref: `{ ref: 'r' }` resolves against the
+  // seeded store. Without the seed this throws LayoutRefNotFoundError and the
+  // frame comes back empty; with it, the node is in the frame at first render.
+  const refApp = {
+    charter: { public: ['counter'] },
+    assignments: {},
+    actions: { counter },
+    shell: {
+      canvases: [{ id: 'main', initial: 'counter' }],
+      layout: { ref: 'r' },
+      layoutStore: { r: { component: 'Text', children: 'seeded-dock' } },
+    },
+  } as unknown as NiscApp;
+  const refCtx = { ...ctx, app: refApp };
+  const frames = (conn: ReturnType<typeof fakeConnection>): Record<string, unknown>[] => conn.sent.filter((m) => m['type'] === 'frame');
+
+  it('a seeded ref resolves in the frame at first render', async () => {
+    const host = createShellHost(refCtx);
+    const conn = fakeConnection();
+    (await host.session('t', 'usr_1')).attach(conn);
+    const frame = frames(conn).at(-1);
+    expect(frame).toBeDefined();
+    expect(JSON.stringify(frame)).toContain('seeded-dock');
+  });
+
+  it('setLayout re-sends the frame to attached terminals; an unchanged frame sends nothing', async () => {
+    const host = createShellHost(refCtx);
+    const conn = fakeConnection();
+    const session = await host.session('t', 'usr_1');
+    session.attach(conn);
+    const afterAttach = frames(conn).length;
+
+    session.shell.setLayout('r', { component: 'Text', children: 'swapped-dock' });
+    await tick();
+    await tick();
+    const afterSwap = frames(conn);
+    expect(afterSwap.length).toBeGreaterThan(afterAttach);
+    expect(JSON.stringify(afterSwap.at(-1))).toContain('swapped-dock');
+
+    // Re-setting the same layout changes nothing — the frame is diffed, so no
+    // second frame message goes out.
+    const settled = afterSwap.length;
+    session.shell.setLayout('r', { component: 'Text', children: 'swapped-dock' });
+    await tick();
+    await tick();
+    expect(frames(conn).length).toBe(settled);
+  });
+
+  it('a canvas-only change on a frame with no ref sends no frame message', async () => {
+    const host = createShellHost(ctx); // the plain app: default frame, no ref
+    const conn = fakeConnection();
+    const session = await host.session('t', 'usr_1');
+    session.attach(conn);
+    await tick();
+    const before = frames(conn).length;
+
+    session.dispatch('main', { type: 'ui:click', ref: 'bump' });
+    await tick();
+    await tick();
+    expect(frames(conn).length).toBe(before);
+  });
+});

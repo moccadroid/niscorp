@@ -1,4 +1,4 @@
-import { createShell, createComponentRegistry, CANVAS_SLOT_NAME, ACTION_SLOT_NAME } from '@niscorp/nova';
+import { createShell, createComponentRegistry, createLayoutStore, CANVAS_SLOT_NAME, ACTION_SLOT_NAME } from '@niscorp/nova';
 import { componentsOf, snapshotShell } from '@niscorp/nova/reflect';
 import type { Shell, CanvasConfig, FetchFn, FunctionHandler, LayoutNode, RenderNode } from '@niscorp/nova';
 import { emitterOf, spanClock } from './telemetry';
@@ -269,7 +269,7 @@ export const createShellHost = (ctx: ShellHostContext): ShellHost => {
   // from default layouts, not the app's, so the walk can't find them — seed
   // them first.
   const componentNames = new Set<string>([CANVAS_SLOT_NAME, ACTION_SLOT_NAME]);
-  for (const source of [ctx.app.actions, ctx.app.layouts ?? {}, shellManifest.canvases, shellManifest.layout ?? {}, shellManifest.fragments ?? {}]) {
+  for (const source of [ctx.app.actions, ctx.app.layouts ?? {}, shellManifest.canvases, shellManifest.layout ?? {}, shellManifest.layoutStore ?? {}, shellManifest.fragments ?? {}]) {
     for (const name of componentsOf(source)) componentNames.add(name);
   }
   // Declared contracts register even when no authored layout mentions them
@@ -282,6 +282,9 @@ export const createShellHost = (ctx: ShellHostContext): ShellHost => {
     connections: Set<Connection>;
     // last frame per canvas — only changes are sent
     sent: Map<string, string>;
+    // last FRAME (the arrangement) sent to the set — the frame's own `sent`
+    // baseline, so a `setLayout` re-sends it only when it actually changed.
+    sentFrame?: string;
     // Connections that asked for deltas at attach. Every connection is level
     // with `sent` (attach hands a newcomer the current frames, and a change
     // fans out to all of them), so one baseline serves the whole set — but a
@@ -484,9 +487,18 @@ export const createShellHost = (ctx: ShellHostContext): ShellHost => {
     // behind the screen it is painting.
     const phrases = (await ctx.app.phrases?.({ principal, identity: who.scope, wire: ctx.wire(token) })) ?? {};
 
+    // THE FRAME'S LAYOUT STORE, seeded from the manifest so a `{ ref }` in the
+    // frame resolves at the FIRST render — before any `setLayout`. A malformed
+    // seed throws here (store.set validates), failing this build closed and
+    // named, exactly as a bad definition does; the socket refuses this terminal
+    // and the process stays up.
+    const layoutStore = createLayoutStore();
+    for (const [refId, node] of Object.entries(shellManifest.layoutStore ?? {})) layoutStore.set(refId, node);
+
     const shell = createShell({
       registry,
       canvases,
+      layoutStore,
       ...(shellManifest.layout !== undefined ? { canvasLayout: shellManifest.layout } : {}),
       // Ring 1 then ring 2: an ungranted action doesn't exist; a granted one
       // carries the principal's variant layout when they hold one — the swap
@@ -582,6 +594,22 @@ export const createShellHost = (ctx: ShellHostContext): ShellHost => {
           connection.send(short !== null && live.deltaReady.has(connection) ? short : next);
         }
       }
+      // THE FRAME too — re-rendered and diffed like a canvas, so a `setLayout`
+      // (or `setCanvasLayout`) that changes the arrangement reaches every
+      // attached terminal, not only the next one to attach. Sent AFTER the
+      // canvases, so a frame that references a canvas seeded this same pass finds
+      // its tree already delivered. Guarded like attach: a frame that fails to
+      // render leaves the last one standing rather than taking the pass down.
+      let frame: string | undefined;
+      try {
+        frame = JSON.stringify({ type: 'frame', tree: live.shell.getShellRenderTree() } satisfies ServerMessage);
+      } catch (error) {
+        console.error('[moss/shells] the shell frame failed to render on a flush — leaving the last one in place:', error);
+      }
+      if (frame !== undefined && frame !== live.sentFrame) {
+        live.sentFrame = frame;
+        for (const connection of live.connections) connection.send(frame);
+      }
     };
     const flush = (): void => {
       if (live.flushing) return;
@@ -623,7 +651,11 @@ export const createShellHost = (ctx: ShellHostContext): ShellHost => {
     } catch (error) {
       console.error('[moss/shells] the shell frame failed to render — serving an empty arrangement:', error);
     }
-    connection.send(JSON.stringify({ type: 'frame', tree: frameTree } satisfies ServerMessage));
+    // The newcomer joins the frame's shared baseline the same way it joins each
+    // canvas's below — so the next flush re-sends the frame only if it changes.
+    const frameMessage = JSON.stringify({ type: 'frame', tree: frameTree } satisfies ServerMessage);
+    connection.send(frameMessage);
+    live.sentFrame = frameMessage;
     for (const canvas of shellManifest.canvases) {
       const next = frameOf(live, canvas.id);
       if (next === null) continue;

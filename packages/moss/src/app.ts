@@ -422,6 +422,13 @@ export type ShellManifest = {
   // The FRAME — the canvas arrangement, a layout of CanvasSlot markers.
   // Served to terminals verbatim; the terminal owns nothing but pixels.
   layout?: LayoutNode;
+  // THE INITIAL LAYOUT STORE — what a `{ ref: id }` in the frame resolves to
+  // before anything calls `setLayout`. A dynamic region embeds `{ ref: 'dock' }`
+  // in `layout` above and this seeds what it draws; `shell.setLayout('dock', …)`
+  // then swaps it and the change re-sends the frame. NOT `layouts` (below, on
+  // NiscApp) — those are per-role variants of ACTION layouts; this seeds the
+  // shell's layout STORE, mirroring nova's own `createShell({ layoutStore })`.
+  layoutStore?: Record<string, LayoutNode>;
   fragments?: Record<string, ActionFragment>;
   // Per-principal canvas SEEDING — the instance twin of `inputs`. Where
   // `initial` is static data and `inputs` derives per-principal boot DATA,
