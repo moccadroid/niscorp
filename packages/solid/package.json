@@ -1,7 +1,7 @@
 {
   "name": "@niscorp/solid",
   "version": "0.1.0",
-  "description": "Structured Output Live Inference Decoding — always-valid schema-backed object stream over partial JSON",
+  "description": "Structured Output Live Inference Decoding \u00e2\u20ac\u201d always-valid schema-backed object stream over partial JSON",
   "license": "MIT",
   "type": "module",
   "sideEffects": false,
@@ -58,12 +58,11 @@
   "engines": {
     "node": ">=18.18.0"
   },
-  "peerDependencies": {
-    "zod": "^4.0.0"
+  "dependencies": {
+    "zod": "^4.3.6"
   },
   "devDependencies": {
     "tsup": "^8.5.1",
-    "vitest": "^4.1.2",
-    "zod": "^4.3.6"
+    "vitest": "^4.1.2"
   }
 }

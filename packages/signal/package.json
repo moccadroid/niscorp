@@ -1,7 +1,7 @@
 {
   "name": "@niscorp/signal",
   "version": "0.1.0",
-  "description": "Universal LLM abstraction — stateless, immutable, provider-agnostic",
+  "description": "Universal LLM abstraction \u00e2\u20ac\u201d stateless, immutable, provider-agnostic",
   "license": "MIT",
   "type": "module",
   "sideEffects": false,
@@ -61,15 +61,14 @@
   "engines": {
     "node": ">=18.18.0"
   },
-  "peerDependencies": {
-    "zod": "^4.0.0"
+  "dependencies": {
+    "zod": "^4.3.6"
   },
   "devDependencies": {
     "@types/node": "^25.5.2",
     "dotenv": "^17.4.0",
     "openai": "^6.33.0",
     "tsup": "^8.5.1",
-    "vitest": "^4.1.2",
-    "zod": "^4.3.6"
+    "vitest": "^4.1.2"
   }
 }

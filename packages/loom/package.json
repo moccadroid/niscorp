@@ -1,7 +1,7 @@
 {
   "name": "@niscorp/loom",
   "version": "0.1.0",
-  "description": "Schema-driven editors that run on Nova — turn any schema into an editing UI",
+  "description": "Schema-driven editors that run on Nova \u00e2\u20ac\u201d turn any schema into an editing UI",
   "license": "MIT",
   "type": "module",
   "sideEffects": false,
@@ -96,10 +96,13 @@
     "test": "vitest run",
     "typecheck": "tsc --noEmit -p tsconfig.test.json"
   },
-  "devDependencies": {
+  "dependencies": {
     "@niscorp/nova": "workspace:^",
     "@niscorp/prism": "workspace:^",
     "@niscorp/vex": "workspace:^",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
     "@testing-library/react": "^16.1.0",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.0",
@@ -107,24 +110,13 @@
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
     "tsup": "^8.5.1",
-    "vitest": "^4.1.2",
-    "zod": "^4.3.6"
+    "vitest": "^4.1.2"
   },
   "peerDependencies": {
-    "@niscorp/nova": "workspace:^",
-    "@niscorp/prism": "workspace:^",
-    "@niscorp/vex": "workspace:^",
-    "react": "^19.2.4",
-    "zod": "^4.3.6"
+    "react": "^19.2.4"
   },
   "peerDependenciesMeta": {
     "react": {
-      "optional": true
-    },
-    "@niscorp/prism": {
-      "optional": true
-    },
-    "@niscorp/vex": {
       "optional": true
     }
   }

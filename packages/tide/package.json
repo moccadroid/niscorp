@@ -1,7 +1,7 @@
 {
   "name": "@niscorp/tide",
   "version": "0.1.0",
-  "description": "Host-blind automation engine — a reflex turns the clock and the fact into one named effect, through a durable ledger.",
+  "description": "Host-blind automation engine \u00e2\u20ac\u201d a reflex turns the clock and the fact into one named effect, through a durable ledger.",
   "license": "MIT",
   "type": "module",
   "sideEffects": false,
@@ -27,13 +27,12 @@
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit -p tsconfig.test.json"
   },
+  "dependencies": {
+    "zod": "^4.3.6"
+  },
   "devDependencies": {
     "tsup": "^8.5.1",
     "typescript": "^6.0.2",
-    "vitest": "^4.1.2",
-    "zod": "^4.3.6"
-  },
-  "peerDependencies": {
-    "zod": "^4.3.6"
+    "vitest": "^4.1.2"
   }
 }
