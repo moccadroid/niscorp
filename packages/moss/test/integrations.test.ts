@@ -2,8 +2,9 @@ import { describe, it, expect, vi } from 'vitest';
 import { z } from 'zod';
 import { PGlite } from '@electric-sql/pglite';
 import { createPglitePool } from '@niscorp/vex/pglite';
-import { runIntake, reachOf, copyPress, callIntegrationWith, initIntegrations, listIntegrations } from '../src/integrations';
+import { runIntake, reachOf, copyPress, callIntegrationWith, initIntegrations, listIntegrations, intakeContextOf } from '../src/integrations';
 import type { IntakeContext, Bundle, StorePress } from '../src/integrations';
+import type { NiscApp } from '../src/app';
 import { createAssertionSigner, verifyAssertion } from '../src/assert';
 
 // The listing's long form travels WITH the bundle (story, highlights, press),
@@ -623,6 +624,56 @@ describe('assistants — what an add-on’s assistant knows', () => {
     await upsert(one);
     const after = await listIntegrations(pool);
     expect(after.find((r) => r.id === 'acme')?.assistants?.[0]?.id).toBe('brand');
+  });
+});
+
+describe('intakeContextOf — the host vocabulary reaches intake', () => {
+  const app = {
+    shell: { components: { Text: {} } },
+    attachable: { 'member.detail': { membership_id: '$.membershipId' } },
+    menuSlots: ['people'],
+    assistantTools: ['floors', 'derive'],
+    publishChecks: ['readability'],
+    editorRegions: ['host-stage'],
+  } as unknown as NiscApp;
+
+  it('maps the manifest vocabulary into the intake context', () => {
+    const c = intakeContextOf(app, 'acme', new Set(['deals/table']));
+    expect([...(c.tools ?? [])]).toEqual(['floors', 'derive']);
+    expect([...(c.checks ?? [])]).toEqual(['readability']);
+    expect([...(c.regions ?? [])]).toEqual(['host-stage']);
+    expect([...c.menuSlots]).toEqual(['people']);
+    expect([...c.attachable]).toEqual(['member.detail']);
+    expect(c.components.has('Text')).toBe(true);
+    expect(c.fingerprints.has('deals/table')).toBe(true);
+  });
+
+  const doc = (over: Record<string, unknown> = {}): Record<string, unknown> => ({
+    id: 'd', title: 'D', capability: 'build',
+    registry: [{ type: 't', label: 'T', fields: [{ key: 'k', label: 'K', kind: 'line' }], fragment: { component: 'Text' } }],
+    sections: { open: { max: 5 } }, publish: { path: '/integrations/acme/x' }, ...over,
+  });
+
+  it('an assistant naming a tool the manifest lists is admitted; one naming another is refused', () => {
+    const run = (tools: string[]) =>
+      runIntake(
+        { integration: 'acme', actions: {}, capabilities: [{ id: 'build', title: 'Build' }], documents: [doc()], assistants: [{ id: 'a', title: 'A', instructions: 'x', tools, applies: { document: 'd' } }] },
+        intakeContextOf(app, 'acme', new Set()),
+      );
+    expect(run(['floors']).ok, 'a listed tool is admitted').toBe(true);
+    const bad = run(['telepathy']);
+    expect(bad.ok).toBe(false);
+    if (!bad.ok) expect(bad.reasons.join(' ')).toContain('not one the host offers');
+  });
+
+  it('a document naming a check the manifest lists is admitted; one naming another is refused', () => {
+    const run = (checks: string[]) =>
+      runIntake(
+        { integration: 'acme', actions: {}, capabilities: [{ id: 'build', title: 'Build' }], documents: [doc({ checks })] },
+        intakeContextOf(app, 'acme', new Set()),
+      );
+    expect(run(['readability']).ok, 'a listed check is admitted').toBe(true);
+    expect(run(['telekinesis']).ok).toBe(false);
   });
 });
 

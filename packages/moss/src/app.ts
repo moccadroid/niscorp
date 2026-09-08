@@ -205,6 +205,23 @@ export type NiscApp = {
   // screens. Who owns a menu is the host's question; this list is its answer,
   // and intake refuses a placement outside it.
   menuSlots?: readonly string[];
+  // THE VOCABULARY AN ADD-ON'S DECLARATIONS MAY NAME — the same posture as
+  // `menuSlots`: the host names what it offers, intake refuses anything outside
+  // it. Read into the intake context so a `documents`/`assistants` declaration
+  // fails at registration, not in front of a person, when it names one the host
+  // does not hold. moss carries the names; what a tool DOES, what a check
+  // MEANS, and which region an id draws are the host's, never moss's.
+  //
+  // `assistantTools`: the host's closed assistant tool set, an `assistants`
+  // declaration's `tools[]` is checked against it.
+  assistantTools?: readonly string[];
+  // `publishChecks`: the checks the host runs before publishing a document, a
+  // `documents` declaration's `checks[]` is checked against it.
+  publishChecks?: readonly string[];
+  // `editorRegions`: region action ids the host's editor offers a document
+  // beyond the bundle's own actions; a `documents` declaration's `regions`
+  // values are admitted if they are one of these OR one of the bundle's actions.
+  editorRegions?: readonly string[];
   // WORDS FOR THE IDS ABOVE, for the one sentence a person reads before
   // turning an integration on. Optional: without it the approval card and store tile
   // print ids, which is honest and unhelpful.

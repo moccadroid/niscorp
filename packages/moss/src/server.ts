@@ -33,6 +33,7 @@ import {
   reachDeclares,
   reachOf,
   runIntake,
+  intakeContextOf,
 } from './integrations';
 import type { Reach, CallIntegration } from './integrations';
 import { createAssertionSigner, hashIntegrationKey, mintIntegrationKey } from './assert';
@@ -749,13 +750,7 @@ export const createServer = async (app: NiscApp, runtime: NiscRuntime): Promise<
     }
 
     const fingerprints = new Set((await data.engine.cache.keys?.()) ?? []);
-    const result = runIntake(payload, {
-      integrationId: id,
-      components: new Map(Object.entries(app.shell?.components ?? {}).map(([name, def]) => [name, { propsSchema: def.meta?.propsSchema }])),
-      fingerprints,
-      attachable: new Set(Object.keys(app.attachable ?? {})),
-      menuSlots: new Set(app.menuSlots ?? []),
-    });
+    const result = runIntake(payload, intakeContextOf(app, id, fingerprints));
     if (!result.ok) {
       await runtime.pool.query(
         `INSERT INTO integrations (id, url, last_error) VALUES ($1, $2, $3)

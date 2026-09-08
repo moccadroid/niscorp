@@ -541,6 +541,27 @@ export type IntakeContext = {
   checks?: ReadonlySet<string>;
 };
 
+// THE HOST'S VOCABULARY, gathered from the manifest for one intake. The one
+// place the registration route learns what this app offers a bundle to name —
+// components, fingerprints, attachment seats, menu hubs, and the assistant
+// tools / publish checks / editor regions a `documents`/`assistants`
+// declaration is checked against. Pure over the app plus the fingerprints the
+// route reads from the engine, so it is testable without a running server.
+export const intakeContextOf = (
+  app: NiscApp,
+  integrationId: string,
+  fingerprints: ReadonlySet<string>,
+): IntakeContext => ({
+  integrationId,
+  components: new Map(Object.entries(app.shell?.components ?? {}).map(([name, def]) => [name, { propsSchema: def.meta?.propsSchema }])),
+  fingerprints,
+  attachable: new Set(Object.keys(app.attachable ?? {})),
+  menuSlots: new Set(app.menuSlots ?? []),
+  tools: new Set(app.assistantTools ?? []),
+  checks: new Set(app.publishChecks ?? []),
+  regions: new Set(app.editorRegions ?? []),
+});
+
 const AUDIENCE = /^[a-z][a-z0-9-]*$/;
 
 // The host surface a screen calls to be handed a framed page's URL. Named once
