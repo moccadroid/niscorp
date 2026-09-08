@@ -112,3 +112,58 @@ describe('complete() error cases', () => {
     await expect(signal.complete('hello')).rejects.toThrow(/Missing model/);
   });
 });
+
+describe('stepStream carries the client options to the wire', () => {
+  // A client whose streaming create captures the params it was handed, so we can
+  // assert what actually reached the wire on the streaming path.
+  const capture = () => {
+    const captured: { params?: Record<string, unknown> } = {};
+    const client = {
+      chat: {
+        completions: {
+          create: async (params: Record<string, unknown>) => {
+            captured.params = params;
+            return (async function* () {
+              yield { choices: [{ finish_reason: 'stop' }] };
+            })();
+          },
+        },
+      },
+    };
+    return { captured, client };
+  };
+  const drain = async (stream: AsyncIterable<unknown>): Promise<void> => {
+    for await (const event of stream) void event;
+  };
+
+  it('a reasoningEffort set via .options() reaches the streamed body', async () => {
+    const { captured, client } = capture();
+    const signal = createSignal(
+      { baseUrl: 'https://fake.api.com/v1', apiKey: 'k', model: 'm', adapter: 'openai-compatible' },
+      { client },
+    ).options({ reasoningEffort: 'high' });
+    await drain(signal.stepStream({ messages: [{ role: 'user', content: 'hi' }] }));
+    expect(captured.params?.['reasoning_effort']).toBe('high');
+  });
+
+  it('a general option (temperature) set via .options() reaches the streamed body too', async () => {
+    const { captured, client } = capture();
+    const signal = createSignal(
+      { baseUrl: 'https://fake.api.com/v1', apiKey: 'k', model: 'm', adapter: 'openai-compatible' },
+      { client },
+    ).options({ temperature: 0.5 });
+    await drain(signal.stepStream({ messages: [{ role: 'user', content: 'hi' }] }));
+    expect(captured.params?.['temperature']).toBe(0.5);
+  });
+
+  it('end-to-end: a streamed Groq call with reasoningEffort now asks for the effort AND opts into the trace', async () => {
+    // The bd583fd opt-in keys reasoning_format on request.options.reasoningEffort;
+    // before the stepStream merge, config.options never reached the adapter on a
+    // stream, so this fired on no assistant turn. Now both land.
+    const { captured, client } = capture();
+    const signal = createSignal('groq', { apiKey: 'k', client }).options({ reasoningEffort: 'high' });
+    await drain(signal.stepStream({ messages: [{ role: 'user', content: 'hi' }] }));
+    expect(captured.params?.['reasoning_effort']).toBe('high');
+    expect(captured.params?.['reasoning_format']).toBe('parsed');
+  });
+});

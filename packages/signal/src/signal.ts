@@ -302,11 +302,20 @@ const createSignalFromConfig = <T = string>(config: SignalConfig): Signal<T> => 
       const adapter = await getAdapter();
       const resolved = resolveProvider(config);
       const declared = new Set((request.tools ?? []).map((tool) => tool.name));
+      // The client's own options are the floor here too — step() merges them and
+      // stepStream must not diverge, or a configured client (reasoningEffort,
+      // temperature, …) behaves differently depending on which door it came
+      // through. This is the merge that carries reasoning_effort to the wire on
+      // the streaming path cortex actually runs every turn through.
+      const merged: StepRequest =
+        config.options !== undefined || request.options !== undefined
+          ? { ...request, options: { ...config.options, ...request.options } }
+          : request;
       try {
         for await (const event of executeStepStream({
           adapter,
           model: resolved.model,
-          request,
+          request: merged,
           ...(streamOptions && { streamOptions }),
         })) {
           if (event.type === 'done' && request.output) {
