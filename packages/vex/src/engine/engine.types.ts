@@ -20,11 +20,13 @@ export type ResolvedField = {
 
 export type ResolvedJoin = {
   fromAlias: string;
-  fromColumn: string;
+  // Paired by position with `toColumns`: the whole key, every pair of which
+  // the compiled ON clause carries.
+  fromColumns: string[];
   toAlias: string;
-  toColumn: string;
+  toColumns: string[];
   toTable: string;
-  // 'left' when the referencing FK column is nullable: a null FK must never
+  // 'left' when any referencing FK column is nullable: a null FK must never
   // drop the referencing row from the read. Non-nullable FKs compile to an
   // inner JOIN (equivalent — the column can't be null).
   kind: 'inner' | 'left';

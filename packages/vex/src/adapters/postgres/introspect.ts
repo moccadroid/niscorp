@@ -145,34 +145,43 @@ const COLUMNS_QUERY = `
   ORDER BY c.table_name, c.ordinal_position
 `;
 
-const PRIMARY_KEYS_QUERY = `
+// Every key at once — primary, unique and foreign — from pg_constraint, with
+// the columns in the key's own order and a foreign key's referencing and
+// referenced columns zipped BY POSITION: a two-column key is one row with
+// two ordered pairs.
+//
+// information_schema cannot say this. key_column_usage (the referencing
+// columns) and constraint_column_usage (the referenced ones) share only the
+// constraint's name, so joining them pairs every referencing column with
+// every referenced one, and a key over N columns came back as N×N rows —
+// each read as its own relation, the first of which the resolver joined on.
+// Which came first was row order. A key referencing (id, builder_id) joined
+// on role_id = builder_id and matched nothing, and nothing said so.
+//
+// Ordered by OID, which is creation order. Where two tables reference each
+// other both ways the first-declared key wins the join, and a schema that
+// leans on that (a tenant's builder over a builder's home tenant) is leaning
+// on this ORDER BY. The referenced table must share the schema; a key into
+// another schema names a table no entity here carries and is left out, as
+// before.
+const CONSTRAINTS_QUERY = `
   SELECT
-    tc.table_name,
-    kcu.column_name
-  FROM information_schema.table_constraints tc
-  JOIN information_schema.key_column_usage kcu
-    ON tc.constraint_name = kcu.constraint_name
-    AND tc.table_schema = kcu.table_schema
-  WHERE tc.constraint_type = 'PRIMARY KEY'
-    AND tc.table_schema = $1
-`;
-
-const FOREIGN_KEYS_QUERY = `
-  SELECT
-    tc.table_name AS from_table,
-    kcu.column_name AS from_column,
-    ccu.table_name AS to_table,
-    ccu.column_name AS to_column,
-    tc.constraint_name
-  FROM information_schema.table_constraints tc
-  JOIN information_schema.key_column_usage kcu
-    ON tc.constraint_name = kcu.constraint_name
-    AND tc.table_schema = kcu.table_schema
-  JOIN information_schema.constraint_column_usage ccu
-    ON tc.constraint_name = ccu.constraint_name
-    AND tc.table_schema = ccu.table_schema
-  WHERE tc.constraint_type = 'FOREIGN KEY'
-    AND tc.table_schema = $1
+    c.contype::text AS kind,
+    rel.relname AS from_table,
+    frel.relname AS to_table,
+    array_agg(a.attname ORDER BY k.n)::text[] AS from_columns,
+    array_agg(fa.attname ORDER BY k.n)::text[] AS to_columns
+  FROM pg_constraint c
+  JOIN pg_class rel ON rel.oid = c.conrelid
+  JOIN pg_namespace ns ON ns.oid = rel.relnamespace
+  LEFT JOIN pg_class frel ON frel.oid = c.confrelid AND frel.relnamespace = rel.relnamespace
+  CROSS JOIN LATERAL unnest(c.conkey, c.confkey) WITH ORDINALITY AS k(attnum, fattnum, n)
+  JOIN pg_attribute a ON a.attrelid = c.conrelid AND a.attnum = k.attnum
+  LEFT JOIN pg_attribute fa ON fa.attrelid = c.confrelid AND fa.attnum = k.fattnum
+  WHERE ns.nspname = $1
+    AND c.contype IN ('p', 'u', 'f')
+  GROUP BY c.oid, c.contype, rel.relname, frel.relname
+  ORDER BY c.oid
 `;
 
 const INDEXES_QUERY = `
@@ -201,18 +210,6 @@ const ROW_COUNTS_QUERY = `
   WHERE schemaname = $1
 `;
 
-const UNIQUE_COLUMNS_QUERY = `
-  SELECT
-    tc.table_name,
-    kcu.column_name
-  FROM information_schema.table_constraints tc
-  JOIN information_schema.key_column_usage kcu
-    ON tc.constraint_name = kcu.constraint_name
-    AND tc.table_schema = kcu.table_schema
-  WHERE tc.constraint_type = 'UNIQUE'
-    AND tc.table_schema = $1
-`;
-
 // ═══════════════════════════════════════════════════════════════
 // Introspection
 // ═══════════════════════════════════════════════════════════════
@@ -224,50 +221,54 @@ export const introspectPostgres = async (
   const schemaName = options?.schema ?? 'public';
 
   // Run all queries in parallel
-  const [
-    tablesResult,
-    columnsResult,
-    pkResult,
-    fkResult,
-    indexesResult,
-    rowCountsResult,
-    uniqueResult,
-  ] = await Promise.all([
+  const [tablesResult, columnsResult, keysResult, indexesResult, rowCountsResult] = await Promise.all([
     pool.query(TABLES_QUERY, [schemaName]),
     pool.query(COLUMNS_QUERY, [schemaName]),
-    pool.query(PRIMARY_KEYS_QUERY, [schemaName]),
-    pool.query(FOREIGN_KEYS_QUERY, [schemaName]),
+    pool.query(CONSTRAINTS_QUERY, [schemaName]),
     pool.query(INDEXES_QUERY, [schemaName]),
     pool.query(ROW_COUNTS_QUERY, [schemaName]),
-    pool.query(UNIQUE_COLUMNS_QUERY, [schemaName]),
   ]);
 
-  // ─── Build lookup maps ─────────────────────────────────────
+  // ─── Keys ──────────────────────────────────────────────────
+  type Key = {
+    kind: 'p' | 'u' | 'f';
+    fromTable: string;
+    toTable: string | null;
+    fromColumns: string[];
+    toColumns: Array<string | null>;
+  };
 
-  // Primary keys: table -> Set of PK column names
+  const keys: Key[] = keysResult.rows.map((row) => ({
+    kind: row['kind'] as Key['kind'],
+    fromTable: row['from_table'] as string,
+    toTable: (row['to_table'] as string | null) ?? null,
+    fromColumns: row['from_columns'] as string[],
+    toColumns: row['to_columns'] as Array<string | null>,
+  }));
+
+  // Primary keys: table -> PK column names (flags the field)
   const pkMap = new Map<string, Set<string>>();
-  for (const row of pkResult.rows) {
-    const table = row['table_name'] as string;
-    const col = row['column_name'] as string;
-    let cols = pkMap.get(table);
-    if (cols === undefined) {
-      cols = new Set();
-      pkMap.set(table, cols);
+  // Every column set that makes a row unique — primary and unique keys,
+  // whole. A foreign key's reverse is hasOne when the key CONTAINS one of
+  // these sets, not when one of its columns appears in any of them:
+  // UNIQUE (builder_id, name) says nothing about builder_id alone.
+  const uniqueSets = new Map<string, string[][]>();
+  for (const key of keys) {
+    if (key.kind === 'f') continue;
+    if (key.kind === 'p') {
+      let cols = pkMap.get(key.fromTable);
+      if (cols === undefined) {
+        cols = new Set();
+        pkMap.set(key.fromTable, cols);
+      }
+      for (const col of key.fromColumns) cols.add(col);
     }
-    cols.add(col);
-  }
-
-  // Unique columns: table -> Set of unique column names
-  const uniqueMap = new Map<string, Set<string>>();
-  for (const row of uniqueResult.rows) {
-    const table = row['table_name'] as string;
-    const col = row['column_name'] as string;
-    let cols = uniqueMap.get(table);
-    if (cols === undefined) {
-      cols = new Set();
-      uniqueMap.set(table, cols);
+    let sets = uniqueSets.get(key.fromTable);
+    if (sets === undefined) {
+      sets = [];
+      uniqueSets.set(key.fromTable, sets);
     }
-    cols.add(col);
+    sets.push(key.fromColumns);
   }
 
   // Row counts: table -> count
@@ -313,58 +314,42 @@ export const introspectPostgres = async (
   }
 
   // ─── Foreign keys → Relations ──────────────────────────────
-  type FkInfo = {
-    fromTable: string;
-    fromColumn: string;
-    toTable: string;
-    toColumn: string;
+  // One key, two relations: the referencing side's belongsTo and the
+  // referenced side's reverse, each carrying the whole key as ordered pairs.
+  const relationsByTable = new Map<string, RelationSchema[]>();
+  const addRelation = (table: string, relation: RelationSchema): void => {
+    let rels = relationsByTable.get(table);
+    if (rels === undefined) {
+      rels = [];
+      relationsByTable.set(table, rels);
+    }
+    rels.push(relation);
   };
 
-  const fkList: FkInfo[] = fkResult.rows.map((row) => ({
-    fromTable: row['from_table'] as string,
-    fromColumn: row['from_column'] as string,
-    toTable: row['to_table'] as string,
-    toColumn: row['to_column'] as string,
-  }));
+  for (const key of keys) {
+    if (key.kind !== 'f' || key.toTable === null) continue;
+    const foreignFields = key.toColumns.filter((col): col is string => col !== null);
+    if (foreignFields.length !== key.fromColumns.length) continue;
 
-  const relationsByTable = new Map<string, RelationSchema[]>();
+    const isFkUnique = (uniqueSets.get(key.fromTable) ?? []).some((set) =>
+      set.every((col) => key.fromColumns.includes(col)),
+    );
 
-  for (const fk of fkList) {
-    // Determine if the FK column is unique on the source table
-    const fromUniques = uniqueMap.get(fk.fromTable);
-    const fromPks = pkMap.get(fk.fromTable);
-    const isFkUnique =
-      (fromUniques !== undefined && fromUniques.has(fk.fromColumn)) ||
-      (fromPks !== undefined && fromPks.has(fk.fromColumn));
-
-    // belongsTo: this table's FK points to the other table
-    const belongsTo: RelationSchema = {
+    // belongsTo: this table's key points at the other table
+    addRelation(key.fromTable, {
       type: 'belongsTo',
-      entity: fk.toTable,
-      localField: fk.fromColumn,
-      foreignField: fk.toColumn,
-    };
-    let fromRels = relationsByTable.get(fk.fromTable);
-    if (fromRels === undefined) {
-      fromRels = [];
-      relationsByTable.set(fk.fromTable, fromRels);
-    }
-    fromRels.push(belongsTo);
+      entity: key.toTable,
+      localFields: key.fromColumns,
+      foreignFields,
+    });
 
-    // hasOne or hasMany: the other table has a reverse relation
-    const reverseType = isFkUnique ? 'hasOne' as const : 'hasMany' as const;
-    const reverse: RelationSchema = {
-      type: reverseType,
-      entity: fk.fromTable,
-      localField: fk.toColumn,
-      foreignField: fk.fromColumn,
-    };
-    let toRels = relationsByTable.get(fk.toTable);
-    if (toRels === undefined) {
-      toRels = [];
-      relationsByTable.set(fk.toTable, toRels);
-    }
-    toRels.push(reverse);
+    // hasOne or hasMany: the other table's reverse of the same key
+    addRelation(key.toTable, {
+      type: isFkUnique ? 'hasOne' : 'hasMany',
+      entity: key.fromTable,
+      localFields: foreignFields,
+      foreignFields: key.fromColumns,
+    });
   }
 
   // ─── Indexes ───────────────────────────────────────────────

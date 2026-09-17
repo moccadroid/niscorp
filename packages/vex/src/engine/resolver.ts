@@ -136,17 +136,21 @@ const findJoinBetween = (
   fromAlias: string,
   toAlias: string,
 ): ResolvedJoin | undefined => {
-  // Check if fromEntity has a relation pointing to toEntity. The FK column
-  // lives on the referencing side — when it is nullable, the join is LEFT so
-  // a null FK never silently drops the referencing row.
+  // Check if fromEntity has a relation pointing to toEntity. The FK columns
+  // live on the referencing side — when ANY of them is nullable, the join is
+  // LEFT so a null never silently drops the referencing row. Any, not the
+  // first: a composite key is MATCH SIMPLE by default, unenforced as a whole
+  // once one column is null, so the row exists with no counterpart to join.
   for (const rel of fromEntity.relations) {
     if (rel.entity === toEntity.name) {
-      const fkNullable = fromEntity.fields.find((f) => f.name === rel.localField)?.nullable === true;
+      const fkNullable = rel.localFields.some(
+        (column) => fromEntity.fields.find((f) => f.name === column)?.nullable === true,
+      );
       return {
         fromAlias,
-        fromColumn: rel.localField,
+        fromColumns: rel.localFields,
         toAlias,
-        toColumn: rel.foreignField,
+        toColumns: rel.foreignFields,
         toTable: toEntity.table,
         kind: fkNullable ? 'left' : 'inner',
       };
@@ -159,9 +163,9 @@ const findJoinBetween = (
     if (rel.entity === fromEntity.name) {
       return {
         fromAlias,
-        fromColumn: rel.foreignField,
+        fromColumns: rel.foreignFields,
         toAlias,
-        toColumn: rel.localField,
+        toColumns: rel.localFields,
         toTable: toEntity.table,
         kind: 'inner',
       };

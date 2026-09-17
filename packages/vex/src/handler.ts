@@ -137,7 +137,7 @@ type DiscoveryEntity = {
   relations: Array<{
     entity: string;
     type: string;
-    via: string;
+    via: string[];
   }>;
   rowCount?: number;
 };
@@ -266,7 +266,7 @@ export const handleDiscovery = async (config: VexHandlerConfig): Promise<Discove
       relations: e.relations.map(r => ({
         entity: r.entity,
         type: r.type,
-        via: r.localField,
+        via: r.localFields,
       })),
       rowCount: e.rowCount,
     })),

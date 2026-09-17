@@ -29,7 +29,7 @@ const TEST_SCHEMA: DatabaseSchema = {
         { name: 'user_id', type: 'uuid', normalizedType: 'uuid', nullable: false, primaryKey: false },
       ],
       relations: [
-        { type: 'belongsTo', entity: 'users', localField: 'user_id', foreignField: 'id' },
+        { type: 'belongsTo', entity: 'users', localFields: ['user_id'], foreignFields: ['id'] },
       ],
       indexes: [{ name: 'posts_pkey', fields: ['id'], unique: true, type: 'btree' }],
     },

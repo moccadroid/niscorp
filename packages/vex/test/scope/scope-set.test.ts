@@ -42,14 +42,14 @@ const schema: DatabaseSchema = {
       table: 'bookings',
       fields: [text('id', false, true), text('studio_id'), text('person_id'), text('session_id', true), text('status')],
       // Nullable FK, so the join below is LEFT — see the placement test.
-      relations: [{ type: 'belongsTo', entity: 'sessions', localField: 'session_id', foreignField: 'id' }],
+      relations: [{ type: 'belongsTo', entity: 'sessions', localFields: ['session_id'], foreignFields: ['id'] }],
       indexes: [],
     },
     {
       name: 'sessions',
       table: 'sessions',
       fields: [text('id', false, true), text('studio_id'), text('name')],
-      relations: [{ type: 'hasMany', entity: 'bookings', localField: 'id', foreignField: 'session_id' }],
+      relations: [{ type: 'hasMany', entity: 'bookings', localFields: ['id'], foreignFields: ['session_id'] }],
       indexes: [],
     },
   ],

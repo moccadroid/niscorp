@@ -30,14 +30,14 @@ const schema: DatabaseSchema = {
       fields: [{ ...text('id'), primaryKey: true }, text('property_id'), text('room_id', true), text('summary')],
       // The FK lives on the referencing side and is NULLABLE — an issue need
       // not be about a room. That is what makes the join LEFT.
-      relations: [{ type: 'belongsTo', entity: 'rooms', localField: 'room_id', foreignField: 'id' }],
+      relations: [{ type: 'belongsTo', entity: 'rooms', localFields: ['room_id'], foreignFields: ['id'] }],
       indexes: [],
     },
     {
       name: 'rooms',
       table: 'rooms',
       fields: [{ ...text('id'), primaryKey: true }, text('property_id'), text('number')],
-      relations: [{ type: 'hasMany', entity: 'issues', localField: 'id', foreignField: 'room_id' }],
+      relations: [{ type: 'hasMany', entity: 'issues', localFields: ['id'], foreignFields: ['room_id'] }],
       indexes: [],
     },
     {
@@ -46,7 +46,7 @@ const schema: DatabaseSchema = {
       // A REQUIRED FK — the join to issues is inner, and a row rule on it may
       // safely stay in WHERE.
       fields: [{ ...text('id'), primaryKey: true }, text('property_id'), text('issue_id')],
-      relations: [{ type: 'belongsTo', entity: 'issues', localField: 'issue_id', foreignField: 'id' }],
+      relations: [{ type: 'belongsTo', entity: 'issues', localFields: ['issue_id'], foreignFields: ['id'] }],
       indexes: [],
     },
   ],

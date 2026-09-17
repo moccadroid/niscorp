@@ -19,8 +19,12 @@ export const FieldSchemaSchema = z.object({
 export const RelationSchemaSchema = z.object({
   type: z.enum(['hasOne', 'hasMany', 'belongsTo']),
   entity: z.string(),
-  localField: z.string(),
-  foreignField: z.string(),
+  // One entry per column pair of the key, in the key's own order. A composite
+  // foreign key is ONE relation with N pairs, never N relations: the join
+  // emits every pair, which is what makes a reference over (id, tenant_id)
+  // mean what the schema says it means.
+  localFields: z.array(z.string()).min(1),
+  foreignFields: z.array(z.string()).min(1),
 });
 
 export const IndexSchemaSchema = z.object({

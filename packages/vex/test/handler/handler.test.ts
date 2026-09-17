@@ -18,7 +18,7 @@ const TEST_SCHEMA: DatabaseSchema = {
         { name: 'status', type: 'text', normalizedType: 'string', nullable: false, primaryKey: false },
       ],
       relations: [
-        { type: 'hasMany', entity: 'orders', localField: 'id', foreignField: 'customer_id' },
+        { type: 'hasMany', entity: 'orders', localFields: ['id'], foreignFields: ['customer_id'] },
       ],
       indexes: [
         { name: 'customers_pkey', fields: ['id'], unique: true, type: 'btree' },
@@ -35,7 +35,7 @@ const TEST_SCHEMA: DatabaseSchema = {
         { name: 'status', type: 'text', normalizedType: 'string', nullable: false, primaryKey: false },
       ],
       relations: [
-        { type: 'belongsTo', entity: 'customers', localField: 'customer_id', foreignField: 'id' },
+        { type: 'belongsTo', entity: 'customers', localFields: ['customer_id'], foreignFields: ['id'] },
       ],
       indexes: [
         { name: 'orders_pkey', fields: ['id'], unique: true, type: 'btree' },
@@ -121,7 +121,7 @@ describe('handler', () => {
       expect(customer.relations).toContainEqual({
         entity: 'orders',
         type: 'hasMany',
-        via: 'id',
+        via: ['id'],
       });
     });
 

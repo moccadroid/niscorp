@@ -1,6 +1,6 @@
 import type { ResolvedQuery } from '../../engine/engine.types.js';
 import type { CompiledQuery, ParamSlot, ContextContract } from '../adapter.types.js';
-import { compileFilter, compileCompute, compileAggregate } from './operators.js';
+import { compileFilter, compileCompute, compileAggregate, compileJoinPairs } from './operators.js';
 import type { CompilationContext } from './operators.js';
 
 // ═══════════════════════════════════════════════════════════════
@@ -89,7 +89,7 @@ export const compileQuery = (resolved: ResolvedQuery): CompiledQuery => {
     if (joinSource !== undefined) {
       const keyword = join.kind === 'left' ? 'LEFT JOIN' : 'JOIN';
       const conditions = [
-        `${join.fromAlias}.${join.fromColumn} = ${join.toAlias}.${join.toColumn}`,
+        ...compileJoinPairs(join),
         ...(join.on ?? []).map((extra) => compileFilter(extra.original, ctx)),
       ];
       const on = conditions.join(' AND ');

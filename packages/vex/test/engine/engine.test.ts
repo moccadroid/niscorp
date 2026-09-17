@@ -23,7 +23,7 @@ const createTestSchema = (): DatabaseSchema => ({
         { name: 'email', type: 'text', normalizedType: 'string', nullable: false, primaryKey: false },
       ],
       relations: [
-        { type: 'hasMany', entity: 'orders', localField: 'id', foreignField: 'customer_id' },
+        { type: 'hasMany', entity: 'orders', localFields: ['id'], foreignFields: ['customer_id'] },
       ],
       indexes: [
         { name: 'customers_pkey', fields: ['id'], type: 'btree', unique: true },
@@ -40,8 +40,8 @@ const createTestSchema = (): DatabaseSchema => ({
         { name: 'created_at', type: 'timestamptz', normalizedType: 'timestamp', nullable: false, primaryKey: false },
       ],
       relations: [
-        { type: 'belongsTo', entity: 'customers', localField: 'customer_id', foreignField: 'id' },
-        { type: 'hasMany', entity: 'order_items', localField: 'id', foreignField: 'order_id' },
+        { type: 'belongsTo', entity: 'customers', localFields: ['customer_id'], foreignFields: ['id'] },
+        { type: 'hasMany', entity: 'order_items', localFields: ['id'], foreignFields: ['order_id'] },
       ],
       indexes: [
         { name: 'orders_pkey', fields: ['id'], type: 'btree', unique: true },
@@ -60,7 +60,7 @@ const createTestSchema = (): DatabaseSchema => ({
         { name: 'unit_price', type: 'numeric', normalizedType: 'number', nullable: false, primaryKey: false },
       ],
       relations: [
-        { type: 'belongsTo', entity: 'orders', localField: 'order_id', foreignField: 'id' },
+        { type: 'belongsTo', entity: 'orders', localFields: ['order_id'], foreignFields: ['id'] },
       ],
       indexes: [
         { name: 'order_items_pkey', fields: ['id'], type: 'btree', unique: true },
@@ -135,8 +135,8 @@ describe('Resolver', () => {
       const join = result.joins[0];
       expect(join).toBeDefined();
       // orders.customer_id -> customers.id (orders belongsTo customers)
-      expect(join?.fromColumn).toBe('customer_id');
-      expect(join?.toColumn).toBe('id');
+      expect(join?.fromColumns).toEqual(['customer_id']);
+      expect(join?.toColumns).toEqual(['id']);
       expect(join?.toTable).toBe('customers');
     });
 

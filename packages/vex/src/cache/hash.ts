@@ -105,9 +105,13 @@ export const computeSchemaFingerprint = (schema: DatabaseSchema): string => {
         primaryKey: f.primaryKey,
         ...(f.vectorDimensions !== undefined ? { vectorDimensions: f.vectorDimensions } : {}),
       })),
+      // Column order within a relation is the key's own order, so it is
+      // preserved; relations are sorted by target and columns. This shape
+      // changed when keys became composite, so every entry cached before
+      // revalidates once on the next boot — the drift eviction, by design.
       relations: [...e.relations]
-        .sort((a, b) => `${a.entity}.${a.localField}`.localeCompare(`${b.entity}.${b.localField}`))
-        .map((r) => ({ type: r.type, entity: r.entity, localField: r.localField, foreignField: r.foreignField })),
+        .sort((a, b) => `${a.entity}.${a.localFields.join(',')}`.localeCompare(`${b.entity}.${b.localFields.join(',')}`))
+        .map((r) => ({ type: r.type, entity: r.entity, localFields: r.localFields, foreignFields: r.foreignFields })),
       // Index field order is significant (composite indexes) and stable
       // from introspection, so it is preserved; indexes are sorted by name.
       indexes: [...e.indexes].sort(byName).map((i) => ({

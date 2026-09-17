@@ -4,7 +4,7 @@ import type { AggregateExpression } from '../../schemas/aggregate.schema.js';
 import type { FieldOrValue } from '../../schemas/value.schema.js';
 import type { ParamSlot } from '../adapter.types.js';
 import type { FieldSchema } from '../../schemas/database.schema.js';
-import type { ResolvedExists } from '../../engine/engine.types.js';
+import type { ResolvedExists, ResolvedJoin } from '../../engine/engine.types.js';
 import { RESERVED_CONTEXT_KEYS } from '../../schemas/request.schema.js';
 import { refuseOptional } from '../../engine/optional.js';
 import { VexError } from '../../errors.js';
@@ -107,6 +107,26 @@ export const compileFieldOrValue = (
 const escapeSqlString = (s: string): string => s.replace(/'/g, "''");
 
 // ═══════════════════════════════════════════════════════════════
+// Join pairs
+//
+// The whole key, one equality per column pair, for the query's joins and
+// the joins inside an `exists` alike — two emitters, one rule, so a
+// composite key can never be half-joined in one of them.
+// ═══════════════════════════════════════════════════════════════
+
+export const compileJoinPairs = (join: ResolvedJoin): string[] =>
+  join.fromColumns.map((column, i) => {
+    const to = join.toColumns[i];
+    if (to === undefined) {
+      throw new VexError(
+        'invalid_dsl',
+        `The join from "${join.fromAlias}" to "${join.toAlias}" pairs "${column}" with no column.`,
+      );
+    }
+    return `${join.fromAlias}.${column} = ${join.toAlias}.${to}`;
+  });
+
+// ═══════════════════════════════════════════════════════════════
 // Filter compilation
 // ═══════════════════════════════════════════════════════════════
 
@@ -151,7 +171,7 @@ export const compileFilter = (
       if (source?.table === undefined) continue;
       const keyword = join.kind === 'left' ? 'LEFT JOIN' : 'JOIN';
       const conditions = [
-        `${join.fromAlias}.${join.fromColumn} = ${join.toAlias}.${join.toColumn}`,
+        ...compileJoinPairs(join),
         ...(join.on ?? []).map((extra) => compileFilter(extra.original, inner)),
       ];
       parts.push(`${keyword} ${source.table} AS ${join.toAlias} ON ${conditions.join(' AND ')}`);
