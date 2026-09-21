@@ -7,7 +7,7 @@ import type { Props } from './props';
 // Arrangement primitives. They know about boxes, gaps and columns, and have
 // never heard of a stage.
 
-const BOX_TONES = ['plain', 'ground', 'panel', 'sunken', 'calm', 'elevated', 'critical', 'marker'] as const;
+const BOX_TONES = ['plain', 'ground', 'panel', 'sunken', 'calm', 'elevated', 'critical', 'dock', 'dock-head'] as const;
 
 // `tone` doubles as the frame's alarm state: calm / elevated / critical are
 // box tones like any other, so the intent line changing colour when a storm is

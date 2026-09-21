@@ -5,7 +5,7 @@ import type { Props } from './props';
 
 // Content primitives: words, labels, records and lists of them.
 
-const TEXT_VARIANTS = ['body', 'label', 'title', 'display', 'mono', 'tag', 'kicker', 'answer'] as const;
+const TEXT_VARIANTS = ['body', 'label', 'title', 'display', 'mono', 'tag', 'kicker', 'story'] as const;
 
 export const Text: NovaComponent<Props> = ({ children, value, variant, tone }) => (
   <span className={classes('en-text', `en-text--${oneOf(variant, TEXT_VARIANTS, 'body')}`, `en-tone--${oneOf(tone, TONES, 'plain')}`)}>
@@ -96,10 +96,8 @@ export const List: NovaComponent<Props> = ({ rows, rowKey, title, primaryKey, pr
 
 // A row of small labelled tags behind one muted prefix: `prefix` says what
 // KIND of thing they are ("heard", "filters", "selected"), each item carries a
-// label and optionally a tone. Renders nothing when there are none. `stateKey`
-// names a field to print small beside each label — an instrument's reading of
-// the tag — and is empty for anybody who only wants the tags.
-export const Tags: NovaComponent<Props> = ({ items, prefix, stateKey }) => {
+// label and optionally a tone. Renders nothing when there are none.
+export const Tags: NovaComponent<Props> = ({ items, prefix }) => {
   const tags = rowsOf(items).filter((item) => text(item['label']) !== '');
   if (tags.length === 0) return null;
   return (
@@ -108,7 +106,6 @@ export const Tags: NovaComponent<Props> = ({ items, prefix, stateKey }) => {
       {tags.map((item, index) => (
         <span key={`${text(item['label'])}-${index}`} className={classes('en-tag', `en-tone--${oneOf(item['tone'], TONES, 'plain')}`)}>
           {text(item['label'])}
-          {text(stateKey) === '' || text(item[text(stateKey)]) === '' ? null : <span className="en-tag__state">{text(item[text(stateKey)])}</span>}
         </span>
       ))}
     </div>

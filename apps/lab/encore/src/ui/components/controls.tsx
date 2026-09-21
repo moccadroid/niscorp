@@ -90,7 +90,7 @@ export const Button: NovaComponent<Props> = ({ children, label, value, variant, 
   return (
     <button
       type="button"
-      className={classes('en-button', `en-button--${oneOf(variant, ['primary', 'ghost', 'warn', 'quiet', 'link'], 'primary')}`)}
+      className={classes('en-button', `en-button--${oneOf(variant, ['primary', 'ghost', 'warn', 'quiet', 'link', 'tab', 'tab-on'], 'primary')}`)}
       disabled={disabled === true}
       onClick={novaRef === undefined ? undefined : () => dispatch({ type: 'ui:click', ref: novaRef, ...(value === undefined ? {} : { payload: value }) })}
     >

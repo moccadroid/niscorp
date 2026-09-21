@@ -9,12 +9,19 @@ import type { ActionPlan, AgentMode, Answer, CandidateSets, Chip, Derived, Entit
 //
 // PROBABILITY IS ASSERTIVENESS (PLAN.md, claim 4). Three bands:
 //
-//   ≥ 0.80          the card mounts
+//   ≥ 0.50          the card mounts
 //   0.30 – mount    the card is OFFERED, as a chip
 //   below           nothing
 //
+// THE LINE IS WHERE A CALIBRATED MODEL SAYS "PROBABLY". It was 0.80, chosen
+// before anybody had seen a calibrated model's numbers — and on the real one,
+// "who's playing right now?" left the running order (0.77) and the act (0.69) as
+// chips beside an overview the slow model had to place. A calibrated 0.77 means
+// "this probably belongs": it belongs. 0.5 is the point where it is likelier
+// than not, and that is the whole argument; then we just show it.
+//
 // with HYSTERESIS on the way down: a card already on screen stays until it
-// falls to 0.55. Without the gap a card sitting near the line would flap with
+// falls to 0.35. Without the gap a card sitting near the line would flap with
 // every keystroke — mounted at "headline", gone at "headliner ", back at
 // "headliner t" — and a room that flickers while you type is worse than one
 // that is a beat late.
@@ -22,15 +29,15 @@ import type { ActionPlan, AgentMode, Answer, CandidateSets, Chip, Derived, Entit
 // Nothing here commits anything. The most this lane can do is put a filled-in
 // form in front of a person.
 
-export const MOUNT_AT = 0.8;
-export const UNMOUNT_AT = 0.55;
+export const MOUNT_AT = 0.5;
+export const UNMOUNT_AT = 0.35;
 export const CHIP_AT = 0.3;
 // WHAT AN OPERATOR IS OFFERED. A calibrated model has a middling opinion about
 // most of the catalog, and every one of those clears CHIP_AT: a single question
 // put eight chips on the strip, and eight guesses is noise. The app shows the
 // best few, and only those within a margin of the best — a 0.41 beside a 0.72 is
 // not the same kind of guess. The whole middle band is still computed, still
-// counted by the handoff, and x-ray shows all of it.
+// counted by the handoff, and listed — every card, with its number — in x-ray's panel.
 export const CHIPS_SHOWN = 3;
 export const CHIP_MARGIN = 0.15;
 export const suggestedOf = (chips: readonly Chip[]): Chip[] => {
@@ -136,6 +143,10 @@ const AGENT_MODES = ['ask', 'write', 'plan'] as const;
 // right now?") read `direct` at 0.86 and 0.92; one they did not ("how will the
 // storm at 9 affect the lineup?") read 0.58.
 export const SURE_DIRECT_AT = 0.7;
+// How sure Jev must have been of a card it could not aim for that to ROUTE the
+// sentence to the agent ("wanted X and could not aim it"). This is the old mount
+// line, kept for the one rule that was really about being sure.
+export const DEMOTION_ROUTES_AT = 0.8;
 
 // What the screen lane found, that the route may be computed from.
 type ScreenOutcome = { mountedCount: number; chipCount: number; demoted: string[] };
@@ -236,8 +247,12 @@ const resolveHandoff = (input: ResolveInput, scored: readonly { id: string; p: n
 };
 
 // CONFIDENCE, IN WORDS. A number on a card is an instrument; a person wants to
-// know whether to trust it. Three words, off the same bands the room mounts by.
-export const confidenceWord = (p: number): string => (p >= 0.9 ? 'sure' : p >= MOUNT_AT ? 'fairly sure' : 'a guess');
+// know whether to trust it. Three words — and since the mount line moved down to
+// "probably", the middle one has a line of its own: a card up at 0.55 is a guess
+// the room acted on, and its "why?" says so.
+export const SURE_AT = 0.9;
+export const FAIRLY_SURE_AT = 0.7;
+export const confidenceWord = (p: number): string => (p >= SURE_AT ? 'sure' : p >= FAIRLY_SURE_AT ? 'fairly sure' : 'a guess');
 
 export const resolveScreen = (input: ResolveInput): Resolved => {
   const desired: Record<string, Desired[]> = Object.fromEntries(QUESTION_CANVASES.map((canvas) => [canvas, []]));
@@ -282,7 +297,10 @@ export const resolveScreen = (input: ResolveInput): Resolved => {
     const wanted = isPinned || ((jevWants || leadOpenedWith !== undefined) && input.suppressed?.has(plan.actionId) !== true);
     // A companion that cannot be aimed is not "a card Jev wanted and could not
     // open" — it is a form with its stage still blank. It never routes.
-    if (jevWants && !aimed && !isPinned && lead === undefined) demoted.push(plan.actionId);
+    // ...and only a card Jev was SURE of. The mount line moved down to "probably"
+    // (0.5); a record card that probably belongs, in a sentence that names no
+    // record, is a chip — not a reason to spend seconds of the slow model.
+    if (jevWants && p >= DEMOTION_ROUTES_AT && !aimed && !isPinned && lead === undefined) demoted.push(plan.actionId);
 
     // WHY IT IS HERE rides in with everything else the card is opened with: a
     // person's click or a plan's step if there was one, otherwise Jev and how
@@ -305,6 +323,7 @@ export const resolveScreen = (input: ResolveInput): Resolved => {
     desired,
     chips: chips.sort((a, b) => b.p - a.p),
     suggested: suggestedOf(chips),
+    scored: [...scored].sort((a, b) => b.p - a.p),
     tone: tone?.kind === 'score' ? (TONES[tone.level] ?? 'calm') : 'calm',
     top: [...scored].sort((a, b) => b.p - a.p).slice(0, 6),
     handoff: resolveHandoff(input, scored, { mountedCount: Object.values(desired).reduce((sum, cards) => sum + cards.length, 0), chipCount: chips.length, demoted }),

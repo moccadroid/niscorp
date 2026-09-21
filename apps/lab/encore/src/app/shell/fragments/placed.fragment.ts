@@ -42,12 +42,13 @@ export const keptAcrossReopen = (held: Record<string, unknown>): Record<string, 
 export const placedFragment: ActionFragment = {
   kind: 'fragment',
   id: PLACED_FRAGMENT,
-  data: { [PLACED_BY]: '', [CITE_KEY]: '', [WHY]: '', whyOpen: false, xray: false, lit: '', [TILE_SPAN]: 'regular', [TILE_HUE]: 'teal', [TILE_TAG]: '' },
+  data: { [PLACED_BY]: '', [CITE_KEY]: '', [WHY]: '', whyOpen: false, lit: '', [TILE_SPAN]: 'regular', [TILE_HUE]: 'teal', [TILE_TAG]: '' },
   layout: {
     // THE CARD'S PLACE IN THE FLOW, and everything the room says about it in one
     // thin row: what kind of thing it is (a tag in its category's hue) on the
-    // left; on the right, how it got here — x-ray's probability tag, and the
-    // operator's "why?".
+    // left; on the right, the operator's "why?". (Who placed it and how sure they
+    // were is still in the card's data — `placedBy` — and is x-ray's to tell, in
+    // its own panel: nothing about how the room decided is drawn on a card.)
     component: 'Tile',
     props: { span: `$.${TILE_SPAN}`, accent: `$.${TILE_HUE}` },
     children: [
@@ -60,14 +61,7 @@ export const placedFragment: ActionFragment = {
             props: { gap: 8, align: 'center', justify: 'between' },
             children: [
               { component: 'Text', props: { value: `$.${TILE_TAG}`, variant: 'kicker' } },
-              {
-                component: 'Row',
-                props: { gap: 8, align: 'center' },
-                children: [
-                  { if: '$.xray', then: { component: 'Text', props: { value: `$.${PLACED_BY}`, variant: 'tag', tone: 'mute' } }, else: '' },
-                  { if: '$.whyOpen', then: { component: 'Button', ref: 'whyHide', props: { label: 'hide', variant: 'quiet' } }, else: { component: 'Button', ref: 'why', props: { label: 'why?', variant: 'quiet' } } },
-                ],
-              },
+              { if: '$.whyOpen', then: { component: 'Button', ref: 'whyHide', props: { label: 'hide', variant: 'quiet' } }, else: { component: 'Button', ref: 'why', props: { label: 'why?', variant: 'quiet' } } },
             ],
           },
           { if: '$.whyOpen', then: { component: 'Text', props: { value: `$.${WHY}`, tone: 'mute' } }, else: '' },

@@ -16,7 +16,7 @@ export const CHARTER: Charter = {
 
   // The ops tent. Everything the app ships, and every table behind it.
   operator: {
-    actions: ['intent.*', 'room.*', 'assist.*', 'site.*', 'stage.*', 'lineup.*', 'act.*', 'weather.*', 'crowd.*', 'attendance.*', 'situation.*', 'incident.*', 'move.*', 'attention.*', 'director.*', 'sales.*', 'slot.*', 'set.*', 'push.*'],
+    actions: ['intent.*', 'assist.*', 'site.*', 'stage.*', 'lineup.*', 'act.*', 'weather.*', 'crowd.*', 'attendance.*', 'situation.*', 'incident.*', 'move.*', 'attention.*', 'director.*', 'sales.*', 'slot.*', 'set.*', 'push.*'],
     data: [
       'acts.read',
       'stages.read',
@@ -88,7 +88,7 @@ export const CHARTER: Charter = {
     // `attention.*` is the strip the room raises cards on. They hold it; what is
     // raised ON it for them is decided, as ever, by what their policy can read —
     // they are told when the Food Court fills, and never about an injury.
-    actions: ['intent.*', 'room.*', 'assist.*', 'attention.*', 'site.map', 'crowd.gauge', 'attendance.now', 'sales.chart', 'push.compose'],
+    actions: ['intent.*', 'assist.*', 'attention.*', 'site.map', 'crowd.gauge', 'attendance.now', 'sales.chart', 'push.compose'],
     data: ['zones.read', 'zone_counts.read', 'sales_hourly.read', 'pushes.read', 'pushes.write.insert', 'agent_turns.read', 'agent_turns.write.insert', 'festival_clock.read', 'attention_labels.read', 'attention_labels.write.insert'],
   },
 };

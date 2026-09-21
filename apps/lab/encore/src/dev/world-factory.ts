@@ -153,10 +153,14 @@ export const createWorld = async (options: WorldOptions): Promise<World> => {
       for (const entry of runs) if (entry.principal === principal) latest.set(entry.record.run, entry.record);
       return [...latest.values()];
     },
+    // X-RAY IS ITS PANEL BEING OPEN — pressed the way a person presses it.
     xray: async (principal) => {
-      const on = intent.of(principal)?.toggleXray() ?? false;
+      const shell = sessionOf(principal).shell;
+      const panel = shell.getState().canvases['trace']?.stack.find((item) => item.definitionId === 'intent.trace');
+      const isOpen = panel !== undefined && shell.getRuntime(panel.id)?.getData()['open'] === true;
+      sessionOf(principal).dispatch('trace', { type: 'ui:click', ref: isOpen ? 'shut' : 'open', ...(panel === undefined ? {} : { origin: panel.id }) });
       await settle(4);
-      return on;
+      return !isOpen;
     },
     sql: async (text, values = []) => (await runtime.pool.query(text, values)).rows,
     tableCounts: async () => {

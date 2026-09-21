@@ -25,7 +25,7 @@ const labelPrism = { fingerprint: labelAdd.fingerprint, context: { verdict: { $r
 export const raisedFragment: ActionFragment = {
   kind: 'fragment',
   id: RAISED_FRAGMENT,
-  data: { cause: '', causeLine: '', raisedAt: '', raisedBand: '', raisedTone: 'mute', raisedBy: '', raisedWith: '{}', raisedCard: '', xray: false, [TILE_SPAN]: 'regular', [TILE_HUE]: 'teal', [TILE_TAG]: '', verdict: '', labelled: '', labelError: '' },
+  data: { cause: '', causeLine: '', raisedAt: '', raisedBand: '', raisedTone: 'mute', raisedBy: '', raisedWith: '{}', raisedCard: '', [TILE_SPAN]: 'regular', [TILE_HUE]: 'teal', [TILE_TAG]: '', verdict: '', labelled: '', labelError: '' },
   layout: {
     // A tile like any other card's, PINNED: what the room raised reads first,
     // ahead of whatever the sentence put up. Severity, when, one sentence, and
@@ -47,7 +47,6 @@ export const raisedFragment: ActionFragment = {
                 children: [
                   { component: 'Badge', props: { label: '$.raisedBand', tone: '$.raisedTone' } },
                   { component: 'Text', props: { value: '$.raisedAt', variant: 'tag', tone: 'mute' } },
-                  { if: '$.xray', then: { component: 'Text', props: { value: '$.raisedBy', variant: 'tag', tone: 'mute' } }, else: '' },
                 ],
               },
               {

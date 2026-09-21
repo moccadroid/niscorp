@@ -145,7 +145,9 @@ export type Resolved = {
   // "leave it alone", and the loop owns these canvases outright.
   desired: Record<string, Desired[]>;
   chips: Chip[];
-  // The few of those the app shows (resolve.ts `suggestedOf`); x-ray shows `chips`.
+  // Every card Jev was asked about, with its probability — what x-ray's story lists.
+  scored: { id: string; p: number }[];
+  // The few of those the app shows (resolve.ts `suggestedOf`).
   suggested: Chip[];
   tone: 'calm' | 'elevated' | 'critical';
   top: { id: string; p: number }[];
@@ -179,6 +181,8 @@ export type PassRecord = {
   // False when the line was cleared while the pass was out: it was measured
   // and recorded, and nothing it decided was put on screen.
   applied: boolean;
+  // How the sentence read: calm · elevated · critical.
+  tone: string;
   notes: string[];
   // Rows the sentence named and took back — removed before Jev was asked.
   superseded: Superseded[];
@@ -222,6 +226,9 @@ export type RunRecord = {
   narrowed: string[];
   // What was looked up, one entry per tool call — the call, never the rows.
   lookups: string[];
+  // What the admission rule refused INSIDE the run — the reason the model was
+  // handed, one per correction. X-ray's story says it in full.
+  refused: string[];
   answer: string;
   // Citations that stood, the notes for those that did not, and the sentences
   // offered as follow-ups.

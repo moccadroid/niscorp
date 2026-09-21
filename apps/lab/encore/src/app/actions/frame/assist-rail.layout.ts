@@ -1,18 +1,17 @@
 import type { LayoutNode } from '@niscorp/nova';
 
 // A QUIET HISTORY IS ONE LINE: "Earlier · 3". Pressed, it opens to the last few
-// turns, a line each, and "show all"; pressed again it shuts. Who answered is
-// x-ray's business — the rows are projected per mode, so the role is not even
-// SENT with x-ray off.
+// turns, a line each, and "show all"; pressed again it shuts. Who answered — the
+// cards, the assistant, an event — is not an operator's business: the rows are
+// projected, so the role is not even sent.
 const SHOWN = 3;
 
 const rail: LayoutNode = {
   component: 'Rail',
   ref: 'entry',
   props: {
-    rows: { $if: '$.xray', $then: '$.entries', $else: { $prism: { $map: { over: { $ref: '$.entries' }, as: 'row', body: { $omit: { from: { $var: 'row' }, keys: ['by'] } } } } } },
+    rows: { $prism: { $map: { over: { $ref: '$.entries' }, as: 'row', body: { $omit: { from: { $var: 'row' }, keys: ['by'] } } } } },
     rowKey: 'key',
-    tagKey: { $if: '$.xray', $then: 'by', $else: '' },
     toneKey: 'tone',
     primaryKey: 'line',
     secondaryKey: 'said',

@@ -10,12 +10,12 @@ export const ROOM_REF = 'room';
 
 // ONE SCROLLBAR, AND IT IS THE PAGE'S. The frame is a document that grows: no
 // fixed height, no inner scrolling region. The line sticks to the top of the page
-// as it scrolls, the two tiny handles (and, under x-ray, the drawer) to the
-// bottom; neither is a scroll container.
+// as it scrolls. X-ray's panel is the LAST thing in the page's flow and sticks to
+// the bottom of the window: being in the flow is what makes the page exactly one
+// panel longer, so the panel pushes the room up and never ends on top of a card.
 //
-// Top to bottom with no empty bands: the x-ray marker (nothing, when off), the
-// line, the answer, one row of next steps, what the room noticed, THE FLOW, and
-// a one-line history.
+// Top to bottom with no empty bands: the line, the answer, one row of next steps,
+// what the room noticed, THE FLOW, a one-line history, the panel.
 export const frameLayout: LayoutNode = {
   component: 'Box',
   props: { tone: 'ground', minH: '100vh', px: 18, py: 12 },
@@ -26,26 +26,13 @@ export const frameLayout: LayoutNode = {
       // when the room is short; taller, and the PAGE scrolls.
       props: { gap: 12, minH: 'calc(100vh - 24px)' },
       children: [
-        { component: 'Box', props: { stick: 'top' }, children: [{ component: 'Stack', props: { gap: 8 }, children: [{ component: 'CanvasSlot', props: { canvasId: 'marker' } }, { component: 'CanvasSlot', props: { canvasId: 'line' } }] }] },
+        { component: 'Box', props: { stick: 'top' }, children: [{ component: 'CanvasSlot', props: { canvasId: 'line' } }] },
         { component: 'CanvasSlot', props: { canvasId: 'assist' } },
         { component: 'CanvasSlot', props: { canvasId: 'maybe' } },
         { component: 'CanvasSlot', props: { canvasId: 'watch' } },
         { ref: ROOM_REF },
         { component: 'CanvasSlot', props: { canvasId: 'rail' } },
-        {
-          component: 'Box',
-          props: { stick: 'bottom' },
-          children: [
-            {
-              component: 'Stack',
-              props: { gap: 6 },
-              children: [
-                { component: 'CanvasSlot', props: { canvasId: 'trace' } },
-                { component: 'Row', props: { gap: 10, align: 'center', justify: 'end', wrap: true }, children: [{ component: 'CanvasSlot', props: { canvasId: 'deck' } }, { component: 'CanvasSlot', props: { canvasId: 'xray' } }] },
-              ],
-            },
-          ],
-        },
+        { component: 'Box', props: { stick: 'bottom' }, children: [{ component: 'CanvasSlot', props: { canvasId: 'trace' } }] },
       ],
     },
   ],

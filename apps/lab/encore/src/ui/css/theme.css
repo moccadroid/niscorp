@@ -78,14 +78,18 @@ body {
 .en-box--ground { background: var(--ground); }
 .en-box--panel { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); }
 .en-box--sunken { background: var(--sunken); border: 1px solid var(--line); border-radius: var(--radius); }
-/* X-ray's marker: unmistakable, and not a severity colour. */
-.en-box--marker { background: color-mix(in srgb, var(--hue-violet) 16%, var(--ground)); border: 1px solid var(--hue-violet); border-radius: var(--radius); color: var(--ink); }
+/* X-ray's panel: docked, solid, quiet. It sits IN the page's flow (so the page is
+   one panel longer and nothing ends underneath it) and sticks to the window's
+   bottom edge; its body is the one thing in the room that scrolls inside itself. */
+.en-box--dock { flex: 1 1 100%; background: var(--panel); border: 1px solid var(--line-strong); border-bottom: none; border-radius: var(--radius) var(--radius) 0 0; box-shadow: 0 -12px 32px rgba(0, 0, 0, 0.45); }
+.en-box--dock-head { border-bottom: 1px solid var(--line); }
 /* Pinned to the page as it scrolls — never a scroll container of its own. */
 .en-box--stick-top { position: sticky; top: 0; z-index: 6; background: var(--ground); padding-top: var(--s2); margin-top: calc(-1 * var(--s2)); padding-bottom: var(--s1); }
-.en-box--stick-bottom { position: sticky; bottom: 0; z-index: 5; margin-top: auto; padding-bottom: var(--s1); pointer-events: none; }
-.en-box--stick-bottom > * { pointer-events: auto; }
-/* The handles float over whatever scrolls under them, so they bring their own ground. */
-.en-box--stick-bottom > .en-stack > .en-row { align-self: flex-end; max-width: 100%; background: var(--ground); border: 1px solid var(--line); border-radius: 999px; padding: 2px var(--s2); }
+.en-box--stick-bottom { position: sticky; bottom: 0; z-index: 5; margin-top: auto; pointer-events: none; }
+/* Shut, the panel is one word in a row as wide as the page: only the word takes clicks. */
+.en-box--stick-bottom > .en-row > * { pointer-events: auto; }
+/* Shut, the panel is one quiet word with its own ground under it. */
+.en-box--stick-bottom .en-row > .en-button--quiet:only-child { background: var(--ground); border: 1px solid var(--line); border-radius: 999px; padding: var(--s1) var(--s3); margin-bottom: var(--s1); }
 
 /* The intent line wears the room's alarm state. Calm is the accent at rest;
    the other two are the only places these colours touch the frame. */
@@ -147,7 +151,8 @@ body {
 .en-text--kicker { font: 600 11.5px/1.2 var(--sans); color: var(--hue, var(--mute)); letter-spacing: 0.01em; }
 .en-text--kicker::before { content: ''; display: inline-block; width: 6px; height: 6px; margin-right: 6px; border-radius: 50%; background: var(--hue, var(--mute)); vertical-align: 1px; }
 .en-text--kicker:empty { display: none; }
-.en-text--answer { font: 400 15.5px/1.55 var(--sans); }
+/* X-ray's story: the reading face at body size, with room between the lines. */
+.en-text--story { font: 400 14px/1.6 var(--sans); max-width: 86ch; }
 .en-text--display { font: 600 26px/1 var(--mono); }
 .en-text--mono { font: 12px/1.3 var(--mono); }
 /* A time, a count, an instrument's reading: small, never competing. */
@@ -206,8 +211,11 @@ body {
 .en-meter__head { display: flex; justify-content: space-between; gap: 10px; font: 11px/1 var(--mono); color: var(--mute); }
 .en-meter__track { height: 4px; background: var(--line); border-radius: 2px; overflow: hidden; }
 .en-meter__fill { height: 100%; background: currentColor; transition: width 160ms ease; }
-.en-meter--compact { min-width: 150px; }
-.en-meter--compact .en-meter__track { height: 2px; }
+/* One line per reading: what it is, a bar, and the number. */
+.en-meter--compact { display: grid; grid-template-columns: minmax(120px, 220px) minmax(60px, 240px) 3.5ch; align-items: center; gap: var(--s3); min-width: 0; }
+.en-meter--compact .en-meter__head { display: contents; font: 400 14px/1.4 var(--sans); color: var(--ink); }
+.en-meter--compact .en-meter__head span:last-child { order: 3; font: 12.5px/1 var(--mono); color: var(--mute); text-align: right; }
+.en-meter--compact .en-meter__track { order: 2; height: 4px; }
 
 .en-chip {
   position: relative;
@@ -230,8 +238,6 @@ body {
 /* ── tags ──────────────────────────────────────────────────── */
 .en-tags { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; }
 .en-tag { padding: 3px var(--s2); border: 1px solid currentColor; border-radius: 999px; font: 500 12px/1.2 var(--sans); opacity: 0.9; }
-/* A tag's state — x-ray's reading of it — small, beside the label. */
-.en-tag__state { margin-left: 6px; font: 11px/1 var(--mono); opacity: 0.6; }
 .en-tag.en-tone--mute { border-style: dashed; }
 
 /* ── controls ──────────────────────────────────────────────── */
@@ -265,6 +271,10 @@ body {
 .en-button--link { background: transparent; border: none; padding: 2px 0; color: var(--mute); font: 400 13px/1.3 var(--sans); text-align: left; }
 .en-button--link::before { content: '↳ '; opacity: 0.7; }
 .en-button--link:hover { color: var(--ink); text-decoration: underline; text-underline-offset: 3px; }
+/* The panel's sections: words, and a rule under the one that is showing. */
+.en-button--tab, .en-button--tab-on { background: transparent; border: none; border-bottom: 2px solid transparent; border-radius: 0; padding: var(--s1) var(--s2); color: var(--mute); font: 500 13.5px/1.3 var(--sans); }
+.en-button--tab:hover { color: var(--ink); }
+.en-button--tab-on { color: var(--ink); border-bottom-color: var(--accent); }
 .en-button:disabled { opacity: 0.4; cursor: not-allowed; }
 
 /* ── timeline ──────────────────────────────────────────────── */

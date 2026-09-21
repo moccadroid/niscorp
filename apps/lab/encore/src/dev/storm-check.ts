@@ -17,7 +17,7 @@ import { PASS_CEILING_MS, PASS_QUIET_MS } from '@encore/server/intent/pacer';
 import { cardData, check, decider, keystroke, login, mounted, passesOf, report, settle, sql, typeLine } from './world';
 
 const SENTENCE = 'storm at 9 move headliner to the tent';
-const PREFIXES = ['st', 'storm', 'storm at 9', 'storm at 9 move', 'storm at 9 move headl', 'storm at 9 move headliner', 'storm at 9 move headliner to the', SENTENCE];
+const PREFIXES = ['st', 'storm', 'storm at 9', 'storm at 9 move', 'storm at 9 move hea', 'storm at 9 move headl', 'storm at 9 move headliner', 'storm at 9 move headliner to the', SENTENCE];
 
 const main = async (): Promise<void> => {
   const headliner = String((await sql(`SELECT id FROM acts WHERE billing = 'headliner'`))[0]?.['id'] ?? '');
@@ -40,7 +40,10 @@ const main = async (): Promise<void> => {
   check('"storm" alone already aims the radar', (rooms['storm'] ?? []).includes('weather.radar'));
   check('...and the swap form is NOT there yet — nobody has said move', !(rooms['storm at 9'] ?? []).includes('slot.swap'));
   check('"…move" opens the swap form before there is an act to put in it', (rooms['storm at 9 move'] ?? []).includes('slot.swap'));
-  check('a half-typed "headl" does not yet mount the record card', !(rooms['storm at 9 move headl'] ?? []).includes('act.card'));
+  // (Restated 2026-09-21: the mount line moved from 0.80 to 0.50 — a calibrated "probably" — and the unmount line from 0.55 to 0.35.
+  // "headl" reads as the headliner at 0.60: probably — so it is shown. Three letters are still a guess.)
+  check('three letters of a word — "hea" — do not yet mount the record card', !(rooms['storm at 9 move hea'] ?? []).includes('act.card'));
+  check('..."headl" already does: probably the headliner is enough to show her', (rooms['storm at 9 move headl'] ?? []).includes('act.card'));
   check('...the finished word does', (rooms['storm at 9 move headliner'] ?? []).includes('act.card'));
 
   // ═══ 2. what each canvas holds, at the end of the sentence ═

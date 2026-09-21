@@ -28,16 +28,10 @@ export const intentLineLayout: LayoutNode = {
         // What was HEARD, the moment it was heard. "heard", not "decided": a tag
         // is a match the parser or retrieval made; the pass confirms it (it
         // lights) or drops it.
-        { if: '$.heard.length', then: {
-            component: 'Tags',
-            props: {
-              prefix: { $if: '$.xray', $then: 'heard', $else: '' },
-              // Whether a tag was read, matched or confirmed is the instrument's
-              // word for it: an operator sees it light. Off, the state is not sent.
-              items: { $if: '$.xray', $then: '$.heard', $else: { $prism: { $map: { over: { $ref: '$.heard' }, as: 'tag', body: { $omit: { from: { $var: 'tag' }, keys: ['state'] } } } } } },
-              stateKey: { $if: '$.xray', $then: 'state', $else: '' },
-            },
-          }, else: '' },
+        // Whether a tag was read, matched or confirmed is said by its TONE — muted
+        // until the pass confirms it — and in words only in x-ray's panel. The state
+        // itself is not sent.
+        { if: '$.heard.length', then: { component: 'Tags', props: { items: { $prism: { $map: { over: { $ref: '$.heard' }, as: 'tag', body: { $omit: { from: { $var: 'tag' }, keys: ['state'] } } } } } } }, else: '' },
       ],
     },
   ],

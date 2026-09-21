@@ -899,3 +899,52 @@ and that click is a reset (`command: 'off'`), not a toggle.
 
 **Density.** "Earlier · 3" is one line until pressed. Title 15, body 13.5, one radius, hairline
 borders, 12–14 px padding.
+
+## The mount line, and x-ray rebuilt — derived while fixing
+
+**The mount line is "probably".** MOUNT 0.50 · UNMOUNT 0.35 · chips for 0.30–0.50 (still ≤3, within
+0.15 of the best) — all in `resolve.ts`. 0.80 was chosen before anybody had seen a calibrated
+model's numbers: on the real one "who's playing right now?" left the running order (0.77) and the
+act (0.69) as chips beside an overview the slow model had to place. What leaned on the old line:
+
+- **Hysteresis belongs to a sentence.** With the unmount line at 0.35, a model with a middling
+  opinion of everything (0.4) would never take a card down: typed over, the old room would stay.
+  The first pass of a NEW sentence (continuation.ts) gives nothing the benefit of being up — every
+  card re-earns the mount line, and one that does keeps its instance. Asserted under the 0.4
+  floor, which now sits between the two lines on purpose (the floor did not move).
+- **"Wanted and could not aim" routes only when Jev was SURE** (`DEMOTION_ROUTES_AT` 0.80 — the
+  old line, kept for the one rule that was really about being sure). A record card that probably
+  belongs, in a sentence that names no record, is a chip, not a run of the slow model.
+- `FILL_AT` (0.6, on the pick), companions and `SURE_DIRECT_AT` did not fight the new line and are
+  unchanged. The confidence WORD got its own lines (sure ≥0.9 · fairly sure ≥0.7 · a guess): a card
+  up at 0.55 is a guess the room acted on, and its "why?" says so.
+
+**X-ray changes nothing in the app.** The first x-ray wrote itself over the whole room — a tag on
+every card, a legend, a banner, a status line under the answer — and buried the interesting part
+in five collapsed key/value grids. Now every app canvas is BYTE-IDENTICAL with it on and off
+(asserted, and not one of them is even re-sent by the switch). Deleted: the marker banner, the
+legend arrangement and `shell.setLayout` swap, the `xray` flag the loop wrote into every
+instance, every `{ if: '$.xray' }` on an app element, `Tags.stateKey`, the five summary+body
+sections. "Why?" stays: it is app-layer and already in words.
+
+**One panel** (`intent.trace`, which IS x-ray: `open` is its own data, flipped by its own word,
+the backtick key, and — once per page load — the kit's `OnLoad` as a reset). It is the last thing
+in the page's flow and sticks to the window's bottom edge: being IN the flow is what makes the
+page exactly one panel longer, so it pushes the room up and never ends on top of a card; its body
+has a fixed ceiling (44vh) and the room's only inner scroll. Shut, it is one quiet word.
+
+**The story first** (`server/intent/story.ts`, pure; the layout draws fields and knows nothing
+about either model): what was typed and heard → "Jev · 331 ms · 38 questions", the cards it
+wanted as a bar and a number (best first, six, "show all"), the rows it picked, the mood, and the
+routing in a sentence → what the assistant was handed → "Assistant · model · 1.7 s · 1 step", what
+it said, placed, looked up, and what admission dropped or REFUSED, with the reason in plain words
+(`RunRecord.refused` is new: the in-run refusals were thrown away before) → what changed on
+screen. An event pass tells the same story from the event. The last 20 are kept; the panel follows
+the newest until somebody steps back (‹ ›), and then stays where they put it — so a run that
+landed is not overwritten by the next keystroke's pass. A run attaches to the pass that sent it.
+
+**Numbers second**: one table of where the time went, one of what it cost — real labels ("Jev
+round trip"), each once. **The demo third**: the director's deck is still its own action (its own
+grant), drawn inside the panel through a CanvasSlot and told over a channel when the panel opens —
+so, like everything else about x-ray, it is not even sent while the panel is shut. The app has no
+demo handle any more.

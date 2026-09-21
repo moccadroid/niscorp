@@ -12,8 +12,8 @@ import { deriveQuestions } from './derive';
 import { decideQuestions } from './decide';
 import type { DecideState } from './decide';
 import { supersede, supersededNotes } from './supersede';
-import { resolveScreen } from './resolve';
-import { clearScreen, mountedActions, reconcileScreen, writeHeard, writeTrace, writeTraceWarm } from './reconcile';
+import { resolveScreen, HANDOFF_AT } from './resolve';
+import { clearScreen, mountedActions, reconcileScreen, writeHeard, writeStory, writeTrace, writeTraceWarm } from './reconcile';
 import { referencedTables } from './input-contract';
 import { readablePacks } from './context-packs';
 import { createPacer, systemClock } from './pacer';
@@ -29,10 +29,8 @@ import { createReloader } from '@encore/server/watch/reload';
 import type { Reloader } from '@encore/server/watch/reload';
 import { ENTRIES } from '@encore/app/vex';
 import { QUESTION_CANVASES } from '@encore/app/canvas-placement';
-import { calmLayout, xrayLayout } from '@encore/app/shell/calm.layout';
-import { ROOM_REF } from '@encore/app/shell/frame.layout';
-import { ROOM_MARKER_ID } from '@encore/app/actions/frame/room-marker.action';
-import { ROOM_XRAY_ID } from '@encore/app/actions/frame/room-xray.action';
+import { STORIES_KEPT, eventStory, sentenceStory, withRun } from './story';
+import type { Story, StoryNames } from './story';
 import { admit } from './admission';
 import type { RailEntry } from './thread';
 import type { Message } from '@niscorp/signal';
@@ -119,10 +117,9 @@ export type IntentLoop = {
   notifyFeed: (table: string) => void;
   watching: () => Watcher;
   reloading: () => Reloader;
-  // X-RAY: flip the room between the app and its instruments. Returns the new state.
-  toggleXray: () => boolean;
-  // ...or put it where it is told: a fresh page load, and the marker's "turn off".
-  setXray: (on: boolean) => boolean;
+  // X-RAY'S STEPPER: 'earlier' · 'later' · 'latest'. Returns "3 of 14".
+  stepStory: (command: string) => string;
+  stories: () => readonly Story[];
 };
 
 // Enough history to read a typing burst back; not a log.
@@ -146,9 +143,8 @@ export const createIntentLoop = (session: FunctionSession, deps: IntentDeps): In
   const TONES = ['calm', 'elevated', 'critical'] as const;
   let sentenceTone: (typeof TONES)[number] = 'calm';
   let eventTone: (typeof TONES)[number] = 'calm';
-  // AN IDLE ROOM SAYS SO: no sentence, no card, nothing raised. It offers the
-  // director only to somebody who holds its deck.
-  const IDLE = session.actions.includes('director.deck') ? 'Nothing needs attention right now. Say what is happening, or press play.' : 'Nothing needs attention right now. Say what is happening.';
+  // AN IDLE ROOM SAYS SO: no sentence, no card, nothing raised.
+  const IDLE = 'Nothing needs attention right now. Say what is happening.';
   let raisedCount = 0;
   const writeIdle = (): void => {
     const shell = session.shell;
@@ -158,38 +154,45 @@ export const createIntentLoop = (session: FunctionSession, deps: IntentDeps): In
     const idle = isIdle ? IDLE : '';
     if (runtime !== undefined && runtime.getData()['idle'] !== idle) runtime.setData({ ...runtime.getData(), idle });
   };
-  // X-RAY IS SHELL DATA, NOT STYLE. One flag per session; the loop writes it into
-  // every instance (every meta element is behind a layout `if` on it) and swaps
-  // the room's arrangement for the one with the regions' questions drawn. With it
-  // off, nothing meta is in the tree the terminal is sent. Cards are written in
-  // place — toggling never re-mounts the room — and a card that mounts later is
-  // told as it arrives.
-  let xray = false;
-  let isWatchingMounts = false;
-  const applyXray = (): void => {
-    const shell = session.shell;
-    for (const canvas of Object.values(shell.getState().canvases)) {
-      for (const item of canvas.stack) {
-        const runtime = shell.getRuntime(item.id);
-        // The switch's own `on` is written with it: three things can flip x-ray (the
-        // button, the key, the marker) and only one of them is the switch's endpoint.
-        const isSwitch = item.definitionId === ROOM_XRAY_ID || item.definitionId === ROOM_MARKER_ID;
-        const held = runtime?.getData();
-        if (runtime !== undefined && held !== undefined && (held['xray'] !== xray || (isSwitch && held['on'] !== xray))) runtime.setData({ ...held, xray, ...(isSwitch ? { on: xray } : {}) });
-      }
-    }
+  // X-RAY'S STORIES. One per pass and one per event pass, the last few kept, so a
+  // run that landed is not overwritten by the next keystroke's pass: the panel
+  // FOLLOWS the newest until somebody steps back, and then stays where they put
+  // it. X-ray itself is the panel being open — its own data, flipped by its own
+  // trigger; the loop does not know and the app's cards are never told.
+  const packNouns = Object.fromEntries(CONTEXT_PACKS.map((pack) => [pack.id, pack.noun]));
+  // (`titles` is the session's catalog, resolved further down.)
+  const names = (): StoryNames => ({ titles, packs: packNouns });
+  const stories: { story: Story; record?: PassRecord }[] = [];
+  let pinnedStory: string | undefined;
+  let lastWarm = '';
+  let eventCount = 0;
+  const showStory = (): string => {
+    const found = pinnedStory === undefined ? -1 : stories.findIndex((entry) => entry.story.key === pinnedStory);
+    if (found < 0) pinnedStory = undefined;
+    const index = found < 0 ? stories.length - 1 : found;
+    const position = stories.length === 0 ? '' : `${index + 1} of ${stories.length}`;
+    writeStory(session.shell, { story: stories[index]?.story ?? {}, storyPosition: position, hasEarlier: index > 0, hasLater: index >= 0 && index < stories.length - 1, following: pinnedStory === undefined });
+    return position;
   };
-  const setXray = (on: boolean): boolean => {
-    xray = on;
-    session.shell.setLayout(ROOM_REF, xray ? xrayLayout : calmLayout);
-    applyXray();
-    if (!isWatchingMounts) {
-      isWatchingMounts = true;
-      session.shell.onStateChange(() => applyXray());
-    }
-    return xray;
+  const keepStory = (story: Story, record?: PassRecord): void => {
+    stories.push({ story, ...(record === undefined ? {} : { record }) });
+    if (stories.length > STORIES_KEPT) stories.shift();
+    showStory();
   };
-  const toggleXray = (): boolean => setXray(!xray);
+  const stepStory = (command: string): string => {
+    const at = pinnedStory === undefined ? stories.length - 1 : stories.findIndex((entry) => entry.story.key === pinnedStory);
+    const to = command === 'earlier' ? Math.max(0, at - 1) : command === 'later' ? at + 1 : stories.length - 1;
+    pinnedStory = to >= stories.length - 1 ? undefined : stories[to]?.story.key;
+    return showStory();
+  };
+  // A RUN BELONGS TO THE PASS THAT SENT IT: the newest sentence story whose
+  // handoff it answers — and it lands there even if the panel is looking elsewhere.
+  const attachRun = (run: RunRecord): void => {
+    const entry = [...stories].reverse().find((held) => held.record !== undefined && held.record.handoff.signature === run.signature) ?? [...stories].reverse().find((held) => held.record !== undefined);
+    if (entry?.record === undefined) return;
+    entry.story = withRun(entry.story, entry.record, run, names());
+    showStory();
+  };
 
   const writeFrameTone = (): void => {
     const louder = TONES[Math.max(TONES.indexOf(sentenceTone), TONES.indexOf(eventTone))] ?? 'calm';
@@ -235,6 +238,9 @@ export const createIntentLoop = (session: FunctionSession, deps: IntentDeps): In
   // the PREVIOUS sentence still lands — passes always do — but it has no say in
   // the slow path: its route is about words that are no longer on the line.
   let sentenceAt = 0;
+  // The sentence (by its `sentenceAt`) whose passes have put the current cards up:
+  // what unmount hysteresis is allowed to remember.
+  let earnedAt = -1;
   // The generation of the most recent clear. A pass started before it answers
   // a sentence that is no longer on the line, and must not repopulate a room
   // the operator just emptied.
@@ -284,11 +290,20 @@ export const createIntentLoop = (session: FunctionSession, deps: IntentDeps): In
     const shell = session.shell;
     touched.watch(shell);
     lastCandidates = candidates;
-    const resolved = resolveScreen({ line: text, derived, answers: decided.answers, parsed, clock: clock, mounted: mountedActions(shell), pinned, titles, given, placers, whys, candidates });
+    // HYSTERESIS BELONGS TO A SENTENCE. It exists so a card does not flicker while
+    // ONE sentence is being typed — not so that the last sentence's cards can sit
+    // out the next one. With the unmount line at 0.35, a model that has a middling
+    // opinion of everything (0.4, say) would never take a card down again: typed
+    // over, the old room would simply stay. So the first pass of a new sentence
+    // gives nothing the benefit of being up — every card re-earns the mount line,
+    // and one that does keeps its instance, untouched.
+    const staying = earnedAt === sentenceAt ? mountedActions(shell) : new Set<string>();
+    const resolved = resolveScreen({ line: text, derived, answers: decided.answers, parsed, clock: clock, mounted: staying, pinned, titles, given, placers, whys, candidates });
     const afterResolve = performance.now();
 
     const applied = clearedAt <= generation;
     const notes = applied ? reconcileScreen(shell, resolved, deps.definitions, touched, assist.enabled && resolved.handoff.route !== 'direct') : ['dropped: the line was cleared while this pass was out'];
+    if (applied && generation >= sentenceAt) earnedAt = sentenceAt;
     if (applied) {
       sentenceTone = resolved.tone;
       writeFrameTone();
@@ -326,6 +341,7 @@ export const createIntentLoop = (session: FunctionSession, deps: IntentDeps): In
       decider: `${deps.decider.id} · ${decided.model}`,
       calibrated: decided.calibrated,
       applied,
+      tone: resolved.tone,
       notes: [...supersededNotes(corrected.superseded).map((note) => `heard: ${note}`), ...notes],
       superseded: corrected.superseded,
       handoff: resolved.handoff,
@@ -338,6 +354,7 @@ export const createIntentLoop = (session: FunctionSession, deps: IntentDeps): In
     // the same frame, and the trace row already says `pending`.
     if (applied && generation >= sentenceAt) assist.onPass({ text, parsed, candidates, handoff: resolved.handoff });
     writeTrace(shell, record, assist.traceRows());
+    keepStory(sentenceStory({ record, heard: heardTags(parsed, candidates, applied ? resolved.handoff.entities : undefined), scored: resolved.scored, names: names(), handoffLine: HANDOFF_AT, warm: lastWarm }), record);
     deps.onPass?.(session.principal, record);
   };
 
@@ -374,7 +391,10 @@ export const createIntentLoop = (session: FunctionSession, deps: IntentDeps): In
       // Nobody typed this pass, so there is no burst to wait out.
       pacer.submit(lastText, { now: true });
     },
-    ...(deps.onRun !== undefined ? { onRun: deps.onRun } : {}),
+    onRun: (principal, run) => {
+      attachRun(run);
+      deps.onRun?.(principal, run);
+    },
   });
 
   // A WRITE LANDED: the cards showing those rows re-read (watch/reload.ts).
@@ -412,6 +432,10 @@ export const createIntentLoop = (session: FunctionSession, deps: IntentDeps): In
       writeIdle();
     },
     brief: (request, abort) => assist.brief(request, abort),
+    onEventPass: (told) => {
+      eventCount += 1;
+      keepStory(eventStory({ ...told, count: eventCount, names: names() }));
+    },
   });
 
   // Both speeds at rest. A landing run sets off a pass, and a pass can arm a
@@ -506,7 +530,10 @@ export const createIntentLoop = (session: FunctionSession, deps: IntentDeps): In
     },
     warm: () => {
       // Fire and forget: the focus event must not wait on a network.
-      void deps.decider.warm().then((result) => writeTraceWarm(session.shell, result));
+      void deps.decider.warm().then((result) => {
+        lastWarm = result.outcome === 'fresh' ? 'already warm' : `${result.outcome}, ${Math.round(result.ms)} ms`;
+        writeTraceWarm(session.shell, result);
+      });
       return 'warming';
     },
     runNow: () => {
@@ -533,7 +560,7 @@ export const createIntentLoop = (session: FunctionSession, deps: IntentDeps): In
     },
     watching: () => watcher,
     reloading: () => reloader,
-    toggleXray,
-    setXray,
+    stepStory,
+    stories: () => stories.map((entry) => entry.story),
   };
 };

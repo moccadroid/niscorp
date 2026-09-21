@@ -5,6 +5,7 @@ import { ATTENTION_STRIP_ID } from '@encore/app/actions/frame/attention-strip.ac
 import { CLOCK_CHANNEL } from '@encore/app/actions/frame/director-deck.action';
 import { CANVAS_PLACEMENT } from '@encore/app/canvas-placement';
 import { CARD_SPAN, TILE_SPAN, tileOf } from '@encore/app/canvas-placement';
+import type { EventStoryInput } from '@encore/server/intent/story';
 import { RAISED_FRAGMENT } from '@encore/app/shell/fragments/raised.fragment';
 import { clockNow, feedGates, feedIncidents, feedScans, feedZoneCounts, labelsSince } from '@encore/app/vex/watch.entries';
 import type { FestivalClock } from '@encore/lib/festival-clock';
@@ -120,6 +121,8 @@ export type WatchDeps = {
   onClock: (from: FestivalClock, to: FestivalClock) => void;
   // One line from the agent, or undefined (no agent, aborted, failed).
   brief: (request: BriefRequest, abort: AbortSignal) => Promise<string | undefined>;
+  // One call per event pass that reached Jev: what x-ray's story is told from.
+  onEventPass?: (told: Omit<EventStoryInput, 'count' | 'names'>) => void;
 };
 
 export type Watcher = {
@@ -347,10 +350,26 @@ export const createWatcher = (deps: WatchDeps): Watcher => {
     if (dismissed.get(event.key) !== event.band) dismissed.delete(event.key);
     const isWorthEyes = standing === undefined ? interrupt >= INTERRUPT_AT : interrupt > INTERRUPT_LEAVE_AT;
 
+    // X-RAY'S STORY OF THIS PASS (intent/story.ts): what Jev was asked and said.
+    const tell = (outcome: string): void =>
+      deps.onEventPass?.({
+        line: withoutBand(event),
+        heard: [event.place, event.kind, event.band],
+        decideMs: decided.durationMs,
+        questionCount: decided.questionCount,
+        scored: derived.plans.map((plan) => ({ id: plan.actionId, p: Math.round(probabilityOf(decided.answers[plan.question]) * 1000) / 1000 })),
+        interrupt,
+        interruptLine: standing === undefined ? INTERRUPT_AT : INTERRUPT_LEAVE_AT,
+        urgency: URGENCY_WORDS[urgency] ?? 'routine',
+        outcome,
+      });
+
     if (!isWorthEyes || best === undefined || dismissed.has(event.key)) {
       // MOST EVENTS ANSWER "NOTHING", AND THAT IS THE PRODUCT.
-      if (comeDown(event.key)) stats.left += 1;
+      const left = comeDown(event.key);
+      if (left) stats.left += 1;
       else stats.nothing += 1;
+      tell(left ? 'Took its card down: no longer worth a pair of eyes.' : dismissed.has(event.key) ? 'Raised nothing: the operator dismissed this cause, and it has not changed band since.' : !isWorthEyes ? 'Raised nothing: below the line. Most events end here, and that is the product.' : 'Raised nothing: no card it was sure of could be aimed.');
       return;
     }
 
@@ -370,6 +389,7 @@ export const createWatcher = (deps: WatchDeps): Watcher => {
       // A FLAGGED EVENT IS A TURN, so "what did I miss?" is answerable.
       deps.recordEvent(`${deps.clock.time} · ${event.short} — raised`, { rail: `${event.short} — raised (${URGENCY_WORDS[urgency] ?? 'routine'})`, cause: event.key, card: best.plan.actionId, line: event.line, audience: audience?.kind === 'choice' && audience.p >= FILL_AT ? audience.choice : 'none', probabilities });
     }
+    tell(isNew ? `Raised “${deps.definitions[best.plan.actionId]?.title ?? best.plan.actionId}” — ${best.p.toFixed(2)} — on the attention strip.` : 'Already up: its card was updated in place.');
     maybeBrief(event, urgency, confidence);
   };
 

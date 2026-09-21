@@ -58,20 +58,25 @@ const main = async (): Promise<void> => {
   };
   const setCount = (zoneId: string, headcount: number): Promise<void> => director.send({ what: `${zoneId} → ${headcount}`, fingerprint: feedSetCount.fingerprint, context: { zoneId, day: 'sat', hour: 18, headcount } });
   const countsBefore = await world.tableCounts();
-  const IDLE_WITH_DECK = 'Nothing needs attention right now. Say what is happening, or press play.';
+  // (2026-09-22: the app has no demo handle, so the idle sentence offers none.)
+  const IDLE_WITH_DECK = 'Nothing needs attention right now. Say what is happening.';
   const idleSays = (room: typeof shell): unknown => cardData(room, 'maybe', 'intent.options')['idle'];
   const served = (room: string, actionId: string): string => world.servedTo(room).filter((message) => message.includes(`"definitionId":"${actionId}"`)).at(-1) ?? '';
 
-  // (2026-09-21, the surface: the trace, the deck and the rail's role tags are
-  // LAYER THREE. This check reads them off the rendering, so the operator's room
-  // runs with x-ray ON from here; what the APP shows with it off is surface-check's.)
+  // (2026-09-21, the surface; 2026-09-22, x-ray rebuilt: the story of a pass and the
+  // director's deck live in x-ray's PANEL. This check reads them off the rendering, so
+  // the operator's panel is OPEN from here; the app is identical either way, and what
+  // it shows is surface-check's.)
   await world.xray(OP);
 
   // ═══ what am I looking at? — the room before anything has happened ═══
   check(`AN IDLE ROOM SAYS SO, in one quiet sentence: "${String(idleSays(shell))}"`, String(idleSays(shell)).startsWith('Nothing needs attention right now. Say what is happening') && served(OP, 'intent.options').includes('Nothing needs attention right now'));
-  check('...and offers the director only to somebody who holds its deck', !String(idleSays(liaisonShell)).includes('press play') && mounted(liaisonShell, 'deck').length === 0 && mounted(shell, 'deck').join() === 'director.deck');
-  check('THE TRACE HAS A ZERO STATE: before any pass it draws one muted line — no zeros, no "calibrated false"', served(OP, 'intent.trace').includes('no sentence yet') && !served(OP, 'intent.trace').toLowerCase().includes('calibrated') && !served(OP, 'intent.trace').includes('"label":"PASS"') && !served(OP, 'intent.trace').includes('"label":"pass"'));
-  check('the director’s deck says it is ready, and offers play', JSON.stringify(cardData(shell, 'deck', 'director.deck')['deck']).includes('"status":"ready"') && served(OP, 'director.deck').includes('"label":"play"'));
+  check('...and the director’s deck is held only by somebody granted it', !String(idleSays(liaisonShell)).includes('press play') && mounted(liaisonShell, 'deck').length === 0 && mounted(shell, 'deck').join() === 'director.deck');
+  // (Restated 2026-09-22, x-ray rebuilt: the trace is x-ray's PANEL now, and its zero
+  // state is one plain sentence — still no zeros, still no "calibrated false".)
+  check('X-RAY HAS A ZERO STATE: before any pass its panel says so in one sentence — no zeros, no "calibrated false"', served(OP, 'intent.trace').includes('Nothing has been typed yet') && !served(OP, 'intent.trace').toLowerCase().includes('calibrated') && !served(OP, 'intent.trace').includes('Jev ·'));
+  // (2026-09-22: the deck is drawn inside the panel, under "Demo", and only while it is open.)
+  check('the director’s deck says it is ready, and offers play — inside x-ray’s panel', JSON.stringify(cardData(shell, 'deck', 'director.deck')['deck']).includes('"status":"ready"') && world.servedTo(OP).filter((message) => message.includes('"canvas":"deck"')).at(-1)?.includes('"label":"Play"') === true);
 
   // ═══ a. routine ══════════════════════════════════════════
   await setCount('zone_arena', 6980);
@@ -274,7 +279,8 @@ const main = async (): Promise<void> => {
   // (Restated 2026-09-21, the surface: the trace is a drawer of five sections, each
   // ONE LINE until it is opened — so what a landed pass draws is its summaries, not
   // a KeyValue. Same claim: the zero state is gone and the pass is on the screen.)
-  check('the trace draws its sections once a pass has landed', /Pass \d+ · \d+ ms · \d+ questions/.test(served(OP, 'intent.trace')) && served(OP, 'intent.trace').includes('▸ Probabilities') && !served(OP, 'intent.trace').includes('no sentence yet'));
+  // (Restated again 2026-09-22: what a landed pass draws is its STORY.)
+  check('x-ray tells the story of a pass once one has landed', /Jev · \d+ ms · \d+ questions/.test(served(OP, 'intent.trace')) && served(OP, 'intent.trace').includes('You typed: ') && !served(OP, 'intent.trace').includes('Nothing has been typed yet'));
   check(`THE RAIL HAS A HEADING, so a cold reader knows what the list is`, /"label":"Earlier · \d+"/.test(served(OP, 'assist.rail'))); // (2026-09-21: the heading is one plain word — and, since the redesign, the whole rail until it is pressed: "Earlier · n")
   await world.typeLine(OP, '');
 
@@ -354,7 +360,7 @@ const main = async (): Promise<void> => {
   await evening.xray(OP);
   evening.dispatchOn(OP, 'deck', { type: 'ui:click', ref: 'pause' });
   await settle(4);
-  check('...on the deck too, where `play` has become `replay`', JSON.stringify(cardData(eveningShell, 'deck', 'director.deck')['deck']).includes('"status":"finished"') && evening.servedTo(OP).filter((message) => message.includes('"definitionId":"director.deck"')).at(-1)?.includes('"label":"replay"') === true);
+  check('...on the deck too, where `play` has become `replay`', JSON.stringify(cardData(eveningShell, 'deck', 'director.deck')['deck']).includes('"status":"finished"') && evening.servedTo(OP).filter((message) => message.includes('"definitionId":"director.deck"')).at(-1)?.includes('"label":"Replay"') === true);
 
   // REPLAY: the feed puts the evening back — through its own mutations, as its
   // own principal — and plays it again.

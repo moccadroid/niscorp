@@ -24,7 +24,7 @@ export const intentLineAction: ActionDefinition = {
   // `heard` is the instant lane: what the parser read and retrieval matched,
   // written by the loop ~10 ms after a keystroke is sent — before the model has
   // been asked anything. Tags, not decisions.
-  data: { text: '', generation: 0, tone: 'calm', xray: false, ran: '', warmed: '', heard: [] },
+  data: { text: '', generation: 0, tone: 'calm', ran: '', warmed: '', heard: [] },
   layout: intentLineLayout,
   endpoints: {
     decide: { fn: 'encore.intent', target: 'generation' },

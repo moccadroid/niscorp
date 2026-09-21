@@ -41,7 +41,7 @@ export const assistAnswerAction: ActionDefinition = {
   description: 'The answer to the sentence on the line, as a briefing: the question, the answer in sentences that each cite a card on screen, what was read to give it, the steps of a plan as chips, and up to three follow-up sentences.',
   // `say` is the run in the operator's terms — what is happening, then what was
   // read and how long it took. `status` is for the badge and the checks.
-  data: { status: 'pending', statusTone: 'mute', mode: '', by: '', question: '', say: '', plain: '', answer: '', segments: [], landed: false, xray: false, lit: '', lookups: '', reason: '', notes: '', steps: [], progress: '', followUps: [], stepIndex: -1, opened: '' },
+  data: { status: 'pending', statusTone: 'mute', mode: '', by: '', question: '', say: '', plain: '', answer: '', segments: [], landed: false, lit: '', lookups: '', reason: '', notes: '', steps: [], progress: '', followUps: [], stepIndex: -1, opened: '' },
   layout: assistAnswerLayout,
   endpoints: {
     openStep: { fn: 'encore.step', target: 'opened' },

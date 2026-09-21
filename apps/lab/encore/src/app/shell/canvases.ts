@@ -11,8 +11,6 @@ import { QUESTION_CANVASES } from '@encore/app/canvas-placement';
 // collapses it. An empty room is an empty screen with a cursor in it, which is
 // the correct thing to show somebody who has not said anything yet.
 
-// (The region's question used to be drawn here, over every card. It is x-ray's
-// now: app/shell/calm.layout.ts.)
 // A QUESTION CANVAS DRAWS NO BOX OF ITS OWN. Its cards are tiles of the room's
 // one packed flow (shell/calm.layout.ts): a slot renders no element, so the
 // cards of six canvases are siblings in one grid, and a canvas is a question the
@@ -20,7 +18,6 @@ import { QUESTION_CANVASES } from '@encore/app/canvas-placement';
 const tray: LayoutNode = { for: '$.instances', as: 'card', key: 'id', do: { component: 'ActionSlot', props: { instanceId: '$.card.id' } } };
 
 export const CANVASES: ShellManifest['canvases'] = [
-  { id: 'marker', mode: 'list', actionLayout: tray, initial: 'room.marker' },
   { id: 'line', initial: 'intent.line' },
   ...QUESTION_CANVASES.map((id) => ({ id, mode: 'list' as const, actionLayout: tray })),
   // The slow path's one card. Empty until a pass decides a handoff is coming.
@@ -41,5 +38,4 @@ export const CANVASES: ShellManifest['canvases'] = [
   { id: 'warm', mode: 'list', actionLayout: tray },
   { id: 'trace', mode: 'list', actionLayout: tray, initial: 'intent.trace' },
   // The one switch between the app and its instruments.
-  { id: 'xray', mode: 'list', actionLayout: tray, initial: 'room.xray' },
 ];

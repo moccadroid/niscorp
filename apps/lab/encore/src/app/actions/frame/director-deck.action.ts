@@ -1,3 +1,4 @@
+import { XRAY_CHANNEL } from './intent-trace.action';
 import type { ActionDefinition } from '@niscorp/nova';
 import { directorDeckLayout } from './director-deck.layout';
 
@@ -16,11 +17,13 @@ export const directorDeckAction: ActionDefinition = {
   id: DIRECTOR_DECK_ID,
   title: 'Director',
   description: 'Plays Saturday evening as a feed of real writes: play, pause and speed, with the festival clock.',
-  data: { xray: false, command: 'status', deck: { playing: false, finished: false, status: 'ready', speed: 60, time: '18:00', day: 'sat', played: 0, of: 0 } },
+  data: { shown: false, command: 'status', deck: { playing: false, finished: false, status: 'ready', speed: 60, time: '18:00', day: 'sat', played: 0, of: 0 } },
   layout: directorDeckLayout,
   endpoints: { run: { fn: 'encore.director', target: 'deck' } },
   lifecycle: { mount: [{ call: 'run' }] },
   triggers: [
+    // Shown only while x-ray's panel is open — told by the panel, over a channel.
+    { message: XRAY_CHANNEL, do: [{ set: 'shown', value: '@event.payload' }] },
     { event: 'ui:click', ref: 'play', do: [{ set: 'command', value: 'play' }, { call: 'run' }] },
     { event: 'ui:click', ref: 'pause', do: [{ set: 'command', value: 'pause' }, { call: 'run' }] },
     // A finished evening can be put back and played again — by the feed, through

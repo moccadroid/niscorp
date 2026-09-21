@@ -1,8 +1,8 @@
 import type { LayoutNode } from '@niscorp/nova';
-import { CATEGORIES, FLOW_ORDER } from '@encore/app/canvas-placement';
+import { FLOW_ORDER } from '@encore/app/canvas-placement';
 
-// THE ROOM'S ARRANGEMENT — what the frame's `{ ref: 'room' }` resolves to, and
-// what x-ray swaps whole with `shell.setLayout`.
+// THE ROOM'S ARRANGEMENT — what the frame's `{ ref: 'room' }` resolves to. There
+// is one: x-ray does not re-arrange the room, or touch it at all.
 //
 // (It was three flex columns — doing | about, where | when, nearby — and a
 // question nobody had asked was a column of nothing: a two-card answer used a
@@ -18,14 +18,4 @@ const flow: LayoutNode = {
   children: [{ component: 'CanvasSlot', props: { canvasId: 'attention' } }, ...FLOW_ORDER.map((canvasId): LayoutNode => ({ component: 'CanvasSlot', props: { canvasId } }))],
 };
 
-// X-RAY'S LEGEND: each hue IS a question Jev is asked, and that is something about
-// how the room decides — which is what x-ray is for. The app needs no legend: the
-// tags are on the cards.
-const legend: LayoutNode = {
-  component: 'Row',
-  props: { gap: 14, align: 'center', wrap: true },
-  children: FLOW_ORDER.map((canvasId): LayoutNode => ({ component: 'Chip', props: { label: `${CATEGORIES[canvasId].tag} — ${CATEGORIES[canvasId].question}`, accent: CATEGORIES[canvasId].hue, done: true } })),
-};
-
 export const calmLayout: LayoutNode = flow;
-export const xrayLayout: LayoutNode = { component: 'Stack', props: { gap: 10 }, children: [legend, flow] };

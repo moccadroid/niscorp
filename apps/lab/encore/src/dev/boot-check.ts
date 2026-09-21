@@ -19,7 +19,8 @@ import { app, asPrincipal, check, login, mounted, report, runtime, settle } from
 // (2026-09-21, scene 4: `watch`, `attention` and `deck` joined the frame.)
 // (2026-09-21, the surface: `xray` — the one switch — joined the frame.)
 // (2026-09-21, the redesign: `marker` — x-ray's "instruments visible" banner — joined it.)
-const CANVASES = ['marker', 'line', 'assist', 'rail', 'watch', 'attention', 'deck', 'xray', 'doing', 'about', 'where', 'when', 'nearby', 'maybe', 'warm', 'trace'];
+// (2026-09-22, x-ray rebuilt: `marker` and `xray` are gone — x-ray is the `trace` panel.)
+const CANVASES = ['line', 'assist', 'rail', 'watch', 'attention', 'deck', 'doing', 'about', 'where', 'when', 'nearby', 'maybe', 'warm', 'trace'];
 
 const RowsSchema = z.object({ result: z.array(z.record(z.string(), z.unknown())) });
 

@@ -22,7 +22,6 @@ import type { AdmittedCard, AnswerContext } from './admission';
 import { segmentsOf, streamingSegments } from './answer-spans';
 import { harvestRefs, readPacks } from './context-packs';
 import { inputContractOf } from './input-contract';
-import { runSummary } from './reconcile';
 import { HANDOFF_AT } from './resolve';
 import { CARDS_ONLY, createThread } from './thread';
 import type { RailEntry, RememberedRow } from './thread';
@@ -332,7 +331,7 @@ export const createAssist = (deps: AssistDeps): Assist => {
     ];
   };
 
-  const writeTraceRun = (): void => mergeInto('trace', 'intent.trace', { run: traceRows(), summary_run: runSummary(traceRows()) });
+  const writeTraceRun = (): void => mergeInto('trace', 'intent.trace', { run: traceRows() });
 
   const publish = (record: RunRecord): void => {
     writeTraceRun();
@@ -737,6 +736,7 @@ export const createAssist = (deps: AssistDeps): Assist => {
       packsSent: [],
       narrowed: handoff.narrowed,
       lookups: [],
+      refused: [],
       answer: '',
       claims: 0,
       claimsDropped: [],
@@ -838,6 +838,7 @@ export const createAssist = (deps: AssistDeps): Assist => {
       abort: controller.signal,
       refusals: (data, response) => {
         const verdict = admitAnswer(answerContext(), data, response);
+        if (!verdict.ok) record.refused.push(verdict.reasons.join('; '));
         return verdict.ok ? [] : verdict.reasons;
       },
       onAnswer: (soFar) => writer.push({ answer: soFar, segments: streamingSegments(soFar) }),

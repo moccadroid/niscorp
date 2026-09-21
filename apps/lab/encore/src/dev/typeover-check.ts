@@ -103,14 +103,17 @@ const main = async (): Promise<void> => {
   // (Restated 2026-09-21, the surface: the placed-by tag is LAYER THREE now — it is
   // not in the app's tree at all — so the rendering is read with x-ray on. The
   // claim is the same: one fragment draws it, and no authored card mentions it.)
-  await world.xray(OP);
-  check('...drawn by the shared fragment: no authored card knows the tag exists', !JSON.stringify(CATALOG_DEFINITIONS).includes('placedBy') && world.servedTo(OP).some((message) => message.includes('"variant":"tag"') && message.includes('"value":"you"')));
+  // (Restated again 2026-09-22, x-ray rebuilt: who placed a card is not drawn on the
+  // card in ANY mode now — x-ray changes nothing in the app. It is still provenance
+  // composed at mount, carried by the shared fragment's data, and what is served is the
+  // fragment's chrome — the tile and its "why?" — around a card that knows none of it.)
+  check('...carried by the shared fragment: no authored card knows the tag exists, and every served card wears the fragment’s chrome', !JSON.stringify(CATALOG_DEFINITIONS).includes('placedBy') && !JSON.stringify(CATALOG_DEFINITIONS).includes('"why"') && world.servedTo(OP).some((message) => message.includes('"definitionId":"sales.chart"') && message.includes('"name":"Tile"') && message.includes('"label":"why?"')));
 
-  await world.xray(OP);
   await world.typeLine(OP, 'qqq zzz');
   check(`a sentence nothing answers says so: "${String(strip()['say'])}"`, room().length === 0 && strip()['say'] === NOTHING_ANSWERS);
   // Half a word: enough for Jev to suspect two cards, not enough to open one.
-  await world.typeLine(OP, 'headl');
+  // (2026-09-21: "headl" now MOUNTS — 0.60 clears the new 0.50 line — so the half word is a shorter one.)
+  await world.typeLine(OP, 'head');
   const guesses = strip()['chips'];
   check(`chips and no cards says they are guesses: "${String(strip()['say'])}"`, room().length === 0 && Array.isArray(guesses) && guesses.length > 0 && strip()['say'] === ONLY_GUESSES);
   await world.typeLine(OP, 'storm at 9 move headliner to the tent');

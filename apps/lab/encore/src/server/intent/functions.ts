@@ -65,8 +65,8 @@ export const createIntentLoops = (deps: IntentDeps, director?: DirectorControls)
         // "New thread": the operator's click, and the only thing that ever ends
         // a thread. It is a write like every other — a row, through the wire.
         'encore.newThread': async () => loop.newThread(),
-        // The x-ray switch: the operator's click or key. Returns the new state.
-        'encore.xray': async (data) => (textOf(data['command']) === 'off' ? loop.setXray(false) : loop.toggleXray()),
+        // X-ray's stepper: an earlier pass, a later one, or back to following the newest.
+        'encore.story': async (data) => loop.stepStory(textOf(data['command'])),
         // The director's deck: play, pause, faster, slower — or just "how is it
         // going". Only a principal who holds the deck can mount what calls this.
         'encore.director': async (data) => (session.actions.includes('director.deck') ? (director?.command(textOf(data['command'])) ?? {}) : {}),

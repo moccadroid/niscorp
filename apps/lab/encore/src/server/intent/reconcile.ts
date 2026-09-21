@@ -138,12 +138,9 @@ export const writeTraceWarm = (shell: Shell, warm: WarmOutcome): void => {
 
 const round = (ms: number): number => Math.round(ms * 10) / 10;
 
-// The Run section's one line: which run, how it ended, and on what.
-export const runSummary = (run: readonly { label: string; value: string | number }[]): string =>
-  run
-    .slice(0, 2)
-    .map((row) => `${row.value}`)
-    .join(' · ');
+// X-RAY'S STORY (story.ts), onto the panel: the one the panel is showing, and
+// where it sits among the ones kept.
+export const writeStory = (shell: Shell, patch: Record<string, unknown>): void => mergeInto(shell, 'trace', 'intent.trace', patch);
 
 export const writeTrace = (shell: Shell, record: PassRecord, run: readonly { label: string; value: string | number }[]): void => {
   mergeInto(shell, 'trace', 'intent.trace', {
@@ -166,12 +163,5 @@ export const writeTrace = (shell: Shell, record: PassRecord, run: readonly { lab
       { label: 'narrowed', value: record.handoff.narrowed.length },
     ],
     run,
-    // THE DRAWER'S ONE-LINE SUMMARIES (frame/intent-trace.layout.ts): what each
-    // section says while it is shut.
-    summary_pass: `Pass ${record.pass} · ${Math.round(record.totalMs)} ms · ${record.questionCount} questions`,
-    summary_decision: `${record.decider} · ${record.requestBytes} bytes · ${record.calibrated ? 'calibrated' : 'uncalibrated'}`,
-    summary_handoff: `route ${record.handoff.route} ${record.handoff.routeP} · complete ${record.handoff.completeP} · ${record.handoff.packs.map((pack) => pack.id).join(', ') || 'no packs'}`,
-    summary_run: runSummary(run),
-    summary_probabilities: record.top.slice(0, 3).map((entry) => `${entry.id} ${entry.p.toFixed(2)}`).join(' · '),
   });
 };

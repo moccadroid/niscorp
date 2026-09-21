@@ -19,43 +19,13 @@ const answer: LayoutNode = {
 
 // THE STATUS EXISTS ONLY WHILE SOMETHING IS HAPPENING — "Reading the running
 // order…" — or when something went wrong, in one plain sentence. An answer that
-// has arrived needs no badge saying it arrived. X-ray gets the whole row: the
-// state word, which model, what was read and how long it took.
-const status: LayoutNode = {
-  if: '$.xray',
-  then: {
-    component: 'Row',
-    props: { gap: 10, align: 'center', wrap: true },
-    children: [
-      { component: 'Badge', props: { label: '$.status', tone: '$.statusTone' } },
-      { if: '$.by', then: { component: 'Text', props: { value: '$.by', variant: 'tag', tone: 'mute' } }, else: '' },
-      { component: 'Text', props: { value: '$.say', tone: 'mute' } },
-    ],
-  },
-  // THE APP: `plain` when the run has something an operator needs to be told —
-  // it failed, or the steps are theirs to press — else what is happening, while
-  // it is happening, and then nothing.
-  else: { if: '$.plain', then: { component: 'Text', props: { value: '$.plain', tone: 'mute' } }, else: { if: '$.landed', then: '', else: { component: 'Text', props: { value: '$.say', tone: 'mute' } } } },
-};
+// has arrived needs no badge saying it arrived. `plain` is what an operator still
+// needs to be told once it has: that it failed, or that the steps are theirs to
+// press. (Which model, how long, what was looked up and what was dropped are
+// x-ray's, in its own panel — `say`, `lookups` and `notes` stay in the data.)
+const status: LayoutNode = { if: '$.plain', then: { component: 'Text', props: { value: '$.plain', tone: 'mute' } }, else: { if: '$.landed', then: '', else: { component: 'Text', props: { value: '$.say', tone: 'mute' } } } };
 
 const progress: LayoutNode = { if: '$.progress', then: { component: 'Badge', props: { label: '$.progress', tone: 'accent' } }, else: '' };
-
-// What was looked up, as one line. The rows stayed with the agent.
-const lookups: LayoutNode = {
-  if: '$.lookups',
-  then: {
-    component: 'Row',
-    props: { gap: 8, align: 'center', wrap: true },
-    children: [
-      { component: 'Text', props: { value: 'looked up', variant: 'label', tone: 'mute' } },
-      { component: 'Text', props: { value: '$.lookups', variant: 'mono', tone: 'mute' } },
-    ],
-  },
-  else: '',
-};
-
-// A citation that was dropped is said, not hidden.
-const notes: LayoutNode = { if: '$.notes', then: { component: 'Text', props: { value: '$.notes', variant: 'tag', tone: 'warn' } }, else: '' };
 
 const steps: LayoutNode = {
   if: '$.steps.length',
@@ -73,5 +43,5 @@ const steps: LayoutNode = {
 export const assistAnswerLayout: LayoutNode = {
   component: 'Box',
   props: { tone: 'plain', py: 2 },
-  children: [{ component: 'Stack', props: { gap: 8 }, children: [answer, status, { if: '$.xray', then: { component: 'Stack', props: { gap: 8 }, children: [lookups, notes] }, else: '' }, steps, progress] }],
+  children: [{ component: 'Stack', props: { gap: 8 }, children: [answer, status, steps, progress] }],
 };

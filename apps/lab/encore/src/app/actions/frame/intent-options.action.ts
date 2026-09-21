@@ -21,7 +21,7 @@ export const intentOptionsAction: ActionDefinition = {
   // loop writes one plain sentence here, or nothing (reconcile.ts).
   // `idle` is the room with nothing in it and nothing asked of it: one quiet
   // sentence instead of a blank, written by the loop, gone at the first key.
-  data: { chips: [], suggested: [], links: [], stepsUp: false, xray: false, say: '', idle: 'Nothing needs attention right now. Say what is happening.', promoteId: '', promoted: 0 },
+  data: { chips: [], suggested: [], links: [], stepsUp: false, say: '', idle: 'Nothing needs attention right now. Say what is happening.', promoteId: '', promoted: 0 },
   layout: intentOptionsLayout,
   endpoints: {
     promote: { fn: 'encore.promote', target: 'promoted' },
