@@ -2,7 +2,7 @@ import type { ActionDefinition } from '@niscorp/nova';
 import { TRACE_TABS, intentTraceLayout } from './intent-trace.layout';
 
 // X-RAY — the one panel (intent-trace.layout.ts). `open` IS x-ray: this card's own
-// data, flipped by its own button, the backtick key, and — once per page load, so
+// data, flipped by its own button, Ctrl+. (a chord: the line always has focus), and — once per page load, so
 // nobody ever lands in somebody else's x-ray — the kit's `OnLoad`. Nothing else in
 // the room knows whether it is open, and nothing else changes when it is.
 //

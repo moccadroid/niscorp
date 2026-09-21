@@ -341,6 +341,7 @@ export const createIntentLoop = (session: FunctionSession, deps: IntentDeps): In
       decider: `${deps.decider.id} · ${decided.model}`,
       calibrated: decided.calibrated,
       applied,
+      held: resolved.held,
       tone: resolved.tone,
       notes: [...supersededNotes(corrected.superseded).map((note) => `heard: ${note}`), ...notes],
       superseded: corrected.superseded,
@@ -352,7 +353,7 @@ export const createIntentLoop = (session: FunctionSession, deps: IntentDeps): In
     // The handoff is decided AFTER the cards are down and BEFORE the trace is
     // written, so the card announcing a run and the cards Jev placed leave in
     // the same frame, and the trace row already says `pending`.
-    if (applied && generation >= sentenceAt) assist.onPass({ text, parsed, candidates, handoff: resolved.handoff });
+    if (applied && generation >= sentenceAt) assist.onPass({ text, parsed, candidates, handoff: resolved.handoff, held: resolved.held });
     writeTrace(shell, record, assist.traceRows());
     keepStory(sentenceStory({ record, heard: heardTags(parsed, candidates, applied ? resolved.handoff.entities : undefined), scored: resolved.scored, names: names(), handoffLine: HANDOFF_AT, warm: lastWarm }), record);
     deps.onPass?.(session.principal, record);

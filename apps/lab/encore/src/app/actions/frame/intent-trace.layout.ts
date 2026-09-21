@@ -18,6 +18,8 @@ import type { LayoutNode } from '@niscorp/nova';
 // said and what was refused, what changed on screen. NUMBERS SECOND: one table,
 // real labels, each once. The demo's controls third. Mono is for ids and numbers.
 
+export const XRAY_CHORD = 'mod+., mod+`';
+
 const heading = (value: string): LayoutNode => ({ component: 'Text', props: { value, variant: 'title' } });
 
 const lines = (path: string): LayoutNode => ({
@@ -29,7 +31,7 @@ const lines = (path: string): LayoutNode => ({
 const meters = (path: string): LayoutNode => ({
   component: 'Stack',
   props: { gap: 4 },
-  children: [{ for: path, as: 'card', key: 'id', do: { component: 'Meter', props: { label: '$.card.label', value: '$.card.p', note: '$.card.shown', compact: true } } }],
+  children: [{ for: path, as: 'card', key: 'id', do: { component: 'Meter', props: { label: '$.card.label', value: '$.card.p', note: '$.card.note', compact: true } } }],
 });
 
 // 1 — what was typed, and what was heard in it.
@@ -169,9 +171,11 @@ export const intentTraceLayout: LayoutNode = {
   component: 'Row',
   props: { gap: 8, align: 'end', justify: 'end' },
   children: [
-    // The backtick key is the same switch, either way round; and a freshly loaded
-    // page that finds the panel open shuts it (kit `OnLoad`: once per page load).
-    { if: '$.open', then: { component: 'Hotkey', ref: 'shutKey', props: { value: '`' } }, else: { component: 'Hotkey', ref: 'openKey', props: { value: '`' } } },
+    // Ctrl+. (or Ctrl+`) is the same switch, either way round — a CHORD, because the
+    // line always has focus and a bare backtick is a character in the sentence (kit
+    // `Hotkey`, chords.ts). And a freshly loaded page that finds the panel open shuts
+    // it (kit `OnLoad`: once per page load).
+    { if: '$.open', then: { component: 'Hotkey', ref: 'shutKey', props: { value: XRAY_CHORD } }, else: { component: 'Hotkey', ref: 'openKey', props: { value: XRAY_CHORD } } },
     { component: 'OnLoad', ref: 'fresh', props: { when: '$.open' } },
     { if: '$.open', then: panel, else: { component: 'Button', ref: 'open', props: { label: 'x-ray', variant: 'quiet' } } },
   ],

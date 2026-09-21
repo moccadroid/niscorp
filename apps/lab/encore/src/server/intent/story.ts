@@ -1,5 +1,5 @@
 import type { HeardTag } from './heard';
-import type { PassRecord, RunRecord } from './intent.types';
+import type { HeldCard, PassRecord, RunRecord } from './intent.types';
 
 // THE STORY OF ONE PASS — x-ray's main view, as DATA. Pure.
 //
@@ -21,7 +21,8 @@ import type { PassRecord, RunRecord } from './intent.types';
 // the numbers — lanes, bytes, tokens — are a second tab, each label once.
 
 export type StoryLine = { text: string; tone: 'plain' | 'mute' | 'warn' };
-export type StoryCard = { id: string; label: string; p: number; shown: string };
+// `note`: why a card at or above the mount line is NOT on screen — beside its bar.
+export type StoryCard = { id: string; label: string; p: number; shown: string; note: string };
 export type StoryFact = { label: string; value: string };
 
 export type Story = {
@@ -59,19 +60,22 @@ const seconds = (value: number): string => `${(value / 1000).toFixed(1)} s`;
 const list = (items: readonly string[]): string => (items.length <= 1 ? (items[0] ?? '') : `${items.slice(0, -1).join(', ')} and ${items.at(-1)}`);
 const nameOf = (label: string): string => label.split(' — ')[0] ?? label;
 
-const cardsOf = (scored: readonly { id: string; p: number }[], titles: Record<string, string>): StoryCard[] =>
-  [...scored].sort((a, b) => b.p - a.p).map((entry) => ({ id: entry.id, label: titles[entry.id] ?? entry.id, p: entry.p, shown: entry.p.toFixed(2) }));
+const cardsOf = (scored: readonly { id: string; p: number }[], titles: Record<string, string>, held: readonly HeldCard[] = []): StoryCard[] =>
+  [...scored].sort((a, b) => b.p - a.p).map((entry) => ({ id: entry.id, label: titles[entry.id] ?? entry.id, p: entry.p, shown: entry.p.toFixed(2), note: held.find((card) => card.id === entry.id)?.reason ?? '' }));
 
 const TONE_WORDS: Record<string, string> = { calm: 'calm — nothing urgent in it', elevated: 'elevated — something to watch', critical: 'critical — act now' };
 const MODE_WORDS: Record<string, string> = { ask: 'answer in words', write: 'write the words for a form', plan: 'work out a plan' };
 
 // ─── 2. where the sentence went ──────────────────────────────
 
-const routingOf = (record: PassRecord, handoffLine: number): StoryLine => {
+// (The computed reason names cards by id — it is written for the trace; here each is
+// called what its card is called.)
+const routingOf = (record: PassRecord, handoffLine: number, titles: Record<string, string>): StoryLine => {
   const { handoff } = record;
+  const computedWhy = Object.entries(titles).reduce((why, [id, title]) => why.split(id).join(`“${title}”`), handoff.computedWhy);
   const finished = handoff.completeP >= handoffLine ? '' : ` It does not read as finished yet (${handoff.completeP.toFixed(2)}), so nothing starts until it does — or until Enter.`;
   if (handoff.route === 'direct') return plain(`Kept to the cards: Jev read this as something the cards answer by themselves — direct ${handoff.routeP.toFixed(2)}.`);
-  if (handoff.routedBy === 'computed') return plain(`Sent to the assistant anyway: ${handoff.computedWhy}. (Jev itself said the cards were enough.)${finished}`);
+  if (handoff.routedBy === 'computed') return plain(`Sent to the assistant anyway: ${computedWhy}. (Jev itself said the cards were enough.)${finished}`);
   return plain(`Sent to the assistant to ${MODE_WORDS[handoff.route] ?? handoff.route} — ${handoff.route} ${handoff.routeP.toFixed(2)}.${finished}`);
 };
 
@@ -162,6 +166,7 @@ const assistantOf = (run: RunRecord, names: StoryNames): StoryLine[] => {
   if (run.status === 'landed') {
     lines.push(plain(`Said: “${run.answer}”`));
     if (run.claims > 0) lines.push(plain(`${run.claims} of its statements cite a card on screen.`));
+    for (const aimed of run.cardsAimed) lines.push(plain(`Aimed ${aimed}: aimed by the assistant from the facts it read.`));
     if (run.cardsMounted.length > 0) lines.push(plain(`Placed ${list(run.cardsMounted.map((id) => `“${names.titles[id] ?? id}”`))} as evidence.`));
     if (run.fieldsWritten.length > 0) lines.push(plain(`Wrote ${list(run.fieldsWritten)}.`));
     if (run.planSteps > 0) lines.push(plain(`Proposed ${run.planSteps} step(s); nothing opens until one is pressed.`));
@@ -188,7 +193,7 @@ export type SentenceStoryInput = {
 
 export const sentenceStory = (input: SentenceStoryInput): Story => {
   const { record, names, run } = input;
-  const cards = cardsOf(input.scored, names.titles);
+  const cards = cardsOf(input.scored, names.titles, record.held);
   const goesToAssistant = record.handoff.route !== 'direct' || run !== undefined;
   const picked = record.handoff.entities.map((entity) => `${nameOf(entity.label)} (${entity.table})`);
   return {
@@ -205,7 +210,7 @@ export const sentenceStory = (input: SentenceStoryInput): Story => {
     decided: [
       plain(picked.length === 0 ? 'Picked no rows: the sentence names none it was sure of.' : `Picked ${list(picked)}.`),
       plain(`Read the mood as ${TONE_WORDS[record.tone] ?? record.tone}.`),
-      routingOf(record, input.handoffLine),
+      routingOf(record, input.handoffLine, names.titles),
     ],
     handedHeading: goesToAssistant ? 'Handed to the assistant' : '',
     handed: goesToAssistant ? handedOf(record, run, names) : [],

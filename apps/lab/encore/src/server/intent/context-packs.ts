@@ -1,3 +1,4 @@
+import { REF_TABLES } from '@encore/app/vex/ref-tables';
 import type { FetchFn } from '@niscorp/nova';
 import type { ScopePolicy } from '@niscorp/vex';
 import { z } from 'zod';
@@ -53,8 +54,12 @@ export const readPacks = async (wire: FetchFn, packs: readonly ContextPack[], pa
 // may a later turn of the same thread.
 const FactRows = z.array(z.record(z.string(), z.unknown()));
 
-export const harvestRefs = (packs: readonly ContextPack[], facts: Record<string, Record<string, unknown>>): { table: string; id: string; label: string }[] => {
-  const found = new Map<string, { table: string; id: string; label: string }>();
+// `from`: the pack's noun — "the running order" — so a card aimed at one of these
+// rows can say where the assistant got it.
+export type HarvestedRow = { table: string; id: string; label: string; from: string };
+
+export const harvestRefs = (packs: readonly ContextPack[], facts: Record<string, Record<string, unknown>>): HarvestedRow[] => {
+  const found = new Map<string, HarvestedRow>();
   for (const pack of packs) {
     for (const read of pack.reads) {
       const rows = FactRows.safeParse(facts[pack.id]?.[read.name]);
@@ -63,9 +68,26 @@ export const harvestRefs = (packs: readonly ContextPack[], facts: Record<string,
         for (const ref of read.refs ?? []) {
           const id = row[ref.id];
           const label = row[ref.label];
-          if (typeof id === 'string' && id !== '') found.set(`${ref.table}:${id}`, { table: ref.table, id, label: typeof label === 'string' ? label : id });
+          if (typeof id === 'string' && id !== '' && !found.has(`${ref.table}:${id}`)) found.set(`${ref.table}:${id}`, { table: ref.table, id, label: typeof label === 'string' ? label : id, from: pack.noun });
         }
       }
+    }
+  }
+  return [...found.values()];
+};
+
+// ROWS A LOOKUP RETURNED, in this run. A `query` can replay any read the caller
+// may make, so there is nowhere to declare its refs; what names a row is the
+// convention every entry here follows (`act_id` worded by `act_name` —
+// vex/ref-tables.ts). Read under the session's policy, in this run, and SHOWN to
+// the model: exactly as nameable as a row of a pack.
+export const harvestRows = (rows: readonly unknown[]): HarvestedRow[] => {
+  const found = new Map<string, HarvestedRow>();
+  for (const row of FactRows.safeParse(rows).data ?? []) {
+    for (const [table, source] of Object.entries(REF_TABLES)) {
+      const id = row[source.rowKeys.id];
+      const label = source.rowKeys.labels.map((key) => row[key]).find((value) => typeof value === 'string');
+      if (typeof id === 'string' && id !== '' && !found.has(`${table}:${id}`)) found.set(`${table}:${id}`, { table, id, label: typeof label === 'string' ? label : id, from: 'what it looked up' });
     }
   }
   return [...found.values()];

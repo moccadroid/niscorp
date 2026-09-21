@@ -151,6 +151,32 @@ const factParts = (facts: Predecisions['facts']): string[] =>
     return parsed.success ? Object.entries(parsed.data).map(([name, rows]) => `${countOf(rows)} ${pack}.${name}`) : [];
   });
 
+// WANTED, FINISHED. A card the fast model wanted and could not aim ("act.card —
+// wanted 0.70 — needs: an act") is aimed when the facts hold a row of the table
+// its required input refers to: the FIRST such row, which for "who is on stage" is
+// the act on stage. A script's idea of "the facts settle it" — but it takes the
+// id from FACTS and from nowhere else, which is the part the room depends on.
+const ROW_ID: Record<string, string> = { acts: 'act_id', stages: 'stage_id', zones: 'zone_id' };
+const firstRowWith = (facts: Predecisions['facts'], key: string): string | undefined => {
+  for (const reads of Object.values(facts)) {
+    for (const rows of Object.values(z.record(z.string(), z.unknown()).catch({}).parse(reads))) {
+      const found = z.array(z.record(z.string(), z.unknown())).catch([]).parse(rows).map((row) => row[key]).find((value) => typeof value === 'string' && value !== '');
+      if (typeof found === 'string') return found;
+    }
+  }
+  return undefined;
+};
+// (The first wanted card only, and only one that lacks a single row: a script
+// should not look cleverer than it is.)
+const aimWanted = (predecisions: Predecisions): { canvas: string; actionId: string; input: Record<string, unknown> }[] =>
+  predecisions.wanted.slice(0, 1).flatMap((line) => {
+    const action = predecisions.actions.flatMap((entry) => readActionLine(entry) ?? []).find((entry) => line.startsWith(`${entry.id} — `));
+    const rowKeys = action?.keys.filter((entry) => entry.required && entry.shape.startsWith('row:')) ?? [];
+    const key = rowKeys.length === 1 ? rowKeys[0] : undefined;
+    const id = key === undefined ? undefined : firstRowWith(predecisions.facts, ROW_ID[key.shape.slice('row:'.length)] ?? '');
+    return action === undefined || key === undefined || id === undefined ? [] : [{ canvas: action.canvas, actionId: action.id, input: { [key.name]: id } }];
+  });
+
 const factsLine = (parts: readonly string[]): string => (parts.length === 0 ? 'I was handed no facts for this' : `From what was read a moment ago: ${parts.join(', ')}`);
 
 // What a scripted operator would want next. A script, not a judgement — but it
@@ -179,6 +205,13 @@ const fromSibling = (predecisions: Predecisions): string | undefined => {
 // A question about whether something is FREE is the one the pre-decisions
 // cannot settle — it needs the running order — so it is the scripted lookup.
 const NEEDS_LOOKUP = /\b(free|clash|collide|available)\b/i;
+
+const canvasesOf = (cards: readonly { canvas: string; actionId: string; input: Record<string, unknown> }[]): { canvases?: Record<string, { actionId: string; input: Record<string, unknown> }[]> } => {
+  if (cards.length === 0) return {};
+  const canvases: Record<string, { actionId: string; input: Record<string, unknown> }[]> = {};
+  for (const card of cards) canvases[card.canvas] = [...(canvases[card.canvas] ?? []), { actionId: card.actionId, input: card.input }];
+  return { canvases };
+};
 
 export const defaultScript: AgentScript = (turn) => {
   const { predecisions } = turn;
@@ -239,7 +272,7 @@ export const defaultScript: AgentScript = (turn) => {
   return {
     answer: {
       response: `${factsLine(parts)}${looked}.${earlier}`,
-      data: { claims, followUps: followUpsFor(predecisions.asked), ...(placing === undefined ? {} : { canvases: { [placing.canvas]: [{ actionId: placing.id, input: {} }] } }) },
+      data: { claims, followUps: followUpsFor(predecisions.asked), ...(canvasesOf([...(placing === undefined ? [] : [{ canvas: placing.canvas, actionId: placing.id, input: {} }]), ...aimWanted(predecisions)])) },
     },
   };
 };

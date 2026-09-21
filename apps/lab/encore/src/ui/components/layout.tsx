@@ -27,8 +27,39 @@ export const Box: NovaComponent<Props> = ({ children, tone, pad, px, py, h, minH
 
     overflow: scroll === true ? 'auto' : undefined,
   };
+  const element = useRef<HTMLDivElement>(null);
+  // A BOX STUCK TO THE BOTTOM CHANGES HEIGHT UNDER THE READER — a panel opens in it
+  // — and the page must not move when it does. Where the page WAS is remembered from
+  // its own scroll events, and put back after the box has resized; a scroll the
+  // resize itself caused is not remembered.
+  useLayoutEffect(() => {
+    const box = element.current;
+    if (stick !== 'bottom' || box === null) return undefined;
+    let restingAt = window.scrollY;
+    let isSettling = false;
+    const onScroll = (): void => {
+      if (!isSettling) restingAt = window.scrollY;
+    };
+    const sizes = new ResizeObserver(() => {
+      isSettling = true;
+      const putBack = (): void => window.scrollTo({ top: Math.min(restingAt, document.documentElement.scrollHeight - window.innerHeight), behavior: 'instant' });
+      putBack();
+      requestAnimationFrame(() => {
+        putBack();
+        requestAnimationFrame(() => {
+          isSettling = false;
+        });
+      });
+    });
+    sizes.observe(box);
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => {
+      sizes.disconnect();
+      window.removeEventListener('scroll', onScroll);
+    };
+  }, [stick]);
   return (
-    <div className={classes('en-box', `en-box--${oneOf(tone, BOX_TONES, 'plain')}`, stick === 'top' && 'en-box--stick-top', stick === 'bottom' && 'en-box--stick-bottom')} style={style}>
+    <div ref={element} className={classes('en-box', `en-box--${oneOf(tone, BOX_TONES, 'plain')}`, stick === 'top' && 'en-box--stick-top', stick === 'bottom' && 'en-box--stick-bottom')} style={style}>
       {children}
     </div>
   );

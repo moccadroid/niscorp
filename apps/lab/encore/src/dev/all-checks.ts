@@ -20,6 +20,7 @@ const CHECKS = [
   ['scenes-check', 'scenes 1–3 end to end: citations that light their cards, the rail, typed follow-ups, the impact card, exposure, a plan that ticks when a person presses the button'],
   ['watch-check', 'scene 4, nobody typing: every event triaged under a middling model, a burst is one pass, the sentence never waits, a click is a label, the liaison is never asked about an incident'],
   ['surface-check', 'three layers that never mix: with x-ray off no meta reaches the terminal, a card says why in a word, the switch remounts nothing, the drawer remembers what was open'],
+  ['aim-check', 'the two models finish each other’s work: a card Jev wanted and could not aim is aimed by the assistant from the facts it read — an id from nowhere still rejects the answer — and x-ray says why every wanted card that is not up is not'],
   ['law-check','the agent never acts: its files cannot reach a shell or a write, and no run changes a row but its own thread'],
 ] as const;
 

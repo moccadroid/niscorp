@@ -1,3 +1,4 @@
+import { REF_TABLES } from '@encore/app/vex/ref-tables';
 import type { ActionDefinition } from '@niscorp/nova';
 import type { ContextPack } from '@encore/app/vex/context-packs';
 import type { Question } from '@niscorp/signal';
@@ -145,6 +146,15 @@ const EVENT_QUESTIONS: Record<string, Question> = {
 
 export type DeriveAbout = 'sentence' | 'event';
 
+// A required input, as an operator would call it: a row of a table by that table's
+// noun ("an act"); anything else by the first words of its own description.
+const needOf = (field: InputField): { noun: string; table?: string } => {
+  const table = field.ref === undefined ? undefined : REF_TABLES[field.ref];
+  if (field.ref !== undefined && table !== undefined) return { noun: table.noun, table: field.ref };
+  const words = (field.description ?? field.name).split(/[.;—(]/)[0]?.trim() ?? field.name;
+  return { noun: words === '' ? field.name : `${words.charAt(0).toLowerCase()}${words.slice(1)}` };
+};
+
 // What a card holds for a field when nothing has been said: its own default.
 const blankOf = (definition: ActionDefinition, field: string): string | number | boolean => {
   const held = definition.data?.[field];
@@ -184,7 +194,7 @@ export const deriveQuestions = (definitions: readonly ActionDefinition[], candid
       return [{ field: field.name, kind: 'level', question: name, minimum: emitted.minimum }];
     });
 
-    return { actionId: definition.id, question: actionQuestionName(definition.id), fields, required: contract.required, inputs: contract.fields.map((field) => field.name) };
+    return { actionId: definition.id, question: actionQuestionName(definition.id), fields, required: contract.required, inputs: contract.fields.map((field) => field.name), needs: Object.fromEntries(contract.fields.filter((field) => contract.required.includes(field.name)).map((field) => [field.name, needOf(field)])) };
   });
 
   if (about === 'event') {

@@ -1,3 +1,4 @@
+import { chordsOf, fires } from './chords';
 import { useEffect, useRef, useState } from 'react';
 import type { ChangeEvent } from 'react';
 import { useNovaDispatch } from '@niscorp/nova/adapters/react';
@@ -116,23 +117,27 @@ export const OnLoad: NovaComponent<Props> = ({ when, novaRef }) => {
   return null;
 };
 
-// A KEY PRESSED ANYWHERE is a click on this ref — unless somebody is typing in a
-// field, where the key is a character. Draws nothing.
+// A CHORD PRESSED ANYWHERE is a click on this ref (chords.ts). A chord with a
+// modifier fires even while somebody is typing — the line always has focus — and
+// the key is swallowed, so nothing is typed; a bare character only fires when
+// nobody is. Listens in the CAPTURE phase: before the field sees the key.
 export const Hotkey: NovaComponent<Props> = ({ value, novaRef }) => {
   const dispatch = useNovaDispatch();
-  const key = text(value);
+  const chords = text(value);
   useEffect(() => {
-    if (novaRef === undefined || key === '') return undefined;
+    const wanted = chordsOf(chords);
+    if (novaRef === undefined || wanted.length === 0) return undefined;
     const onKey = (event: KeyboardEvent): void => {
       const target = event.target;
       const isTyping = target instanceof HTMLElement && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT' || target.isContentEditable);
-      if (event.key !== key || isTyping) return;
+      if (!fires(wanted, event, isTyping)) return;
       event.preventDefault();
+      event.stopPropagation();
       dispatch({ type: 'ui:click', ref: novaRef });
     };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [dispatch, key, novaRef]);
+    window.addEventListener('keydown', onKey, true);
+    return () => window.removeEventListener('keydown', onKey, true);
+  }, [dispatch, chords, novaRef]);
   return null;
 };
 

@@ -85,7 +85,7 @@ body {
 .en-box--dock-head { border-bottom: 1px solid var(--line); }
 /* Pinned to the page as it scrolls — never a scroll container of its own. */
 .en-box--stick-top { position: sticky; top: 0; z-index: 6; background: var(--ground); padding-top: var(--s2); margin-top: calc(-1 * var(--s2)); padding-bottom: var(--s1); }
-.en-box--stick-bottom { position: sticky; bottom: 0; z-index: 5; margin-top: auto; pointer-events: none; }
+.en-box--stick-bottom { position: sticky; bottom: 0; z-index: 5; margin-top: auto; pointer-events: none; overflow-anchor: none; }
 /* Shut, the panel is one word in a row as wide as the page: only the word takes clicks. */
 .en-box--stick-bottom > .en-row > * { pointer-events: auto; }
 /* Shut, the panel is one quiet word with its own ground under it. */
@@ -212,10 +212,11 @@ body {
 .en-meter__track { height: 4px; background: var(--line); border-radius: 2px; overflow: hidden; }
 .en-meter__fill { height: 100%; background: currentColor; transition: width 160ms ease; }
 /* One line per reading: what it is, a bar, and the number. */
-.en-meter--compact { display: grid; grid-template-columns: minmax(120px, 220px) minmax(60px, 240px) 3.5ch; align-items: center; gap: var(--s3); min-width: 0; }
+.en-meter--compact { display: grid; grid-template-columns: minmax(120px, 220px) minmax(60px, 240px) 3.5ch minmax(0, 1fr); align-items: center; gap: var(--s3); min-width: 0; }
 .en-meter--compact .en-meter__head { display: contents; font: 400 14px/1.4 var(--sans); color: var(--ink); }
 .en-meter--compact .en-meter__head span:last-child { order: 3; font: 12.5px/1 var(--mono); color: var(--mute); text-align: right; }
 .en-meter--compact .en-meter__track { order: 2; height: 4px; }
+.en-meter--compact .en-meter__note { order: 4; font: 400 13px/1.4 var(--sans); color: var(--warn); }
 
 .en-chip {
   position: relative;

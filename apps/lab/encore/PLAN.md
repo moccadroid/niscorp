@@ -948,3 +948,42 @@ round trip"), each once. **The demo third**: the director's deck is still its ow
 grant), drawn inside the panel through a CanvasSlot and told over a channel when the panel opens —
 so, like everything else about x-ray, it is not even sent while the panel is shut. The app has no
 demo handle any more.
+
+## The two models finish each other's work — derived while fixing
+
+"Why did Act not mount? 0.70?" — for "who's playing right now?" real Jev wanted the act's card
+and could not aim it (`actId` is required; the sentence names no act), and the assistant's own
+answer NAMED the act on stage and could not aim the card either. Both halves were right.
+
+**Every non-mount above the line has a reason, in x-ray's story, beside the card's bar**
+(`resolve.ts held` → `story.ts` `StoryCard.note`): "not shown — it needs an act, and the
+sentence names none" (the input is named from its table's noun — `REF_TABLES.noun` — or the
+first words of its description, never `actId`); "…it shows what “Move a set” would do, and that
+form is not open" for a companion; "…it was closed for this sentence"; and whether it was at
+least offered as a suggestion, or fell outside the best three within the margin. A card below
+the line needs no reason and gets none.
+
+**The assistant may aim what Jev could not.** The mechanism was already half there — rows a
+pack declares `refs` for are harvested into the run's admissible set — but the situation's
+"on stage" read carried no ids and declared none. Now: `lineup/around` returns `act_id` and
+`stage_id`; the situation, attendance and capacities packs declare their refs; and a row a
+`query` of THIS run returned and SHOWED the model (after the cap) is harvested the same way, by
+the row-key convention every entry follows (`REF_TABLES.rowKeys`). The admissible set is Jev's
+candidates ∪ the thread's remembered rows ∪ this run's pack rows ∪ this run's lookup rows, and
+nothing else: an id from nowhere — or a real row this run never read — still rejects the answer
+whole. All of it is read over the session's own wire, so a principal's packs cannot widen what
+they can aim at (the liaison is handed zones, and only zones).
+
+The pre-decisions gain `WANTED` ("act.card — wanted 0.70 — needs: an act"); those cards join the
+actions the run may open; the instructions say aim it when the facts SETTLE it, leave it when
+they do not. It mounts through the same admission + reconcile path (pinned, like any card the
+assistant places — so the pass the landing sets off keeps the instance), its "why?" says
+"Opened because you said “…” — the assistant picked Brass Against the Tide from the situation.",
+and the run's story says "aimed by the assistant from the facts it read". A COMPANION is never
+WANTED: it is aimed by its lead and by nothing else.
+
+**X-ray's key is a chord** (`ui/components/chords.ts`, pure, asserted): the line always has
+focus, so a bare backtick was a character in the sentence. Ctrl+. (or Ctrl/⌘+`) fires wherever
+focus is, in the capture phase, and the key is swallowed. **Opening the panel does not move the
+page**: the box stuck to the bottom remembers where the page was from its own scroll events and
+puts it back after it resizes (and opts out of scroll anchoring).

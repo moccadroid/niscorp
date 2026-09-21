@@ -69,7 +69,7 @@ export const CONTEXT_PACKS: readonly ContextPack[] = [
     description: 'What is going on across the site right now — who is on stage and who is next, bad weather due in the next three hours, open incidents, holds called on sets; needed for an overview, a status, or "what is happening".',
     tables: ['slots', 'acts', 'stages', 'weather_hours', 'incidents', 'zones', 'delays'],
     reads: [
-      { name: 'onStage', fingerprint: lineupAround.fingerprint, context: { day: DAY, fromMin: { heard: 'hour', times: 60 }, toMin: { heard: 'hour', offset: 3, times: 60 } } },
+      { name: 'onStage', fingerprint: lineupAround.fingerprint, context: { day: DAY, fromMin: { heard: 'hour', times: 60 }, toMin: { heard: 'hour', offset: 3, times: 60 } }, refs: ACT_AND_STAGE },
       { name: 'weatherWarnings', fingerprint: weatherWarnings.fingerprint, context: { day: DAY, fromHour: { heard: 'hour' }, toHour: { heard: 'hour', offset: 3 } } },
       { name: 'openIncidents', fingerprint: incidentsOpen.fingerprint, context: {} },
       { name: 'holds', fingerprint: delaysRecent.fingerprint, context: {} },
@@ -89,7 +89,7 @@ export const CONTEXT_PACKS: readonly ContextPack[] = [
     tables: ['zones', 'zone_counts'],
     reads: [
       { name: 'total', fingerprint: attendanceTotal.fingerprint, context: { day: DAY, hour: { heard: 'hour' } } },
-      { name: 'byZone', fingerprint: attendanceByZone.fingerprint, context: { day: DAY, hour: { heard: 'hour' } } },
+      { name: 'byZone', fingerprint: attendanceByZone.fingerprint, context: { day: DAY, hour: { heard: 'hour' } }, refs: [{ table: 'zones', id: 'zone_id', label: 'name' }] },
     ],
   },
   {
@@ -121,7 +121,7 @@ export const CONTEXT_PACKS: readonly ContextPack[] = [
     noun: 'stage capacities',
     description: 'Every stage with whether it is covered or open-air and how many people it holds; needed to judge whether people fit somewhere or which stage gives shelter.',
     tables: ['stages'],
-    reads: [{ name: 'stages', fingerprint: stageCapacities.fingerprint, context: {} }],
+    reads: [{ name: 'stages', fingerprint: stageCapacities.fingerprint, context: {}, refs: [{ table: 'stages', id: 'stage_id', label: 'name' }] }],
   },
   {
     id: 'sales',

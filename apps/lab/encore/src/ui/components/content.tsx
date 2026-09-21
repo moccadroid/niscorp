@@ -114,7 +114,8 @@ export const Tags: NovaComponent<Props> = ({ items, prefix }) => {
 
 // A bar from 0 to 1. `compact` is the trace's variant: label and number on one
 // line over a hairline bar.
-export const Meter: NovaComponent<Props> = ({ value, label, tone, compact }) => {
+// `note` is a few words beside a compact reading — why it came to nothing, say.
+export const Meter: NovaComponent<Props> = ({ value, label, tone, compact, note }) => {
   const level = clamp01(num(value, 0));
   return (
     <div className={classes('en-meter', compact === true && 'en-meter--compact')}>
@@ -125,6 +126,7 @@ export const Meter: NovaComponent<Props> = ({ value, label, tone, compact }) => 
       <div className="en-meter__track">
         <div className={classes('en-meter__fill', `en-tone--${oneOf(tone, TONES, 'accent')}`)} style={{ width: `${level * 100}%` }} />
       </div>
+      {compact === true ? <span className="en-meter__note">{text(note)}</span> : null}
     </div>
   );
 };

@@ -102,7 +102,7 @@ const metaIn = (messages: readonly string[]): string[] => {
 // X-ray's story, as the panel holds it (server/intent/story.ts).
 const Line = z.object({ text: z.string(), tone: z.enum(['plain', 'mute', 'warn']) });
 const Fact = z.object({ label: z.string(), value: z.string() });
-const CardLine = z.object({ id: z.string(), label: z.string(), p: z.number(), shown: z.string() });
+const CardLine = z.object({ id: z.string(), label: z.string(), p: z.number(), shown: z.string(), note: z.string() });
 const StorySchema: z.ZodType<Story> = z.object({
   key: z.string(),
   label: z.string(),

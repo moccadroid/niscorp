@@ -20,14 +20,15 @@ import { createReadTools } from '@encore/server/agent/tools';
 import { admitAnswer } from './admission';
 import type { AdmittedCard, AnswerContext } from './admission';
 import { segmentsOf, streamingSegments } from './answer-spans';
-import { harvestRefs, readPacks } from './context-packs';
+import { harvestRefs, harvestRows, readPacks } from './context-packs';
+import type { HarvestedRow } from './context-packs';
 import { inputContractOf } from './input-contract';
 import { HANDOFF_AT } from './resolve';
 import { CARDS_ONLY, createThread } from './thread';
 import type { RailEntry, RememberedRow } from './thread';
 import type { TouchTracker } from './touched';
 import type { BriefRequest } from '@encore/server/watch/watch';
-import type { AgentMode, CandidateSets, Handoff, Parsed, RunRecord, RunStatus } from './intent.types';
+import type { AgentMode, CandidateSets, Handoff, HeldCard, Parsed, RunRecord, RunStatus } from './intent.types';
 
 // ═══════════════════════════════════════════════════════════
 // THE SLOW SPEED, for one session: the agent's manager.
@@ -90,6 +91,8 @@ export type PassContext = {
   parsed: Parsed;
   candidates: CandidateSets;
   handoff: Handoff;
+  // Cards Jev wanted and could not put up, with why (resolve.ts `held`).
+  held: readonly HeldCard[];
 };
 
 export type AssistDeps = {
@@ -562,7 +565,7 @@ export const createAssist = (deps: AssistDeps): Assist => {
     reconcileTo(card.canvas, [card], standing, placedBy, why);
   };
 
-  const apply = (answer: Extract<ReturnType<typeof admitAnswer>, { ok: true }>, record: RunRecord): void => {
+  const apply = (answer: Extract<ReturnType<typeof admitAnswer>, { ok: true }>, record: RunRecord, aimedBy?: (card: AdmittedCard) => { why: string; told: string } | undefined): void => {
     const shell = session.shell;
     for (const entry of answer.fields) {
       const canvas = CANVAS_PLACEMENT[entry.card];
@@ -593,9 +596,13 @@ export const createAssist = (deps: AssistDeps): Assist => {
     // call, on its hysteresis, 300 ms after the sentence changes.
     for (const [canvas, cards] of Object.entries(answer.canvases)) {
       record.canvasesNamed.push(canvas);
-      const named = new Set(cards.map((card) => card.actionId));
-      const standing = (shell.getState().canvases[canvas]?.stack ?? []).map((item) => item.definitionId).filter((id) => !named.has(id));
-      reconcileTo(canvas, cards, standing, agent.label, 'Added by the assistant as evidence for its answer.');
+      // A CARD JEV WANTED AND THE ASSISTANT AIMED says so, one card at a time: which
+      // row, and where the assistant got it.
+      for (const card of cards) {
+        const aimedWith = aimedBy?.(card);
+        if (aimedWith !== undefined) record.cardsAimed.push(aimedWith.told);
+        reconcileTo(canvas, [card], (shell.getState().canvases[canvas]?.stack ?? []).map((item) => item.definitionId).filter((id) => id !== card.actionId), agent.label, aimedWith?.why ?? 'Added by the assistant as evidence for its answer.');
+      }
       record.cardsMounted.push(...cards.map((card) => card.actionId));
     }
     if (record.canvasesNamed.length > 0) deps.repass();
@@ -745,6 +752,7 @@ export const createAssist = (deps: AssistDeps): Assist => {
       planSteps: 0,
       canvasesNamed: [],
       cardsMounted: [],
+      cardsAimed: [],
       cardsClosed: [],
       fieldsWritten: [],
     };
@@ -802,7 +810,14 @@ export const createAssist = (deps: AssistDeps): Assist => {
     const table = mergeRows(context.candidates, [...remembered, ...handed]);
     lastTable = table;
 
-    const narrowed = handoff.narrowed.flatMap((id) => (deps.definitions[id] === undefined ? [] : [deps.definitions[id]]));
+    // THE TWO MODELS FINISH EACH OTHER'S WORK. Jev only knows the rows the operator
+    // NAMED; the assistant is about to be handed facts. A card Jev wanted and could
+    // not aim ("who's playing right now?" — the act's card, 0.70, no act named) is
+    // told to the assistant with what it needs, and is one of the actions it may
+    // open — so if the facts settle which row is meant, it can aim the card.
+    const unaimed = context.held.filter((card) => card.needs.length > 0 && deps.definitions[card.id] !== undefined);
+    const mayOpen = [...new Set([...handoff.narrowed, ...unaimed.map((card) => card.id)])];
+    const narrowed = mayOpen.flatMap((id) => (deps.definitions[id] === undefined ? [] : [deps.definitions[id]]));
     const writable = writableNow();
     const predecisions: Predecisions = {
       mode,
@@ -815,6 +830,7 @@ export const createAssist = (deps: AssistDeps): Assist => {
       facts,
       screen: screenNow(),
       writable,
+      wanted: unaimed.map((card) => `${card.id} — wanted ${card.p.toFixed(2)} — needs: ${card.needs.map((need) => need.noun).join(', ')}`),
       asked,
     };
     // WHAT THIS RUN MAY NAME: the few actions Jev narrowed the catalog to, the
@@ -823,7 +839,11 @@ export const createAssist = (deps: AssistDeps): Assist => {
     // lands (whole, or not at all).
     // Citations are admitted against the screen AS IT IS WHEN THEY ARE CHECKED —
     // inside the run and again at landing — so both are functions, not values.
-    const answerContext = (): AnswerContext => ({ allowed: new Set(handoff.narrowed), definitions: deps.definitions, candidates: table, writable, onScreen: new Set(screenNow().map((card) => card.card)), rowsOn, namesOn, asked });
+    // ...AND THE ROWS IT MAY NAME GROW WITH WHAT IT READS: a row a `query` of this
+    // run returned — under this session's policy, shown to the model — is as nameable
+    // as a row of a pack. Nothing else is: an id from nowhere still rejects the answer.
+    const lookedUpRows: HarvestedRow[] = [];
+    const answerContext = (): AnswerContext => ({ allowed: new Set(mayOpen), definitions: deps.definitions, candidates: mergeRows(table, lookedUpRows), writable, onScreen: new Set(screenNow().map((card) => card.card)), rowsOn, namesOn, asked });
     const request = { thread: window, predecisions, line: context.text };
     lastInput = { input: runInput(request), mode };
     record.threadMessages = window.length;
@@ -834,7 +854,7 @@ export const createAssist = (deps: AssistDeps): Assist => {
       ...request,
       llm,
       mode,
-      tools: createReadTools({ wire: session.wire, policy: session.policy, entries: ENTRIES }),
+      tools: createReadTools({ wire: session.wire, policy: session.policy, entries: ENTRIES, onRows: (rows) => lookedUpRows.push(...harvestRows(rows)) }),
       abort: controller.signal,
       refusals: (data, response) => {
         const verdict = admitAnswer(answerContext(), data, response);
@@ -872,7 +892,16 @@ export const createAssist = (deps: AssistDeps): Assist => {
       record.answer = outcome.response;
       record.planSteps = verdict.steps.length;
       landed = { signature: record.signature, mode, steps: verdict.steps, opened: new Set(), done: new Set() };
-      apply(verdict, record);
+      // What aimed a wanted card, in words: the row the assistant chose for the input
+      // Jev could not fill, and the facts it came from.
+      const sources = new Map([...handed, ...lookedUpRows].map((row) => [`${row.table}:${row.id}`, row]));
+      apply(verdict, record, (card) => {
+        const need = unaimed.find((held) => held.id === card.actionId)?.needs.find((entry) => entry.table !== undefined && typeof card.input[entry.key] === 'string');
+        const row = need === undefined ? undefined : sources.get(`${need.table}:${String(card.input[need.key])}`);
+        if (need === undefined || row === undefined) return undefined;
+        const name = row.label.split(' — ')[0] ?? row.label;
+        return { why: `Opened because you said “${context.text.trim()}” — the assistant picked ${name} from ${row.from}.`, told: `“${deps.definitions[card.actionId]?.title ?? card.actionId}” at ${name}, from ${row.from} — Jev wanted it and could not aim it` };
+      });
       // Citations are re-admitted against the screen the answer just MADE: a
       // card it placed is on screen now, and may be stood on.
       const cited = admitAnswer(answerContext(), outcome.data ?? {}, outcome.response);
@@ -1124,7 +1153,7 @@ export const createAssist = (deps: AssistDeps): Assist => {
     brief: async (request, abort) => {
       const llm = agent.llm;
       if (!enabled || llm === undefined) return undefined;
-      const predecisions: Predecisions = { mode: 'brief', sentence: request.event.line, heard: {}, now: { day: request.clock.day, time: request.clock.time }, resolved: [], rows: {}, actions: [], facts: { standing: request.standing }, screen: request.screen, writable: [], asked: [] };
+      const predecisions: Predecisions = { mode: 'brief', sentence: request.event.line, heard: {}, now: { day: request.clock.day, time: request.clock.time }, resolved: [], rows: {}, actions: [], facts: { standing: request.standing }, screen: request.screen, writable: [], wanted: [], asked: [] };
       const nothing: AnswerContext = { allowed: new Set(), definitions: deps.definitions, candidates: {}, writable: [] };
       const outcome = await runAgent({
         llm,

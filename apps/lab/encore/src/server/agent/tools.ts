@@ -39,6 +39,9 @@ export type ReadToolsConfig = {
   wire: FetchFn;
   policy: ScopePolicy;
   entries: readonly (SeedEntry | SeedMutation)[];
+  // The rows a `query` SHOWED the model (after the cap) — what the answer that
+  // read them may name.
+  onRows?: (rows: readonly unknown[]) => void;
 };
 
 export type ReadableQuery = { fingerprint: string; returns: string; context: string[] };
@@ -67,7 +70,7 @@ export const readableQueries = (config: Pick<ReadToolsConfig, 'policy' | 'entrie
     return [{ fingerprint: entry.fingerprint, returns: entry.intent ?? entry.fingerprint, context: [...new Set(contextKeysIn(entry.dsl))] }];
   });
 
-const capped = (rows: unknown): unknown => {
+const capped = (rows: unknown): { rows: unknown[]; note?: string } => {
   const list = Array.isArray(rows) ? rows : [rows];
   const kept: unknown[] = [];
   let size = 0;
@@ -128,7 +131,9 @@ export const createReadTools = (config: ReadToolsConfig): ToolDefinition[] => {
 
       const response = await config.wire('/api/vex', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ fingerprint, context: bound }) });
       if (!response.ok) return { failed: `the read did not run (${response.status}): ${(await response.text()).slice(0, 300)}` };
-      return capped(await response.json());
+      const shown = capped(await response.json());
+      config.onRows?.(shown.rows);
+      return shown;
     },
   });
 

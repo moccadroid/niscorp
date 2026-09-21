@@ -53,6 +53,9 @@ export const PredecisionsSchema = z.object({
   // WRITABLE: free-text fields you may author — what each is for, and what it
   // holds now.
   writable: z.array(z.object({ card: z.string(), field: z.string(), for: z.string(), holds: z.string() })),
+  // WANTED: cards the fast model wanted on screen and could NOT aim — what each
+  // needs, in words. If FACTS or a lookup settles it, you may aim the card.
+  wanted: z.array(z.string()).default([]),
   // ASKED: what this thread has already asked or been offered as a follow-up.
   // A follow-up that repeats one of these is dropped.
   asked: z.array(z.string()).default([]),

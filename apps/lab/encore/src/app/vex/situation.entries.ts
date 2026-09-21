@@ -11,13 +11,17 @@ import type { SeedEntry } from '@niscorp/vex';
 export const lineupAround: SeedEntry = {
   fingerprint: 'lineup/around',
   intent: 'Sets on one festival day that are still running at or start within a window of minutes, by stage then time',
-  shape: [{ slot_id: '', act_name: '', billing: '', stage_name: '', starts_at: '', start_min: 0, end_min: 0 }],
+  shape: [{ slot_id: '', act_id: '', act_name: '', billing: '', stage_id: '', stage_name: '', starts_at: '', start_min: 0, end_min: 0 }],
   dsl: {
     from: ['slots', 'acts', 'stages'],
     fields: [
       { field: 'slots.id', as: 'slot_id' },
+      // The ids ride along so that whoever is handed these rows can NAME them: the
+      // assistant knows who is on stage from here, and may aim the act's card at her.
+      { field: 'acts.id', as: 'act_id' },
       { field: 'acts.name', as: 'act_name' },
       'acts.billing',
+      { field: 'stages.id', as: 'stage_id' },
       { field: 'stages.name', as: 'stage_name' },
       'slots.starts_at',
       'slots.start_min',

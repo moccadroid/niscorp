@@ -59,6 +59,10 @@ export type ActionPlan = {
   // aimed by its lead's values for the keys they share, and a follow-up that
   // retrieved nothing must still be able to hand an act across.
   inputs: string[];
+  // WHAT EACH REQUIRED INPUT IS, to an operator: "an act", not `actId`. Said when
+  // a card Jev wanted could not be aimed — to the person (x-ray's story) and to the
+  // assistant (WANTED), who may be holding the row that aims it.
+  needs: Record<string, { noun: string; table?: string }>;
 };
 
 export type Derived = {
@@ -101,6 +105,8 @@ export type Decided = {
 // ─── resolve ─────────────────────────────────────────────────
 
 // `hue`: the kit hue of the kind of card it would open (canvas-placement.ts).
+export type HeldCard = { id: string; p: number; reason: string; needs: { key: string; noun: string; table?: string }[] };
+
 export type Chip = { id: string; label: string; p: number; hue: string };
 
 // `direct` is Jev alone. The other three are what the agent is asked to do.
@@ -149,6 +155,9 @@ export type Resolved = {
   scored: { id: string; p: number }[];
   // The few of those the app shows (resolve.ts `suggestedOf`).
   suggested: Chip[];
+  // EVERY CARD AT OR ABOVE THE MOUNT LINE THAT DID NOT MOUNT, and why, in plain
+  // words. `needs` is set when the reason is an input nobody could fill.
+  held: HeldCard[];
   tone: 'calm' | 'elevated' | 'critical';
   top: { id: string; p: number }[];
   handoff: Handoff;
@@ -181,6 +190,8 @@ export type PassRecord = {
   // False when the line was cleared while the pass was out: it was measured
   // and recorded, and nothing it decided was put on screen.
   applied: boolean;
+  // Cards at or above the mount line that did not mount, and why.
+  held: HeldCard[];
   // How the sentence read: calm · elevated · critical.
   tone: string;
   notes: string[];
@@ -241,6 +252,8 @@ export type RunRecord = {
   // Canvases the answer NAMED — the only ones reconciled.
   canvasesNamed: string[];
   cardsMounted: string[];
+  // Of those, the ones Jev had wanted and could not aim — and what aimed them.
+  cardsAimed: string[];
   cardsClosed: string[];
   fieldsWritten: string[];
 };

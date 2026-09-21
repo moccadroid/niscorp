@@ -3,7 +3,7 @@ import { CANVAS_PLACEMENT, COMPANIONS, QUESTION_CANVASES, TILE_HUE, tileOf } fro
 import { CITE_KEY, PLACED_BY, PLACED_FRAGMENT, WHY } from '@encore/app/shell/fragments/placed.fragment';
 import type { FestivalClock } from '@encore/lib/festival-clock';
 import { NONE } from './derive';
-import type { ActionPlan, AgentMode, Answer, CandidateSets, Chip, Derived, Entity, FieldPlan, Handoff, Parsed, Resolved, Route } from './intent.types';
+import type { ActionPlan, AgentMode, Answer, CandidateSets, Chip, Derived, Entity, FieldPlan, Handoff, Parsed, Resolved, Route, HeldCard } from './intent.types';
 
 // LANE 5 — RESOLVE. Probabilities in, a desired screen out. Pure.
 //
@@ -126,6 +126,8 @@ const fieldValue = (plan: FieldPlan, input: Filling): string | number | boolean 
 // sentence itself and is never blank while there is one.)
 const blanksOf = (plan: ActionPlan, held: Record<string, unknown>): Record<string, unknown> =>
   Object.fromEntries(plan.fields.flatMap((field) => (field.kind === 'parse' && field.parse !== 'line' && held[field.field] === undefined ? [[field.field, field.blank]] : [])));
+
+const listOf = (items: readonly string[]): string => (items.length <= 1 ? (items[0] ?? 'something') : `${items.slice(0, -1).join(', ')} and ${items.at(-1)}`);
 
 export const inputOf = (plan: ActionPlan, input: Filling): Record<string, unknown> =>
   Object.fromEntries(plan.fields.flatMap((field) => {
@@ -257,6 +259,7 @@ export const confidenceWord = (p: number): string => (p >= SURE_AT ? 'sure' : p 
 export const resolveScreen = (input: ResolveInput): Resolved => {
   const desired: Record<string, Desired[]> = Object.fromEntries(QUESTION_CANVASES.map((canvas) => [canvas, []]));
   const chips: Chip[] = [];
+  const held: HeldCard[] = [];
   const scored: { id: string; p: number }[] = [];
   // Cards Jev wanted ON SCREEN — not merely pinned by somebody — and could not
   // aim. What the computed route reads.
@@ -315,7 +318,24 @@ export const resolveScreen = (input: ResolveInput): Resolved => {
         input.whys?.[plan.actionId] ??
         (!jevWants && leadOpenedWith !== undefined ? `Opened beside “${input.titles[lead ?? ''] ?? 'the form'}”, to show what that would do.` : `Opened because you said “${input.line.trim()}” — ${confidenceWord(p)}.`);
       desired[canvas]?.push({ actionId: plan.actionId, input: { ...blanksOf(plan, seeded), ...seeded, ...tileOf(plan.actionId, canvas), [PLACED_BY]: placedBy, [CITE_KEY]: plan.actionId, [WHY]: why }, with: [PLACED_FRAGMENT] });
-    } else if (wanted || p >= CHIP_AT) chips.push({ id: plan.actionId, label: input.titles[plan.actionId] ?? plan.actionId, p: Math.round(p * 100) / 100, hue: tileOf(plan.actionId, canvas)[TILE_HUE] ?? '' });
+    } else {
+      // EVERY NON-MOUNT ABOVE THE LINE HAS A REASON, and x-ray's story says it
+      // beside the card's bar. (A card below the line needs none: it was not wanted.)
+      const missing = plan.required.filter((key) => seeded[key] === undefined).map((key) => ({ key, ...(plan.needs[key] ?? { noun: key }) }));
+      const leadTitle = input.titles[lead ?? ''] ?? lead ?? '';
+      if (p >= MOUNT_AT || jevWants) {
+        const reason =
+          input.suppressed?.has(plan.actionId) === true
+            ? 'not shown — it was closed for this sentence'
+            : lead !== undefined && leadOpenedWith === undefined
+              ? `not shown — it shows what “${leadTitle}” would do, and that form is not open`
+              : `not shown — it needs ${listOf(missing.map((need) => need.noun))}, and the sentence names none`;
+        held.push({ id: plan.actionId, p: Math.round(p * 1000) / 1000, reason, // `needs` is what somebody ELSE could fill — the assistant, from the facts it
+        // reads. A companion is aimed by its lead and by nothing else, so it asks for none.
+        needs: input.suppressed?.has(plan.actionId) === true || lead !== undefined ? [] : missing });
+      }
+    }
+    if (!(wanted && aimed) && (wanted || p >= CHIP_AT)) chips.push({ id: plan.actionId, label: input.titles[plan.actionId] ?? plan.actionId, p: Math.round(p * 100) / 100, hue: tileOf(plan.actionId, canvas)[TILE_HUE] ?? '' });
   }
 
   const tone = input.answers[input.derived.tone];
@@ -323,6 +343,7 @@ export const resolveScreen = (input: ResolveInput): Resolved => {
     desired,
     chips: chips.sort((a, b) => b.p - a.p),
     suggested: suggestedOf(chips),
+    held: held.map((card) => (suggestedOf([...chips].sort((a, b) => b.p - a.p)).some((chip) => chip.id === card.id) ? { ...card, reason: `${card.reason}; offered as a suggestion instead` } : { ...card, reason: `${card.reason}; not among the suggestions either — those are the best ${CHIPS_SHOWN} within ${CHIP_MARGIN} of the top guess` })),
     scored: [...scored].sort((a, b) => b.p - a.p),
     tone: tone?.kind === 'score' ? (TONES[tone.level] ?? 'calm') : 'calm',
     top: [...scored].sort((a, b) => b.p - a.p).slice(0, 6),
