@@ -1,4 +1,4 @@
-import type { ProviderAdapter, ProviderRequest, ProviderResponse, ProviderStreamDelta, EmbedRequest, EmbedResponse, Message, ContentPart } from '../types';
+import type { ChatAdapter, ProviderRequest, ProviderResponse, ProviderStreamDelta, EmbedRequest, EmbedResponse, Message, ContentPart } from '../types';
 import { SignalError, ErrorCode } from '../errors';
 import { loadSdk } from '../utils/sdk-loader';
 
@@ -207,7 +207,7 @@ export type OpenAICompatibleConfig = {
 
 export const createOpenAICompatibleAdapter = async (
   config: OpenAICompatibleConfig,
-): Promise<ProviderAdapter> => {
+): Promise<ChatAdapter> => {
   const chatCreate = await loadChatCreateFn(config);
 
   const buildParams = (request: ProviderRequest): Record<string, unknown> => {
@@ -375,5 +375,5 @@ export const createOpenAICompatibleAdapter = async (
     };
   };
 
-  return { id: 'openai-compatible', chat, chatStream, embed };
+  return { kind: 'chat', id: 'openai-compatible', chat, chatStream, embed };
 };

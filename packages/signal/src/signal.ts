@@ -2,17 +2,20 @@ import { type ZodType } from 'zod';
 import type {
   Message, ContentPart, Tool, SignalOptions, Capabilities,
   SignalResult, StreamEvent, StepStreamEvent, StreamOptions,
-  ProviderAdapter, ProviderRequest, ProviderResponse, Rejection,
+  ProviderAdapter, ChatAdapter, DecisionAdapter, ProviderRequest, ProviderResponse, Rejection,
   StepRequest, StepResult, StepToolCall, CountInput,
-  EmbedOptions,
+  EmbedOptions, Questions, DecideRequest, DecideResult,
 } from './types';
 import type { SignalConfig, CustomProviderConfig } from './config';
 import { estimateUsage } from './utils/estimate-usage';
 import { SignalError, ErrorCode } from './errors';
-import { providerRegistry, resolveApiKey } from './registry';
+import { providerRegistry, resolveApiKey, type ProviderEntry } from './registry';
 import { createOpenAICompatibleAdapter } from './adapters/openai-compatible.adapter';
 import { createAnthropicAdapter } from './adapters/anthropic.adapter';
 import { createGoogleAdapter } from './adapters/google.adapter';
+import { createSystemOneAdapter } from './adapters/systemone.adapter';
+import { assertQuestions, acceptCalibrated, acceptUncalibrated, uncalibratedSchemaOf } from './decide/gate';
+import { decisionEmulationPrompt } from './transport/protocol';
 import { executeStepStream } from './stream/execute-step-stream';
 import { runComplete, runStream } from './run';
 import { resolveWireStrategies, responseStrategies, recoverRejection, type WireStrategy } from './wire/strategies';
@@ -67,12 +70,25 @@ export type Signal<T = string> = {
     (input: string, options?: EmbedOptions): Promise<number[]>;
     (input: string[], options?: EmbedOptions): Promise<number[][]>;
   };
+
+  // ─── Decisions ────────────────────────────────────────────
+  // decide(): typed questions about a state, each answered with a pick. One
+  // request, one response — no history, no tools, no loop. The questions are
+  // the schema: the result type and the acceptance gate both derive from them.
+  // On a decision provider the picks come with probabilities
+  // (`calibrated: true`); on a chat provider the same questions run through
+  // structured output and come back as picks alone, one to two orders of
+  // magnitude slower — a caller on a latency budget reads `describe().kind`.
+  decide: <const Qs extends Questions>(request: DecideRequest<Qs>) => Promise<DecideResult<Qs>>;
 };
 
 // What a Signal client resolves to, without touching the network.
 export type SignalDescription = {
   provider: string;              // registry name, or the custom baseUrl
   model: string | undefined;     // undefined only for custom providers with no model set
+  // Which verbs exist here. A decision provider has decide() and nothing else;
+  // a chat provider has every verb, decide() included, by emulation.
+  kind: ProviderAdapter['kind'];
   capabilities: Capabilities;
 };
 
@@ -84,7 +100,7 @@ type ResolvedProvider = {
   model: string;
   apiKey: string;
   baseUrl: string;
-  adapterType: string;
+  adapterType: ProviderEntry['adapter'];
   // Per-provider params that ask for streamed reasoning (registry.ts). Carried
   // to the adapter, which applies them only on a streaming call the caller
   // asked reasoning of.
@@ -97,7 +113,13 @@ const resolveProvider = (config: SignalConfig): ResolvedProvider => {
     if (!entry) throw new SignalError(`Unknown provider: ${config.provider}`, ErrorCode.PROVIDER_NOT_FOUND);
     const apiKey = resolveApiKey(entry.envKey, config.apiKey);
     if (!apiKey) throw new SignalError(`Missing API key for ${config.provider}. Set ${entry.envKey} or pass apiKey.`, ErrorCode.MISSING_API_KEY);
-    return { model: config.model ?? entry.defaultModel, apiKey, baseUrl: entry.baseUrl, adapterType: entry.adapter, ...(entry.reasoningRequest !== undefined && { reasoningRequest: entry.reasoningRequest }) };
+    return {
+      model: config.model ?? entry.defaultModel,
+      apiKey,
+      baseUrl: entry.baseUrl,
+      adapterType: entry.adapter,
+      ...(entry.adapter !== 'systemone' && entry.reasoningRequest !== undefined && { reasoningRequest: entry.reasoningRequest }),
+    };
   }
 
   const custom = config.provider;
@@ -119,14 +141,33 @@ const FALLBACK_CAPABILITIES: Capabilities = {
   supportsEmbedding: false,
 };
 
+// The adapter a config names, without resolving a key — describe() and the
+// capability lookup both need it and neither may throw for a missing one.
+const adapterTypeOf = (config: SignalConfig): ProviderEntry['adapter'] | undefined =>
+  typeof config.provider === 'string'
+    ? providerRegistry[config.provider]?.adapter
+    : config.provider.adapter ?? 'openai-compatible';
+
+const kindOf = (adapterType: ProviderEntry['adapter'] | undefined): ProviderAdapter['kind'] =>
+  adapterType === 'systemone' ? 'decisions' : 'chat';
+
+// Chat capabilities. A decision provider declares none because it has none, so
+// it resolves to the all-false floor.
 const resolveCapabilities = (config: SignalConfig): Capabilities => {
   if (typeof config.provider === 'string') {
-    const defaults = providerRegistry[config.provider]?.capabilities ?? FALLBACK_CAPABILITIES;
+    const entry = providerRegistry[config.provider];
+    const defaults = entry === undefined || entry.adapter === 'systemone' ? FALLBACK_CAPABILITIES : entry.capabilities;
     return { ...defaults, ...config.capabilities };
   }
   // Custom providers may declare capabilities on the provider config;
   // instance-level .capabilities() overrides still win.
-  return { ...FALLBACK_CAPABILITIES, ...config.provider.capabilities, ...config.capabilities };
+  const declared = config.provider.adapter === 'systemone' ? {} : config.provider.capabilities;
+  return { ...FALLBACK_CAPABILITIES, ...declared, ...config.capabilities };
+};
+
+const wireIdsOf = (config: SignalConfig): string[] => {
+  const source = typeof config.provider === 'string' ? providerRegistry[config.provider] : config.provider;
+  return source === undefined || source.adapter === 'systemone' ? [] : source.wire ?? [];
 };
 
 const createAdapter = async (resolved: ResolvedProvider, client: unknown): Promise<ProviderAdapter> => {
@@ -137,8 +178,8 @@ const createAdapter = async (resolved: ResolvedProvider, client: unknown): Promi
       return createAnthropicAdapter({ apiKey: resolved.apiKey, client });
     case 'google':
       return createGoogleAdapter({ apiKey: resolved.apiKey, client });
-    default:
-      throw new SignalError(`Unknown adapter type: ${resolved.adapterType}`, ErrorCode.PROVIDER_NOT_FOUND);
+    case 'systemone':
+      return createSystemOneAdapter({ apiKey: resolved.apiKey, baseUrl: resolved.baseUrl, client });
   }
 };
 
@@ -196,11 +237,7 @@ const createSignalFromConfig = <T = string>(config: SignalConfig): Signal<T> => 
   // Provider wire strategies — data from the registry entry (or the
   // custom provider config), resolved once. Unknown ids throw here,
   // at construction, not mid-run.
-  const wireStrategies: WireStrategy[] = resolveWireStrategies(
-    typeof config.provider === 'string'
-      ? providerRegistry[config.provider]?.wire ?? []
-      : config.provider.wire ?? [],
-  );
+  const wireStrategies: WireStrategy[] = resolveWireStrategies(wireIdsOf(config));
 
   const getAdapter = async (): Promise<ProviderAdapter> => {
     const resolved = resolveProvider(config);
@@ -211,6 +248,18 @@ const createSignalFromConfig = <T = string>(config: SignalConfig): Signal<T> => 
     return cachedAdapter;
   };
 
+  // The chat verbs on a decision provider fail HERE, by name, before any
+  // request is built — the provider has no endpoint that could answer them.
+  const getChatAdapter = async (verb: string): Promise<ChatAdapter> => {
+    const adapter = await getAdapter();
+    if (adapter.kind === 'chat') return adapter;
+    throw new SignalError(
+      `${verb}() is not available on a decision provider — it answers decide() and generates no text`,
+      ErrorCode.VERB_NOT_SUPPORTED,
+      { verb, adapter: adapter.id },
+    );
+  };
+
   const fork = <U = T>(override: Partial<SignalConfig>): Signal<U> =>
     createSignalFromConfig<U>({ ...config, ...override });
 
@@ -219,7 +268,7 @@ const createSignalFromConfig = <T = string>(config: SignalConfig): Signal<T> => 
   // wire layer serves every entry point identically.
 
   const step = async (request: StepRequest): Promise<StepResult> => {
-    const adapter = await getAdapter();
+    const adapter = await getChatAdapter('step');
     const resolved = resolveProvider(config);
     const messages = request.messages.slice() as Message[];
     const providerTools = request.tools && request.tools.length > 0
@@ -299,7 +348,7 @@ const createSignalFromConfig = <T = string>(config: SignalConfig): Signal<T> => 
 
   const stepStream = (request: StepRequest, streamOptions?: StreamOptions): AsyncIterable<StepStreamEvent> => {
     const run = async function* (): AsyncGenerator<StepStreamEvent> {
-      const adapter = await getAdapter();
+      const adapter = await getChatAdapter('stepStream');
       const resolved = resolveProvider(config);
       const declared = new Set((request.tools ?? []).map((tool) => tool.name));
       // The client's own options are the floor here too — step() merges them and
@@ -349,6 +398,70 @@ const createSignalFromConfig = <T = string>(config: SignalConfig): Signal<T> => 
     return run();
   };
 
+  // ─── decide — beside the execution core, not through it ────
+  // A decision provider answers the questions itself and the gate checks the
+  // answers against them. No wire strategy, repair or retry applies: there are
+  // no bytes to repair and the model cannot be told what it got wrong.
+  const decideCalibrated = async <Qs extends Questions>(
+    adapter: DecisionAdapter,
+    model: string,
+    request: DecideRequest<Qs>,
+    started: number,
+  ): Promise<DecideResult<Qs>> => {
+    const response = await adapter.decide(
+      { model, state: request.state, questions: request.questions },
+      request.options?.signal !== undefined ? { signal: request.options.signal } : undefined,
+    );
+    const decisions = acceptCalibrated(request.questions, response.answers, response.raw);
+    const inputTokens = response.usage?.inputTokens ?? 0;
+    const outputTokens = response.usage?.outputTokens ?? 0;
+    return {
+      calibrated: true,
+      decisions,
+      meta: {
+        model: response.model ?? model,
+        usage: { inputTokens, outputTokens, totalTokens: inputTokens + outputTokens, reported: response.usage !== undefined },
+        durationMs: Date.now() - started,
+        provider: { raw: response.raw },
+      },
+    };
+  };
+
+  // A chat provider is asked the same questions through structured output: the
+  // derived schema is the contract, so the whole complete() pipeline — native
+  // grammar where it exists, the repair ladder, correction retries — serves it.
+  // It returns picks and no probabilities; see DecideResult.
+  const decideEmulated = async <Qs extends Questions>(
+    model: string,
+    request: DecideRequest<Qs>,
+    started: number,
+  ): Promise<DecideResult<Qs>> => {
+    const state = typeof request.state === 'string' ? request.state : JSON.stringify(request.state);
+    const result = await runComplete<unknown>(
+      {
+        messages: [{ role: 'user', content: decisionEmulationPrompt(state) }],
+        schema: uncalibratedSchemaOf(request.questions),
+        tools: undefined,
+        retries: config.retries ?? 2,
+        options: config.options,
+        ...(request.options?.signal !== undefined && { streamOptions: { signal: request.options.signal } }),
+      },
+      { stepStream, model, capabilities: resolveCapabilities(config) },
+    );
+    return {
+      calibrated: false,
+      decisions: acceptUncalibrated(request.questions, result.response, result.meta.provider.raw),
+      meta: {
+        model: result.meta.model,
+        // complete() sums what providers reported with what it had to estimate
+        // and does not say which, so this total cannot be vouched for as measured.
+        usage: { ...result.meta.usage, reported: false },
+        durationMs: Date.now() - started,
+        provider: { raw: result.meta.provider.raw },
+      },
+    };
+  };
+
   return {
     // Builder methods
     apiKey: (key) => fork({ apiKey: key }),
@@ -369,12 +482,14 @@ const createSignalFromConfig = <T = string>(config: SignalConfig): Signal<T> => 
         return {
           provider: config.provider,
           model: config.model ?? entry?.defaultModel,
+          kind: kindOf(adapterTypeOf(config)),
           capabilities: resolveCapabilities(config),
         };
       }
       return {
         provider: config.provider.baseUrl,
         model: config.model ?? config.provider.model,
+        kind: kindOf(adapterTypeOf(config)),
         capabilities: resolveCapabilities(config),
       };
     },
@@ -415,7 +530,7 @@ const createSignalFromConfig = <T = string>(config: SignalConfig): Signal<T> => 
 
     // ─── Embedding ────────────────────────────────────────────
     embed: (async (input: string | string[], options?: EmbedOptions): Promise<number[] | number[][]> => {
-      const adapter = await getAdapter();
+      const adapter = await getChatAdapter('embed');
       if (!adapter.embed) {
         throw new SignalError('This provider does not support embedding', ErrorCode.PROVIDER_ERROR);
       }
@@ -436,6 +551,17 @@ const createSignalFromConfig = <T = string>(config: SignalConfig): Signal<T> => 
       }
       return response.embeddings;
     }) as Signal<T>['embed'],
+
+    // ─── Decisions ────────────────────────────────────────────
+    decide: async <const Qs extends Questions>(request: DecideRequest<Qs>): Promise<DecideResult<Qs>> => {
+      assertQuestions(request.questions);
+      const started = Date.now();
+      const adapter = await getAdapter();
+      const model = resolveProvider(config).model;
+      return adapter.kind === 'decisions'
+        ? decideCalibrated(adapter, model, request, started)
+        : decideEmulated(model, request, started);
+    },
 
     // ─── Low-level: token counting (heuristic) ───────────────
     count: async (input: CountInput): Promise<number> => {

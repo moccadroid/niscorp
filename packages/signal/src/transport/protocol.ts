@@ -1,4 +1,5 @@
 import type { OutputTransport, ResponseMode } from './resolve';
+import type { Question } from '../types';
 
 // ═══════════════════════════════════════════════════════════
 // Protocol text — EVERY word signal ever puts in a prompt
@@ -97,3 +98,21 @@ export const bareSchemaPrompt = (jsonSchema: string): string =>
 
 export const bareSchemaCorrection = (issues: string): string =>
   `Your output was invalid: ${issues}. Reply with ONLY the corrected JSON value matching the OUTPUT SCHEMA.`;
+
+// ─── Decision emulation (decide() on a text model) ──────────
+// A text model standing in for a decision model is asked the same questions
+// through structured output. Each question rides its field's description, so
+// the schema stays the contract; the only prose is what frames the state.
+
+export const decisionEmulationPrompt = (state: string): string =>
+  `Answer every field of the OUTPUT SCHEMA about the STATE below. Each field's description is the question and lists everything you may answer with.\nSTATE:\n${state}`;
+
+export const decisionQuestionDescription = (question: Question): string => {
+  if (question.type === 'choice') return `${question.instructions} Options: ${JSON.stringify(question.criteria)}`;
+  if (question.type === 'score') {
+    return `${question.instructions} Answer with the index of the level that fits. Levels, lowest first: ${JSON.stringify(question.criteria)}`;
+  }
+  return question.criteria === undefined
+    ? question.instructions
+    : `${question.instructions} Meaning: ${JSON.stringify(question.criteria)}`;
+};

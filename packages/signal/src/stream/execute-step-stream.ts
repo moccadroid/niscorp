@@ -1,5 +1,5 @@
 import type {
-  Message, ProviderAdapter, ProviderRequest, ProviderStreamDelta,
+  Message, ChatAdapter, ProviderRequest, ProviderStreamDelta,
   StepRequest, StepResult, StepStreamEvent, StepToolCall, StreamOptions,
 } from '../types';
 import { estimateUsage } from '../utils/estimate-usage';
@@ -13,7 +13,7 @@ import { estimateUsage } from '../utils/estimate-usage';
 // owns the tool loop and re-invokes for each iteration.
 
 export type ExecuteStepStreamConfig = {
-  adapter: ProviderAdapter;
+  adapter: ChatAdapter;
   model: string;
   request: StepRequest;
   streamOptions?: StreamOptions;

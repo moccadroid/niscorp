@@ -14,9 +14,10 @@ every provider — or you get a typed failure with evidence.**
 types.ts       the public contract (incl. StepOutcome / Rejection / WireReport)
 registry.ts    provider DATA: baseUrl, capabilities, adapter id, wire strategy ids
 adapters/      byte movers, one per WIRE PROTOCOL (not per vendor) — throw-and-wrap, zero policy
+decide/        gate.ts: the acceptance gate DERIVED from a decide() call's questions
 wire/          RESPONSE side: repair.ts (mechanisms) → router.ts (classify) → strategies/ (provider quirks)
 transport/     REQUEST side: resolve.ts (respond | native | emit) + protocol.ts (ALL prompt prose)
-signal.ts      the client: step/stepStream = the ONE execution core, builders, embed, count
+signal.ts      the client: step/stepStream = the ONE execution core, builders, embed, decide, count
 run.ts         complete()/stream(): one loop over step — runStream is the core, runComplete drains it
 ```
 
@@ -93,6 +94,26 @@ sides is two changes.
    same recovery. Streaming is a delivery mode, never a second system.
 9. **Streaming validation is end-of-stream**; mid-stream structural
    parsing is `@niscorp/solid`'s job in the consumer.
+10. **An adapter is one of two kinds, and the kind is the capability.**
+    `ChatAdapter | DecisionAdapter`, discriminated by `kind`, and the
+    registry row and the custom-provider config split the same way. A
+    decision model has no chat endpoint, so a decision adapter carrying a
+    `chat` that throws would be an adapter lying about what it is. There
+    is deliberately no `supportsDecisions` flag: a flag beside the kind is
+    a second truth that can disagree with the first. `describe().kind`
+    answers without the network.
+11. **`decide()` sits beside the execution core, not in it.** Like
+    `embed`: one request, one response, no history, tools or loop — none
+    of the wire layer applies, because a decision model writes no bytes
+    to repair. The questions are the schema: the result type and the
+    gate (`decide/gate.ts`) both derive from them, which is the package's
+    one sentence applied to a model that answers instead of writing.
+12. **Emulation is honest or absent.** On a chat adapter `decide()`
+    runs the derived schema through `complete()` and returns picks with
+    `calibrated: false` — the discriminant of `DecideResult`, so the
+    probabilities do not exist in the type on that branch. A fabricated
+    `1.0` would clear every caller's threshold. Same rule as
+    `usage.reported`.
 
 ## Known debt
 

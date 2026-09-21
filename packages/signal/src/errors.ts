@@ -10,6 +10,7 @@ export const ErrorCode = {
   TOOL_NOT_FOUND: 'E_TOOL_NOT_FOUND',
   TOOL_EXECUTION: 'E_TOOL_EXECUTION',
   TOOL_VALIDATION: 'E_TOOL_VALIDATION',
+  VERB_NOT_SUPPORTED: 'E_VERB_NOT_SUPPORTED',
 } as const;
 
 export type ErrorCode = (typeof ErrorCode)[keyof typeof ErrorCode];

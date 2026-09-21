@@ -329,6 +329,79 @@ export type EmbedResponse = {
 };
 
 // ═══════════════════════════════════════════════════════════
+// Decisions
+// ═══════════════════════════════════════════════════════════
+//
+// A decision model takes a state and typed questions and answers each with a
+// value and a probability distribution. It generates no text, so none of the
+// chat contract applies: no messages, no history, no tools, no finish reason,
+// no repair. The questions ARE the schema — the result type and the runtime
+// acceptance gate are both derived from them, and the caller never writes an
+// output type.
+
+// One of the listed options. `criteria` maps each option to what it means.
+export type ChoiceQuestion<K extends string = string> = {
+  type: 'choice';
+  instructions: string;
+  criteria: Record<K, string>;
+};
+
+// A level on an ordered rubric. `criteria` describes each level, lowest first;
+// level 0 is the first entry.
+export type ScoreQuestion = {
+  type: 'score';
+  instructions: string;
+  criteria: readonly string[];
+};
+
+// A yes/no, answered as the probability of yes.
+export type NoulQuestion = {
+  type: 'noul';
+  instructions: string;
+  criteria?: { true: string; false: string };
+};
+
+export type Question = ChoiceQuestion | ScoreQuestion | NoulQuestion;
+export type Questions = Record<string, Question>;
+
+export type DecideState = string | Record<string, unknown> | readonly unknown[];
+
+// What every answer carries, whoever gave it: the pick itself.
+export type UncalibratedDecision<Q extends Question> =
+  Q extends ChoiceQuestion<infer K> ? { choice: K }
+  : Q extends ScoreQuestion ? { level: number }
+  : { answer: boolean };
+
+// What only a decision model adds: how sure it is. `level` is the most probable
+// level and `score` the probability-weighted one (1.05 sits just above level 1);
+// `answer` is `noul >= 0.5`.
+export type CalibratedDecision<Q extends Question> =
+  Q extends ChoiceQuestion<infer K> ? { choice: K; probabilities: Record<K, number>; confidence: number }
+  : Q extends ScoreQuestion ? { level: number; score: number; probabilities: number[]; confidence: number }
+  : { answer: boolean; noul: number };
+
+export type DecideRequest<Qs extends Questions> = {
+  state: DecideState;
+  questions: Qs;
+  options?: { signal?: AbortSignal };
+};
+
+export type DecideMeta = {
+  model: string;
+  usage: { inputTokens: number; outputTokens: number; totalTokens: number; reported: boolean };
+  durationMs: number;
+  provider: { raw: unknown };
+};
+
+// `calibrated` is the discriminant, not a note in `meta`: a text model asked the
+// same questions returns picks and no probabilities, and a fabricated 1.0 would
+// clear every caller's threshold. The probabilities exist in the type only on
+// the branch where a model actually produced them.
+export type DecideResult<Qs extends Questions> =
+  | { calibrated: true; decisions: { [N in keyof Qs]: CalibratedDecision<Qs[N]> }; meta: DecideMeta }
+  | { calibrated: false; decisions: { [N in keyof Qs]: UncalibratedDecision<Qs[N]> }; meta: DecideMeta };
+
+// ═══════════════════════════════════════════════════════════
 // Stream Events (emitted by signal.stream())
 // ═══════════════════════════════════════════════════════════
 
@@ -410,7 +483,13 @@ export type ProviderResponse = {
   raw: unknown;
 };
 
-export type ProviderAdapter = {
+// An adapter is one of two KINDS, and the kind is the whole truth about which
+// verbs a provider has. A chat provider generates text; a decision provider
+// answers typed questions and generates none. They share no method, so they
+// share no shape: a decision adapter carrying a `chat` that throws would be an
+// adapter lying about what it is, and every caller would find out at run time.
+export type ChatAdapter = {
+  kind: 'chat';
   id: string;
   chat: (request: ProviderRequest) => Promise<ProviderResponse>;
   // `options.signal`, when given, is handed to the underlying fetch so an abort
@@ -418,4 +497,28 @@ export type ProviderAdapter = {
   // adapter that does not forward it simply keeps aborting between deltas.
   chatStream: (request: ProviderRequest, options?: { signal?: AbortSignal }) => AsyncIterable<ProviderStreamDelta>;
   embed?: (request: EmbedRequest) => Promise<EmbedResponse>;
+};
+
+export type DecisionAdapter = {
+  kind: 'decisions';
+  id: string;
+  decide: (request: DecisionRequest, options?: { signal?: AbortSignal }) => Promise<DecisionResponse>;
+};
+
+export type ProviderAdapter = ChatAdapter | DecisionAdapter;
+
+// What a decision adapter is handed and what it hands back. The adapter moves
+// bytes: `answers` is the provider's body as it arrived, unvalidated — the
+// acceptance gate (decide/gate.ts) is what decides whether it counts.
+export type DecisionRequest = {
+  model: string;
+  state: DecideState;
+  questions: Questions;
+};
+
+export type DecisionResponse = {
+  model?: string;
+  answers: unknown;
+  usage?: { inputTokens: number; outputTokens: number };
+  raw: unknown;
 };

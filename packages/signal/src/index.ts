@@ -14,8 +14,8 @@ export { SignalError, ErrorCode } from './errors';
 
 // Provider registry — per-provider capability truth (read-only consumers:
 // preview instruments, capability-aware orchestrators).
-export { providerRegistry } from './registry';
-export type { ProviderEntry } from './registry';
+export { providerRegistry, chatProviderEntry } from './registry';
+export type { ProviderEntry, ChatProviderEntry, DecisionProviderEntry } from './registry';
 
 // Wire layer — routed outcomes and the strategy seam. Consumers switch
 // on StepResult.outcome; strategies are selected via registry entries.
@@ -71,6 +71,23 @@ export type {
   EmbedOptions,
   EmbedRequest,
   EmbedResponse,
+  // Decisions
+  Question,
+  Questions,
+  ChoiceQuestion,
+  ScoreQuestion,
+  NoulQuestion,
+  DecideState,
+  DecideRequest,
+  DecideResult,
+  DecideMeta,
+  CalibratedDecision,
+  UncalibratedDecision,
 } from './types';
 
-export type { SignalConfig, CustomProviderConfig } from './config';
+export type {
+  SignalConfig,
+  CustomProviderConfig,
+  CustomChatProviderConfig,
+  CustomDecisionProviderConfig,
+} from './config';

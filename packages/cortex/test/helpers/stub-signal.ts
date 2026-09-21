@@ -129,6 +129,7 @@ export const stubSignal = (
   const describe = (): SignalDescription => ({
     provider: 'stub',
     model: options?.model ?? 'stub-model',
+    kind: 'chat',
     capabilities,
   });
 

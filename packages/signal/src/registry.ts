@@ -4,13 +4,16 @@ import type { Capabilities } from './types';
 // Provider Registry
 // ═══════════════════════════════════════════════════════════
 
-export type ProviderEntry = {
+type ProviderEntryBase = {
   id: string;
   baseUrl: string;
   envKey: string;
   defaultModel: string;
-  capabilities: Capabilities;
+};
+
+export type ChatProviderEntry = ProviderEntryBase & {
   adapter: 'openai-compatible' | 'anthropic' | 'google';
+  capabilities: Capabilities;
   // Wire strategies (src/wire/strategies.ts) — provider-specific
   // recovery/normalization, selected by id. The default repair ladder
   // runs everywhere; this list is only what is true of THIS provider.
@@ -24,6 +27,15 @@ export type ProviderEntry = {
   // constants reviewed in code, not an untrusted declaration.
   reasoningRequest?: Record<string, unknown>;
 };
+
+// A decision provider has no chat, so it has none of chat's capabilities, wire
+// strategies or reasoning params to declare. The adapter it names IS what it
+// can do.
+export type DecisionProviderEntry = ProviderEntryBase & {
+  adapter: 'systemone';
+};
+
+export type ProviderEntry = ChatProviderEntry | DecisionProviderEntry;
 
 export const providerRegistry: Record<string, ProviderEntry> = {
   groq: {
@@ -133,7 +145,24 @@ export const providerRegistry: Record<string, ProviderEntry> = {
     },
     adapter: 'google',
   },
+  typesafe: {
+    id: 'typesafe',
+    baseUrl: 'https://api.typesafe.ai/v1',
+    envKey: 'TYPESAFE_API_KEY',
+    // The moving alias. A caller that records calibration against a model pins
+    // a version (`jev-1.13.0`) with `.model()`.
+    defaultModel: 'jev-latest',
+    adapter: 'systemone',
+  },
 };
 
 export const resolveApiKey = (envKey: string, explicitKey?: string): string | undefined =>
   explicitKey ?? (typeof process !== 'undefined' ? process.env?.[envKey] : undefined);
+
+// The row for a provider that generates text — the one a capability-aware
+// consumer means when it reads `capabilities`, `wire` or `reasoningRequest`.
+// Undefined for an unknown id and for a decision provider, which has none.
+export const chatProviderEntry = (id: string): ChatProviderEntry | undefined => {
+  const entry = providerRegistry[id];
+  return entry === undefined || entry.adapter === 'systemone' ? undefined : entry;
+};

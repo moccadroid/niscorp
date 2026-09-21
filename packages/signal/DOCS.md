@@ -372,6 +372,84 @@ const embed = createSignal('openai', { model: 'text-embedding-3-small' });
 
 ---
 
+## Decisions
+
+A decision model takes a state and typed questions and answers each with a pick and a probability distribution. It generates no text, so `decide()` is a sibling of `embed()`: one request, one response — no messages, no history, no tools.
+
+### Basic Usage
+
+```typescript
+const jev = createSignal('typesafe');
+
+const result = await jev.decide({
+  state: { message: 'I was charged twice for order 7429', verified: true },
+  questions: {
+    intent: {
+      type: 'choice',
+      instructions: 'What is the customer asking for?',
+      criteria: { refund: 'Money back', bug: 'A defect report', other: 'Anything else' },
+    },
+    needsHuman: { type: 'noul', instructions: 'Does this need a person?' },
+    urgency: { type: 'score', instructions: 'How urgent is it?', criteria: ['Low', 'Medium', 'High'] },
+  },
+});
+
+result.decisions.intent.choice;      // 'refund' | 'bug' | 'other'
+result.decisions.needsHuman.answer;  // boolean
+result.decisions.urgency.level;      // 0 | 1 | 2 — index into criteria
+```
+
+### The Questions Are the Schema
+
+You declare the questions once and never write an output type. Signal derives both halves from them:
+
+- **The result type.** `choice` → the union of the `criteria` keys; `score` → a level index into `criteria`; `noul` → a boolean.
+- **The acceptance gate.** The same derivation at runtime: a choice outside the asked options, a question left unanswered, a distribution over other keys, a probability outside [0, 1] — each fails the call with `E_VALIDATION_FAILED` and the provider's body under `context.raw`.
+
+There is no repair and no correction retry. A decision model writes no bytes to repair and cannot be told what it got wrong.
+
+### Calibrated or Not
+
+`result.calibrated` is the discriminant. Probabilities exist in the type only where a model produced them:
+
+```typescript
+if (result.calibrated) {
+  result.decisions.intent.probabilities;  // Record<'refund' | 'bug' | 'other', number>
+  result.decisions.intent.confidence;     // 0–1
+  result.decisions.needsHuman.noul;       // probability of yes
+  result.decisions.urgency.score;         // probability-weighted level, e.g. 1.05
+  result.decisions.urgency.probabilities; // number[], one per level
+}
+```
+
+On a chat provider `decide()` still works: the same questions run through structured output (native grammar where it exists, the repair ladder, correction retries) and come back as picks alone with `calibrated: false`. Signal does not invent a `1.0` — it would clear every threshold. Emulation is one to two orders of magnitude slower; a caller on a latency budget checks first:
+
+```typescript
+if (signal.describe().kind === 'decisions') { /* sub-second */ }
+```
+
+### Abort
+
+```typescript
+const controller = new AbortController();
+jev.decide({ state, questions, options: { signal: controller.signal } });
+controller.abort(); // tears down the HTTP request
+```
+
+### Provider Support
+
+A provider is one of two kinds. A **decision provider** (`typesafe`) has `decide()` and nothing else — `complete`, `stream`, `step`, `stepStream` and `embed` fail with `E_VERB_NOT_SUPPORTED` before any request is built. A **chat provider** has every verb, `decide()` included, by emulation.
+
+A decision provider by base URL — self-hosted, or the fake a check runs — names its protocol:
+
+```typescript
+const local = createSignal({ baseUrl: 'http://127.0.0.1:8790/v1', apiKey: 'dev', model: 'fake', adapter: 'systemone' });
+```
+
+`meta.usage.reported` is `false` when the provider sent no usage, and always `false` under emulation: `complete()` sums reported and estimated usage without saying which.
+
+---
+
 ## Error Handling
 
 All errors are `SignalError` instances with a `.code` and optional `.context`:
@@ -388,6 +466,7 @@ All errors are `SignalError` instances with a `.code` and optional `.context`:
 | `E_TOOL_NOT_FOUND` | Model called an unknown tool |
 | `E_TOOL_EXECUTION` | Tool execute() threw |
 | `E_TOOL_VALIDATION` | Tool args failed Zod validation |
+| `E_VERB_NOT_SUPPORTED` | A chat verb was called on a decision provider |
 
 ```typescript
 import { SignalError } from '@niscorp/signal';

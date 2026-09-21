@@ -21,12 +21,23 @@ export type SignalConfig = {
   readonly onToolCall?: (name: string, args: unknown) => void;
 };
 
-export type CustomProviderConfig = {
+type CustomProviderBase = {
   baseUrl: string;
   apiKey?: string;
   model?: string;
+};
+
+export type CustomChatProviderConfig = CustomProviderBase & {
   adapter?: 'openai-compatible' | 'anthropic' | 'google';
   capabilities?: Partial<Capabilities>;
   // Wire strategy ids (see src/wire/strategies.ts), like a registry entry's.
   wire?: string[];
 };
+
+// A decision provider by base URL — a self-hosted one, or the fake a check runs.
+// It names its protocol and nothing else: it has no chat capabilities to declare.
+export type CustomDecisionProviderConfig = CustomProviderBase & {
+  adapter: 'systemone';
+};
+
+export type CustomProviderConfig = CustomChatProviderConfig | CustomDecisionProviderConfig;

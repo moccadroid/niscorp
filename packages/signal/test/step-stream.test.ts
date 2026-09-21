@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import type { ProviderAdapter, ProviderStreamDelta, StepStreamEvent } from '../src/types';
+import type { ChatAdapter, ProviderStreamDelta, StepStreamEvent } from '../src/types';
 import { executeStepStream } from '../src/stream/execute-step-stream';
 import { createOpenAICompatibleAdapter } from '../src/adapters/openai-compatible.adapter';
-import { providerRegistry } from '../src/registry';
+import { chatProviderEntry } from '../src/registry';
 
 // `noUncheckedIndexedAccess` is on, so an index read is `T | undefined`. Every
 // assertion below is about the LAST event of a stream, and a stream that
@@ -18,7 +18,8 @@ const lastOf = <T>(items: readonly T[]): T => {
 // Mock adapter — returns canned stream deltas
 // ═══════════════════════════════════════════════════════════
 
-const createMockAdapter = (deltas: ProviderStreamDelta[]): ProviderAdapter => ({
+const createMockAdapter = (deltas: ProviderStreamDelta[]): ChatAdapter => ({
+  kind: 'chat',
   id: 'mock',
   chat: async () => ({
     content: '',
@@ -120,7 +121,8 @@ describe('stepStream — tool calls', () => {
     // Same scenario as above; verify the stream terminates after one
     // adapter pass with finish:tool_calls — no follow-up chatStream call.
     let chatStreamCalls = 0;
-    const adapter: ProviderAdapter = {
+    const adapter: ChatAdapter = {
+      kind: 'chat',
       id: 'mock',
       chat: async () => ({
         content: '',
@@ -198,7 +200,8 @@ describe('stepStream — tool_call_delta events', () => {
 
   it('passes toolChoice and responseFormat through to the provider request', async () => {
     let seen: { toolChoice?: unknown; responseFormat?: unknown } = {};
-    const adapter: ProviderAdapter = {
+    const adapter: ChatAdapter = {
+      kind: 'chat',
       id: 'mock',
       chat: async () => ({
         content: '',
@@ -234,7 +237,8 @@ describe('stepStream — tool_call_delta events', () => {
 describe('stepStream — abort', () => {
   it('terminates iteration when the abort signal fires', async () => {
     const controller = new AbortController();
-    const adapter: ProviderAdapter = {
+    const adapter: ChatAdapter = {
+      kind: 'chat',
       id: 'mock',
       chat: async () => ({
         content: '',
@@ -268,14 +272,14 @@ describe('stepStream — abort', () => {
 
 // The openai-compatible adapter fed a canned SSE stream through an injected
 // client, so the real parse runs. Providers differ on the field name.
-const streamingAdapter = (chunks: unknown[]): Promise<ProviderAdapter> =>
+const streamingAdapter = (chunks: unknown[]): Promise<ChatAdapter> =>
   createOpenAICompatibleAdapter({
     apiKey: 'k',
     baseUrl: 'https://fake.api.com/v1',
     client: { chat: { completions: { create: async () => (async function* () { for (const c of chunks) yield c; })() } } },
   });
 
-const deltasOf = async (adapter: ProviderAdapter): Promise<ProviderStreamDelta[]> => {
+const deltasOf = async (adapter: ChatAdapter): Promise<ProviderStreamDelta[]> => {
   const out: ProviderStreamDelta[] = [];
   for await (const d of adapter.chatStream({ model: 'm', messages: [{ role: 'user', content: 'hi' }] })) out.push(d);
   return out;
@@ -308,7 +312,7 @@ describe('reasoning', () => {
     });
     return { captured, adapter };
   };
-  const drain = async (adapter: ProviderAdapter, options?: { reasoningEffort: 'high' }): Promise<void> => {
+  const drain = async (adapter: ChatAdapter, options?: { reasoningEffort: 'high' }): Promise<void> => {
     for await (const chunk of adapter.chatStream({ model: 'm', messages: [{ role: 'user', content: 'hi' }], ...(options ? { options } : {}) })) void chunk;
   };
 
@@ -323,8 +327,8 @@ describe('reasoning', () => {
   });
 
   it('the registry declares the reasoning-request params per provider', () => {
-    expect(providerRegistry['groq']?.reasoningRequest).toEqual({ reasoning_format: 'parsed' });
-    expect(providerRegistry['openrouter']?.reasoningRequest).toEqual({ reasoning: { enabled: true } });
+    expect(chatProviderEntry('groq')?.reasoningRequest).toEqual({ reasoning_format: 'parsed' });
+    expect(chatProviderEntry('openrouter')?.reasoningRequest).toEqual({ reasoning: { enabled: true } });
   });
 
   it('executeStepStream passes reasoning through and keeps it OUT of the content', async () => {
@@ -354,7 +358,8 @@ describe('abort while the provider is silent', () => {
     // Silent until aborted, then throws a NON-abort error on purpose: the real
     // adapter re-wraps an aborted fetch as a SignalError, so executeStepStream
     // must discriminate on `signal.aborted`, never on the error being AbortError.
-    const silent: ProviderAdapter = {
+    const silent: ChatAdapter = {
+      kind: 'chat',
       id: 'silent',
       chat: async () => ({ content: '', usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 }, finishReason: 'stop', raw: null }),
       chatStream: async function* (_request, options) {

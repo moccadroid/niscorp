@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { providerRegistry, resolveApiKey } from '../src/registry';
+import { providerRegistry, chatProviderEntry, resolveApiKey } from '../src/registry';
 
 describe('providerRegistry', () => {
   it('has groq entry', () => {
@@ -10,7 +10,7 @@ describe('providerRegistry', () => {
 
   it('has openai entry', () => {
     expect(providerRegistry['openai']).toBeDefined();
-    expect(providerRegistry['openai']!.capabilities.nativeTools).toBe(true);
+    expect(chatProviderEntry('openai')?.capabilities.nativeTools).toBe(true);
   });
 
   it('has anthropic entry with anthropic adapter', () => {
@@ -24,16 +24,16 @@ describe('providerRegistry', () => {
   });
 
   it('groq has native tools but cannot combine them with response_format', () => {
-    expect(providerRegistry['groq']!.capabilities.nativeTools).toBe(true);
-    expect(providerRegistry['groq']!.capabilities.toolsWithStructuredOutput).toBe(false);
+    expect(chatProviderEntry('groq')?.capabilities.nativeTools).toBe(true);
+    expect(chatProviderEntry('groq')?.capabilities.toolsWithStructuredOutput).toBe(false);
   });
 
   it('openai can combine tools with structured output', () => {
-    expect(providerRegistry['openai']!.capabilities.toolsWithStructuredOutput).toBe(true);
+    expect(chatProviderEntry('openai')?.capabilities.toolsWithStructuredOutput).toBe(true);
   });
 
   it('openrouter defaults to no tools+structured-output combination', () => {
-    expect(providerRegistry['openrouter']!.capabilities.toolsWithStructuredOutput).toBe(false);
+    expect(chatProviderEntry('openrouter')?.capabilities.toolsWithStructuredOutput).toBe(false);
   });
 });
 

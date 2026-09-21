@@ -84,19 +84,33 @@ const embedder = createSignal('openai').model('text-embedding-3-small');
 const vector = await embedder.embed('wireless headphones');             // number[]
 const vectors = await embedder.embed(['shoes', 'boots', 'hat']);       // number[][]
 const small = await embedder.embed('text', { dimensions: 256 });       // truncated
+
+// Execute — decisions (typed questions about a state; no text is generated)
+const jev = createSignal('typesafe');
+const { decisions } = await jev.decide({
+  state: { message: 'I was charged twice' },
+  questions: {
+    intent: { type: 'choice', instructions: 'What do they want?', criteria: { refund: 'Money back', other: 'Anything else' } },
+    needsHuman: { type: 'noul', instructions: 'Does this need a person?' },
+  },
+});
+decisions.intent.choice;                                               // 'refund' | 'other'
 ```
 
 ## Providers
 
-| Provider | String | SDK | Embedding |
-|----------|--------|-----|-----------|
-| Groq | `'groq'` | `openai` | No |
-| OpenAI | `'openai'` | `openai` | Yes |
-| OpenRouter | `'openrouter'` | `openai` | No |
-| Anthropic | `'anthropic'` | stub (use OpenRouter) | No |
-| Google | `'google'` | stub (use OpenRouter) | No |
+| Provider | String | Kind | SDK | Embedding |
+|----------|--------|------|-----|-----------|
+| Groq | `'groq'` | chat | `openai` | No |
+| OpenAI | `'openai'` | chat | `openai` | Yes |
+| OpenRouter | `'openrouter'` | chat | `openai` | No |
+| Anthropic | `'anthropic'` | chat | stub (use OpenRouter) | No |
+| Google | `'google'` | chat | stub (use OpenRouter) | No |
+| TypeSafe (Jev) | `'typesafe'` | decisions | none — one `fetch` | — |
 
-API keys are read from environment variables (`GROQ_API_KEY`, `OPENAI_API_KEY`, etc.) or passed via `.apiKey()` / options.
+A chat provider has every verb; `decide()` runs there by emulation, uncalibrated. A decision provider has `decide()` only.
+
+API keys are read from environment variables (`GROQ_API_KEY`, `OPENAI_API_KEY`, `TYPESAFE_API_KEY`, etc.) or passed via `.apiKey()` / options.
 
 ## License
 
