@@ -46,7 +46,10 @@ const main = async (): Promise<void> => {
   // ═══ 0. citations — the rule, pure ═══════════════════════
   const definitions = CATALOG_DEFINITIONS;
   const candidates = { acts: [{ id: 'act_a', label: 'Act A — headliner' }], stages: [{ id: 'stage_x', label: 'Stage X — open-air' }] };
-  const RESPONSE = 'Three sets are exposed. Act A is the one that matters. The Tent is covered.';
+  // (Restated 2026-09-21, the redesign: an answer is AT MOST TWO SENTENCES now, and a
+  // third is refused — so the fixture says its three things in two. The claims below
+  // are still exact substrings of it.)
+  const RESPONSE = 'Three sets are exposed; Act A is the one that matters. The Tent is covered.';
   const context = {
     allowed: new Set(['lineup.timeline', 'weather.radar', 'slot.swap']),
     definitions,
@@ -59,7 +62,7 @@ const main = async (): Promise<void> => {
     context,
     {
       claims: [
-        { text: 'Three sets are exposed.', card: 'lineup.timeline' },
+        { text: 'Three sets are exposed', card: 'lineup.timeline' },
         { text: 'Act A is the one that matters.', card: 'lineup.timeline', row: 'act_a' },
         { text: 'The Tent is covered.', card: 'stage.view' },
         { text: 'Nobody said this.', card: 'lineup.timeline' },
@@ -69,15 +72,25 @@ const main = async (): Promise<void> => {
     },
     RESPONSE,
   );
+  // ...and what the thread has already asked is not offered again.
+  const notAgain = admitAnswer(
+    { ...context, asked: ['What are our options?'] },
+    {
+      followUps: ['what are our options', 'who needs to know', 'how full is the arena'],
+    },
+    RESPONSE,
+  );
   check('a claim whose words are in the answer and whose card is on screen is ADMITTED, with its row', cited.ok && cited.claims.some((claim) => claim.text === 'Act A is the one that matters.' && claim.card === 'lineup.timeline' && claim.row === 'act_a'));
   check('a claim on a card that is NOT on screen is dropped, with a note', cited.ok && !cited.claims.some((claim) => claim.card === 'stage.view') && cited.notes.some((note) => note.includes('"stage.view" is not on screen')));
   check('a claim whose text is NOT a substring of the answer is dropped, with a note', cited.ok && !cited.claims.some((claim) => claim.text === 'Nobody said this.') && cited.notes.some((note) => note.includes('is not in the answer')));
   check('a row that is not one of the card’s rows is dropped — the words still stand on the card', cited.ok && cited.claims.some((claim) => claim.text === 'Three sets' && claim.row === '') && cited.notes.some((note) => note.includes('slot_999')));
   check(`NONE of that rejects the answer: ${cited.ok ? cited.claims.length : 0} claims stand, ${cited.ok ? cited.notes.length : 0} notes`, cited.ok && cited.claims.length === 3);
-  check(`follow-ups: at most three, trimmed, no repeats, none over 60 characters (${cited.ok ? cited.followUps.join(' · ') : ''})`, cited.ok && cited.followUps.join('|') === 'what are our options|who needs to know|how full is the arena' && cited.notes.some((note) => note.includes('follow-up')));
+  // (Restated 2026-09-21: at most TWO, and never one this thread already asked.)
+  check(`follow-ups: at most two, trimmed, no repeats, none over 60 characters (${cited.ok ? cited.followUps.join(' · ') : ''})`, cited.ok && cited.followUps.join('|') === 'what are our options|who needs to know' && cited.notes.some((note) => note.includes('follow-up')));
+  check(`...and never one the thread has already asked (${notAgain.ok ? notAgain.followUps.join(' · ') : ''})`, notAgain.ok && notAgain.followUps.join('|') === 'who needs to know|how full is the arena' && notAgain.notes.some((note) => note.includes('already asked')));
   const placedAndCited = admitAnswer({ ...context, onScreen: new Set<string>() }, { canvases: { when: [{ actionId: 'weather.radar', input: { day: 'sat', hour: 21 } }] }, claims: [{ text: 'The Tent is covered.', card: 'weather.radar' }] }, RESPONSE);
   check('a card the SAME answer places may be stood on: placing evidence and citing it is one move', placedAndCited.ok && placedAndCited.claims.length === 1);
-  const wrongCard = admitAnswer(context, { canvases: { when: [{ actionId: 'weather.radar', input: { hour: 99 } }] }, claims: [{ text: 'Three sets are exposed.', card: 'lineup.timeline' }] }, RESPONSE);
+  const wrongCard = admitAnswer(context, { canvases: { when: [{ actionId: 'weather.radar', input: { hour: 99 } }] }, claims: [{ text: 'Three sets are exposed', card: 'lineup.timeline' }] }, RESPONSE);
   check('...while a wrong INPUT still rejects the whole answer, citations and all', !wrongCard.ok);
 
   const spans = segmentsOf(RESPONSE, cited.ok ? cited.claims : []);
@@ -86,7 +99,9 @@ const main = async (): Promise<void> => {
 
   // ═══ the world ═══════════════════════════════════════════
   const controls: FakeAgentControls = { latencyMs: 0, chunkMs: 0, seen: [] };
-  const world = await createWorld({ agent: { kind: 'fake', fake: controls } });
+  // What Jev was actually ASKED, pass by pass: the options are the proof.
+  const asked: Record<string, unknown>[] = [];
+  const world = await createWorld({ agent: { kind: 'fake', fake: controls }, onDecided: (principal, pass) => { if (principal === OPERATOR_PRINCIPAL) asked.push(pass.questions); } });
   const OP = OPERATOR_PRINCIPAL;
   const shell = await world.login(OP);
   await settle();
@@ -129,8 +144,27 @@ const main = async (): Promise<void> => {
      world.passesOf(OP).at(-1)?.notes.some((note) => note.startsWith('doing: re-opened') || note.startsWith('doing: placed')) === false);
   const groveFit = Verdict.shape.result.safeParse(impact()['fit']);
   check(`the impact card re-aimed with it, and is RED: "${groveFit.success ? groveFit.data.line : ''}"`, impact()['toStageId'] === 'stage_grove' && groveFit.success && groveFit.data.verdict === 'does not fit' && groveFit.data.line.includes('The Grove holds 4,000') && servedOf('move.impact').includes('"tone":"alert"'));
+  // (2026-09-21: the correction is READ now — intent/supersede.ts — and the fake
+  // scorer's negation cue is gone, so what the assertions above prove is the lane.)
+  const flipPass = world.passesOf(OP).at(-1);
+  check(`...BECAUSE THE TENT WAS NOT AN OPTION: the lane took it back before Jev was asked (${flipPass?.superseded.map((entry) => `${entry.label.split(' — ')[0]} → ${entry.by.label.split(' — ')[0]}`).join(', ')})`, flipPass?.superseded.some((entry) => entry.id === 'stage_tent' && entry.by.id === 'stage_grove') === true && JSON.stringify(asked.at(-1) ?? {}).includes('The Grove') && !JSON.stringify(asked.at(-1) ?? {}).includes('The Tent —'));
+  check(`...and the line under the sentence shows the survivor: ${JSON.stringify(cardData(shell, 'line', 'intent.line')['heard'])}`, JSON.stringify(cardData(shell, 'line', 'intent.line')['heard']).includes('The Grove') && !JSON.stringify(cardData(shell, 'line', 'intent.line')['heard']).includes('The Tent'));
   await world.settled(OP);
   check('THE AGENT DID NOT RUN: this is what 300 ms is for', world.runsOf(OP).length === runsBeforeScene3 && controls.seen.length === 0 && mounted(shell, 'assist').length === 0);
+
+  // A VALUE THE SENTENCE NO LONGER SAYS GOES BACK (seen live: a form kept 21:00
+  // from an earlier sentence that the new one never said).
+  await world.typeLine(OP, 'move headliner to the tent at 9');
+  const timedForm = instanceOn('doing', 'slot.swap');
+  check('"…at 9" fills the new start', swap()['time'] === '21:00');
+  await world.typeLine(OP, 'move headliner to the grove');
+  check(`a sentence that says no time leaves NO time on the form ("${String(swap()['time'])}") — in place, same instance`, swap()['time'] === '' && swap()['toStageId'] === 'stage_grove' && instanceOn('doing', 'slot.swap') === timedForm);
+  world.dispatchOn(OP, 'doing', { type: 'ui:model', ref: 'time', payload: '20:15' }, 'slot.swap');
+  await settle(4);
+  await world.typeLine(OP, 'move headliner to the tent');
+  check('...unless a person typed it: a touched field is theirs, said or not', swap()['time'] === '20:15' && swap()['toStageId'] === 'stage_tent');
+  await world.typeLine(OP, '');
+  await world.settled(OP);
 
   // ═══ 3. scene 2 — say it once ════════════════════════════
   await world.typeLine(OP, TWO_INTENTS);
@@ -173,6 +207,10 @@ const main = async (): Promise<void> => {
   await world.typeLine(OP, '');
   await world.typeLine(OP, 'who is on the main stage');
   check('THE RAIL PERSISTS: another sentence, another room — the same entries, and one more', rail().some((entry) => entry.line === TO_THE_TENT) && rail()[0]?.line === 'bar sales today' && mounted(shell, 'rail').join() === 'assist.rail');
+  // (2026-09-21, the redesign: the history is one line — "Earlier · n" — until it is
+  // pressed; an entry can only be clicked once it is open.)
+  world.dispatchOn(OP, 'rail', { type: 'ui:click', ref: 'earlierOpen' }, 'assist.rail');
+  await settle(2);
   world.dispatchOn(OP, 'rail', { type: 'ui:click', ref: 'entry', payload: movedEntry?.key ?? '' });
   await settle(2);
   check('clicking an entry opens it — one at a time — and the terminal is served the whole of it', cardData(shell, 'rail', 'assist.rail')['open'] === movedEntry?.key && servedOf('assist.rail').includes('"open":"') && servedOf('assist.rail').includes('not submitted'));
@@ -223,7 +261,7 @@ const main = async (): Promise<void> => {
 
   // A follow-up is TYPED.
   const followUps = z.array(z.object({ text: z.string() })).parse(answerCard()['followUps']);
-  check(`the answer proposes what to say next: ${followUps.map((next) => next.text).join(' · ')}`, followUps.length === 3 && followUps.some((next) => next.text === OPTIONS));
+  check(`the answer proposes what to say next: ${followUps.map((next) => next.text).join(' · ')}`, followUps.length === 2 && followUps.some((next) => next.text === OPTIONS)); // (2026-09-21: at most two)
   const runsBeforeChip = world.runsOf(OP).length;
   const stepsBeforeChip = controls.seen.length;
   const passesBeforeChip = world.passesOf(OP).length;
@@ -242,7 +280,8 @@ const main = async (): Promise<void> => {
       ? defaultScript(turn)
       : {
           answer: {
-            response: 'Three things, in order. Hold Nova Kestrel until the cell has passed. Do not move her to The Grove. Tell everyone now.',
+            // (2026-09-21: two sentences — the steps say the rest.)
+            response: 'Three things, in order: hold her, do not move her to The Grove, tell everyone. Nothing is sent until you press it.',
             data: {
               steps: [
                 { say: 'Hold Nova Kestrel 45 minutes', actionId: 'set.delay', input: { actId: 'act_nova_kestrel', minutes: 45 } },

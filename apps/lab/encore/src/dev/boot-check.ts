@@ -18,7 +18,8 @@ import { app, asPrincipal, check, login, mounted, report, runtime, settle } from
 // one card — and the assertion grew with the manifest rather than loosening.
 // (2026-09-21, scene 4: `watch`, `attention` and `deck` joined the frame.)
 // (2026-09-21, the surface: `xray` — the one switch — joined the frame.)
-const CANVASES = ['line', 'assist', 'rail', 'watch', 'attention', 'deck', 'xray', 'doing', 'about', 'where', 'when', 'nearby', 'maybe', 'warm', 'trace'];
+// (2026-09-21, the redesign: `marker` — x-ray's "instruments visible" banner — joined it.)
+const CANVASES = ['marker', 'line', 'assist', 'rail', 'watch', 'attention', 'deck', 'xray', 'doing', 'about', 'where', 'when', 'nearby', 'maybe', 'warm', 'trace'];
 
 const RowsSchema = z.object({ result: z.array(z.record(z.string(), z.unknown())) });
 
@@ -52,9 +53,10 @@ const main = async (): Promise<void> => {
   check('...and every question canvas starts empty — the slow path’s included', ['assist', 'doing', 'about', 'where', 'when', 'nearby', 'warm'].every((id) => mounted(operator, id).length === 0));
 
   const frame = JSON.stringify(operator.flattenRenderTree(operator.getShellRenderTree()));
-  // The room arrives through `{ ref: 'room' }`; its columns (the only nodes in
-  // the frame that carry a `basis`) prove the ref resolved to the arrangement.
-  check('the frame renders, with the room resolved through its layout ref', frame.includes('"basis":360') && !frame.includes('"type":"error"'));
+  // The room arrives through `{ ref: 'room' }`. (Restated 2026-09-21, the redesign: the
+  // arrangement is ONE packed flow now, not three columns with a `basis` — so what
+  // proves the ref resolved is the Pack, which is nowhere in the frame's own layout.)
+  check('the frame renders, with the room resolved through its layout ref', frame.includes('"name":"Pack"') && !frame.includes('"type":"error"'));
 
   // ═══ 3. ring 1, from the resolver ════════════════════════
   const operatorIds = resolveCatalog(app, OPERATOR_PRINCIPAL).ids;

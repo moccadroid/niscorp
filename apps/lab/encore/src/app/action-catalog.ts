@@ -8,6 +8,7 @@ import { assistAnswerAction } from './actions/frame/assist-answer.action';
 import { assistRailAction } from './actions/frame/assist-rail.action';
 import { attentionStripAction } from './actions/frame/attention-strip.action';
 import { directorDeckAction } from './actions/frame/director-deck.action';
+import { roomMarkerAction } from './actions/frame/room-marker.action';
 import { roomXrayAction } from './actions/frame/room-xray.action';
 import { moveImpactAction, moveImpactInputSchema } from './actions/live/move-impact.action';
 import { siteMapAction, siteMapInputSchema } from './actions/spatial/site-map.action';
@@ -43,6 +44,7 @@ const DEFINITIONS: readonly ActionDefinition[] = [
   attentionStripAction,
   directorDeckAction,
   roomXrayAction,
+  roomMarkerAction,
   withInput(slotSwapAction, slotSwapInputSchema),
   withInput(setDelayAction, setDelayInputSchema),
   withInput(pushComposeAction, pushComposeInputSchema),

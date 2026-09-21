@@ -11,6 +11,7 @@ import { readCandidates } from './candidates';
 import { deriveQuestions } from './derive';
 import { decideQuestions } from './decide';
 import type { DecideState } from './decide';
+import { supersede, supersededNotes } from './supersede';
 import { resolveScreen } from './resolve';
 import { clearScreen, mountedActions, reconcileScreen, writeHeard, writeTrace, writeTraceWarm } from './reconcile';
 import { referencedTables } from './input-contract';
@@ -30,6 +31,8 @@ import { ENTRIES } from '@encore/app/vex';
 import { QUESTION_CANVASES } from '@encore/app/canvas-placement';
 import { calmLayout, xrayLayout } from '@encore/app/shell/calm.layout';
 import { ROOM_REF } from '@encore/app/shell/frame.layout';
+import { ROOM_MARKER_ID } from '@encore/app/actions/frame/room-marker.action';
+import { ROOM_XRAY_ID } from '@encore/app/actions/frame/room-xray.action';
 import { admit } from './admission';
 import type { RailEntry } from './thread';
 import type { Message } from '@niscorp/signal';
@@ -118,6 +121,8 @@ export type IntentLoop = {
   reloading: () => Reloader;
   // X-RAY: flip the room between the app and its instruments. Returns the new state.
   toggleXray: () => boolean;
+  // ...or put it where it is told: a fresh page load, and the marker's "turn off".
+  setXray: (on: boolean) => boolean;
 };
 
 // Enough history to read a typing burst back; not a log.
@@ -166,12 +171,16 @@ export const createIntentLoop = (session: FunctionSession, deps: IntentDeps): In
     for (const canvas of Object.values(shell.getState().canvases)) {
       for (const item of canvas.stack) {
         const runtime = shell.getRuntime(item.id);
-        if (runtime !== undefined && runtime.getData()['xray'] !== xray) runtime.setData({ ...runtime.getData(), xray });
+        // The switch's own `on` is written with it: three things can flip x-ray (the
+        // button, the key, the marker) and only one of them is the switch's endpoint.
+        const isSwitch = item.definitionId === ROOM_XRAY_ID || item.definitionId === ROOM_MARKER_ID;
+        const held = runtime?.getData();
+        if (runtime !== undefined && held !== undefined && (held['xray'] !== xray || (isSwitch && held['on'] !== xray))) runtime.setData({ ...held, xray, ...(isSwitch ? { on: xray } : {}) });
       }
     }
   };
-  const toggleXray = (): boolean => {
-    xray = !xray;
+  const setXray = (on: boolean): boolean => {
+    xray = on;
     session.shell.setLayout(ROOM_REF, xray ? xrayLayout : calmLayout);
     applyXray();
     if (!isWatchingMounts) {
@@ -180,6 +189,7 @@ export const createIntentLoop = (session: FunctionSession, deps: IntentDeps): In
     }
     return xray;
   };
+  const toggleXray = (): boolean => setXray(!xray);
 
   const writeFrameTone = (): void => {
     const louder = TONES[Math.max(TONES.indexOf(sentenceTone), TONES.indexOf(eventTone))] ?? 'calm';
@@ -246,7 +256,11 @@ export const createIntentLoop = (session: FunctionSession, deps: IntentDeps): In
     const parsed = parseLine(text, clock);
     const afterParse = performance.now();
 
-    const candidates = await readCandidates(session.wire, tables, parsed.tokens);
+    // A CORRECTION IS READ HERE, not judged later: a row the sentence took back
+    // leaves the candidate sets before a question is derived from them, so it is
+    // not something any model can pick (supersede.ts).
+    const corrected = supersede(text, await readCandidates(session.wire, tables, parsed.tokens));
+    const candidates = corrected.candidates;
     const afterCandidates = performance.now();
 
     // THE INSTANT LANE. Parsing and retrieval are local and took ~10 ms; the
@@ -262,7 +276,7 @@ export const createIntentLoop = (session: FunctionSession, deps: IntentDeps): In
     // ONLY LABELS LEAVE THE PROCESS: the line, what the parser heard in it,
     // action and pack descriptions, candidate labels. No row ever does — not
     // on this path. (The slow path sends the rows of the packs Jev chose.)
-    const state: DecideState = { line: text, heard: heardOf(parsed) };
+    const state: DecideState = { line: text, heard: heardOf(parsed), ...(corrected.superseded.length === 0 ? {} : { superseded: supersededNotes(corrected.superseded) }) };
     const decided = await decideQuestions(deps.decider, state, derived.questions);
     const afterDecide = performance.now();
     deps.onDecided?.(session.principal, { text, questions: derived.questions, answers: decided.answers });
@@ -312,7 +326,8 @@ export const createIntentLoop = (session: FunctionSession, deps: IntentDeps): In
       decider: `${deps.decider.id} · ${decided.model}`,
       calibrated: decided.calibrated,
       applied,
-      notes,
+      notes: [...supersededNotes(corrected.superseded).map((note) => `heard: ${note}`), ...notes],
+      superseded: corrected.superseded,
       handoff: resolved.handoff,
     };
     records.push(record);
@@ -519,5 +534,6 @@ export const createIntentLoop = (session: FunctionSession, deps: IntentDeps): In
     watching: () => watcher,
     reloading: () => reloader,
     toggleXray,
+    setXray,
   };
 };

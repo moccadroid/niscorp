@@ -275,7 +275,7 @@ const main = async (): Promise<void> => {
   // ONE LINE until it is opened — so what a landed pass draws is its summaries, not
   // a KeyValue. Same claim: the zero state is gone and the pass is on the screen.)
   check('the trace draws its sections once a pass has landed', /Pass \d+ · \d+ ms · \d+ questions/.test(served(OP, 'intent.trace')) && served(OP, 'intent.trace').includes('▸ Probabilities') && !served(OP, 'intent.trace').includes('no sentence yet'));
-  check(`THE RAIL HAS A HEADING, so a cold reader knows what the list is`, served(OP, 'assist.rail').includes('"value":"Earlier"')); // (2026-09-21: the heading is one plain word now)
+  check(`THE RAIL HAS A HEADING, so a cold reader knows what the list is`, /"label":"Earlier · \d+"/.test(served(OP, 'assist.rail'))); // (2026-09-21: the heading is one plain word — and, since the redesign, the whole rail until it is pressed: "Earlier · n")
   await world.typeLine(OP, '');
 
   // A CARD THAT FOLLOWS THE CLOCK FOLLOWS THE ROW; one that was TOLD an hour

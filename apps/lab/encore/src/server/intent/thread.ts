@@ -63,7 +63,7 @@ export type RememberedRow = { table: string; id: string; label: string };
 
 const RowSchema = z.object({ seq: z.number(), role: z.enum(['operator', 'jev', 'agent', 'did', 'event', 'break']), body: z.string(), detail: z.string() });
 
-const DetailSchema = z.object({ rail: z.string().optional(), rows: z.array(z.object({ table: z.string(), id: z.string(), label: z.string() })).optional() }).loose();
+const DetailSchema = z.object({ rail: z.string().optional(), followUps: z.array(z.string()).optional(), rows: z.array(z.object({ table: z.string(), id: z.string(), label: z.string() })).optional() }).loose();
 
 const detailOf = (row: TurnRow): z.infer<typeof DetailSchema> => {
   try {
@@ -93,6 +93,9 @@ export type Thread = {
   entries: () => Promise<RailEntry[]>;
   // Every row this thread has resolved or been handed, by table.
   remembered: () => Promise<RememberedRow[]>;
+  // Every sentence this thread has asked, and every follow-up it was offered:
+  // what the next answer's follow-ups must not repeat.
+  asked: () => Promise<string[]>;
   // Every append so far has reached the database.
   flushed: () => Promise<void>;
 };
@@ -176,6 +179,7 @@ export const createThread = (wire: FetchFn): Thread => {
       for (const row of await read()) for (const found of detailOf(row).rows ?? []) seen.set(`${found.table}:${found.id}`, found);
       return [...seen.values()];
     },
+    asked: async () => (await read()).flatMap((row) => (row.role === 'operator' ? [row.body] : row.role === 'agent' ? (detailOf(row).followUps ?? []) : [])),
     flushed: () => queue,
   };
 };

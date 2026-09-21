@@ -13,33 +13,16 @@ import { QUESTION_CANVASES } from '@encore/app/canvas-placement';
 
 // (The region's question used to be drawn here, over every card. It is x-ray's
 // now: app/shell/calm.layout.ts.)
-const region = (_heading: string): LayoutNode => ({
-  if: '$.instances.length',
-  then: {
-    component: 'Stack',
-    props: { gap: 10 },
-    children: [
-      { for: '$.instances', as: 'card', key: 'id', do: { component: 'ActionSlot', props: { instanceId: '$.card.id' } } },
-    ],
-  },
-  else: '',
-});
-
-// Furniture trays: no heading, because what sits on them is chrome and says so
-// itself.
+// A QUESTION CANVAS DRAWS NO BOX OF ITS OWN. Its cards are tiles of the room's
+// one packed flow (shell/calm.layout.ts): a slot renders no element, so the
+// cards of six canvases are siblings in one grid, and a canvas is a question the
+// loop owns — not a column on the screen.
 const tray: LayoutNode = { for: '$.instances', as: 'card', key: 'id', do: { component: 'ActionSlot', props: { instanceId: '$.card.id' } } };
 
-const HEADINGS: Record<(typeof QUESTION_CANVASES)[number], string> = {
-  doing: 'what are you doing?',
-  about: 'who or what is this about?',
-  where: 'where is it?',
-  when: 'when is it?',
-  nearby: 'what else matters?',
-};
-
 export const CANVASES: ShellManifest['canvases'] = [
+  { id: 'marker', mode: 'list', actionLayout: tray, initial: 'room.marker' },
   { id: 'line', initial: 'intent.line' },
-  ...QUESTION_CANVASES.map((id) => ({ id, mode: 'list' as const, actionLayout: region(HEADINGS[id]) })),
+  ...QUESTION_CANVASES.map((id) => ({ id, mode: 'list' as const, actionLayout: tray })),
   // The slow path's one card. Empty until a pass decides a handoff is coming.
   { id: 'assist', mode: 'list', actionLayout: tray },
   // The log of the shift: always there, under the exchange, outliving it.

@@ -22,7 +22,9 @@ import type { Answer, Decided } from './intent.types';
 const UNCALIBRATED_YES = 0.8;
 const UNCALIBRATED_PICK = 0.6;
 
-export type DecideState = { line: string; heard: Record<string, string | number> };
+// `superseded`: rows the sentence names and then took back (supersede.ts). They
+// are already not options; the note is why the line as typed still says them.
+export type DecideState = { line: string; heard: Record<string, string | number>; superseded?: string[] };
 
 export const decideQuestions = async (decider: Decider, state: DecideState, questions: Record<string, Question>): Promise<Decided> => {
   // What actually crosses the wire, minus the model name the adapter adds —

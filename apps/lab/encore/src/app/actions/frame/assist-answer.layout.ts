@@ -67,20 +67,11 @@ const steps: LayoutNode = {
   else: '',
 };
 
-const followUps: LayoutNode = {
-  if: '$.followUps.length',
-  then: {
-    component: 'Row',
-    props: { gap: 8, align: 'center', wrap: true },
-    children: [
-      { for: '$.followUps', as: 'next', key: 'text', do: { component: 'Chip', ref: 'followUp', props: { label: '$.next.text', value: '$.next.text' } } },
-    ],
-  },
-  else: '',
-};
+// (The follow-up questions are not here any more: they are links in the room's
+// one row of next steps — frame/intent-options.layout.ts.)
 
 export const assistAnswerLayout: LayoutNode = {
   component: 'Box',
-  props: { tone: 'panel', pad: 12 },
-  children: [{ component: 'Stack', props: { gap: 8 }, children: [answer, status, { if: '$.xray', then: { component: 'Stack', props: { gap: 8 }, children: [lookups, notes] }, else: '' }, steps, progress, followUps] }],
+  props: { tone: 'plain', py: 2 },
+  children: [{ component: 'Stack', props: { gap: 8 }, children: [answer, status, { if: '$.xray', then: { component: 'Stack', props: { gap: 8 }, children: [lookups, notes] }, else: '' }, steps, progress] }],
 };

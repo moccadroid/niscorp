@@ -1,11 +1,11 @@
 import { useNovaDispatch } from '@niscorp/nova/adapters/react';
 import type { NovaComponent } from '@niscorp/nova/adapters/react';
-import { TONES, clamp01, classes, num, oneOf, rowsOf, text } from './props';
+import { HUES, TONES, clamp01, classes, num, oneOf, rowsOf, text } from './props';
 import type { Props } from './props';
 
 // Content primitives: words, labels, records and lists of them.
 
-const TEXT_VARIANTS = ['body', 'label', 'title', 'display', 'mono', 'tag'] as const;
+const TEXT_VARIANTS = ['body', 'label', 'title', 'display', 'mono', 'tag', 'kicker', 'answer'] as const;
 
 export const Text: NovaComponent<Props> = ({ children, value, variant, tone }) => (
   <span className={classes('en-text', `en-text--${oneOf(variant, TEXT_VARIANTS, 'body')}`, `en-tone--${oneOf(tone, TONES, 'plain')}`)}>
@@ -134,10 +134,10 @@ export const Meter: NovaComponent<Props> = ({ value, label, tone, compact }) => 
 
 // An offered option. The click carries `value` — whatever the layout bound to
 // it — and the meter underneath says how sure whoever offered it was.
-export const Chip: NovaComponent<Props> = ({ label, value, meter, done, novaRef }) => {
+export const Chip: NovaComponent<Props> = ({ label, value, meter, done, accent, novaRef }) => {
   const dispatch = useNovaDispatch();
   return (
-    <button type="button" className={classes('en-chip', done === true && 'en-chip--done')} onClick={novaRef === undefined ? undefined : () => dispatch({ type: 'ui:click', ref: novaRef, payload: value })}>
+    <button type="button" className={classes('en-chip', done === true && 'en-chip--done', text(accent) !== '' && `en-hue--${oneOf(accent, HUES, 'teal')}`, text(accent) !== '' && 'en-chip--hued')} onClick={novaRef === undefined ? undefined : () => dispatch({ type: 'ui:click', ref: novaRef, payload: value })}>
       <span>{text(label)}</span>
       {meter === undefined ? null : <span className="en-chip__meter" style={{ width: `${clamp01(num(meter, 0)) * 100}%` }} />}
     </button>

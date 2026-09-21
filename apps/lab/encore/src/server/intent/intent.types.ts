@@ -5,6 +5,10 @@ import type { Day } from '@encore/lib/festival-clock';
 // The loop's working vocabulary — what one lane hands the next. Plain data all
 // the way through, so any lane can be run alone against a literal.
 
+// A row the sentence named and then took back, and the row meant in its place
+// (supersede.ts).
+export type Superseded = { table: string; id: string; label: string; by: { id: string; label: string }; marker: string };
+
 // ─── parse ───────────────────────────────────────────────────
 
 // What the sentence SAID outright. Every field is absent until it is said:
@@ -35,7 +39,9 @@ export type CandidateSets = Record<string, Candidate[]>;
 // question whose answer fills it — possibly one asked on behalf of a sibling
 // field, when two fields emitted the same question.
 export type FieldPlan =
-  | { field: string; kind: 'parse'; parse: string; fallback: boolean }
+  // `blank`: what the card holds for this field before anybody says anything —
+  // the definition's own default. What an unsaid value goes BACK to.
+  | { field: string; kind: 'parse'; parse: string; fallback: boolean; blank: string | number | boolean }
   // `table` is set when the options were candidate ROWS: the pick is then an
   // entity the sentence resolved, which the handoff reports as such.
   | { field: string; kind: 'choice'; question: string; table?: string }
@@ -94,7 +100,8 @@ export type Decided = {
 
 // ─── resolve ─────────────────────────────────────────────────
 
-export type Chip = { id: string; label: string; p: number };
+// `hue`: the kit hue of the kind of card it would open (canvas-placement.ts).
+export type Chip = { id: string; label: string; p: number; hue: string };
 
 // `direct` is Jev alone. The other three are what the agent is asked to do.
 export type Route = 'direct' | 'ask' | 'write' | 'plan';
@@ -138,6 +145,8 @@ export type Resolved = {
   // "leave it alone", and the loop owns these canvases outright.
   desired: Record<string, Desired[]>;
   chips: Chip[];
+  // The few of those the app shows (resolve.ts `suggestedOf`); x-ray shows `chips`.
+  suggested: Chip[];
   tone: 'calm' | 'elevated' | 'critical';
   top: { id: string; p: number }[];
   handoff: Handoff;
@@ -171,6 +180,8 @@ export type PassRecord = {
   // and recorded, and nothing it decided was put on screen.
   applied: boolean;
   notes: string[];
+  // Rows the sentence named and took back — removed before Jev was asked.
+  superseded: Superseded[];
   handoff: Handoff;
 };
 

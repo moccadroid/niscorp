@@ -34,12 +34,12 @@ import type { Question } from '@niscorp/signal';
 //             other concept cue fired: "what should we do?" is shaped like a
 //             question and is a request for a plan. The generic reading is the
 //             fallback, never the rival.
-//   changed   "to the tent no the grove". A correction word — no, not,
-//   mind      instead, rather, actually — splits the sentence: a match BEFORE
-//             it is what the speaker took back, and counts for little once a
-//             match AFTER it names another option of the same question. The
-//             word after the correction also inherits the DIRECTION of the one
-//             it replaces, because "no, the grove" is still "to the grove".
+//   (changed  REMOVED 2026-09-21. This scorer used to down-weight a match that a
+//   mind)     correction word took back — and that cue was the only reason "to
+//             the tent no the grove" worked: the real model left To = The Tent.
+//             A correction is now READ by a lane (intent/supersede.ts) and the
+//             row taken back never reaches any decider as an option. The fake
+//             has no opinion about "no" any more, so the checks prove the lane.
 //   middling  a real decision model almost never says zero. With `noulFloor`
 //             set, every yes/no answer is lifted onto [floor, 1], so an
 //             unrelated card is a 0.4 guess instead of nothing — and a rule
@@ -67,7 +67,7 @@ import type { Question } from '@niscorp/signal';
 // evidence of anything.
 const STOPWORDS: ReadonlySet<string> = new Set([
   'a', 'an', 'the', 'and', 'or', 'of', 'at', 'in', 'on', 'for', 'with', 'by', 'is', 'it', 'its', 'this', 'that', 'be', 'as', 'are', 'was',
-  'every', 'each', 'all', 'any', 'some', 'one', 'when', 'open', 'such', 'whether', 'will', 'them', 'their', 'they', 'who', 'what', 'which', 'how', 'not', 'none', 'these', 'about',
+  'every', 'each', 'all', 'any', 'some', 'one', 'when', 'open', 'such', 'whether', 'will', 'them', 'their', 'they', 'who', 'what', 'which', 'how', 'not', 'no', 'none', 'these', 'about',
 ]);
 
 // Direction words are neither content nor noise: they are read as a cue on the
@@ -78,12 +78,6 @@ const DIRECTION_FAMILY: Record<string, string> = { to: 'to', into: 'to', onto: '
 // How far back a direction word may sit from the token it governs: "to the
 // main tent" is two skips.
 const DIRECTION_REACH = 3;
-
-// Words that take back what was just said. Generic: they are about the
-// SENTENCE, and the scorer still has no idea what was corrected.
-const CORRECTIONS: ReadonlySet<string> = new Set(['no', 'not', 'instead', 'rather', 'actually', 'sorry', 'scratch']);
-// What a match the speaker took back is still worth.
-const TAKEN_BACK = 0.15;
 
 // Words that mean it is serious. The `score` lane's whole vocabulary: weights
 // add, and the sum bends the distribution toward the top level.
@@ -132,8 +126,7 @@ const NONE_PRIOR = 1;
 const NOUL_GAIN = 2.6;
 const SCORE_SPREAD = 0.55;
 
-// `takenBack`: a correction word follows this token somewhere in the sentence.
-export type StateToken = { text: string; direction: string | undefined; takenBack: boolean };
+export type StateToken = { text: string; direction: string | undefined };
 
 const wordsOf = (text: string): string[] => text.toLowerCase().split(/[^a-z0-9]+/).filter((word) => word.length > 0);
 
@@ -145,31 +138,31 @@ const directionsOf = (text: string): ReadonlySet<string> => new Set(wordsOf(text
 
 // Every string leaf of the state, in order. The wire allows a string, an object
 // or an array; whatever the caller sent, the words are what is scored.
+const NOTES: ReadonlySet<string> = new Set(['superseded']);
+
 const stateText = (state: unknown): string => {
   if (typeof state === 'string') return state;
   if (Array.isArray(state)) return state.map(stateText).join(' ');
-  if (state !== null && typeof state === 'object') return Object.values(state).map(stateText).join(' ');
+  // A NOTE ABOUT THE SENTENCE IS NOT THE SENTENCE. `superseded` is prose the
+  // loop wrote for a model that reads; to a scorer that counts words it would be
+  // the operator saying "taken", "back" and "place". (It also names the row that
+  // was taken back — and this scorer must get no help with that: supersede.ts.)
+  if (state !== null && typeof state === 'object') return Object.entries(state).filter(([key]) => !NOTES.has(key)).map(([, value]) => stateText(value)).join(' ');
   return '';
 };
 
 export const stateTokensOf = (state: unknown): StateToken[] => {
   const words = wordsOf(stateText(state));
   const tokens: StateToken[] = [];
-  const lastCorrection = words.reduce((last, word, index) => (CORRECTIONS.has(word) ? index : last), -1);
-  // The direction of the last thing said before the correction: what the word
-  // after it inherits when it brings none of its own.
-  let replaced: string | undefined;
   words.forEach((word, index) => {
-    if (STOPWORDS.has(word) || DIRECTIONS.has(word) || CORRECTIONS.has(word) || /^\d+$/.test(word)) return;
+    if (STOPWORDS.has(word) || DIRECTIONS.has(word) || /^\d+$/.test(word)) return;
     const before = words.slice(Math.max(0, index - DIRECTION_REACH), index).reverse();
     // The nearest direction word wins, and only across function words: in "to
     // the tent" `to` governs tent; in "to move tent" it governs `move`.
     const reach = before.findIndex((prior) => !STOPWORDS.has(prior) && !DIRECTIONS.has(prior));
     const governing = (reach < 0 ? before : before.slice(0, reach)).find((prior) => DIRECTIONS.has(prior));
     const own = governing === undefined ? undefined : DIRECTION_FAMILY[governing];
-    const isAfter = lastCorrection >= 0 && index > lastCorrection;
-    if (!isAfter && own !== undefined) replaced = own;
-    tokens.push({ text: word, direction: own ?? (isAfter ? replaced : undefined), takenBack: lastCorrection >= 0 && index < lastCorrection });
+    tokens.push({ text: word, direction: own });
   });
   return tokens;
 };
@@ -212,12 +205,8 @@ const scoreChoice = (tokens: readonly StateToken[], words: readonly string[], ra
 
   const evidence = options.map(() => 0);
   const strengthsOf = (token: StateToken): number[] => optionWords.map((words, index) => (options[index]?.[0] === 'none' ? 0 : bestMatch(token.text, words)));
-  // Was something said AFTER the correction that names an option of THIS
-  // question? Only then is what came before it taken back here: "not now, move
-  // her to the tent" corrects nothing about which stage.
-  const isCorrected = tokens.some((token) => !token.takenBack && tokens.some((other) => other.takenBack) && strengthsOf(token).some((strength) => strength > 0));
   for (const token of tokens) {
-    const strengths = strengthsOf(token).map((strength) => (isCorrected && token.takenBack ? strength * TAKEN_BACK : strength));
+    const strengths = strengthsOf(token);
     const matched = strengths.filter((strength) => strength > 0).length;
     if (matched === 0) continue;
     // Rarity: a token shared by every option separates none of them.

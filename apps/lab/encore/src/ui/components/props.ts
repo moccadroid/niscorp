@@ -35,6 +35,12 @@ export const length = (value: unknown): string | undefined => {
 
 export const clamp01 = (value: number): number => Math.min(1, Math.max(0, value));
 
+// FIVE HUES, ONE FAMILY. What a card MEANS is said by a thin edge and a small tag
+// in one of these — equal lightness, calm, and none of them near the amber and
+// red that are kept for severity. The kit names colours; what each one stands
+// for is the app's business.
+export const HUES = ['teal', 'violet', 'blue', 'lime', 'pink'] as const;
+
 export const TONES = ['plain', 'mute', 'accent', 'warn', 'alert', 'good'] as const;
 export type Tone = (typeof TONES)[number];
 

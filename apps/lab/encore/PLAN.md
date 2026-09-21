@@ -798,3 +798,104 @@ has two text sizes (16 title, 14 everything else) and badges/quiet buttons are c
 a failure, the director's evening, under a 0.4 floor — walked leaf by leaf for model names, state
 words, probabilities, timings and units, and the same scan proven not blind by running it over
 x-ray on.
+
+## Polish, and a correction that no model can get wrong — derived while fixing
+
+**Suggestions are few.** A calibrated model has a middling opinion about most of the catalog and
+every one of those clears `CHIP_AT`: one question put eight chips on the strip. The app shows at
+most `CHIPS_SHOWN` (3), best first, and only those within `CHIP_MARGIN` (0.15) of the best —
+`resolve.ts suggestedOf`. The whole middle band is still computed, still counted by the handoff,
+and x-ray shows all of it with meters. Asserted under a 0.4 floor (nine chips in the band, one
+offered).
+
+**A correction is READ, not judged** (`intent/supersede.ts`, lane 2½, pure). "move the headliner
+to the tent no the grove" left To = The Tent on the real model and passed every check through the
+fake scorer's negation cue — the sixth rule the fake hid. Now a row the speaker took back is
+removed from that pass's candidate sets BEFORE a question is derived from them: it is not an
+option, for any model. The heard tags are built from the same sets, so the line shows the
+survivor; Jev gets the line as typed plus a `superseded` note; the pass record carries
+`superseded` and the note leads its `notes`.
+
+- A row is MENTIONED when a word of the sentence begins a word of its label and of no other
+  row's in that table ("stage" names four stages and therefore none). Stopwords and marker words
+  are not mentions ("no" begins "Nova").
+- **Two kinds of marker, because English has two** — a deliberate departure from "not = no":
+  `replaces` (no · actually · i mean · scratch that · instead · rather): what FOLLOWS replaces the
+  same-table row said LAST before it. `rejects` (not · instead of · rather than): what follows is
+  the thing NOT meant, and goes if another row of its table was mentioned at all. Treating "not"
+  like "no" takes The Grove back in "to the grove, not the tent" — deterministically wrong, for
+  every model, which is the opposite of what the lane is for.
+- Different tables never touch; a marker with nothing after it changes nothing; "do not delay"
+  supersedes nothing; chained corrections chain.
+
+**The fake's negation cue is removed** — `CORRECTIONS`, `TAKEN_BACK`, `takenBack`, the direction
+a word inherited across a correction — so scenes-check proves the lane. Two things the fake
+needed instead, both about being a word-counter and neither about corrections: "no" is a function
+word, and a `superseded` NOTE is not the sentence (it would have been the operator saying
+"taken", "back" and "place", and it names the row that was taken back). decider-check now asserts
+the fake has NO opinion: handed both stages, it cannot fill the field.
+
+**A value the sentence no longer says goes back.** A form kept 21:00 from an earlier sentence
+that the new one never said. A parsed field the current line does not name returns to the card's
+own blank (`FieldPlan.blank`, the definition's default; `resolve.ts blanksOf`) — in place, same
+instance. A field a person typed into is still theirs (the reconciler strips it). Not done, and
+the same class of bug: a CHOICE field (`toStageId`) the new sentence stops naming keeps its row.
+
+## The redesign — derived while looking at it
+
+What the user saw on the real app: a wall of 18 px text reciting the card beside it, every
+sentence underlined and flashing green, two identical rows of pills, "why?" shutting itself, a
+scrollbar inside the page, columns with nothing in them — and x-ray, left on by somebody else.
+
+**One packed flow, not columns.** A canvas is still a question the loop owns; it is no longer a
+place. Every question canvas — and what the room raised, first — renders into ONE `Pack`
+(`shell/calm.layout.ts`); a slot renders no element, so the cards of six canvases are siblings in
+one grid. Columns come from the width the pack HAS (a container query: 1 · 2 · 4 · 6), a tile
+spans what its size class says at that width, `grid-auto-flow: dense` back-fills, and rows are
+4 px with each tile spanning as many as its content is tall (measured by `Pack`, re-measured on
+resize) — so nothing waits under a short card for a tall neighbour to end. Size class is DATA
+beside the placement (`canvas-placement.ts CARD_SPAN`). Looking at it changed the numbers:
+`regular` and `wide` are halves and wholes (then thirds and two-thirds) so they always sum to a
+row; records were `compact` until a form beside one record left a quarter of the row empty.
+
+**Meaning by colour, not position.** Five of the kit's hues, one family, one lightness, none near
+the amber and red kept for severity: a thin left edge on the card and a small sentence-case tag
+("Doing · About · When · Where · Context"). The kit names colours; `CATEGORIES` says what they
+stand for. Three things mount cards (Jev, the assistant, the watcher) and all hand the chrome its
+tile through one function (`tileOf`). A form's old green `accent` border is gone. X-ray swaps the
+arrangement for the same pack under a legend of the five questions.
+
+**One scrollbar, the page's.** The frame is a document that grows: no `100vh`, no inner scroll
+box. The line sticks to the top of the page, the handles to the bottom; neither is a scroll
+container. The only thing that may scroll inside itself is x-ray's drawer (34vh).
+
+**The answer shrinks and stops reciting.** Body size, 70ch. AT MOST TWO SENTENCES (320 chars), and
+never a recital: an answer that names more than two of the things a mounted card is showing
+(`namesOn`: strings under `name`/`*_name`/`summary` in the rows it loaded) is REFUSED with the
+reason and the model gets its one correction — never truncated. The bounds live in the contract
+(`agent/contract.ts`), are said in the instructions and the schema's description from the same
+constants, and are enforced by admission, in-run and at landing. (`response` is cortex's envelope
+field, so the bound cannot be a `.max()` on it.) Citations are invisible at rest: a dotted
+underline on hover or focus, and the cited card outlined in ITS OWN hue.
+
+**One row of next steps.** Card suggestions are chips (≤3, each with the hue of what it would
+open); follow-up questions are plain "↳" links (≤2) in the same row, written there by the run
+(`assist.ts writeNextSteps`). A plan's steps ARE the next steps: while they stand, no other card
+is offered. Follow-ups must be specific and are never a repeat: the thread's asked lines and every
+follow-up it was ever offered (`thread.asked()`, stored on the agent's turn) are handed to the
+agent as ASKED and deduped by admission.
+
+**"Why?" stays open.** The bug: nova re-opens a re-aimed card by removing it and pushing a new
+instance, which starts from the fragment's defaults — and while somebody types, most passes move a
+mount key. Whoever re-opens a card now hands the new instance what the old one held under
+`KEPT_ACROSS_REOPEN` (reconcile.ts, assist.ts). Asserted across a re-aim (new instance id), a
+reload-on-write, and the switch.
+
+**X-ray is unmistakable and never sticky.** On, a violet marker at the very top says so, with
+"turn off" beside it (`room.marker`). And it does not survive a page load: moss tells an app when
+a shell is BUILT, not when a terminal attaches to one that already exists, so the arrival is
+noticed from the terminal — the kit's `OnLoad` clicks once per page load, only while x-ray is on,
+and that click is a reset (`command: 'off'`), not a toggle.
+
+**Density.** "Earlier · 3" is one line until pressed. Title 15, body 13.5, one radius, hairline
+borders, 12–14 px padding.

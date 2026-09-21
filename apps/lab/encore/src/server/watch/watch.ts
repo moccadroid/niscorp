@@ -4,6 +4,7 @@ import type { FunctionSession } from '@niscorp/moss';
 import { ATTENTION_STRIP_ID } from '@encore/app/actions/frame/attention-strip.action';
 import { CLOCK_CHANNEL } from '@encore/app/actions/frame/director-deck.action';
 import { CANVAS_PLACEMENT } from '@encore/app/canvas-placement';
+import { CARD_SPAN, TILE_SPAN, tileOf } from '@encore/app/canvas-placement';
 import { RAISED_FRAGMENT } from '@encore/app/shell/fragments/raised.fragment';
 import { clockNow, feedGates, feedIncidents, feedScans, feedZoneCounts, labelsSince } from '@encore/app/vex/watch.entries';
 import type { FestivalClock } from '@encore/lib/festival-clock';
@@ -196,7 +197,11 @@ export const createWatcher = (deps: WatchDeps): Watcher => {
     if (runtime !== undefined) runtime.setData({ ...runtime.getData(), ...patch });
   };
 
+  // A raised card carries a sentence and two buttons over its body, so it is
+  // never narrower than `regular`, whatever the card under it would be.
   const chromeOf = (entry: Raised): Record<string, unknown> => ({
+    ...tileOf(entry.actionId),
+    ...(CARD_SPAN[entry.actionId] === 'compact' ? { [TILE_SPAN]: 'regular' } : {}),
     cause: entry.cause,
     raisedCard: entry.actionId,
     causeLine: withoutBand(entry.event),

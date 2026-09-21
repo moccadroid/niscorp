@@ -1,4 +1,5 @@
 import type { ActionDefinition } from '@niscorp/nova';
+import { LINE_TYPE_CHANNEL } from './assist-answer.action';
 import { intentOptionsLayout } from './intent-options.layout';
 
 // THE MIDDLE BAND, as chips.
@@ -20,12 +21,15 @@ export const intentOptionsAction: ActionDefinition = {
   // loop writes one plain sentence here, or nothing (reconcile.ts).
   // `idle` is the room with nothing in it and nothing asked of it: one quiet
   // sentence instead of a blank, written by the loop, gone at the first key.
-  data: { chips: [], xray: false, say: '', idle: 'Nothing needs attention right now. Say what is happening.', promoteId: '', promoted: 0 },
+  data: { chips: [], suggested: [], links: [], stepsUp: false, xray: false, say: '', idle: 'Nothing needs attention right now. Say what is happening.', promoteId: '', promoted: 0 },
   layout: intentOptionsLayout,
   endpoints: {
     promote: { fn: 'encore.promote', target: 'promoted' },
   },
   triggers: [
+    // A LINK IS TYPING, NOT RUNNING: it puts its sentence on the line, where the
+    // operator can still change it, and the line decides as it does for any text.
+    { event: 'ui:click', ref: 'link', do: [{ emit: { channel: LINE_TYPE_CHANNEL, payload: '@event.payload' } }] },
     {
       event: 'ui:click',
       ref: 'chip',

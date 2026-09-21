@@ -17,7 +17,7 @@ type Reading<T> = { value: T | undefined; rest: string };
 
 // Function words, plus the ones that only exist to introduce a value ("at 9",
 // "by 20 min"). Candidate retrieval is an `ilike`, and `%the%` finds everything.
-const STOPWORDS: ReadonlySet<string> = new Set([
+export const STOPWORDS: ReadonlySet<string> = new Set([
   'a', 'an', 'the', 'and', 'or', 'of', 'at', 'in', 'on', 'for', 'with', 'by', 'to', 'from', 'into', 'onto', 'is', 'it', 'its', 'this', 'that',
   'be', 'as', 'are', 'was', 'we', 'i', 'me', 'my', 'our', 'us', 'them', 'they', 'please', 'until', 'till', 'around', 'about', 'than', 'then',
 ]);

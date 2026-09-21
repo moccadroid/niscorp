@@ -1,5 +1,6 @@
 import { reconcileCanvas } from '@niscorp/nova';
 import { mountInputKeys } from '@niscorp/nova/reflect';
+import { keptAcrossReopen } from '@encore/app/shell/fragments/placed.fragment';
 import type { ActionDefinition, Shell } from '@niscorp/nova';
 import { QUESTION_CANVASES } from '@encore/app/canvas-placement';
 import type { TouchTracker } from './touched';
@@ -87,7 +88,8 @@ export const reconcileScreen = (shell: Shell, resolved: Resolved, definitions: R
       const moved = Object.fromEntries(Object.entries(wanted).filter(([key, value]) => JSON.stringify(holds[key]) !== JSON.stringify(value)));
       const definition = definitions[entry.actionId];
       const reopens = definition !== undefined && Object.keys(moved).some((key) => mountInputKeys(definition).has(key));
-      const input = reopens ? wanted : moved;
+      // ...and with what a PERSON did to the card's chrome: an open "why?" stays open.
+      const input = reopens ? { ...wanted, ...keptAcrossReopen(holds) } : moved;
       touched.willWrite(instanceId, input);
       return { ...entry, input };
     });
@@ -110,7 +112,7 @@ export const reconcileScreen = (shell: Shell, resolved: Resolved, definitions: R
       if (instanceId !== undefined && definition !== undefined) touched.adopt(instanceId, definition, entry.input ?? {});
     }
   }
-  mergeInto(shell, 'maybe', 'intent.options', { chips: resolved.chips, say: roomSays(mountedActions(shell).size, resolved.chips.length, answerComing) });
+  mergeInto(shell, 'maybe', 'intent.options', { chips: resolved.chips, suggested: resolved.suggested, say: roomSays(mountedActions(shell).size, resolved.chips.length, answerComing) });
   mergeInto(shell, 'line', 'intent.line', { tone: resolved.tone });
   return notes;
 };
@@ -120,7 +122,7 @@ export const clearScreen = (shell: Shell): void => {
   for (const canvas of QUESTION_CANVASES) reconcileCanvas(shell, canvas, [], { origin: INTENT_ORIGIN, own: 'canvas' });
   const none: Chip[] = [];
   // Cleared is not "nothing answers that": nothing was asked.
-  mergeInto(shell, 'maybe', 'intent.options', { chips: none, say: '' });
+  mergeInto(shell, 'maybe', 'intent.options', { chips: none, suggested: none, say: '' });
   mergeInto(shell, 'line', 'intent.line', { tone: 'calm', heard: [] });
 };
 

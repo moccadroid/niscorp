@@ -1,54 +1,31 @@
 import type { LayoutNode } from '@niscorp/nova';
+import { CATEGORIES, FLOW_ORDER } from '@encore/app/canvas-placement';
 
-// `calm` — the one arrangement this slice ships. What the operator is DOING
-// gets the wide left column because it is the only region with buttons in it;
-// the four questions that explain it sit to the right, in reading order.
+// THE ROOM'S ARRANGEMENT — what the frame's `{ ref: 'room' }` resolves to, and
+// what x-ray swaps whole with `shell.setLayout`.
 //
-// COLUMNS THAT ARE NOT THERE TAKE NO ROOM. A canvas with nothing on it is served
-// as an empty tree and its slot renders nothing, so a column whose canvases are
-// all empty is an empty element — and the kit collapses an empty Stack. The
-// columns are flex items, not grid tracks, precisely so that the ones left
-// share the width: a fixed three-track grid kept a dead middle column between
-// `doing` and `when` whenever nobody had asked who or where.
+// (It was three flex columns — doing | about, where | when, nearby — and a
+// question nobody had asked was a column of nothing: a two-card answer used a
+// third of the window. Position meant category, so category cost whitespace.)
 //
-// `basis` is each column's comfortable minimum: below it the row wraps, which
-// is the whole responsive story — three columns on a wall display, one in a
-// narrow pane. `max` is the other end: a lone card on a wall display stays a
-// card, not a banner.
-//
-// Later slices author `focus`, `split` and `warroom` beside this file and let
-// one `choice` question pick among them. Nothing here knows that.
-// THE SAME ROOM, TWICE. The app's arrangement has no headings: a card called
-// "Move a set" does not need "WHAT ARE YOU DOING?" shouted over it. X-ray's has
-// them — each region IS a question, and that is something about how the room
-// decides, which is what x-ray is for. Swapped whole with `shell.setLayout`.
-const HEADINGS: Record<string, string> = { doing: 'what are you doing?', about: 'who or what is this about?', where: 'where is it?', when: 'when is it?', nearby: 'what else matters?' };
+// ONE PACKED FLOW, NOT COLUMNS. Every question canvas — and what the room raised
+// by itself, first — renders into ONE `Pack`. A card's width is its size class
+// (canvas-placement.ts `CARD_SPAN`), its meaning is its hue and tag, and its
+// position is wherever the grid packs it: no region to be empty, no column to be
+// dead, at any width.
+const flow: LayoutNode = {
+  component: 'Pack',
+  children: [{ component: 'CanvasSlot', props: { canvasId: 'attention' } }, ...FLOW_ORDER.map((canvasId): LayoutNode => ({ component: 'CanvasSlot', props: { canvasId } }))],
+};
 
-const slot = (canvasId: string, headings: boolean): LayoutNode[] => [...(headings ? [{ component: 'Text', props: { value: HEADINGS[canvasId] ?? canvasId, variant: 'tag', tone: 'mute' } }] : []), { component: 'CanvasSlot', props: { canvasId } }];
-
-const room = (headings: boolean): LayoutNode => ({
+// X-RAY'S LEGEND: each hue IS a question Jev is asked, and that is something about
+// how the room decides — which is what x-ray is for. The app needs no legend: the
+// tags are on the cards.
+const legend: LayoutNode = {
   component: 'Row',
-  props: { gap: 18, align: 'start', wrap: true },
-  children: [
-    { component: 'Stack', props: { gap: 18, grow: 1.25, basis: 360, max: 860 }, children: [...slot('doing', headings)] },
-    {
-      component: 'Stack',
-      props: { gap: 18, grow: 1, basis: 320, max: 760 },
-      children: [
-        ...slot('about', headings),
-        ...slot('where', headings),
-      ],
-    },
-    {
-      component: 'Stack',
-      props: { gap: 18, grow: 1, basis: 320, max: 760 },
-      children: [
-        ...slot('when', headings),
-        ...slot('nearby', headings),
-      ],
-    },
-  ],
-});
+  props: { gap: 14, align: 'center', wrap: true },
+  children: FLOW_ORDER.map((canvasId): LayoutNode => ({ component: 'Chip', props: { label: `${CATEGORIES[canvasId].tag} — ${CATEGORIES[canvasId].question}`, accent: CATEGORIES[canvasId].hue, done: true } })),
+};
 
-export const calmLayout: LayoutNode = room(false);
-export const xrayLayout: LayoutNode = room(true);
+export const calmLayout: LayoutNode = flow;
+export const xrayLayout: LayoutNode = { component: 'Stack', props: { gap: 10 }, children: [legend, flow] };

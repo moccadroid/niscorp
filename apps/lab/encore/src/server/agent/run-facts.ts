@@ -24,7 +24,7 @@ import type { AnswerData } from './contract';
 export type RunFacts = {
   // The admission rule (intent/admission.ts), bound to this run's narrowed
   // actions, candidate rows and writable fields. Empty = admitted.
-  refusals: (data: AnswerData) => string[];
+  refusals: (data: AnswerData, response: string) => string[];
 };
 
 export const runFacts = new AsyncLocalStorage<RunFacts>();

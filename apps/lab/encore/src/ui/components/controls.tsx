@@ -85,18 +85,35 @@ export const Input: NovaComponent<Props> = ({ value, placeholder, type, size, de
   );
 };
 
-export const Button: NovaComponent<Props> = ({ children, label, variant, disabled, novaRef }) => {
+export const Button: NovaComponent<Props> = ({ children, label, value, variant, disabled, novaRef }) => {
   const dispatch = useNovaDispatch();
   return (
     <button
       type="button"
-      className={classes('en-button', `en-button--${oneOf(variant, ['primary', 'ghost', 'warn', 'quiet'], 'primary')}`)}
+      className={classes('en-button', `en-button--${oneOf(variant, ['primary', 'ghost', 'warn', 'quiet', 'link'], 'primary')}`)}
       disabled={disabled === true}
-      onClick={novaRef === undefined ? undefined : () => dispatch({ type: 'ui:click', ref: novaRef })}
+      onClick={novaRef === undefined ? undefined : () => dispatch({ type: 'ui:click', ref: novaRef, ...(value === undefined ? {} : { payload: value }) })}
     >
       {label === undefined ? children : text(label)}
     </button>
   );
+};
+
+// ONCE PER PAGE LOAD. The first time one of these renders in a freshly loaded
+// page, and `when` holds, it clicks its ref — and never again until the page is
+// loaded again, however often the tree is re-sent. It is how a server-side shell
+// that outlives its terminals learns that a NEW terminal has arrived: moss tells
+// an app when a shell is built, not when somebody attaches to it. Draws nothing.
+const loaded = { done: false };
+
+export const OnLoad: NovaComponent<Props> = ({ when, novaRef }) => {
+  const dispatch = useNovaDispatch();
+  useEffect(() => {
+    if (loaded.done) return;
+    loaded.done = true;
+    if (when === true && novaRef !== undefined) dispatch({ type: 'ui:click', ref: novaRef });
+  }, [dispatch, novaRef, when]);
+  return null;
 };
 
 // A KEY PRESSED ANYWHERE is a click on this ref — unless somebody is typing in a

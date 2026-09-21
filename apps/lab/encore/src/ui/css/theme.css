@@ -7,10 +7,17 @@
  * else is grey, so that colour always means something.
  *
  * THE SURFACE (PLAN.md): a product, not a console dump. One spacing scale
- * (4 · 8 · 12 · 16 · 24), one radius, one border weight. The reading face for
+ * (4 · 8 · 12 · 16 · 24), one radius, one hairline. The reading face for
  * everything a person reads; MONO IS FOR DATA — a time, a count, the instrument —
  * never for a label, and nothing shouts in capitals. A card has two text sizes:
- * its title (16) and everything else (14); badges and quiet buttons are chrome.
+ * its title (15) and everything else (13.5); badges and quiet buttons are chrome.
+ *
+ * ONE PACKED FLOW: every card is a tile in one dense grid (`.en-pack`), so what
+ * a card MEANS is said by colour, not position — five hues of one family at one
+ * lightness, used as a thin left edge and a small tag. Amber and red are not
+ * among them: they mean severity, and nothing else.
+ *
+ * ONE SCROLLBAR: the page's. Nothing in the app scrolls inside itself.
  */
 
 :root {
@@ -33,18 +40,29 @@
   --s3: 12px;
   --s4: 16px;
   --s5: 24px;
-  --radius: 10px;
+  --radius: 8px;
+  --hue-teal: #6fd4c4;
+  --hue-violet: #b4a7f2;
+  --hue-blue: #7fc0f0;
+  --hue-lime: #a9d48c;
+  --hue-pink: #e89cc8;
 }
+
+.en-hue--teal { --hue: var(--hue-teal); }
+.en-hue--violet { --hue: var(--hue-violet); }
+.en-hue--blue { --hue: var(--hue-blue); }
+.en-hue--lime { --hue: var(--hue-lime); }
+.en-hue--pink { --hue: var(--hue-pink); }
 
 * { box-sizing: border-box; }
 
-html, body, #root { height: 100%; }
+html, body, #root { min-height: 100%; }
 
 body {
   margin: 0;
   background: var(--ground);
   color: var(--ink);
-  font: 14px/1.45 var(--sans);
+  font: 13.5px/1.45 var(--sans);
   -webkit-font-smoothing: antialiased;
 }
 
@@ -60,6 +78,14 @@ body {
 .en-box--ground { background: var(--ground); }
 .en-box--panel { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); }
 .en-box--sunken { background: var(--sunken); border: 1px solid var(--line); border-radius: var(--radius); }
+/* X-ray's marker: unmistakable, and not a severity colour. */
+.en-box--marker { background: color-mix(in srgb, var(--hue-violet) 16%, var(--ground)); border: 1px solid var(--hue-violet); border-radius: var(--radius); color: var(--ink); }
+/* Pinned to the page as it scrolls — never a scroll container of its own. */
+.en-box--stick-top { position: sticky; top: 0; z-index: 6; background: var(--ground); padding-top: var(--s2); margin-top: calc(-1 * var(--s2)); padding-bottom: var(--s1); }
+.en-box--stick-bottom { position: sticky; bottom: 0; z-index: 5; margin-top: auto; padding-bottom: var(--s1); pointer-events: none; }
+.en-box--stick-bottom > * { pointer-events: auto; }
+/* The handles float over whatever scrolls under them, so they bring their own ground. */
+.en-box--stick-bottom > .en-stack > .en-row { align-self: flex-end; max-width: 100%; background: var(--ground); border: 1px solid var(--line); border-radius: 999px; padding: 2px var(--s2); }
 
 /* The intent line wears the room's alarm state. Calm is the accent at rest;
    the other two are the only places these colours touch the frame. */
@@ -78,13 +104,50 @@ body {
 .en-stack:empty { display: none; }
 .en-row { display: flex; min-width: 0; }
 .en-grid { display: grid; min-width: 0; }
+
+/* ── the pack ──────────────────────────────────────────────────
+   Columns by the width the pack actually has (a container query, so a narrow
+   pane and a wall display are the same rule). A tile spans what its size class
+   says AT THAT WIDTH; `dense` back-fills; rows are 4 px and a tile spans as many
+   as its content is tall (layout.tsx `Pack`), so nothing waits under a short
+   card for a tall neighbour to end. */
+.en-pack { container-type: inline-size; min-width: 0; }
+.en-pack__grid {
+  --cols: 1; --span-compact: 1; --span-regular: 1; --span-wide: 1;
+  display: grid;
+  grid-template-columns: repeat(var(--cols), minmax(0, 1fr));
+  grid-auto-flow: dense;
+  grid-auto-rows: 4px;
+  column-gap: var(--s3);
+  row-gap: 0;
+  align-items: start;
+}
+.en-pack__grid:empty { display: none; }
+@container (min-width: 600px) { .en-pack__grid { --cols: 2; --span-wide: 2; } }
+/* Halves and wholes, then thirds and two-thirds: spans that always sum to a row,
+   so the only gap a row can have is one a `compact` card is about to fill. */
+@container (min-width: 1000px) { .en-pack__grid { --cols: 4; --span-regular: 2; --span-wide: 4; } }
+@container (min-width: 1700px) { .en-pack__grid { --cols: 6; --span-regular: 2; --span-wide: 4; } }
+
+.en-tile { min-width: 0; grid-column: span var(--span-regular); grid-row-end: span 40; }
+.en-tile--compact { grid-column: span var(--span-compact); }
+.en-tile--wide { grid-column: span var(--span-wide); }
+.en-tile--pin { order: -1; }
+.en-tile__body { min-width: 0; }
+/* The category's thin left edge, on the card itself. */
+.en-tile .en-card { border-left: 2px solid var(--hue, var(--line)); }
 @media (max-width: 900px) { .en-grid { grid-template-columns: minmax(0, 1fr) !important; } }
 
 /* ── words ─────────────────────────────────────────────────── */
-.en-text--body { font-size: 14px; }
+.en-text--body { font-size: 13.5px; }
 /* Labels are sentence case, in the reading face, quiet. */
-.en-text--label { font: 500 14px/1.3 var(--sans); }
-.en-text--title { font-size: 16px; font-weight: 600; }
+.en-text--label { font: 500 13.5px/1.3 var(--sans); }
+.en-text--title { font-size: 15px; font-weight: 600; }
+/* What KIND of card this is: a small tag in its category's hue. */
+.en-text--kicker { font: 600 11.5px/1.2 var(--sans); color: var(--hue, var(--mute)); letter-spacing: 0.01em; }
+.en-text--kicker::before { content: ''; display: inline-block; width: 6px; height: 6px; margin-right: 6px; border-radius: 50%; background: var(--hue, var(--mute)); vertical-align: 1px; }
+.en-text--kicker:empty { display: none; }
+.en-text--answer { font: 400 15.5px/1.55 var(--sans); }
 .en-text--display { font: 600 26px/1 var(--mono); }
 .en-text--mono { font: 12px/1.3 var(--mono); }
 /* A time, a count, an instrument's reading: small, never competing. */
@@ -106,13 +169,15 @@ body {
   overflow: hidden;
   animation: en-arrive 220ms ease-out;
 }
-.en-card--accent { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent-dim); }
+/* A form is not an alarm: `accent` is the card's category now, and that is the
+   tile's edge. Amber stays a severity. */
+.en-card--accent { border-color: var(--line); }
 .en-card--warn { border-color: var(--warn); box-shadow: 0 0 0 1px var(--warn-dim); }
-.en-card__head { display: flex; flex-direction: column; gap: var(--s1); padding: var(--s4) var(--s4) var(--s3); border-bottom: 1px solid var(--line); }
+.en-card__head { display: flex; flex-direction: column; gap: var(--s1); padding: var(--s3) 14px var(--s2); border-bottom: 1px solid var(--line); }
 .en-card__titles { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
-.en-card__title { margin: 0; font: 600 16px/1.3 var(--sans); }
-.en-card__subtitle { color: var(--mute); font-size: 14px; font-variant-numeric: tabular-nums; }
-.en-card__body { display: flex; flex-direction: column; gap: var(--s3); padding: var(--s3) var(--s4) var(--s4); }
+.en-card__title { margin: 0; font: 600 15px/1.3 var(--sans); }
+.en-card__subtitle { color: var(--mute); font-size: 13.5px; font-variant-numeric: tabular-nums; }
+.en-card__body { display: flex; flex-direction: column; gap: var(--s3); padding: var(--s3) 14px 14px; }
 
 @keyframes en-arrive { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
 @media (prefers-reduced-motion: reduce) { .en-card { animation: none; } }
@@ -120,11 +185,11 @@ body {
 /* ── key / value ───────────────────────────────────────────── */
 .en-kv { margin: 0; display: grid; grid-template-columns: max-content 1fr; gap: 5px 14px; }
 .en-kv__pair { display: contents; }
-.en-kv dt { color: var(--mute); font: 14px/1.5 var(--sans); }
+.en-kv dt { color: var(--mute); font: 13.5px/1.5 var(--sans); }
 .en-kv dd { margin: 0; font-variant-numeric: tabular-nums; }
 .en-kv--inline { display: flex; flex-wrap: wrap; gap: 4px 16px; }
 .en-kv--inline .en-kv__pair { display: flex; gap: 6px; align-items: baseline; }
-.en-kv--inline dd { font: 14px/1.5 var(--sans); }
+.en-kv--inline dd { font: 13.5px/1.5 var(--sans); }
 
 /* ── list ──────────────────────────────────────────────────── */
 .en-list { display: flex; flex-direction: column; gap: 6px; }
@@ -132,7 +197,7 @@ body {
 .en-list__row { display: grid; grid-template-columns: 1fr auto auto; gap: 10px; align-items: baseline; padding: 6px 0; border-top: 1px solid var(--line); }
 .en-list__row--action { cursor: pointer; }
 .en-list__row--action:hover { background: var(--sunken); }
-.en-list__secondary { color: var(--mute); font-size: 14px; }
+.en-list__secondary { color: var(--mute); font-size: 13.5px; }
 .en-list__badge { margin-right: 6px; padding: 1px 6px; border: 1px solid var(--line-strong); border-radius: 999px; font: 600 12px/1.3 var(--sans); }
 .en-list__meta { color: var(--mute); font: 12px/1 var(--mono); }
 
@@ -146,16 +211,19 @@ body {
 
 .en-chip {
   position: relative;
-  padding: var(--s2) var(--s3);
-  background: var(--panel);
+  padding: 6px var(--s3);
+  background: transparent;
   border: 1px solid var(--line-strong);
   border-radius: 999px;
   color: var(--ink);
-  font: 500 14px/1 var(--sans);
+  font: 500 13px/1 var(--sans);
   cursor: pointer;
   overflow: hidden;
 }
-.en-chip:hover { border-color: var(--accent); }
+.en-chip:hover { border-color: var(--hue, var(--ink)); }
+/* A suggestion wears the hue of the kind of card it would open. */
+.en-chip--hued { border-color: color-mix(in srgb, var(--hue) 55%, var(--line)); }
+.en-chip--hued::before { content: ''; display: inline-block; width: 6px; height: 6px; margin-right: 6px; border-radius: 50%; background: var(--hue); vertical-align: 1px; }
 .en-chip--done { border-color: var(--line); color: var(--mute); }
 .en-chip__meter { position: absolute; left: 0; bottom: 0; height: 2px; background: var(--accent); }
 
@@ -179,7 +247,7 @@ body {
 }
 .en-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-dim); }
 /* The line is the hero: the largest type in the room, in the reading face. */
-.en-input--line { background: transparent; border: none; padding: var(--s1) 0; font: 500 24px/1.25 var(--sans); caret-color: var(--accent); }
+.en-input--line { background: transparent; border: none; padding: 2px 0; font: 500 22px/1.25 var(--sans); caret-color: var(--accent); }
 .en-input--line:focus { box-shadow: none; }
 .en-input::placeholder { color: #4b5867; }
 
@@ -192,6 +260,11 @@ body {
 /* A control that does not ask to be looked at: "why?", "hide", "demo", "x-ray". */
 .en-button--quiet { background: transparent; color: var(--mute); padding: var(--s1) var(--s2); font: 500 12px/1 var(--sans); }
 .en-button--quiet:hover { color: var(--ink); }
+/* A question to ask next: words with an arrow, never a pill — so it cannot be
+   mistaken for a card suggestion. */
+.en-button--link { background: transparent; border: none; padding: 2px 0; color: var(--mute); font: 400 13px/1.3 var(--sans); text-align: left; }
+.en-button--link::before { content: '↳ '; opacity: 0.7; }
+.en-button--link:hover { color: var(--ink); text-decoration: underline; text-underline-offset: 3px; }
 .en-button:disabled { opacity: 0.4; cursor: not-allowed; }
 
 /* ── timeline ──────────────────────────────────────────────── */
@@ -245,17 +318,17 @@ body {
 .en-timeline__bar--warn { background: color-mix(in srgb, var(--warn) 30%, transparent); border-color: var(--warn); color: var(--warn); }
 .en-timeline__bar--alert { background: color-mix(in srgb, var(--alert) 34%, transparent); border-color: var(--alert); color: var(--ink); box-shadow: 0 0 10px color-mix(in srgb, var(--alert) 45%, transparent); }
 
-/* The answer is the second thing the eye hits: proportional, comfortable, about
-   seventy characters a line. A citation is an underline that brightens with its
-   card — never a block of colour. */
-.en-spans { margin: 0; font: 400 18px/1.6 var(--sans); max-width: 70ch; color: var(--ink); }
-.en-spans__span--unsupported { color: var(--mute); }
-.en-spans__span--linked { border-bottom: 1px solid var(--line-strong); outline: none; transition: border-color 120ms ease, color 120ms ease; }
-.en-spans__span--linked:hover, .en-spans__span--linked:focus-visible { border-bottom-color: var(--accent); }
-.en-spans__span--lit { border-bottom-color: var(--accent); color: var(--accent); }
+/* THE ANSWER IS TWO SENTENCES OF BODY TEXT, not a headline: it says what matters
+   and the cards say the rest. A citation is INVISIBLE until it is pointed at —
+   then a dotted underline, and its card is outlined in the card's own hue.
+   Nothing is underlined at rest and nothing flashes. */
+.en-spans { margin: 0; font: 400 15.5px/1.55 var(--sans); max-width: 70ch; color: var(--ink); }
+.en-spans__span--unsupported { color: var(--ink); }
+.en-spans__span--linked { outline: none; text-decoration: none; cursor: default; }
+.en-spans__span--linked:hover, .en-spans__span--linked:focus-visible, .en-spans__span--lit { text-decoration: underline dotted var(--mute); text-underline-offset: 4px; }
 
 .en-spotlight { border-radius: var(--radius); transition: box-shadow 120ms ease; }
-.en-spotlight--lit { box-shadow: 0 0 0 1px var(--accent), 0 0 22px var(--accent-dim); }
+.en-spotlight--lit { box-shadow: 0 0 0 1px var(--hue, var(--line-strong)); }
 
 .en-rail { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
 /* Plain lines; the role column exists only when x-ray asks for one. */

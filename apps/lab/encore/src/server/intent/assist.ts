@@ -4,9 +4,9 @@ import type { ActionDefinition, Shell } from '@niscorp/nova';
 import type { FunctionSession, RunTurn } from '@niscorp/moss';
 import type { Message } from '@niscorp/signal';
 import { ASSIST_ANSWER_ID, THREAD_CHANNEL } from '@encore/app/actions/frame/assist-answer.action';
-import { CANVAS_PLACEMENT, QUESTION_CANVASES } from '@encore/app/canvas-placement';
+import { CANVAS_PLACEMENT, QUESTION_CANVASES, tileOf } from '@encore/app/canvas-placement';
 import { NOT_SUBMITTED, RAIL_PHRASES, SUBMITTED } from '@encore/app/rail-phrases';
-import { CITE_KEY, PLACED_BY, PLACED_FRAGMENT, WHY } from '@encore/app/shell/fragments/placed.fragment';
+import { CITE_KEY, PLACED_BY, PLACED_FRAGMENT, WHY, keptAcrossReopen } from '@encore/app/shell/fragments/placed.fragment';
 import { ENTRIES } from '@encore/app/vex';
 import type { ContextPack } from '@encore/app/vex/context-packs';
 import type { FestivalClock } from '@encore/lib/festival-clock';
@@ -238,14 +238,25 @@ export const createAssist = (deps: AssistDeps): Assist => {
     if (runtime !== undefined) runtime.setData({ ...runtime.getData(), ...patch });
   };
 
+  // THE ROOM HAS ONE ROW OF NEXT STEPS (frame/intent-options.layout.ts), and the
+  // answer's part of it — the questions worth asking next, and whether a plan's
+  // steps are standing in for card suggestions — is written there with the card.
+  const writeNextSteps = (card: Record<string, unknown>): void => {
+    const links = Array.isArray(card['followUps']) ? card['followUps'] : [];
+    const steps = Array.isArray(card['steps']) ? card['steps'] : [];
+    mergeInto('maybe', 'intent.options', { links, stepsUp: steps.length > 0 });
+  };
+
   const showCard = (patch: Record<string, unknown>): void => {
     const shell = session.shell;
     if (instanceOf(shell, ASSIST_CANVAS, ASSIST_ACTION) === undefined) reconcileCanvas(shell, ASSIST_CANVAS, [{ actionId: ASSIST_ACTION }], { origin: INTENT_ORIGIN, own: 'canvas' });
     mergeInto(ASSIST_CANVAS, ASSIST_ACTION, patch);
+    if ('followUps' in patch || 'steps' in patch) writeNextSteps(patch);
   };
 
   const hideCard = (): void => {
     reconcileCanvas(session.shell, ASSIST_CANVAS, [], { origin: INTENT_ORIGIN, own: 'canvas' });
+    writeNextSteps({});
   };
 
   // THE CARD SAYS WHAT IS HAPPENING, IN WORDS. A badge reading `pending` is a
@@ -399,6 +410,27 @@ export const createAssist = (deps: AssistDeps): Assist => {
     }
   };
 
+  // THE NAMES A CARD IS SHOWING: every string under a key that names something
+  // (`name`, `act_name`, `summary`…) in the ROWS it loaded — what an answer must
+  // not read back to somebody who is looking at them.
+  const NAMING = (key: string): boolean => key === 'name' || key.endsWith('_name') || key === 'summary';
+  const namesIn = (value: unknown, found: Set<string>, inRows: boolean): void => {
+    if (Array.isArray(value)) for (const item of value) namesIn(item, found, true);
+    const record = z.record(z.string(), z.unknown()).safeParse(value);
+    if (Array.isArray(value) || !record.success) return;
+    for (const [key, inner] of Object.entries(record.data)) {
+      if (typeof inner === 'string' && inRows && NAMING(key)) found.add(inner);
+      else namesIn(inner, found, inRows);
+    }
+  };
+  const namesOn = (card: string): readonly string[] => {
+    const found = new Set<string>();
+    const canvas = CANVAS_PLACEMENT[card];
+    const instanceId = canvas === undefined ? undefined : instanceOf(session.shell, canvas, card);
+    if (instanceId !== undefined) namesIn(session.shell.getRuntime(instanceId)?.getData() ?? {}, found, false);
+    return [...found];
+  };
+
   const rowsOn = (card: string): ReadonlySet<string> => {
     const found = new Set<string>();
     const canvas = CANVAS_PLACEMENT[card];
@@ -502,10 +534,10 @@ export const createAssist = (deps: AssistDeps): Assist => {
       const existing = instanceOf(shell, canvas, card.actionId);
       // Tagged like every card in the room — but with the agent's name, not
       // Jev's probability: this card is here because an answer said so.
-      const input = { ...card.input, [PLACED_BY]: placedBy, [CITE_KEY]: card.actionId, [WHY]: why };
+      const input = { ...card.input, ...tileOf(card.actionId, canvas), [PLACED_BY]: placedBy, [CITE_KEY]: card.actionId, [WHY]: why };
       // A card already up is written only where nobody has been (touched.ts):
       // the write is recorded BEFORE it is made.
-      const writing = existing === undefined ? input : touched.untouched(existing, input);
+      const writing = existing === undefined ? input : { ...touched.untouched(existing, input), ...keptAcrossReopen(shell.getRuntime(existing)?.getData() ?? {}) };
       if (existing !== undefined) touched.willWrite(existing, writing);
       return { actionId: card.actionId, input: writing, with: [PLACED_FRAGMENT] };
     });
@@ -742,6 +774,8 @@ export const createAssist = (deps: AssistDeps): Assist => {
     const window = await thread.window();
     // ...and so is what the conversation has already put on the table.
     const remembered = await thread.remembered();
+    // ...and what has already been asked or offered, this sentence included.
+    const asked = [...(await thread.asked()), context.text];
     if (context.text !== storedLine) {
       storedLine = context.text;
       await thread.append('operator', context.text, { route: handoff.route, routedBy: record.routedBy, run: true, rows: resolvedRows(handoff.entities) });
@@ -781,6 +815,7 @@ export const createAssist = (deps: AssistDeps): Assist => {
       facts,
       screen: screenNow(),
       writable,
+      asked,
     };
     // WHAT THIS RUN MAY NAME: the few actions Jev narrowed the catalog to, the
     // candidate rows of this pass, the fields listed as writable. The same
@@ -788,7 +823,7 @@ export const createAssist = (deps: AssistDeps): Assist => {
     // lands (whole, or not at all).
     // Citations are admitted against the screen AS IT IS WHEN THEY ARE CHECKED —
     // inside the run and again at landing — so both are functions, not values.
-    const answerContext = (): AnswerContext => ({ allowed: new Set(handoff.narrowed), definitions: deps.definitions, candidates: table, writable, onScreen: new Set(screenNow().map((card) => card.card)), rowsOn });
+    const answerContext = (): AnswerContext => ({ allowed: new Set(handoff.narrowed), definitions: deps.definitions, candidates: table, writable, onScreen: new Set(screenNow().map((card) => card.card)), rowsOn, namesOn, asked });
     const request = { thread: window, predecisions, line: context.text };
     lastInput = { input: runInput(request), mode };
     record.threadMessages = window.length;
@@ -801,8 +836,8 @@ export const createAssist = (deps: AssistDeps): Assist => {
       mode,
       tools: createReadTools({ wire: session.wire, policy: session.policy, entries: ENTRIES }),
       abort: controller.signal,
-      refusals: (data) => {
-        const verdict = admitAnswer(answerContext(), data);
+      refusals: (data, response) => {
+        const verdict = admitAnswer(answerContext(), data, response);
         return verdict.ok ? [] : verdict.reasons;
       },
       onAnswer: (soFar) => writer.push({ answer: soFar, segments: streamingSegments(soFar) }),
@@ -867,7 +902,7 @@ export const createAssist = (deps: AssistDeps): Assist => {
       // The answer becomes a turn — with what it did to the screen, so a later
       // "do that for the support act too" knows what "that" was, and with the
       // rows it was handed, so a later turn may name them.
-      await thread.append('agent', outcome.response, { mode, canvases: record.canvasesNamed, cards: record.cardsMounted, closed: record.cardsClosed, fields: record.fieldsWritten, steps: verdict.steps.map((step) => step.say), lookups: outcome.lookups, rows: handed.slice(0, REMEMBERED_MAX) });
+      await thread.append('agent', outcome.response, { mode, canvases: record.canvasesNamed, cards: record.cardsMounted, closed: record.cardsClosed, fields: record.fieldsWritten, steps: verdict.steps.map((step) => step.say), lookups: outcome.lookups, followUps: verdict.followUps, rows: handed.slice(0, REMEMBERED_MAX) });
       threadChanged();
     } else if (outcome.status === 'aborted') {
       // AN OUTCOME, NOT AN ERROR. The partial answer is not kept — not on the
@@ -1088,7 +1123,7 @@ export const createAssist = (deps: AssistDeps): Assist => {
     brief: async (request, abort) => {
       const llm = agent.llm;
       if (!enabled || llm === undefined) return undefined;
-      const predecisions: Predecisions = { mode: 'brief', sentence: request.event.line, heard: {}, now: { day: request.clock.day, time: request.clock.time }, resolved: [], rows: {}, actions: [], facts: { standing: request.standing }, screen: request.screen, writable: [] };
+      const predecisions: Predecisions = { mode: 'brief', sentence: request.event.line, heard: {}, now: { day: request.clock.day, time: request.clock.time }, resolved: [], rows: {}, actions: [], facts: { standing: request.standing }, screen: request.screen, writable: [], asked: [] };
       const nothing: AnswerContext = { allowed: new Set(), definitions: deps.definitions, candidates: {}, writable: [] };
       const outcome = await runAgent({
         llm,
@@ -1101,8 +1136,8 @@ export const createAssist = (deps: AssistDeps): Assist => {
         line: `JUST NOW: ${request.event.line}\nSTANDING, all at once: ${request.standing.map((cause) => `${cause.place} — ${cause.reading} (since ${cause.since})`).join(' | ')}`,
         tools: [],
         abort,
-        refusals: (data) => {
-          const verdict = admitAnswer(nothing, data);
+        refusals: (data, response) => {
+          const verdict = admitAnswer(nothing, data, response);
           return verdict.ok ? [] : verdict.reasons;
         },
         onAnswer: () => {},

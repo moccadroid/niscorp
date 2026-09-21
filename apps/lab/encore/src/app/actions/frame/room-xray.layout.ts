@@ -8,6 +8,7 @@ export const roomXrayLayout: LayoutNode = {
   props: { gap: 8, align: 'center', justify: 'end' },
   children: [
     { component: 'Hotkey', ref: 'hotkey', props: { value: '`' } },
+    { component: 'OnLoad', ref: 'fresh', props: { when: '$.on' } },
     { if: '$.on', then: { component: 'Button', ref: 'toggle', props: { label: 'x-ray on', variant: 'ghost' } }, else: { component: 'Button', ref: 'toggle', props: { label: 'x-ray', variant: 'quiet' } } },
   ],
 };

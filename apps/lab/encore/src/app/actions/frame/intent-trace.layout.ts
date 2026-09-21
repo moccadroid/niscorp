@@ -81,7 +81,9 @@ export const intentTraceLayout: LayoutNode = {
   if: '$.xray',
   then: {
     component: 'Box',
-    props: { tone: 'sunken', pad: 10 },
+    // The one place in the room that may scroll inside itself: an instrument
+    // drawer docked to the bottom of the page, never taller than a third of it.
+    props: { tone: 'sunken', pad: 10, scroll: true, maxH: '34vh' },
     children: [{ if: '$.pass', then: drawer, else: { component: 'Text', props: { value: 'no sentence yet — the instrument reads from the first pass', variant: 'tag', tone: 'mute' } } }],
   },
   else: '',

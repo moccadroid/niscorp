@@ -121,8 +121,14 @@ const main = async (): Promise<void> => {
   const toTheTent = await stageFor('move headliner to the tent');
   const corrected = await stageFor('move headliner to the tent no the grove');
   const unrelated = await stageFor('not now, move headliner to the tent');
-  check(`a CORRECTION prefers what is named after it: "…to the tent" → ${toTheTent.choice}; "…to the tent no the grove" → ${corrected.choice} (${corrected.p.toFixed(2)}), sure enough to fill a field`, toTheTent.choice === 'stage_tent' && corrected.choice === 'stage_grove' && corrected.p >= 0.6);
-  check(`...and only then: a "not" that corrects nothing about stages leaves the stage alone (${unrelated.choice})`, unrelated.choice === 'stage_tent' && unrelated.p >= 0.6);
+  // (Restated 2026-09-21. This asserted the scorer's negation cue — and that cue was
+  // the only reason a correction worked anywhere: the real model left To = The Tent.
+  // A correction is READ now, by a lane (intent/supersede.ts, lanes-check 1e), and the
+  // row taken back never reaches a decider. The cue is gone, and what is asserted is
+  // that the fake has NO opinion about "no": handed both stages, it cannot choose —
+  // so nothing downstream can be leaning on it.)
+  check(`the scorer has NO correction cue: "…to the tent" → ${toTheTent.choice}; handed BOTH stages, "…to the tent no the grove" is undecided (${corrected.choice} ${corrected.p.toFixed(2)}) — too unsure to fill a field`, toTheTent.choice === 'stage_tent' && corrected.p < 0.6);
+  check(`...and a "not" that corrects nothing about stages leaves the stage alone (${unrelated.choice})`, unrelated.choice === 'stage_tent' && unrelated.p >= 0.6);
 
   // A MIDDLING MODEL. The plain fake answers an unrelated question with zero; a
   // calibrated model almost never does. The floor is what lets a check exercise

@@ -37,6 +37,20 @@ const CANVASES =
   'Cards to put on screen as evidence for your answer. COMPLETE STATE per canvas you name: list every card that canvas should hold, and a card you leave out of a canvas you named is closed. A canvas you do not name is left exactly as it is — so name none unless the answer needs one. Each action belongs on the one canvas ACTIONS gives it in [brackets]. INPUT RULE, for every `input` here and in `steps`: only keys that action lists under `input:` in ACTIONS, only row ids that appear in ROWS or RESOLVED, only values the pre-decisions support; leave out what you do not know — a person fills the rest.';
 
 export const FOLLOW_UP_MAX_CHARS = 60;
+export const FOLLOW_UPS_MAX = 2;
+
+// THE ANSWER IS TWO SENTENCES. The operator is looking at the cards; an answer
+// that lists what a card lists is a wall of text beside the thing it describes.
+// The bounds live HERE, with the rest of the contract the model reads, and are
+// ENFORCED by admission (intent/admission.ts) — by refusing the answer with the
+// reason, never by cutting it: half a sentence is worse than a long one.
+// (`response` is cortex's envelope field, not a key of this schema, so its bound
+// cannot be a `.max()` on it: it is said in the schema's own description and in
+// the instructions, both from these constants.)
+export const ANSWER_MAX_SENTENCES = 2;
+export const ANSWER_MAX_CHARS = 320;
+// How many things a card already shows an answer may name before it is reciting.
+export const RECITE_MAX = 2;
 
 export const AnswerDataSchema = z.strictObject({
   claims: z
@@ -52,9 +66,9 @@ export const AnswerDataSchema = z.strictObject({
     .describe('CITE YOUR ANSWER. One entry per sentence of `response` that a card on screen supports, so the operator can point at a sentence and see the card it came from. A sentence you cannot cite is shown to them as unsupported — so if the card that would support it is not on screen, PLACE it in `canvases` and cite it. A claim whose text is not in `response`, or whose card is not on screen, is dropped.'),
   followUps: z
     .array(z.string().min(1).describe(`One complete sentence the operator might type next, in their voice, at most ${FOLLOW_UP_MAX_CHARS} characters: "what are our options", not "Options?".`))
-    .max(3)
+    .max(FOLLOW_UPS_MAX)
     .nullish()
-    .describe('Up to three sentences the operator is likely to want next, most useful first. Pressing one types it into their line — it is a suggestion of what to SAY, never an action you take.'),
+    .describe(`At most ${FOLLOW_UPS_MAX} questions worth asking NEXT, specific to this answer — its rows, its problem. Never one that ASKED already lists, never one that would fit any answer; omit the key when nothing specific remains. Pressing one types it into their line — it is a suggestion of what to SAY, never an action you take.`),
   canvases: z
     .strictObject(Object.fromEntries(QUESTION_CANVASES.map((canvas) => [canvas, z.array(Card).max(4).nullish()])))
     .nullish()
@@ -80,6 +94,6 @@ export const AnswerDataSchema = z.strictObject({
     .max(6)
     .nullish()
     .describe('A plan, in order, most consequential first — only when the operator asked what to DO. Each step opens one prefilled form when pressed; nothing is submitted for them. Leave empty when answering a question or writing words.'),
-});
+}).describe(`What goes beside your \`response\`. The response itself: AT MOST ${ANSWER_MAX_SENTENCES} sentences, ${ANSWER_MAX_CHARS} characters, and never a recital of what a card on screen already shows (more than ${RECITE_MAX} of a card's own rows named is a recital). An answer over either bound is refused and you are asked again.`);
 
 export type AnswerData = z.infer<typeof AnswerDataSchema>;

@@ -2,6 +2,7 @@ import { z } from 'zod';
 import type { ActionDefinition } from '@niscorp/nova';
 import { CANVAS_PLACEMENT } from '@encore/app/canvas-placement';
 import type { QuestionCanvas } from '@encore/app/canvas-placement';
+import { ANSWER_MAX_CHARS, ANSWER_MAX_SENTENCES, FOLLOW_UPS_MAX, RECITE_MAX } from '@encore/server/agent/contract';
 import { inputContractOf } from './input-contract';
 import type { InputField } from './input-contract';
 import type { CandidateSets } from './intent.types';
@@ -131,11 +132,30 @@ export type AnswerContext = AdmissionContext & {
   // is showing. Absent = nothing is on screen and no row is known.
   onScreen?: ReadonlySet<string>;
   rowsOn?: (card: string) => ReadonlySet<string>;
+  // THE NAMES A CARD IS SHOWING — acts on the running order, incidents on the
+  // feed. What an answer must not read back to somebody who can see them.
+  namesOn?: (card: string) => readonly string[];
+  // WHAT THIS THREAD HAS ALREADY ASKED OR BEEN OFFERED, this sentence included.
+  // A follow-up that repeats one is dropped: "what are our options?" under every
+  // answer is furniture, not a suggestion.
+  asked?: readonly string[];
 };
 
 export type AdmittedClaim = { text: string; card: string; row: string };
 
-export const FOLLOW_UPS_MAX = 3;
+// (The bounds — two sentences, no recital, two follow-ups — are the contract's:
+// agent/contract.ts. They are enforced here.)
+
+// A sentence ends at . ! or ? followed by a space and a capital or a quote — or
+// by the end. "21.00", "4.5 k" and "e.g. this" do not end one.
+export const sentencesOf = (text: string): string[] =>
+  text
+    .trim()
+    .split(/(?<=[.!?])["”’)]?\s+(?=["“‘(]?[A-Z0-9])/)
+    .map((sentence) => sentence.trim())
+    .filter((sentence) => sentence !== '');
+
+const normal = (text: string): string => text.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
 export const FOLLOW_UP_MAX_CHARS = 60;
 
 export type AdmittedAnswer =
@@ -179,13 +199,30 @@ const admitClaims = (context: AnswerContext, answer: AnswerShape, response: stri
   return { claims, notes };
 };
 
-const admitFollowUps = (answer: AnswerShape): { followUps: string[]; notes: string[] } => {
+// Too long, or reading a card back. Reasons are written FOR THE MODEL: cortex
+// hands them to it as the correction, and it gets to try again.
+const wordReasons = (context: AnswerContext, response: string): string[] => {
+  const reasons: string[] = [];
+  const sentences = sentencesOf(response);
+  if (sentences.length > ANSWER_MAX_SENTENCES) reasons.push(`response: ${sentences.length} sentences — at most ${ANSWER_MAX_SENTENCES}. Say what matters, not everything`);
+  if (response.trim().length > ANSWER_MAX_CHARS) reasons.push(`response: ${response.trim().length} characters — at most ${ANSWER_MAX_CHARS}`);
+  const said = normal(response);
+  for (const card of context.onScreen ?? []) {
+    const recited = [...new Set((context.namesOn?.(card) ?? []).filter((name) => normal(name).length >= 4 && said.includes(normal(name))))];
+    if (recited.length > RECITE_MAX) reasons.push(`response: it reads "${card}" back to somebody who is looking at it (${recited.slice(0, 4).join(', ')}…). Never restate what a card on screen shows — say what matters, what connects the cards, or what is on none of them; if the cards are the whole answer, say so in one short sentence`);
+  }
+  return reasons;
+};
+
+const admitFollowUps = (context: AnswerContext, answer: AnswerShape): { followUps: string[]; notes: string[] } => {
   const notes: string[] = [];
   const followUps: string[] = [];
+  const before = new Set((context.asked ?? []).map(normal));
   for (const raw of answer.followUps ?? []) {
     const sentence = raw.trim();
-    if (sentence === '' || followUps.includes(sentence)) continue;
-    if (sentence.length > FOLLOW_UP_MAX_CHARS) notes.push(`a follow-up was dropped: over ${FOLLOW_UP_MAX_CHARS} characters`);
+    if (sentence === '' || followUps.some((held) => normal(held) === normal(sentence))) continue;
+    if (before.has(normal(sentence))) notes.push(`a follow-up was dropped: "${sentence}" was already asked or offered in this thread`);
+    else if (sentence.length > FOLLOW_UP_MAX_CHARS) notes.push(`a follow-up was dropped: over ${FOLLOW_UP_MAX_CHARS} characters`);
     else if (followUps.length < FOLLOW_UPS_MAX) followUps.push(sentence);
   }
   return { followUps, notes };
@@ -222,9 +259,13 @@ export const admitAnswer = (context: AnswerContext, answer: AnswerShape, respons
     else steps.push({ say: step.say, card: { actionId: admitted.actionId, canvas: admitted.canvas, input: admitted.input } });
   }
 
+  // THE WORDS. Only an answer that HAS words is judged on them: the in-run check
+  // sees every attempt, and the landing sees the last.
+  if (response.trim() !== '') reasons.push(...wordReasons(context, response));
+
   if (reasons.length > 0) return { ok: false, reasons };
   const placed = new Set(Object.values(canvases).flatMap((cards) => cards.map((card) => card.actionId)));
   const cited = admitClaims(context, answer, response, placed);
-  const next = admitFollowUps(answer);
+  const next = admitFollowUps(context, answer);
   return { ok: true, canvases, fields, steps, claims: cited.claims, followUps: next.followUps, notes: [...cited.notes, ...next.notes] };
 };

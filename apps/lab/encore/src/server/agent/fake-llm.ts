@@ -1,3 +1,4 @@
+import { FOLLOW_UPS_MAX } from './contract';
 import { z } from 'zod';
 import { predecisionsIn } from './predecisions';
 import type { Predecisions } from './predecisions';
@@ -150,10 +151,14 @@ const factParts = (facts: Predecisions['facts']): string[] =>
     return parsed.success ? Object.entries(parsed.data).map(([name, rows]) => `${countOf(rows)} ${pack}.${name}`) : [];
   });
 
-const factsLine = (parts: readonly string[]): string => (parts.length === 0 ? 'I was handed no facts for this.' : `From what was read a moment ago: ${parts.join(', ')}.`);
+const factsLine = (parts: readonly string[]): string => (parts.length === 0 ? 'I was handed no facts for this' : `From what was read a moment ago: ${parts.join(', ')}`);
 
-// What a scripted operator would want next. A script, not a judgement.
-const FOLLOW_UPS = ['what are our options?', 'who needs to know?', 'how full is the arena?'];
+// What a scripted operator would want next. A script, not a judgement — but it
+// keeps the contract's promise: nothing this thread already asked or was offered
+// (ASKED), and at most two.
+const FOLLOW_UPS = ['what are our options?', 'who needs to know?', 'how full is the arena?', 'which sets are exposed?', 'what did I miss?'];
+const sameWords = (text: string): string => text.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+const followUpsFor = (asked: readonly string[]): string[] => FOLLOW_UPS.filter((next) => !asked.some((before) => sameWords(before) === sameWords(next))).slice(0, FOLLOW_UPS_MAX);
 
 // A row's name, out of the ROWS lines ("id = Name — what it is").
 const nameIn = (rows: Predecisions['rows'], id: unknown): string => {
@@ -215,8 +220,12 @@ export const defaultScript: AgentScript = (turn) => {
   if (NEEDS_LOOKUP.test(turn.line) && turn.lookups.length === 0) {
     return { call: { name: 'query', args: { fingerprint: 'lineup/forDay', context: JSON.stringify({ day: predecisions.heard['day'] ?? predecisions.now.day }) } } };
   }
-  const earlier = turn.thread.length === 0 ? '' : ` Earlier in this conversation: ${turn.thread.length} message(s), the last being "${turn.thread.at(-1)?.content ?? ''}".`;
-  const looked = turn.lookups.length === 0 ? '' : ` I looked up ${turn.lookups.length} thing(s) to be sure.`;
+  // TWO SENTENCES, like the contract says: what was read (and looked up), then
+  // what the thread holds. The quoted turn is clipped and stripped of full stops —
+  // a script must not be refused for quoting somebody else's punctuation.
+  const lastSaid = (turn.thread.at(-1)?.content ?? '').replace(/[.!?"]/g, '').slice(0, 60);
+  const earlier = turn.thread.length === 0 ? '' : ` Earlier in this conversation: ${turn.thread.length} message(s), the last being "${lastSaid}".`;
+  const looked = turn.lookups.length === 0 ? '' : `; I looked up ${turn.lookups.length} thing(s) to be sure`;
   const parts = factParts(predecisions.facts);
 
   // EVERY SENTENCE STANDS ON A CARD. What is on screen is cited, part by part;
@@ -229,8 +238,8 @@ export const defaultScript: AgentScript = (turn) => {
 
   return {
     answer: {
-      response: `${factsLine(parts)}${looked}${earlier}`,
-      data: { claims, followUps: FOLLOW_UPS, ...(placing === undefined ? {} : { canvases: { [placing.canvas]: [{ actionId: placing.id, input: {} }] } }) },
+      response: `${factsLine(parts)}${looked}.${earlier}`,
+      data: { claims, followUps: followUpsFor(predecisions.asked), ...(placing === undefined ? {} : { canvases: { [placing.canvas]: [{ actionId: placing.id, input: {} }] } }) },
     },
   };
 };

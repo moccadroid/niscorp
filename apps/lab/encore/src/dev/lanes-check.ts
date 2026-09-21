@@ -11,6 +11,7 @@ import { parseLine } from '@encore/server/intent/parse';
 import { CONTINUATION_KEEPS, anchorAfter, continues } from '@encore/server/intent/continuation';
 import { PASS_CEILING_MS, PASS_QUIET_MS, createPacer } from '@encore/server/intent/pacer';
 import { heardTags } from '@encore/server/intent/heard';
+import { supersede, supersededNotes } from '@encore/server/intent/supersede';
 import { deriveQuestions, NONE, TONE_QUESTION } from '@encore/server/intent/derive';
 import { resolveScreen, CHIP_AT, FILL_AT, HANDOFF_AT, MOUNT_AT, SURE_DIRECT_AT, UNMOUNT_AT } from '@encore/server/intent/resolve';
 import { admit, admitAnswer } from '@encore/server/intent/admission';
@@ -186,6 +187,40 @@ const bench = (): { pacer: ReturnType<typeof createPacer>; sent: { text: string;
   check('nothing heard, no tags', heardTags(parse('qqq'), { acts: [], stages: rows['stages'] ?? [] }).length === 0);
 }
 
+// ═══ 1e. a correction is read, not judged ════════════════════
+{
+  const rows: CandidateSets = {
+    acts: [{ id: 'act_a', label: 'Nova Kestrel — headliner, electronic' }, { id: 'act_b', label: 'Velvet Arcade — indie' }],
+    stages: [
+      { id: 'stage_main', label: 'Main Stage — open-air stage' },
+      { id: 'stage_tent', label: 'The Tent — covered stage' },
+      { id: 'stage_grove', label: 'The Grove — open-air stage' },
+      { id: 'stage_dock', label: 'Dockside — open-air stage' },
+    ],
+  };
+  const gone = (line: string): string => supersede(line, rows).superseded.map((entry) => `${entry.table}:${entry.id}>${entry.by.id}`).join();
+  const left = (line: string, table: string): string => (supersede(line, rows).candidates[table] ?? []).map((row) => row.id).join();
+
+  check('SAME TABLE SUPERSEDES: "…to the tent no the grove" takes The Tent out of the stages Jev may pick', gone('move the headliner to the tent no the grove') === 'stages:stage_tent>stage_grove' && left('move the headliner to the tent no the grove', 'stages') === 'stage_main,stage_grove,stage_dock');
+  check('...and touches no other table: the act is still a candidate', left('move the headliner to the tent no the grove', 'acts') === 'act_a,act_b');
+  check('...with a comma, a capital, and every other way of saying it', ['to the tent, No, the grove', 'to the tent actually the grove', 'to the tent i mean the grove', 'to the tent scratch that the grove', 'to the tent, or rather the grove', 'to the tent instead the grove'].every((line) => gone(line).startsWith('stages:stage_tent>stage_grove')));
+  check('...chained: "the tent no the grove no dockside" leaves Dockside', gone('to the tent no the grove no dockside') === 'stages:stage_tent>stage_grove,stages:stage_grove>stage_dock');
+  check('...and it is only the row said LAST before the marker: "from main to the tent no the grove" keeps Main Stage', gone('move her from main to the tent no the grove') === 'stages:stage_tent>stage_grove');
+  check('DIFFERENT TABLES DO NOT: "move nova kestrel no to the grove" takes nobody back', gone('move nova kestrel no to the grove') === '' && supersede('move nova kestrel no to the grove', rows).candidates === rows);
+  check('...while two acts do: "move nova kestrel no velvet arcade"', gone('move nova kestrel no velvet arcade to the tent') === 'acts:act_a>act_b');
+  check('A MARKER WITH NOTHING AFTER IT CHANGES NOTHING: "move the headliner to the tent no"', gone('move the headliner to the tent no') === '' && gone('to the tent actually') === '');
+  check('"NOT" IN AN ORDINARY PHRASE supersedes nothing: "do not delay nova kestrel", "not now, move her to the tent"', gone('do not delay nova kestrel') === '' && gone('not now move her to the tent') === '');
+  check('A WORD THAT NAMES EVERY ROW NAMES NONE: "to the tent stage no the grove" still takes back The Tent, not "stage"', gone('to the tent stage no the grove') === 'stages:stage_tent>stage_grove');
+  check('the same row said twice is not a correction: "the grove no the grove"', gone('to the grove no the grove') === '');
+  // (A deliberate departure from "not" = "no" — see supersede.ts: what follows
+  // "not" / "instead of" / "rather than" is the thing NOT meant.)
+  check('"NOT" REJECTS WHAT FOLLOWS IT: "to the grove, not the tent" keeps The Grove — and so do "instead of" and "rather than"', ['to the grove, not the tent', 'to the grove instead of the tent', 'to the grove rather than the tent', 'not the tent, the grove'].every((line) => gone(line) === 'stages:stage_tent>stage_grove'));
+  const told = supersededNotes(supersede('move the headliner to the tent no the grove', rows).superseded);
+  check(`Jev is told, beside the line as typed: ${told.join(' · ')}`, told.length === 1 && told[0]?.includes('"The Tent" was taken back') === true && told[0].includes('"The Grove" is meant'));
+  const heardAfter = heardTags(parse('move the headliner to the tent no the grove'), supersede('move the headliner to the tent no the grove', rows).candidates);
+  check(`WHAT WAS HEARD IS THE SURVIVOR (${heardAfter.map((tag) => tag.label).join(' · ')})`, heardAfter.some((tag) => tag.label.startsWith('The Grove')) && !heardAfter.some((tag) => tag.label.startsWith('The Tent')));
+}
+
 // ═══ 2. derive ═══════════════════════════════════════════════
 const held = Object.keys(CANVAS_PLACEMENT).flatMap((id) => (CATALOG_DEFINITIONS[id] === undefined ? [] : [CATALOG_DEFINITIONS[id]]));
 const candidates: CandidateSets = {
@@ -245,7 +280,11 @@ check(`...until it falls to ${UNMOUNT_AT}, where it comes down`, !onScreen(scree
 check('a wanted card whose REQUIRED input is unsure is offered, not mounted', ((): boolean => { const resolved = screen({ 'action/act.card': noul(0.95), [actQuestion]: { kind: 'choice', choice: 'act_a', p: FILL_AT - 0.01, confidence: FILL_AT - 0.01 } }); return !onScreen(resolved).includes('act.card') && resolved.chips.some((chip) => chip.id === 'act.card'); })());
 check(`...and mounts, aimed, once the pick clears ${FILL_AT}`, screen({ 'action/act.card': noul(0.95), [actQuestion]: { kind: 'choice', choice: 'act_a', p: FILL_AT, confidence: FILL_AT } }).desired['about']?.[0]?.input?.['actId'] === 'act_a');
 check('`none` fills nothing, however confident', screen({ 'action/slot.swap': noul(0.95), [actQuestion]: { kind: 'choice', choice: NONE, p: 0.99, confidence: 0.99 } }).desired['doing']?.[0]?.input?.['actId'] === undefined);
-check('parsed values fill their fields; a `fallback: now` field takes the clock; one without is left alone', ((): boolean => { const swap = screen({ 'action/slot.swap': noul(0.9) }).desired['doing']?.[0]?.input ?? {}; const bare = resolveScreen({ line: 'x', derived, answers: { 'action/slot.swap': noul(0.9) }, parsed: parse('move'), clock: PINNED_CLOCK, mounted: new Set(), pinned: new Set(), titles: {} }).desired['doing']?.[0]?.input ?? {}; return swap['time'] === '21:00' && swap['day'] === 'sat' && bare['time'] === undefined && bare['day'] === 'sat'; })());
+// (Restated 2026-09-21: "left alone" was the bug — a form kept 21:00 from an earlier
+// sentence that the new one never said. A parsed field the sentence does not name
+// now goes back to the card's own blank; a touched field is still the person's,
+// which is the reconciler's business and asserted in scenes-check.)
+check('parsed values fill their fields; a `fallback: now` field takes the clock; one the sentence does not name goes back to BLANK', ((): boolean => { const swap = screen({ 'action/slot.swap': noul(0.9) }).desired['doing']?.[0]?.input ?? {}; const bare = resolveScreen({ line: 'x', derived, answers: { 'action/slot.swap': noul(0.9) }, parsed: parse('move'), clock: PINNED_CLOCK, mounted: new Set(), pinned: new Set(), titles: {} }).desired['doing']?.[0]?.input ?? {}; return swap['time'] === '21:00' && swap['day'] === 'sat' && bare['time'] === '' && bare['day'] === 'sat'; })());
 check('a score fills a bounded integer with minimum + level', screen({ 'action/push.compose': noul(0.9), 'input/push.compose/urgency': { kind: 'score', level: 2, confidence: 0.8 } }).desired['doing']?.[0]?.input?.['urgency'] === 2);
 check('a pin outranks the model: a promoted card stays at probability 0', onScreen(screen({ 'action/site.map': noul(0) }, [], ['site.map'])).includes('site.map'));
 check('every question canvas is named in the answer, empty or not — so reconcile clears what is stale', Object.keys(screen({}).desired).sort().join() === 'about,doing,nearby,when,where');

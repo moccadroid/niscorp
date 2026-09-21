@@ -41,7 +41,7 @@ export type AgentRunRequest = {
   tools: readonly ToolDefinition[];
   abort: AbortSignal;
   // The admission rule, bound to this run (run-facts.ts). Empty = admitted.
-  refusals: (data: AnswerData) => string[];
+  refusals: (data: AnswerData, response: string) => string[];
   // `response`, as far as it has streamed. Called per parsed partial — it is
   // the CALLER that throttles what reaches a screen.
   onAnswer: (soFar: string) => void;

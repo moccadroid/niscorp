@@ -226,6 +226,10 @@ const main = async (): Promise<void> => {
   await world.xray(OP);
   const servedCard = world.servedTo(OP).filter((message) => message.includes('"definitionId":"assist.answer"')).at(-1) ?? '';
   await world.xray(OP);
+  // (2026-09-21, the redesign: the history is one line — "Earlier · n" — until it is
+  // pressed. Pressed, it is the same rail it was.)
+  world.dispatchOn(OP, 'rail', { type: 'ui:click', ref: 'earlierOpen' }, 'assist.rail');
+  await settle(4);
   const servedRail = world.servedTo(OP).filter((message) => message.includes('"definitionId":"assist.rail"')).at(-1) ?? '';
   check('...and that is what the terminal was SERVED: the earlier turn and the one control that ends a thread on the rail, the answer and what was looked up on the card', servedRail.includes(MOVE) && servedRail.includes('"label":"new thread"') && servedCard.includes('looked up') && servedCard.includes('lineup/forDay'));
 

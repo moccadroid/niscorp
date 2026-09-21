@@ -145,6 +145,12 @@ const EVENT_QUESTIONS: Record<string, Question> = {
 
 export type DeriveAbout = 'sentence' | 'event';
 
+// What a card holds for a field when nothing has been said: its own default.
+const blankOf = (definition: ActionDefinition, field: string): string | number | boolean => {
+  const held = definition.data?.[field];
+  return typeof held === 'string' || typeof held === 'number' || typeof held === 'boolean' ? held : '';
+};
+
 export const deriveQuestions = (definitions: readonly ActionDefinition[], candidates: CandidateSets, packs: readonly ContextPack[] = [], about: DeriveAbout = 'sentence'): Derived => {
   const questions: Record<string, Question> = {};
   // ONE QUESTION PER DISTINCT QUESTION. Two fields that emit the same words
@@ -163,7 +169,7 @@ export const deriveQuestions = (definitions: readonly ActionDefinition[], candid
     };
 
     const fields: FieldPlan[] = contract.fields.flatMap((field): FieldPlan[] => {
-      if (field.parse !== undefined) return [{ field: field.name, kind: 'parse', parse: field.parse, fallback: field.fallback === 'now' }];
+      if (field.parse !== undefined) return [{ field: field.name, kind: 'parse', parse: field.parse, fallback: field.fallback === 'now', blank: blankOf(definition, field.name) }];
       const emitted = questionOf(field, candidates);
       if (emitted === undefined) return [];
 

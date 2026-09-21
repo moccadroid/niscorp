@@ -1,7 +1,7 @@
 import { defineAgent, duration, outputRetries, stepCount } from '@niscorp/cortex';
 import type { AgentDefinition, OutputValidator, Producer } from '@niscorp/cortex';
 import type { RunMode } from '@encore/server/intent/intent.types';
-import { AnswerDataSchema } from './contract';
+import { ANSWER_MAX_CHARS, ANSWER_MAX_SENTENCES, AnswerDataSchema, FOLLOW_UPS_MAX } from './contract';
 import type { AnswerData } from './contract';
 import { runFacts } from './run-facts';
 
@@ -46,7 +46,7 @@ const INSTRUCTIONS = [
   'You are the second, slower mind of Encore: the operations room of a three-day music festival. The operator types what is happening; a fast model has already read the sentence and arranged cards on screen. You are called for what cards alone cannot do — answer in words, write words into a form, or propose what to do.',
   'THE LAW: you never act. You cannot press a button, submit a form, send a message or change a record, and you must never say that you did. You say things, and you return a description of the screen; a person reads it and decides.',
   'Work from what you are handed and what your two read tools return. Never invent an id, a name, a time or a number. If you do not know, say so plainly.',
-  'Your `response` is what the operator reads: brief plain text, the answer first, no markdown, no preamble. It is the only place the answer goes.',
+  `Your \`response\` is what the operator reads, beside the cards: AT MOST ${ANSWER_MAX_SENTENCES} SENTENCES (${ANSWER_MAX_CHARS} characters), plain text, the answer first, no markdown, no preamble. NEVER restate what a card on screen already shows — not the acts, not the times, not the list of incidents: they can see them. Say what MATTERS, what CONNECTS the cards, or what is on NONE of them. If the cards are the whole answer, say one short sentence pointing at them. A third sentence, or a recital, is refused and you will be asked again.`,
   'You are briefing someone who is looking at a screen of cards, so your words and their cards are ONE thing: every sentence that a card supports CITES that card (`claims`), and if the card that would support a sentence is not on screen, you PUT it there (`canvases`) and cite it. An answer in words alone, beside a room that does not show what it says, is half an answer.',
 ].join('\n');
 
@@ -64,7 +64,7 @@ const howToAnswer = (() =>
   [
     'HOW TO DECIDE:',
     'The fast model has usually put the right cards up already — SCREEN shows them. Do not re-open what is there, and do not rearrange a region to be helpful. But a sentence needs a card to stand on: when the evidence for what you say is NOT on screen and an action in ACTIONS would show it, place that card — naming its canvas with the cards already there kept in the list, or they are closed — and cite it. Keys marked * in ACTIONS are required to open a card.',
-    'Then suggest what to ask next (`followUps`): up to three short sentences the operator would actually type — the decision this answer leads to first ("what are our options").',
+    `Then, only if something SPECIFIC to this answer is worth asking next, suggest it (\`followUps\`): at most ${FOLLOW_UPS_MAX} short sentences the operator would actually type, about the rows and the problem of THIS turn. ASKED lists everything this thread has already asked or been offered — never repeat one of those, never offer a generic question that would fit any answer. None is better than furniture.`,
     'FACTS were read for you a moment ago. Answer from them first. Use a tool only for a figure or a row you were not handed; one lookup is normal, five is a wander.',
     'The conversation above is what this operator said and what was done about it — including things the cards handled without you, marked [cards only]. "Then", "that one", "tomorrow" refer to it.',
   ].join('\n')) satisfies Producer<AgentDeps>;
@@ -86,7 +86,9 @@ const thisTurnIs = (({ deps }) => THIS_TURN[deps.mode]) satisfies Producer<Agent
 // admission rule, and go back to the model as a correction while its tools are
 // still warm. The facts come from the run's own scope (run-facts.ts).
 const admitted: OutputValidator<AnswerData> = (output) => {
-  const refusals = runFacts.getStore()?.refusals(output.data) ?? [];
+  // The words are judged with the data: the length bound and the no-recital
+  // rule are admission rules like any other, so the model is told and retries.
+  const refusals = runFacts.getStore()?.refusals(output.data, output.response ?? '') ?? [];
   return refusals.length === 0 ? { ok: true } : { retry: refusals.join('; ') };
 };
 

@@ -1,5 +1,5 @@
 import type { Desired } from '@niscorp/nova';
-import { CANVAS_PLACEMENT, COMPANIONS, QUESTION_CANVASES } from '@encore/app/canvas-placement';
+import { CANVAS_PLACEMENT, COMPANIONS, QUESTION_CANVASES, TILE_HUE, tileOf } from '@encore/app/canvas-placement';
 import { CITE_KEY, PLACED_BY, PLACED_FRAGMENT, WHY } from '@encore/app/shell/fragments/placed.fragment';
 import type { FestivalClock } from '@encore/lib/festival-clock';
 import { NONE } from './derive';
@@ -25,6 +25,18 @@ import type { ActionPlan, AgentMode, Answer, CandidateSets, Chip, Derived, Entit
 export const MOUNT_AT = 0.8;
 export const UNMOUNT_AT = 0.55;
 export const CHIP_AT = 0.3;
+// WHAT AN OPERATOR IS OFFERED. A calibrated model has a middling opinion about
+// most of the catalog, and every one of those clears CHIP_AT: a single question
+// put eight chips on the strip, and eight guesses is noise. The app shows the
+// best few, and only those within a margin of the best — a 0.41 beside a 0.72 is
+// not the same kind of guess. The whole middle band is still computed, still
+// counted by the handoff, and x-ray shows all of it.
+export const CHIPS_SHOWN = 3;
+export const CHIP_MARGIN = 0.15;
+export const suggestedOf = (chips: readonly Chip[]): Chip[] => {
+  const best = chips[0]?.p ?? 0;
+  return chips.filter((chip) => chip.p >= best - CHIP_MARGIN).slice(0, CHIPS_SHOWN);
+};
 // A field is only written when its OWN answer is sure — a confidently-wanted
 // form with a shaky act in it is a form with the act left blank.
 export const FILL_AT = 0.6;
@@ -98,6 +110,15 @@ const fieldValue = (plan: FieldPlan, input: Filling): string | number | boolean 
   if (plan.kind === 'boolean') return answer.kind === 'noul' && answer.p >= FILL_AT ? true : undefined;
   return answer.kind === 'score' && answer.confidence >= FILL_AT ? plan.minimum + answer.level : undefined;
 };
+
+// A VALUE THE SENTENCE NO LONGER SAYS GOES BACK. "move her at 9" wrote 21:00 into
+// the form; the next sentence said no time, and the form kept 21:00 — a value
+// nobody in THIS sentence asked for, prefilled into a write. A parsed field the
+// current line does not name returns to the card's own blank. (A field a person
+// typed into is theirs: the reconciler strips it before it writes. `line` is the
+// sentence itself and is never blank while there is one.)
+const blanksOf = (plan: ActionPlan, held: Record<string, unknown>): Record<string, unknown> =>
+  Object.fromEntries(plan.fields.flatMap((field) => (field.kind === 'parse' && field.parse !== 'line' && held[field.field] === undefined ? [[field.field, field.blank]] : [])));
 
 export const inputOf = (plan: ActionPlan, input: Filling): Record<string, unknown> =>
   Object.fromEntries(plan.fields.flatMap((field) => {
@@ -275,14 +296,15 @@ export const resolveScreen = (input: ResolveInput): Resolved => {
       const why =
         input.whys?.[plan.actionId] ??
         (!jevWants && leadOpenedWith !== undefined ? `Opened beside “${input.titles[lead ?? ''] ?? 'the form'}”, to show what that would do.` : `Opened because you said “${input.line.trim()}” — ${confidenceWord(p)}.`);
-      desired[canvas]?.push({ actionId: plan.actionId, input: { ...seeded, [PLACED_BY]: placedBy, [CITE_KEY]: plan.actionId, [WHY]: why }, with: [PLACED_FRAGMENT] });
-    } else if (wanted || p >= CHIP_AT) chips.push({ id: plan.actionId, label: input.titles[plan.actionId] ?? plan.actionId, p: Math.round(p * 100) / 100 });
+      desired[canvas]?.push({ actionId: plan.actionId, input: { ...blanksOf(plan, seeded), ...seeded, ...tileOf(plan.actionId, canvas), [PLACED_BY]: placedBy, [CITE_KEY]: plan.actionId, [WHY]: why }, with: [PLACED_FRAGMENT] });
+    } else if (wanted || p >= CHIP_AT) chips.push({ id: plan.actionId, label: input.titles[plan.actionId] ?? plan.actionId, p: Math.round(p * 100) / 100, hue: tileOf(plan.actionId, canvas)[TILE_HUE] ?? '' });
   }
 
   const tone = input.answers[input.derived.tone];
   return {
     desired,
     chips: chips.sort((a, b) => b.p - a.p),
+    suggested: suggestedOf(chips),
     tone: tone?.kind === 'score' ? (TONES[tone.level] ?? 'calm') : 'calm',
     top: [...scored].sort((a, b) => b.p - a.p).slice(0, 6),
     handoff: resolveHandoff(input, scored, { mountedCount: Object.values(desired).reduce((sum, cards) => sum + cards.length, 0), chipCount: chips.length, demoted }),

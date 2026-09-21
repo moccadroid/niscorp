@@ -1,4 +1,5 @@
 import type { ActionFragment } from '@niscorp/nova';
+import { TILE_HUE, TILE_SPAN, TILE_TAG } from '@encore/app/canvas-placement';
 import { labelAdd } from '@encore/app/vex/watch.entries';
 
 // A CARD THE ROOM RAISED BY ITSELF — and the only place a label is written.
@@ -24,24 +25,45 @@ const labelPrism = { fingerprint: labelAdd.fingerprint, context: { verdict: { $r
 export const raisedFragment: ActionFragment = {
   kind: 'fragment',
   id: RAISED_FRAGMENT,
-  data: { cause: '', causeLine: '', raisedAt: '', raisedBand: '', raisedTone: 'mute', raisedBy: '', raisedWith: '{}', raisedCard: '', xray: false, verdict: '', labelled: '', labelError: '' },
+  data: { cause: '', causeLine: '', raisedAt: '', raisedBand: '', raisedTone: 'mute', raisedBy: '', raisedWith: '{}', raisedCard: '', xray: false, [TILE_SPAN]: 'regular', [TILE_HUE]: 'teal', [TILE_TAG]: '', verdict: '', labelled: '', labelError: '' },
   layout: {
-    component: 'Stack',
-    props: { gap: 4 },
+    // A tile like any other card's, PINNED: what the room raised reads first,
+    // ahead of whatever the sentence put up. Severity, when, one sentence, and
+    // the operator's two words.
+    component: 'Tile',
+    props: { span: `$.${TILE_SPAN}`, accent: `$.${TILE_HUE}`, pin: true },
     children: [
       {
-        component: 'Row',
-        props: { gap: 10, align: 'center', wrap: true },
+        component: 'Stack',
+        props: { gap: 6 },
         children: [
-          { component: 'Badge', props: { label: '$.raisedBand', tone: '$.raisedTone' } },
-          { component: 'Text', props: { value: '$.raisedAt', variant: 'tag', tone: 'mute' } },
+          {
+            component: 'Row',
+            props: { gap: 8, align: 'center', justify: 'between' },
+            children: [
+              {
+                component: 'Row',
+                props: { gap: 8, align: 'center' },
+                children: [
+                  { component: 'Badge', props: { label: '$.raisedBand', tone: '$.raisedTone' } },
+                  { component: 'Text', props: { value: '$.raisedAt', variant: 'tag', tone: 'mute' } },
+                  { if: '$.xray', then: { component: 'Text', props: { value: '$.raisedBy', variant: 'tag', tone: 'mute' } }, else: '' },
+                ],
+              },
+              {
+                component: 'Row',
+                props: { gap: 4, align: 'center' },
+                children: [
+                  { if: '$.labelled', then: { component: 'Badge', props: { label: '$.labelled', tone: 'good' } }, else: { component: 'Button', ref: 'keep', props: { label: 'keep', variant: 'quiet' } } },
+                  { component: 'Button', ref: 'dismiss', props: { label: 'dismiss', variant: 'quiet' } },
+                ],
+              },
+            ],
+          },
           { component: 'Text', props: { value: '$.causeLine' } },
-          { if: '$.xray', then: { component: 'Text', props: { value: '$.raisedBy', variant: 'tag', tone: 'mute' } }, else: '' },
-          { if: '$.labelled', then: { component: 'Badge', props: { label: '$.labelled', tone: 'good' } }, else: { component: 'Button', ref: 'keep', props: { label: 'keep', variant: 'ghost' } } },
-          { component: 'Button', ref: 'dismiss', props: { label: 'dismiss', variant: 'ghost' } },
+          { slot: 'body' },
         ],
       },
-      { slot: 'body' },
     ],
   },
   endpoints: {
