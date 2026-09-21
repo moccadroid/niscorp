@@ -1,0 +1,273 @@
+/* ENCORE — an ops tent at night.
+ *
+ * A dark console on purpose: the room is read from across a table, under work
+ * lights, by somebody who is also on a radio. So: high contrast, ONE accent
+ * (what the system is pointing at), ONE warning tone (what the world is doing
+ * to you), and red kept back for the frame's critical state alone. Everything
+ * else is grey, so that colour always means something.
+ *
+ * THE SURFACE (PLAN.md): a product, not a console dump. One spacing scale
+ * (4 · 8 · 12 · 16 · 24), one radius, one border weight. The reading face for
+ * everything a person reads; MONO IS FOR DATA — a time, a count, the instrument —
+ * never for a label, and nothing shouts in capitals. A card has two text sizes:
+ * its title (16) and everything else (14); badges and quiet buttons are chrome.
+ */
+
+:root {
+  --ground: #080b10;
+  --panel: #10151d;
+  --sunken: #0b0f15;
+  --line: #1e2733;
+  --line-strong: #2d3a4a;
+  --ink: #e8eef5;
+  --mute: #7c8a9a;
+  --accent: #5ee6d0;
+  --accent-dim: rgba(94, 230, 208, 0.16);
+  --warn: #ffb84d;
+  --warn-dim: rgba(255, 184, 77, 0.18);
+  --alert: #ff6b6b;
+  --sans: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --mono: ui-monospace, 'SF Mono', 'Cascadia Mono', Menlo, Consolas, monospace;
+  --s1: 4px;
+  --s2: 8px;
+  --s3: 12px;
+  --s4: 16px;
+  --s5: 24px;
+  --radius: 10px;
+}
+
+* { box-sizing: border-box; }
+
+html, body, #root { height: 100%; }
+
+body {
+  margin: 0;
+  background: var(--ground);
+  color: var(--ink);
+  font: 14px/1.45 var(--sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── tones ─────────────────────────────────────────────────── */
+.en-tone--plain { color: var(--ink); }
+.en-tone--mute { color: var(--mute); }
+.en-tone--accent, .en-tone--good { color: var(--accent); }
+.en-tone--warn { color: var(--warn); }
+.en-tone--alert { color: var(--alert); }
+
+/* ── arrangement ───────────────────────────────────────────── */
+.en-box { min-width: 0; }
+.en-box--ground { background: var(--ground); }
+.en-box--panel { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); }
+.en-box--sunken { background: var(--sunken); border: 1px solid var(--line); border-radius: var(--radius); }
+
+/* The intent line wears the room's alarm state. Calm is the accent at rest;
+   the other two are the only places these colours touch the frame. */
+.en-box--calm, .en-box--elevated, .en-box--critical {
+  background: var(--panel);
+  border: 1px solid var(--line-strong);
+  border-left: 3px solid var(--accent);
+  border-radius: var(--radius);
+  transition: border-color 240ms ease, box-shadow 240ms ease;
+}
+.en-box--elevated { border-color: var(--warn); box-shadow: 0 0 0 1px var(--warn-dim), 0 0 28px var(--warn-dim); }
+.en-box--critical { border-color: var(--alert); box-shadow: 0 0 0 1px rgba(255, 107, 107, 0.25), 0 0 34px rgba(255, 107, 107, 0.22); }
+
+.en-stack { display: flex; flex-direction: column; min-width: 0; }
+/* A column whose every slot rendered nothing is not a column. */
+.en-stack:empty { display: none; }
+.en-row { display: flex; min-width: 0; }
+.en-grid { display: grid; min-width: 0; }
+@media (max-width: 900px) { .en-grid { grid-template-columns: minmax(0, 1fr) !important; } }
+
+/* ── words ─────────────────────────────────────────────────── */
+.en-text--body { font-size: 14px; }
+/* Labels are sentence case, in the reading face, quiet. */
+.en-text--label { font: 500 14px/1.3 var(--sans); }
+.en-text--title { font-size: 16px; font-weight: 600; }
+.en-text--display { font: 600 26px/1 var(--mono); }
+.en-text--mono { font: 12px/1.3 var(--mono); }
+/* A time, a count, an instrument's reading: small, never competing. */
+.en-text--tag { font: 12px/1.3 var(--mono); }
+
+.en-badge {
+  display: inline-block;
+  padding: 3px var(--s2);
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  font: 600 12px/1.2 var(--sans);
+}
+
+/* ── card ──────────────────────────────────────────────────── */
+.en-card {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  overflow: hidden;
+  animation: en-arrive 220ms ease-out;
+}
+.en-card--accent { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent-dim); }
+.en-card--warn { border-color: var(--warn); box-shadow: 0 0 0 1px var(--warn-dim); }
+.en-card__head { display: flex; flex-direction: column; gap: var(--s1); padding: var(--s4) var(--s4) var(--s3); border-bottom: 1px solid var(--line); }
+.en-card__titles { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.en-card__title { margin: 0; font: 600 16px/1.3 var(--sans); }
+.en-card__subtitle { color: var(--mute); font-size: 14px; font-variant-numeric: tabular-nums; }
+.en-card__body { display: flex; flex-direction: column; gap: var(--s3); padding: var(--s3) var(--s4) var(--s4); }
+
+@keyframes en-arrive { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .en-card { animation: none; } }
+
+/* ── key / value ───────────────────────────────────────────── */
+.en-kv { margin: 0; display: grid; grid-template-columns: max-content 1fr; gap: 5px 14px; }
+.en-kv__pair { display: contents; }
+.en-kv dt { color: var(--mute); font: 14px/1.5 var(--sans); }
+.en-kv dd { margin: 0; font-variant-numeric: tabular-nums; }
+.en-kv--inline { display: flex; flex-wrap: wrap; gap: 4px 16px; }
+.en-kv--inline .en-kv__pair { display: flex; gap: 6px; align-items: baseline; }
+.en-kv--inline dd { font: 14px/1.5 var(--sans); }
+
+/* ── list ──────────────────────────────────────────────────── */
+.en-list { display: flex; flex-direction: column; gap: 6px; }
+.en-list__rows { list-style: none; margin: 0; padding: 0; }
+.en-list__row { display: grid; grid-template-columns: 1fr auto auto; gap: 10px; align-items: baseline; padding: 6px 0; border-top: 1px solid var(--line); }
+.en-list__row--action { cursor: pointer; }
+.en-list__row--action:hover { background: var(--sunken); }
+.en-list__secondary { color: var(--mute); font-size: 14px; }
+.en-list__badge { margin-right: 6px; padding: 1px 6px; border: 1px solid var(--line-strong); border-radius: 999px; font: 600 12px/1.3 var(--sans); }
+.en-list__meta { color: var(--mute); font: 12px/1 var(--mono); }
+
+/* ── meter / chip ──────────────────────────────────────────── */
+.en-meter { display: flex; flex-direction: column; gap: 4px; min-width: 120px; }
+.en-meter__head { display: flex; justify-content: space-between; gap: 10px; font: 11px/1 var(--mono); color: var(--mute); }
+.en-meter__track { height: 4px; background: var(--line); border-radius: 2px; overflow: hidden; }
+.en-meter__fill { height: 100%; background: currentColor; transition: width 160ms ease; }
+.en-meter--compact { min-width: 150px; }
+.en-meter--compact .en-meter__track { height: 2px; }
+
+.en-chip {
+  position: relative;
+  padding: var(--s2) var(--s3);
+  background: var(--panel);
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  color: var(--ink);
+  font: 500 14px/1 var(--sans);
+  cursor: pointer;
+  overflow: hidden;
+}
+.en-chip:hover { border-color: var(--accent); }
+.en-chip--done { border-color: var(--line); color: var(--mute); }
+.en-chip__meter { position: absolute; left: 0; bottom: 0; height: 2px; background: var(--accent); }
+
+/* ── tags ──────────────────────────────────────────────────── */
+.en-tags { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; }
+.en-tag { padding: 3px var(--s2); border: 1px solid currentColor; border-radius: 999px; font: 500 12px/1.2 var(--sans); opacity: 0.9; }
+/* A tag's state — x-ray's reading of it — small, beside the label. */
+.en-tag__state { margin-left: 6px; font: 11px/1 var(--mono); opacity: 0.6; }
+.en-tag.en-tone--mute { border-style: dashed; }
+
+/* ── controls ──────────────────────────────────────────────── */
+.en-input {
+  width: 100%;
+  background: var(--sunken);
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+  color: var(--ink);
+  font: 14px/1.2 var(--sans);
+  padding: 8px 10px;
+  outline: none;
+}
+.en-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-dim); }
+/* The line is the hero: the largest type in the room, in the reading face. */
+.en-input--line { background: transparent; border: none; padding: var(--s1) 0; font: 500 24px/1.25 var(--sans); caret-color: var(--accent); }
+.en-input--line:focus { box-shadow: none; }
+.en-input::placeholder { color: #4b5867; }
+
+.en-field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+
+.en-button { padding: 9px 16px; border-radius: 6px; border: 1px solid transparent; font: 600 13px/1 var(--sans); cursor: pointer; }
+.en-button--primary { background: var(--accent); color: #04120f; }
+.en-button--warn { background: var(--warn); color: #1d1200; }
+.en-button--ghost { background: transparent; border-color: var(--line-strong); color: var(--ink); padding: var(--s2) var(--s3); }
+/* A control that does not ask to be looked at: "why?", "hide", "demo", "x-ray". */
+.en-button--quiet { background: transparent; color: var(--mute); padding: var(--s1) var(--s2); font: 500 12px/1 var(--sans); }
+.en-button--quiet:hover { color: var(--ink); }
+.en-button:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* ── timeline ──────────────────────────────────────────────── */
+.en-timeline { display: flex; flex-direction: column; gap: 6px; }
+.en-timeline__axis, .en-timeline__row { display: grid; grid-template-columns: 88px 1fr; gap: 10px; align-items: center; }
+.en-timeline__ticks { position: relative; height: 14px; }
+.en-timeline__tick { position: absolute; transform: translateX(-50%); font: 10px/1 var(--mono); color: var(--mute); }
+.en-timeline__label { font: 12px/1.2 var(--sans); color: var(--mute); }
+.en-timeline__lane { position: relative; height: 26px; background: var(--sunken); border-radius: 4px; border: 1px solid var(--line); }
+.en-timeline__bar {
+  position: absolute; top: 2px; bottom: 2px;
+  padding: 0 6px;
+  display: flex; align-items: center;
+  background: var(--line-strong);
+  border-radius: 3px;
+  font: 11px/1 var(--sans);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.en-timeline__bar--lit { background: var(--accent); color: #04120f; font-weight: 700; box-shadow: 0 0 14px var(--accent-dim); z-index: 1; }
+
+/* ── zone map ──────────────────────────────────────────────── */
+.en-map { width: 100%; height: auto; display: block; background: var(--sunken); border: 1px solid var(--line); border-radius: 6px; }
+.en-map__plot { fill: var(--panel); stroke: var(--line-strong); stroke-width: 0.35; }
+.en-map__heat { fill: var(--accent); }
+.en-map__heat--hot { fill: var(--warn); }
+.en-map__zone--focus .en-map__plot { stroke: var(--accent); stroke-width: 1; }
+.en-map__label { fill: var(--ink); font: 600 3px var(--sans); }
+.en-map__value { fill: var(--ink); font: 2.8px var(--mono); opacity: 0.8; }
+
+/* ── bar chart ─────────────────────────────────────────────── */
+.en-bars { display: flex; flex-direction: column; gap: 6px; }
+.en-bars__plot { display: flex; align-items: flex-end; gap: 3px; height: 96px; }
+.en-bars__column { flex: 1 1 0; min-width: 0; height: 100%; display: flex; flex-direction: column; gap: 4px; }
+.en-bars__stack { position: relative; flex: 1 1 0; display: flex; align-items: flex-end; }
+.en-bars__bar { position: relative; width: 100%; min-height: 1px; background: currentColor; opacity: 0.55; border-radius: 2px 2px 0 0; }
+.en-bars__bar--marked { opacity: 1; box-shadow: 0 0 12px currentColor; }
+.en-bars__ghost { position: absolute; left: 0; right: 0; bottom: 0; border: 1px dashed var(--mute); border-bottom: none; border-radius: 2px 2px 0 0; }
+.en-bars__label { text-align: center; font: 9.5px/1 var(--mono); color: var(--mute); overflow: hidden; }
+.en-bars__label--marked { color: var(--ink); font-weight: 700; }
+
+/* ── gauge ─────────────────────────────────────────────────── */
+.en-gauge { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.en-gauge__dial { width: 100%; max-width: 220px; }
+.en-gauge__track, .en-gauge__fill { fill: none; stroke-width: 8; stroke-linecap: round; }
+.en-gauge__track { stroke: var(--line); }
+.en-gauge__fill { stroke: var(--accent); transition: stroke-dashoffset 240ms ease; }
+.en-gauge__fill--hot { stroke: var(--warn); }
+.en-gauge__figure { fill: var(--ink); font: 600 15px var(--mono); text-anchor: middle; }
+
+/* ─── attention: spans, spotlight, rail ─────────────────────── */
+.en-timeline__bar--warn { background: color-mix(in srgb, var(--warn) 30%, transparent); border-color: var(--warn); color: var(--warn); }
+.en-timeline__bar--alert { background: color-mix(in srgb, var(--alert) 34%, transparent); border-color: var(--alert); color: var(--ink); box-shadow: 0 0 10px color-mix(in srgb, var(--alert) 45%, transparent); }
+
+/* The answer is the second thing the eye hits: proportional, comfortable, about
+   seventy characters a line. A citation is an underline that brightens with its
+   card — never a block of colour. */
+.en-spans { margin: 0; font: 400 18px/1.6 var(--sans); max-width: 70ch; color: var(--ink); }
+.en-spans__span--unsupported { color: var(--mute); }
+.en-spans__span--linked { border-bottom: 1px solid var(--line-strong); outline: none; transition: border-color 120ms ease, color 120ms ease; }
+.en-spans__span--linked:hover, .en-spans__span--linked:focus-visible { border-bottom-color: var(--accent); }
+.en-spans__span--lit { border-bottom-color: var(--accent); color: var(--accent); }
+
+.en-spotlight { border-radius: var(--radius); transition: box-shadow 120ms ease; }
+.en-spotlight--lit { box-shadow: 0 0 0 1px var(--accent), 0 0 22px var(--accent-dim); }
+
+.en-rail { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+/* Plain lines; the role column exists only when x-ray asks for one. */
+.en-rail__entry { display: grid; grid-template-columns: 56px minmax(0, auto) minmax(0, 1fr); column-gap: 10px; align-items: baseline; font-size: 14px; line-height: 22px; cursor: pointer; border-left: 1px solid var(--line); padding-left: var(--s2); }
+.en-rail__entry:hover { border-left-color: var(--accent); }
+.en-rail__tag { font: 12px/22px var(--mono); }
+.en-rail__entry--plain { grid-template-columns: minmax(0, auto) minmax(0, 1fr); }
+.en-rail__entry--plain .en-rail__detail { grid-column: 1 / -1; }
+.en-rail__primary, .en-rail__secondary { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.en-rail__primary { color: var(--ink); }
+.en-rail__secondary { color: var(--mute); }
+.en-rail__detail { grid-column: 2 / -1; color: var(--ink); white-space: normal; padding: 2px 0 6px; max-width: 86ch; }
+.en-rail__entry--open { border-left-color: var(--accent); }
+.en-rail__more { font: 500 12px/22px var(--sans); color: var(--mute); padding-left: 9px; cursor: pointer; }
+.en-rail__more:hover { color: var(--ink); }

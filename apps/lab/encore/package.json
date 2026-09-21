@@ -1,0 +1,41 @@
+{
+  "name": "encore",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "serve": "tsx src/server/serve.ts",
+    "typecheck": "tsc --noEmit",
+    "probe": "tsx src/dev/jev-probe.ts",
+    "request": "tsx src/dev/jev-request.ts",
+    "timeline": "tsx src/dev/typing-timeline.ts",
+    "check": "tsx src/dev/all-checks.ts"
+  },
+  "dependencies": {
+    "@electric-sql/pglite": "^0.5.1",
+    "@hono/node-server": "^2.0.4",
+    "@niscorp/charter": "workspace:^",
+    "@niscorp/cortex": "workspace:^",
+    "@niscorp/moss": "workspace:^",
+    "@niscorp/nova": "workspace:^",
+    "@niscorp/prism": "workspace:^",
+    "@niscorp/signal": "workspace:^",
+    "@niscorp/vex": "workspace:^",
+    "hono": "^4.12.23",
+    "openai": "^6.33.0",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4",
+    "undici": "^8.10.2",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@types/node": "^24.10.1",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^5.0.4",
+    "tsx": "^4.23.1",
+    "typescript": "^6.0.2",
+    "vite": "^7.1.12"
+  }
+}

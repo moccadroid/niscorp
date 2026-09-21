@@ -44,6 +44,12 @@
       "port": 5174
     },
     {
+      "name": "encore",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["--filter", "encore", "dev", "--port", "5195", "--strictPort", "--no-open"],
+      "port": 5195
+    },
+    {
       "name": "showroom",
       "runtimeExecutable": "pnpm",
       "runtimeArgs": ["--filter", "showroom", "dev", "--port", "5199", "--strictPort", "--no-open"],
