@@ -13,7 +13,7 @@ import { PASS_CEILING_MS, PASS_QUIET_MS, createPacer } from '@encore/server/inte
 import { heardTags } from '@encore/server/intent/heard';
 import { supersede, supersededNotes } from '@encore/server/intent/supersede';
 import { deriveQuestions, NONE, TONE_QUESTION } from '@encore/server/intent/derive';
-import { resolveScreen, CHIP_AT, FILL_AT, HANDOFF_AT, MOUNT_AT, SURE_DIRECT_AT, UNMOUNT_AT } from '@encore/server/intent/resolve';
+import { resolveScreen, CHIP_AT, UNMOUNT_AT, YES_AT } from '@encore/server/intent/resolve';
 import { admit, admitAnswer } from '@encore/server/intent/admission';
 import type { ContextPack } from '@encore/app/vex/context-packs';
 import type { Answer, CandidateSets } from '@encore/server/intent/intent.types';
@@ -259,10 +259,8 @@ const PACKS: ContextPack[] = [
   { id: 'beta', noun: 'beta', description: 'Facts about beta.', tables: ['zones'], reads: [{ name: 'rows', fingerprint: 'x/beta', context: {} }] },
 ];
 const withPacks = deriveQuestions(held, candidates, PACKS);
-check('the handoff is three more KINDS of question in the same derivation: a route…', ((): boolean => { const asked = withPacks.questions['handoff/route']; return asked?.type === 'choice' && Object.keys(asked.criteria).join() === 'direct,ask,write,plan'; })());
-check('...whether the thought is finished…', withPacks.questions['handoff/complete']?.type === 'noul');
-check('...and one noul per declared context pack, its description as the subject', PACKS.every((pack) => { const asked = withPacks.questions[`context/${pack.id}`]; return asked?.type === 'noul' && asked.criteria?.true === pack.description; }));
-check('no packs declared, no context questions — but the route is always asked', !Object.keys(derived.questions).some((name) => name.startsWith('context/')) && derived.questions['handoff/route'] !== undefined);
+check('one yes/no per declared context pack rides the same derivation, its description as the subject', PACKS.every((pack) => { const asked = withPacks.questions[`context/${pack.id}`]; return asked?.type === 'noul' && asked.criteria?.true === pack.description; }));
+check('no packs declared, no context questions — and NOTHING is asked about routing or whether the thought is finished', !Object.keys(derived.questions).some((name) => name.startsWith('context/')) && !Object.keys(withPacks.questions).some((name) => name.startsWith('handoff/')));
 check('no candidates, no question: an act field with no rows to offer is left alone', !Object.keys(deriveQuestions(held, { ...candidates, acts: [] }).questions).some((name) => name.endsWith('/actId')));
 check('`required` is read off the schema', derived.plans.find((plan) => plan.actionId === 'act.card')?.required.join() === 'actId' && derived.plans.find((plan) => plan.actionId === 'slot.swap')?.required.length === 0);
 
@@ -273,15 +271,15 @@ const screen = (answers: Record<string, Answer>, mounted: string[] = [], pinned:
 const onScreen = (resolved: ReturnType<typeof resolveScreen>): string[] => Object.values(resolved.desired).flatMap((entries) => entries.map((entry) => entry.actionId));
 const noul = (p: number): Answer => ({ kind: 'noul', p });
 
-check(`at the mount line (${MOUNT_AT}) a card mounts; just under, it is a chip`, onScreen(screen({ 'action/weather.radar': noul(MOUNT_AT) })).includes('weather.radar') && screen({ 'action/weather.radar': noul(MOUNT_AT - 0.01) }).chips.some((chip) => chip.id === 'weather.radar'));
+check(`at the mount line (${YES_AT}) a card mounts; just under, it is a chip`, onScreen(screen({ 'action/weather.radar': noul(YES_AT) })).includes('weather.radar') && screen({ 'action/weather.radar': noul(YES_AT - 0.01) }).chips.some((chip) => chip.id === 'weather.radar'));
 check(`under the chip line (${CHIP_AT}) it is nothing at all`, ((): boolean => { const resolved = screen({ 'action/weather.radar': noul(CHIP_AT - 0.01) }); return onScreen(resolved).length === 0 && resolved.chips.length === 0; })());
 // (Restated 2026-09-21: the mount line moved from 0.80 to 0.50 — a calibrated "probably" — and the unmount line from 0.55 to 0.35. The
 // claim is the band's, so it is stated in the band's terms: a value between the two.)
-const BETWEEN = (MOUNT_AT + UNMOUNT_AT) / 2;
+const BETWEEN = (YES_AT + UNMOUNT_AT) / 2;
 check(`HYSTERESIS: ${BETWEEN.toFixed(3)} does not mount a card — but keeps one that is already up`, !onScreen(screen({ 'action/weather.radar': noul(BETWEEN) })).includes('weather.radar') && onScreen(screen({ 'action/weather.radar': noul(BETWEEN) }, ['weather.radar'])).includes('weather.radar'));
 check(`...until it falls to ${UNMOUNT_AT}, where it comes down`, !onScreen(screen({ 'action/weather.radar': noul(UNMOUNT_AT) }, ['weather.radar'])).includes('weather.radar'));
-check('a wanted card whose REQUIRED input is unsure is offered, not mounted', ((): boolean => { const resolved = screen({ 'action/act.card': noul(0.95), [actQuestion]: { kind: 'choice', choice: 'act_a', p: FILL_AT - 0.01, confidence: FILL_AT - 0.01 } }); return !onScreen(resolved).includes('act.card') && resolved.chips.some((chip) => chip.id === 'act.card'); })());
-check(`...and mounts, aimed, once the pick clears ${FILL_AT}`, screen({ 'action/act.card': noul(0.95), [actQuestion]: { kind: 'choice', choice: 'act_a', p: FILL_AT, confidence: FILL_AT } }).desired['about']?.[0]?.input?.['actId'] === 'act_a');
+check('a wanted card whose REQUIRED input is unsure is offered, not mounted', ((): boolean => { const resolved = screen({ 'action/act.card': noul(0.95), [actQuestion]: { kind: 'choice', choice: 'act_a', p: YES_AT - 0.01, confidence: YES_AT - 0.01 } }); return !onScreen(resolved).includes('act.card') && resolved.chips.some((chip) => chip.id === 'act.card'); })());
+check(`...and mounts, aimed, once the pick clears ${YES_AT}`, screen({ 'action/act.card': noul(0.95), [actQuestion]: { kind: 'choice', choice: 'act_a', p: YES_AT, confidence: YES_AT } }).desired['about']?.[0]?.input?.['actId'] === 'act_a');
 check('`none` fills nothing, however confident', screen({ 'action/slot.swap': noul(0.95), [actQuestion]: { kind: 'choice', choice: NONE, p: 0.99, confidence: 0.99 } }).desired['doing']?.[0]?.input?.['actId'] === undefined);
 // (Restated 2026-09-21: "left alone" was the bug — a form kept 21:00 from an earlier
 // sentence that the new one never said. A parsed field the sentence does not name
@@ -291,60 +289,28 @@ check('parsed values fill their fields; a `fallback: now` field takes the clock;
 check('a score fills a bounded integer with minimum + level', screen({ 'action/push.compose': noul(0.9), 'input/push.compose/urgency': { kind: 'score', level: 2, confidence: 0.8 } }).desired['doing']?.[0]?.input?.['urgency'] === 2);
 check('a pin outranks the model: a promoted card stays at probability 0', onScreen(screen({ 'action/site.map': noul(0) }, [], ['site.map'])).includes('site.map'));
 check('every question canvas is named in the answer, empty or not — so reconcile clears what is stale', Object.keys(screen({}).desired).sort().join() === 'about,doing,nearby,when,where');
-// The handoff, resolved off the same answers.
-const routed = (choice: string, confidence: number, extra: Record<string, Answer> = {}): ReturnType<typeof resolveScreen>['handoff'] =>
-  resolveScreen({ line: 'x', derived: withPacks, answers: { 'handoff/route': { kind: 'choice', choice, p: confidence, confidence, probabilities: { direct: 0.1, write: 0.6, plan: 0.3 } }, ...extra }, parsed: parse('at 9'), clock: PINNED_CLOCK, mounted: new Set(), pinned: new Set(), titles: {}, candidates }).handoff;
-check('a confident route is the route; an unsure one is direct — cards are the default', routed('plan', 0.7).route === 'plan' && routed('plan', 0.59).route === 'direct');
-check('...and Enter on a direct sentence would run the likeliest of ask, write and plan', routed('direct', 0.9).preferred === 'write');
-check('...which is `ask` when the provider gave no odds: the one that cannot put a wrong form up', resolveScreen({ line: 'x', derived: withPacks, answers: {}, parsed: parse('x'), clock: PINNED_CLOCK, mounted: new Set(), pinned: new Set(), titles: {} }).handoff.preferred === 'ask');
-
-// THE ONE ROUTE THAT IS COMPUTED, NOT ASKED (DESIGN.md § When it runs).
-const FINISHED = { 'handoff/complete': noul(0.9) };
-const direct: Answer = { kind: 'choice', choice: 'direct', p: 0.9, confidence: 0.9 };
-const handoffOf = (answers: Record<string, Answer>, pinned: string[] = []): ReturnType<typeof resolveScreen>['handoff'] =>
-  resolveScreen({ line: 'x', derived: withPacks, answers, parsed: parse('x'), clock: PINNED_CLOCK, mounted: new Set(), pinned: new Set(pinned), titles: {}, candidates }).handoff;
-check('a FINISHED thought that leaves Jev with nothing — no card, no chip — goes to the agent as `ask`', ((): boolean => { const handoff = handoffOf({ 'handoff/route': direct, ...FINISHED }); return handoff.route === 'ask' && handoff.routedBy === 'computed' && handoff.computedWhy.includes('nothing'); })());
-check(`...but only a finished one: under ${HANDOFF_AT} complete it stays direct, however empty the room`, handoffOf({ 'handoff/route': direct, 'handoff/complete': noul(HANDOFF_AT - 0.01) }).route === 'direct');
-// A QUESTION MARK ASKS FOR WORDS (2026-09-21, from real Jev: "how will the storm
-// at 9 affect the lineup?" was `direct` at 0.58 with both cards up — cards, and
-// silence). The line matters here, so these build their own input.
-const asked = (line: string, directP: number): ReturnType<typeof resolveScreen>['handoff'] =>
-  resolveScreen({ line, derived: withPacks, answers: { 'handoff/route': { kind: 'choice', choice: 'direct', p: directP, confidence: directP, probabilities: { direct: directP, ask: 1 - directP, write: 0, plan: 0 } }, ...FINISHED, 'action/weather.radar': noul(0.95) }, parsed: parse(line), clock: PINNED_CLOCK, mounted: new Set(), pinned: new Set(), titles: {}, candidates }).handoff;
-check('a finished QUESTION Jev only half-thinks the cards answer goes to the agent, cards mounted or not', ((): boolean => { const handoff = asked('how will the storm affect the lineup?', 0.58); return handoff.route === 'ask' && handoff.routedBy === 'computed' && handoff.computedWhy.includes('question'); })());
-check(`...but a question Jev is SURE the cards answer stays direct (${SURE_DIRECT_AT} and up)`, asked('how many guests are there right now?', 0.92).route === 'direct');
-check('...and the same half-sure route on a STATEMENT stays direct: the cards are the answer', asked('storm at 9', 0.58).route === 'direct');
-check('a card Jev WANTED and had to demote for a required input it could not fill routes it too, and says which', ((): boolean => { const handoff = handoffOf({ 'handoff/route': direct, ...FINISHED, 'action/act.card': noul(0.95) }); return handoff.route === 'ask' && handoff.routedBy === 'computed' && handoff.computedWhy.includes('act.card'); })());
-// Restated 2026-09-21 from real Jev. This used to assert the opposite — "a chip
-// worth offering is not nothing, the route stays direct" — which held on the
-// lexical fake and stranded every cold follow-up on a calibrated model, because
-// a calibrated model nearly always has a middling guess to offer.
-check('a guess offered is still a sentence unanswered: chips alone route it to the agent, and say so', ((): boolean => { const handoff = handoffOf({ 'handoff/route': direct, ...FINISHED, 'action/weather.radar': noul(MOUNT_AT - 0.05) }); return handoff.route === 'ask' && handoff.routedBy !== 'jev' && handoff.computedWhy.includes('only guesses'); })()); // (2026-09-21: the guess is stated relative to the mount line, which moved to 0.50)
-check('...while a card that actually MOUNTED leaves the route direct: the room answered', ((): boolean => { const handoff = handoffOf({ 'handoff/route': direct, ...FINISHED, 'action/weather.radar': noul(0.95) }); return handoff.route === 'direct' && handoff.routedBy === 'jev' && handoff.computedWhy === ''; })());
-check('...and so is a card that mounted', handoffOf({ 'handoff/route': direct, ...FINISHED, 'action/weather.radar': noul(0.9) }).route === 'direct');
-check('a route Jev DID pick is never recomputed', ((): boolean => { const handoff = handoffOf({ 'handoff/route': { kind: 'choice', choice: 'plan', p: 0.8, confidence: 0.8 }, ...FINISHED }); return handoff.route === 'plan' && handoff.routedBy === 'jev'; })());
-check('the computed route moves the signature like any other route', handoffOf({ 'handoff/route': direct, ...FINISHED }).signature !== handoffOf({ 'handoff/route': direct }).signature);
+// What the assistant is handed, resolved off the same answers. (2026-09-22: the
+// route question, the computed fallback, the question-mark rule, the demotion line
+// and the signature are GONE — and so are their assertions. Whether the assistant
+// runs is not decided here.)
+const handedWith = (extra: Record<string, Answer> = {}): ReturnType<typeof resolveScreen>['handoff'] =>
+  resolveScreen({ line: 'x', derived: withPacks, answers: extra, parsed: parse('x'), clock: PINNED_CLOCK, mounted: new Set(), pinned: new Set(), titles: {}, candidates }).handoff;
 
 // COMPANIONS (slice 2a): `move.impact` stands beside `slot.swap`.
 const toStageQuestion = names.find((name) => name.endsWith('/toStageId')) ?? '';
 const pickedAct: Answer = { kind: 'choice', choice: 'act_a', p: 0.9, confidence: 0.9 };
 const pickedStage: Answer = { kind: 'choice', choice: 'stage_y', p: 0.9, confidence: 0.9 };
 const beside = (answers: Record<string, Answer>): ReturnType<typeof resolveScreen> =>
-  resolveScreen({ line: 'x', derived: withPacks, answers: { 'handoff/route': direct, ...FINISHED, ...answers }, parsed: parse('at 9'), clock: PINNED_CLOCK, mounted: new Set(), pinned: new Set(), titles: { 'slot.swap': 'Move a set' }, candidates });
+  resolveScreen({ line: 'x', derived: withPacks, answers, parsed: parse('at 9'), clock: PINNED_CLOCK, mounted: new Set(), pinned: new Set(), titles: { 'slot.swap': 'Move a set' }, candidates });
 check('the swap form and the impact card ask ONE question about the to-stage: same field, same words', names.filter((name) => name.endsWith('/toStageId')).length === 1 && derived.plans.find((plan) => plan.actionId === 'move.impact')?.fields.some((field) => field.kind === 'choice' && field.question === toStageQuestion) === true);
 check('a COMPANION mounts when its lead does — at a probability that alone would only have made it a chip', ((): boolean => { const resolved = beside({ 'action/slot.swap': noul(0.9), 'action/move.impact': noul(0.45), [actQuestion]: pickedAct, [toStageQuestion]: pickedStage }); const card = resolved.desired['nearby']?.find((entry) => entry.actionId === 'move.impact'); return card?.input?.['toStageId'] === 'stage_y' && card.input['actId'] === 'act_a' && card.input['placedBy'] === 'with Move a set' && !resolved.chips.some((chip) => chip.id === 'move.impact'); })());
-check('...and not without it: no form, no consequences card, however middling the model', !onScreen(beside({ 'action/slot.swap': noul(MOUNT_AT - 0.05), 'action/move.impact': noul(MOUNT_AT - 0.05), [actQuestion]: pickedAct, [toStageQuestion]: pickedStage })).includes('move.impact')); // (2026-09-21: "middling" is now just under 0.50)
-check('a companion that cannot be AIMED is offered, not mounted — and never counts as "a card Jev wanted and could not open"', ((): boolean => { const resolved = beside({ 'action/slot.swap': noul(0.9), 'action/move.impact': noul(0.95), [actQuestion]: pickedAct }); return onScreen(resolved).includes('slot.swap') && !onScreen(resolved).includes('move.impact') && resolved.handoff.route === 'direct' && resolved.handoff.computedWhy === ''; })());
+check('...and not without it: no form, no consequences card, however middling the model', !onScreen(beside({ 'action/slot.swap': noul(YES_AT - 0.05), 'action/move.impact': noul(YES_AT - 0.05), [actQuestion]: pickedAct, [toStageQuestion]: pickedStage })).includes('move.impact')); // (2026-09-21: "middling" is now just under 0.50)
+check('a companion that cannot be AIMED is offered, not mounted', ((): boolean => { const resolved = beside({ 'action/slot.swap': noul(0.9), 'action/move.impact': noul(0.95), [actQuestion]: pickedAct }); return onScreen(resolved).includes('slot.swap') && !onScreen(resolved).includes('move.impact') && resolved.chips.some((chip) => chip.id === 'move.impact'); })());
 check('every card is opened with the key an answer cites it by', beside({ 'action/weather.radar': noul(0.9) }).desired['when']?.[0]?.input?.['citeKey'] === 'weather.radar');
 
-// A card an agent's answer CLOSED is held down — offered, not mounted.
-const suppressedScreen = (pinned: string[]): ReturnType<typeof resolveScreen> =>
-  resolveScreen({ line: 'x', derived, answers: { 'action/weather.radar': noul(0.95) }, parsed: parse('at 9'), clock: PINNED_CLOCK, mounted: new Set(['weather.radar']), pinned: new Set(pinned), titles: {}, suppressed: new Set(['weather.radar']) });
-check('a card the agent left out of a canvas it named is OFFERED, not mounted, however sure Jev is', !onScreen(suppressedScreen([])).includes('weather.radar') && suppressedScreen([]).chips.some((chip) => chip.id === 'weather.radar'));
-check('...and a click still outranks it', onScreen(suppressedScreen(['weather.radar'])).includes('weather.radar'));
-check('the narrowed catalog is the top six, never the lot', routed('plan', 0.9).narrowed.length === 6 && held.length > 6);
-check('a pack goes out only if Jev said yes to it', routed('plan', 0.9, { 'context/alpha': noul(0.7), 'context/beta': noul(0.4) }).packs.map((pack) => pack.id).join() === 'alpha');
-check('a confident pick over candidate rows is an ENTITY, reported with its label', routed('plan', 0.9, { [actQuestion]: { kind: 'choice', choice: 'act_a', p: 0.9, confidence: 0.9 } }).entities.some((entity) => entity.table === 'acts' && entity.id === 'act_a' && entity.label.startsWith('Act A')));
-check('the signature moves with the route and with the entities — and with nothing else', routed('plan', 0.9).signature !== routed('write', 0.9).signature && routed('plan', 0.9).signature !== routed('plan', 0.9, { [actQuestion]: { kind: 'choice', choice: 'act_a', p: 0.9, confidence: 0.9 } }).signature && routed('plan', 0.9).signature === routed('plan', 0.7, { 'context/alpha': noul(0.9) }).signature);
+check('the narrowed catalog is the top six, never the lot', handedWith().narrowed.length === 6 && held.length > 6);
+check(`a pack goes out only if Jev said yes to it — ${YES_AT} is yes, like everywhere`, handedWith({ 'context/alpha': noul(YES_AT), 'context/beta': noul(YES_AT - 0.01) }).packs.map((pack) => pack.id).join() === 'alpha');
+check('a pick over candidate rows is an ENTITY, reported with its label', handedWith({ [actQuestion]: { kind: 'choice', choice: 'act_a', p: 0.9, confidence: 0.9 } }).entities.some((entity) => entity.table === 'acts' && entity.id === 'act_a' && entity.label.startsWith('Act A')));
 check('what the slow path opened a card with counts toward it being aimed', onScreen(resolveScreen({ line: 'x', derived, answers: {}, parsed: parse('x'), clock: PINNED_CLOCK, mounted: new Set(), pinned: new Set(['act.card']), titles: {}, given: { 'act.card': { actId: 'act_a' } } })).includes('act.card'));
 
 // ═══ 4. admission — one rule, three doors ════════════════════

@@ -12,7 +12,7 @@ import { deriveQuestions } from './derive';
 import { decideQuestions } from './decide';
 import type { DecideState } from './decide';
 import { supersede, supersededNotes } from './supersede';
-import { resolveScreen, HANDOFF_AT } from './resolve';
+import { resolveScreen } from './resolve';
 import { clearScreen, mountedActions, reconcileScreen, writeHeard, writeStory, writeTrace, writeTraceWarm } from './reconcile';
 import { referencedTables } from './input-contract';
 import { readablePacks } from './context-packs';
@@ -34,7 +34,7 @@ import type { Story, StoryNames } from './story';
 import { admit } from './admission';
 import type { RailEntry } from './thread';
 import type { Message } from '@niscorp/signal';
-import type { AgentMode, Answer, CandidateSets, Entity, Parsed, PassRecord, RunRecord } from './intent.types';
+import type { Answer, CandidateSets, Entity, Parsed, PassRecord, RunRecord } from './intent.types';
 
 // ═══════════════════════════════════════════════════════════
 // THE LOOP, for one session — both speeds of it.
@@ -100,7 +100,7 @@ export type IntentLoop = {
   // The operator's "new thread" control, and the rows the answer card lists.
   newThread: () => Promise<string>;
   earlierTurns: () => Promise<RailEntry[]>;
-  lastAgentInput: () => { input: Message[]; mode: AgentMode } | undefined;
+  lastAgentInput: () => { input: Message[] } | undefined;
   // The line took focus: somebody is about to type. Open the connection now.
   warm: () => string;
   // The fast path at rest: no pass running or waiting.
@@ -185,10 +185,10 @@ export const createIntentLoop = (session: FunctionSession, deps: IntentDeps): In
     pinnedStory = to >= stories.length - 1 ? undefined : stories[to]?.story.key;
     return showStory();
   };
-  // A RUN BELONGS TO THE PASS THAT SENT IT: the newest sentence story whose
-  // handoff it answers — and it lands there even if the panel is looking elsewhere.
+  // A RUN BELONGS TO ITS TEXT: it is told on the newest story of that sentence —
+  // and it lands there even if the panel is looking elsewhere.
   const attachRun = (run: RunRecord): void => {
-    const entry = [...stories].reverse().find((held) => held.record !== undefined && held.record.handoff.signature === run.signature) ?? [...stories].reverse().find((held) => held.record !== undefined);
+    const entry = [...stories].reverse().find((held) => held.record !== undefined && held.record.text === run.text);
     if (entry?.record === undefined) return;
     entry.story = withRun(entry.story, entry.record, run, names());
     showStory();
@@ -236,7 +236,7 @@ export const createIntentLoop = (session: FunctionSession, deps: IntentDeps): In
   let anchor = '';
   // The generation at which the current sentence began. A pass started under
   // the PREVIOUS sentence still lands — passes always do — but it has no say in
-  // the slow path: its route is about words that are no longer on the line.
+  // the slow path: it is about words that are no longer on the line.
   let sentenceAt = 0;
   // The sentence (by its `sentenceAt`) whose passes have put the current cards up:
   // what unmount hysteresis is allowed to remember.
@@ -302,7 +302,7 @@ export const createIntentLoop = (session: FunctionSession, deps: IntentDeps): In
     const afterResolve = performance.now();
 
     const applied = clearedAt <= generation;
-    const notes = applied ? reconcileScreen(shell, resolved, deps.definitions, touched, assist.enabled && resolved.handoff.route !== 'direct') : ['dropped: the line was cleared while this pass was out'];
+    const notes = applied ? reconcileScreen(shell, resolved, deps.definitions, touched) : ['dropped: the line was cleared while this pass was out'];
     if (applied && generation >= sentenceAt) earnedAt = sentenceAt;
     if (applied) {
       sentenceTone = resolved.tone;
@@ -355,7 +355,7 @@ export const createIntentLoop = (session: FunctionSession, deps: IntentDeps): In
     // the same frame, and the trace row already says `pending`.
     if (applied && generation >= sentenceAt) assist.onPass({ text, parsed, candidates, handoff: resolved.handoff, held: resolved.held });
     writeTrace(shell, record, assist.traceRows());
-    keepStory(sentenceStory({ record, heard: heardTags(parsed, candidates, applied ? resolved.handoff.entities : undefined), scored: resolved.scored, names: names(), handoffLine: HANDOFF_AT, warm: lastWarm }), record);
+    keepStory(sentenceStory({ record, heard: heardTags(parsed, candidates, applied ? resolved.handoff.entities : undefined), scored: resolved.scored, names: names(), warm: lastWarm }), record);
     deps.onPass?.(session.principal, record);
   };
 
@@ -378,14 +378,6 @@ export const createIntentLoop = (session: FunctionSession, deps: IntentDeps): In
       pinned.add(actionId);
       given[actionId] = { ...(given[actionId] ?? {}), ...input };
       placers[actionId] = placedBy;
-    },
-    release: (actionIds) => {
-      for (const actionId of actionIds) {
-        pinned.delete(actionId);
-        delete whys[actionId];
-        delete given[actionId];
-        delete placers[actionId];
-      }
     },
     onRunStart: () => watcher.yieldToOperator(),
     repass: () => {
@@ -484,7 +476,7 @@ export const createIntentLoop = (session: FunctionSession, deps: IntentDeps): In
       writeIdle();
       // A keystroke is the line not being idle: whatever handoff was armed is
       // disarmed, and the pass this starts will decide again.
-      assist.onKeystroke();
+      assist.onKeystroke(text);
       // A line with nothing to decide about is not sent — and whatever a longer
       // line put up comes down now, the way it does for an empty one: "st" is
       // not an intent, whether it was typed or backspaced to. What the

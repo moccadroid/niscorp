@@ -15,7 +15,6 @@ export type RunTrace = {
   runId: string;
   at: string;
   principal: string | null;
-  mode: string;
   model: string;
   status: string;
   // The messages of the first request, exactly as cortex assembled them.

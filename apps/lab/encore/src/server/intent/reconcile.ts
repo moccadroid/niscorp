@@ -51,17 +51,12 @@ export const mountedActions = (shell: Shell): Set<string> => {
 export const NOTHING_ANSWERS = 'Nothing in the room answers that yet.';
 export const ONLY_GUESSES = 'Nothing is sure enough to open by itself. These are guesses — click one to open it.';
 
-// `answerComing`: the sentence was routed to the agent and there is an agent to
-// take it. "Nothing in the room answers that yet" beside a card that says
-// "about to answer" would be the room contradicting itself — an empty room with
-// an answer on the way says nothing. Guesses are still guesses.
-const roomSays = (mountedCount: number, chipCount: number, answerComing: boolean): string => {
+const roomSays = (mountedCount: number, chipCount: number): string => {
   if (mountedCount > 0) return '';
-  if (chipCount === 0) return answerComing ? '' : NOTHING_ANSWERS;
-  return ONLY_GUESSES;
+  return chipCount === 0 ? NOTHING_ANSWERS : ONLY_GUESSES;
 };
 
-export const reconcileScreen = (shell: Shell, resolved: Resolved, definitions: Record<string, ActionDefinition>, touched: TouchTracker, answerComing = false): string[] => {
+export const reconcileScreen = (shell: Shell, resolved: Resolved, definitions: Record<string, ActionDefinition>, touched: TouchTracker): string[] => {
   const notes: string[] = [];
   for (const canvas of QUESTION_CANVASES) {
     // A CARD ALREADY UP is written only where nobody else has been: keys a
@@ -112,7 +107,7 @@ export const reconcileScreen = (shell: Shell, resolved: Resolved, definitions: R
       if (instanceId !== undefined && definition !== undefined) touched.adopt(instanceId, definition, entry.input ?? {});
     }
   }
-  mergeInto(shell, 'maybe', 'intent.options', { chips: resolved.chips, suggested: resolved.suggested, say: roomSays(mountedActions(shell).size, resolved.chips.length, answerComing) });
+  mergeInto(shell, 'maybe', 'intent.options', { chips: resolved.chips, suggested: resolved.suggested, say: roomSays(mountedActions(shell).size, resolved.chips.length) });
   mergeInto(shell, 'line', 'intent.line', { tone: resolved.tone });
   return notes;
 };
@@ -155,10 +150,8 @@ export const writeTrace = (shell: Shell, record: PassRecord, run: readonly { lab
     connection: record.reusedConnection ? 'reused' : 'new',
     lanes: Object.entries(record.lanes).map(([label, ms]) => ({ label, value: round(ms) })),
     top: record.top,
-    // What Jev decided about the SLOW path in this same pass.
+    // What the assistant would be handed from this pass.
     handoff: [
-      { label: 'route', value: `${record.handoff.route} ${record.handoff.routeP}` },
-      { label: 'complete', value: record.handoff.completeP },
       { label: 'packs', value: record.handoff.packs.map((pack) => pack.id).join(', ') || 'none' },
       { label: 'narrowed', value: record.handoff.narrowed.length },
     ],

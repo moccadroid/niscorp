@@ -14,10 +14,9 @@ import type { FakeAgentControls } from './fake-llm';
 // fresh checkout runs the fast speed alone and says so, rather than failing on
 // a key nobody was told about.
 //
-// OFF IS NOT ABSENT. The route, completeness and context questions are still
-// asked in every pass and still traced, and every settled sentence is still a
-// turn in the thread; the room reports what it WOULD have handed off. Only the
-// run, and the card that announces it, do not exist.
+// OFF IS NOT ABSENT. The context questions are still asked in every pass and
+// still traced, and every finished sentence is still a turn in the thread. Only
+// the run, and the card that announces it, do not exist.
 
 export type AgentKind = 'groq' | 'fake' | 'off';
 

@@ -261,7 +261,7 @@ export const DDL = /* sql */ `
     principal   TEXT NOT NULL,
     role        TEXT NOT NULL CHECK (role IN ('operator', 'jev', 'agent', 'did', 'event', 'break')),
     body        TEXT NOT NULL,
-    -- What was made of the line, as JSON text: route, rows resolved, cards
+    -- What was made of the line, as JSON text: rows resolved, cards
     -- opened and what they were aimed at. Read by one mapper, never queried.
     detail      TEXT NOT NULL DEFAULT '{}',
     created_at  TIMESTAMPTZ NOT NULL DEFAULT now()

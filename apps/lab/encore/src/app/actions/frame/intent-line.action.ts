@@ -42,7 +42,7 @@ export const intentLineAction: ActionDefinition = {
     { event: 'ui:focus', ref: 'line', do: [{ call: 'warm' }] },
     // A FOLLOW-UP CHIP IS TYPING. The answer card announces a sentence; the line
     // takes it as its own text and decides about it exactly as if it had been
-    // typed — so a suggested sentence is routed by Jev like any other, and
+    // typed — so a suggested sentence is decided like any other, and
     // nothing but this line ever starts a pass.
     { message: LINE_TYPE_CHANNEL, do: [{ set: 'text', value: '@event.payload' }, { call: 'decide' }] },
   ],

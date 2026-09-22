@@ -140,7 +140,7 @@ export const railOf = (rows: readonly TurnRow[]): RailEntry[] => {
     } else if (row.role === 'did') entries.push({ key: String(row.seq), by: 'pressed', tone: 'good', line: row.body, said: '', full: row.body });
     else if (row.role === 'event') entries.push({ key: String(row.seq), by: 'event', tone: 'warn', line: row.body, said: '', full: rail === '' ? row.body : rail });
     else if (asked !== undefined && row.role === 'jev') Object.assign(asked, { by: 'cards', tone: 'mute', said: rail === '' ? row.body : rail, full: rail === '' ? row.body : rail });
-    else if (asked !== undefined && row.role === 'agent') Object.assign(asked, { by: 'agent', tone: 'accent', said: firstSentence(row.body), full: row.body });
+    else if (asked !== undefined && row.role === 'agent') Object.assign(asked, row.body.startsWith(CARDS_ONLY) ? { by: 'cards', tone: 'mute', said: rail === '' ? row.body : rail, full: rail === '' ? row.body : rail } : { by: 'agent', tone: 'accent', said: firstSentence(row.body), full: row.body });
   }
   return entries.reverse();
 };

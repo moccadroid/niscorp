@@ -109,39 +109,42 @@ keystroke → ui:model (debounce 0) → fn encore.intent (returns at once)
 > building", below, records what building it decided. (Slice 1b shipped this as a single
 > `signal.stream()` call — "the writer". It was replaced whole, not wrapped: one mechanism.)
 
-Jev routes and fills. It cannot write a sentence, reason across rows, or build a plan —
-and it should not try. What it cannot finish it hands to **a cortex agent with a thread**
-(Groq's `openai/gpt-oss-120b` through signal), and the handoff is **Jev's own decision**,
-asked in the same wide pass at no extra latency:
+Jev fills. It answers yes/no per card, picks rows and enum values for fields, yes/no per
+context pack, and the tone — in one wide pass, at no extra latency. **0.5 is yes**
+everywhere Jev is asked anything: mount the card, fill the field with that pick, send the
+pack. The only other numbers are 0.35 (a card already up stays until it falls to here —
+scoped to one sentence) and 0.30 (a chip). No other thresholds exist.
 
-| Question | Type | Decides |
-|---|---|---|
-| `handoff/route` | choice: `direct` · `ask` · `write` · `plan` | whether cards suffice, the sentence wants an answer in words, a field needs authored words, or it needs reasoning |
-| `handoff/complete` | noul | whether the thought is finished — the agent is never run on half a sentence |
-| `context/<pack>` | noul each | which declared reads the agent is handed (the situation, incidents, attendance, the day's lineup, the weather window, stage capacities, sales) |
+**The assistant runs on every finished sentence** — the line quiet for 700 ms after its
+pass landed, or Enter. Nothing else decides whether it runs. It is always handed the same
+state under one prompt and one contract, in which everything is optional: `response` may be
+empty (the right answer when the cards already say it), plus `canvases` (add or aim),
+`fields`, `steps`, `claims`, `followUps`. What comes back goes through the one admission
+rule and lands as before: it adds and aims, only Jev closes, touched fields stay untouched.
+A run belongs to the text it started with; any change of the line aborts it. The answer
+surface shows only while there is something to show: a working line while a run is out,
+then words or steps if any came back, otherwise nothing.
 
-And one route that is **computed, not asked**: a finished thought that leaves Jev with
-nothing — no card, no chip worth offering, or a card it wanted and could not aim — goes to
-the agent as `ask`. Jev not knowing is itself a routing decision.
-
-**The fast speed never waits.** Jev's cards land at once. A sentence is *settled* when the
-pacer is at rest, `handoff/complete` clears 0.6 and the line has been idle 700 ms; a settled
-sentence routed to the agent starts a run (Enter starts one now) — and the card that says
-so, `assist.answer`, was mounted by the same pass.
+(Deleted 2026-09-22: the `handoff/route` question and the direct/ask/write/plan enum, the
+`handoff/complete` gate, the computed "Jev doesn't know" fallback, the question-mark rule,
+the demotion threshold, `HANDOFF_AT`, `FILL_AT`, run signatures, per-mode prompts, and the
+fake scorer's route and finished-thought cues. Jev's routing answers were near coin-flips
+and every mis-route had grown a compensating rule.)
 
 **The agent is handed Jev's work, and a conversation.** Static blocks first (identity and
 the law, the tools' own guides, the contract, what the room is), then **the thread** — the
 last twenty turns, as messages — then **this turn's pre-decisions** as one system message
 (the sentence, what the parser heard, the rows Jev resolved, Jev's top six actions *one line
-each*, the rows of the packs Jev chose, what is on screen), then the operator's line. So a
+each*, the cards Jev wanted and could not aim, the rows of the packs Jev said yes to, what
+is on screen, the writable fields, what was asked before), then the operator's line. So a
 typical run is one model step. Two tools, both reads: `list_queries` and `query` — replay by
 fingerprint over the session's wire, refused before the wire if it is not in the caller's
 allow-set or is a write.
 
-**It returns cortex's envelope.** `response` is the answer, streamed onto the card at most
-every 120 ms. `data` is the room's: `canvases` (the complete state of each canvas the answer
-*names* — no other canvas is touched), `fields` (words for `.meta({ write: true })` fields
-nobody has typed in) and `steps` (a plan: each a chip that opens one prefilled form). One
+**It returns cortex's envelope.** `response`, when there is one, is streamed onto the card at
+most every 120 ms. `data` is the room's: `canvases` (cards to add or aim on the canvases
+it names — nothing is closed), `fields` (words for `.meta({ write: true })` fields nobody
+has typed in) and `steps` (each a chip that opens one prefilled form). One
 admission rule, in one file, decides what may be opened — for the agent's cards, a plan's
 steps and a clicked chip alike. Rejected whole.
 
@@ -149,14 +152,14 @@ So the thesis holds at both speeds: the model places, it never generates a layou
 cannot name a row that does not exist, and **it never presses a button** — `law-check`
 reads the agent's files and counts the database's rows to hold that.
 
-**The thread is memory for the agent and none for Jev.** Every settled sentence is a turn —
-including the ones Jev handled alone, stored as one compact line of what was opened and
+**The thread is memory for the agent and none for Jev.** Every finished sentence is a turn —
+including the ones with nothing to say, stored as one compact line of what was opened and
 aimed at — in `agent_turns`, written and read through vex with the principal stamped by the
 engine. The room resets with every sentence; the thread only when the operator says so.
 Jev is handed one sentence and nothing before it, and a check asserts that on the wire.
 
 **It is abortable and the fast speed is not.** A Jev pass always lands; a run is torn down
-the moment the sentence changes in a way that moves Jev's answers. Aborted is an outcome:
+the moment the line changes. Aborted is an outcome:
 the card says so at once, the question stays in the thread, the partial answer does not.
 A field the operator has touched is never overwritten by either speed.
 
@@ -164,7 +167,7 @@ A field the operator has touched is never overwritten by either speed.
 and tokens for each — and `ENCORE_TRACE_DIR` writes one JSON file per run.
 
 Without `GROQ_API_KEY` (or with `ENCORE_AGENT=off`) no run starts and no answer card
-appears; the route is still asked and traced, and settled sentences are still turns.
+appears; finished sentences are still turns.
 Checks run the agent against a scripted chat client under signal's real adapter,
 deterministic and offline, the same way the fake decider works.
 
@@ -189,9 +192,9 @@ line.
 1. **Slice 1 — the loop, end to end.** Skeleton, schema and seed, a plain kit, the
    shell, the fake provider, the loop, one action per kind, and a check that types the
    storm sentence into a real shell and asserts what each canvas holds.
-   **Slice 1b — two speeds.** The handoff: route, completeness and context-pack questions
-   in the pass; the text-model run with its closed output contract; touched-field pins;
-   both clocks in the trace; a fake chat provider for the checks.
+   **Slice 1b — two speeds.** The context-pack questions in the pass; the text-model run
+   with its closed output contract; touched-field pins; both clocks in the trace; a fake
+   chat provider for the checks.
 2. **Slice 2 — the room.** The full roster and the components that make it a room: map,
    timeline, chart, gauge, radar.
 3. **Slice 3 — wild.** Arrangement and tone, two intents in one sentence, correction
@@ -254,22 +257,6 @@ Choices that followed from "Two speeds" rather than being asked, recorded for re
   asked about `sales` and nothing else.
 - **Packs are read when a run starts, not per pass.** The pass only decides which.
 - **`assist.run` needs a grant** (`assist.*`, both roles). No grant or no writer → no slow path.
-- **The card is a promise until a run starts, then a report.** Pending is withdrawn if the
-  route falls back to `direct`; running / landed / aborted / failed stays until the line is
-  cleared, so an aborted run can say so even when the sentence that aborted it needs no run.
-- **A signature is run once.** `landed` and `failed` are remembered per signature until the
-  line is cleared; only Enter re-runs them. `aborted` is not remembered — if the sentence comes
-  back, so does the run.
-- **The signature is route + the SET of narrowed actions + the SET of resolved entities.** Two
-  actions trading places in Jev's top six is not a new question. Ties in rank keep CATALOG
-  order — the loop now derives in authored order rather than the alphabetical order moss
-  resolves ids in. With a calibrated model ties do not happen; with the lexical fake they are
-  most of the list, and they decide which forms a fake plan can propose.
-- **Enter on a `direct` sentence** runs whichever of write / plan Jev gave the higher
-  probability (plan when the provider was uncalibrated). Enter waits for the fast path to go
-  idle first — milliseconds — because a run is *for* a landed pass.
-- **In a plan, cards wait behind their steps**; a card no step points at mounts on landing. In
-  `write` mode every card mounts on landing.
 - **A card the slow path opens is adopted by the fast path**: pinned, its input remembered
   (`given`), and a pass is run so Jev fills the keys the text model left alone. `given` counts
   toward a card being aimed, so a record card the text model opened is not unmounted by a pass
@@ -331,7 +318,7 @@ Three defects, and three measured findings about latency.
   takes down what Jev no longer wants. A pass started under the old sentence still lands, but
   has no say in the slow path.
 - The remaining edge, handled elsewhere: an edit in the last 30% can change what the sentence
-  is ABOUT and still be a continuation. When that moves the handoff signature, the superseded
+  is ABOUT and still be a continuation. When that changes the line, the superseded
   plan's cards are released back to Jev's judgement (unpinned, `given` forgotten).
 - A line with nothing to decide ("st", "at 9") is not a new sentence, but the room comes down
   as for an empty line, and a run in flight is aborted: the sentence stopped asking.
@@ -418,25 +405,15 @@ asked, recorded for review — and where what was built differs from DESIGN.md, 
 
 **Choices**
 
-- **One settle timer for every route.** `direct` sentences arm it too — that is how they
-  become turns — so "settled" means one thing.
 - **Every write a run makes to the card is throttled**, not only the words: "looking
   something up" and a retry's wipe share the same 120 ms budget (`ANSWER_WRITE_MS`, one
   constant, `intent/assist.ts`). Patches merge while they wait, and a patch that changes
   nothing is not a write — solid reports a partial per chunk, and most of an envelope's chunks
   are not the answer. Landing, aborting and failing bypass it: the card settles at once.
-- **A canvas the answer names is reconciled to exactly what it listed.** Cards it left out
-  are closed and then *held down* (`suppressed`, resolve.ts) — offered as chips, not mounted —
-  or Jev would put them back on the next keystroke. A click outranks that; a new sentence
-  clears it. Cards it listed are adopted (pinned, `given`) exactly as slice 1b's were.
 - **A plan step JOINS its canvas**; only `canvases` describes one whole.
 - **`null` and absent both mean "I did not name this canvas"; `[]` names it, empty.**
 - **Required inputs are required of anything a model opens, and not yet of a chip** — a chip
   opens a card with nothing and Jev aims it on the pass the click sets off (`partial`).
-- **The computed route only fires on a finished thought** (`complete` ≥ 0.6), and a card a
-  person pinned does not count as "Jev wanted it and could not aim it".
-- **Enter on a `direct` sentence** runs the likeliest of ask / write / plan, `ask` on a tie
-  or with no odds: of the three it is the one that cannot put a wrong form up.
 - **The same sentence is stored once**, however often it is run (Enter after a failure).
 - **The answer card lists the turns BEFORE the exchange it is showing**, loaded through its
   own declared endpoint (`encore.thread`) at mount and on a `thread-changed` message the
@@ -452,9 +429,6 @@ asked, recorded for review — and where what was built differs from DESIGN.md, 
   They do hold `assist.*` and a thread of their own.
 - **The `runs` sink is an in-process list of the last 200** (`boot.ts`). A run has three
   outcomes and moss has two, so the third rides the label: `write:aborted`.
-- **The fake's `ask` cue is shape, and a fallback**: a question mark or an interrogative first
-  word, counted only when no other concept cue fired ("what should we do?" is a plan). `how`
-  left the plan lexicon for that reason. A terminal `.`, `?` or `!` finishes a thought.
 - **The scripted agent model is asked for one MOVE per model step** — call a tool or answer
   — from what a model would have in front of it, so a scripted run is a real multi-step run.
   It declares Groq's capabilities, so transport resolves to `emit` and a check that reads the
@@ -511,10 +485,6 @@ only have made it a chip; a companion that cannot be aimed never routes.
 - **The scene-1 plan on the fake moves Nova Kestrel to The Grove, not Velvet Arcade.** Velvet
   Arcade is under a roof, so nothing the storm turn was handed names her — and an answer may only
   name rows that are on the table (below). The red verdict is the scenario's own: 22,000 into 4,000.
-- **"what are our options" reaches the agent as `plan`, by Jev, on the fake** — "options" is a
-  plan cue and has been since slice 1b. The COMPUTED route is exercised beside it with a cue-less
-  follow-up under the middling floor. The fake's follow-ups carry a question mark: its finished-
-  thought test is a shape test, and four short words are not a shape.
 - **Follow-ups are not ranked by Jev.** SCENARIOS.md says "Jev ranks them"; they are shown in the
   agent's order. Ranking is one more `choice` in the pass that lands the answer — a second pass,
   so it was left until it can be measured on the real model.
@@ -633,9 +603,9 @@ BOTH the interrupt and a card over the mount line that can be aimed.
   strip by name ("+2 more raised, not shown: …") — raised, on the rail, and shown as room is made.
 - **A dismissal holds its cause down until the cause changes band or leaves** — "I have seen
   this", not "never tell me about the Food Court again".
-- **The brief** is the same agent in a fourth mode (`brief`, never a route): no tools, nothing it
-  may name, handed the causes that are up; it lands whole on the strip (one line is not worth
-  streaming). Critical + pick ≥ 0.6, none while an operator run is out, one per ten seconds, and
+- **The brief** is the same agent, the same prompt and contract, with the event as its state: no
+  tools, nothing it may name, handed the causes that are up; it lands whole on the strip (one
+  line is not worth streaming). Critical + pick ≥ 0.5, none while an operator run is out, one per ten seconds, and
   a brief that cannot go now is dropped, not queued. An operator run starting aborts one in flight.
 - **The clock is a row per DATABASE and an object per SESSION**: the director advances
   `festival_clock`; each watcher re-reads it under its own policy and mutates the session's clock
@@ -902,8 +872,8 @@ borders, 12–14 px padding.
 
 ## The mount line, and x-ray rebuilt — derived while fixing
 
-**The mount line is "probably".** MOUNT 0.50 · UNMOUNT 0.35 · chips for 0.30–0.50 (still ≤3, within
-0.15 of the best) — all in `resolve.ts`. 0.80 was chosen before anybody had seen a calibrated
+**The mount line is "probably".** MOUNT 0.50 · UNMOUNT 0.35 · chips for 0.30–0.50 (still ≤3) —
+all in `resolve.ts`. 0.80 was chosen before anybody had seen a calibrated
 model's numbers: on the real one "who's playing right now?" left the running order (0.77) and the
 act (0.69) as chips beside an overview the slow model had to place. What leaned on the old line:
 
@@ -912,12 +882,8 @@ act (0.69) as chips beside an overview the slow model had to place. What leaned 
   The first pass of a NEW sentence (continuation.ts) gives nothing the benefit of being up — every
   card re-earns the mount line, and one that does keeps its instance. Asserted under the 0.4
   floor, which now sits between the two lines on purpose (the floor did not move).
-- **"Wanted and could not aim" routes only when Jev was SURE** (`DEMOTION_ROUTES_AT` 0.80 — the
-  old line, kept for the one rule that was really about being sure). A record card that probably
-  belongs, in a sentence that names no record, is a chip, not a run of the slow model.
-- `FILL_AT` (0.6, on the pick), companions and `SURE_DIRECT_AT` did not fight the new line and are
-  unchanged. The confidence WORD got its own lines (sure ≥0.9 · fairly sure ≥0.7 · a guess): a card
-  up at 0.55 is a guess the room acted on, and its "why?" says so.
+- (Two more bullets stood here about the demotion threshold, `FILL_AT` and the confidence
+  word; all three were deleted the next day with the routing itself — see "Two speeds".)
 
 **X-ray changes nothing in the app.** The first x-ray wrote itself over the whole room — a tag on
 every card, a legend, a banner, a status line under the answer — and buried the interesting part

@@ -25,7 +25,9 @@ const heading = (value: string): LayoutNode => ({ component: 'Text', props: { va
 const lines = (path: string): LayoutNode => ({
   component: 'Stack',
   props: { gap: 4 },
-  children: [{ for: path, as: 'line', key: 'text', do: { component: 'Text', props: { value: '$.line.text', tone: '$.line.tone', variant: 'story' } } }],
+  // No `key`: two story lines can be the same words (a run refused twice for
+  // the same reason), and keying by text made React drop one of them.
+  children: [{ for: path, as: 'line', do: { component: 'Text', props: { value: '$.line.text', tone: '$.line.tone', variant: 'story' } } }],
 });
 
 const meters = (path: string): LayoutNode => ({

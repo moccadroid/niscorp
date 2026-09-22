@@ -1,3 +1,5 @@
+import { defaultScript } from '@encore/server/agent/fake-llm';
+import type { AgentScript } from '@encore/server/agent/fake-llm';
 import type { Shell } from '@niscorp/nova';
 import { mintDevToken } from '@niscorp/moss';
 import { boot } from '@encore/server/boot';
@@ -187,6 +189,23 @@ export const createWorld = async (options: WorldOptions): Promise<World> => {
     close: booted.close,
   };
 };
+
+// ─── a plan, scripted ────────────────────────────────────────
+// The default scripted assistant never proposes steps: nothing in the STATE says a
+// plan is wanted, and only a model that reads the sentence can tell. A check that
+// needs a plan on the card says which.
+export type ScriptedStep = { say: string; actionId: string; input: Record<string, unknown> };
+
+export const planOf =
+  (steps: readonly ScriptedStep[]): AgentScript =>
+  (turn) =>
+    turn.predecisions.facts['standing'] !== undefined ? defaultScript(turn) : { answer: { response: `${steps.length} step(s), most consequential first. Nothing is sent until you press it.`, data: { steps } } };
+
+export const STORM_PLAN_STEPS: readonly ScriptedStep[] = [
+  { say: 'Move a set — Nova Kestrel', actionId: 'slot.swap', input: { actId: 'act_nova_kestrel' } },
+  { say: 'Delay a set — Nova Kestrel', actionId: 'set.delay', input: { actId: 'act_nova_kestrel' } },
+  { say: 'Push to attendees', actionId: 'push.compose', input: {} },
+];
 
 // ─── the reporter ────────────────────────────────────────────
 

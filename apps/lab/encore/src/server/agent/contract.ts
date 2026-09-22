@@ -34,7 +34,7 @@ const Card = z.strictObject({
 });
 
 const CANVASES =
-  'Cards to put on screen as evidence for your answer. COMPLETE STATE per canvas you name: list every card that canvas should hold, and a card you leave out of a canvas you named is closed. A canvas you do not name is left exactly as it is — so name none unless the answer needs one. Each action belongs on the one canvas ACTIONS gives it in [brackets]. INPUT RULE, for every `input` here and in `steps`: only keys that action lists under `input:` in ACTIONS, only row ids that appear in ROWS or RESOLVED, only values the pre-decisions support; leave out what you do not know — a person fills the rest.';
+  'Cards to ADD to the screen, or AIM — keyed by canvas; each action belongs on the one canvas ACTIONS gives it in [brackets]. You only add and aim: a card already up stays up whether or not you list it. INPUT RULE, for every `input` here and in `steps`: only keys that action lists under `input:` in ACTIONS; only row ids that appear in ROWS, RESOLVED, FACTS or a lookup of this turn; leave out what you do not know — a person fills the rest. An id from anywhere else rejects the whole answer.';
 
 export const FOLLOW_UP_MAX_CHARS = 60;
 export const FOLLOW_UPS_MAX = 2;
@@ -49,8 +49,6 @@ export const FOLLOW_UPS_MAX = 2;
 // the instructions, both from these constants.)
 export const ANSWER_MAX_SENTENCES = 2;
 export const ANSWER_MAX_CHARS = 320;
-// How many things a card already shows an answer may name before it is reciting.
-export const RECITE_MAX = 2;
 
 export const AnswerDataSchema = z.strictObject({
   claims: z
@@ -94,6 +92,6 @@ export const AnswerDataSchema = z.strictObject({
     .max(6)
     .nullish()
     .describe('A plan, in order, most consequential first — only when the operator asked what to DO. Each step opens one prefilled form when pressed; nothing is submitted for them. Leave empty when answering a question or writing words.'),
-}).describe(`What goes beside your \`response\`. The response itself: AT MOST ${ANSWER_MAX_SENTENCES} sentences, ${ANSWER_MAX_CHARS} characters, and never a recital of what a card on screen already shows (more than ${RECITE_MAX} of a card's own rows named is a recital). An answer over either bound is refused and you are asked again.`);
+}).describe(`What goes beside your \`response\`. The response itself: AT MOST ${ANSWER_MAX_SENTENCES} sentences, ${ANSWER_MAX_CHARS} characters, and preferably what the cards on screen do not already show. An answer over either bound is refused and you are asked again.`);
 
 export type AnswerData = z.infer<typeof AnswerDataSchema>;

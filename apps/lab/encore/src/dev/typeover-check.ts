@@ -18,7 +18,7 @@ import { CATALOG_DEFINITIONS } from '@encore/app/action-catalog';
 import { QUESTION_CANVASES } from '@encore/app/canvas-placement';
 import { NOTHING_ANSWERS, ONLY_GUESSES } from '@encore/server/intent/reconcile';
 import type { FakeAgentControls } from '@encore/server/agent/fake-llm';
-import { cardData, createReporter, createWorld, mounted, settle } from './world-factory';
+import { STORM_PLAN_STEPS, cardData, createReporter, createWorld, mounted, planOf, settle } from './world-factory';
 
 const STORM_PLAN = 'storm at 9 what should we do with the headliner';
 const QUESTION = 'how many guests are there right now?';
@@ -37,10 +37,13 @@ const main = async (): Promise<void> => {
   const strip = (): Record<string, unknown> => cardData(shell, 'maybe', 'intent.options');
 
   // ═══ the session, as it happened ═════════════════════════
+  // (2026-09-22: a plan is scripted where a check needs one — the default scripted
+  // assistant proposes none, and nothing routes a sentence to "plan" any more.)
+  controls.script = planOf(STORM_PLAN_STEPS);
   await world.typeLine(OP, STORM_PLAN);
   await world.settled(OP);
+  controls.script = undefined;
   const steps = cardData(shell, 'assist', 'assist.answer')['steps'];
-  const planRun = world.runsOf(OP).at(-1)?.run;
   const swapStep = (Array.isArray(steps) ? steps : []).findIndex((step) => JSON.stringify(step).includes('Move a set'));
   world.dispatchOn(OP, 'assist', { type: 'ui:click', ref: 'step', payload: swapStep });
   await world.settled(OP);
@@ -68,10 +71,11 @@ const main = async (): Promise<void> => {
   check('the line was never emptied', !wasEverEmpty);
 
   // ═══ 1. a new room ═══════════════════════════════════════
-  check('assist.answer is gone', mounted(shell, 'assist').length === 0);
+  // (2026-09-22: the assistant runs on every finished sentence, so the new one may
+  // have an answer of its own. What must be gone is the OLD one: the plan and its steps.)
+  check('the old answer is gone: no steps on the card — whatever is there answers THIS sentence', (cardData(shell, 'assist', 'assist.answer')['steps'] ?? []).toString() === '' && world.runsOf(OP).at(-1)?.text === QUESTION);
   check(`no storm card remains on any canvas (the room: ${room().join(', ') || 'empty'})`, !room().some((id) => STORM_CARDS.includes(id)));
   check('nothing stays pinned, and nothing the plan gave a card is remembered', holding().pinned.length === 0 && holding().given.length === 0);
-  check('no run was started for a question that needs none', world.runsOf(OP).at(-1)?.run === planRun && world.runsOf(OP).at(-1)?.signature !== world.passesOf(OP).at(-1)?.handoff.signature && world.passesOf(OP).at(-1)?.handoff.route === 'direct');
 
   // ═══ 2. a room that answers ══════════════════════════════
   check('the question is ANSWERED: attendance.now is mounted', mounted(shell, 'nearby').includes('attendance.now'));

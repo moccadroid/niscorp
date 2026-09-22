@@ -20,11 +20,8 @@ import type { ActionPlan, CandidateSets, Derived, FieldPlan } from './intent.typ
 //   a parsed field         → NOT a question. Days, hours and minutes are read
 //                            from the sentence, never judged from it.
 //
-// and, since Slice 1b, the three kinds that decide the SLOW path in the same
-// breath — the handoff is Jev's decision, not a second call's:
+// and one more kind, in the same breath:
 //
-//   handoff/route          → a `choice`: direct, write or plan
-//   handoff/complete       → a `noul`: is the thought finished?
 //   context/<pack>         → a `noul` per context pack the principal may read
 //
 // Every choice carries `none`. An input is optional and "they did not say" is
@@ -34,8 +31,6 @@ import type { ActionPlan, CandidateSets, Derived, FieldPlan } from './intent.typ
 // the claim, and this file is where it is either true or not.
 
 export const TONE_QUESTION = 'frame/tone';
-export const ROUTE_QUESTION = 'handoff/route';
-export const COMPLETE_QUESTION = 'handoff/complete';
 export const packQuestionName = (packId: string): string => `context/${packId}`;
 export const NONE = 'none';
 
@@ -89,30 +84,6 @@ const questionOf = (field: InputField, candidates: CandidateSets): { question: Q
     return { question: { type: 'score', instructions, criteria: levels }, minimum: field.minimum };
   }
   return undefined;
-};
-
-// THE HANDOFF IS JEV'S DECISION, asked in the same pass as everything else.
-// `direct` is listed first on purpose: it is the fallback, and most sentences
-// are. There is no `none` — a sentence goes one of four ways.
-//
-// `ask` is the one that is easy to over-use, so its criterion says what it is
-// NOT: a question a card answers by being opened is `direct`. "How full is the
-// tent" wants a gauge, not a paragraph.
-const ROUTE: Question = {
-  type: 'choice',
-  instructions: 'What does this sentence need beyond the cards that answer it?',
-  criteria: {
-    direct: 'Nothing more — opening and filling the right cards is the whole answer.',
-    ask: 'An answer in words: a question about what is happening or what is true, that no single card answers by being opened.',
-    write: 'Words for other people: a message or a text has to be composed for them to read.',
-    plan: 'Reasoning: an open question about what to do, needing facts weighed and steps proposed.',
-  },
-};
-
-const COMPLETE: Question = {
-  type: 'noul',
-  instructions: 'Is what the operator typed a finished thought, rather than one still being typed?',
-  criteria: { true: 'It reads as a whole sentence or instruction.', false: 'It stops mid-word or mid-phrase.' },
 };
 
 const NEEDS_CONTEXT = 'Would answering this well need these facts?';
@@ -199,7 +170,7 @@ export const deriveQuestions = (definitions: readonly ActionDefinition[], candid
 
   if (about === 'event') {
     Object.assign(questions, EVENT_QUESTIONS);
-    return { questions, plans, tone: EVENT_URGENCY, handoff: { route: '', complete: '', packs: {} } };
+    return { questions, plans, tone: EVENT_URGENCY, packs: {} };
   }
 
   // The one question that is about the ROOM rather than a card.
@@ -209,18 +180,14 @@ export const deriveQuestions = (definitions: readonly ActionDefinition[], candid
     criteria: ['calm — routine', 'elevated — needs attention soon', 'critical — immediate danger'],
   };
 
-  // ── the slow path's three kinds of question ────────────────
-  // Width is free: route, completeness and one noul per context pack ride the
-  // same call as the cards. Asking them costs bytes; asking them LATER would
-  // cost a round trip before the text model could even start.
-  questions[ROUTE_QUESTION] = ROUTE;
-  questions[COMPLETE_QUESTION] = COMPLETE;
+  // One yes/no per context pack, in the same call as the cards: asking LATER would
+  // cost a round trip before the assistant could even start.
   for (const pack of packs) questions[packQuestionName(pack.id)] = { type: 'noul', instructions: NEEDS_CONTEXT, criteria: { true: pack.description, false: NOT_NEEDED } };
 
   return {
     questions,
     plans,
     tone: TONE_QUESTION,
-    handoff: { route: ROUTE_QUESTION, complete: COMPLETE_QUESTION, packs: Object.fromEntries(packs.map((pack) => [pack.id, packQuestionName(pack.id)])) },
+    packs: Object.fromEntries(packs.map((pack) => [pack.id, packQuestionName(pack.id)])),
   };
 };

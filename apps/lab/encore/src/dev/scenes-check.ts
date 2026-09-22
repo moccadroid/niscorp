@@ -150,7 +150,6 @@ const main = async (): Promise<void> => {
   check(`...BECAUSE THE TENT WAS NOT AN OPTION: the lane took it back before Jev was asked (${flipPass?.superseded.map((entry) => `${entry.label.split(' — ')[0]} → ${entry.by.label.split(' — ')[0]}`).join(', ')})`, flipPass?.superseded.some((entry) => entry.id === 'stage_tent' && entry.by.id === 'stage_grove') === true && JSON.stringify(asked.at(-1) ?? {}).includes('The Grove') && !JSON.stringify(asked.at(-1) ?? {}).includes('The Tent —'));
   check(`...and the line under the sentence shows the survivor: ${JSON.stringify(cardData(shell, 'line', 'intent.line')['heard'])}`, JSON.stringify(cardData(shell, 'line', 'intent.line')['heard']).includes('The Grove') && !JSON.stringify(cardData(shell, 'line', 'intent.line')['heard']).includes('The Tent'));
   await world.settled(OP);
-  check('THE AGENT DID NOT RUN: this is what 300 ms is for', world.runsOf(OP).length === runsBeforeScene3 && controls.seen.length === 0 && mounted(shell, 'assist').length === 0);
 
   // A VALUE THE SENTENCE NO LONGER SAYS GOES BACK (seen live: a form kept 21:00
   // from an earlier sentence that the new one never said).
@@ -171,10 +170,10 @@ const main = async (): Promise<void> => {
   const twoPass = world.passesOf(OP).at(-1);
   const body = (): string => String(cardData(shell, 'doing', 'push.compose')['body']);
   check(`TWO intents, TWO forms, both in \`doing\`, both aimed (${mounted(shell, 'doing').join(' + ')})`, [...mounted(shell, 'doing')].sort().join() === 'push.compose,slot.swap' && swap()['toStageId'] === 'stage_tent' && swap()['time'] === '21:00' && cardData(shell, 'doing', 'push.compose')['audience'] === 'everyone');
-  check(`...the message a draft of the operator’s own sentence until somebody writes it; routed ${twoPass?.handoff.route}`, body() === TWO_INTENTS && twoPass?.handoff.route === 'write');
+  check('...the message a draft of the operator’s own sentence until somebody writes it', body() === TWO_INTENTS && twoPass !== undefined);
   await world.settled(OP);
   const firstDraft = body();
-  check(`the agent wrote the message FROM THE FORM BESIDE IT: "${firstDraft}"`, lastRun()?.status === 'landed' && lastRun()?.mode === 'write' && firstDraft.startsWith('Nova Kestrel moves to The Tent, 21:00.'));
+  check(`the agent wrote the message FROM THE FORM BESIDE IT: "${firstDraft}"`, lastRun()?.status === 'landed' && (lastRun()?.fieldsWritten.length ?? 0) > 0 && firstDraft.startsWith('Nova Kestrel moves to The Tent, 21:00.'));
   const handedScreen = controls.seen.at(-1)?.messages.map((message) => message.content).join('\n') ?? '';
   check('...because it was HANDED what that form holds: the act, the stage and the time, as the form has them', handedScreen.includes('"card":"slot.swap"') && handedScreen.includes('"toStageId":"stage_tent"') && handedScreen.includes('"time":"21:00"'));
 
@@ -203,7 +202,9 @@ const main = async (): Promise<void> => {
   await world.settled(OP);
   const movedEntry = rail().find((entry) => entry.line === TO_THE_TENT);
   check(`a turn Jev handled alone is on the rail IN THE OPERATOR’S TERMS: "${movedEntry?.said}"`, movedEntry?.by === 'cards' && movedEntry.said === 'moved Nova Kestrel → The Tent · not submitted');
-  check(`...newest nearest the line (${rail().map((entry) => entry.line).slice(0, 3).join(' | ')})`, rail()[0]?.line === TO_THE_TENT && rail().some((entry) => entry.line === TWO_INTENTS && entry.by === 'agent'));
+  // (2026-09-22: the last run on that line — after the operator took the message over — had
+  // nothing to add, so its entry says what the cards amounted to, the draft included.)
+  check(`...newest nearest the line (${rail().map((entry) => entry.line).slice(0, 3).join(' | ')})`, rail()[0]?.line === TO_THE_TENT && rail().some((entry) => entry.line === TWO_INTENTS && entry.said.includes('drafted a push')));
   await world.typeLine(OP, '');
   await world.typeLine(OP, 'who is on the main stage');
   check('THE RAIL PERSISTS: another sentence, another room — the same entries, and one more', rail().some((entry) => entry.line === TO_THE_TENT) && rail()[0]?.line === 'bar sales today' && mounted(shell, 'rail').join() === 'assist.rail');
@@ -228,8 +229,7 @@ const main = async (): Promise<void> => {
   check(`"${STORM}" → tone ${String(cardData(shell, 'line', 'intent.line')['tone'])}, the radar aimed at 21:00, the running order beside it`, cardData(shell, 'line', 'intent.line')['tone'] === 'elevated' && cardData(shell, 'when', 'weather.radar')['hour'] === 21 && mounted(shell, 'when').includes('lineup.timeline'));
   check(`EVERY EXPOSED SET IS LIT: ${exposed.map((slot) => slot.act_name).join(', ')} — open-air, under the warning, in the alert tone; nothing under a roof is`, exposed.length === 3 && exposed.every((slot) => slot.exposure_tone === 'alert' && slot.stage_kind === 'open-air') && slots.filter((slot) => !slot.exposed).every((slot) => slot.exposure_tone === '') && exposed.some((slot) => slot.act_name === 'Nova Kestrel') && !exposed.some((slot) => slot.act_name === 'Velvet Arcade'));
   check('...drawn by a timeline that was only told which key is a tone', servedOf('lineup.timeline').includes('"toneKey":"exposure_tone"'));
-  check(`a statement of a problem is a question: route ${stormPass?.handoff.route} (${stormPass?.handoff.routedBy}), and Jev chose the facts: ${stormPass?.handoff.packs.map((pack) => pack.id).join(', ')}`, stormPass?.handoff.route === 'ask' && stormPass.handoff.packs.some((pack) => pack.id === 'exposure') && stormPass.handoff.packs.some((pack) => pack.id === 'weather'));
-  check(`THE SAME PASS put the exchange up, the question on it: "${String(answerCard()['question'])}"`, answerCard()['status'] === 'pending' && answerCard()['question'] === STORM);
+  check(`Jev chose the facts for it: ${stormPass?.handoff.packs.map((pack) => pack.id).join(', ')}`, stormPass !== undefined && stormPass.handoff.packs.some((pack) => pack.id === 'exposure') && stormPass.handoff.packs.some((pack) => pack.id === 'weather'));
 
   await world.settled(OP);
   const stormRun = lastRun();
@@ -270,8 +270,8 @@ const main = async (): Promise<void> => {
   await loop?.idle();
   await settle(8);
   check(`pressing it TYPES IT INTO THE LINE: "${String(cardData(shell, 'line', 'intent.line')['text'])}"`, cardData(shell, 'line', 'intent.line')['text'] === OPTIONS);
-  check('...which made an ordinary PASS of it — Jev routed it like any sentence', world.passesOf(OP).length > passesBeforeChip && world.passesOf(OP).at(-1)?.text === OPTIONS);
-  check('...and did NOT call the agent: no run, no model step — only a card saying one is coming', world.runsOf(OP).length === runsBeforeChip && controls.seen.length === stepsBeforeChip && answerCard()['status'] === 'pending' && answerCard()['question'] === OPTIONS);
+  check('...which made an ordinary PASS of it — decided like any sentence', world.passesOf(OP).length > passesBeforeChip && world.passesOf(OP).at(-1)?.text === OPTIONS);
+  check('...and did NOT start a run: a pressed link is typing, and the line decides as it does for any text', world.runsOf(OP).length === runsBeforeChip && controls.seen.length === stepsBeforeChip);
   check('a new sentence is a new room: Jev opens nothing for it, and the old exchange is gone', ['doing', 'about', 'where', 'when', 'nearby'].every((canvas) => mounted(shell, canvas).length === 0));
 
   // The plan. The scene's model: it read the thread, and proposes three forms.
@@ -335,15 +335,14 @@ const main = async (): Promise<void> => {
   const coldPass = world.passesOf(OP).at(-1);
   const guesses = cardData(shell, 'maybe', 'intent.options')['chips'];
   check(`under a middling model a cold follow-up is ALL GUESSES (${Array.isArray(guesses) ? guesses.length : 0} chips, nothing mounted)…`, Array.isArray(guesses) && guesses.length >= 8 && ['doing', 'about', 'where', 'when', 'nearby'].every((canvas) => mounted(shell, canvas).length === 0));
-  check(`...and STILL goes to the agent: route ${coldPass?.handoff.route} (${coldPass?.handoff.routedBy}: ${coldPass?.handoff.computedWhy})`, coldPass?.handoff.route === 'ask' && coldPass.handoff.routedBy === 'computed' && coldPass.handoff.computedWhy.includes('only guesses'));
   await world.settled(OP);
-  check('...which answers it', lastRun()?.status === 'landed' && lastRun()?.routedBy === 'computed');
+  check('...and the assistant answers it all the same: it runs on every finished sentence, whatever Jev made of it', lastRun()?.status === 'landed' && lastRun()?.text === world.passesOf(OP).at(-1)?.text);
   await world.typeLine(OP, 'move the headliner to the tent at 9');
   const middlingTop = world.passesOf(OP).at(-1)?.top.find((entry) => entry.id === 'move.impact');
   check(`...the impact card stands beside the form though Jev alone would only have offered it (${middlingTop?.p ?? 'unranked'})`, mounted(shell, 'doing').includes('slot.swap') && mounted(shell, 'nearby').includes('move.impact') && (middlingTop === undefined || middlingTop.p < 0.8));
   await world.typeLine(OP, 'move the headliner right away please');
   const noStage = world.passesOf(OP).at(-1);
-  check(`...and with no stage said there is a form and NO impact card — which is not "a card Jev wanted and could not open": route ${noStage?.handoff.route}, nothing computed`, mounted(shell, 'doing').includes('slot.swap') && !mounted(shell, 'nearby').includes('move.impact') && noStage?.handoff.route === 'direct' && noStage.handoff.computedWhy === '' && (noStage.handoff.completeP ?? 0) >= 0.6);
+  check('...and with no stage said there is a form and NO impact card', mounted(shell, 'doing').includes('slot.swap') && !mounted(shell, 'nearby').includes('move.impact') && noStage !== undefined);
   middling.floor = 0;
   await world.typeLine(OP, '');
   await world.settled(OP);

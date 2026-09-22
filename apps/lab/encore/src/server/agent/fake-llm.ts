@@ -117,30 +117,6 @@ const readActionLine = (line: string): ActionLine | undefined => {
   return { id: head[1] ?? '', canvas: head[2] ?? '', title: head[3] ?? '', keys };
 };
 
-// An input built ONLY from pre-decisions: a row reference takes the first row
-// Jev resolved for that table, a parsed field takes what the parser heard.
-// Anything else is left for the operator.
-const inputFor = (action: ActionLine, predecisions: Predecisions): Record<string, unknown> => {
-  const input: Record<string, unknown> = {};
-  const usedTables = new Set<string>();
-  for (const key of action.keys) {
-    if (key.shape.startsWith('row:')) {
-      const table = key.shape.slice('row:'.length);
-      const row = usedTables.has(table) ? undefined : predecisions.resolved.find((candidate) => candidate.table === table);
-      if (row !== undefined) {
-        input[key.name] = row.id;
-        // One row fills ONE field of an action: a stage the sentence named is
-        // not both where an act is moving from and where it is moving to.
-        usedTables.add(table);
-      }
-      continue;
-    }
-    const heard = predecisions.heard[key.name];
-    if (heard !== undefined) input[key.name] = heard;
-  }
-  return input;
-};
-
 const countOf = (value: unknown): number => (Array.isArray(value) ? value.length : 0);
 
 // What the facts amount to — counted, never interpreted. One PART per read, so
@@ -202,10 +178,6 @@ const fromSibling = (predecisions: Predecisions): string | undefined => {
   return `${nameIn(predecisions.rows, move.aimedAt['actId'])} moves to ${nameIn(predecisions.rows, move.aimedAt['toStageId'])}${time === undefined ? '' : `, ${String(time)}`}. Please follow directions from festival crew.`;
 };
 
-// A question about whether something is FREE is the one the pre-decisions
-// cannot settle — it needs the running order — so it is the scripted lookup.
-const NEEDS_LOOKUP = /\b(free|clash|collide|available)\b/i;
-
 const canvasesOf = (cards: readonly { canvas: string; actionId: string; input: Record<string, unknown> }[]): { canvases?: Record<string, { actionId: string; input: Record<string, unknown> }[]> } => {
   if (cards.length === 0) return {};
   const canvases: Record<string, { actionId: string; input: Record<string, unknown> }[]> = {};
@@ -213,68 +185,48 @@ const canvasesOf = (cards: readonly { canvas: string; actionId: string; input: R
   return { canvases };
 };
 
+// ONE BEHAVIOUR, READ OFF THE STATE — like the agent it stands in for, which has
+// one prompt. An event (FACTS.standing) gets its one line. Otherwise: words for
+// every field nobody has typed in; the card Jev wanted and could not aim; evidence
+// when the screen is empty; what the facts amount to, cited — and NOTHING AT ALL
+// when it was handed no facts and found nothing to write, which is what most
+// sentences get. It never proposes steps or looks anything up: a check that wants
+// either scripts it.
 export const defaultScript: AgentScript = (turn) => {
   const { predecisions } = turn;
   const about = predecisions.resolved.map((row) => row.label.split(' — ')[0] ?? row.label);
 
-  if (predecisions.mode === 'write') {
-    const when = predecisions.heard['time'];
-    const authored = fromSibling(predecisions) ?? `${capitalise(predecisions.sentence.trim())}${when === undefined ? '' : ` — from ${String(when)}`}${about.length === 0 ? '' : `, concerning ${about.join(' and ')}`}. Please follow directions from festival crew.`;
-    return {
-      answer: {
-        response: predecisions.writable.length === 0 ? 'Nothing on screen takes written words.' : `Drafted ${predecisions.writable.length} field(s) from your sentence, for the people who receive them.`,
-        data: { fields: predecisions.writable.map((target) => ({ card: target.card, field: target.field, text: authored })) },
-      },
-    };
-  }
-
-  // ONE LINE about what is wrong, naming every place that is: the causes it was
-  // handed, joined. A script — a model would say why they matter TOGETHER.
-  if (predecisions.mode === 'brief') {
-    const standing = z.array(z.object({ place: z.string(), kind: z.string() })).safeParse(predecisions.facts['standing']);
-    const places = standing.success && standing.data.length > 0 ? standing.data.map((cause) => `${cause.place} (${cause.kind})`) : [predecisions.sentence];
+  const standing = z.array(z.object({ place: z.string(), kind: z.string() })).safeParse(predecisions.facts['standing']);
+  if (standing.success) {
+    const places = standing.data.length > 0 ? standing.data.map((cause) => `${cause.place} (${cause.kind})`) : [predecisions.sentence];
     // Every standing place, joined as things happening AT ONCE — which is the
     // only thing a script can say about how they compound.
     return { answer: { response: places.length === 1 ? `${places[0] ?? ''} stands alone.` : `${places.slice(0, -1).join(', ')} while ${places.at(-1) ?? ''}: each makes the other harder to clear.`, data: {} } };
   }
 
-  if (predecisions.mode === 'plan') {
-    // A plan: one step per FORM among the narrowed actions, in Jev's order.
-    const forms = predecisions.actions.flatMap((line) => readActionLine(line) ?? []).filter((action) => action.canvas === 'doing');
-    return {
-      answer: {
-        response: forms.length === 0 ? 'No form applies to this; nothing to propose.' : `${forms.length} step(s)${about.length === 0 ? '' : ` for ${about.join(' and ')}`}, most consequential first. Nothing is sent until you press it.`,
-        data: { steps: forms.map((action) => ({ say: `${action.title}${about.length === 0 ? '' : ` — ${about.join(', ')}`}`, actionId: action.id, input: inputFor(action, predecisions) })) },
-      },
-    };
-  }
+  const when = predecisions.heard['time'];
+  const authored = fromSibling(predecisions) ?? `${capitalise(predecisions.sentence.trim())}${when === undefined ? '' : ` — from ${String(when)}`}${about.length === 0 ? '' : `, concerning ${about.join(' and ')}`}. Please follow directions from festival crew.`;
+  const fields = predecisions.writable.map((target) => ({ card: target.card, field: target.field, text: authored }));
 
-  // A question. One lookup when the facts cannot settle it, then the answer.
-  if (NEEDS_LOOKUP.test(turn.line) && turn.lookups.length === 0) {
-    return { call: { name: 'query', args: { fingerprint: 'lineup/forDay', context: JSON.stringify({ day: predecisions.heard['day'] ?? predecisions.now.day }) } } };
-  }
-  // TWO SENTENCES, like the contract says: what was read (and looked up), then
-  // what the thread holds. The quoted turn is clipped and stripped of full stops —
-  // a script must not be refused for quoting somebody else's punctuation.
-  const lastSaid = (turn.thread.at(-1)?.content ?? '').replace(/[.!?"]/g, '').slice(0, 60);
-  const earlier = turn.thread.length === 0 ? '' : ` Earlier in this conversation: ${turn.thread.length} message(s), the last being "${lastSaid}".`;
-  const looked = turn.lookups.length === 0 ? '' : `; I looked up ${turn.lookups.length} thing(s) to be sure`;
   const parts = factParts(predecisions.facts);
-
   // EVERY SENTENCE STANDS ON A CARD. What is on screen is cited, part by part;
   // with nothing on screen the first view that needs no row to open is PLACED,
-  // and cited — evidence is the default for an answer, not an extra.
+  // and cited.
   const views = predecisions.actions.flatMap((line) => readActionLine(line) ?? []).filter((action) => action.canvas !== 'doing' && !action.keys.some((key) => key.required));
   const placing = predecisions.screen.length === 0 && parts.length > 0 ? views[0] : undefined;
-  const standing = placing === undefined ? predecisions.screen.map((card) => card.card) : [placing.id];
-  const claims = standing.length === 0 ? [] : parts.map((text, index) => ({ text, card: standing[index % standing.length] ?? '' }));
+  const cited = placing === undefined ? predecisions.screen.map((card) => card.card) : [placing.id];
+  const claims = cited.length === 0 ? [] : parts.map((text, index) => ({ text, card: cited[index % cited.length] ?? '' }));
+  const cards = canvasesOf([...(placing === undefined ? [] : [{ canvas: placing.canvas, actionId: placing.id, input: {} }]), ...aimWanted(predecisions)]);
 
-  return {
-    answer: {
-      response: `${factsLine(parts)}${looked}.${earlier}`,
-      data: { claims, followUps: followUpsFor(predecisions.asked), ...(canvasesOf([...(placing === undefined ? [] : [{ canvas: placing.canvas, actionId: placing.id, input: {} }]), ...aimWanted(predecisions)])) },
-    },
-  };
+  if (fields.length > 0) return { answer: { response: `Drafted ${fields.length} field(s) from your sentence, for the people who receive them.`, data: { fields, ...cards } } };
+  if (parts.length === 0) return { answer: { response: '', data: cards } };
+
+  // TWO SENTENCES, like the contract says: what was read, then what the thread
+  // holds. The quoted turn is clipped and stripped of full stops — a script must
+  // not be refused for quoting somebody else's punctuation.
+  const lastSaid = (turn.thread.at(-1)?.content ?? '').replace(/[.!?"]/g, '').slice(0, 60);
+  const earlier = turn.thread.length === 0 ? '' : ` Earlier in this conversation: ${turn.thread.length} message(s), the last being "${lastSaid}".`;
+  return { answer: { response: `${factsLine(parts)}.${earlier}`, data: { claims, followUps: followUpsFor(predecisions.asked), ...cards } } };
 };
 
 // ─── the wire ───────────────────────────────────────────────

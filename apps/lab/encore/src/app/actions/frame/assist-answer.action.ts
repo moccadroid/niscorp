@@ -5,11 +5,11 @@ import { assistAnswerLayout } from './assist-answer.layout';
 // the second one speaks — as a BRIEFING, not a chat (SCENARIOS.md § First: the
 // answer is not a chat).
 //
-// It is mounted by the SAME PASS that routed the sentence — before the agent has
-// been called — so the room says what is coming 300 ms after the thought
-// settles. From then on the run manager writes into this instance: the question,
-// the answer as SEGMENTS (at most every 120 ms while it streams), what happened
-// in the operator's terms (`say`), the steps of a plan, the follow-ups.
+// IT IS ON SCREEN ONLY WHILE THERE IS SOMETHING TO SHOW. The assistant runs on
+// every finished sentence; this card goes up when a run starts — a minimal
+// working line (`say`) — and the run manager writes into it: the answer as
+// SEGMENTS (at most every 120 ms while it streams), the steps, the follow-ups. A
+// run that comes back with nothing to say takes the card down again.
 //
 // EVERY SENTENCE CITES ITS CARD. A segment that carries a `card` is a citation:
 // pointing at it — mouse or keyboard, one event — announces that card's key on
@@ -21,8 +21,7 @@ import { assistAnswerLayout } from './assist-answer.layout';
 // nothing to stand on should look like it.
 //
 // FOLLOW-UPS ARE TYPED, NOT RUN. Pressing one announces its sentence on
-// `line-type`; the line takes it as if the operator had typed it, and Jev routes
-// it like anything else. Nothing on this card can start an agent.
+// `line-type`; the line takes it as if the operator had typed it. Nothing on this card can start an agent.
 //
 // A plan's steps are chips. Pressing one opens that step's form, prefilled — and
 // that is all it does. A step ticks when a PERSON presses that form's button.
@@ -41,7 +40,7 @@ export const assistAnswerAction: ActionDefinition = {
   description: 'The answer to the sentence on the line, as a briefing: the question, the answer in sentences that each cite a card on screen, what was read to give it, the steps of a plan as chips, and up to three follow-up sentences.',
   // `say` is the run in the operator's terms — what is happening, then what was
   // read and how long it took. `status` is for the badge and the checks.
-  data: { status: 'pending', statusTone: 'mute', mode: '', by: '', question: '', say: '', plain: '', answer: '', segments: [], landed: false, lit: '', lookups: '', reason: '', notes: '', steps: [], progress: '', followUps: [], stepIndex: -1, opened: '' },
+  data: { status: 'running', statusTone: 'mute', by: '', say: '', plain: '', answer: '', segments: [], landed: false, lit: '', lookups: '', reason: '', notes: '', steps: [], progress: '', followUps: [], stepIndex: -1, opened: '' },
   layout: assistAnswerLayout,
   endpoints: {
     openStep: { fn: 'encore.step', target: 'opened' },

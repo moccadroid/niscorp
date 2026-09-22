@@ -2,7 +2,7 @@ import { z } from 'zod';
 import type { ActionDefinition } from '@niscorp/nova';
 import { CANVAS_PLACEMENT } from '@encore/app/canvas-placement';
 import type { QuestionCanvas } from '@encore/app/canvas-placement';
-import { ANSWER_MAX_CHARS, ANSWER_MAX_SENTENCES, FOLLOW_UPS_MAX, RECITE_MAX } from '@encore/server/agent/contract';
+import { ANSWER_MAX_CHARS, ANSWER_MAX_SENTENCES, FOLLOW_UPS_MAX } from '@encore/server/agent/contract';
 import { inputContractOf } from './input-contract';
 import type { InputField } from './input-contract';
 import type { CandidateSets } from './intent.types';
@@ -132,9 +132,6 @@ export type AnswerContext = AdmissionContext & {
   // is showing. Absent = nothing is on screen and no row is known.
   onScreen?: ReadonlySet<string>;
   rowsOn?: (card: string) => ReadonlySet<string>;
-  // THE NAMES A CARD IS SHOWING — acts on the running order, incidents on the
-  // feed. What an answer must not read back to somebody who can see them.
-  namesOn?: (card: string) => readonly string[];
   // WHAT THIS THREAD HAS ALREADY ASKED OR BEEN OFFERED, this sentence included.
   // A follow-up that repeats one is dropped: "what are our options?" under every
   // answer is furniture, not a suggestion.
@@ -143,7 +140,7 @@ export type AnswerContext = AdmissionContext & {
 
 export type AdmittedClaim = { text: string; card: string; row: string };
 
-// (The bounds — two sentences, no recital, two follow-ups — are the contract's:
+// (The bounds — two sentences, two follow-ups — are the contract's:
 // agent/contract.ts. They are enforced here.)
 
 // A sentence ends at . ! or ? followed by a space and a capital or a quote — or
@@ -199,18 +196,20 @@ const admitClaims = (context: AnswerContext, answer: AnswerShape, response: stri
   return { claims, notes };
 };
 
-// Too long, or reading a card back. Reasons are written FOR THE MODEL: cortex
-// hands them to it as the correction, and it gets to try again.
-const wordReasons = (context: AnswerContext, response: string): string[] => {
+// Too long. Reasons are written FOR THE MODEL: cortex hands them to it as the
+// correction, and it gets to try again.
+//
+// There used to be a second gate here — "a recital": an answer naming more than
+// two things a mounted card shows was refused. On the real model it refused
+// "how will the storm at 9 affect the lineup?" three times, because the honest
+// answer names the exposed sets and the running order shows them too, and the
+// run failed. A gate that refuses a correct answer is deleted, not tuned; the
+// instruction to prefer what the cards do not show stays as guidance.
+const wordReasons = (response: string): string[] => {
   const reasons: string[] = [];
   const sentences = sentencesOf(response);
   if (sentences.length > ANSWER_MAX_SENTENCES) reasons.push(`response: ${sentences.length} sentences — at most ${ANSWER_MAX_SENTENCES}. Say what matters, not everything`);
   if (response.trim().length > ANSWER_MAX_CHARS) reasons.push(`response: ${response.trim().length} characters — at most ${ANSWER_MAX_CHARS}`);
-  const said = normal(response);
-  for (const card of context.onScreen ?? []) {
-    const recited = [...new Set((context.namesOn?.(card) ?? []).filter((name) => normal(name).length >= 4 && said.includes(normal(name))))];
-    if (recited.length > RECITE_MAX) reasons.push(`response: it reads "${card}" back to somebody who is looking at it (${recited.slice(0, 4).join(', ')}…). Never restate what a card on screen shows — say what matters, what connects the cards, or what is on none of them; if the cards are the whole answer, say so in one short sentence`);
-  }
   return reasons;
 };
 
@@ -261,7 +260,7 @@ export const admitAnswer = (context: AnswerContext, answer: AnswerShape, respons
 
   // THE WORDS. Only an answer that HAS words is judged on them: the in-run check
   // sees every attempt, and the landing sees the last.
-  if (response.trim() !== '') reasons.push(...wordReasons(context, response));
+  if (response.trim() !== '') reasons.push(...wordReasons(response));
 
   if (reasons.length > 0) return { ok: false, reasons };
   const placed = new Set(Object.values(canvases).flatMap((cards) => cards.map((card) => card.actionId)));

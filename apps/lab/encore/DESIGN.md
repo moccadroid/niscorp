@@ -46,31 +46,21 @@ What each of them wrote down the hard way, and what it decides here:
 
 ### When it runs
 
-Jev decides, in the pass it is already making. `handoff/route` gains a fourth option:
+On **every finished sentence**: the line has been quiet for 700 ms after its pass landed, or
+Enter. Nothing else decides — not Jev, not the sentence's shape. A run belongs to the text
+it started with: any change of the line aborts it. One run at a time.
 
-| Route | Means | The agent |
-|---|---|---|
-| `direct` | the cards are the whole answer | does not run |
-| `ask` | a question that wants an answer in words | answers, and may place cards as evidence |
-| `write` | a field needs authored words | writes them in place |
-| `plan` | an open question about what to do | proposes steps, each a prefilled form |
+Jev's part is one question per card ("does this belong?"), one per field that can be
+filled from rows or an enum, one per context pack, and the tone. **0.5 is yes**, everywhere
+Jev is asked anything: mount the card, fill the field with that pick, send the pack. The
+only other numbers are 0.35 (a card already up stays until it falls to here — within one
+sentence) and 0.30 (offered as a chip). A calibrated model says "probably" at 0.6 and
+almost never 0.8; a room that waits for 0.8 waits for ever.
 
-And one rule that is **computed, not asked**: if a settled pass leaves Jev with nothing —
-**nothing cleared the mount line**, or a wanted card was demoted because a required input
-could not be filled — the sentence goes to the agent as `ask`. Jev not knowing is itself a
-routing decision.
-
-Chips do not count as knowing. The first version also required that there be no chips; it
-passed every check on the lexical fake and stranded every cold follow-up on real Jev,
-which answered "which of those is the most urgent?" with `incident.feed` 0.64 and
-`situation.now` 0.54 — four honest guesses and no card. A calibrated model almost always
-has a middling opinion; a rule that waits for zeros waits forever. (The third rule to pass
-on the fake and fail on the model, after the fill gate on `confidence` and the wording of
-row-reference questions. Thresholds are tested against the real model before they are
-believed.)
-
-"Settled" is the debounce at rest, `handoff/complete` clearing 0.6, and the line idle
-700 ms. Enter runs it now, whatever Jev thought.
+(There used to be a routing question — direct / ask / write / plan — a "finished thought"
+question gating the run, a computed fallback for when Jev had no cards, a question-mark
+rule, a demotion threshold and run signatures. Jev's routing answers were near coin-flips,
+so every mis-route grew a compensating rule. All of it is deleted.)
 
 ### What it is handed
 
@@ -79,9 +69,11 @@ Static blocks first, the one dynamic block last, so a provider's prefix cache ho
 
 1. identity and the law — a few sentences, in `instructions`;
 2. the contract — cortex and signal inject the JSON Schema; constraints live in `.describe()`;
-3. **Jev's pre-decisions**, the dynamic block: the sentence, what the parser heard, the
-   rows Jev resolved, the six actions Jev ranked highest (one line each, not JSON Schema),
-   the rows of the context packs Jev asked for, and what is on screen.
+3. **Jev's pre-decisions**, the dynamic block — the same shape every time: the sentence,
+   what the parser heard, the rows Jev resolved, the six actions Jev ranked highest (one
+   line each, not JSON Schema), the cards Jev wanted at ≥ 0.5 and could not aim and what
+   each needs, the rows of the context packs Jev said yes to, what is on screen, the
+   free-text fields nobody has touched, and what this thread has already asked.
 
 So a typical run is **one model step**: the facts are already there. The tools are the
 escape hatch for what Jev could not anticipate:
@@ -101,14 +93,17 @@ second time inside `data` (atrium `contract.ts:36-51`: the duplicate won, becaus
 the one the app read):
 
 ```
-response   the answer, in words — required
-data       { canvases: { <canvasId>: [{ actionId, input }] }, fields: [...], steps: [...] }
+response   the answer, in words — OPTIONAL: empty when the cards already say it
+data       { canvases: { <canvasId>: [{ actionId, input }] }, fields: [...], steps: [...], claims, followUps } — every key optional
 reasoning  why, first
 ```
 
-- **Only a canvas the answer names is reconciled.** An unnamed canvas is left exactly as
-  Jev arranged it (atrium `contract.ts:247-259`: `columns: {}` "was taking the aside down
-  every time").
+One prompt and one contract for every run. Everything the assistant may return is
+optional; an answer with nothing in it is correct, and common. What comes back goes through
+the one admission rule and lands as it always has.
+
+- **It adds and aims; only Jev closes.** A canvas it names gets the cards it lists, added
+  or re-aimed; what it leaves out stays.
 - `actionId` is an enum of the narrowed list; each `input` is that action's own schema
   with every row reference an enum of Jev's candidates. An action the principal lacks, a
   row that does not exist and an input that does not fit are unrepresentable, not checked.
@@ -118,8 +113,8 @@ reasoning  why, first
 
 ### How the words arrive
 
-On an `assist.answer` card, mounted by the same Jev pass that routed the sentence, so the
-room says "answering…" 300 ms after the thought settles. The run's `response` streams into
+On an `assist.answer` card that goes up when a run starts and comes down again if the run
+returns nothing to show. The run's `response` streams into
 it through `@niscorp/solid` over the envelope, written with `setData` **at most every
 120 ms** — Midas's mechanism at half its rate, because relay measured what unthrottled
 costs. A rejected attempt is discarded before it reaches the card (Midas `reply-stream.ts:98-107`).
@@ -160,12 +155,12 @@ over a thread.
 
 - **The room resets per sentence; the thread does not.** A new sentence clears pins, cards
   and any run in flight (PLAN.md, the continuation rule). It never clears the thread.
-- **The thread records every settled sentence, not only the ones the agent answered.**
-  The operator moves the headliner — Jev alone, `direct`, no run — and then asks "is the
-  tent free then?". The agent has to know what was just done. So a settled sentence is
-  stored with what *either* speed made of it: the route, the rows resolved, the cards
-  opened and what they were aimed at, and — when the agent ran — its answer. A turn Jev
-  handled alone reaches the agent as one compact line, not as a transcript of nothing.
+- **The thread records every finished sentence, not only the ones answered in words.**
+  The operator moves the headliner — the cards do it, the assistant has nothing to add —
+  and then asks "is the tent free then?". The assistant has to know what was just done.
+  So a finished sentence is stored with what came of it: the rows resolved, the cards
+  opened and what they were aimed at, and — when there were words — the words. A sentence
+  the cards answered reaches the assistant as one compact line, not a transcript of nothing.
 - **Rows, not process memory.** `agent_turns`, written through a vex mutation entry with
   the principal stamped server-side, read back through a vex entry. Relay keeps its
   history in the process and says so as debt ("eviction dies with the process"). The
@@ -177,10 +172,10 @@ over a thread.
   this turn's pre-decisions as a system message, then the operator's line — so the
   per-turn block sits between the conversation and the last line, where Midas puts it,
   and the cached prefix survives.
-- **A follow-up is where the computed fallback earns its keep.** Jev sees "and tomorrow?"
-  cold, recognises nothing, mounts nothing — and "Jev doesn't know" routes it to the agent
-  as `ask`, which reads the thread and knows exactly what is meant. Neither model has to
-  pretend to the other's job.
+- **A follow-up is where the thread earns its keep.** Jev sees "and tomorrow?" cold,
+  recognises nothing, mounts nothing — and the assistant, which runs on every finished
+  sentence, reads the thread and knows exactly what is meant. Neither model has to pretend
+  to the other's job.
 - **The operator ends a thread, nothing else does.** A "new thread" control on the answer
   card. It is the operator's click, like every other write.
 - **The thread is on screen.** `assist.answer` shows the current exchange with earlier

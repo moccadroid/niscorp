@@ -25,15 +25,6 @@ import type { Question } from '@niscorp/signal';
 //             an empty line — or a line about something else — answers `none`.
 //             A choice with no `none` gives that prior to its FIRST option: the
 //             asker lists the fallback first.
-//   concepts  a few option KEYS are ordinary verbs of intent, and the words
-//             that signal them are in nobody's criteria: "what should we do"
-//             means `plan` without saying plan. A short cue lexicon keyed by
-//             option key, exactly like the intensity words below.
-//   asking    an option keyed `ask` is cued by the sentence's SHAPE — a
-//             question mark, or an interrogative first word — and only when no
-//             other concept cue fired: "what should we do?" is shaped like a
-//             question and is a request for a plan. The generic reading is the
-//             fallback, never the rival.
 //   (changed  REMOVED 2026-09-21. This scorer used to down-weight a match that a
 //   mind)     correction word took back — and that cue was the only reason "to
 //             the tent no the grove" worked: the real model left To = The Tent.
@@ -45,16 +36,6 @@ import type { Question } from '@niscorp/signal';
 //             unrelated card is a 0.4 guess instead of nothing — and a rule
 //             that quietly relied on zeros fails HERE, in a check, instead of
 //             in front of somebody on the calibrated model.
-//   a bare    "storm at 9". A sentence made of nothing but intensity words and
-//   problem   numbers names a danger and asks for nothing — which is a question
-//             all the same ("and?"), so it cues `ask` exactly like a question
-//             mark does, and under the same condition: no other cue fired.
-//   finished  a noul that asks whether the sentence is FINISHED is answered
-//             from the sentence's shape, not its vocabulary: enough words, not
-//             ending on a function word, not ending on a stub of a longer word
-//             the request itself contains — or it simply ends in a full stop,
-//             a question mark or an exclamation mark, which is how people say
-//             they have finished.
 //   families  a question's name is `<family>/<rest>`, and rarity is counted
 //             within a family: a word that lights one card is discounted for
 //             lighting other CARDS, not for also naming a context to fetch.
@@ -87,38 +68,6 @@ const INTENSITY: Record<string, number> = {
   emergency: 3, evacuate: 3, evacuation: 3, fire: 3, critical: 3, danger: 3, dangerous: 3,
   injury: 2, injured: 2, medic: 2, collapse: 3, collapsed: 3, crush: 3, warning: 1,
 };
-
-// Words that signal an intent whose option key they do not contain. Keyed by
-// OPTION KEY, so they apply to any choice that offers that key and to nothing
-// else — the scorer still has no idea what a festival is, only that "warn" is a
-// way of asking for something to be written.
-const CONCEPT_CUES: Record<string, ReadonlySet<string>> = {
-  plan: new Set(['plan', 'should', 'options', 'option', 'strategy', 'advise', 'recommend', 'suggest']),
-  write: new Set(['warn', 'tell', 'announce', 'message', 'draft', 'write', 'notify', 'inform', 'reword', 'rewrite']),
-};
-
-// The option key cued by shape rather than by vocabulary, and the first words
-// that make a sentence a question without a question mark.
-const ASK_KEY = 'ask';
-const INTERROGATIVES: ReadonlySet<string> = new Set([
-  'who', 'what', 'whats', 'which', 'where', 'when', 'why', 'how', 'is', 'are', 'was', 'were', 'do', 'does', 'did', 'can', 'could', 'would', 'will', 'any', 'anything',
-]);
-// Terminal punctuation: a mark followed by a space or the end. Not "21.00".
-const QUESTION_MARK = /\?(\s|$)/;
-const TERMINAL_MARK = /[a-z0-9)][.?!](\s|$)/i;
-
-const isQuestion = (raw: string, words: readonly string[]): boolean => QUESTION_MARK.test(raw) || INTERROGATIVES.has(words[0] ?? '');
-
-// Nothing but the problem: every content token is an intensity word.
-const isBareProblem = (tokens: readonly StateToken[]): boolean => tokens.length > 0 && tokens.every((token) => (INTENSITY[token.text] ?? 0) > 0);
-
-const isAsked = (raw: string, words: readonly string[], tokens: readonly StateToken[]): boolean => isQuestion(raw, words) || isBareProblem(tokens);
-
-// A noul whose own wording asks this is about the sentence's SHAPE.
-const COMPLETENESS_WORDS: ReadonlySet<string> = new Set(['finished', 'unfinished', 'complete', 'incomplete']);
-const FINISHED_MIN_TOKENS = 3;
-const FINISHED_P = 0.92;
-const UNFINISHED_P = 0.12;
 
 const PREFIX_MIN = 3;
 const CHOICE_GAIN = 3;
@@ -195,7 +144,7 @@ const softmax = (logits: readonly number[]): number[] => {
 
 export type ChoiceAnswer = { type: 'choice'; choice: string; probabilities: Record<string, number>; confidence: number };
 
-const scoreChoice = (tokens: readonly StateToken[], words: readonly string[], raw: string, question: Extract<Question, { type: 'choice' }>): ChoiceAnswer => {
+const scoreChoice = (tokens: readonly StateToken[], question: Extract<Question, { type: 'choice' }>): ChoiceAnswer => {
   const options = Object.entries(question.criteria);
   // Where the standing prior goes: `none` when it is offered, else the first
   // option — the asker's stated fallback.
@@ -214,19 +163,6 @@ const scoreChoice = (tokens: readonly StateToken[], words: readonly string[], ra
       evidence[index] = (evidence[index] ?? 0) + (strength * directionFactor(token, directions)) / matched;
     });
   }
-
-  let cued = 0;
-  options.forEach(([key], index) => {
-    const cues = CONCEPT_CUES[key];
-    if (cues === undefined) return;
-    const hits = words.filter((word) => cues.has(word)).length;
-    cued += hits;
-    evidence[index] = (evidence[index] ?? 0) + hits;
-  });
-  // The generic reading of a question-shaped sentence, when nothing more
-  // specific claimed it.
-  const askAt = options.findIndex(([key]) => key === ASK_KEY);
-  if (askAt >= 0 && cued === 0 && isAsked(raw, words, tokens)) evidence[askAt] = (evidence[askAt] ?? 0) + 1;
 
   const logits = options.map(([key], index) => (key === fallback ? NONE_PRIOR : 0) + (key === 'none' ? 0 : CHOICE_GAIN * (evidence[index] ?? 0)));
   const distribution = softmax(logits);
@@ -253,24 +189,6 @@ const noulEvidence = (tokens: readonly StateToken[], subjectWords: readonly stri
     const strength = bestMatch(token.text, subjectWords);
     return strength === 0 ? sum : sum + strength / Math.sqrt(rarity.get(token.text) ?? 1);
   }, 0);
-
-const asksCompleteness = (question: Extract<Question, { type: 'noul' }>): boolean => wordsOf(question.instructions).some((word) => COMPLETENESS_WORDS.has(word));
-
-const isNumber = (word: string): boolean => /^\d+$/.test(word);
-
-// Is the sentence a finished thought? Judged on shape alone. `vocabulary` is
-// every content word the REQUEST contains, which is what lets "headl" be
-// recognised as a stub (it is most of a word the asker used) while "tent" and
-// an unknown surname are taken as whole.
-const looksFinished = (words: readonly string[], tokens: readonly StateToken[], vocabulary: ReadonlySet<string>, raw: string): boolean => {
-  const last = words.at(-1);
-  if (last === undefined) return false;
-  if (TERMINAL_MARK.test(raw)) return true;
-  if (tokens.length + words.filter(isNumber).length < FINISHED_MIN_TOKENS) return false;
-  if (STOPWORDS.has(last) || DIRECTIONS.has(last)) return false;
-  if (isNumber(last) || vocabulary.has(last) || last.length < PREFIX_MIN) return true;
-  return ![...vocabulary].some((word) => word.length > last.length && word.startsWith(last));
-};
 
 // ─── score ───────────────────────────────────────────────────
 
@@ -302,13 +220,6 @@ export type Answer = ChoiceAnswer | NoulAnswer | ScoreAnswer;
 // Questions compete with their own KIND: `action/…` against `action/…`.
 const familyOf = (name: string): string => name.split('/')[0] ?? '';
 
-// Every string a question carries, as one text.
-const wordingOf = (question: Question): string => {
-  if (question.type === 'choice') return [question.instructions, ...Object.entries(question.criteria).flat()].join(' ').replace(/_/g, ' ');
-  if (question.type === 'score') return [question.instructions, ...question.criteria].join(' ');
-  return [question.instructions, question.criteria?.true ?? '', question.criteria?.false ?? ''].join(' ');
-};
-
 export type ScorerOptions = {
   // Lift every yes/no onto [floor, 1]. 0 (the default) is the plain lexical
   // scorer; ~0.4 is a model with a middling opinion about everything.
@@ -319,8 +230,6 @@ export const answerQuestions = (state: unknown, questions: Record<string, Questi
   const floor = Math.min(0.95, Math.max(0, options.noulFloor ?? 0));
   const lifted = (p: number): number => floor + (1 - floor) * p;
   const tokens = stateTokensOf(state);
-  const raw = stateText(state);
-  const words = wordsOf(raw);
 
   // Rarity within a family of noul questions: how many of them a token matches
   // at all. One shared word must not light every card at once.
@@ -336,14 +245,10 @@ export const answerQuestions = (state: unknown, questions: Record<string, Questi
     return rarity;
   };
 
-  // Every content word the request itself uses — what a stub is a stub OF.
-  const vocabulary = new Set(Object.values(questions).flatMap((question) => contentTokensOf(wordingOf(question))));
-
   const answers: Record<string, Answer> = {};
   for (const [name, question] of Object.entries(questions)) {
-    if (question.type === 'choice') answers[name] = scoreChoice(tokens, words, raw, question);
+    if (question.type === 'choice') answers[name] = scoreChoice(tokens, question);
     else if (question.type === 'score') answers[name] = scoreLevels(tokens, question);
-    else if (asksCompleteness(question)) answers[name] = { type: 'noul', noul: looksFinished(words, tokens, vocabulary, raw) ? FINISHED_P : UNFINISHED_P };
     else answers[name] = { type: 'noul', noul: lifted(1 - Math.exp(-NOUL_GAIN * noulEvidence(tokens, subjects.get(name) ?? [], rarityWithin(familyOf(name))))) };
   }
   return answers;

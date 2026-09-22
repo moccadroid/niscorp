@@ -23,39 +23,32 @@ import { segmentsOf, streamingSegments } from './answer-spans';
 import { harvestRefs, harvestRows, readPacks } from './context-packs';
 import type { HarvestedRow } from './context-packs';
 import { inputContractOf } from './input-contract';
-import { HANDOFF_AT } from './resolve';
 import { CARDS_ONLY, createThread } from './thread';
 import type { RailEntry, RememberedRow } from './thread';
 import type { TouchTracker } from './touched';
 import type { BriefRequest } from '@encore/server/watch/watch';
-import type { AgentMode, CandidateSets, Handoff, HeldCard, Parsed, RunRecord, RunStatus } from './intent.types';
+import type { CandidateSets, Handoff, HeldCard, Parsed, RunRecord, RunStatus } from './intent.types';
 
 // ═══════════════════════════════════════════════════════════
 // THE SLOW SPEED, for one session: the agent's manager.
 //
-// The fast speed decides and never waits; this is what happens to the sentences
-// it could not finish — and the keeper of the thread for the ones it could. It
-// owns five things:
+// The fast speed decides and never waits. This runs the assistant on EVERY
+// FINISHED SENTENCE, and keeps the thread. It owns five things:
 //
-//   WHEN    a sentence is SETTLED when the pacer is at rest, Jev called the
-//           thought finished, and the line has been quiet for a beat since that
-//           pass landed. A settled sentence routed `ask`, `write` or `plan`
-//           starts a run; Enter starts one now, whatever Jev thought. Never
-//           more than one run at a time.
-//   WHAT    the agent is handed the thread, Jev's pre-decisions for this
-//           sentence and the line (agent/run.ts) — and two read tools.
-//   ABORT   a pass ALWAYS lands; a run does not. A newer pass whose handoff
-//           signature differs — another route, other actions, other rows — has
-//           changed what the run was FOR, and the run is torn down mid-request.
-//           The card says so AT ONCE; the provider stream drains behind it.
-//   APPLY   whole, or not at all, through the one admission rule. ONLY A CANVAS
-//           THE ANSWER NAMES IS RECONCILED — to exactly the state it gave; every
-//           other canvas stays as Jev arranged it. Words go into fields nobody
-//           has touched. A plan's forms wait behind their steps. Nothing is
-//           ever submitted.
-//   THREAD  every settled sentence becomes a turn — including the ones Jev
-//           handled alone, which is how the agent knows what was just done
-//           (thread.ts).
+//   WHEN    a sentence is FINISHED when the line has been quiet for a beat after
+//           its pass landed, or when the operator presses Enter. Nothing else
+//           decides whether the assistant runs — not Jev, not the sentence's
+//           shape. Never more than one run at a time.
+//   WHAT    the same state every time: the thread, Jev's pre-decisions for this
+//           sentence, and the line (agent/run.ts) — and two read tools.
+//   ABORT   a run belongs to the text it started with. Any change of the line
+//           tears it down mid-request; what it spent is still recorded.
+//   APPLY   whole, or not at all, through the one admission rule. It ADDS AND
+//           AIMS cards; only Jev closes. Words go into fields nobody has
+//           touched. Steps wait behind their chips. Nothing is ever submitted.
+//           An answer with nothing in it shows nothing.
+//   THREAD  every finished sentence becomes a turn — what was said, or, when
+//           nothing was, what the cards amounted to (thread.ts).
 //
 // THE AGENT NEVER TOUCHES THE SHELL. Everything under src/server/agent/ is
 // handed callbacks; every write to a screen is in THIS file, made by the loop,
@@ -66,7 +59,7 @@ import type { AgentMode, CandidateSets, Handoff, HeldCard, Parsed, RunRecord, Ru
 // ═══════════════════════════════════════════════════════════
 
 // How long the line must stay quiet, after a pass lands, before the sentence
-// counts as settled. Long enough that a person pausing between words does not
+// counts as finished. Long enough that a person pausing between words does not
 // spend a run; short enough to read as "it noticed I stopped". THE constant.
 export const HANDOFF_IDLE_MS = 700;
 
@@ -83,7 +76,7 @@ const ASSIST_CANVAS = 'assist';
 const INTENT_ORIGIN = 'intent';
 const AGENT_ID = encoreAgent.agentId;
 
-const STATUS_TONE: Record<RunStatus, string> = { pending: 'mute', running: 'accent', landed: 'good', aborted: 'warn', failed: 'alert', off: 'mute' };
+const STATUS_TONE: Record<RunStatus, string> = { running: 'accent', landed: 'good', aborted: 'warn', failed: 'alert' };
 
 // What the latest landed pass knew — the run's whole input, thread aside.
 export type PassContext = {
@@ -108,9 +101,6 @@ export type AssistDeps = {
   // Hand a card to the fast speed: pin it, remember what it was opened with,
   // and let Jev fill the keys the agent left alone.
   adopt: (actionId: string, input: Record<string, unknown>, placedBy: string, why: string) => void;
-  // Give cards back to the fast speed's judgement: unpin them and forget what
-  // they were opened with.
-  release: (actionIds: readonly string[]) => void;
   repass: () => void;
   onRun?: (principal: string | null, record: RunRecord) => void;
   // An operator's run is starting: whatever else is using the agent gives way.
@@ -119,7 +109,8 @@ export type AssistDeps = {
 
 export type Assist = {
   enabled: boolean;
-  onKeystroke: () => void;
+  // The line changed. A run belongs to the text it started with.
+  onKeystroke: (text: string) => void;
   onPass: (context: PassContext) => void;
   // The line is still this sentence, but what is left of it asks for nothing —
   // backspaced to a letter or two, so no pass will be sent to say so. A run in
@@ -139,7 +130,7 @@ export type Assist = {
   runs: () => readonly RunRecord[];
   // The messages the last run was started with — what a check hands to
   // `agent.preview()` to read the prompt that run sent.
-  lastInput: () => { input: Message[]; mode: AgentMode } | undefined;
+  lastInput: () => { input: Message[] } | undefined;
   recordEvent: (line: string, detail: Record<string, unknown>) => void;
   isRunOut: () => boolean;
   brief: (request: BriefRequest, abort: AbortSignal) => Promise<string | undefined>;
@@ -148,9 +139,9 @@ export type Assist = {
 
 // A step is OPENED when its chip is pressed and DONE when a person presses that
 // form's own button. Only the second ticks the plan.
-type Landed = { signature: string; mode: AgentMode; steps: { say: string; card: AdmittedCard }[]; opened: Set<number>; done: Set<number> };
+type Landed = { text: string; steps: { say: string; card: AdmittedCard }[]; opened: Set<number>; done: Set<number> };
 type Active = { id: number; controller: AbortController; record: RunRecord };
-type SayDetail = { isComplete?: boolean; count?: number; reason?: string; read?: string[]; lookedUp?: number; ms?: number };
+type SayDetail = { steps?: number; fields?: number; reason?: string; read?: string[]; lookedUp?: number; ms?: number };
 
 const StepIndexSchema = z.number().int().min(0);
 
@@ -181,9 +172,9 @@ export const createAssist = (deps: AssistDeps): Assist => {
   // Runs before this index belong to sentences that are gone: the trace shows
   // the sentence on the line, not the last thing that ever ran.
   let sentenceFrom = 0;
-  // How each signature's last run ended — a sentence that already has its
-  // answer (or already failed) is not run again by merely being re-decided.
-  const finished = new Map<string, RunStatus>();
+  // The text whose run has finished — landed or failed. It is not run again by
+  // the pass its own landing sets off; Enter runs it again, because a person asked.
+  let answeredText = '';
   let latest: PassContext | undefined;
   let timer: ReturnType<typeof setTimeout> | undefined;
   let active: Active | undefined;
@@ -199,10 +190,10 @@ export const createAssist = (deps: AssistDeps): Assist => {
   let settledAlone: PassContext | undefined;
   // The sentence last stored as an operator turn — Enter twice is one question.
   let storedLine = '';
-  let lastInput: { input: Message[]; mode: AgentMode } | undefined;
+  let lastInput: { input: Message[] } | undefined;
   // What the last landed WRITE was authored from, and the timer that notices it
   // has gone stale.
-  let authoredFrom: { signature: string; siblings: string } | undefined;
+  let authoredFrom: { text: string; siblings: string } | undefined;
   let reauthorTimer: ReturnType<typeof setTimeout> | undefined;
   // Form instances whose button has been pressed — so a press is recorded once.
   const submitted = new Set<string>();
@@ -210,8 +201,6 @@ export const createAssist = (deps: AssistDeps): Assist => {
   // The rows the last run could name (candidates, facts, thread) — kept for
   // wording a form that run opened.
   let lastTable: CandidateSets = {};
-  // Cards this sentence's runs have opened — what `release` hands back.
-  const opened = new Set<string>();
   // Runs still draining: an aborted run is reported at once and RECORDED when
   // its stream finally ends, because only then is what it spent known.
   const draining = new Set<Promise<void>>();
@@ -261,49 +250,34 @@ export const createAssist = (deps: AssistDeps): Assist => {
     writeNextSteps({});
   };
 
-  // THE CARD SAYS WHAT IS HAPPENING, IN WORDS. A badge reading `pending` is a
-  // state machine showing through; an operator wants to know whether to keep
-  // typing, wait, or look elsewhere.
-  const DOING: Record<AgentMode, string> = { ask: 'answer', write: 'write the words', plan: 'work out a plan' };
-
-  const sayFor = (status: RunStatus, mode: AgentMode, detail: SayDetail): string => {
-    if (status === 'pending') return detail.isComplete === true ? `That reads as finished — about to ${DOING[mode]}.` : `Waiting for you to finish the sentence, then I will ${DOING[mode]}. Enter starts now.`;
+  // WHAT THE CARD SAYS WHILE A RUN IS OUT, and — for x-ray's story — what it read
+  // and how long it took once it is back.
+  const sayFor = (status: RunStatus, detail: SayDetail): string => {
     if (status === 'running') return 'Answering…';
-    // "DONE" IS NOT A STATUS. What happened, in the operator's terms: what was
-    // read to say this, and how long it took — "read the running order and the
-    // weather · 2.1 s". The badge already says it landed.
     if (status === 'landed') {
       const read = detail.read ?? [];
       const from = read.length === 0 ? 'from the conversation alone' : `read ${read.length === 1 ? read[0] : `${read.slice(0, -1).join(', ')} and ${read.at(-1)}`}`;
-      const looked = (detail.lookedUp ?? 0) === 0 ? '' : ` · looked up ${detail.lookedUp} more`;
-      const took = ` · ${((detail.ms ?? 0) / 1000).toFixed(1)} s`;
-      if (mode === 'plan') return `${detail.count ?? 0} step(s), ${from}${looked}${took} — press one to open its form, filled in; nothing is submitted for you`;
-      if (mode === 'write') return (detail.count ?? 0) === 0 ? `nothing on screen needed words, ${from}${took}` : `wrote ${detail.count ?? 0} field(s), ${from}${looked}${took} — edit them freely; I will not write over you`;
-      return `${from}${looked}${took}`;
+      return `${from}${(detail.lookedUp ?? 0) === 0 ? '' : ` · looked up ${detail.lookedUp} more`} · ${((detail.ms ?? 0) / 1000).toFixed(1)} s`;
     }
-    if (status === 'aborted') return 'Dropped — the sentence changed, so this was no longer what you were asking.';
     if (status === 'failed') return `That did not work, and nothing was changed: ${detail.reason ?? 'unknown'}`;
     return '';
   };
 
-  // THE SAME, FOR THE APP (layer one): no timings, no counts, no reason in the
-  // room's vocabulary. Empty where the answer speaks for itself.
-  const plainFor = (status: RunStatus, mode: AgentMode, detail: SayDetail): string => {
+  // The one line an operator still needs once an answer is back: that it failed,
+  // that the steps are theirs to press, that the words are theirs to edit.
+  const plainFor = (status: RunStatus, detail: SayDetail): string => {
     if (status === 'failed') return 'That did not work, and nothing was changed. Say it another way, or press Enter to try again.';
     if (status !== 'landed') return '';
-    if (mode === 'plan') return (detail.count ?? 0) === 0 ? '' : 'Press a step to open its form, filled in. Nothing is submitted for you.';
-    if (mode === 'write') return (detail.count ?? 0) === 0 ? 'Nothing on screen needed words.' : 'Edit the words freely — they will not be written over.';
-    return '';
+    if ((detail.steps ?? 0) > 0) return 'Press a step to open its form, filled in. Nothing is submitted for you.';
+    return (detail.fields ?? 0) > 0 ? 'Edit the words freely — they will not be written over.' : '';
   };
 
-  const cardFor = (status: RunStatus, mode: AgentMode, extra: Record<string, unknown> = {}, detail: SayDetail = {}): Record<string, unknown> => ({
+  const cardFor = (status: RunStatus, extra: Record<string, unknown> = {}, detail: SayDetail = {}): Record<string, unknown> => ({
     status,
     statusTone: STATUS_TONE[status],
-    mode,
     by: agent.label,
-    question: latest?.text ?? '',
-    say: sayFor(status, mode, detail),
-    plain: plainFor(status, mode, detail),
+    say: sayFor(status, detail),
+    plain: plainFor(status, detail),
     answer: '',
     segments: [],
     landed: false,
@@ -323,7 +297,7 @@ export const createAssist = (deps: AssistDeps): Assist => {
     return [
       { label: 'run', value: `${last.run} · ${last.status}` },
       { label: 'agent', value: `${last.provider} · ${last.model}` },
-      { label: 'mode', value: `${last.mode} (${last.routedBy}, ${last.startedBy})` },
+      { label: 'started by', value: last.startedBy },
       { label: 'run ms', value: Math.round(last.ms) },
       { label: 'model steps', value: last.modelSteps },
       { label: 'tokens in/out', value: `${last.inputTokens}/${last.outputTokens}${last.usageReported ? '' : ' (estimated)'}` },
@@ -412,27 +386,6 @@ export const createAssist = (deps: AssistDeps): Assist => {
     }
   };
 
-  // THE NAMES A CARD IS SHOWING: every string under a key that names something
-  // (`name`, `act_name`, `summary`…) in the ROWS it loaded — what an answer must
-  // not read back to somebody who is looking at them.
-  const NAMING = (key: string): boolean => key === 'name' || key.endsWith('_name') || key === 'summary';
-  const namesIn = (value: unknown, found: Set<string>, inRows: boolean): void => {
-    if (Array.isArray(value)) for (const item of value) namesIn(item, found, true);
-    const record = z.record(z.string(), z.unknown()).safeParse(value);
-    if (Array.isArray(value) || !record.success) return;
-    for (const [key, inner] of Object.entries(record.data)) {
-      if (typeof inner === 'string' && inRows && NAMING(key)) found.add(inner);
-      else namesIn(inner, found, inRows);
-    }
-  };
-  const namesOn = (card: string): readonly string[] => {
-    const found = new Set<string>();
-    const canvas = CANVAS_PLACEMENT[card];
-    const instanceId = canvas === undefined ? undefined : instanceOf(session.shell, canvas, card);
-    if (instanceId !== undefined) namesIn(session.shell.getRuntime(instanceId)?.getData() ?? {}, found, false);
-    return [...found];
-  };
-
   const rowsOn = (card: string): ReadonlySet<string> => {
     const found = new Set<string>();
     const canvas = CANVAS_PLACEMENT[card];
@@ -507,21 +460,29 @@ export const createAssist = (deps: AssistDeps): Assist => {
     return words.length === 0 ? '' : ` (${words.join(', ')})`;
   };
 
-  // A sentence Jev handled alone, as ONE compact line: what it opened, what
-  // those cards were aimed at, which rows it took the sentence to name.
+  // A sentence the CARDS answered — no assistant, or an assistant with nothing to
+  // add — as ONE compact line: what was opened, what those cards were aimed at,
+  // which rows the sentence was taken to name. Stored when the sentence is LEFT:
+  // by then the screen says what was submitted, which at the moment it finished it
+  // did not yet.
   const storeSettledAlone = (): void => {
     const context = settledAlone;
     settledAlone = undefined;
-    if (context === undefined || context.text === storedLine) return;
-    const screen = screenNow();
-    const openedWords = screen.length === 0 ? 'Nothing was opened.' : `Opened ${screen.map((card) => `${card.card}${aimedWords(card.aimedAt)}`).join('; ')}.`;
+    if (context === undefined) return;
     const rows = resolvedRows(context.handoff.entities);
-    const rowWords = rows.length === 0 ? '' : ` Rows named: ${rows.map((row) => `${row.label} [${row.table}:${row.id}]`).join('; ')}.`;
-    const unanswered = context.handoff.route === 'direct' ? '' : ` It was routed "${context.handoff.route}", and no agent was running, so it got no answer in words.`;
-    void thread.append('operator', context.text, { route: context.handoff.route, routedBy: context.handoff.routedBy, run: false, rows });
+    if (context.text !== storedLine) void thread.append('operator', context.text, { run: false, rows });
+    storedLine = context.text;
     // `rail` is the same turn for a PERSON: "moved Nova Kestrel → The Tent,
     // 21:00 · not submitted". The body above it is the same turn for the agent.
-    void thread.append('jev', `${CARDS_ONLY} ${openedWords}${rowWords}${unanswered}`, { route: context.handoff.route, resolved: rows, rows, screen, rail: railOfScreen() }).then(threadChanged);
+    void thread.append('jev', `${CARDS_ONLY} ${screenWords(rows)}`, { resolved: rows, rows, screen: screenNow(), rail: railOfScreen() }).then(threadChanged);
+  };
+
+  // What the cards amount to, as one compact line for the thread: what is open and
+  // aimed at what, and which rows the sentence was taken to name.
+  const screenWords = (rows: Predecisions['resolved'] = []): string => {
+    const screen = screenNow();
+    const openedWords = screen.length === 0 ? 'Nothing was opened.' : `Opened ${screen.map((card) => `${card.card}${aimedWords(card.aimedAt)}`).join('; ')}.`;
+    return `${openedWords}${rows.length === 0 ? '' : ` Rows named: ${rows.map((row) => `${row.label} [${row.table}:${row.id}]`).join('; ')}.`}`;
   };
 
   // ─── applying a landed answer ──────────────────────────────
@@ -555,7 +516,6 @@ export const createAssist = (deps: AssistDeps): Assist => {
       }
       // Handed to the fast speed: pinned, and Jev fills what the agent left.
       deps.adopt(card.actionId, card.input, placedBy, why);
-      opened.add(card.actionId);
     });
   };
 
@@ -580,10 +540,6 @@ export const createAssist = (deps: AssistDeps): Assist => {
       record.fieldsWritten.push(`${entry.card}.${entry.field}`);
     }
 
-    // ONLY A CANVAS THE ANSWER NAMES. Each is brought to exactly the state the
-    // answer gave: what it listed goes up (or is re-aimed), what it left out
-    // comes down — and is held down, or Jev would put it back a keystroke
-    // later. Every other canvas is not read, not written, not mentioned.
     // THE AGENT ADDS AND AIMS; ONLY JEV CLOSES. The first version copied
     // atrium: what a named canvas's list left out came down, and was held down.
     // That is right where the agent is the only thing placing cards. Here there
@@ -618,7 +574,7 @@ export const createAssist = (deps: AssistDeps): Assist => {
     session.recordRun({
       agentId: AGENT_ID,
       agentPath: [AGENT_ID],
-      label: `${record.mode}:${record.status}`,
+      label: `sentence:${record.status}`,
       provider: record.provider,
       model: record.model,
       inputTokens: outcome?.inputTokens ?? 0,
@@ -645,6 +601,8 @@ export const createAssist = (deps: AssistDeps): Assist => {
     record.lookups = [...outcome.lookups];
   };
 
+  // A torn-down run has nothing to show: the card goes with it. The provider
+  // stream is still draining behind this line; nobody has to watch it do so.
   const abort = (reason: string): void => {
     if (active === undefined) return;
     const { controller, record } = active;
@@ -652,15 +610,11 @@ export const createAssist = (deps: AssistDeps): Assist => {
     record.status = 'aborted';
     record.reason = reason;
     controller.abort();
-    finished.set(record.signature, 'aborted');
-    // THE CARD SETTLES AT ONCE. The provider stream is still draining behind
-    // this line; nobody should have to watch it do so.
-    showCard(cardFor('aborted', record.mode, { reason }));
+    hasReported = false;
+    hideCard();
     publish(record);
     settleIfIdle();
   };
-  // (`reason` is for the record and the trace; what the CARD says about an
-  // abort is always the same plain sentence — see `sayFor`.)
 
   // Every write a RUN makes to the card goes through here, and so at most once
   // per ANSWER_WRITE_MS. Patches merge while they wait: the newest words win,
@@ -710,22 +664,19 @@ export const createAssist = (deps: AssistDeps): Assist => {
     const context = latest;
     const llm = agent.llm;
     if (!enabled || llm === undefined || context === undefined || context.text.trim() === '') return;
-    // ONE RUN PER SESSION. The same question already being answered is left
-    // to finish; a different one replaces it.
+    // ONE RUN PER SESSION, and a run belongs to its text: the same text already
+    // being answered is left to finish.
     if (active !== undefined) {
-      if (active.record.signature === context.handoff.signature) return;
-      abort('A different sentence took over.');
+      if (active.record.text === context.text) return;
+      abort('The line changed.');
     }
 
     const { handoff } = context;
-    const mode: AgentMode = handoff.route === 'direct' ? handoff.preferred : handoff.route;
     runCount += 1;
     const record: RunRecord = {
       run: runCount,
-      mode,
+      text: context.text,
       startedBy,
-      routedBy: handoff.route === 'direct' ? 'enter' : handoff.routedBy,
-      signature: handoff.signature,
       status: 'running',
       reason: '',
       provider: agent.id,
@@ -765,7 +716,7 @@ export const createAssist = (deps: AssistDeps): Assist => {
     hasReported = true;
     // This sentence is the agent's now; its turn is stored here, not on leave.
     settledAlone = undefined;
-    showCard(cardFor('running', mode));
+    showCard(cardFor('running'));
     publish(record);
 
     const isCurrent = (): boolean => active === run;
@@ -786,7 +737,7 @@ export const createAssist = (deps: AssistDeps): Assist => {
     const asked = [...(await thread.asked()), context.text];
     if (context.text !== storedLine) {
       storedLine = context.text;
-      await thread.append('operator', context.text, { route: handoff.route, routedBy: record.routedBy, run: true, rows: resolvedRows(handoff.entities) });
+      await thread.append('operator', context.text, { run: true, rows: resolvedRows(handoff.entities) });
       threadChanged();
     }
     if (!isCurrent()) return droppedEarly();
@@ -820,7 +771,6 @@ export const createAssist = (deps: AssistDeps): Assist => {
     const narrowed = mayOpen.flatMap((id) => (deps.definitions[id] === undefined ? [] : [deps.definitions[id]]));
     const writable = writableNow();
     const predecisions: Predecisions = {
-      mode,
       sentence: context.text,
       heard: heardOf(context.parsed),
       now: { day: deps.clock.day, time: deps.clock.time },
@@ -843,9 +793,9 @@ export const createAssist = (deps: AssistDeps): Assist => {
     // run returned — under this session's policy, shown to the model — is as nameable
     // as a row of a pack. Nothing else is: an id from nowhere still rejects the answer.
     const lookedUpRows: HarvestedRow[] = [];
-    const answerContext = (): AnswerContext => ({ allowed: new Set(mayOpen), definitions: deps.definitions, candidates: mergeRows(table, lookedUpRows), writable, onScreen: new Set(screenNow().map((card) => card.card)), rowsOn, namesOn, asked });
+    const answerContext = (): AnswerContext => ({ allowed: new Set(mayOpen), definitions: deps.definitions, candidates: mergeRows(table, lookedUpRows), writable, onScreen: new Set(screenNow().map((card) => card.card)), rowsOn, asked });
     const request = { thread: window, predecisions, line: context.text };
-    lastInput = { input: runInput(request), mode };
+    lastInput = { input: runInput(request) };
     record.threadMessages = window.length;
     record.predecisionChars = (lastInput.input.at(-2)?.content ?? '').length;
 
@@ -853,7 +803,6 @@ export const createAssist = (deps: AssistDeps): Assist => {
     const outcome = await runAgent({
       ...request,
       llm,
-      mode,
       tools: createReadTools({ wire: session.wire, policy: session.policy, entries: ENTRIES, onRows: (rows) => lookedUpRows.push(...harvestRows(rows)) }),
       abort: controller.signal,
       refusals: (data, response) => {
@@ -886,12 +835,14 @@ export const createAssist = (deps: AssistDeps): Assist => {
     }
     active = undefined;
 
-    const verdict = outcome.status === 'landed' && outcome.data !== undefined ? admitAnswer(answerContext(), outcome.data, outcome.response) : undefined;
+    // NOTHING AT ALL IS AN ANSWER: no data is an empty answer, admitted like any other.
+    const data = outcome.data ?? {};
+    const verdict = outcome.status === 'landed' ? admitAnswer(answerContext(), data, outcome.response) : undefined;
     if (outcome.status === 'landed' && verdict !== undefined && verdict.ok) {
       record.status = 'landed';
       record.answer = outcome.response;
       record.planSteps = verdict.steps.length;
-      landed = { signature: record.signature, mode, steps: verdict.steps, opened: new Set(), done: new Set() };
+      landed = { text: context.text, steps: verdict.steps, opened: new Set(), done: new Set() };
       // What aimed a wanted card, in words: the row the assistant chose for the input
       // Jev could not fill, and the facts it came from.
       const sources = new Map([...handed, ...lookedUpRows].map((row) => [`${row.table}:${row.id}`, row]));
@@ -904,49 +855,51 @@ export const createAssist = (deps: AssistDeps): Assist => {
       });
       // Citations are re-admitted against the screen the answer just MADE: a
       // card it placed is on screen now, and may be stood on.
-      const cited = admitAnswer(answerContext(), outcome.data ?? {}, outcome.response);
+      const cited = admitAnswer(answerContext(), data, outcome.response);
       const claims = cited.ok ? cited.claims : verdict.claims;
       const notes = cited.ok ? cited.notes : verdict.notes;
       record.claims = claims.length;
       record.claimsDropped = notes;
       record.followUps = verdict.followUps;
-      showCard(
-        cardFor(
-          'landed',
-          mode,
-          {
-            answer: outcome.response,
-            segments: segmentsOf(outcome.response, claims),
-            landed: true,
-            lookups: outcome.lookups.join(' · '),
-            notes: notes.join(' · '),
-            steps: stepsShown(),
-            followUps: verdict.followUps.map((text) => ({ text })),
-          },
-          { count: mode === 'plan' ? verdict.steps.length : record.fieldsWritten.length, read: wanted.filter((pack) => facts[pack.id] !== undefined).map((pack) => pack.noun), lookedUp: outcome.lookups.length, ms: outcome.ms },
-        ),
-      );
-      // What a WRITE was authored from: the forms beside the field. If a person
-      // changes one of them, the words are stale (see `reauthor`).
-      authoredFrom = mode === 'write' ? { signature: record.signature, siblings: siblingsNow() } : undefined;
-      // The answer becomes a turn — with what it did to the screen, so a later
-      // "do that for the support act too" knows what "that" was, and with the
-      // rows it was handed, so a later turn may name them.
-      await thread.append('agent', outcome.response, { mode, canvases: record.canvasesNamed, cards: record.cardsMounted, closed: record.cardsClosed, fields: record.fieldsWritten, steps: verdict.steps.map((step) => step.say), lookups: outcome.lookups, followUps: verdict.followUps, rows: handed.slice(0, REMEMBERED_MAX) });
+      const hasWords = outcome.response.trim() !== '';
+      // THE SURFACE SHOWS ONLY WHAT THERE IS TO SHOW: words, steps, a question worth
+      // asking next. An answer with none of them leaves no card behind.
+      if (hasWords || verdict.steps.length > 0 || verdict.followUps.length > 0) {
+        showCard(
+          cardFor(
+            'landed',
+            { answer: outcome.response, segments: segmentsOf(outcome.response, claims), landed: true, lookups: outcome.lookups.join(' · '), notes: notes.join(' · '), steps: stepsShown(), followUps: verdict.followUps.map((text) => ({ text })) },
+            { steps: verdict.steps.length, fields: record.fieldsWritten.length, read: wanted.filter((pack) => facts[pack.id] !== undefined).map((pack) => pack.noun), lookedUp: outcome.lookups.length, ms: outcome.ms },
+          ),
+        );
+      } else {
+        hasReported = false;
+        hideCard();
+      }
+      // What written words were authored from: the forms beside the field. If a
+      // person changes one of them, the words are stale (see `reauthor`).
+      authoredFrom = record.fieldsWritten.length > 0 ? { text: context.text, siblings: siblingsNow() } : undefined;
+      // The answer becomes a turn — with what it did to the screen, so a later "do
+      // that for the support act too" knows what "that" was, and with the rows it
+      // was handed, so a later turn may name them. An answer with no words is a turn
+      // too: what the cards amounted to, in the same compact line a sentence with no
+      // assistant gets (storeSettledAlone).
+      await thread.append('agent', hasWords ? outcome.response : `${CARDS_ONLY} ${screenWords()}`, { canvases: record.canvasesNamed, cards: record.cardsMounted, closed: record.cardsClosed, fields: record.fieldsWritten, steps: verdict.steps.map((step) => step.say), lookups: outcome.lookups, followUps: verdict.followUps, rows: handed.slice(0, REMEMBERED_MAX), ...(hasWords ? {} : { rail: railOfScreen() }) });
       threadChanged();
     } else if (outcome.status === 'aborted') {
-      // AN OUTCOME, NOT AN ERROR. The partial answer is not kept — not on the
-      // card, not in the thread.
+      // AN OUTCOME, NOT AN ERROR. Nothing of it is kept — not on the card, not in
+      // the thread.
       record.status = 'aborted';
       record.reason = outcome.reason;
-      showCard(cardFor('aborted', mode, { reason: record.reason }));
+      hasReported = false;
+      hideCard();
     } else {
       // REJECTED WHOLE: nothing above ran, so nothing was written or mounted.
       record.status = 'failed';
       record.reason = verdict !== undefined && !verdict.ok ? `The answer named something the room cannot open: ${verdict.reasons.join('; ')}` : outcome.reason;
-      showCard(cardFor('failed', mode, { reason: record.reason, lookups: outcome.lookups.join(' · ') }, { reason: record.reason }));
+      showCard(cardFor('failed', { reason: record.reason, lookups: outcome.lookups.join(' · ') }, { reason: record.reason }));
     }
-    finished.set(record.signature, record.status);
+    if (record.status !== 'aborted') answeredText = context.text;
     publish(record);
     recordSpend(record, outcome);
   };
@@ -960,8 +913,8 @@ export const createAssist = (deps: AssistDeps): Assist => {
         if (failedRun !== undefined) {
           failedRun.record.status = 'failed';
           failedRun.record.reason = error instanceof Error ? error.message : String(error);
-          finished.set(failedRun.record.signature, 'failed');
-          showCard(cardFor('failed', failedRun.record.mode, { reason: failedRun.record.reason }, { reason: failedRun.record.reason }));
+          answeredText = failedRun.record.text;
+          showCard(cardFor('failed', { reason: failedRun.record.reason }, { reason: failedRun.record.reason }));
           publish(failedRun.record);
           recordSpend(failedRun.record, undefined);
         }
@@ -997,10 +950,7 @@ export const createAssist = (deps: AssistDeps): Assist => {
   const reauthor = (): void => {
     reauthorTimer = undefined;
     const written = authoredFrom;
-    if (written !== undefined && active === undefined && latest?.handoff.signature === written.signature && siblingsNow() !== written.siblings) {
-      finished.delete(written.signature);
-      launch('idle');
-    }
+    if (written !== undefined && active === undefined && latest?.text === written.text && siblingsNow() !== written.siblings) launch('idle');
     settleIfIdle();
   };
 
@@ -1021,52 +971,34 @@ export const createAssist = (deps: AssistDeps): Assist => {
     });
   };
 
-  // The line has been quiet for a beat after a finished thought: SETTLED.
-  const onSettled = (context: PassContext): void => {
-    const answered = finished.get(context.handoff.signature);
-    if (enabled && context.handoff.route !== 'direct') {
-      if (answered !== 'landed' && answered !== 'failed') launch('idle');
-      return;
-    }
-    // Jev alone — or a route with no agent to take it. A turn all the same.
-    settledAlone = context;
+  // The line has been quiet for a beat: the sentence is FINISHED. With an assistant,
+  // it runs. Without one, the cards are the turn.
+  const onFinished = (context: PassContext): void => {
+    if (enabled) launch('idle');
+    else settledAlone = context;
   };
 
   return {
     enabled,
-    // A keystroke is the line NOT being idle. The pass it starts will re-arm.
-    onKeystroke: () => {
+    // A keystroke is the line NOT being idle — and a run belongs to the text it
+    // started with, so a line that now says something else tears it down.
+    onKeystroke: (text) => {
       disarm();
+      if (active !== undefined && active.record.text !== text) abort('The line changed.');
     },
 
     onPass: (context) => {
       latest = context;
       watch();
       disarm();
-      const { handoff } = context;
-      if (active !== undefined && active.record.signature !== handoff.signature) abort('The sentence changed what this was for.');
-
-      const wanted = enabled && handoff.route !== 'direct';
-      const answered = finished.get(handoff.signature);
-      // THE SAME PASS that decided a handoff is coming puts the card up.
-      if (wanted && active === undefined && answered !== 'landed' && answered !== 'failed') showCard(cardFor('pending', handoff.route === 'direct' ? handoff.preferred : handoff.route, {}, { isComplete: handoff.completeP >= HANDOFF_AT }));
-      // Every route settles — a direct sentence is a turn too.
-      if (handoff.completeP >= HANDOFF_AT) {
+      if (active !== undefined && active.record.text !== context.text) abort('The line changed.');
+      // The pass a landing sets off is the same text: it is not run twice.
+      if (active === undefined && context.text !== answeredText) {
         timer = setTimeout(() => {
           timer = undefined;
-          onSettled(context);
+          onFinished(context);
           settleIfIdle();
         }, HANDOFF_IDLE_MS);
-      }
-      // Cards are enough again and no run ever happened: the card was only a
-      // promise, and the promise is withdrawn. A card that REPORTS something —
-      // landed, aborted, failed — stays until the line is cleared.
-      if (enabled && !wanted && active === undefined && !hasReported) hideCard();
-      // An answer to a different question is not this sentence's answer.
-      if (wanted && landed !== undefined && landed.signature !== handoff.signature) {
-        landed = undefined;
-        deps.release([...opened]);
-        opened.clear();
       }
       settleIfIdle();
     },
@@ -1075,7 +1007,6 @@ export const createAssist = (deps: AssistDeps): Assist => {
       disarm();
       latest = undefined;
       abort('The sentence stopped asking for anything.');
-      if (enabled && !hasReported) hideCard();
       settleIfIdle();
     },
 
@@ -1087,8 +1018,7 @@ export const createAssist = (deps: AssistDeps): Assist => {
       storeSettledAlone();
       latest = undefined;
       landed = undefined;
-      finished.clear();
-      opened.clear();
+      answeredText = '';
       hasReported = false;
       storedLine = '';
       authoredFrom = undefined;
@@ -1099,6 +1029,8 @@ export const createAssist = (deps: AssistDeps): Assist => {
       // history, and the thread is where history lives.
       sentenceFrom = records.length;
       if (enabled) hideCard();
+      // The exchange that was on show is history now: the rail reads it back.
+      threadChanged();
       writeTraceRun();
       settleIfIdle();
     },
@@ -1134,7 +1066,7 @@ export const createAssist = (deps: AssistDeps): Assist => {
       const entries = await thread.entries();
       // The exchange on the answer card is shown BY that card; the rail is what
       // came before it. Same rows, newest first, minus the line being answered.
-      const current = storedLine === '' || !hasReported ? -1 : entries.findIndex((entry) => entry.line === storedLine && entry.by !== 'pressed');
+      const current = storedLine === '' ? -1 : entries.findIndex((entry) => entry.line === storedLine && entry.by !== 'pressed');
       return current < 0 ? entries : entries.filter((_, index) => index !== current);
     },
 
@@ -1148,16 +1080,15 @@ export const createAssist = (deps: AssistDeps): Assist => {
       void thread.append('event', line, detail).then(threadChanged);
     },
     isRunOut: () => active !== undefined,
-    // ONE LINE about an event — the same agent, the same law, no tools, nothing
-    // it may name. Recorded in the `runs` sink like every other run.
+    // ONE LINE about an event — the same agent, the same prompt and contract, the
+    // event as its state; no tools, nothing it may name. Recorded in the `runs` sink like every other run.
     brief: async (request, abort) => {
       const llm = agent.llm;
       if (!enabled || llm === undefined) return undefined;
-      const predecisions: Predecisions = { mode: 'brief', sentence: request.event.line, heard: {}, now: { day: request.clock.day, time: request.clock.time }, resolved: [], rows: {}, actions: [], facts: { standing: request.standing }, screen: request.screen, writable: [], wanted: [], asked: [] };
+      const predecisions: Predecisions = { sentence: request.event.line, heard: {}, now: { day: request.clock.day, time: request.clock.time }, resolved: [], rows: {}, actions: [], facts: { standing: request.standing }, screen: request.screen, writable: [], wanted: [], asked: [] };
       const nothing: AnswerContext = { allowed: new Set(), definitions: deps.definitions, candidates: {}, writable: [] };
       const outcome = await runAgent({
         llm,
-        mode: 'brief',
         thread: [],
         predecisions,
         // The line is the WHOLE situation, not only what tipped it: a model

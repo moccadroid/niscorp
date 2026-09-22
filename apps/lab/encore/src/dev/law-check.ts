@@ -25,7 +25,7 @@ import { ENTRIES } from '@encore/app/vex';
 import { encoreAgent } from '@encore/server/agent/agent';
 import { createReadTools } from '@encore/server/agent/tools';
 import type { AgentScript, FakeAgentControls } from '@encore/server/agent/fake-llm';
-import { createReporter, createWorld, mounted, settle } from './world-factory';
+import { STORM_PLAN_STEPS, createReporter, createWorld, mounted, planOf, settle } from './world-factory';
 
 const AGENT_DIR = join(import.meta.dirname, '..', 'server', 'agent');
 
@@ -75,7 +75,8 @@ const main = async (): Promise<void> => {
   // loop's, and no file here so much as names them.
   check('no file under agent/ can type into the line, start a pass or start a run', !files.some((file) => ["'line-type'", 'encore.intent', 'encore.run', 'runNow', '.submit('].some((word) => file.code.includes(word))));
   check('the agent is defined ONCE, at module scope, with no tools of its own: they arrive on the run', (files.find((file) => file.name === 'agent.ts')?.code.match(/defineAgent\s*[<(]/g)?.length ?? 0) === 1 && files.filter((file) => /defineAgent\s*[<(]/.test(file.code)).length === 1 && (encoreAgent.config.tools ?? []).length === 0);
-  check('...its output strategy is left to signal, and `response` is required', encoreAgent.config.output?.strategy === undefined && encoreAgent.config.output?.response === 'required');
+  // (2026-09-22: `response` is OPTIONAL now — saying nothing is a correct answer.)
+  check('...its output strategy is left to signal, and `response` is not forced', encoreAgent.config.output?.strategy === undefined && encoreAgent.config.output?.response === undefined);
 
   // ═══ static, the event path ══════════════════════════════
   // THE ROOM THAT WATCHES IS THE LOOP'S OTHER HALF, not the agent's: it places
@@ -101,13 +102,17 @@ const main = async (): Promise<void> => {
   const headlinerStage = async (): Promise<unknown> => (await world.sql(`SELECT s.stage_id FROM slots s JOIN acts a ON a.id = s.act_id WHERE a.billing = 'headliner'`))[0]?.['stage_id'];
   const stageBefore = await headlinerStage();
 
-  // Every mode, behaving.
-  for (const sentence of ["what's going on?", 'is the tent free then?', 'warn everyone about the storm at 9', 'storm at 9 what should we do with the headliner']) {
+  // Behaving: words, words for a form, a plan (scripted — the default proposes none).
+  for (const sentence of ["what's going on?", 'is the tent free then?', 'warn everyone about the storm at 9']) {
     await world.typeLine(OP, sentence);
     await world.settled(OP);
   }
-  const modes = world.runsOf(OP).map((run) => `${run.mode}:${run.status}`);
-  check(`an agent ran in every mode (${modes.join(', ')})`, ['ask:landed', 'write:landed', 'plan:landed'].every((mode) => modes.includes(mode)));
+  controls.script = planOf(STORM_PLAN_STEPS);
+  await world.typeLine(OP, 'storm at 9 what should we do with the headliner');
+  await world.settled(OP);
+  controls.script = undefined;
+  const ran = world.runsOf(OP).map((run) => run.status);
+  check(`the assistant ran on every finished sentence (${ran.join(', ')}), wrote words into a form and proposed a plan`, ran.length >= 4 && ran.every((status) => status === 'landed') && world.runsOf(OP).some((run) => run.fieldsWritten.length > 0) && world.runsOf(OP).some((run) => run.planSteps > 0));
   check(`...and a plan opened NOTHING: its forms wait for a person (doing: ${mounted(shell, 'doing').join(', ') || 'empty'})`, !mounted(shell, 'doing').includes('slot.swap'));
 
   // Then misbehaving: one run that asks the read tool for every write there is.

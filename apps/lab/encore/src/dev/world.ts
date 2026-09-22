@@ -3,9 +3,9 @@ import { createReporter, createWorld } from './world-factory';
 // THE DEFAULT WORLD — the one the fast-path checks share: the fake decider, and
 // the slow path OFF. Off, not faked: these checks assert what Jev's pass does,
 // and a text model landing seven hundred milliseconds into an assertion about
-// a form's body would make every one of them a race. The route, completeness
-// and context questions are still asked in every pass here — that is what
-// `off` means — so the width these checks measure is the real width.
+// a form's body would make every one of them a race. The context questions are
+// still asked in every pass here — that is what `off` means — so the width these
+// checks measure is the real width.
 //
 // The two-speeds check builds its own worlds (world-factory.ts).
 

@@ -17,10 +17,9 @@
 import { z } from 'zod';
 import { XRAY_CHORD } from '@encore/app/actions/frame/intent-trace.layout';
 import { LIAISON_PRINCIPAL, OPERATOR_PRINCIPAL } from '@encore/app/charter/assignments';
-import { defaultScript } from '@encore/server/agent/fake-llm';
 import type { FakeAgentControls } from '@encore/server/agent/fake-llm';
 import { predecisionsIn } from '@encore/server/agent/predecisions';
-import { MOUNT_AT } from '@encore/server/intent/resolve';
+import { YES_AT } from '@encore/server/intent/resolve';
 import { chordsOf, fires, isCharacter } from '@encore/ui/components/chords';
 import { cardData, createReporter, createWorld, mounted, settle } from './world-factory';
 
@@ -45,12 +44,12 @@ const main = async (): Promise<void> => {
   const alonePass = alone.passesOf(OP).at(-1);
   const heldAct = alonePass?.held.find((card) => card.id === 'act.card');
   const chips = z.array(z.object({ id: z.string() })).parse(cardData(aloneShell, 'maybe', 'intent.options')['chips'] ?? []);
-  check(`JEV WANTS THE ACT'S CARD AND CANNOT AIM IT: ${heldAct?.p} is over the ${MOUNT_AT} line, the sentence names no act — so it is a chip, not a card (${mounted(aloneShell, 'about').join(', ') || 'nothing in about'})`, heldAct !== undefined && heldAct.p >= MOUNT_AT && !mounted(aloneShell, 'about').includes('act.card') && chips.some((chip) => chip.id === 'act.card') && alone.runsOf(OP).length === 0);
+  check(`JEV WANTS THE ACT'S CARD AND CANNOT AIM IT: ${heldAct?.p} is over the ${YES_AT} line, the sentence names no act — so it is a chip, not a card (${mounted(aloneShell, 'about').join(', ') || 'nothing in about'})`, heldAct !== undefined && heldAct.p >= YES_AT && !mounted(aloneShell, 'about').includes('act.card') && chips.some((chip) => chip.id === 'act.card') && alone.runsOf(OP).length === 0);
   check(`...AND THE STORY SAYS WHY, in the operator's terms, beside its bar: "${heldAct?.reason}"`, heldAct?.reason.startsWith('not shown — it needs an act, and the sentence names none') === true && !heldAct.reason.includes('actId') && heldAct.needs.length === 1 && heldAct.needs[0]?.noun === 'an act');
   const aloneStory = StoryCards.parse(cardData(aloneShell, 'trace', 'intent.trace')['story']);
-  const aboveLine = aloneStory.cards.filter((card) => card.p >= MOUNT_AT);
+  const aboveLine = aloneStory.cards.filter((card) => card.p >= YES_AT);
   const up = new Set(['doing', 'about', 'where', 'when', 'nearby'].flatMap((canvas) => mounted(aloneShell, canvas)));
-  check(`...EVERY card at or above the line is either up or carries its reason (${aboveLine.map((card) => `${card.label} ${card.p}${up.has(card.id) ? ' up' : ' — reason'}`).join(' · ')}); none below it does`, aboveLine.length >= 2 && aboveLine.every((card) => up.has(card.id) === (card.note === '')) && aloneStory.cards.filter((card) => card.p < MOUNT_AT && !up.has(card.id)).every((card) => card.note === ''));
+  check(`...EVERY card at or above the line is either up or carries its reason (${aboveLine.map((card) => `${card.label} ${card.p}${up.has(card.id) ? ' up' : ' — reason'}`).join(' · ')}); none below it does`, aboveLine.length >= 2 && aboveLine.every((card) => up.has(card.id) === (card.note === '')) && aloneStory.cards.filter((card) => card.p < YES_AT && !up.has(card.id)).every((card) => card.note === ''));
   check('...including whether it was at least offered: a card outside the suggestions says that too', aloneStory.cards.some((card) => card.note.includes('offered as a suggestion instead')) && aloneStory.cards.filter((card) => card.note !== '').every((card) => card.note.includes('suggestion')));
   await alone.xray(OP);
   const panel = alone.servedTo(OP).filter((message) => message.includes('"canvas":"trace"')).at(-1) ?? '';
@@ -85,7 +84,7 @@ const main = async (): Promise<void> => {
   const friday = await world.sql(`SELECT a.id, a.name FROM acts a WHERE NOT EXISTS (SELECT 1 FROM slots s WHERE s.act_id = a.id AND s.day = 'sat') LIMIT 1`);
   const elsewhere = { id: String(friday[0]?.['id'] ?? ''), name: String(friday[0]?.['name'] ?? '') };
   const aimAt = (actId: string): void => {
-    controls.script = (turn) => (turn.predecisions.mode === 'ask' ? { answer: { response: 'One act is on stage.', data: { canvases: { about: [{ actionId: 'act.card', input: { actId } }] } } } } : defaultScript(turn));
+    controls.script = () => ({ answer: { response: 'One act is on stage.', data: { canvases: { about: [{ actionId: 'act.card', input: { actId } }] } } } });
   };
   for (const [label, actId] of [['an id nobody has ever seen', 'act_nobody'], [`a REAL act (${elsewhere.name}) that is in no candidate set, no pack and no lookup of this run`, elsewhere.id]] as const) {
     await world.typeLine(OP, '');
@@ -101,7 +100,6 @@ const main = async (): Promise<void> => {
   await world.typeLine(OP, '');
   await world.settled(OP);
   controls.script = (turn) => {
-    if (turn.predecisions.mode !== 'ask') return defaultScript(turn);
     if (turn.lookups.length === 0) return { call: { name: 'query', args: { fingerprint: 'lineup/forDay', context: JSON.stringify({ day: 'fri' }) } } };
     return { answer: { response: 'Looked at Friday instead.', data: { canvases: { about: [{ actionId: 'act.card', input: { actId: elsewhere.id } }] } } } };
   };
@@ -115,7 +113,7 @@ const main = async (): Promise<void> => {
   const liaisonShell = await world.login(LIAISON_PRINCIPAL);
   await settle();
   const seenBefore = controls.seen.length;
-  controls.script = (turn) => (turn.predecisions.mode === 'ask' ? { answer: { response: 'One act is on stage.', data: { canvases: { about: [{ actionId: 'act.card', input: { actId: actOnStage.id } }] } } } } : defaultScript(turn));
+  controls.script = () => ({ answer: { response: 'One act is on stage.', data: { canvases: { about: [{ actionId: 'act.card', input: { actId: actOnStage.id } }] } } } });
   await world.typeLine(LIAISON_PRINCIPAL, ON_STAGE);
   world.booted.intent.of(LIAISON_PRINCIPAL)?.runNow();
   await world.settled(LIAISON_PRINCIPAL);

@@ -69,9 +69,8 @@ export type Derived = {
   questions: Record<string, Question>;
   plans: ActionPlan[];
   tone: string;
-  // The handoff's own questions, by name: which way the sentence goes, whether
-  // it is finished, and one per context pack the principal may read.
-  handoff: { route: string; complete: string; packs: Record<string, string> };
+  // One question per context pack the principal may read, by pack id.
+  packs: Record<string, string>;
 };
 
 // ─── decide ──────────────────────────────────────────────────
@@ -109,41 +108,15 @@ export type HeldCard = { id: string; p: number; reason: string; needs: { key: st
 
 export type Chip = { id: string; label: string; p: number; hue: string };
 
-// `direct` is Jev alone. The other three are what the agent is asked to do.
-export type Route = 'direct' | 'ask' | 'write' | 'plan';
-
-export type AgentMode = Exclude<Route, 'direct'>;
-
-// What the agent can be run FOR. The three an operator's sentence routes to,
-// and one nobody types: `brief` — one line about an event Jev called critical
-// (server/watch). It is never a route; a sentence cannot ask for it.
-export type RunMode = AgentMode | 'brief';
-
 export type Entity = { table: string; id: string; label: string };
 
-// JEV'S PRE-DECISIONS ABOUT THE SLOW SPEED, read off the same pass as the cards.
-// `signature` is what a running agent run is compared against: a newer pass
-// that moves it has changed what the run was FOR, and the run is torn down;
-// one that leaves it alone lets the run finish.
+// WHAT THE ASSISTANT IS HANDED from a pass: the packs Jev said yes to, the few
+// actions it ranked highest — the only catalog the assistant sees — and the rows
+// it picked. Whether the assistant runs is not decided here, or by Jev at all.
 export type Handoff = {
-  route: Route;
-  routeP: number;
-  // WHO ROUTED IT. `jev` answered the route question. `computed` is the one
-  // rule nobody is asked (DESIGN.md § When it runs): Jev said the cards were
-  // enough and then had no cards — nothing to mount and nothing worth offering,
-  // or a card it wanted and could not aim. Not knowing is a routing decision.
-  routedBy: 'jev' | 'computed';
-  // Why the computed rule fired, in words for the trace. '' when it did not.
-  computedWhy: string;
-  // The likeliest of ask, write and plan, whatever `route` says — what Enter
-  // runs when Jev thought cards were enough.
-  preferred: AgentMode;
-  completeP: number;
   packs: { id: string; p: number }[];
-  // The top actions by Jev's probability — the only catalog the agent sees.
   narrowed: string[];
   entities: Entity[];
-  signature: string;
 };
 
 export type Resolved = {
@@ -202,16 +175,17 @@ export type PassRecord = {
 
 // ─── the record of a run ─────────────────────────────────────
 
-export type RunStatus = 'pending' | 'running' | 'landed' | 'aborted' | 'failed' | 'off';
+export type RunStatus = 'running' | 'landed' | 'aborted' | 'failed';
 
 // The slow clock. One of these per agent run, kept beside the pass records so
 // the gap between the two speeds is two numbers on one screen.
 export type RunRecord = {
   run: number;
-  mode: AgentMode;
+  // The line this run was started with. A run belongs to that text: any change
+  // of the line aborts it.
+  text: string;
+  // A finished sentence is a quiet line, or Enter. Nothing else starts a run.
   startedBy: 'idle' | 'enter';
-  routedBy: 'jev' | 'computed' | 'enter';
-  signature: string;
   status: RunStatus;
   // Why it failed or was aborted, in a sentence the operator can read.
   reason: string;

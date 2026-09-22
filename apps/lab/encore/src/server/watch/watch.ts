@@ -16,7 +16,7 @@ import { canRead } from '@encore/server/intent/context-packs';
 import { decideQuestions } from '@encore/server/intent/decide';
 import { EVENT_AUDIENCE, EVENT_INTERRUPT, EVENT_URGENCY, deriveQuestions } from '@encore/server/intent/derive';
 import { referencedTables } from '@encore/server/intent/input-contract';
-import { FILL_AT, MOUNT_AT, UNMOUNT_AT, inputOf, probabilityOf } from '@encore/server/intent/resolve';
+import { YES_AT, inputOf, probabilityOf } from '@encore/server/intent/resolve';
 import type { Ceiling } from './ceiling';
 import { GateRows, IncidentRows, ScanRows, ZoneCountRows, eventsFrom, withoutBand } from './events';
 import type { FeedEvent, FeedRows } from './events';
@@ -48,20 +48,17 @@ import type { FeedEvent, FeedRows } from './events';
 // second; the trace says when it bit. A SENTENCE IS NEVER BEHIND ANY OF THIS: it
 // has its own pacer, and the decider serves both at once.
 //
-// RAISING HAS HYSTERESIS, LIKE MOUNTING, and for the same reason — a calibrated
-// model has a middling opinion about nearly everything, so "is this worth the
-// operator's eyes" sits near a line more often than it sits at zero. A cause
-// goes up at INTERRUPT_AT and stays until it falls under INTERRUPT_LEAVE_AT.
+// RAISING IS A YES AT 0.5, like everything Jev is asked (intent/resolve.ts) — and
+// a cause stays up only while it is still a yes. A card's hysteresis exists so it
+// does not flicker while ONE SENTENCE is typed; an event pass is a new reading of a
+// count that moved, and there is no sentence to scope anything to.
 // ═══════════════════════════════════════════════════════════
 
-export const INTERRUPT_AT = 0.7;
-export const INTERRUPT_LEAVE_AT = 0.5;
 // How many raised cards are SHOWN. Never how many may be raised: the rest fold
 // into a counted line, are on the rail, and come up as room is made.
 export const ATTENTION_SHOWN = 4;
-// The agent says one line about an event only when Jev called it critical and
-// was this sure of the pick — and then at most this often.
-export const BRIEF_CONFIDENCE_AT = 0.6;
+// The agent says one line about an event only when Jev called it critical — a
+// yes, like any other — and then at most this often.
 export const BRIEF_EVERY_MS = 10_000;
 // COALESCING, LIKE KEYSTROKES: a batch is read once the feeds have been quiet
 // for a beat, or this long after the first write of it — whichever is first.
@@ -273,7 +270,7 @@ export const createWatcher = (deps: WatchDeps): Watcher => {
   // ─── the agent's one line ──────────────────────────────────
 
   const maybeBrief = (event: FeedEvent, urgency: number, confidence: number): void => {
-    if (urgency < 2 || confidence < BRIEF_CONFIDENCE_AT) return;
+    if (urgency < 2 || confidence < YES_AT) return;
     // THE OPERATOR'S RUN COMES FIRST, and a brief is not worth a queue: one that
     // cannot go now is not sent later about a moment that has passed.
     if (deps.isOperatorRunOut() || briefing !== undefined || deps.now() - lastBriefAt < BRIEF_EVERY_MS) {
@@ -343,12 +340,12 @@ export const createWatcher = (deps: WatchDeps): Watcher => {
     const filling = { line: '', answers: decided.answers, parsed: { tokens: event.tokens, day: deps.clock.day, hour: deps.clock.hour }, clock: deps.clock };
     const best = derived.plans
       .map((plan) => ({ plan, p: probabilityOf(decided.answers[plan.question]), input: inputOf(plan, filling) }))
-      .filter((entry) => (standing?.actionId === entry.plan.actionId ? entry.p > UNMOUNT_AT : entry.p >= MOUNT_AT) && entry.plan.required.every((key) => entry.input[key] !== undefined))
+      .filter((entry) => entry.p >= YES_AT && entry.plan.required.every((key) => entry.input[key] !== undefined))
       .sort((a, b) => b.p - a.p)[0];
 
     // A dismissal stands until the cause changes band.
     if (dismissed.get(event.key) !== event.band) dismissed.delete(event.key);
-    const isWorthEyes = standing === undefined ? interrupt >= INTERRUPT_AT : interrupt > INTERRUPT_LEAVE_AT;
+    const isWorthEyes = interrupt >= YES_AT;
 
     // X-RAY'S STORY OF THIS PASS (intent/story.ts): what Jev was asked and said.
     const tell = (outcome: string): void =>
@@ -359,7 +356,7 @@ export const createWatcher = (deps: WatchDeps): Watcher => {
         questionCount: decided.questionCount,
         scored: derived.plans.map((plan) => ({ id: plan.actionId, p: Math.round(probabilityOf(decided.answers[plan.question]) * 1000) / 1000 })),
         interrupt,
-        interruptLine: standing === undefined ? INTERRUPT_AT : INTERRUPT_LEAVE_AT,
+        interruptLine: YES_AT,
         urgency: URGENCY_WORDS[urgency] ?? 'routine',
         outcome,
       });
@@ -387,7 +384,7 @@ export const createWatcher = (deps: WatchDeps): Watcher => {
     if (isNew) {
       stats.raised += 1;
       // A FLAGGED EVENT IS A TURN, so "what did I miss?" is answerable.
-      deps.recordEvent(`${deps.clock.time} · ${event.short} — raised`, { rail: `${event.short} — raised (${URGENCY_WORDS[urgency] ?? 'routine'})`, cause: event.key, card: best.plan.actionId, line: event.line, audience: audience?.kind === 'choice' && audience.p >= FILL_AT ? audience.choice : 'none', probabilities });
+      deps.recordEvent(`${deps.clock.time} · ${event.short} — raised`, { rail: `${event.short} — raised (${URGENCY_WORDS[urgency] ?? 'routine'})`, cause: event.key, card: best.plan.actionId, line: event.line, audience: audience?.kind === 'choice' && audience.p >= YES_AT ? audience.choice : 'none', probabilities });
     }
     tell(isNew ? `Raised “${deps.definitions[best.plan.actionId]?.title ?? best.plan.actionId}” — ${best.p.toFixed(2)} — on the attention strip.` : 'Already up: its card was updated in place.');
     maybeBrief(event, urgency, confidence);

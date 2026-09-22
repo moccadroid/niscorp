@@ -36,7 +36,6 @@ import type { CandidateSets, Entity } from '@encore/server/intent/intent.types';
 export const PREDECISIONS_HEADING = 'THIS TURN — decided before you were called (JSON):';
 
 export const PredecisionsSchema = z.object({
-  mode: z.enum(['ask', 'write', 'plan', 'brief']),
   sentence: z.string(),
   heard: z.record(z.string(), z.union([z.string(), z.number()])),
   now: z.object({ day: z.string(), time: z.string() }),

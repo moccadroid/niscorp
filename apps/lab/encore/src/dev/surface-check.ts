@@ -20,7 +20,7 @@
 //   f. (2026-09-21, the redesign) ONE packed flow holding every question canvas, no
 //      card in a column; ONE scrollbar; one row of next steps — 3 chips, 2 links;
 //      an open "why?" survives a re-aim, a reload-on-write and the switch; the
-//      answer is two sentences and never a recital; a follow-up is never a repeat;
+//      answer is two sentences; a follow-up is never a repeat;
 //      x-ray says it is on, and never survives a page load
 import { OPERATOR_PRINCIPAL } from '@encore/app/charter/assignments';
 import { FAKE_AGENT_MODEL } from '@encore/server/agent/fake-llm';
@@ -31,11 +31,11 @@ import { FLOW_ORDER } from '@encore/app/canvas-placement';
 import { ANSWER_MAX_SENTENCES, FOLLOW_UPS_MAX } from '@encore/server/agent/contract';
 import { admitAnswer, sentencesOf } from '@encore/server/intent/admission';
 import { feedSetCount } from '@encore/app/vex/watch.entries';
-import { CHIPS_SHOWN, CHIP_MARGIN, MOUNT_AT, UNMOUNT_AT } from '@encore/server/intent/resolve';
+import { CHIPS_SHOWN, UNMOUNT_AT, YES_AT } from '@encore/server/intent/resolve';
 import { STORIES_KEPT, STORY_CARDS_SHOWN } from '@encore/server/intent/story';
 import type { Story } from '@encore/server/intent/story';
 import { z } from 'zod';
-import { cardData, createReporter, createWorld, mounted, settle } from './world-factory';
+import { STORM_PLAN_STEPS, cardData, createReporter, createWorld, mounted, planOf, settle } from './world-factory';
 
 const { check, report } = createReporter();
 
@@ -179,7 +179,7 @@ const main = async (): Promise<void> => {
   const offered = Chips.parse(cardData(shell, 'maybe', 'intent.options')['suggested'] ?? []);
   const chipsServed = (): number => served('intent.options').split('"ref":"chip"').length - 1;
   check(`THE MIDDLE BAND IS WIDE under a ${FLOOR} floor (${band.length} chips: ${band.map((chip) => `${chip.id} ${chip.p}`).join(', ')})`, band.length > CHIPS_SHOWN);
-  check(`...and the app offers at most ${CHIPS_SHOWN}, best first, all within ${CHIP_MARGIN} of the best (${offered.map((chip) => `${chip.id} ${chip.p}`).join(', ')})`, offered.length >= 1 && offered.length <= CHIPS_SHOWN && offered.every((chip, index) => chip.id === band[index]?.id && chip.p >= (band[0]?.p ?? 0) - CHIP_MARGIN) && chipsServed() === offered.length);
+  check(`...and the app offers at most ${CHIPS_SHOWN}, best first (${offered.map((chip) => `${chip.id} ${chip.p}`).join(', ')})`, offered.length >= 1 && offered.length <= CHIPS_SHOWN && offered.every((chip, index) => chip.id === band[index]?.id) && chipsServed() === offered.length);
 
   // ═══ d. why? ═════════════════════════════════════════════
   const whyLine = (actionId: string): string => /"value":"((?:Opened|Here|Added|You)[^"]*)"/.exec(served(actionId))?.[1] ?? '';
@@ -188,7 +188,8 @@ const main = async (): Promise<void> => {
   await settle(4);
   const jevWhy = whyLine('slot.swap');
   check(`...pressed, it is ONE plain line: "${jevWhy}"`, jevWhy.includes(`because you said “${STORM_MOVE}”`) && served('slot.swap').includes('"label":"hide"'));
-  check(`...with its confidence in a WORD (p ${String(cardData(shell, 'doing', 'slot.swap')['placedBy'])} under a ${FLOOR} floor) and no number`, / — (sure|fairly sure|a guess)\.$/.test(jevWhy) && !/\d\.\d/.test(jevWhy) && !/%/.test(jevWhy));
+  // (2026-09-22: the confidence WORD — sure / fairly sure / a guess — was two more thresholds; deleted.)
+  check('...and no number in it', !/\d\.\d/.test(jevWhy) && !/%/.test(jevWhy));
   // "when I click why it always resets": a re-aimed card is a NEW instance.
   world.dispatchOn(OP, 'nearby', { type: 'ui:click', ref: 'why' }, 'move.impact');
   await settle(4);
@@ -208,6 +209,9 @@ const main = async (): Promise<void> => {
 
   // ═══ e. a question, its status, its answer ═══════════════
   await clear();
+  // (The assistant runs on every finished sentence now, and every run above offered the
+  // fake's few follow-ups: a fresh thread, so this answer has some left to offer.)
+  await world.booted.intent.of(OP)?.newThread();
   controls.latencyMs = 120;
   controls.chunkMs = 25;
   const beforeAsk = world.servedTo(OP).length;
@@ -246,10 +250,12 @@ const main = async (): Promise<void> => {
   await world.typeLine(OP, STORM);
   await world.settled(OP);
 
-  // a plan
+  // a plan (scripted: the default assistant proposes none)
+  controls.script = planOf(STORM_PLAN_STEPS);
   await world.typeLine(OP, OPTIONS);
   await world.settled(OP);
-  check(`A PLAN lands as steps (${JSON.stringify(answerCard()['steps']).slice(0, 90)}…) with one plain hint: "${String(answerCard()['plain'])}"`, answerCard()['mode'] === 'plan' && served('assist.answer').includes('"ref":"step"') && served('assist.answer').includes('Nothing is submitted for you.') && !served('assist.answer').includes(String(answerCard()['say'])));
+  controls.script = undefined;
+  check(`A PLAN lands as steps (${JSON.stringify(answerCard()['steps'] ?? []).slice(0, 90)}…) with one plain hint: "${String(answerCard()['plain'])}"`, served('assist.answer').includes('"ref":"step"') && served('assist.answer').includes('Nothing is submitted for you.') && !served('assist.answer').includes(String(answerCard()['say'])));
   world.dispatchOn(OP, 'assist', { type: 'ui:click', ref: 'step', payload: 0 });
   await world.settled(OP);
   const stepped = ROOM_CANVASES.flatMap((canvas) => (shell.getState().canvases[canvas]?.stack ?? []).map((item) => String(shell.getRuntime(item.id)?.getData()['why'] ?? ''))).find((why) => why.startsWith('You opened this from step'));
@@ -275,12 +281,12 @@ const main = async (): Promise<void> => {
   await settle(4);
   check(`a card the ASSISTANT put up says so, in its own "why?": "${whyLine('push.compose')}"`, whyLine('push.compose') === 'Added by the assistant as evidence for its answer.' && String(cardData(shell, 'doing', 'push.compose')['placedBy']) === 'scripted');
 
-  // THE CONTRACT REFUSES A THIRD SENTENCE, AND A RECITAL — with a correction, so
-  // the model gets to say it properly. The script recites first, then behaves.
+  // THE CONTRACT REFUSES A THIRD SENTENCE — with a correction, so the model gets
+  // to say it properly. The script breaks the bound first, then behaves. (A
+  // second gate, "a recital", was deleted on 2026-09-22: it refused the honest
+  // answer to "how will the storm affect the lineup?" three times on the real
+  // model and failed the run.)
   await clear();
-  await world.typeLine(OP, 'how is the running order looking');
-  await world.settled(OP);
-  const shown = [...new Set(z.array(z.object({ act_name: z.string() }).loose()).catch([]).parse(cardData(shell, 'when', 'lineup.timeline')['slots'] ?? []).map((row) => row.act_name))].slice(0, 4);
   // (One correction per run — agent.ts `outputRetries(2)` — so each refusal is its
   // own sentence: the script breaks the contract once, is told, and then keeps it.)
   const corrections: string[] = [];
@@ -290,19 +296,13 @@ const main = async (): Promise<void> => {
       return { answer: { response: turn.corrections.length === 0 ? broken : kept, data: {} } };
     };
   };
-  breaksOnce(`Tonight it is ${shown.join(', ')}.`, 'The cards are the answer: nothing on the running order is out of place.');
-  await world.typeLine(OP, 'how is the running order looking?');
+  breaksOnce('One thing matters. Then another. And a third.', 'One thing matters, and it is the second.');
+  await world.typeLine(OP, 'what matters most on the running order?');
   // Enter: whatever Jev made of the sentence, the operator wants words about it.
   world.booted.intent.of(OP)?.runNow();
   await world.settled(OP);
-  check(`A RECITAL IS REFUSED (the card shows ${shown.join(', ')}): "${corrections[0]?.slice(0, 90)}…"`, mounted(shell, 'when').includes('lineup.timeline') && shown.length >= 3 && (corrections[0] ?? '').includes('reads "lineup.timeline" back'));
-  check(`...and the answer that lands is the one that kept the contract: "${String(answerCard()['answer'])}"`, answerCard()['status'] === 'landed' && String(answerCard()['answer']).startsWith('The cards are the answer'));
-  breaksOnce('One thing matters. Then another. And a third.', 'One thing matters, and it is the second.');
-  await world.typeLine(OP, 'and what matters most on the running order?');
-  world.booted.intent.of(OP)?.runNow();
-  await world.settled(OP);
   controls.script = undefined;
-  check(`...AND SO IS A THIRD SENTENCE: "${corrections[1]?.slice(0, 70)}…" → "${String(answerCard()['answer'])}"`, (corrections[1] ?? '').includes(`at most ${ANSWER_MAX_SENTENCES}`) && answerCard()['status'] === 'landed' && String(answerCard()['answer']) === 'One thing matters, and it is the second.');
+  check(`A THIRD SENTENCE IS REFUSED: "${corrections[0]?.slice(0, 70)}…" → "${String(answerCard()['answer'])}"`, (corrections[0] ?? '').includes(`at most ${ANSWER_MAX_SENTENCES}`) && answerCard()['status'] === 'landed' && String(answerCard()['answer']) === 'One thing matters, and it is the second.');
   const empty = { allowed: new Set<string>(), definitions: {}, candidates: {}, writable: [] };
   const repeated = admitAnswer({ ...empty, asked: ['What are our options?', 'who needs to know'] }, { followUps: ['what are our options', 'Who needs to know?', 'is gate B open?', 'how long will it last?', 'a third one'] }, 'Short.');
   check(`the rule itself: asked-before is dropped, and at most ${FOLLOW_UPS_MAX} remain (${repeated.ok ? repeated.followUps.join(' · ') : ''})`, repeated.ok && repeated.followUps.join('|') === 'is gate B open?|how long will it last?');
@@ -350,7 +350,7 @@ const main = async (): Promise<void> => {
   await world.settled(OP);
   await world.typeLine(OP, 'how many guests are there right now');
   const swapNow = StorySchema.parse(panel()['story']).cards.find((card) => card.id === 'slot.swap')?.p ?? 0;
-  check(`A NEW SENTENCE RE-EARNS THE ROOM, even for a middling model: the move form reads ${swapNow} — over the ${UNMOUNT_AT} that would keep a card up, under the ${MOUNT_AT} that puts one up — and it is gone (${mounted(shell, 'doing').join(', ') || 'nothing in doing'} · ${mounted(shell, 'nearby').join(', ')})`, swapNow > UNMOUNT_AT && swapNow < MOUNT_AT && !mounted(shell, 'doing').includes('slot.swap') && mounted(shell, 'nearby').includes('attendance.now'));
+  check(`A NEW SENTENCE RE-EARNS THE ROOM, even for a middling model: the move form reads ${swapNow} — over the ${UNMOUNT_AT} that would keep a card up, under the ${YES_AT} that puts one up — and it is gone (${mounted(shell, 'doing').join(', ') || 'nothing in doing'} · ${mounted(shell, 'nearby').join(', ')})`, swapNow > UNMOUNT_AT && swapNow < YES_AT && !mounted(shell, 'doing').includes('slot.swap') && mounted(shell, 'nearby').includes('attendance.now'));
   await clear();
 
   // ═══ b. x-ray: one panel, and nothing else ═══════════════
@@ -388,21 +388,21 @@ const main = async (): Promise<void> => {
   world.dispatchOn(OP, 'trace', { type: 'ui:click', ref: 'allCards' }, 'intent.trace');
   await settle(4);
   check('...pressed, every card Jev was asked about is listed', told.cards.every((card) => servedOn('trace').includes(`"label":"${card.label}","value":${card.p}`)) && servedOn('trace').includes('show fewer'));
-  check(`...what it picked, how it read the mood, and where the sentence went: ${told.decided.map((line) => `"${line.text}"`).join(' ')}`, told.decided.length === 3 && told.decided[0]?.text.includes('Nova Kestrel') === true && told.decided[2]?.text.startsWith('Kept to the cards') === true && told.decided.every((line) => servedOn('trace').includes(line.text)));
+  // (2026-09-22: no routing sentence — there is no routing. Two lines: what it picked, the mood.)
+  check(`...what it picked and how it read the mood: ${told.decided.map((line) => `"${line.text}"`).join(' ')}`, told.decided.length === 2 && told.decided[0]?.text.includes('Nova Kestrel') === true && told.decided.every((line) => servedOn('trace').includes(line.text)));
   check(`...and what changed on screen as a result: ${told.screen.map((line) => line.text).join(' ')}`, told.screen.length > 0 && told.screen.every((line) => servedOn('trace').includes(line.text)));
-  check('a sentence the cards answered has no assistant in its story', told.assistantHeading === '' && told.handedHeading === '' && !servedOn('trace').includes('Handed to the assistant'));
+  check(`EVERY finished sentence has the assistant in its story — why it ran, and what it was handed: "${told.handedHeading}"`, told.handedHeading === 'Assistant ran (finished sentence) — what it was handed' && told.handed.length === 3 && servedOn('trace').includes(told.handedHeading));
   const panelText = leavesOf(servedOn('trace')).filter((leaf) => typeof leaf.value === 'string' && leaf.key === 'value').map((leaf) => String(leaf.value));
   check('TYPOGRAPHY: sentence case and real words — no all-lowercase mono key/value run, no label in capitals', !servedOn('trace').includes('"inline":true') && !servedOn('trace').includes('"variant":"mono"') && panelText.every((value) => value === '' || value !== value.toUpperCase() || !/[A-Z]{4,}/.test(value)));
 
   // A question: the assistant joins the story, with what it was handed and what was refused.
   await clear();
-  await world.typeLine(OP, 'how is the running order looking');
-  await world.settled(OP);
-  const names = [...new Set(z.array(z.object({ act_name: z.string() }).loose()).catch([]).parse(cardData(shell, 'when', 'lineup.timeline')['slots'] ?? []).map((row) => row.act_name))].slice(0, 4);
+  // (The scripted first answer breaks the two-sentence bound; it used to be a
+  // "recital", a gate deleted on 2026-09-22.)
   controls.script = (turn) => ({
     answer:
       turn.corrections.length === 0
-        ? { response: `Tonight it is ${names.join(', ')}.`, data: {} }
+        ? { response: 'One thing. Then another. And a third.', data: {} }
         : { response: 'Nothing on the running order is out of place.', data: { claims: [{ text: 'Nothing on the running order is out of place.', card: 'stage.view' }] } },
   });
   await world.typeLine(OP, 'is anything out of place on the running order?');
@@ -410,11 +410,11 @@ const main = async (): Promise<void> => {
   await world.settled(OP);
   controls.script = undefined;
   const asked = story();
-  check(`A QUESTION’S STORY SAYS WHERE IT WENT AND WHAT WAS HANDED OVER: "${asked.decided[2]?.text}" — ${asked.handed.map((fact) => `${fact.label}: ${fact.value}`).join(' · ')}`, asked.handedHeading === 'Handed to the assistant' && asked.handed.length === 3 && asked.handed[2]?.value.endsWith('message(s)') === true && servedOn('trace').includes('Handed to the assistant'));
+  check(`A QUESTION’S STORY SAYS WHY IT RAN AND WHAT WAS HANDED OVER: "${asked.handedHeading}" — ${asked.handed.map((fact) => `${fact.label}: ${fact.value}`).join(' · ')}`, asked.handedHeading === 'Assistant ran (Enter) — what it was handed' && asked.handed.length === 3 && asked.handed[2]?.value.endsWith('message(s)') === true && servedOn('trace').includes(asked.handedHeading));
   check(`...THE ASSISTANT, in a heading a person can read: "${asked.assistantHeading}"`, /^Assistant · \S+ · \d+\.\d s · \d+ steps?$/.test(asked.assistantHeading) && servedOn('trace').includes(asked.assistantHeading));
   const refused = asked.assistant.find((line) => line.text.startsWith('Refused its first answer'));
   const dropped = asked.assistant.find((line) => line.text.startsWith('Dropped one citation'));
-  check(`...WHAT WAS REFUSED, WITH THE REASON: "${refused?.text.slice(0, 120)}…"`, refused !== undefined && refused.tone === 'warn' && refused.text.includes('reads "lineup.timeline" back') && servedOn('trace').includes('Refused its first answer and asked again'));
+  check(`...WHAT WAS REFUSED, WITH THE REASON: "${refused?.text.slice(0, 120)}…"`, refused !== undefined && refused.tone === 'warn' && refused.text.includes(`at most ${ANSWER_MAX_SENTENCES}`) && servedOn('trace').includes('Refused its first answer and asked again'));
   check(`...AND WHAT WAS DROPPED, in plain words: "${dropped?.text}"`, dropped?.text === 'Dropped one citation: it pointed at a card that is not on screen (stage.view).' && servedOn('trace').includes(dropped.text));
   check('...and what it finally said', asked.assistant.some((line) => line.text === 'Said: “Nothing on the running order is out of place.”'));
 

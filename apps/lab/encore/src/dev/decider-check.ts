@@ -70,47 +70,11 @@ const main = async (): Promise<void> => {
     check('...and the room is calm', empty.decisions.urgency.level === 0);
   } else check('the empty pass is calibrated', false);
 
-  // ═══ 2b. the handoff's three kinds of question ═══════════
-  // Generic cues in the scorer — not words planted in anybody's description.
-  const HANDOFF = {
-    'handoff/route': { type: 'choice', instructions: 'What does this sentence need?', criteria: { direct: 'Cards are enough.', write: 'Words have to be composed.', plan: 'Reasoning and steps.' } },
-    'handoff/complete': { type: 'noul', instructions: 'Is what the operator typed a finished thought?' },
-    'action/radar': { type: 'noul', instructions: 'Belongs?', criteria: { true: 'Weather radar and the headliner.', false: 'No.' } },
-  } as const;
-  const routed = async (line: string): Promise<{ route: string; complete: number }> => {
-    const answer = await signal.decide({ state: { line }, questions: HANDOFF });
-    return answer.calibrated ? { route: answer.decisions['handoff/route'].choice, complete: answer.decisions['handoff/complete'].noul } : { route: 'uncalibrated', complete: -1 };
-  };
-  const plan = await routed('storm at 9 what should we do');
-  const write = await routed('warn everyone about the storm at 9');
-  const direct = await routed('move the headliner to the tent');
-  const stub = await routed('storm at 9 move headl');
-  const dangling = await routed('storm at 9 move headliner to the');
-  check(`"what should we do" routes to plan, "warn everyone" to write, a move to direct (${plan.route}, ${write.route}, ${direct.route})`, plan.route === 'plan' && write.route === 'write' && direct.route === 'direct');
-  check(`a whole sentence reads as finished (${plan.complete}); a stub of a word the request knows does not (${stub.complete}); nor does one left on "to the" (${dangling.complete})`, plan.complete >= 0.6 && write.complete >= 0.6 && stub.complete < 0.6 && dangling.complete < 0.6);
-  check('with no none on offer, an empty line falls back to the FIRST option', (await routed('')).route === 'direct');
-
-  // The fourth route, cued by the sentence's SHAPE rather than its vocabulary.
-  const ASKED = { ...HANDOFF, 'handoff/route': { type: 'choice', instructions: 'What does this sentence need?', criteria: { direct: 'Cards are enough.', ask: 'An answer in words.', write: 'Words have to be composed.', plan: 'Reasoning and steps.' } } } as const;
-  const asked = async (line: string): Promise<{ route: string; complete: number }> => {
-    const answer = await signal.decide({ state: { line, heard: {} }, questions: ASKED });
-    return answer.calibrated ? { route: answer.decisions['handoff/route'].choice, complete: answer.decisions['handoff/complete'].noul } : { route: 'uncalibrated', complete: -1 };
-  };
-  const marked = await asked('anything odd at the gates?');
-  const opened = await asked('is the tent free then');
-  const planned = await asked('what should we do about the storm?');
-  const stated = await asked('move the headliner to the tent');
-  const short = await asked('and tomorrow?');
-  check(`an \`ask\` option is cued by a question mark, or by an interrogative first word (${marked.route}, ${opened.route})`, marked.route === 'ask' && opened.route === 'ask');
-  check(`...but it is the FALLBACK reading: a question that asks for a plan is a plan (${planned.route})`, planned.route === 'plan');
-  check(`...and a statement is still direct (${stated.route})`, stated.route === 'direct');
-  check(`a question mark FINISHES a thought, however short: "and tomorrow?" (${short.complete}) — where "and tomorrow" is two words too few (${(await asked('and tomorrow')).complete})`, short.complete >= 0.6 && short.route === 'ask' && (await asked('and tomorrow')).complete < 0.6);
-  check('...and it is only offered where it is asked for: the three-option question above never answered `ask`', [plan.route, write.route, direct.route].every((route) => route !== 'ask'));
-
-  // Slice 2a's three cues. All generic: none of them knows what a stage is.
-  const problem = await asked('storm at 9');
-  const command = await asked('storm at 9 move the headliner to the tent');
-  check(`a sentence that is NOTHING BUT a problem asks what to do about it (${problem.route}); the same problem with an instruction after it does not (${command.route})`, problem.route === 'ask' && command.route === 'direct');
+  // (2026-09-22: a section stood here proving the scorer's route, ask, finished-thought and
+  // bare-problem cues. The questions those cued no longer exist, and the cues went with
+  // them. A choice with no `none` still falls back to its first option — asserted below
+  // with a real question, not a routing one.)
+  check('with no none on offer, an empty line falls back to the FIRST option', (await signal.decide({ state: { line: '' }, questions: { pick: { type: 'choice', instructions: 'Which?', criteria: { first: 'The first.', second: 'The second.' } } } })).decisions['pick']?.choice === 'first');
 
   const STAGES = { 'input/to': { type: 'choice', instructions: 'The stage the act is moving to. Which of these rows?', criteria: { stage_tent: 'The Tent — covered stage', stage_grove: 'The Grove — open-air stage', none: 'None of these is meant.' } } } as const;
   const stageFor = async (line: string): Promise<{ choice: string; p: number }> => {
@@ -134,7 +98,7 @@ const main = async (): Promise<void> => {
   // calibrated model almost never does. The floor is what lets a check exercise
   // a rule against the second kind.
   const middling = await createDecider({ kind: 'fake', port: 0, latencyMs: 0, noulFloor: 0.4 }, {});
-  const lifted = await middling.signal.decide({ state: { line: 'weather radar at 9' }, questions: { 'action/radar': HANDOFF['action/radar'], 'action/other': { type: 'noul', instructions: 'Belongs?', criteria: { true: 'Ticket sales by hour.', false: 'No.' } } } });
+  const lifted = await middling.signal.decide({ state: { line: 'weather radar at 9' }, questions: { 'action/radar': { type: 'noul', instructions: 'Belongs?', criteria: { true: 'Weather radar and the headliner.', false: 'No.' } }, 'action/other': { type: 'noul', instructions: 'Belongs?', criteria: { true: 'Ticket sales by hour.', false: 'No.' } } } });
   const plain = await signal.decide({ state: { line: 'weather radar at 9' }, questions: { 'action/other': { type: 'noul', instructions: 'Belongs?', criteria: { true: 'Ticket sales by hour.', false: 'No.' } } } });
   check(`with a floor, NOTHING is zero: an unrelated card is a ${lifted.calibrated ? lifted.decisions['action/other'].noul.toFixed(2) : '?'} guess (plain fake: ${plain.calibrated ? plain.decisions['action/other'].noul.toFixed(2) : '?'}), and a sure one is still sure`, lifted.calibrated && plain.calibrated && plain.decisions['action/other'].noul === 0 && lifted.decisions['action/other'].noul === 0.4 && lifted.decisions['action/radar'].noul > 0.8);
   await middling.close();

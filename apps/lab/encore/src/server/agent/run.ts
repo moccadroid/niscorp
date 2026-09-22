@@ -1,7 +1,6 @@
 import { z } from 'zod';
 import type { CortexEvent, RunHandle, SignalClient, ToolDefinition } from '@niscorp/cortex';
 import type { Message } from '@niscorp/signal';
-import type { RunMode } from '@encore/server/intent/intent.types';
 import { encoreAgent } from './agent';
 import type { AnswerData } from './contract';
 import { predecisionsBlock } from './predecisions';
@@ -34,7 +33,6 @@ import { writeRunTrace } from './trace-file';
 
 export type AgentRunRequest = {
   llm: SignalClient;
-  mode: RunMode;
   thread: readonly Message[];
   predecisions: Predecisions;
   line: string;
@@ -153,7 +151,7 @@ export const runAgent = async (request: AgentRunRequest): Promise<AgentRunOutcom
   // Started INSIDE the run's own scope, so the agent's validator — module-level
   // and handed nothing — can find this run's admission rule (run-facts.ts).
   handle = runFacts.run({ refusals: request.refusals }, () =>
-    encoreAgent.run(runInput(request), { llm: request.llm, tools: request.tools, deps: { mode: request.mode }, signal: request.abort, onEvent }),
+    encoreAgent.run(runInput(request), { llm: request.llm, tools: request.tools, deps: {}, signal: request.abort, onEvent }),
   );
   const result = await handle.result;
   const transcript = handle.snapshot().messages;
@@ -172,7 +170,6 @@ export const runAgent = async (request: AgentRunRequest): Promise<AgentRunOutcom
       runId: handle.runId,
       at: new Date().toISOString(),
       principal: request.trace.principal,
-      mode: request.mode,
       model: request.trace.model,
       status,
       prompt,

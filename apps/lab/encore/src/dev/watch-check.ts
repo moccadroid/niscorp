@@ -24,7 +24,8 @@ import { z } from 'zod';
 import { LIAISON_PRINCIPAL, OPERATOR_PRINCIPAL } from '@encore/app/charter/assignments';
 import { feedOpenIncident, feedScan, feedSetCount, feedSetIncidentStatus, feedSetScanner } from '@encore/app/vex/watch.entries';
 import type { FakeAgentControls } from '@encore/server/agent/fake-llm';
-import { ATTENTION_SHOWN, BRIEF_EVERY_MS, INTERRUPT_AT } from '@encore/server/watch/watch';
+import { YES_AT } from '@encore/server/intent/resolve';
+import { ATTENTION_SHOWN, BRIEF_EVERY_MS } from '@encore/server/watch/watch';
 import { cardData, createReporter, createWorld, mounted, settle } from './world-factory';
 
 const { check, report } = createReporter();
@@ -86,7 +87,7 @@ const main = async (): Promise<void> => {
   // its card stood, or one that left, was an event and neither "raised" nor
   // "nothing". It now names all four things an event can be.)
   check(`...and COUNTED, because that is the product: "${String(strip()['say'])}"`, strip()['say'] === '1 event · 0 raised · 1 nothing · 0 already up · 0 left');
-  check(`...under a model with a ${FLOOR} opinion of everything: "worth a look?" came back ${FLOOR}, under the ${INTERRUPT_AT} line`, (world.booted.decider.fakeMiddling?.floor ?? 0) === FLOOR && tone() === 'calm');
+  check(`...under a model with a ${FLOOR} opinion of everything: "worth a look?" came back ${FLOOR}, under the ${YES_AT} line`, (world.booted.decider.fakeMiddling?.floor ?? 0) === FLOOR && tone() === 'calm');
 
   // ═══ d. a burst is one pass ══════════════════════════════
   const beforeBurst = watcher.stats();
@@ -120,7 +121,7 @@ const main = async (): Promise<void> => {
   check(`ONE BRIEF, and it names BOTH: "${String(strip()['brief'])}"`, watcher.stats().briefs === 1 && String(strip()['brief']).includes('Food Court') && String(strip()['brief']).includes('West Gate') && world.booted.spent().filter((run) => run.label === 'brief:landed' && run.principal === OP).length === 1);
   const briefRequests = controls.seen.filter((request) => request.messages.some((message) => message.content.startsWith('JUST NOW: Food Court crowding')));
   const briefPrompt = briefRequests.find((request) => request.messages.some((message) => message.content.includes('West Gate')))?.messages.map((message) => message.content).join('\n') ?? '';
-  check('...because the prompt held EVERY standing cause — in FACTS and in the last message, which is what a model answers — and asked for how they COMPOUND, not for the header again', briefPrompt.includes('"standing":[') && briefPrompt.includes('"place":"West Gate"') && briefPrompt.includes('"place":"Food Court"') && briefPrompt.includes('STANDING, all at once: West Gate') && briefPrompt.includes('compound') && briefPrompt.includes('do not restate the reading'));
+  check('...because the prompt held EVERY standing cause — in FACTS and in the last message, which is what a model answers — and asked for how they COMPOUND, not for the header again', briefPrompt.includes('"standing":[') && briefPrompt.includes('"place":"West Gate"') && briefPrompt.includes('"place":"Food Court"') && briefPrompt.includes('STANDING, all at once: West Gate') && briefPrompt.includes('compound') && briefPrompt.includes('with the reading on it'));
   check(`...from the agent with NO tools and nothing it may name, handed the causes that are up — one request per watcher that may be briefed (${briefRequests.length})`, controls.seen.length === briefRequests.length && briefRequests.length === 2 && briefRequests.every((request) => request.tools.length === 0) && briefRequests.filter((request) => request.messages.some((message) => message.content.includes('West Gate'))).length === 1);
   check('AN EVENT PASS TOUCHES `attention` AND NOTHING ELSE: the five question canvases are exactly as they were', room() === roomBefore);
 
@@ -164,7 +165,7 @@ const main = async (): Promise<void> => {
   check('ten seconds on, a critical event arrives while THE OPERATOR’S RUN IS OUT: its card goes up, and the brief stands aside', isOut && watcher.raised().some((entry) => entry.cause === 'crowd:zone_dock') && watcher.stats().briefs === 1 && watcher.stats().briefsSkipped === skippedSoFar + 2);
   await world.settled(OP);
   controls.latencyMs = 0;
-  check('...the operator’s answer landed as it always does', world.runsOf(OP).at(-1)?.status === 'landed' && world.runsOf(OP).at(-1)?.mode === 'ask');
+  check('...the operator’s answer landed as it always does', world.runsOf(OP).at(-1)?.status === 'landed');
   await world.typeLine(OP, '');
   await bothSettled();
 
@@ -199,7 +200,7 @@ const main = async (): Promise<void> => {
   const labels = await world.sql('SELECT principal, verdict, action_id, cause, probabilities FROM attention_labels ORDER BY seq');
   const stored = Probabilities.safeParse(JSON.parse(String(labels[0]?.['probabilities'] ?? '{}')));
   check(`DISMISS IS A LABEL: one row, the operator’s, stamped by the engine (${String(labels[0]?.['verdict'])} ${String(labels[0]?.['action_id'])} for ${String(labels[0]?.['cause'])})`, labels.length === 1 && labels[0]?.['principal'] === OP && labels[0]?.['verdict'] === 'dismissed' && labels[0]?.['action_id'] === 'crowd.gauge' && String(labels[0]?.['cause']).startsWith('crowd:'));
-  check(`...carrying the probabilities of THE PASS THAT RAISED IT: ${JSON.stringify(stored.success ? stored.data : {})}`, stored.success && (stored.data['event/interrupt'] ?? 0) >= INTERRUPT_AT && (stored.data['action/crowd.gauge'] ?? 0) >= 0.8 && stored.data['event/urgency'] !== undefined);
+  check(`...carrying the probabilities of THE PASS THAT RAISED IT: ${JSON.stringify(stored.success ? stored.data : {})}`, stored.success && (stored.data['event/interrupt'] ?? 0) >= YES_AT && (stored.data['action/crowd.gauge'] ?? 0) >= 0.8 && stored.data['event/urgency'] !== undefined);
   const dismissedCause = String(labels[0]?.['cause']);
   check('...and the card comes down', !watcher.raised().some((entry) => entry.cause === dismissedCause));
   const zoneOf = dismissedCause.slice('crowd:'.length);
