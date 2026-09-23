@@ -1,4 +1,4 @@
-import { compileFilter, compileFieldOrValue } from '../adapters/postgres/operators.js';
+import { compileFilter, compileFieldOrValue, quoteLiteral } from '../adapters/postgres/operators.js';
 import type { CompilationContext } from '../adapters/postgres/operators.js';
 import type { ParamSlot, Row } from '../adapters/adapter.types.js';
 import type { Filter } from '../schemas/filter.schema.js';
@@ -7,6 +7,7 @@ import type { ScopePolicy, ScopeValues, ScopeMatch, ScopeRule } from '../scope/s
 import { isSetMatch } from '../scope/scope.types.js';
 import { VexScopeError } from '../scope/apply.js';
 import { VexError } from '../errors.js';
+import { isFieldPathShape } from '../schemas/identifier.schema.js';
 import { resolveParams } from '../utils/context.js';
 import { MutationDefinitionSchema } from './schema.js';
 import type { Mutation, MutationDefinition, CoreMutation, ResolvedMutation, ResolvedOnConflict, MutationValue, LookupValue, ItemRef } from './schema.js';
@@ -77,9 +78,69 @@ const assertConflictTarget = (table: string, target: string[], entity: { fields:
   }
 };
 
+// Every column a write's filter names — field positions, and value positions
+// shaped like a column (the same rule the read compiler uses to tell a column
+// from a literal). A field position is collected whatever it looks like, so a
+// string that is not a column is refused by the check below instead of being
+// compiled.
+const filterColumns = (filter: Filter): string[] => {
+  const out: string[] = [];
+  const value = (v: unknown): void => {
+    if (isFieldPathShape(v)) out.push(v);
+  };
+  const walk = (f: Filter): void => {
+    if ('and' in f) return f.and.forEach(walk);
+    if ('or' in f) return f.or.forEach(walk);
+    if ('not' in f) return walk(f.not);
+    if ('eq' in f) return f.eq.forEach(value);
+    if ('neq' in f) return f.neq.forEach(value);
+    if ('gt' in f) return f.gt.forEach(value);
+    if ('gte' in f) return f.gte.forEach(value);
+    if ('lt' in f) return f.lt.forEach(value);
+    if ('lte' in f) return f.lte.forEach(value);
+    if ('in' in f || 'notIn' in f) {
+      const [field, target] = 'in' in f ? f.in : f.notIn;
+      out.push(field);
+      if (Array.isArray(target)) target.forEach(value);
+      return;
+    }
+    if ('like' in f || 'ilike' in f) {
+      const [field, pattern] = 'like' in f ? f.like : f.ilike;
+      out.push(field);
+      return value(pattern);
+    }
+    if ('isNull' in f) return void out.push(f.isNull);
+    if ('isNotNull' in f) return void out.push(f.isNotNull);
+    if ('semantic' in f) return void out.push(f.semantic.field);
+    if ('fuzzy' in f) return void out.push(f.fuzzy.field);
+    // `exists` and `optional` have no single-table meaning in a write; the
+    // compiler refuses both loudly.
+  };
+  walk(filter);
+  return out;
+};
+
+// A write's filter reads ONE table — the one it writes, or the one a `$lookup`
+// reads — and every column it names must be that table's. This is what makes
+// the compiler's identity mapping below safe: nothing reaches it that the
+// schema does not have.
+const assertFilterColumns = (filter: Filter, table: string, schema: DatabaseSchema, where: string): void => {
+  const entity = findEntity(table, schema);
+  if (entity === undefined) throw new VexError('invalid_dsl', `Unknown table "${table}" in ${where}.`);
+  for (const path of filterColumns(filter)) {
+    const dot = path.indexOf('.');
+    const owner = path.slice(0, dot);
+    const column = path.slice(dot + 1);
+    if (!isFieldPathShape(path) || owner !== table || !entity.fields.some((f) => f.name === column)) {
+      throw new VexError('invalid_dsl', `"${path}" in ${where} is not a column of "${table}".`);
+    }
+  }
+};
+
 const assertWritableColumns = (m: ResolvedMutation, schema: DatabaseSchema): void => {
   const entity = findEntity(m.table, schema);
   if (entity === undefined) throw new VexError('invalid_dsl', `Unknown table "${m.table}".`);
+  if (m.op === 'update' || m.op === 'delete') assertFilterColumns(m.where, m.table, schema, 'the WHERE');
   const known = new Set(entity.fields.map((f) => f.name));
   const cols = m.op === 'insert' || m.op === 'insertEach' ? Object.keys(m.values) : m.op === 'update' ? Object.keys(m.set) : [];
   for (const c of cols) {
@@ -91,12 +152,14 @@ const assertWritableColumns = (m: ResolvedMutation, schema: DatabaseSchema): voi
     const le = findEntity(l.from, schema);
     if (le === undefined) throw new VexError('invalid_dsl', `Unknown table "${l.from}" in $lookup.`);
     if (!le.fields.some((f) => f.name === l.field)) throw new VexError('invalid_dsl', `Unknown column "${l.from}.${l.field}" in $lookup.`);
+    assertFilterColumns(l.where, l.from, schema, 'a $lookup');
   }
   if ((m.op === 'insert' || m.op === 'insertEach') && m.onConflict !== undefined) {
     for (const c of [...m.onConflict.target, ...Object.keys(m.onConflict.set ?? {})]) {
       if (!known.has(c)) throw new VexError('invalid_dsl', `Unknown column "${m.table}.${c}" in onConflict.`);
     }
     assertConflictTarget(m.table, m.onConflict.target, entity);
+    if (m.onConflict.where !== undefined) assertFilterColumns(m.onConflict.where, m.table, schema, 'onConflict');
   }
 };
 
@@ -289,17 +352,11 @@ const newCtx = (): CompilationContext => ({
   paramCounter: { value: 0 },
 });
 
+// Every column the filter names maps to itself — a single-table statement
+// qualifies `table.column` fine. Only ever called on a filter
+// `assertFilterColumns` has already held to the table's real columns.
 const indexFilterFields = (filter: Filter, aliasMap: Map<string, string>): void => {
-  for (const [op, val] of Object.entries(filter)) {
-    if (op === 'and' || op === 'or') (val as Filter[]).forEach((f) => indexFilterFields(f, aliasMap));
-    else if (op === 'not') indexFilterFields(val as Filter, aliasMap);
-    else if (op === 'isNull' || op === 'isNotNull') {
-      if (typeof val === 'string' && val.includes('.')) aliasMap.set(val, val);
-    } else if (Array.isArray(val)) {
-      const field = val[0];
-      if (typeof field === 'string' && field.includes('.')) aliasMap.set(field, field);
-    }
-  }
+  for (const path of filterColumns(filter)) aliasMap.set(path, path);
 };
 
 // A value that may be a `$lookup` compiles to a scalar subquery INLINE, into
@@ -337,7 +394,6 @@ const ITEM_CAST: Record<string, string> = {
   uuid: 'uuid',
 };
 
-const escapeItemKey = (s: string): string => s.replace(/'/g, "''");
 
 const compileMutation = (m: ResolvedMutation, schema: DatabaseSchema): Compiled => {
   const ctx = newCtx();
@@ -354,9 +410,9 @@ const compileMutation = (m: ResolvedMutation, schema: DatabaseSchema): Compiled 
     const exprs = entries.map(([col, v]) => {
       if (isItemRef(v)) {
         const nt = entity?.fields.find((f) => f.name === col)?.normalizedType ?? 'string';
-        if (nt === 'json') return `(item.value->'${escapeItemKey(v.$item)}')`;
+        if (nt === 'json') return `(item.value->${quoteLiteral(v.$item)})`;
         const cast = ITEM_CAST[nt];
-        const raw = `(item.value->>'${escapeItemKey(v.$item)}')`;
+        const raw = `(item.value->>${quoteLiteral(v.$item)})`;
         return cast === undefined ? raw : `${raw}::${cast}`;
       }
       return compileValue(v, ctx);

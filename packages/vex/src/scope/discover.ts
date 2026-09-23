@@ -4,6 +4,7 @@ import type { ComputeExpression } from '../schemas/compute.schema.js';
 import type { AggregateExpression } from '../schemas/aggregate.schema.js';
 import type { FieldOrValue } from '../schemas/value.schema.js';
 import { refuseOptional } from '../engine/optional.js';
+import { isFieldPathShape } from '../schemas/identifier.schema.js';
 
 // ───────────────────────────────────────────────────────────────
 // Helpers
@@ -14,8 +15,13 @@ export const extractEntityFromPath = (path: string): string | undefined => {
   return parts.length === 2 ? parts[0] : undefined;
 };
 
+// A VALUE is a column only when it is shaped like one — the resolver and the
+// compiler use the same rule, so a literal like "u1@x.com" is never mistaken
+// for a table here and refused as one. (Field positions below keep the looser
+// split: over-collecting there can only refuse more, and the resolver refuses
+// anything in a field position that is not a real column anyway.)
 const collectFromFieldOrValue = (fov: FieldOrValue, out: Set<string>): void => {
-  if (typeof fov === 'string') {
+  if (isFieldPathShape(fov)) {
     const entity = extractEntityFromPath(fov);
     if (entity !== undefined) out.add(entity);
   }

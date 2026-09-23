@@ -529,6 +529,25 @@ Only `zod` is mandatory. Everything else is pulled in only by the path you use.
    more reliably than free text), and safety (the analyzer rejects cartesian
    products and over-deep nesting *before* SQL exists).
 
+   A validated JSON union is only injection-proof if every string in it reaches
+   SQL as something the union can vouch for. Authored text reaches a statement
+   exactly three ways: a **column** that resolved against the introspected
+   schema, a **literal** quoted the way Postgres's `quote_literal` does (safe
+   under either `standard_conforming_strings`), or an **output name** held to
+   `ident` and quoted. Values from a request bind as parameters and never reach
+   text at all. The name grammar (`identifier.schema.ts`) is checked three
+   times — at parse, in the resolver for a DSL that skipped parsing, and by a
+   compiler that refuses any field position that did not resolve.
+
+   ⟲ It was not, until 2026-09-24. Field positions (`isNull`, `in`, `like`,
+   aggregate arguments) were typed `z.string()`; the resolver skipped any
+   string without a dot and the compiler pasted it into the statement, so
+   `{ isNotNull: "(SELECT secret FROM …)" }` was a boolean oracle over a table
+   the policy denied. Output names went into `AS "…"` unescaped, and a literal
+   containing a backslash could close its own string on a server with
+   `standard_conforming_strings` off. `test/security/injection.test.ts` is the
+   attack list, against a real Postgres; it failed 35 of 41 before the fix.
+
 2. **The LLM is injected, not embedded.** Making `generateDsl`/`mapToShape`
    plain hooks keeps the engine deterministic and testable without a model,
    lets the heavy Cortex/Signal/Prism stack stay optional, and lets a consumer

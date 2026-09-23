@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { ContextRefSchema, ScopeRefSchema, FieldOrValueSchema } from './value.schema.js';
+import { FieldPathSchema } from './identifier.schema.js';
 import type { ContextRef, ScopeRef, FieldOrValue } from './value.schema.js';
 
 // EXISTS — "is there a row over there that points back at this one".
@@ -48,7 +49,7 @@ const comparisonPair = z
   .tuple([FieldOrValueSchema, FieldOrValueSchema])
   .describe('[left, right] — both can be field paths, literals, or references');
 
-const fieldString = z.string().describe('Field path in entity.field format');
+const fieldString = FieldPathSchema.describe('Field path in entity.field format');
 
 const collectionTarget = z
   .union([
@@ -87,14 +88,14 @@ export const FilterSchema: z.ZodType<Filter> = z.lazy(() =>
     z.object({ not: FilterSchema }).strict().describe('Logical NOT: negates the condition'),
     z.object({
       semantic: z.object({
-        field: z.string().describe('Vector column field path (entity.field)'),
+        field: FieldPathSchema.describe('Vector column field path (entity.field)'),
         query: z.union([ContextRefSchema, ScopeRefSchema]).describe('Text to embed and compare'),
         minScore: z.number().min(0).max(1).optional().describe('Minimum cosine similarity (0–1)'),
       }).strict(),
     }).strict().describe('Semantic vector similarity search'),
     z.object({
       fuzzy: z.object({
-        field: z.string().describe('String field path'),
+        field: FieldPathSchema.describe('String field path'),
         query: z.union([ContextRefSchema, ScopeRefSchema]).describe('Text to fuzzy-match'),
         maxDistance: z.number().int().nonnegative().optional().describe('Maximum Levenshtein edit distance'),
       }).strict(),

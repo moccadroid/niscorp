@@ -1,6 +1,7 @@
 import type { ResolvedQuery } from '../../engine/engine.types.js';
 import type { CompiledQuery, ParamSlot, ContextContract } from '../adapter.types.js';
-import { compileFilter, compileCompute, compileAggregate, compileJoinPairs } from './operators.js';
+import { compileFilter, compileCompute, compileAggregate, compileJoinPairs, quoteIdent } from './operators.js';
+import { VexError } from '../../errors.js';
 import type { CompilationContext } from './operators.js';
 
 // ═══════════════════════════════════════════════════════════════
@@ -30,19 +31,19 @@ export const compileQuery = (resolved: ResolvedQuery): CompiledQuery => {
 
   // Regular fields
   const fieldColumns = resolved.fields.map((f) =>
-    `${f.alias}.${f.column} AS "${f.outputName}"`,
+    `${f.alias}.${f.column} AS ${quoteIdent(f.outputName)}`,
   );
 
   // Computed fields
   const computeColumns = resolved.computes.map((c) => {
     const expr = compileCompute(c.expression, ctx);
-    return `${expr} AS "${c.name}"`;
+    return `${expr} AS ${quoteIdent(c.name)}`;
   });
 
   // Aggregate fields
   const aggregateColumns = resolved.aggregates.map((a) => {
     const expr = compileAggregate(a.expression, ctx);
-    return `${expr} AS "${a.name}"`;
+    return `${expr} AS ${quoteIdent(a.name)}`;
   });
 
   // Semantic score column
@@ -137,9 +138,9 @@ export const compileQuery = (resolved: ResolvedQuery): CompiledQuery => {
   if (resolved.sort.length > 0) {
     const orderByParts = resolved.sort.map((s) => {
       if (typeof s.field === 'string') {
-        return `"${s.field}" ${s.dir.toUpperCase()}`;
+        return `${quoteIdent(s.field)} ${s.dir === 'desc' ? 'DESC' : 'ASC'}`;
       }
-      return `${s.field.alias}.${s.field.column} ${s.dir.toUpperCase()}`;
+      return `${s.field.alias}.${s.field.column} ${s.dir === 'desc' ? 'DESC' : 'ASC'}`;
     });
     sqlParts.push(`ORDER BY ${orderByParts.join(', ')}`);
   } else if (resolved.semantic !== undefined) {
@@ -152,6 +153,11 @@ export const compileQuery = (resolved: ResolvedQuery): CompiledQuery => {
 
   // ─── LIMIT ─────────────────────────────────────────────────
   if (resolved.limit !== undefined) {
+    // The schema says a positive integer; a DSL that skipped the schema is held
+    // to it here, because this is text, not a parameter.
+    if (!Number.isInteger(resolved.limit) || resolved.limit < 1) {
+      throw new VexError('invalid_dsl', `LIMIT must be a positive integer, not ${String(resolved.limit)}.`);
+    }
     sqlParts.push(`LIMIT ${resolved.limit}`);
   }
 

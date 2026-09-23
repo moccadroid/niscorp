@@ -1,7 +1,8 @@
 import { z } from 'zod';
 import { ComputeExpressionSchema } from './compute.schema.js';
+import { FieldPathSchema } from './identifier.schema.js';
 
-const fieldPath = z.string().describe('Field path in entity.field format');
+const fieldPath = FieldPathSchema.describe('Field path in entity.field format');
 
 // SUM/AVG/MIN/MAX take either a field path or a compute expression — so the
 // argument can be a derived value (e.g. SUM(value * win_probability / 100)),
@@ -10,7 +11,7 @@ const fieldOrExpr = z.union([fieldPath, ComputeExpressionSchema]).describe('A fi
 
 export const AggregateExpressionSchema = z
   .union([
-    z.object({ count: z.string().describe('Field path or "*" for COUNT(*)') }).strict().describe('COUNT'),
+    z.object({ count: z.union([FieldPathSchema, z.literal('*')]).describe('Field path or "*" for COUNT(*)') }).strict().describe('COUNT'),
     z.object({ sum: fieldOrExpr }).strict().describe('SUM'),
     z.object({ avg: fieldOrExpr }).strict().describe('AVG'),
     z.object({ min: fieldOrExpr }).strict().describe('MIN'),

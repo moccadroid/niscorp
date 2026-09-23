@@ -2,13 +2,14 @@ import { z } from 'zod';
 import { FilterSchema } from './filter.schema.js';
 import { ComputeExpressionSchema } from './compute.schema.js';
 import { AggregateExpressionSchema } from './aggregate.schema.js';
+import { FieldPathSchema, IdentifierSchema } from './identifier.schema.js';
 import type { Filter } from './filter.schema.js';
 import type { ComputeExpression } from './compute.schema.js';
 import type { AggregateExpression } from './aggregate.schema.js';
 
 export const SortEntrySchema = z
   .object({
-    field: z.string().describe('Field path (entity.field), computed field name, or aggregate alias'),
+    field: z.union([FieldPathSchema, IdentifierSchema]).describe('Field path (entity.field), computed field name, or aggregate alias'),
     dir: z.enum(['asc', 'desc']).default('asc').describe('Sort direction'),
   })
   .strict()
@@ -39,7 +40,7 @@ export type Query = {
 
 const SubquerySourceSchema = z
   .object({
-    as: z.string().describe('Alias for subquery results — use as prefix in field paths'),
+    as: IdentifierSchema.describe('Alias for subquery results — use as prefix in field paths'),
     query: z.lazy((): z.ZodType<Query> => QuerySchema).describe('A nested query'),
   })
   .strict()
@@ -54,11 +55,11 @@ const SourceSchema = z
 
 const FieldRefSchema = z
   .union([
-    z.string().describe('A column in entity.field format'),
+    FieldPathSchema.describe('A column in entity.field format'),
     z
       .object({
-        field: z.string().describe('A column in entity.field format'),
-        as: z.string().describe('Output key for this column'),
+        field: FieldPathSchema.describe('A column in entity.field format'),
+        as: IdentifierSchema.describe('Output key for this column'),
       })
       .strict()
       .describe('An aliased column: output under `as` instead of the column name'),
@@ -71,9 +72,9 @@ export const QuerySchema: z.ZodType<Query> = z.lazy(() =>
       from: z.array(SourceSchema).min(1).describe('Data sources — entity names or subqueries. Every entity used anywhere in the query must be listed here.'),
       fields: z.array(FieldRefSchema).optional().describe('Raw columns to select — each `entity.field`, or `{ field, as }` to alias the output key (no SELECT *). Optional: omit it for an aggregate-only query (e.g. a bare COUNT). Do not list compute or aggregate aliases here — those are added automatically.'),
       filter: FilterSchema.optional().describe('Filter conditions'),
-      compute: z.record(z.string(), ComputeExpressionSchema).optional().describe('Computed fields — key is output alias, value is the expression'),
-      aggregate: z.record(z.string(), AggregateExpressionSchema).optional().describe('Aggregate functions — key is output alias, value is the function'),
-      groupBy: z.array(z.string()).optional().describe('Fields to group by for aggregation'),
+      compute: z.record(IdentifierSchema, ComputeExpressionSchema).optional().describe('Computed fields — key is output alias, value is the expression'),
+      aggregate: z.record(IdentifierSchema, AggregateExpressionSchema).optional().describe('Aggregate functions — key is output alias, value is the function'),
+      groupBy: z.array(FieldPathSchema).optional().describe('Fields to group by for aggregation'),
       sort: z.array(SortEntrySchema).optional().describe('Sort order'),
       limit: z.number().int().positive().optional().describe('Maximum rows to return'),
       distinct: z.boolean().optional().describe('Eliminate duplicate rows'),

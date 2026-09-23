@@ -8,6 +8,7 @@ import type { ResolvedExists, ResolvedJoin } from '../../engine/engine.types.js'
 import { RESERVED_CONTEXT_KEYS } from '../../schemas/request.schema.js';
 import { refuseOptional } from '../../engine/optional.js';
 import { VexError } from '../../errors.js';
+import { isFieldPathShape } from '../../schemas/identifier.schema.js';
 
 // A `$context` ref naming a reserved sort key would otherwise become a bound
 // param; reject it at compile so reserved keys only ever drive ORDER BY.
@@ -40,10 +41,46 @@ type CompilationContext = {
 // FieldOrValue compilation
 // ═══════════════════════════════════════════════════════════════
 
-const isFieldPath = (value: string): boolean => {
-  const dotIndex = value.indexOf('.');
-  return dotIndex > 0 && dotIndex < value.length - 1;
+// ═══════════════════════════════════════════════════════════════
+// SQL TEXT — the only three ways authored input reaches a statement.
+//
+//   · a COLUMN, which must have resolved against the introspected schema —
+//     `columnOf` emits the resolver's alias.column or refuses. There is no
+//     "pass it through" branch, anywhere: the fallback that used to exist here
+//     pasted whatever string sat in a field position into the statement.
+//   · a LITERAL, quoted by `quoteLiteral` exactly as Postgres's own
+//     quote_literal() does, so it is safe whatever standard_conforming_strings
+//     says.
+//   · an OUTPUT NAME, quoted by `quoteIdent`.
+//
+// Values from a request never reach text at all: they bind as parameters.
+// ═══════════════════════════════════════════════════════════════
+
+export const quoteLiteral = (s: string): string => {
+  const doubled = s.replace(/'/g, "''");
+  // With standard_conforming_strings off, a backslash in '…' is an escape and
+  // `\'` closes the string. The E'' form escapes backslashes explicitly, so the
+  // literal means the same thing under either setting.
+  return s.includes('\\') ? `E'${doubled.replace(/\\/g, '\\\\')}'` : `'${doubled}'`;
 };
+
+export const quoteIdent = (name: string): string => `"${name.replace(/"/g, '""')}"`;
+
+// A number that is not finite has no SQL spelling — `NaN` would read as a name.
+export const numberLiteral = (n: number): string => {
+  if (!Number.isFinite(n)) throw new VexError('invalid_dsl', `${String(n)} is not a number SQL can hold.`);
+  return String(n);
+};
+
+const columnOf = (path: string, ctx: CompilationContext): string => {
+  const mapped = ctx.aliasMap.get(path);
+  if (mapped !== undefined) return mapped;
+  const res = ctx.resolvedPaths.get(path);
+  if (res !== undefined) return `${res.alias}.${res.column}`;
+  throw new VexError('invalid_dsl', `"${path}" is not a column this query reads.`);
+};
+
+const isFieldPath = isFieldPathShape;
 
 const inferParamType = (path: string, resolvedPaths: Map<string, PathResolution>): ParamSlot['type'] => {
   const res = resolvedPaths.get(path);
@@ -60,21 +97,12 @@ export const compileFieldOrValue = (
 ): string => {
   if (fov === null) return 'NULL';
   if (typeof fov === 'boolean') return fov ? 'TRUE' : 'FALSE';
-  if (typeof fov === 'number') return String(fov);
+  if (typeof fov === 'number') return numberLiteral(fov);
 
   if (typeof fov === 'string') {
-    if (isFieldPath(fov)) {
-      // Resolve to alias.column
-      const mapped = ctx.aliasMap.get(fov);
-      if (mapped !== undefined) return mapped;
-      // Fallback: check resolvedPaths
-      const res = ctx.resolvedPaths.get(fov);
-      if (res !== undefined) return `${res.alias}.${res.column}`;
-      // Unknown path — pass through as quoted string
-      return `'${escapeSqlString(fov)}'`;
-    }
-    // Literal string
-    return `'${escapeSqlString(fov)}'`;
+    // Shaped like a column → it is one, and it resolved (or this refuses).
+    // Anything else is a literal.
+    return isFieldPath(fov) ? columnOf(fov, ctx) : quoteLiteral(fov);
   }
 
   // Object: $context or $scope — after eliminating primitives, only these remain
@@ -104,7 +132,6 @@ export const compileFieldOrValue = (
   return 'NULL';
 };
 
-const escapeSqlString = (s: string): string => s.replace(/'/g, "''");
 
 // ═══════════════════════════════════════════════════════════════
 // Join pairs
@@ -189,9 +216,7 @@ export const compileFilter = (
   if ('lte' in filter) return compileComparisonFilter('<=', filter.lte, ctx);
 
   if ('in' in filter) {
-    const fieldPath = filter.in[0];
-    const mapped = ctx.aliasMap.get(fieldPath);
-    const col = mapped ?? fieldPath;
+    const col = columnOf(filter.in[0], ctx);
     const target = filter.in[1];
 
     if (Array.isArray(target)) {
@@ -216,9 +241,7 @@ export const compileFilter = (
   }
 
   if ('notIn' in filter) {
-    const fieldPath = filter.notIn[0];
-    const mapped = ctx.aliasMap.get(fieldPath);
-    const col = mapped ?? fieldPath;
+    const col = columnOf(filter.notIn[0], ctx);
     const target = filter.notIn[1];
 
     if (Array.isArray(target)) {
@@ -242,31 +265,23 @@ export const compileFilter = (
   }
 
   if ('like' in filter) {
-    const fieldPath = filter.like[0];
-    const mapped = ctx.aliasMap.get(fieldPath);
-    const col = mapped ?? fieldPath;
+    const col = columnOf(filter.like[0], ctx);
     const pattern = compileFieldOrValue(filter.like[1], ctx);
     return `${col} LIKE ${pattern}`;
   }
 
   if ('ilike' in filter) {
-    const fieldPath = filter.ilike[0];
-    const mapped = ctx.aliasMap.get(fieldPath);
-    const col = mapped ?? fieldPath;
+    const col = columnOf(filter.ilike[0], ctx);
     const pattern = compileFieldOrValue(filter.ilike[1], ctx);
     return `${col} ILIKE ${pattern}`;
   }
 
   if ('isNull' in filter) {
-    const mapped = ctx.aliasMap.get(filter.isNull);
-    const col = mapped ?? filter.isNull;
-    return `${col} IS NULL`;
+    return `${columnOf(filter.isNull, ctx)} IS NULL`;
   }
 
   if ('isNotNull' in filter) {
-    const mapped = ctx.aliasMap.get(filter.isNotNull);
-    const col = mapped ?? filter.isNotNull;
-    return `${col} IS NOT NULL`;
+    return `${columnOf(filter.isNotNull, ctx)} IS NOT NULL`;
   }
 
   if ('and' in filter) {
@@ -287,8 +302,7 @@ export const compileFilter = (
   if ('semantic' in filter) {
     // Semantic filter: cosine distance using pgvector <=> operator
     const fieldPath = filter.semantic.field;
-    const mapped = ctx.aliasMap.get(fieldPath);
-    const col = mapped ?? fieldPath;
+    const col = columnOf(fieldPath, ctx);
 
     const queryRef = filter.semantic.query;
     const key = '$context' in queryRef ? queryRef.$context : queryRef.$scope;
@@ -307,14 +321,12 @@ export const compileFilter = (
     });
 
     const paramRef = `$${ctx.paramCounter.value}`;
-    const minScore = filter.semantic.minScore ?? 0;
+    const minScore = numberLiteral(filter.semantic.minScore ?? 0);
     return `1 - (${col} <=> ${paramRef}) >= ${minScore}`;
   }
 
   if ('fuzzy' in filter) {
-    const fieldPath = filter.fuzzy.field;
-    const mapped = ctx.aliasMap.get(fieldPath);
-    const col = mapped ?? fieldPath;
+    const col = columnOf(filter.fuzzy.field, ctx);
 
     const queryRef = filter.fuzzy.query;
     const key = '$context' in queryRef ? queryRef.$context : queryRef.$scope;
@@ -328,7 +340,7 @@ export const compileFilter = (
     const maxDistance = filter.fuzzy.maxDistance;
 
     if (maxDistance !== undefined) {
-      return `levenshtein(${col}, ${paramRef}) <= ${maxDistance}`;
+      return `levenshtein(${col}, ${paramRef}) <= ${numberLiteral(maxDistance)}`;
     }
     // pg_trgm similarity
     return `${col} % ${paramRef}`;
@@ -407,7 +419,7 @@ export const compileCompute = (
 // SUM/AVG/MIN/MAX take a field path (mapped to its qualified column) OR a
 // compute expression (compiled to SQL). count stays a plain field/`*`.
 const aggArg = (arg: string | ComputeExpression, ctx: CompilationContext): string =>
-  typeof arg === 'string' ? (ctx.aliasMap.get(arg) ?? arg) : compileCompute(arg, ctx);
+  typeof arg === 'string' ? columnOf(arg, ctx) : compileCompute(arg, ctx);
 
 export const compileAggregate = (
   expr: AggregateExpression,
@@ -415,8 +427,7 @@ export const compileAggregate = (
 ): string => {
   if ('count' in expr) {
     if (expr.count === '*') return 'COUNT(*)';
-    const mapped = ctx.aliasMap.get(expr.count);
-    return `COUNT(${mapped ?? expr.count})`;
+    return `COUNT(${columnOf(expr.count, ctx)})`;
   }
   if ('sum' in expr) return `SUM(${aggArg(expr.sum, ctx)})`;
   if ('avg' in expr) return `AVG(${aggArg(expr.avg, ctx)})`;

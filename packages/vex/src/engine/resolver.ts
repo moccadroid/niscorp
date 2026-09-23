@@ -15,6 +15,7 @@ import type {
   ResolvedExists,
 } from './engine.types.js';
 import { VexError } from '../errors.js';
+import { isFieldPathShape, isIdentifier } from '../schemas/identifier.schema.js';
 
 // ═══════════════════════════════════════════════════════════════
 // Levenshtein distance for "did you mean?" suggestions
@@ -112,18 +113,31 @@ const findField = (fieldName: string, entity: EntitySchema): FieldSchema => {
 // Path parsing
 // ═══════════════════════════════════════════════════════════════
 
+// Both halves are names, so both are held to the name grammar — a field path
+// that resolves is a column the schema has, and one that does not is refused
+// here rather than reaching SQL as text.
 const parsePath = (path: string): { entity: string; field: string } => {
-  const dotIndex = path.indexOf('.');
-  if (dotIndex === -1 || dotIndex === 0 || dotIndex === path.length - 1) {
+  if (!isFieldPathShape(path)) {
     throw new VexError(
       'invalid_dsl',
       `Invalid field path "${path}". Expected format: entity.field`,
     );
   }
+  const dotIndex = path.indexOf('.');
   return {
     entity: path.substring(0, dotIndex),
     field: path.substring(dotIndex + 1),
   };
+};
+
+// A name the author chose — an output alias, a compute or aggregate key, a
+// subquery alias — becomes SQL text, so it must be a name and nothing else.
+// The schema says the same thing; this says it for a DSL that skipped the
+// schema (`engine.compile`, `engine.test`).
+const assertName = (name: string, what: string): void => {
+  if (!isIdentifier(name)) {
+    throw new VexError('invalid_dsl', `Invalid ${what} "${name}": letters, digits and underscores, not starting with a digit.`);
+  }
 };
 
 // ═══════════════════════════════════════════════════════════════
@@ -223,11 +237,10 @@ const resolveFieldPath = (
   };
 };
 
-const isFieldPath = (value: unknown): boolean => {
-  if (typeof value !== 'string') return false;
-  const dotIndex = value.indexOf('.');
-  return dotIndex > 0 && dotIndex < value.length - 1;
-};
+// In a VALUE position, a string is a column exactly when it is shaped like one;
+// anything else is a literal. (In a FIELD position there is no such choice —
+// see resolveFilterFieldPath.)
+const isFieldPath = isFieldPathShape;
 
 const collectFilterPaths = (
   filter: Filter,
@@ -382,7 +395,10 @@ const resolveFilterFieldPath = (
   resolvedPaths: Map<string, PathResolution>,
 ): void => {
   if (resolvedPaths.has(path)) return;
-  if (!isFieldPath(path)) return;
+  // A FIELD position (`in`, `like`, `isNull`, `semantic`, …) holds a column and
+  // nothing else. It resolves or the query is refused — it used to return
+  // quietly for a string without a dot, and the compiler then pasted that
+  // string into the statement verbatim.
   const { resolved } = resolveFieldPath(path, entityLookup, schema);
   resolvedPaths.set(path, { alias: resolved.alias, column: resolved.column, schema: resolved.schema });
 };
@@ -463,6 +479,7 @@ export const resolve = (dsl: Query, schema: DatabaseSchema): ResolvedQuery => {
       entitySources.push({ entity, alias });
     } else {
       // Subquery source — after the typeof string check, source is narrowed
+      assertName(source.as, 'subquery alias');
       const subResolved = resolve(source.query, schema);
       const alias = source.as;
 
@@ -530,6 +547,7 @@ export const resolve = (dsl: Query, schema: DatabaseSchema): ResolvedQuery => {
   const fields: ResolvedField[] = [];
   for (const ref of dsl.fields ?? []) {
     const path = typeof ref === 'string' ? ref : ref.field;
+    if (typeof ref !== 'string') assertName(ref.as, 'field alias');
     const { resolved } = resolveFieldPath(path, entityLookup, schema);
     fields.push(typeof ref === 'string' ? resolved : { ...resolved, outputName: ref.as });
     aliasMap.set(path, `${resolved.alias}.${resolved.column}`);
@@ -564,6 +582,7 @@ export const resolve = (dsl: Query, schema: DatabaseSchema): ResolvedQuery => {
   if (dsl.compute !== undefined) {
     for (const [name, expr] of Object.entries(dsl.compute)) {
       if (expr !== undefined) {
+        assertName(name, 'compute name');
         resolveComputePaths(expr, entityLookup, schema, aliasMap, existsMap, aliasCounter);
         computes.push({ name, expression: expr });
       }
@@ -575,6 +594,7 @@ export const resolve = (dsl: Query, schema: DatabaseSchema): ResolvedQuery => {
   if (dsl.aggregate !== undefined) {
     for (const [name, expr] of Object.entries(dsl.aggregate)) {
       if (expr !== undefined) {
+        assertName(name, 'aggregate name');
         resolveAggregatePaths(expr, entityLookup, schema, aliasMap);
         aggregates.push({ name, expression: expr });
       }
@@ -706,7 +726,8 @@ const resolveAggregatePaths = (
     return;
   }
 
-  if (isFieldPath(arg) && !aliasMap.has(arg)) {
+  // A field position: resolves or refuses, like a filter's.
+  if (!aliasMap.has(arg)) {
     const { resolved } = resolveFieldPath(arg, entityLookup, schema);
     aliasMap.set(arg, `${resolved.alias}.${resolved.column}`);
   }
