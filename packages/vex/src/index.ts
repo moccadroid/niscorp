@@ -71,7 +71,7 @@ export type { VexEvent, VexEventHandler } from './events.js';
 export { VexError } from './errors.js';
 
 // ─── Types ───────────────────────────────────────────────────
-export type { QueryEngine, QueryEngineConfig, ExecuteOptions } from './types.js';
+export type { QueryEngine, QueryEngineConfig, ExecuteOptions, GenerateDsl, GenerationCaller, MapToShape } from './types.js';
 export type { Query, Source, SortEntry } from './schemas/query.schema.js';
 export type { Filter } from './schemas/filter.schema.js';
 export type { ComputeExpression } from './schemas/compute.schema.js';

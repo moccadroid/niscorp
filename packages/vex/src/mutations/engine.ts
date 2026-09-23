@@ -9,6 +9,7 @@ import { VexScopeError } from '../scope/apply.js';
 import { VexError } from '../errors.js';
 import { isFieldPathShape } from '../schemas/identifier.schema.js';
 import { resolveParams } from '../utils/context.js';
+import { requireScope } from '../engine/executor.js';
 import { MutationDefinitionSchema } from './schema.js';
 import type { Mutation, MutationDefinition, CoreMutation, ResolvedMutation, ResolvedOnConflict, MutationValue, LookupValue, ItemRef } from './schema.js';
 import { collectMutationContext, requiredContextKeys } from './signature.js';
@@ -483,7 +484,11 @@ export const executeWrites = async (client: MutationClient, def: MutationDefinit
     }
     const m = scopeMutation(core, mctx.policy);
     assertWritableColumns(m, mctx.schema);
-    return { ...compileMutation(m, mctx.schema), table: m.table, op: (m.op === 'insertEach' ? 'insert' : m.op) as WriteResult['op'] };
+    const statement = compileMutation(m, mctx.schema);
+    // A `set` rule with no value would STAMP NULL — an insert owned by nobody,
+    // written anyway. Every scope slot is filled or nothing runs.
+    requireScope({ paramSlots: statement.slots }, mctx.scope);
+    return { ...statement, table: m.table, op: (m.op === 'insertEach' ? 'insert' : m.op) as WriteResult['op'] };
   });
 
   const runAll = async (q: MutationTx): Promise<WriteResult[]> => {

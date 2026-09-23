@@ -134,7 +134,10 @@ export const makeTools = (
         today: todayStr(),
       }) as QueryRequest;
       const rt = await ray.engine();
-      const res = await rt.engine.execute(request);
+      // As the person asking, like every other read Ray makes. This one used to
+      // pass nothing, which the engine read as nobody-in-particular and ran
+      // without its policy at all.
+      const res = await rt.engine.execute(request, { scope: { userId } });
       const rows = (res.result ?? []) as Record<string, unknown>[];
       return rows.slice(0, 5).map((r) => ({ id: r[cfg.idKey], label: r[cfg.labelKey] }));
     },

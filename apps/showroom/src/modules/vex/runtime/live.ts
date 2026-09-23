@@ -1,12 +1,11 @@
 import { createSignal } from '@niscorp/signal';
 import type { SignalClient } from '@niscorp/cortex';
 import { createQueryDsl, createShapeMapper } from '@niscorp/vex/agent';
-import type { DatabaseAdapter, DatabaseSchema, QueryEngineConfig, Row } from '@niscorp/vex';
+import type { DatabaseSchema, QueryEngineConfig, Row } from '@niscorp/vex';
 import { compile } from '@niscorp/prism';
 import type { JsonValue } from '@niscorp/prism';
 import { getKey } from '@showroom/modules/signal/settings/api-key-storage';
 import { createOpenAIClient } from '@showroom/modules/signal/openai-client';
-import { scopePolicy } from './scope';
 import { getLiveConfig } from './live-config';
 import { wrapForDebug } from './live-debug';
 
@@ -59,19 +58,10 @@ const flattenShape = (shape: unknown): unknown => {
 };
 
 // Engine-level hook: builds the real Cortex query agent on demand.
-export const makeGenerateDsl = (
-  adapter: DatabaseAdapter,
-  queryJsonSchema: object,
-): GenerateDsl => {
-  return (request, schema: DatabaseSchema) => {
-    const generate = createQueryDsl({
-      adapter,
-      llm: buildLlm(),
-      scopePolicy,
-      schema,
-      queryJsonSchema,
-    });
-    return generate({ ...request, shape: flattenShape(request.shape) }, schema);
+export const makeGenerateDsl = (queryJsonSchema: object): GenerateDsl => {
+  return (request, schema: DatabaseSchema, caller) => {
+    const generate = createQueryDsl({ llm: buildLlm(), queryJsonSchema });
+    return generate({ ...request, shape: flattenShape(request.shape) }, schema, caller);
   };
 };
 

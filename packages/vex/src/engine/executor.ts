@@ -1,6 +1,7 @@
 import type { CompiledQuery, Row, DatabaseAdapter } from '../adapters/adapter.types.js';
 import type { ContextMeta } from '../schemas/request.schema.js';
 import { resolveParams } from '../utils/context.js';
+import { VexError } from '../errors.js';
 
 // ═══════════════════════════════════════════════════════════════
 // Execution
@@ -56,24 +57,36 @@ export const buildContextContract = (
 // Missing context detection
 // ═══════════════════════════════════════════════════════════════
 
+// The CALLER's half: context keys the request did not supply. A read with
+// holes answers empty and hands back the contract it missed — the caller can
+// fix that. Scope is not in here; see requireScope.
 export const findMissingContext = (
   compiled: CompiledQuery,
   context: Record<string, unknown>,
-  scope: Record<string, unknown>,
 ): string[] => {
   const missing: string[] = [];
 
   for (const slot of compiled.paramSlots) {
-    if (slot.kind === 'context' || slot.kind === 'semantic') {
-      if (context[slot.key] === undefined) {
-        missing.push(slot.key);
-      }
-    } else if (slot.kind === 'scope') {
-      if (scope[slot.key] === undefined) {
-        missing.push(slot.key);
-      }
+    if ((slot.kind === 'context' || slot.kind === 'semantic') && context[slot.key] === undefined) {
+      missing.push(slot.key);
     }
   }
 
   return missing;
+};
+
+// ═══════════════════════════════════════════════════════════════
+// Missing scope — the HOST's half
+// ═══════════════════════════════════════════════════════════════
+
+// A `$scope` slot the host did not fill is not a hole a caller can mend: the
+// caller cannot supply scope, and binding it would bind NULL — which matches
+// no row on a read and STAMPS NULL on a write. So it refuses, loudly, before
+// anything runs. The keys ride in `details` for the host's logs; the HTTP
+// layer does not hand them to the client.
+export const requireScope = (compiled: { paramSlots: readonly { kind: string; key: string }[] }, scope: Record<string, unknown>): void => {
+  const missing = [...new Set(compiled.paramSlots.filter((slot) => slot.kind === 'scope' && scope[slot.key] === undefined).map((slot) => slot.key))];
+  if (missing.length > 0) {
+    throw new VexError('missing_scope', `This statement is scoped by ${missing.join(', ')}, which the host did not supply.`, { keys: missing });
+  }
 };

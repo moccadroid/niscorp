@@ -73,7 +73,7 @@ const engine = createQueryEngine(config);
 
 engine.introspect();              // Promise<DatabaseSchema> — load + cache schema
 engine.execute(request, options); // Promise<QueryResponse> — the full pipeline
-engine.compile(dsl, scope?);      // CompiledQuery — DSL → SQL, no LLM, no execution
+engine.compile(dsl);             // CompiledQuery — DSL → SQL, no LLM, no execution
 engine.test(dsl, scope?);         // Promise<TestResult> — compile + run with synthetic params (LIMIT 5)
 engine.getDslSchema();            // object — the DSL as JSON Schema (draft-7)
 engine.getSchema();               // DatabaseSchema | undefined — last introspected schema

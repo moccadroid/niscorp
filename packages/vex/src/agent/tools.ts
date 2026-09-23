@@ -1,24 +1,24 @@
 import { z } from 'zod';
 import { defineTool } from '@niscorp/cortex';
 import { QuerySchema } from '../schemas/query.schema.js';
-import { discoverEntities } from '../scope/discover.js';
-import { checkScope, scopeResolved } from '../scope/apply.js';
-import { resolve } from '../engine/resolver.js';
-import { analyze } from '../engine/analyzer.js';
 import type { Query } from '../schemas/query.schema.js';
-import type { DatabaseAdapter, CompiledQuery, BoundParams, Row } from '../adapters/adapter.types.js';
-import type { DatabaseSchema, EntitySchema } from '../schemas/database.schema.js';
-import type { ScopePolicy } from '../scope/scope.types.js';
-import type { AnalysisConfig } from '../engine/engine.types.js';
+import type { Row } from '../adapters/adapter.types.js';
+import type { DatabaseSchema, EntitySchema, FieldSchema } from '../schemas/database.schema.js';
+import type { GenerationCaller } from '../types.js';
 
 // ═══════════════════════════════════════════════════════════════
 // Dependencies
+//
+// The tools hold no adapter and no policy. Everything they learn about the
+// data they learn through `read` — the engine's own pipeline, run as the
+// caller the generation is for — so a sample row, a distinct value and a
+// null count are all things that person could have read, and nothing else.
+// There is no SQL in this file.
 // ═══════════════════════════════════════════════════════════════
 
 export type QueryToolDeps = {
   getSchema: () => DatabaseSchema | undefined;
-  adapter: DatabaseAdapter;
-  scopePolicy?: ScopePolicy;
+  read: GenerationCaller['read'];
 };
 
 // ═══════════════════════════════════════════════════════════════
@@ -32,14 +32,14 @@ export type GetSchemaInput = z.infer<typeof GetSchemaInputSchema>;
 
 const GetSampleRowsInputSchema = z.object({
   entity: z.string().describe('Entity name to sample rows from'),
-  limit: z.number().int().positive().optional().describe('Max rows to return (default: 5)'),
+  limit: z.number().int().positive().max(50).optional().describe('Max rows to return (default: 5)'),
 });
 export type GetSampleRowsInput = z.infer<typeof GetSampleRowsInputSchema>;
 
 const GetDistinctValuesInputSchema = z.object({
   entity: z.string().describe('Entity name'),
   field: z.string().describe('Field name within the entity'),
-  limit: z.number().int().positive().optional().describe('Max distinct values to return (default: 20)'),
+  limit: z.number().int().positive().max(200).optional().describe('Max distinct values to return (default: 20)'),
 });
 export type GetDistinctValuesInput = z.infer<typeof GetDistinctValuesInputSchema>;
 
@@ -89,33 +89,41 @@ type TestQueryResult = {
 // Helpers
 // ═══════════════════════════════════════════════════════════════
 
-const findEntity = (schema: DatabaseSchema, entityName: string): EntitySchema | undefined =>
-  schema.entities.find(e => e.name === entityName);
+type Located = { entity: EntitySchema } | { error: string };
+type LocatedField = { entity: EntitySchema; field: FieldSchema } | { error: string };
 
-const buildSimpleQuery = (sql: string): CompiledQuery => ({
-  sql,
-  paramSlots: [],
-  contextContract: {},
-});
-
-const executeRaw = (adapter: DatabaseAdapter, sql: string): Promise<Row[]> =>
-  adapter.execute(buildSimpleQuery(sql), []);
-
-// Synthetic params bind NULL: comparisons against a column of ANY type are
-// valid SQL with NULL (Postgres infers the type from the column side), so
-// testQuery checks executability without guessing values. Typed guesses
-// were a trap — '' bound against a date/uuid column is a cast ERROR, which
-// made the agent conclude the DSL "does not support" date-context
-// comparisons and negative-cache a perfectly satisfiable request.
-export const buildSyntheticParams = (compiled: CompiledQuery): BoundParams =>
-  compiled.paramSlots.map(() => null);
-
-const DEFAULT_ANALYSIS_CONFIG: AnalysisConfig = {
-  maxNestingDepth: 2,
-  rejectCartesianProducts: true,
-  warnUnindexedFilters: true,
-  rejectUnindexedFilters: false,
+// The schema the tools are handed is already the caller's — tables their
+// policy cannot read are not in it — so "not found" and "not yours" are the
+// same answer, which is the point.
+const locate = (deps: QueryToolDeps, entityName: string): Located => {
+  const schema = deps.getSchema();
+  if (schema === undefined) return { error: 'Schema not available' };
+  const entity = schema.entities.find((e) => e.name === entityName);
+  return entity === undefined ? { error: `Entity "${entityName}" not found` } : { entity };
 };
+
+const locateField = (deps: QueryToolDeps, entityName: string, fieldName: string): LocatedField => {
+  const located = locate(deps, entityName);
+  if ('error' in located) return located;
+  const field = located.entity.fields.find((f) => f.name === fieldName);
+  return field === undefined
+    ? { error: `Field "${fieldName}" not found on entity "${entityName}"` }
+    : { entity: located.entity, field };
+};
+
+const messageOf = (err: unknown): string => (err instanceof Error ? err.message : String(err));
+
+// A read that fails (a refused table, a column the grammar cannot name) is an
+// answer the model can use, not a crash of the run.
+const attempt = async <T>(run: () => Promise<T>): Promise<T | { error: string }> => {
+  try {
+    return await run();
+  } catch (err) {
+    return { error: messageOf(err) };
+  }
+};
+
+const firstRow = (rows: Row[]): Row => rows[0] ?? {};
 
 // ═══════════════════════════════════════════════════════════════
 // Factory
@@ -149,16 +157,14 @@ export const createQueryTools = (deps: QueryToolDeps): ReturnType<typeof defineT
     description: 'Returns sample rows from an entity table.',
     input: GetSampleRowsInputSchema,
     execute: async (input: GetSampleRowsInput) => {
-      const schema = deps.getSchema();
-      if (!schema) return { error: 'Schema not available' };
-
-      const entity = findEntity(schema, input.entity);
-      if (!entity) return { error: `Entity "${input.entity}" not found` };
-
-      const rowLimit = input.limit ?? 5;
-      const sql = `SELECT * FROM ${entity.table} LIMIT ${rowLimit}`;
-      const rows = await executeRaw(deps.adapter, sql);
-      return rows;
+      const located = locate(deps, input.entity);
+      if ('error' in located) return located;
+      const { entity } = located;
+      // Vector columns are left out: hundreds of floats per row teach the
+      // model nothing and cost the context window everything.
+      const fields = entity.fields.filter((f) => f.normalizedType !== 'vector').map((f) => `${entity.name}.${f.name}`);
+      const query: Query = { from: [entity.name], fields, limit: input.limit ?? 5 };
+      return attempt(async () => (await deps.read(query)).rows);
     },
   });
 
@@ -168,19 +174,11 @@ export const createQueryTools = (deps: QueryToolDeps): ReturnType<typeof defineT
     description: 'Returns distinct values for a specific field in an entity.',
     input: GetDistinctValuesInputSchema,
     execute: async (input: GetDistinctValuesInput) => {
-      const schema = deps.getSchema();
-      if (!schema) return { error: 'Schema not available' };
-
-      const entity = findEntity(schema, input.entity);
-      if (!entity) return { error: `Entity "${input.entity}" not found` };
-
-      const field = entity.fields.find(f => f.name === input.field);
-      if (!field) return { error: `Field "${input.field}" not found on entity "${input.entity}"` };
-
-      const valueLimit = input.limit ?? 20;
-      const sql = `SELECT DISTINCT ${field.name} FROM ${entity.table} LIMIT ${valueLimit}`;
-      const rows = await executeRaw(deps.adapter, sql);
-      return rows.map(row => row[field.name]);
+      const located = locateField(deps, input.entity, input.field);
+      if ('error' in located) return located;
+      const { entity, field } = located;
+      const query: Query = { from: [entity.name], fields: [`${entity.name}.${field.name}`], distinct: true, limit: input.limit ?? 20 };
+      return attempt(async () => (await deps.read(query)).rows.map((row) => row[field.name]));
     },
   });
 
@@ -190,46 +188,33 @@ export const createQueryTools = (deps: QueryToolDeps): ReturnType<typeof defineT
     description: 'Returns statistics about a field: type, nullable, cardinality, null count, min/max for numeric/date types.',
     input: DescribeFieldInputSchema,
     execute: async (input: DescribeFieldInput) => {
-      const schema = deps.getSchema();
-      if (!schema) return { error: 'Schema not available' };
-
-      const entity = findEntity(schema, input.entity);
-      if (!entity) return { error: `Entity "${input.entity}" not found` };
-
-      const field = entity.fields.find(f => f.name === input.field);
-      if (!field) return { error: `Field "${input.field}" not found on entity "${input.entity}"` };
-
+      const located = locateField(deps, input.entity, input.field);
+      if ('error' in located) return located;
+      const { entity, field } = located;
+      const path = `${entity.name}.${field.name}`;
       const isNumericOrDate = ['number', 'date', 'timestamp'].includes(field.normalizedType);
 
-      const cardinalitySql = `SELECT COUNT(DISTINCT ${field.name}) AS cardinality FROM ${entity.table}`;
-      const nullCountSql = `SELECT COUNT(*) AS null_count FROM ${entity.table} WHERE ${field.name} IS NULL`;
+      return attempt(async (): Promise<FieldStats> => {
+        const [counted, nulls, range] = await Promise.all([
+          deps.read({ from: [entity.name], aggregate: { cardinality: { countDistinct: path } } }),
+          deps.read({ from: [entity.name], aggregate: { null_count: { count: '*' } }, filter: { isNull: path } }),
+          isNumericOrDate
+            ? deps.read({ from: [entity.name], aggregate: { min_val: { min: path }, max_val: { max: path } } })
+            : Promise.resolve(undefined),
+        ]);
 
-      const [cardinalityRows, nullCountRows] = await Promise.all([
-        executeRaw(deps.adapter, cardinalitySql),
-        executeRaw(deps.adapter, nullCountSql),
-      ]);
-
-      const firstCardinality = cardinalityRows[0];
-      const firstNullCount = nullCountRows[0];
-
-      const stats: FieldStats = {
-        type: field.normalizedType,
-        nullable: field.nullable,
-        cardinality: Number(firstCardinality?.cardinality ?? 0),
-        nullCount: Number(firstNullCount?.null_count ?? 0),
-      };
-
-      if (isNumericOrDate) {
-        const minMaxSql = `SELECT MIN(${field.name}) AS min_val, MAX(${field.name}) AS max_val FROM ${entity.table}`;
-        const minMaxRows = await executeRaw(deps.adapter, minMaxSql);
-        const firstMinMax = minMaxRows[0];
-        if (firstMinMax) {
-          stats.min = firstMinMax.min_val;
-          stats.max = firstMinMax.max_val;
+        const stats: FieldStats = {
+          type: field.normalizedType,
+          nullable: field.nullable,
+          cardinality: Number(firstRow(counted.rows)['cardinality'] ?? 0),
+          nullCount: Number(firstRow(nulls.rows)['null_count'] ?? 0),
+        };
+        if (range !== undefined) {
+          stats.min = firstRow(range.rows)['min_val'];
+          stats.max = firstRow(range.rows)['max_val'];
         }
-      }
-
-      return stats;
+        return stats;
+      });
     },
   });
 
@@ -237,13 +222,10 @@ export const createQueryTools = (deps: QueryToolDeps): ReturnType<typeof defineT
     id: 'testQuery',
     name: 'testQuery',
     description:
-      'Validates a DSL query, compiles it to SQL, and executes it with synthetic parameters (LIMIT 5, statement timeout). ' +
+      'Validates a DSL query, compiles it to SQL, and executes it with synthetic parameters (LIMIT 5). ' +
       'Pass the query object DIRECTLY as the arguments. Returns rows, SQL, warnings, and errors.',
     input: TestQueryInputSchema,
     execute: async (input: TestQueryInput): Promise<TestQueryResult> => {
-      const schema = deps.getSchema();
-      if (!schema) return { rows: [], sql: '', warnings: [], errors: ['Schema not available'] };
-
       const parseResult = QuerySchema.safeParse(input);
       if (!parseResult.success) {
         const validationErrors = parseResult.error.issues.map(
@@ -252,46 +234,11 @@ export const createQueryTools = (deps: QueryToolDeps): ReturnType<typeof defineT
         return { rows: [], sql: '', warnings: [], errors: validationErrors };
       }
 
-      const dsl = parseResult.data;
-
       try {
-        const entities = discoverEntities(dsl);
-
-        if (deps.scopePolicy) checkScope(entities, deps.scopePolicy);
-
-        const testDsl: Query = { ...dsl, limit: 5 };
-        const resolved = resolve(testDsl, schema);
-        if (deps.scopePolicy) scopeResolved(resolved, deps.scopePolicy);
-        const analysis = analyze(resolved, DEFAULT_ANALYSIS_CONFIG);
-
-        if (analysis.errors.length > 0) {
-          return { rows: [], sql: '', warnings: analysis.warnings, errors: analysis.errors };
-        }
-
-        const compiled = deps.adapter.compile(resolved);
-
-        const hasSemantic = compiled.paramSlots.some(s => s.kind === 'semantic');
-        if (hasSemantic) {
-          return {
-            rows: [],
-            sql: compiled.sql,
-            warnings: [...analysis.warnings, 'Semantic params present — execution skipped, SQL structure validated only'],
-            errors: [],
-          };
-        }
-
-        const syntheticParams = buildSyntheticParams(compiled);
-        const rows = await deps.adapter.execute(compiled, syntheticParams);
-
-        return {
-          rows,
-          sql: compiled.sql,
-          warnings: analysis.warnings,
-          errors: [],
-        };
+        const { rows, sql, warnings } = await deps.read({ ...parseResult.data, limit: 5 });
+        return { rows, sql, warnings, errors: [] };
       } catch (err: unknown) {
-        const message = err instanceof Error ? err.message : String(err);
-        return { rows: [], sql: '', warnings: [], errors: [message] };
+        return { rows: [], sql: '', warnings: [], errors: [messageOf(err)] };
       }
     },
   });

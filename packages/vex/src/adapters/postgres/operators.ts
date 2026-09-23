@@ -429,6 +429,7 @@ export const compileAggregate = (
     if (expr.count === '*') return 'COUNT(*)';
     return `COUNT(${columnOf(expr.count, ctx)})`;
   }
+  if ('countDistinct' in expr) return `COUNT(DISTINCT ${columnOf(expr.countDistinct, ctx)})`;
   if ('sum' in expr) return `SUM(${aggArg(expr.sum, ctx)})`;
   if ('avg' in expr) return `AVG(${aggArg(expr.avg, ctx)})`;
   if ('min' in expr) return `MIN(${aggArg(expr.min, ctx)})`;

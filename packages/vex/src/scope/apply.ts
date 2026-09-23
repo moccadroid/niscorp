@@ -60,6 +60,18 @@ const matchesFor = (entity: string, rule: ScopeEntityRule | undefined, def: 'all
   return rule.read;
 };
 
+// Whether a policy lets a caller read a table at all — the same answer
+// `checkScope` enforces, as a predicate for anything that must decide what to
+// SHOW (discovery, the schema a generating agent is handed) rather than what
+// to refuse.
+export const canReadTable = (policy: ScopePolicy, table: string): boolean => {
+  const rule = policy.entities[table];
+  if (rule === undefined) return policy.default === 'allow';
+  if ('public' in rule) return true;
+  if ('deny' in rule) return false;
+  return rule.read !== undefined || policy.default === 'allow';
+};
+
 // ───────────────────────────────────────────────────────────────
 // 1. May they touch it
 // ───────────────────────────────────────────────────────────────

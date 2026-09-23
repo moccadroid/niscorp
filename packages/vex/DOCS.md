@@ -193,8 +193,12 @@ There is no cache mode — the request body itself expresses
 replay/generate/replace semantics via its `fingerprint` field (see the
 request contract below).
 
-Scope filters are injected only when **both** a `scope` policy is configured and
-`options.scope` values are provided.
+An engine with a policy (configured, or `options.scopePolicy` per request)
+enforces it on every run. `options.scope` supplies the values its row rules
+compare against; it never decides whether the policy applies. An engine with no
+policy is open and needs no values; a policy with no row rules needs none
+either. A statement whose `$scope` slot the caller left empty is refused with
+`missing_scope` — it is never read as "everybody".
 
 ---
 
@@ -305,7 +309,7 @@ type QueryEngine = {
 - **`introspect()`** — discover and cache the schema + fingerprint. Call once at
   startup (and again after a schema migration).
 - **`execute(request, options)`** — the full pipeline described in DESIGN.md.
-- **`compile(dsl, scope?)`** — run the deterministic pipeline (clamp limit →
+- **`compile(dsl)`** — run the deterministic pipeline (clamp limit →
   discover → scope → resolve → analyze → adapter compile) and return the
   `CompiledQuery` (`{ sql, paramSlots, contextContract }`). No execution, no
   LLM. Throws `invalid_dsl` if the analyzer finds errors.
@@ -601,13 +605,15 @@ Behavior:
   filters update/delete and pins the column on insert; `set` writes the column
   on insert AND update. Applied server-side, never authored in the mutation
   — so identity/ownership can't be forged.
-- A missing `$scope` key surfaces via `meta.missingContext` (empty-but-valid), not
-  a thrown error.
+- A missing `$scope` value throws `missing_scope` — on a read, and on a write,
+  where binding it would stamp NULL. A missing `$context` value is different: it
+  is the caller's, and a read surfaces it via `meta.missingContext`
+  (empty-but-valid).
 - `match` is equality today; an `op` for `in` / multi-valued boundaries is additive
   when a real one appears.
 
-Scope is applied only when a policy is configured **and** `options.scope` is
-provided.
+The policy applies whenever one is configured; the values fill it. Omitting
+the values means nobody, never everybody.
 
 ---
 
@@ -1051,9 +1057,9 @@ import { createSignal } from '@niscorp/signal';
 const schema = await engine.introspect();
 const queryJsonSchema = engine.getDslSchema();
 
-const llm = createSignal('openrouter', { apiKey, model: 'openai/gpt-oss-120b' });
+const llm = createSignal('openrouter', { apiKey, model: 'qwen/qwen3.8-27b' });
 
-const generateDsl = createQueryDsl({ adapter, llm, schema, queryJsonSchema });
+const generateDsl = createQueryDsl({ llm, queryJsonSchema });
 const mapToShape  = createShapeMapper(llm);
 
 const engine = createQueryEngine({ adapter, generateDsl, mapToShape, cache });
@@ -1061,7 +1067,12 @@ await engine.introspect();
 ```
 
 - `createQueryDsl(config)` builds the `generateDsl` hook by running
-  `vexQueryDslAgent`.
+  `vexQueryDslAgent`. It is built from a model and the DSL spec only — who it
+  runs for arrives with every call. The engine calls the hook as
+  `generateDsl(request, schema, caller)`: `schema` holds only the tables the
+  caller's policy can read, and `caller.read(dsl)` runs a DSL through the
+  engine's own pipeline under the caller's policy and scope values (`$context`
+  binds NULL). That capability is the tools' only way to the database.
 - `createShapeMapper(llm)` builds the `mapToShape` hook by running Prism's
   `mappingAgent`. The `@niscorp/vex/agent` subpath also exports `vexQueryDslAgent`
   itself plus `createQueryTools` for customizing the tool set.
@@ -1078,8 +1089,10 @@ agent whose envelope payload is a `QuerySchema` query, with six tools:
 | `testQuery` | `{ dsl }` | Validate + compile + execute with synthetic params (LIMIT 5) |
 | `cannotSatisfy` | `{ reason }` | Declare the request impossible (`createQueryDsl` aborts the run and throws `unsatisfiable`) |
 
-Bounds: `stepCount(20)` + `outputRetries(3)` stop conditions on the agent. All
-data-touching tools respect the scope policy. (If you build your own generator,
+Bounds: `stepCount(20)` + `outputRetries(3)` stop conditions on the agent. Every
+data-touching tool is a DSL run through `caller.read` — there is no SQL in the
+tool set — so a sample row, a distinct value and a statistic are all things the
+caller could have read. (If you build your own generator,
 none of this applies — only the `Query` you return matters.)
 
 `testQuery` executes drafts with **NULL synthetic params** — valid SQL against
@@ -1219,7 +1232,7 @@ try {
 |------|---------|
 | `invalid_request` | The request failed Zod validation |
 | `invalid_dsl` | The analyzer rejected the resolved query (cartesian product, nesting, etc.) |
-| `missing_scope` | A required scope value was absent (reserved) |
+| `missing_scope` | A `$scope` slot the host did not fill. The host's fault, not the request's: the HTTP handler answers 500 and keeps the key names in its log |
 | `scope_denied` | An entity is denied by the scope policy (`VexScopeError`) |
 | `missing_context` | A required context value was absent. Reads surface it softly via `meta.missingContext`; a WRITE hard-400s with the full derived signature in `details.expected` |
 | `execution_error` | Schema not loaded, or a database/runtime failure |

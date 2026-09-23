@@ -224,21 +224,21 @@ const main = async () => {
     return;
   }
 
-  console.log('LLM: openrouter (openai/gpt-oss-120b)');
+  console.log('LLM: openrouter (qwen/qwen3.8-27b)');
 
   const queryLlm = wrapLlm(
-    createSignal('openrouter', { apiKey: OPENROUTER_API_KEY, model: 'openai/gpt-oss-120b' }),
+    createSignal('openrouter', { apiKey: OPENROUTER_API_KEY, model: 'qwen/qwen3.8-27b' }),
     'query-agent',
     onEvent,
   );
   const mapLlm = wrapLlm(
-    createSignal('openrouter', { apiKey: OPENROUTER_API_KEY, model: 'openai/gpt-oss-120b' }),
+    createSignal('openrouter', { apiKey: OPENROUTER_API_KEY, model: 'qwen/qwen3.8-27b' }),
     'mapping-agent',
     onEvent,
   );
 
   const queryJsonSchema = engine.getDslSchema();
-  const generateDsl = createQueryDsl({ adapter, llm: queryLlm, schema, queryJsonSchema });
+  const generateDsl = createQueryDsl({ llm: queryLlm, queryJsonSchema });
   const mapToShape = createShapeMapper(mapLlm);
 
   const fullEngine = createQueryEngine({

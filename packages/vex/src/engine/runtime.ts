@@ -1,4 +1,4 @@
-import type { QueryEngine, QueryEngineConfig, ExecuteOptions } from '../types.js';
+import type { QueryEngine, QueryEngineConfig, ExecuteOptions, GenerationCaller } from '../types.js';
 import type { DatabaseSchema } from '../schemas/database.schema.js';
 import type { Query } from '../schemas/query.schema.js';
 import type { QueryRequest, QueryResponse } from '../schemas/request.schema.js';
@@ -10,13 +10,13 @@ import { z } from 'zod';
 import { QueryRequestSchema } from '../schemas/request.schema.js';
 import { QuerySchema } from '../schemas/query.schema.js';
 import { discoverEntities } from '../scope/discover.js';
-import { checkScope, scopeResolved } from '../scope/apply.js';
+import { checkScope, scopeResolved, canReadTable } from '../scope/apply.js';
 import { resolve } from './resolver.js';
 import { analyze } from './analyzer.js';
-import { executeQuery, buildContextContract, findMissingContext } from './executor.js';
+import { executeQuery, buildContextContract, findMissingContext, requireScope } from './executor.js';
 import { pruneOptional, presenceOf, presenceSignature, optionalKeysOf } from './optional.js';
 import { createMemoryCache } from '../cache/memory.js';
-import { computeSchemaFingerprint, computeRequestHash, mintFingerprint } from '../cache/hash.js';
+import { computeSchemaFingerprint, computeRequestHash, computePolicyKey, mintFingerprint } from '../cache/hash.js';
 import { isEntryFresh, fireAndForget } from '../cache/util.js';
 import { buildValidationContext } from '../utils/context.js';
 import { VexError } from '../errors.js';
@@ -150,7 +150,13 @@ export const createQueryEngine = (engineConfig: QueryEngineConfig): QueryEngine 
     return cachedSchema;
   };
 
-  const runPipeline = (dsl: Query, scopeValues?: ScopeValues, policyOverride?: ScopePolicy): PipelineResult => {
+  // WHO IS ASKING never decides WHETHER the policy applies. An engine with a
+  // policy enforces it on every run; the caller's scope values only fill the
+  // row rules' `$scope` slots at bind time, and a slot nobody filled is a
+  // refusal (`requireScope`), not a pass. Omitting the values used to switch
+  // the whole policy off — table access included — so a call that forgot to
+  // say who it was for read as everybody.
+  const runPipeline = (dsl: Query, policyOverride?: ScopePolicy): PipelineResult => {
     const schema = ensureSchema();
 
     // Apply limit constraints
@@ -173,12 +179,11 @@ export const createQueryEngine = (engineConfig: QueryEngineConfig): QueryEngine 
     // and a row rule in the WHERE of a left join silently deletes rows whose
     // optional FK is null. See scope/apply.ts.
     const activePolicy = policyOverride ?? scopePolicy;
-    const scoping = activePolicy !== undefined && scopeValues !== undefined;
-    if (scoping && activePolicy !== undefined) checkScope(entities, activePolicy);
+    if (activePolicy !== undefined) checkScope(entities, activePolicy);
 
     // Resolve
     const resolved = resolve(processedDsl, schema);
-    if (scoping && activePolicy !== undefined) scopeResolved(resolved, activePolicy);
+    if (activePolicy !== undefined) scopeResolved(resolved, activePolicy);
 
     // Analyze
     const analysis = analyze(resolved, analysisConfig);
@@ -202,8 +207,8 @@ export const createQueryEngine = (engineConfig: QueryEngineConfig): QueryEngine 
   // form of the query, every optional condition included. That is the right
   // default for both of these — a compile is asking "does this query build",
   // and a test is asking "does the hardest version of it run".
-  const compile = (dsl: Query, scopeValues?: ScopeValues): CompiledQuery =>
-    runPipeline(pruneOptional(dsl, 'all'), scopeValues).compiled;
+  const compile = (dsl: Query): CompiledQuery =>
+    runPipeline(pruneOptional(dsl, 'all')).compiled;
 
   // ─── Test ──────────────────────────────────────────────────
 
@@ -211,15 +216,16 @@ export const createQueryEngine = (engineConfig: QueryEngineConfig): QueryEngine 
     try {
       // Override limit to 5 for test queries
       const testDsl: Query = { ...pruneOptional(dsl, 'all'), limit: 5 };
-      const { compiled, warnings } = runPipeline(testDsl, scopeValues);
+      const { compiled, warnings } = runPipeline(testDsl);
 
       // Build synthetic context for testing
       const syntheticContext = buildValidationContext(compiled.contextContract);
 
-      // Build synthetic scope from scope values or empty
-      const syntheticScope: Record<string, unknown> = scopeValues ?? {};
+      // Scope is never synthetic: a test runs AS somebody or it is refused.
+      const scope: ScopeValues = scopeValues ?? {};
+      requireScope(compiled, scope);
 
-      const rows = await executeQuery(compiled, syntheticContext, syntheticScope, adapter, embed);
+      const rows = await executeQuery(compiled, syntheticContext, scope, adapter, embed);
 
       return { rows, warnings, errors: [] };
     } catch (err) {
@@ -308,24 +314,52 @@ export const createQueryEngine = (engineConfig: QueryEngineConfig): QueryEngine 
 
   // ─── DSL generation (single-flight + negative caching) ─────
 
+  // WHAT A GENERATION MAY TOUCH is what its caller may touch. The hook is
+  // handed a `read` capability that runs the engine's own pipeline under the
+  // caller's policy and scope values — the only way anything it does reaches
+  // the database — and a schema holding only the tables that policy lets the
+  // caller read. The DSL it writes is still caller-neutral (scope is applied
+  // again on every replay); what it SAW while writing it is the caller's.
+  const callerOf = (policy: ScopePolicy | undefined, scope: ScopeValues): GenerationCaller => ({
+    read: async (dsl) => {
+      const { compiled, warnings } = runPipeline(pruneOptional(dsl, 'all'), policy);
+      requireScope(compiled, scope);
+      if (compiled.paramSlots.some((slot) => slot.kind === 'semantic')) {
+        return { rows: [], sql: compiled.sql, warnings: [...warnings, 'Semantic params present — execution skipped, SQL structure validated only'] };
+      }
+      // `$context` binds NULL — a probe asks whether a query runs, not what it
+      // answers, and NULL compares against a column of any type. Typed guesses
+      // were a trap: an empty string against a date column is a cast ERROR,
+      // which taught the agent the DSL could not compare dates. Scope binds the
+      // caller's own values.
+      const params = compiled.paramSlots.map((slot) => (slot.kind === 'scope' ? scope[slot.key] : null));
+      return { rows: await adapter.execute(compiled, params), sql: compiled.sql, warnings };
+    },
+  });
+
   const generateMissingDsl = async (
     validRequest: QueryRequest,
-    requestHash: string,
+    flightKey: string,
     negKey: string,
     entities: string[] | undefined,
+    policy: ScopePolicy | undefined,
+    scope: ScopeValues,
   ): Promise<Query> => {
     if (generateDsl === undefined) {
       throw new VexError('agent_failed', 'No query generation function available and no cached query found');
     }
 
     const fullSchema = ensureSchema();
-    const agentSchema = entities
-      ? { ...fullSchema, entities: fullSchema.entities.filter(e => entities.includes(e.name)) }
-      : fullSchema;
+    const agentSchema = {
+      ...fullSchema,
+      entities: fullSchema.entities.filter(
+        (e) => (entities === undefined || entities.includes(e.name)) && (policy === undefined || canReadTable(policy, e.name)),
+      ),
+    };
 
     const generate = async (): Promise<Query> => {
       try {
-        return await generateDsl(validRequest, agentSchema);
+        return await generateDsl(validRequest, agentSchema, callerOf(policy, scope));
       } catch (err) {
         // Cache a negative result so a known-impossible request doesn't
         // re-run the agent. TTL'd — a schema change may make it possible.
@@ -347,15 +381,19 @@ export const createQueryEngine = (engineConfig: QueryEngineConfig): QueryEngine 
 
     // Single-flight: a burst of identical requests (same request
     // identity) triggers one generation, not N.
-    const existing = inFlight.get(requestHash);
+    //
+    // Keyed by request AND policy: two callers who can see different tables
+    // are asking different agents, and one's answer — or one's "cannot
+    // satisfy" — is not the other's.
+    const existing = inFlight.get(flightKey);
     if (existing !== undefined) return existing;
 
     const generation = generate();
-    inFlight.set(requestHash, generation);
+    inFlight.set(flightKey, generation);
     try {
       return await generation;
     } finally {
-      inFlight.delete(requestHash);
+      inFlight.delete(flightKey);
     }
   };
 
@@ -438,7 +476,8 @@ export const createQueryEngine = (engineConfig: QueryEngineConfig): QueryEngine 
     }
 
     const validRequest = parsed.data;
-    const scopeValues = options?.scope;
+    const scope: ScopeValues = options?.scope ?? {};
+    const activePolicy = options?.scopePolicy ?? scopePolicy;
     const t0 = Date.now();
 
     const hasRequest = validRequest.shape !== undefined && validRequest.shape !== null;
@@ -446,7 +485,8 @@ export const createQueryEngine = (engineConfig: QueryEngineConfig): QueryEngine 
       throw new VexError('invalid_request', 'Pass a fingerprint (replay) or intent + shape (generate) — or both (named slot).');
     }
     const requestHash = hasRequest ? computeRequestHash(validRequest) : undefined;
-    const negKey = requestHash !== undefined ? `neg:${requestHash}` : undefined;
+    const flightKey = requestHash !== undefined ? `${requestHash}:${computePolicyKey(activePolicy)}` : undefined;
+    const negKey = flightKey !== undefined ? `neg:${flightKey}` : undefined;
     emit({
       type: 'query.start',
       intent: validRequest.intent,
@@ -466,7 +506,7 @@ export const createQueryEngine = (engineConfig: QueryEngineConfig): QueryEngine 
       if (options?.locked === true) {
         throw new VexError('locked', 'This endpoint is replay-only — unknown or changed fingerprints cannot generate here.');
       }
-      if (requestHash === undefined || negKey === undefined) {
+      if (flightKey === undefined || negKey === undefined) {
         throw new VexError('invalid_request', 'Generation needs intent + shape.');
       }
       const negative = await cache.get(negKey);
@@ -475,7 +515,7 @@ export const createQueryEngine = (engineConfig: QueryEngineConfig): QueryEngine 
         throw new VexError('unsatisfiable', negative.reason);
       }
       const agentStart = Date.now();
-      dsl = await generateMissingDsl(validRequest, requestHash, negKey, options?.entities);
+      dsl = await generateMissingDsl(validRequest, flightKey, negKey, options?.entities, activePolicy, scope);
       agentMs = Date.now() - agentStart;
       emit({ type: 'query.dsl', dsl, agentMs });
     }
@@ -488,14 +528,15 @@ export const createQueryEngine = (engineConfig: QueryEngineConfig): QueryEngine 
     // shape, so one stored artifact answers every combination of keys.
     const presence = presenceOf(validRequest.context);
     const shaped = pruneOptional(applySortContext(dsl, validRequest.context), presence);
-    const { compiled, warnings } = runPipeline(shaped, scopeValues, options?.scopePolicy);
+    const { compiled, warnings } = runPipeline(shaped, activePolicy);
     noteVariant(cached.fingerprint, presenceSignature(dsl, presence), warnings);
     emit({ type: 'query.sql', sql: compiled.sql, warnings });
 
-    // Check for missing context
+    // A missing SCOPE value is the host's fault and refuses; a missing CONTEXT
+    // value is the caller's and answers empty with the contract it missed.
+    requireScope(compiled, scope);
     const context = validRequest.context;
-    const scope = scopeValues ?? {};
-    const missingKeys = findMissingContext(compiled, context, scope);
+    const missingKeys = findMissingContext(compiled, context);
 
     if (missingKeys.length > 0) {
       return {

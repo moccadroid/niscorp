@@ -90,6 +90,23 @@ export const computeRequestHash = (request: {
   return createHash('sha256').update(JSON.stringify(identity)).digest('hex');
 };
 
+// Which POLICY a generation ran under — part of the single-flight and
+// negative-cache keys, because an agent that can see different tables is a
+// different agent. Key order is normalised so two structurally equal policies
+// built in different orders share a key. `none` is the engine with no policy.
+const canonical = (value: unknown): unknown => {
+  if (Array.isArray(value)) return value.map(canonical);
+  if (isRecord(value)) {
+    const out: Record<string, unknown> = {};
+    for (const key of Object.keys(value).sort()) out[key] = canonical(value[key]);
+    return out;
+  }
+  return value;
+};
+
+export const computePolicyKey = (policy: unknown): string =>
+  policy === undefined ? 'none' : createHash('sha256').update(JSON.stringify(canonical(policy))).digest('hex').slice(0, 16);
+
 export const computeSchemaFingerprint = (schema: DatabaseSchema): string => {
   const byName = (a: { name: string }, b: { name: string }) => a.name.localeCompare(b.name);
 

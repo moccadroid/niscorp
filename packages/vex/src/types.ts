@@ -8,8 +8,22 @@ import type { TestResult } from './engine/engine.types.js';
 import type { VexEventHandler } from './events.js';
 import type { CompiledIr, JsonValue } from '@niscorp/prism';
 
-/** DSL generation from intent + shape. Wire to a Cortex agent (see agent/). */
-export type GenerateDsl = (request: QueryRequest, schema: DatabaseSchema) => Promise<Query>;
+/**
+ * Who a generation is for, as a capability rather than an identity. `read` runs
+ * a DSL through the engine's own pipeline under the caller's policy and scope
+ * values — `$context` slots bind NULL, because a probe asks whether a query
+ * runs, not what it answers. It is the only door a generator has to the
+ * database: it sees what the person asking would see, and nothing else.
+ */
+export type GenerationCaller = {
+  read: (dsl: Query) => Promise<{ rows: Row[]; sql: string; warnings: string[] }>;
+};
+
+/**
+ * DSL generation from intent + shape. Wire to a Cortex agent (see agent/).
+ * `schema` holds only the tables the caller's policy lets them read.
+ */
+export type GenerateDsl = (request: QueryRequest, schema: DatabaseSchema, caller: GenerationCaller) => Promise<Query>;
 
 /**
  * Result mapping from the raw row set to the requested shape. The mapping runs
@@ -53,7 +67,7 @@ export type QueryEngineConfig = {
 export type QueryEngine = {
   introspect: () => Promise<DatabaseSchema>;
   execute: (request: QueryRequest, options?: ExecuteOptions) => Promise<QueryResponse>;
-  compile: (dsl: Query, scope?: ScopeValues) => CompiledQuery;
+  compile: (dsl: Query) => CompiledQuery;
   test: (dsl: Query, scope?: ScopeValues) => Promise<TestResult>;
   getDslSchema: () => object;
   getSchema: () => DatabaseSchema | undefined;

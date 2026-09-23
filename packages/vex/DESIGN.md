@@ -382,7 +382,12 @@ defs at seed time.
 
 The engine takes two optional hooks:
 
-- `generateDsl(request, schema) → Query` — natural language + shape → DSL.
+- `generateDsl(request, schema, caller) → Query` — natural language + shape →
+  DSL. `schema` is only the tables the caller's policy can read; `caller.read`
+  runs a DSL through the engine's pipeline as that caller. A generation sees
+  what the person asking could see — and it is keyed (single-flight, negative
+  cache) by request AND policy, because two callers who see different tables
+  are asking different agents.
 - `mapToShape(rows, shape) → { ir, transformed }` — raw rows → requested shape,
   returning a compiled Prism IR that is cached for reuse.
 
@@ -396,7 +401,8 @@ exported from the `@niscorp/vex/agent` subpath — `createQueryDsl` (fills
   `getDistinctValues`, `describeField`, `testQuery`, `cannotSatisfy` — and two
   rules: a tool-call limiter (nudge at 8, abort at 10) and an unsatisfiable
   abort. Context producers inject the live schema and the DSL JSON Schema so the
-  static instructions stay stable. All data-touching tools respect scope.
+  static instructions stay stable. Every data-touching tool is a DSL run through
+  `caller.read`; the tool set holds no adapter and no SQL.
   `createQueryDsl` wraps it into the `generateDsl` hook.
 - The **mapping agent** is Prism's exported `mappingAgent`; `createShapeMapper`
   wraps each raw row as `{ result: row }`, runs the agent once to get a transform
@@ -564,6 +570,19 @@ Only `zod` is mandatory. Everything else is pulled in only by the path you use.
 4. **Scope injected server-side, after RESOLUTION.** If the model could see
    scope filters it could be talked out of them. Binding them to `$scope`
    values after the DSL is fixed makes them unforgeable.
+
+   The policy decides whether scope applies; the values only fill it. An
+   engine with a policy enforces it on every run, and a `$scope` slot nobody
+   filled refuses (`missing_scope`) rather than binding NULL — which matches no
+   row on a read and stamps NULL on a write.
+
+   ⟲ Until 2026-09-24 scoping switched on only when a policy AND values were
+   both present. Omitting the values turned the policy off entirely, table
+   access included — a call that forgot to say who it was for read as
+   everybody, and one did (relay's record lookup). Writes had always required
+   both; reads now agree. The generating agent's tools had the same hole by a
+   different route: they ran their own SQL, unscoped, beside the pipeline.
+   They now reach the database only through `caller.read`.
 
    Scope answers two questions and they run at different stages, which is the
    correction to an earlier version that ran both at once:

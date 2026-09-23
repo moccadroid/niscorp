@@ -11,7 +11,6 @@ import {
 import type { QueryEngine, DatabaseSchema, VexEvent, MutationClient } from '@niscorp/vex';
 import { DDL, buildSeedSql } from './seed-data';
 import { createPglitePool } from '@niscorp/vex/pglite';
-import { scopePolicy } from './scope';
 import { embed } from './embed';
 import { makeGenerateDsl, makeMapToShape } from './live';
 
@@ -63,10 +62,9 @@ const boot = async (): Promise<VexRuntime> => {
   const engine = createQueryEngine({
     adapter,
     cache,
-    scope: scopePolicy,
     onEvent,
     embed,
-    generateDsl: makeGenerateDsl(adapter, dslJsonSchema),
+    generateDsl: makeGenerateDsl(dslJsonSchema),
     mapToShape: makeMapToShape(),
   });
   await engine.introspect();

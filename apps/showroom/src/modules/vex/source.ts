@@ -57,7 +57,7 @@ export const buildSource = (s: VexScenario): string => {
   }
 
   const hasScope = s.scopeKey !== undefined;
-  const opts = hasScope ? `, {\n  scope: ${json(s.scope ?? {})},\n}` : '';
+  const opts = hasScope ? `, {\n  scopePolicy,\n  scope: ${json(s.scope ?? {})},\n}` : '';
   const seed = [
     '// SEED TIME (boot, server-side): the DSL is generated ONCE and stored',
     '// under a name. This is how an app PUBLISHES a read — the fingerprint',
@@ -119,7 +119,7 @@ export const buildSource = (s: VexScenario): string => {
   return [
     "import { createQueryEngine, createPostgresAdapter } from '@niscorp/vex';",
     '',
-    '// engine = createQueryEngine({ adapter, scope, generateDsl, mapToShape })',
+    '// engine = createQueryEngine({ adapter, generateDsl, mapToShape })',
     '',
     '// First call — intent + shape drive the DSL and the mapping. No',
     '// fingerprint given, so the engine generates it and MINTS one.',

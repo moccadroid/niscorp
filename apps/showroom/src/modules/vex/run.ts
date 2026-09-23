@@ -3,7 +3,7 @@ import type { VexEvent, Query, ScopeValues } from '@niscorp/vex';
 import { compile } from '@niscorp/prism';
 import { deepEqual } from '@showroom/lib/deep-equal';
 import type { VexRuntime } from './runtime/boot';
-import { mutationPolicy } from './runtime/scope';
+import { mutationPolicy, scopePolicy } from './runtime/scope';
 import type { VexScenario } from './scenarios';
 
 // Identity Prism transform. The engine runs the mapping once over the whole
@@ -78,6 +78,11 @@ export type RunOptions = {
   // advance the visualizer in real time rather than after the result.
   onEvent?: (event: VexEvent) => void;
 };
+
+// Who a read is for. A story that carries scope values reads under the tenant
+// policy those values fill; a story that carries none reads an open database.
+const readerOf = (opts: RunOptions): { scope?: ScopeValues; scopePolicy?: typeof scopePolicy } =>
+  opts.scope === undefined ? {} : { scope: opts.scope, scopePolicy };
 
 export const runScenario = async (
   runtime: VexRuntime,
@@ -187,7 +192,7 @@ export const runScenario = async (
     // ─── Analyzer demo: compile only, expect possible rejection ──
     if (scenario.mode === 'compile') {
       try {
-        const compiled = runtime.engine.compile(readDsl, opts.scope);
+        const compiled = runtime.engine.compile(readDsl);
         return {
           ok: true,
           dsl: readDsl,
@@ -239,7 +244,7 @@ export const runScenario = async (
         // fingerprint + intent/shape under `locked` throws `locked`.
         const res = await runtime.engine.execute(
           { fingerprint, intent: scenario.intent, shape: scenario.shape, context: opts.context },
-          { scope: opts.scope, ...(scenario.locked === true ? { locked: true } : {}) },
+          { ...readerOf(opts), ...(scenario.locked === true ? { locked: true } : {}) },
         );
         return toOutcome(res, events, scenario, { cacheHit, generated, live });
       }
@@ -271,7 +276,7 @@ export const runScenario = async (
       // Replay by fingerprint alone — the exact call an app would make.
       const res = await runtime.engine.execute(
         { fingerprint, context: opts.context },
-        { scope: opts.scope },
+        readerOf(opts),
       );
       return toOutcome(res, events, scenario, { cacheHit, generated, live });
     } catch (err) {

@@ -12,6 +12,7 @@ const fieldOrExpr = z.union([fieldPath, ComputeExpressionSchema]).describe('A fi
 export const AggregateExpressionSchema = z
   .union([
     z.object({ count: z.union([FieldPathSchema, z.literal('*')]).describe('Field path or "*" for COUNT(*)') }).strict().describe('COUNT'),
+    z.object({ countDistinct: FieldPathSchema.describe('Field path whose distinct non-null values are counted') }).strict().describe('COUNT(DISTINCT field)'),
     z.object({ sum: fieldOrExpr }).strict().describe('SUM'),
     z.object({ avg: fieldOrExpr }).strict().describe('AVG'),
     z.object({ min: fieldOrExpr }).strict().describe('MIN'),

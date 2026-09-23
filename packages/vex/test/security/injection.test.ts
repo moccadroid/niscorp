@@ -54,7 +54,7 @@ const adapter = createPostgresAdapter({ pool });
 const engine = createQueryEngine({ adapter, scope: policy });
 let schema: DatabaseSchema;
 
-const read = async (dsl: Query): Promise<Row[]> => executeQuery(engine.compile(dsl, scope), {}, scope, adapter);
+const read = async (dsl: Query): Promise<Row[]> => executeQuery(engine.compile(dsl), {}, scope, adapter);
 
 const write = (def: MutationDefinition, context: Record<string, unknown> = {}): Promise<Row[]> =>
   executeMutation(pool, def, { context, scope, policy, schema });

@@ -712,6 +712,7 @@ const resolveAggregatePaths = (
   aliasMap: Map<string, string>,
 ): void => {
   const arg = ('count' in expr) ? expr.count
+    : ('countDistinct' in expr) ? expr.countDistinct
     : ('sum' in expr) ? expr.sum
     : ('avg' in expr) ? expr.avg
     : ('min' in expr) ? expr.min

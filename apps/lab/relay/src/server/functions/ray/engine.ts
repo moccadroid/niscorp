@@ -51,8 +51,11 @@ const boot = async (runtime: NiscRuntime, policy: ScopePolicy): Promise<RayEngin
     adapter,
     scope: policy,
     cache,
-    generateDsl: (request, schema) =>
-      createQueryDsl({ adapter, llm: buildLlm('query'), scopePolicy: policy, schema, queryJsonSchema: dslJsonSchema })(request, schema),
+    // The engine hands every generation its caller — a `read` under this
+    // policy and the asking user's scope — so the agent samples what they
+    // could read and nothing else.
+    generateDsl: (request, schema, caller) =>
+      createQueryDsl({ llm: buildLlm('query'), queryJsonSchema: dslJsonSchema })(request, schema, caller),
     mapToShape: (rows, shape) => createShapeMapper(buildLlm('shape'))(rows, shape),
   });
   await engine.introspect();

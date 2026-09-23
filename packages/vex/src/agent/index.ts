@@ -6,9 +6,6 @@ import type { JsonObject } from '@niscorp/prism';
 import { createQueryTools } from './tools.js';
 import { vexQueryDslAgent } from './query.agent.js';
 import type { Query } from '../schemas/query.schema.js';
-import type { DatabaseAdapter } from '../adapters/adapter.types.js';
-import type { DatabaseSchema } from '../schemas/database.schema.js';
-import type { ScopePolicy } from '../scope/scope.types.js';
 import type { GenerateDsl, MapToShape } from '../types.js';
 import type { SignalClient } from '@niscorp/cortex';
 
@@ -25,11 +22,12 @@ export type { QueryToolDeps } from './tools.js';
 // generateDsl hook factory — runs vexQueryDslAgent
 // ═══════════════════════════════════════════════════════════════
 
+// What the agent is built from. Who it runs FOR is not here: the engine hands
+// every generation its caller (a `read` capability under that caller's policy
+// and scope) and the schema that caller may see, so one hook serves every
+// principal and cannot be built with the wrong one baked in.
 export type QueryDslConfig = {
-  adapter: DatabaseAdapter;
   llm: SignalClient;
-  scopePolicy?: ScopePolicy;
-  schema: DatabaseSchema;
   queryJsonSchema: object;
 };
 
@@ -40,12 +38,8 @@ const reasonFrom = (args: unknown): string | undefined => {
 };
 
 export const createQueryDsl = (config: QueryDslConfig): GenerateDsl => {
-  return async (request, schema) => {
-    const tools = createQueryTools({
-      getSchema: () => schema,
-      adapter: config.adapter,
-      ...(config.scopePolicy && { scopePolicy: config.scopePolicy }),
-    });
+  return async (request, schema, caller) => {
+    const tools = createQueryTools({ getSchema: () => schema, read: caller.read });
 
     const agentInput = {
       intent: request.intent,

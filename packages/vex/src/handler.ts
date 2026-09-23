@@ -13,6 +13,7 @@ import type { ContextSignature, MutationEffect } from './mutations/signature.js'
 import type { CacheEntry } from './cache/cache.types.js';
 import type { Query } from './schemas/query.schema.js';
 import { VexError } from './errors.js';
+import { canReadTable } from './scope/apply.js';
 
 // ═══════════════════════════════════════════════════════════════
 // Types
@@ -164,14 +165,6 @@ const filterSchema = (schema: DatabaseSchema | undefined, entities?: string[]): 
 // scopeMutation) as pure predicates: a phase exists, is public, or falls
 // to the default. Enforcement still runs on every request; this only
 // keeps the catalog honest per principal. ───────────────────────
-const canReadTable = (policy: ScopePolicy, table: string): boolean => {
-  const rule = policy.entities[table];
-  if (rule === undefined) return policy.default === 'allow';
-  if ('public' in rule) return true;
-  if ('deny' in rule) return false;
-  return rule.read !== undefined || policy.default === 'allow';
-};
-
 const canWriteTable = (policy: ScopePolicy, table: string, op: string): boolean => {
   const rule = policy.entities[table];
   if (rule === undefined) return policy.default === 'allow';
@@ -510,6 +503,13 @@ const runQuery = async (
     }
     return { status: 200, body: response };
   } catch (err) {
+    // The host did not say who is asking. That is the server's fault, not the
+    // request's, and the names of the missing keys are the host's business —
+    // they go to the log, not over the wire.
+    if (err instanceof VexError && err.code === 'missing_scope') {
+      console.error('[vex] refused a statement the host did not scope:', err.message);
+      return { status: 500, body: { error: 'missing_scope', message: 'The server did not supply the scope this request needs.' } };
+    }
     if (err instanceof VexError) {
       const status = err.code === 'fingerprint_protected' ? 409 : err.code === 'cache_miss' ? 404 : 400;
       return {

@@ -2,12 +2,15 @@ import type { ScopePolicy } from '@niscorp/vex';
 
 // Server-side, LLM-invisible access control. `orders` is the only
 // seeded table with a tenant column (account_id), so it carries the
-// row-level filter the scope demo switches on. Everything else is
-// public (default: 'allow') so the non-scope stories run unfiltered.
+// row-level filter the scope demo shows.
 //
-// At query time the engine AND-merges
+// The engine has NO default policy: the other read stories are an open
+// database and say so by carrying none. The scope story passes this policy
+// with its request (`scopePolicy`), together with the values that fill it —
+// who a read is for is stated, never inferred from a missing argument. Under
+// it the engine places
 //   { eq: ["orders.account_id", { $scope: "accountId" }] }
-// into the generated DSL — only when options.scope provides accountId.
+// on every read of `orders`, and refuses one that names no accountId.
 export const scopePolicy: ScopePolicy = {
   default: 'allow',
   entities: {
@@ -17,8 +20,7 @@ export const scopePolicy: ScopePolicy = {
 
 // The write side — the SAME ScopePolicy grammar, handed to the handler as
 // `mutations.policy`. Deliberately `default: 'deny'`: a write phase a table
-// doesn't have is a verb that doesn't exist (the read policy above stays
-// `allow` so the read stories run unfiltered).
+// doesn't have is a verb that doesn't exist.
 //
 //   - `write`  is the UMBRELLA phase: present = insert/update/delete all
 //     granted, its rules applying to each. `products` uses it, rule-free.
