@@ -16,7 +16,6 @@ export type SignalConfig = {
   readonly tools?: Tool[];
   readonly retries?: number;
   readonly options?: SignalOptions;
-  readonly capabilities?: Partial<Capabilities>;
   readonly onRetry?: (error: Error, attempt: number) => void;
   readonly onToolCall?: (name: string, args: unknown) => void;
 };
@@ -29,6 +28,9 @@ type CustomProviderBase = {
 
 export type CustomChatProviderConfig = CustomProviderBase & {
   adapter?: 'openai-compatible' | 'anthropic' | 'google';
+  // A provider outside the registry states what it does itself — the only
+  // place capabilities are declared rather than looked up. Unstated fields are
+  // the all-false floor.
   capabilities?: Partial<Capabilities>;
   // Wire strategy ids (see src/wire/strategies.ts), like a registry entry's.
   wire?: string[];

@@ -34,7 +34,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:integration": "vitest run --config vitest.integration.config.ts",
-    "typecheck": "tsc --noEmit -p tsconfig.test.json"
+    "typecheck": "tsc --noEmit -p tsconfig.test.json",
+    "probe": "tsx --env-file=.env scripts/probe-model.ts"
   },
   "keywords": [
     "llm",
@@ -69,6 +70,7 @@
     "dotenv": "^17.4.0",
     "openai": "^6.33.0",
     "tsup": "^8.5.1",
+    "tsx": "^4.20.3",
     "vitest": "^4.1.2"
   }
 }

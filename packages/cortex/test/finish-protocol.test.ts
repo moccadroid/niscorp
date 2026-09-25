@@ -82,14 +82,22 @@ describe('finish protocol chunk', () => {
     }
   });
 
-  it('forceTool cannot combine with emit — config error at run creation', () => {
+  it('forceTool cannot combine with an explicit emit — config error at run creation', () => {
     const llm = stubSignal([], { capabilities: { manglesNestedToolArgs: true } });
     const agent = defineAgent({
       id: 'a',
       instructions: 'x',
       tools: [noopTool],
-      output: { schema: Small, forceTool: true },
+      output: { schema: Small, forceTool: true, strategy: 'emit' },
     });
     expect(() => agent.run('go', { llm })).toThrow(/forceTool/);
+  });
+
+  // forceTool says "respond is the only exit" — under auto that IS the choice,
+  // on a provider where auto would otherwise land on emit.
+  it('forceTool under auto resolves to respond, even on a mangling provider', async () => {
+    const llm = stubSignal([], { capabilities: { manglesNestedToolArgs: true } });
+    const agent = defineAgent({ id: 'a', instructions: 'x', tools: [noopTool], output: { schema: Small, forceTool: true } });
+    expect((await agent.preview('go', { llm })).strategy).toBe('respond');
   });
 });

@@ -131,6 +131,8 @@ export const stubSignal = (
     model: options?.model ?? 'stub-model',
     kind: 'chat',
     capabilities,
+    // A scripted client is not a registry model: its capabilities are declared.
+    modelKnown: false,
   });
 
   return {

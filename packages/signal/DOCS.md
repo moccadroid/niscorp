@@ -57,7 +57,7 @@ Reads `GROQ_API_KEY` from environment automatically. Known providers: `'groq'`, 
 ```typescript
 const signal = createSignal('groq', {
   apiKey: 'gsk_...',
-  model: 'openai/gpt-oss-120b',
+  model: 'qwen/qwen3.8-27b',
   systemPrompt: 'You are a data extractor.',
   retries: 3,
 });
@@ -84,7 +84,7 @@ Every method returns a new `Signal` instance.
 ### `.model(name)`
 Override the model for this instance.
 ```typescript
-signal.model('openai/gpt-oss-120b')
+signal.model('qwen/qwen3.8-27b')
 ```
 
 ### `.systemPrompt(prompt)`
@@ -132,11 +132,19 @@ Set LLM options (temperature, maxTokens, etc.). These are rarely needed.
 signal.options({ temperature: 0 })
 ```
 
-### `.capabilities(caps)`
-Override provider capability defaults.
+### Capabilities — looked up, not configured
+What a client can do is the provider's registry row (what the ENDPOINT
+does) joined with the model's registry row (what the MODEL does, as
+measured by `scripts/probe-model.ts`). There is no override: a fact about
+a model is a row in `src/registry.ts`. A model with no row resolves to the
+conservative `UNMEASURED_MODEL`, and `describe().modelKnown` says so.
+A custom provider (by `baseUrl`) declares its own `capabilities`.
 ```typescript
-signal.capabilities({ nativeTools: true })
+createSignal('groq').describe()
+// { provider: 'groq', model: 'qwen/qwen3.8-27b', kind: 'chat', modelKnown: true, capabilities: {…} }
 ```
+A `reasoningEffort` the model's row does not list is refused when the
+client is built (`SignalError`), not by a provider 400 mid-run.
 
 ### `.onRetry(handler)`
 Hook called on each validation retry.
@@ -366,7 +374,7 @@ Only providers with `supportsEmbedding: true` can embed. Currently: **OpenAI** (
 Use a separate Signal client for embedding — embedding models are different from chat models:
 
 ```typescript
-const chat = createSignal('openrouter', { model: 'openai/gpt-oss-120b' });
+const chat = createSignal('openrouter', { model: 'qwen/qwen3.8-27b' });
 const embed = createSignal('openai', { model: 'text-embedding-3-small' });
 ```
 
@@ -488,6 +496,7 @@ Groq is fast and cheap but has quirks:
 
 - **No native tools + structured output together.** Signal uses the unified schema strategy automatically.
 - **`json_validate_failed` errors.** Groq sometimes returns the model's failed output in the error. Signal extracts and recovers from this.
-- **Model-dependent capabilities.** Not all Groq models support `json_schema` response format. Signal defaults to `json_mode` for Groq.
+- **Model-dependent capabilities.** What each Groq model does (json_schema, nested tool args, reasoning efforts) is its own row in the model registry, measured by the probe.
+- **Tool args are validated server-side.** So `respond` params would enforce nothing on Groq, and `auto` resolves every agent there to `emit`.
 
-You don't need to handle any of this — Signal does it automatically based on the provider registry.
+You don't need to handle any of this — Signal does it automatically based on the registry.

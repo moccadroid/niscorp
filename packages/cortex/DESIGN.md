@@ -31,7 +31,9 @@ tool loop with a typed exit.
 2. **One loop.** model → tools → model. Bounded, gated, observed. The
    only execution path; there is no second mode.
 3. **The envelope.** Every agent returns structured data. Terminating
-   the loop is itself a tool call (`respond`).
+   the loop is a message that IS the envelope — as content (`emit`),
+   under provider grammar (`native`), or as the arguments of a
+   synthetic `respond` tool, whichever the provider can enforce.
 4. **Context.** Functions of typed deps build the prefix once per
    run. The transcript is append-only after that.
 5. **Gates.** Code hooks before and after every tool call. Approvals
@@ -100,18 +102,35 @@ type RunMeta = {
 
 How the envelope travels from model to runtime. The output is ALWAYS
 the JSON envelope; a strategy only picks the TRANSPORT — which channel
-carries its bytes. Three transports, one config field, `auto` default:
+carries its bytes. Three transports, one config field, `auto` default.
+
+`auto` picks the transport that ENFORCES the most, and falls to `emit`
+when nothing would enforce anything (signal `transport/resolve.ts`):
+
+    native   — provider grammar is viable (small schema; tools allowed
+               beside response_format, or no tools)
+    respond  — the tool params can enforce the contract: the endpoint
+               does not validate tool args itself, the full schema fits
+               in the params, and the model carries nested payloads on
+               the tool channel intact (or `output.forceTool` is set)
+    emit     — everything else. Every model can do it, and the contract
+               rides the prompt — exactly as it would under a respond
+               whose params enforce nothing.
+
+On Groq every agent resolves to `emit`: Groq validates tool args
+server-side, so `respond` params would be sent permissive and enforce
+nothing. That holds whichever model Groq serves.
 
 | Strategy | Transport | Termination | Schema reaches model via |
 |---|---|---|---|
-| `respond` (default) | tool-call arguments (synthetic `respond` tool) | the `respond` call, OR an emitted envelope on the content channel | tool params (small schemas) or prompt docs (large) |
+| `respond` | tool-call arguments (synthetic `respond` tool) | the `respond` call, OR an emitted envelope on the content channel | tool params (small schemas) or prompt docs (large) |
 | `native` | content channel under provider grammar (`response_format: json_schema`) | a content turn with no tool calls | provider grammar |
 | `emit` | content channel; the model's completion IS the envelope | a content turn with no tool calls | prompt docs |
 
 Zod validates the envelope in **every** strategy. Providers enforce
 at most syntax; cortex enforces the contract.
 
-### 3.1 `respond` — the default
+### 3.1 `respond`
 
 Cortex registers one synthetic tool per run:
 
@@ -138,9 +157,8 @@ Cortex registers one synthetic tool per run:
 - **Emit is a legal exit (respond-or-finish).** A turn with no tool
   calls is first parsed (fence-tolerant) and validated as the
   envelope; a valid one finishes the run exactly like a `respond`
-  call. Some models (gpt-oss on Groq) are unreliable tool-call
-  finishers but emit clean JSON — both doors lead to the same
-  validated envelope. Only a turn with no valid envelope in it is an
+  call. Some models are unreliable tool-call finishers but emit clean
+  JSON — both doors lead to the same validated envelope. Only a turn with no valid envelope in it is an
   error.
 - **The unwrap rung.** Models regularly produce the PAYLOAD instead
   of the envelope around it — especially when the payload has its
@@ -164,9 +182,9 @@ Cortex registers one synthetic tool per run:
   hardening: `output.forceTool: true` sets `toolChoice: 'required'`
   so every turn must be a tool call and `respond` is the only exit —
   opt-in, because some models get tool-happy under `required`.
-- **Groq-safe.** No `response_format` in any request, so tools and
-  structured output never conflict. gpt-oss-120b runs this at full
-  speed.
+- **Groq-safe when chosen explicitly.** No `response_format` in any
+  request, so tools and structured output never conflict. `auto` does
+  not pick it on Groq (above): the params there would enforce nothing.
 
 ### 3.2 `native`
 
@@ -183,13 +201,14 @@ completion IS the envelope, as raw JSON — no tool call, no provider
 grammar. First-class, not degraded: same envelope, same Zod
 validation, same correction retries (appended messages, bounded by
 `outputRetries`), same solid streaming via content deltas.
-Fence-tolerant parse. It exists because tool-call arguments are a
-LOSSIER channel on some models — gpt-oss on Groq stringifies nested
-arrays inside function args while emitting the identical JSON cleanly
-as content — and because some models compose very large payloads
-better as a completion than as function args. `auto` resolves to it
-when the provider capability `manglesNestedToolArgs` is true (Groq);
-explicit `respond`/`native` choices are still honored.
+Fence-tolerant parse. It is `auto`'s floor: wherever neither grammar
+nor tool params would enforce the contract, the contract rides the
+prompt either way, and emit carries the answer without a synthetic
+tool or a tool-call ending. Tool-call arguments are also a LOSSIER
+channel on some models (signal capability `manglesNestedToolArgs`,
+measured per model in signal's model registry), and some models
+compose very large payloads better as a completion than as function
+args. Explicit `respond`/`native` choices are still honored.
 `output.forceTool` cannot combine with emit — the final turn must be
 a content-only message.
 
@@ -623,8 +642,10 @@ a context entry, on top of the loop — not an interpreter under it.
 - **Exact token counting** — behind `signal.count()` when a real
   tokenizer lands.
 - **`respond` vs `emit` A/B** on the big-DSL agents (prism mapping,
-  nova layout, architect) — they start on `respond`; flip per-agent
-  only if measured quality says so.
+  nova layout, architect). Settled by RULE, not by measurement
+  (2026-09-24): their schemas are too large for enforcing respond
+  params, so `auto` resolves them to `emit` everywhere. The quality
+  comparison was never run.
 
 ---
 

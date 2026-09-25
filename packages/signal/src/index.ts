@@ -12,10 +12,11 @@ export { defineTool } from './tools/define-tool';
 // Errors
 export { SignalError, ErrorCode } from './errors';
 
-// Provider registry — per-provider capability truth (read-only consumers:
-// preview instruments, capability-aware orchestrators).
-export { providerRegistry, chatProviderEntry } from './registry';
-export type { ProviderEntry, ChatProviderEntry, DecisionProviderEntry } from './registry';
+// Registry — what an endpoint does (providerRegistry) and what a model does on
+// it, as measured (modelRegistry). Read-only consumers: preview instruments,
+// capability-aware orchestrators, apps that offer a model picker.
+export { providerRegistry, chatProviderEntry, modelRegistry, modelEntry, modelKey, UNMEASURED_MODEL } from './registry';
+export type { ProviderEntry, ChatProviderEntry, DecisionProviderEntry, ModelEntry } from './registry';
 
 // Wire layer — routed outcomes and the strategy seam. Consumers switch
 // on StepResult.outcome; strategies are selected via registry entries.
@@ -52,6 +53,9 @@ export type {
   ToolConfig,
   ToolCallRecord,
   Capabilities,
+  EndpointCapabilities,
+  ModelCapabilities,
+  ReasoningEffort,
   SignalOptions,
   SignalResult,
   SignalMeta,
@@ -91,3 +95,5 @@ export type {
   CustomChatProviderConfig,
   CustomDecisionProviderConfig,
 } from './config';
+
+export { REASONING_EFFORTS } from './types';

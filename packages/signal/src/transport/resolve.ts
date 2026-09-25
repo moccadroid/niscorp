@@ -16,6 +16,8 @@ import { RESPOND_DESCRIPTION, corrections, finishProtocol, type ProtocolSpec } f
 //   respond — a synthetic exit tool; the output rides its arguments.
 //   native  — provider grammar (response_format: json_schema).
 //   emit    — the content channel; the completion IS the output.
+//             The floor: every model can do it, so `auto` lands here
+//             whenever neither of the others ENFORCES anything.
 //
 // Resolution is a PURE function of the spec and the capabilities:
 // no client, no network — previews resolve exactly like runs.
@@ -156,15 +158,27 @@ export const resolveTransport = (spec: TransportSpec, caps: Capabilities): Resol
     );
   }
 
-  // Providers that corrupt structured tool-call args (Groq gpt-oss
-  // stringifies nested arrays inside function args while emitting the
-  // identical JSON cleanly as content) get the content channel.
-  // Explicit respond/native choices are still honored.
+  // `respond` EARNS ITS PLACE ONLY WHEN ITS TOOL PARAMS ENFORCE THE CONTRACT.
+  // That takes three things: the provider does not validate tool args itself
+  // (if it does, the params are sent permissive and enforce nothing), the full
+  // schema fits in the params (loose params enforce nothing either), and the
+  // model carries nested payloads on the tool channel intact. Anywhere else
+  // `respond` would add a synthetic tool and a tool-call ending for no
+  // enforcement at all — the contract would ride the prompt exactly as it does
+  // under `emit`, which every model can do.
+  //
+  //   auto: native (grammar)  →  respond (enforcing params)  →  emit
+  //
+  // Explicit respond/native choices are still honored, and `forceTool` —
+  // "every turn is a tool call, `respond` is the only exit" — is a choice of
+  // `respond` in all but name.
+  const respondEnforces = !caps.validatesToolArgs && !caps.manglesNestedToolArgs && (!spec.hasData || fullIsViable);
+
   let transport: OutputTransport;
   if (choice !== 'auto') transport = choice;
-  else if (caps.manglesNestedToolArgs) transport = 'emit';
   else if (nativeIsViable && spec.hasData) transport = 'native';
-  else transport = 'respond';
+  else if (respondEnforces || spec.forceTool) transport = 'respond';
+  else transport = 'emit';
 
   if (transport === 'emit' && spec.forceTool) {
     throw new SignalError(

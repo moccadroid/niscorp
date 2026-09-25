@@ -47,13 +47,13 @@ const signal = createSignal('groq');               // known provider
 const signal = createSignal('groq', { apiKey, model, systemPrompt, retries });
 
 // Configure (each returns a new instance)
-signal.model('openai/gpt-oss-120b')
+signal.model('qwen/qwen3.8-27b')
 signal.systemPrompt('You are helpful.')
 signal.schema(zodSchema)           // typed structured output
 signal.tools([myTool])             // tool calling
 signal.history(messages)           // multi-turn
 signal.retries(3)                  // validation retries
-signal.capabilities({ ... })      // override provider defaults
+signal.describe()                  // provider, model, capabilities — from the registry
 signal.onRetry(handler)            // retry hook
 signal.onToolCall(handler)         // tool call hook
 

@@ -1,6 +1,6 @@
 import { type ZodType } from 'zod';
 import type {
-  Message, ContentPart, Tool, SignalOptions, Capabilities,
+  Message, ContentPart, Tool, SignalOptions, Capabilities, ReasoningEffort,
   SignalResult, StreamEvent, StepStreamEvent, StreamOptions,
   ProviderAdapter, ChatAdapter, DecisionAdapter, ProviderRequest, ProviderResponse, Rejection,
   StepRequest, StepResult, StepToolCall, CountInput,
@@ -9,7 +9,7 @@ import type {
 import type { SignalConfig, CustomProviderConfig } from './config';
 import { estimateUsage } from './utils/estimate-usage';
 import { SignalError, ErrorCode } from './errors';
-import { providerRegistry, resolveApiKey, type ProviderEntry } from './registry';
+import { providerRegistry, modelEntry, resolveApiKey, UNMEASURED_MODEL, type ModelEntry, type ProviderEntry } from './registry';
 import { createOpenAICompatibleAdapter } from './adapters/openai-compatible.adapter';
 import { createAnthropicAdapter } from './adapters/anthropic.adapter';
 import { createGoogleAdapter } from './adapters/google.adapter';
@@ -35,7 +35,6 @@ export type Signal<T = string> = {
   tools: (tools: Tool[]) => Signal<T>;
   retries: (count: number) => Signal<T>;
   options: (opts: SignalOptions) => Signal<T>;
-  capabilities: (caps: Partial<Capabilities>) => Signal<T>;
   onRetry: (handler: (error: Error, attempt: number) => void) => Signal<T>;
   onToolCall: (handler: (name: string, args: unknown) => void) => Signal<T>;
 
@@ -90,6 +89,10 @@ export type SignalDescription = {
   // a chat provider has every verb, decide() included, by emulation.
   kind: ProviderAdapter['kind'];
   capabilities: Capabilities;
+  // Is (provider, model) a row in the model registry? False means the model
+  // half of `capabilities` is UNMEASURED_MODEL — assumed, not measured. Always
+  // false for a custom provider, which declares its own.
+  modelKnown: boolean;
 };
 
 // ═══════════════════════════════════════════════════════════
@@ -151,18 +154,42 @@ const adapterTypeOf = (config: SignalConfig): ProviderEntry['adapter'] | undefin
 const kindOf = (adapterType: ProviderEntry['adapter'] | undefined): ProviderAdapter['kind'] =>
   adapterType === 'systemone' ? 'decisions' : 'chat';
 
-// Chat capabilities. A decision provider declares none because it has none, so
+// The model a registered provider's client runs, and its row if it has one.
+const modelRowOf = (config: SignalConfig): { provider: string; model: string; row: ModelEntry | undefined } | undefined => {
+  if (typeof config.provider !== 'string') return undefined;
+  const entry = providerRegistry[config.provider];
+  if (entry === undefined) return undefined;
+  const model = config.model ?? entry.defaultModel;
+  return { provider: config.provider, model, row: modelEntry(config.provider, model) };
+};
+
+// Chat capabilities: the provider's endpoint row JOINED with the model's row —
+// no field is on both, so nothing overrides anything. A model with no row gets
+// UNMEASURED_MODEL. A decision provider declares none because it has none, so
 // it resolves to the all-false floor.
 const resolveCapabilities = (config: SignalConfig): Capabilities => {
   if (typeof config.provider === 'string') {
     const entry = providerRegistry[config.provider];
-    const defaults = entry === undefined || entry.adapter === 'systemone' ? FALLBACK_CAPABILITIES : entry.capabilities;
-    return { ...defaults, ...config.capabilities };
+    if (entry === undefined || entry.adapter === 'systemone') return FALLBACK_CAPABILITIES;
+    return { ...entry.endpoint, ...(modelRowOf(config)?.row?.capabilities ?? UNMEASURED_MODEL) };
   }
-  // Custom providers may declare capabilities on the provider config;
-  // instance-level .capabilities() overrides still win.
   const declared = config.provider.adapter === 'systemone' ? {} : config.provider.capabilities;
-  return { ...FALLBACK_CAPABILITIES, ...declared, ...config.capabilities };
+  return { ...FALLBACK_CAPABILITIES, ...declared };
+};
+
+// A reasoning effort the model's row does not list is refused HERE, when the
+// client is built — not by a provider 400 in the middle of a run. An unmeasured
+// model is not checked: nobody knows what it takes, and the provider will say.
+const assertEffort = (config: SignalConfig, effort: ReasoningEffort | undefined): void => {
+  if (effort === undefined) return;
+  const resolved = modelRowOf(config);
+  const row = resolved?.row;
+  if (resolved === undefined || row === undefined || row.reasoningEfforts.includes(effort)) return;
+  const accepted = row.reasoningEfforts.length === 0 ? 'nothing — it takes no reasoning effort' : row.reasoningEfforts.join(', ');
+  throw new SignalError(
+    `reasoningEffort "${effort}" is not accepted by ${resolved.provider} ${resolved.model} (accepts: ${accepted}; measured ${row.verified})`,
+    ErrorCode.VALIDATION_FAILED,
+  );
 };
 
 const wireIdsOf = (config: SignalConfig): string[] => {
@@ -239,6 +266,10 @@ const createSignalFromConfig = <T = string>(config: SignalConfig): Signal<T> => 
   // at construction, not mid-run.
   const wireStrategies: WireStrategy[] = resolveWireStrategies(wireIdsOf(config));
 
+  // So is an effort the model does not take — every builder call re-runs this,
+  // so `.model()` after `.options()` is checked against the model it lands on.
+  assertEffort(config, config.options?.reasoningEffort);
+
   const getAdapter = async (): Promise<ProviderAdapter> => {
     const resolved = resolveProvider(config);
     const key = `${resolved.adapterType}:${resolved.baseUrl}:${resolved.apiKey}`;
@@ -295,6 +326,7 @@ const createSignalFromConfig = <T = string>(config: SignalConfig): Signal<T> => 
         options: { ...config.options, ...request.options },
       }),
     };
+    assertEffort(config, providerRequest.options?.reasoningEffort);
     const declared = new Set((request.tools ?? []).map((tool) => tool.name));
     let response: ProviderResponse;
     try {
@@ -360,6 +392,7 @@ const createSignalFromConfig = <T = string>(config: SignalConfig): Signal<T> => 
         config.options !== undefined || request.options !== undefined
           ? { ...request, options: { ...config.options, ...request.options } }
           : request;
+      assertEffort(config, merged.options?.reasoningEffort);
       try {
         for await (const event of executeStepStream({
           adapter,
@@ -472,7 +505,6 @@ const createSignalFromConfig = <T = string>(config: SignalConfig): Signal<T> => 
     tools: (t) => fork({ tools: t }),
     retries: (count) => fork({ retries: count }),
     options: (opts) => fork({ options: { ...config.options, ...opts } }),
-    capabilities: (caps) => fork({ capabilities: { ...config.capabilities, ...caps } }),
     onRetry: (handler) => fork({ onRetry: handler }),
     onToolCall: (handler) => fork({ onToolCall: handler }),
 
@@ -484,6 +516,7 @@ const createSignalFromConfig = <T = string>(config: SignalConfig): Signal<T> => 
           model: config.model ?? entry?.defaultModel,
           kind: kindOf(adapterTypeOf(config)),
           capabilities: resolveCapabilities(config),
+          modelKnown: modelRowOf(config)?.row !== undefined,
         };
       }
       return {
@@ -491,6 +524,7 @@ const createSignalFromConfig = <T = string>(config: SignalConfig): Signal<T> => 
         model: config.model ?? config.provider.model,
         kind: kindOf(adapterTypeOf(config)),
         capabilities: resolveCapabilities(config),
+        modelKnown: false,
       };
     },
 

@@ -15,7 +15,7 @@
 //   import { mappingAgent } from '@niscorp/prism/agent';
 //   import { evaluate } from '@niscorp/prism';
 //
-//   const llm = createSignal('groq', { apiKey, model: 'openai/gpt-oss-120b' });
+//   const llm = createSignal('groq', { apiKey }); // qwen/qwen3.8-27b, the registry default
 //   const result = await mappingAgent.run({
 //     sampleInput: { first: 'Ada', last: 'Lovelace' },
 //     targetShape: { fullName: '' },

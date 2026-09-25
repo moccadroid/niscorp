@@ -12,7 +12,9 @@ every provider — or you get a typed failure with evidence.**
 
 ```
 types.ts       the public contract (incl. StepOutcome / Rejection / WireReport)
-registry.ts    provider DATA: baseUrl, capabilities, adapter id, wire strategy ids
+registry.ts    provider DATA (baseUrl, endpoint capabilities, adapter id, wire strategy ids)
+               + model DATA (model capabilities, reasoning efforts) — measured rows
+scripts/       probe-model.ts: measures one model on one provider, prints its registry row
 adapters/      byte movers, one per WIRE PROTOCOL (not per vendor) — throw-and-wrap, zero policy
 decide/        gate.ts: the acceptance gate DERIVED from a decide() call's questions
 wire/          RESPONSE side: repair.ts (mechanisms) → router.ts (classify) → strategies/ (provider quirks)
@@ -68,18 +70,28 @@ sides is two changes.
   identically: a rejected call to a declared tool IS a tool call; a
   rejected pseudo-call carrying valid output IS output.
 - **Transport resolution is pure.** `resolveTransport(spec,
-  capabilities)` — previews resolve exactly like runs. `auto` → emit on
-  arg-mangling providers (`manglesNestedToolArgs`), native when grammar
-  and tools combine, respond otherwise. Explicit choices are honored.
-  Permissive respond params on hard-validating providers
+  capabilities)` — previews resolve exactly like runs. `auto` picks what
+  ENFORCES: native when grammar is viable; respond when its tool params
+  can enforce the contract (the endpoint does not validate tool args
+  itself, the full schema fits, the model does not mangle nested args —
+  or `forceTool`); emit otherwise, because every model can do it and
+  the contract rides the prompt either way. Explicit choices are
+  honored. Permissive respond params on hard-validating providers
   (`validatesToolArgs`) never advertise a field the contract lacks.
+- **A capability is owned by the endpoint or by the model, never both.**
+  `EndpointCapabilities` live on the provider row, `ModelCapabilities`
+  on a model row keyed `provider/model`; a client's capabilities are
+  the join. Model rows are pasted from `scripts/probe-model.ts`, carry
+  the day they were measured, and are the only place a model fact
+  lives — no instance override, no app-side table. The invariants are
+  `test/registry.test.ts`.
 
 ## Design decisions (carried from v1 where still true)
 
 1. **Factory function, not class.** Plain object from a closure.
 2. **Immutable builder via spread.** Each method forks the config bag.
 3. **String provider names**; registry supplies URLs, env keys,
-   capability defaults; object config for custom endpoints.
+   endpoint and model capabilities; object config for custom endpoints.
 4. **Capabilities drive behavior, not provider identity.** No
    "if groq then X" outside the registry row.
 5. **Zod is the source of truth.** Provider grammar is a compliance

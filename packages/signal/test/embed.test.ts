@@ -80,21 +80,21 @@ describe('embed() onUsage', () => {
 describe('supportsEmbedding capability', () => {
   it('openai has supportsEmbedding: true', async () => {
     const { chatProviderEntry } = await import('../src/registry');
-    expect(chatProviderEntry('openai')?.capabilities.supportsEmbedding).toBe(true);
+    expect(chatProviderEntry('openai')?.endpoint.supportsEmbedding).toBe(true);
   });
 
   it('groq has supportsEmbedding: false', async () => {
     const { chatProviderEntry } = await import('../src/registry');
-    expect(chatProviderEntry('groq')?.capabilities.supportsEmbedding).toBe(false);
+    expect(chatProviderEntry('groq')?.endpoint.supportsEmbedding).toBe(false);
   });
 
   it('openrouter has supportsEmbedding: false', async () => {
     const { chatProviderEntry } = await import('../src/registry');
-    expect(chatProviderEntry('openrouter')?.capabilities.supportsEmbedding).toBe(false);
+    expect(chatProviderEntry('openrouter')?.endpoint.supportsEmbedding).toBe(false);
   });
 
   it('anthropic has supportsEmbedding: false', async () => {
     const { chatProviderEntry } = await import('../src/registry');
-    expect(chatProviderEntry('anthropic')?.capabilities.supportsEmbedding).toBe(false);
+    expect(chatProviderEntry('anthropic')?.endpoint.supportsEmbedding).toBe(false);
   });
 });

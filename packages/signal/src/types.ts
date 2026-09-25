@@ -64,32 +64,46 @@ export type ToolCallRecord = {
 // Capabilities
 // ═══════════════════════════════════════════════════════════
 
-export type Capabilities = {
+// Two owners, two types. What the ENDPOINT does holds for every model behind
+// it and lives on the provider's registry row; what the MODEL does is measured
+// per model (scripts/probe-model.ts) and lives on the model's row. A client's
+// `Capabilities` is the two joined — they share no field, so neither overrides
+// the other.
+
+export type EndpointCapabilities = {
   nativeTools: boolean;
-  nativeJsonSchema: boolean;
   nativeJsonMode: boolean;
-  // Can the provider combine response_format with tool calling in ONE
-  // request? OpenAI can; Groq and OpenRouter reject the combination.
-  // Orchestrators (cortex) use this to pick an output strategy.
-  toolsWithStructuredOutput: boolean;
   // Does the provider validate tool-call arguments SERVER-SIDE against
   // the declared `parameters` schema and 400 the whole request on a
-  // mismatch (Groq's tool_use_failed)? When true, orchestrators keep
-  // the wire `parameters` of large/repairable payloads permissive and
-  // validate client-side — a client sees the attempt and can repair or
-  // correct specifically; a server 400 destroys it.
+  // mismatch (Groq's tool_use_failed)? When true, tool params cannot
+  // enforce a contract — they are sent permissive and validation is
+  // client-side — so the `respond` transport has nothing to offer there.
   validatesToolArgs: boolean;
-  // Does the provider/model corrupt STRUCTURED tool-call arguments?
-  // Observed on Groq gpt-oss: nested arrays inside function args arrive
-  // JSON-STRINGIFIED (`"children": "[{\"component\":..."`), while the
-  // model emits the identical JSON cleanly on the content channel.
-  // When true, orchestrators should carry large structured payloads on
-  // the content channel (cortex resolves output strategy to 'emit')
-  // instead of through tool args.
-  manglesNestedToolArgs: boolean;
-  multimodal: boolean;
   supportsEmbedding: boolean;
 };
+
+export type ModelCapabilities = {
+  // Does the model answer `response_format: json_schema` (strict:false, as
+  // signal's `native` sends it) with content that fits the schema?
+  nativeJsonSchema: boolean;
+  // Is `response_format` accepted with `tools` in ONE request for this model?
+  // Per model: Groq refuses it outright, OpenRouter depends on the route.
+  toolsWithStructuredOutput: boolean;
+  // Does the model corrupt STRUCTURED tool-call arguments? Measured on
+  // Groq gpt-oss-120b: nested arrays inside function args arrive
+  // JSON-STRINGIFIED (`"children": "[{\"component\":..."`). A model that
+  // mangles never carries its output on the tool channel (`respond`).
+  manglesNestedToolArgs: boolean;
+  multimodal: boolean;
+};
+
+export type Capabilities = EndpointCapabilities & ModelCapabilities;
+
+// Every `reasoning_effort` value a provider has been seen to accept. `none` and
+// `default` are Qwen's on Groq; `minimal`…`max` are OpenAI's and OpenRouter's.
+// WHICH of these a given model takes is its registry row's `reasoningEfforts`.
+export const REASONING_EFFORTS = ['none', 'default', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'] as const;
+export type ReasoningEffort = (typeof REASONING_EFFORTS)[number];
 
 // ═══════════════════════════════════════════════════════════
 // Options (rarely set)
@@ -102,14 +116,12 @@ export type SignalOptions = {
   stopSequences?: string[];
   seed?: number;
   signal?: AbortSignal;
-  // How hard a REASONING model thinks before it answers. The scale is the
-  // provider's, not ours (OpenAI stops at 'high'; OpenRouter routes models that
-  // also take 'max'), so the union is the union of what providers accept and an
-  // unsupported rung is the provider's to reject. Models whose reasoning is
-  // mandatory default to their own top rung — on a long agentic loop that is the
-  // difference between a run that finishes inside its budget and one that does
-  // not, so the caller gets to say.
-  reasoningEffort?: 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max';
+  // How hard a REASONING model thinks before it answers — sent as-is as
+  // `reasoning_effort`. The scale is the provider's, not ours, so the union is
+  // the union of what providers accept. For a model in the registry, a value its
+  // row does not list is refused when the client is built, not by a 400 mid-run;
+  // for an unmeasured model it is sent unchecked.
+  reasoningEffort?: ReasoningEffort;
 };
 
 // ═══════════════════════════════════════════════════════════

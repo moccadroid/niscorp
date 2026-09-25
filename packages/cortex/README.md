@@ -32,12 +32,12 @@ const calculator = defineTool({
 const calcAgent = defineAgent({
   id: 'calc',
   description: 'Arithmetic with a tool.',
-  instructions: 'Use the calculator tool, then finish with respond.',
+  instructions: 'Use the calculator tool, then give the answer.',
   tools: [calculator],
   output: { schema: z.object({ answer: z.number() }) },
 });
 
-const llm = createSignal('groq', { model: 'openai/gpt-oss-120b' });
+const llm = createSignal('groq'); // qwen/qwen3.8-27b — the registry default
 
 const result = await calcAgent.run('What is (2 + 3) * 7 - 6?', { llm }).result;
 if (result.ok) console.log(result.output.data.answer); // 29
@@ -78,14 +78,14 @@ How the envelope travels from model to runtime. One field,
 
 | Strategy | Mechanism | Fits |
 |---|---|---|
-| `respond` (default) | a synthesized `respond` tool; the envelope is its arguments | everything — including Groq-class providers that reject `response_format` + tools |
 | `native` | provider `response_format: json_schema`, in-loop | small strict-compatible schemas on capable providers (auto-picked) |
-| `emit` | the model's completion IS the envelope (content channel) | providers that corrupt structured tool args (auto-picked on Groq via `manglesNestedToolArgs`) |
+| `respond` | a synthesized `respond` tool; the envelope is its arguments | where the tool params can ENFORCE the contract — the endpoint does not validate tool args itself, the schema is small, the model carries nested args intact (auto-picked there) |
+| `emit` | the model's completion IS the envelope (content channel) | everything else — auto-picked wherever neither of the above enforces anything: all of Groq, big schemas, models that mangle nested tool args |
 
 Zod validates in **every** strategy. Invalid output feeds back as a
 correction *inside the same run* (a tool error result / an appended
 message) — never a full re-run. Big recursive schemas (Prism nodes,
-Nova actions) ride `respond` with loose tool params; cortex injects
+Nova actions) ride `emit`; cortex injects
 the JSON Schema into the prompt automatically (`output.doc: 'auto'`,
 via `schemaDoc()` — single-sourced from the Zod schema).
 
@@ -210,7 +210,7 @@ are the same execution path.
 
 ```ts
 const manifold = createManifold({
-  llm: groq120b,                  // fallback model
+  llm: groqQwen,                  // fallback model
   gates: [uiApprovalGate],        // appended to every run
   onRun: (run) => trace.attach(run),
 });
@@ -227,7 +227,7 @@ import { asTool } from '@niscorp/cortex';
 const orchestrator = defineAgent({
   id: 'orchestrator',
   instructions: 'Delegate, then respond.',
-  tools: [asTool(vexQueryAgent, { deps, llm: groq120b })],
+  tools: [asTool(vexQueryAgent, { deps, llm: groqQwen })],
 });
 // or from the catalog: manifold.asTool('vex.query')
 ```

@@ -79,7 +79,6 @@ describe('builder immutability', () => {
       base.tools([]),
       base.retries(1),
       base.options({ temperature: 0 }),
-      base.capabilities({ nativeTools: true }),
       base.onRetry(() => {}),
       base.onToolCall(() => {}),
     ];

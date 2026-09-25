@@ -35,8 +35,9 @@ export type ResolvedPreview = {
   estimatedTokens: number;
 };
 
-// Without an llm to describe(), resolution assumes the most
-// conservative provider — which resolves to the respond strategy.
+// Without an llm to describe(), resolution assumes a plain provider
+// that neither validates nor mangles tool args — respond for a small
+// contract, emit for one too large to enforce in tool params.
 const FALLBACK_CAPABILITIES: Capabilities = {
   nativeTools: true,
   nativeJsonSchema: false,
