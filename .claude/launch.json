@@ -54,6 +54,12 @@
       "runtimeExecutable": "pnpm",
       "runtimeArgs": ["--filter", "showroom", "dev", "--port", "5199", "--strictPort", "--no-open"],
       "port": 5199
+    },
+    {
+      "name": "lyceum",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["--filter", "lyceum", "dev", "--port", "5197", "--strictPort", "--no-open"],
+      "port": 5197
     }
   ]
 }

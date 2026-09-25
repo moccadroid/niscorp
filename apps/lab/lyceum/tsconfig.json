@@ -1,0 +1,13 @@
+{
+  "extends": "../../../tsconfig.json",
+  "compilerOptions": {
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "noEmit": true,
+    "lib": ["DOM", "DOM.Iterable", "ES2022"],
+    "types": ["vite/client", "node"],
+    "baseUrl": ".",
+    "paths": { "@lyceum/*": ["src/*"] }
+  },
+  "include": ["src", "vite.config.ts"]
+}

@@ -9,6 +9,67 @@ The talk's subject is how software should work, and what it should look like, no
 language models exist. Lyceum does not argue that on slides. It shows it on the room's
 own phones.
 
+## Status and handoff — 2026-09-25
+
+Where to pick up. Read this section, then "Vex is never hidden behind a function" and
+"Reactive reads" below — they record decisions made after the plan was first written.
+
+**Built (order of work steps 2–3), committed with this plan:**
+- The scaffold: manifest (`src/app/app.ts`, artifacts only; the code seams are injected
+  by `src/server/boot.ts`), dev runtime on PGlite with moss's real `sessions` credential,
+  vite dev plugin with a dev-only `/dev/as/<principal>` for the speaker and the stage,
+  a DOM terminal on nova's default kit (lyceum's own kit is step 4).
+- Roles resolve from rows through moss's `identity` seam (`src/server/identity.ts`): a
+  member wears their `house_id` (or `unsorted`) plus rows in `grants`; the speaker and
+  the stage wear only their grants. No raw SQL.
+- Five placeholder actions (door, member card, house crest, speaker console, stage
+  roster) and the sorting.
+- `src/dev/sorting-check.ts`: 25 of 26 assertions pass over a real websocket.
+
+**Proven — the claim the talk stands on.** A member's phone, connected before the
+sorting and never reconnected, receives its house the moment the speaker sorts
+(`invalidateIdentity` → `shells.reset` carries the open connection across). Checked
+headless and in a real browser with the controller in a second tab.
+
+**The one red assertion — and what it exposed.** "The stage shows their house": the
+roster did not refresh after the sort. The sorting wrote through `executeAs`, and moss
+attaches vex's write observer (`onWrite`, which feeds `reactions` and tide facts) to the
+HTTP vex mount only (`packages/moss/src/server.ts` ~622). **Every write made through
+`executeAs` is invisible to reactions and to tide.** `executeAs` was born in `55bdfd8`
+(2026-08-14) to replace raw SQL on no-principal surfaces and inherited raw SQL's
+silence; nothing says it was deliberate (its telemetry IS wired). moss's DESIGN.md
+claims every write passes the observer — the code disagrees. Leave the assertion red
+until the fix below lands; do not weaken it.
+
+**Decided in conversation — do these next, in this order:**
+1. **Lyceum: the sort writes as the speaker.** Replace `executeAs('hat', …)` in
+   `src/server/functions/sorting.functions.ts` with reads and writes over
+   `session.wire` as the speaker; grant the speaker `members.write.update` in the
+   charter; delete the `hat` machinery role. The function keeps only the CHOICE (Jev,
+   later). See "Vex is never hidden behind a function".
+2. **moss: `executeAs` writes pass the write observer.** `executeAs` calls vex's
+   `handleQuery` with a `mutations` config — pass it the same `onWrite` the HTTP mount
+   passes. Needed for the one legitimate no-principal write (the door's member insert)
+   and for every webhook and effect. Test: a machinery write fires a reaction. Midas
+   note for its next bump: its machinery writes will start firing reactions and tide
+   facts; a write fact is stamped from the write's scope, which `executeAs`'s caller
+   supplies, so every machinery writer must pass a scope that stamps the right tenant,
+   and its reactions need a loop audit.
+3. **vex + moss + nova: reactive reads** (see "Reactive reads"). Then delete
+   `src/server/reactions.ts` and every `members-changed` channel in lyceum.
+4. Continue the order of work from step 4 (the kit).
+
+**Two open questions for step 3** (ask before building): how the touched-tables list
+reaches nova through moss's `{ result }` unwrap (a response header, or the endpoint
+keeping the reply's `meta`); and whether refresh is on by default for every vex read
+(the "nothing declared" answer, with an opt-out) or opted into per endpoint.
+
+**Working-tree notes.** `pnpm install` added lyceum to `pnpm-lock.yaml`; only lyceum's
+part of the lockfile was committed — the rest of the lockfile's uncommitted changes
+belong to another session's signal/qwen work, as do the uncommitted changes under
+`packages/signal`, `packages/cortex`, `apps/lab/{encore,relay,atrium}` and the showroom
+signal stories. `.claude/launch.json` has a `lyceum` entry (port 5197).
+
 ## What the room experiences
 
 1. **Arrival.** A QR code on the projector. Scanning it signs the phone in (a session
@@ -99,7 +160,7 @@ D2, D4 and D5 follow from D1 and D3 and are recorded for review.
 | `stage` (the projector) | `stage` | slide actions, roster, the sorting, standings, the board, the ask tally. No controls. |
 | `speaker` (the controller) | `speaker` | next/back, countdown, join counter, Sort, grants, moderation queue, notes, section timers, model seam status |
 | Trickster (optional) | `guest` | nearly nothing — the point |
-| machinery | `persona-maker`, `hat`, `headmaster`, `answerer`, `automation` | each exactly the reads and writes its job needs, and nothing else |
+| machinery | `identity` (resolves roles), `doorkeeper` (the stranger's member row) — and only roles like these | a machinery role exists only where NO principal exists yet. Everything that acts for a person or for the speaker acts as them, over their session's wire (see "Vex is never hidden behind a function") |
 
 Stage and speaker are separate principals on separate devices. The projector never holds a
 control; the controller can be a phone.
@@ -138,18 +199,22 @@ personal; writes to a persona are pinned to its owner by a `match` rule.
 
 ## The mechanics
 
-**Persona generation.** A server function under the `persona-maker` principal: a small
-model writes the persona as structured output, streamed with solid onto the new person's
-phone; relationships are a `choice` over existing personas. A buffer of pre-generated
+**Persona generation.** Runs once the new member's own session exists, and writes AS
+the member over their wire: a small model writes the persona as structured output,
+streamed with solid onto their phone; relationships are a `choice` over existing
+personas. A buffer of pre-generated
 personas makes a join instant under load and keeps joins working if generation is down.
 
-**The sorting.** A server function under the `hat` principal. For each unsorted persona in
-join order: ask Jev (state: the persona, the house sizes so far); write the assignment,
-the persona's house and a `sortings` row; `invalidateIdentity` their principal. The
-projector's sorting action listens to `sortings` and plays each one back.
+**The sorting.** A server function the speaker's controller calls; its only code is the
+CHOICE. For each unsorted persona in join order: ask Jev (state: the persona, the house
+sizes so far); write the persona's house and a `sortings` row as the speaker, over the
+speaker's wire; `invalidateIdentity` their principal. The projector's sorting action
+reads `sortings` and plays each one back, refreshed by the write itself (reactive
+reads). Until Jev lands, the choice is "the house with the fewest members" — which
+stays as the fallback when Jev is down.
 
-**The headmaster.** A cortex agent run per message under the `headmaster` principal acting
-for the asker. Its persona is the house's `houses` row. Its reply envelope is
+**The headmaster.** A cortex agent run per message, reading as the asker over their own
+wire — it never writes. Its persona is the house's `houses` row. Its reply envelope is
 `{ response, actions: { action, input, inline }[] }`, admitted against the asker's
 resolved catalog and each action's `input` schema. Granting a capability role extends
 what it can offer with no prompt change, because its options are the catalog.
@@ -182,6 +247,56 @@ charter resolution, the action catalog, nova's `reflect`, the roster and `shells
 An audience member may ask about the app and their own screen; the stage version, under
 the speaker's principal, may look at any screen.
 
+## Vex is never hidden behind a function
+
+Decided 2026-09-25, after the scaffold reached for `executeAs` twice.
+
+- Actions talk to vex directly through their endpoints. A server function exists only
+  for what cannot be data: a model's choice, session lifecycle (`grant`/`revoke`), an
+  outside call.
+- When a function does touch data, it does so AS the principal it acts for, over
+  `session.wire` — the same governed door their actions use. Their charter grants the
+  verbs, their identity stamps the write, and the write is observed like any other.
+- `executeAs` is for surfaces with NO principal: the identity read, the stranger at the
+  door, a webhook, an effect nobody is driving. Reaching for it on behalf of a signed-in
+  person (the first scaffold's `hat`) hides vex behind a function and invents a
+  machinery role to do what the charter should say the person may do.
+
+## Reactive reads
+
+Decided in direction 2026-09-25; two questions open (see Status). A library change
+across vex, moss and nova — lyceum is its first consumer.
+
+**The idea: a vex read refreshes itself when a table it read changes.** The query
+already knows what it reads, so freshness is the query's own property — not a listener
+an action declares, and not a registry the host keeps.
+
+- **vex** answers every read with the tables it actually touched (`discoverEntities`
+  over the query it ran). Its write observer already reports the tables every committed
+  write touched (`mutationEffect`).
+- **The holder of a result listens for its tables.** A nova endpoint that loaded data
+  from a query reading `members` and `houses` subscribes to those tables' change signals
+  at call time, and on one re-runs that endpoint under the viewer's own policy. No rows
+  travel.
+- **The host broadcasts which tables changed.** moss publishes table-change signals into
+  living shells (and across processes through the fabric). A client-degrade app's
+  in-browser engine can emit the same signals to its own shell — so the mechanism is not
+  a moss feature, and vex stays independent of moss.
+- **nova stays independent of vex**: its contract is generic — "a result may name the
+  channels that invalidate it"; vex happens to name tables.
+
+**Rules.** Only reads re-run — a mutation endpoint never replays (vex knows every entry's
+kind). Only the endpoint call re-runs, not the action's `onSuccess` chain. Bursts
+coalesce: a sort placing thirty people is one refresh per endpoint, not thirty (moss's
+newest-wins backpressure). Table-level precision: any write to `members` refreshes every
+read of `members` — exact about which tables, blunt about which rows; row-level is not
+attempted.
+
+**Why it matters beyond lyceum.** It covers fingerprints computed at runtime and queries
+generated live (the ask action) with nothing registered, and it retires most of the
+"writers announce, viewers react" wiring every app carries. Channels remain for signals
+that are not data — the deck moving on, "the sorting has started".
+
 ## Timeline (40 minutes, adjustable)
 
 | Minutes | What happens |
@@ -208,9 +323,8 @@ the speaker's principal, may look at any screen.
 
 ## Risks and things to verify first
 
-- **Live role change.** Roles must resolve from rows through moss's `identity` seam, and a
-  role change must land on a connected phone via `invalidateIdentity` without a reload.
-  Prove this before anything else; the sorting stands on it.
+- **Live role change — proven 2026-09-25** (`sorting-check`, and in a browser). What it
+  exposed is under Status: machinery writes are invisible to the write observer.
 - **Model choice per seam must be measured, not assumed.** qwen 27b on Groq at effort
   `default` looped to its step limit on encore's agent (0/6); `low` and `medium` passed
   (6/6). Groq's per-model token limit (250k/min) is shared by every seam on one model.
@@ -239,10 +353,11 @@ the speaker's principal, may look at any screen.
 
 ## Order of work
 
-1. This plan, reviewed.
+1. This plan, reviewed. — done
 2. Scaffold: manifest, runtime, terminal; canvases and an empty registry; one action
-   renders on a phone against the VPS.
-3. Prove the live role change end to end.
+   renders on a phone against the VPS. — done locally (dev runtime); the VPS is Open
+3. Prove the live role change end to end. — done; follow-ups under Status (the sort
+   as the speaker, `executeAs` writes observed, reactive reads)
 4. Kit: primitives against a kitchen-sink action; the house variants; lock the look.
 5. Data: schema, entries, behaviours; persona generation and the join.
 6. The deck: controller, stage, the `deck` row.
