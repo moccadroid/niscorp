@@ -333,7 +333,7 @@ map, so the grant widens no data.
 **The room accounts for itself.**
 
 - Every card the loop mounts is composed `with: ['placed']` — one fragment, no per-action field —
-  and carries `placedBy`: `jev 0.89`, `you`, or `120b · step 2`. The loop rewrites it in place
+  and carries `placedBy`: `jev 0.89`, `you`, or `27b · step 2`. The loop rewrites it in place
   as Jev's confidence moves.
 - With nothing on the canvases the chip strip says so: "Nothing in the room answers that yet."
   / "…These are guesses — click one to open it." A cleared line says nothing: nothing was asked.

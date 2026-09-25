@@ -10,7 +10,7 @@ import { TILE_HUE, TILE_SPAN, TILE_TAG } from '@encore/app/canvas-placement';
 //
 //   jev 0.89        the fast model, and its probability that the card belongs
 //   you             a chip the operator clicked
-//   120b · step 2   the text model, and which step of its plan opened it
+//   27b · step 2    the text model, and which step of its plan opened it
 //
 // A fragment and not a field, on purpose (AGENTS rule 3): provenance is chrome,
 // the same on all fourteen cards, and none of them should know it exists. The

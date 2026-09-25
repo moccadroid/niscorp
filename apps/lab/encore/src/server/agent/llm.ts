@@ -6,7 +6,8 @@ import type { FakeAgentControls } from './fake-llm';
 // WHICH MODEL THE AGENT THINKS WITH, chosen once at boot — the slow speed's
 // twin of decider.ts.
 //
-//   ENCORE_AGENT=groq   Groq's gpt-oss-120b through signal; needs GROQ_API_KEY
+//   ENCORE_AGENT=groq   Groq's default model (signal's registry) through signal;
+//                       needs GROQ_API_KEY
 //   ENCORE_AGENT=fake   the scripted client, deterministic and offline
 //   ENCORE_AGENT=off    no agent
 //
@@ -25,7 +26,7 @@ export type AgentLlm = {
   id: string;
   model: string;
   // What a card it opened is tagged with — short enough for a card header:
-  // `120b`, not `openai/gpt-oss-120b`.
+  // `27b`, not `qwen/qwen3.8-27b`.
   label: string;
   // Absent exactly when `kind` is 'off'.
   llm: SignalClient | undefined;
@@ -62,19 +63,22 @@ export const createAgentLlm = (config: AgentLlmConfig, env: Record<string, strin
     // nothing: somebody waiting for an answer should learn why none is coming
     // at boot, not by watching a card stay pending.
     if ((env['GROQ_API_KEY'] ?? '') === '') throw new Error('encore: ENCORE_AGENT=groq needs GROQ_API_KEY in apps/lab/encore/.env.');
-    // Three settings, each one a scar from another app on this exact model
-    // (DESIGN.md § What was studied first):
+    // Three settings:
     //
-    //   temperature 0       the provider default made one prompt a 3-tool run
-    //                       on Monday and a 20-step wander on Tuesday;
-    //   reasoningEffort     `low` broke multi-step flows — it answered before
-    //   medium              reading the tool result it had just asked for;
-    //   no strategy pinned  signal resolves `emit` from the registry's
-    //                       `manglesNestedToolArgs`, and must be left to.
+    //   temperature 0       a scar from gpt-oss-120b in another app: the
+    //                       provider default made one prompt a 3-tool run on
+    //                       Monday and a 20-step wander on Tuesday;
+    //   reasoningEffort     Qwen's own default on Groq, which does not reason
+    //   default             before answering — chosen 2026-09-24. signal
+    //                       refuses it at construction on a model whose
+    //                       registry row does not list it;
+    //   no strategy pinned  signal resolves `emit` on Groq (its endpoint
+    //                       validates tool args, so `respond` params would
+    //                       enforce nothing), and must be left to.
     //
-    // signal's registry default for Groq is gpt-oss-120b; read back rather than
-    // restated, so the trace names whatever the registry actually resolves.
-    const llm = createSignal('groq', { options: { temperature: 0, reasoningEffort: 'medium' } });
+    // signal's registry default for Groq is qwen/qwen3.8-27b; read back rather
+    // than restated, so the trace names whatever the registry actually resolves.
+    const llm = createSignal('groq', { options: { temperature: 0, reasoningEffort: 'default' } });
     const model = llm.describe().model ?? '';
     return { kind: 'groq', id: 'groq', model, label: model.split('-').at(-1) ?? 'groq', llm };
   }
@@ -87,19 +91,21 @@ export const createAgentLlm = (config: AgentLlmConfig, env: Record<string, strin
     // A custom openai-compatible provider whose SDK client is the script. The
     // base URL is never dialled — the injected client answers instead.
     //
-    // It declares GROQ'S temperament, so everything above the client resolves
-    // as it will in production: `manglesNestedToolArgs` puts the envelope on
-    // the content channel (`emit`), the schema rides the prompt as a document,
-    // and a check that reads `agent.preview()` is reading the prompt Groq gets.
+    // It declares what production resolves to — Groq's endpoint joined with
+    // Qwen's measured row (signal registry) — so everything above the client
+    // resolves as it will in production: `validatesToolArgs` puts the envelope
+    // on the content channel (`emit`), the schema rides the prompt as a
+    // document, and a check that reads `agent.preview()` is reading the prompt
+    // Groq gets.
     llm: createSignal(
       {
         baseUrl: 'http://127.0.0.1:0/v1',
         apiKey: 'encore-dev',
         model: FAKE_AGENT_MODEL,
         adapter: 'openai-compatible',
-        capabilities: { nativeTools: true, nativeJsonMode: true, validatesToolArgs: true, manglesNestedToolArgs: true },
+        capabilities: { nativeTools: true, nativeJsonMode: true, validatesToolArgs: true, nativeJsonSchema: true, manglesNestedToolArgs: false, multimodal: true },
       },
-      { client: createScriptedClient(config.fake), options: { temperature: 0, reasoningEffort: 'medium' } },
+      { client: createScriptedClient(config.fake), options: { temperature: 0, reasoningEffort: 'default' } },
     ),
   };
 };

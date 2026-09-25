@@ -125,7 +125,7 @@ const main = async (): Promise<void> => {
     const next = attempts[turn.lookups.length];
     return next === undefined
       ? { answer: { response: `I tried ${turn.lookups.length} writes and was refused every time.`, data: {} } }
-      : { call: { name: 'query', args: { fingerprint: next, context: '{"actId":"act_nova_kestrel","toStageId":"stage_tent","minutes":30,"audience":"everyone","urgency":2,"body":"x","role":"agent","detail":"{}"}' } } };
+      : { call: { name: 'query', args: { fingerprint: next, context: { actId: 'act_nova_kestrel', toStageId: 'stage_tent', minutes: 30, audience: 'everyone', urgency: 2, body: 'x', role: 'agent', detail: '{}' } } } };
   };
   controls.script = misbehave;
   controls.seen.length = 0;
@@ -142,7 +142,7 @@ const main = async (): Promise<void> => {
   let requestsMade = 0;
   const lawTools = createReadTools({ wire: (url, init) => { requestsMade += 1; return lawSession.wire(url, init); }, policy: lawSession.policy, entries: ENTRIES });
   const queryTool = lawTools.find((tool) => tool.config.name === 'query');
-  const verdicts = await Promise.all(mutations.map(async (fingerprint) => JSON.stringify(await queryTool?.config.execute({ fingerprint, context: '{}' }, { runId: 'law', agentId: 'law', agentPath: ['law'], signal: new AbortController().signal, forward: () => {} }))));
+  const verdicts = await Promise.all(mutations.map(async (fingerprint) => JSON.stringify(await queryTool?.config.execute({ fingerprint, context: {} }, { runId: 'law', agentId: 'law', agentPath: ['law'], signal: new AbortController().signal, forward: () => {} }))));
   check(`the read tool refuses ALL ${mutations.length} mutations — the feed’s included — before the wire (${requestsMade} requests made)`, mutations.length === 11 && verdicts.every((verdict) => verdict.includes('"refused"') && verdict.includes('changes data')) && requestsMade === 0);
   check('...and the headliner is where she was', (await headlinerStage()) === stageBefore && stageBefore !== undefined);
 

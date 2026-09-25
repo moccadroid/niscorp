@@ -29,9 +29,10 @@ import { canRead } from '@encore/server/intent/context-packs';
 // A REFUSAL IS THE TOOL'S ANSWER, not an exception: the model reads why and
 // tries something that exists.
 //
-// FLAT ARGUMENTS ONLY. gpt-oss-120b on Groq stringifies nested values inside
-// tool arguments, so `context` is asked for as what would arrive anyway — a
-// JSON object in a string — and parsed here.
+// `context` IS A JSON OBJECT. A model that stringifies nested tool arguments
+// (signal's `manglesNestedToolArgs`) is rescued below this file: cortex decodes
+// a stringified value and re-validates before the tool ever runs, so the tool
+// declares the shape it means rather than the shape one model used to send.
 // ═══════════════════════════════════════════════════════════
 
 export type ReadToolsConfig = {
@@ -82,10 +83,7 @@ const capped = (rows: unknown): { rows: unknown[]; note?: string } => {
   return kept.length === list.length ? { rows: kept } : { rows: kept, note: `${list.length - kept.length} more row(s) not shown — narrow the question instead of asking again.` };
 };
 
-const ContextArgument = z
-  .string()
-  .nullish()
-  .describe('The parameters of that query, as ONE JSON object in a string — exactly the keys list_queries gives under `context`, e.g. {"day":"sat"}. Leave out when it takes none.');
+const ContextArgument = Json.nullish().describe('The parameters of that query — exactly the keys list_queries gives under `context`, each with its value, e.g. {"day":"sat"}. Leave out when it takes none.');
 
 export const createReadTools = (config: ReadToolsConfig): ToolDefinition[] => {
   const readable = readableQueries(config);
@@ -118,18 +116,7 @@ export const createReadTools = (config: ReadToolsConfig): ToolDefinition[] => {
       if (writes.has(fingerprint)) return { refused: `"${fingerprint}" changes data. You only read; a person makes changes with the forms on screen.` };
       if (!allowed.has(fingerprint)) return { refused: `"${fingerprint}" is not a read available here. Call list_queries for the ones that are.` };
 
-      let bound: Record<string, unknown> = {};
-      if (typeof context === 'string' && context.trim() !== '') {
-        try {
-          const parsed = Json.safeParse(JSON.parse(context));
-          if (!parsed.success) return { refused: '`context` must be a JSON OBJECT in a string, e.g. {"day":"sat"}.' };
-          bound = parsed.data;
-        } catch {
-          return { refused: '`context` is not valid JSON. Send one JSON object in a string, e.g. {"day":"sat"}.' };
-        }
-      }
-
-      const response = await config.wire('/api/vex', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ fingerprint, context: bound }) });
+      const response = await config.wire('/api/vex', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ fingerprint, context: context ?? {} }) });
       if (!response.ok) return { failed: `the read did not run (${response.status}): ${(await response.text()).slice(0, 300)}` };
       const shown = capped(await response.json());
       config.onRows?.(shown.rows);

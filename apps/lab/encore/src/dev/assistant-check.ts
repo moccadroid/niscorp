@@ -34,6 +34,7 @@ import { z } from 'zod';
 import { estimateTokens } from '@niscorp/cortex';
 import type { ToolContext, ToolDefinition } from '@niscorp/cortex';
 import type { FetchFn } from '@niscorp/nova';
+import { deepDecodeJsonish } from '@niscorp/signal';
 import { LIAISON_PRINCIPAL, OPERATOR_PRINCIPAL } from '@encore/app/charter/assignments';
 import { CANVAS_PLACEMENT } from '@encore/app/canvas-placement';
 import { ENTRIES } from '@encore/app/vex';
@@ -182,7 +183,7 @@ const main = async (): Promise<void> => {
   check(`...SCREEN says what is up (${goingHanded?.screen.map((card) => card.card).join(', ')})`, goingHanded?.screen.some((card) => card.card === 'situation.now' && card.canvas === 'nearby') === true);
   check(`...and a NARROWED catalog, ONE LINE EACH, not JSON Schema (${goingHanded?.actions.length} of ${Object.keys(CANVAS_PLACEMENT).length})`, (goingHanded?.actions.length ?? 99) <= 8 && goingHanded?.actions.every((line) => !line.includes('"properties"') && !line.includes('\n')) === true);
   check('...and NOTHING about a mode or a route: the state is the same shape every time', goingHanded !== undefined && !('mode' in goingHanded) && !(goingRequest?.messages ?? []).some((message) => /"(mode|route)":/.test(message.content)));
-  check('Groq’s settings ride every request: temperature 0, reasoning effort medium', goingRequest?.params['temperature'] === 0 && goingRequest.params['reasoning_effort'] === 'medium');
+  check('Groq’s settings ride every request: temperature 0, reasoning effort default', goingRequest?.params['temperature'] === 0 && goingRequest.params['reasoning_effort'] === 'default');
   check(`...two tools, both reads, and no exit tool — the envelope rides the content channel (${goingRun?.strategy})`, goingRequest?.tools.join() === 'list_queries,query' && goingRun?.strategy === 'emit');
   check('...with token counts from the provider’s usage frame, and said to be', (goingRun?.inputTokens ?? 0) > 0 && (goingRun?.outputTokens ?? 0) > 0 && goingRun?.usageReported === true);
   controls.chunkMs = 0;
@@ -245,16 +246,21 @@ const main = async (): Promise<void> => {
   const mutations = ENTRIES.flatMap((entry) => ('mutation' in entry ? [entry.fingerprint] : []));
   check(`list_queries: ${listed.queries.length} readable fingerprints, each with what it returns and the context it needs — without a request`, listed.queries.length > 10 && listed.queries.every((query) => query.returns !== '') && listed.queries.find((query) => query.fingerprint === 'lineup/forDay')?.context.join() === 'day,stageId' && wireCalls === 0);
   check(`...and never a mutation (${mutations.join(', ')})`, mutations.length >= 4 && mutations.every((fingerprint) => !listed.queries.some((query) => query.fingerprint === fingerprint)));
-  const lineup = RowsSchema.safeParse(await toolNamed(opTools, 'query').config.execute({ fingerprint: 'lineup/forDay', context: '{"day":"sat"}' }, toolContext()));
+  const lineup = RowsSchema.safeParse(await toolNamed(opTools, 'query').config.execute({ fingerprint: 'lineup/forDay', context: { day: 'sat' } }, toolContext()));
   check(`query replays an allowed fingerprint over the session’s wire, as the operator (${lineup.success ? lineup.data.rows.length : 0} rows, ${wireCalls} request)`, lineup.success && lineup.data.rows.length > 0 && wireCalls === 1);
-  const swapRefusal = RefusedSchema.safeParse(await toolNamed(opTools, 'query').config.execute({ fingerprint: 'slots/swap', context: `{"actId":"${headliner}"}` }, toolContext()));
+  const swapRefusal = RefusedSchema.safeParse(await toolNamed(opTools, 'query').config.execute({ fingerprint: 'slots/swap', context: { actId: headliner } }, toolContext()));
   check(`a MUTATION is refused before the wire: "${swapRefusal.success ? swapRefusal.data.refused.slice(0, 60) : ''}…"`, swapRefusal.success && swapRefusal.data.refused.includes('changes data') && wireCalls === 1);
   const madeUp = RefusedSchema.safeParse(await toolNamed(opTools, 'query').config.execute({ fingerprint: 'acts/everything', context: null }, toolContext()));
   check('a fingerprint that does not exist is refused before the wire, and told where to look', madeUp.success && madeUp.data.refused.includes('list_queries') && wireCalls === 1);
-  const badContext = RefusedSchema.safeParse(await toolNamed(opTools, 'query').config.execute({ fingerprint: 'lineup/forDay', context: 'day=sat' }, toolContext()));
-  check('a context that is not a JSON object is refused before the wire — the refusal is the tool’s ANSWER, not a throw', badContext.success && wireCalls === 1);
+  // `context` is an OBJECT in the tool's own schema: cortex validates the call
+  // against it before `execute` runs — a failure goes back to the model as the
+  // tool's answer, and never reaches the wire. A model that stringifies nested
+  // args is rescued by the decode cortex applies first (loop.ts), not here.
+  const queryInput = toolNamed(opTools, 'query').config.input;
+  check('a context that is not a JSON object fails the tool’s own schema — it never reaches execute, so never the wire', !queryInput.safeParse({ fingerprint: 'lineup/forDay', context: 'day=sat' }).success && wireCalls === 1);
+  check('...while the SAME object stringified (as gpt-oss sends nested args) validates once cortex has decoded it', queryInput.safeParse(deepDecodeJsonish({ fingerprint: 'lineup/forDay', context: '{"day":"sat"}' })).success);
   const manyRows: FetchFn = async () => ({ ok: true, status: 200, json: async () => Array.from({ length: 300 }, (_, index) => ({ id: index })), text: async () => '' });
-  const cappedRows = RowsSchema.parse(await toolNamed(createReadTools({ wire: manyRows, policy: session.policy, entries: ENTRIES }), 'query').config.execute({ fingerprint: 'lineup/forDay', context: '{"day":"sat"}' }, toolContext()));
+  const cappedRows = RowsSchema.parse(await toolNamed(createReadTools({ wire: manyRows, policy: session.policy, entries: ENTRIES }), 'query').config.execute({ fingerprint: 'lineup/forDay', context: { day: 'sat' } }, toolContext()));
   check(`the answer is CAPPED (${cappedRows.rows.length} of 300 rows), and says what it left out`, cappedRows.rows.length === QUERY_MAX_ROWS && String(cappedRows.note).includes('260'));
 
   // ═══ f. it adds and aims; it closes nothing ══════════════
@@ -421,9 +427,9 @@ const main = async (): Promise<void> => {
   const liaisonTools = createReadTools({ wire: (url, init) => { liaisonWire += 1; return liaisonSession.wire(url, init); }, policy: liaisonSession.policy, entries: ENTRIES });
   const liaisonListed = readableQueries({ policy: liaisonSession.policy, entries: ENTRIES }).map((query) => query.fingerprint);
   check(`the liaison’s allow-set DERIVES from their policy: ${liaisonListed.length} reads against the operator’s ${listed.queries.length}`, liaisonListed.length > 0 && liaisonListed.length < listed.queries.length && !liaisonListed.includes('lineup/forDay'));
-  const liaisonLineup = RefusedSchema.safeParse(await toolNamed(liaisonTools, 'query').config.execute({ fingerprint: 'lineup/forDay', context: '{"day":"sat"}' }, toolContext()));
+  const liaisonLineup = RefusedSchema.safeParse(await toolNamed(liaisonTools, 'query').config.execute({ fingerprint: 'lineup/forDay', context: { day: 'sat' } }, toolContext()));
   check('...the running order is refused to them BEFORE the wire — never asked of the engine at all', liaisonLineup.success && liaisonWire === 0);
-  const liaisonSales = RowsSchema.safeParse(await toolNamed(liaisonTools, 'query').config.execute({ fingerprint: 'sales/dayTotals', context: '{"day":"sat"}' }, toolContext()));
+  const liaisonSales = RowsSchema.safeParse(await toolNamed(liaisonTools, 'query').config.execute({ fingerprint: 'sales/dayTotals', context: { day: 'sat' } }, toolContext()));
   check('...and what they may read, they read', liaisonSales.success && liaisonSales.data.rows.length > 0 && liaisonWire === 1);
 
   // ═══ m. every run was recorded; every run left a trace ═══

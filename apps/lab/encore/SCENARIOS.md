@@ -1,7 +1,7 @@
 # Encore — the scenarios
 
 One demo, about four minutes, six scenes. Each scene names what **Jev** does in ~300 ms,
-what the **agent** (120b) does in ~2 s, what the operator does, and what has to exist
+what the **agent** (Qwen 3.8 27b) does in ~2 s, what the operator does, and what has to exist
 that does not yet. Scenes are ordered so each one needs the mechanics of the one before.
 
 The thing being shown, every time: **two models, two clocks, one screen** — and the

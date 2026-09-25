@@ -100,7 +100,7 @@ const main = async (): Promise<void> => {
   await world.typeLine(OP, '');
   await world.settled(OP);
   controls.script = (turn) => {
-    if (turn.lookups.length === 0) return { call: { name: 'query', args: { fingerprint: 'lineup/forDay', context: JSON.stringify({ day: 'fri' }) } } };
+    if (turn.lookups.length === 0) return { call: { name: 'query', args: { fingerprint: 'lineup/forDay', context: { day: 'fri' } } } };
     return { answer: { response: 'Looked at Friday instead.', data: { canvases: { about: [{ actionId: 'act.card', input: { actId: elsewhere.id } }] } } } };
   };
   await world.typeLine(OP, 'and which act was on stage on the first night?');

@@ -71,7 +71,9 @@ export type AgentRunOutcome = {
 
 const PartialSchema = z.object({ response: z.string().optional() }).loose();
 
-const ArgsSchema = z.object({ fingerprint: z.string().optional(), context: z.string().nullish() }).loose();
+// `context` is an object — or, from a model that stringifies nested args, the
+// same object in a string, as the call arrived before cortex decoded it.
+const ArgsSchema = z.object({ fingerprint: z.string().optional(), context: z.union([z.record(z.string(), z.unknown()), z.string()]).nullish() }).loose();
 const ResultSchema = z.object({ refused: z.string().optional(), failed: z.string().optional(), rows: z.array(z.unknown()).optional(), queries: z.array(z.unknown()).optional() }).loose();
 
 const CONTEXT_SHOWN = 60;
@@ -80,7 +82,8 @@ const callLine = (toolId: string, args: unknown): string => {
   const name = toolId.split('.').at(-1) ?? toolId;
   const parsed = ArgsSchema.safeParse(args);
   const fingerprint = parsed.success ? parsed.data.fingerprint : undefined;
-  const bound = parsed.success && typeof parsed.data.context === 'string' ? parsed.data.context : '';
+  const held = parsed.success ? parsed.data.context : undefined;
+  const bound = typeof held === 'string' ? held : held !== undefined && held !== null && Object.keys(held).length > 0 ? JSON.stringify(held) : '';
   // One line on a card, not a payload: a long context is cut, and says so.
   const context = bound === '' ? '' : ` ${bound.length > CONTEXT_SHOWN ? `${bound.slice(0, CONTEXT_SHOWN)}…` : bound}`;
   return fingerprint === undefined ? name : `${name} ${fingerprint}${context}`;

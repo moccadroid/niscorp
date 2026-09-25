@@ -91,11 +91,10 @@ export const encoreAgent: AgentDefinition<AnswerData, AgentDeps> = defineAgent<A
   // `response` is OPTIONAL (cortex's default beside a schema): saying nothing is a
   // correct answer when the cards already say it.
   //
-  // NO `strategy`. On Groq's gpt-oss-120b signal resolves `emit` — the envelope
-  // on the content channel — because that model stringifies nested arrays in
-  // tool arguments (registry: `manglesNestedToolArgs`). Pinning a strategy here
-  // would take that resolution away; the tools below stay flat for the same
-  // reason.
+  // NO `strategy`. On Groq signal resolves `emit` — the envelope on the content
+  // channel — because Groq validates tool args server-side, so `respond`
+  // params would enforce nothing (signal transport/resolve.ts). Pinning a
+  // strategy here would take that resolution away.
   output: { schema: AnswerDataSchema, validate: admitted },
   // A typical run is ONE step — the facts are already in the prompt. Six is
   // room for a lookup or two and a correction, not for a wander; somebody is

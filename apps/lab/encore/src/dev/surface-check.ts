@@ -51,7 +51,7 @@ const ROOM_CANVASES = ['line', 'assist', 'rail', 'maybe', 'watch', 'attention', 
 // WHAT MAY NOT REACH AN OPERATOR. Names of models and of the fast decider — the
 // real ones, and this world's own, so the claim is not vacuous on the fake —
 // the instrument's units, and the room's internal state words as a label.
-const NAMES = ['jev', '120b', 'gpt-oss', 'scripted', FAKE_AGENT_MODEL, FAKE_MODEL, 'lexical', 'tokens', 'bytes', 'calibrated', 'canvases named', 'questions'];
+const NAMES = ['jev', 'qwen', '27b', '120b', 'gpt-oss', 'scripted', FAKE_AGENT_MODEL, FAKE_MODEL, 'lexical', 'tokens', 'bytes', 'calibrated', 'canvases named', 'questions'];
 const STATE_WORDS = /^(landed|pending|running|aborted|failed|maybe|heard|narrowed|computed|idle|matched|confirmed|watching|director|looked up)$/i;
 const PROBABILITY = /\b[01]\.\d\d\b/;
 const TIMING = /\b\d+(\.\d+)? ?(ms|s)\b/;
