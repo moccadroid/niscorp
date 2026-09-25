@@ -11,7 +11,7 @@ import { ChatView, type ChatViewInitial } from '@showroom/modules/signal/chat/ch
 // Persist it as-is and feed it back next turn — that's stateful chat.
 
 export const provider = 'groq' as const;
-export const model = 'openai/gpt-oss-120b';
+export const model = 'qwen/qwen3.8-27b';
 export const userInput = 'What is the capital of France?';
 
 export const complete = (
@@ -26,25 +26,35 @@ export const complete = (
     .history(history)
     .complete(input);
 
-// Illustrative snapshot — your live run will differ in exact wording,
-// latency, and token counts. Seeded as the opening turns of the chat.
+// Captured from a live run — `model` on Groq, 2026-09-24. Yours will differ in
+// wording, latency and token counts. Seeded as the opening turns of the chat.
 export const snapshot = {
   result: {
-    response: 'The capital of France is Paris.',
+    response: 'The capital of France is **Paris**.\n\nIt is the largest city in France and serves as its primary center for politics, culture, economy, and transportation.',
     history: [
-      { role: 'user', content: 'What is the capital of France?' },
-      { role: 'assistant', content: 'The capital of France is Paris.' },
+      {
+        role: 'user',
+        content: 'What is the capital of France?',
+      },
+      {
+        role: 'assistant',
+        content: 'The capital of France is **Paris**.\n\nIt is the largest city in France and serves as its primary center for politics, culture, economy, and transportation.',
+      },
     ] as Message[],
     meta: {
       model,
-      usage: { inputTokens: 13, outputTokens: 7, totalTokens: 20 },
-      durationMs: 412,
+      usage: {
+        inputTokens: 19,
+        outputTokens: 33,
+        totalTokens: 52,
+      },
+      durationMs: 270,
       retries: 0,
       toolCalls: [],
       provider: { raw: null, errors: [] },
     },
   } as SignalResult<string>,
-  capturedAt: '2026-04-08T10:00:00Z',
+  capturedAt: '2026-09-24T01:17:00+02:00',
   capturedWith: { provider: 'groq', model },
 };
 

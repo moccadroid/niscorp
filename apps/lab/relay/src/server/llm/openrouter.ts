@@ -1,5 +1,5 @@
 import OpenAI from 'openai';
-import { createSignal, type Capabilities } from '@niscorp/signal';
+import { createSignal } from '@niscorp/signal';
 import type { SignalClient } from '@niscorp/cortex';
 import type { ReasoningEffort } from './effort';
 
@@ -13,9 +13,9 @@ import type { ReasoningEffort } from './effort';
 // dynamic `import('openai')` from the workspace dist).
 //
 // One endpoint, many models — so the MODELS live here, each with a factory that
-// names it and states what is true of it. Signal's `openrouter` registry entry
-// is pessimistic on purpose (capabilities are a property of the routed model,
-// not of the proxy); a model that does better says so at its own factory.
+// names it. What each model CAN DO is not stated here: it is signal's model
+// registry row for (openrouter, model), measured by signal's probe. A model
+// with no row resolves to signal's unmeasured floor.
 // ═══════════════════════════════════════════════════════════
 
 export const OPENROUTER_ENV_KEY = 'OPENROUTER_API_KEY';
@@ -26,6 +26,10 @@ export const GLM_MODEL = 'z-ai/glm-5.2';
 // 131k completion, free while it sits behind the `stealth/` namespace (checked
 // against /api/v1/models on 2026-08-21 — pricing 0/0). Reasoning is mandatory
 // and defaults to MAX effort, so it thinks before every step by construction.
+//
+// GONE: not in OpenRouter's /models on 2026-09-24, so it has no signal registry
+// row and could not be measured. Kept in the roster pending a decision; a run
+// on it will fail at the provider.
 export const OX_ALPHA_MODEL = 'stealth/ox-alpha';
 
 // GPT-5.6 Luna — a mid-price frontier model: 1M context, six reasoning rungs,
@@ -33,20 +37,6 @@ export const OX_ALPHA_MODEL = 'stealth/ox-alpha';
 // `response_format` in one request, nested arrays in tool args arrive clean.
 export const LUNA_MODEL = 'openai/gpt-5.6-luna';
 
-
-// Measured against the live endpoint, not assumed: it accepts `tools` and
-// `response_format` in ONE request, and emits nested arrays inside tool-call
-// arguments as real JSON — the GLM mangling that sent the builder back to Groq
-// is absent here, so a structured payload may ride the tool channel.
-const OX_ALPHA_CAPABILITIES: Partial<Capabilities> = {
-  toolsWithStructuredOutput: true,
-  manglesNestedToolArgs: false,
-};
-
-const LUNA_CAPABILITIES: Partial<Capabilities> = {
-  toolsWithStructuredOutput: true,
-  manglesNestedToolArgs: false,
-};
 
 
 const openRouter = (apiKey: string): OpenAI =>
@@ -78,7 +68,6 @@ export const createOxAlphaClient = (apiKey: string, reasoningEffort?: ReasoningE
     client: openRouter(apiKey),
     model: OX_ALPHA_MODEL,
     apiKey,
-    capabilities: OX_ALPHA_CAPABILITIES,
     ...(reasoningEffort !== undefined && { options: { reasoningEffort } }),
   });
 
@@ -94,6 +83,5 @@ export const createLunaClient = (apiKey: string, reasoningEffort?: ReasoningEffo
     client: openRouter(apiKey),
     model: LUNA_MODEL,
     apiKey,
-    capabilities: LUNA_CAPABILITIES,
     ...(reasoningEffort !== undefined && { options: { reasoningEffort } }),
   });

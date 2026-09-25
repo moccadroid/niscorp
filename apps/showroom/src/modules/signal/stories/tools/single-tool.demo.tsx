@@ -25,7 +25,7 @@ export const weatherTool = defineTool({
 });
 
 export const provider = 'groq' as const;
-export const model = 'openai/gpt-oss-120b';
+export const model = 'qwen/qwen3.8-27b';
 export const tools = [weatherTool];
 export const userInput = "What's the weather like in Paris right now?";
 
@@ -42,40 +42,65 @@ export const complete = (
     .history(history)
     .complete(input);
 
+// Captured from a live run — `model` on Groq, 2026-09-24. Yours will differ in
+// wording, latency and token counts. Seeded as the opening turns of the chat.
 export const snapshot = {
   result: {
-    response: "It's 18°C and partly cloudy in Paris right now.",
+    response: 'It\'s 18°C (about 64°F) and partly cloudy in Paris right now.',
     history: [
-      { role: 'user', content: userInput },
-      { role: 'assistant', content: '' },
+      {
+        role: 'user',
+        content: 'What\'s the weather like in Paris right now?',
+      },
+      {
+        role: 'assistant',
+        content: '',
+        toolCalls: [
+          {
+            id: '9ejqws5mz',
+            name: 'get_weather',
+            args: '{"city":"Paris"}',
+          },
+        ],
+      },
       {
         role: 'tool',
-        toolCallId: 'tc_1',
+        toolCallId: '9ejqws5mz',
         name: 'get_weather',
         content: '{"city":"Paris","temperature":18,"condition":"partly cloudy"}',
       },
       {
         role: 'assistant',
-        content: "It's 18°C and partly cloudy in Paris right now.",
+        content: 'It\'s 18°C (about 64°F) and partly cloudy in Paris right now.',
       },
     ] as Message[],
     meta: {
       model,
-      usage: { inputTokens: 87, outputTokens: 24, totalTokens: 111 },
-      durationMs: 1834,
+      usage: {
+        inputTokens: 705,
+        outputTokens: 48,
+        totalTokens: 753,
+      },
+      durationMs: 287,
       retries: 0,
       toolCalls: [
         {
           name: 'get_weather',
-          args: { city: 'Paris' },
-          result: { city: 'Paris', temperature: 18, condition: 'partly cloudy' },
-          durationMs: 12,
+          args: {
+            city: 'Paris',
+          },
+          result: {
+            city: 'Paris',
+            temperature: 18,
+            condition: 'partly cloudy',
+          },
+          durationMs: 0,
         },
       ],
       provider: { raw: null, errors: [] },
     },
   } as SignalResult<string>,
-  capturedAt: '2026-04-08T10:00:00Z',
+  capturedAt: '2026-09-24T01:17:00+02:00',
   capturedWith: { provider: 'groq', model },
 };
 

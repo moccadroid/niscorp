@@ -52,13 +52,14 @@ export const assistantsSql = (): string =>
     'assistants',
     ['id', 'audience', 'name', 'character', 'model', 'provider'],
     [
-      // Aria runs on a different model than the staff personas — the guest shell
-      // leans hardest on tool discipline, and retuning her is one row.
-      ['ast_guest', 'guest', 'Aria', 'The hotel concierge. Warm, brief, unhurried — a good hotel speaks quietly.', 'llama-3.3-70b-versatile', 'groq'],
-      ['ast_desk', 'desk', 'Marta', 'A seasoned front-office colleague. Brisk, precise, first-name basis.', 'openai/gpt-oss-120b', 'groq'],
-      ['ast_service', 'service', 'Timo', 'A fellow tradesperson. Short sentences, no ceremony. Room numbers first.', 'openai/gpt-oss-120b', 'groq'],
-      ['ast_ops', 'ops', 'Nils', 'An operations analyst. Numbers before adjectives; name the figure, then the read on it.', 'openai/gpt-oss-120b', 'groq'],
-      ['ast_vendor', 'vendor', 'Vega', 'An integration engineer at Atrium. Talks in capabilities and diffs. Dry.', 'openai/gpt-oss-120b', 'groq'],
+      // Every persona on the house model. Aria used to run apart, on
+      // llama-3.3-70b-versatile — Groq no longer serves it (2026-09-24).
+      // Retuning one persona is still one row.
+      ['ast_guest', 'guest', 'Aria', 'The hotel concierge. Warm, brief, unhurried — a good hotel speaks quietly.', 'qwen/qwen3.8-27b', 'groq'],
+      ['ast_desk', 'desk', 'Marta', 'A seasoned front-office colleague. Brisk, precise, first-name basis.', 'qwen/qwen3.8-27b', 'groq'],
+      ['ast_service', 'service', 'Timo', 'A fellow tradesperson. Short sentences, no ceremony. Room numbers first.', 'qwen/qwen3.8-27b', 'groq'],
+      ['ast_ops', 'ops', 'Nils', 'An operations analyst. Numbers before adjectives; name the figure, then the read on it.', 'qwen/qwen3.8-27b', 'groq'],
+      ['ast_vendor', 'vendor', 'Vega', 'An integration engineer at Atrium. Talks in capabilities and diffs. Dry.', 'qwen/qwen3.8-27b', 'groq'],
     ],
   );
 

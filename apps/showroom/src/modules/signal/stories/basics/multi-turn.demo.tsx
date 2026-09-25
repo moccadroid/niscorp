@@ -8,7 +8,7 @@ import { ChatView, type ChatViewInitial } from '@showroom/modules/signal/chat/ch
 // pass it back next turn for stateful chat without glue code.
 
 export const provider = 'groq' as const;
-export const model = 'openai/gpt-oss-120b';
+export const model = 'qwen/qwen3.8-27b';
 export const systemPrompt = 'You are a friendly tutor for new programmers.';
 export const userInput = 'Can you give me a tiny example in JavaScript?';
 
@@ -34,30 +34,47 @@ export const complete = (
     .history(history)
     .complete(input);
 
+// Captured from a live run — `model` on Groq, 2026-09-24. Yours will differ in
+// wording, latency and token counts. Seeded as the opening turns of the chat.
 export const snapshot = {
   result: {
-    response:
-      'Sure! Here is a simple function that adds two numbers:\n\n```js\nfunction add(a, b) {\n  return a + b;\n}\n\nconsole.log(add(2, 3)); // 5\n```\n\nThe function `add` takes two parameters and returns their sum.',
+    response: 'Here is a small JavaScript function that greets a person by name:\n\n```javascript\nfunction greet(name) {\n  console.log("Hello, " + name);\n}\n\n// Calling the function with an argument\ngreet("Alice"); // Outputs: Hello, Alice\ngreet("Bob");   // Outputs: Hello, Bob\n```\n\nIn this example:\n- `name` is the **parameter** (the input).\n- The code inside the curly braces `{}` is the **function body** (what it does).\n- We **call** (or execute) the function by writing `greet(...)` followed by the actual value we want to pass in.',
     history: [
-      { role: 'system', content: systemPrompt },
-      ...seedHistory,
-      { role: 'user', content: userInput },
+      {
+        role: 'system',
+        content: 'You are a friendly tutor for new programmers.',
+      },
+      {
+        role: 'user',
+        content: 'What is a function in programming?',
+      },
       {
         role: 'assistant',
-        content:
-          'Sure! Here is a simple function that adds two numbers:\n\n```js\nfunction add(a, b) {\n  return a + b;\n}\n\nconsole.log(add(2, 3)); // 5\n```\n\nThe function `add` takes two parameters and returns their sum.',
+        content: 'A function is a reusable block of code that performs a specific task. You give it inputs (parameters), it does some work, and optionally returns a value.',
+      },
+      {
+        role: 'user',
+        content: 'Can you give me a tiny example in JavaScript?',
+      },
+      {
+        role: 'assistant',
+        content: 'Here is a small JavaScript function that greets a person by name:\n\n```javascript\nfunction greet(name) {\n  console.log("Hello, " + name);\n}\n\n// Calling the function with an argument\ngreet("Alice"); // Outputs: Hello, Alice\ngreet("Bob");   // Outputs: Hello, Bob\n```\n\nIn this example:\n- `name` is the **parameter** (the input).\n- The code inside the curly braces `{}` is the **function body** (what it does).\n- We **call** (or execute) the function by writing `greet(...)` followed by the actual value we want to pass in.',
       },
     ] as Message[],
     meta: {
       model,
-      usage: { inputTokens: 73, outputTokens: 65, totalTokens: 138 },
-      durationMs: 891,
+      usage: {
+        inputTokens: 89,
+        outputTokens: 142,
+        totalTokens: 231,
+      },
+      durationMs: 466,
       retries: 0,
       toolCalls: [],
       provider: { raw: null, errors: [] },
     },
   } as SignalResult<string>,
-  capturedAt: '2026-04-08T10:00:00Z',
+  capturedAt: '2026-09-24T01:17:00+02:00',
   capturedWith: { provider: 'groq', model },
 };
 

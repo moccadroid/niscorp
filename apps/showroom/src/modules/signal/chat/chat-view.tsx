@@ -29,7 +29,7 @@ import { CardRenderer, isCardData } from './card-renderer';
 const PROVIDER_DEFAULT_MODEL: Record<RecipeProvider, string> = {
   openai: 'gpt-4o-mini',
   openrouter: 'openai/gpt-4o-mini',
-  groq: 'openai/gpt-oss-120b',
+  groq: 'qwen/qwen3.8-27b',
 };
 
 // Conversation entries are messages plus a synthetic "snapshot"

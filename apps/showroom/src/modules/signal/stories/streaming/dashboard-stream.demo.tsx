@@ -26,7 +26,7 @@ import { DashboardCard } from './dashboard-stream.ui';
 // lock in. Not used here; see comments inline where hooks go.
 
 export const provider = 'groq' as const;
-export const model = 'llama-3.3-70b-versatile';
+export const model = 'qwen/qwen3.8-27b';
 export const systemPrompt = `You are a data analyst. Respond ONLY with a JSON object matching the schema provided. No markdown, no explanation — just the JSON object.
 
 Generate realistic data for a SaaS metrics dashboard. Include:

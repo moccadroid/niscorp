@@ -23,7 +23,7 @@ import { createOpenAIClient } from '@showroom/modules/signal/openai-client';
 // stop mid-stream. The for-await loop exits cleanly.
 
 export const provider = 'groq' as const;
-export const model = 'llama-3.3-70b-versatile';
+export const model = 'qwen/qwen3.8-27b';
 export const systemPrompt =
   'You are a thorough technical writer. Give detailed, well-structured answers with examples. Use markdown formatting.';
 export const userInput =

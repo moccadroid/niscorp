@@ -33,7 +33,7 @@ export const schema = z.object({
 export type Card = z.infer<typeof schema>;
 
 export const provider = 'groq' as const;
-export const model = 'openai/gpt-oss-120b';
+export const model = 'qwen/qwen3.8-27b';
 export const systemPrompt =
   'You generate UI cards. Pick badges and actions that genuinely fit the topic. Keep the body to 2-3 sentences.';
 export const userInput = 'Show me a card recommending a weekend hiking trail near San Francisco.';
@@ -53,39 +53,72 @@ export const complete = (
     .complete(input);
 
 const snapshotResponse: Card = {
-  title: 'Mount Tamalpais Loop',
-  subtitle: 'Marin County · 7.2 mi · moderate',
-  body:
-    'A classic Bay Area ridge hike with sweeping ocean views, redwood groves, and a brutal final climb that earns the panorama at the summit. Best in the early morning before the marine layer burns off.',
+  title: 'Half Moon Bay & Point Reyes',
+  subtitle: 'A scenic 9-mile round trip along the coast.',
+  body: 'This moderate trail offers stunning ocean views, wildflower meadows, and chances to spot sea lions. Hike early on a Saturday morning to avoid crowds and catch the morning light on the cliffs. Wear sturdy shoes as the terrain includes rocky sections and soft sand.',
   badges: [
-    { label: 'Moderate', tone: 'warning' },
-    { label: 'Dog friendly', tone: 'positive' },
-    { label: '~3 hrs drive', tone: 'neutral' },
+    {
+      label: 'Family Friendly',
+      tone: 'positive',
+    },
+    {
+      label: 'Moderate Difficulty',
+      tone: 'neutral',
+    },
+    {
+      label: 'No Permit Required',
+      tone: 'positive',
+    },
   ],
   actions: [
-    { label: 'Open in Maps', intent: 'primary' },
-    { label: 'Save for later', intent: 'secondary' },
+    {
+      label: 'View Map',
+      intent: 'primary',
+    },
+    {
+      label: 'Share with Friends',
+      intent: 'secondary',
+    },
   ],
 };
 
+// Captured from a live run — `model` on Groq, 2026-09-24. Yours will differ in
+// wording, latency and token counts. Seeded as the opening turns of the chat.
 export const snapshot = {
   result: {
     response: snapshotResponse,
     history: [
-      { role: 'system', content: systemPrompt },
-      { role: 'user', content: userInput },
-      { role: 'assistant', content: JSON.stringify(snapshotResponse) },
+      {
+        role: 'system',
+        content: 'You generate UI cards. Pick badges and actions that genuinely fit the topic. Keep the body to 2-3 sentences.',
+      },
+      {
+        role: 'user',
+        content: 'Show me a card recommending a weekend hiking trail near San Francisco.',
+      },
+      {
+        role: 'system',
+        content: 'OUTPUT SCHEMA: your final reply must be ONLY a JSON value matching this schema — raw JSON, no prose, no code fences:\n{"$schema":"http://json-schema.org/draft-07/schema#","type":"object","properties":{"title":{"type":"string","description":"Headline of the card."},"subtitle":{"type":"string","description":"Short supporting line."},"body":{"type":"string","description":"Two or three sentences of detail."},"badges":{"type":"array","items":{"type":"object","properties":{"label":{"type":"string"},"tone":{"type":"string","enum":["neutral","positive","warning","danger"]}},"required":["label","tone"],"additionalProperties":false}},"actions":{"type":"array","items":{"type":"object","properties":{"label":{"type":"string","description":"Button text."},"intent":{"type":"string","enum":["primary","secondary"],"description":"Button style."}},"required":["label","intent"],"additionalProperties":false}}},"required":["title","subtitle","body","badges","actions"],"additionalProperties":false}',
+      },
+      {
+        role: 'assistant',
+        content: '{\n  "title": "Half Moon Bay & Point Reyes",\n  "subtitle": "A scenic 9-mile round trip along the coast.",\n  "body": "This moderate trail offers stunning ocean views, wildflower meadows, and chances to spot sea lions. Hike early on a Saturday morning to avoid crowds and catch the morning light on the cliffs. Wear sturdy shoes as the terrain includes rocky sections and soft sand.",\n  "badges": [\n    {\n      "label": "Family Friendly",\n      "tone": "positive"\n    },\n    {\n      "label": "Moderate Difficulty",\n      "tone": "neutral"\n    },\n    {\n      "label": "No Permit Required",\n      "tone": "positive"\n    }\n  ],\n  "actions": [\n    {\n      "label": "View Map",\n      "intent": "primary"\n    },\n    {\n      "label": "Share with Friends",\n      "intent": "secondary"\n    }\n  ]\n}',
+      },
     ] as Message[],
     meta: {
       model,
-      usage: { inputTokens: 88, outputTokens: 142, totalTokens: 230 },
-      durationMs: 712,
+      usage: {
+        inputTokens: 277,
+        outputTokens: 229,
+        totalTokens: 506,
+      },
+      durationMs: 678,
       retries: 0,
       toolCalls: [],
       provider: { raw: null, errors: [] },
     },
   } as SignalResult<Card>,
-  capturedAt: '2026-04-08T10:00:00Z',
+  capturedAt: '2026-09-24T01:17:00+02:00',
   capturedWith: { provider: 'groq', model },
 };
 

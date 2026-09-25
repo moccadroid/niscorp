@@ -12,8 +12,8 @@ import { createOpenAIClient, type RecipeProvider } from '@showroom/modules/signa
 const PREFERENCE: readonly RecipeProvider[] = ['groq', 'openrouter', 'openai'];
 
 const DEFAULT_MODELS: Record<RecipeProvider, string> = {
-  groq: 'openai/gpt-oss-120b',
-  openrouter: 'openai/gpt-oss-120b',
+  groq: 'qwen/qwen3.8-27b',
+  openrouter: 'qwen/qwen3.8-27b',
   openai: 'gpt-4o-mini',
 };
 

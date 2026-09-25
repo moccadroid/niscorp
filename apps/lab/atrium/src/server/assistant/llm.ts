@@ -67,10 +67,8 @@ export const createLlmClient = (provider: string, model: string): Signal | undef
     dangerouslyAllowBrowser: true,
     ...(tuning.reasoning ? {} : { fetch: withoutReasoning(fetch) }),
   });
-  const llm = createSignal(provider, { client, model, apiKey });
-  // The registry row is the PROVIDER's floor; this is what we know about the
-  // model being routed to. Signal resolves the transport from the merged answer,
-  // so one client lands on `native` with tools still on the request while
-  // another stays on `emit`, neither having been told which to use.
-  return tuning.capabilities === undefined ? llm : llm.capabilities(tuning.capabilities);
+  // What the model can do is signal's registry row for (provider, model): the
+  // transport resolves from it, so one client lands on `native` with tools still
+  // on the request while another stays on `emit`, neither told which to use.
+  return createSignal(provider, { client, model, apiKey });
 };

@@ -1,7 +1,7 @@
 import type { SignalClient } from '@niscorp/cortex';
 import { EFFORT_LABELS, type ReasoningEffort } from './effort';
 import { streamViaStep } from './streaming';
-import { createGroqClient, getKey as groqKey, GROQ_MODEL, GROQ_ENV_KEY } from './groq';
+import { createGroqClient, getKey as groqKey, GPT_OSS_MODEL, QWEN_MODEL, GROQ_ENV_KEY } from './groq';
 import {
   createOpenRouterClient,
   createLunaClient,
@@ -33,7 +33,7 @@ import {
 // nothing LLM-shaped reaches a browser.
 // ═══════════════════════════════════════════════════════════
 
-export type ModelId = 'groq-120b' | 'glm-5.2' | 'ox-alpha' | 'luna';
+export type ModelId = 'qwen-27b' | 'groq-120b' | 'glm-5.2' | 'ox-alpha' | 'luna';
 
 export type ModelEntry = {
   // The one line a chooser reads in the dropdown: what it is, whose endpoint,
@@ -56,15 +56,26 @@ export type ModelEntry = {
 };
 
 export const MODELS: Record<ModelId, ModelEntry> = {
+  'qwen-27b': {
+    label: 'Qwen 3.8 27B · Groq · fast',
+    model: QWEN_MODEL,
+    envKey: GROQ_ENV_KEY,
+    // Its own default on Groq does not reason before answering; the other rungs
+    // do. The list is signal's registry row for the model (measured 2026-09-24).
+    efforts: ['none', 'default', 'low', 'medium', 'high'],
+    defaultEffort: 'default',
+    create: createGroqClient(QWEN_MODEL),
+    getKey: groqKey,
+  },
   'groq-120b': {
     label: 'GPT-OSS 120B · Groq · fast',
-    model: GROQ_MODEL,
+    model: GPT_OSS_MODEL,
     envKey: GROQ_ENV_KEY,
     // Groq's own default for gpt-oss is medium, so the default here sends what
     // the model already did before any of this was settable.
     efforts: ['low', 'medium', 'high'],
     defaultEffort: 'medium',
-    create: createGroqClient,
+    create: createGroqClient(GPT_OSS_MODEL),
     getKey: groqKey,
   },
   'glm-5.2': {
@@ -125,18 +136,21 @@ export const AGENTS: Record<AgentRole, AgentEntry> = {
   layout: { label: 'Chat visualiser', runsOn: 'groq-120b' },
   // Designs a whole screen from a description and mounts it to check itself.
   //
-  // BACK ON 120b, 2026-08-22. Ox Alpha was made the default on one green run and
-  // it did not hold: builds came back with malformed ActionDefinitions — props
-  // hoisted out of `props`, whole definitions nested inside `endpoints` — and
-  // burned their step budget re-submitting them to `run_action`. Two changes
-  // went in together and neither was measured over a suite: `low` reasoning
-  // effort, and capability overrides that move the output off the content
-  // channel onto tool arguments. The pipeline's budgets and producers were
-  // tuned against 120b; that is the floor until a bench run says otherwise.
-  // Ox Alpha is one dropdown away in Settings → Models.
-  architect: { label: 'Screen builder', runsOn: 'groq-120b' },
+  // ON QWEN, 2026-09-24, by bench (architect-suite, 1 rep, default effort,
+  // same vex build): architect + reviewer on qwen-27b, the agents below on
+  // groq-120b, put rows on the live screen in 9 of 9 runs at 14–54 s;
+  // everything on groq-120b, 8 of 9 at 6–40 s — as good, not better. With
+  // 120b's registry row saying json_schema works, its REVIEWER resolves to
+  // `native` and the builds stall (0 of 4 before the run was stopped).
+  // The earlier history stands as the warning it was: Ox Alpha went default
+  // on ONE green run in August and did not hold. One rep is one rep.
+  architect: { label: 'Screen builder', runsOn: 'qwen-27b' },
   // Reads a built screen against the intent; its findings are the repair.
-  validator: { label: 'Screen reviewer', runsOn: 'groq-120b' },
+  validator: { label: 'Screen reviewer', runsOn: 'qwen-27b' },
+  // The three below stay on 120b ON PURPOSE, not by leftover: with them on
+  // qwen too, one build ran past Groq's per-model 250k tokens/minute and every
+  // intent after the first died on a 429 (2026-09-24). Two models = two
+  // budgets.
   // Prism: the config that maps one shape into another.
   mapping: { label: 'Transform writer', runsOn: 'groq-120b' },
   // Vex: a request becomes query DSL when no cached shape matches.

@@ -10,22 +10,16 @@ import type { RecipeProvider } from '@showroom/modules/signal/openai-client';
 
 export type LiveConfig = { provider: RecipeProvider; model: string };
 
-// A few sensible presets per provider; the first is the default. Any
-// model id the provider accepts works — these are just quick picks.
+// A few presets per provider; the first is the default. Each is a model
+// the provider served on 2026-09-24 and signal's registry has a measured
+// row for — an unmeasured id still works, on signal's conservative floor.
 export const PROVIDER_MODELS: Record<RecipeProvider, string[]> = {
-  groq: [
-    'llama-3.3-70b-versatile',
-    'openai/gpt-oss-120b',
-    'openai/gpt-oss-20b',
-    'moonshotai/kimi-k2-instruct',
-    'llama-3.1-8b-instant',
-  ],
+  groq: ['qwen/qwen3.8-27b', 'openai/gpt-oss-120b', 'openai/gpt-oss-20b'],
   openrouter: [
+    'qwen/qwen3.8-27b',
     'openai/gpt-oss-120b',
     'openai/gpt-oss-20b',
-    'anthropic/claude-3.5-sonnet',
     'meta-llama/llama-3.3-70b-instruct',
-    'google/gemini-2.0-flash-001',
   ],
   openai: ['gpt-4o-mini', 'gpt-4o', 'gpt-4.1-mini'],
 };

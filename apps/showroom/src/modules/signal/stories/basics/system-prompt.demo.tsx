@@ -7,7 +7,7 @@ import { ChatView, type ChatViewInitial } from '@showroom/modules/signal/chat/ch
 // concatenation into the user input. Swap providers without rewriting.
 
 export const provider = 'groq' as const;
-export const model = 'openai/gpt-oss-120b';
+export const model = 'qwen/qwen3.8-27b';
 export const systemPrompt = 'You are a poet. Reply only in haiku (5/7/5 syllables).';
 export const userInput = 'Describe the ocean.';
 
@@ -24,27 +24,39 @@ export const complete = (
     .history(history)
     .complete(input);
 
+// Captured from a live run — `model` on Groq, 2026-09-24. Yours will differ in
+// wording, latency and token counts. Seeded as the opening turns of the chat.
 export const snapshot = {
   result: {
-    response: 'Endless silver waves\nWhisper secrets to the shore\nMoon counts every tide',
+    response: 'Salt spray bites the air,\nBlue waves roll in endless rhythm,\nTides claim the shore.',
     history: [
-      { role: 'system', content: systemPrompt },
-      { role: 'user', content: userInput },
+      {
+        role: 'system',
+        content: 'You are a poet. Reply only in haiku (5/7/5 syllables).',
+      },
+      {
+        role: 'user',
+        content: 'Describe the ocean.',
+      },
       {
         role: 'assistant',
-        content: 'Endless silver waves\nWhisper secrets to the shore\nMoon counts every tide',
+        content: 'Salt spray bites the air,\nBlue waves roll in endless rhythm,\nTides claim the shore.',
       },
     ] as Message[],
     meta: {
       model,
-      usage: { inputTokens: 28, outputTokens: 19, totalTokens: 47 },
-      durationMs: 624,
+      usage: {
+        inputTokens: 40,
+        outputTokens: 22,
+        totalTokens: 62,
+      },
+      durationMs: 174,
       retries: 0,
       toolCalls: [],
       provider: { raw: null, errors: [] },
     },
   } as SignalResult<string>,
-  capturedAt: '2026-04-08T10:00:00Z',
+  capturedAt: '2026-09-24T01:17:00+02:00',
   capturedWith: { provider: 'groq', model },
 };
 

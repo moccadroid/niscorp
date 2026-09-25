@@ -28,7 +28,7 @@ import { ResponseCard } from './structured-stream.ui';
 // No JSON.parse, no "wait until done", no defensive `??`.
 
 export const provider = 'groq' as const;
-export const model = 'llama-3.3-70b-versatile';
+export const model = 'qwen/qwen3.8-27b';
 export const systemPrompt =
   'You are a helpful assistant that responds with structured JSON. Always respond with a JSON object matching the schema provided. Write thorough, detailed responses — at least 3-4 paragraphs for the response field and 2-3 paragraphs for reasoning.';
 export const userInput =

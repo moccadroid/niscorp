@@ -22,18 +22,11 @@ export type Profile = {
 // a choice is a settings value, a truth belongs to the model id — and the second
 // must be reachable from a persona row that never went through the picker.
 //
-// Everything per-model lives here rather than at the place that consumes it:
-// transport, budget and reasoning are all facts about a model, and asserting any
-// of them globally means asserting it about every model.
-
-// Signal's own capability names. A partial: whatever is not stated keeps the
-// provider registry's default. This says what we have VERIFIED about one model,
-// never what we hope about a provider.
-export type ModelCapabilities = { toolsWithStructuredOutput?: boolean; nativeJsonSchema?: boolean; manglesNestedToolArgs?: boolean };
+// Budget and reasoning are facts about how ATRIUM runs a model, so they live
+// here. What a model CAN DO — its transport capabilities — is not atrium's to
+// say: it is signal's model registry row, measured by signal's probe.
 
 export type ModelTuning = {
-  // Merged over the provider registry's row before transport resolution runs.
-  capabilities?: ModelCapabilities;
   // What the ambient watcher may spend. A model that answers in one step and a
   // model that reads first are not the same budget.
   steps: number;
@@ -53,16 +46,9 @@ const DEFAULT_TUNING: ModelTuning = { steps: 6, seconds: 45, reasoning: true };
 // Keyed by MODEL ID, not by choice key: persona rows name models directly and
 // never pass through the picker.
 const TUNING: Record<string, ModelTuning> = {
-  // Verified against the API: GLM 5.2 takes `tools` and `response_format:
-  // json_schema` in one request and answers with clean structured content.
-  // OpenRouter's registry row defaults false for the whole proxy and tells
-  // callers to override per routed model — declaring it is what lets the
-  // envelope ride `response_format` with the tools still on the request.
-  'z-ai/glm-5.2': { capabilities: { toolsWithStructuredOutput: true }, steps: 12, seconds: 120, reasoning: false },
-  // Groq's registry row already describes gpt-oss correctly: no native JSON
-  // schema, and it corrupts nested tool args, so signal sends it down `emit`.
+  'z-ai/glm-5.2': { steps: 12, seconds: 120, reasoning: false },
+  'qwen/qwen3.8-27b': { steps: 6, seconds: 45, reasoning: true },
   'openai/gpt-oss-120b': { steps: 6, seconds: 45, reasoning: true },
-  'llama-3.3-70b-versatile': { steps: 6, seconds: 45, reasoning: true },
 };
 
 // Any model, chosen or seeded. An unlisted one gets the conservative default
@@ -86,6 +72,7 @@ export type ModelChoice = { provider: string; model: string; title: string; blur
 export const MODELS: Record<string, ModelChoice> = {
   '': { provider: '', model: '', title: 'House default', blurb: 'Whatever this assistant is configured to run on.' },
   'glm-5.2': { provider: 'openrouter', model: 'z-ai/glm-5.2', title: 'GLM 5.2', blurb: 'Through OpenRouter. Slower, and reads a situation better.' },
+  'qwen-27b': { provider: 'groq', model: 'qwen/qwen3.8-27b', title: 'Qwen 3.8 27B', blurb: 'Through Groq. The house model: fast enough to feel ambient.' },
   'gpt-oss-120b': { provider: 'groq', model: 'openai/gpt-oss-120b', title: 'gpt-oss 120b', blurb: 'Through Groq. Fast enough to feel ambient.' },
 };
 
