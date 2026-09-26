@@ -44,11 +44,11 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 
 const readManifest = (dir: string): Manifest => {
   const raw: unknown = JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8'));
-  if (!isRecord(raw) || typeof raw['name'] !== 'string' || !isRecord(raw['exports'])) {
-    throw new Error(`${dir}: package.json has no name or exports map`);
-  }
+  if (!isRecord(raw) || typeof raw['name'] !== 'string') throw new Error(`${dir}: package.json has no name`);
+  // A package with no `exports` ships no code (the @niscorp/nisc meta package):
+  // it is linted and installed, but has no entrypoints to resolve or import.
   const exports: Manifest['exports'] = {};
-  for (const [key, entry] of Object.entries(raw['exports'])) {
+  for (const [key, entry] of Object.entries(isRecord(raw['exports']) ? raw['exports'] : {})) {
     exports[key] = isRecord(entry) ? { import: entry['import'], require: entry['require'] } : {};
   }
   const peers = isRecord(raw['peerDependencies']) ? raw['peerDependencies'] : {};
@@ -105,7 +105,10 @@ const INTERNAL_DEPENDENCIES: Readonly<Record<string, Readonly<Record<string, str
 
 // ── 1 + 2: publint and attw, per package ────────────────────────────
 for (const { dir, manifest } of packages) {
-  for (const dependency of manifest.dependencies.filter((name) => name.startsWith('@niscorp/'))) {
+  // The meta package is the one exception by construction: it is what PROVIDES
+  // the single copies — its exact dependencies are the set, installed once.
+  const isMetaPackage = manifest.name === '@niscorp/nisc';
+  for (const dependency of manifest.dependencies.filter((name) => name.startsWith('@niscorp/') && !isMetaPackage)) {
     const reason = INTERNAL_DEPENDENCIES[manifest.name]?.[dependency];
     results.push({
       label: `${manifest.name} → ${dependency}: ${reason === undefined ? 'must be a peer' : 'internal dependency, allowed'}`,
@@ -122,6 +125,7 @@ for (const { dir, manifest } of packages) {
   }
   run(`publint ${manifest.name}`, bin('publint'), ['--strict'], dir);
   const exclude = ESM_ONLY[manifest.name] ?? [];
+  if (Object.keys(manifest.exports).length === 0) continue;
   run(
     `attw ${manifest.name}`,
     bin('attw'),

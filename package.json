@@ -15,10 +15,13 @@
     "typecheck": "turbo typecheck",
     "lint": "eslint \"apps/lab/lyra/src/**/*.ts\" \"packages/moss/src/**/*.ts\" \"packages/charter/src/**/*.ts\"",
     "format": "prettier --write \"**/*.{ts,tsx,json,md}\"",
-    "check:packages": "node scripts/check-packages.mts"
+    "check:packages": "node scripts/check-packages.mts",
+    "check:changesets": "node scripts/check-changesets.mts",
+    "changeset": "changeset"
   },
   "devDependencies": {
     "@arethetypeswrong/cli": "^0.18.5",
+    "@changesets/cli": "^3.0.3",
     "eslint": "^9",
     "prettier": "^3.8.1",
     "publint": "^0.3.24",

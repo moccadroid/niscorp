@@ -31,6 +31,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
+        with:
+          # Changesets compares the branch against main — it needs the history.
+          fetch-depth: 0
 
       - uses: pnpm/action-setup@v4
         with:
@@ -60,6 +63,17 @@ jobs:
       # consumer outside this repo actually gets. See scripts/check-packages.mts.
       - name: Check packages
         run: pnpm check:packages
+
+      # Every package change on a PR carries a changeset, and a breaking release
+      # (a major, or a minor below 1.0) is refused until everything that depends
+      # or peers on it is released as breaking too — Changesets alone would ship
+      # those dependents as patches with a moved peer range. Push-to-main skips
+      # this: there is no base to compare against.
+      - name: Changesets
+        if: github.event_name == 'pull_request'
+        run: |
+          pnpm changeset status --since=origin/${{ github.base_ref }}
+          pnpm check:changesets
 
       # Every workspace: ten packages and eight apps, tests and checks included.
       # This is the step that would have caught all 110.

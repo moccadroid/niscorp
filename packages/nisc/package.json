@@ -1,0 +1,36 @@
+{
+  "name": "@niscorp/nisc",
+  "version": "0.1.0",
+  "description": "The nisc platform as one known-compatible set: every @niscorp package, each pinned to the exact version it was released with.",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/moccadroid/niscorp.git",
+    "directory": "packages/nisc"
+  },
+  "files": [
+    "*.md",
+    "LICENSE"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": ">=22.12"
+  },
+  "dependencies": {
+    "@niscorp/charter": "workspace:*",
+    "@niscorp/cortex": "workspace:*",
+    "@niscorp/loom": "workspace:*",
+    "@niscorp/moss": "workspace:*",
+    "@niscorp/nova": "workspace:*",
+    "@niscorp/prism": "workspace:*",
+    "@niscorp/signal": "workspace:*",
+    "@niscorp/solid": "workspace:*",
+    "@niscorp/tide": "workspace:*",
+    "@niscorp/vex": "workspace:*"
+  },
+  "peerDependencies": {
+    "zod": "^4.2.0"
+  }
+}

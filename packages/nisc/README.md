@@ -1,0 +1,22 @@
+# @niscorp/nisc
+
+The nisc platform as **one known-compatible set**. Every `@niscorp` package is
+its own library with its own version — prism, solid and signal are useful far
+from nisc, nova runs without moss — and this package is the release that says
+which versions of all of them belong together.
+
+```bash
+pnpm add @niscorp/nisc zod
+```
+
+It ships no code. Its dependencies pin each package to the **exact** version it
+was released with, so installing `@niscorp/nisc@0.4.0` installs the set that
+was tested as nisc 0.4.0. Import from the packages themselves
+(`@niscorp/nova`, `@niscorp/moss`, …).
+
+Its version moves whenever any member's does, and it breaks whenever any member
+breaks — `pnpm check:changesets` refuses a release plan that forgets.
+
+## License
+
+Apache-2.0
