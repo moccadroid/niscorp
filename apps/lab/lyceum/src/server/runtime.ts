@@ -1,5 +1,5 @@
 import { PGlite } from '@electric-sql/pglite';
-import { createPostgresCache } from '@niscorp/vex';
+import { createMemoryCache, createPostgresCache, createTieredCache } from '@niscorp/vex';
 import { createPglitePool, RAW_DATE_PARSERS } from '@niscorp/vex/pglite';
 import type { NiscRuntime } from '@niscorp/moss';
 import { migrate } from '@niscorp/strata/postgres';
@@ -32,8 +32,10 @@ export const devRuntime = async (borrowed?: PGlite): Promise<DevRuntime> => {
   await db.exec(buildSeedSql());
 
   // Two pools over one database: app reads get raw date strings; the cache
-  // keeps Dates, because it calls getTime() on its own timestamps.
-  const cache = createPostgresCache({ pool: createPglitePool(db) });
+  // keeps Dates, because it calls getTime() on its own timestamps. The cache
+  // is the deployment's shape — memory in front of the table
+  // (./postgres-runtime.ts) — so the checks run what the talk runs.
+  const cache = createTieredCache({ l1: createMemoryCache(), l2: createPostgresCache({ pool: createPglitePool(db) }) });
   await cache.init();
 
   return {

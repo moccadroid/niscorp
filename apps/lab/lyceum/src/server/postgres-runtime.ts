@@ -1,5 +1,5 @@
 import pg from 'pg';
-import { createPostgresCache } from '@niscorp/vex';
+import { createMemoryCache, createPostgresCache, createTieredCache } from '@niscorp/vex';
 import { migrate } from '@niscorp/strata/postgres';
 import { LYCEUM_SEQUENCE } from '@lyceum/db/schema';
 import { buildSeedSql } from '@lyceum/db/seed';
@@ -23,7 +23,12 @@ export const postgresRuntime = async (databaseUrl: string): Promise<LyceumRuntim
   // One pool, two readings of it: app reads get raw date strings, the vex
   // cache keeps Dates (see ./pg.ts).
   const app = createPgPool(pool, RAW_DATE_PARSERS);
-  const cache = createPostgresCache({ pool: createPgPool(pool) });
+  // The vex cache in memory, Postgres behind it: every entry is loaded at
+  // boot, so a replay looks its entry up in memory rather than asking the
+  // database first — 12 of a stage connect's 27 queries. Writes still land in
+  // Postgres, off the hot path. One process only: a second replica would keep
+  // its own memory (one replica is what lyceum runs).
+  const cache = createTieredCache({ l1: createMemoryCache(), l2: createPostgresCache({ pool: createPgPool(pool) }) });
   await cache.init();
 
   return {
