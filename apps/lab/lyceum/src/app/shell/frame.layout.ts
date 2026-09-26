@@ -1,7 +1,7 @@
 import type { LayoutNode } from '@niscorp/nova';
 
 // The frame every principal shares. Canvases stack; the last one takes the
-// rest of the screen. Each is empty for whoever holds nothing for it — the
+// rest of the screen. Each is empty for anyone who has nothing on it — the
 // strip is the stage's, the house is the sorted's — and an empty canvas takes
 // no room.
 export const frameLayout: LayoutNode = {

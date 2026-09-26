@@ -37,13 +37,13 @@ export const STAFF: readonly { principal: string; role: string }[] = [
   { principal: 'kit', role: 'kit' },
 ];
 
-// The deck, in order. Each id is an action the stage holds — `deck-check`
+// The deck, in order. Each id is an action the stage is granted — `deck-check`
 // asserts it. Provisional: the streamed agenda composes the real order.
 export const SLIDES: readonly { slideId: string; title: string }[] = [
   { slideId: 'slide.title', title: 'The talk is an application' },
   { slideId: 'stage.roster', title: 'The room' },
   { slideId: 'slide.data', title: 'Everything is data' },
-  { slideId: 'slide.existence', title: 'What you hold exists' },
+  { slideId: 'slide.existence', title: 'If you can’t use it, it isn’t there' },
   { slideId: 'slide.live', title: 'Nobody announced anything' },
   { slideId: 'slide.end', title: 'It is all in the folder' },
 ];

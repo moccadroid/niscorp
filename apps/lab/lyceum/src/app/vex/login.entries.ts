@@ -1,6 +1,6 @@
 import type { SeedMutation } from '@niscorp/vex';
 
-// ── one-time sign-in links: redeemed once, by whoever holds the link ──
+// ── one-time sign-in links: redeemed once, by whoever has the link ──
 //
 // Run as the `gatekeeper` machinery role — there is no principal yet, which is
 // the whole point of a sign-in. Deleting the row IS the redemption: a link

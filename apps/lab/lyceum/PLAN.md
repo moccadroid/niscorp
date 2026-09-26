@@ -123,7 +123,7 @@ own canvas above the slide canvas. The kitchen sink is `kit.sink` — `/dev/as/k
    rebuilt from the row on boot, so a restart before minute 40 still ends the talk and a
    server down at 40 fires on restart. Its effect is one vex write (`talk.ended_at`, the
    deck to the closing slide) made as a `clock` principal — a real principal in `grants`
-   holding only those writes, through the normal door with its own session, like Lyra's
+   granted only those writes, through the normal door with its own session, like Lyra's
    automation actors. Phones and the controller read the talk's state reactively; the
    stage moves on the existing `deck-moved` reaction. No notification system.
 3. Later, in moss: **identity as a reactive read.** Identity resolves from vex reads; if

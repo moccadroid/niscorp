@@ -43,20 +43,20 @@ const main = async (): Promise<void> => {
   const memberHello = await member.hello();
   const memberId = memberHello.principal ?? '';
   check(`they are now a principal of their own (${memberId})`, memberId.startsWith('m_'));
-  check('they hold the member card', memberHello.catalog.actions.includes('member.card'));
+  check('they get the member card', memberHello.catalog.actions.includes('member.card'));
   check('the house crest does not exist for them yet', !memberHello.catalog.actions.includes('house.crest'));
   check('their card says they are not yet sorted', await member.shows('main', 'Not yet sorted'));
 
   // ── the speaker and the stage, signed in with the same credential ──
   const speaker = await connect(base, await mintSession(runtime.pool, 'speaker', 60_000));
   const speakerHello = await speaker.hello();
-  check('the speaker holds the controller', speakerHello.catalog.actions.includes('speaker.console'));
-  check('the speaker holds nothing of the room', !speakerHello.catalog.actions.includes('member.card'));
+  check('the speaker gets the controller', speakerHello.catalog.actions.includes('speaker.console'));
+  check('the speaker gets nothing of the room', !speakerHello.catalog.actions.includes('member.card'));
   check('the controller counts the room', await speaker.shows('main', '1 joined · 0 sorted'));
 
   const stage = await connect(base, await mintSession(runtime.pool, 'stage', 60_000));
   const stageHello = await stage.hello();
-  check('the stage holds the roster and no controls', stageHello.catalog.actions.includes('stage.roster') && !stageHello.catalog.actions.includes('speaker.console'));
+  check('the stage gets the roster and no controls', stageHello.catalog.actions.includes('stage.roster') && !stageHello.catalog.actions.includes('speaker.console'));
   // The projector is the deck now: it opens on the first slide, and the room
   // is the slide after it.
   check('the stage opens on the first slide', await stage.shows('main', 'The talk is an application'));

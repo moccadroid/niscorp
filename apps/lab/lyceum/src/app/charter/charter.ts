@@ -29,7 +29,7 @@ export const CHARTER: Charter = {
 
   // The speaker's controller and the projector: two principals, two devices.
   // The speaker moves the deck; the stage shows it — every slide is an action
-  // only the stage holds.
+  // only the stage is granted.
   // The speaker sorts the room, as themselves.
   speaker: { actions: ['speaker.*'], data: [...ROOM_READS, ...DECK_READS, 'deck.write.update', 'members.write.update'] },
   stage: { actions: ['stage.*', 'slide.*'], data: [...ROOM_READS, ...DECK_READS] },
@@ -37,7 +37,7 @@ export const CHARTER: Charter = {
   // The kit's kitchen sink: every piece of the look on one screen (dev).
   kit: { actions: ['kit.*'] },
 
-  // ── machinery: roles nobody wears, each holding exactly its job ──
+  // ── machinery: roles nobody wears, each granted exactly its job ──
   // Reads who somebody is, for the identity seam.
   identity: { data: ['members.read', 'grants.read'] },
   // Redeems a one-time sign-in link: uses it up, and that is all.

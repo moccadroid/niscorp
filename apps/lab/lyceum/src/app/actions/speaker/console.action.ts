@@ -4,7 +4,7 @@ import { deckCurrent, slidesCount } from '@lyceum/app/vex/deck.entries';
 import { consoleLayout } from './console.layout';
 import { deckBackPrism, deckNextPrism } from './console.prism';
 
-// The speaker's controller — the one screen that holds the talk's levers. The
+// The speaker's controller — the one screen with the talk's controls. The
 // counts are a reactive read: they follow the room without being told.
 // Sorting is a server function: it runs as the `hat`, one person at a time,
 // and each placement re-roles that person's live shell.

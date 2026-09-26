@@ -2,7 +2,7 @@ import type { ActionDefinition, EndpointConfig } from '@niscorp/nova';
 import { memberCounts } from '@lyceum/app/vex/member.entries';
 import { codeLayout, liveLayout, statementLayout, titleLayout } from './slide.layouts';
 
-// THE SLIDES. Each is an action only the stage holds; the deck (`slides` rows)
+// THE SLIDES. Each is an action only the stage is granted; the deck (`slides` rows)
 // decides which is on screen and in what order. A slide's words are its data;
 // its layout is one of a few shapes. The words are provisional — the talk's
 // text is written with the story (PLAN.md, Open).
@@ -56,13 +56,13 @@ export const dataSlide: ActionDefinition = {
 
 export const existenceSlide: ActionDefinition = {
   id: 'slide.existence',
-  title: 'What you hold exists',
+  title: 'If you can’t use it, it isn’t there',
   data: {
     kicker: 'Look at your phone',
-    title: 'What you hold exists',
+    title: 'If you can’t use it, it isn’t there',
     points: [
       { label: '01 · Ring one', text: 'An action you are not granted is never sent to your phone. Not hidden, not disabled — absent.' },
-      { label: '02 · Ring two', text: 'An action you hold may come in your variant. Your house is a mark, not a different screen.' },
+      { label: '02 · Ring two', text: 'An action you can use may come in your role’s variant. Your house is a mark, not a different screen.' },
       { label: '03 · Ring three', text: 'Every query runs under your policy. The same question answers you and me differently.' },
     ],
   },

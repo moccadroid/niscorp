@@ -67,7 +67,7 @@ const main = async (): Promise<void> => {
 
   const speaker = await connect(`ws://127.0.0.1:${address.port}`, session);
   const hello = await speaker.hello();
-  check('the session it minted is the speaker, holding the controller', hello.principal === 'speaker' && hello.catalog.actions.includes('speaker.console'));
+  check('the session it minted is the speaker, with the controller', hello.principal === 'speaker' && hello.catalog.actions.includes('speaker.console'));
 
   // ── the door: a person writes their own row, and only their own ──
   const replay = async (token: string, fingerprint: string, context: Record<string, unknown>): Promise<number> =>

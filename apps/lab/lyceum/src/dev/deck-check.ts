@@ -26,8 +26,8 @@ const main = async (): Promise<void> => {
 
   // ── the deck's rows and the charter agree ──
   const unheld = SLIDES.filter((slide) => !stageHello.catalog.actions.includes(slide.slideId));
-  check(`every slide in the deck is an action the stage holds${unheld.length === 0 ? '' : ` (missing: ${unheld.map((s) => s.slideId).join(', ')})`}`, unheld.length === 0);
-  check('the speaker holds no slide — the controller moves the deck, it does not show it', !SLIDES.some((slide) => speakerHello.catalog.actions.includes(slide.slideId)));
+  check(`every slide in the deck is an action the stage is granted${unheld.length === 0 ? '' : ` (missing: ${unheld.map((s) => s.slideId).join(', ')})`}`, unheld.length === 0);
+  check('the speaker is granted no slide — the controller moves the deck, it does not show it', !SLIDES.some((slide) => speakerHello.catalog.actions.includes(slide.slideId)));
 
   const total = SLIDES.length;
   const titleOf = (index: number): string => SLIDES[index]?.title ?? '';

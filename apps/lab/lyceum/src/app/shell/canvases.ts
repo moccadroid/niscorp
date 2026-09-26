@@ -1,6 +1,6 @@
 import type { ShellManifest } from '@niscorp/moss';
 
-// Each canvas mounts the first candidate the principal holds — the door for
+// Each canvas mounts the first candidate the principal is granted — the door for
 // the anonymous, the controller for the speaker, the roster for the stage, the
 // member card for everybody in the room. Nobody configures which; the charter
 // decides by existence (rule 11).
