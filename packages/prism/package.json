@@ -71,12 +71,12 @@
     "node": ">=22.12"
   },
   "dependencies": {
-    "dayjs": "^1.11.20",
-    "zod": "^4.3.6"
+    "dayjs": "^1.11.20"
   },
   "peerDependencies": {
     "@niscorp/cortex": "workspace:^",
-    "@niscorp/signal": "workspace:^"
+    "@niscorp/signal": "workspace:^",
+    "zod": "^4.2.0"
   },
   "peerDependenciesMeta": {
     "@niscorp/cortex": {
@@ -90,6 +90,7 @@
     "@niscorp/cortex": "workspace:^",
     "@niscorp/signal": "workspace:^",
     "tsup": "^8.5.1",
-    "vitest": "^4.1.2"
+    "vitest": "^4.1.2",
+    "zod": "^4.3.6"
   }
 }

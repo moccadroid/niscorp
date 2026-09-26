@@ -36,6 +36,7 @@ type Manifest = {
   name: string;
   exports: Record<string, { import?: unknown; require?: unknown }>;
   peerDependencies: Record<string, string>;
+  dependencies: readonly string[];
 };
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -53,10 +54,29 @@ const readManifest = (dir: string): Manifest => {
   const peers = isRecord(raw['peerDependencies']) ? raw['peerDependencies'] : {};
   const peerDependencies: Record<string, string> = {};
   for (const [name, range] of Object.entries(peers)) if (typeof range === 'string') peerDependencies[name] = range;
-  return { name: raw['name'], exports, peerDependencies };
+  const dependencies = isRecord(raw['dependencies']) ? Object.keys(raw['dependencies']) : [];
+  return { name: raw['name'], exports, peerDependencies, dependencies };
 };
 
+// zod is a peer of every package that touches it: schemas cross from the app
+// into nisc, so the app owns the one copy. The floor is not arbitrary —
+// 4.1.13 moved `.describe()`/`.meta()` into a registry shared across copies
+// (before it, a schema from one copy converted by another silently lost every
+// description), and 4.2.0 added the Standard JSON Schema hook nisc converts
+// caller schemas through. Below 4.2.0 the second guarantee is gone.
+const ZOD_FLOOR = '4.2.0';
+
 const results: { label: string; ok: boolean; detail?: string }[] = [];
+
+const minVersionOf = (range: string): readonly number[] => (range.match(/\d+(\.\d+){0,2}/)?.[0] ?? '0').split('.').map(Number);
+const atLeast = (version: readonly number[], floor: readonly number[]): boolean => {
+  for (let i = 0; i < floor.length; i++) {
+    const a = version[i] ?? 0;
+    const b = floor[i] ?? 0;
+    if (a !== b) return a > b;
+  }
+  return true;
+};
 
 const run = (label: string, cmd: string, args: readonly string[], cwd: string): void => {
   try {
@@ -76,6 +96,13 @@ const packages = readdirSync(packagesDir).map((name) => {
 
 // ── 1 + 2: publint and attw, per package ────────────────────────────
 for (const { dir, manifest } of packages) {
+  const zodPeer = manifest.peerDependencies['zod'];
+  if (manifest.dependencies.includes('zod')) {
+    results.push({ label: `zod is a peer of ${manifest.name}`, ok: false, detail: 'zod is in dependencies — a second copy per package' });
+  } else if (zodPeer !== undefined) {
+    const ok = atLeast(minVersionOf(zodPeer), minVersionOf(ZOD_FLOOR));
+    results.push({ label: `zod peer floor of ${manifest.name}`, ok, ...(ok ? {} : { detail: `${zodPeer} admits versions below ${ZOD_FLOOR}` }) });
+  }
   run(`publint ${manifest.name}`, bin('publint'), ['--strict'], dir);
   const exclude = ESM_ONLY[manifest.name] ?? [];
   run(
@@ -105,6 +132,9 @@ try {
       if (!(name in tarballs)) peers[name] = range;
     }
   }
+  // A SECOND zod, at the oldest version the packages accept, beside the app's
+  // own copy — the duplicate every consumer can end up with (see ZOD_FLOOR).
+  peers['zod-other'] = `npm:zod@${ZOD_FLOOR}`;
 
   writeFileSync(
     join(scratch, 'package.json'),
@@ -137,6 +167,32 @@ try {
         }
       }
     }
+
+    // ── 4: a schema from ANOTHER zod copy keeps its descriptions ──────
+    // Every place nisc turns a caller's schema into JSON Schema (signal's
+    // wire, cortex's prompt docs, nova's layout palette) must convert it
+    // through the schema's own copy. Converted by nisc's copy instead, a
+    // pre-4.1.13 schema loses every `.describe()` without an error.
+    const probe = (label: string, body: string): void =>
+      run(label, 'node', ['--input-type=module', '-e', `
+        import { z as other } from 'zod-other';
+        import { z as own } from 'zod';
+        if (other === own) throw new Error('zod-other resolved to the app copy — the scenario proves nothing');
+        const schema = other.object({ field: other.string().describe('SENTINEL_DESCRIPTION') });
+        ${body}
+        if (!JSON.stringify(out).includes('SENTINEL_DESCRIPTION')) throw new Error('description lost: ' + JSON.stringify(out));
+      `], scratch);
+    probe(`second zod: signal wire schema`, `
+      const { resolveTransport } = await import('@niscorp/signal');
+      const caps = { nativeTools: true, nativeJsonMode: true, validatesToolArgs: false, supportsEmbedding: false,
+                     nativeJsonSchema: true, toolsWithStructuredOutput: true, manglesNestedToolArgs: false };
+      const out = resolveTransport({ wire: schema, looseWire: schema, responseMode: 'text', hasData: true, hasTools: false, choice: 'native' }, caps);`);
+    probe(`second zod: cortex schemaDoc`, `
+      const { schemaDoc } = await import('@niscorp/cortex');
+      const out = schemaDoc(schema);`);
+    probe(`second zod: nova palette`, `
+      const { paletteEntryOf } = await import('@niscorp/nova');
+      const out = paletteEntryOf('Probe', { propsSchema: schema });`);
   }
 } finally {
   rmSync(scratch, { recursive: true, force: true });

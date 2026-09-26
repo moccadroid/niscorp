@@ -9,7 +9,7 @@ Moss does not host code and guard it. It serves *existence*: a resolved catalog 
 ## Install
 
 ```bash
-pnpm add @niscorp/moss
+pnpm add @niscorp/moss zod
 # everything moss composes (charter, vex, nova, prism, hono, the Node
 # listener) comes with it as regular dependencies. The one optional peer
 # pair is React, needed only for the ./terminal/react render target:

@@ -1,4 +1,3 @@
-import { z } from 'zod';
 import type { ComponentRegistry, ComponentMeta } from '../layout/types';
 
 // ───────────────────────────────────────────────────────────
@@ -44,7 +43,9 @@ const stripProps = (schema: object, omit: readonly string[]): object => {
 export const paletteEntryOf = (name: string, meta: ComponentMeta, omitProps?: readonly string[]): LayoutPaletteEntry => {
   let propsSchema: object | undefined;
   if (meta.propsSchema !== undefined) {
-    const js = z.toJSONSchema(meta.propsSchema, { target: 'draft-7' });
+    // The app's schema converts itself (Standard JSON Schema): it may come from
+    // the app's zod copy, and ours would read that copy's metadata through our registry.
+    const js = meta.propsSchema['~standard'].jsonSchema.output({ target: 'draft-07' });
     propsSchema = omitProps !== undefined && omitProps.length > 0 ? stripProps(js, omitProps) : js;
   }
   return { name, description: meta.description ?? '', ...(propsSchema === undefined ? {} : { propsSchema }) };

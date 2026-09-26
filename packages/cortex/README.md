@@ -1,11 +1,13 @@
 # @niscorp/cortex
 
 Agent runtime. One tool loop, typed envelopes, code-hook gates,
-streamed events. Three peer dependencies:
-[`@niscorp/signal`](../signal), [`@niscorp/solid`](../solid), `zod`.
+streamed events. Two peer dependencies — the app owns the one copy of
+each, because both cross the API: [`@niscorp/signal`](../signal) (you
+hand cortex the client) and `zod` (you hand it the schemas).
+[`@niscorp/solid`](../solid) is an ordinary dependency.
 
 ```bash
-pnpm add @niscorp/cortex @niscorp/signal @niscorp/solid zod
+pnpm add @niscorp/cortex @niscorp/signal zod
 ```
 
 For the *why* behind the architecture — the envelope, output

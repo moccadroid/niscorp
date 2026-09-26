@@ -1,4 +1,4 @@
-import { z, type ZodType } from 'zod';
+import type { ZodType } from 'zod';
 import { SignalError, ErrorCode } from './errors';
 import { bareSchemaPrompt, bareSchemaCorrection } from './transport/protocol';
 import { asOutput } from './output-trust';
@@ -58,8 +58,12 @@ const stringify = (value: unknown): string => {
   }
 };
 
+// Converted by the schema's OWN zod (Standard JSON Schema), never by ours: the
+// caller's schema may come from another zod copy, and converting it here would
+// read that copy's metadata through our registry. `output` matches the
+// z.toJSONSchema default.
 const toJsonSchema = (schema: ZodType): Record<string, unknown> =>
-  z.toJSONSchema(schema, { target: 'draft-7' }) as Record<string, unknown>;
+  schema['~standard'].jsonSchema.output({ target: 'draft-07' });
 
 // The one request shape for the whole run.
 const buildRequest = (spec: RunSpec, caps: Capabilities): Omit<StepRequest, 'messages'> => {

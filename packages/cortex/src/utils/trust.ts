@@ -20,15 +20,7 @@
 //    connect "no schema" to "TData is undefined", so producing
 //    the `data: undefined` field of Envelope<TData> needs one
 //    documented coercion.
-//
-// 3. JSON Schema records. z.toJSONSchema returns a structured
-//    JSONSchema type that IS a plain record at runtime but does
-//    not declare an index signature (a Zod typing gap — signal
-//    carries the same cast at its own call sites).
 
 export const trustErased = <T>(value: unknown): T => value as T;
 
 export const trustUndefinedData = <TData>(): TData => undefined as TData;
-
-export const trustJsonSchemaRecord = (value: unknown): Record<string, unknown> =>
-  value as Record<string, unknown>;

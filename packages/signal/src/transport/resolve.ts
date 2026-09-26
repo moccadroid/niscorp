@@ -1,4 +1,4 @@
-import { z, type ZodType } from 'zod';
+import type { ZodType } from 'zod';
 import type { Capabilities, ResponseFormat, StepToolDescriptor } from '../types';
 import { SignalError, ErrorCode } from '../errors';
 import { RESPOND_DESCRIPTION, corrections, finishProtocol, type ProtocolSpec } from './protocol';
@@ -83,11 +83,9 @@ const FULL_PARAMS_MAX_CHARS = 8_192;
 
 type SchemaAnalysis = { serialized: Record<string, unknown> | null; hasRef: boolean; size: number };
 
-const toRecord = (value: unknown): Record<string, unknown> => value as Record<string, unknown>;
-
 const analyzeWireSchema = (schema: ZodType): SchemaAnalysis => {
   try {
-    const serialized = toRecord(z.toJSONSchema(schema, { target: 'draft-7' }));
+    const serialized = schema['~standard'].jsonSchema.output({ target: 'draft-07' });
     const text = JSON.stringify(serialized);
     return { serialized, hasRef: text.includes('"$ref"'), size: text.length };
   } catch {
@@ -95,11 +93,16 @@ const analyzeWireSchema = (schema: ZodType): SchemaAnalysis => {
   }
 };
 
+// Converted by the schema's OWN zod (Standard JSON Schema), never by ours: the
+// caller's schema may come from another zod copy, and converting it here would
+// read that copy's metadata through our registry. `output` matches the
+// z.toJSONSchema default.
 const toJsonSchemaRecord = (schema: ZodType): Record<string, unknown> => {
+  const convert = schema['~standard'].jsonSchema.output;
   try {
-    return toRecord(z.toJSONSchema(schema, { target: 'draft-7' }));
+    return convert({ target: 'draft-07' });
   } catch {
-    return toRecord(z.toJSONSchema(schema, { target: 'draft-7', unrepresentable: 'any' }));
+    return convert({ target: 'draft-07', libraryOptions: { unrepresentable: 'any' } });
   }
 };
 

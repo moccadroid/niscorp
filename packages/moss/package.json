@@ -124,13 +124,13 @@
     "@niscorp/tide": "workspace:^",
     "@niscorp/vex": "workspace:^",
     "hono": "^4.12.23",
-    "ws": "^8.21.1",
-    "zod": "^4.3.6"
+    "ws": "^8.21.1"
   },
   "peerDependencies": {
     "ink": "^7.1.1",
     "react": "^19.2.4",
-    "react-dom": "^19.2.4"
+    "react-dom": "^19.2.4",
+    "zod": "^4.2.0"
   },
   "peerDependenciesMeta": {
     "ink": {
@@ -154,6 +154,7 @@
     "react-dom": "^19.2.4",
     "tsup": "^8.5.1",
     "typescript": "^6.0.2",
-    "vitest": "^4.1.2"
+    "vitest": "^4.1.2",
+    "zod": "^4.3.6"
   }
 }

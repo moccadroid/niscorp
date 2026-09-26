@@ -11,7 +11,7 @@
 //   - Streaming is not a mode: the loop always consumes
 //     signal.stepStream; `await run.result` is the opt-out.
 
-import { z, type ZodType } from 'zod';
+import type { ZodType } from 'zod';
 import type { Message, StepRequest, StepResult, StepToolDescriptor, ResolvedTransport, StepOutcome } from '@niscorp/signal';
 import { deepDecodeJsonish } from '@niscorp/signal';
 import {
@@ -43,7 +43,6 @@ import type { ApprovalBridge } from '../gates/approval';
 import type { ToolContext, ToolDefinition } from '../tool/define-tool';
 import { withTimeout, DEFAULT_TOOL_TIMEOUT_MS } from '../utils/timeout';
 import { newApprovalId } from '../utils/id';
-import { trustJsonSchemaRecord } from '../utils/trust';
 
 // ───────────────────────────────────────────────────────────
 // Shared mutable run state — read by snapshot(), written here
@@ -126,7 +125,9 @@ export const buildToolDescriptor = (tool: ToolDefinition): StepToolDescriptor =>
   // identity; the loop resolves calls by either.
   name: tool.config.name,
   description: tool.config.description,
-  parameters: trustJsonSchemaRecord(z.toJSONSchema(tool.config.input, { target: 'draft-7' })),
+  // The tool's schema converts itself (Standard JSON Schema) — it may come from
+  // the caller's zod copy, not ours.
+  parameters: tool.config.input['~standard'].jsonSchema.output({ target: 'draft-07' }),
 });
 
 // JSON forensics live in SIGNAL's wire layer now — the loop consumes

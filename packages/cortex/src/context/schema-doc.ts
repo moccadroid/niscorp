@@ -9,20 +9,25 @@
 //
 // Minified per STYLE_GUIDE — never pretty-print JSON in prompts.
 
-import { z, type ZodType } from 'zod';
+import type { ZodType } from 'zod';
 
 export type SchemaDocOptions = {
   title?: string;
 };
 
+// Converted by the schema's OWN zod (Standard JSON Schema), never by ours: the
+// caller's schema may come from another zod copy, and converting it here would
+// read that copy's metadata through our registry. `output` matches the
+// z.toJSONSchema default.
 const toJsonSchemaString = (schema: ZodType): string => {
+  const convert = schema['~standard'].jsonSchema.output;
   try {
-    return JSON.stringify(z.toJSONSchema(schema, { target: 'draft-7' }));
+    return JSON.stringify(convert({ target: 'draft-07' }));
   } catch {
     // Schemas with refinements or other unrepresentable pieces still
     // document everything else; the runtime Zod validation keeps the
     // full contract authoritative.
-    return JSON.stringify(z.toJSONSchema(schema, { target: 'draft-7', unrepresentable: 'any' }));
+    return JSON.stringify(convert({ target: 'draft-07', libraryOptions: { unrepresentable: 'any' } }));
   }
 };
 

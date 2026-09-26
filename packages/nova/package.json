@@ -146,8 +146,7 @@
     "typecheck": "tsc --noEmit -p tsconfig.test.json"
   },
   "dependencies": {
-    "@niscorp/prism": "workspace:*",
-    "zod": "^4.3.6"
+    "@niscorp/prism": "workspace:*"
   },
   "devDependencies": {
     "@niscorp/cortex": "workspace:^",
@@ -161,13 +160,15 @@
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
     "tsup": "^8.5.1",
-    "vitest": "^4.1.2"
+    "vitest": "^4.1.2",
+    "zod": "^4.3.6"
   },
   "peerDependencies": {
     "@niscorp/cortex": "workspace:^",
     "ink": "^7.1.1",
     "ink-text-input": "^6.0.0",
-    "react": "^19.2.4"
+    "react": "^19.2.4",
+    "zod": "^4.2.0"
   },
   "peerDependenciesMeta": {
     "@niscorp/cortex": {
