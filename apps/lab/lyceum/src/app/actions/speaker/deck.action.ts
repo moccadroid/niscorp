@@ -1,23 +1,24 @@
 import type { ActionDefinition } from '@niscorp/nova';
-import { deckCurrent } from '@lyceum/app/vex/deck.entries';
+import { slideTools } from '@lyceum/app/vex/deck.entries';
 
 // THE SPEAKER'S DECK — the stage's twin (stage/deck.action.ts), on the
-// controller. It shows nothing itself: it keeps the `tools` canvas on the tool
-// the slide on screen names (`slides.tool_id`, or `tools.none`), on mount and
-// whenever the deck moves. So the controller has the controls a slide needs
-// while that slide is up, and nothing else.
-const toCurrentTool = [
-  { call: 'current', onSuccess: [{ replace: { canvas: 'tools', action: '{{$.current.tool_id}}' } }] },
+// controller. It shows nothing itself: on mount and whenever the deck moves it
+// reads the tools the slide on screen lists and makes the controller's `tools`
+// canvas hold exactly those — every one, in order, stacked (a list canvas). A
+// tool two slides share stays mounted across the move. It owns that canvas
+// outright; nothing else puts anything there.
+const toSlideTools = [
+  { call: 'tools', onSuccess: [{ reconcile: { canvas: 'tools', to: '$.tools', action: 'tool_id', own: 'canvas' as const } }] },
 ];
 
 export const speakerDeckAction: ActionDefinition = {
   id: 'speaker.deck',
   title: 'The controller follows the deck',
-  data: { current: { slide_id: '', title: '', position: 0, number: 0, tool_id: 'tools.none', count: 0, prev_number: 0, prev_title: '', next_number: 0, next_title: '' } },
+  data: { tools: [] },
   layout: [],
   endpoints: {
-    current: { url: '/api/vex', method: 'POST', request: { fingerprint: deckCurrent.fingerprint, context: {} }, target: 'current' },
+    tools: { url: '/api/vex', method: 'POST', request: { fingerprint: slideTools.fingerprint, context: {} }, target: 'tools' },
   },
-  lifecycle: { mount: toCurrentTool },
-  triggers: [{ message: 'deck-moved', do: toCurrentTool }],
+  lifecycle: { mount: toSlideTools },
+  triggers: [{ message: 'deck-moved', do: toSlideTools }],
 };

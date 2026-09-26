@@ -9,7 +9,7 @@ export const controlsAction: ActionDefinition = {
   id: 'speaker.controls',
   title: 'Back and next',
   data: {
-    current: { slide_id: '', title: '', position: 0, number: 0, tool_id: 'tools.none', count: 0, prev_number: 0, prev_title: '', next_number: 0, next_title: '' },
+    current: { slide_id: '', title: '', position: 0, number: 0, count: 0, prev_number: 0, prev_title: '', next_number: 0, next_title: '' },
     error: '',
   },
   layout: {

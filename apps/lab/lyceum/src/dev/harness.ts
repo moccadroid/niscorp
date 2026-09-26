@@ -19,6 +19,7 @@ export type Terminal = {
   // Resolves when the newest tree on `canvas` contains `text`.
   shows: (canvas: string, text: string) => Promise<boolean>;
   showsNow: (canvas: string, text: string) => boolean;
+  textOf: (canvas: string) => string;
   session: () => Promise<string>;
   click: (canvas: string, ref: string, payload?: unknown) => void;
   sessionsSeen: () => number;
@@ -35,6 +36,24 @@ export const waitUntil = async (condition: () => boolean): Promise<boolean> => {
     await new Promise((resolve) => setTimeout(resolve, 25));
   }
   return condition();
+};
+
+// WHICH INSTANCE A CLICK BELONGS TO — decided where a terminal decides it: the
+// served tree's ActionSlot around the pressed node. On a list canvas several
+// instances are live at once, and a click on any but the last must say which
+// (nova's dom adapter and moss's react terminal both stamp it the same way).
+const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value);
+const instanceAround = (nodes: unknown, ref: string, inside?: string): string | undefined => {
+  if (!Array.isArray(nodes)) return undefined;
+  for (const node of nodes) {
+    if (!isRecord(node)) continue;
+    const props = isRecord(node['props']) ? node['props'] : {};
+    const here = node['name'] === 'ActionSlot' && typeof props['instanceId'] === 'string' ? props['instanceId'] : inside;
+    if (node['ref'] === ref) return here;
+    const found = instanceAround(node['children'], ref, here);
+    if (found !== undefined) return found;
+  }
+  return undefined;
 };
 
 export const connect = (base: string, token?: string): Promise<Terminal> =>
@@ -68,14 +87,18 @@ export const connect = (base: string, token?: string): Promise<Terminal> =>
         },
         shows: (canvas, text) => waitUntil(() => (trees.get(canvas) ?? '').includes(text)),
         showsNow: (canvas, text) => (trees.get(canvas) ?? '').includes(text),
+        textOf: (canvas) => trees.get(canvas) ?? '',
         session: async () => {
           await waitUntil(() => sessions.length > 0);
           const [first] = sessions;
           if (first === undefined) throw new Error('no session granted');
           return first;
         },
-        click: (canvas, ref, payload) =>
-          socket.send(JSON.stringify({ type: 'event', canvas, event: payload === undefined ? { type: 'ui:click', ref } : { type: 'ui:click', ref, payload } })),
+        click: (canvas, ref, payload) => {
+          const origin = instanceAround(JSON.parse(trees.get(canvas) ?? '[]'), ref);
+          const event = { type: 'ui:click', ref, ...(payload === undefined ? {} : { payload }), ...(origin === undefined ? {} : { origin }) };
+          socket.send(JSON.stringify({ type: 'event', canvas, event }));
+        },
         sessionsSeen: () => sessions.length,
         isOpen: () => open,
         close: () => socket.close(),

@@ -4,7 +4,7 @@ import { assignmentToolLayout } from './assignment.layout';
 
 // The controller's tool while the assignment slides are up: put the room into
 // departments, or (testing) take everybody back out. Mounted on the speaker's
-// `tools` canvas by the speaker's deck when a slide names it (`slides.tool_id`).
+// `tools` canvas by the speaker's deck when a slide lists it (`slide_tools`).
 export const assignmentTool: ActionDefinition = {
   id: 'tools.assignment',
   title: 'Assignment',

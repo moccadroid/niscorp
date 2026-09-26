@@ -38,23 +38,22 @@ export const STAFF: readonly { principal: string; role: string }[] = [
 ];
 
 // The deck, in order. Each slide id is an action the stage is granted, each
-// tool id one the speaker is granted — `deck-check` asserts both. The tool is
-// what the controller shows while that slide is up. The words are
+// tool id one the speaker is granted — `deck-check` asserts both. The tools are
+// what the controller shows while that slide is up, stacked in this order. The words are
 // provisional: the talk's text is written with the story.
-export const SLIDES: readonly { slideId: string; title: string; toolId?: string; notes: readonly string[] }[] = [
-  { slideId: 'slide.title', title: 'The talk is an application', notes: ['Say hello; say it is running, not a recording', 'Ask everyone to take their phone out and scan the code', 'Wait for the register to fill before moving on'] },
-  { slideId: 'stage.register', title: 'The register', notes: ['Point at the names arriving — each one is a row', 'The model wrote the ID cards while they watched', 'Nobody has a department yet'] },
-  { slideId: 'slide.data', title: 'Everything is data', notes: ['Actions, layouts, queries, policy: all JSON with a schema', 'The code is only at the edges — a renderer, an endpoint, the boot', 'Show one file if there is time'] },
-  { slideId: 'slide.assignment', title: 'Assignment', toolId: 'tools.assignment', notes: ['Tell the room to watch their phones', 'Press Assign the room', 'One row changes per person — the phone follows without a reload'] },
-  { slideId: 'slide.clearance', title: 'If you can’t use it, it isn’t there', toolId: 'tools.assignment', notes: ['Ask people to compare phones with a neighbour', 'Different departments, different tools — the rest was never sent', 'Not hidden, not disabled: it does not exist for them'] },
-  { slideId: 'slide.live', title: 'Nobody announced anything', notes: ['Watch the numbers move as people act', 'No channel, no listener — the query knows what it reads', 'This is a reactive vex read'] },
-  { slideId: 'slide.end', title: 'It is all in the folder', notes: ['Everything was running on this server as they watched', 'It is all in the folder: apps/lab/lyceum', 'Thank them; take questions'] },
+export const SLIDES: readonly { slideId: string; title: string; tools: readonly string[]; notes: readonly string[] }[] = [
+  { slideId: 'slide.title', title: 'The talk is an application', tools: [], notes: ['Say hello; say it is running, not a recording', 'Ask everyone to take their phone out and scan the code', 'Wait for the register to fill before moving on'] },
+  { slideId: 'stage.register', title: 'The register', tools: [], notes: ['Point at the names arriving — each one is a row', 'The model wrote the ID cards while they watched', 'Nobody has a department yet'] },
+  { slideId: 'slide.data', title: 'Everything is data', tools: [], notes: ['Actions, layouts, queries, policy: all JSON with a schema', 'The code is only at the edges — a renderer, an endpoint, the boot', 'Show one file if there is time'] },
+  { slideId: 'slide.assignment', title: 'Assignment', tools: ['tools.assignment', 'tools.tally'], notes: ['Tell the room to watch their phones', 'Press Assign the room', 'One row changes per person — the phone follows without a reload'] },
+  { slideId: 'slide.clearance', title: 'If you can’t use it, it isn’t there', tools: ['tools.assignment'], notes: ['Ask people to compare phones with a neighbour', 'Different departments, different tools — the rest was never sent', 'Not hidden, not disabled: it does not exist for them'] },
+  { slideId: 'slide.live', title: 'Nobody announced anything', tools: [], notes: ['Watch the numbers move as people act', 'No channel, no listener — the query knows what it reads', 'This is a reactive vex read'] },
+  { slideId: 'slide.end', title: 'It is all in the folder', tools: [], notes: ['Everything was running on this server as they watched', 'It is all in the folder: apps/lab/lyceum', 'Thank them; take questions'] },
 ];
 
 export const DECK_ID = 'talk';
 
 const quote = (value: string): string => `'${value.replace(/'/g, "''")}'`;
-const nullable = (value: string | undefined): string => (value === undefined ? 'NULL' : quote(value));
 
 const slideIds = SLIDES.map((slide) => quote(slide.slideId)).join(', ');
 
@@ -75,8 +74,8 @@ export const buildSeedSql = (): string =>
     `UPDATE slides SET position = -1 - position WHERE position >= 0;`,
     ...SLIDES.map(
       (slide, position) =>
-        `INSERT INTO slides (slide_id, position, title, tool_id) VALUES (${quote(slide.slideId)}, ${position}, ${quote(slide.title)}, ${nullable(slide.toolId)})
-         ON CONFLICT (slide_id) DO UPDATE SET position = EXCLUDED.position, title = EXCLUDED.title, tool_id = EXCLUDED.tool_id;`,
+        `INSERT INTO slides (slide_id, position, title) VALUES (${quote(slide.slideId)}, ${position}, ${quote(slide.title)})
+         ON CONFLICT (slide_id) DO UPDATE SET position = EXCLUDED.position, title = EXCLUDED.title;`,
     ),
     // The deck row is the talk's state: seeded once, never reset by a restart —
     // unless the slide it names was taken out of the deck, when it goes back to
@@ -84,7 +83,11 @@ export const buildSeedSql = (): string =>
     `INSERT INTO deck (deck_id, slide_id) VALUES (${quote(DECK_ID)}, ${quote(SLIDES[0]?.slideId ?? '')}) ON CONFLICT DO NOTHING;`,
     `UPDATE deck SET slide_id = ${quote(SLIDES[0]?.slideId ?? '')} WHERE slide_id NOT IN (${slideIds});`,
     `DELETE FROM slides WHERE slide_id NOT IN (${slideIds});`,
-    // The notes converge to SLIDES too: replaced whole, every boot.
+    // The tools and the notes converge to SLIDES too: replaced whole, every boot.
+    `DELETE FROM slide_tools;`,
+    ...SLIDES.flatMap((slide) =>
+      slide.tools.map((tool, position) => `INSERT INTO slide_tools (slide_id, position, tool_id) VALUES (${quote(slide.slideId)}, ${position}, ${quote(tool)});`),
+    ),
     `DELETE FROM slide_notes;`,
     ...SLIDES.flatMap((slide) =>
       slide.notes.map((note, position) => `INSERT INTO slide_notes (slide_id, position, note) VALUES (${quote(slide.slideId)}, ${position}, ${quote(note)});`),

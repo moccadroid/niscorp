@@ -11,7 +11,7 @@ import type { ShellManifest } from '@niscorp/moss';
 //          the controller's four regions (speaker). They are not in the frame:
 //          the controller's own layout places them (speaker/console.layout.ts),
 //          so they exist on the speaker's screen and nowhere else. `tools` is
-//          the slide's tool, put there by the speaker's deck.
+//          the slide's tools, a list the speaker's deck reconciles.
 //   desk   your department's own tool — the one thing your clearance lets you
 //          do that the others' does not
 //   overlay  whatever is opened over the screen, in the `sheet` fragment's
@@ -23,7 +23,21 @@ export const CANVASES: ShellManifest['canvases'] = [
   { id: 'badge', initial: ['department.badge'] },
   { id: 'main', initial: ['speaker.console', 'member.card', 'kit.sink', 'door.join'] },
   { id: 'head', initial: ['speaker.head'] },
-  { id: 'tools' },
+  {
+    // A LIST: every tool the slide lists is live at once, stacked in order
+    // (the speaker's deck reconciles it). A slide with none says so.
+    id: 'tools',
+    mode: 'list',
+    actionLayout: {
+      if: '$.active',
+      then: { for: '$.instances', as: 'instance', do: { component: 'ActionSlot', props: { instanceId: '$instance.id' } } },
+      else: {
+        component: 'Sheet',
+        props: { size: 'fill', areas: ['none'] },
+        children: [{ component: 'Cell', props: { area: 'none', mark: 'hatch', align: 'center' }, children: [{ component: 'Label', children: 'Nothing to press on this slide' }] }],
+      },
+    },
+  },
   { id: 'notes', initial: ['speaker.notes'] },
   { id: 'controls', initial: ['speaker.controls'] },
   { id: 'desk', initial: ['records.register', 'forms.rename', 'inquiries.desk', 'archive.log'] },

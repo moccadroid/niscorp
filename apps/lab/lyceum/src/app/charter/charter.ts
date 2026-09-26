@@ -32,7 +32,7 @@ export const CHARTER: Charter = {
   // The speaker moves the deck and assigns the room, as themselves; the
   // controller's tools change with the slide. The stage shows the deck —
   // every slide is an action only the stage is granted.
-  speaker: { actions: ['speaker.*', 'tools.*'], data: [...ROOM_READS, ...DECK_READS, 'slide_notes.read', 'deck.write.update', 'members.write.update'] },
+  speaker: { actions: ['speaker.*', 'tools.*'], data: [...ROOM_READS, ...DECK_READS, 'slide_notes.read', 'slide_tools.read', 'deck.write.update', 'members.write.update'] },
   stage: { actions: ['stage.*', 'slide.*'], data: [...ROOM_READS, ...DECK_READS] },
 
   // The kit's kitchen sink: every piece of the look on one screen (dev).

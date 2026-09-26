@@ -10,7 +10,7 @@ export const stripAction: ActionDefinition = {
   id: 'stage.strip',
   title: 'The strip',
   data: {
-    current: { slide_id: '', title: '', position: 0, number: 0, tool_id: 'tools.none', count: 0, prev_number: 0, prev_title: '', next_number: 0, next_title: '' },
+    current: { slide_id: '', title: '', position: 0, number: 0, count: 0, prev_number: 0, prev_title: '', next_number: 0, next_title: '' },
     counts: { joined: 0, assigned: 0, unassigned: 0 },
   },
   layout: stripLayout,

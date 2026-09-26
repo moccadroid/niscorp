@@ -13,7 +13,7 @@ import { controlsAction } from './actions/speaker/controls.action';
 import { speakerDeckAction } from './actions/speaker/deck.action';
 import { slidesAction } from './actions/speaker/slides.action';
 import { assignmentTool } from './actions/tools/assignment.action';
-import { noTool } from './actions/tools/none.action';
+import { tallyTool } from './actions/tools/tally.action';
 import { stageRegisterAction } from './actions/stage/register.action';
 import { deckAction } from './actions/stage/deck.action';
 import { stripAction } from './actions/stage/strip.action';
@@ -38,7 +38,7 @@ export const ACTIONS: Record<string, ActionDefinition> = Object.fromEntries(
     speakerDeckAction,
     slidesAction,
     assignmentTool,
-    noTool,
+    tallyTool,
     stageRegisterAction,
     deckAction,
     stripAction,

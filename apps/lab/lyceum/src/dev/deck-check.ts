@@ -28,13 +28,24 @@ const main = async (): Promise<void> => {
   const unheld = SLIDES.filter((slide) => !stageHello.catalog.actions.includes(slide.slideId));
   check(`every slide in the deck is an action the stage is granted${unheld.length === 0 ? '' : ` (missing: ${unheld.map((s) => s.slideId).join(', ')})`}`, unheld.length === 0);
   check('the speaker is granted no slide — the controller moves the deck, it does not show it', !SLIDES.some((slide) => speakerHello.catalog.actions.includes(slide.slideId)));
-  const tools = SLIDES.flatMap((slide) => (slide.toolId === undefined ? [] : [slide.toolId]));
-  check('every slide\'s tool is an action the speaker is granted, and the stage is not', tools.every((toolId) => speakerHello.catalog.actions.includes(toolId) && !stageHello.catalog.actions.includes(toolId)));
+  const tools = SLIDES.flatMap((slide) => slide.tools);
+  check('every slide\'s tools are actions the speaker is granted, and the stage is not', tools.every((toolId) => speakerHello.catalog.actions.includes(toolId) && !stageHello.catalog.actions.includes(toolId)));
 
   const total = SLIDES.length;
   const titleOf = (index: number): string => SLIDES[index]?.title ?? '';
   const onSlide = async (index: number): Promise<boolean> =>
     (await speaker.shows('head', `slide ${index + 1} of ${total}`)) && (await speaker.shows('head', titleOf(index))) && (await stage.shows('main', titleOf(index)));
+
+  // What each tool says, so the tool region can be read: exactly a slide's
+  // tools, in the slide's order — or, with none, that there are none.
+  const SAYS: Record<string, string> = { 'tools.assignment': 'Assign the room', 'tools.tally': 'Departments so far' };
+  const toolsAre = (expected: readonly string[]): Promise<boolean> =>
+    waitUntil(() => {
+      const shown = Object.keys(SAYS).filter((tool) => speaker.showsNow('tools', SAYS[tool] ?? '\u0000'));
+      const order = [...shown].sort((a, b) => speaker.textOf('tools').indexOf(SAYS[a] ?? '') - speaker.textOf('tools').indexOf(SAYS[b] ?? ''));
+      const none = speaker.showsNow('tools', 'Nothing to press on this slide');
+      return expected.length === 0 ? none && shown.length === 0 : !none && JSON.stringify(order) === JSON.stringify(expected);
+    });
 
   // ── the controller: four regions, on the speaker's screen only ──
   const regions = ['head', 'tools', 'notes', 'controls'];
@@ -54,6 +65,7 @@ const main = async (): Promise<void> => {
     speaker.click('controls', 'next');
     check(`next shows slide ${index + 1} on the stage (${titleOf(index)})`, await onSlide(index));
     check(`...and its notes on the controller`, await speaker.shows('notes', SLIDES[index]?.notes[0] ?? '\u0000'));
+    check(`...and exactly its tools, in order (${(SLIDES[index]?.tools ?? []).join(', ') || 'none'})`, await toolsAre(SLIDES[index]?.tools ?? []));
   }
   speaker.click('controls', 'next');
   check('next on the last slide stays there', await onSlide(total - 1));

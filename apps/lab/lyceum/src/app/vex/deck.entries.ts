@@ -29,14 +29,14 @@ const at = (offset: number): unknown => ({
 export const deckCurrent: SeedEntry = {
   fingerprint: 'deck/current',
   refresh: 'reactive',
-  intent: 'The slide on screen — its action, title, place and tool — the slides either side of it, and how many there are',
-  shape: [{ slide_id: '', title: '', position: 0, number: 0, tool_id: '', count: 0, prev_number: 0, prev_title: '', next_number: 0, next_title: '' }],
+  intent: 'The slide on screen — its action, title and place — the slides either side of it, and how many there are',
+  shape: [{ slide_id: '', title: '', position: 0, number: 0, count: 0, prev_number: 0, prev_title: '', next_number: 0, next_title: '' }],
   dsl: {
     from: [
       'slides',
       { as: 'cur', query: { from: ['deck', 'slides'], fields: [{ field: 'slides.position', as: 'at' }], filter: { eq: ['deck.deck_id', 'talk'] } } },
     ],
-    fields: ['slides.slide_id', 'slides.title', 'slides.position', 'slides.tool_id', 'cur.at'],
+    fields: ['slides.slide_id', 'slides.title', 'slides.position', 'cur.at'],
     filter: { gte: ['slides.position', 0] },
     sort: [{ field: 'slides.position', dir: 'asc' }],
     limit: 1000,
@@ -57,7 +57,6 @@ export const deckCurrent: SeedEntry = {
             // Counted from one, for people.
             number: { $add: [{ $var: 'at' }, 1] },
             // A slide with no controls of its own still names a tool: the empty one.
-            tool_id: { $coalesce: [field('here', 'tool_id', null), { $const: 'tools.none' }] },
             count: { $length: { $var: 'rows' } },
             prev_number: { $var: 'at' },
             prev_title: field('before', 'title', ''),
@@ -110,6 +109,21 @@ export const slideNotes: SeedEntry = {
   },
 };
 
+// The tools the slide on screen puts on the controller, in order. A snapshot:
+// the speaker's deck reads it when the deck moves and makes the tool region
+// hold exactly these (a `reconcile` step).
+export const slideTools: SeedEntry = {
+  fingerprint: 'slides/tools',
+  intent: 'The tools the slide on screen puts on the controller, in order',
+  shape: [{ position: 0, tool_id: '' }],
+  dsl: {
+    from: ['deck', 'slides', 'slide_tools'],
+    fields: ['slide_tools.position', 'slide_tools.tool_id'],
+    filter: { eq: ['deck.deck_id', 'talk'] },
+    sort: [{ field: 'slide_tools.position', dir: 'asc' }],
+  },
+};
+
 // Put the slide at `position` on screen. The controller computes the position
 // (one on, one back, clamped to the deck); the slide is looked up by it, so a
 // request names a place in the deck, never an action. The deck is named too —
@@ -127,4 +141,4 @@ export const deckGo: SeedMutation = {
   },
 };
 
-export const DECK_ENTRIES: readonly (SeedEntry | SeedMutation)[] = [deckCurrent, slidesAll, slideNotes, deckGo];
+export const DECK_ENTRIES: readonly (SeedEntry | SeedMutation)[] = [deckCurrent, slidesAll, slideNotes, slideTools, deckGo];

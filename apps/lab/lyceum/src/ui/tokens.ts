@@ -71,7 +71,10 @@ html, body { margin: 0; padding: 0; }
 
 /* a canvas placed by an action's own layout (the controller's regions) fills
    its cell, and its sheet is part of the outer grid — its rules, not a frame */
-.${ROOT_CLASS} .cell > [data-canvas], .${ROOT_CLASS} .cell > [data-canvas] > * { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; }
+.${ROOT_CLASS} .cell > [data-canvas] { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; overflow-y: auto; }
+/* several actions in one region (a list canvas) stack; the last takes what is left */
+.${ROOT_CLASS} .cell > [data-canvas] > * { display: flex; flex-direction: column; flex: 0 0 auto; }
+.${ROOT_CLASS} .cell > [data-canvas] > *:last-child { flex: 1 1 auto; min-height: 0; }
 /* a sheet that fills takes the region; any other is as tall as it is, with its
    own rule under it and the region's paper below */
 .${ROOT_CLASS} .cell > [data-canvas] > * > .sheet { border: 0; flex: 0 0 auto; border-bottom: var(--rule) solid var(--ink); }

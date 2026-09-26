@@ -88,7 +88,26 @@ export const DDL = /* sql */ `
   );
 `;
 
+// Migration 2: A SLIDE'S TOOLS ARE ROWS. A slide put at most one tool on the
+// controller (`slides.tool_id`); now it puts as many as it lists, in order —
+// the controller's tool region is a list canvas the speaker's deck reconciles
+// to these rows. What a database already says is carried over before the
+// column goes.
+export const SLIDE_TOOLS = /* sql */ `
+  CREATE TABLE slide_tools (
+    slide_id TEXT NOT NULL REFERENCES slides (slide_id) ON DELETE CASCADE,
+    position INT  NOT NULL,
+    tool_id  TEXT NOT NULL,
+    PRIMARY KEY (slide_id, position)
+  );
+  INSERT INTO slide_tools (slide_id, position, tool_id) SELECT slide_id, 0, tool_id FROM slides WHERE tool_id IS NOT NULL;
+  ALTER TABLE slides DROP COLUMN tool_id;
+`;
+
 export const LYCEUM_SEQUENCE: Sequence = {
   id: 'lyceum.app',
-  migrations: [{ description: "The Ministry's tables: departments, members, the deck and its notes, grants, sign-in links", steps: sqlSteps(DDL) }],
+  migrations: [
+    { description: "The Ministry's tables: departments, members, the deck and its notes, grants, sign-in links", steps: sqlSteps(DDL) },
+    { description: "A slide's tools are rows (slide_tools), not one column on the slide", steps: sqlSteps(SLIDE_TOOLS) },
+  ],
 };
