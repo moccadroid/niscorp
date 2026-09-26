@@ -257,6 +257,9 @@ importers:
       '@niscorp/solid':
         specifier: workspace:^
         version: link:../../../packages/solid
+      '@niscorp/strata':
+        specifier: workspace:^
+        version: link:../../../packages/strata
       '@niscorp/vex':
         specifier: workspace:^
         version: link:../../../packages/vex

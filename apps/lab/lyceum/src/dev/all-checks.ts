@@ -3,7 +3,7 @@
 // the order of the suite part of its meaning.
 import { spawnSync } from 'node:child_process';
 
-const CHECKS = ['assignment-check', 'deck-check', 'serve-check'];
+const CHECKS = ['tables-check', 'assignment-check', 'deck-check', 'serve-check'];
 
 // The checks never call a model: ID cards come from the deterministic issuer.
 const env = { ...process.env, LYCEUM_ISSUER: 'fake' };

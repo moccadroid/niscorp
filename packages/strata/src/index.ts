@@ -10,6 +10,7 @@ export type { Stamp, Location, Transform, Upgrader, UpgradeResult } from './docu
 export { prepare, planMigrations, refuseProblems, orderPending } from './plan';
 export type { Plan, Problem, PreparedMigration, PreparedSequence, LedgerRow } from './plan';
 export { checksumOf } from './checksum';
+export { sqlSteps } from './sql';
 export { StrataError } from './errors';
 export type { StrataErrorCode } from './errors';
 

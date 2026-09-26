@@ -116,7 +116,7 @@ pnpm format        # prettier write
 
 # the gates CI runs (after pnpm build)
 pnpm check:packages    # every package, packed and installed OUTSIDE the workspace: publint, attw, every subpath imported
-pnpm check:grammars    # nova's and Prism's schemas vs their snapshots; 131 real documents must upgrade and parse
+pnpm check:grammars    # nova's and Prism's schemas vs their snapshots; 157 real documents must upgrade and parse
 pnpm check:sources     # each lab app's source is written at the grammars it runs on (strata.lock.json)
 pnpm check:changesets  # a breaking release breaks everything that depends or peers on it
 ```

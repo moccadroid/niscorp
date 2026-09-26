@@ -38,7 +38,9 @@ own tables, the sessions table, the vex cache — in one ledgered run at boot.
   full-line `--` comments are not part of the checksum — rewording is not
   editing.
 - **One statement per step.** A driver that prepares statements (PGlite, `pg`
-  with parameters) refuses a string carrying several.
+  with parameters) refuses a string carrying several. For a DDL file, use
+  `sqlSteps(ddl)` — never split on every `;`: a comment containing one is cut
+  in two and its tail becomes SQL (lyceum's schema would have failed at boot).
 - **A run is one transaction** under an advisory lock. A step throws, nothing
   from the run happened — Postgres DDL is transactional. Two processes booting
   at once serialize; the second finds the work done.
@@ -57,6 +59,7 @@ own tables, the sessions table, the vex cache — in one ledgered run at boot.
 | `prepare(sequences)` | Parses (Zod, at the boundary), numbers and checksums. Throws `INVALID_SEQUENCE`. |
 | `planMigrations(prepared, ledger)` | Pure: what is pending, in order, and every problem (`EDITED`, `TOO_NEW`, `UNKNOWN_DEPENDENCY`, `CYCLE`). |
 | `checksumOf(migration)` | SHA-256 over the steps (WebCrypto — Node ≥ 22 and every browser). |
+| `sqlSteps(ddl)` | A DDL file as one step per statement — splits only at a `;` that ends a line of SQL, never inside a comment. |
 | `SequenceSchema`, `MigrationSchema`, `StepSchema` | The grammar, as Zod. |
 | `StrataError` | `code` + a sentence + `details`. |
 

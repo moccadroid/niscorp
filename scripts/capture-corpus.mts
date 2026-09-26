@@ -10,7 +10,7 @@
 // moved. Once a grammar gains a migration the stamp changes, the next capture
 // lands in a new file, and the old one is frozen history: never edit it.
 //
-// Run: pnpm strata:corpus   (after `pnpm build`)
+// Run: pnpm strata:corpus [app …]   (after `pnpm build`; no apps named = all)
 
 import { execFileSync } from 'node:child_process';
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
@@ -19,7 +19,11 @@ import { NOVA_SEQUENCE } from '../packages/nova/dist/migrations/index.js';
 import { PRISM_SEQUENCE } from '../packages/prism/dist/migrations/index.js';
 
 const root = resolve(import.meta.dirname, '..');
-const APPS = ['atrium', 'encore', 'lyceum', 'lyra', 'relay'] as const;
+const ALL_APPS = ['atrium', 'encore', 'lyceum', 'lyra', 'relay'] as const;
+// `pnpm strata:corpus lyceum` captures just the named apps; no names, all of them.
+const named = process.argv.slice(2).filter((a) => !a.startsWith('-'));
+const APPS = named.length === 0 ? ALL_APPS : ALL_APPS.filter((app) => named.includes(app));
+if (named.length > 0 && APPS.length !== named.length) throw new Error(`unknown app(s): ${named.filter((n) => !ALL_APPS.some((a) => a === n)).join(', ')}`);
 
 // Runs inside each app, with that app's own tsx and tsconfig paths, so its
 // catalog imports resolve exactly as the app resolves them.

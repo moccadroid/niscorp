@@ -2,14 +2,16 @@ import { PGlite } from '@electric-sql/pglite';
 import { createPostgresCache } from '@niscorp/vex';
 import { createPglitePool, RAW_DATE_PARSERS } from '@niscorp/vex/pglite';
 import type { NiscRuntime } from '@niscorp/moss';
-import { DDL } from '@lyceum/db/schema';
+import { migrate } from '@niscorp/strata/postgres';
+import { LYCEUM_SEQUENCE } from '@lyceum/db/schema';
 import { buildSeedSql } from '@lyceum/db/seed';
 
 // The DEVELOPMENT environment: an in-memory PGlite, for `pnpm dev` and the
 // checks. A check gets a fresh one per boot. `pnpm dev` opens ONE for the life
 // of the process and lends it to every re-boot (vite.config.ts), so an edit
-// keeps the room: sessions, members and the deck survive it. The DDL is
-// idempotent and the seed converges, so both run again on the borrowed one. The talk itself runs on Postgres
+// keeps the room: sessions, members and the deck survive it. The tables go
+// through strata's ledger (a borrowed database finds them already applied) and
+// the seed converges, so both run again on the borrowed one. The talk itself runs on Postgres
 // (./postgres-runtime.ts) — the manifest does not change, only the environment.
 //
 // Sessions are the real credential even here: 256-bit, hashed at rest,
@@ -26,7 +28,7 @@ export const openDevDatabase = (): PGlite => new PGlite();
 // `borrowed`: a database somebody else opened and will close — the dev server's.
 export const devRuntime = async (borrowed?: PGlite): Promise<DevRuntime> => {
   const db = borrowed ?? openDevDatabase();
-  await db.exec(DDL);
+  await migrate(createPglitePool(db), [LYCEUM_SEQUENCE]);
   await db.exec(buildSeedSql());
 
   // Two pools over one database: app reads get raw date strings; the cache

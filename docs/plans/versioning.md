@@ -11,8 +11,9 @@
 > the grammar gate with a 131-document corpus (S4); `strata upgrade` for app
 > source with a committed lock, rehearsed on relay with a real rename and
 > enforced by `pnpm check:sources` (S5); rules 17–20 in AGENTS.md (S6).
-> **Open:** npm publishing (a future step, not scheduled); lyceum and midas
-> adopt on their own (corpus, lock).
+> **Open:** npm publishing (a future step, not scheduled); midas adopts on its
+> own (corpus, lock). lyceum adopted: its tables are `lyceum.app`, its source
+> has a lock, its 26 documents are in the corpus (157).
 
 Two problems, one plan. **Package versioning**: ten libraries with no version
 discipline, never published. **Data versioning**: every nisc artifact is JSON
@@ -310,7 +311,6 @@ $ pnpm strata verify
   `midas.app` sequence, its three `zod ^4.0.0` declarations move to `^4.2.0`,
   it keeps a `strata.lock.json` and captures its own corpus, and bumping its
   submodule to niscorp HEAD is strata's acceptance test.
-- **lyceum** captures its corpus and takes a lock once it settles.
 - Decided along the way (recorded, the user's call): `$ref: '$'` accepted
   (S3); the ledger is `strata_ledger` in the app's schema (configurable);
   `vex_cache` is not stamped (a cache, not a store).

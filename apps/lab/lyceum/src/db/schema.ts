@@ -1,9 +1,17 @@
-// The Ministry's tables — idempotent, so the same DDL stands up an empty
-// database and leaves a live one alone. Who somebody IS in the talk — not yet
-// assigned, a department, the speaker, the projector — is read from these rows
-// by the identity seam, so a role changes by writing a row, never by signing in
-// again.
+import { sqlSteps, type Sequence } from '@niscorp/strata';
 
+// The Ministry's tables. Who somebody IS in the talk — not yet assigned, a
+// department, the speaker, the projector — is read from these rows by the
+// identity seam, so a role changes by writing a row, never by signing in again.
+//
+// THEY GO THROUGH THE LEDGER (strata; AGENTS.md rule 17): LYCEUM_SEQUENCE below,
+// applied once and recorded — not run on every boot. Its migration 1 is this
+// DDL, verbatim and idempotent, so the talk's live Postgres (which ran it on
+// every boot until now) adopts on its next boot with every row kept.
+//
+// HISTORY: this text is migration 1, and the live database has run it. Change a
+// table by APPENDING a migration to LYCEUM_SEQUENCE — editing this makes every
+// database that ran it refuse to boot (EDITED). Rewording a `--` comment is fine.
 export const DDL = /* sql */ `
   -- The four departments. Each is a role in the charter with a different
   -- clearance; \`remit\` says in plain words what that clearance lets you do.
@@ -79,3 +87,8 @@ export const DDL = /* sql */ `
     expires_at TIMESTAMPTZ NOT NULL
   );
 `;
+
+export const LYCEUM_SEQUENCE: Sequence = {
+  id: 'lyceum.app',
+  migrations: [{ description: "The Ministry's tables: departments, members, the deck and its notes, grants, sign-in links", steps: sqlSteps(DDL) }],
+};

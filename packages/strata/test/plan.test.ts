@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { prepare, planMigrations, checksumOf, StrataError, type LedgerRow, type Sequence } from '../src';
+import { prepare, planMigrations, checksumOf, sqlSteps, StrataError, type LedgerRow, type Sequence } from '../src';
 
 const sql = (s: string) => ({ kind: 'sql' as const, sql: s });
 
@@ -121,5 +121,27 @@ describe('checksum', () => {
     const b = await checksumOf({ steps: [{ sql: 'SELECT 1', kind: 'sql' }], description: 'two', dependsOn: ['x.y/1'] });
     expect(a).toBe(b);
     expect(a).toMatch(/^[0-9a-f]{64}$/);
+  });
+});
+
+describe('sqlSteps — a DDL file as one statement per step', () => {
+  it('never splits inside a comment, even one with a semicolon', () => {
+    const steps = sqlSteps(`
+  -- The departments. Each is a role; \`remit\` says what it may do.
+  CREATE TABLE IF NOT EXISTS departments (
+    id TEXT PRIMARY KEY  -- the key; never reused
+  );
+
+  -- One row per person; NULL until assigned.
+  CREATE TABLE IF NOT EXISTS members (id TEXT PRIMARY KEY);
+`);
+    expect(steps.map((s) => s.sql.split('\n').filter((l) => !l.trim().startsWith('--')).join(' ').replace(/\s+/g, ' ').trim())).toEqual([
+      'CREATE TABLE IF NOT EXISTS departments ( id TEXT PRIMARY KEY -- the key; never reused )',
+      'CREATE TABLE IF NOT EXISTS members (id TEXT PRIMARY KEY)',
+    ]);
+  });
+
+  it('a trailing statement without a semicolon is kept; comment-only tails are not steps', () => {
+    expect(sqlSteps('CREATE TABLE a (x int);\nCREATE TABLE b (y int)\n-- the end').map((s) => s.sql.split('\n')[0])).toEqual(['CREATE TABLE a (x int)', 'CREATE TABLE b (y int)']);
   });
 });

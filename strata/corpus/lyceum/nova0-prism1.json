@@ -1,0 +1,3520 @@
+{
+  "app": "lyceum",
+  "stamp": {
+    "nisc.nova": 0,
+    "nisc.prism": 1
+  },
+  "documents": [
+    {
+      "kind": "nisc.nova/action",
+      "id": "archive.log",
+      "document": {
+        "id": "archive.log",
+        "title": "The archive",
+        "data": {
+          "rows": []
+        },
+        "layout": {
+          "component": "Sheet",
+          "props": {
+            "size": "fill",
+            "areas": [
+              "kick",
+              "table"
+            ],
+            "rows": [
+              "auto",
+              1
+            ]
+          },
+          "children": [
+            {
+              "component": "Cell",
+              "props": {
+                "area": "kick",
+                "ink": "live"
+              },
+              "children": [
+                {
+                  "component": "Label",
+                  "children": "Archive · the history"
+                }
+              ]
+            },
+            {
+              "component": "Cell",
+              "props": {
+                "area": "table",
+                "pad": "none"
+              },
+              "children": [
+                {
+                  "component": "Rows",
+                  "props": {
+                    "rows": "$.rows",
+                    "rowKey": "member_id",
+                    "empty": "Nothing has happened yet.",
+                    "columns": [
+                      {
+                        "label": "Arrived",
+                        "key": "arrived",
+                        "kind": "mono",
+                        "w": 1.1
+                      },
+                      {
+                        "label": "Name",
+                        "key": "name",
+                        "w": 2
+                      },
+                      {
+                        "label": "Went to",
+                        "key": "department_name",
+                        "w": 1.4,
+                        "missing": "—"
+                      },
+                      {
+                        "label": "At",
+                        "key": "assigned",
+                        "kind": "mono",
+                        "w": 1.1,
+                        "missing": "—"
+                      }
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        "endpoints": {
+          "load": {
+            "url": "/api/vex",
+            "method": "POST",
+            "request": {
+              "fingerprint": "archive/history",
+              "context": {}
+            },
+            "target": "rows"
+          }
+        },
+        "lifecycle": {
+          "mount": [
+            {
+              "call": "load"
+            }
+          ]
+        },
+        "triggers": []
+      }
+    },
+    {
+      "kind": "nisc.nova/action",
+      "id": "department.badge",
+      "document": {
+        "id": "department.badge",
+        "title": "Your department",
+        "data": {
+          "me": {
+            "member_id": "",
+            "name": "",
+            "title": "",
+            "quirk": "",
+            "department_id": "",
+            "department_name": "",
+            "department_remit": "",
+            "department_mark": "",
+            "department_sigil": ""
+          }
+        },
+        "layout": {
+          "component": "Sheet",
+          "props": {
+            "areas": [
+              "kick",
+              "department",
+              "remit"
+            ]
+          },
+          "children": [
+            {
+              "component": "Cell",
+              "props": {
+                "area": "kick"
+              },
+              "children": [
+                {
+                  "component": "Label",
+                  "children": "Your department"
+                }
+              ]
+            },
+            {
+              "component": "Cell",
+              "props": {
+                "area": "department",
+                "mark": "$.me.department_mark"
+              },
+              "children": [
+                {
+                  "component": "Sigil",
+                  "props": {
+                    "shape": "$.me.department_sigil",
+                    "size": "large"
+                  }
+                },
+                {
+                  "component": "Headline",
+                  "props": {
+                    "level": "title"
+                  },
+                  "children": "{{$.me.department_name}}"
+                }
+              ]
+            },
+            {
+              "component": "Cell",
+              "props": {
+                "area": "remit",
+                "ink": "highlight"
+              },
+              "children": [
+                {
+                  "component": "Text",
+                  "children": "{{$.me.department_remit}}"
+                }
+              ]
+            }
+          ]
+        },
+        "endpoints": {
+          "load": {
+            "url": "/api/vex",
+            "method": "POST",
+            "request": {
+              "fingerprint": "members/me",
+              "context": {}
+            },
+            "target": "me"
+          }
+        },
+        "lifecycle": {
+          "mount": [
+            {
+              "call": "load"
+            }
+          ]
+        },
+        "triggers": []
+      }
+    },
+    {
+      "kind": "nisc.nova/action",
+      "id": "door.join",
+      "document": {
+        "id": "door.join",
+        "title": "Step in",
+        "data": {
+          "entering": false,
+          "error": ""
+        },
+        "layout": {
+          "component": "Sheet",
+          "props": {
+            "size": "fill",
+            "areas": [
+              "kick",
+              "head",
+              "body",
+              "enter"
+            ],
+            "rows": [
+              "auto",
+              1,
+              "auto",
+              "auto"
+            ]
+          },
+          "children": [
+            {
+              "component": "Cell",
+              "props": {
+                "area": "kick"
+              },
+              "children": [
+                {
+                  "component": "Label",
+                  "children": "Lyceum"
+                }
+              ]
+            },
+            {
+              "component": "Cell",
+              "props": {
+                "area": "head",
+                "align": "end"
+              },
+              "children": [
+                {
+                  "component": "Headline",
+                  "props": {
+                    "level": "title"
+                  },
+                  "children": "The talk is an app, and you are in it"
+                }
+              ]
+            },
+            {
+              "component": "Cell",
+              "props": {
+                "area": "body"
+              },
+              "children": [
+                {
+                  "component": "Text",
+                  "children": "Tonight the talk is an application, and you are in it."
+                },
+                {
+                  "if": "$.error",
+                  "then": {
+                    "component": "Text",
+                    "props": {
+                      "tone": "muted"
+                    },
+                    "children": "{{$.error}}"
+                  }
+                }
+              ]
+            },
+            {
+              "component": "Action",
+              "ref": "enter",
+              "props": {
+                "area": "enter",
+                "ink": "ink",
+                "label": {
+                  "$if": "$.entering",
+                  "$then": "Stepping in…",
+                  "$else": "Step in →"
+                }
+              }
+            }
+          ]
+        },
+        "endpoints": {
+          "enter": {
+            "fn": "door.enter",
+            "errorTarget": "error"
+          }
+        },
+        "triggers": [
+          {
+            "event": "ui:click",
+            "ref": "enter",
+            "do": [
+              {
+                "set": "entering",
+                "value": true
+              },
+              {
+                "call": "enter",
+                "onError": [
+                  {
+                    "set": "entering",
+                    "value": false
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "kind": "nisc.nova/action",
+      "id": "forms.rename",
+      "document": {
+        "id": "forms.rename",
+        "title": "Change your record",
+        "data": {
+          "me": {
+            "member_id": "",
+            "name": ""
+          },
+          "draft": "",
+          "saved": false,
+          "error": ""
+        },
+        "layout": {
+          "component": "Sheet",
+          "props": {
+            "size": "fill",
+            "areas": [
+              "kick",
+              "now",
+              "field",
+              "save",
+              "rest"
+            ],
+            "rows": [
+              "auto",
+              "auto",
+              "auto",
+              "auto",
+              1
+            ]
+          },
+          "children": [
+            {
+              "component": "Cell",
+              "props": {
+                "area": "kick",
+                "ink": "live"
+              },
+              "children": [
+                {
+                  "component": "Label",
+                  "children": "Forms · change your record"
+                }
+              ]
+            },
+            {
+              "component": "Cell",
+              "props": {
+                "area": "now"
+              },
+              "children": [
+                {
+                  "component": "Label",
+                  "children": "On record"
+                },
+                {
+                  "component": "Headline",
+                  "props": {
+                    "level": "name"
+                  },
+                  "children": "{{$.me.name}}"
+                }
+              ]
+            },
+            {
+              "component": "Field",
+              "ref": "draft",
+              "model": "$.draft",
+              "props": {
+                "area": "field",
+                "value": "$.draft",
+                "placeholder": "A new name"
+              }
+            },
+            {
+              "component": "Action",
+              "ref": "save",
+              "props": {
+                "area": "save",
+                "ink": "alert",
+                "label": "File the change →"
+              }
+            },
+            {
+              "component": "Cell",
+              "props": {
+                "area": "rest"
+              },
+              "children": [
+                {
+                  "if": "$.error",
+                  "then": {
+                    "component": "Text",
+                    "children": "{{$.error}}"
+                  }
+                },
+                {
+                  "if": "$.saved",
+                  "then": {
+                    "component": "Text",
+                    "props": {
+                      "tone": "muted"
+                    },
+                    "children": "Filed. Every screen that shows your name has it now."
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        "endpoints": {
+          "load": {
+            "url": "/api/vex",
+            "method": "POST",
+            "request": {
+              "fingerprint": "members/me",
+              "context": {}
+            },
+            "target": "me"
+          },
+          "save": {
+            "url": "/api/vex",
+            "method": "POST",
+            "request": {
+              "fingerprint": "members/rename",
+              "context": {
+                "memberId": {
+                  "$ref": "$.me.member_id"
+                },
+                "name": {
+                  "$ref": "$.draft"
+                }
+              }
+            },
+            "errorTarget": "error"
+          }
+        },
+        "lifecycle": {
+          "mount": [
+            {
+              "call": "load"
+            }
+          ]
+        },
+        "triggers": [
+          {
+            "event": "ui:click",
+            "ref": "save",
+            "do": [
+              {
+                "set": "error",
+                "value": ""
+              },
+              {
+                "call": "save",
+                "onSuccess": [
+                  {
+                    "set": "draft",
+                    "value": ""
+                  },
+                  {
+                    "set": "saved",
+                    "value": true
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "kind": "nisc.nova/action",
+      "id": "inquiries.desk",
+      "document": {
+        "id": "inquiries.desk",
+        "title": "Put a question to the records",
+        "data": {
+          "questions": [
+            {
+              "fingerprint": "inquiry/by-department",
+              "question": "How many are in each department?"
+            },
+            {
+              "fingerprint": "inquiry/newest",
+              "question": "Who arrived last?"
+            },
+            {
+              "fingerprint": "inquiry/waiting",
+              "question": "Who is still waiting?"
+            }
+          ],
+          "asked": "",
+          "answer": [],
+          "error": ""
+        },
+        "layout": {
+          "component": "Sheet",
+          "props": {
+            "areas": [
+              "kick"
+            ],
+            "rows": [
+              "auto"
+            ]
+          },
+          "children": [
+            {
+              "component": "Cell",
+              "props": {
+                "area": "kick",
+                "ink": "live"
+              },
+              "children": [
+                {
+                  "component": "Label",
+                  "children": "Inquiries · put a question to the records"
+                }
+              ]
+            },
+            {
+              "for": "$.questions",
+              "as": "q",
+              "do": {
+                "component": "Action",
+                "ref": "question",
+                "props": {
+                  "label": "{{$q.question}}",
+                  "value": "$q.fingerprint"
+                }
+              }
+            },
+            {
+              "component": "Cell",
+              "props": {
+                "pad": "none"
+              },
+              "children": [
+                {
+                  "if": "$.error",
+                  "then": {
+                    "component": "Text",
+                    "children": "{{$.error}}"
+                  }
+                },
+                {
+                  "if": "$.asked",
+                  "then": {
+                    "component": "Rows",
+                    "props": {
+                      "rows": "$.answer",
+                      "rowKey": "label",
+                      "empty": "Nothing on record.",
+                      "columns": [
+                        {
+                          "label": "Answer",
+                          "key": "label",
+                          "w": 2
+                        },
+                        {
+                          "label": "",
+                          "key": "value",
+                          "kind": "mono",
+                          "w": 1
+                        }
+                      ]
+                    }
+                  },
+                  "else": {
+                    "component": "Cell",
+                    "props": {
+                      "mark": "hatch"
+                    },
+                    "children": [
+                      {
+                        "component": "Text",
+                        "children": "Pick a question."
+                      }
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        "endpoints": {
+          "ask": {
+            "url": "/api/vex",
+            "method": "POST",
+            "request": {
+              "fingerprint": {
+                "$ref": "$.asked"
+              },
+              "context": {}
+            },
+            "target": "answer",
+            "errorTarget": "error"
+          }
+        },
+        "triggers": [
+          {
+            "event": "ui:click",
+            "ref": "question",
+            "do": [
+              {
+                "set": "asked",
+                "value": "@event.payload"
+              },
+              {
+                "set": "error",
+                "value": ""
+              },
+              {
+                "call": "ask"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "kind": "nisc.nova/action",
+      "id": "kit.sink",
+      "document": {
+        "id": "kit.sink",
+        "title": "Kitchen sink",
+        "data": {
+          "rows": [
+            {
+              "id": "1",
+              "sigil": "triangle",
+              "name": "Ada Moreau",
+              "department": "Records",
+              "fp": "members/me"
+            },
+            {
+              "id": "2",
+              "sigil": "circle",
+              "name": "Ben Okafor",
+              "department": "Forms",
+              "fp": "members/register"
+            },
+            {
+              "id": "3",
+              "sigil": "cross",
+              "name": "Cleo Lind",
+              "department": "Inquiries",
+              "fp": "deck/current"
+            },
+            {
+              "id": "4",
+              "sigil": null,
+              "name": "Dev Rao",
+              "department": null,
+              "fp": "members/counts"
+            }
+          ],
+          "code": "{ component: 'Cell',\n  props: { area: 'department',\n           mark: '$.me.department_mark' } }"
+        },
+        "layout": {
+          "component": "Sheet",
+          "props": {
+            "size": "fill",
+            "areas": [
+              "kick kick kick kick",
+              "display display display figure",
+              "paper ink signal alert",
+              "highlight highlight live live",
+              "stripes dots bars checks",
+              "hatch title name code",
+              "rows rows rows code",
+              "bar bar bar bar",
+              "act1 act2 act3 act4"
+            ],
+            "rows": [
+              "auto",
+              1,
+              "auto",
+              "auto",
+              "auto",
+              "auto",
+              "auto",
+              "auto",
+              "auto"
+            ]
+          },
+          "children": [
+            {
+              "component": "Cell",
+              "props": {
+                "area": "kick"
+              },
+              "children": [
+                {
+                  "component": "Label",
+                  "children": "Kitchen sink — every piece of the look"
+                }
+              ]
+            },
+            {
+              "component": "Cell",
+              "props": {
+                "area": "display",
+                "align": "end"
+              },
+              "children": [
+                {
+                  "component": "Headline",
+                  "props": {
+                    "level": "display"
+                  },
+                  "children": "Display headline"
+                }
+              ]
+            },
+            {
+              "component": "Cell",
+              "props": {
+                "area": "figure",
+                "ink": "signal",
+                "align": "end"
+              },
+              "children": [
+                {
+                  "component": "Figure",
+                  "props": {
+                    "label": "Figure",
+                    "value": 47
+                  }
+                }
+              ]
+            },
+            {
+              "component": "Cell",
+              "props": {
+                "area": "paper"
+              },
+              "children": [
+                {
+                  "component": "Label",
+                  "children": "Paper"
+                },
+                {
+                  "component": "Text",
+                  "children": "The default ink."
+                }
+              ]
+            },
+            {
+              "component": "Cell",
+              "props": {
+                "area": "ink",
+                "ink": "ink"
+              },
+              "children": [
+                {
+                  "component": "Label",
+                  "children": "Ink"
+                },
+                {
+                  "component": "Text",
+                  "children": "Black blocks."
+                }
+              ]
+            },
+            {
+              "component": "Cell",
+              "props": {
+                "area": "signal",
+                "ink": "signal"
+              },
+              "children": [
+                {
+                  "component": "Label",
+                  "children": "Signal"
+                },
+                {
+                  "component": "Text",
+                  "children": "The one fact that matters."
+                }
+              ]
+            },
+            {
+              "component": "Cell",
+              "props": {
+                "area": "alert",
+                "ink": "alert"
+              },
+              "children": [
+                {
+                  "component": "Label",
+                  "children": "Alert"
+                },
+                {
+                  "component": "Text",
+                  "children": "Act on this."
+                }
+              ]
+            },
+            {
+              "component": "Cell",
+              "props": {
+                "area": "highlight",
+                "ink": "highlight"
+              },
+              "children": [
+                {
+                  "component": "Label",
+                  "children": "Highlight"
+                },
+                {
+                  "component": "Text",
+                  "children": "What the pointer is on; what the eye should find."
+                }
+              ]
+            },
+            {
+              "component": "Cell",
+              "props": {
+                "area": "live",
+                "ink": "live"
+              },
+              "children": [
+                {
+                  "component": "Label",
+                  "children": "Live"
+                },
+                {
+                  "component": "Text",
+                  "children": "A number that changes on its own."
+                }
+              ]
+            },
+            {
+              "component": "Cell",
+              "props": {
+                "area": "stripes",
+                "mark": "stripes"
+              },
+              "children": [
+                {
+                  "component": "Sigil",
+                  "props": {
+                    "shape": "triangle",
+                    "size": "large"
+                  }
+                },
+                {
+                  "component": "Label",
+                  "children": "Stripes · triangle"
+                }
+              ]
+            },
+            {
+              "component": "Cell",
+              "props": {
+                "area": "dots",
+                "mark": "dots"
+              },
+              "children": [
+                {
+                  "component": "Sigil",
+                  "props": {
+                    "shape": "circle",
+                    "size": "large"
+                  }
+                },
+                {
+                  "component": "Label",
+                  "children": "Dots · circle"
+                }
+              ]
+            },
+            {
+              "component": "Cell",
+              "props": {
+                "area": "bars",
+                "mark": "bars"
+              },
+              "children": [
+                {
+                  "component": "Sigil",
+                  "props": {
+                    "shape": "cross",
+                    "size": "large"
+                  }
+                },
+                {
+                  "component": "Label",
+                  "children": "Bars · cross"
+                }
+              ]
+            },
+            {
+              "component": "Cell",
+              "props": {
+                "area": "checks",
+                "mark": "checks"
+              },
+              "children": [
+                {
+                  "component": "Sigil",
+                  "props": {
+                    "shape": "square",
+                    "size": "large"
+                  }
+                },
+                {
+                  "component": "Label",
+                  "children": "Checks · square"
+                }
+              ]
+            },
+            {
+              "component": "Cell",
+              "props": {
+                "area": "hatch",
+                "mark": "hatch"
+              },
+              "children": [
+                {
+                  "component": "Text",
+                  "children": "Not yet — the hatch."
+                }
+              ]
+            },
+            {
+              "component": "Cell",
+              "props": {
+                "area": "title"
+              },
+              "children": [
+                {
+                  "component": "Label",
+                  "children": "Title"
+                },
+                {
+                  "component": "Headline",
+                  "props": {
+                    "level": "title"
+                  },
+                  "children": "A title"
+                }
+              ]
+            },
+            {
+              "component": "Cell",
+              "props": {
+                "area": "name"
+              },
+              "children": [
+                {
+                  "component": "Label",
+                  "children": "Name"
+                },
+                {
+                  "component": "Headline",
+                  "props": {
+                    "level": "name"
+                  },
+                  "children": "Ada Moreau"
+                },
+                {
+                  "component": "Text",
+                  "props": {
+                    "tone": "muted"
+                  },
+                  "children": "Muted text."
+                }
+              ]
+            },
+            {
+              "component": "Cell",
+              "props": {
+                "area": "code",
+                "ink": "ink"
+              },
+              "children": [
+                {
+                  "component": "Label",
+                  "children": "sink.layout.ts"
+                },
+                {
+                  "component": "Code",
+                  "props": {
+                    "text": "$.code",
+                    "marked": [
+                      3
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "component": "Cell",
+              "props": {
+                "area": "rows",
+                "pad": "none"
+              },
+              "children": [
+                {
+                  "component": "Rows",
+                  "props": {
+                    "rows": "$.rows",
+                    "rowKey": "id",
+                    "columns": [
+                      {
+                        "label": "",
+                        "key": "sigil",
+                        "kind": "sigil",
+                        "w": 0.35
+                      },
+                      {
+                        "label": "Name",
+                        "key": "name",
+                        "w": 2
+                      },
+                      {
+                        "label": "Department",
+                        "key": "department",
+                        "w": 1.5,
+                        "missing": "waiting"
+                      },
+                      {
+                        "label": "Fingerprint",
+                        "key": "fp",
+                        "kind": "mono",
+                        "w": 2
+                      }
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "component": "Cell",
+              "props": {
+                "area": "bar",
+                "pad": "none"
+              },
+              "children": [
+                {
+                  "component": "Bar",
+                  "props": {
+                    "segments": [
+                      {
+                        "value": 3,
+                        "ink": "signal"
+                      },
+                      {
+                        "value": 2,
+                        "ink": "live"
+                      },
+                      {
+                        "value": 2,
+                        "mark": "dots"
+                      },
+                      {
+                        "value": 1,
+                        "ink": "highlight"
+                      },
+                      {
+                        "value": 1,
+                        "ink": "alert"
+                      },
+                      {
+                        "value": 2,
+                        "mark": "hatch"
+                      }
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "component": "Action",
+              "ref": "a",
+              "props": {
+                "area": "act1",
+                "label": "Paper action"
+              }
+            },
+            {
+              "component": "Action",
+              "ref": "b",
+              "props": {
+                "area": "act2",
+                "ink": "ink",
+                "label": "Ink action"
+              }
+            },
+            {
+              "component": "Action",
+              "ref": "c",
+              "props": {
+                "area": "act3",
+                "ink": "signal",
+                "label": "Signal action"
+              }
+            },
+            {
+              "component": "Action",
+              "ref": "d",
+              "props": {
+                "area": "act4",
+                "ink": "alert",
+                "label": "Next →"
+              }
+            }
+          ]
+        },
+        "triggers": []
+      }
+    },
+    {
+      "kind": "nisc.nova/action",
+      "id": "member.card",
+      "document": {
+        "id": "member.card",
+        "title": "Your ID card",
+        "data": {
+          "me": {
+            "member_id": "",
+            "name": "",
+            "title": "",
+            "quirk": "",
+            "department_id": "",
+            "department_name": "",
+            "department_remit": "",
+            "department_mark": "",
+            "department_sigil": ""
+          }
+        },
+        "layout": {
+          "component": "Sheet",
+          "props": {
+            "areas": [
+              "kick kick",
+              "name name",
+              "title quirk",
+              "status status"
+            ],
+            "cols": [
+              1,
+              1
+            ]
+          },
+          "children": [
+            {
+              "component": "Cell",
+              "props": {
+                "area": "kick"
+              },
+              "children": [
+                {
+                  "component": "Label",
+                  "children": "ID card"
+                }
+              ]
+            },
+            {
+              "component": "Cell",
+              "props": {
+                "area": "name"
+              },
+              "children": [
+                {
+                  "component": "Headline",
+                  "props": {
+                    "level": "title"
+                  },
+                  "children": "{{$.me.name}}"
+                }
+              ]
+            },
+            {
+              "if": "$.me.title",
+              "then": {
+                "component": "Cell",
+                "props": {
+                  "area": "title"
+                },
+                "children": [
+                  {
+                    "component": "Label",
+                    "children": "Title"
+                  },
+                  {
+                    "component": "Text",
+                    "children": "{{$.me.title}}"
+                  }
+                ]
+              },
+              "else": {
+                "component": "Cell",
+                "props": {
+                  "area": "title",
+                  "mark": "hatch"
+                },
+                "children": [
+                  {
+                    "component": "Label",
+                    "children": "Title — being issued"
+                  }
+                ]
+              }
+            },
+            {
+              "if": "$.me.quirk",
+              "then": {
+                "component": "Cell",
+                "props": {
+                  "area": "quirk"
+                },
+                "children": [
+                  {
+                    "component": "Label",
+                    "children": "On file"
+                  },
+                  {
+                    "component": "Text",
+                    "children": "{{$.me.quirk}}"
+                  }
+                ]
+              },
+              "else": {
+                "component": "Cell",
+                "props": {
+                  "area": "quirk",
+                  "mark": "hatch"
+                },
+                "children": [
+                  {
+                    "component": "Label",
+                    "children": "On file — pending"
+                  }
+                ]
+              }
+            },
+            {
+              "if": "$.me.department_name",
+              "then": {
+                "component": "Cell",
+                "props": {
+                  "area": "status"
+                },
+                "children": [
+                  {
+                    "component": "Label",
+                    "children": "Department of {{$.me.department_name}}"
+                  }
+                ]
+              },
+              "else": {
+                "component": "Cell",
+                "props": {
+                  "area": "status",
+                  "mark": "hatch"
+                },
+                "children": [
+                  {
+                    "component": "Text",
+                    "children": "Not yet assigned. Wait for your department."
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        "endpoints": {
+          "load": {
+            "url": "/api/vex",
+            "method": "POST",
+            "request": {
+              "fingerprint": "members/me",
+              "context": {}
+            },
+            "target": "me"
+          }
+        },
+        "lifecycle": {
+          "mount": [
+            {
+              "call": "load"
+            }
+          ]
+        },
+        "triggers": []
+      }
+    },
+    {
+      "kind": "nisc.nova/action",
+      "id": "records.register",
+      "document": {
+        "id": "records.register",
+        "title": "The register",
+        "data": {
+          "rows": []
+        },
+        "layout": {
+          "component": "Sheet",
+          "props": {
+            "size": "fill",
+            "areas": [
+              "kick",
+              "table"
+            ],
+            "rows": [
+              "auto",
+              1
+            ]
+          },
+          "children": [
+            {
+              "component": "Cell",
+              "props": {
+                "area": "kick",
+                "ink": "live"
+              },
+              "children": [
+                {
+                  "component": "Label",
+                  "children": "Records · the register"
+                }
+              ]
+            },
+            {
+              "component": "Cell",
+              "props": {
+                "area": "table",
+                "pad": "none"
+              },
+              "children": [
+                {
+                  "component": "Rows",
+                  "props": {
+                    "rows": "$.rows",
+                    "rowKey": "member_id",
+                    "empty": "Nobody yet.",
+                    "columns": [
+                      {
+                        "label": "",
+                        "key": "department_sigil",
+                        "kind": "sigil",
+                        "w": 0.4
+                      },
+                      {
+                        "label": "Name",
+                        "key": "name",
+                        "w": 2
+                      },
+                      {
+                        "label": "Department",
+                        "key": "department_name",
+                        "w": 1.6,
+                        "missing": "waiting"
+                      }
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        "endpoints": {
+          "load": {
+            "url": "/api/vex",
+            "method": "POST",
+            "request": {
+              "fingerprint": "members/register",
+              "context": {}
+            },
+            "target": "rows"
+          }
+        },
+        "lifecycle": {
+          "mount": [
+            {
+              "call": "load"
+            }
+          ]
+        },
+        "triggers": []
+      }
+    },
+    {
+      "kind": "nisc.nova/fragment",
+      "id": "sheet",
+      "document": {
+        "kind": "fragment",
+        "id": "sheet",
+        "data": {
+          "sheetTitle": ""
+        },
+        "layout": {
+          "component": "Sheet",
+          "props": {
+            "size": "fill",
+            "areas": [
+              "title close",
+              "body body"
+            ],
+            "cols": [
+              4,
+              1
+            ],
+            "rows": [
+              "auto",
+              1
+            ]
+          },
+          "children": [
+            {
+              "component": "Cell",
+              "props": {
+                "area": "title",
+                "ink": "highlight"
+              },
+              "children": [
+                {
+                  "component": "Label",
+                  "children": "{{$.sheetTitle}}"
+                }
+              ]
+            },
+            {
+              "component": "Action",
+              "ref": "close",
+              "props": {
+                "area": "close",
+                "ink": "ink",
+                "label": "Close"
+              }
+            },
+            {
+              "component": "Cell",
+              "props": {
+                "area": "body",
+                "pad": "none",
+                "scroll": "y"
+              },
+              "children": [
+                {
+                  "slot": "body"
+                }
+              ]
+            }
+          ]
+        },
+        "triggers": [
+          {
+            "event": "ui:click",
+            "ref": "close",
+            "do": [
+              {
+                "pop": true
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "kind": "nisc.nova/action",
+      "id": "slide.assignment",
+      "document": {
+        "id": "slide.assignment",
+        "title": "Assignment",
+        "data": {
+          "kicker": "Look at your phone",
+          "title": "Assignment",
+          "lines": [
+            "Your department is a role. Being assigned is one row changing — and your phone changes with it."
+          ],
+          "departments": [],
+          "tally": [],
+          "counts": {
+            "joined": 0,
+            "assigned": 0,
+            "unassigned": 0
+          }
+        },
+        "layout": {
+          "component": "Sheet",
+          "props": {
+            "size": "fill",
+            "areas": [
+              "kick kick kick kick",
+              "head head head head",
+              "words words tally tally"
+            ],
+            "rows": [
+              "auto",
+              1,
+              "auto"
+            ]
+          },
+          "children": [
+            {
+              "component": "Cell",
+              "props": {
+                "area": "kick"
+              },
+              "children": [
+                {
+                  "component": "Label",
+                  "children": "{{$.kicker}}"
+                }
+              ]
+            },
+            {
+              "component": "Cell",
+              "props": {
+                "area": "head",
+                "align": "end"
+              },
+              "children": [
+                {
+                  "component": "Headline",
+                  "props": {
+                    "level": "display"
+                  },
+                  "children": "{{$.title}}"
+                }
+              ]
+            },
+            {
+              "component": "Cell",
+              "props": {
+                "area": "words"
+              },
+              "children": [
+                {
+                  "component": "Text",
+                  "children": "{{$.lines.0}}"
+                },
+                {
+                  "component": "Label",
+                  "children": "{{$.counts.assigned}} assigned · {{$.counts.unassigned}} waiting"
+                }
+              ]
+            },
+            {
+              "component": "Cell",
+              "props": {
+                "area": "tally",
+                "pad": "none"
+              },
+              "children": [
+                {
+                  "component": "Rows",
+                  "props": {
+                    "rows": "$.tally",
+                    "rowKey": "label",
+                    "empty": "Nobody assigned yet.",
+                    "columns": [
+                      {
+                        "label": "Department",
+                        "key": "label",
+                        "w": 2
+                      },
+                      {
+                        "label": "People",
+                        "key": "value",
+                        "kind": "mono",
+                        "w": 1
+                      }
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "for": "$.departments",
+              "as": "department",
+              "key": "department_id",
+              "do": {
+                "component": "Cell",
+                "props": {
+                  "mark": "$department.mark"
+                },
+                "children": [
+                  {
+                    "component": "Sigil",
+                    "props": {
+                      "shape": "$department.sigil",
+                      "size": "large"
+                    }
+                  },
+                  {
+                    "component": "Headline",
+                    "props": {
+                      "level": "name"
+                    },
+                    "children": "{{$department.name}}"
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        "endpoints": {
+          "departments": {
+            "url": "/api/vex",
+            "method": "POST",
+            "request": {
+              "fingerprint": "departments/all",
+              "context": {}
+            },
+            "target": "departments"
+          },
+          "tally": {
+            "url": "/api/vex",
+            "method": "POST",
+            "request": {
+              "fingerprint": "inquiry/by-department",
+              "context": {}
+            },
+            "target": "tally"
+          },
+          "counts": {
+            "url": "/api/vex",
+            "method": "POST",
+            "request": {
+              "fingerprint": "members/counts",
+              "context": {}
+            },
+            "target": "counts"
+          }
+        },
+        "lifecycle": {
+          "mount": [
+            {
+              "call": "departments"
+            },
+            {
+              "call": "tally"
+            },
+            {
+              "call": "counts"
+            }
+          ]
+        },
+        "triggers": []
+      }
+    },
+    {
+      "kind": "nisc.nova/action",
+      "id": "slide.clearance",
+      "document": {
+        "id": "slide.clearance",
+        "title": "If you can’t use it, it isn’t there",
+        "data": {
+          "kicker": "Compare with your neighbour",
+          "title": "If you can’t use it, it isn’t there",
+          "lines": [
+            "An action your role is not granted is never sent to your phone. Not hidden, not disabled — it does not exist for you."
+          ],
+          "departments": []
+        },
+        "layout": {
+          "component": "Sheet",
+          "props": {
+            "size": "fill",
+            "areas": [
+              "kick kick",
+              "head words",
+              "table table"
+            ],
+            "cols": [
+              1.4,
+              1
+            ],
+            "rows": [
+              "auto",
+              1,
+              "auto"
+            ]
+          },
+          "children": [
+            {
+              "component": "Cell",
+              "props": {
+                "area": "kick"
+              },
+              "children": [
+                {
+                  "component": "Label",
+                  "children": "{{$.kicker}}"
+                }
+              ]
+            },
+            {
+              "component": "Cell",
+              "props": {
+                "area": "head",
+                "align": "end"
+              },
+              "children": [
+                {
+                  "component": "Headline",
+                  "props": {
+                    "level": "title"
+                  },
+                  "children": "{{$.title}}"
+                }
+              ]
+            },
+            {
+              "component": "Cell",
+              "props": {
+                "area": "words",
+                "ink": "highlight",
+                "align": "end"
+              },
+              "children": [
+                {
+                  "component": "Text",
+                  "children": "{{$.lines.0}}"
+                }
+              ]
+            },
+            {
+              "component": "Cell",
+              "props": {
+                "area": "table",
+                "pad": "none"
+              },
+              "children": [
+                {
+                  "component": "Rows",
+                  "props": {
+                    "rows": "$.departments",
+                    "rowKey": "department_id",
+                    "columns": [
+                      {
+                        "label": "",
+                        "key": "sigil",
+                        "kind": "sigil",
+                        "w": 0.3
+                      },
+                      {
+                        "label": "Department",
+                        "key": "name",
+                        "w": 1
+                      },
+                      {
+                        "label": "Its clearance",
+                        "key": "remit",
+                        "w": 3.2
+                      }
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        "endpoints": {
+          "departments": {
+            "url": "/api/vex",
+            "method": "POST",
+            "request": {
+              "fingerprint": "departments/all",
+              "context": {}
+            },
+            "target": "departments"
+          }
+        },
+        "lifecycle": {
+          "mount": [
+            {
+              "call": "departments"
+            }
+          ]
+        },
+        "triggers": []
+      }
+    },
+    {
+      "kind": "nisc.nova/action",
+      "id": "slide.data",
+      "document": {
+        "id": "slide.data",
+        "title": "Everything is data",
+        "data": {
+          "kicker": "How it is built",
+          "title": "Everything is data",
+          "file": "member.card.action.ts",
+          "code": "{ id: 'member.card',\n  data: { me: {} },\n  endpoints: { load: {\n    request: { fingerprint: 'members/me' },\n    target: 'me' } },\n  layout: { component: 'Sheet',\n    areas: ['kick', 'name', 'status'],\n    children: [ … ] } }",
+          "marked": [
+            4,
+            7
+          ],
+          "lines": [
+            "The ID card on your phone is this object. No component knows who you are: the screen is data, and so is the query behind it.",
+            "A screen is JSON · A query is JSON · A permission is JSON"
+          ]
+        },
+        "layout": {
+          "component": "Sheet",
+          "props": {
+            "size": "fill",
+            "areas": [
+              "kick code",
+              "head code",
+              "body code",
+              "tags tags"
+            ],
+            "cols": [
+              1,
+              1.25
+            ],
+            "rows": [
+              "auto",
+              1,
+              "auto",
+              "auto"
+            ]
+          },
+          "children": [
+            {
+              "component": "Cell",
+              "props": {
+                "area": "kick"
+              },
+              "children": [
+                {
+                  "component": "Label",
+                  "children": "{{$.kicker}}"
+                }
+              ]
+            },
+            {
+              "component": "Cell",
+              "props": {
+                "area": "head",
+                "align": "end"
+              },
+              "children": [
+                {
+                  "component": "Headline",
+                  "props": {
+                    "level": "title"
+                  },
+                  "children": "{{$.title}}"
+                }
+              ]
+            },
+            {
+              "component": "Cell",
+              "props": {
+                "area": "body"
+              },
+              "children": [
+                {
+                  "component": "Text",
+                  "children": "{{$.lines.0}}"
+                }
+              ]
+            },
+            {
+              "component": "Cell",
+              "props": {
+                "area": "code",
+                "ink": "ink"
+              },
+              "children": [
+                {
+                  "component": "Label",
+                  "children": "{{$.file}}"
+                },
+                {
+                  "component": "Code",
+                  "props": {
+                    "text": "$.code",
+                    "marked": "$.marked"
+                  }
+                }
+              ]
+            },
+            {
+              "component": "Cell",
+              "props": {
+                "area": "tags",
+                "ink": "highlight"
+              },
+              "children": [
+                {
+                  "component": "Label",
+                  "children": "{{$.lines.1}}"
+                }
+              ]
+            }
+          ]
+        },
+        "triggers": []
+      }
+    },
+    {
+      "kind": "nisc.nova/action",
+      "id": "slide.end",
+      "document": {
+        "id": "slide.end",
+        "title": "It is all in the folder",
+        "data": {
+          "kicker": "apps/lab/lyceum",
+          "title": "It is all in the folder",
+          "points": [
+            {
+              "label": "Live",
+              "text": "Everything you saw tonight was running, on this server, as you watched."
+            },
+            {
+              "label": "Data",
+              "text": "Every screen, query and permission is a file you can read."
+            },
+            {
+              "label": "Yours",
+              "text": "Open it. Change a slide. It is the same thing the room just used."
+            }
+          ]
+        },
+        "layout": {
+          "component": "Sheet",
+          "props": {
+            "size": "fill",
+            "areas": [
+              "kick kick kick",
+              "head head head"
+            ],
+            "rows": [
+              "auto",
+              1
+            ]
+          },
+          "children": [
+            {
+              "component": "Cell",
+              "props": {
+                "area": "kick"
+              },
+              "children": [
+                {
+                  "component": "Label",
+                  "children": "{{$.kicker}}"
+                }
+              ]
+            },
+            {
+              "component": "Cell",
+              "props": {
+                "area": "head",
+                "align": "end"
+              },
+              "children": [
+                {
+                  "component": "Headline",
+                  "props": {
+                    "level": "display"
+                  },
+                  "children": "{{$.title}}"
+                }
+              ]
+            },
+            {
+              "for": "$.points",
+              "as": "point",
+              "do": {
+                "component": "Cell",
+                "children": [
+                  {
+                    "component": "Label",
+                    "children": "{{$point.label}}"
+                  },
+                  {
+                    "component": "Text",
+                    "children": "{{$point.text}}"
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        "triggers": []
+      }
+    },
+    {
+      "kind": "nisc.nova/action",
+      "id": "slide.live",
+      "document": {
+        "id": "slide.live",
+        "title": "Nobody announced anything",
+        "data": {
+          "kicker": "Watch the numbers",
+          "title": "Nobody announced anything",
+          "lines": [
+            "Every screen that shows the room follows it on its own — no channel, no listener. The query knows what it reads."
+          ],
+          "counts": {
+            "joined": 0,
+            "assigned": 0,
+            "unassigned": 0
+          }
+        },
+        "layout": {
+          "component": "Sheet",
+          "props": {
+            "size": "fill",
+            "areas": [
+              "kick kick kick",
+              "head head head",
+              "joined assigned words",
+              "bar bar bar"
+            ],
+            "rows": [
+              "auto",
+              1,
+              "auto",
+              "auto"
+            ]
+          },
+          "children": [
+            {
+              "component": "Cell",
+              "props": {
+                "area": "kick"
+              },
+              "children": [
+                {
+                  "component": "Label",
+                  "children": "{{$.kicker}}"
+                }
+              ]
+            },
+            {
+              "component": "Cell",
+              "props": {
+                "area": "head",
+                "align": "end"
+              },
+              "children": [
+                {
+                  "component": "Headline",
+                  "props": {
+                    "level": "display"
+                  },
+                  "children": "{{$.title}}"
+                }
+              ]
+            },
+            {
+              "component": "Cell",
+              "props": {
+                "area": "joined",
+                "ink": "live"
+              },
+              "children": [
+                {
+                  "component": "Figure",
+                  "props": {
+                    "label": "In the room",
+                    "value": "$.counts.joined"
+                  }
+                }
+              ]
+            },
+            {
+              "component": "Cell",
+              "props": {
+                "area": "assigned",
+                "ink": "signal"
+              },
+              "children": [
+                {
+                  "component": "Figure",
+                  "props": {
+                    "label": "Assigned",
+                    "value": "$.counts.assigned"
+                  }
+                }
+              ]
+            },
+            {
+              "component": "Cell",
+              "props": {
+                "area": "words"
+              },
+              "children": [
+                {
+                  "component": "Text",
+                  "children": "{{$.counts.joined}} in the room · {{$.counts.assigned}} assigned"
+                },
+                {
+                  "component": "Text",
+                  "props": {
+                    "tone": "muted"
+                  },
+                  "children": "{{$.lines.0}}"
+                }
+              ]
+            },
+            {
+              "component": "Cell",
+              "props": {
+                "area": "bar",
+                "pad": "none"
+              },
+              "children": [
+                {
+                  "component": "Bar",
+                  "props": {
+                    "segments": [
+                      {
+                        "value": "$.counts.assigned",
+                        "ink": "signal"
+                      },
+                      {
+                        "value": "$.counts.unassigned",
+                        "mark": "hatch"
+                      }
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        "endpoints": {
+          "counts": {
+            "url": "/api/vex",
+            "method": "POST",
+            "request": {
+              "fingerprint": "members/counts",
+              "context": {}
+            },
+            "target": "counts"
+          }
+        },
+        "lifecycle": {
+          "mount": [
+            {
+              "call": "counts"
+            }
+          ]
+        },
+        "triggers": []
+      }
+    },
+    {
+      "kind": "nisc.nova/action",
+      "id": "slide.title",
+      "document": {
+        "id": "slide.title",
+        "title": "The talk is an application",
+        "data": {
+          "kicker": "The Ministry — tonight",
+          "title": "The talk is an application",
+          "lines": [
+            "Everything you will see tonight is running — not a recording, not a mock-up.",
+            "Take your phone out."
+          ],
+          "counts": {
+            "joined": 0,
+            "assigned": 0,
+            "unassigned": 0
+          }
+        },
+        "layout": {
+          "component": "Sheet",
+          "props": {
+            "size": "fill",
+            "areas": [
+              "kick kick kick count",
+              "head head head count",
+              "body body cta count"
+            ],
+            "cols": [
+              1,
+              1,
+              1,
+              1.1
+            ],
+            "rows": [
+              "auto",
+              1,
+              "auto"
+            ]
+          },
+          "children": [
+            {
+              "component": "Cell",
+              "props": {
+                "area": "kick"
+              },
+              "children": [
+                {
+                  "component": "Label",
+                  "children": "{{$.kicker}}"
+                }
+              ]
+            },
+            {
+              "component": "Cell",
+              "props": {
+                "area": "head",
+                "align": "end"
+              },
+              "children": [
+                {
+                  "component": "Headline",
+                  "props": {
+                    "level": "display"
+                  },
+                  "children": "{{$.title}}"
+                }
+              ]
+            },
+            {
+              "component": "Cell",
+              "props": {
+                "area": "body"
+              },
+              "children": [
+                {
+                  "component": "Text",
+                  "children": "{{$.lines.0}}"
+                }
+              ]
+            },
+            {
+              "component": "Cell",
+              "props": {
+                "area": "cta",
+                "ink": "alert"
+              },
+              "children": [
+                {
+                  "component": "Text",
+                  "children": "{{$.lines.1}}"
+                }
+              ]
+            },
+            {
+              "component": "Cell",
+              "props": {
+                "area": "count",
+                "ink": "live",
+                "align": "end"
+              },
+              "children": [
+                {
+                  "component": "Figure",
+                  "props": {
+                    "label": "In the room",
+                    "value": "$.counts.joined"
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        "endpoints": {
+          "counts": {
+            "url": "/api/vex",
+            "method": "POST",
+            "request": {
+              "fingerprint": "members/counts",
+              "context": {}
+            },
+            "target": "counts"
+          }
+        },
+        "lifecycle": {
+          "mount": [
+            {
+              "call": "counts"
+            }
+          ]
+        },
+        "triggers": []
+      }
+    },
+    {
+      "kind": "nisc.nova/action",
+      "id": "speaker.console",
+      "document": {
+        "id": "speaker.console",
+        "title": "Controller",
+        "data": {},
+        "layout": {
+          "component": "Sheet",
+          "props": {
+            "size": "fill",
+            "areas": [
+              "head head",
+              "tools notes",
+              "controls controls"
+            ],
+            "rows": [
+              "auto",
+              1,
+              "auto"
+            ]
+          },
+          "children": [
+            {
+              "component": "Cell",
+              "props": {
+                "area": "head",
+                "pad": "none"
+              },
+              "children": [
+                {
+                  "component": "CanvasSlot",
+                  "props": {
+                    "canvasId": "head"
+                  }
+                }
+              ]
+            },
+            {
+              "component": "Cell",
+              "props": {
+                "area": "tools",
+                "pad": "none"
+              },
+              "children": [
+                {
+                  "component": "CanvasSlot",
+                  "props": {
+                    "canvasId": "tools"
+                  }
+                }
+              ]
+            },
+            {
+              "component": "Cell",
+              "props": {
+                "area": "notes",
+                "pad": "none"
+              },
+              "children": [
+                {
+                  "component": "CanvasSlot",
+                  "props": {
+                    "canvasId": "notes"
+                  }
+                }
+              ]
+            },
+            {
+              "component": "Cell",
+              "props": {
+                "area": "controls",
+                "pad": "none"
+              },
+              "children": [
+                {
+                  "component": "CanvasSlot",
+                  "props": {
+                    "canvasId": "controls"
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        "triggers": []
+      }
+    },
+    {
+      "kind": "nisc.nova/action",
+      "id": "speaker.controls",
+      "document": {
+        "id": "speaker.controls",
+        "title": "Back and next",
+        "data": {
+          "current": {
+            "slide_id": "",
+            "title": "",
+            "position": 0,
+            "number": 0,
+            "tool_id": "tools.none",
+            "count": 0,
+            "prev_number": 0,
+            "prev_title": "",
+            "next_number": 0,
+            "next_title": ""
+          },
+          "error": ""
+        },
+        "layout": {
+          "component": "Sheet",
+          "props": {
+            "areas": [
+              "all all",
+              "back next"
+            ]
+          },
+          "children": [
+            {
+              "component": "Action",
+              "ref": "all",
+              "props": {
+                "area": "all",
+                "label": "All slides ({{$.current.count}})"
+              }
+            },
+            {
+              "component": "Action",
+              "ref": "back",
+              "props": {
+                "area": "back",
+                "lines": "two",
+                "label": {
+                  "$if": "$.current.prev_title",
+                  "$then": "← {{$.current.prev_number}} · {{$.current.prev_title}}",
+                  "$else": "Start of the deck"
+                }
+              }
+            },
+            {
+              "component": "Action",
+              "ref": "next",
+              "props": {
+                "area": "next",
+                "ink": "alert",
+                "lines": "two",
+                "label": {
+                  "$if": "$.current.next_title",
+                  "$then": "{{$.current.next_number}} · {{$.current.next_title}} →",
+                  "$else": "End of the deck"
+                }
+              }
+            }
+          ]
+        },
+        "endpoints": {
+          "current": {
+            "url": "/api/vex",
+            "method": "POST",
+            "request": {
+              "fingerprint": "deck/current",
+              "context": {}
+            },
+            "target": "current"
+          },
+          "next": {
+            "url": "/api/vex",
+            "method": "POST",
+            "request": {
+              "fingerprint": "deck/go",
+              "context": {
+                "deck": "talk",
+                "position": {
+                  "$min": {
+                    "over": [
+                      {
+                        "$add": [
+                          {
+                            "$ref": "$.current.position"
+                          },
+                          1
+                        ]
+                      },
+                      {
+                        "$sub": [
+                          {
+                            "$ref": "$.current.count"
+                          },
+                          1
+                        ]
+                      }
+                    ]
+                  }
+                }
+              }
+            },
+            "errorTarget": "error"
+          },
+          "back": {
+            "url": "/api/vex",
+            "method": "POST",
+            "request": {
+              "fingerprint": "deck/go",
+              "context": {
+                "deck": "talk",
+                "position": {
+                  "$max": {
+                    "over": [
+                      {
+                        "$sub": [
+                          {
+                            "$ref": "$.current.position"
+                          },
+                          1
+                        ]
+                      },
+                      0
+                    ]
+                  }
+                }
+              }
+            },
+            "errorTarget": "error"
+          }
+        },
+        "lifecycle": {
+          "mount": [
+            {
+              "call": "current"
+            }
+          ]
+        },
+        "triggers": [
+          {
+            "event": "ui:click",
+            "ref": "next",
+            "do": [
+              {
+                "call": "next"
+              }
+            ]
+          },
+          {
+            "event": "ui:click",
+            "ref": "back",
+            "do": [
+              {
+                "call": "back"
+              }
+            ]
+          },
+          {
+            "event": "ui:click",
+            "ref": "all",
+            "do": [
+              {
+                "push": {
+                  "action": "speaker.slides",
+                  "canvas": "overlay",
+                  "with": [
+                    "sheet"
+                  ]
+                }
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "kind": "nisc.nova/action",
+      "id": "speaker.deck",
+      "document": {
+        "id": "speaker.deck",
+        "title": "The controller follows the deck",
+        "data": {
+          "current": {
+            "slide_id": "",
+            "title": "",
+            "position": 0,
+            "number": 0,
+            "tool_id": "tools.none",
+            "count": 0,
+            "prev_number": 0,
+            "prev_title": "",
+            "next_number": 0,
+            "next_title": ""
+          }
+        },
+        "layout": [],
+        "endpoints": {
+          "current": {
+            "url": "/api/vex",
+            "method": "POST",
+            "request": {
+              "fingerprint": "deck/current",
+              "context": {}
+            },
+            "target": "current"
+          }
+        },
+        "lifecycle": {
+          "mount": [
+            {
+              "call": "current",
+              "onSuccess": [
+                {
+                  "replace": {
+                    "canvas": "tools",
+                    "action": "{{$.current.tool_id}}"
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        "triggers": [
+          {
+            "message": "deck-moved",
+            "do": [
+              {
+                "call": "current",
+                "onSuccess": [
+                  {
+                    "replace": {
+                      "canvas": "tools",
+                      "action": "{{$.current.tool_id}}"
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "kind": "nisc.nova/action",
+      "id": "speaker.head",
+      "document": {
+        "id": "speaker.head",
+        "title": "Where the talk is",
+        "data": {
+          "counts": {
+            "joined": 0,
+            "assigned": 0,
+            "unassigned": 0
+          },
+          "current": {
+            "slide_id": "",
+            "title": "",
+            "position": 0,
+            "number": 0,
+            "tool_id": "tools.none",
+            "count": 0,
+            "prev_number": 0,
+            "prev_title": "",
+            "next_number": 0,
+            "next_title": ""
+          }
+        },
+        "layout": {
+          "component": "Sheet",
+          "props": {
+            "areas": [
+              "room",
+              "slide"
+            ]
+          },
+          "children": [
+            {
+              "component": "Cell",
+              "props": {
+                "area": "room"
+              },
+              "children": [
+                {
+                  "component": "Label",
+                  "children": "Controller · {{$.counts.joined}} in the room · {{$.counts.assigned}} assigned"
+                }
+              ]
+            },
+            {
+              "component": "Cell",
+              "props": {
+                "area": "slide"
+              },
+              "children": [
+                {
+                  "component": "Label",
+                  "children": "On screen · slide {{$.current.number}} of {{$.current.count}}"
+                },
+                {
+                  "component": "Headline",
+                  "props": {
+                    "level": "name"
+                  },
+                  "children": "{{$.current.title}}"
+                }
+              ]
+            }
+          ]
+        },
+        "endpoints": {
+          "counts": {
+            "url": "/api/vex",
+            "method": "POST",
+            "request": {
+              "fingerprint": "members/counts",
+              "context": {}
+            },
+            "target": "counts"
+          },
+          "current": {
+            "url": "/api/vex",
+            "method": "POST",
+            "request": {
+              "fingerprint": "deck/current",
+              "context": {}
+            },
+            "target": "current"
+          }
+        },
+        "lifecycle": {
+          "mount": [
+            {
+              "call": "counts"
+            },
+            {
+              "call": "current"
+            }
+          ]
+        },
+        "triggers": []
+      }
+    },
+    {
+      "kind": "nisc.nova/action",
+      "id": "speaker.notes",
+      "document": {
+        "id": "speaker.notes",
+        "title": "Notes",
+        "data": {
+          "notes": []
+        },
+        "layout": {
+          "component": "Sheet",
+          "props": {
+            "size": "fill",
+            "areas": [
+              "kick",
+              "notes"
+            ],
+            "rows": [
+              "auto",
+              1
+            ]
+          },
+          "children": [
+            {
+              "component": "Cell",
+              "props": {
+                "area": "kick",
+                "ink": "highlight"
+              },
+              "children": [
+                {
+                  "component": "Label",
+                  "children": "Notes"
+                }
+              ]
+            },
+            {
+              "component": "Cell",
+              "props": {
+                "area": "notes",
+                "pad": "none",
+                "scroll": "y"
+              },
+              "children": [
+                {
+                  "component": "Rows",
+                  "props": {
+                    "rows": "$.notes",
+                    "rowKey": "position",
+                    "empty": "No notes for this slide.",
+                    "columns": [
+                      {
+                        "label": "",
+                        "key": "note",
+                        "w": 1
+                      }
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        "endpoints": {
+          "notes": {
+            "url": "/api/vex",
+            "method": "POST",
+            "request": {
+              "fingerprint": "slides/notes",
+              "context": {}
+            },
+            "target": "notes"
+          }
+        },
+        "lifecycle": {
+          "mount": [
+            {
+              "call": "notes"
+            }
+          ]
+        },
+        "triggers": []
+      }
+    },
+    {
+      "kind": "nisc.nova/action",
+      "id": "speaker.slides",
+      "document": {
+        "id": "speaker.slides",
+        "title": "All slides",
+        "data": {
+          "sheetTitle": "All slides",
+          "slides": [],
+          "current": {
+            "slide_id": "",
+            "title": "",
+            "position": 0,
+            "number": 0,
+            "tool_id": "tools.none",
+            "count": 0,
+            "prev_number": 0,
+            "prev_title": "",
+            "next_number": 0,
+            "next_title": ""
+          },
+          "picked": 0,
+          "error": ""
+        },
+        "layout": {
+          "component": "Rows",
+          "props": {
+            "rows": "$.slides",
+            "rowKey": "position",
+            "rowRef": "pick",
+            "selected": "$.current.position",
+            "columns": [
+              {
+                "label": "#",
+                "key": "number",
+                "kind": "mono",
+                "w": 0.4
+              },
+              {
+                "label": "Slide",
+                "key": "title",
+                "w": 5
+              }
+            ]
+          }
+        },
+        "endpoints": {
+          "all": {
+            "url": "/api/vex",
+            "method": "POST",
+            "request": {
+              "fingerprint": "slides/all",
+              "context": {}
+            },
+            "target": "slides"
+          },
+          "current": {
+            "url": "/api/vex",
+            "method": "POST",
+            "request": {
+              "fingerprint": "deck/current",
+              "context": {}
+            },
+            "target": "current"
+          },
+          "pick": {
+            "url": "/api/vex",
+            "method": "POST",
+            "request": {
+              "fingerprint": "deck/go",
+              "context": {
+                "deck": "talk",
+                "position": {
+                  "$max": {
+                    "over": [
+                      {
+                        "$min": {
+                          "over": [
+                            {
+                              "$ref": "$.picked"
+                            },
+                            {
+                              "$sub": [
+                                {
+                                  "$ref": "$.current.count"
+                                },
+                                1
+                              ]
+                            }
+                          ]
+                        }
+                      },
+                      0
+                    ]
+                  }
+                }
+              }
+            },
+            "errorTarget": "error"
+          }
+        },
+        "lifecycle": {
+          "mount": [
+            {
+              "call": "all"
+            },
+            {
+              "call": "current"
+            }
+          ]
+        },
+        "triggers": [
+          {
+            "event": "ui:click",
+            "ref": "pick",
+            "do": [
+              {
+                "set": "picked",
+                "value": "@event.payload"
+              },
+              {
+                "call": "pick",
+                "onSuccess": [
+                  {
+                    "pop": true
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "kind": "nisc.nova/action",
+      "id": "stage.deck",
+      "document": {
+        "id": "stage.deck",
+        "title": "The deck",
+        "data": {
+          "current": {
+            "slide_id": "",
+            "title": "",
+            "position": 0,
+            "number": 0,
+            "tool_id": "tools.none",
+            "count": 0,
+            "prev_number": 0,
+            "prev_title": "",
+            "next_number": 0,
+            "next_title": ""
+          }
+        },
+        "layout": [],
+        "endpoints": {
+          "current": {
+            "url": "/api/vex",
+            "method": "POST",
+            "request": {
+              "fingerprint": "deck/current",
+              "context": {}
+            },
+            "target": "current"
+          }
+        },
+        "lifecycle": {
+          "mount": [
+            {
+              "call": "current",
+              "onSuccess": [
+                {
+                  "replace": {
+                    "canvas": "main",
+                    "action": "{{$.current.slide_id}}"
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        "triggers": [
+          {
+            "message": "deck-moved",
+            "do": [
+              {
+                "call": "current",
+                "onSuccess": [
+                  {
+                    "replace": {
+                      "canvas": "main",
+                      "action": "{{$.current.slide_id}}"
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "kind": "nisc.nova/action",
+      "id": "stage.register",
+      "document": {
+        "id": "stage.register",
+        "title": "The register",
+        "data": {
+          "rows": [],
+          "counts": {
+            "joined": 0,
+            "assigned": 0,
+            "unassigned": 0
+          }
+        },
+        "layout": {
+          "component": "Sheet",
+          "props": {
+            "size": "fill",
+            "areas": [
+              "kick count",
+              "head count",
+              "table table"
+            ],
+            "cols": [
+              3,
+              1
+            ],
+            "rows": [
+              "auto",
+              "auto",
+              1
+            ]
+          },
+          "children": [
+            {
+              "component": "Cell",
+              "props": {
+                "area": "kick"
+              },
+              "children": [
+                {
+                  "component": "Label",
+                  "children": "The register"
+                }
+              ]
+            },
+            {
+              "component": "Cell",
+              "props": {
+                "area": "head"
+              },
+              "children": [
+                {
+                  "component": "Headline",
+                  "props": {
+                    "level": "title"
+                  },
+                  "children": "Everybody who stepped in"
+                }
+              ]
+            },
+            {
+              "component": "Cell",
+              "props": {
+                "area": "count",
+                "ink": "live",
+                "align": "end"
+              },
+              "children": [
+                {
+                  "component": "Figure",
+                  "props": {
+                    "label": "In the room",
+                    "value": "$.counts.joined"
+                  }
+                }
+              ]
+            },
+            {
+              "component": "Cell",
+              "props": {
+                "area": "table",
+                "pad": "none"
+              },
+              "children": [
+                {
+                  "component": "Rows",
+                  "props": {
+                    "rows": "$.rows",
+                    "rowKey": "member_id",
+                    "empty": "Nobody yet. Scan the code.",
+                    "columns": [
+                      {
+                        "label": "",
+                        "key": "department_sigil",
+                        "kind": "sigil",
+                        "w": 0.35
+                      },
+                      {
+                        "label": "Name",
+                        "key": "name",
+                        "w": 2.2
+                      },
+                      {
+                        "label": "Title",
+                        "key": "title",
+                        "w": 3,
+                        "missing": "being issued"
+                      },
+                      {
+                        "label": "Department",
+                        "key": "department_name",
+                        "w": 1.5,
+                        "missing": "waiting"
+                      }
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        "endpoints": {
+          "load": {
+            "url": "/api/vex",
+            "method": "POST",
+            "request": {
+              "fingerprint": "members/register",
+              "context": {}
+            },
+            "target": "rows"
+          },
+          "counts": {
+            "url": "/api/vex",
+            "method": "POST",
+            "request": {
+              "fingerprint": "members/counts",
+              "context": {}
+            },
+            "target": "counts"
+          }
+        },
+        "lifecycle": {
+          "mount": [
+            {
+              "call": "load"
+            },
+            {
+              "call": "counts"
+            }
+          ]
+        },
+        "triggers": []
+      }
+    },
+    {
+      "kind": "nisc.nova/action",
+      "id": "stage.strip",
+      "document": {
+        "id": "stage.strip",
+        "title": "The strip",
+        "data": {
+          "current": {
+            "slide_id": "",
+            "title": "",
+            "position": 0,
+            "number": 0,
+            "tool_id": "tools.none",
+            "count": 0,
+            "prev_number": 0,
+            "prev_title": "",
+            "next_number": 0,
+            "next_title": ""
+          },
+          "counts": {
+            "joined": 0,
+            "assigned": 0,
+            "unassigned": 0
+          }
+        },
+        "layout": {
+          "component": "Sheet",
+          "props": {
+            "areas": [
+              "brand slide room"
+            ],
+            "cols": [
+              1,
+              5,
+              1.4
+            ]
+          },
+          "children": [
+            {
+              "component": "Cell",
+              "props": {
+                "area": "brand"
+              },
+              "children": [
+                {
+                  "component": "Label",
+                  "children": "Lyceum"
+                }
+              ]
+            },
+            {
+              "component": "Cell",
+              "props": {
+                "area": "slide"
+              },
+              "children": [
+                {
+                  "component": "Label",
+                  "children": "{{$.current.number}} / {{$.current.count}} · {{$.current.title}}"
+                }
+              ]
+            },
+            {
+              "component": "Cell",
+              "props": {
+                "area": "room",
+                "ink": "live"
+              },
+              "children": [
+                {
+                  "component": "Label",
+                  "children": "{{$.counts.joined}} in the room"
+                }
+              ]
+            }
+          ]
+        },
+        "endpoints": {
+          "current": {
+            "url": "/api/vex",
+            "method": "POST",
+            "request": {
+              "fingerprint": "deck/current",
+              "context": {}
+            },
+            "target": "current"
+          },
+          "counts": {
+            "url": "/api/vex",
+            "method": "POST",
+            "request": {
+              "fingerprint": "members/counts",
+              "context": {}
+            },
+            "target": "counts"
+          }
+        },
+        "lifecycle": {
+          "mount": [
+            {
+              "call": "current"
+            },
+            {
+              "call": "counts"
+            }
+          ]
+        },
+        "triggers": []
+      }
+    },
+    {
+      "kind": "nisc.nova/action",
+      "id": "tools.assignment",
+      "document": {
+        "id": "tools.assignment",
+        "title": "Assignment",
+        "data": {
+          "counts": {
+            "joined": 0,
+            "assigned": 0,
+            "unassigned": 0
+          },
+          "working": false,
+          "error": ""
+        },
+        "layout": {
+          "component": "Sheet",
+          "props": {
+            "areas": [
+              "kick kick",
+              "waiting assigned",
+              "assign assign",
+              "unassign unassign"
+            ]
+          },
+          "children": [
+            {
+              "component": "Cell",
+              "props": {
+                "area": "kick",
+                "ink": "ink"
+              },
+              "children": [
+                {
+                  "component": "Label",
+                  "children": "Assignment"
+                }
+              ]
+            },
+            {
+              "component": "Cell",
+              "props": {
+                "area": "waiting"
+              },
+              "children": [
+                {
+                  "component": "Figure",
+                  "props": {
+                    "label": "Waiting",
+                    "value": "$.counts.unassigned"
+                  }
+                }
+              ]
+            },
+            {
+              "component": "Cell",
+              "props": {
+                "area": "assigned",
+                "ink": "live"
+              },
+              "children": [
+                {
+                  "component": "Figure",
+                  "props": {
+                    "label": "Assigned",
+                    "value": "$.counts.assigned"
+                  }
+                }
+              ]
+            },
+            {
+              "component": "Action",
+              "ref": "assign",
+              "props": {
+                "area": "assign",
+                "ink": "signal",
+                "label": {
+                  "$if": "$.working",
+                  "$then": "Assigning…",
+                  "$else": "Assign the room"
+                }
+              }
+            },
+            {
+              "component": "Action",
+              "ref": "unassign",
+              "props": {
+                "area": "unassign",
+                "label": "Unassign (testing)"
+              }
+            }
+          ]
+        },
+        "endpoints": {
+          "counts": {
+            "url": "/api/vex",
+            "method": "POST",
+            "request": {
+              "fingerprint": "members/counts",
+              "context": {}
+            },
+            "target": "counts"
+          },
+          "assign": {
+            "fn": "speaker.assign",
+            "errorTarget": "error"
+          },
+          "unassign": {
+            "fn": "speaker.unassign",
+            "errorTarget": "error"
+          }
+        },
+        "lifecycle": {
+          "mount": [
+            {
+              "call": "counts"
+            }
+          ]
+        },
+        "triggers": [
+          {
+            "event": "ui:click",
+            "ref": "assign",
+            "do": [
+              {
+                "set": "working",
+                "value": true
+              },
+              {
+                "set": "error",
+                "value": ""
+              },
+              {
+                "call": "assign",
+                "onSuccess": [
+                  {
+                    "set": "working",
+                    "value": false
+                  }
+                ],
+                "onError": [
+                  {
+                    "set": "working",
+                    "value": false
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "event": "ui:click",
+            "ref": "unassign",
+            "do": [
+              {
+                "set": "working",
+                "value": true
+              },
+              {
+                "set": "error",
+                "value": ""
+              },
+              {
+                "call": "unassign",
+                "onSuccess": [
+                  {
+                    "set": "working",
+                    "value": false
+                  }
+                ],
+                "onError": [
+                  {
+                    "set": "working",
+                    "value": false
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "kind": "nisc.nova/action",
+      "id": "tools.none",
+      "document": {
+        "id": "tools.none",
+        "title": "No tool",
+        "data": {},
+        "layout": {
+          "component": "Sheet",
+          "props": {
+            "size": "fill",
+            "areas": [
+              "none"
+            ]
+          },
+          "children": [
+            {
+              "component": "Cell",
+              "props": {
+                "area": "none",
+                "mark": "hatch",
+                "align": "center"
+              },
+              "children": [
+                {
+                  "component": "Label",
+                  "children": "Nothing to press on this slide"
+                }
+              ]
+            }
+          ]
+        },
+        "triggers": []
+      }
+    }
+  ]
+}
