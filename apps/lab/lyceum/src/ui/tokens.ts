@@ -165,7 +165,7 @@ html, body { margin: 0; padding: 0; }
    phone a tap must not leave a cell stuck lit. */
 .${ROOT_CLASS} [data-ref]:not(input) { cursor: pointer; user-select: none; -webkit-tap-highlight-color: transparent; }
 @media (hover: hover) {
-  {R} [data-ref]:not(input):hover {{ --bg: var(--highlight); --fg: var(--ink); background: var(--bg); color: var(--fg); }
+  .${ROOT_CLASS} [data-ref]:not(input):hover { --bg: var(--highlight); --fg: var(--ink); background: var(--bg); color: var(--fg); }
 }
 .${ROOT_CLASS} [data-ref]:not(input):active { --bg: var(--highlight); --fg: var(--ink); background: repeating-linear-gradient(-45deg, var(--ink) 0 2px, var(--highlight) 2px 8px); color: var(--ink); }
 .${ROOT_CLASS} [data-ref]:focus-visible { outline: var(--rule) solid var(--alert); outline-offset: calc(var(--rule) * -1); }
