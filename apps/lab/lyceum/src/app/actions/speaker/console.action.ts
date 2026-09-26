@@ -27,10 +27,20 @@ export const consoleAction: ActionDefinition = {
     next: { url: '/api/vex', method: 'POST', request: deckNextPrism, errorTarget: 'error' },
     back: { url: '/api/vex', method: 'POST', request: deckBackPrism, errorTarget: 'error' },
     sort: { fn: 'speaker.sort', errorTarget: 'error' },
+    unsort: { fn: 'speaker.unsort', errorTarget: 'error' },
   },
   lifecycle: { mount: [{ call: 'load' }, { call: 'current' }, { call: 'slides' }] },
   triggers: [
     { event: 'ui:click', ref: 'next', do: [{ call: 'next' }] },
+    {
+      event: 'ui:click',
+      ref: 'unsort',
+      do: [
+        { set: 'sorting', value: true },
+        { set: 'error', value: '' },
+        { call: 'unsort', onSuccess: [{ set: 'sorting', value: false }], onError: [{ set: 'sorting', value: false }] },
+      ],
+    },
     { event: 'ui:click', ref: 'back', do: [{ call: 'back' }] },
     {
       event: 'ui:click',

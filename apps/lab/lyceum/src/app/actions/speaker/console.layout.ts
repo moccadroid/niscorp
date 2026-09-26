@@ -18,7 +18,14 @@ export const consoleLayout: LayoutNode = {
     {
       if: '$.sorting',
       then: { component: 'Text', children: 'Sorting…' },
-      else: { component: 'Button', ref: 'sort', children: 'Sort the room' },
+      else: {
+        component: 'Row',
+        props: { gap: 8 },
+        children: [
+          { component: 'Button', ref: 'sort', children: 'Sort the room' },
+          { component: 'Button', ref: 'unsort', children: 'Unsort the room (testing)' },
+        ],
+      },
     },
     { if: '$.error', then: { component: 'Text', children: '{{$.error}}' } },
   ],

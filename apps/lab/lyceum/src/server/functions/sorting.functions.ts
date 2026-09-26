@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import type { MossServer } from '@niscorp/moss';
 import type { FunctionHandler } from '@niscorp/nova';
-import { houseSizes, housesAll, memberSort, membersUnsorted } from '@lyceum/app/vex/member.entries';
+import { houseSizes, housesAll, memberSort, memberUnsort, membersSorted, membersUnsorted } from '@lyceum/app/vex/member.entries';
 
 // THE SORTING. Every unsorted person, in the order they joined, is placed in a
 // house — and the placement IS their new role: one write as the `hat`, then
@@ -45,5 +45,19 @@ export const sortingFunctions = (server: () => MossServer): Record<string, Funct
       placed.push({ memberId, houseId });
     }
     return { placed };
+  },
+
+  // UNSORTING — for testing: everybody back out of their house, re-roled the
+  // same way the sorting re-roles them, so every open phone loses its house
+  // where it stands. The room stays; the sorting can run again.
+  'speaker.unsort': async () => {
+    const hat = server();
+    const sorted = await rows(UnsortedSchema, hat.executeAs('hat', membersSorted.fingerprint, {}));
+    for (const { member_id: memberId } of sorted) {
+      const written = await hat.executeAs('hat', memberUnsort.fingerprint, { memberId });
+      if (written === undefined) throw new Error(`The hat could not take ${memberId} back out.`);
+      hat.invalidateIdentity(memberId);
+    }
+    return { unsorted: sorted.length };
   },
 });

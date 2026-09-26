@@ -86,6 +86,17 @@ const main = async (): Promise<void> => {
   const secondSort = await waitUntil(() => speaker.showsNow('main', 'Sort the room'));
   check('the controller is ready again', secondSort);
 
+  // ── unsorting, for testing: the same re-role, backwards ──
+  speaker.click('main', 'unsort');
+  check('unsorting takes the house off the open phone', await member.shows('main', 'Not yet sorted'));
+  check('...and the crest with it', await waitUntil(() => !member.showsNow('house', 'You belong to the')));
+  check('the phone never reconnected for that either', member.isOpen() && member.sessionsSeen() === sessionsBefore);
+  check('the controller counts nobody sorted', await speaker.shows('main', '1 joined · 0 sorted'));
+  const unplaced = await runtime.db.query<{ house_id: string | null }>('SELECT house_id FROM members WHERE member_id = $1', [memberId]);
+  check('the database holds them unsorted', unplaced.rows[0]?.house_id === null);
+  speaker.click('main', 'sort');
+  check('and the room can be sorted again', await member.shows('house', 'You belong to the'));
+
   member.close();
   speaker.close();
   stage.close();

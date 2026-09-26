@@ -96,6 +96,19 @@ export const membersUnsorted: SeedEntry = {
   },
 };
 
+export const membersSorted: SeedEntry = {
+  fingerprint: 'members/sorted',
+  intent: 'Members already in a house — the ones an unsorting takes back out',
+  shape: [{ member_id: '' }],
+  dsl: {
+    from: ['members'],
+    fields: ['members.member_id'],
+    filter: { isNotNull: 'members.house_id' },
+    sort: [{ field: 'members.joined_at', dir: 'asc' }, { field: 'members.member_id', dir: 'asc' }],
+    limit: 500,
+  },
+};
+
 export const houseSizes: SeedEntry = {
   fingerprint: 'members/house-sizes',
   intent: 'How many members each house holds so far',
@@ -132,6 +145,18 @@ export const memberSort: SeedMutation = {
   },
 };
 
+// For testing the sorting again without emptying the room.
+export const memberUnsort: SeedMutation = {
+  fingerprint: 'members/unsort',
+  intent: 'Take a member back out of their house',
+  mutation: {
+    op: 'update',
+    table: 'members',
+    set: { house_id: null },
+    where: { eq: ['members.member_id', { $context: 'memberId' }] },
+  },
+};
+
 export const MEMBER_ENTRIES: readonly (SeedEntry | SeedMutation)[] = [
   identityMember,
   identityGrants,
@@ -140,7 +165,9 @@ export const MEMBER_ENTRIES: readonly (SeedEntry | SeedMutation)[] = [
   memberCounts,
   housesAll,
   membersUnsorted,
+  membersSorted,
   houseSizes,
   memberJoin,
   memberSort,
+  memberUnsort,
 ];
