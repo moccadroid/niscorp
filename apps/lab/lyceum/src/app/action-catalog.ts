@@ -7,6 +7,9 @@ import { renameAction } from './actions/forms/rename.action';
 import { deskAction } from './actions/inquiries/desk.action';
 import { logAction } from './actions/archive/log.action';
 import { consoleAction } from './actions/speaker/console.action';
+import { headAction } from './actions/speaker/head.action';
+import { notesAction } from './actions/speaker/notes.action';
+import { controlsAction } from './actions/speaker/controls.action';
 import { speakerDeckAction } from './actions/speaker/deck.action';
 import { slidesAction } from './actions/speaker/slides.action';
 import { assignmentTool } from './actions/tools/assignment.action';
@@ -29,6 +32,9 @@ export const ACTIONS: Record<string, ActionDefinition> = Object.fromEntries(
     deskAction,
     logAction,
     consoleAction,
+    headAction,
+    notesAction,
+    controlsAction,
     speakerDeckAction,
     slidesAction,
     assignmentTool,

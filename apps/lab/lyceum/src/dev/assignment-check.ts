@@ -66,20 +66,20 @@ const main = async (): Promise<void> => {
   const speakerHello = await speaker.hello();
   check('the speaker gets the controller', speakerHello.catalog.actions.includes('speaker.console'));
   check('the speaker gets nothing of the room', !speakerHello.catalog.actions.includes('member.card'));
-  check('the controller counts the room', await speaker.shows('main', '1 in the room · 0 assigned'));
+  check('the controller counts the room', await speaker.shows('head', '1 in the room · 0 assigned'));
   check('the first slide needs no tool: the controller has none', await waitUntil(() => !speaker.showsNow('tools', 'Assign the room')));
 
   const stage = await connect(base, await mintSession(runtime.pool, 'stage', 60_000));
   const stageHello = await stage.hello();
   check('the stage gets the register and no controls', stageHello.catalog.actions.includes('stage.register') && !stageHello.catalog.actions.includes('speaker.console'));
   check('the stage opens on the first slide', await stage.shows('main', 'The talk is an application'));
-  speaker.click('main', 'next');
+  speaker.click('controls', 'next');
   check('next moves the stage to the register', await stage.shows('main', 'The register'));
   check('the register shows them by their issued name', await stage.shows('main', issuedName));
 
   // ── the assignment slide brings its tool to the controller ──
   const assignmentAt = SLIDES.findIndex((slide) => slide.slideId === 'slide.assignment');
-  speaker.click('main', 'all');
+  speaker.click('controls', 'all');
   check('all slides open over the controller', await speaker.shows('overlay', 'All slides'));
   speaker.click('overlay', 'pick', assignmentAt);
   check('picking the assignment slide puts it on the stage', await stage.shows('main', 'Assignment'));
@@ -104,7 +104,7 @@ const main = async (): Promise<void> => {
   const desk = await waitUntil(() => member.showsNow('desk', department?.name ?? '\u0000'));
   check(`their department's own tool is on their phone (${tool})`, desk);
 
-  check('the controller counts them assigned', await speaker.shows('main', '1 in the room · 1 assigned'));
+  check('the controller counts them assigned', await speaker.shows('head', '1 in the room · 1 assigned'));
 
   // ── unassigning, for testing: the same re-role, backwards ──
   speaker.click('tools', 'unassign');
@@ -118,7 +118,7 @@ const main = async (): Promise<void> => {
   check('and the room can be assigned again', await member.shows('badge', 'Your department'));
 
   // ── leaving the slide takes its tool with it ──
-  speaker.click('main', 'all');
+  speaker.click('controls', 'all');
   await speaker.shows('overlay', 'All slides');
   speaker.click('overlay', 'pick', 1);
   check('on the register, the controller has no assignment tool', await waitUntil(() => !speaker.showsNow('tools', 'Assign the room')));

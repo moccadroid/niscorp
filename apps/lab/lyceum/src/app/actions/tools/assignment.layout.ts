@@ -2,9 +2,9 @@ import type { LayoutNode } from '@niscorp/nova';
 
 export const assignmentToolLayout: LayoutNode = {
   component: 'Sheet',
-  props: { areas: ['kick kick', 'waiting assigned', 'assign unassign'] },
+  props: { areas: ['kick kick', 'waiting assigned', 'assign assign', 'unassign unassign'] },
   children: [
-    { component: 'Cell', props: { area: 'kick', ink: 'ink' }, children: [{ component: 'Label', children: 'For this slide · assignment' }] },
+    { component: 'Cell', props: { area: 'kick', ink: 'ink' }, children: [{ component: 'Label', children: 'Assignment' }] },
     { component: 'Cell', props: { area: 'waiting' }, children: [{ component: 'Figure', props: { label: 'Waiting', value: '$.counts.unassigned' } }] },
     { component: 'Cell', props: { area: 'assigned', ink: 'live' }, children: [{ component: 'Figure', props: { label: 'Assigned', value: '$.counts.assigned' } }] },
     {

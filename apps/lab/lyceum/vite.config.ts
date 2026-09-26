@@ -9,18 +9,22 @@ import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 import { existsSync } from 'node:fs';
 import { z } from 'zod';
+import type { PGlite } from '@electric-sql/pglite';
 import type { Booted } from './src/server/boot';
 
 // The app server runs INSIDE vite's dev process — one `pnpm dev`, one port.
 // `ssrLoadModule` gives the composition vite's own resolution, so this is the
 // same boot `serve.ts` runs standalone and the checks run in-process. It
-// re-boots on save: a manifest, layout or seed edit rebuilds the whole world
-// (fresh database, fresh shells) and the browser reloads onto it.
+// re-boots on save: a manifest, layout or seed edit rebuilds the server and its
+// shells, and the browser reloads onto it. The DATABASE is not rebuilt: it is
+// opened once here and lent to every boot, so everybody stays signed in across
+// an edit. A fresh room is a restart of `pnpm dev`.
 const SERVER_DIRS = /[\\/]src[\\/](app|server|db)[\\/]/;
 
 // `ssrLoadModule` hands back an untyped record; the one thing this file needs
 // from it is a function called `boot`, so that is what is parsed.
-const BootModuleSchema = z.object({ boot: z.custom<() => Promise<Booted>>((value) => typeof value === 'function') });
+const BootModuleSchema = z.object({ boot: z.custom<(db: PGlite) => Promise<Booted>>((value) => typeof value === 'function') });
+const RuntimeModuleSchema = z.object({ openDevDatabase: z.custom<() => PGlite>((value) => typeof value === 'function') });
 
 type Running = { listener: ReturnType<typeof getRequestListener>; booted: Booted };
 
@@ -34,14 +38,19 @@ if (existsSync(resolve(here, '.env'))) process.loadEnvFile(resolve(here, '.env')
 const appServer = (): Plugin => ({
   name: 'lyceum-app-server',
   configureServer: (viteServer: ViteDevServer) => {
+    // The one database of this `pnpm dev`, opened with the first boot.
+    const database = viteServer.ssrLoadModule('/src/server/runtime.ts').then((module) => RuntimeModuleSchema.parse(module).openDevDatabase());
     const build = async (): Promise<Running> => {
       const { boot } = BootModuleSchema.parse(await viteServer.ssrLoadModule('/src/server/boot.ts'));
-      const booted = await boot();
+      const booted = await boot(await database);
       return { listener: getRequestListener(booted.server.fetch), booted };
     };
     let current = build();
 
-    viteServer.httpServer?.once('close', () => void current.then(({ booted }) => booted.close(), () => {}));
+    viteServer.httpServer?.once('close', () => {
+      void current.then(({ booted }) => booted.close(), () => {});
+      void database.then((db) => (db.closed ? undefined : db.close()), () => {});
+    });
 
     // The socket is attached ONCE with a delegating accept — every rebuild swaps
     // what it delegates to, never the upgrade handler.

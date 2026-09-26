@@ -34,31 +34,38 @@ const main = async (): Promise<void> => {
   const total = SLIDES.length;
   const titleOf = (index: number): string => SLIDES[index]?.title ?? '';
   const onSlide = async (index: number): Promise<boolean> =>
-    (await speaker.shows('main', `slide ${index + 1} of ${total}`)) && (await speaker.shows('main', titleOf(index))) && (await stage.shows('main', titleOf(index)));
+    (await speaker.shows('head', `slide ${index + 1} of ${total}`)) && (await speaker.shows('head', titleOf(index))) && (await stage.shows('main', titleOf(index)));
+
+  // ── the controller: four regions, on the speaker's screen only ──
+  const regions = ['head', 'tools', 'notes', 'controls'];
+  check('the controller places its four regions itself', await waitUntil(() => regions.every((region) => speaker.showsNow('main', `"canvasId":"${region}"`))));
+  check('none of them exists for the stage', !['speaker.console', 'speaker.head', 'speaker.notes', 'speaker.controls'].some((id) => stageHello.catalog.actions.includes(id)));
+  check('a slide without a tool says so, rather than leave a hole', await speaker.shows('tools', 'Nothing to press on this slide'));
 
   // ── the first slide, and no way back from it ──
   check('the stage and the controller open on the first slide', await onSlide(0));
-  check('Next says which slide it goes to', await speaker.shows('main', `2 · ${titleOf(1)} →`));
-  check('Back on the first slide says so', await speaker.shows('main', 'Start of the deck'));
-  speaker.click('main', 'back');
+  check('Next says which slide it goes to', await speaker.shows('controls', `2 · ${titleOf(1)} →`));
+  check('Back on the first slide says so', await speaker.shows('controls', 'Start of the deck'));
+  speaker.click('controls', 'back');
   check('back on the first slide stays there', await onSlide(0));
 
   // ── forward through the deck, and no way past its end ──
   for (let index = 1; index < total; index += 1) {
-    speaker.click('main', 'next');
+    speaker.click('controls', 'next');
     check(`next shows slide ${index + 1} on the stage (${titleOf(index)})`, await onSlide(index));
+    check(`...and its notes on the controller`, await speaker.shows('notes', SLIDES[index]?.notes[0] ?? '\u0000'));
   }
-  speaker.click('main', 'next');
+  speaker.click('controls', 'next');
   check('next on the last slide stays there', await onSlide(total - 1));
-  check('Back says which slide it goes to', await speaker.shows('main', `← ${total - 1} · ${titleOf(total - 2)}`));
-  check('Next on the last slide says so', await speaker.shows('main', 'End of the deck'));
+  check('Back says which slide it goes to', await speaker.shows('controls', `← ${total - 1} · ${titleOf(total - 2)}`));
+  check('Next on the last slide says so', await speaker.shows('controls', 'End of the deck'));
 
   const row = await runtime.db.query<{ slide_id: string }>('SELECT slide_id FROM deck');
   check('the row is what the stage shows', row.rows[0]?.slide_id === SLIDES[total - 1]?.slideId);
 
   // ── all slides, over the controller: any slide, straight away ──
   const pick = async (position: number): Promise<void> => {
-    speaker.click('main', 'all');
+    speaker.click('controls', 'all');
     await speaker.shows('overlay', 'All slides');
     speaker.click('overlay', 'pick', position);
   };
@@ -69,14 +76,14 @@ const main = async (): Promise<void> => {
   check('...any slide, in any order', await onSlide(total - 1));
   await pick(total + 5);
   check('a pick past the end stays on the last slide', await onSlide(total - 1));
-  speaker.click('main', 'all');
+  speaker.click('controls', 'all');
   await speaker.shows('overlay', 'All slides');
   speaker.click('overlay', 'close');
   check('Close shuts the list and changes nothing', (await waitUntil(() => !speaker.showsNow('overlay', 'All slides'))) && (await onSlide(total - 1)));
 
   // ── a live slide follows the room ──
   const live = SLIDES.findIndex((slide) => slide.slideId === 'slide.live');
-  speaker.click('main', 'back');
+  speaker.click('controls', 'back');
   check('back shows the slide before it', await onSlide(live));
   check('the live slide counts an empty room', await stage.shows('main', '0 in the room'));
 

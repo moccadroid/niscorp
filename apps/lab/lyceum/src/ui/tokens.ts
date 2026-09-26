@@ -69,6 +69,14 @@ html, body { margin: 0; padding: 0; }
 /* a sheet inside a cell is part of that cell's grid: its rules, not a second frame */
 .${ROOT_CLASS} .cell > .sheet { border: 0; }
 
+/* a canvas placed by an action's own layout (the controller's regions) fills
+   its cell, and its sheet is part of the outer grid — its rules, not a frame */
+.${ROOT_CLASS} .cell > [data-canvas], .${ROOT_CLASS} .cell > [data-canvas] > * { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; }
+/* a sheet that fills takes the region; any other is as tall as it is, with its
+   own rule under it and the region's paper below */
+.${ROOT_CLASS} .cell > [data-canvas] > * > .sheet { border: 0; flex: 0 0 auto; border-bottom: var(--rule) solid var(--ink); }
+.${ROOT_CLASS} .cell > [data-canvas] > * > .sheet[data-size="fill"] { flex: 1 1 auto; border-bottom: 0; }
+
 /* ── cell: a place in the grid, and its ink ── */
 /* defaults first, so an ink always out-ranks them */
 .${ROOT_CLASS} :where(.cell, .bar > span, .action) { --bg: var(--paper); --fg: var(--ink); }
@@ -118,7 +126,7 @@ html, body { margin: 0; padding: 0; }
 .${ROOT_CLASS} .rows { display: grid; gap: var(--rule); background: var(--ink); }
 .${ROOT_CLASS} .rows > div { display: grid; grid-template-columns: var(--cols); gap: var(--rule); }
 .${ROOT_CLASS} .rows > div > span { background: var(--paper); color: var(--ink); padding: .35em .6em; font-size: clamp(13px, 1.5cqw, 28px); display: flex; align-items: center; gap: .4em; min-width: 0; overflow: hidden; }
-.${ROOT_CLASS} .rows > div:first-child > span { font: 700 clamp(9px, 1.05cqw, 18px)/1.2 var(--display); letter-spacing: .08em; text-transform: uppercase; }
+.${ROOT_CLASS} .rows[data-head] > div:first-child > span { font: 700 clamp(9px, 1.05cqw, 18px)/1.2 var(--display); letter-spacing: .08em; text-transform: uppercase; }
 .${ROOT_CLASS} .rows [data-kind="mono"] { font-family: var(--mono); }
 .${ROOT_CLASS} .rows [data-kind="missing"] { color: color-mix(in srgb, var(--ink) 45%, var(--paper)); }
 .${ROOT_CLASS} .rows > .empty { display: block; background: var(--paper); padding: .6em; }
@@ -154,6 +162,7 @@ html, body { margin: 0; padding: 0; }
   padding: clamp(10px, 1.4cqw, 26px) clamp(12px, 1.6cqw, 30px);
   font: 900 clamp(14px, 1.8cqw, 34px)/1 var(--display); text-transform: uppercase; letter-spacing: .02em;
 }
+.${ROOT_CLASS} .action[data-lines="two"] > span { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; height: 2em; }
 
 /* ── anything you can press ──
    Whatever carries a \`ref\` is clickable (nova wires the click by that

@@ -1,3 +1,4 @@
+import type { PGlite } from '@electric-sql/pglite';
 import { createServer } from '@niscorp/moss';
 import type { MossServer, NiscApp } from '@niscorp/moss';
 import { buildLyceum } from '@lyceum/app/app';
@@ -20,8 +21,8 @@ export type Booted<R extends LyceumRuntime = DevRuntime> = {
   close: () => Promise<void>;
 };
 
-// The development boot: in-memory PGlite, reset every time.
-export const boot = async (): Promise<Booted> => bootOn(await devRuntime());
+// The development boot: in-memory PGlite — a fresh one, or the one it is lent.
+export const boot = async (db?: PGlite): Promise<Booted> => bootOn(await devRuntime(db));
 
 // The boot itself, on whatever environment it is handed.
 export const bootOn = async <R extends LyceumRuntime>(runtime: R): Promise<Booted<R>> => {

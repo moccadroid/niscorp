@@ -95,6 +95,21 @@ export const slidesAll: SeedEntry = {
   },
 };
 
+// The speaker's notes for the slide on screen, in order. Reactive: the deck
+// row moving is a write to a table this reads, so the notes follow the deck.
+export const slideNotes: SeedEntry = {
+  fingerprint: 'slides/notes',
+  refresh: 'reactive',
+  intent: 'The speaker\'s notes for the slide on screen, in order',
+  shape: [{ position: 0, note: '' }],
+  dsl: {
+    from: ['deck', 'slides', 'slide_notes'],
+    fields: ['slide_notes.position', 'slide_notes.note'],
+    filter: { eq: ['deck.deck_id', 'talk'] },
+    sort: [{ field: 'slide_notes.position', dir: 'asc' }],
+  },
+};
+
 // Put the slide at `position` on screen. The controller computes the position
 // (one on, one back, clamped to the deck); the slide is looked up by it, so a
 // request names a place in the deck, never an action. The deck is named too —
@@ -112,4 +127,4 @@ export const deckGo: SeedMutation = {
   },
 };
 
-export const DECK_ENTRIES: readonly (SeedEntry | SeedMutation)[] = [deckCurrent, slidesAll, deckGo];
+export const DECK_ENTRIES: readonly (SeedEntry | SeedMutation)[] = [deckCurrent, slidesAll, slideNotes, deckGo];

@@ -5,8 +5,11 @@ import type { NiscRuntime } from '@niscorp/moss';
 import { DDL } from '@lyceum/db/schema';
 import { buildSeedSql } from '@lyceum/db/seed';
 
-// The DEVELOPMENT environment: an in-memory PGlite, reset on every boot, for
-// `pnpm dev` and the checks. The talk itself runs on Postgres
+// The DEVELOPMENT environment: an in-memory PGlite, for `pnpm dev` and the
+// checks. A check gets a fresh one per boot. `pnpm dev` opens ONE for the life
+// of the process and lends it to every re-boot (vite.config.ts), so an edit
+// keeps the room: sessions, members and the deck survive it. The DDL is
+// idempotent and the seed converges, so both run again on the borrowed one. The talk itself runs on Postgres
 // (./postgres-runtime.ts) — the manifest does not change, only the environment.
 //
 // Sessions are the real credential even here: 256-bit, hashed at rest,
@@ -18,8 +21,11 @@ export type LyceumRuntime = NiscRuntime & { close: () => Promise<void> };
 
 export type DevRuntime = LyceumRuntime & { db: PGlite };
 
-export const devRuntime = async (): Promise<DevRuntime> => {
-  const db = new PGlite();
+export const openDevDatabase = (): PGlite => new PGlite();
+
+// `borrowed`: a database somebody else opened and will close — the dev server's.
+export const devRuntime = async (borrowed?: PGlite): Promise<DevRuntime> => {
+  const db = borrowed ?? openDevDatabase();
   await db.exec(DDL);
   await db.exec(buildSeedSql());
 
@@ -33,10 +39,10 @@ export const devRuntime = async (): Promise<DevRuntime> => {
     pool: createPglitePool(db, RAW_DATE_PARSERS),
     cache,
     session: 'sessions',
-    // Safe twice: a re-boot in vite closes the old server, which may already
-    // have let go of the database.
+    // A borrowed database outlives this runtime; an owned one is closed with
+    // it. Safe twice either way.
     close: async () => {
-      if (!db.closed) await db.close();
+      if (borrowed === undefined && !db.closed) await db.close();
     },
   };
 };

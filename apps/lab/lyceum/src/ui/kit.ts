@@ -172,10 +172,16 @@ const sigil = (shape: unknown, large: boolean): HTMLElement => {
 
 export const Sigil: DomComponent = ({ props }) => sigil(props['shape'], props['size'] === 'large');
 
+const withHead = (node: HTMLElement, head: boolean): HTMLElement => {
+  if (head) node.setAttribute('data-head', '');
+  return node;
+};
+
 // ── Rows — a ruled table ────────────────────────────────────────
 // rows: the records; rowKey: the id field; empty: what an empty table says.
 // columns: [{ label, key, w?, kind?: 'text' | 'mono' | 'sigil', missing? }] —
-// `missing` is what a cell says when its value is absent.
+// `missing` is what a cell says when its value is absent. Columns with no
+// labels at all make a table with no header row (a list of lines).
 export const Rows: DomComponent = ({ props, dispatch }) => {
   const columns = records(props['columns']);
   // A row you can press: `rowRef` names the click, `clickKey` the field its
@@ -190,11 +196,13 @@ export const Rows: DomComponent = ({ props, dispatch }) => {
     row.style.setProperty('--cols', cols);
     return row;
   };
+  const labelled = columns.some((column) => (text(column['label']) ?? '') !== '');
   const header = line(columns.map((column) => {
     const cell = el('span', '');
     cell.textContent = text(column['label']) ?? '';
     return cell;
   }));
+  const head = labelled ? [header] : [];
   const body = records(props['rows']).map((record) => {
     const row = line(columns.map((column) => {
       const cell = el('span', '');
@@ -222,9 +230,9 @@ export const Rows: DomComponent = ({ props, dispatch }) => {
   if (body.length === 0) {
     const empty = el('div', 'empty');
     empty.textContent = text(props['empty']) ?? '';
-    return el('div', 'rows', [header, empty]);
+    return withHead(el('div', 'rows', [...head, empty]), labelled);
   }
-  return el('div', 'rows', [header, ...body]);
+  return withHead(el('div', 'rows', [...head, ...body]), labelled);
 };
 
 // ── Bar — proportions as cells ──────────────────────────────────
@@ -243,14 +251,18 @@ export const Bar: DomComponent = ({ props }) => {
 };
 
 // ── Action — a whole cell you press ─────────────────────────────
-// area, ink, label. Pressed, it is a `ui:click` on its `ref` (nova's
-// convention — the renderer wires it, the component knows nothing of events).
+// area, ink, label, lines ('two' — the label always takes exactly two lines,
+// clamped: a row of actions whose labels change keeps its height). Pressed, it
+// is a `ui:click` on its `ref` (nova's convention — the renderer wires it, the
+// component knows nothing of events).
 export const Action: DomComponent = ({ props }) => {
-  const node = el('button', 'action');
+  const label = el('span', '');
+  label.textContent = text(props['label']) ?? '';
+  const node = el('button', 'action', [label]);
   node.setAttribute('type', 'button');
-  node.textContent = text(props['label']) ?? '';
   placeIn(node, props['area']);
   setData(node, 'ink', oneOf(props['ink'], INKS));
+  setData(node, 'lines', oneOf(props['lines'], ['two'] as const));
   return node;
 };
 

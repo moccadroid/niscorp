@@ -1,38 +1,18 @@
 import type { LayoutNode } from '@niscorp/nova';
 
-// The controller, at thumb size: every control is a whole cell. The slide on
-// screen, back and next, then the whole deck — press any slide to put it up.
+// THE CONTROLLER'S ARRANGEMENT — four canvases, nothing else. What stays the
+// same stays where it is: the head at the top, Back and Next at the bottom. The
+// middle is the slide on screen: its tool on the left, its notes on the right.
+// Each region is its own canvas holding its own action, so a slide bringing a
+// tool, or none, changes what is IN the left region and moves nothing.
+const region = (area: string): LayoutNode => ({
+  component: 'Cell',
+  props: { area, pad: 'none' },
+  children: [{ component: 'CanvasSlot', props: { canvasId: area } }],
+});
+
 export const consoleLayout: LayoutNode = {
   component: 'Sheet',
-  // The slide on screen takes the middle; Back and Next are the last row, so
-  // they stay at the bottom — and each says which slide it goes to. Every
-  // slide is behind "All slides".
-  props: { size: 'fill', areas: ['head head', 'slide slide', 'all all', 'back next'], rows: ['auto', 1, 'auto', 'auto'] },
-  children: [
-    {
-      component: 'Cell',
-      props: { area: 'head' },
-      children: [{ component: 'Label', children: 'Controller · {{$.counts.joined}} in the room · {{$.counts.assigned}} assigned' }],
-    },
-    {
-      component: 'Cell',
-      props: { area: 'slide', align: 'between' },
-      children: [
-        { component: 'Label', children: 'On screen · slide {{$.current.number}} of {{$.current.count}}' },
-        { component: 'Headline', props: { level: 'title' }, children: '{{$.current.title}}' },
-        { if: '$.error', then: { component: 'Text', children: '{{$.error}}' } },
-      ],
-    },
-    { component: 'Action', ref: 'all', props: { area: 'all', label: 'All slides ({{$.current.count}})' } },
-    {
-      component: 'Action',
-      ref: 'back',
-      props: { area: 'back', label: { $if: '$.current.prev_title', $then: '← {{$.current.prev_number}} · {{$.current.prev_title}}', $else: 'Start of the deck' } },
-    },
-    {
-      component: 'Action',
-      ref: 'next',
-      props: { area: 'next', ink: 'alert', label: { $if: '$.current.next_title', $then: '{{$.current.next_number}} · {{$.current.next_title}} →', $else: 'End of the deck' } },
-    },
-  ],
+  props: { size: 'fill', areas: ['head head', 'tools notes', 'controls controls'], rows: ['auto', 1, 'auto'] },
+  children: [region('head'), region('tools'), region('notes'), region('controls')],
 };

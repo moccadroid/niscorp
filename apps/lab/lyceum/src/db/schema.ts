@@ -43,6 +43,16 @@ export const DDL = /* sql */ `
     tool_id  TEXT
   );
 
+  -- THE SPEAKER'S NOTES: a few lines per slide, in order, shown on the
+  -- controller beside the slide's tool while that slide is up. Rows, not a
+  -- column of text: each line is one thing to say.
+  CREATE TABLE IF NOT EXISTS slide_notes (
+    slide_id TEXT NOT NULL REFERENCES slides (slide_id) ON DELETE CASCADE,
+    position INT  NOT NULL,
+    note     TEXT NOT NULL,
+    PRIMARY KEY (slide_id, position)
+  );
+
   -- THE TALK'S STATE: one row, the slide on screen now. The controller writes
   -- it; a moss restart lands every screen back on it.
   CREATE TABLE IF NOT EXISTS deck (
