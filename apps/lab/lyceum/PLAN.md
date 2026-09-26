@@ -205,7 +205,7 @@ D2, D4 and D5 follow from D1 and D3 and are recorded for review.
 | `stage` (the projector) | `stage` | slide actions, roster, the sorting, standings, the board, the ask tally. No controls. |
 | `speaker` (the controller) | `speaker` | next/back, countdown, join counter, Sort, grants, moderation queue, notes, section timers, model seam status |
 | Trickster (optional) | `guest` | nearly nothing — the point |
-| machinery | `identity` (resolves roles), `doorkeeper` (the stranger's member row) — and only roles like these | a machinery role exists only where NO principal exists yet. Everything that acts for a person or for the speaker acts as them, over their session's wire (see "Vex is never hidden behind a function") |
+| machinery | `identity` (resolves roles, moss's own), `gatekeeper` (redeems a sign-in link, until links move into moss) — and only roles like these | a machinery role exists only where NO principal exists yet. Everything that acts for a person or for the speaker acts as them, over their session's wire (see "Vex is never hidden behind a function"). A stranger stepping in is minted first and writes their own row. |
 
 Stage and speaker are separate principals on separate devices. The projector never holds a
 control; the controller can be a phone.
