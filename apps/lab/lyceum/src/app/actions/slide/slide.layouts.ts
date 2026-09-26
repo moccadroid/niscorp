@@ -25,7 +25,7 @@ export const titleLayout: LayoutNode = {
     cell('head', [{ component: 'Headline', props: { level: 'display' }, children: '{{$.title}}' }], { align: 'end' }),
     cell('body', [{ component: 'Text', children: '{{$.lines.0}}' }]),
     cell('cta', [{ component: 'Text', children: '{{$.lines.1}}' }], { ink: 'alert' }),
-    cell('count', [{ component: 'Figure', props: { label: 'In the room', value: '$.counts.joined' } }], { ink: 'signal', align: 'end' }),
+    cell('count', [{ component: 'Figure', props: { label: 'In the room', value: '$.counts.joined' } }], { ink: 'live', align: 'end' }),
   ],
 };
 
@@ -55,7 +55,7 @@ export const codeLayout: LayoutNode = {
     cell('head', [{ component: 'Headline', props: { level: 'title' }, children: '{{$.title}}' }], { align: 'end' }),
     cell('body', [{ component: 'Text', children: '{{$.lines.0}}' }]),
     cell('code', [label('{{$.file}}'), { component: 'Code', props: { text: '$.code', marked: '$.marked' } }], { ink: 'ink' }),
-    cell('tags', [label('{{$.lines.1}}')]),
+    cell('tags', [label('{{$.lines.1}}')], { ink: 'highlight' }),
   ],
 };
 
@@ -66,7 +66,7 @@ export const liveLayout: LayoutNode = {
   children: [
     cell('kick', [label('{{$.kicker}}')]),
     cell('head', [{ component: 'Headline', props: { level: 'display' }, children: '{{$.title}}' }], { align: 'end' }),
-    cell('joined', [{ component: 'Figure', props: { label: 'In the room', value: '$.counts.joined' } }]),
+    cell('joined', [{ component: 'Figure', props: { label: 'In the room', value: '$.counts.joined' } }], { ink: 'live' }),
     cell('sorted', [{ component: 'Figure', props: { label: 'Sorted', value: '$.counts.sorted' } }], { ink: 'signal' }),
     cell('words', [
       { component: 'Text', children: '{{$.counts.joined}} in the room · {{$.counts.sorted}} sorted' },

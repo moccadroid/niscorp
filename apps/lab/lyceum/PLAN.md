@@ -103,8 +103,10 @@ documented in moss, not here.
 `src/ui/` holds lyceum's own DOM kit (tokens, components, registry, render target) —
 the only renderer code in the app. A screen is a `Sheet` (a ruled grid whose areas are
 named in the layout, e.g. `['kick kick count', 'head head count']`); everything on it is
-a `Cell` with an ink (`paper | ink | signal | alert` — four colours, and ink only where
-it carries a fact) or a mark. Houses are not colours: each is a MARK (stripes, dots,
+a `Cell` with an ink or a mark. Four colours, each with a job, on paper and ink:
+`signal` (blue) the fact that matters, `alert` (orange) what to do next, `live` (green)
+a number that changes on its own, `highlight` (yellow) what the pointer is on — every
+hover — and what the eye should find (marked code lines). Houses are not colours: each is a MARK (stripes, dots,
 bars, checks) and a SIGIL (triangle, circle, cross, square), stored on the house's row
 and read as data — no layout names a house. "Not yet" is the hatch. Type: Unbounded for
 the back row, Space Grotesk for sentences, Space Mono for code (Google Fonts, nothing

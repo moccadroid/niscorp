@@ -15,7 +15,7 @@ import type { DomComponent } from '@niscorp/nova/adapters/dom';
 // (names and numbers), not style.
 // ═══════════════════════════════════════════════════════════════
 
-const INKS = ['paper', 'ink', 'signal', 'alert'] as const;
+const INKS = ['paper', 'ink', 'signal', 'alert', 'live', 'highlight'] as const;
 const MARKS = ['stripes', 'dots', 'bars', 'checks', 'hatch'] as const;
 const SIGILS = ['triangle', 'circle', 'square', 'cross'] as const;
 const ALIGNS = ['start', 'end', 'center', 'between'] as const;
@@ -85,7 +85,7 @@ export const Sheet: DomComponent = ({ props, children }) => {
 };
 
 // ── Cell — a place in the grid ──────────────────────────────────
-// area, ink (paper | ink | signal | alert), mark (stripes | dots | bars |
+// area, ink (paper | ink | signal | alert | live | highlight), mark (stripes | dots | bars |
 // checks | hatch), align (start | end | center | between), pad ('none').
 export const Cell: DomComponent = ({ props, children }) => {
   const node = el('div', 'cell', children);

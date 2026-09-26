@@ -10,7 +10,7 @@ export const rosterLayout: LayoutNode = {
     { component: 'Cell', props: { area: 'head' }, children: [{ component: 'Headline', props: { level: 'title' }, children: 'Everybody who stepped in' }] },
     {
       component: 'Cell',
-      props: { area: 'count', ink: 'signal', align: 'between' },
+      props: { area: 'count', ink: 'live', align: 'between' },
       children: [
         { component: 'Figure', props: { label: 'In the room', value: '$.counts.joined' } },
         { component: 'Label', children: '{{$.counts.sorted}} sorted' },

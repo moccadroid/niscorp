@@ -9,8 +9,11 @@
 //     the ink underneath — cells never draw borders.
 //   · Everything is a CELL. Paper by default; a block of INK only where it
 //     carries a fact (the live count, the one primary action).
-//   · Four colours: paper, ink, signal, alert. Houses are not colours — they
-//     are MARKS (a pattern) and SIGILS (a shape), so the inks stay free to mean
+//   · Four colours, each with a job, on paper and ink: SIGNAL (blue) is the
+//     fact that matters, ALERT (orange) is what to do next, LIVE (green) is a
+//     number that changes on its own, HIGHLIGHT (yellow) is what the pointer
+//     is on and what the eye should find. Houses are not colours — they are
+//     MARKS (a pattern) and SIGILS (a shape), so the colours stay free to mean
 //     something.
 //   · "Not yet" has a pattern, the hatch — never a grey.
 //   · Two voices: Unbounded for what is read from the back row, Space
@@ -27,7 +30,7 @@ export const FONTS_HREF =
 export const LYCEUM_CSS = `
 html, body { margin: 0; padding: 0; }
 .${ROOT_CLASS} {
-  --paper: #ffffff; --ink: #000000; --signal: #1400ff; --alert: #ff3b00;
+  --paper: #ffffff; --ink: #000000; --signal: #1400ff; --alert: #ff3b00; --live: #00c853; --highlight: #ffe600;
   --rule: 3px;
   --display: 'Unbounded', 'Arial Black', sans-serif;
   --prose: 'Space Grotesk', system-ui, sans-serif;
@@ -58,6 +61,8 @@ html, body { margin: 0; padding: 0; }
 .${ROOT_CLASS} [data-ink="ink"] { --bg: var(--ink); --fg: var(--paper); }
 .${ROOT_CLASS} [data-ink="signal"] { --bg: var(--signal); --fg: var(--paper); }
 .${ROOT_CLASS} [data-ink="alert"] { --bg: var(--alert); --fg: var(--ink); }
+.${ROOT_CLASS} [data-ink="live"] { --bg: var(--live); --fg: var(--ink); }
+.${ROOT_CLASS} [data-ink="highlight"] { --bg: var(--highlight); --fg: var(--ink); }
 .${ROOT_CLASS} .cell {
   background: var(--bg); color: var(--fg);
   padding: clamp(8px, 1.2cqw, 22px) clamp(10px, 1.5cqw, 28px);
@@ -89,10 +94,10 @@ html, body { margin: 0; padding: 0; }
 .${ROOT_CLASS} .figure { display: flex; flex-direction: column; gap: .3em; }
 .${ROOT_CLASS} .figure > .value { font: 900 clamp(30px, 6cqw, 150px)/.85 var(--display); }
 
-/* ── code: a cell of mono, the lines that matter marked in signal ── */
+/* ── code: a cell of mono, the lines that matter highlighted ── */
 .${ROOT_CLASS} .code { font: 400 clamp(11px, 1.45cqw, 26px)/1.5 var(--mono); white-space: pre; overflow: hidden; }
 .${ROOT_CLASS} .code > span { display: block; }
-.${ROOT_CLASS} .code > span[data-marked] { background: var(--signal); color: var(--paper); margin: 0 -.4em; padding: 0 .4em; }
+.${ROOT_CLASS} .code > span[data-marked] { background: var(--highlight); color: var(--ink); margin: 0 -.4em; padding: 0 .4em; }
 
 /* ── rows: a ruled table, headers in the label voice ── */
 .${ROOT_CLASS} .rows { display: grid; gap: var(--rule); background: var(--ink); }
@@ -125,16 +130,15 @@ html, body { margin: 0; padding: 0; }
    Whatever carries a \`ref\` is clickable (nova wires the click by that
    convention), so the affordance keys on the same thing: [data-ref]. No
    component opts in and no layout can opt out.
-   HOVER INVERTS: the cell's ink and paper swap — a hard cut, no easing, the
-   poster's one motion. PRESSED is the hatch over the inverted cell. Hover is
-   only where a pointer can hover: on a phone a tap must not leave a cell
-   stuck inverted. */
+   HOVER IS THE HIGHLIGHT: whatever ink the cell wore, under the pointer it
+   is yellow and black — a hard cut, no easing, the poster's one motion.
+   PRESSED is the hatch over it. Hover is only where a pointer can hover: on a
+   phone a tap must not leave a cell stuck lit. */
 .${ROOT_CLASS} [data-ref] { cursor: pointer; user-select: none; -webkit-tap-highlight-color: transparent; }
 @media (hover: hover) {
-  .${ROOT_CLASS} [data-ref]:hover { background: var(--fg); color: var(--bg); }
-  .${ROOT_CLASS} [data-ref]:hover .label, .${ROOT_CLASS} [data-ref]:hover .text { color: var(--bg); }
+  .${ROOT_CLASS} [data-ref]:hover { --bg: var(--highlight); --fg: var(--ink); background: var(--bg); color: var(--fg); }
 }
-.${ROOT_CLASS} [data-ref]:active { background: repeating-linear-gradient(-45deg, var(--bg) 0 2px, var(--fg) 2px 8px); color: var(--bg); }
+.${ROOT_CLASS} [data-ref]:active { --bg: var(--highlight); --fg: var(--ink); background: repeating-linear-gradient(-45deg, var(--ink) 0 2px, var(--highlight) 2px 8px); color: var(--ink); }
 .${ROOT_CLASS} [data-ref]:focus-visible { outline: var(--rule) solid var(--alert); outline-offset: calc(var(--rule) * -1); }
 .${ROOT_CLASS} .action[data-ink="alert"]:focus-visible { outline-color: var(--signal); }
 `;
