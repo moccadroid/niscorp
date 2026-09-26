@@ -12,7 +12,7 @@ export const consoleAction: ActionDefinition = {
   id: 'speaker.console',
   title: 'Controller',
   data: {
-    counts: { joined: 0, sorted: 0 },
+    counts: { joined: 0, sorted: 0, unsorted: 0 },
     current: { slide_id: '', title: '', position: 0, number: 0 },
     count: { slides: 0 },
     sorting: false,

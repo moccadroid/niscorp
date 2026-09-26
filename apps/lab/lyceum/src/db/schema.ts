@@ -8,9 +8,16 @@ export const DDL = /* sql */ `
     house_id  TEXT PRIMARY KEY,
     name      TEXT NOT NULL,
     character TEXT NOT NULL,
-    colour    TEXT NOT NULL,
+    -- A house is a MARK (a pattern) and a SIGIL (a shape), not a colour: the
+    -- look's four inks carry meaning and are not spent on identity.
+    mark      TEXT NOT NULL,
+    sigil     TEXT NOT NULL,
     position  INT  NOT NULL
   );
+  -- A database from before houses had marks: give it the columns, drop colour.
+  ALTER TABLE houses ADD COLUMN IF NOT EXISTS mark TEXT NOT NULL DEFAULT 'hatch';
+  ALTER TABLE houses ADD COLUMN IF NOT EXISTS sigil TEXT NOT NULL DEFAULT 'square';
+  ALTER TABLE houses DROP COLUMN IF EXISTS colour;
 
   -- One row per person in the room. The row's id IS their principal.
   -- house_id is NULL until the sorting places them.

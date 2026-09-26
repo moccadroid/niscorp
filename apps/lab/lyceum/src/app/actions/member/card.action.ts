@@ -7,7 +7,7 @@ import { cardLayout } from './card.layout';
 export const cardAction: ActionDefinition = {
   id: 'member.card',
   title: 'You',
-  data: { me: { name: '', house_id: '', house_name: '' }, loading: true },
+  data: { me: { name: '', house_id: '', house_name: '', house_character: '', house_mark: '', house_sigil: '' }, loading: true },
   layout: cardLayout,
   endpoints: {
     load: { url: '/api/vex', method: 'POST', request: { fingerprint: memberMe.fingerprint, context: {} }, target: 'me' },

@@ -99,8 +99,23 @@ Consequence: the moss gap this plan used to lead with — `executeAs` writes nev
 discrepancy with moss's DESIGN.md ("every write passes the observer"), to be fixed or
 documented in moss, not here.
 
+**The kit — built 2026-09-26** (order of work step 4). The look is "the poster":
+`src/ui/` holds lyceum's own DOM kit (tokens, components, registry, render target) —
+the only renderer code in the app. A screen is a `Sheet` (a ruled grid whose areas are
+named in the layout, e.g. `['kick kick count', 'head head count']`); everything on it is
+a `Cell` with an ink (`paper | ink | signal | alert` — four colours, and ink only where
+it carries a fact) or a mark. Houses are not colours: each is a MARK (stripes, dots,
+bars, checks) and a SIGIL (triangle, circle, cross, square), stored on the house's row
+and read as data — no layout names a house. "Not yet" is the hatch. Type: Unbounded for
+the back row, Space Grotesk for sentences, Space Mono for code (Google Fonts, nothing
+hosted), sized to the cell's width. Components are configured, never styled (AGENTS.md
+rule 2): closed sets of names, no style or class from a layout. Slides use four layout
+shapes (title, statement, code, live); the stage's strip (slide n/N, the room) is its
+own canvas above the slide canvas. The kitchen sink is `kit.sink` — `/dev/as/kit`.
+
 **Next:**
-1. **The UI** — lyceum's own kit, the house variants, the look (order of work step 4).
+1. **The UI, continued** — the look is locked on the kitchen sink and the screens that
+   exist; the talk's real slides and the persona screen are written against it.
 2. **The ending.** "Start the talk" writes a `talk` row (`ends_at`) through the speaker's
    own vex. One tide reflex is derived from that row — a clock trigger at `ends_at`,
    rebuilt from the row on boot, so a restart before minute 40 still ends the talk and a

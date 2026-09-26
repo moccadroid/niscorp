@@ -34,6 +34,9 @@ export const CHARTER: Charter = {
   speaker: { actions: ['speaker.*'], data: [...ROOM_READS, ...DECK_READS, 'deck.write.update', 'members.write.update'] },
   stage: { actions: ['stage.*', 'slide.*'], data: [...ROOM_READS, ...DECK_READS] },
 
+  // The kit's kitchen sink: every piece of the look on one screen (dev).
+  kit: { actions: ['kit.*'] },
+
   // ── machinery: roles nobody wears, each holding exactly its job ──
   // Reads who somebody is, for the identity seam.
   identity: { data: ['members.read', 'grants.read'] },
@@ -52,4 +55,5 @@ export const WEARABLE: readonly (readonly string[])[] = [
   ['stags'],
   ['speaker'],
   ['stage'],
+  ['kit'],
 ];

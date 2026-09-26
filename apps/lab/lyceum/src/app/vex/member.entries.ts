@@ -37,10 +37,17 @@ export const memberMe: SeedEntry = {
   fingerprint: 'members/me',
   refresh: 'reactive',
   intent: 'The signed-in member: their name and their house, if sorted',
-  shape: { name: '', house_id: '', house_name: '' },
+  shape: { name: '', house_id: '', house_name: '', house_character: '', house_mark: '', house_sigil: '' },
   dsl: {
     from: ['members', 'houses'],
-    fields: ['members.name', 'members.house_id', { field: 'houses.name', as: 'house_name' }],
+    fields: [
+      'members.name',
+      'members.house_id',
+      { field: 'houses.name', as: 'house_name' },
+      { field: 'houses.character', as: 'house_character' },
+      { field: 'houses.mark', as: 'house_mark' },
+      { field: 'houses.sigil', as: 'house_sigil' },
+    ],
     filter: { eq: ['members.member_id', { $scope: 'userId' }] },
   },
 };
@@ -49,10 +56,10 @@ export const memberRoster: SeedEntry = {
   fingerprint: 'members/roster',
   refresh: 'reactive',
   intent: 'Everybody in the room in the order they joined, with their house if sorted',
-  shape: [{ member_id: '', name: '', house_name: '' }],
+  shape: [{ member_id: '', name: '', house_name: '', house_sigil: '' }],
   dsl: {
     from: ['members', 'houses'],
-    fields: ['members.member_id', 'members.name', { field: 'houses.name', as: 'house_name' }],
+    fields: ['members.member_id', 'members.name', { field: 'houses.name', as: 'house_name' }, { field: 'houses.sigil', as: 'house_sigil' }],
     sort: [{ field: 'members.joined_at', dir: 'asc' }, { field: 'members.member_id', dir: 'asc' }],
     limit: 500,
   },
@@ -62,11 +69,16 @@ export const memberCounts: SeedEntry = {
   fingerprint: 'members/counts',
   refresh: 'reactive',
   intent: 'How many people have joined, and how many of them are sorted',
-  shape: { joined: 0, sorted: 0 },
+  shape: { joined: 0, sorted: 0, unsorted: 0 },
   dsl: {
     from: ['members'],
     // COUNT(column) skips NULLs: an unsorted member has no house_id.
     aggregate: { joined: { count: '*' }, sorted: { count: 'members.house_id' } },
+  },
+  mapping: {
+    joined: { $ref: '$.result.joined' },
+    sorted: { $ref: '$.result.sorted' },
+    unsorted: { $sub: [{ $ref: '$.result.joined' }, { $ref: '$.result.sorted' }] },
   },
 };
 

@@ -8,7 +8,7 @@ import { crestLayout } from './crest.layout';
 export const crestAction: ActionDefinition = {
   id: 'house.crest',
   title: 'Your house',
-  data: { me: { name: '', house_id: '', house_name: '' } },
+  data: { me: { name: '', house_id: '', house_name: '', house_character: '', house_mark: '', house_sigil: '' } },
   layout: crestLayout,
   endpoints: {
     load: { url: '/api/vex', method: 'POST', request: { fingerprint: memberMe.fingerprint, context: {} }, target: 'me' },

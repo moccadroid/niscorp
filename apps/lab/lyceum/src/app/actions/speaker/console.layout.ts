@@ -1,32 +1,35 @@
 import type { LayoutNode } from '@niscorp/nova';
 
+// The speaker's controller, at thumb size: every control is a whole cell, and
+// the one block of ink is the action that moves the talk on.
 export const consoleLayout: LayoutNode = {
-  component: 'Stack',
-  props: { gap: 12, p: 24 },
+  component: 'Sheet',
+  props: { size: 'fill', areas: ['head head', 'slide slide', 'room room', 'back next', 'sort unsort'], rows: ['auto', 1, 'auto', 'auto', 'auto'] },
   children: [
-    { component: 'Text', props: { as: 'h2' }, children: 'Controller' },
-    { component: 'Text', children: 'Slide {{$.current.number}} / {{$.count.slides}} — {{$.current.title}}' },
+    { component: 'Cell', props: { area: 'head' }, children: [{ component: 'Label', children: 'Controller' }] },
     {
-      component: 'Row',
-      props: { gap: 8 },
+      component: 'Cell',
+      props: { area: 'slide', align: 'between' },
       children: [
-        { component: 'Button', ref: 'back', children: 'Back' },
-        { component: 'Button', ref: 'next', children: 'Next' },
+        { component: 'Label', children: 'Slide {{$.current.number}} / {{$.count.slides}} — {{$.current.title}}' },
+        { component: 'Headline', props: { level: 'title' }, children: '{{$.current.title}}' },
       ],
     },
-    { component: 'Text', children: '{{$.counts.joined}} joined · {{$.counts.sorted}} sorted' },
     {
-      if: '$.sorting',
-      then: { component: 'Text', children: 'Sorting…' },
-      else: {
-        component: 'Row',
-        props: { gap: 8 },
-        children: [
-          { component: 'Button', ref: 'sort', children: 'Sort the room' },
-          { component: 'Button', ref: 'unsort', children: 'Unsort the room (testing)' },
-        ],
-      },
+      component: 'Cell',
+      props: { area: 'room' },
+      children: [
+        { component: 'Label', children: '{{$.counts.joined}} joined · {{$.counts.sorted}} sorted' },
+        { if: '$.error', then: { component: 'Text', props: { tone: 'muted' }, children: '{{$.error}}' } },
+      ],
     },
-    { if: '$.error', then: { component: 'Text', children: '{{$.error}}' } },
+    { component: 'Action', ref: 'back', props: { area: 'back', ink: 'ink', label: '← Back' } },
+    { component: 'Action', ref: 'next', props: { area: 'next', ink: 'alert', label: 'Next →' } },
+    {
+      component: 'Action',
+      ref: 'sort',
+      props: { area: 'sort', ink: 'signal', label: { $if: '$.sorting', $then: 'Sorting…', $else: 'Sort the room' } },
+    },
+    { component: 'Action', ref: 'unsort', props: { area: 'unsort', label: 'Unsort (testing)' } },
   ],
 };

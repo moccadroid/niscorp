@@ -18,13 +18,13 @@
 // role — sorting a person into a house IS giving them that role — and
 // `sorting-check` asserts the two lists agree.
 
-type House = { houseId: string; name: string; character: string; colour: string };
+type House = { houseId: string; name: string; character: string; mark: string; sigil: string };
 
 export const HOUSES: readonly House[] = [
-  { houseId: 'ravens', name: 'Ravens', character: 'The curious: they ask the question behind the question and follow it wherever it goes.', colour: '#3b4a8c' },
-  { houseId: 'owls', name: 'Owls', character: 'The careful: they read the whole thing first and trust what they can check.', colour: '#8c6d3b' },
-  { houseId: 'foxes', name: 'Foxes', character: 'The quick: they try it before they are told how, and learn from what breaks.', colour: '#a4462c' },
-  { houseId: 'stags', name: 'Stags', character: 'The steadfast: they build the thing that is still standing next year.', colour: '#2f6b4f' },
+  { houseId: 'ravens', name: 'Ravens', character: 'The curious: they ask the question behind the question and follow it wherever it goes.', mark: 'stripes', sigil: 'triangle' },
+  { houseId: 'owls', name: 'Owls', character: 'The careful: they read the whole thing first and trust what they can check.', mark: 'dots', sigil: 'circle' },
+  { houseId: 'foxes', name: 'Foxes', character: 'The quick: they try it before they are told how, and learn from what breaks.', mark: 'bars', sigil: 'cross' },
+  { houseId: 'stags', name: 'Stags', character: 'The steadfast: they build the thing that is still standing next year.', mark: 'checks', sigil: 'square' },
 ];
 
 // The two principals that are not people, and the role each wears. Their
@@ -32,6 +32,9 @@ export const HOUSES: readonly House[] = [
 export const STAFF: readonly { principal: string; role: string }[] = [
   { principal: 'speaker', role: 'speaker' },
   { principal: 'stage', role: 'stage' },
+  // The kit's kitchen sink — every piece of the look on one screen, to lock
+  // it before a feature leans on it (order of work, step 4).
+  { principal: 'kit', role: 'kit' },
 ];
 
 // The deck, in order. Each id is an action the stage holds — `deck-check`
@@ -57,8 +60,8 @@ export const buildSeedSql = (): string =>
     // members, and a house_id is a charter role.
     ...HOUSES.map(
       (house, position) =>
-        `INSERT INTO houses (house_id, name, character, colour, position) VALUES (${quote(house.houseId)}, ${quote(house.name)}, ${quote(house.character)}, ${quote(house.colour)}, ${position})
-         ON CONFLICT (house_id) DO UPDATE SET name = EXCLUDED.name, character = EXCLUDED.character, colour = EXCLUDED.colour, position = EXCLUDED.position;`,
+        `INSERT INTO houses (house_id, name, character, mark, sigil, position) VALUES (${quote(house.houseId)}, ${quote(house.name)}, ${quote(house.character)}, ${quote(house.mark)}, ${quote(house.sigil)}, ${position})
+         ON CONFLICT (house_id) DO UPDATE SET name = EXCLUDED.name, character = EXCLUDED.character, mark = EXCLUDED.mark, sigil = EXCLUDED.sigil, position = EXCLUDED.position;`,
     ),
     ...STAFF.map((staff) => `INSERT INTO grants (principal, role) VALUES (${quote(staff.principal)}, ${quote(staff.role)}) ON CONFLICT DO NOTHING;`),
 

@@ -1,13 +1,12 @@
 import { browserEnv, createWire } from '@niscorp/moss/client';
 import { mountTerminal } from '@niscorp/moss/terminal';
-import { domTarget } from '@niscorp/moss/terminal/dom';
+import { lyceumTarget } from '@lyceum/ui/target';
 
 // The whole browser. A socket and a renderer — no knowledge of houses, talks
 // or anybody's role. Everything a phone, the projector or the speaker's
 // controller shows is decided on the server and arrives as trees.
 //
-// nova's default DOM kit until the kit step (PLAN.md, order of work 4) locks
-// lyceum's own look.
+// The look is lyceum's own kit (src/ui/) — the only renderer code in the app.
 const root = document.getElementById('root');
 if (root === null) throw new Error('No root element');
 
@@ -19,7 +18,7 @@ if (root === null) throw new Error('No root element');
 const seat = new URLSearchParams(window.location.search).get('seat');
 
 mountTerminal({
-  targets: { dom: domTarget({ root }) },
+  targets: { dom: lyceumTarget({ root }) },
   // The shell is server state keyed by principal; a wedged one is not
   // something a reload can fix. This asks for a fresh one.
   resetKey: 'ctrl+shift+u',
