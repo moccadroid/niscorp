@@ -49,6 +49,17 @@ export type RemoveInstanceEffect = { removeInstance: { canvas?: string; instance
 // says "close me" without knowing its own id. The runtime desugars it to
 // `removeInstance` with the instance's real id before it escapes.
 export type RemoveSelfEffect = { removeSelf: true };
+
+// Make a canvas EQUAL a list read from the action's data — the declarative
+// verb (shell/reconcile.ts) as a step. Every other navigation step moves ONE
+// action; a surface whose actions come from rows (a slide's tools, a set of
+// cards) has as many as the rows say, and a fixed list of steps cannot.
+// Missing actions are pushed, ones no longer listed are removed, ones already
+// there stay mounted. A row naming an action this shell does not have (not
+// granted) is skipped, as an ungranted `initial` candidate is.
+export type ReconcileEffect = {
+  reconcile: { to: string; action: string; input?: string; canvas?: string; own?: 'pushed' | 'canvas'; with?: string[] };
+};
 export type ReloadEffect = { reload: true };
 
 export type Effect =
@@ -61,6 +72,7 @@ export type Effect =
   | ResetToEffect
   | RemoveInstanceEffect
   | RemoveSelfEffect
+  | ReconcileEffect
   | ReloadEffect;
 
 export const StepSchema: z.ZodType<Step> = z.lazy(() =>
@@ -199,6 +211,26 @@ const RemoveSelfEffectSchema = z
   .strict()
   .describe('Close the firing instance — the list-card X (escapes via onNavigate callback).');
 
+const ReconcileEffectSchema = z
+  .object({
+    reconcile: z
+      .object({
+        to: z.string().describe('Binding to the desired list, e.g. "$.tools" — an array of rows; anything else is an empty list.'),
+        action: z.string().describe('The row field naming the action to place, e.g. "tool_id". Rows without it are skipped.'),
+        input: z.string().optional().describe('The row field holding that action\'s input (an object), if any.'),
+        canvas: z.string().optional().describe('Canvas id to reconcile; defaults to the current canvas.'),
+        own: z
+          .enum(['pushed', 'canvas'])
+          .optional()
+          .describe('What this step may remove: "pushed" (default) only what this action placed there; "canvas" everything on it — for an action that owns the canvas outright.'),
+        with: z.array(z.string()).optional().describe('Fragment ids to compose each placed action with. See ActionFragment.'),
+      })
+      .strict()
+      .describe('Reconcile parameters.'),
+  })
+  .strict()
+  .describe('Make a canvas hold exactly the actions a list names: push the missing, remove the unlisted, keep the rest mounted (escapes via onNavigate callback).');
+
 // Re-run the firing instance's `mount` hook — the action re-reads whatever it
 // reads, in place, keeping its identity and its data.
 //
@@ -216,6 +248,6 @@ const ReloadEffectSchema = z
 
 export const EffectSchema: z.ZodType<Effect> = z.lazy(() =>
   z
-    .union([CallEffectSchema, EmitEffectSchema, PushEffectSchema, PopEffectSchema, ReplaceEffectSchema, PopToEffectSchema, ResetToEffectSchema, RemoveInstanceEffectSchema, RemoveSelfEffectSchema, ReloadEffectSchema])
+    .union([CallEffectSchema, EmitEffectSchema, PushEffectSchema, PopEffectSchema, ReplaceEffectSchema, PopToEffectSchema, ResetToEffectSchema, RemoveInstanceEffectSchema, RemoveSelfEffectSchema, ReconcileEffectSchema, ReloadEffectSchema])
     .describe('An effect that touches the outside world.'),
 );

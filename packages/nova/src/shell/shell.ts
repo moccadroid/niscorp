@@ -20,6 +20,7 @@ import { rememberShellRegistry } from './shell-internals';
 import { createCanvas, type Canvas } from './canvas';
 import { DEFAULT_ACTION_LAYOUT, DEFAULT_SHELL_LAYOUT } from './default-layouts';
 import { flattenRenderTree } from './flatten-render-tree';
+import { reconcileCanvas } from './reconcile';
 import { createJournal, DEFAULT_HISTORY_DEPTH } from './journal';
 import type { HistoryEntry, HistoryFrame } from './journal';
 import { createLifecycleOps } from './lifecycle-ops';
@@ -330,6 +331,25 @@ export const createShell = (config: ShellConfig): Shell => {
     },
     popTo: (cid, iid) => popTo(cid, iid),
     removeInstance: (cid, iid) => removeInstance(cid, iid),
+    // ONE movement, like resetTo: the position before it is what back returns
+    // to — recorded only when something actually moved, so a reconcile that
+    // found the canvas already right leaves no empty step in history. Rows
+    // naming an action this shell does not have are skipped: ungranted is
+    // absent, as an ungranted `initial` candidate is.
+    reconcile: (cid, desired, options) => {
+      const before = positionOf(cid);
+      const known = desired
+        .filter((entry) => actions[entry.actionId] !== undefined)
+        .map((entry) => (options.with === undefined ? entry : { ...entry, with: options.with }));
+      const result = journal.mute(() =>
+        reconcileCanvas(shell, cid, known, {
+          origin: options.origin,
+          ...(options.own === undefined ? {} : { own: options.own }),
+          definitionOf: (actionId) => actions[actionId],
+        }),
+      );
+      if (result.changed) journal.record(cid, before);
+    },
   });
 
   const buildRuntime = createRuntimeFactory({

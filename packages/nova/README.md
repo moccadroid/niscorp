@@ -163,8 +163,25 @@ A stateful unit. An `ActionDefinition` carries:
 
 A `Step` is either a **mutation** (one of `set`, `toggle`, `increment`,
 `decrement`, `push`, `pop`, `removeAt`, `move`, `clear`, `reset`) or an
-**effect** (`call`, `emit`, navigation `push`/`pop`/`replace`/`popTo`/`resetTo`).
+**effect** (`call`, `emit`, navigation `push`/`pop`/`replace`/`popTo`/`resetTo`/
+`removeInstance`/`removeSelf`/`reconcile`, `reload`).
 Mutations are op-per-file under `action/mutations/ops/`.
+
+Every navigation step moves ONE action. `reconcile` is the one that moves as
+many as data says: it makes a canvas hold exactly the actions a list in the
+action's data names — missing ones pushed, unlisted ones removed, the rest kept
+mounted (`shell/reconcile.ts`, as a step). A row naming an action the shell
+does not have is skipped, as an ungranted `initial` candidate is.
+
+```ts
+{ reconcile: { canvas: 'tools', to: '$.tools', action: 'tool_id', own: 'canvas' } }
+```
+
+`action` names the row field holding the action id; `input` (optional) the field
+holding its input. `own: 'pushed'` (default) removes only what this action placed
+there — stamped with its definition id — while `'canvas'` treats the whole canvas
+as the action's. Added at grammar `nisc.nova` 1: a reader at 0 refuses an action
+that uses it (`TOO_NEW`).
 
 The runtime is a closure factory (`createActionRuntime`) — no classes.
 It owns a reactive data store, an `AbortController`, the trigger

@@ -41,7 +41,14 @@ export const NOVA_SEQUENCE: Sequence = {
       },
     },
   },
-  migrations: [],
+  migrations: [
+    {
+      // A MARKER: an addition, so no stored action needs rewriting — but a
+      // reader at 0 must refuse an action that uses it.
+      description: 'The `reconcile` step: make a canvas hold exactly the actions a list in the action\'s data names',
+      steps: [],
+    },
+  ],
 };
 
 // ── the schemas behind the kinds ────────────────────────────────

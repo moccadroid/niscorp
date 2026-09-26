@@ -74,7 +74,19 @@ export type FetchResponse = {
 // Navigation effects (escape via onNavigate)
 // ═══════════════════════════════════════════════════════════
 
-export type NavigationEffect = PushEffect | PopEffect | ReplaceEffect | PopToEffect | ResetToEffect | RemoveInstanceEffect | RemoveSelfEffect;
+// A `reconcile` step, resolved: its rows read into the actions they name, and
+// stamped with who placed them (the firing action's id, by the runtime).
+export type ReconcileNavigation = {
+  reconcile: {
+    canvas?: string;
+    own?: 'pushed' | 'canvas';
+    with?: string[];
+    origin?: string;
+    desired: { actionId: string; input?: Record<string, unknown> }[];
+  };
+};
+
+export type NavigationEffect = PushEffect | PopEffect | ReplaceEffect | PopToEffect | ResetToEffect | RemoveInstanceEffect | RemoveSelfEffect | ReconcileNavigation;
 export type NavigateHandler = (effect: NavigationEffect) => void;
 
 // ═══════════════════════════════════════════════════════════

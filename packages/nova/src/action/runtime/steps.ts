@@ -7,7 +7,7 @@ import type { MessageBus } from '@shared/message-bus';
 import { setPath } from '@shared/bindings/paths';
 import { applyMutations } from '../mutations';
 import { isMutationStep } from '../grammar';
-import type { EndpointConfig, Mutation, Step } from '../schemas';
+import type { EndpointConfig, Mutation, ReconcileEffect, Step } from '../schemas';
 import { LifecycleError, UnknownFunctionError, type LifecycleHook, type NovaError } from '@shared/errors';
 import type {
   EndpointEventInit,
@@ -269,6 +269,23 @@ const resolveNavInput = (effect: NavigationEffect, ctx: StepContext): Navigation
   return effect;
 };
 
+// Resolve a `reconcile` step: read its list and turn each row into the action it
+// names (and that action's input, when the step names a field for it). A value
+// that is not a list is an empty one — the canvas empties, which is what a
+// slide with no tools means.
+const resolveReconcile = (step: ReconcileEffect, ctx: StepContext): NavigationEffect => {
+  const { to, action, input, ...rest } = step.reconcile;
+  const rows = resolve(to, createScopeChain(ctx.dataStore.get()), ctx.extras);
+  const desired = (Array.isArray(rows) ? rows : []).flatMap((row: unknown) => {
+    if (!isObject(row)) return [];
+    const actionId = row[action];
+    if (typeof actionId !== 'string' || actionId === '') return [];
+    const seeded = input === undefined ? undefined : row[input];
+    return [isObject(seeded) ? { actionId, input: seeded } : { actionId }];
+  });
+  return { reconcile: { ...rest, desired } };
+};
+
 export const executeSteps = async (steps: Step[], ctx: StepContext): Promise<void> => {
   let buffer: Mutation[] = [];
 
@@ -343,6 +360,10 @@ export const executeSteps = async (steps: Step[], ctx: StepContext): Promise<voi
     }
     if ('removeInstance' in step) {
       navigate(resolveNavInput(step, ctx), ctx);
+      continue;
+    }
+    if ('reconcile' in step) {
+      navigate(resolveReconcile(step, ctx), ctx);
       continue;
     }
     if ('removeSelf' in step) {

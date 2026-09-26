@@ -107,15 +107,19 @@ export const createActionRuntime = (config: ActionRuntimeConfig): ActionRuntime 
     }
   };
 
-  // The runtime is the only place that knows THIS instance's id, so it desugars
+  // The runtime is the only place that knows THIS instance, so it desugars
   // `{ removeSelf: true }` — a card's "close me" — into a `removeInstance`
-  // carrying the real id before the effect escapes upward. Every other effect
-  // passes through untouched.
+  // carrying the real id, and stamps a `reconcile` with who is placing things:
+  // the firing action's definition id, which outlives any one instance of it
+  // (a remounted deck still owns what it placed). Every other effect passes
+  // through untouched.
+  const stamp = (effect: NavigationEffect): NavigationEffect => {
+    if ('removeSelf' in effect) return { removeInstance: { instance: instance.id } };
+    if ('reconcile' in effect) return { reconcile: { origin: instance.definitionId, ...effect.reconcile } };
+    return effect;
+  };
   const onNavigate =
-    config.onNavigate === undefined
-      ? undefined
-      : (effect: NavigationEffect): void =>
-          config.onNavigate!('removeSelf' in effect ? { removeInstance: { instance: instance.id } } : effect);
+    config.onNavigate === undefined ? undefined : (effect: NavigationEffect): void => config.onNavigate!(stamp(effect));
 
   const buildContext = (signal: AbortSignal = abortController.signal): StepContext => ({
     dataStore,

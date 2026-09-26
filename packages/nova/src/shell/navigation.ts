@@ -41,6 +41,12 @@ export type ShellNavOps = {
   resetTo: (canvasId: string, actionId: string, input?: Record<string, unknown>, fragments?: string[]) => void;
   popTo: (canvasId: string, instanceId: string) => void;
   removeInstance: (canvasId: string, instanceId: string) => void;
+  // Make a canvas hold exactly `desired` (shell/reconcile.ts), as one movement.
+  reconcile: (
+    canvasId: string,
+    desired: readonly { actionId: string; input?: Record<string, unknown> }[],
+    options: { origin: string; own?: 'pushed' | 'canvas'; with?: string[] },
+  ) => void;
 };
 
 export type NavigationHandler = (currentCanvasId: string, effect: NavigationEffect) => void;
@@ -72,6 +78,15 @@ export const createNavigationHandler = (ops: ShellNavOps): NavigationHandler => 
     }
     if ('removeInstance' in effect) {
       ops.removeInstance(effect.removeInstance.canvas ?? currentCanvasId, effect.removeInstance.instance);
+      return;
+    }
+    if ('reconcile' in effect) {
+      const { canvas, desired, origin, own, with: fragments } = effect.reconcile;
+      ops.reconcile(canvas ?? currentCanvasId, desired, {
+        origin: origin ?? 'reconcile',
+        ...(own === undefined ? {} : { own }),
+        ...(fragments === undefined ? {} : { with: fragments }),
+      });
     }
   };
 };
