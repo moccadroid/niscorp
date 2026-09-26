@@ -1,4 +1,4 @@
-import { SequenceSchema, type Sequence, type Step } from './schema';
+import { SequenceSchema, type DocumentKind, type Sequence, type Step } from './schema';
 import { checksumOf } from './checksum';
 import { StrataError, type StrataErrorCode } from './errors';
 
@@ -21,12 +21,19 @@ export type PreparedMigration = {
   dependsOn: readonly string[];
 };
 
-export type PreparedSequence = { id: string; migrations: readonly PreparedMigration[] };
+export type PreparedSequence = {
+  id: string;
+  // A grammar sequence owns documents (tracked by stamps); otherwise it owns
+  // tables (tracked by a database's ledger). See SequenceSchema.
+  grammar: boolean;
+  documents: Readonly<Record<string, DocumentKind>>;
+  migrations: readonly PreparedMigration[];
+};
 
 // One row of the ledger, as a runner read it back.
 export type LedgerRow = { sequence: string; n: number; checksum: string; description: string; appliedAt: string };
 
-export type Problem = { code: Exclude<StrataErrorCode, 'PENDING' | 'STEP_FAILED' | 'NO_TRANSACTION'>; detail: string };
+export type Problem = { code: Exclude<StrataErrorCode, 'PENDING' | 'STEP_FAILED' | 'NO_TRANSACTION' | 'UNKNOWN_KIND' | 'WRONG_OWNER'>; detail: string };
 
 export type Plan = {
   // Already run, per sequence this code knows: how far each one is.
@@ -67,9 +74,38 @@ export const prepare = async (sequences: readonly Sequence[]): Promise<readonly 
         dependsOn: migration.dependsOn ?? [],
       });
     }
-    prepared.push({ id: sequence.id, migrations });
+    const grammar = sequence.documents !== undefined || sequence.migrations.some((m) => m.steps.some((s) => s.kind === 'document'));
+    prepared.push({ id: sequence.id, grammar, documents: sequence.documents ?? {}, migrations });
   }
   return prepared;
+};
+
+// Order: walk the sequences in the order given, and let each run as far as its
+// dependencies allow before moving on; repeat until nothing moves. The same
+// input always yields the same order, and a sequence's own migrations stay
+// together unless a dependency splits them. Shared by the ledger's plan and a
+// document's upgrade, so both order the same migrations the same way.
+export const orderPending = (
+  queues: readonly { waiting: readonly PreparedMigration[] }[],
+  alreadyDone: ReadonlySet<string>,
+): { pending: PreparedMigration[]; stuck: PreparedMigration[] } => {
+  const done = new Set(alreadyDone);
+  const waiting = queues.map((q) => [...q.waiting]);
+  const pending: PreparedMigration[] = [];
+  let moved = true;
+  while (moved) {
+    moved = false;
+    for (const queue of waiting) {
+      for (let head = queue[0]; head !== undefined; head = queue[0]) {
+        if (!head.dependsOn.every((d) => done.has(d))) break;
+        pending.push(head);
+        done.add(head.ref);
+        queue.shift();
+        moved = true;
+      }
+    }
+  }
+  return { pending, stuck: waiting.flat() };
 };
 
 export const planMigrations = (sequences: readonly PreparedSequence[], ledger: readonly LedgerRow[]): Plan => {
@@ -126,25 +162,7 @@ export const planMigrations = (sequences: readonly PreparedSequence[], ledger: r
     }
   }
 
-  // Order: walk the sequences in the order given, and let each run as far as
-  // its dependencies allow before moving on; repeat until nothing moves. The
-  // same input always yields the same order, and a sequence's own migrations
-  // stay together unless a dependency splits them.
-  const pending: PreparedMigration[] = [];
-  let moved = true;
-  while (moved) {
-    moved = false;
-    for (const queue of queues) {
-      for (let head = queue.waiting[0]; head !== undefined; head = queue.waiting[0]) {
-        if (!head.dependsOn.every((d) => done.has(d))) break;
-        pending.push(head);
-        done.add(head.ref);
-        queue.waiting.shift();
-        moved = true;
-      }
-    }
-  }
-  const stuck = queues.flatMap((q) => q.waiting);
+  const { pending, stuck } = orderPending(queues, done);
   if (stuck.length > 0 && !problems.some((p) => p.code === 'UNKNOWN_DEPENDENCY')) {
     problems.push({ code: 'CYCLE', detail: `These wait on each other and can never run: ${stuck.map((m) => m.ref).join(', ')}.` });
   }

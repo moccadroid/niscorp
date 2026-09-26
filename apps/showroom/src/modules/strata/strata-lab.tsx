@@ -274,7 +274,7 @@ export const StrataLab: FC<StrataLabProps> = ({ code: initialCode, setup, edits 
                       ) : (
                         migration.steps.map((step, i) => (
                           <pre key={i} style={C.sql}>
-                            {step.sql}
+                            {step.kind === 'sql' ? step.sql : `document step on ${step.at}\n${JSON.stringify(step.transform, null, 2)}`}
                           </pre>
                         ))
                       )}

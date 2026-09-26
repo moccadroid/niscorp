@@ -21,6 +21,18 @@ export const SEQUENCE_ID = /^[a-z][a-z0-9-]*(\.[a-z][a-z0-9-]*)+$/;
 // dependency, an error.
 export const MIGRATION_REF = /^[a-z][a-z0-9-]*(\.[a-z][a-z0-9-]*)+\/[1-9][0-9]*$/;
 
+// A document kind, named by its owner: `<sequence>/<kind>`, e.g.
+// "nisc.nova/layout". The kind part is a plain lowercase word.
+export const KIND_NAME = /^[a-z][a-z0-9-]*$/;
+export const KIND_REF = /^[a-z][a-z0-9-]*(\.[a-z][a-z0-9-]*)+\/[a-z][a-z0-9-]*$/;
+
+// Where, inside a document, another document sits. Dot-separated keys, with
+// two wildcards that say WHICH shape they cross — `children[]` is every item of
+// the array at `children`, `endpoints.*` every value of the record at
+// `endpoints`. Kept apart on purpose: nova's `children` is a single node OR an
+// array, and one wildcard for both would read a lone node's `props` as layouts.
+export const EMBED_PATH = /^([A-Za-z_$][\w$]*|\*)(\[\])?(\.([A-Za-z_$][\w$]*|\*)(\[\])?)*$/;
+
 export const SqlStepSchema = z
   .object({
     kind: z.literal('sql'),
@@ -35,7 +47,34 @@ export const SqlStepSchema = z
   .strict()
   .describe('A statement run against the database, inside the migration transaction.');
 
-export const StepSchema = z.discriminatedUnion('kind', [SqlStepSchema]);
+export const DocumentStepSchema = z
+  .object({
+    kind: z.literal('document'),
+    at: z
+      .string()
+      .regex(KIND_REF)
+      .describe('The kind of document this step rewrites, e.g. "nisc.nova/layout" — wherever one sits, at any depth.'),
+    transform: z
+      .unknown()
+      .describe(
+        'A transform config (Prism) run by the injected evaluator over { document, path }: `document` is ONE document of ' +
+          'the `at` kind, `path` where it sits. It returns that document rewritten. Nested documents are found by the ' +
+          'grammar\'s embeddings and rewritten on their own, deepest first — a transform only ever sees one flat node.',
+      ),
+  })
+  .strict()
+  .describe('A rewrite of stored JSON documents of one kind.');
+
+export const StepSchema = z.discriminatedUnion('kind', [SqlStepSchema, DocumentStepSchema]);
+
+export const DocumentKindSchema = z
+  .object({
+    embeds: z
+      .record(z.string().regex(EMBED_PATH), z.string().regex(KIND_REF))
+      .optional()
+      .describe('Where other documents sit inside this one: path → the kind found there (possibly this kind itself).'),
+  })
+  .strict();
 
 export const MigrationSchema = z
   .object({
@@ -59,13 +98,33 @@ export const MigrationSchema = z
 export const SequenceSchema = z
   .object({
     id: z.string().regex(SEQUENCE_ID).describe('Namespaced and lowercase, e.g. "nisc.vex.cache" or "midas.app".'),
+    documents: z
+      .record(z.string().regex(KIND_NAME), DocumentKindSchema)
+      .optional()
+      .describe('The document kinds this sequence owns (a GRAMMAR sequence), each named "<id>/<kind>" elsewhere.'),
     migrations: z
       .array(MigrationSchema)
       .describe('Append-only. A migration is numbered by its position (from 1); the sequence\'s version is its length.'),
   })
-  .strict();
+  .strict()
+  // TWO KINDS OF OWNER. A table sequence (sql steps) is recorded per DATABASE,
+  // in its ledger. A grammar sequence (document steps) is tracked per DOCUMENT,
+  // by the stamp the document carries — because documents travel: an add-on
+  // built on older code submits older documents to a newer host. One sequence
+  // cannot be both; the two versions would mean different things.
+  .superRefine((sequence, ctx) => {
+    const kinds = new Set(sequence.migrations.flatMap((m) => m.steps.map((s) => s.kind)));
+    if (kinds.has('sql') && (kinds.has('document') || sequence.documents !== undefined)) {
+      ctx.addIssue({
+        code: 'custom',
+        message: 'A sequence either owns tables (sql steps) or documents (document steps and `documents`), not both.',
+      });
+    }
+  });
 
 export type SqlStep = z.infer<typeof SqlStepSchema>;
+export type DocumentStep = z.infer<typeof DocumentStepSchema>;
+export type DocumentKind = z.infer<typeof DocumentKindSchema>;
 export type Step = z.infer<typeof StepSchema>;
 export type Migration = z.infer<typeof MigrationSchema>;
 export type Sequence = z.infer<typeof SequenceSchema>;

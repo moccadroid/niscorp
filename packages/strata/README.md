@@ -84,12 +84,58 @@ Packages used to converge their tables on every boot with
 shape of the tables it lands the current one, keeps the rows, and is recorded
 so it never runs again. From then on changes are plain appended migrations.
 
+## Documents
+
+A **grammar** sequence owns document kinds instead of tables. It declares its
+kinds and where other documents nest inside them (its **embeddings**), and its
+migrations are **document steps** — a transform over one document of one kind.
+
+```ts
+export const NOVA_SEQUENCE = {
+  id: 'nisc.nova',
+  documents: {
+    action: { embeds: { layout: 'nisc.nova/layout', 'endpoints.*.request': 'nisc.prism/config' } },
+    layout: { embeds: { children: 'nisc.nova/layout', 'children[]': 'nisc.nova/layout', then: 'nisc.nova/layout' } },
+  },
+  migrations: [],
+};
+
+// An app's kit: Button's `label` prop is now `text` — one flat node at a time.
+export const kit = {
+  id: 'acme.kit',
+  migrations: [{ description: 'Button: label → text', steps: [{ kind: 'document', at: 'nisc.nova/layout', transform: renameLabelPrismConfig }] }],
+};
+
+const upgrader = await createUpgrader([NOVA_SEQUENCE, PRISM_SEQUENCE, kit], { transform: prismEvaluate });
+const { document, stamp, applied } = upgrader.upgrade(storedAction, { kind: 'nisc.nova/action', stamp: row.grammar });
+```
+
+- **A document carries a stamp** — `{ "nisc.nova": 3, "acme.kit": 1 }`, how far
+  along each grammar its writer was — and is upgraded where it is read. Grammars
+  are never recorded in a ledger: documents travel (an add-on built on older
+  code submits older documents), so their version travels with them. One
+  sequence owns tables or documents, never both.
+- **The walker does the recursion.** Embedding paths use `key`, `*` (every
+  value of a record) and `[]` (every item of an array) — kept apart because
+  nova's `children` is a lone node or an array. Every document of a step's kind
+  is found at any depth and rewritten on its own, deepest first; a transform
+  only ever sees one node.
+- **The transform is injected** — `(config, source) => unknown`, nova's socket.
+  Under moss it is Prism's `evaluate`; a migration runs exactly like an endpoint.
+  The source is `{ document, path }`.
+- **No stamp** (`{}`, `null`) reads as the start of every grammar. **Ahead of
+  the code** on any grammar is refused, `TOO_NEW`: the reader upgrades first.
+
+| | |
+|---|---|
+| `createUpgrader(grammars, { transform })` | `{ stamp, upgrade, locate, behind }` — the stamp a document written now carries; upgrade one; every document inside one, by kind; is a stamp behind (throws if ahead). |
+| `upgradeStore(pool, store, upgrader)` | `@niscorp/strata/postgres`. Rewrites every row of a table holding documents that is behind, in one transaction; a row from newer code refuses the pass. |
+
 ## Not yet
 
-Document steps — migrating the JSON stored in rows and written in source files,
-with migrations authored as Prism configs — and the check that gates a grammar
-change on a migration. See [DESIGN.md](./DESIGN.md) and
-[the plan](../../docs/plans/versioning.md).
+The check that gates a grammar change on a migration (schema snapshots and a
+corpus of old documents), and `upgrade --verify` for artifacts in source files.
+See [DESIGN.md](./DESIGN.md) and [the plan](../../docs/plans/versioning.md).
 
 ## License
 

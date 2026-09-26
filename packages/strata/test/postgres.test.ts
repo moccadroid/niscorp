@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { PGlite } from '@electric-sql/pglite';
-import type { Sequence } from '../src';
-import { migrate, readLedger, status, type StrataPool } from '../src/postgres';
+import { createUpgrader, type Sequence } from '../src';
+import { migrate, readLedger, status, upgradeStore, type StrataPool } from '../src/postgres';
 
 // A PGlite database in the pool shape — query plus a pinned transaction.
 const freshPool = (): StrataPool & { db: PGlite } => {
@@ -155,5 +155,57 @@ describe('adoption — a database created the old way', () => {
     const pool = freshPool();
     await migrate(pool, [baseline]);
     expect(await columnsOf(pool, 'vex_cache')).toEqual(['key', 'request_hash', 'refresh']);
+  });
+});
+
+describe('upgradeStore — rows that hold documents', () => {
+  const grammar = (migrations: Sequence['migrations']): Sequence => ({ id: 'acme.forms', documents: { form: {} }, migrations });
+  const renameTitle = {
+    description: 'title → heading',
+    steps: [
+      {
+        kind: 'document' as const,
+        at: 'acme.forms/form',
+        transform: ({ document }: { document: Record<string, unknown> }) => {
+          const { title, ...rest } = document;
+          return title === undefined ? document : { ...rest, heading: title };
+        },
+      },
+    ],
+  };
+  const transform = (config: unknown, source: unknown): unknown => (typeof config === 'function' ? config(source) : source);
+  const store = { table: 'forms', column: 'definition', stamp: 'grammar', kind: 'acme.forms/form', key: ['id'] };
+
+  const withForms = async () => {
+    const pool = freshPool();
+    await pool.query(`CREATE TABLE forms (id text PRIMARY KEY, definition jsonb NOT NULL, grammar jsonb NOT NULL DEFAULT '{}'::jsonb)`);
+    await pool.query(`INSERT INTO forms (id, definition) VALUES ('a', '{"title":"Sign up"}'), ('b', '{"title":"Contact"}')`);
+    await pool.query(`INSERT INTO forms (id, definition, grammar) VALUES ('c', '{"heading":"Already"}', '{"acme.forms":1}')`);
+    return pool;
+  };
+
+  it('rewrites the rows that are behind, stamps them current, leaves the current ones alone', async () => {
+    const pool = await withForms();
+    const upgrader = await createUpgrader([grammar([renameTitle])], { transform });
+    const report = await upgradeStore(pool, store, upgrader);
+    expect(report).toEqual({ total: 3, upgraded: 2, applied: { 'acme.forms/1': 2 } });
+    const { rows } = await pool.query('SELECT id, definition, grammar FROM forms ORDER BY id');
+    expect(rows).toEqual([
+      { id: 'a', definition: { heading: 'Sign up' }, grammar: { 'acme.forms': 1 } },
+      { id: 'b', definition: { heading: 'Contact' }, grammar: { 'acme.forms': 1 } },
+      { id: 'c', definition: { heading: 'Already' }, grammar: { 'acme.forms': 1 } },
+    ]);
+    expect(await upgradeStore(pool, store, upgrader)).toEqual({ total: 3, upgraded: 0, applied: {} });
+  });
+
+  it('a row written by newer code refuses the whole pass — nothing is rewritten', async () => {
+    const pool = await withForms();
+    await pool.query(`INSERT INTO forms (id, definition, grammar) VALUES ('z', '{"heading":"From the future"}', '{"acme.forms":7}')`);
+    const upgrader = await createUpgrader([grammar([renameTitle])], { transform });
+    const error = await upgradeStore(pool, store, upgrader).catch((e: unknown) => e);
+    expect(error).toMatchObject({ code: 'TOO_NEW' });
+    expect(String(error)).toContain('forms (id="z")');
+    const { rows } = await pool.query(`SELECT definition FROM forms WHERE id = 'a'`);
+    expect(rows[0]?.['definition']).toEqual({ title: 'Sign up' });
   });
 });

@@ -1,5 +1,6 @@
-import { prepare, planMigrations, refuseProblems, type LedgerRow, type Plan, type PreparedMigration } from '../plan';
+import { prepare, planMigrations, refuseProblems, type LedgerRow, type Plan, type PreparedMigration, type PreparedSequence } from '../plan';
 import type { Sequence } from '../schema';
+import type { UpgradeResult, Upgrader } from '../documents';
 import { StrataError } from '../errors';
 
 // ═══════════════════════════════════════════════════════════════
@@ -96,8 +97,20 @@ export const readLedger = async (pool: StrataPool, options: LedgerOptions = {}):
 export const status = async (pool: StrataPool, sequences: readonly Sequence[], options: LedgerOptions = {}): Promise<Plan> =>
   planMigrations(await prepare(sequences), await readLedger(pool, options));
 
+const refuseGrammars = (prepared: readonly PreparedSequence[]): void => {
+  const grammars = prepared.filter((s) => s.grammar);
+  if (grammars.length > 0) {
+    throw new StrataError(
+      'WRONG_OWNER',
+      'These sequences own documents, not tables: a document carries its own stamp and is upgraded where it is read (`createUpgrader`, `upgradeStore`) — never recorded in a database\'s ledger.',
+      grammars.map((s) => s.id),
+    );
+  }
+};
+
 export const migrate = async (pool: StrataPool, sequences: readonly Sequence[], options: MigrateOptions = {}): Promise<MigrateReport> => {
   const prepared = await prepare(sequences);
+  refuseGrammars(prepared);
   const { transaction } = pool;
   if (transaction === undefined) {
     throw new StrataError(
@@ -128,6 +141,8 @@ export const migrate = async (pool: StrataPool, sequences: readonly Sequence[], 
     const applied: PreparedMigration[] = [];
     for (const migration of plan.pending) {
       for (const [index, step] of migration.steps.entries()) {
+        // Only table sequences reach the ledger (refuseGrammars above).
+        if (step.kind !== 'sql') continue;
         try {
           await tx.query(step.sql);
         } catch (cause) {
@@ -148,5 +163,82 @@ export const migrate = async (pool: StrataPool, sequences: readonly Sequence[], 
       applied.push(migration);
     }
     return { applied, plan };
+  });
+};
+
+// ═══════════════════════════════════════════════════════════════
+// Stores — tables whose rows hold documents.
+//
+// A store names where the documents live: the table, the jsonb column holding
+// each document, the jsonb column holding its stamp, the kind every document
+// in it is, and the key that identifies a row. The table itself (and its stamp
+// column) is its owner's, created by the owner's TABLE sequence; strata only
+// reads and rewrites rows.
+//
+// `upgradeStore` brings every row that is behind up to the code, in one
+// transaction, and writes each back with a current stamp. A row written by
+// newer code refuses the whole run (TOO_NEW) — the same answer the ledger
+// gives, one row at a time. Read paths that cannot wait for a boot upgrade the
+// row they read with the same upgrader; this is the pass that makes that rare.
+// ═══════════════════════════════════════════════════════════════
+
+export type DocumentStore = {
+  table: string;
+  schema?: string;
+  // The jsonb column holding the document.
+  column: string;
+  // The jsonb column holding the document's stamp (`{}` means "before stamps").
+  stamp: string;
+  // Every document in this store is of this kind, e.g. "nisc.nova/action".
+  kind: string;
+  // The columns that identify a row.
+  key: readonly string[];
+};
+
+export type StoreReport = {
+  // Rows read, and rows that were behind and rewritten.
+  total: number;
+  upgraded: number;
+  // Per migration ref, how many rows it rewrote.
+  applied: Readonly<Record<string, number>>;
+};
+
+export const upgradeStore = async (pool: StrataPool, store: DocumentStore, upgrader: Upgrader): Promise<StoreReport> => {
+  const { transaction } = pool;
+  if (transaction === undefined) {
+    throw new StrataError('NO_TRANSACTION', 'Rewriting a store must land whole or not at all; this pool cannot run a transaction.');
+  }
+  const table = store.schema === undefined ? quote(store.table, 'table') : `${quote(store.schema, 'schema')}.${quote(store.table, 'table')}`;
+  const column = quote(store.column, 'column');
+  const stamp = quote(store.stamp, 'column');
+  const keys = store.key.map((k) => quote(k, 'column'));
+  if (keys.length === 0) throw new StrataError('INVALID_SEQUENCE', `The store ${store.table} names no key columns.`);
+
+  return transaction(async (tx) => {
+    const { rows } = await tx.query(`SELECT ${[...keys, column, stamp].join(', ')} FROM ${table} FOR UPDATE`);
+    const applied: Record<string, number> = {};
+    let upgraded = 0;
+    for (const row of rows) {
+      const given = row[store.stamp];
+      const rowStamp = typeof given === 'object' && given !== null && !Array.isArray(given) ? Object.fromEntries(Object.entries(given).map(([k, v]) => [k, Number(v)])) : {};
+      const where = store.key.map((k) => `${k}=${JSON.stringify(row[k])}`).join(', ');
+      let result: UpgradeResult;
+      try {
+        if (!upgrader.behind(rowStamp)) continue;
+        result = upgrader.upgrade(row[store.column], { kind: store.kind, stamp: rowStamp });
+      } catch (cause) {
+        if (cause instanceof StrataError) {
+          throw new StrataError(cause.code, `${store.table} (${where}): ${cause.message.split('\n')[0] ?? ''}`, cause.details, { cause });
+        }
+        throw cause;
+      }
+      await tx.query(
+        `UPDATE ${table} SET ${column} = $1::jsonb, ${stamp} = $2::jsonb WHERE ${keys.map((k, i) => `${k} = $${i + 3}`).join(' AND ')}`,
+        [JSON.stringify(result.document), JSON.stringify(result.stamp), ...store.key.map((k) => row[k])],
+      );
+      upgraded += 1;
+      for (const ref of result.applied) applied[ref] = (applied[ref] ?? 0) + 1;
+    }
+    return { total: rows.length, upgraded, applied };
   });
 };

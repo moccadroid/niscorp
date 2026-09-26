@@ -78,8 +78,52 @@ it replaced were. Two consequences, named rather than discovered later:
   `migrate` keep their names and now go through the ledger, so a host that is
   not moss's server gets the same guarantees.
 
+## Documents (S2)
+
+**Two kinds of owner.** Tables live in one database, so their version is the
+database's — a ledger. Documents travel: an add-on built on older code submits
+older documents, a row written by one replica is read by another, an artifact
+sits in a repo for a year. Their version has to travel with them — a stamp per
+document. A sequence owns one or the other; the same number cannot mean both.
+
+**Version vector, not one number.** tldraw's answer to nested, pluggable
+formats: the stamp names every grammar the writer spoke (`nisc.nova`,
+`nisc.prism`, the app's `acme.kit`), so a kit's props and nova's layout evolve on
+their own schedules and nothing composes by hand.
+
+**The grammar owns the nesting; the migration owns one node.** Embedding paths
+are the grammar's declaration of where documents sit inside documents. The
+walker applies each step to every document of its kind, deepest first, re-reading
+each node from the current document so a parent sees — and keeps — its children
+already rewritten (the first implementation captured targets up front and wrote
+stale parents over rewritten children; a test caught it). The consequence is
+the useful one: a migration is flat. The relay rename that needed 22.5 KB of
+unrolled Prism as a whole-tree transform is a dozen lines as a per-node one, and
+Prism needs no recursion of its own for anything a grammar's embeddings describe.
+
+**Two wildcards.** `*` crosses a record's values, `[]` an array's items. nova's
+`children` is a single node or an array; one wildcard for both would treat a
+lone child's `props` as a record of layouts.
+
+**Injected transform.** strata knows nothing of Prism: a document step's
+`transform` is opaque data run by the evaluator the host injects — nova's own
+socket shape, `(config, source) => unknown`. moss injects Prism, so a
+migration runs through the engine that runs endpoints, with the same guarantee
+that no code executes. That is what makes a third party's migration safe to run.
+
+**Refuse ahead, upgrade behind.** Strict grammars make every addition break
+older readers, so a document ahead of the code on any grammar is `TOO_NEW` — at
+boot a refusal to start, at intake "the host must be updated first", on a read
+path the one action left out with a sentence. The reader upgrades first.
+
+**Not every table of documents is a store.** `vex_cache` holds DSL and compiled
+Prism IR, but its protected rows are re-seeded from source on every boot and its
+generated rows are a cache invalidated by schema fingerprint and `irVersion`. It
+is not stamped: there is nothing there to preserve across a grammar change.
+`integration_actions` is — its rows are the only copy of what an add-on submitted.
+
 ## Next
 
-Document steps with an injected Prism evaluator, embeddings (where one grammar
-nests inside another), stamps on stored rows, the snapshot + corpus check, and
-`upgrade --verify` for source artifacts — stages S2–S5 of the plan.
+The snapshot + corpus check that makes a grammar change without a migration fail
+CI, `upgrade --verify` for artifacts in source files, and Prism's `$walk` for the
+migrations that must reach inside a Prism config — stages S3–S5 of the plan.

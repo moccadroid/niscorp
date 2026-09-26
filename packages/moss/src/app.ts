@@ -1,3 +1,4 @@
+import type { Sequence } from '@niscorp/strata';
 import type { ScopeBehaviors, ScopePolicy, SeedEntry, SeedMutation } from '@niscorp/vex';
 import type { Charter } from '@niscorp/charter';
 import type { ActionDefinition, ActionFragment, CanvasConfig, FetchFn, FunctionHandler, LayoutNode, Shell } from '@niscorp/nova';
@@ -247,6 +248,12 @@ export type NiscApp = {
   // derivation hook — per-principal boot input (nav flags, user chips),
   // merged over each canvas's static seed. Absent = no server shells.
   shell?: ShellManifest;
+  // The app's own GRAMMAR sequences (strata): migrations for documents only this
+  // app defines the shape of — its component kit's props, say, rewritten on
+  // every nova layout node that uses them. Pure data like every artifact here: a
+  // document migration is a Prism config. moss runs them with nova's and
+  // Prism's over every stored document and every submitted bundle.
+  grammars?: readonly Sequence[];
   // The `fn:` escape hatch, server-side: app code running IN-PROCESS next
   // to the session's durable shell (Ray lives here). Built once per
   // session — handlers close over the session context, so keys and code

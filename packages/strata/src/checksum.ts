@@ -40,7 +40,7 @@ const effectOf = (sql: string): string =>
     .trim();
 
 export const checksumOf = async (migration: Migration): Promise<string> => {
-  const steps = migration.steps.map((step) => ({ ...step, sql: effectOf(step.sql) }));
+  const steps = migration.steps.map((step) => (step.kind === 'sql' ? { ...step, sql: effectOf(step.sql) } : step));
   const bytes = new TextEncoder().encode(canonical(steps));
   const digest = await crypto.subtle.digest('SHA-256', bytes);
   return Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, '0')).join('');

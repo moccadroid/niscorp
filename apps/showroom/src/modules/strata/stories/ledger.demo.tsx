@@ -43,7 +43,7 @@ const edits: readonly CodeEdit[] = [
       onFirst(code, (s) => ({
         ...s,
         migrations: s.migrations.map((m, i) =>
-          i === 0 ? { ...m, steps: m.steps.map((step) => ({ ...step, sql: `-- Everyone the studio knows.\n${step.sql}` })) } : m,
+          i === 0 ? { ...m, steps: m.steps.map((step) => (step.kind === 'sql' ? { ...step, sql: `-- Everyone the studio knows.\n${step.sql}` } : step)) } : m,
         ),
       })),
   },

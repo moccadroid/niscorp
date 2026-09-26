@@ -15,8 +15,8 @@ const docs: readonly DocPage[] = [
   { id: 'plan', title: 'The plan', content: planContent },
 ];
 
-const KIND_ORDER: readonly string[] = ['tables'];
-const KIND_LABELS: Record<string, string> = { tables: 'TABLES' };
+const KIND_ORDER: readonly string[] = ['tables', 'documents'];
+const KIND_LABELS: Record<string, string> = { tables: 'TABLES', documents: 'DOCUMENTS' };
 
 export const strataModule: LibraryModule = {
   id: 'strata',

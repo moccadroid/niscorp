@@ -1,7 +1,7 @@
 {
   "name": "@niscorp/nova",
   "version": "0.1.0",
-  "description": "Declarative UI framework for AI agents — JSON layouts, shell orchestration, React",
+  "description": "Declarative UI framework for AI agents \u2014 JSON layouts, shell orchestration, React",
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
@@ -126,6 +126,16 @@
         "types": "./dist/devtools/index.d.cts",
         "default": "./dist/devtools/index.cjs"
       }
+    },
+    "./migrations": {
+      "import": {
+        "types": "./dist/migrations/index.d.ts",
+        "default": "./dist/migrations/index.js"
+      },
+      "require": {
+        "types": "./dist/migrations/index.d.cts",
+        "default": "./dist/migrations/index.cjs"
+      }
     }
   },
   "files": [
@@ -148,6 +158,7 @@
   "devDependencies": {
     "@niscorp/cortex": "workspace:^",
     "@niscorp/prism": "workspace:^",
+    "@niscorp/strata": "workspace:^",
     "@testing-library/react": "^16.1.0",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.0",
@@ -164,6 +175,7 @@
   "peerDependencies": {
     "@niscorp/cortex": "workspace:^",
     "@niscorp/prism": "workspace:^",
+    "@niscorp/strata": "workspace:^",
     "ink": "^7.1.1",
     "ink-text-input": "^6.0.0",
     "react": "^19.2.4",
@@ -171,6 +183,9 @@
   },
   "peerDependenciesMeta": {
     "@niscorp/cortex": {
+      "optional": true
+    },
+    "@niscorp/strata": {
       "optional": true
     },
     "ink": {

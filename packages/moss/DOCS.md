@@ -142,7 +142,19 @@ refused if the ledger was edited or written by newer code. `migrations` on the
 runtime picks the posture: `'apply'` (default) runs what is pending; `'verify'`
 refuses to boot if anything is, for a deployment that migrates as a deploy step.
 `initIntegrations` and `initSessions` remain for hosts that are not moss's
-server, and go through the same ledger. Migration 1 of each sequence is the DDL
+server, and go through the same ledger.
+
+**Documents are read in this code's grammars.** Stored integration actions
+carry a `grammar` stamp (`INTEGRATION_ACTIONS_STORE`). At boot, after the
+tables, moss upgrades every stored action that is behind — through nova's and
+Prism's grammar sequences plus the app's own (`NiscApp.grammars`: sequences
+whose document steps are Prism configs, e.g. a kit renaming a component's
+prop) — and a row written by newer code refuses the boot. A bundle may declare
+the `grammar` it was built on; intake upgrades its actions from there before
+parsing them, stores them stamped current, and refuses a bundle built on newer
+grammars than the host (*the host must be updated first*). Reads upgrade too:
+a row another process wrote since boot is read current, and one it cannot read
+is left out with a logged sentence. Migration 1 of each sequence is the DDL
 boots used to run, so a database from before the ledger adopts on its next boot.
 
 `shellFrameDelta` and `socketCompression` are the two wire-size knobs. They are

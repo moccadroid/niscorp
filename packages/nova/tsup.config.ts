@@ -16,6 +16,7 @@ export default defineConfig([
       'i18n/index': 'src/i18n/index.ts',
       'reflect/index': 'src/reflect/index.ts',
       'devtools/index': 'src/devtools/index.ts',
+      'migrations/index': 'src/migrations/index.ts',
     },
     format: ['esm', 'cjs'],
     dts: true,

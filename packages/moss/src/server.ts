@@ -4,7 +4,8 @@ import { Hono } from 'hono';
 import { vex, VEX_LIVE_ENV } from '@niscorp/vex/hono';
 import { createWireFollower } from './follow';
 import { handleQuery, createPostgresCache } from '@niscorp/vex';
-import { migrate } from '@niscorp/strata/postgres';
+import { migrate, upgradeStore } from '@niscorp/strata/postgres';
+import { createGrammarUpgrader } from './grammar';
 import { scopeProfiles } from '@niscorp/vex';
 import type { ScopePolicy, WriteEvent, ExecuteRecord } from '@niscorp/vex';
 import { emitterOf } from './telemetry';
@@ -27,6 +28,7 @@ import {
   copyPress,
   describePlacements,
   MOSS_SEQUENCE,
+  INTEGRATION_ACTIONS_STORE,
   integrationByKey,
   listIntegrations,
   loadIntegrationActions,
@@ -253,6 +255,13 @@ export const createServer = async (app: NiscApp, runtime: NiscRuntime): Promise<
     [MOSS_SEQUENCE, ...(runtime.session === 'sessions' ? [SESSIONS_SEQUENCE] : []), ...(cacheSequence === undefined ? [] : [cacheSequence])],
     { mode: runtime.migrations ?? 'apply' },
   );
+  // THE DOCUMENTS IN THOSE TABLES, brought to this code's grammars — nova's,
+  // Prism's and the app's own (grammar.ts). Rows carry the stamp they were
+  // written at; what they have not seen runs now, once, and they are written
+  // back current. A row written by newer code refuses the boot, as a ledger
+  // written by newer code does.
+  const grammars = await createGrammarUpgrader(app);
+  await upgradeStore(runtime.pool, INTEGRATION_ACTIONS_STORE, grammars);
   const data = await createDataLayer(runtime, app.entries ?? []);
 
   // ── Refuse to start incoherent — the charter engine verifies,
@@ -464,7 +473,7 @@ export const createServer = async (app: NiscApp, runtime: NiscRuntime): Promise<
   // shells adopt.
   const staticActions = { ...app.actions };
   const reloadIntegrations = async (): Promise<void> => {
-    const fromRows = await loadIntegrationActions(runtime.pool);
+    const fromRows = await loadIntegrationActions(runtime.pool, grammars);
     app.actions = { ...staticActions, ...fromRows };
     refresh();
   };
@@ -760,7 +769,7 @@ export const createServer = async (app: NiscApp, runtime: NiscRuntime): Promise<
     }
 
     const fingerprints = new Set((await data.engine.cache.keys?.()) ?? []);
-    const result = runIntake(payload, intakeContextOf(app, id, fingerprints));
+    const result = runIntake(payload, intakeContextOf(app, id, fingerprints, grammars));
     if (!result.ok) {
       await runtime.pool.query(
         `INSERT INTO integrations (id, url, last_error) VALUES ($1, $2, $3)
@@ -866,8 +875,9 @@ export const createServer = async (app: NiscApp, runtime: NiscRuntime): Promise<
       const attachTo = binding === undefined ? '' : typeof binding === 'string' ? binding : binding.to;
       const preview = binding === undefined || typeof binding === 'string' ? '' : binding.preview;
       await runtime.pool.query(
-        'INSERT INTO integration_actions (integration_id, action_id, definition, attach_to, preview, place_in) VALUES ($1, $2, $3::jsonb, $4, $5, $6)',
-        [id, actionId, JSON.stringify(definition), attachTo, preview, result.bundle.placements[actionId] ?? ''],
+        // Stamped current: runIntake upgraded every definition to this code's grammars.
+        'INSERT INTO integration_actions (integration_id, action_id, definition, attach_to, preview, place_in, grammar) VALUES ($1, $2, $3::jsonb, $4, $5, $6, $7::jsonb)',
+        [id, actionId, JSON.stringify(definition), attachTo, preview, result.bundle.placements[actionId] ?? '', JSON.stringify(grammars.stamp)],
       );
     }
 
@@ -1432,7 +1442,7 @@ export const createServer = async (app: NiscApp, runtime: NiscRuntime): Promise<
   // request and not on a timer. It happens here rather than beside the routes
   // because it calls `refresh`, which is declared below them.
   {
-    const fromRows = await loadIntegrationActions(runtime.pool);
+    const fromRows = await loadIntegrationActions(runtime.pool, grammars);
     if (Object.keys(fromRows).length > 0) {
       app.actions = { ...staticActions, ...fromRows };
       refresh();
@@ -1445,7 +1455,7 @@ export const createServer = async (app: NiscApp, runtime: NiscRuntime): Promise<
       // Somebody else wrote. Re-read what is loaded FROM rows (an approval lands
       // as new actions), then drop every derivation without moving the pointer
       // again.
-      const fromRows = await loadIntegrationActions(runtime.pool);
+      const fromRows = await loadIntegrationActions(runtime.pool, grammars);
       app.actions = { ...staticActions, ...fromRows };
       refreshLocal();
     },

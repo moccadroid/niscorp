@@ -17,7 +17,12 @@ export type StrataErrorCode =
   // A step threw; the whole run was rolled back.
   | 'STEP_FAILED'
   // The pool cannot hold one connection for a transaction.
-  | 'NO_TRANSACTION';
+  | 'NO_TRANSACTION'
+  // A document kind nobody declares — as the root being upgraded, a step's
+  // `at`, or an embedding's target.
+  | 'UNKNOWN_KIND'
+  // A grammar sequence handed to the ledger, or a table sequence to upgrade().
+  | 'WRONG_OWNER';
 
 export class StrataError extends Error {
   readonly code: StrataErrorCode;

@@ -20,6 +20,7 @@ import { createServer } from '../src/server';
 
 const PINNED: ReadonlyArray<[Sequence, number, string]> = [
   [MOSS_SEQUENCE, 1, '1c21031de558301ea60804cce1ed1e5c636aa8644fcdedc1ef96f5bebb558880'],
+  [MOSS_SEQUENCE, 2, '92bd612e35a830e2f58de2327451a8e3346e7bc102ab0b49777c349792894b1a'],
   [SESSIONS_SEQUENCE, 1, '83a62e0217940bfe62136052c18f730947355d20e481d9aceb76463251b33700'],
   [TIDE_SEQUENCE, 1, '41f565e0faf179237fb6b92ca50f6266677871a4965e61bc3494a1d59d9c541b'],
 ];
@@ -47,10 +48,10 @@ describe('boot — every owner through one ledger', () => {
     const pool = createPglitePool(new PGlite());
     await quietly(() => createServer(app, { pool, db: pool, session: 'sessions' }));
     const ledger = await readLedger(pool);
-    expect(ledger.map((r) => `${r.sequence}/${r.n}`)).toEqual(['nisc.moss/1', 'nisc.moss.sessions/1', 'nisc.vex.cache/1']);
+    expect(ledger.map((r) => `${r.sequence}/${r.n}`)).toEqual(['nisc.moss/1', 'nisc.moss/2', 'nisc.moss.sessions/1', 'nisc.vex.cache/1']);
 
     await quietly(() => createServer(app, { pool, db: pool, session: 'sessions', migrations: 'verify' }));
-    expect((await readLedger(pool)).length).toBe(3);
+    expect((await readLedger(pool)).length).toBe(4);
   });
 
   it("migrations: 'verify' refuses a database nobody migrated — and creates nothing", async () => {

@@ -1,5 +1,6 @@
 import type { Sequence } from '@niscorp/strata';
-import { migrate } from '@niscorp/strata/postgres';
+import { migrate, type DocumentStore } from '@niscorp/strata/postgres';
+import { StrataError, type Upgrader } from '@niscorp/strata';
 import { GENERATION_DDL } from './generation';
 import { z } from 'zod';
 import { ActionDefinitionSchema, LayoutNodeSchema, paletteEntryOf } from '@niscorp/nova';
@@ -360,6 +361,11 @@ const BundleSchema = z
     // degrades, and the store says so in a sentence the HOST prints.
     offers: z.array(z.string()).default([]),
     needs: z.array(z.string()).default([]),
+    // THE GRAMMARS THE ADD-ON WAS BUILT ON — how far along each grammar sequence
+    // (nova's, Prism's, the host's kit) its documents are written. The host
+    // upgrades them from here before anything else reads them, and refuses a
+    // bundle written in a grammar newer than its own. Absent: before stamps.
+    grammar: z.record(z.string(), z.number().int().nonnegative()).optional(),
     actions: z.record(z.string(), ActionDefinitionSchema),
     // action id → HOST action it rides on (a panel on the member detail). The
     // host must have declared itself attachable — see IntakeContext. The long
@@ -542,6 +548,10 @@ export type IntakeContext = {
   regions?: ReadonlySet<string>;
   tools?: ReadonlySet<string>;
   checks?: ReadonlySet<string>;
+  // The host's grammars (see grammar.ts). With it, a bundle's actions are
+  // upgraded from the bundle's `grammar` stamp BEFORE they are parsed — an
+  // action in an older grammar would fail today's strict schema otherwise.
+  upgrader?: Upgrader;
 };
 
 // THE HOST'S VOCABULARY, gathered from the manifest for one intake. The one
@@ -554,8 +564,10 @@ export const intakeContextOf = (
   app: NiscApp,
   integrationId: string,
   fingerprints: ReadonlySet<string>,
+  upgrader?: Upgrader,
 ): IntakeContext => ({
   integrationId,
+  ...(upgrader === undefined ? {} : { upgrader }),
   components: new Map(Object.entries(app.shell?.components ?? {}).map(([name, def]) => [name, { propsSchema: def.meta?.propsSchema }])),
   fingerprints,
   attachable: new Set(Object.keys(app.attachable ?? {})),
@@ -581,8 +593,36 @@ export const FRAME_GRANT_URL = '/api/integrations/frame';
 const isDeferred = (value: unknown): boolean =>
   (typeof value === 'string' && isBinding(value)) || (isRecord(value) && Object.keys(value).some((key) => key.startsWith('$')));
 
+const isPlainRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value);
+
+// A bundle's actions, brought to the host's grammar. Only the stamp and the
+// actions are touched; everything else is parsed as it arrived.
+const upgradeBundle = (payload: unknown, upgrader: Upgrader | undefined): { ok: true; payload: unknown } | { ok: false; reasons: string[] } => {
+  if (upgrader === undefined || !isPlainRecord(payload) || !isPlainRecord(payload['actions'])) return { ok: true, payload };
+  const declared = payload['grammar'];
+  const stamp = isPlainRecord(declared) ? Object.fromEntries(Object.entries(declared).map(([k, v]) => [k, Number(v)])) : {};
+  try {
+    const actions = Object.fromEntries(
+      Object.entries(payload['actions']).map(([id, definition]) => [id, upgrader.upgrade(definition, { kind: 'nisc.nova/action', stamp }).document]),
+    );
+    return { ok: true, payload: { ...payload, actions, grammar: upgrader.stamp } };
+  } catch (error) {
+    if (!(error instanceof StrataError)) throw error;
+    return {
+      ok: false,
+      reasons:
+        error.code === 'TOO_NEW'
+          ? ['This integration was built on newer nisc grammars than this host runs — the host must be updated first.', ...error.details]
+          : [error.message.split('\n')[0] ?? error.code, ...error.details],
+    };
+  }
+};
+
 export const runIntake = (payload: unknown, ctx: IntakeContext): IntakeResult => {
-  const parsed = BundleSchema.safeParse(payload);
+  const upgraded = upgradeBundle(payload, ctx.upgrader);
+  if (!upgraded.ok) return upgraded;
+  const parsed = BundleSchema.safeParse(upgraded.payload);
   if (!parsed.success) {
     return { ok: false, reasons: parsed.error.issues.map((i) => `${i.path.join('.') || '(root)'}: ${i.message}`) };
   }
@@ -1173,7 +1213,23 @@ export const MOSS_SEQUENCE: Sequence = {
         ...GENERATION_DDL.map((sql) => ({ kind: 'sql' as const, sql })),
       ],
     },
+    {
+      description: 'Stored integration actions carry the grammar stamp their definition is written in',
+      steps: [{ kind: 'sql', sql: `ALTER TABLE integration_actions ADD COLUMN grammar jsonb NOT NULL DEFAULT '{}'::jsonb` }],
+    },
   ],
+};
+
+// The rows that hold documents: every integration action's definition is a
+// nova action, stamped with the grammars it was written in (`{}` — a row from
+// before stamps — reads as the start of every grammar). Brought current at boot
+// by strata's upgradeStore; see grammar.ts.
+export const INTEGRATION_ACTIONS_STORE: DocumentStore = {
+  table: 'integration_actions',
+  column: 'definition',
+  stamp: 'grammar',
+  kind: 'nisc.nova/action',
+  key: ['integration_id', 'action_id'],
 };
 
 // Through the ledger, for a host that is not moss's server (which runs every
@@ -1266,16 +1322,31 @@ export const listIntegrations = async (pool: PgPool): Promise<IntegrationRow[]> 
 };
 
 // Every approved integration's actions, as the manifest wants them.
-export const loadIntegrationActions = async (pool: PgPool): Promise<Record<string, ActionDefinition>> => {
+// With an upgrader, each definition is read in the host's grammar: boot brings
+// the table current (upgradeStore), but a row another process wrote since — one
+// running older code — is upgraded here. A row written by NEWER code is not
+// served: the action is left out with a sentence, never rendered half-read.
+export const loadIntegrationActions = async (pool: PgPool, upgrader?: Upgrader): Promise<Record<string, ActionDefinition>> => {
   const res = await pool.query(
-    `SELECT a.action_id, a.definition FROM integration_actions a
+    `SELECT a.action_id, a.definition, a.grammar FROM integration_actions a
        JOIN integrations i ON i.id = a.integration_id
       WHERE i.status = 'approved'`,
   );
   const out: Record<string, ActionDefinition> = {};
   for (const r of res.rows) {
     const row = r as Record<string, unknown>;
-    out[String(row['action_id'])] = row['definition'] as ActionDefinition;
+    const id = String(row['action_id']);
+    if (upgrader === undefined) {
+      out[id] = row['definition'] as ActionDefinition;
+      continue;
+    }
+    const stamp = isPlainRecord(row['grammar']) ? Object.fromEntries(Object.entries(row['grammar']).map(([k, v]) => [k, Number(v)])) : {};
+    try {
+      out[id] = upgrader.upgrade(row['definition'], { kind: 'nisc.nova/action', stamp }).document as ActionDefinition;
+    } catch (error) {
+      if (!(error instanceof StrataError)) throw error;
+      console.error(`[moss] integration action "${id}" is not served: ${error.message.split('\n')[0] ?? error.code}`);
+    }
   }
   return out;
 };
