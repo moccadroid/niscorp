@@ -1,5 +1,6 @@
 // SERVE CHECK — the deployed shape, minus Postgres: one process serving moss,
-// the one-time sign-in and the built terminal. The same `mountLogin` and
+// the sign-ins (a one-time link, the speaker's mailed link, the stage) and the
+// built terminal. The same `mountLogin` and
 // `mountSite` `serve.ts` composes, over the dev runtime, against a stand-in
 // dist/ so the check does not need a vite build.
 import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
@@ -11,8 +12,11 @@ import { attachSocket } from '@niscorp/moss/node';
 import { boot } from '@lyceum/server/boot';
 import { hashLinkToken, mountLogin } from '@lyceum/server/login';
 import { mountSite } from '@lyceum/server/site';
+import type { Mail } from '@lyceum/server/mail';
 import { mintSession } from '@niscorp/moss';
-import { memberJoin } from '@lyceum/app/vex/member.entries';
+import { memberAssign, memberJoin } from '@lyceum/app/vex/member.entries';
+import { deckGo } from '@lyceum/app/vex/deck.entries';
+import { DECK_ID } from '@lyceum/db/seed';
 import { check, connect, finish } from './harness';
 
 const main = async (): Promise<void> => {
@@ -22,7 +26,9 @@ const main = async (): Promise<void> => {
   await writeFile(join(dist, 'assets', 'app.js'), 'console.log("terminal")');
 
   const { server, runtime, close } = await boot();
-  mountLogin(server, runtime.pool);
+  // The mail that would have gone out, caught instead of sent.
+  const outbox: Mail[] = [];
+  mountLogin(server, runtime.pool, { publicUrl: 'https://lyceum.test', speakerEmail: 'Speaker@Lyceum.test', send: async (mail) => void outbox.push(mail) });
   mountSite(server, dist);
   const httpServer = serve({ fetch: server.fetch, port: 0 });
   attachSocket(httpServer, server.socket);
@@ -69,6 +75,29 @@ const main = async (): Promise<void> => {
   const hello = await speaker.hello();
   check('the session it minted is the speaker, with the controller', hello.principal === 'speaker' && hello.catalog.actions.includes('speaker.console'));
 
+  // ── the speaker asks by email; only the speaker's address gets a link ──
+  const ask = async (email: string): Promise<string> =>
+    (await fetch(`${http}/speaker`, { method: 'POST', body: new URLSearchParams({ email }) })).text();
+  check('/speaker is a form, not the one page', (await get('/speaker')).text.includes('name="email"'));
+  const wrong = await ask('someone@else.test');
+  check('another address is told the same thing and mailed nothing', wrong.includes('on its way') && outbox.length === 0);
+  const right = await ask('  speaker@lyceum.test ');
+  const mailed = outbox[0];
+  const mailedToken = /\/login\?token=([\w-]+)/.exec(mailed?.text ?? '')?.[1];
+  check('the speaker\'s address, in any case, is mailed one link to the public address', right === wrong && outbox.length === 1 && mailed?.to === 'speaker@lyceum.test' && (mailed?.text.includes('https://lyceum.test/login?token=') ?? false));
+  const redeemedMail = await get(`/login?token=${mailedToken ?? ''}`);
+  check('the mailed link signs the device in as the speaker', redeemedMail.text.includes('nisc.token.speaker') && redeemedMail.text.includes('/?seat=speaker'));
+  check('the mailed link works once', (await get(`/login?token=${mailedToken ?? ''}`)).text.includes('used or has expired'));
+
+  // ── the stage: no secret, and nothing it could do with one ──
+  const stagePage = await get('/stage');
+  const stageSession = /"(st_[^"]+)"/.exec(stagePage.text)?.[1];
+  check('/stage signs the device in as the stage, into its own seat', stageSession !== undefined && stagePage.text.includes('nisc.token.stage') && stagePage.text.includes('/?seat=stage'));
+  const stage = await connect(`ws://127.0.0.1:${address.port}`, stageSession);
+  const stageHello = await stage.hello();
+  check('the stage session is the stage, without the controller', stageHello.principal === 'stage' && !stageHello.catalog.actions.some((id) => id.startsWith('speaker.')));
+  stage.close();
+
   // ── the door: a person writes their own row, and only their own ──
   const replay = async (token: string, fingerprint: string, context: Record<string, unknown>): Promise<number> =>
     (await fetch(`${http}/api/vex`, { method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` }, body: JSON.stringify({ fingerprint, context }) })).status;
@@ -80,6 +109,16 @@ const main = async (): Promise<void> => {
   check('stepping in writes a row stamped with the person\'s own id, whatever the request says', joined === 200 && rows.rows.length === 1 && rows.rows[0]?.member_id === 'm_newcomer');
   server.invalidateIdentity('m_newcomer');
   check('a member cannot step in twice', (await replay(newcomer, memberJoin.fingerprint, { name: 'Again' })) !== 200);
+
+  // The stage is open to anyone because it can change nothing.
+  // Control first: the same write as the speaker lands, so the refusal
+  // below is the stage's policy, not a malformed request.
+  check('the speaker can move the deck', (await replay(session ?? '', deckGo.fingerprint, { deck: DECK_ID, position: 2 })) === 200);
+  const stageWrites = [
+    await replay(stageSession ?? '', deckGo.fingerprint, { deck: DECK_ID, position: 1 }),
+    await replay(stageSession ?? '', memberAssign.fingerprint, { memberId: 'm_newcomer', departmentId: 'records', at: new Date().toISOString() }),
+  ];
+  check('a stage session cannot move the deck or assign anybody', stageWrites.every((status) => status !== 200));
 
   speaker.close();
   httpServer.close();

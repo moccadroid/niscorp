@@ -45,8 +45,8 @@ export const CHARTER: Charter = {
   // ── machinery: roles nobody wears, each granted exactly its job ──
   // Reads who somebody is, for the identity seam.
   identity: { data: ['members.read', 'grants.read'] },
-  // Redeems a one-time sign-in link: uses it up, and that is all.
-  gatekeeper: { data: ['login_links.write.delete'] },
+  // Issues a one-time sign-in link and redeems it: writes it, uses it up.
+  gatekeeper: { data: ['login_links.write.insert', 'login_links.write.delete'] },
 };
 
 // The role combinations a principal can resolve to — declared, because roles

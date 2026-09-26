@@ -1,6 +1,6 @@
 // Lyceum standalone: `pnpm --filter lyceum serve` — the deployed shape. One
 // process, one port: moss (/api, /catalog, /socket), the one-time sign-in
-// (/login), and the built terminal (dist/). `pnpm --filter lyceum dev` runs
+// (/login, /speaker, /stage), and the built terminal (dist/). `pnpm --filter lyceum dev` runs
 // the same boot inside vite instead.
 //
 // DATABASE_URL set → Postgres (the deployment). Unset → in-memory PGlite, reset
@@ -14,6 +14,7 @@ import { bootOn } from './boot';
 import { devRuntime } from './runtime';
 import { postgresRuntime } from './postgres-runtime';
 import { mountLogin } from './login';
+import { createMailer } from './mail';
 import { mountSite } from './site';
 
 const dist = resolve(dirname(fileURLToPath(import.meta.url)), '../../dist');
@@ -26,9 +27,10 @@ const main = async (): Promise<void> => {
   if (databaseUrl === '') console.warn('[lyceum] no DATABASE_URL — running on in-memory PGlite; everything is gone on restart.');
   const runtime = databaseUrl === '' ? await devRuntime() : await postgresRuntime(databaseUrl);
   const port = Number(process.env['PORT'] ?? 8796);
-  const { server, close } = await bootOn(runtime, { publicUrl: process.env['PUBLIC_URL'] ?? `http://localhost:${port}` });
+  const publicUrl = process.env['PUBLIC_URL'] ?? `http://localhost:${port}`;
+  const { server, close } = await bootOn(runtime, { publicUrl });
 
-  mountLogin(server, runtime.pool);
+  mountLogin(server, runtime.pool, { publicUrl, speakerEmail: process.env['LYCEUM_SPEAKER_EMAIL'] ?? '', send: createMailer(process.env, publicUrl) });
   if (existsSync(dist)) mountSite(server, dist);
   else console.warn(`[lyceum] no ${dist} — serving the app surfaces only; run \`pnpm --filter lyceum build\` for the terminal.`);
 
