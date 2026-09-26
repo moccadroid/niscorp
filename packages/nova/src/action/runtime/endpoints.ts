@@ -2,7 +2,7 @@ import { createScopeChain, resolve } from '@shared/bindings';
 import { hasKey } from '@shared/common';
 import type { ScopeChain } from '@shared/bindings';
 import type { EndpointConfig, FunctionEndpointConfig, HttpEndpointConfig } from '../schemas';
-import type { FetchFn, FunctionHandler, TransformFn } from '../types';
+import type { FetchFn, FetchResponse, FunctionHandler, TransformFn, Unsubscribe } from '../types';
 
 const stringifyForBody = (value: unknown): string | undefined => {
   if (typeof value === 'string') return value;
@@ -27,7 +27,10 @@ const resolveHeaders = (
 };
 
 export type EndpointResult =
-  | { ok: true; data: unknown; status: number }
+  // `onChange` — the transport's later bodies, already shaped by the endpoint's
+  // `response` (see FetchResponse.onChange). Absent for function endpoints and
+  // for any transport that answers once.
+  | { ok: true; data: unknown; status: number; onChange?: (handler: (data: unknown) => void) => Unsubscribe }
   | { ok: false; error: { status: number; message: string; data: unknown; aborted?: boolean } };
 
 const defaultFetch: FetchFn = () => {
@@ -131,7 +134,35 @@ const callHttpEndpoint = async (
     }
   }
 
-  return { ok: true, data: result, status: response.status };
+  const onChange = laterBodiesOf(response, endpoint.response, transform);
+  return { ok: true, data: result, status: response.status, ...(onChange === undefined ? {} : { onChange }) };
+};
+
+// The transport's later bodies, shaped by the same `response` config as the
+// first. A body the transform rejects is dropped — the screen keeps the last
+// good value rather than showing a half-applied one.
+const laterBodiesOf = (
+  response: FetchResponse,
+  config: unknown,
+  transform: TransformFn | undefined,
+): ((handler: (data: unknown) => void) => Unsubscribe) | undefined => {
+  const subscribe = response.onChange;
+  if (subscribe === undefined) return undefined;
+  if (config !== undefined && transform === undefined) return undefined;
+  return (handler) =>
+    subscribe((body) => {
+      if (config === undefined || transform === undefined) {
+        handler(body);
+        return;
+      }
+      let shaped: unknown;
+      try {
+        shaped = transform(config, body);
+      } catch {
+        return;
+      }
+      handler(shaped);
+    });
 };
 
 const callFunctionEndpoint = async (

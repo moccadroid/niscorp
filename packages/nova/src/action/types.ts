@@ -61,6 +61,13 @@ export type FetchResponse = {
   status: number;
   json: () => Promise<unknown>;
   text: () => Promise<string>;
+  // A LATER BODY FOR THE SAME REQUEST. A transport that can tell the answer
+  // changed (a reactive vex read under moss) offers this; nova applies every
+  // later body exactly as it applied the first — `response`, then `target` —
+  // and nothing else runs: no `onSuccess`, no telemetry, no loading flag. The
+  // subscription ends when a newer call to the same endpoint lands or the
+  // instance unmounts. Nova knows nothing about why a body changed.
+  onChange?: (handler: (body: unknown) => void) => Unsubscribe;
 };
 
 // ═══════════════════════════════════════════════════════════

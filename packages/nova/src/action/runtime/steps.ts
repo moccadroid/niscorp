@@ -17,6 +17,7 @@ import type {
   NavigationEffect,
   OnErrorHandler,
   TransformFn,
+  Unsubscribe,
 } from '../types';
 import { callEndpoint } from './endpoints';
 
@@ -24,6 +25,28 @@ import { callEndpoint } from './endpoints';
 // browser, and jsdom; `Date.now` is the universal fallback.
 const now = (): number =>
   typeof performance !== 'undefined' && typeof performance.now === 'function' ? performance.now() : Date.now();
+
+// THE CALLS AN INSTANCE HAS MADE, per endpoint name — held by the runtime,
+// which outlives every step context it builds. Two jobs, one ledger:
+//
+//   · A response that lands after a NEWER call to the same endpoint already
+//     landed is stale: it must not overwrite what the newer one wrote. (Before
+//     this, the slower of two searches won — whichever answered last.)
+//   · A response that can change later (`onChange`) is followed until a newer
+//     call lands or the instance unmounts — never two at once, or an old
+//     search's updates would keep writing over the new one's rows.
+//
+// Absent in a bare step context (a test driving `executeSteps` directly):
+// every response then lands as before and none is followed.
+export type EndpointCalls = {
+  // A ticket for a call that is about to start.
+  begin: (endpoint: string) => number;
+  // Record that this call's response landed. False when a newer call to the
+  // same endpoint landed first — the caller must then leave `target` alone.
+  land: (endpoint: string, ticket: number) => boolean;
+  // Follow this call's later bodies, replacing whatever the endpoint followed.
+  follow: (endpoint: string, ticket: number, stop: Unsubscribe) => void;
+};
 
 export type StepContext = {
   dataStore: DataStore;
@@ -40,6 +63,7 @@ export type StepContext = {
   // Reports a completed `call` step upward (the runtime stamps instance/canvas
   // and forwards to telemetry). Aborted calls are not reported.
   onEndpoint?: (event: EndpointEventInit) => void;
+  calls?: EndpointCalls;
   extras: ExtraScopes;
   strict: boolean;
   onError: OnErrorHandler;
@@ -150,6 +174,7 @@ const runCall = async (
       return;
     }
   }
+  const ticket = ctx.calls?.begin(callName);
   const t0 = now();
   const result = await callEndpoint({
     endpoint,
@@ -172,7 +197,15 @@ const runCall = async (
     ms: now() - t0,
   });
   if (result.ok) {
-    writeTarget(ctx.dataStore, endpoint.target, result.data);
+    const isCurrent = ticket === undefined || ctx.calls === undefined || ctx.calls.land(callName, ticket);
+    if (isCurrent) {
+      writeTarget(ctx.dataStore, endpoint.target, result.data);
+      const { dataStore } = ctx;
+      const { target } = endpoint;
+      if (result.onChange !== undefined && ticket !== undefined && ctx.calls !== undefined) {
+        ctx.calls.follow(callName, ticket, result.onChange((data) => writeTarget(dataStore, target, data)));
+      }
+    }
     if (onSuccess) await executeSteps(onSuccess, ctx);
     return;
   }

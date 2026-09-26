@@ -21,7 +21,7 @@ import { applyMutations } from '../mutations';
 import { buildInitialData, runLifecycleHook } from './lifecycle';
 import { collectModelBindings } from './model-bindings';
 import { renderRuntime } from './render';
-import { executeSteps, noopOnError, type StepContext } from './steps';
+import { executeSteps, noopOnError, type EndpointCalls, type StepContext } from './steps';
 import { attachTriggers, type TriggerHandle } from './triggers';
 
 const defaultInstanceIdFactory = createIdFactory('act');
@@ -65,6 +65,48 @@ export const createActionRuntime = (config: ActionRuntimeConfig): ActionRuntime 
     instance.data = next;
   });
 
+  // Per endpoint: the last ticket handed out, the newest that landed, and the
+  // later-bodies subscription it holds. See `EndpointCalls` in steps.ts.
+  const ledger = new Map<string, { issued: number; landed: number; stop?: Unsubscribe }>();
+  const entryOf = (endpoint: string): { issued: number; landed: number; stop?: Unsubscribe } => {
+    const existing = ledger.get(endpoint);
+    if (existing !== undefined) return existing;
+    const created = { issued: 0, landed: 0 };
+    ledger.set(endpoint, created);
+    return created;
+  };
+  const calls: EndpointCalls = {
+    begin: (endpoint) => {
+      const entry = entryOf(endpoint);
+      entry.issued += 1;
+      return entry.issued;
+    },
+    land: (endpoint, ticket) => {
+      const entry = entryOf(endpoint);
+      if (ticket < entry.landed) return false;
+      entry.landed = ticket;
+      // Whatever the endpoint followed belongs to an older call now.
+      entry.stop?.();
+      delete entry.stop;
+      return true;
+    },
+    follow: (endpoint, ticket, stop) => {
+      const entry = entryOf(endpoint);
+      if (ticket !== entry.landed || abortController.signal.aborted) {
+        stop();
+        return;
+      }
+      entry.stop?.();
+      entry.stop = stop;
+    },
+  };
+  const stopFollowing = (): void => {
+    for (const entry of ledger.values()) {
+      entry.stop?.();
+      delete entry.stop;
+    }
+  };
+
   // The runtime is the only place that knows THIS instance's id, so it desugars
   // `{ removeSelf: true }` — a card's "close me" — into a `removeInstance`
   // carrying the real id before the effect escapes upward. Every other effect
@@ -90,6 +132,7 @@ export const createActionRuntime = (config: ActionRuntimeConfig): ActionRuntime 
     ...(config.onEndpoint === undefined
       ? {}
       : { onEndpoint: (event) => config.onEndpoint!({ ...event, instanceId: instance.id, canvasId: instance.canvasId }) }),
+    calls,
     extras: {},
     strict,
     onError,
@@ -197,8 +240,10 @@ export const createActionRuntime = (config: ActionRuntimeConfig): ActionRuntime 
   };
 
   const unmount = async (): Promise<void> => {
-    // Cancel any in-flight step execution before running unmount hooks.
+    // Cancel any in-flight step execution before running unmount hooks, and
+    // stop following every endpoint whose answer could still change.
     abortController.abort();
+    stopFollowing();
     detach();
     teardownModelListeners();
     // Unmount hooks run on a fresh (non-aborted) signal so they can
@@ -267,6 +312,7 @@ export const createActionRuntime = (config: ActionRuntimeConfig): ActionRuntime 
   };
 
   const dispose = (): void => {
+    stopFollowing();
     detach();
     teardownModelListeners();
     statusSubscribers.length = 0;
