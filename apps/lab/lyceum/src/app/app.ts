@@ -6,13 +6,13 @@ import { ENTRIES } from './vex';
 import { CANVASES } from './shell/canvases';
 import { frameLayout } from './shell/frame.layout';
 
-// The manifest. Artifacts are imported here; the three code seams — who a
-// principal is, the server functions, and what a write announces — are handed
-// in by the server, which is the only place code lives (PLAN.md, build rules).
+// The manifest. Artifacts are imported here; the two code seams — who a
+// principal is, and the server functions — are handed in by the server, which
+// is the only place code lives (PLAN.md, build rules). There is no reactions
+// seam: the room's reads are reactive, so no write has to be announced.
 export type LyceumSeams = {
   identity: NonNullable<NiscApp['identity']>;
   functions: NonNullable<NiscApp['functions']>;
-  reactions: NonNullable<NiscApp['reactions']>;
 };
 
 export const buildLyceum = (seams: LyceumSeams): NiscApp =>
@@ -23,7 +23,6 @@ export const buildLyceum = (seams: LyceumSeams): NiscApp =>
     entries: ENTRIES,
     identity: seams.identity,
     functions: seams.functions,
-    reactions: seams.reactions,
     shell: {
       canvases: CANVASES,
       layout: frameLayout,

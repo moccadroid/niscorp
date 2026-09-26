@@ -2,7 +2,6 @@ import { createServer } from '@niscorp/moss';
 import type { MossServer, NiscApp } from '@niscorp/moss';
 import { buildLyceum } from '@lyceum/app/app';
 import { lyceumIdentity } from './identity';
-import { lyceumReactions } from './reactions';
 import { doorFunctions } from './functions/door.functions';
 import { sortingFunctions } from './functions/sorting.functions';
 import { devRuntime } from './runtime';
@@ -33,7 +32,6 @@ export const boot = async (): Promise<Booted> => {
   const app = buildLyceum({
     identity: lyceumIdentity,
     functions: (session) => ({ ...doorFunctions(session, server), ...sortingFunctions(server) }),
-    reactions: lyceumReactions(server),
   });
   built = await createServer(app, runtime);
 

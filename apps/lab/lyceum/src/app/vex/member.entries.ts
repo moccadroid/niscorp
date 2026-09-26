@@ -25,23 +25,17 @@ export const identityGrants: SeedEntry = {
   },
 };
 
-// Who is watching the room — the principals a change to the members is
-// announced to. Read as the `identity` role; the talk's principals are rows.
-export const roomWatchers: SeedEntry = {
-  fingerprint: 'grants/watchers',
-  intent: 'The principals that watch the room: the speaker and the stage',
-  shape: [{ principal: '' }],
-  dsl: {
-    from: ['grants'],
-    fields: ['grants.principal'],
-    filter: { in: ['grants.role', ['speaker', 'stage']] },
-  },
-};
-
 // ── the room ──
+//
+// REACTIVE: the room's own reads answer again whenever a write lands on a
+// table they read — somebody steps in, somebody is sorted — on every screen
+// that has them open, the projector and the controller included. Nothing
+// announces the change and nothing listens for it: vex knows what each query
+// reads, and every write passes through vex.
 
 export const memberMe: SeedEntry = {
   fingerprint: 'members/me',
+  refresh: 'reactive',
   intent: 'The signed-in member: their name and their house, if sorted',
   shape: { name: '', house_id: '', house_name: '' },
   dsl: {
@@ -53,6 +47,7 @@ export const memberMe: SeedEntry = {
 
 export const memberRoster: SeedEntry = {
   fingerprint: 'members/roster',
+  refresh: 'reactive',
   intent: 'Everybody in the room in the order they joined, with their house if sorted',
   shape: [{ member_id: '', name: '', house_name: '' }],
   dsl: {
@@ -65,6 +60,7 @@ export const memberRoster: SeedEntry = {
 
 export const memberCounts: SeedEntry = {
   fingerprint: 'members/counts',
+  refresh: 'reactive',
   intent: 'How many people have joined, and how many of them are sorted',
   shape: { joined: 0, sorted: 0 },
   dsl: {
@@ -139,7 +135,6 @@ export const memberSort: SeedMutation = {
 export const MEMBER_ENTRIES: readonly (SeedEntry | SeedMutation)[] = [
   identityMember,
   identityGrants,
-  roomWatchers,
   memberMe,
   memberRoster,
   memberCounts,

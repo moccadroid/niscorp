@@ -2,8 +2,9 @@ import type { ActionDefinition } from '@niscorp/nova';
 import { memberRoster } from '@lyceum/app/vex/member.entries';
 import { rosterLayout } from './roster.layout';
 
-// The projector's view of the room. Re-reads whenever the members change —
-// somebody stepped in, somebody was sorted.
+// The projector's view of the room. Its read is reactive: when the members
+// change — somebody stepped in, somebody was sorted — the new rows arrive on
+// their own.
 export const rosterAction: ActionDefinition = {
   id: 'stage.roster',
   title: 'The room',
@@ -13,5 +14,5 @@ export const rosterAction: ActionDefinition = {
     load: { url: '/api/vex', method: 'POST', request: { fingerprint: memberRoster.fingerprint, context: {} }, target: 'rows' },
   },
   lifecycle: { mount: [{ call: 'load' }] },
-  triggers: [{ message: 'members-changed', do: [{ call: 'load' }] }],
+  triggers: [],
 };
