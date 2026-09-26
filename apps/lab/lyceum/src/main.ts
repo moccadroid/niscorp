@@ -1,4 +1,4 @@
-import { createWire } from '@niscorp/moss/client';
+import { browserEnv, createWire } from '@niscorp/moss/client';
 import { mountTerminal } from '@niscorp/moss/terminal';
 import { domTarget } from '@niscorp/moss/terminal/dom';
 
@@ -11,10 +11,17 @@ import { domTarget } from '@niscorp/moss/terminal/dom';
 const root = document.getElementById('root');
 if (root === null) throw new Error('No root element');
 
+// A SEAT is one person's place in this browser. The session token lives in
+// localStorage, which every tab of one origin shares — so without a seat, every
+// tab is the same person. `?seat=<name>` gives a tab a token of its own that
+// survives reloads: `/?seat=ada` and `/?seat=ben` are two people in the room,
+// `/dev/as/stage` lands on `/?seat=stage`. A phone opens `/` and has the one.
+const seat = new URLSearchParams(window.location.search).get('seat');
+
 mountTerminal({
   targets: { dom: domTarget({ root }) },
   // The shell is server state keyed by principal; a wedged one is not
   // something a reload can fix. This asks for a fresh one.
   resetKey: 'ctrl+shift+u',
-  wire: createWire(),
+  wire: createWire(seat === null || seat === '' ? {} : { env: browserEnv({ tokenKey: `nisc.token.${seat}` }) }),
 });

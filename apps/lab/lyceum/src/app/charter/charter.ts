@@ -9,6 +9,7 @@ import type { Charter } from '@niscorp/charter';
 // by writing that id onto their row.
 
 const ROOM_READS = ['members.read', 'houses.read'];
+const DECK_READS = ['deck.read', 'slides.read'];
 
 export const CHARTER: Charter = {
   // Anonymous: the door and nothing else.
@@ -25,8 +26,10 @@ export const CHARTER: Charter = {
   stags: { extends: ['member'], actions: ['house.*'] },
 
   // The speaker's controller and the projector: two principals, two devices.
-  speaker: { actions: ['speaker.*'], data: ROOM_READS },
-  stage: { actions: ['stage.*'], data: ROOM_READS },
+  // The speaker moves the deck; the stage shows it — every slide is an action
+  // only the stage holds.
+  speaker: { actions: ['speaker.*'], data: [...ROOM_READS, ...DECK_READS, 'deck.write.update'] },
+  stage: { actions: ['stage.*', 'slide.*'], data: [...ROOM_READS, ...DECK_READS] },
 
   // ── machinery: roles nobody wears, each holding exactly its job ──
   // Reads who somebody is, for the identity seam.

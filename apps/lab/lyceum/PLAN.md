@@ -24,7 +24,8 @@ Where to pick up. Read this section, then "Vex is never hidden behind a function
   the stage wear only their grants. No raw SQL.
 - Five placeholder actions (door, member card, house crest, speaker console, stage
   roster) and the sorting.
-- `src/dev/sorting-check.ts`: 26 of 26 assertions pass over a real websocket.
+- `src/dev/sorting-check.ts` (28) and `src/dev/deck-check.ts` (14) pass over a real
+  websocket; `src/dev/harness.ts` is the headless terminal both drive.
 
 **Proven — the claim the talk stands on.** A member's phone, connected before the
 sorting and never reconnected, receives its house the moment the speaker sorts
@@ -36,6 +37,26 @@ assertion ("the stage shows their house") is green, unedited: `members/roster`,
 `members/counts` and `members/me` declare `refresh: 'reactive'`, and the roster, the
 controller's counts and the member card follow the room on their own. The reactions
 seam, the `grants/watchers` entry and every `members-changed` channel are deleted.
+
+**The deck — first cut, built 2026-09-26** (order of work step 6, stage and controller
+only). Slides are actions (`src/app/actions/slide/`, plus `stage.roster` as the room
+slide); their order is rows in `slides`; the slide on screen is the `deck` row. The
+controller's Back/Next replay `deck/go` with a position clamped to the deck in Prism; the
+controller's "Slide n / N" is a reactive read. The stage's `stage.deck` (on its own
+`deck` canvas, shows nothing) replaces the stage's `main` with the slide the row names —
+on mount, so a restart lands on the same slide, and on `deck-moved`, the one reaction
+left (`src/server/reactions.ts`): mounting a new slide is navigation, which no data
+update can do. `src/dev/deck-check.ts` (14 assertions): rows and charter agree, both ends
+clamp, the stage follows the controller, the live slide counts the room unannounced.
+`sorting-check` gained two assertions (the stage opens on the first slide; Next moves it
+to the room) — the room is a slide now, so the check reaches it before asserting on it.
+Not yet: what a slide puts on the audience's phones, the streamed agenda composing the
+order, and the talk's real words (the slides carry provisional ones).
+
+**Dev seats.** Every tab of one origin shares localStorage, so every tab was the same
+person. `?seat=<name>` gives a tab its own session (`src/main.ts`); `/dev/new` opens a
+fresh seat at the door; `/dev/as/stage` and `/dev/as/speaker` land on `?seat=stage` and
+`?seat=speaker`. A phone at `/` has the one seat it needs.
 
 **What the red assertion exposed, and where it stands.** The sorting writes through
 `executeAs`, and moss attaches vex's write observer (`onWrite`, which feeds `reactions`

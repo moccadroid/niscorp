@@ -3,7 +3,7 @@
 // the order of the suite part of its meaning.
 import { spawnSync } from 'node:child_process';
 
-const CHECKS = ['sorting-check'];
+const CHECKS = ['sorting-check', 'deck-check'];
 
 const failed = CHECKS.filter((name) => spawnSync('node', ['--import', 'tsx', `src/dev/${name}.ts`], { stdio: 'inherit', shell: false }).status !== 0);
 

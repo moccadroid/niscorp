@@ -5,6 +5,15 @@ export const consoleLayout: LayoutNode = {
   props: { gap: 12, p: 24 },
   children: [
     { component: 'Text', props: { as: 'h2' }, children: 'Controller' },
+    { component: 'Text', children: 'Slide {{$.current.number}} / {{$.count.slides}} — {{$.current.title}}' },
+    {
+      component: 'Row',
+      props: { gap: 8 },
+      children: [
+        { component: 'Button', ref: 'back', children: 'Back' },
+        { component: 'Button', ref: 'next', children: 'Next' },
+      ],
+    },
     { component: 'Text', children: '{{$.counts.joined}} joined · {{$.counts.sorted}} sorted' },
     {
       if: '$.sorting',

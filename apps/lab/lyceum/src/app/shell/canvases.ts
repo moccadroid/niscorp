@@ -7,7 +7,12 @@ import type { ShellManifest } from '@niscorp/moss';
 //
 // `house` holds one candidate that only the sorted hold, so for everybody
 // else it is simply empty.
+//
+// The stage's `main` has no candidate of its own: `deck` holds the stage's
+// deck, which puts the slide the `deck` row names there — so a restart lands
+// the projector on the slide it left.
 export const CANVASES: ShellManifest['canvases'] = [
-  { id: 'main', initial: ['speaker.console', 'stage.roster', 'member.card', 'door.join'] },
+  { id: 'main', initial: ['speaker.console', 'member.card', 'door.join'] },
   { id: 'house', initial: ['house.crest'] },
+  { id: 'deck', initial: ['stage.deck'] },
 ];

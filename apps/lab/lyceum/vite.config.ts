@@ -76,6 +76,17 @@ const appServer = (): Plugin => ({
     // and only for a principal the `grants` table names; a member signs in by
     // stepping in, like everybody in the room. The talk's own sign-in for the
     // speaker and the stage is decided before the VPS (PLAN.md, Open).
+    // ─── /dev/new — a fresh seat: somebody new at the door, in a tab of its own ──
+    viteServer.middlewares.use((req, res, next) => {
+      if (req.url !== '/dev/new') {
+        next();
+        return;
+      }
+      res.statusCode = 302;
+      res.setHeader('location', `/?seat=guest-${Math.random().toString(36).slice(2, 8)}`);
+      res.end();
+    });
+
     viteServer.middlewares.use((req, res, next) => {
       const who = /^\/dev\/as\/([\w-]+)/.exec(req.url ?? '')?.[1];
       if (who === undefined) {
@@ -91,8 +102,10 @@ const appServer = (): Plugin => ({
             return;
           }
           const token = await mintSession(booted.runtime.pool, who, SESSION_TTL_MS);
+          // Into the principal's own SEAT (src/main.ts), so the stage, the
+          // speaker and any number of members can share one browser.
           res.setHeader('content-type', 'text/html');
-          res.end(`<script>localStorage.setItem('nisc.token',${JSON.stringify(token)});location.replace('/')</script>`);
+          res.end(`<script>localStorage.setItem(${JSON.stringify(`nisc.token.${who}`)},${JSON.stringify(token)});location.replace(${JSON.stringify(`/?seat=${who}`)})</script>`);
         })
         .catch(() => {
           res.statusCode = 500;

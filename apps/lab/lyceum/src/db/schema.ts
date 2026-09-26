@@ -22,6 +22,22 @@ export const DDL = /* sql */ `
 
   -- Capability roles held on top of whatever a person's house makes them, and
   -- the roles of the principals that are not people (the speaker, the stage).
+  -- THE DECK. Its order is rows (the streamed agenda composes it, later); each
+  -- slide_id names the action that IS the slide. What a slide shows lives in
+  -- its action; which slides, and in what order, lives here.
+  CREATE TABLE slides (
+    slide_id TEXT PRIMARY KEY,
+    position INT  NOT NULL UNIQUE,
+    title    TEXT NOT NULL
+  );
+
+  -- THE TALK'S STATE: one row, the slide on screen now. The controller's
+  -- next/back write it; a moss restart lands every screen back on it.
+  CREATE TABLE deck (
+    deck_id  TEXT PRIMARY KEY,
+    slide_id TEXT NOT NULL REFERENCES slides (slide_id)
+  );
+
   CREATE TABLE grants (
     principal  TEXT NOT NULL,
     role       TEXT NOT NULL,
