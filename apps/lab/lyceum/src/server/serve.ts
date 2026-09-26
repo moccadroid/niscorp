@@ -25,13 +25,13 @@ const main = async (): Promise<void> => {
   const databaseUrl = process.env['DATABASE_URL'] ?? '';
   if (databaseUrl === '') console.warn('[lyceum] no DATABASE_URL — running on in-memory PGlite; everything is gone on restart.');
   const runtime = databaseUrl === '' ? await devRuntime() : await postgresRuntime(databaseUrl);
-  const { server, close } = await bootOn(runtime);
+  const port = Number(process.env['PORT'] ?? 8796);
+  const { server, close } = await bootOn(runtime, { publicUrl: process.env['PUBLIC_URL'] ?? `http://localhost:${port}` });
 
   mountLogin(server, runtime.pool);
   if (existsSync(dist)) mountSite(server, dist);
   else console.warn(`[lyceum] no ${dist} — serving the app surfaces only; run \`pnpm --filter lyceum build\` for the terminal.`);
 
-  const port = Number(process.env['PORT'] ?? 8796);
   const httpServer = serve({ fetch: server.fetch, port });
   attachSocket(httpServer, server.socket);
   console.log(`lyceum listening on http://localhost:${port}`);

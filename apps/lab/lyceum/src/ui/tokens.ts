@@ -159,6 +159,13 @@ html, body { margin: 0; padding: 0; }
 .${ROOT_CLASS} .field::placeholder { color: color-mix(in srgb, var(--ink) 40%, var(--paper)); }
 .${ROOT_CLASS} .field:focus { background: var(--highlight); }
 
+/* ── qr: ink on paper whatever the cell's ink, square, as large as its place ── */
+.${ROOT_CLASS} .qr { display: block; position: relative; flex: 1 1 auto; min-height: 0; }
+/* the svg keeps its square inside whatever box it gets (xMidYMid meet) */
+.${ROOT_CLASS} .qr > svg { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.${ROOT_CLASS} .qr .qr-ground { fill: var(--paper); }
+.${ROOT_CLASS} .qr path { fill: var(--ink); }
+
 /* ── action: a whole cell you press ── */
 .${ROOT_CLASS} .action {
   background: var(--bg); color: var(--fg); border: 0; cursor: pointer; text-align: left;

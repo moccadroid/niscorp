@@ -23,7 +23,7 @@ const SERVER_DIRS = /[\\/]src[\\/](app|server|db)[\\/]/;
 
 // `ssrLoadModule` hands back an untyped record; the one thing this file needs
 // from it is a function called `boot`, so that is what is parsed.
-const BootModuleSchema = z.object({ boot: z.custom<(db: PGlite) => Promise<Booted>>((value) => typeof value === 'function') });
+const BootModuleSchema = z.object({ boot: z.custom<(db: PGlite, options: { publicUrl?: string }) => Promise<Booted>>((value) => typeof value === 'function') });
 const RuntimeModuleSchema = z.object({ openDevDatabase: z.custom<() => PGlite>((value) => typeof value === 'function') });
 
 type Running = { listener: ReturnType<typeof getRequestListener>; booted: Booted };
@@ -35,6 +35,13 @@ const SESSION_TTL_MS = 12 * 60 * 60 * 1000;
 const here = dirname(fileURLToPath(import.meta.url));
 if (existsSync(resolve(here, '.env'))) process.loadEnvFile(resolve(here, '.env'));
 
+// What the projector's QR code says in dev. localhost unless told otherwise:
+// vite listens on this machine only, and it should — /dev/as would otherwise
+// sign anybody on the wifi in as the speaker. To try it with a real phone, run
+// `pnpm dev --host` with PUBLIC_URL set to this machine's address, knowing that.
+const PORT = 5197;
+const PUBLIC_URL = process.env['PUBLIC_URL'] ?? `http://localhost:${PORT}`;
+
 const appServer = (): Plugin => ({
   name: 'lyceum-app-server',
   configureServer: (viteServer: ViteDevServer) => {
@@ -42,7 +49,7 @@ const appServer = (): Plugin => ({
     const database = viteServer.ssrLoadModule('/src/server/runtime.ts').then((module) => RuntimeModuleSchema.parse(module).openDevDatabase());
     const build = async (): Promise<Running> => {
       const { boot } = BootModuleSchema.parse(await viteServer.ssrLoadModule('/src/server/boot.ts'));
-      const booted = await boot(await database);
+      const booted = await boot(await database, { publicUrl: PUBLIC_URL });
       return { listener: getRequestListener(booted.server.fetch), booted };
     };
     let current = build();
@@ -143,6 +150,6 @@ const workspaceRoot = resolve(here, '../../..');
 export default defineConfig({
   plugins: [appServer()],
   resolve: { alias: { '@lyceum': resolve(here, 'src') } },
-  server: { port: 5197, fs: { allow: [workspaceRoot] } },
+  server: { port: PORT, fs: { allow: [workspaceRoot] } },
   optimizeDeps: { exclude: ['@electric-sql/pglite'] },
 });

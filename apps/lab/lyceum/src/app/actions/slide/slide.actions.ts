@@ -10,6 +10,8 @@ import { assignmentLayout, clearanceLayout, codeLayout, liveLayout, statementLay
 
 const read = (fingerprint: string, target: string): EndpointConfig => ({ url: '/api/vex', method: 'POST', request: { fingerprint, context: {} }, target });
 const COUNTS = { joined: 0, assigned: 0, unassigned: 0 };
+// Where people open the room — the deployment's, handed out by the server.
+const ADDRESS = { url: '', host: '' };
 
 export const titleSlide: ActionDefinition = {
   id: 'slide.title',
@@ -19,10 +21,11 @@ export const titleSlide: ActionDefinition = {
     title: 'The talk is an application',
     lines: ['Everything you will see tonight is running — not a recording, not a mock-up.', 'Take your phone out.'],
     counts: COUNTS,
+    address: ADDRESS,
   },
   layout: titleLayout,
-  endpoints: { counts: read(memberCounts.fingerprint, 'counts') },
-  lifecycle: { mount: [{ call: 'counts' }] },
+  endpoints: { counts: read(memberCounts.fingerprint, 'counts'), address: { fn: 'room.address', target: 'address' } },
+  lifecycle: { mount: [{ call: 'counts' }, { call: 'address' }] },
   triggers: [],
 };
 

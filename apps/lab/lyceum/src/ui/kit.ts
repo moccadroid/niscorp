@@ -1,3 +1,4 @@
+import { encode } from 'uqr';
 import type { DomComponent } from '@niscorp/nova/adapters/dom';
 
 // ═══════════════════════════════════════════════════════════════
@@ -15,11 +16,11 @@ import type { DomComponent } from '@niscorp/nova/adapters/dom';
 // (names and numbers), not style.
 // ═══════════════════════════════════════════════════════════════
 
-const INKS = ['paper', 'ink', 'signal', 'alert', 'live', 'highlight'] as const;
-const MARKS = ['stripes', 'dots', 'bars', 'checks', 'hatch'] as const;
-const SIGILS = ['triangle', 'circle', 'square', 'cross'] as const;
-const ALIGNS = ['start', 'end', 'center', 'between'] as const;
-const LEVELS = ['display', 'title', 'name'] as const;
+export const INKS = ['paper', 'ink', 'signal', 'alert', 'live', 'highlight'] as const;
+export const MARKS = ['stripes', 'dots', 'bars', 'checks', 'hatch'] as const;
+export const SIGILS = ['triangle', 'circle', 'square', 'cross'] as const;
+export const ALIGNS = ['start', 'end', 'center', 'between'] as const;
+export const LEVELS = ['display', 'title', 'name'] as const;
 const AREA = /^[a-z][a-z0-9-]*$/;
 
 const oneOf = <T extends string>(value: unknown, options: readonly T[]): T | undefined =>
@@ -175,6 +176,33 @@ export const Sigil: DomComponent = ({ props }) => sigil(props['shape'], props['s
 const withHead = (node: HTMLElement, head: boolean): HTMLElement => {
   if (head) node.setAttribute('data-head', '');
   return node;
+};
+
+// ── Qr — a value as a QR code ───────────────────────────────────
+// value: what the code says (an address). Drawn as one SVG path of square
+// modules with the standard quiet zone, ink on paper, as large as its place;
+// the look decides the size. An empty value draws nothing.
+export const Qr: DomComponent = ({ props }) => {
+  const value = text(props['value']) ?? '';
+  const holder = el('span', 'qr');
+  if (value === '') return holder;
+  const { data, size } = encode(value);
+  const quiet = 4;
+  const modules = data.flatMap((row, y) => row.flatMap((dark, x) => (dark ? [`M${x + quiet} ${y + quiet}h1v1h-1z`] : [])));
+  const svg = document.createElementNS(SVG, 'svg');
+  svg.setAttribute('viewBox', `0 0 ${size + quiet * 2} ${size + quiet * 2}`);
+  svg.setAttribute('shape-rendering', 'crispEdges');
+  svg.setAttribute('role', 'img');
+  svg.setAttribute('aria-label', value);
+  const ground = document.createElementNS(SVG, 'rect');
+  ground.setAttribute('width', '100%');
+  ground.setAttribute('height', '100%');
+  ground.setAttribute('class', 'qr-ground');
+  const path = document.createElementNS(SVG, 'path');
+  path.setAttribute('d', modules.join(''));
+  svg.append(ground, path);
+  holder.appendChild(svg);
+  return holder;
 };
 
 // ── Rows — a ruled table ────────────────────────────────────────

@@ -1,5 +1,6 @@
 // strata for this app's SOURCE artifacts — which version of each grammar
-// (nova's, Prism's) the actions and fragments in src/app are written in, and
+// (nova's, Prism's, the kit's own) the actions, fragments and shell layouts in
+// src/app are written in, and
 // how they are brought forward when a grammar moves (docs/plans/versioning.md).
 //
 //   pnpm strata status [--check]   where the source stands (CI runs --check)
@@ -11,6 +12,10 @@ import { runSourceUpgrade } from '@niscorp/strata/node';
 import { NOVA_SEQUENCE, NOVA_SCHEMAS } from '@niscorp/nova/migrations';
 import { PRISM_SEQUENCE, PRISM_SCHEMAS, prismTransform } from '@niscorp/prism/migrations';
 import { ACTIONS } from '@lyceum/app/action-catalog';
+import { LYCEUM_KIT } from '@lyceum/app/grammars';
+import { CANVASES } from '@lyceum/app/shell/canvases';
+import { frameLayout } from '@lyceum/app/shell/frame.layout';
+import { KIT_PROPS } from '@lyceum/ui/kit.props';
 
 const root = fileURLToPath(new URL('../..', import.meta.url));
 const fragmentsDir = fileURLToPath(new URL('../app/shell/fragments', import.meta.url));
@@ -32,16 +37,22 @@ const documents = async () => {
     const module: Record<string, unknown> = await import(`${fragmentsDir}/${name}`);
     for (const value of Object.values(module)) if (isFragment(value)) fragments.push({ kind: 'nisc.nova/fragment', id: value.id, document: value });
   }
-  return [...actions, ...fragments];
+  // The shell's own layouts are nova layouts too: the frame, and each canvas's
+  // action layout (the controller's tool list says what an empty one shows).
+  const shell = [
+    { kind: 'nisc.nova/layout', id: 'shell.frame', document: frameLayout },
+    ...CANVASES.flatMap((canvas) => (canvas.actionLayout === undefined ? [] : [{ kind: 'nisc.nova/layout', id: `canvas.${canvas.id}`, document: canvas.actionLayout }])),
+  ];
+  return [...actions, ...fragments, ...shell];
 };
 
 process.exit(
   await runSourceUpgrade(
     {
       root,
-      grammars: [NOVA_SEQUENCE, PRISM_SEQUENCE],
+      grammars: [NOVA_SEQUENCE, PRISM_SEQUENCE, LYCEUM_KIT],
       transform: prismTransform,
-      schemas: { ...NOVA_SCHEMAS, ...PRISM_SCHEMAS },
+      schemas: { ...NOVA_SCHEMAS, ...PRISM_SCHEMAS, 'lyceum.kit/props': KIT_PROPS },
       documents,
     },
     process.argv.slice(2),

@@ -11,13 +11,15 @@ const cell = (area: string, children: LayoutNode[], props: Record<string, unknow
 
 const label = (words: string): LayoutNode => ({ component: 'Label', children: words });
 
-// The title: the claim, the room counted beside it, one line to act on.
+// The title: the claim, the way in beside it — the code to scan and the
+// address to type — the room counted under it, one line to act on.
 export const titleLayout: LayoutNode = {
   component: 'Sheet',
   props: {
     size: 'fill',
-    areas: ['kick kick kick count', 'head head head count', 'body body cta count'],
-    cols: [1, 1, 1, 1.1],
+    areas: ['kick kick kick join', 'head head head join', 'body body cta count'],
+    // the code is the one thing on this slide somebody at the back must read
+    cols: [1, 1, 1, 1.5],
     rows: ['auto', 1, 'auto'],
   },
   children: [
@@ -25,6 +27,7 @@ export const titleLayout: LayoutNode = {
     cell('head', [{ component: 'Headline', props: { level: 'display' }, children: '{{$.title}}' }], { align: 'end' }),
     cell('body', [{ component: 'Text', children: '{{$.lines.0}}' }]),
     cell('cta', [{ component: 'Text', children: '{{$.lines.1}}' }], { ink: 'alert' }),
+    cell('join', [label('Scan to step in'), { component: 'Qr', props: { value: '$.address.url' } }, { component: 'Headline', props: { level: 'name' }, children: '{{$.address.host}}' }]),
     cell('count', [{ component: 'Figure', props: { label: 'In the room', value: '$.counts.joined' } }], { ink: 'live', align: 'end' }),
   ],
 };

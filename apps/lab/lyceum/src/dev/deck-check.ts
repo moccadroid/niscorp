@@ -53,6 +53,11 @@ const main = async (): Promise<void> => {
   check('none of them exists for the stage', !['speaker.console', 'speaker.head', 'speaker.notes', 'speaker.controls'].some((id) => stageHello.catalog.actions.includes(id)));
   check('a slide without a tool says so, rather than leave a hole', await speaker.shows('tools', 'Nothing to press on this slide'));
 
+  // ── the way in: the first slide's code and address, the strip's address ──
+  check('the first slide carries the code to scan, saying the room\'s address', await stage.shows('main', '"name":"Qr"') && stage.showsNow('main', '"value":"http://localhost:8796"'));
+  check('...and the address in words, for typing', stage.showsNow('main', 'localhost:8796'));
+  check('the strip shows the address on every slide, for whoever arrives late', await stage.shows('strip', 'localhost:8796'));
+
   // ── the first slide, and no way back from it ──
   check('the stage and the controller open on the first slide', await onSlide(0));
   check('Next says which slide it goes to', await speaker.shows('controls', `2 · ${titleOf(1)} →`));

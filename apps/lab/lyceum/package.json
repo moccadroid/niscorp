@@ -10,7 +10,8 @@
     "mint": "tsx src/server/mint-link.ts",
     "typecheck": "tsc --noEmit",
     "check": "tsx src/dev/all-checks.ts",
-    "strata": "tsx src/dev/strata.ts"
+    "strata": "tsx src/dev/strata.ts",
+    "kit:snapshot": "tsx src/dev/kit-check.ts --write"
   },
   "dependencies": {
     "@electric-sql/pglite": "^0.5.1",
@@ -23,6 +24,7 @@
     "@niscorp/strata": "workspace:^",
     "@niscorp/vex": "workspace:^",
     "pg": "^8.16.3",
+    "uqr": "^0.1.3",
     "zod": "^4.3.6"
   },
   "devDependencies": {

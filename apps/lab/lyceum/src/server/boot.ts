@@ -6,6 +6,7 @@ import { lyceumIdentity } from './identity';
 import { lyceumReactions } from './reactions';
 import { doorFunctions } from './functions/door.functions';
 import { assignmentFunctions } from './functions/assignment.functions';
+import { roomFunctions } from './functions/room.functions';
 import { devRuntime } from './runtime';
 import { createIssuer } from './issuer';
 import type { DevRuntime, LyceumRuntime } from './runtime';
@@ -21,11 +22,18 @@ export type Booted<R extends LyceumRuntime = DevRuntime> = {
   close: () => Promise<void>;
 };
 
+// Where people open the room — the deployment's address (PUBLIC_URL), which
+// the projector shows as a QR code. A boot not told falls back to the
+// standalone server's own port on this machine.
+export type BootOptions = { publicUrl?: string };
+const DEFAULT_PUBLIC_URL = 'http://localhost:8796';
+
 // The development boot: in-memory PGlite — a fresh one, or the one it is lent.
-export const boot = async (db?: PGlite): Promise<Booted> => bootOn(await devRuntime(db));
+export const boot = async (db?: PGlite, options: BootOptions = {}): Promise<Booted> => bootOn(await devRuntime(db), options);
 
 // The boot itself, on whatever environment it is handed.
-export const bootOn = async <R extends LyceumRuntime>(runtime: R): Promise<Booted<R>> => {
+export const bootOn = async <R extends LyceumRuntime>(runtime: R, options: BootOptions = {}): Promise<Booted<R>> => {
+  const publicUrl = options.publicUrl ?? DEFAULT_PUBLIC_URL;
   // The seams reach the server they are part of; it exists once createServer
   // returns, and nothing calls a seam before then.
   let built: MossServer | undefined;
@@ -40,7 +48,7 @@ export const bootOn = async <R extends LyceumRuntime>(runtime: R): Promise<Boote
 
   const app = buildLyceum({
     identity: lyceumIdentity,
-    functions: (session) => ({ ...doorFunctions(session, server, issuer), ...assignmentFunctions(session, server) }),
+    functions: (session) => ({ ...doorFunctions(session, server, issuer), ...assignmentFunctions(session, server), ...roomFunctions(publicUrl) }),
     reactions: lyceumReactions(server),
   });
   built = await createServer(app, runtime);
