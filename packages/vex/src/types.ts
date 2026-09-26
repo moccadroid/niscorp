@@ -7,6 +7,7 @@ import type { QueryRequest, QueryResponse } from './schemas/request.schema.js';
 import type { TestResult } from './engine/engine.types.js';
 import type { VexEventHandler } from './events.js';
 import type { CompiledIr, JsonValue } from '@niscorp/prism';
+import type { LiveRowsConfig, LiveRowsStats } from './engine/live.js';
 
 /**
  * Who a generation is for, as a capability rather than an identity. `read` runs
@@ -48,6 +49,11 @@ export type QueryEngineConfig = {
   generateDsl?: GenerateDsl;
   /** Optional LLM-backed result mapping (raw rows used as-is without it). */
   mapToShape?: MapToShape;
+  /**
+   * The rows cache behind `refresh: 'reactive'` entries — its age, size and
+   * burst window. Held in this process's memory; nothing else is cached.
+   */
+  rows?: LiveRowsConfig;
   config?: {
     maxNestingDepth?: number;
     defaultLimit?: number;
@@ -72,6 +78,15 @@ export type QueryEngine = {
   getDslSchema: () => object;
   getSchema: () => DatabaseSchema | undefined;
   cache: CacheBackend;
+  /**
+   * These tables were written. Every reactive read over any of them is
+   * refetched (once per burst) and its followers told if their answer changed.
+   * The vex handler calls this after every committed mutation; a host calls
+   * it for writes vex did not make.
+   */
+  invalidate: (tables: readonly string[]) => void;
+  /** The reactive rows cache: what it holds and how it is doing. */
+  rows: { stats: () => LiveRowsStats; stop: () => void };
 };
 
 export type ExecuteOptions = {
@@ -86,4 +101,12 @@ export type ExecuteOptions = {
   // layer) passes it here so reads enforce that principal's phases, not a
   // single static engine policy. Omitted → the engine's configured policy.
   scopePolicy?: ScopePolicy;
+  /**
+   * FOLLOW THE ANSWER. For an entry with `refresh: 'reactive'`, every later
+   * answer that differs from the last one is handed to `onChange` — after
+   * writes to the tables the query reads — until `signal` aborts. Both or
+   * neither; ignored for a snapshot read.
+   */
+  signal?: AbortSignal;
+  onChange?: (response: QueryResponse) => void;
 };

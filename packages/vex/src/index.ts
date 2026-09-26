@@ -49,6 +49,11 @@ export { sweepCache } from './cache/util.js';
 // the locked posture). The machinery apps used to hand-roll.
 export { seedCache } from './cache/seed.js';
 export type { SeedEntry, SeedMutation } from './cache/seed.js';
+// When a read's answer is refreshed ('snapshot' | 'reactive'), and the rows
+// cache that makes 'reactive' work (engine/live.ts).
+export { REFRESH_MODES, isRefresh } from './cache/cache.types.js';
+export type { Refresh } from './cache/cache.types.js';
+export type { LiveRowsConfig, LiveRowsStats } from './engine/live.js';
 
 // ─── Mutations ───────────────────────────────────────────────
 // The write pipeline: a closed grammar, engine-applied scope, and replay-only
@@ -61,8 +66,8 @@ export type { Mutation, MutationDefinition, CoreMutation, ResolvedMutation, Reso
 export { buildValidationContext, resolveParams } from './utils/context.js';
 
 // ─── Handler ────────────────────────────────────────────────
-export { handleDiscovery, handleQuery, handleFingerprintPatch, handleFingerprintDelete } from './handler.js';
-export type { VexHandlerConfig, DiscoveryResponse, DiscoveryFingerprint, QueryResult, WriteEvent, ExecuteRecord } from './handler.js';
+export { handleDiscovery, handleQuery, handleFingerprintPatch, handleFingerprintDelete, tablesChangedBy } from './handler.js';
+export type { VexHandlerConfig, DiscoveryResponse, DiscoveryFingerprint, QueryResult, WriteEvent, ExecuteRecord, VexLive } from './handler.js';
 
 // ─── Events ─────────────────────────────────────────────────
 export type { VexEvent, VexEventHandler } from './events.js';

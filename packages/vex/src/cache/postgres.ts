@@ -3,6 +3,7 @@ import type { Query } from '../schemas/query.schema.js';
 import type { CompiledIr } from '@niscorp/prism';
 import type { MutationDefinition } from '../mutations/schema.js';
 import type { CacheBackend, CacheEntry } from './cache.types.js';
+import { isRefresh } from './cache.types.js';
 import { validateEntry } from './validate.js';
 import { fireAndForget } from './util.js';
 
@@ -52,7 +53,7 @@ const quoteIdent = (name: string, label: string): string => {
 };
 
 const SELECT_COLS =
-  'key, kind, intent, shape, dsl, prism_ir, reach, reason, created_at, expires_at, schema_fingerprint, protected, last_used_at, request_hash';
+  'key, kind, intent, shape, dsl, prism_ir, reach, reason, created_at, expires_at, schema_fingerprint, protected, last_used_at, request_hash, refresh';
 
 const rowToEntry = (row: Record<string, unknown>): CacheEntry => {
   const createdAt = (row['created_at'] as Date).getTime();
@@ -92,6 +93,9 @@ const rowToEntry = (row: Record<string, unknown>): CacheEntry => {
     // served at the caller's own, wider reach, which is the exact thing the
     // field exists to prevent.
     ...(row['reach'] != null ? { reach: row['reach'] as string } : {}),
+    // So must the refresh mode: dropped, a reactive read would quietly answer
+    // once and never again.
+    ...(isRefresh(row['refresh']) ? { refresh: row['refresh'] } : {}),
     ...meta,
   };
 };
@@ -119,7 +123,8 @@ export const createPostgresCache = (config: PostgresCacheConfig): PostgresCache 
         schema_fingerprint text,
         protected          boolean NOT NULL DEFAULT false,
         last_used_at       timestamptz,
-        request_hash       text
+        request_hash       text,
+        refresh            text
       )`,
     );
     // Migrate pre-fingerprint tables in place (idempotent).
@@ -127,6 +132,7 @@ export const createPostgresCache = (config: PostgresCacheConfig): PostgresCache 
     await pool.query(`ALTER TABLE ${qualified} ADD COLUMN IF NOT EXISTS last_used_at timestamptz`);
     await pool.query(`ALTER TABLE ${qualified} ADD COLUMN IF NOT EXISTS request_hash text`);
     await pool.query(`ALTER TABLE ${qualified} ADD COLUMN IF NOT EXISTS reach text`);
+    await pool.query(`ALTER TABLE ${qualified} ADD COLUMN IF NOT EXISTS refresh text`);
   };
 
   const evict = (key: string, reason: string): void => {
@@ -180,10 +186,11 @@ export const createPostgresCache = (config: PostgresCacheConfig): PostgresCache 
     const lastUsedAt = entry.lastUsedAt !== undefined ? new Date(entry.lastUsedAt) : null;
     const requestHash = entry.requestHash ?? null;
     const reach = entry.kind === 'unsatisfiable' ? null : (entry.reach ?? null);
+    const refresh = entry.kind === 'ok' ? (entry.refresh ?? null) : null;
 
     await pool.query(
-      `INSERT INTO ${qualified} (key, kind, intent, shape, dsl, prism_ir, reach, reason, created_at, expires_at, schema_fingerprint, protected, last_used_at, request_hash)
-       VALUES ($1, $2, $3, $4::jsonb, $5::jsonb, $6::jsonb, $7, $8, $9, $10, $11, $12, $13, $14)
+      `INSERT INTO ${qualified} (key, kind, intent, shape, dsl, prism_ir, reach, reason, created_at, expires_at, schema_fingerprint, protected, last_used_at, request_hash, refresh)
+       VALUES ($1, $2, $3, $4::jsonb, $5::jsonb, $6::jsonb, $7, $8, $9, $10, $11, $12, $13, $14, $15)
        ON CONFLICT (key) DO UPDATE SET
          kind               = EXCLUDED.kind,
          intent             = EXCLUDED.intent,
@@ -197,8 +204,9 @@ export const createPostgresCache = (config: PostgresCacheConfig): PostgresCache 
          schema_fingerprint = EXCLUDED.schema_fingerprint,
          protected          = EXCLUDED.protected,
          last_used_at       = EXCLUDED.last_used_at,
-         request_hash       = EXCLUDED.request_hash`,
-      [key, entry.kind, intent, shape, dsl, prismIr, reach, reason, createdAt, expiresAt, fingerprint, isProtected, lastUsedAt, requestHash],
+         request_hash       = EXCLUDED.request_hash,
+         refresh            = EXCLUDED.refresh`,
+      [key, entry.kind, intent, shape, dsl, prismIr, reach, reason, createdAt, expiresAt, fingerprint, isProtected, lastUsedAt, requestHash, refresh],
     );
   };
 

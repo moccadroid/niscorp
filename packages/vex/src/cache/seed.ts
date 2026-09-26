@@ -3,6 +3,8 @@ import type { CacheBackend } from './cache.types.js';
 import type { Query } from '../schemas/query.schema.js';
 import type { MutationDefinition } from '../mutations/schema.js';
 import { lintMutation } from '../mutations/signature.js';
+import { canonicalText } from '../utils/canonical.js';
+import type { Refresh } from './cache.types.js';
 
 // ═══════════════════════════════════════════════════════════════
 // Seeding — authored entries → protected cache rows.
@@ -34,6 +36,8 @@ export type SeedEntry = {
   mapping?: unknown;
   /** The reach this read requires whatever the caller holds — see `OkCacheEntry.reach`. */
   reach?: string;
+  /** When this read's answer is refreshed — see `Refresh`. Absent means 'snapshot'. */
+  refresh?: Refresh;
 };
 
 // A write seed — the same idea, `kind: 'mutation'`.
@@ -45,23 +49,10 @@ export type SeedMutation = {
   reach?: string;
 };
 
-// Stored definitions round-trip through jsonb, which reorders object keys,
-// so equality must be canonical: keys sorted recursively, arrays untouched
-// (their order is semantic). A value-order compare would call every row
-// "changed" and quietly turn refresh into rewrite-every-boot.
-const canonical = (value: unknown): unknown => {
-  if (Array.isArray(value)) return value.map(canonical);
-  if (value !== null && typeof value === 'object') {
-    const source = value as Record<string, unknown>;
-    const sorted: Record<string, unknown> = {};
-    for (const key of Object.keys(source).sort()) sorted[key] = canonical(source[key]);
-    return sorted;
-  }
-  return value;
-};
-
+// Stored definitions round-trip through jsonb, which reorders object keys —
+// equality is canonical (utils/canonical.ts).
 const same = (a: unknown, b: unknown): boolean =>
-  a === undefined || b === undefined ? a === b : JSON.stringify(canonical(a)) === JSON.stringify(canonical(b));
+  a === undefined || b === undefined ? a === b : canonicalText(a) === canonicalText(b);
 
 export const seedCache = async (cache: CacheBackend, entries: readonly (SeedEntry | SeedMutation)[]): Promise<void> => {
   for (const entry of entries) {
@@ -102,10 +93,12 @@ export const seedCache = async (cache: CacheBackend, entries: readonly (SeedEntr
       same(existing.dsl, entry.dsl) &&
       same(existing.shape, entry.shape) &&
       same(existing.reach, entry.reach) &&
-      same(existing.intent, entry.intent);
+      same(existing.intent, entry.intent) &&
+      (existing.refresh ?? 'snapshot') === (entry.refresh ?? 'snapshot');
     if (current) continue;
     await cache.set(entry.fingerprint, {
       kind: 'ok',
+      ...(entry.refresh !== undefined ? { refresh: entry.refresh } : {}),
       dsl: entry.dsl,
       prismIr,
       ...(entry.reach !== undefined ? { reach: entry.reach } : {}),

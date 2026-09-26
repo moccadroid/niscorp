@@ -18,7 +18,12 @@ import { pruneOptional, presenceOf, presenceSignature, optionalKeysOf } from './
 import { createMemoryCache } from '../cache/memory.js';
 import { computeSchemaFingerprint, computeRequestHash, computePolicyKey, mintFingerprint } from '../cache/hash.js';
 import { isEntryFresh, fireAndForget } from '../cache/util.js';
-import { buildValidationContext } from '../utils/context.js';
+import { buildValidationContext, resolveParams } from '../utils/context.js';
+import { canonicalHash } from '../utils/canonical.js';
+import { createLiveRows } from './live.js';
+import type { RowsSource } from './live.js';
+import type { Refresh } from '../cache/cache.types.js';
+import type { Row } from '../adapters/adapter.types.js';
 import { VexError } from '../errors.js';
 import type { CompiledIr, JsonObject, JsonValue } from '@niscorp/prism';
 import { execute as executePrism } from '@niscorp/prism';
@@ -83,6 +88,10 @@ export const createQueryEngine = (engineConfig: QueryEngineConfig): QueryEngine 
     warnUnindexedFilters,
     rejectUnindexedFilters,
   };
+
+  // The rows behind `refresh: 'reactive'` entries (engine/live.ts). Snapshot
+  // reads never touch it.
+  const live = createLiveRows(engineConfig.rows, emit);
 
   let cachedSchema: DatabaseSchema | undefined;
   let cachedFingerprint: string | undefined;
@@ -245,6 +254,7 @@ export const createQueryEngine = (engineConfig: QueryEngineConfig): QueryEngine 
     // The stored shape — drives the array-vs-single mapping envelope on
     // fingerprint-only replays (the request carries no shape then).
     shape?: unknown;
+    refresh?: Refresh;
     hit: boolean;
     // A named slot existed but its stored request differed — this run
     // regenerates and REPLACES it.
@@ -292,6 +302,7 @@ export const createQueryEngine = (engineConfig: QueryEngineConfig): QueryEngine 
           ...(entry.prismIr !== undefined ? { cachedIr: entry.prismIr } : {}),
           ...(entry.intent !== undefined ? { intent: entry.intent } : {}),
           ...(entry.shape !== undefined ? { shape: entry.shape } : {}),
+          ...(entry.refresh !== undefined ? { refresh: entry.refresh } : {}),
           hit: true,
           replaced: false,
         };
@@ -401,6 +412,44 @@ export const createQueryEngine = (engineConfig: QueryEngineConfig): QueryEngine 
 
   type MapResult = { result: JsonValue; executionMs: number; mappingMs?: number; mappedIr?: CompiledIr };
 
+  // Prism runs ONCE and its output IS the result. The shape decides the
+  // envelope: an ARRAY shape maps over the whole row set (`$.result` is the
+  // array — a `$map`/identity); a non-array shape maps the SINGLE (first)
+  // row (`$.result` is that row — a detail/aggregate reads `$.result.field`,
+  // no `[0]`). Vex never forces an array: the mapping owns the shape.
+  //
+  // `$.result` is the rows, and it is what every mapping was written
+  // against. `$.context` and `$.scope` sit BESIDE it — additive, so nothing
+  // authored before this line changes meaning.
+  //
+  // WHY A MAPPING NEEDS THE SCOPE. A mapping is where a row becomes words
+  // ("Active", "Fri 14 Mar", "€45"), and words have a language. Without
+  // this, the deepest layer of an application's display strings is the one
+  // layer that structurally cannot be localised — and the only escape is to
+  // stop mapping in vex and re-derive the same fields somewhere further out,
+  // which is worse in every direction.
+  //
+  // Scope values are ENGINE-side (moss injects them per session; a request
+  // cannot author one), so reading them here does not widen what a caller
+  // can reach — it widens what the app can say about a caller it already
+  // knows. It is also why a reactive read shares ROWS between callers and
+  // maps them per caller: the rows are the same, the words may not be.
+  const mapRows = (
+    rows: Row[],
+    shape: unknown,
+    ir: CompiledIr,
+    context: Record<string, unknown>,
+    scope: Record<string, unknown>,
+  ): JsonValue => {
+    const single = !Array.isArray(shape);
+    const source = {
+      result: single ? (rows[0] ?? null) : rows,
+      context,
+      scope,
+    } as unknown as JsonObject;
+    return executePrism(ir, source);
+  };
+
   const executeAndMap = async (
     compiled: CompiledQuery,
     validRequest: QueryRequest,
@@ -419,37 +468,9 @@ export const createQueryEngine = (engineConfig: QueryEngineConfig): QueryEngine 
     let mappedIr: CompiledIr | undefined = cachedIr;
 
     if (validRequest.shape !== undefined) {
-      // Prism runs ONCE and its output IS the result. The shape decides the
-      // envelope: an ARRAY shape maps over the whole row set (`$.result` is the
-      // array — a `$map`/identity); a non-array shape maps the SINGLE (first)
-      // row (`$.result` is that row — a detail/aggregate reads `$.result.field`,
-      // no `[0]`). Vex never forces an array: the mapping owns the shape.
-      const single = !Array.isArray(validRequest.shape);
-      // `$.result` is the rows, and it is what every mapping was written
-      // against. `$.context` and `$.scope` sit BESIDE it — additive, so nothing
-      // authored before this line changes meaning.
-      //
-      // WHY A MAPPING NEEDS THE SCOPE. A mapping is where a row becomes words
-      // ("Active", "Fri 14 Mar", "€45"), and words have a language. Without
-      // this, the deepest layer of an application's display strings is the one
-      // layer that structurally cannot be localised — and the only escape is to
-      // stop mapping in vex and re-derive the same fields somewhere further out,
-      // which is worse in every direction.
-      //
-      // Scope values are ENGINE-side (moss injects them per session; a request
-      // cannot author one), so reading them here does not widen what a caller
-      // can reach — it widens what the app can say about a caller it already
-      // knows. Note this does not touch the cache: vex caches the query PLAN
-      // (`dsl` + `prismIr`), never the rows, and the compiled IR holds the
-      // lookup rather than the looked-up value.
-      const source = {
-        result: single ? (rows[0] ?? null) : rows,
-        context,
-        scope,
-      } as unknown as JsonObject;
       if (cachedIr !== undefined) {
         const mapStart = Date.now();
-        result = executePrism(cachedIr, source);
+        result = mapRows(rows, validRequest.shape, cachedIr, context, scope);
         mappingMs = Date.now() - mapStart;
       } else if (mapToShape !== undefined) {
         const mapStart = Date.now();
@@ -558,6 +579,51 @@ export const createQueryEngine = (engineConfig: QueryEngineConfig): QueryEngine 
     // Execute SQL + map rows to the requested shape. A fingerprint-only
     // replay carries no shape — the stored one drives the envelope.
     const effectiveRequest = hasRequest ? validRequest : { ...validRequest, shape: cached.shape };
+
+    // A REACTIVE READ answers from the shared rows and, when the caller asks
+    // to follow it, keeps answering. Only a stored entry can be reactive —
+    // the mode is authored, never generated — and only one whose mapping is
+    // already compiled, because a later answer must never wait on a model.
+    const reactiveIr = cached.cachedIr;
+    if (cached.hit && cached.refresh === 'reactive' && (effectiveRequest.shape === undefined || reactiveIr !== undefined)) {
+      const shape = effectiveRequest.shape;
+      const shapeRows = (rows: Row[]): JsonValue =>
+        shape === undefined || reactiveIr === undefined ? (rows as unknown as JsonValue) : mapRows(rows, shape, reactiveIr, context, scope);
+      const params = await resolveParams(compiled.paramSlots, context, scope, embed);
+      // The compiled SQL and its bound values: scope is inside both, so two
+      // callers share rows exactly when they would get the same rows.
+      const key = canonicalHash([compiled.sql, params]);
+      const source: RowsSource = { tables: [...discoverEntities(shaped)], fetch: () => adapter.execute(compiled, params) };
+      const execStart = Date.now();
+      const rows = await live.read(key, source);
+      const executionMs = Date.now() - execStart;
+      emit({ type: 'query.rows', count: rows.length, executionMs });
+      const result = shapeRows(rows);
+      const meta = {
+        cache: {
+          hit: cached.hit,
+          fingerprint: cached.fingerprint,
+          intent: cached.intent ?? validRequest.intent,
+        },
+        context: buildContextContract(compiled, optionalKeysOf(dsl)),
+        warnings: warnings.length > 0 ? warnings : undefined,
+      };
+      const { signal, onChange } = options ?? {};
+      if (signal !== undefined && onChange !== undefined) {
+        let lastHash = canonicalHash(result);
+        live.follow(key, source, rows, {
+          deliver: (next) => {
+            const nextResult = shapeRows(next);
+            const nextHash = canonicalHash(nextResult);
+            if (nextHash === lastHash) return;
+            lastHash = nextHash;
+            onChange({ result: nextResult, meta });
+          },
+        }, signal);
+      }
+      emit({ type: 'query.done', totalMs: Date.now() - t0 });
+      return { result, meta: { ...meta, timing: { executionMs } } };
+    }
     const { result, executionMs, mappingMs, mappedIr } = await executeAndMap(
       compiled, effectiveRequest, cached.cachedIr, context, scope,
     );
@@ -619,5 +685,7 @@ export const createQueryEngine = (engineConfig: QueryEngineConfig): QueryEngine 
     getDslSchema,
     getSchema,
     cache,
+    invalidate: live.invalidate,
+    rows: { stats: live.stats, stop: live.stop },
   };
 };

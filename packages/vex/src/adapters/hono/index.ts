@@ -4,7 +4,23 @@ import type { QueryEngine } from '../../types.js';
 import type { ScopePolicy, ScopeValues } from '../../scope/scope.types.js';
 import type { MutationClient } from '../../mutations/engine.js';
 import { handleDiscovery, handleQuery, handleFingerprintPatch, handleFingerprintDelete } from '../../handler.js';
-import type { WriteEvent, ExecuteRecord } from '../../handler.js';
+import type { WriteEvent, ExecuteRecord, VexLive } from '../../handler.js';
+import type { QueryResponse } from '../../schemas/request.schema.js';
+
+// A request made IN-PROCESS may carry a follower in hono's env — the third
+// argument of `app.request(url, init, env)` — under this key. A request off
+// the network never can: its env is the runtime's (node's sockets, a
+// worker's bindings), so nothing a client sends reaches it. See `VexLive`.
+export const VEX_LIVE_ENV = 'vexLive';
+
+const liveOf = (env: unknown): VexLive | undefined => {
+  if (env === null || typeof env !== 'object' || !(VEX_LIVE_ENV in env)) return undefined;
+  const live: unknown = Reflect.get(env, VEX_LIVE_ENV);
+  if (live === null || typeof live !== 'object' || !('signal' in live) || !('onChange' in live)) return undefined;
+  const { signal, onChange } = live;
+  if (!(signal instanceof AbortSignal) || typeof onChange !== 'function') return undefined;
+  return { signal, onChange: (response: QueryResponse) => void Reflect.apply(onChange, undefined, [response]) };
+};
 
 // Generic over the hono Env so a host that mounts this under its own app
 // (with typed context variables — e.g. the resolved principal) reads them
@@ -87,7 +103,7 @@ export const vex = <E extends Env = Env>(config: VexHonoConfig<E>): Hono<E> => {
   app.post('/', async (c) => {
     const scope = config.getScope ? await config.getScope(c) : {};
     const body: unknown = await c.req.json();
-    const result = await handleQuery(await requestConfig(c), body, scope);
+    const result = await handleQuery(await requestConfig(c), body, scope, liveOf(c.env));
     return c.json(result.body, result.status as 200);
   });
 

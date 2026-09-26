@@ -25,6 +25,7 @@ type DbRow = {
   expires_at: Date | null;
   schema_fingerprint: string | null;
   reach: string | null;
+  refresh?: string | null;
 };
 
 const makeFakePool = () => {
@@ -43,7 +44,7 @@ const makeFakePool = () => {
         // POSITIONAL, so the order here is part of the contract with
         // `postgres.ts` — a column inserted in the middle silently shifts every
         // field after it, and the round-trips below are what catch that.
-        const [key, kind, intent, shape, dsl, prismIr, reach, reason, createdAt, expiresAt, fingerprint] = v;
+        const [key, kind, intent, shape, dsl, prismIr, reach, reason, createdAt, expiresAt, fingerprint, , , , refresh] = v;
         rows.set(key as string, {
           key: key as string,
           kind: kind as string,
@@ -56,6 +57,7 @@ const makeFakePool = () => {
           expires_at: (expiresAt as Date | null) ?? null,
           schema_fingerprint: (fingerprint as string | null) ?? null,
           reach: (reach as string | null) ?? null,
+          refresh: (refresh as string | null) ?? null,
         });
         return { rows: [] };
       }
@@ -131,6 +133,20 @@ describe('createPostgresCache', () => {
     const got = await cache.get('mine');
     expect(got?.kind).toBe('ok');
     expect(got?.kind === 'ok' ? got.reach : undefined).toBe('personal');
+  });
+
+  it('round-trips a refresh mode', async () => {
+    const { pool } = makeFakePool();
+    const cache = createPostgresCache({ pool });
+    await cache.init();
+    // Dropped here, a reactive read would answer once and never again — and
+    // nothing would say so.
+    await cache.set('roster', okEntry({ refresh: 'reactive' }));
+    const got = await cache.get('roster');
+    expect(got?.kind === 'ok' ? got.refresh : undefined).toBe('reactive');
+    await cache.set('plain', okEntry());
+    const plain = await cache.get('plain');
+    expect(plain?.kind === 'ok' ? plain.refresh : 'set').toBeUndefined();
   });
 
   it('leaves an entry that declares none without one', async () => {

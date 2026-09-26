@@ -11,6 +11,7 @@ import type { MutationClient, WriteResult } from './mutations/engine.js';
 import { collectMutationContext, collectQueryContext, mutationEffect } from './mutations/signature.js';
 import type { ContextSignature, MutationEffect } from './mutations/signature.js';
 import type { CacheEntry } from './cache/cache.types.js';
+import type { QueryResponse } from './schemas/request.schema.js';
 import type { Query } from './schemas/query.schema.js';
 import { VexError } from './errors.js';
 import { canReadTable } from './scope/apply.js';
@@ -62,6 +63,43 @@ export type VexHandlerConfig = {
 };
 
 export type WriteEvent = { fingerprint: string; writes: WriteResult[]; scope: ScopeValues };
+
+// A CALLER THAT FOLLOWS THE ANSWER. In-process only: an HTTP request cannot
+// carry a callback, so a host that runs its own clients next to the handler
+// (moss's server shells) passes one here, and a reactive entry keeps
+// answering through it until `signal` aborts. See `refresh` on an entry.
+export type VexLive = {
+  signal: AbortSignal;
+  onChange: (response: QueryResponse) => void;
+};
+
+// WHICH TABLES A WRITE CHANGED. The statements' own tables, plus — for a
+// delete — every table that references one of them, transitively: an
+// `ON DELETE CASCADE` or `SET NULL` changes rows vex never wrote. The
+// introspected schema carries the reference but not its rule, so a delete is
+// assumed to reach every referencing table. Over-telling costs a refetch;
+// under-telling leaves a screen stale.
+export const tablesChangedBy = (writes: readonly WriteResult[], schema: DatabaseSchema | undefined): string[] => {
+  const changed = new Set<string>();
+  const referencing = (table: string): string[] =>
+    (schema?.entities.find((entity) => entity.name === table)?.relations ?? [])
+      .filter((relation) => relation.type !== 'belongsTo')
+      .map((relation) => relation.entity);
+  for (const write of writes) {
+    if (write.rows.length === 0) continue;
+    changed.add(write.table);
+    if (write.op !== 'delete') continue;
+    const pending = [write.table];
+    for (let next = pending.pop(); next !== undefined; next = pending.pop()) {
+      for (const table of referencing(next)) {
+        if (changed.has(table)) continue;
+        changed.add(table);
+        pending.push(table);
+      }
+    }
+  }
+  return [...changed];
+};
 
 // What one execution DID, in vex's own vocabulary — the record `onExecute`
 // hands a host. Not a span: vex holds no telemetry model, so a host maps these
@@ -314,15 +352,16 @@ export const handleQuery = async (
   config: VexHandlerConfig,
   body: unknown,
   scope: ScopeValues,
+  live?: VexLive,
 ): Promise<QueryResult> => {
   // Unobserved: the fast path builds no probe, takes no timestamps, allocates
   // no record. An endpoint with no telemetry pays exactly nothing.
-  if (config.onExecute === undefined) return runQuery(config, body, scope, undefined);
+  if (config.onExecute === undefined) return runQuery(config, body, scope, undefined, live);
 
   const startUnixNano = Date.now() * 1e6;
   const t0 = elapsedClock();
   const probe: ExecuteProbe = { kind: 'query' };
-  const result = await runQuery(config, body, scope, probe);
+  const result = await runQuery(config, body, scope, probe, live);
   const record: ExecuteRecord = {
     kind: probe.kind,
     // 200 succeeded; 403 is a policy/reach refusal (a normal outcome, not a
@@ -354,6 +393,7 @@ const runQuery = async (
   body: unknown,
   scope: ScopeValues,
   probe: ExecuteProbe | undefined,
+  live: VexLive | undefined,
 ): Promise<QueryResult> => {
   const { engine } = config;
 
@@ -438,6 +478,12 @@ const runQuery = async (
           schema,
         });
         const rows = writes.flatMap((w) => w.rows);
+        // Every reactive read over these tables is now stale. Here, not in
+        // any host's observer: this is the one door every vex write passes —
+        // a request, a server function's `executeAs`, a reflex's effect — and
+        // a read that heard about only some of them would be live only
+        // sometimes, which is worse than a snapshot that says what it is.
+        engine.invalidate(tablesChangedBy(writes, schema));
         // The commit happened; the observer hears about it now, and its
         // failure is its own — the response must tell the truth about a
         // write that already landed.
@@ -493,6 +539,7 @@ const runQuery = async (
       entities: config.entities,
       ...(config.locked === true ? { locked: true } : {}),
       ...(readPolicy !== undefined ? { scopePolicy: readPolicy } : {}),
+      ...(live !== undefined ? { signal: live.signal, onChange: live.onChange } : {}),
     });
     if (probe !== undefined) {
       probe.cacheHit = response.meta.cache.hit;

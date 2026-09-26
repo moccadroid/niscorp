@@ -1,6 +1,7 @@
 import { QuerySchema } from '../schemas/query.schema.js';
 import { MutationDefinitionSchema } from '../mutations/schema.js';
 import type { CacheEntry } from './cache.types.js';
+import { isRefresh } from './cache.types.js';
 
 // ───────────────────────────────────────────────────────────────
 // Entry validation
@@ -51,6 +52,9 @@ export const validateEntry = (entry: CacheEntry): string | null => {
     if (!parsed.success) return `invalid dsl: ${parsed.error.message}`;
     if (entry.prismIr !== undefined && !isCompiledIr(entry.prismIr)) {
       return 'invalid prismIr: not a CompiledIr structure';
+    }
+    if (entry.refresh !== undefined && !isRefresh(entry.refresh)) {
+      return `invalid refresh: ${String(entry.refresh)}`;
     }
     return null;
   }

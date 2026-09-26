@@ -134,4 +134,19 @@ describe('seedCache', () => {
     const bad: SeedMutation = { ...write, mutation: { op: 'update', table: 'things', set: { name: 'x' }, where: { eq: ['things.id', 'literal'] } } };
     await expect(seedCache(cache, [bad])).rejects.toThrow(/authoring lint/);
   });
+
+  it('carries the refresh mode, and a changed mode converges like any other edit', async () => {
+    const { cache, writes } = jsonbLikeCache();
+    await seedCache(cache, [{ ...read, refresh: 'reactive' }]);
+    const stored = (await cache.get('demo/list')) as OkCacheEntry;
+    expect(stored.refresh).toBe('reactive');
+    await seedCache(cache, [{ ...read, refresh: 'reactive' }]);
+    expect(writes()).toBe(1);
+    await seedCache(cache, [read]);
+    expect(writes()).toBe(2);
+    expect(((await cache.get('demo/list')) as OkCacheEntry).refresh).toBeUndefined();
+    // An explicit 'snapshot' is the default said out loud — no rewrite.
+    await seedCache(cache, [{ ...read, refresh: 'snapshot' }]);
+    expect(writes()).toBe(2);
+  });
 });

@@ -38,7 +38,8 @@ const makeWorld = async () => {
   await cache.set('tasks/setDone', { kind: 'mutation', mutation: setDone, intent: 'Flip a task done flag', protected: true, createdAt: 1 });
   await cache.set('tasks/list', { kind: 'ok', dsl: { from: ['tasks'], fields: ['tasks.id'] } as never, shape: [{ id: '' }], intent: 'List tasks', protected: true, createdAt: 1 });
   const execute = vi.fn(async () => ({ result: [], meta: { cache: { hit: true }, context: {} } }));
-  const engine = { cache, getSchema: () => schema, execute } as unknown as QueryEngine;
+  const invalidate = vi.fn();
+  const engine = { cache, getSchema: () => schema, execute, invalidate } as unknown as QueryEngine;
   const calls: Array<{ sql: string; params: unknown[] }> = [];
   const client: MutationClient = {
     query: async (sql, params = []) => {
@@ -46,7 +47,7 @@ const makeWorld = async () => {
       return { rows: [{ id: 'task_1', done: true }] };
     },
   };
-  return { engine, execute, client, calls };
+  return { engine, execute, client, calls, invalidate };
 };
 
 describe('unified wire — one shape, kind dispatch', () => {
@@ -58,6 +59,12 @@ describe('unified wire — one shape, kind dispatch', () => {
     expect(calls).toHaveLength(1);
     expect(calls[0]!.sql).toMatch(/^UPDATE tasks/);
     expect(execute).not.toHaveBeenCalled();
+  });
+
+  it('a committed write invalidates the tables it changed', async () => {
+    const { engine, client, invalidate } = await makeWorld();
+    await handleQuery({ engine, locked: true, mutations: { client, policy } }, { fingerprint: 'tasks/setDone', context: { id: 'task_1', done: true } }, { userId: 'usr_1' });
+    expect(invalidate).toHaveBeenCalledWith(['tasks']);
   });
 
   it('routes a query fingerprint to the read engine', async () => {

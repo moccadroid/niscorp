@@ -20,6 +20,25 @@ import type { MutationDefinition } from '../mutations/schema.js';
 //                       change).
 // ───────────────────────────────────────────────────────────────
 
+// ───────────────────────────────────────────────────────────────
+// When a read's answer is refreshed.
+//
+//   'snapshot' — the default, and what every read was before this existed:
+//                answered when asked, never again.
+//   'reactive' — answered when asked, and again whenever a write lands on a
+//                table the query reads, for as long as somebody follows it
+//                (see engine/live.ts). Rows are shared between callers whose
+//                compiled SQL and bound values are identical.
+//
+// A mode, not a flag, because it will grow: time as a source of change
+// (a read that depends on `today`) is the next state it is waiting for.
+// ───────────────────────────────────────────────────────────────
+
+export const REFRESH_MODES = ['snapshot', 'reactive'] as const;
+export type Refresh = (typeof REFRESH_MODES)[number];
+
+export const isRefresh = (value: unknown): value is Refresh => REFRESH_MODES.some((mode) => mode === value);
+
 type CacheEntryMeta = {
   createdAt: number;
   /**
@@ -78,6 +97,8 @@ export type OkCacheEntry = CacheEntryMeta & {
    * rather than served wide.
    */
   reach?: string;
+  /** When this read's answer is refreshed. Absent means 'snapshot'. */
+  refresh?: Refresh;
 };
 
 export type UnsatisfiableCacheEntry = CacheEntryMeta & {
