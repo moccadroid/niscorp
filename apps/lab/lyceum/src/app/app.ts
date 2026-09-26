@@ -6,6 +6,7 @@ import { ENTRIES } from './vex';
 import { BEHAVIORS } from './vex/behaviors';
 import { CANVASES } from './shell/canvases';
 import { frameLayout } from './shell/frame.layout';
+import { FRAGMENTS } from './shell/fragments/sheet.fragment';
 
 // The manifest. Artifacts are imported here; the three code seams — who a
 // principal is, the server functions, and the one signal that is not data (the
@@ -31,5 +32,6 @@ export const buildLyceum = (seams: LyceumSeams): NiscApp =>
     shell: {
       canvases: CANVASES,
       layout: frameLayout,
+      fragments: FRAGMENTS,
     },
   });

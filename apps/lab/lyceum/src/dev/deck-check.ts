@@ -9,7 +9,7 @@ import { attachSocket } from '@niscorp/moss/node';
 import { mintSession } from '@niscorp/moss';
 import { SLIDES, buildSeedSql } from '@lyceum/db/seed';
 import { boot } from '@lyceum/server/boot';
-import { check, connect, finish } from './harness';
+import { check, connect, finish, waitUntil } from './harness';
 
 const main = async (): Promise<void> => {
   const { server, runtime, close } = await boot();
@@ -52,13 +52,23 @@ const main = async (): Promise<void> => {
   const row = await runtime.db.query<{ slide_id: string }>('SELECT slide_id FROM deck');
   check('the row holds what the stage shows', row.rows[0]?.slide_id === SLIDES[total - 1]?.slideId);
 
-  // ── the picker: any slide, straight away ──
-  speaker.click('main', 'pick', 2);
-  check('picking a slide from the deck puts it on the stage', await onSlide(2));
-  speaker.click('main', 'pick', total - 1);
+  // ── all slides, over the controller: any slide, straight away ──
+  const pick = async (position: number): Promise<void> => {
+    speaker.click('main', 'all');
+    await speaker.shows('overlay', 'All slides');
+    speaker.click('overlay', 'pick', position);
+  };
+  await pick(2);
+  check('picking a slide from all slides puts it on the stage', await onSlide(2));
+  check('...and the list closes', await waitUntil(() => !speaker.showsNow('overlay', 'All slides')));
+  await pick(total - 1);
   check('...any slide, in any order', await onSlide(total - 1));
-  speaker.click('main', 'pick', total + 5);
+  await pick(total + 5);
   check('a pick past the end stays on the last slide', await onSlide(total - 1));
+  speaker.click('main', 'all');
+  await speaker.shows('overlay', 'All slides');
+  speaker.click('overlay', 'close');
+  check('Close shuts the list and changes nothing', (await waitUntil(() => !speaker.showsNow('overlay', 'All slides'))) && (await onSlide(total - 1)));
 
   // ── a live slide follows the room ──
   const live = SLIDES.findIndex((slide) => slide.slideId === 'slide.live');

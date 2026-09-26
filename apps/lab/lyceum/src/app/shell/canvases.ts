@@ -11,6 +11,8 @@ import type { ShellManifest } from '@niscorp/moss';
 //          here by the speaker's deck)
 //   desk   your department's own tool — the one thing your clearance lets you
 //          do that the others' does not
+//   overlay  whatever is opened over the screen, in the `sheet` fragment's
+//          chrome (all slides, on the controller)
 //   deck   the stage's and the speaker's deck: shows nothing, follows the
 //          `deck` row. Not in the frame.
 export const CANVASES: ShellManifest['canvases'] = [
@@ -19,5 +21,6 @@ export const CANVASES: ShellManifest['canvases'] = [
   { id: 'main', initial: ['speaker.console', 'member.card', 'kit.sink', 'door.join'] },
   { id: 'tools' },
   { id: 'desk', initial: ['records.register', 'forms.rename', 'inquiries.desk', 'archive.log'] },
+  { id: 'overlay' },
   { id: 'deck', initial: ['stage.deck', 'speaker.deck'] },
 ];

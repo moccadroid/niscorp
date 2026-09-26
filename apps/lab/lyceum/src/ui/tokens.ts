@@ -45,8 +45,11 @@ html, body { margin: 0; padding: 0; }
 .${ROOT_CLASS} .page > [data-canvas] { display: flex; flex-direction: column; min-height: 0; }
 .${ROOT_CLASS} .page > [data-canvas]:not(:empty):not(:has(~ [data-canvas]:not(:empty))) { flex: 1 1 auto; }
 .${ROOT_CLASS} .page > [data-canvas] > * { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; }
+/* the overlay canvas: over the whole screen when something is open, out of
+   the stack either way */
+.${ROOT_CLASS} .page > [data-canvas="overlay"]:not(:empty) { position: fixed; inset: 0; z-index: 10; background: var(--paper); }
 /* stacked canvases share one rule where they meet, not two */
-.${ROOT_CLASS} .page > [data-canvas]:not(:empty) ~ [data-canvas] > * > .sheet { border-top: 0; }
+.${ROOT_CLASS} .page > [data-canvas]:not(:empty):not([data-canvas="overlay"]) ~ [data-canvas] > * > .sheet { border-top: 0; }
 
 /* ── sheet: the ruled grid ── */
 .${ROOT_CLASS} .sheet {

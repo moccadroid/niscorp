@@ -79,8 +79,11 @@ const main = async (): Promise<void> => {
 
   // ── the assignment slide brings its tool to the controller ──
   const assignmentAt = SLIDES.findIndex((slide) => slide.slideId === 'slide.assignment');
-  speaker.click('main', 'pick', assignmentAt);
+  speaker.click('main', 'all');
+  check('all slides open over the controller', await speaker.shows('overlay', 'All slides'));
+  speaker.click('overlay', 'pick', assignmentAt);
   check('picking the assignment slide puts it on the stage', await stage.shows('main', 'Assignment'));
+  check('...and closes the list', await waitUntil(() => !speaker.showsNow('overlay', 'All slides')));
   check('...and its tool on the controller', await speaker.shows('tools', 'Assign the room'));
 
   // ── the assignment ──
@@ -115,7 +118,9 @@ const main = async (): Promise<void> => {
   check('and the room can be assigned again', await member.shows('badge', 'Your department'));
 
   // ── leaving the slide takes its tool with it ──
-  speaker.click('main', 'pick', 1);
+  speaker.click('main', 'all');
+  await speaker.shows('overlay', 'All slides');
+  speaker.click('overlay', 'pick', 1);
   check('on the register, the controller has no assignment tool', await waitUntil(() => !speaker.showsNow('tools', 'Assign the room')));
   const final = await runtime.db.query<{ department_id: string | null }>('SELECT department_id FROM members WHERE member_id = $1', [memberId]);
   const finalName = DEPARTMENTS.find((candidate) => candidate.departmentId === final.rows[0]?.department_id)?.name ?? '\u0000';

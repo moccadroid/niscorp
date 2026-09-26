@@ -8,6 +8,7 @@ import { deskAction } from './actions/inquiries/desk.action';
 import { logAction } from './actions/archive/log.action';
 import { consoleAction } from './actions/speaker/console.action';
 import { speakerDeckAction } from './actions/speaker/deck.action';
+import { slidesAction } from './actions/speaker/slides.action';
 import { assignmentTool } from './actions/tools/assignment.action';
 import { noTool } from './actions/tools/none.action';
 import { stageRegisterAction } from './actions/stage/register.action';
@@ -29,6 +30,7 @@ export const ACTIONS: Record<string, ActionDefinition> = Object.fromEntries(
     logAction,
     consoleAction,
     speakerDeckAction,
+    slidesAction,
     assignmentTool,
     noTool,
     stageRegisterAction,
