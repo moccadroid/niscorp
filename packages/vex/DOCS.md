@@ -1002,7 +1002,7 @@ const l2 = createPostgresCache({
   table: 'vex_cache',      // default
   onError: (err) => console.error(err),
 });
-await l2.init();           // CREATE SCHEMA/TABLE IF NOT EXISTS
+await l2.init();           // applies l2.sequence through strata's ledger — once, recorded
 ```
 
 **Tiered** — L1 (memory) + L2 (durable), read-through/write-through. Reads hit

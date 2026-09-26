@@ -130,8 +130,20 @@ standard, one table over: 256 bits behind an `st_` prefix, the row keeps only
 the hash, `expires_at` is enforced on every read, and revocation is deleting
 the row (one token, or every token a principal holds). The app mints at its
 own door after its own identity check and hands the token to the terminal;
-`initSessions` rides `createServer` boot automatically under `'sessions'`.
-Expired rows are swept on every mint — no timer to run.
+its table (`SESSIONS_SEQUENCE`) rides `createServer` boot automatically under
+`'sessions'`. Expired rows are swept on every mint — no timer to run.
+
+**Tables go through a ledger.** moss creates no table on its own: its tables are
+[strata](../strata/README.md) sequences — `MOSS_SEQUENCE` (integrations, their
+actions, the generation pointer), `SESSIONS_SEQUENCE`, `TIDE_SEQUENCE` for the
+tide store — and `createServer` applies them with the vex cache's sequence in
+one ledgered run before introspection: once, recorded in `strata_ledger`, and
+refused if the ledger was edited or written by newer code. `migrations` on the
+runtime picks the posture: `'apply'` (default) runs what is pending; `'verify'`
+refuses to boot if anything is, for a deployment that migrates as a deploy step.
+`initIntegrations` and `initSessions` remain for hosts that are not moss's
+server, and go through the same ledger. Migration 1 of each sequence is the DDL
+boots used to run, so a database from before the ledger adopts on its next boot.
 
 `shellFrameDelta` and `socketCompression` are the two wire-size knobs. They are
 environment settings, not manifest ones — an operational decision about a

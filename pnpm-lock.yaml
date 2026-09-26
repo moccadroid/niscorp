@@ -584,6 +584,9 @@ importers:
       '@niscorp/solid':
         specifier: workspace:*
         version: link:../../packages/solid
+      '@niscorp/strata':
+        specifier: workspace:^
+        version: link:../../packages/strata
       '@niscorp/tide':
         specifier: workspace:*
         version: link:../../packages/tide

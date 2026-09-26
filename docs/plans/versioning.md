@@ -1,12 +1,15 @@
 # Versioning, migrations and strata
 
-> **Status (2026-09-26): package side built, data side designed.** Built:
+> **Status (2026-09-26): package side built; strata S0 + S1 built.** Built:
 > Apache-2.0, consumable manifests, the zod peer + cross-copy check, nisc
 > packages as peers, changesets + `@niscorp/nisc` + the breaking-dependents
 > gate, the moss wire protocol version, golden credential hashes, Prism stored-IR
-> speed + the `$const` fix. **Not started: strata** (§5) — and with it, the
-> removal of runtime DDL from vex, moss and tide. **npm publishing is blocked
-> until strata's S1–S4 land** (decided).
+> speed + the `$const` fix — and **strata S0 + S1**: the package, the ledger,
+> SQL steps, and every table vex and moss own moved into ledgered sequences
+> (no package runs un-ledgered DDL any more), with the showroom's *The ledger*
+> and *Adopt an old database* stories. **Next: S2** (document steps,
+> embeddings, stamped rows). **npm publishing is blocked until S1–S4 land**
+> (decided).
 
 Two problems, one plan. **Package versioning**: ten libraries with no version
 discipline, never published. **Data versioning**: every nisc artifact is JSON
@@ -261,8 +264,8 @@ $ pnpm strata upgrade --verify
 
 | Stage | What | Unblocks |
 |---|---|---|
-| S0 | Package skeleton, types, `upgrade()` over document steps with injected transform | — |
-| S1 | Ledger + `sql` steps + `/postgres`; vex, moss, tide DDL moved into baseline sequences; adoption of existing databases (verify the tables match, then record — never assume) | D6 |
+| S0 ✅ | Package skeleton, types, the plan (pure), checksums — built 2026-09-26. `upgrade()` over document steps moves to S2 | — |
+| S1 ✅ | Ledger + `sql` steps + `/postgres`; vex, moss, tide DDL moved into baseline sequences — built 2026-09-26. Adoption turned out simpler than planned: each baseline IS the old convergent `IF NOT EXISTS` DDL, so running it once over any earlier shape lands the current one and keeps the rows; no schema diffing, nothing marked applied on assumption. Baseline checksums pinned in tests | D6 |
 | S2 | Embeddings; stamps on `integration_actions`, `vex_cache`; add-on intake refuses `TOO_NEW` | rows |
 | S3 | Prism: `$walk`, `$renameKeys`, `$update`, `$assert`, `$has`; validation errors with paths; computed `$join` parts; the never-remove-an-op check; `irVersion` rule | migrations as data |
 | S4 | `/check`: snapshots via `~standard.jsonSchema.input`, corpus from the lab apps + the three historic breaks | CI gate, npm |
