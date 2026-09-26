@@ -131,10 +131,25 @@ const { document, stamp, applied } = upgrader.upgrade(storedAction, { kind: 'nis
 | `createUpgrader(grammars, { transform })` | `{ stamp, upgrade, locate, behind }` — the stamp a document written now carries; upgrade one; every document inside one, by kind; is a stamp behind (throws if ahead). |
 | `upgradeStore(pool, store, upgrader)` | `@niscorp/strata/postgres`. Rewrites every row of a table holding documents that is behind, in one transaction; a row from newer code refuses the pass. |
 
+## The check
+
+**`@niscorp/strata/check`** — the gate a grammar change has to pass. Pure; the
+host keeps the files.
+
+| | |
+|---|---|
+| `snapshotOf(sequence, schemas)` | Each kind's JSON Schema, through the schema's own Standard JSON Schema hook (Zod ≥ 4.2, Valibot, ArkType), descriptions stripped. `schemas` must cover exactly the grammar's kinds. |
+| `compareSnapshot(recorded, current)` | `same`, `missing`, or `changed` with short diff lines (`+ properties.retry`, `~ required[0]: "id" → "key"`). Changed at the same version = a migration is owed. |
+| `snapshotText(snapshot)` | Stable file text: sorted keys. |
+| `checkCorpus(upgrader, schemas, documents)` | Every captured document, upgraded from its stamp, must pass its kind's current schema. |
+
+A snapshot only says *something moved*; the corpus of real documents is the
+judge of whether old ones survive. nisc runs both on its own grammars in CI
+(`pnpm check:grammars`; records in the repo's `strata/` directory).
+
 ## Not yet
 
-The check that gates a grammar change on a migration (schema snapshots and a
-corpus of old documents), and `upgrade --verify` for artifacts in source files.
+`upgrade --verify` for artifacts in source files.
 See [DESIGN.md](./DESIGN.md) and [the plan](../../docs/plans/versioning.md).
 
 ## License

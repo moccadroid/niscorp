@@ -1,0 +1,5282 @@
+{
+  "app": "encore",
+  "stamp": {
+    "nisc.nova": 0,
+    "nisc.prism": 0
+  },
+  "documents": [
+    {
+      "kind": "nisc.nova/action",
+      "id": "act.card",
+      "document": {
+        "id": "act.card",
+        "title": "Act",
+        "description": "The record card for one act — billing such as headliner or support, genre, expected draw, and the stage and time of their set; open it when a performer, band, DJ or the headliner is the subject.",
+        "data": {
+          "actId": "",
+          "act": {},
+          "delays": [],
+          "loading": true
+        },
+        "layout": {
+          "component": "Card",
+          "props": {
+            "title": "{{$.act.name}}",
+            "subtitle": "{{$.act.genre}}"
+          },
+          "children": [
+            {
+              "component": "Row",
+              "props": {
+                "gap": 8
+              },
+              "children": [
+                {
+                  "component": "Badge",
+                  "props": {
+                    "label": "$.act.billing",
+                    "tone": "accent"
+                  }
+                }
+              ]
+            },
+            {
+              "component": "KeyValue",
+              "props": {
+                "items": [
+                  {
+                    "label": "Stage",
+                    "value": "$.act.stage_name"
+                  },
+                  {
+                    "label": "Day",
+                    "value": "$.act.day"
+                  },
+                  {
+                    "label": "On at",
+                    "value": "$.act.starts_at"
+                  },
+                  {
+                    "label": "Set (min)",
+                    "value": "$.act.duration_min"
+                  },
+                  {
+                    "label": "Expected draw",
+                    "value": "$.act.draw"
+                  }
+                ]
+              }
+            },
+            {
+              "if": "$.delays.length",
+              "then": {
+                "component": "List",
+                "props": {
+                  "title": "Holds called",
+                  "rows": "$.delays",
+                  "rowKey": "delay_id",
+                  "primaryKey": "minutes",
+                  "primarySuffix": " min",
+                  "secondaryKey": "created_by",
+                  "tone": "warn"
+                }
+              },
+              "else": ""
+            }
+          ]
+        },
+        "endpoints": {
+          "load": {
+            "url": "/api/lineup/vex",
+            "method": "POST",
+            "request": {
+              "fingerprint": "acts/byId",
+              "context": {
+                "actId": {
+                  "$ref": "$.actId"
+                }
+              }
+            },
+            "target": "act"
+          },
+          "loadDelays": {
+            "url": "/api/lineup/vex",
+            "method": "POST",
+            "request": {
+              "fingerprint": "delays/forAct",
+              "context": {
+                "actId": {
+                  "$ref": "$.actId"
+                }
+              }
+            },
+            "target": "delays"
+          }
+        },
+        "lifecycle": {
+          "mount": [
+            {
+              "call": "load",
+              "onSuccess": [
+                {
+                  "call": "loadDelays",
+                  "onSuccess": [
+                    {
+                      "set": "loading",
+                      "value": false
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        "triggers": [
+          {
+            "message": "reload:act.card",
+            "do": [
+              {
+                "call": "load",
+                "onSuccess": [
+                  {
+                    "call": "loadDelays",
+                    "onSuccess": [
+                      {
+                        "set": "loading",
+                        "value": false
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "input": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "type": "object",
+          "properties": {
+            "actId": {
+              "type": "string",
+              "description": "The act whose set this concerns.",
+              "ref": "acts"
+            }
+          },
+          "required": [
+            "actId"
+          ],
+          "additionalProperties": false
+        }
+      }
+    },
+    {
+      "kind": "nisc.nova/action",
+      "id": "assist.answer",
+      "document": {
+        "id": "assist.answer",
+        "title": "Agent",
+        "description": "The answer to the sentence on the line, as a briefing: the question, the answer in sentences that each cite a card on screen, what was read to give it, the steps of a plan as chips, and up to three follow-up sentences.",
+        "data": {
+          "status": "running",
+          "statusTone": "mute",
+          "by": "",
+          "say": "",
+          "plain": "",
+          "answer": "",
+          "segments": [],
+          "landed": false,
+          "lit": "",
+          "lookups": "",
+          "reason": "",
+          "notes": "",
+          "steps": [],
+          "progress": "",
+          "followUps": [],
+          "stepIndex": -1,
+          "opened": ""
+        },
+        "layout": {
+          "component": "Box",
+          "props": {
+            "tone": "plain",
+            "py": 2
+          },
+          "children": [
+            {
+              "component": "Stack",
+              "props": {
+                "gap": 8
+              },
+              "children": [
+                {
+                  "if": "$.segments.length",
+                  "then": {
+                    "component": "Spans",
+                    "ref": "answer",
+                    "props": {
+                      "segments": "$.segments",
+                      "textKey": "text",
+                      "linkKey": "card",
+                      "active": "$.lit",
+                      "markUnlinked": "$.landed"
+                    }
+                  },
+                  "else": ""
+                },
+                {
+                  "if": "$.plain",
+                  "then": {
+                    "component": "Text",
+                    "props": {
+                      "value": "$.plain",
+                      "tone": "mute"
+                    }
+                  },
+                  "else": {
+                    "if": "$.landed",
+                    "then": "",
+                    "else": {
+                      "component": "Text",
+                      "props": {
+                        "value": "$.say",
+                        "tone": "mute"
+                      }
+                    }
+                  }
+                },
+                {
+                  "if": "$.steps.length",
+                  "then": {
+                    "component": "Row",
+                    "props": {
+                      "gap": 8,
+                      "wrap": true
+                    },
+                    "children": [
+                      {
+                        "for": "$.steps",
+                        "as": "step",
+                        "key": "index",
+                        "do": {
+                          "component": "Chip",
+                          "ref": "step",
+                          "props": {
+                            "label": "$.step.label",
+                            "value": "$.step.index",
+                            "done": "$.step.done"
+                          }
+                        }
+                      }
+                    ]
+                  },
+                  "else": ""
+                },
+                {
+                  "if": "$.progress",
+                  "then": {
+                    "component": "Badge",
+                    "props": {
+                      "label": "$.progress",
+                      "tone": "accent"
+                    }
+                  },
+                  "else": ""
+                }
+              ]
+            }
+          ]
+        },
+        "endpoints": {
+          "openStep": {
+            "fn": "encore.step",
+            "target": "opened"
+          }
+        },
+        "triggers": [
+          {
+            "event": "ui:click",
+            "ref": "step",
+            "do": [
+              {
+                "set": "stepIndex",
+                "value": "@event.payload"
+              },
+              {
+                "call": "openStep"
+              }
+            ]
+          },
+          {
+            "event": "ui:focus",
+            "ref": "answer",
+            "do": [
+              {
+                "set": "lit",
+                "value": "@event.payload"
+              },
+              {
+                "emit": {
+                  "channel": "attention",
+                  "payload": "@event.payload"
+                }
+              }
+            ]
+          },
+          {
+            "event": "ui:blur",
+            "ref": "answer",
+            "do": [
+              {
+                "set": "lit",
+                "value": ""
+              },
+              {
+                "emit": {
+                  "channel": "attention",
+                  "payload": ""
+                }
+              }
+            ]
+          },
+          {
+            "message": "attention",
+            "do": [
+              {
+                "set": "lit",
+                "value": "@event.payload"
+              }
+            ]
+          },
+          {
+            "event": "ui:click",
+            "ref": "followUp",
+            "do": [
+              {
+                "emit": {
+                  "channel": "line-type",
+                  "payload": "@event.payload"
+                }
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "kind": "nisc.nova/action",
+      "id": "assist.rail",
+      "document": {
+        "id": "assist.rail",
+        "title": "Earlier",
+        "description": "The turns of this shift so far, one line each, newest first: what the operator said and what either the cards or the agent made of it. Click one to read it in full.",
+        "data": {
+          "entries": [],
+          "open": "",
+          "thread": "",
+          "expanded": false
+        },
+        "layout": {
+          "if": "$.entries.length",
+          "then": {
+            "component": "Stack",
+            "props": {
+              "gap": 2
+            },
+            "children": [
+              {
+                "component": "Row",
+                "props": {
+                  "gap": 12,
+                  "align": "center"
+                },
+                "children": [
+                  {
+                    "if": "$.expanded",
+                    "then": {
+                      "component": "Button",
+                      "ref": "earlierShut",
+                      "props": {
+                        "label": "Earlier ▾",
+                        "variant": "quiet"
+                      }
+                    },
+                    "else": {
+                      "component": "Button",
+                      "ref": "earlierOpen",
+                      "props": {
+                        "label": "Earlier · {{$.entries.length}}",
+                        "variant": "quiet"
+                      }
+                    }
+                  },
+                  {
+                    "if": "$.expanded",
+                    "then": {
+                      "component": "Button",
+                      "ref": "newThread",
+                      "props": {
+                        "label": "new thread",
+                        "variant": "quiet"
+                      }
+                    },
+                    "else": ""
+                  }
+                ]
+              },
+              {
+                "if": "$.expanded",
+                "then": {
+                  "component": "Rail",
+                  "ref": "entry",
+                  "props": {
+                    "rows": {
+                      "$prism": {
+                        "$map": {
+                          "over": {
+                            "$ref": "$.entries"
+                          },
+                          "as": "row",
+                          "body": {
+                            "$omit": {
+                              "from": {
+                                "$var": "row"
+                              },
+                              "keys": [
+                                "by"
+                              ]
+                            }
+                          }
+                        }
+                      }
+                    },
+                    "rowKey": "key",
+                    "toneKey": "tone",
+                    "primaryKey": "line",
+                    "secondaryKey": "said",
+                    "detailKey": "full",
+                    "open": "$.open",
+                    "max": {
+                      "$if": {
+                        "$eq": [
+                          "$.open",
+                          "__all__"
+                        ]
+                      },
+                      "$then": 999,
+                      "$else": 3
+                    }
+                  }
+                },
+                "else": ""
+              }
+            ]
+          },
+          "else": ""
+        },
+        "endpoints": {
+          "loadThread": {
+            "fn": "encore.thread",
+            "target": "entries"
+          },
+          "newThread": {
+            "fn": "encore.newThread",
+            "target": "thread"
+          }
+        },
+        "lifecycle": {
+          "mount": [
+            {
+              "call": "loadThread"
+            }
+          ]
+        },
+        "triggers": [
+          {
+            "event": "ui:click",
+            "ref": "earlierOpen",
+            "do": [
+              {
+                "set": "expanded",
+                "value": true
+              }
+            ]
+          },
+          {
+            "event": "ui:click",
+            "ref": "earlierShut",
+            "do": [
+              {
+                "set": "expanded",
+                "value": false
+              }
+            ]
+          },
+          {
+            "event": "ui:click",
+            "ref": "entry",
+            "do": [
+              {
+                "set": "open",
+                "value": "@event.payload"
+              }
+            ]
+          },
+          {
+            "event": "ui:click",
+            "ref": "newThread",
+            "do": [
+              {
+                "set": "open",
+                "value": ""
+              },
+              {
+                "call": "newThread",
+                "onSuccess": [
+                  {
+                    "call": "loadThread"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "message": "thread-changed",
+            "do": [
+              {
+                "call": "loadThread"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "kind": "nisc.nova/action",
+      "id": "attendance.now",
+      "document": {
+        "id": "attendance.now",
+        "title": "On site",
+        "description": "How many people are on site right now — total attendance against the capacity of the whole site, with how full each zone is; open it when someone asks how many guests, people, attendees or visitors there are, how busy it is, or how full the festival is.",
+        "data": {
+          "day": "sat",
+          "hour": 18,
+          "total": {},
+          "zones": [],
+          "loading": true
+        },
+        "layout": {
+          "component": "Card",
+          "props": {
+            "title": "On site",
+            "subtitle": "{{$.day}} · {{$.hour}}:00"
+          },
+          "children": [
+            {
+              "component": "Gauge",
+              "props": {
+                "value": "$.total.headcount",
+                "max": "$.total.capacity",
+                "label": "people on site",
+                "warnAt": 0.85
+              }
+            },
+            {
+              "component": "List",
+              "props": {
+                "title": "By zone",
+                "rows": "$.zones",
+                "rowKey": "zone_id",
+                "primaryKey": "name",
+                "secondaryKey": "fill_display",
+                "metaKey": "headcount",
+                "empty": "No counts for that hour."
+              }
+            }
+          ]
+        },
+        "endpoints": {
+          "load": {
+            "url": "/api/site/vex",
+            "method": "POST",
+            "request": {
+              "fingerprint": "attendance/total",
+              "context": {
+                "day": {
+                  "$ref": "$.day"
+                },
+                "hour": {
+                  "$ref": "$.hour"
+                }
+              }
+            },
+            "target": "total"
+          },
+          "loadZones": {
+            "url": "/api/site/vex",
+            "method": "POST",
+            "request": {
+              "fingerprint": "attendance/byZone",
+              "context": {
+                "day": {
+                  "$ref": "$.day"
+                },
+                "hour": {
+                  "$ref": "$.hour"
+                }
+              }
+            },
+            "target": "zones"
+          }
+        },
+        "lifecycle": {
+          "mount": [
+            {
+              "call": "load",
+              "onSuccess": [
+                {
+                  "call": "loadZones",
+                  "onSuccess": [
+                    {
+                      "set": "loading",
+                      "value": false
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        "input": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "type": "object",
+          "properties": {
+            "day": {
+              "type": "string",
+              "enum": [
+                "fri",
+                "sat",
+                "sun"
+              ],
+              "description": "Festival day: fri, sat or sun.",
+              "parse": "day",
+              "fallback": "now"
+            },
+            "hour": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 23,
+              "description": "Hour of the day, 0–23.",
+              "parse": "hour",
+              "fallback": "now"
+            }
+          },
+          "additionalProperties": false
+        },
+        "triggers": [
+          {
+            "message": "reload:attendance.now",
+            "do": [
+              {
+                "call": "load",
+                "onSuccess": [
+                  {
+                    "call": "loadZones",
+                    "onSuccess": [
+                      {
+                        "set": "loading",
+                        "value": false
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "kind": "nisc.nova/action",
+      "id": "attention.strip",
+      "document": {
+        "id": "attention.strip",
+        "title": "Watching",
+        "description": "What the room has noticed without being asked: how many events were triaged and how many raised, the one line the agent wrote about a critical one, how many raised cards are folded away, and whether the ceiling on event passes has bitten.",
+        "data": {
+          "events": 0,
+          "raised": 0,
+          "showing": 0,
+          "folded": 0,
+          "rows": 0,
+          "passes": 0,
+          "say": "",
+          "foldedSay": "",
+          "ceilingSay": "",
+          "brief": ""
+        },
+        "layout": {
+          "if": "$.events",
+          "then": {
+            "component": "Stack",
+            "props": {
+              "gap": 4
+            },
+            "children": [
+              {
+                "if": "$.foldedSay",
+                "then": {
+                  "component": "Text",
+                  "props": {
+                    "value": "$.foldedSay",
+                    "variant": "tag",
+                    "tone": "warn"
+                  }
+                },
+                "else": ""
+              },
+              {
+                "if": "$.brief",
+                "then": {
+                  "component": "Text",
+                  "props": {
+                    "value": "$.brief",
+                    "tone": "alert"
+                  }
+                },
+                "else": ""
+              }
+            ]
+          },
+          "else": ""
+        }
+      }
+    },
+    {
+      "kind": "nisc.nova/action",
+      "id": "crowd.gauge",
+      "document": {
+        "id": "crowd.gauge",
+        "title": "Crowd",
+        "description": "A gauge of how full one zone is — headcount against capacity at one hour; open it when crowding, capacity, density or whether people will fit somewhere is mentioned.",
+        "data": {
+          "zoneId": "",
+          "day": "sat",
+          "hour": 18,
+          "count": {},
+          "loading": true
+        },
+        "layout": {
+          "component": "Card",
+          "props": {
+            "title": "{{$.count.name}}",
+            "subtitle": "{{$.day}} · {{$.hour}}:00"
+          },
+          "children": [
+            {
+              "component": "Gauge",
+              "props": {
+                "value": "$.count.headcount",
+                "max": "$.count.capacity",
+                "label": "people",
+                "warnAt": 0.85
+              }
+            }
+          ]
+        },
+        "endpoints": {
+          "load": {
+            "url": "/api/site/vex",
+            "method": "POST",
+            "request": {
+              "fingerprint": "zones/count",
+              "context": {
+                "zoneId": {
+                  "$ref": "$.zoneId"
+                },
+                "day": {
+                  "$ref": "$.day"
+                },
+                "hour": {
+                  "$ref": "$.hour"
+                }
+              }
+            },
+            "target": "count"
+          }
+        },
+        "lifecycle": {
+          "mount": [
+            {
+              "call": "load",
+              "onSuccess": [
+                {
+                  "set": "loading",
+                  "value": false
+                }
+              ]
+            }
+          ]
+        },
+        "input": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "type": "object",
+          "properties": {
+            "zoneId": {
+              "type": "string",
+              "description": "The zone of the site this is about.",
+              "ref": "zones"
+            },
+            "day": {
+              "type": "string",
+              "enum": [
+                "fri",
+                "sat",
+                "sun"
+              ],
+              "description": "Festival day: fri, sat or sun.",
+              "parse": "day",
+              "fallback": "now"
+            },
+            "hour": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 23,
+              "description": "Hour of the day, 0–23.",
+              "parse": "hour",
+              "fallback": "now"
+            }
+          },
+          "required": [
+            "zoneId"
+          ],
+          "additionalProperties": false
+        },
+        "triggers": [
+          {
+            "message": "reload:crowd.gauge",
+            "do": [
+              {
+                "call": "load",
+                "onSuccess": [
+                  {
+                    "set": "loading",
+                    "value": false
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "kind": "nisc.nova/action",
+      "id": "director.deck",
+      "document": {
+        "id": "director.deck",
+        "title": "Director",
+        "description": "Plays Saturday evening as a feed of real writes: play, pause and speed, with the festival clock.",
+        "data": {
+          "shown": false,
+          "command": "status",
+          "deck": {
+            "playing": false,
+            "finished": false,
+            "status": "ready",
+            "speed": 60,
+            "time": "18:00",
+            "day": "sat",
+            "played": 0,
+            "of": 0
+          }
+        },
+        "layout": {
+          "if": "$.shown",
+          "then": {
+            "component": "Row",
+            "props": {
+              "gap": 10,
+              "align": "center",
+              "wrap": true
+            },
+            "children": [
+              {
+                "component": "Text",
+                "props": {
+                  "value": "Festival clock: {{$.deck.day}} {{$.deck.time}}",
+                  "variant": "story"
+                }
+              },
+              {
+                "component": "Badge",
+                "props": {
+                  "label": "$.deck.status",
+                  "tone": {
+                    "$if": "$.deck.finished",
+                    "$then": "good",
+                    "$else": "mute"
+                  }
+                }
+              },
+              {
+                "if": "$.deck.playing",
+                "then": {
+                  "component": "Button",
+                  "ref": "pause",
+                  "props": {
+                    "label": "Pause",
+                    "variant": "ghost"
+                  }
+                },
+                "else": {
+                  "if": "$.deck.finished",
+                  "then": {
+                    "component": "Button",
+                    "ref": "replay",
+                    "props": {
+                      "label": "Replay",
+                      "variant": "ghost"
+                    }
+                  },
+                  "else": {
+                    "component": "Button",
+                    "ref": "play",
+                    "props": {
+                      "label": "Play",
+                      "variant": "ghost"
+                    }
+                  }
+                }
+              },
+              {
+                "component": "Button",
+                "ref": "slower",
+                "props": {
+                  "label": "Slower",
+                  "variant": "quiet"
+                }
+              },
+              {
+                "component": "Text",
+                "props": {
+                  "value": "{{$.deck.speed}}× speed",
+                  "tone": "mute",
+                  "variant": "story"
+                }
+              },
+              {
+                "component": "Button",
+                "ref": "faster",
+                "props": {
+                  "label": "Faster",
+                  "variant": "quiet"
+                }
+              },
+              {
+                "component": "Text",
+                "props": {
+                  "value": "{{$.deck.played}} of {{$.deck.of}} cues played",
+                  "tone": "mute",
+                  "variant": "story"
+                }
+              }
+            ]
+          },
+          "else": ""
+        },
+        "endpoints": {
+          "run": {
+            "fn": "encore.director",
+            "target": "deck"
+          }
+        },
+        "lifecycle": {
+          "mount": [
+            {
+              "call": "run"
+            }
+          ]
+        },
+        "triggers": [
+          {
+            "message": "xray-open",
+            "do": [
+              {
+                "set": "shown",
+                "value": "@event.payload"
+              }
+            ]
+          },
+          {
+            "event": "ui:click",
+            "ref": "play",
+            "do": [
+              {
+                "set": "command",
+                "value": "play"
+              },
+              {
+                "call": "run"
+              }
+            ]
+          },
+          {
+            "event": "ui:click",
+            "ref": "pause",
+            "do": [
+              {
+                "set": "command",
+                "value": "pause"
+              },
+              {
+                "call": "run"
+              }
+            ]
+          },
+          {
+            "event": "ui:click",
+            "ref": "replay",
+            "do": [
+              {
+                "set": "command",
+                "value": "replay"
+              },
+              {
+                "call": "run"
+              }
+            ]
+          },
+          {
+            "event": "ui:click",
+            "ref": "faster",
+            "do": [
+              {
+                "set": "command",
+                "value": "faster"
+              },
+              {
+                "call": "run"
+              }
+            ]
+          },
+          {
+            "event": "ui:click",
+            "ref": "slower",
+            "do": [
+              {
+                "set": "command",
+                "value": "slower"
+              },
+              {
+                "call": "run"
+              }
+            ]
+          },
+          {
+            "message": "clock-changed",
+            "do": [
+              {
+                "set": "command",
+                "value": "status"
+              },
+              {
+                "call": "run"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "kind": "nisc.nova/action",
+      "id": "incident.feed",
+      "document": {
+        "id": "incident.feed",
+        "title": "Incidents",
+        "description": "The feed of open incidents, newest first — medical, security, technical, crowd and weather reports, each with where it is; open it when incidents, problems, injuries, faults or what has gone wrong is mentioned.",
+        "data": {
+          "incidents": [],
+          "loading": true
+        },
+        "layout": {
+          "component": "Card",
+          "props": {
+            "title": "Open incidents",
+            "tone": "warn"
+          },
+          "children": [
+            {
+              "component": "List",
+              "props": {
+                "rows": "$.incidents",
+                "rowKey": "incident_id",
+                "primaryKey": "summary",
+                "secondaryKey": "zone_name",
+                "metaKey": "at",
+                "badgeKey": "kind",
+                "empty": "Nothing open."
+              }
+            }
+          ]
+        },
+        "endpoints": {
+          "load": {
+            "url": "/api/readings/vex",
+            "method": "POST",
+            "request": {
+              "fingerprint": "incidents/open",
+              "context": {}
+            },
+            "target": "incidents"
+          }
+        },
+        "lifecycle": {
+          "mount": [
+            {
+              "call": "load",
+              "onSuccess": [
+                {
+                  "set": "loading",
+                  "value": false
+                }
+              ]
+            }
+          ]
+        },
+        "triggers": [
+          {
+            "message": "reload:incident.feed",
+            "do": [
+              {
+                "call": "load",
+                "onSuccess": [
+                  {
+                    "set": "loading",
+                    "value": false
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "kind": "nisc.nova/action",
+      "id": "intent.line",
+      "document": {
+        "id": "intent.line",
+        "title": "Intent",
+        "description": "The line the operator types what is happening into; the room assembles itself around it.",
+        "data": {
+          "text": "",
+          "generation": 0,
+          "tone": "calm",
+          "ran": "",
+          "warmed": "",
+          "heard": []
+        },
+        "layout": {
+          "component": "Box",
+          "props": {
+            "tone": "$.tone",
+            "pad": 14
+          },
+          "children": [
+            {
+              "component": "Stack",
+              "props": {
+                "gap": 8
+              },
+              "children": [
+                {
+                  "component": "Row",
+                  "props": {
+                    "gap": 14,
+                    "align": "center"
+                  },
+                  "children": [
+                    {
+                      "component": "Text",
+                      "props": {
+                        "value": "›",
+                        "variant": "display",
+                        "tone": "accent"
+                      }
+                    },
+                    {
+                      "component": "Input",
+                      "ref": "line",
+                      "model": "$.text",
+                      "props": {
+                        "value": "$.text",
+                        "size": "line",
+                        "debounce": 0,
+                        "autofocus": true,
+                        "placeholder": "say what is happening — “storm at 9 move headliner to the tent”"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "if": "$.heard.length",
+                  "then": {
+                    "component": "Tags",
+                    "props": {
+                      "items": {
+                        "$prism": {
+                          "$map": {
+                            "over": {
+                              "$ref": "$.heard"
+                            },
+                            "as": "tag",
+                            "body": {
+                              "$omit": {
+                                "from": {
+                                  "$var": "tag"
+                                },
+                                "keys": [
+                                  "state"
+                                ]
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "else": ""
+                }
+              ]
+            }
+          ]
+        },
+        "endpoints": {
+          "decide": {
+            "fn": "encore.intent",
+            "target": "generation"
+          },
+          "runNow": {
+            "fn": "encore.run",
+            "target": "ran"
+          },
+          "warm": {
+            "fn": "encore.warm",
+            "target": "warmed"
+          }
+        },
+        "triggers": [
+          {
+            "event": "ui:model",
+            "ref": "line",
+            "do": [
+              {
+                "call": "decide"
+              }
+            ]
+          },
+          {
+            "event": "ui:key",
+            "ref": "line",
+            "key": "Enter",
+            "do": [
+              {
+                "call": "runNow"
+              }
+            ]
+          },
+          {
+            "event": "ui:focus",
+            "ref": "line",
+            "do": [
+              {
+                "call": "warm"
+              }
+            ]
+          },
+          {
+            "message": "line-type",
+            "do": [
+              {
+                "set": "text",
+                "value": "@event.payload"
+              },
+              {
+                "call": "decide"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "kind": "nisc.nova/action",
+      "id": "intent.options",
+      "document": {
+        "id": "intent.options",
+        "title": "Maybe",
+        "description": "Cards the model is unsure about, offered as chips the operator can promote with a click.",
+        "data": {
+          "chips": [],
+          "suggested": [],
+          "links": [],
+          "stepsUp": false,
+          "say": "",
+          "idle": "Nothing needs attention right now. Say what is happening.",
+          "promoteId": "",
+          "promoted": 0
+        },
+        "layout": {
+          "if": "$.idle",
+          "then": {
+            "component": "Text",
+            "props": {
+              "value": "$.idle",
+              "tone": "mute"
+            }
+          },
+          "else": {
+            "if": "$.say",
+            "then": {
+              "component": "Row",
+              "props": {
+                "gap": 8,
+                "align": "center",
+                "wrap": true
+              },
+              "children": [
+                {
+                  "if": "$.say",
+                  "then": {
+                    "component": "Text",
+                    "props": {
+                      "value": "$.say",
+                      "tone": "mute"
+                    }
+                  },
+                  "else": ""
+                },
+                {
+                  "if": "$.stepsUp",
+                  "then": "",
+                  "else": {
+                    "for": "$.suggested",
+                    "as": "chip",
+                    "key": "id",
+                    "do": {
+                      "component": "Chip",
+                      "ref": "chip",
+                      "props": {
+                        "label": "$.chip.label",
+                        "value": "$.chip.id",
+                        "accent": "$.chip.hue"
+                      }
+                    }
+                  }
+                },
+                {
+                  "for": "$.links",
+                  "as": "link",
+                  "key": "text",
+                  "do": {
+                    "component": "Button",
+                    "ref": "link",
+                    "props": {
+                      "label": "$.link.text",
+                      "value": "$.link.text",
+                      "variant": "link"
+                    }
+                  }
+                }
+              ]
+            },
+            "else": {
+              "if": "$.suggested.length",
+              "then": {
+                "component": "Row",
+                "props": {
+                  "gap": 8,
+                  "align": "center",
+                  "wrap": true
+                },
+                "children": [
+                  {
+                    "if": "$.say",
+                    "then": {
+                      "component": "Text",
+                      "props": {
+                        "value": "$.say",
+                        "tone": "mute"
+                      }
+                    },
+                    "else": ""
+                  },
+                  {
+                    "if": "$.stepsUp",
+                    "then": "",
+                    "else": {
+                      "for": "$.suggested",
+                      "as": "chip",
+                      "key": "id",
+                      "do": {
+                        "component": "Chip",
+                        "ref": "chip",
+                        "props": {
+                          "label": "$.chip.label",
+                          "value": "$.chip.id",
+                          "accent": "$.chip.hue"
+                        }
+                      }
+                    }
+                  },
+                  {
+                    "for": "$.links",
+                    "as": "link",
+                    "key": "text",
+                    "do": {
+                      "component": "Button",
+                      "ref": "link",
+                      "props": {
+                        "label": "$.link.text",
+                        "value": "$.link.text",
+                        "variant": "link"
+                      }
+                    }
+                  }
+                ]
+              },
+              "else": {
+                "if": "$.links.length",
+                "then": {
+                  "component": "Row",
+                  "props": {
+                    "gap": 8,
+                    "align": "center",
+                    "wrap": true
+                  },
+                  "children": [
+                    {
+                      "if": "$.say",
+                      "then": {
+                        "component": "Text",
+                        "props": {
+                          "value": "$.say",
+                          "tone": "mute"
+                        }
+                      },
+                      "else": ""
+                    },
+                    {
+                      "if": "$.stepsUp",
+                      "then": "",
+                      "else": {
+                        "for": "$.suggested",
+                        "as": "chip",
+                        "key": "id",
+                        "do": {
+                          "component": "Chip",
+                          "ref": "chip",
+                          "props": {
+                            "label": "$.chip.label",
+                            "value": "$.chip.id",
+                            "accent": "$.chip.hue"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "for": "$.links",
+                      "as": "link",
+                      "key": "text",
+                      "do": {
+                        "component": "Button",
+                        "ref": "link",
+                        "props": {
+                          "label": "$.link.text",
+                          "value": "$.link.text",
+                          "variant": "link"
+                        }
+                      }
+                    }
+                  ]
+                },
+                "else": ""
+              }
+            }
+          }
+        },
+        "endpoints": {
+          "promote": {
+            "fn": "encore.promote",
+            "target": "promoted"
+          }
+        },
+        "triggers": [
+          {
+            "event": "ui:click",
+            "ref": "link",
+            "do": [
+              {
+                "emit": {
+                  "channel": "line-type",
+                  "payload": "@event.payload"
+                }
+              }
+            ]
+          },
+          {
+            "event": "ui:click",
+            "ref": "chip",
+            "do": [
+              {
+                "set": "promoteId",
+                "value": "@event.payload"
+              },
+              {
+                "call": "promote"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "kind": "nisc.nova/action",
+      "id": "intent.trace",
+      "document": {
+        "id": "intent.trace",
+        "title": "X-ray",
+        "description": "How the room decided: the story of the last pass — what was typed, what the fast model decided, what the assistant was handed and said, what was refused and why, what changed on screen — then timings and cost, and the demo controls.",
+        "data": {
+          "open": false,
+          "tab": "story",
+          "allCards": false,
+          "command": "latest",
+          "story": {},
+          "storyPosition": "",
+          "hasEarlier": false,
+          "hasLater": false,
+          "following": true,
+          "pass": 0,
+          "text": "",
+          "questions": 0,
+          "bytes": 0,
+          "decider": "",
+          "calibrated": false,
+          "lanes": [],
+          "totalMs": 0,
+          "waitedMs": 0,
+          "connection": "",
+          "warm": "",
+          "top": [],
+          "handoff": [],
+          "run": []
+        },
+        "layout": {
+          "component": "Row",
+          "props": {
+            "gap": 8,
+            "align": "end",
+            "justify": "end"
+          },
+          "children": [
+            {
+              "if": "$.open",
+              "then": {
+                "component": "Hotkey",
+                "ref": "shutKey",
+                "props": {
+                  "value": "mod+., mod+`"
+                }
+              },
+              "else": {
+                "component": "Hotkey",
+                "ref": "openKey",
+                "props": {
+                  "value": "mod+., mod+`"
+                }
+              }
+            },
+            {
+              "component": "OnLoad",
+              "ref": "fresh",
+              "props": {
+                "when": "$.open"
+              }
+            },
+            {
+              "if": "$.open",
+              "then": {
+                "component": "Box",
+                "props": {
+                  "tone": "dock",
+                  "grow": true
+                },
+                "children": [
+                  {
+                    "component": "Stack",
+                    "props": {
+                      "gap": 0
+                    },
+                    "children": [
+                      {
+                        "component": "Box",
+                        "props": {
+                          "px": 16,
+                          "py": 8,
+                          "tone": "dock-head"
+                        },
+                        "children": [
+                          {
+                            "component": "Row",
+                            "props": {
+                              "gap": 16,
+                              "align": "center",
+                              "justify": "between",
+                              "wrap": true
+                            },
+                            "children": [
+                              {
+                                "component": "Row",
+                                "props": {
+                                  "gap": 4,
+                                  "align": "center"
+                                },
+                                "children": [
+                                  {
+                                    "if": {
+                                      "$eq": [
+                                        "$.tab",
+                                        "story"
+                                      ]
+                                    },
+                                    "then": {
+                                      "component": "Button",
+                                      "ref": "tab-story",
+                                      "props": {
+                                        "label": "What happened",
+                                        "variant": "tab-on"
+                                      }
+                                    },
+                                    "else": {
+                                      "component": "Button",
+                                      "ref": "tab-story",
+                                      "props": {
+                                        "label": "What happened",
+                                        "variant": "tab"
+                                      }
+                                    }
+                                  },
+                                  {
+                                    "if": {
+                                      "$eq": [
+                                        "$.tab",
+                                        "numbers"
+                                      ]
+                                    },
+                                    "then": {
+                                      "component": "Button",
+                                      "ref": "tab-numbers",
+                                      "props": {
+                                        "label": "Timings & cost",
+                                        "variant": "tab-on"
+                                      }
+                                    },
+                                    "else": {
+                                      "component": "Button",
+                                      "ref": "tab-numbers",
+                                      "props": {
+                                        "label": "Timings & cost",
+                                        "variant": "tab"
+                                      }
+                                    }
+                                  },
+                                  {
+                                    "if": {
+                                      "$eq": [
+                                        "$.tab",
+                                        "demo"
+                                      ]
+                                    },
+                                    "then": {
+                                      "component": "Button",
+                                      "ref": "tab-demo",
+                                      "props": {
+                                        "label": "Demo",
+                                        "variant": "tab-on"
+                                      }
+                                    },
+                                    "else": {
+                                      "component": "Button",
+                                      "ref": "tab-demo",
+                                      "props": {
+                                        "label": "Demo",
+                                        "variant": "tab"
+                                      }
+                                    }
+                                  }
+                                ]
+                              },
+                              {
+                                "if": "$.storyPosition",
+                                "then": {
+                                  "component": "Row",
+                                  "props": {
+                                    "gap": 6,
+                                    "align": "center"
+                                  },
+                                  "children": [
+                                    {
+                                      "component": "Button",
+                                      "ref": "earlier",
+                                      "props": {
+                                        "label": "‹",
+                                        "variant": "quiet",
+                                        "disabled": {
+                                          "$if": "$.hasEarlier",
+                                          "$then": false,
+                                          "$else": true
+                                        }
+                                      }
+                                    },
+                                    {
+                                      "component": "Text",
+                                      "props": {
+                                        "value": "{{$.story.label}} · {{$.storyPosition}}",
+                                        "tone": "mute",
+                                        "variant": "story"
+                                      }
+                                    },
+                                    {
+                                      "component": "Button",
+                                      "ref": "later",
+                                      "props": {
+                                        "label": "›",
+                                        "variant": "quiet",
+                                        "disabled": {
+                                          "$if": "$.hasLater",
+                                          "$then": false,
+                                          "$else": true
+                                        }
+                                      }
+                                    },
+                                    {
+                                      "if": "$.following",
+                                      "then": "",
+                                      "else": {
+                                        "component": "Button",
+                                        "ref": "latest",
+                                        "props": {
+                                          "label": "back to the latest",
+                                          "variant": "link"
+                                        }
+                                      }
+                                    }
+                                  ]
+                                },
+                                "else": ""
+                              },
+                              {
+                                "component": "Button",
+                                "ref": "shut",
+                                "props": {
+                                  "label": "close x-ray",
+                                  "variant": "quiet"
+                                }
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "component": "Box",
+                        "props": {
+                          "px": 16,
+                          "py": 12,
+                          "scroll": true,
+                          "maxH": "44vh"
+                        },
+                        "children": [
+                          {
+                            "if": {
+                              "$eq": [
+                                "$.tab",
+                                "numbers"
+                              ]
+                            },
+                            "then": {
+                              "if": "$.story.key",
+                              "then": {
+                                "component": "Grid",
+                                "props": {
+                                  "columns": 2,
+                                  "gap": 24,
+                                  "align": "start"
+                                },
+                                "children": [
+                                  {
+                                    "component": "Stack",
+                                    "props": {
+                                      "gap": 6
+                                    },
+                                    "children": [
+                                      {
+                                        "component": "Text",
+                                        "props": {
+                                          "value": "Where the time went",
+                                          "variant": "title"
+                                        }
+                                      },
+                                      {
+                                        "component": "KeyValue",
+                                        "props": {
+                                          "items": "$.story.timings"
+                                        }
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "component": "Stack",
+                                    "props": {
+                                      "gap": 6
+                                    },
+                                    "children": [
+                                      {
+                                        "component": "Text",
+                                        "props": {
+                                          "value": "What it cost",
+                                          "variant": "title"
+                                        }
+                                      },
+                                      {
+                                        "component": "KeyValue",
+                                        "props": {
+                                          "items": "$.story.cost"
+                                        }
+                                      }
+                                    ]
+                                  }
+                                ]
+                              },
+                              "else": {
+                                "component": "Text",
+                                "props": {
+                                  "value": "No pass yet — nothing has been measured.",
+                                  "tone": "mute",
+                                  "variant": "story"
+                                }
+                              }
+                            },
+                            "else": {
+                              "if": {
+                                "$eq": [
+                                  "$.tab",
+                                  "demo"
+                                ]
+                              },
+                              "then": {
+                                "component": "Stack",
+                                "props": {
+                                  "gap": 8
+                                },
+                                "children": [
+                                  {
+                                    "component": "Text",
+                                    "props": {
+                                      "value": "A scripted Saturday evening, written to the database by a separate principal — the room sees it the way it would see the real site.",
+                                      "tone": "mute",
+                                      "variant": "story"
+                                    }
+                                  },
+                                  {
+                                    "component": "CanvasSlot",
+                                    "props": {
+                                      "canvasId": "deck"
+                                    }
+                                  }
+                                ]
+                              },
+                              "else": {
+                                "if": "$.story.key",
+                                "then": {
+                                  "component": "Stack",
+                                  "props": {
+                                    "gap": 16
+                                  },
+                                  "children": [
+                                    {
+                                      "component": "Stack",
+                                      "props": {
+                                        "gap": 6
+                                      },
+                                      "children": [
+                                        {
+                                          "component": "Text",
+                                          "props": {
+                                            "value": "$.story.typed",
+                                            "variant": "story"
+                                          }
+                                        },
+                                        {
+                                          "if": "$.story.heard.length",
+                                          "then": {
+                                            "component": "Tags",
+                                            "props": {
+                                              "prefix": "Heard",
+                                              "items": "$.story.heard"
+                                            }
+                                          },
+                                          "else": {
+                                            "component": "Text",
+                                            "props": {
+                                              "value": "Heard nothing it could name: no time, no row.",
+                                              "tone": "mute",
+                                              "variant": "story"
+                                            }
+                                          }
+                                        },
+                                        {
+                                          "component": "Stack",
+                                          "props": {
+                                            "gap": 4
+                                          },
+                                          "children": [
+                                            {
+                                              "for": "$.story.corrections",
+                                              "as": "line",
+                                              "do": {
+                                                "component": "Text",
+                                                "props": {
+                                                  "value": "$.line.text",
+                                                  "tone": "$.line.tone",
+                                                  "variant": "story"
+                                                }
+                                              }
+                                            }
+                                          ]
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "component": "Stack",
+                                      "props": {
+                                        "gap": 6
+                                      },
+                                      "children": [
+                                        {
+                                          "component": "Text",
+                                          "props": {
+                                            "value": "$.story.jevHeading",
+                                            "variant": "title"
+                                          }
+                                        },
+                                        {
+                                          "component": "Text",
+                                          "props": {
+                                            "value": "How much it wanted each card on screen:",
+                                            "tone": "mute",
+                                            "variant": "story"
+                                          }
+                                        },
+                                        {
+                                          "if": "$.allCards",
+                                          "then": {
+                                            "component": "Stack",
+                                            "props": {
+                                              "gap": 4
+                                            },
+                                            "children": [
+                                              {
+                                                "for": "$.story.cards",
+                                                "as": "card",
+                                                "key": "id",
+                                                "do": {
+                                                  "component": "Meter",
+                                                  "props": {
+                                                    "label": "$.card.label",
+                                                    "value": "$.card.p",
+                                                    "note": "$.card.note",
+                                                    "compact": true
+                                                  }
+                                                }
+                                              }
+                                            ]
+                                          },
+                                          "else": {
+                                            "component": "Stack",
+                                            "props": {
+                                              "gap": 4
+                                            },
+                                            "children": [
+                                              {
+                                                "for": "$.story.cardsTop",
+                                                "as": "card",
+                                                "key": "id",
+                                                "do": {
+                                                  "component": "Meter",
+                                                  "props": {
+                                                    "label": "$.card.label",
+                                                    "value": "$.card.p",
+                                                    "note": "$.card.note",
+                                                    "compact": true
+                                                  }
+                                                }
+                                              }
+                                            ]
+                                          }
+                                        },
+                                        {
+                                          "if": "$.story.moreCards",
+                                          "then": {
+                                            "if": "$.allCards",
+                                            "then": {
+                                              "component": "Button",
+                                              "ref": "fewerCards",
+                                              "props": {
+                                                "label": "show fewer",
+                                                "variant": "link"
+                                              }
+                                            },
+                                            "else": {
+                                              "component": "Button",
+                                              "ref": "allCards",
+                                              "props": {
+                                                "label": "show all {{$.story.cards.length}}",
+                                                "variant": "link"
+                                              }
+                                            }
+                                          },
+                                          "else": ""
+                                        },
+                                        {
+                                          "component": "Stack",
+                                          "props": {
+                                            "gap": 4
+                                          },
+                                          "children": [
+                                            {
+                                              "for": "$.story.decided",
+                                              "as": "line",
+                                              "do": {
+                                                "component": "Text",
+                                                "props": {
+                                                  "value": "$.line.text",
+                                                  "tone": "$.line.tone",
+                                                  "variant": "story"
+                                                }
+                                              }
+                                            }
+                                          ]
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "if": "$.story.handedHeading",
+                                      "then": {
+                                        "component": "Stack",
+                                        "props": {
+                                          "gap": 6
+                                        },
+                                        "children": [
+                                          {
+                                            "component": "Text",
+                                            "props": {
+                                              "value": "$.story.handedHeading",
+                                              "variant": "title"
+                                            }
+                                          },
+                                          {
+                                            "component": "KeyValue",
+                                            "props": {
+                                              "items": "$.story.handed"
+                                            }
+                                          }
+                                        ]
+                                      },
+                                      "else": ""
+                                    },
+                                    {
+                                      "if": "$.story.assistantHeading",
+                                      "then": {
+                                        "component": "Stack",
+                                        "props": {
+                                          "gap": 6
+                                        },
+                                        "children": [
+                                          {
+                                            "component": "Text",
+                                            "props": {
+                                              "value": "$.story.assistantHeading",
+                                              "variant": "title"
+                                            }
+                                          },
+                                          {
+                                            "component": "Stack",
+                                            "props": {
+                                              "gap": 4
+                                            },
+                                            "children": [
+                                              {
+                                                "for": "$.story.assistant",
+                                                "as": "line",
+                                                "do": {
+                                                  "component": "Text",
+                                                  "props": {
+                                                    "value": "$.line.text",
+                                                    "tone": "$.line.tone",
+                                                    "variant": "story"
+                                                  }
+                                                }
+                                              }
+                                            ]
+                                          }
+                                        ]
+                                      },
+                                      "else": ""
+                                    },
+                                    {
+                                      "component": "Stack",
+                                      "props": {
+                                        "gap": 6
+                                      },
+                                      "children": [
+                                        {
+                                          "component": "Text",
+                                          "props": {
+                                            "value": "On screen, as a result",
+                                            "variant": "title"
+                                          }
+                                        },
+                                        {
+                                          "component": "Stack",
+                                          "props": {
+                                            "gap": 4
+                                          },
+                                          "children": [
+                                            {
+                                              "for": "$.story.screen",
+                                              "as": "line",
+                                              "do": {
+                                                "component": "Text",
+                                                "props": {
+                                                  "value": "$.line.text",
+                                                  "tone": "$.line.tone",
+                                                  "variant": "story"
+                                                }
+                                              }
+                                            }
+                                          ]
+                                        }
+                                      ]
+                                    }
+                                  ]
+                                },
+                                "else": {
+                                  "component": "Text",
+                                  "props": {
+                                    "value": "Nothing has been typed yet. The story of a sentence appears here as soon as there is one.",
+                                    "tone": "mute",
+                                    "variant": "story"
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              },
+              "else": {
+                "component": "Button",
+                "ref": "open",
+                "props": {
+                  "label": "x-ray",
+                  "variant": "quiet"
+                }
+              }
+            }
+          ]
+        },
+        "endpoints": {
+          "step": {
+            "fn": "encore.story",
+            "target": "storyPosition"
+          }
+        },
+        "triggers": [
+          {
+            "event": "ui:click",
+            "ref": "open",
+            "do": [
+              {
+                "set": "open",
+                "value": true
+              },
+              {
+                "emit": {
+                  "channel": "xray-open",
+                  "payload": true
+                }
+              }
+            ]
+          },
+          {
+            "event": "ui:click",
+            "ref": "openKey",
+            "do": [
+              {
+                "set": "open",
+                "value": true
+              },
+              {
+                "emit": {
+                  "channel": "xray-open",
+                  "payload": true
+                }
+              }
+            ]
+          },
+          {
+            "event": "ui:click",
+            "ref": "shut",
+            "do": [
+              {
+                "set": "open",
+                "value": false
+              },
+              {
+                "emit": {
+                  "channel": "xray-open",
+                  "payload": false
+                }
+              }
+            ]
+          },
+          {
+            "event": "ui:click",
+            "ref": "shutKey",
+            "do": [
+              {
+                "set": "open",
+                "value": false
+              },
+              {
+                "emit": {
+                  "channel": "xray-open",
+                  "payload": false
+                }
+              }
+            ]
+          },
+          {
+            "event": "ui:click",
+            "ref": "fresh",
+            "do": [
+              {
+                "set": "open",
+                "value": false
+              },
+              {
+                "emit": {
+                  "channel": "xray-open",
+                  "payload": false
+                }
+              }
+            ]
+          },
+          {
+            "event": "ui:click",
+            "ref": "tab-story",
+            "do": [
+              {
+                "set": "tab",
+                "value": "story"
+              }
+            ]
+          },
+          {
+            "event": "ui:click",
+            "ref": "tab-numbers",
+            "do": [
+              {
+                "set": "tab",
+                "value": "numbers"
+              }
+            ]
+          },
+          {
+            "event": "ui:click",
+            "ref": "tab-demo",
+            "do": [
+              {
+                "set": "tab",
+                "value": "demo"
+              }
+            ]
+          },
+          {
+            "event": "ui:click",
+            "ref": "allCards",
+            "do": [
+              {
+                "set": "allCards",
+                "value": true
+              }
+            ]
+          },
+          {
+            "event": "ui:click",
+            "ref": "fewerCards",
+            "do": [
+              {
+                "set": "allCards",
+                "value": false
+              }
+            ]
+          },
+          {
+            "event": "ui:click",
+            "ref": "earlier",
+            "do": [
+              {
+                "set": "command",
+                "value": "earlier"
+              },
+              {
+                "call": "step"
+              }
+            ]
+          },
+          {
+            "event": "ui:click",
+            "ref": "later",
+            "do": [
+              {
+                "set": "command",
+                "value": "later"
+              },
+              {
+                "call": "step"
+              }
+            ]
+          },
+          {
+            "event": "ui:click",
+            "ref": "latest",
+            "do": [
+              {
+                "set": "command",
+                "value": "latest"
+              },
+              {
+                "call": "step"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "kind": "nisc.nova/action",
+      "id": "lineup.timeline",
+      "document": {
+        "id": "lineup.timeline",
+        "title": "Running order",
+        "description": "The running order — every stage and its sets across one day on an hour axis, with one act lit and every set exposed to bad weather lit up; open it when an act, the headliner, a clash, a changeover or a set time is mentioned, or when a storm, rain or wind threatens the programme.",
+        "data": {
+          "day": "sat",
+          "stageId": "",
+          "highlightActId": "",
+          "slots": [],
+          "loading": true
+        },
+        "layout": {
+          "component": "Card",
+          "props": {
+            "title": "Running order",
+            "subtitle": "{{$.day}}"
+          },
+          "children": [
+            {
+              "component": "Timeline",
+              "props": {
+                "bars": "$.slots",
+                "idKey": "act_id",
+                "rowKey": "stage_name",
+                "labelKey": "act_name",
+                "startKey": "start_min",
+                "endKey": "end_min",
+                "toneKey": "exposure_tone",
+                "noteKey": "exposure_display",
+                "from": 720,
+                "to": 1440,
+                "step": 60,
+                "highlight": "$.highlightActId",
+                "empty": "Nothing billed."
+              }
+            }
+          ]
+        },
+        "endpoints": {
+          "load": {
+            "url": "/api/lineup/vex",
+            "method": "POST",
+            "request": {
+              "fingerprint": "lineup/forDay",
+              "context": {
+                "day": {
+                  "$ref": "$.day"
+                },
+                "stageId": {
+                  "$case": {
+                    "branches": [
+                      {
+                        "when": {
+                          "$eq": [
+                            {
+                              "$ref": "$.stageId"
+                            },
+                            ""
+                          ]
+                        },
+                        "then": null
+                      }
+                    ],
+                    "else": {
+                      "$ref": "$.stageId"
+                    }
+                  }
+                }
+              }
+            },
+            "target": "slots"
+          }
+        },
+        "lifecycle": {
+          "mount": [
+            {
+              "call": "load",
+              "onSuccess": [
+                {
+                  "set": "loading",
+                  "value": false
+                }
+              ]
+            }
+          ]
+        },
+        "input": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "type": "object",
+          "properties": {
+            "day": {
+              "type": "string",
+              "enum": [
+                "fri",
+                "sat",
+                "sun"
+              ],
+              "description": "Festival day: fri, sat or sun.",
+              "parse": "day",
+              "fallback": "now"
+            },
+            "stageId": {
+              "description": "Show only the sets on this one stage; leave unset for every stage.",
+              "ref": "stages",
+              "type": "string"
+            },
+            "highlightActId": {
+              "description": "The act whose set is lit on the running order.",
+              "ref": "acts",
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        },
+        "triggers": [
+          {
+            "message": "reload:lineup.timeline",
+            "do": [
+              {
+                "call": "load",
+                "onSuccess": [
+                  {
+                    "set": "loading",
+                    "value": false
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "kind": "nisc.nova/action",
+      "id": "move.impact",
+      "document": {
+        "id": "move.impact",
+        "title": "Impact of the move",
+        "description": "What a relocation would cost, line by line with a verdict: whether the expected crowd fits the target, what it clashes with on that stage, the changeover gap, and whether that stage has a roof against the weather at that hour.",
+        "data": {
+          "actId": "",
+          "toStageId": "",
+          "day": "sat",
+          "time": "",
+          "act": {},
+          "fit": {},
+          "stage": [],
+          "cover": {},
+          "error": ""
+        },
+        "layout": {
+          "component": "Card",
+          "props": {
+            "title": "Impact of the move",
+            "subtitle": "{{$.act.name}} → {{$.fit.name}}",
+            "tone": {
+              "$prism": {
+                "$case": {
+                  "branches": [
+                    {
+                      "when": {
+                        "$gt": [
+                          {
+                            "$count": {
+                              "over": {
+                                "$filter": {
+                                  "over": {
+                                    "$flatten": [
+                                      [
+                                        {
+                                          "$ref": "$.fit.verdict"
+                                        },
+                                        {
+                                          "$ref": "$.cover.verdict"
+                                        }
+                                      ],
+                                      {
+                                        "$map": {
+                                          "over": {
+                                            "$ref": "$.stage"
+                                          },
+                                          "as": "row",
+                                          "body": {
+                                            "$get": {
+                                              "from": {
+                                                "$var": "row"
+                                              },
+                                              "path": [
+                                                "verdict"
+                                              ]
+                                            }
+                                          }
+                                        }
+                                      }
+                                    ]
+                                  },
+                                  "as": "verdict",
+                                  "when": {
+                                    "$eq": [
+                                      {
+                                        "$var": "verdict"
+                                      },
+                                      "does not fit"
+                                    ]
+                                  }
+                                }
+                              }
+                            }
+                          },
+                          0
+                        ]
+                      },
+                      "then": "alert"
+                    },
+                    {
+                      "when": {
+                        "$gt": [
+                          {
+                            "$count": {
+                              "over": {
+                                "$filter": {
+                                  "over": {
+                                    "$flatten": [
+                                      [
+                                        {
+                                          "$ref": "$.fit.verdict"
+                                        },
+                                        {
+                                          "$ref": "$.cover.verdict"
+                                        }
+                                      ],
+                                      {
+                                        "$map": {
+                                          "over": {
+                                            "$ref": "$.stage"
+                                          },
+                                          "as": "row",
+                                          "body": {
+                                            "$get": {
+                                              "from": {
+                                                "$var": "row"
+                                              },
+                                              "path": [
+                                                "verdict"
+                                              ]
+                                            }
+                                          }
+                                        }
+                                      }
+                                    ]
+                                  },
+                                  "as": "verdict",
+                                  "when": {
+                                    "$eq": [
+                                      {
+                                        "$var": "verdict"
+                                      },
+                                      "tight"
+                                    ]
+                                  }
+                                }
+                              }
+                            }
+                          },
+                          0
+                        ]
+                      },
+                      "then": "warn"
+                    }
+                  ],
+                  "else": "good"
+                }
+              }
+            }
+          },
+          "children": [
+            {
+              "if": "$.fit.verdict",
+              "then": {
+                "component": "Stack",
+                "props": {
+                  "gap": 8
+                },
+                "children": [
+                  {
+                    "component": "Row",
+                    "props": {
+                      "gap": 10,
+                      "align": "baseline",
+                      "wrap": true
+                    },
+                    "children": [
+                      {
+                        "component": "Badge",
+                        "props": {
+                          "label": "$.fit.verdict",
+                          "tone": "$.fit.tone"
+                        }
+                      },
+                      {
+                        "component": "Text",
+                        "props": {
+                          "value": "capacity",
+                          "variant": "tag",
+                          "tone": "mute"
+                        }
+                      },
+                      {
+                        "component": "Text",
+                        "props": {
+                          "value": "$.fit.line"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "for": "$.stage",
+                    "as": "row",
+                    "key": "key",
+                    "do": {
+                      "component": "Row",
+                      "props": {
+                        "gap": 10,
+                        "align": "baseline",
+                        "wrap": true
+                      },
+                      "children": [
+                        {
+                          "component": "Badge",
+                          "props": {
+                            "label": "$.row.verdict",
+                            "tone": "$.row.tone"
+                          }
+                        },
+                        {
+                          "component": "Text",
+                          "props": {
+                            "value": "$.row.label",
+                            "variant": "tag",
+                            "tone": "mute"
+                          }
+                        },
+                        {
+                          "component": "Text",
+                          "props": {
+                            "value": "$.row.line"
+                          }
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "if": "$.cover.verdict",
+                    "then": {
+                      "component": "Row",
+                      "props": {
+                        "gap": 10,
+                        "align": "baseline",
+                        "wrap": true
+                      },
+                      "children": [
+                        {
+                          "component": "Badge",
+                          "props": {
+                            "label": "$.cover.verdict",
+                            "tone": "$.cover.tone"
+                          }
+                        },
+                        {
+                          "component": "Text",
+                          "props": {
+                            "value": "weather",
+                            "variant": "tag",
+                            "tone": "mute"
+                          }
+                        },
+                        {
+                          "component": "Text",
+                          "props": {
+                            "value": "$.cover.line"
+                          }
+                        }
+                      ]
+                    },
+                    "else": ""
+                  }
+                ]
+              },
+              "else": {
+                "component": "Text",
+                "props": {
+                  "value": "Pick an act and a stage to see what the move would do.",
+                  "tone": "mute"
+                }
+              }
+            }
+          ]
+        },
+        "endpoints": {
+          "loadAct": {
+            "url": "/api/lineup/vex",
+            "method": "POST",
+            "request": {
+              "fingerprint": "impact/act",
+              "context": {
+                "actId": {
+                  "$ref": "$.actId"
+                }
+              }
+            },
+            "target": "act",
+            "errorTarget": "error"
+          },
+          "loadFit": {
+            "url": "/api/lineup/vex",
+            "method": "POST",
+            "request": {
+              "fingerprint": "impact/capacity",
+              "context": {
+                "stageId": {
+                  "$ref": "$.toStageId"
+                },
+                "draw": {
+                  "$ref": "$.act.draw"
+                }
+              }
+            },
+            "target": "fit",
+            "errorTarget": "error"
+          },
+          "loadStage": {
+            "url": "/api/lineup/vex",
+            "method": "POST",
+            "request": {
+              "fingerprint": "impact/stageDay",
+              "context": {
+                "stageId": {
+                  "$ref": "$.toStageId"
+                },
+                "day": {
+                  "$ref": "$.day"
+                },
+                "actId": {
+                  "$ref": "$.actId"
+                },
+                "fromMin": {
+                  "$dateDiff": {
+                    "from": "2000-01-01T00:00:00",
+                    "to": {
+                      "$join": {
+                        "parts": [
+                          "2000-01-01T",
+                          {
+                            "$case": {
+                              "branches": [
+                                {
+                                  "when": {
+                                    "$empty": {
+                                      "$ref": "$.time"
+                                    }
+                                  },
+                                  "then": {
+                                    "$ref": "$.act.starts_at"
+                                  }
+                                }
+                              ],
+                              "else": {
+                                "$ref": "$.time"
+                              }
+                            }
+                          },
+                          ":00"
+                        ],
+                        "sep": ""
+                      }
+                    },
+                    "unit": "minute"
+                  }
+                },
+                "toMin": {
+                  "$add": [
+                    {
+                      "$dateDiff": {
+                        "from": "2000-01-01T00:00:00",
+                        "to": {
+                          "$join": {
+                            "parts": [
+                              "2000-01-01T",
+                              {
+                                "$case": {
+                                  "branches": [
+                                    {
+                                      "when": {
+                                        "$empty": {
+                                          "$ref": "$.time"
+                                        }
+                                      },
+                                      "then": {
+                                        "$ref": "$.act.starts_at"
+                                      }
+                                    }
+                                  ],
+                                  "else": {
+                                    "$ref": "$.time"
+                                  }
+                                }
+                              },
+                              ":00"
+                            ],
+                            "sep": ""
+                          }
+                        },
+                        "unit": "minute"
+                      }
+                    },
+                    {
+                      "$ref": "$.act.duration_min"
+                    }
+                  ]
+                }
+              }
+            },
+            "target": "stage",
+            "errorTarget": "error"
+          },
+          "loadCover": {
+            "url": "/api/readings/vex",
+            "method": "POST",
+            "request": {
+              "fingerprint": "impact/cover",
+              "context": {
+                "day": {
+                  "$ref": "$.day"
+                },
+                "hour": {
+                  "$dateDiff": {
+                    "from": "2000-01-01T00:00:00",
+                    "to": {
+                      "$join": {
+                        "parts": [
+                          "2000-01-01T",
+                          {
+                            "$case": {
+                              "branches": [
+                                {
+                                  "when": {
+                                    "$empty": {
+                                      "$ref": "$.time"
+                                    }
+                                  },
+                                  "then": {
+                                    "$ref": "$.act.starts_at"
+                                  }
+                                }
+                              ],
+                              "else": {
+                                "$ref": "$.time"
+                              }
+                            }
+                          },
+                          ":00"
+                        ],
+                        "sep": ""
+                      }
+                    },
+                    "unit": "hour"
+                  }
+                },
+                "kind": {
+                  "$ref": "$.fit.kind"
+                }
+              }
+            },
+            "target": "cover",
+            "errorTarget": "error"
+          }
+        },
+        "lifecycle": {
+          "mount": [
+            {
+              "call": "loadAct",
+              "onSuccess": [
+                {
+                  "call": "loadStage"
+                },
+                {
+                  "call": "loadFit",
+                  "onSuccess": [
+                    {
+                      "call": "loadCover"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        "triggers": [
+          {
+            "message": "move-draft",
+            "do": [
+              {
+                "set": "actId",
+                "value": "@event.payload.actId"
+              },
+              {
+                "set": "toStageId",
+                "value": "@event.payload.toStageId"
+              },
+              {
+                "set": "day",
+                "value": "@event.payload.day"
+              },
+              {
+                "set": "time",
+                "value": "@event.payload.time"
+              },
+              {
+                "call": "loadAct",
+                "onSuccess": [
+                  {
+                    "call": "loadStage"
+                  },
+                  {
+                    "call": "loadFit",
+                    "onSuccess": [
+                      {
+                        "call": "loadCover"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "message": "reload:move.impact",
+            "do": [
+              {
+                "call": "loadAct",
+                "onSuccess": [
+                  {
+                    "call": "loadStage"
+                  },
+                  {
+                    "call": "loadFit",
+                    "onSuccess": [
+                      {
+                        "call": "loadCover"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "input": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "type": "object",
+          "properties": {
+            "actId": {
+              "type": "string",
+              "description": "The act whose set this concerns.",
+              "ref": "acts"
+            },
+            "toStageId": {
+              "type": "string",
+              "description": "The stage the act is moving to.",
+              "ref": "stages"
+            },
+            "day": {
+              "type": "string",
+              "enum": [
+                "fri",
+                "sat",
+                "sun"
+              ],
+              "description": "Festival day: fri, sat or sun.",
+              "parse": "day",
+              "fallback": "now"
+            },
+            "time": {
+              "description": "The new start time, 24-hour HH:MM.",
+              "parse": "time",
+              "type": "string"
+            }
+          },
+          "required": [
+            "actId",
+            "toStageId"
+          ],
+          "additionalProperties": false
+        }
+      }
+    },
+    {
+      "kind": "nisc.nova/fragment",
+      "id": "placed",
+      "document": {
+        "kind": "fragment",
+        "id": "placed",
+        "data": {
+          "placedBy": "",
+          "citeKey": "",
+          "why": "",
+          "whyOpen": false,
+          "lit": "",
+          "tileSpan": "regular",
+          "tileHue": "teal",
+          "tileTag": ""
+        },
+        "layout": {
+          "component": "Tile",
+          "props": {
+            "span": "$.tileSpan",
+            "accent": "$.tileHue"
+          },
+          "children": [
+            {
+              "component": "Stack",
+              "props": {
+                "gap": 4
+              },
+              "children": [
+                {
+                  "component": "Row",
+                  "props": {
+                    "gap": 8,
+                    "align": "center",
+                    "justify": "between"
+                  },
+                  "children": [
+                    {
+                      "component": "Text",
+                      "props": {
+                        "value": "$.tileTag",
+                        "variant": "kicker"
+                      }
+                    },
+                    {
+                      "if": "$.whyOpen",
+                      "then": {
+                        "component": "Button",
+                        "ref": "whyHide",
+                        "props": {
+                          "label": "hide",
+                          "variant": "quiet"
+                        }
+                      },
+                      "else": {
+                        "component": "Button",
+                        "ref": "why",
+                        "props": {
+                          "label": "why?",
+                          "variant": "quiet"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "if": "$.whyOpen",
+                  "then": {
+                    "component": "Text",
+                    "props": {
+                      "value": "$.why",
+                      "tone": "mute"
+                    }
+                  },
+                  "else": ""
+                },
+                {
+                  "component": "Spotlight",
+                  "ref": "spot",
+                  "props": {
+                    "value": "$.citeKey",
+                    "active": "$.lit"
+                  },
+                  "children": [
+                    {
+                      "slot": "body"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        "triggers": [
+          {
+            "event": "ui:click",
+            "ref": "why",
+            "do": [
+              {
+                "set": "whyOpen",
+                "value": true
+              }
+            ]
+          },
+          {
+            "event": "ui:click",
+            "ref": "whyHide",
+            "do": [
+              {
+                "set": "whyOpen",
+                "value": false
+              }
+            ]
+          },
+          {
+            "event": "ui:focus",
+            "ref": "spot",
+            "do": [
+              {
+                "emit": {
+                  "channel": "attention",
+                  "payload": "@event.payload"
+                }
+              }
+            ]
+          },
+          {
+            "event": "ui:blur",
+            "ref": "spot",
+            "do": [
+              {
+                "emit": {
+                  "channel": "attention",
+                  "payload": ""
+                }
+              }
+            ]
+          },
+          {
+            "message": "attention",
+            "do": [
+              {
+                "set": "lit",
+                "value": "@event.payload"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "kind": "nisc.nova/action",
+      "id": "push.compose",
+      "document": {
+        "id": "push.compose",
+        "title": "Push to attendees",
+        "description": "The form that drafts a push notification to attendees or crew — pick the audience and how urgent it is; open it when the operator wants to warn, tell, alert or notify people of something.",
+        "data": {
+          "audience": "everyone",
+          "urgency": 0,
+          "body": "",
+          "recent": [],
+          "saved": false,
+          "error": ""
+        },
+        "layout": {
+          "component": "Card",
+          "props": {
+            "title": "Push",
+            "subtitle": "draft — nothing is sent until you send it",
+            "tone": "accent"
+          },
+          "children": [
+            {
+              "component": "Grid",
+              "props": {
+                "columns": 2,
+                "gap": 10
+              },
+              "children": [
+                {
+                  "component": "Field",
+                  "props": {
+                    "label": "To"
+                  },
+                  "children": [
+                    {
+                      "component": "Select",
+                      "ref": "audience",
+                      "model": "$.audience",
+                      "props": {
+                        "value": "$.audience",
+                        "options": [
+                          {
+                            "value": "everyone",
+                            "label": "Everyone on site"
+                          },
+                          {
+                            "value": "arena",
+                            "label": "Main arena"
+                          },
+                          {
+                            "value": "tent",
+                            "label": "The tent"
+                          },
+                          {
+                            "value": "campsite",
+                            "label": "Campsite"
+                          },
+                          {
+                            "value": "vendors",
+                            "label": "Vendors"
+                          },
+                          {
+                            "value": "crew",
+                            "label": "Crew"
+                          }
+                        ],
+                        "valueKey": "value",
+                        "labelKey": "label"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "component": "Field",
+                  "props": {
+                    "label": "Urgency"
+                  },
+                  "children": [
+                    {
+                      "component": "Select",
+                      "ref": "urgency",
+                      "model": "$.urgency",
+                      "props": {
+                        "value": "$.urgency",
+                        "options": [
+                          {
+                            "value": 0,
+                            "label": "Routine"
+                          },
+                          {
+                            "value": 1,
+                            "label": "Important"
+                          },
+                          {
+                            "value": 2,
+                            "label": "Critical"
+                          }
+                        ],
+                        "valueKey": "value",
+                        "labelKey": "label",
+                        "numeric": true
+                      }
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "component": "Field",
+              "props": {
+                "label": "Message"
+              },
+              "children": [
+                {
+                  "component": "Input",
+                  "ref": "body",
+                  "model": "$.body",
+                  "props": {
+                    "value": "$.body",
+                    "placeholder": "what they need to know"
+                  }
+                }
+              ]
+            },
+            {
+              "component": "Row",
+              "props": {
+                "gap": 10,
+                "align": "center"
+              },
+              "children": [
+                {
+                  "component": "Button",
+                  "ref": "submit",
+                  "props": {
+                    "label": "Send push",
+                    "variant": "warn"
+                  }
+                },
+                {
+                  "if": "$.saved",
+                  "then": {
+                    "component": "Badge",
+                    "props": {
+                      "label": "sent",
+                      "tone": "good"
+                    }
+                  },
+                  "else": ""
+                },
+                {
+                  "if": "$.error",
+                  "then": {
+                    "component": "Text",
+                    "props": {
+                      "value": "That push was refused.",
+                      "tone": "alert"
+                    }
+                  },
+                  "else": ""
+                }
+              ]
+            },
+            {
+              "if": "$.recent.length",
+              "then": {
+                "component": "List",
+                "props": {
+                  "title": "Recently sent",
+                  "rows": "$.recent",
+                  "rowKey": "push_id",
+                  "primaryKey": "body",
+                  "secondaryKey": "audience",
+                  "metaKey": "created_by"
+                }
+              },
+              "else": ""
+            }
+          ]
+        },
+        "endpoints": {
+          "loadRecent": {
+            "url": "/api/ledger/vex",
+            "method": "POST",
+            "request": {
+              "fingerprint": "pushes/recent",
+              "context": {}
+            },
+            "target": "recent"
+          },
+          "send": {
+            "url": "/api/ledger/vex",
+            "method": "POST",
+            "request": {
+              "fingerprint": "pushes/send",
+              "context": {
+                "audience": {
+                  "$ref": "$.audience"
+                },
+                "urgency": {
+                  "$ref": "$.urgency"
+                },
+                "body": {
+                  "$ref": "$.body"
+                }
+              }
+            },
+            "errorTarget": "error"
+          }
+        },
+        "lifecycle": {
+          "mount": [
+            {
+              "call": "loadRecent"
+            }
+          ]
+        },
+        "triggers": [
+          {
+            "event": "ui:click",
+            "ref": "submit",
+            "do": [
+              {
+                "set": "error",
+                "value": ""
+              },
+              {
+                "call": "send",
+                "onSuccess": [
+                  {
+                    "set": "saved",
+                    "value": true
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "message": "reload:push.compose",
+            "do": [
+              {
+                "call": "loadRecent"
+              }
+            ]
+          }
+        ],
+        "input": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "type": "object",
+          "properties": {
+            "audience": {
+              "description": "Who receives it: everyone on site, people in the main arena, people at the tent, the campsite, the vendors, or the crew.",
+              "type": "string",
+              "enum": [
+                "everyone",
+                "arena",
+                "tent",
+                "campsite",
+                "vendors",
+                "crew"
+              ]
+            },
+            "urgency": {
+              "description": "How urgent the message is, which sets how loudly a phone announces it.",
+              "levels": [
+                "routine",
+                "important",
+                "critical"
+              ],
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 2
+            },
+            "body": {
+              "description": "The text of the message, as attendees will read it on their phones: one or two plain sentences, what is happening and what to do.",
+              "parse": "line",
+              "write": true,
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        }
+      }
+    },
+    {
+      "kind": "nisc.nova/fragment",
+      "id": "raised",
+      "document": {
+        "kind": "fragment",
+        "id": "raised",
+        "data": {
+          "cause": "",
+          "causeLine": "",
+          "raisedAt": "",
+          "raisedBand": "",
+          "raisedTone": "mute",
+          "raisedBy": "",
+          "raisedWith": "{}",
+          "raisedCard": "",
+          "tileSpan": "regular",
+          "tileHue": "teal",
+          "tileTag": "",
+          "verdict": "",
+          "labelled": "",
+          "labelError": ""
+        },
+        "layout": {
+          "component": "Tile",
+          "props": {
+            "span": "$.tileSpan",
+            "accent": "$.tileHue",
+            "pin": true
+          },
+          "children": [
+            {
+              "component": "Stack",
+              "props": {
+                "gap": 6
+              },
+              "children": [
+                {
+                  "component": "Row",
+                  "props": {
+                    "gap": 8,
+                    "align": "center",
+                    "justify": "between"
+                  },
+                  "children": [
+                    {
+                      "component": "Row",
+                      "props": {
+                        "gap": 8,
+                        "align": "center"
+                      },
+                      "children": [
+                        {
+                          "component": "Badge",
+                          "props": {
+                            "label": "$.raisedBand",
+                            "tone": "$.raisedTone"
+                          }
+                        },
+                        {
+                          "component": "Text",
+                          "props": {
+                            "value": "$.raisedAt",
+                            "variant": "tag",
+                            "tone": "mute"
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "component": "Row",
+                      "props": {
+                        "gap": 4,
+                        "align": "center"
+                      },
+                      "children": [
+                        {
+                          "if": "$.labelled",
+                          "then": {
+                            "component": "Badge",
+                            "props": {
+                              "label": "$.labelled",
+                              "tone": "good"
+                            }
+                          },
+                          "else": {
+                            "component": "Button",
+                            "ref": "keep",
+                            "props": {
+                              "label": "keep",
+                              "variant": "quiet"
+                            }
+                          }
+                        },
+                        {
+                          "component": "Button",
+                          "ref": "dismiss",
+                          "props": {
+                            "label": "dismiss",
+                            "variant": "quiet"
+                          }
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "component": "Text",
+                  "props": {
+                    "value": "$.causeLine"
+                  }
+                },
+                {
+                  "slot": "body"
+                }
+              ]
+            }
+          ]
+        },
+        "endpoints": {
+          "label": {
+            "url": "/api/feeds/vex",
+            "method": "POST",
+            "request": {
+              "fingerprint": "attention/label",
+              "context": {
+                "verdict": {
+                  "$ref": "$.verdict"
+                },
+                "actionId": {
+                  "$ref": "$.raisedCard"
+                },
+                "cause": {
+                  "$ref": "$.cause"
+                },
+                "probabilities": {
+                  "$ref": "$.raisedWith"
+                }
+              }
+            },
+            "errorTarget": "labelError"
+          }
+        },
+        "triggers": [
+          {
+            "event": "ui:click",
+            "ref": "keep",
+            "do": [
+              {
+                "set": "verdict",
+                "value": "kept"
+              },
+              {
+                "call": "label",
+                "onSuccess": [
+                  {
+                    "set": "labelled",
+                    "value": "kept"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "event": "ui:click",
+            "ref": "dismiss",
+            "do": [
+              {
+                "set": "verdict",
+                "value": "dismissed"
+              },
+              {
+                "call": "label"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "kind": "nisc.nova/action",
+      "id": "sales.chart",
+      "document": {
+        "id": "sales.chart",
+        "title": "Sales",
+        "description": "A chart of ticket or bar sales — units or revenue, by hour or by day, for one day or the whole weekend, optionally against the day before; open it when money, takings, revenue, tickets sold or the bars are mentioned.",
+        "data": {
+          "metric": "revenue",
+          "grain": "hour",
+          "range": "today",
+          "compare": false,
+          "kind": "bar",
+          "day": "sat",
+          "hourly": [],
+          "daily": [],
+          "previous": [],
+          "loading": true
+        },
+        "layout": {
+          "component": "Card",
+          "props": {
+            "title": "{{$.kind}} {{$.metric}}",
+            "subtitle": "{{$.range}} · by {{$.grain}}"
+          },
+          "children": [
+            {
+              "if": {
+                "$eq": [
+                  "$.grain",
+                  "day"
+                ]
+              },
+              "then": {
+                "component": "BarChart",
+                "props": {
+                  "series": "$.daily",
+                  "labelKey": "day",
+                  "valueKey": "$.metric",
+                  "tone": "accent"
+                }
+              },
+              "else": {
+                "component": "BarChart",
+                "props": {
+                  "series": "$.hourly",
+                  "labelKey": "hour",
+                  "valueKey": "$.metric",
+                  "tone": "accent",
+                  "behind": {
+                    "$if": "$.compare",
+                    "$then": "$.previous",
+                    "$else": []
+                  }
+                }
+              }
+            }
+          ]
+        },
+        "endpoints": {
+          "loadHourly": {
+            "url": "/api/readings/vex",
+            "method": "POST",
+            "request": {
+              "fingerprint": "sales/hourly",
+              "context": {
+                "kind": {
+                  "$ref": "$.kind"
+                },
+                "days": {
+                  "$case": {
+                    "branches": [
+                      {
+                        "when": {
+                          "$eq": [
+                            {
+                              "$ref": "$.range"
+                            },
+                            "weekend"
+                          ]
+                        },
+                        "then": [
+                          "fri",
+                          "sat",
+                          "sun"
+                        ]
+                      }
+                    ],
+                    "else": [
+                      {
+                        "$ref": "$.day"
+                      }
+                    ]
+                  }
+                }
+              }
+            },
+            "target": "hourly"
+          },
+          "loadDaily": {
+            "url": "/api/readings/vex",
+            "method": "POST",
+            "request": {
+              "fingerprint": "sales/daily",
+              "context": {
+                "kind": {
+                  "$ref": "$.kind"
+                },
+                "days": {
+                  "$case": {
+                    "branches": [
+                      {
+                        "when": {
+                          "$eq": [
+                            {
+                              "$ref": "$.range"
+                            },
+                            "weekend"
+                          ]
+                        },
+                        "then": [
+                          "fri",
+                          "sat",
+                          "sun"
+                        ]
+                      }
+                    ],
+                    "else": [
+                      {
+                        "$ref": "$.day"
+                      }
+                    ]
+                  }
+                }
+              }
+            },
+            "target": "daily"
+          },
+          "loadPrevious": {
+            "url": "/api/readings/vex",
+            "method": "POST",
+            "request": {
+              "fingerprint": "sales/hourly",
+              "context": {
+                "kind": {
+                  "$ref": "$.kind"
+                },
+                "days": {
+                  "$case": {
+                    "branches": [
+                      {
+                        "when": {
+                          "$eq": [
+                            {
+                              "$ref": "$.day"
+                            },
+                            "sun"
+                          ]
+                        },
+                        "then": [
+                          "sat"
+                        ]
+                      },
+                      {
+                        "when": {
+                          "$eq": [
+                            {
+                              "$ref": "$.day"
+                            },
+                            "sat"
+                          ]
+                        },
+                        "then": [
+                          "fri"
+                        ]
+                      }
+                    ],
+                    "else": [
+                      "fri"
+                    ]
+                  }
+                }
+              }
+            },
+            "target": "previous"
+          }
+        },
+        "lifecycle": {
+          "mount": [
+            {
+              "call": "loadHourly",
+              "onSuccess": [
+                {
+                  "set": "loading",
+                  "value": false
+                }
+              ]
+            },
+            {
+              "call": "loadDaily"
+            },
+            {
+              "call": "loadPrevious"
+            }
+          ]
+        },
+        "input": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "type": "object",
+          "properties": {
+            "metric": {
+              "description": "What the bars measure: revenue is money taken, units is how many were sold.",
+              "type": "string",
+              "enum": [
+                "revenue",
+                "units"
+              ]
+            },
+            "grain": {
+              "description": "The width of one bar: an hour of trading, or a whole festival day.",
+              "type": "string",
+              "enum": [
+                "hour",
+                "day"
+              ]
+            },
+            "range": {
+              "description": "How much to chart: today alone, or the whole weekend so far.",
+              "type": "string",
+              "enum": [
+                "today",
+                "weekend"
+              ]
+            },
+            "compare": {
+              "description": "Compare against the day before, drawn behind the bars.",
+              "type": "boolean"
+            },
+            "kind": {
+              "description": "Which takings: tickets sold at the gates, or drinks sold at the bar.",
+              "type": "string",
+              "enum": [
+                "tickets",
+                "bar"
+              ]
+            },
+            "day": {
+              "type": "string",
+              "enum": [
+                "fri",
+                "sat",
+                "sun"
+              ],
+              "description": "Festival day: fri, sat or sun.",
+              "parse": "day",
+              "fallback": "now"
+            }
+          },
+          "additionalProperties": false
+        },
+        "triggers": [
+          {
+            "message": "reload:sales.chart",
+            "do": [
+              {
+                "call": "loadHourly",
+                "onSuccess": [
+                  {
+                    "set": "loading",
+                    "value": false
+                  }
+                ]
+              },
+              {
+                "call": "loadDaily"
+              },
+              {
+                "call": "loadPrevious"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "kind": "nisc.nova/action",
+      "id": "set.delay",
+      "document": {
+        "id": "set.delay",
+        "title": "Delay a set",
+        "description": "The form that delays the set of one act by a number of minutes — a hold on the running order; open it when the operator wants to delay, hold, postpone or push back an act.",
+        "data": {
+          "actId": "",
+          "minutes": 15,
+          "act": {},
+          "saved": false,
+          "error": ""
+        },
+        "layout": {
+          "component": "Card",
+          "props": {
+            "title": "Delay a set",
+            "subtitle": "{{$.act.name}}",
+            "tone": "accent"
+          },
+          "children": [
+            {
+              "component": "KeyValue",
+              "props": {
+                "inline": true,
+                "items": [
+                  {
+                    "label": "on",
+                    "value": "$.act.stage_name"
+                  },
+                  {
+                    "label": "at",
+                    "value": "$.act.starts_at"
+                  }
+                ]
+              }
+            },
+            {
+              "component": "Field",
+              "props": {
+                "label": "Hold for (minutes)"
+              },
+              "children": [
+                {
+                  "component": "Input",
+                  "ref": "minutes",
+                  "model": "$.minutes",
+                  "props": {
+                    "value": "{{$.minutes}}",
+                    "type": "number"
+                  }
+                }
+              ]
+            },
+            {
+              "component": "Row",
+              "props": {
+                "gap": 10,
+                "align": "center"
+              },
+              "children": [
+                {
+                  "component": "Button",
+                  "ref": "submit",
+                  "props": {
+                    "label": "Call the hold",
+                    "variant": "primary"
+                  }
+                },
+                {
+                  "if": "$.saved",
+                  "then": {
+                    "component": "Badge",
+                    "props": {
+                      "label": "called",
+                      "tone": "good"
+                    }
+                  },
+                  "else": ""
+                },
+                {
+                  "if": "$.error",
+                  "then": {
+                    "component": "Text",
+                    "props": {
+                      "value": "That hold was refused.",
+                      "tone": "alert"
+                    }
+                  },
+                  "else": ""
+                }
+              ]
+            }
+          ]
+        },
+        "endpoints": {
+          "load": {
+            "url": "/api/lineup/vex",
+            "method": "POST",
+            "request": {
+              "fingerprint": "acts/byId",
+              "context": {
+                "actId": {
+                  "$ref": "$.actId"
+                }
+              }
+            },
+            "target": "act"
+          },
+          "save": {
+            "url": "/api/lineup/vex",
+            "method": "POST",
+            "request": {
+              "fingerprint": "delays/add",
+              "context": {
+                "actId": {
+                  "$ref": "$.actId"
+                },
+                "minutes": {
+                  "$ref": "$.minutes"
+                }
+              }
+            },
+            "errorTarget": "error"
+          }
+        },
+        "lifecycle": {
+          "mount": [
+            {
+              "call": "load"
+            }
+          ]
+        },
+        "triggers": [
+          {
+            "event": "ui:click",
+            "ref": "submit",
+            "do": [
+              {
+                "set": "error",
+                "value": ""
+              },
+              {
+                "call": "save",
+                "onSuccess": [
+                  {
+                    "set": "saved",
+                    "value": true
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "message": "reload:set.delay",
+            "do": [
+              {
+                "call": "load"
+              }
+            ]
+          }
+        ],
+        "input": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "type": "object",
+          "properties": {
+            "actId": {
+              "type": "string",
+              "description": "The act whose set this concerns.",
+              "ref": "acts"
+            },
+            "minutes": {
+              "description": "How many minutes to hold the set for, 0–120.",
+              "parse": "minutes",
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 120
+            }
+          },
+          "additionalProperties": false
+        }
+      }
+    },
+    {
+      "kind": "nisc.nova/action",
+      "id": "site.map",
+      "document": {
+        "id": "site.map",
+        "title": "Site map",
+        "description": "The site map — every zone as a region coloured by how full it is, with one zone outlined; open it when a place, zone, field, gate or crowd movement is mentioned.",
+        "data": {
+          "focusZoneId": "",
+          "overlay": "crowd",
+          "day": "sat",
+          "hour": 18,
+          "zones": [],
+          "loading": true
+        },
+        "layout": {
+          "component": "Card",
+          "props": {
+            "title": "Site",
+            "subtitle": "{{$.day}} · {{$.hour}}:00"
+          },
+          "children": [
+            {
+              "component": "ZoneMap",
+              "props": {
+                "zones": "$.zones",
+                "idKey": "zone_id",
+                "labelKey": "name",
+                "heatKey": {
+                  "$if": {
+                    "$eq": [
+                      "$.overlay",
+                      "crowd"
+                    ]
+                  },
+                  "$then": "heat",
+                  "$else": ""
+                },
+                "focus": "$.focusZoneId",
+                "width": 100,
+                "height": 60
+              }
+            }
+          ]
+        },
+        "endpoints": {
+          "load": {
+            "url": "/api/site/vex",
+            "method": "POST",
+            "request": {
+              "fingerprint": "zones/heat",
+              "context": {
+                "day": {
+                  "$ref": "$.day"
+                },
+                "hour": {
+                  "$ref": "$.hour"
+                }
+              }
+            },
+            "target": "zones"
+          }
+        },
+        "lifecycle": {
+          "mount": [
+            {
+              "call": "load",
+              "onSuccess": [
+                {
+                  "set": "loading",
+                  "value": false
+                }
+              ]
+            }
+          ]
+        },
+        "input": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "type": "object",
+          "properties": {
+            "focusZoneId": {
+              "type": "string",
+              "description": "The zone of the site this is about.",
+              "ref": "zones"
+            },
+            "overlay": {
+              "description": "What colours the zones: crowd fills them by headcount over capacity; plain draws the plan alone.",
+              "type": "string",
+              "enum": [
+                "crowd",
+                "plain"
+              ]
+            },
+            "day": {
+              "type": "string",
+              "enum": [
+                "fri",
+                "sat",
+                "sun"
+              ],
+              "description": "Festival day: fri, sat or sun.",
+              "parse": "day",
+              "fallback": "now"
+            },
+            "hour": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 23,
+              "description": "Hour of the day, 0–23.",
+              "parse": "hour",
+              "fallback": "now"
+            }
+          },
+          "additionalProperties": false
+        },
+        "triggers": [
+          {
+            "message": "reload:site.map",
+            "do": [
+              {
+                "call": "load",
+                "onSuccess": [
+                  {
+                    "set": "loading",
+                    "value": false
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "kind": "nisc.nova/action",
+      "id": "situation.now",
+      "document": {
+        "id": "situation.now",
+        "title": "Right now",
+        "description": "What is going on across the whole site right now — who is on stage and who is up next, bad weather due in the next three hours, open incidents, holds called on sets and the fullest zones; open it when someone asks what is going on, what is happening, or for a status or an overview.",
+        "data": {
+          "day": "sat",
+          "hour": 18,
+          "onStage": [],
+          "warnings": [],
+          "incidents": [],
+          "holds": [],
+          "zones": [],
+          "loading": true
+        },
+        "layout": {
+          "component": "Card",
+          "props": {
+            "title": "Right now",
+            "subtitle": "{{$.day}} · {{$.hour}}:00"
+          },
+          "children": [
+            {
+              "component": "List",
+              "props": {
+                "title": "On stage and next",
+                "rows": "$.onStage",
+                "rowKey": "slot_id",
+                "primaryKey": "act_name",
+                "secondaryKey": "stage_name",
+                "metaKey": "starts_at",
+                "max": 6,
+                "empty": "Nobody on, nobody due."
+              }
+            },
+            {
+              "component": "List",
+              "props": {
+                "title": "Weather, next three hours",
+                "rows": "$.warnings",
+                "rowKey": "hour",
+                "primaryKey": "condition",
+                "secondaryKey": "wind_kph",
+                "secondaryPrefix": "wind ",
+                "secondarySuffix": " kph",
+                "metaKey": "hour",
+                "metaSuffix": ":00",
+                "tone": "warn",
+                "empty": "Nothing worse than fair."
+              }
+            },
+            {
+              "component": "List",
+              "props": {
+                "title": "Open incidents",
+                "rows": "$.incidents",
+                "rowKey": "incident_id",
+                "primaryKey": "summary",
+                "secondaryKey": "zone_name",
+                "metaKey": "at",
+                "max": 4,
+                "empty": "None open."
+              }
+            },
+            {
+              "component": "List",
+              "props": {
+                "title": "Holds called",
+                "rows": "$.holds",
+                "rowKey": "delay_id",
+                "primaryKey": "act_name",
+                "secondaryKey": "minutes",
+                "secondarySuffix": " min",
+                "metaKey": "created_by",
+                "max": 4,
+                "empty": "No holds called."
+              }
+            },
+            {
+              "component": "List",
+              "props": {
+                "title": "Fullest zones",
+                "rows": "$.zones",
+                "rowKey": "zone_id",
+                "primaryKey": "name",
+                "secondaryKey": "fill_display",
+                "metaKey": "headcount",
+                "max": 3,
+                "empty": "No counts for that hour."
+              }
+            }
+          ]
+        },
+        "endpoints": {
+          "loadStage": {
+            "url": "/api/lineup/vex",
+            "method": "POST",
+            "request": {
+              "fingerprint": "lineup/around",
+              "context": {
+                "day": {
+                  "$ref": "$.day"
+                },
+                "fromMin": {
+                  "$mul": [
+                    {
+                      "$ref": "$.hour"
+                    },
+                    60
+                  ]
+                },
+                "toMin": {
+                  "$mul": [
+                    {
+                      "$add": [
+                        {
+                          "$ref": "$.hour"
+                        },
+                        3
+                      ]
+                    },
+                    60
+                  ]
+                }
+              }
+            },
+            "target": "onStage"
+          },
+          "loadWarnings": {
+            "url": "/api/readings/vex",
+            "method": "POST",
+            "request": {
+              "fingerprint": "weather/warnings",
+              "context": {
+                "day": {
+                  "$ref": "$.day"
+                },
+                "fromHour": {
+                  "$ref": "$.hour"
+                },
+                "toHour": {
+                  "$add": [
+                    {
+                      "$ref": "$.hour"
+                    },
+                    3
+                  ]
+                }
+              }
+            },
+            "target": "warnings"
+          },
+          "loadIncidents": {
+            "url": "/api/readings/vex",
+            "method": "POST",
+            "request": {
+              "fingerprint": "incidents/open",
+              "context": {}
+            },
+            "target": "incidents"
+          },
+          "loadHolds": {
+            "url": "/api/lineup/vex",
+            "method": "POST",
+            "request": {
+              "fingerprint": "delays/recent",
+              "context": {}
+            },
+            "target": "holds"
+          },
+          "loadZones": {
+            "url": "/api/site/vex",
+            "method": "POST",
+            "request": {
+              "fingerprint": "attendance/byZone",
+              "context": {
+                "day": {
+                  "$ref": "$.day"
+                },
+                "hour": {
+                  "$ref": "$.hour"
+                }
+              }
+            },
+            "target": "zones"
+          }
+        },
+        "lifecycle": {
+          "mount": [
+            {
+              "call": "loadStage",
+              "onSuccess": [
+                {
+                  "set": "loading",
+                  "value": false
+                }
+              ]
+            },
+            {
+              "call": "loadWarnings"
+            },
+            {
+              "call": "loadIncidents"
+            },
+            {
+              "call": "loadHolds"
+            },
+            {
+              "call": "loadZones"
+            }
+          ]
+        },
+        "triggers": [
+          {
+            "message": "reload:situation.now",
+            "do": [
+              {
+                "call": "loadStage",
+                "onSuccess": [
+                  {
+                    "set": "loading",
+                    "value": false
+                  }
+                ]
+              },
+              {
+                "call": "loadWarnings"
+              },
+              {
+                "call": "loadIncidents"
+              },
+              {
+                "call": "loadHolds"
+              },
+              {
+                "call": "loadZones"
+              }
+            ]
+          }
+        ],
+        "input": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "type": "object",
+          "properties": {
+            "day": {
+              "type": "string",
+              "enum": [
+                "fri",
+                "sat",
+                "sun"
+              ],
+              "description": "Festival day: fri, sat or sun.",
+              "parse": "day",
+              "fallback": "now"
+            },
+            "hour": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 23,
+              "description": "Hour of the day, 0–23.",
+              "parse": "hour",
+              "fallback": "now"
+            }
+          },
+          "additionalProperties": false
+        }
+      }
+    },
+    {
+      "kind": "nisc.nova/action",
+      "id": "slot.swap",
+      "document": {
+        "id": "slot.swap",
+        "title": "Move a set",
+        "description": "The form that moves the set of one act to another stage or start time — a slot swap on the running order; open it when the operator wants to move, swap, relocate or reschedule an act.",
+        "data": {
+          "actId": "",
+          "fromStageId": "",
+          "toStageId": "",
+          "day": "sat",
+          "time": "",
+          "act": {},
+          "stages": [],
+          "saved": false,
+          "error": ""
+        },
+        "layout": {
+          "component": "Card",
+          "props": {
+            "title": "Move a set",
+            "subtitle": "{{$.act.name}}",
+            "tone": "accent"
+          },
+          "children": [
+            {
+              "component": "KeyValue",
+              "props": {
+                "inline": true,
+                "items": [
+                  {
+                    "label": "now on",
+                    "value": "$.act.stage_name"
+                  },
+                  {
+                    "label": "day",
+                    "value": "$.act.day"
+                  },
+                  {
+                    "label": "at",
+                    "value": "$.act.starts_at"
+                  }
+                ]
+              }
+            },
+            {
+              "component": "Grid",
+              "props": {
+                "columns": 2,
+                "gap": 10
+              },
+              "children": [
+                {
+                  "component": "Field",
+                  "props": {
+                    "label": "From"
+                  },
+                  "children": [
+                    {
+                      "component": "Select",
+                      "ref": "from",
+                      "model": "$.fromStageId",
+                      "props": {
+                        "value": "$.fromStageId",
+                        "options": "$.stages",
+                        "valueKey": "id",
+                        "labelKey": "label",
+                        "placeholder": "stage…"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "component": "Field",
+                  "props": {
+                    "label": "To"
+                  },
+                  "children": [
+                    {
+                      "component": "Select",
+                      "ref": "to",
+                      "model": "$.toStageId",
+                      "props": {
+                        "value": "$.toStageId",
+                        "options": "$.stages",
+                        "valueKey": "id",
+                        "labelKey": "label",
+                        "placeholder": "stage…"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "component": "Field",
+                  "props": {
+                    "label": "Day"
+                  },
+                  "children": [
+                    {
+                      "component": "Select",
+                      "ref": "day",
+                      "model": "$.day",
+                      "props": {
+                        "value": "$.day",
+                        "options": [
+                          {
+                            "value": "fri",
+                            "label": "Friday"
+                          },
+                          {
+                            "value": "sat",
+                            "label": "Saturday"
+                          },
+                          {
+                            "value": "sun",
+                            "label": "Sunday"
+                          }
+                        ],
+                        "valueKey": "value",
+                        "labelKey": "label"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "component": "Field",
+                  "props": {
+                    "label": "New start"
+                  },
+                  "children": [
+                    {
+                      "component": "Input",
+                      "ref": "time",
+                      "model": "$.time",
+                      "props": {
+                        "value": "$.time",
+                        "placeholder": "HH:MM"
+                      }
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "component": "Row",
+              "props": {
+                "gap": 10,
+                "align": "center"
+              },
+              "children": [
+                {
+                  "component": "Button",
+                  "ref": "submit",
+                  "props": {
+                    "label": "Move the set",
+                    "variant": "primary"
+                  }
+                },
+                {
+                  "if": "$.saved",
+                  "then": {
+                    "component": "Badge",
+                    "props": {
+                      "label": "moved",
+                      "tone": "good"
+                    }
+                  },
+                  "else": ""
+                },
+                {
+                  "if": "$.error",
+                  "then": {
+                    "component": "Text",
+                    "props": {
+                      "value": "The running order refused that move.",
+                      "tone": "alert"
+                    }
+                  },
+                  "else": ""
+                }
+              ]
+            }
+          ]
+        },
+        "endpoints": {
+          "load": {
+            "url": "/api/lineup/vex",
+            "method": "POST",
+            "request": {
+              "fingerprint": "acts/byId",
+              "context": {
+                "actId": {
+                  "$ref": "$.actId"
+                }
+              }
+            },
+            "target": "act"
+          },
+          "loadStages": {
+            "url": "/api/vex",
+            "method": "POST",
+            "request": {
+              "fingerprint": "candidates/stages",
+              "context": {}
+            },
+            "target": "stages"
+          },
+          "swap": {
+            "url": "/api/lineup/vex",
+            "method": "POST",
+            "request": {
+              "fingerprint": "slots/swap",
+              "context": {
+                "actId": {
+                  "$ref": "$.actId"
+                },
+                "day": {
+                  "$ref": "$.day"
+                },
+                "fromStageId": {
+                  "$ref": "$.fromStageId"
+                },
+                "toStageId": {
+                  "$ref": "$.toStageId"
+                },
+                "time": {
+                  "$ref": "$.time"
+                }
+              }
+            },
+            "errorTarget": "error"
+          }
+        },
+        "lifecycle": {
+          "mount": [
+            {
+              "call": "loadStages"
+            },
+            {
+              "call": "load",
+              "onSuccess": [
+                {
+                  "set": "fromStageId",
+                  "from": "act.stage_id"
+                }
+              ]
+            }
+          ]
+        },
+        "triggers": [
+          {
+            "event": "ui:model",
+            "ref": "to",
+            "do": [
+              {
+                "emit": {
+                  "channel": "move-draft",
+                  "payload": {
+                    "actId": "$.actId",
+                    "toStageId": "$.toStageId",
+                    "day": "$.day",
+                    "time": "$.time"
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "event": "ui:model",
+            "ref": "from",
+            "do": [
+              {
+                "emit": {
+                  "channel": "move-draft",
+                  "payload": {
+                    "actId": "$.actId",
+                    "toStageId": "$.toStageId",
+                    "day": "$.day",
+                    "time": "$.time"
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "event": "ui:model",
+            "ref": "day",
+            "do": [
+              {
+                "emit": {
+                  "channel": "move-draft",
+                  "payload": {
+                    "actId": "$.actId",
+                    "toStageId": "$.toStageId",
+                    "day": "$.day",
+                    "time": "$.time"
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "event": "ui:model",
+            "ref": "time",
+            "do": [
+              {
+                "emit": {
+                  "channel": "move-draft",
+                  "payload": {
+                    "actId": "$.actId",
+                    "toStageId": "$.toStageId",
+                    "day": "$.day",
+                    "time": "$.time"
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "event": "ui:click",
+            "ref": "submit",
+            "do": [
+              {
+                "set": "error",
+                "value": ""
+              },
+              {
+                "call": "swap",
+                "onSuccess": [
+                  {
+                    "set": "saved",
+                    "value": true
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "message": "reload:slot.swap",
+            "do": [
+              {
+                "call": "loadStages"
+              },
+              {
+                "call": "load",
+                "onSuccess": [
+                  {
+                    "set": "fromStageId",
+                    "from": "act.stage_id"
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "input": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "type": "object",
+          "properties": {
+            "actId": {
+              "type": "string",
+              "description": "The act whose set this concerns.",
+              "ref": "acts"
+            },
+            "fromStageId": {
+              "description": "The stage the act is moving from.",
+              "ref": "stages",
+              "type": "string"
+            },
+            "toStageId": {
+              "type": "string",
+              "description": "The stage the act is moving to.",
+              "ref": "stages"
+            },
+            "day": {
+              "type": "string",
+              "enum": [
+                "fri",
+                "sat",
+                "sun"
+              ],
+              "description": "Festival day: fri, sat or sun.",
+              "parse": "day",
+              "fallback": "now"
+            },
+            "time": {
+              "description": "The new start time, 24-hour HH:MM.",
+              "parse": "time",
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        }
+      }
+    },
+    {
+      "kind": "nisc.nova/action",
+      "id": "stage.view",
+      "document": {
+        "id": "stage.view",
+        "title": "Stage",
+        "description": "One stage in detail — whether it is covered or open-air, its capacity, and the sets on it that day; open it when a particular stage is the subject.",
+        "data": {
+          "stageId": "",
+          "day": "sat",
+          "stage": {},
+          "sets": [],
+          "loading": true
+        },
+        "layout": {
+          "component": "Card",
+          "props": {
+            "title": "{{$.stage.name}}",
+            "subtitle": "{{$.stage.kind}} · {{$.stage.zone_name}}"
+          },
+          "children": [
+            {
+              "component": "KeyValue",
+              "props": {
+                "items": [
+                  {
+                    "label": "Capacity",
+                    "value": "$.stage.capacity"
+                  },
+                  {
+                    "label": "Day",
+                    "value": "$.day"
+                  }
+                ]
+              }
+            },
+            {
+              "component": "List",
+              "props": {
+                "rows": "$.sets",
+                "rowKey": "slot_id",
+                "primaryKey": "act_name",
+                "secondaryKey": "billing",
+                "metaKey": "starts_at",
+                "empty": "Nothing on this stage that day."
+              }
+            }
+          ]
+        },
+        "endpoints": {
+          "load": {
+            "url": "/api/lineup/vex",
+            "method": "POST",
+            "request": {
+              "fingerprint": "stages/byId",
+              "context": {
+                "stageId": {
+                  "$ref": "$.stageId"
+                }
+              }
+            },
+            "target": "stage"
+          },
+          "loadSets": {
+            "url": "/api/lineup/vex",
+            "method": "POST",
+            "request": {
+              "fingerprint": "lineup/forDay",
+              "context": {
+                "day": {
+                  "$ref": "$.day"
+                },
+                "stageId": {
+                  "$ref": "$.stageId"
+                }
+              }
+            },
+            "target": "sets"
+          }
+        },
+        "lifecycle": {
+          "mount": [
+            {
+              "call": "load",
+              "onSuccess": [
+                {
+                  "call": "loadSets",
+                  "onSuccess": [
+                    {
+                      "set": "loading",
+                      "value": false
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        "input": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "type": "object",
+          "properties": {
+            "stageId": {
+              "type": "string",
+              "description": "The stage this is about.",
+              "ref": "stages"
+            },
+            "day": {
+              "type": "string",
+              "enum": [
+                "fri",
+                "sat",
+                "sun"
+              ],
+              "description": "Festival day: fri, sat or sun.",
+              "parse": "day",
+              "fallback": "now"
+            }
+          },
+          "required": [
+            "stageId"
+          ],
+          "additionalProperties": false
+        },
+        "triggers": [
+          {
+            "message": "reload:stage.view",
+            "do": [
+              {
+                "call": "load",
+                "onSuccess": [
+                  {
+                    "call": "loadSets",
+                    "onSuccess": [
+                      {
+                        "set": "loading",
+                        "value": false
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "kind": "nisc.nova/action",
+      "id": "weather.radar",
+      "document": {
+        "id": "weather.radar",
+        "title": "Weather",
+        "description": "The weather radar aimed at one hour — rain, wind and storm cells across the day, with the asked-about hour marked; open it when weather, rain, wind, lightning or a storm is mentioned.",
+        "data": {
+          "day": "sat",
+          "hour": 18,
+          "hours": [],
+          "at": {},
+          "loading": true
+        },
+        "layout": {
+          "component": "Card",
+          "props": {
+            "title": "Weather",
+            "subtitle": "{{$.day}} · {{$.hour}}:00",
+            "tone": {
+              "$if": "$.at.severity",
+              "$then": "warn",
+              "$else": "plain"
+            }
+          },
+          "children": [
+            {
+              "component": "Row",
+              "props": {
+                "gap": 10,
+                "align": "center"
+              },
+              "children": [
+                {
+                  "component": "Badge",
+                  "props": {
+                    "label": "$.at.condition",
+                    "tone": {
+                      "$if": "$.at.severity",
+                      "$then": "warn",
+                      "$else": "mute"
+                    }
+                  }
+                },
+                {
+                  "component": "KeyValue",
+                  "props": {
+                    "inline": true,
+                    "items": [
+                      {
+                        "label": "rain mm",
+                        "value": "$.at.rain_mm"
+                      },
+                      {
+                        "label": "wind kph",
+                        "value": "$.at.wind_kph"
+                      }
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "component": "BarChart",
+              "props": {
+                "series": "$.hours",
+                "labelKey": "hour",
+                "valueKey": "rain_mm",
+                "highlight": "$.hour",
+                "tone": "warn",
+                "unit": "mm"
+              }
+            }
+          ]
+        },
+        "endpoints": {
+          "load": {
+            "url": "/api/readings/vex",
+            "method": "POST",
+            "request": {
+              "fingerprint": "weather/forDay",
+              "context": {
+                "day": {
+                  "$ref": "$.day"
+                }
+              }
+            },
+            "target": "hours"
+          },
+          "loadAt": {
+            "url": "/api/readings/vex",
+            "method": "POST",
+            "request": {
+              "fingerprint": "weather/atHour",
+              "context": {
+                "day": {
+                  "$ref": "$.day"
+                },
+                "hour": {
+                  "$ref": "$.hour"
+                }
+              }
+            },
+            "target": "at"
+          }
+        },
+        "lifecycle": {
+          "mount": [
+            {
+              "call": "load",
+              "onSuccess": [
+                {
+                  "call": "loadAt",
+                  "onSuccess": [
+                    {
+                      "set": "loading",
+                      "value": false
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        "input": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "type": "object",
+          "properties": {
+            "day": {
+              "type": "string",
+              "enum": [
+                "fri",
+                "sat",
+                "sun"
+              ],
+              "description": "Festival day: fri, sat or sun.",
+              "parse": "day",
+              "fallback": "now"
+            },
+            "hour": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 23,
+              "description": "Hour of the day, 0–23.",
+              "parse": "hour",
+              "fallback": "now"
+            }
+          },
+          "additionalProperties": false
+        },
+        "triggers": [
+          {
+            "message": "reload:weather.radar",
+            "do": [
+              {
+                "call": "load",
+                "onSuccess": [
+                  {
+                    "call": "loadAt",
+                    "onSuccess": [
+                      {
+                        "set": "loading",
+                        "value": false
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

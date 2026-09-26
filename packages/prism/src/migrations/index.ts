@@ -1,4 +1,7 @@
 import type { Sequence } from '@niscorp/strata';
+import { ConfigSchema, type Config } from '../schemas/config.schema';
+import { evaluate } from '../engine/evaluate';
+import type { JsonValue } from '../types';
 
 // ═══════════════════════════════════════════════════════════════
 // Prism's grammar, as a strata sequence — @niscorp/prism/migrations.
@@ -20,3 +23,35 @@ export const PRISM_SEQUENCE: Sequence = {
   documents: { config: {} },
   migrations: [],
 };
+
+// ── the evaluator a migration runs through ──────────────────────
+//
+// strata runs a document step through an INJECTED transform, nova's socket
+// shape `(config, source) => unknown`. This is Prism's, for every host: the
+// config is parsed once at the boundary (rule 13; the same object comes back
+// for every node it rewrites) and the source must be plain JSON.
+
+
+const isJsonValue = (value: unknown): value is JsonValue => {
+  if (value === null || typeof value === 'string' || typeof value === 'boolean') return true;
+  if (typeof value === 'number') return Number.isFinite(value);
+  if (Array.isArray(value)) return value.every(isJsonValue);
+  if (typeof value === 'object') return Object.values(value).every(isJsonValue);
+  return false;
+};
+
+const parsedConfigs = new WeakMap<object, Config>();
+
+export const prismTransform = (config: unknown, source: unknown): unknown => {
+  if (!isJsonValue(source)) throw new Error('A document to migrate must be plain JSON.');
+  const cached = typeof config === 'object' && config !== null ? parsedConfigs.get(config) : undefined;
+  const parsed = cached ?? ConfigSchema.parse(config);
+  if (cached === undefined && typeof config === 'object' && config !== null) parsedConfigs.set(config, parsed);
+  return evaluate(parsed, source);
+};
+
+// ── the schemas behind the kinds ────────────────────────────────
+//
+// What `nisc.prism/config` means today — read by the grammar check, which
+// snapshots it and fails when it changes without a migration here.
+export const PRISM_SCHEMAS = { 'nisc.prism/config': ConfigSchema } as const;

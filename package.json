@@ -17,7 +17,10 @@
     "format": "prettier --write \"**/*.{ts,tsx,json,md}\"",
     "check:packages": "node scripts/check-packages.mts",
     "check:changesets": "node scripts/check-changesets.mts",
-    "changeset": "changeset"
+    "changeset": "changeset",
+    "check:grammars": "node scripts/check-grammars.mts",
+    "strata:snapshot": "node scripts/check-grammars.mts --write",
+    "strata:corpus": "node scripts/capture-corpus.mts"
   },
   "devDependencies": {
     "@arethetypeswrong/cli": "^0.18.5",

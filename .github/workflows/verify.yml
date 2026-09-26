@@ -64,6 +64,13 @@ jobs:
       - name: Check packages
         run: pnpm check:packages
 
+      # The grammar gate (strata). A change to nova's or Prism's schemas without
+      # a migration fails here, with the diff and what to append; and every real
+      # document captured from the lab apps (strata/corpus) must still upgrade to
+      # the current grammars and parse with the current strict schemas.
+      - name: Check grammars
+        run: pnpm check:grammars
+
       # Every package change on a PR carries a changeset, and a breaking release
       # (a major, or a minor below 1.0) is refused until everything that depends
       # or peers on it is released as breaking too — Changesets alone would ship

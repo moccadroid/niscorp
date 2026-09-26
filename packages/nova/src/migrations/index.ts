@@ -1,4 +1,6 @@
 import type { Sequence } from '@niscorp/strata';
+import { ActionDefinitionSchema, ActionFragmentSchema } from '../action/schemas';
+import { LayoutNodeSchema } from '../layout/schemas';
 
 // ═══════════════════════════════════════════════════════════════
 // nova's grammar, as a strata sequence — @niscorp/nova/migrations.
@@ -41,3 +43,13 @@ export const NOVA_SEQUENCE: Sequence = {
   },
   migrations: [],
 };
+
+// ── the schemas behind the kinds ────────────────────────────────
+//
+// What each nova kind means today — read by the grammar check, which snapshots
+// them and fails when one changes without a migration in NOVA_SEQUENCE.
+export const NOVA_SCHEMAS = {
+  'nisc.nova/action': ActionDefinitionSchema,
+  'nisc.nova/fragment': ActionFragmentSchema,
+  'nisc.nova/layout': LayoutNodeSchema,
+} as const;

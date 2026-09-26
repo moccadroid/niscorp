@@ -1,7 +1,7 @@
 {
   "name": "@niscorp/strata",
   "version": "0.1.0",
-  "description": "Migrations for nisc — one ledger for the tables a database holds and the documents stored in them, applied in order, recorded once, refused when edited.",
+  "description": "Migrations for nisc \u2014 one ledger for the tables a database holds and the documents stored in them, applied in order, recorded once, refused when edited.",
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
@@ -29,6 +29,16 @@
       "require": {
         "types": "./dist/postgres/index.d.cts",
         "default": "./dist/postgres/index.cjs"
+      }
+    },
+    "./check": {
+      "import": {
+        "types": "./dist/check/index.d.ts",
+        "default": "./dist/check/index.js"
+      },
+      "require": {
+        "types": "./dist/check/index.d.cts",
+        "default": "./dist/check/index.cjs"
       }
     }
   },

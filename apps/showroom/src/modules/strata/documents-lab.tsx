@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type FC } from 'react';
-import { ConfigSchema, evaluate, type JsonValue } from '@niscorp/prism';
-import { createUpgrader, StrataError, type Location, type Sequence, type Stamp, type Transform, type UpgradeResult, type Upgrader } from '@niscorp/strata';
+import { prismTransform } from '@niscorp/prism/migrations';
+import { createUpgrader, StrataError, type Location, type Sequence, type Stamp, type UpgradeResult, type Upgrader } from '@niscorp/strata';
 
 // ═══════════════════════════════════════════════════════════
 // The Documents Lab — what strata does to a JSON document.
@@ -30,19 +30,7 @@ export type DocumentsLabProps = {
   note?: string;
 };
 
-const isJsonValue = (value: unknown): value is JsonValue => {
-  if (value === null || typeof value === 'string' || typeof value === 'boolean') return true;
-  if (typeof value === 'number') return Number.isFinite(value);
-  if (Array.isArray(value)) return value.every(isJsonValue);
-  if (typeof value === 'object') return Object.values(value).every(isJsonValue);
-  return false;
-};
-
-// Prism, injected — exactly as moss does it.
-const prismTransform: Transform = (config, source) => {
-  if (!isJsonValue(source)) throw new Error('A document to migrate must be plain JSON.');
-  return evaluate(ConfigSchema.parse(config), source);
-};
+// Prism's own migration transform — exactly what moss injects.
 
 const C = {
   wrap: { display: 'flex', flexDirection: 'column' as const, gap: 12, padding: 20, fontSize: 13 },
