@@ -145,11 +145,9 @@
     "test": "vitest run",
     "typecheck": "tsc --noEmit -p tsconfig.test.json"
   },
-  "dependencies": {
-    "@niscorp/prism": "workspace:*"
-  },
   "devDependencies": {
     "@niscorp/cortex": "workspace:^",
+    "@niscorp/prism": "workspace:^",
     "@testing-library/react": "^16.1.0",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.0",
@@ -165,6 +163,7 @@
   },
   "peerDependencies": {
     "@niscorp/cortex": "workspace:^",
+    "@niscorp/prism": "workspace:^",
     "ink": "^7.1.1",
     "ink-text-input": "^6.0.0",
     "react": "^19.2.4",

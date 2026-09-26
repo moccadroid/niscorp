@@ -672,7 +672,7 @@ importers:
         version: 4.3.6
 
   packages/loom:
-    dependencies:
+    devDependencies:
       '@niscorp/nova':
         specifier: workspace:^
         version: link:../nova
@@ -682,7 +682,6 @@ importers:
       '@niscorp/vex':
         specifier: workspace:^
         version: link:../vex
-    devDependencies:
       '@testing-library/react':
         specifier: ^16.1.0
         version: 16.3.2(@testing-library/dom@10.4.1)(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
@@ -716,6 +715,16 @@ importers:
       '@hono/node-server':
         specifier: ^2.0.4
         version: 2.0.4(hono@4.12.23)
+      hono:
+        specifier: ^4.12.23
+        version: 4.12.23
+      ws:
+        specifier: ^8.21.1
+        version: 8.21.1
+    devDependencies:
+      '@electric-sql/pglite':
+        specifier: ^0.5.1
+        version: 0.5.1
       '@niscorp/charter':
         specifier: workspace:^
         version: link:../charter
@@ -731,16 +740,6 @@ importers:
       '@niscorp/vex':
         specifier: workspace:^
         version: link:../vex
-      hono:
-        specifier: ^4.12.23
-        version: 4.12.23
-      ws:
-        specifier: ^8.21.1
-        version: 8.21.1
-    devDependencies:
-      '@electric-sql/pglite':
-        specifier: ^0.5.1
-        version: 0.5.1
       '@types/node':
         specifier: ^26.1.1
         version: 26.1.1
@@ -776,14 +775,13 @@ importers:
         version: 4.3.6
 
   packages/nova:
-    dependencies:
-      '@niscorp/prism':
-        specifier: workspace:*
-        version: link:../prism
     devDependencies:
       '@niscorp/cortex':
         specifier: workspace:^
         version: link:../cortex
+      '@niscorp/prism':
+        specifier: workspace:^
+        version: link:../prism
       '@testing-library/react':
         specifier: ^16.1.0
         version: 16.3.2(@testing-library/dom@10.4.1)(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
@@ -895,10 +893,6 @@ importers:
         version: 4.3.6
 
   packages/vex:
-    dependencies:
-      '@niscorp/prism':
-        specifier: workspace:*
-        version: link:../prism
     devDependencies:
       '@electric-sql/pglite':
         specifier: ^0.5.1
@@ -909,6 +903,9 @@ importers:
       '@niscorp/cortex':
         specifier: workspace:^
         version: link:../cortex
+      '@niscorp/prism':
+        specifier: workspace:^
+        version: link:../prism
       '@types/node':
         specifier: ^25.9.1
         version: 25.9.1

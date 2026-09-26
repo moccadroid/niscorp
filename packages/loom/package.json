@@ -109,12 +109,10 @@
     "test": "vitest run",
     "typecheck": "tsc --noEmit -p tsconfig.test.json"
   },
-  "dependencies": {
+  "devDependencies": {
     "@niscorp/nova": "workspace:^",
     "@niscorp/prism": "workspace:^",
-    "@niscorp/vex": "workspace:^"
-  },
-  "devDependencies": {
+    "@niscorp/vex": "workspace:^",
     "@testing-library/react": "^16.1.0",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.0",
@@ -126,10 +124,19 @@
     "zod": "^4.3.6"
   },
   "peerDependencies": {
+    "@niscorp/nova": "workspace:^",
+    "@niscorp/prism": "workspace:^",
+    "@niscorp/vex": "workspace:^",
     "react": "^19.2.4",
     "zod": "^4.2.0"
   },
   "peerDependenciesMeta": {
+    "@niscorp/prism": {
+      "optional": true
+    },
+    "@niscorp/vex": {
+      "optional": true
+    },
     "react": {
       "optional": true
     }

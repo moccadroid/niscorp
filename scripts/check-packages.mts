@@ -94,8 +94,25 @@ const packages = readdirSync(packagesDir).map((name) => {
   return { dir, manifest: readManifest(dir) };
 });
 
+// nisc packages meet each other as PEERS: an app holds one copy of each, so
+// one grammar (one Prism, one nova) runs every artifact, and a value one
+// package hands another is the same type on both sides. A plain dependency
+// is allowed only for something used purely inside — never in the published
+// types, never authored by the app — and says why here.
+const INTERNAL_DEPENDENCIES: Readonly<Record<string, Readonly<Record<string, string>>>> = {
+  '@niscorp/cortex': { '@niscorp/solid': 'streams partial model output inside the loop; never in the API' },
+};
+
 // ── 1 + 2: publint and attw, per package ────────────────────────────
 for (const { dir, manifest } of packages) {
+  for (const dependency of manifest.dependencies.filter((name) => name.startsWith('@niscorp/'))) {
+    const reason = INTERNAL_DEPENDENCIES[manifest.name]?.[dependency];
+    results.push({
+      label: `${manifest.name} → ${dependency}: ${reason === undefined ? 'must be a peer' : 'internal dependency, allowed'}`,
+      ok: reason !== undefined,
+      ...(reason === undefined ? { detail: 'a plain dependency on a nisc package: make it a peer, or allow it in INTERNAL_DEPENDENCIES with the reason' } : {}),
+    });
+  }
   const zodPeer = manifest.peerDependencies['zod'];
   if (manifest.dependencies.includes('zod')) {
     results.push({ label: `zod is a peer of ${manifest.name}`, ok: false, detail: 'zod is in dependencies — a second copy per package' });
