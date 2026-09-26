@@ -10,7 +10,8 @@
     "typecheck": "tsc --noEmit",
     "serve": "tsx src/server/serve.ts",
     "check": "turbo run build --filter=lyra^... && tsx src/dev/all-checks.ts",
-    "census": "tsx src/dev/code-census.ts"
+    "census": "tsx src/dev/code-census.ts",
+    "strata": "tsx src/dev/strata.ts"
   },
   "dependencies": {
     "@electric-sql/pglite": "^0.5.1",
@@ -18,6 +19,7 @@
     "@niscorp/moss": "workspace:^",
     "@niscorp/nova": "workspace:^",
     "@niscorp/prism": "workspace:^",
+    "@niscorp/strata": "workspace:^",
     "@niscorp/tide": "workspace:^",
     "@niscorp/vex": "workspace:^",
     "react": "^19.2.4",

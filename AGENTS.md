@@ -64,6 +64,7 @@ Pick per need; every piece works standalone. Nova is the only mandatory one for 
 | `signal` | LLM calls | — |
 | `cortex` | agents, tools, orchestration | — |
 | `solid` | streaming structured LLM output into UI | — |
+| `strata` | versions: an app's tables as ledgered sequences; stored and submitted documents stamped and upgraded through grammar sequences; `strata upgrade` for artifacts in source (see Versions) | editing a migration that has run — append one |
 
 ## Rules
 
@@ -99,6 +100,13 @@ Pick per need; every piece works standalone. Nova is the only mandatory one for 
 **Code**
 
 16. `/STYLE_GUIDE.md` applies in full, with one app-level override: it is written for the packages, so its "custom error classes for domain errors" does **not** apply here — an app declares no classes at all and throws plain `Error`. Zero-tolerance: `any`, type assertions (`as` — `as const` excepted), non-null `!`, `enum`, classes, default exports, `function` declarations. Deps via `pnpm add` only. Files: `kebab-case.role.ts`. Declared exception: a file that must match an external module's shape (a shim) may break these rules — it says why in a header comment, and reviewers honor it.
+
+**Versions** (`@niscorp/strata`; the why is `packages/strata/DESIGN.md`)
+
+17. No package — and no app, where it can help it — runs DDL outside a strata sequence. Tables change by APPENDING a migration to their owner's sequence; a migration that has run is history, checksummed in the ledger, and editing it makes every database that ran it refuse to boot. The first migration of a sequence may be the old `IF NOT EXISTS` DDL verbatim: that is how an existing database adopts.
+18. A grammar change is a migration. Changing a schema behind a document kind — nova's actions and layouts, Prism's config, an app kit's component props (`NiscApp.grammars`) — appends to that grammar's sequence: an empty marker for an addition (strict readers must still refuse the newer documents), document steps (a Prism config over ONE node; the grammar's embeddings find every node) for anything else. `pnpm check:grammars` refuses the change until it does, and checks every captured document still upgrades and parses. A recorded snapshot is history; so is a corpus file from an earlier stamp.
+19. Stored and submitted documents carry the stamp they were written at and are upgraded where they are read. Ahead of the reader on any grammar is refused (`TOO_NEW`), never guessed at: the reader upgrades first — host before add-on, server before terminal.
+20. An app's source records its grammars in `strata.lock.json`. When a grammar moves: `pnpm strata upgrade` writes the exact expected JSON and a report; edit what it lists; `pnpm strata verify` holds the edit to that JSON and only then moves the lock. Never edit the lock by hand, and never "fix" an edit toward a green verify by any route but the expected JSON. `pnpm check:sources` fails an app whose source is behind.
 
 ## A worked trio
 
@@ -419,5 +427,6 @@ A review pass checks, in order:
 6b. Session code sits in the seam that describes it (rule 7a): no handler registered on `functions` that nothing calls. Tenancy resolves through `scope` and engine-side behaviors, never from a request field.
 7. Style guide bans (rule 16): `any`, `enum`, classes, default exports, `function` declarations by grep; type assertions and non-null `!` at the lint/typecheck level — grep can't tell negation from assertion. Declared shim exceptions are honored.
 8. Decision points: each of D1–D5 is recorded in the app's `PLAN.md` with its tier — answered, delegated by name, or derived — never assumed silently.
+9. Versions (rules 17–20): `pnpm check:grammars` and `pnpm check:sources` pass; no DDL outside a sequence; no edited migration, snapshot, early-stamp corpus file or hand-moved lock.
 
 Report violations by rule number. A change that makes the app less declarative, less validated, or less observable is wrong even if it works.

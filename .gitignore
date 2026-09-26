@@ -13,3 +13,5 @@ coverage/
 
 # Per-machine agent settings. `.claude/launch.json` is project config and IS tracked.
 .claude/settings.local.json
+# strata upgrade work files (plan, expected JSON, report) — transient
+.strata/

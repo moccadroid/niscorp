@@ -81,7 +81,16 @@ export const snapshotOf = (sequence: Sequence, schemas: Readonly<Record<string, 
 export const snapshotText = (snapshot: Snapshot): string => `${JSON.stringify(normalize(snapshot), null, 2)}\n`;
 
 // What differs between two JSON values, as short lines a person can act on.
-const diffLines = (a: unknown, b: unknown, path: string, out: string[], limit: number): void => {
+// Sorted keys only — for documents, where every key (a `description` too) is content.
+const sortKeys = (value: unknown): unknown => {
+  if (Array.isArray(value)) return value.map(sortKeys);
+  if (!isRecord(value)) return value;
+  return Object.fromEntries(Object.entries(value).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)).map(([k, v]) => [k, sortKeys(v)]));
+};
+
+// Schema arrays are compared as sets (`sets`); a document's arrays by position —
+// `layout.children[1]` is how a person finds the thing that changed.
+const diffLines = (a: unknown, b: unknown, path: string, out: string[], limit: number, canon: (v: unknown) => unknown = normalize, sets = true): void => {
   if (out.length >= limit) return;
   if (JSON.stringify(a) === JSON.stringify(b)) return;
   if (isRecord(a) && isRecord(b)) {
@@ -89,9 +98,13 @@ const diffLines = (a: unknown, b: unknown, path: string, out: string[], limit: n
       const at = path === '' ? key : `${path}.${key}`;
       if (!(key in a)) out.push(`+ ${at}`);
       else if (!(key in b)) out.push(`- ${at}`);
-      else diffLines(a[key], b[key], at, out, limit);
+      else diffLines(a[key], b[key], at, out, limit, canon, sets);
       if (out.length >= limit) return;
     }
+    return;
+  }
+  if (Array.isArray(a) && Array.isArray(b) && !sets && a.length === b.length) {
+    a.forEach((item, i) => diffLines(item, b[i], `${path}[${i}]`, out, limit, canon, sets));
     return;
   }
   if (Array.isArray(a) && Array.isArray(b)) {
@@ -100,7 +113,7 @@ const diffLines = (a: unknown, b: unknown, path: string, out: string[], limit: n
     // after it. Match elements by what they describe (an object schema by its
     // property names — for Prism's union, the op), report the ones on one side
     // only, and diff the ones that changed in place.
-    const text = (v: unknown): string => JSON.stringify(normalize(v));
+    const text = (v: unknown): string => JSON.stringify(canon(v));
     const label = (v: unknown): string =>
       isRecord(v) && isRecord(v['properties']) ? Object.keys(v['properties']).join(',') : (text(v) ?? '').slice(0, 50);
     const onlyA = a.filter((x) => !b.some((y) => text(y) === text(x)));
@@ -109,7 +122,7 @@ const diffLines = (a: unknown, b: unknown, path: string, out: string[], limit: n
     for (const x of onlyA) {
       const partner = byLabel.get(label(x));
       if (partner !== undefined) {
-        diffLines(x, partner, `${path}[${label(x)}]`, out, limit);
+        diffLines(x, partner, `${path}[${label(x)}]`, out, limit, canon, sets);
         byLabel.delete(label(x));
       } else {
         out.push(`- ${path}[${label(x)}]`);
@@ -154,6 +167,14 @@ export type CorpusReport = { passed: number; failures: readonly CorpusFailure[] 
 const issueText = (issue: Issue): string => {
   const path = (issue.path ?? []).map((p) => (typeof p === 'object' ? String(p.key) : String(p))).join('.');
   return `${path === '' ? '' : `${path}: `}${issue.message}`;
+};
+
+// What differs between two JSON values, as short lines (`+ a.b`, `- c`,
+// `~ d: 1 → 2`) — for a report a person or an agent acts on.
+export const diffJson = (a: unknown, b: unknown, limit = 20): string[] => {
+  const out: string[] = [];
+  diffLines(a, b, '', out, limit, sortKeys, false);
+  return out;
 };
 
 // Every document, upgraded from its stamp, must pass the current schema of its kind.

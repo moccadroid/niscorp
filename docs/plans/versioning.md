@@ -1,17 +1,18 @@
 # Versioning, migrations and strata
 
-> **Status (2026-09-26): package side built; strata S0–S2 and S4 built.**
-> Built: Apache-2.0, consumable manifests, the zod peer + cross-copy check, nisc
-> packages as peers, changesets + `@niscorp/nisc` + the breaking-dependents
-> gate, the moss wire protocol version, golden credential hashes, Prism stored-IR
-> speed + the `$const` fix — and **strata**: the ledger for every table nisc
-> owns (S1); documents with grammar sequences, embeddings and stamps, upgraded
-> at boot / intake / read (S2); and **the grammar gate** (S4) — per-version
-> schema snapshots of nova's and Prism's kinds and a 131-document corpus from
-> four lab apps, `pnpm check:grammars` in CI. **Nothing on the strata side
-> still blocks npm** (the decided blocker was S1–S4). S3 (Prism ops for
-> migrations that reach inside a config) and S5 (`upgrade --verify`) remain,
-> neither blocking.
+> **Status (2026-09-26): built — package side and strata S0–S6.** Apache-2.0,
+> consumable manifests, the zod peer + cross-copy check, nisc packages as
+> peers, changesets + `@niscorp/nisc` + the breaking-dependents gate, the moss
+> wire protocol version, golden credential hashes, Prism stored-IR speed + the
+> `$const` fix; and **strata**: the ledger for every table nisc owns (S1);
+> documents stamped and upgraded through grammar sequences with embeddings (S2);
+> Prism's transform ops, errors that say where, and the op set that only grows
+> (S3 — its own grammar change was the gate's first real catch: `nisc.prism/1`);
+> the grammar gate with a 131-document corpus (S4); `strata upgrade` for app
+> source with a committed lock, rehearsed on relay with a real rename and
+> enforced by `pnpm check:sources` (S5); rules 17–20 in AGENTS.md (S6).
+> **Open:** npm publishing (a future step, not scheduled); lyceum and midas
+> adopt on their own (corpus, lock).
 
 Two problems, one plan. **Package versioning**: ten libraries with no version
 discipline, never published. **Data versioning**: every nisc artifact is JSON
@@ -269,10 +270,10 @@ $ pnpm strata upgrade --verify
 | S0 ✅ | Package skeleton, types, the plan (pure), checksums — built 2026-09-26. `upgrade()` over document steps moves to S2 | — |
 | S1 ✅ | Ledger + `sql` steps + `/postgres`; vex, moss, tide DDL moved into baseline sequences — built 2026-09-26. Adoption turned out simpler than planned: each baseline IS the old convergent `IF NOT EXISTS` DDL, so running it once over any earlier shape lands the current one and keeps the rows; no schema diffing, nothing marked applied on assumption. Baseline checksums pinned in tests | D6 |
 | S2 ✅ | Document steps, embeddings, `createUpgrader`, `upgradeStore`; nova + Prism grammar sequences; `integration_actions` stamped, upgraded at boot, intake and read; add-on intake refuses `TOO_NEW` — built 2026-09-26. Two departures from the sketch: `vex_cache` is NOT stamped (its rows are re-seeded or regenerable — a cache, not a store), and S3's `$walk` turned out unnecessary for anything a grammar's embeddings describe: the walker recurses, a migration is one flat node | rows |
-| S3 | Prism: `$walk`, `$renameKeys`, `$update`, `$assert`, `$has`; validation errors with paths; computed `$join` parts; the never-remove-an-op check; `irVersion` rule | migrations as data |
+| S3 ✅ | Prism: `$walk`, `$renameKeys`, `$update`, `$assert`, `$has`; `$ref: "$"`; computed `$join` parts; validation errors that name the branch meant, with paths; `EVERY_OP_EVER` — built 2026-09-26. Found on the way: the optimizer constant-folded `$ref`/`$var` (`$ref: "$"` compiled to `{}`). `irVersion` stays 1: the IR's container is unchanged, and the op set is versioned by `nisc.prism` | migrations as data |
 | S4 ✅ | `/check`: snapshots via `~standard.jsonSchema.input`, corpus from the lab apps — built 2026-09-26. 131 documents (atrium, encore, lyra, relay; lyceum skipped while mid-edit). Verified red on an unmigrated addition (snapshot) and a breaking rename (snapshot + 122 corpus failures). The three historic breaks are NOT in the corpus: they predate version 0, the grammar as it stood when strata arrived. midas's corpus is its own to capture | CI gate, npm |
-| S5 | `/cli upgrade --verify` | source artifacts |
-| S6 | AGENTS.md rules: no DDL in packages; every grammar change appends a migration | — |
+| S5 ✅ | `@niscorp/strata/upgrade` + `/node`: `strata.lock.json`, `upgrade` (expected JSON + REPORT.md with file, "look in", positional diff), `verify` (exact, then the lock moves); atrium, encore, lyra, relay carry locks and moved to `nisc.prism/1` through the loop; a real rename rehearsed on relay (careless edit refused, complete edit verified, reverted); `pnpm check:sources` in CI — built 2026-09-26 | source artifacts |
+| S6 ✅ | AGENTS.md rules 17–20 and review item 9 — built 2026-09-26 | — |
 
 ## 6. Open
 

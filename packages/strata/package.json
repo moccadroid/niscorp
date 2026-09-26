@@ -40,6 +40,26 @@
         "types": "./dist/check/index.d.cts",
         "default": "./dist/check/index.cjs"
       }
+    },
+    "./upgrade": {
+      "import": {
+        "types": "./dist/upgrade/index.d.ts",
+        "default": "./dist/upgrade/index.js"
+      },
+      "require": {
+        "types": "./dist/upgrade/index.d.cts",
+        "default": "./dist/upgrade/index.cjs"
+      }
+    },
+    "./node": {
+      "import": {
+        "types": "./dist/node/index.d.ts",
+        "default": "./dist/node/index.js"
+      },
+      "require": {
+        "types": "./dist/node/index.d.cts",
+        "default": "./dist/node/index.cjs"
+      }
     }
   },
   "files": [
@@ -68,6 +88,7 @@
     "tsup": "^8.5.1",
     "typescript": "^6.0.2",
     "vitest": "^4.1.2",
-    "zod": "^4.3.6"
+    "zod": "^4.3.6",
+    "@types/node": "^22"
   }
 }

@@ -10,7 +10,8 @@
     "probe": "tsx src/dev/jev-probe.ts",
     "request": "tsx src/dev/jev-request.ts",
     "timeline": "tsx src/dev/typing-timeline.ts",
-    "check": "tsx src/dev/all-checks.ts"
+    "check": "tsx src/dev/all-checks.ts",
+    "strata": "tsx src/dev/strata.ts"
   },
   "dependencies": {
     "@electric-sql/pglite": "^0.5.1",
@@ -21,6 +22,7 @@
     "@niscorp/nova": "workspace:^",
     "@niscorp/prism": "workspace:^",
     "@niscorp/signal": "workspace:^",
+    "@niscorp/strata": "workspace:^",
     "@niscorp/vex": "workspace:^",
     "hono": "^4.12.23",
     "openai": "^6.33.0",

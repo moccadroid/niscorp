@@ -71,6 +71,12 @@ jobs:
       - name: Check grammars
         run: pnpm check:grammars
 
+      # Every lab app's source artifacts are written at the grammars it runs on
+      # (strata.lock.json). A grammar that moved fails here until the app has run
+      # `pnpm strata upgrade`, made the listed edits, and `strata verify` passed.
+      - name: Check app sources
+        run: pnpm check:sources
+
       # Every package change on a PR carries a changeset, and a breaking release
       # (a major, or a minor below 1.0) is refused until everything that depends
       # or peers on it is released as breaking too — Changesets alone would ship

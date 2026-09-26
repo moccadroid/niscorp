@@ -20,7 +20,8 @@
     "changeset": "changeset",
     "check:grammars": "node scripts/check-grammars.mts",
     "strata:snapshot": "node scripts/check-grammars.mts --write",
-    "strata:corpus": "node scripts/capture-corpus.mts"
+    "strata:corpus": "node scripts/capture-corpus.mts",
+    "check:sources": "node scripts/check-sources.mts"
   },
   "devDependencies": {
     "@arethetypeswrong/cli": "^0.18.5",

@@ -10,6 +10,8 @@ import * as embeddings from './stories/embeddings.demo';
 import embeddingsSrc from './stories/embeddings.demo?raw';
 import * as tooNew from './stories/too-new.demo';
 import tooNewSrc from './stories/too-new.demo?raw';
+import * as source from './stories/source.demo';
+import sourceSrc from './stories/source.demo?raw';
 
 export const stories: readonly Story[] = [
   {
@@ -56,5 +58,14 @@ export const stories: readonly Story[] = [
     kind: 'documents',
     Demo: tooNew.Demo,
     source: tooNewSrc,
+  },
+  {
+    id: 'source',
+    name: 'Upgrade your source',
+    description: 'strata upgrade on an artifact in an app\'s TypeScript: the exact expected JSON and a report for whoever edits, then verify — the lock moves only when the edit lands on it.',
+    category: 'Source',
+    kind: 'source',
+    Demo: source.Demo,
+    source: sourceSrc,
   },
 ];

@@ -11,7 +11,8 @@
     "serve": "tsx src/server/serve.ts",
     "integrations": "tsx watch src/integrations/serve.ts",
     "admin": "tsx watch src/admin/serve.ts",
-    "check": "turbo run build --filter=atrium^... && tsx src/dev/all-checks.ts"
+    "check": "turbo run build --filter=atrium^... && tsx src/dev/all-checks.ts",
+    "strata": "tsx src/dev/strata.ts"
   },
   "dependencies": {
     "@electric-sql/pglite": "^0.5.1",
@@ -22,6 +23,7 @@
     "@niscorp/prism": "workspace:^",
     "@niscorp/signal": "workspace:^",
     "@niscorp/solid": "workspace:^",
+    "@niscorp/strata": "workspace:^",
     "@niscorp/vex": "workspace:^",
     "@noble/hashes": "^2.2.0",
     "openai": "^6.33.0",

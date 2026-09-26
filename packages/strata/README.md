@@ -147,9 +147,37 @@ A snapshot only says *something moved*; the corpus of real documents is the
 judge of whether old ones survive. nisc runs both on its own grammars in CI
 (`pnpm check:grammars`; records in the repo's `strata/` directory).
 
-## Not yet
+## Source — `strata upgrade`
 
-`upgrade --verify` for artifacts in source files.
+Artifacts written in an app's TypeScript are not rewritten by machine — a
+codemod would have to understand every way a person writes an object. strata
+works out EXACTLY what each must become, and holds the edit to it.
+
+```ts
+// the app's src/dev/strata.ts — it lists its artifacts; strata does the rest
+import { runSourceUpgrade } from '@niscorp/strata/node';
+process.exit(await runSourceUpgrade({ root, grammars, transform: prismTransform, schemas, documents }, process.argv.slice(2)));
+```
+
+```bash
+pnpm strata status --check   # the source against the installed grammars (CI)
+pnpm strata upgrade          # .strata/upgrade/: expected JSON + REPORT.md (file, "look in", migrations, diff)
+pnpm strata verify           # the edited source must equal it; then strata.lock.json moves
+```
+
+`strata.lock.json` (committed) is the source's stamp. `upgrade` plans from it:
+artifacts a migration changes get their expected JSON and a positional diff;
+the rest are recorded as untouched. `verify` passes only when every planned
+artifact equals its expected JSON (key order aside), every untouched one is
+still one no migration would change, and nothing was added or removed since
+the plan — then the lock moves and the work files go. A migration whose result
+fails the current schema stops the plan: no edit could pass. `init` records a
+lock for a source that has never had one.
+
+| | |
+|---|---|
+| `@niscorp/strata/upgrade` | Pure: `planSourceUpgrade`, `verifySourceUpgrade`, `renderReport`, `changedStrings`. |
+| `@niscorp/strata/node` | `runSourceUpgrade(options, argv)` — the lock, the work directory, the report, "look in" hints from the source. |
 See [DESIGN.md](./DESIGN.md) and [the plan](../../docs/plans/versioning.md).
 
 ## License
