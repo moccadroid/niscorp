@@ -735,16 +735,28 @@ export const createShellHost = (ctx: ShellHostContext): ShellHost => {
       live.ended = true;
       live.shell.dispose();
     },
-    // Transport → shell addressing: the wire tags the canvas; the canvas's
-    // ACTIVE instance is the origin (only it renders interactive UI), so
-    // nova's own origin filter delivers the event to that instance's
-    // triggers alone. An event already carrying an origin keeps it; a
-    // canvas with nothing mounted dispatches unstamped (global).
+    // Transport → shell addressing: the wire tags the canvas, and nova's own
+    // origin filter delivers the event to one instance's triggers alone.
+    //
+    // A terminal NAMES the instance when it knows it — a list canvas renders
+    // several live cards, and the ActionSlot around the press says which. That
+    // claim comes off the wire, so it is held to the canvas the event is
+    // tagged with: an instance that is not on it (gone since the render, or on
+    // another canvas altogether) drops the event — firing it anywhere else
+    // would run triggers the person never pressed. With no claim, the canvas's
+    // ACTIVE instance is the origin: on a card deck that is the only one
+    // rendered. A canvas with nothing mounted dispatches unstamped (global).
     dispatch: (canvas, event) => {
       const { shell } = cell.live;
-      const active = shell.getState().canvases[canvas]?.active;
-      const stamped = active !== undefined && event['origin'] === undefined ? { ...event, origin: active.id } : event;
-      shell.dispatch(stamped as Parameters<Shell['dispatch']>[0]);
+      const state = shell.getState().canvases[canvas];
+      const claimed = event['origin'];
+      if (claimed !== undefined) {
+        if (typeof claimed !== 'string' || !(state?.stack ?? []).some((item) => item.id === claimed)) return;
+        shell.dispatch(event as Parameters<Shell['dispatch']>[0]);
+        return;
+      }
+      const active = state?.active;
+      shell.dispatch((active === undefined ? event : { ...event, origin: active.id }) as Parameters<Shell['dispatch']>[0]);
     },
     publish: (channel, payload) => cell.live.shell.publish(channel, payload),
     back: () => cell.live.shell.back(),

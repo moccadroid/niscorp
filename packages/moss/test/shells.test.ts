@@ -769,3 +769,74 @@ describe('shells — a canvas placed by an action, not the frame', () => {
     expect(session.shell.getRuntime(inner!.id)?.getData()['n']).toBe(1);
   });
 });
+
+describe('shells — the instance a click names', () => {
+  // A list canvas: two live counters at once, the second one "active". A
+  // terminal names the card a press came from; moss holds that name to the
+  // canvas the event is tagged with.
+  const tallyA = { ...counter, id: 'a' };
+  const tallyB = { ...counter, id: 'b' };
+  const other = { ...counter, id: 'other' };
+  const trayApp = {
+    charter: { public: ['a', 'b', 'other'] },
+    assignments: {},
+    actions: { a: tallyA, b: tallyB, other },
+    shell: {
+      canvases: [
+        { id: 'tray', mode: 'list', initial: 'a' },
+        { id: 'side', initial: 'other' },
+      ],
+    },
+  } as unknown as NiscApp;
+  const ids = { ids: ['a', 'b', 'other'], hash: 'h' };
+  const trayCtx: ShellHostContext = {
+    ...ctx,
+    app: trayApp,
+    catalogFor: () => ids,
+    resolve: async () => ({ roles: ['public'], scope: {}, installed: undefined, catalog: ids, variants: new Map(), policy }),
+  };
+
+  const setup = async () => {
+    const host = createShellHost(trayCtx);
+    const session = await host.session('t', 'usr_1');
+    await tick();
+    session.shell.push('tray', 'b');
+    await tick();
+    const [a, b] = session.shell.getState().canvases['tray']?.stack ?? [];
+    const side = session.shell.getState().canvases['side']?.active;
+    const n = (id: string | undefined): unknown => session.shell.getRuntime(id ?? '')?.getData()['n'];
+    return { session, a: a?.id, b: b?.id, side: side?.id, n };
+  };
+
+  it('a click naming a card on the canvas reaches that card — not the last one', async () => {
+    const { session, a, b, n } = await setup();
+    session.dispatch('tray', { type: 'ui:click', ref: 'bump', origin: a });
+    await tick();
+    expect([n(a), n(b)]).toEqual([1, 0]);
+  });
+
+  it('with no name, the active card is the origin, as before', async () => {
+    const { session, a, b, n } = await setup();
+    session.dispatch('tray', { type: 'ui:click', ref: 'bump' });
+    await tick();
+    expect([n(a), n(b)]).toEqual([0, 1]);
+  });
+
+  it('a click naming an instance on ANOTHER canvas is dropped — it fires nowhere', async () => {
+    const { session, a, b, side, n } = await setup();
+    session.dispatch('tray', { type: 'ui:click', ref: 'bump', origin: side });
+    await tick();
+    expect([n(a), n(b), n(side)]).toEqual([0, 0, 0]);
+  });
+
+  it('a click naming an instance that is gone, or no instance at all, is dropped', async () => {
+    const { session, a, b, side, n } = await setup();
+    session.shell.removeInstance('tray', a ?? '');
+    await tick();
+    session.dispatch('tray', { type: 'ui:click', ref: 'bump', origin: a });
+    session.dispatch('tray', { type: 'ui:click', ref: 'bump', origin: 'made-up' });
+    session.dispatch('tray', { type: 'ui:click', ref: 'bump', origin: 42 });
+    await tick();
+    expect([n(b), n(side)]).toEqual([0, 0]);
+  });
+});
