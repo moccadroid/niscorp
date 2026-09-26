@@ -3,7 +3,8 @@ import { AsyncLocalStorage } from 'node:async_hooks';
 import { Hono } from 'hono';
 import { vex, VEX_LIVE_ENV } from '@niscorp/vex/hono';
 import { createWireFollower } from './follow';
-import { handleQuery } from '@niscorp/vex';
+import { handleQuery, createPostgresCache } from '@niscorp/vex';
+import { migrate } from '@niscorp/strata/postgres';
 import { scopeProfiles } from '@niscorp/vex';
 import type { ScopePolicy, WriteEvent, ExecuteRecord } from '@niscorp/vex';
 import { emitterOf } from './telemetry';
@@ -13,7 +14,7 @@ import { verifyCharter } from '@niscorp/charter';
 import { auditClosure } from './closure';
 import type { NiscApp } from './app';
 import type { NiscRuntime } from './runtime';
-import { initSessions, sessionVerifierOf } from './sessions';
+import { SESSIONS_SEQUENCE, sessionVerifierOf } from './sessions';
 import { createDataLayer } from './data';
 import { mintWrites } from './tide';
 import { memoKey, memoKeyOf, resolveCatalogForRoles, resolvePolicyAtReachForRoles, resolvePolicyForRoles, resolveVariantsForRoles, verifyVariants, wearableOf } from './principal';
@@ -25,7 +26,7 @@ import {
   contractAsMarkdown,
   copyPress,
   describePlacements,
-  initIntegrations,
+  MOSS_SEQUENCE,
   integrationByKey,
   listIntegrations,
   loadIntegrationActions,
@@ -42,7 +43,7 @@ import { createSocket, DEFAULT_REVALIDATE_MS } from './socket';
 import type { SocketAccept } from './socket';
 import { createShellHost } from './shells';
 import { createIdentityCache } from './identity';
-import { createGeneration, GENERATION_DDL } from './generation';
+import { createGeneration } from './generation';
 import type { Generation } from './generation';
 import type { IdentityRecord, IdentityReport } from './identity';
 import type { ShellHost } from './shells';
@@ -240,10 +241,18 @@ export const createServer = async (app: NiscApp, runtime: NiscRuntime): Promise<
   // created after it is a table no grant can reach, silently: an app granting
   // `integrations.read` compiled a policy that denied the very screen the
   // grant existed for, and nothing said so until somebody opened it.
-  await initIntegrations(runtime.pool);
-  // The sessions table rides the same boot for the same reason, when the
-  // deployment chose moss's own credential.
-  if (runtime.session === 'sessions') await initSessions(runtime.pool);
+  //
+  // ONE LEDGERED RUN (strata) for every owner's tables: moss's own, the
+  // sessions table when the deployment chose moss's credential, and the vex
+  // cache's — in one transaction, recorded, refused if the ledger was edited
+  // or written by newer code. The data layer's `cache.init()` below then finds
+  // its sequence already applied.
+  const cacheSequence = (runtime.cache ?? createPostgresCache({ pool: runtime.pool })).sequence;
+  await migrate(
+    runtime.pool,
+    [MOSS_SEQUENCE, ...(runtime.session === 'sessions' ? [SESSIONS_SEQUENCE] : []), ...(cacheSequence === undefined ? [] : [cacheSequence])],
+    { mode: runtime.migrations ?? 'apply' },
+  );
   const data = await createDataLayer(runtime, app.entries ?? []);
 
   // ── Refuse to start incoherent — the charter engine verifies,
@@ -300,7 +309,7 @@ export const createServer = async (app: NiscApp, runtime: NiscRuntime): Promise<
   // same clock a socket credential is re-verified on, and moved by `refresh`.
   // A process that observes a move re-reads the integration actions and drops
   // every derivation, which is exactly what a restart used to be for.
-  for (const statement of GENERATION_DDL) await runtime.pool.query(statement);
+  // (Its table is part of MOSS_SEQUENCE, applied with the rest at the top.)
   let generation: Generation | undefined;
 
   // ONE RESOLUTION, TWO HALVES. The app's `resolve` answers what cannot be

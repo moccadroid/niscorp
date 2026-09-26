@@ -1,0 +1,159 @@
+import { describe, it, expect } from 'vitest';
+import { PGlite } from '@electric-sql/pglite';
+import type { Sequence } from '../src';
+import { migrate, readLedger, status, type StrataPool } from '../src/postgres';
+
+// A PGlite database in the pool shape — query plus a pinned transaction.
+const freshPool = (): StrataPool & { db: PGlite } => {
+  const db = new PGlite();
+  return {
+    db,
+    query: (text, values) => db.query(text, values),
+    transaction: (fn) => db.transaction((tx) => fn({ query: (text, values) => tx.query(text, values) })),
+  };
+};
+
+const sql = (s: string) => ({ kind: 'sql' as const, sql: s });
+
+const columnsOf = async (pool: StrataPool, table: string): Promise<string[]> => {
+  const { rows } = await pool.query(
+    `SELECT column_name FROM information_schema.columns WHERE table_name = $1 ORDER BY ordinal_position`,
+    [table],
+  );
+  return rows.map((r) => String(r['column_name']));
+};
+
+const cache: Sequence = {
+  id: 'nisc.vex.cache',
+  migrations: [
+    { description: 'The cache table', steps: [sql('CREATE TABLE vex_cache (key text PRIMARY KEY)')] },
+    { description: 'Rows remember their request', steps: [sql('ALTER TABLE vex_cache ADD COLUMN request_hash text')] },
+  ],
+};
+
+describe('migrate — the ledger', () => {
+  it('applies a fresh database in order and records every migration', async () => {
+    const pool = freshPool();
+    const report = await migrate(pool, [cache]);
+    expect(report.applied.map((m) => m.ref)).toEqual(['nisc.vex.cache/1', 'nisc.vex.cache/2']);
+    expect(await columnsOf(pool, 'vex_cache')).toEqual(['key', 'request_hash']);
+    const ledger = await readLedger(pool);
+    expect(ledger.map((r) => `${r.sequence}/${r.n}`)).toEqual(['nisc.vex.cache/1', 'nisc.vex.cache/2']);
+    expect(ledger[0]?.description).toBe('The cache table');
+  });
+
+  it('a second run does nothing — once, not every boot', async () => {
+    const pool = freshPool();
+    await migrate(pool, [cache]);
+    const again = await migrate(pool, [cache]);
+    expect(again.applied).toEqual([]);
+    expect(again.plan.applied).toEqual({ 'nisc.vex.cache': 2 });
+  });
+
+  it('an appended migration runs alone on the next boot', async () => {
+    const pool = freshPool();
+    await migrate(pool, [cache]);
+    const grown: Sequence = { ...cache, migrations: [...cache.migrations, { description: 'Rows know their reach', steps: [sql('ALTER TABLE vex_cache ADD COLUMN reach text')] }] };
+    const report = await migrate(pool, [grown]);
+    expect(report.applied.map((m) => m.ref)).toEqual(['nisc.vex.cache/3']);
+    expect(await columnsOf(pool, 'vex_cache')).toEqual(['key', 'request_hash', 'reach']);
+  });
+
+  it('refuses a database whose applied migration was edited in code — and changes nothing', async () => {
+    const pool = freshPool();
+    await migrate(pool, [cache]);
+    const edited: Sequence = { ...cache, migrations: [{ description: 'The cache table', steps: [sql('CREATE TABLE vex_cache (key text PRIMARY KEY, extra int)')] }, ...cache.migrations.slice(1)] };
+    await expect(migrate(pool, [edited])).rejects.toMatchObject({ code: 'EDITED' });
+    expect(await columnsOf(pool, 'vex_cache')).toEqual(['key', 'request_hash']);
+  });
+
+  it('refuses a database migrated by newer code', async () => {
+    const pool = freshPool();
+    const newer: Sequence = { ...cache, migrations: [...cache.migrations, { description: 'Later', steps: [sql('ALTER TABLE vex_cache ADD COLUMN later text')] }] };
+    await migrate(pool, [newer]);
+    await expect(migrate(pool, [cache])).rejects.toMatchObject({ code: 'TOO_NEW' });
+  });
+
+  it('a failing step rolls back the WHOLE run — tables and ledger', async () => {
+    const pool = freshPool();
+    const broken: Sequence = {
+      id: 'acme.app',
+      migrations: [
+        { description: 'People', steps: [sql('CREATE TABLE people (id text PRIMARY KEY)')] },
+        { description: 'Broken', steps: [sql('ALTER TABLE nowhere ADD COLUMN x int')] },
+      ],
+    };
+    const error = await migrate(pool, [cache, broken]).catch((e: unknown) => e);
+    expect(error).toMatchObject({ code: 'STEP_FAILED' });
+    expect(String(error)).toContain('acme.app/2');
+    expect(await columnsOf(pool, 'vex_cache')).toEqual([]);
+    expect(await columnsOf(pool, 'people')).toEqual([]);
+    expect(await readLedger(pool)).toEqual([]);
+  });
+
+  it('verify mode refuses pending work instead of doing it', async () => {
+    const pool = freshPool();
+    const error = await migrate(pool, [cache], { mode: 'verify' }).catch((e: unknown) => e);
+    expect(error).toMatchObject({ code: 'PENDING' });
+    expect(String(error)).toContain('nisc.vex.cache/1');
+    expect(await columnsOf(pool, 'vex_cache')).toEqual([]);
+    await migrate(pool, [cache]);
+    await expect(migrate(pool, [cache], { mode: 'verify' })).resolves.toMatchObject({ applied: [] });
+  });
+
+  it('a pool that cannot transact is refused with the reason', async () => {
+    const pool = freshPool();
+    await expect(migrate({ query: pool.query }, [cache])).rejects.toMatchObject({ code: 'NO_TRANSACTION' });
+  });
+
+  it('status plans without touching anything — not even the ledger table', async () => {
+    const pool = freshPool();
+    const plan = await status(pool, [cache]);
+    expect(plan.pending.map((m) => m.ref)).toEqual(['nisc.vex.cache/1', 'nisc.vex.cache/2']);
+    expect(await columnsOf(pool, 'strata_ledger')).toEqual([]);
+  });
+
+  it('the ledger can live under another name and schema', async () => {
+    const pool = freshPool();
+    await migrate(pool, [cache], { table: 'migrations', schema: 'ops' });
+    expect((await readLedger(pool, { table: 'migrations', schema: 'ops' })).length).toBe(2);
+    expect(await readLedger(pool)).toEqual([]);
+  });
+});
+
+describe('adoption — a database created the old way', () => {
+  // Before strata, packages converged their tables on every boot with
+  // CREATE … IF NOT EXISTS + ADD COLUMN IF NOT EXISTS. A baseline written the
+  // same way is its own adoption: run once over ANY earlier shape, it lands the
+  // current one — and is recorded, so it never runs again.
+  const baseline: Sequence = {
+    id: 'nisc.vex.cache',
+    migrations: [
+      {
+        description: 'The vex cache table, converged from any earlier shape',
+        steps: [
+          sql('CREATE TABLE IF NOT EXISTS vex_cache (key text PRIMARY KEY, request_hash text, refresh text)'),
+          sql('ALTER TABLE vex_cache ADD COLUMN IF NOT EXISTS request_hash text'),
+          sql('ALTER TABLE vex_cache ADD COLUMN IF NOT EXISTS refresh text'),
+        ],
+      },
+    ],
+  };
+
+  it('an older deployment (missing a later column) converges and is recorded', async () => {
+    const pool = freshPool();
+    await pool.query('CREATE TABLE vex_cache (key text PRIMARY KEY, request_hash text)');
+    await pool.query(`INSERT INTO vex_cache (key) VALUES ('kept')`);
+    const report = await migrate(pool, [baseline]);
+    expect(report.applied.map((m) => m.ref)).toEqual(['nisc.vex.cache/1']);
+    expect(await columnsOf(pool, 'vex_cache')).toEqual(['key', 'request_hash', 'refresh']);
+    const { rows } = await pool.query('SELECT key FROM vex_cache');
+    expect(rows).toEqual([{ key: 'kept' }]);
+  });
+
+  it('a fresh database gets the same shape from the same baseline', async () => {
+    const pool = freshPool();
+    await migrate(pool, [baseline]);
+    expect(await columnsOf(pool, 'vex_cache')).toEqual(['key', 'request_hash', 'refresh']);
+  });
+});

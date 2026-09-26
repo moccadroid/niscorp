@@ -1,3 +1,5 @@
+import type { Sequence } from '@niscorp/strata';
+import { migrate as migrateLedger } from '@niscorp/strata/postgres';
 import { PRIMARY_KEY, UNIQUE_BY } from '@niscorp/tide';
 import type { ClaimSpec, Comparison, Mutation, Order, QuerySpec, RemoveSpec, TableName, Tide, TideStore, TideTables, Where } from '@niscorp/tide';
 import type { PgPool, WriteEvent } from '@niscorp/vex';
@@ -35,6 +37,10 @@ import type { PgPool, WriteEvent } from '@niscorp/vex';
 // constructible — and its work was never claimed and it hung there.
 export const TIDE_TABLES = ['tide_fact', 'tide_run', 'tide_work', 'tide_reflex_state'] as const;
 
+// HISTORY. This text is migration 1 of `nisc.moss.tide` (TIDE_SEQUENCE below),
+// and databases have run it: editing it makes every one of them refuse to boot
+// (strata: EDITED). Change the tables by appending a migration to the sequence;
+// test/baselines.test.ts pins this one's checksum so the edit is caught here.
 export const TIDE_DDL = `
 CREATE TABLE IF NOT EXISTS tide_fact (
   id           text PRIMARY KEY,
@@ -314,6 +320,22 @@ const mintId = ((): ((table: TableName) => string) => {
   };
 })();
 
+// One statement per step — a prepared statement carries exactly one command
+// (PGlite says so outright; `pg` under parameters too). The comments ride
+// along: strata hashes a step without its full-line comments, so rewording
+// one is not an edit.
+const statementsOf = (ddl: string): { kind: 'sql'; sql: string }[] =>
+  ddl
+    .split(';')
+    .map((chunk) => chunk.trim())
+    .filter((chunk) => chunk.split('\n').some((line) => line.trim() !== '' && !line.trim().startsWith('--')))
+    .map((sql) => ({ kind: 'sql', sql }));
+
+export const TIDE_SEQUENCE: Sequence = {
+  id: 'nisc.moss.tide',
+  migrations: [{ description: 'The tide store: facts, runs, work and reflex state, converged from any earlier shape', steps: statementsOf(TIDE_DDL) }],
+};
+
 export type TideStoreOptions = {
   // Run the DDL on construction. On by default because a store that cannot
   // create its own tables makes the host responsible for a schema it does
@@ -326,19 +348,11 @@ export const createTideStore = (pool: PgPool, options: TideStoreOptions = {}): T
   // that did not, so on a real pool they raced the DDL and threw
   // `42P01 undefined_table` INSIDE a transaction — which the fan-out then
   // turned into a permanently skipped run.
-  // ONE STATEMENT AT A TIME. A prepared statement carries exactly one
-  // command — PGlite says so outright, and a `pg` pool disallows it under
-  // parameters too — so the DDL is split rather than handed over whole.
-  // Every statement is `IF NOT EXISTS`, so a boot that has already run is a
-  // boot that does nothing rather than one that fails.
-  const migrate = async (): Promise<void> => {
-    for (const statement of TIDE_DDL.split(';')) {
-      const trimmed = statement.trim();
-      if (trimmed !== '') await pool.query(trimmed);
-    }
-  };
-
-  const ready: Promise<void> = options.migrate === false ? Promise.resolve() : migrate();
+  // THROUGH THE LEDGER (strata): the sequence runs once, in one transaction,
+  // and is recorded — a boot that has already run finds nothing pending. Its
+  // one migration is the DDL every boot used to run, IF NOT EXISTS throughout,
+  // so a store created before the ledger existed converges instead of failing.
+  const ready: Promise<void> = options.migrate === false ? Promise.resolve() : migrateLedger(pool, [TIDE_SEQUENCE]).then(() => undefined);
   // An unhandled rejection here is process-fatal on Node ≥ 15, and the
   // failure it reports would be a database that is not up yet.
   ready.catch(() => undefined);

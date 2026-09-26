@@ -1,0 +1,63 @@
+{
+  "name": "@niscorp/strata",
+  "version": "0.1.0",
+  "description": "Migrations for nisc — one ledger for the tables a database holds and the documents stored in them, applied in order, recorded once, refused when edited.",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/moccadroid/niscorp.git",
+    "directory": "packages/strata"
+  },
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
+    },
+    "./postgres": {
+      "import": {
+        "types": "./dist/postgres/index.d.ts",
+        "default": "./dist/postgres/index.js"
+      },
+      "require": {
+        "types": "./dist/postgres/index.d.cts",
+        "default": "./dist/postgres/index.cjs"
+      }
+    }
+  },
+  "files": [
+    "dist",
+    "*.md",
+    "LICENSE"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": ">=22.12"
+  },
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit -p tsconfig.test.json"
+  },
+  "peerDependencies": {
+    "zod": "^4.2.0"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "^0.5.1",
+    "tsup": "^8.5.1",
+    "typescript": "^6.0.2",
+    "vitest": "^4.1.2",
+    "zod": "^4.3.6"
+  }
+}

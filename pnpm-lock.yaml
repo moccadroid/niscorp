@@ -737,6 +737,9 @@ importers:
       '@niscorp/prism':
         specifier: workspace:^
         version: link:../prism
+      '@niscorp/strata':
+        specifier: workspace:^
+        version: link:../strata
       '@niscorp/tide':
         specifier: workspace:^
         version: link:../tide
@@ -803,6 +806,9 @@ importers:
       '@niscorp/solid':
         specifier: workspace:*
         version: link:../solid
+      '@niscorp/strata':
+        specifier: workspace:*
+        version: link:../strata
       '@niscorp/tide':
         specifier: workspace:*
         version: link:../tide
@@ -916,6 +922,24 @@ importers:
         specifier: ^4.3.6
         version: 4.3.6
 
+  packages/strata:
+    devDependencies:
+      '@electric-sql/pglite':
+        specifier: ^0.5.1
+        version: 0.5.1
+      tsup:
+        specifier: ^8.5.1
+        version: 8.5.1(jiti@2.7.0)(postcss@8.5.8)(tsx@4.23.1)(typescript@6.0.2)(yaml@2.9.1)
+      typescript:
+        specifier: ^6.0.2
+        version: 6.0.2
+      vitest:
+        specifier: ^4.1.2
+        version: 4.1.2(@types/node@26.2.0)(jsdom@25.0.1)(vite@8.0.3(@emnapi/core@1.9.2)(@emnapi/runtime@1.9.2)(@types/node@26.2.0)(esbuild@0.27.7)(jiti@2.7.0)(tsx@4.23.1)(yaml@2.9.1))
+      zod:
+        specifier: ^4.3.6
+        version: 4.3.6
+
   packages/tide:
     devDependencies:
       tsup:
@@ -945,6 +969,9 @@ importers:
       '@niscorp/prism':
         specifier: workspace:^
         version: link:../prism
+      '@niscorp/strata':
+        specifier: workspace:^
+        version: link:../strata
       '@types/node':
         specifier: ^25.9.1
         version: 25.9.1

@@ -1,4 +1,6 @@
 import { randomBytes, createHash } from 'node:crypto';
+import type { Sequence } from '@niscorp/strata';
+import { migrate } from '@niscorp/strata/postgres';
 import type { PgPool } from '@niscorp/vex';
 import { devSession } from './runtime';
 import type { NiscRuntime, SessionVerifier } from './runtime';
@@ -33,16 +35,35 @@ import type { NiscRuntime, SessionVerifier } from './runtime';
 
 const hashSessionToken = (token: string): string => createHash('sha256').update(token).digest('hex');
 
-export const initSessions = async (pool: PgPool): Promise<void> => {
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS sessions (
-      -- THE HASH, NEVER THE TOKEN (see the header, and assert.ts for the rule).
+// The sessions table, as a strata sequence. Its own sequence rather than part of
+// `nisc.moss` because it exists only for a deployment that chose moss's own
+// credential (`runtime.session: 'sessions'`). HISTORY: an applied migration is
+// never edited — change the table by appending one (see test/baselines.test.ts).
+export const SESSIONS_SEQUENCE: Sequence = {
+  id: 'nisc.moss.sessions',
+  migrations: [
+    {
+      description: 'The sessions table: a token is stored only as its hash',
+      steps: [
+        {
+          kind: 'sql',
+          // THE HASH, NEVER THE TOKEN (see the header, and assert.ts for the rule).
+          sql: `CREATE TABLE IF NOT EXISTS sessions (
       token_hash text PRIMARY KEY,
       principal  text NOT NULL,
       created_at timestamptz NOT NULL DEFAULT now(),
       expires_at timestamptz NOT NULL
-    )
-  `);
+    )`,
+        },
+      ],
+    },
+  ],
+};
+
+// Through the ledger, for a host that is not moss's server (which runs every
+// owner's sequence in one pass).
+export const initSessions = async (pool: PgPool): Promise<void> => {
+  await migrate(pool, [SESSIONS_SEQUENCE]);
 };
 
 // The broom rides the mint: every new session sweeps the expired ones, so

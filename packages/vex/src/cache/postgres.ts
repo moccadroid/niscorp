@@ -6,6 +6,8 @@ import type { CacheBackend, CacheEntry } from './cache.types.js';
 import { isRefresh } from './cache.types.js';
 import { validateEntry } from './validate.js';
 import { fireAndForget } from './util.js';
+import type { Sequence } from '@niscorp/strata';
+import { migrate } from '@niscorp/strata/postgres';
 
 export type { PgPool };
 
@@ -39,6 +41,7 @@ export type PostgresCacheConfig = {
 
 export type PostgresCache = CacheBackend & {
   init: () => Promise<void>;
+  sequence: Sequence;
   entries: () => Promise<Array<{ key: string; entry: CacheEntry }>>;
 };
 
@@ -106,10 +109,26 @@ export const createPostgresCache = (config: PostgresCacheConfig): PostgresCache 
   const table = quoteIdent(config.table ?? 'vex_cache', 'table');
   const qualified = `${schema}.${table}`;
 
-  const init = async (): Promise<void> => {
-    await pool.query(`CREATE SCHEMA IF NOT EXISTS ${schema}`);
-    await pool.query(
-      `CREATE TABLE IF NOT EXISTS ${qualified} (
+  // THE TABLE, AS A STRATA SEQUENCE. Migration 1 is the DDL every boot used to
+  // run, verbatim — CREATE … IF NOT EXISTS plus the ADD COLUMN IF NOT EXISTS
+  // that caught older tables up — so it converges ANY earlier shape of the
+  // table to the current one: a fresh database and a deployment from months
+  // ago both land here, once, and the ledger remembers. Changes from now on are
+  // appended as plain migrations; this list is never edited.
+  //
+  // One sequence per table: a cache under a non-default name is its own owner.
+  const isDefault = (config.schema ?? 'public') === 'public' && (config.table ?? 'vex_cache') === 'vex_cache';
+  const slug = `${config.schema ?? 'public'}-${config.table ?? 'vex_cache'}`.toLowerCase().replace(/[^a-z0-9-]/g, '-');
+  const sequence: Sequence = {
+    id: isDefault ? 'nisc.vex.cache' : `nisc.vex.cache.${slug}`,
+    migrations: [
+      {
+        description: 'The vex cache table, converged from any earlier shape',
+        steps: [
+          { kind: 'sql', sql: `CREATE SCHEMA IF NOT EXISTS ${schema}` },
+          {
+            kind: 'sql',
+            sql: `CREATE TABLE IF NOT EXISTS ${qualified} (
         key                text PRIMARY KEY,
         kind               text NOT NULL DEFAULT 'ok',
         intent             text,
@@ -126,13 +145,20 @@ export const createPostgresCache = (config: PostgresCacheConfig): PostgresCache 
         request_hash       text,
         refresh            text
       )`,
-    );
-    // Migrate pre-fingerprint tables in place (idempotent).
-    await pool.query(`ALTER TABLE ${qualified} ADD COLUMN IF NOT EXISTS protected boolean NOT NULL DEFAULT false`);
-    await pool.query(`ALTER TABLE ${qualified} ADD COLUMN IF NOT EXISTS last_used_at timestamptz`);
-    await pool.query(`ALTER TABLE ${qualified} ADD COLUMN IF NOT EXISTS request_hash text`);
-    await pool.query(`ALTER TABLE ${qualified} ADD COLUMN IF NOT EXISTS reach text`);
-    await pool.query(`ALTER TABLE ${qualified} ADD COLUMN IF NOT EXISTS refresh text`);
+          },
+          { kind: 'sql', sql: `ALTER TABLE ${qualified} ADD COLUMN IF NOT EXISTS protected boolean NOT NULL DEFAULT false` },
+          { kind: 'sql', sql: `ALTER TABLE ${qualified} ADD COLUMN IF NOT EXISTS last_used_at timestamptz` },
+          { kind: 'sql', sql: `ALTER TABLE ${qualified} ADD COLUMN IF NOT EXISTS request_hash text` },
+          { kind: 'sql', sql: `ALTER TABLE ${qualified} ADD COLUMN IF NOT EXISTS reach text` },
+          { kind: 'sql', sql: `ALTER TABLE ${qualified} ADD COLUMN IF NOT EXISTS refresh text` },
+        ],
+      },
+    ],
+  };
+
+  // Applies the sequence through the ledger — once, recorded — not every boot.
+  const init = async (): Promise<void> => {
+    await migrate(pool, [sequence]);
   };
 
   const evict = (key: string, reason: string): void => {
@@ -245,5 +271,5 @@ export const createPostgresCache = (config: PostgresCacheConfig): PostgresCache 
     return out;
   };
 
-  return { init, get, set, delete: del, clear, keys, entries };
+  return { init, sequence, get, set, delete: del, clear, keys, entries };
 };

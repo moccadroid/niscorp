@@ -3,6 +3,9 @@ import { createPostgresCache } from '../../src/cache/postgres.js';
 import type { PgPool } from '../../src/cache/postgres.js';
 import type { CacheEntry, OkCacheEntry } from '../../src/cache/cache.types.js';
 import type { CompiledIr } from '@niscorp/prism';
+import { PGlite } from '@electric-sql/pglite';
+import { createPglitePool } from '../../src/adapters/pglite/index.js';
+import { checksumOf } from '@niscorp/strata';
 
 // ───────────────────────────────────────────────────────────────
 // Fake pg Pool
@@ -32,11 +35,17 @@ const makeFakePool = () => {
   const rows = new Map<string, DbRow>();
   const notExpired = (r: DbRow) => r.expires_at === null || r.expires_at.getTime() > Date.now();
 
-  const pool: PgPool = {
-    query: async (text: string, values?: unknown[]) => {
+  const query: PgPool['query'] = async (text: string, values?: unknown[]) => {
       const sql = text.trim();
       const v = values ?? [];
 
+      // The migration ledger (strata): `init` runs the table's sequence
+      // through it. This fake is about row serialization, not SQL, so the
+      // ledger reads empty and its writes land nowhere — the real ledger is
+      // covered against PGlite below and in strata's own suite.
+      if (sql.includes('strata_ledger') || sql.includes('pg_advisory_xact_lock') || sql.startsWith('ALTER TABLE')) {
+        return { rows: [] };
+      }
       if (sql.startsWith('CREATE SCHEMA') || sql.startsWith('CREATE TABLE')) {
         return { rows: [] };
       }
@@ -78,8 +87,8 @@ const makeFakePool = () => {
         return { rows: [...rows.values()].filter(notExpired).map((r) => ({ ...r })) };
       }
       return { rows: [] };
-    },
   };
+  const pool: PgPool = { query, transaction: (fn) => fn({ query }) };
 
   return { pool, rows };
 };
@@ -295,5 +304,50 @@ describe('createPostgresCache', () => {
     const { pool } = makeFakePool();
     expect(() => createPostgresCache({ pool, table: 'vex; DROP TABLE users' })).toThrow();
     expect(() => createPostgresCache({ pool, schema: '1bad' })).toThrow();
+  });
+});
+
+// ───────────────────────────────────────────────────────────────
+// The table goes through strata's ledger (real SQL, PGlite)
+// ───────────────────────────────────────────────────────────────
+
+describe('createPostgresCache — the table, through the ledger', () => {
+  const columns = async (pool: PgPool): Promise<string[]> =>
+    (await pool.query(`SELECT column_name FROM information_schema.columns WHERE table_name = 'vex_cache' ORDER BY ordinal_position`)).rows.map((r) =>
+      String(r['column_name']),
+    );
+
+  it('init applies the table once and records it; a second init runs nothing', async () => {
+    const pool = createPglitePool(new PGlite());
+    const cache = createPostgresCache({ pool });
+    await cache.init();
+    await cache.init();
+    const ledger = await pool.query('SELECT sequence, n FROM strata_ledger');
+    expect(ledger.rows).toEqual([{ sequence: 'nisc.vex.cache', n: 1 }]);
+    expect(await columns(pool)).toContain('refresh');
+  });
+
+  it('a table from before the later columns converges, and its rows survive', async () => {
+    const pool = createPglitePool(new PGlite());
+    await pool.query(`CREATE TABLE vex_cache (key text PRIMARY KEY, kind text NOT NULL DEFAULT 'ok', dsl jsonb, created_at timestamptz NOT NULL DEFAULT now())`);
+    await pool.query(`INSERT INTO vex_cache (key) VALUES ('kept')`);
+    await createPostgresCache({ pool }).init();
+    expect(await columns(pool)).toEqual(expect.arrayContaining(['protected', 'last_used_at', 'request_hash', 'reach', 'refresh']));
+    expect((await pool.query('SELECT key FROM vex_cache')).rows).toEqual([{ key: 'kept' }]);
+  });
+
+  // HISTORY, PINNED: every database with a vex cache has run and recorded this.
+  // Red means the applied migration changed — put it back and append a new one
+  // (rewording a full-line `--` comment is fine; strata hashes without them).
+  it('nisc.vex.cache/1 is unchanged', async () => {
+    const migration = createPostgresCache({ pool: createPglitePool(new PGlite()) }).sequence.migrations[0];
+    expect(migration).toBeDefined();
+    if (migration !== undefined) expect(await checksumOf(migration)).toBe('c2c5ca08a6a53b1de69f70c4cc36ec8b3910aee5f1145b99deb30191d225bf24');
+  });
+
+  it('a cache under another name is its own sequence', () => {
+    const pool = createPglitePool(new PGlite());
+    expect(createPostgresCache({ pool }).sequence.id).toBe('nisc.vex.cache');
+    expect(createPostgresCache({ pool, schema: 'ops', table: 'Query_Cache' }).sequence.id).toBe('nisc.vex.cache.ops-query-cache');
   });
 });

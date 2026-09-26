@@ -123,5 +123,5 @@ export const createTieredCache = (config: TieredCacheConfig): TieredCache => {
   // is the authoritative key list for the running process.
   const keys = async (): Promise<string[]> => l1.keys();
 
-  return { init, get, set, delete: del, clear, keys };
+  return { init, get, set, delete: del, clear, keys, ...(l2.sequence !== undefined ? { sequence: l2.sequence } : {}) };
 };

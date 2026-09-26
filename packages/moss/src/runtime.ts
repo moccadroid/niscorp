@@ -28,6 +28,12 @@ export type NiscRuntime = {
   //                the boot says so out loud. Harnesses and demo floors.
   //   a function — the app's own identity provider.
   session: SessionVerifier | 'sessions' | 'dev-open';
+  // The tables moss, vex and a chosen credential own go through ONE ledgered
+  // run at boot (strata), before introspection. 'apply' (default): run what is
+  // pending, once, recorded. 'verify': refuse to boot if anything is pending —
+  // for a deployment whose migrations are a deploy step, not a side effect of
+  // starting a process. Either way an edited or too-new ledger refuses.
+  migrations?: 'apply' | 'verify';
   // How long a durable server shell may sit with no terminal attached before
   // it is disposed (default: 30 minutes; `0` disables the sweep). An
   // environment knob rather than a manifest one, because it trades memory

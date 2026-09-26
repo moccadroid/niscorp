@@ -1,6 +1,7 @@
 import type { Query } from '../schemas/query.schema.js';
 import type { CompiledIr } from '@niscorp/prism';
 import type { MutationDefinition } from '../mutations/schema.js';
+import type { Sequence } from '@niscorp/strata';
 
 // ───────────────────────────────────────────────────────────────
 // Cache entries
@@ -146,5 +147,9 @@ export type CacheBackend = {
   clear: () => Promise<void>;
   keys: () => Promise<string[]>;
   init?: () => Promise<void>;
+  // The tables this backend owns, as a strata sequence (Postgres). A host that
+  // migrates several owners in one run (moss) collects it; `init` applies it
+  // alone for everyone else. Either way it goes through the ledger.
+  sequence?: Sequence;
   entries?: () => Promise<Array<{ key: string; entry: CacheEntry }>>;
 };
