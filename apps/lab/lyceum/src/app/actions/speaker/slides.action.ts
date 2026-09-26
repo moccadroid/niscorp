@@ -1,5 +1,5 @@
 import type { ActionDefinition } from '@niscorp/nova';
-import { deckCurrent, slidesAll, slidesCount } from '@lyceum/app/vex/deck.entries';
+import { deckCurrent, slidesAll } from '@lyceum/app/vex/deck.entries';
 import { deckPickPrism } from './console.prism';
 
 // EVERY SLIDE, over the controller: the deck as a numbered list, the slide on
@@ -12,8 +12,7 @@ export const slidesAction: ActionDefinition = {
   data: {
     sheetTitle: 'All slides',
     slides: [],
-    current: { slide_id: '', title: '', position: 0, number: 0, tool_id: '' },
-    count: { slides: 0 },
+    current: { slide_id: '', title: '', position: 0, number: 0, tool_id: 'tools.none', count: 0, prev_number: 0, prev_title: '', next_number: 0, next_title: '' },
     picked: 0,
     error: '',
   },
@@ -33,9 +32,8 @@ export const slidesAction: ActionDefinition = {
   endpoints: {
     all: { url: '/api/vex', method: 'POST', request: { fingerprint: slidesAll.fingerprint, context: {} }, target: 'slides' },
     current: { url: '/api/vex', method: 'POST', request: { fingerprint: deckCurrent.fingerprint, context: {} }, target: 'current' },
-    count: { url: '/api/vex', method: 'POST', request: { fingerprint: slidesCount.fingerprint, context: {} }, target: 'count' },
     pick: { url: '/api/vex', method: 'POST', request: deckPickPrism, errorTarget: 'error' },
   },
-  lifecycle: { mount: [{ call: 'all' }, { call: 'current' }, { call: 'count' }] },
+  lifecycle: { mount: [{ call: 'all' }, { call: 'current' }] },
   triggers: [{ event: 'ui:click', ref: 'pick', do: [{ set: 'picked', value: '@event.payload' }, { call: 'pick', onSuccess: [{ pop: true }] }] }],
 };

@@ -1,6 +1,6 @@
 import type { ActionDefinition } from '@niscorp/nova';
 import { memberCounts } from '@lyceum/app/vex/member.entries';
-import { deckCurrent, slidesCount } from '@lyceum/app/vex/deck.entries';
+import { deckCurrent } from '@lyceum/app/vex/deck.entries';
 import { stripLayout } from './strip.layout';
 
 // The projector's strip, over every slide: where the talk is, and the room.
@@ -10,16 +10,14 @@ export const stripAction: ActionDefinition = {
   id: 'stage.strip',
   title: 'The strip',
   data: {
-    current: { slide_id: '', title: '', position: 0, number: 0, tool_id: '' },
-    count: { slides: 0 },
+    current: { slide_id: '', title: '', position: 0, number: 0, tool_id: 'tools.none', count: 0, prev_number: 0, prev_title: '', next_number: 0, next_title: '' },
     counts: { joined: 0, assigned: 0, unassigned: 0 },
   },
   layout: stripLayout,
   endpoints: {
     current: { url: '/api/vex', method: 'POST', request: { fingerprint: deckCurrent.fingerprint, context: {} }, target: 'current' },
-    slides: { url: '/api/vex', method: 'POST', request: { fingerprint: slidesCount.fingerprint, context: {} }, target: 'count' },
     counts: { url: '/api/vex', method: 'POST', request: { fingerprint: memberCounts.fingerprint, context: {} }, target: 'counts' },
   },
-  lifecycle: { mount: [{ call: 'current' }, { call: 'slides' }, { call: 'counts' }] },
+  lifecycle: { mount: [{ call: 'current' }, { call: 'counts' }] },
   triggers: [],
 };

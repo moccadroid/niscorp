@@ -13,7 +13,7 @@ const toCurrentTool = [
 export const speakerDeckAction: ActionDefinition = {
   id: 'speaker.deck',
   title: 'The controller follows the deck',
-  data: { current: { slide_id: '', title: '', position: 0, number: 0, tool_id: 'tools.none' } },
+  data: { current: { slide_id: '', title: '', position: 0, number: 0, tool_id: 'tools.none', count: 0, prev_number: 0, prev_title: '', next_number: 0, next_title: '' } },
   layout: [],
   endpoints: {
     current: { url: '/api/vex', method: 'POST', request: { fingerprint: deckCurrent.fingerprint, context: {} }, target: 'current' },

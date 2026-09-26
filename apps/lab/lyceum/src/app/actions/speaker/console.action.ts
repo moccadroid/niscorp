@@ -1,6 +1,6 @@
 import type { ActionDefinition } from '@niscorp/nova';
 import { memberCounts } from '@lyceum/app/vex/member.entries';
-import { deckCurrent, slidesCount } from '@lyceum/app/vex/deck.entries';
+import { deckCurrent } from '@lyceum/app/vex/deck.entries';
 import { consoleLayout } from './console.layout';
 import { deckBackPrism, deckNextPrism } from './console.prism';
 
@@ -14,8 +14,7 @@ export const consoleAction: ActionDefinition = {
   title: 'Controller',
   data: {
     counts: { joined: 0, assigned: 0, unassigned: 0 },
-    current: { slide_id: '', title: '', position: 0, number: 0, tool_id: '' },
-    count: { slides: 0 },
+    current: { slide_id: '', title: '', position: 0, number: 0, tool_id: 'tools.none', count: 0, prev_number: 0, prev_title: '', next_number: 0, next_title: '' },
     error: '',
   },
   layout: consoleLayout,
@@ -24,11 +23,10 @@ export const consoleAction: ActionDefinition = {
     // moved them.
     counts: { url: '/api/vex', method: 'POST', request: { fingerprint: memberCounts.fingerprint, context: {} }, target: 'counts' },
     current: { url: '/api/vex', method: 'POST', request: { fingerprint: deckCurrent.fingerprint, context: {} }, target: 'current' },
-    slides: { url: '/api/vex', method: 'POST', request: { fingerprint: slidesCount.fingerprint, context: {} }, target: 'count' },
     next: { url: '/api/vex', method: 'POST', request: deckNextPrism, errorTarget: 'error' },
     back: { url: '/api/vex', method: 'POST', request: deckBackPrism, errorTarget: 'error' },
   },
-  lifecycle: { mount: [{ call: 'counts' }, { call: 'current' }, { call: 'slides' }] },
+  lifecycle: { mount: [{ call: 'counts' }, { call: 'current' }] },
   triggers: [
     { event: 'ui:click', ref: 'next', do: [{ call: 'next' }] },
     { event: 'ui:click', ref: 'back', do: [{ call: 'back' }] },

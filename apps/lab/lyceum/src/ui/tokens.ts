@@ -47,7 +47,16 @@ html, body { margin: 0; padding: 0; }
 .${ROOT_CLASS} .page > [data-canvas] > * { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; }
 /* the overlay canvas: over the whole screen when something is open, out of
    the stack either way */
-.${ROOT_CLASS} .page > [data-canvas="overlay"]:not(:empty) { position: fixed; inset: 0; z-index: 10; background: var(--paper); }
+.${ROOT_CLASS} .page > [data-canvas="overlay"]:not(:empty) {
+  position: fixed; inset: 0; z-index: 10;
+  /* the screen underneath stays visible, dimmed: this is ON it, not instead of it */
+  background: color-mix(in srgb, var(--ink) 55%, transparent);
+  padding: 12dvh clamp(10px, 4vw, 48px) clamp(10px, 4vw, 48px);
+}
+/* the panel ends where its content does, up to the screen's edge — past that its
+   body scrolls inside it (fifty slides) */
+.${ROOT_CLASS} .page > [data-canvas="overlay"]:not(:empty) > * { flex: 0 1 auto; }
+.${ROOT_CLASS} .page > [data-canvas="overlay"]:not(:empty) > * > .sheet { flex: 0 1 auto; border-top: var(--rule) solid var(--ink); max-width: 720px; width: 100%; margin: 0 auto; box-shadow: 8px 8px 0 var(--ink); }
 /* stacked canvases share one rule where they meet, not two */
 .${ROOT_CLASS} .page > [data-canvas]:not(:empty):not([data-canvas="overlay"]) ~ [data-canvas] > * > .sheet { border-top: 0; }
 

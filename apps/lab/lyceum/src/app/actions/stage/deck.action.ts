@@ -14,7 +14,7 @@ const toCurrentSlide = [
 export const deckAction: ActionDefinition = {
   id: 'stage.deck',
   title: 'The deck',
-  data: { current: { slide_id: '', title: '', position: 0, number: 0, tool_id: '' } },
+  data: { current: { slide_id: '', title: '', position: 0, number: 0, tool_id: 'tools.none', count: 0, prev_number: 0, prev_title: '', next_number: 0, next_title: '' } },
   layout: deckLayout,
   endpoints: {
     current: { url: '/api/vex', method: 'POST', request: { fingerprint: deckCurrent.fingerprint, context: {} }, target: 'current' },

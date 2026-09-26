@@ -5,7 +5,8 @@ import type { LayoutNode } from '@niscorp/nova';
 export const consoleLayout: LayoutNode = {
   component: 'Sheet',
   // The slide on screen takes the middle; Back and Next are the last row, so
-  // they stay at the bottom. Every slide is behind "All slides".
+  // they stay at the bottom — and each says which slide it goes to. Every
+  // slide is behind "All slides".
   props: { size: 'fill', areas: ['head head', 'slide slide', 'all all', 'back next'], rows: ['auto', 1, 'auto', 'auto'] },
   children: [
     {
@@ -15,15 +16,23 @@ export const consoleLayout: LayoutNode = {
     },
     {
       component: 'Cell',
-      props: { area: 'slide', ink: 'ink', align: 'between' },
+      props: { area: 'slide', align: 'between' },
       children: [
-        { component: 'Label', children: 'Slide {{$.current.number}} / {{$.count.slides}} — {{$.current.title}}' },
+        { component: 'Label', children: 'On screen · slide {{$.current.number}} of {{$.current.count}}' },
         { component: 'Headline', props: { level: 'title' }, children: '{{$.current.title}}' },
         { if: '$.error', then: { component: 'Text', children: '{{$.error}}' } },
       ],
     },
-    { component: 'Action', ref: 'all', props: { area: 'all', label: 'All slides ({{$.count.slides}}) →' } },
-    { component: 'Action', ref: 'back', props: { area: 'back', label: '← Back' } },
-    { component: 'Action', ref: 'next', props: { area: 'next', ink: 'alert', label: 'Next →' } },
+    { component: 'Action', ref: 'all', props: { area: 'all', label: 'All slides ({{$.current.count}})' } },
+    {
+      component: 'Action',
+      ref: 'back',
+      props: { area: 'back', label: { $if: '$.current.prev_title', $then: '← {{$.current.prev_number}} · {{$.current.prev_title}}', $else: 'Start of the deck' } },
+    },
+    {
+      component: 'Action',
+      ref: 'next',
+      props: { area: 'next', ink: 'alert', label: { $if: '$.current.next_title', $then: '{{$.current.next_number}} · {{$.current.next_title}} →', $else: 'End of the deck' } },
+    },
   ],
 };

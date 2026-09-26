@@ -34,10 +34,12 @@ const main = async (): Promise<void> => {
   const total = SLIDES.length;
   const titleOf = (index: number): string => SLIDES[index]?.title ?? '';
   const onSlide = async (index: number): Promise<boolean> =>
-    (await speaker.shows('main', `Slide ${index + 1} / ${total} — ${titleOf(index)}`)) && (await stage.shows('main', titleOf(index)));
+    (await speaker.shows('main', `slide ${index + 1} of ${total}`)) && (await speaker.shows('main', titleOf(index))) && (await stage.shows('main', titleOf(index)));
 
   // ── the first slide, and no way back from it ──
   check('the stage and the controller open on the first slide', await onSlide(0));
+  check('Next says which slide it goes to', await speaker.shows('main', `2 · ${titleOf(1)} →`));
+  check('Back on the first slide says so', await speaker.shows('main', 'Start of the deck'));
   speaker.click('main', 'back');
   check('back on the first slide stays there', await onSlide(0));
 
@@ -48,9 +50,11 @@ const main = async (): Promise<void> => {
   }
   speaker.click('main', 'next');
   check('next on the last slide stays there', await onSlide(total - 1));
+  check('Back says which slide it goes to', await speaker.shows('main', `← ${total - 1} · ${titleOf(total - 2)}`));
+  check('Next on the last slide says so', await speaker.shows('main', 'End of the deck'));
 
   const row = await runtime.db.query<{ slide_id: string }>('SELECT slide_id FROM deck');
-  check('the row holds what the stage shows', row.rows[0]?.slide_id === SLIDES[total - 1]?.slideId);
+  check('the row is what the stage shows', row.rows[0]?.slide_id === SLIDES[total - 1]?.slideId);
 
   // ── all slides, over the controller: any slide, straight away ──
   const pick = async (position: number): Promise<void> => {
