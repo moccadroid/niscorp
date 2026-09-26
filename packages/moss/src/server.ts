@@ -1,7 +1,8 @@
 import { randomBytes, createHash, timingSafeEqual } from 'node:crypto';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { Hono } from 'hono';
-import { vex } from '@niscorp/vex/hono';
+import { vex, VEX_LIVE_ENV } from '@niscorp/vex/hono';
+import { createWireFollower } from './follow';
 import { handleQuery } from '@niscorp/vex';
 import { scopeProfiles } from '@niscorp/vex';
 import type { ScopePolicy, WriteEvent, ExecuteRecord } from '@niscorp/vex';
@@ -1306,22 +1307,37 @@ export const createServer = async (app: NiscApp, runtime: NiscRuntime): Promise<
         ...(runtime.shellIdleMs !== undefined ? { idleMs: runtime.shellIdleMs } : {}),
         ...(runtime.shellFrameDelta !== undefined ? { delta: runtime.shellFrameDelta } : {}),
         wire: (token) => async (url, init) => {
-          const res = await server.request(url, {
-            method: init?.method ?? 'GET',
-            headers: { ...(init?.headers ?? {}), ...(token !== null ? { Authorization: `Bearer ${token}` } : {}) },
-            ...(init?.body !== undefined ? { body: init.body } : {}),
-          });
+          const isVex = url.split('?')[0]?.endsWith('/vex') === true;
+          // A vex read made for a caller that can be told when to stop — a
+          // nova endpoint passes its instance's signal — may keep answering
+          // (`refresh: 'reactive'`; see ./follow.ts). The follower rides the
+          // in-process request's env, where no network request can put one.
+          const follower = isVex && init?.signal !== undefined ? createWireFollower(init.signal) : undefined;
+          const res = await server.request(
+            url,
+            {
+              method: init?.method ?? 'GET',
+              headers: { ...(init?.headers ?? {}), ...(token !== null ? { Authorization: `Bearer ${token}` } : {}) },
+              ...(init?.body !== undefined ? { body: init.body } : {}),
+            },
+            follower === undefined ? undefined : { [VEX_LIVE_ENV]: follower.live },
+          );
           // Vex replies `{ result, meta }`; endpoints want the data — the
           // same unwrap the client wire applies, so an action behaves
           // identically under either shell.
-          if (!url.split('?')[0]?.endsWith('/vex') || !res.ok) return res;
+          if (!isVex || !res.ok) {
+            follower?.end();
+            return res;
+          }
           const body = (await res.json()) as Record<string, unknown> | null;
           const result = body !== null && typeof body === 'object' && 'result' in body ? body['result'] : body;
+          follower?.handedOver();
           return {
             ok: res.ok,
             status: res.status,
             json: () => Promise.resolve(result),
             text: () => Promise.resolve(JSON.stringify(result)),
+            ...(follower === undefined ? {} : { onChange: follower.onChange }),
           };
         },
       })
