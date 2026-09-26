@@ -1,10 +1,12 @@
 import { z } from 'zod';
-import type { MossServer } from '@niscorp/moss';
+import type { FunctionSession, MossServer } from '@niscorp/moss';
 import type { FunctionHandler } from '@niscorp/nova';
 import { houseSizes, housesAll, memberSort, memberUnsort, membersSorted, membersUnsorted } from '@lyceum/app/vex/member.entries';
+import { vexOver } from '../vex-over';
 
 // THE SORTING. Every unsorted person, in the order they joined, is placed in a
-// house — and the placement IS their new role: one write as the `hat`, then
+// house — and the placement IS their new role: one write, AS THE SPEAKER over
+// the speaker's own session (their charter grants `members.write.update`), then
 // `invalidateIdentity`, which forgets who they were and rebuilds their live
 // shell from the new row, carrying their open connection across. Their phone
 // receives its house without anybody signing in again.
@@ -27,21 +29,21 @@ const emptiest = (houses: readonly { house_id: string }[], sizes: ReadonlyMap<st
   return rest.reduce((best, house) => ((sizes.get(house.house_id) ?? 0) < (sizes.get(best) ?? 0) ? house.house_id : best), first.house_id);
 };
 
-export const sortingFunctions = (server: () => MossServer): Record<string, FunctionHandler> => ({
+export const sortingFunctions = (session: FunctionSession, server: () => MossServer): Record<string, FunctionHandler> => {
+  const vex = vexOver(session.wire);
+  return {
   'speaker.sort': async () => {
-    const hat = server();
-    const houses = await rows(HousesSchema, hat.executeAs('hat', housesAll.fingerprint, {}));
-    const unsorted = await rows(UnsortedSchema, hat.executeAs('hat', membersUnsorted.fingerprint, {}));
-    const counted = await rows(SizesSchema, hat.executeAs('hat', houseSizes.fingerprint, {}));
+    const houses = await rows(HousesSchema, vex(housesAll.fingerprint));
+    const unsorted = await rows(UnsortedSchema, vex(membersUnsorted.fingerprint));
+    const counted = await rows(SizesSchema, vex(houseSizes.fingerprint));
     const sizes = new Map(counted.map((row) => [row.house_id, row.size]));
 
     const placed: { memberId: string; houseId: string }[] = [];
     for (const { member_id: memberId } of unsorted) {
       const houseId = emptiest(houses, sizes);
-      const written = await hat.executeAs('hat', memberSort.fingerprint, { memberId, houseId });
-      if (written === undefined) throw new Error(`The hat could not place ${memberId}.`);
+      await vex(memberSort.fingerprint, { memberId, houseId });
       sizes.set(houseId, (sizes.get(houseId) ?? 0) + 1);
-      hat.invalidateIdentity(memberId);
+      server().invalidateIdentity(memberId);
       placed.push({ memberId, houseId });
     }
     return { placed };
@@ -51,13 +53,12 @@ export const sortingFunctions = (server: () => MossServer): Record<string, Funct
   // same way the sorting re-roles them, so every open phone loses its house
   // where it stands. The room stays; the sorting can run again.
   'speaker.unsort': async () => {
-    const hat = server();
-    const sorted = await rows(UnsortedSchema, hat.executeAs('hat', membersSorted.fingerprint, {}));
+    const sorted = await rows(UnsortedSchema, vex(membersSorted.fingerprint));
     for (const { member_id: memberId } of sorted) {
-      const written = await hat.executeAs('hat', memberUnsort.fingerprint, { memberId });
-      if (written === undefined) throw new Error(`The hat could not take ${memberId} back out.`);
-      hat.invalidateIdentity(memberId);
+      await vex(memberUnsort.fingerprint, { memberId });
+      server().invalidateIdentity(memberId);
     }
     return { unsorted: sorted.length };
   },
-});
+  };
+};

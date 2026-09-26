@@ -34,7 +34,7 @@ export const bootOn = async <R extends LyceumRuntime>(runtime: R): Promise<Boote
 
   const app = buildLyceum({
     identity: lyceumIdentity,
-    functions: (session) => ({ ...doorFunctions(session, server), ...sortingFunctions(server) }),
+    functions: (session) => ({ ...doorFunctions(session, server), ...sortingFunctions(session, server) }),
     reactions: lyceumReactions(server),
   });
   built = await createServer(app, runtime);

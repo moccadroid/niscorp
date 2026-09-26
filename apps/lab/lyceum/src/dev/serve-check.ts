@@ -11,6 +11,8 @@ import { attachSocket } from '@niscorp/moss/node';
 import { boot } from '@lyceum/server/boot';
 import { hashLinkToken, mountLogin } from '@lyceum/server/login';
 import { mountSite } from '@lyceum/server/site';
+import { mintSession } from '@niscorp/moss';
+import { memberJoin } from '@lyceum/app/vex/member.entries';
 import { check, connect, finish } from './harness';
 
 const main = async (): Promise<void> => {
@@ -66,6 +68,18 @@ const main = async (): Promise<void> => {
   const speaker = await connect(`ws://127.0.0.1:${address.port}`, session);
   const hello = await speaker.hello();
   check('the session it minted is the speaker, holding the controller', hello.principal === 'speaker' && hello.catalog.actions.includes('speaker.console'));
+
+  // ── the door: a person writes their own row, and only their own ──
+  const replay = async (token: string, fingerprint: string, context: Record<string, unknown>): Promise<number> =>
+    (await fetch(`${http}/api/vex`, { method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` }, body: JSON.stringify({ fingerprint, context }) })).status;
+  const newcomer = await mintSession(runtime.pool, 'm_newcomer', 60_000);
+  // A request that tries to name the row after somebody else: the id is not
+  // the request's to set.
+  const joined = await replay(newcomer, memberJoin.fingerprint, { name: 'Somebody', member_id: 'speaker', memberId: 'speaker' });
+  const rows = await runtime.db.query<{ member_id: string }>("SELECT member_id FROM members WHERE name = 'Somebody'");
+  check('stepping in writes a row stamped with the person\'s own id, whatever the request says', joined === 200 && rows.rows.length === 1 && rows.rows[0]?.member_id === 'm_newcomer');
+  server.invalidateIdentity('m_newcomer');
+  check('a member cannot step in twice', (await replay(newcomer, memberJoin.fingerprint, { name: 'Again' })) !== 200);
 
   speaker.close();
   httpServer.close();

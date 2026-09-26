@@ -3,6 +3,7 @@ import type { NiscApp } from '@niscorp/moss';
 import { CHARTER, WEARABLE } from './charter/charter';
 import { ACTIONS } from './action-catalog';
 import { ENTRIES } from './vex';
+import { BEHAVIORS } from './vex/behaviors';
 import { CANVASES } from './shell/canvases';
 import { frameLayout } from './shell/frame.layout';
 
@@ -23,6 +24,7 @@ export const buildLyceum = (seams: LyceumSeams): NiscApp =>
     wearable: WEARABLE,
     actions: ACTIONS,
     entries: ENTRIES,
+    behaviors: BEHAVIORS,
     identity: seams.identity,
     functions: seams.functions,
     reactions: seams.reactions,

@@ -124,13 +124,15 @@ export const houseSizes: SeedEntry = {
 
 // ── writes ──
 
+// Written by the person stepping in, as themselves; `member_id` is stamped by
+// the engine from their session (behaviors.ts), never sent.
 export const memberJoin: SeedMutation = {
   fingerprint: 'members/join',
-  intent: 'Let a person into the room',
+  intent: 'Step into the room as yourself',
   mutation: {
     op: 'insert',
     table: 'members',
-    values: { member_id: { $context: 'memberId' }, name: { $context: 'name' } },
+    values: { name: { $context: 'name' } },
   },
 };
 

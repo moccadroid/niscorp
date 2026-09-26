@@ -24,7 +24,7 @@ Where to pick up. Read this section, then "Vex is never hidden behind a function
   the stage wear only their grants. No raw SQL.
 - Five placeholder actions (door, member card, house crest, speaker console, stage
   roster) and the sorting.
-- `src/dev/sorting-check.ts` (28), `deck-check.ts` (17) and `serve-check.ts` (11) pass
+- `src/dev/sorting-check.ts` (28), `deck-check.ts` (17) and `serve-check.ts` (13) pass
   over a real websocket; `src/dev/harness.ts` is the headless terminal they drive.
 
 **Proven — the claim the talk stands on.** A member's phone, connected before the
@@ -84,28 +84,34 @@ the stage and a member where they were, and the deck moved on from there.
   order at runtime, the order becomes room data and stops converging.
 - **Not yet:** the VPS, the domain and Caddy (TLS + websocket upgrade in front of 8796).
 
-**What the red assertion exposed, and where it stands.** The sorting writes through
-`executeAs`, and moss attaches vex's write observer (`onWrite`, which feeds `reactions`
-and tide facts) to the HTTP vex mount only (`packages/moss/src/server.ts`). **Writes made
-through `executeAs` are still invisible to reactions and to tide.** Reactive reads no
-longer depend on it — invalidation happens inside vex's handler, which every write
-passes — but tide facts and `reactions` still do.
+**`executeAs` is gone from lyceum's writes — 2026-09-26.** The sort and the unsort run
+as the speaker over the speaker's own session (`src/server/vex-over.ts`; the charter
+grants the speaker `members.write.update`). Stepping in mints the person first and has
+them write their own member row as themselves: `public` may insert a member only with
+the engine stamping `member_id` from their `userId` (`src/app/vex/behaviors.ts`) —
+`serve-check` asserts a request cannot name somebody else's row. The `hat` and
+`doorkeeper` machinery roles are deleted. What remains: the `/login` link's redemption
+(`gatekeeper`) — credential plumbing like moss's own `sessions`, which moves into moss
+beside `mintSession` when the mailed link lands — and moss's own identity resolution.
 
-**Next, in this order:**
-1. **Lyceum: the sort writes as the speaker.** Replace `executeAs('hat', …)` in
-   `src/server/functions/sorting.functions.ts` with reads and writes over
-   `session.wire` as the speaker; grant the speaker `members.write.update` in the
-   charter; delete the `hat` machinery role. The function keeps only the CHOICE (Jev,
-   later). See "Vex is never hidden behind a function".
-2. **moss: `executeAs` writes pass the write observer.** `executeAs` calls vex's
-   `handleQuery` with a `mutations` config — pass it the same `onWrite` the HTTP mount
-   passes. Needed for the one legitimate no-principal write (the door's member insert)
-   and for every webhook and effect. Test: a machinery write fires a reaction. Midas
-   note for its next bump: its machinery writes will start firing reactions and tide
-   facts; a write fact is stamped from the write's scope, which `executeAs`'s caller
-   supplies, so every machinery writer must pass a scope that stamps the right tenant,
-   and its reactions need a loop audit.
-3. Continue the order of work from step 4 (the kit).
+Consequence: the moss gap this plan used to lead with — `executeAs` writes never reach
+`onWrite`, so reactions and tide miss them — no longer touches lyceum. It is still a
+discrepancy with moss's DESIGN.md ("every write passes the observer"), to be fixed or
+documented in moss, not here.
+
+**Next:**
+1. **The UI** — lyceum's own kit, the house variants, the look (order of work step 4).
+2. **The ending.** "Start the talk" writes a `talk` row (`ends_at`) through the speaker's
+   own vex. One tide reflex is derived from that row — a clock trigger at `ends_at`,
+   rebuilt from the row on boot, so a restart before minute 40 still ends the talk and a
+   server down at 40 fires on restart. Its effect is one vex write (`talk.ended_at`, the
+   deck to the closing slide) made as a `clock` principal — a real principal in `grants`
+   holding only those writes, through the normal door with its own session, like Lyra's
+   automation actors. Phones and the controller read the talk's state reactively; the
+   stage moves on the existing `deck-moved` reaction. No notification system.
+3. Later, in moss: **identity as a reactive read.** Identity resolves from vex reads; if
+   moss re-resolved a principal when those rows change, writing somebody's house would
+   BE the role change, and the sort would not call `invalidateIdentity` at all.
 
 **Working-tree notes.** `.claude/launch.json` has a `lyceum` entry (port 5197).
 
@@ -404,8 +410,8 @@ pausing a shell's follows while nothing is attached, and `refresh: 'clock'`.
 1. This plan, reviewed. — done
 2. Scaffold: manifest, runtime, terminal; canvases and an empty registry; one action
    renders on a phone against the VPS. — done locally (dev runtime); the VPS is Open
-3. Prove the live role change end to end. — done; reactive reads built; follow-ups
-   under Status (the sort as the speaker, `executeAs` writes observed)
+3. Prove the live role change end to end. — done; reactive reads built; the sort and
+   the door write as the people they act for
 4. Kit: primitives against a kitchen-sink action; the house variants; lock the look.
 5. Data: schema, entries, behaviours; persona generation and the join.
 6. The deck: controller, stage, the `deck` row.

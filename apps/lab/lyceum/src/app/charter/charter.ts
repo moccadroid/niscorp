@@ -12,8 +12,10 @@ const ROOM_READS = ['members.read', 'houses.read'];
 const DECK_READS = ['deck.read', 'slides.read'];
 
 export const CHARTER: Charter = {
-  // Anonymous: the door and nothing else.
-  public: ['door.*'],
+  // Anonymous: the door and nothing else — and, once stepping in has made
+  // them somebody, the one write that makes them a member: their own row
+  // (the engine stamps whose; vex/behaviors.ts).
+  public: { actions: ['door.*'], data: ['members.write.insert'] },
 
   // Everybody in the room, sorted or not. Never worn alone — the roles below
   // extend it.
@@ -28,18 +30,15 @@ export const CHARTER: Charter = {
   // The speaker's controller and the projector: two principals, two devices.
   // The speaker moves the deck; the stage shows it — every slide is an action
   // only the stage holds.
-  speaker: { actions: ['speaker.*'], data: [...ROOM_READS, ...DECK_READS, 'deck.write.update'] },
+  // The speaker sorts the room, as themselves.
+  speaker: { actions: ['speaker.*'], data: [...ROOM_READS, ...DECK_READS, 'deck.write.update', 'members.write.update'] },
   stage: { actions: ['stage.*', 'slide.*'], data: [...ROOM_READS, ...DECK_READS] },
 
   // ── machinery: roles nobody wears, each holding exactly its job ──
   // Reads who somebody is, for the identity seam.
   identity: { data: ['members.read', 'grants.read'] },
-  // Lets a person in: writes their member row, nothing else.
-  doorkeeper: { data: ['members.write.insert'] },
   // Redeems a one-time sign-in link: uses it up, and that is all.
   gatekeeper: { data: ['login_links.write.delete'] },
-  // Places people in houses.
-  hat: { data: ['members.read', 'members.write.update', 'houses.read'] },
 };
 
 // The role combinations a principal can resolve to — declared, because roles
