@@ -22,7 +22,7 @@ export const doorLayout: LayoutNode = {
     {
       component: 'Action',
       ref: 'enter',
-      props: { area: 'enter', ink: 'ink', label: { $if: '$.entering', $then: 'Stepping in…', $else: 'Step in →' } },
+      props: { area: 'enter', ink: 'ink', size: 'large', label: { $if: '$.entering', $then: 'Stepping in…', $else: 'Step in →' } },
     },
   ],
 };

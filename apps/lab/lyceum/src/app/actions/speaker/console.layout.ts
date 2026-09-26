@@ -13,6 +13,13 @@ const region = (area: string): LayoutNode => ({
 
 export const consoleLayout: LayoutNode = {
   component: 'Sheet',
-  props: { size: 'fill', areas: ['head head', 'tools notes', 'controls controls'], rows: ['auto', 1, 'auto'] },
+  // On a phone the controller is a remote, not a lectern: the notes stay on the
+  // computer, and the slide's tools get the whole middle.
+  props: {
+    size: 'fill',
+    areas: ['head head', 'tools notes', 'controls controls'],
+    rows: ['auto', 1, 'auto'],
+    narrow: { areas: ['head', 'tools', 'controls'], rows: ['auto', 1, 'auto'] },
+  },
   children: [region('head'), region('tools'), region('notes'), region('controls')],
 };

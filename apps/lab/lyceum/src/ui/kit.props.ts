@@ -28,6 +28,10 @@ export const KIT_PROPS = z
         cols: z.array(z.number()),
         rows: z.array(z.union([z.number(), z.literal('auto')])),
         size: z.enum(['fill', 'auto']),
+        narrow: z
+          .object({ areas: z.array(z.string()), rows: z.array(z.union([z.number(), z.literal('auto')])), cols: z.array(z.number()) })
+          .partial({ rows: true, cols: true })
+          .strict(),
       })
       .partial()
       .strict(),
@@ -57,7 +61,7 @@ export const KIT_PROPS = z
       .partial()
       .strict(),
     Bar: z.object({ segments: z.array(z.object({ value: z.number(), ink, mark }).partial({ ink: true, mark: true }).strict()) }).partial().strict(),
-    Action: z.object({ area, ink, label, lines: z.literal('two') }).partial().strict(),
+    Action: z.object({ area, ink, label, lines: z.literal('two'), size: z.literal('large') }).partial().strict(),
     Field: z.object({ area, placeholder: z.string(), value: z.string() }).partial().strict(),
   })
   .strict()

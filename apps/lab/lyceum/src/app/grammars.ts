@@ -9,5 +9,12 @@ import type { Sequence } from '@niscorp/strata';
 export const LYCEUM_KIT: Sequence = {
   id: 'lyceum.kit',
   documents: { props: { embeds: {} } },
-  migrations: [],
+  migrations: [
+    {
+      // A MARKER: additions only, so no layout needs rewriting — but a reader
+      // at 0 must refuse a layout that uses them.
+      description: 'Sheet: a narrow arrangement for phone-width screens; Action: size large',
+      steps: [],
+    },
+  ],
 };

@@ -61,27 +61,60 @@ export const Page: DomComponent = ({ children }) => el('div', 'page', children);
 //        when the sheet fills).
 // size:  'fill' takes the height it is given (a slide, a phone); 'auto' is as
 //        tall as its content (a strip).
-export const Sheet: DomComponent = ({ props, children }) => {
-  const node = el('div', 'sheet', children);
-  const rows = (Array.isArray(props['areas']) ? props['areas'] : [])
+// narrow: { areas, rows?, cols? } — the arrangement on a phone-width screen,
+//        in the same words. A cell whose area it leaves out is not shown there.
+type Template = { areas: string; rows: string; cols: string; names: Set<string> } | undefined;
+
+const templateOf = (areasProp: unknown, rowsProp: unknown, colsProp: unknown, size: 'fill' | 'auto'): Template => {
+  const rows = (Array.isArray(areasProp) ? areasProp : [])
     .map((row) => text(row)?.trim().split(/\s+/) ?? [])
     .filter((names) => names.length > 0 && names.every((name) => name === '.' || AREA.test(name)));
   const width = Math.max(0, ...rows.map((names) => names.length));
-  if (rows.length > 0 && rows.every((names) => names.length === width)) {
-    node.style.gridTemplateAreas = rows.map((names) => `"${names.join(' ')}"`).join(' ');
-  }
-  const cols = Array.isArray(props['cols']) ? props['cols'].map(weight) : [];
-  node.style.gridTemplateColumns = Array.from({ length: Math.max(width, 1) }, (_, i) => `${cols[i] ?? 1}fr`).join(' ');
+  if (rows.length === 0 || !rows.every((names) => names.length === width)) return undefined;
+  const cols = Array.isArray(colsProp) ? colsProp.map(weight) : [];
+  const declared = Array.isArray(rowsProp) ? rowsProp : [];
+  return {
+    areas: rows.map((names) => `"${names.join(' ')}"`).join(' '),
+    cols: Array.from({ length: width }, (_, i) => `${cols[i] ?? 1}fr`).join(' '),
+    rows: rows
+      .map((_, i) => {
+        const row = declared[i];
+        if (row === 'auto') return 'auto';
+        const w = weight(row);
+        if (w !== undefined) return `${w}fr`;
+        return size === 'fill' && i === rows.length - 1 ? '1fr' : 'auto';
+      })
+      .join(' '),
+    names: new Set(rows.flat()),
+  };
+};
+
+export const Sheet: DomComponent = ({ props, children }) => {
+  const node = el('div', 'sheet', children);
   const size = oneOf(props['size'], ['fill', 'auto'] as const) ?? 'auto';
   setData(node, 'size', size);
-  const declared = Array.isArray(props['rows']) ? props['rows'] : [];
-  node.style.gridTemplateRows = Array.from({ length: Math.max(rows.length, 1) }, (_, i) => {
-    const row = declared[i];
-    if (row === 'auto') return 'auto';
-    const w = weight(row);
-    if (w !== undefined) return `${w}fr`;
-    return size === 'fill' && i === rows.length - 1 ? '1fr' : 'auto';
-  }).join(' ');
+  const wide = templateOf(props['areas'], props['rows'], props['cols'], size);
+  if (wide === undefined) {
+    node.style.gridTemplateColumns = '1fr';
+    node.style.gridTemplateRows = size === 'fill' ? '1fr' : 'auto';
+  } else {
+    node.style.gridTemplateAreas = wide.areas;
+    node.style.gridTemplateColumns = wide.cols;
+    node.style.gridTemplateRows = wide.rows;
+  }
+  const narrowProp = props['narrow'];
+  const narrow = typeof narrowProp === 'object' && narrowProp !== null && !Array.isArray(narrowProp)
+    ? templateOf(Reflect.get(narrowProp, 'areas'), Reflect.get(narrowProp, 'rows'), Reflect.get(narrowProp, 'cols'), size)
+    : undefined;
+  if (narrow !== undefined) {
+    node.setAttribute('data-narrow', '');
+    node.style.setProperty('--narrow-areas', narrow.areas);
+    node.style.setProperty('--narrow-rows', narrow.rows);
+    node.style.setProperty('--narrow-cols', narrow.cols);
+    for (const child of children) {
+      if (child instanceof HTMLElement && child.style.gridArea !== '' && !narrow.names.has(child.style.gridArea.split(' ')[0] ?? '')) child.setAttribute('data-narrow-hidden', '');
+    }
+  }
   return node;
 };
 
@@ -280,7 +313,8 @@ export const Bar: DomComponent = ({ props }) => {
 
 // ── Action — a whole cell you press ─────────────────────────────
 // area, ink, label, lines ('two' — the label always takes exactly two lines,
-// clamped: a row of actions whose labels change keeps its height). Pressed, it
+// clamped: a row of actions whose labels change keeps its height), size
+// ('large' — the one thing a screen is for, like the door's Step in). Pressed, it
 // is a `ui:click` on its `ref` (nova's convention — the renderer wires it, the
 // component knows nothing of events).
 export const Action: DomComponent = ({ props }) => {
@@ -291,6 +325,7 @@ export const Action: DomComponent = ({ props }) => {
   placeIn(node, props['area']);
   setData(node, 'ink', oneOf(props['ink'], INKS));
   setData(node, 'lines', oneOf(props['lines'], ['two'] as const));
+  setData(node, 'size', oneOf(props['size'], ['large'] as const));
   return node;
 };
 

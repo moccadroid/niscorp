@@ -29,6 +29,14 @@ export const FONTS_HREF =
 
 export const LYCEUM_CSS = `
 html, body { margin: 0; padding: 0; }
+/* THE READING SIZE. Two kinds of type share this kit. Posters — display
+   headlines, big figures — scale with their sheet (cqw), as they always did.
+   Everything read at arm's length — labels, sentences, tables, buttons, code,
+   notes — has a floor in rem, and rem follows the screen: 16px on a phone,
+   ~24px on a laptop, ~27px on a 1080p projector. So a size below is
+   clamp(the reading floor, the poster size, a cap): a phone and a half-width
+   region get the floor, a projector gets its poster. */
+html { font-size: clamp(16px, calc(0.72vw + 13.3px), 28px); }
 .${ROOT_CLASS} {
   --paper: #ffffff; --ink: #000000; --signal: #1400ff; --alert: #ff3b00; --live: #00c853; --highlight: #ffe600;
   --rule: 3px;
@@ -36,12 +44,18 @@ html, body { margin: 0; padding: 0; }
   --prose: 'Space Grotesk', system-ui, sans-serif;
   --mono: 'Space Mono', ui-monospace, monospace;
   color-scheme: light; background: var(--paper); color: var(--ink);
-  font: 16px/1.4 var(--prose); min-height: 100dvh;
+  font: 400 1rem/1.4 var(--prose); min-height: 100dvh;
 }
 .${ROOT_CLASS} * { box-sizing: border-box; margin: 0; }
 
 /* ── the frame: canvases stacked, the last one filling what is left ── */
 .${ROOT_CLASS} .page { display: flex; flex-direction: column; height: 100dvh; }
+/* a phone's notch and home bar are not the page: nothing to press sits under
+   them (the page keeps viewport-fit=cover, so these are real on a phone and
+   zero everywhere else). The edge they leave is ink, like the rules. */
+.${ROOT_CLASS} .page { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left); background: var(--ink); }
+/* the projector has no controls: no pointer on it either */
+.${ROOT_CLASS} .page:has(> [data-canvas="strip"]:not(:empty)) { cursor: none; }
 .${ROOT_CLASS} .page > [data-canvas] { display: flex; flex-direction: column; min-height: 0; }
 .${ROOT_CLASS} .page > [data-canvas]:not(:empty):not(:has(~ [data-canvas]:not(:empty))) { flex: 1 1 auto; }
 .${ROOT_CLASS} .page > [data-canvas] > * { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; }
@@ -51,7 +65,7 @@ html, body { margin: 0; padding: 0; }
   position: fixed; inset: 0; z-index: 10;
   /* the screen underneath stays visible, dimmed: this is ON it, not instead of it */
   background: color-mix(in srgb, var(--ink) 55%, transparent);
-  padding: 12dvh clamp(10px, 4vw, 48px) clamp(10px, 4vw, 48px);
+  padding: calc(12dvh + env(safe-area-inset-top)) clamp(10px, 4vw, 48px) calc(clamp(10px, 4vw, 48px) + env(safe-area-inset-bottom));
 }
 /* the panel ends where its content does, up to the screen's edge — past that its
    body scrolls inside it (fifty slides) */
@@ -66,6 +80,14 @@ html, body { margin: 0; padding: 0; }
   container-type: inline-size;
 }
 .${ROOT_CLASS} .sheet[data-size="fill"] { flex: 1 1 auto; min-height: 0; }
+/* A NARROW ARRANGEMENT: a sheet that declares one (props.narrow) takes it on a
+   phone-width screen — its own areas, rows and columns, set as variables by
+   the kit, and the cells it leaves out are not shown. The inline template is
+   the wide one, so this has to out-rank it. */
+@media (max-width: 640px) {
+  .${ROOT_CLASS} .sheet[data-narrow] { grid-template-areas: var(--narrow-areas) !important; grid-template-rows: var(--narrow-rows) !important; grid-template-columns: var(--narrow-cols) !important; }
+  .${ROOT_CLASS} .sheet[data-narrow] > [data-narrow-hidden] { display: none; }
+}
 /* a sheet inside a cell is part of that cell's grid: its rules, not a second frame */
 .${ROOT_CLASS} .cell > .sheet { border: 0; }
 
@@ -90,8 +112,8 @@ html, body { margin: 0; padding: 0; }
 .${ROOT_CLASS} [data-ink="highlight"] { --bg: var(--highlight); --fg: var(--ink); }
 .${ROOT_CLASS} .cell {
   background: var(--bg); color: var(--fg);
-  padding: clamp(8px, 1.2cqw, 22px) clamp(10px, 1.5cqw, 28px);
-  display: flex; flex-direction: column; gap: clamp(4px, .6cqw, 12px); min-width: 0; overflow: hidden;
+  padding: clamp(.55rem, 1.2cqw, 1.4rem) clamp(.7rem, 1.5cqw, 1.75rem);
+  display: flex; flex-direction: column; gap: clamp(.3rem, .6cqw, .75rem); min-width: 0; overflow: hidden;
 }
 .${ROOT_CLASS} .cell[data-align="end"] { justify-content: flex-end; }
 .${ROOT_CLASS} .cell[data-align="center"] { justify-content: center; align-items: center; text-align: center; }
@@ -109,27 +131,27 @@ html, body { margin: 0; padding: 0; }
 
 /* ── type ── */
 .${ROOT_CLASS} .label {
-  font: 700 clamp(10px, 1.15cqw, 20px)/1.2 var(--display); letter-spacing: .08em; text-transform: uppercase;
+  font: 700 clamp(.78rem, 1.15cqw, 1.2rem)/1.2 var(--display); letter-spacing: .08em; text-transform: uppercase;
 }
 .${ROOT_CLASS} .headline { font-family: var(--display); font-weight: 900; text-transform: uppercase; line-height: .92; overflow-wrap: break-word; hyphens: none; }
-.${ROOT_CLASS} .headline[data-level="display"] { font-size: clamp(34px, 7cqw, 170px); }
-.${ROOT_CLASS} .headline[data-level="title"]   { font-size: clamp(22px, 3.8cqw, 96px); }
-.${ROOT_CLASS} .headline[data-level="name"]    { font-size: clamp(14px, 1.9cqw, 44px); line-height: 1; }
-.${ROOT_CLASS} .text { font-size: clamp(15px, 1.75cqw, 34px); line-height: 1.35; }
+.${ROOT_CLASS} .headline[data-level="display"] { font-size: clamp(2.2rem, 7cqw, 170px); }
+.${ROOT_CLASS} .headline[data-level="title"]   { font-size: clamp(1.6rem, 3.8cqw, 96px); }
+.${ROOT_CLASS} .headline[data-level="name"]    { font-size: clamp(1.25rem, 1.9cqw, 44px); line-height: 1.05; }
+.${ROOT_CLASS} .text { font-size: clamp(1.06rem, 1.75cqw, 2.2rem); line-height: 1.35; }
 .${ROOT_CLASS} .text[data-tone="muted"] { opacity: 1; color: color-mix(in srgb, var(--fg) 55%, var(--bg)); }
 .${ROOT_CLASS} .figure { display: flex; flex-direction: column; gap: .3em; }
-.${ROOT_CLASS} .figure > .value { font: 900 clamp(30px, 6cqw, 150px)/.85 var(--display); }
+.${ROOT_CLASS} .figure > .value { font: 900 clamp(2rem, 6cqw, 150px)/.85 var(--display); }
 
 /* ── code: a cell of mono, the lines that matter highlighted ── */
-.${ROOT_CLASS} .code { font: 400 clamp(11px, 1.45cqw, 26px)/1.5 var(--mono); white-space: pre; overflow: hidden; }
+.${ROOT_CLASS} .code { font: 400 clamp(.8rem, 1.6cqw, 1.5rem)/1.5 var(--mono); white-space: pre; overflow: hidden; }
 .${ROOT_CLASS} .code > span { display: block; }
 .${ROOT_CLASS} .code > span[data-marked] { background: var(--highlight); color: var(--ink); margin: 0 -.4em; padding: 0 .4em; }
 
 /* ── rows: a ruled table, headers in the label voice ── */
 .${ROOT_CLASS} .rows { display: grid; gap: var(--rule); background: var(--ink); }
 .${ROOT_CLASS} .rows > div { display: grid; grid-template-columns: var(--cols); gap: var(--rule); }
-.${ROOT_CLASS} .rows > div > span { background: var(--paper); color: var(--ink); padding: .35em .6em; font-size: clamp(13px, 1.5cqw, 28px); display: flex; align-items: center; gap: .4em; min-width: 0; overflow: hidden; }
-.${ROOT_CLASS} .rows[data-head] > div:first-child > span { font: 700 clamp(9px, 1.05cqw, 18px)/1.2 var(--display); letter-spacing: .08em; text-transform: uppercase; }
+.${ROOT_CLASS} .rows > div > span { background: var(--paper); color: var(--ink); padding: .4em .6em; font-size: clamp(1rem, 1.5cqw, 1.6rem); display: flex; align-items: center; gap: .4em; min-width: 0; overflow: hidden; }
+.${ROOT_CLASS} .rows[data-head] > div:first-child > span { font: 700 clamp(.7rem, 1.05cqw, 1.1rem)/1.2 var(--display); letter-spacing: .08em; text-transform: uppercase; }
 .${ROOT_CLASS} .rows [data-kind="mono"] { font-family: var(--mono); }
 .${ROOT_CLASS} .rows [data-kind="missing"] { color: color-mix(in srgb, var(--ink) 45%, var(--paper)); }
 .${ROOT_CLASS} .rows > .empty { display: block; background: var(--paper); padding: .6em; }
@@ -153,8 +175,9 @@ html, body { margin: 0; padding: 0; }
 /* ── field: a line you type into — a whole cell of it ── */
 .${ROOT_CLASS} .field {
   border: 0; outline: 0; width: 100%; background: var(--paper); color: var(--ink);
-  padding: clamp(10px, 1.4cqw, 26px) clamp(12px, 1.6cqw, 30px);
-  font: 500 clamp(18px, 2.2cqw, 40px)/1.2 var(--prose);
+  padding: clamp(.7rem, 1.4cqw, 1.6rem) clamp(.8rem, 1.6cqw, 1.8rem);
+  /* never under 16px: a phone zooms the page into a smaller field */
+  font: 500 clamp(1.1rem, 2.2cqw, 2.4rem)/1.2 var(--prose);
 }
 .${ROOT_CLASS} .field::placeholder { color: color-mix(in srgb, var(--ink) 40%, var(--paper)); }
 .${ROOT_CLASS} .field:focus { background: var(--highlight); }
@@ -169,9 +192,13 @@ html, body { margin: 0; padding: 0; }
 /* ── action: a whole cell you press ── */
 .${ROOT_CLASS} .action {
   background: var(--bg); color: var(--fg); border: 0; cursor: pointer; text-align: left;
-  padding: clamp(10px, 1.4cqw, 26px) clamp(12px, 1.6cqw, 30px);
-  font: 900 clamp(14px, 1.8cqw, 34px)/1 var(--display); text-transform: uppercase; letter-spacing: .02em;
+  padding: clamp(.8rem, 1.4cqw, 1.6rem) clamp(.9rem, 1.6cqw, 1.8rem);
+  font: 900 clamp(1rem, 1.8cqw, 2rem)/1.1 var(--display); text-transform: uppercase; letter-spacing: .02em;
+  /* a thumb's width at least, whatever the label */
+  min-height: max(3.25rem, 48px);
 }
+/* the one thing a screen is for — the door's Step in */
+.${ROOT_CLASS} .action[data-size="large"] { min-height: max(5.5rem, 72px); font-size: clamp(1.4rem, 3cqw, 3rem); }
 .${ROOT_CLASS} .action[data-lines="two"] > span { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; height: 2em; }
 
 /* ── anything you can press ──

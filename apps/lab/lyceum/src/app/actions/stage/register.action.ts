@@ -8,12 +8,13 @@ import { registerLayout } from './register.layout';
 export const stageRegisterAction: ActionDefinition = {
   id: 'stage.register',
   title: 'The register',
-  data: { rows: [], counts: { joined: 0, assigned: 0, unassigned: 0 } },
+  data: { rows: [], counts: { joined: 0, assigned: 0, unassigned: 0 }, address: { url: '', host: '' } },
   layout: registerLayout,
   endpoints: {
     load: { url: '/api/vex', method: 'POST', request: { fingerprint: memberRegister.fingerprint, context: {} }, target: 'rows' },
     counts: { url: '/api/vex', method: 'POST', request: { fingerprint: memberCounts.fingerprint, context: {} }, target: 'counts' },
+    address: { fn: 'room.address', target: 'address' },
   },
-  lifecycle: { mount: [{ call: 'load' }, { call: 'counts' }] },
+  lifecycle: { mount: [{ call: 'load' }, { call: 'counts' }, { call: 'address' }] },
   triggers: [],
 };

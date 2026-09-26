@@ -1,5 +1,6 @@
 {
   "grammar": {
+    "lyceum.kit": 1,
     "nisc.nova": 1,
     "nisc.prism": 1
   }

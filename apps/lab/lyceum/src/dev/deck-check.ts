@@ -70,6 +70,7 @@ const main = async (): Promise<void> => {
     speaker.click('controls', 'next');
     check(`next shows slide ${index + 1} on the stage (${titleOf(index)})`, await onSlide(index));
     check(`...and its notes on the controller`, await speaker.shows('notes', SLIDES[index]?.notes[0] ?? '\u0000'));
+    if (SLIDES[index]?.slideId === 'stage.register') check('...and the register carries the code to scan while the room arrives', await stage.shows('main', '"name":"Qr"') && stage.showsNow('main', '"value":"http://localhost:8796"'));
     check(`...and exactly its tools, in order (${(SLIDES[index]?.tools ?? []).join(', ') || 'none'})`, await toolsAre(SLIDES[index]?.tools ?? []));
   }
   speaker.click('controls', 'next');
