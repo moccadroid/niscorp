@@ -425,10 +425,12 @@ export type FunctionSession = {
   // Session lifecycle, as capabilities — no reserved channels, no
   // observers. A login fn GRANTS: the token goes down every connection of
   // this session as a `session` message and the terminals reconnect
-  // authenticated. A sign-out fn REVOKES: every connection closes
-  // SIGNED_OUT and the durable shell dies.
+  // authenticated. A sign-out fn REVOKES: under moss's own credential every
+  // session the principal holds is deleted, every connection closes
+  // SIGNED_OUT and the durable shell dies. The promise settles when the
+  // credential is gone — await it to know; ignoring it is still safe.
   grant: (token: string) => void;
-  revoke: () => void;
+  revoke: () => Promise<void>;
   // Record one model run. `at`, `principal` and `shellId` are stamped here, so a
   // caller supplies only what it knows: which agent, which model, what was said,
   // what it cost. A no-op when the manifest declares no `runs` sink.

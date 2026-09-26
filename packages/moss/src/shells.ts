@@ -11,6 +11,7 @@ import type { Catalog } from './principal';
 import { CLOSE_SIGNED_OUT } from './socket';
 import type { Connection, ServerMessage } from './socket';
 import { encodeDelta, frameHash } from './delta';
+import { revokeAllFor } from './sessions';
 
 // ═══════════════════════════════════════════════════════════════
 // The shell host (DESIGN.md § The shell runs on the server): the shell
@@ -444,10 +445,22 @@ export const createShellHost = (ctx: ShellHostContext): ShellHost => {
           const message = JSON.stringify({ type: 'session', token } satisfies ServerMessage);
           for (const connection of liveRef?.connections ?? []) connection.send(message);
         },
-        // REVOKE: close every terminal SIGNED_OUT, evict the durable
-        // shell. Deferred a microtask so the calling trigger finishes
-        // before its own shell is disposed.
+        // REVOKE: forget the credential, close every terminal SIGNED_OUT,
+        // evict the durable shell. Under moss's own credential the rows go
+        // first — closing the terminals clears the tokens THEY held, not a
+        // copy anywhere else. The shell is the principal's and every one of
+        // its terminals closes, so every session the principal holds is
+        // deleted, not only the one this shell was built with. A custom
+        // verifier's credential is the app's to revoke; 'dev-open' stores
+        // none. The teardown is deferred a microtask so the calling trigger
+        // finishes before its own shell is disposed.
         revoke: () => {
+          const forgotten = ctx.runtime.session === 'sessions' && principal !== null ? revokeAllFor(ctx.runtime.pool, principal) : Promise.resolve();
+          // Loud when it fails — a sign-out that left the credential alive is
+          // a security fault, not a detail — and never an unhandled rejection
+          // for a caller that did not await it. A caller that does still sees
+          // the failure.
+          forgotten.catch((error: unknown) => console.error(`[moss] sign-out of ${principal ?? 'anonymous'} did not revoke its sessions:`, error));
           queueMicrotask(() => {
             if (liveRef === undefined) return;
             liveRef.ended = true;
@@ -459,6 +472,7 @@ export const createShellHost = (ctx: ShellHostContext): ShellHost => {
             liveRef.connections.clear();
             if (principal !== null) liveRef.shell.dispose();
           });
+          return forgotten;
         },
         // The session's own fields are stamped here so a caller cannot get them
         // wrong, and the shell id is read lazily — a run cannot happen before

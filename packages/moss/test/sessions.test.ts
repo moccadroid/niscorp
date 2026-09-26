@@ -3,6 +3,10 @@ import { PGlite } from '@electric-sql/pglite';
 import { createPglitePool } from '@niscorp/vex/pglite';
 import { initSessions, mintSession, sessionOf, revokeSession, revokeAllFor, sessionVerifierOf } from '../src/sessions';
 import { mintDevToken } from '../src/runtime';
+import { createShellHost } from '../src/shells';
+import type { ShellHostContext } from '../src/shells';
+import type { FunctionSession, NiscApp } from '../src/app';
+import type { PgPool, ScopePolicy } from '@niscorp/vex';
 
 // THE TESTS NO APP CAN WRITE. An app's harness mints its own tokens, so every
 // check it runs passes whether the verifier is real or not — a suite that
@@ -131,5 +135,71 @@ describe('sessionVerifierOf — the three-way choice, and the refusal', () => {
     const verify = sessionVerifierOf({ pool, session: (token) => (token === 'the-one' ? 'i_mara' : null) });
     expect(await verify('the-one')).toBe('i_mara');
     expect(await verify('another')).toBeNull();
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════
+// SIGN-OUT IS A REVOCATION. `session.revoke()` closes every terminal of the
+// shell and disposes it — and under moss's own credential it must also delete
+// what those terminals held, or a copied token signs straight back in until
+// it expires. The shell is per principal and sign-out closes all of its
+// terminals, so every session the principal holds goes with it.
+// ═══════════════════════════════════════════════════════════════
+
+describe('sign-out — session.revoke() under moss sessions', () => {
+  const tick = (): Promise<void> => new Promise((r) => setTimeout(r, 0));
+
+  const hostOver = (pool: PgPool, session: 'sessions' | 'dev-open', seen: { fn?: FunctionSession }): ReturnType<typeof createShellHost> => {
+    const policy: ScopePolicy = { default: 'deny', entities: {} };
+    const catalog = { ids: ['counter'], hash: 'h' };
+    const app = {
+      charter: { public: ['counter'] },
+      actions: { counter: { id: 'counter', data: { n: 0 } } },
+      shell: { canvases: [{ id: 'main', initial: 'counter' }] },
+      functions: (fn: FunctionSession) => {
+        seen.fn = fn;
+        return {};
+      },
+    } as unknown as NiscApp;
+    const ctx: ShellHostContext = {
+      app,
+      catalogFor: () => catalog,
+      variantsFor: () => new Map(),
+      resolve: async () => ({ roles: ['member'], scope: {}, installed: undefined, catalog, variants: new Map(), policy }),
+      wire: () => async () => ({ ok: true, status: 200, json: async () => ({}), text: async () => '{}' }),
+      runtime: { pool, session } as unknown as ShellHostContext['runtime'],
+    };
+    return createShellHost(ctx);
+  };
+
+  it('deletes every session the principal holds — a copied token no longer signs in', async () => {
+    const pool = await freshPool();
+    const phone = await mintSession(pool, 'i_mara', 60_000);
+    const laptop = await mintSession(pool, 'i_mara', 60_000);
+    const kade = await mintSession(pool, 'i_kade', 60_000);
+    const seen: { fn?: FunctionSession } = {};
+    await hostOver(pool, 'sessions', seen).session(phone, 'i_mara');
+    await tick();
+
+    await seen.fn?.revoke();
+
+    expect(await sessionOf(pool, phone)).toBeNull();
+    expect(await sessionOf(pool, laptop)).toBeNull();
+    expect(await sessionOf(pool, kade)).toBe('i_kade');
+  });
+
+  it('under dev-open there is no stored credential, and nothing is touched', async () => {
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      const pool = await freshPool();
+      const kept = await mintSession(pool, 'i_mara', 60_000);
+      const seen: { fn?: FunctionSession } = {};
+      await hostOver(pool, 'dev-open', seen).session(kept, 'i_mara');
+      await tick();
+      await seen.fn?.revoke();
+      expect(await sessionOf(pool, kept)).toBe('i_mara');
+    } finally {
+      spy.mockRestore();
+    }
   });
 });
