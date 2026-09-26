@@ -711,3 +711,61 @@ describe('shells — the frame layout store and re-send', () => {
     expect(frames(conn).length).toBe(before);
   });
 });
+
+describe('shells — a canvas placed by an action, not the frame', () => {
+  // An action whose layout ARRANGES canvases (a controller whose regions are
+  // canvases of their own). The inner canvas must reach the terminal as itself
+  // — a marker in the outer canvas's tree, its own tree beside it — and a click
+  // the terminal tags with the inner canvas must land on the inner action.
+  const arrangement = {
+    id: 'arrangement',
+    data: {},
+    layout: { component: 'Box', children: [{ component: 'Text', children: 'OUTER' }, { component: 'CanvasSlot', props: { canvasId: 'region' } }] },
+  };
+  const nestedApp = {
+    charter: { public: ['arrangement', 'counter'] },
+    assignments: {},
+    actions: { arrangement, counter: { ...counter, layout: { component: 'Text', children: 'n={{$.n}}' } } },
+    shell: {
+      canvases: [
+        { id: 'main', initial: 'arrangement' },
+        { id: 'region', initial: 'counter' },
+      ],
+    },
+  } as unknown as NiscApp;
+  const ids = { ids: ['arrangement', 'counter'], hash: 'h' };
+  const nestedCtx: ShellHostContext = {
+    ...ctx,
+    app: nestedApp,
+    catalogFor: () => ids,
+    resolve: async () => ({ roles: ['public'], scope: {}, installed: undefined, catalog: ids, variants: new Map(), policy }),
+  };
+  const rendered = (conn: ReturnType<typeof fakeConnection>, canvas: string): string =>
+    JSON.stringify(conn.sent.filter((m) => m['type'] === 'render' && m['canvas'] === canvas).at(-1) ?? {});
+
+  it('the outer canvas carries the marker; the inner canvas is served as itself', async () => {
+    const host = createShellHost(nestedCtx);
+    const conn = fakeConnection();
+    (await host.session('t', 'usr_1')).attach(conn);
+    await tick();
+    const main = rendered(conn, 'main');
+    expect(main).toContain('OUTER');
+    expect(main).toContain('"canvasId":"region"');
+    expect(main).not.toContain('n=0');
+    expect(rendered(conn, 'region')).toContain('n=0');
+  });
+
+  it('a click tagged with the inner canvas lands on the inner action, not the one that placed it', async () => {
+    const host = createShellHost(nestedCtx);
+    const session = await host.session('t', 'usr_1');
+    await tick();
+    const inner = session.shell.getState().canvases['region']?.active;
+    expect(inner).toBeDefined();
+    session.dispatch('main', { type: 'ui:click', ref: 'bump' });
+    await tick();
+    expect(session.shell.getRuntime(inner!.id)?.getData()['n']).toBe(0);
+    session.dispatch('region', { type: 'ui:click', ref: 'bump' });
+    await tick();
+    expect(session.shell.getRuntime(inner!.id)?.getData()['n']).toBe(1);
+  });
+});
