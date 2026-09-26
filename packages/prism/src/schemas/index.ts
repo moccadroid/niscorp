@@ -47,5 +47,9 @@ export type { LocaleDateNode, LocaleMoneyNode, LocaleNumberNode, IntlDateOptions
 export { SumNodeSchema, AvgNodeSchema, CountNodeSchema, MinNodeSchema, MaxNodeSchema, PluckNodeSchema, TakeNodeSchema, DropNodeSchema, MatchNodeSchema, FlatMapNodeSchema } from './ops/sugar.schema';
 export type { SumNode, AvgNode, CountNode, MinNode, MaxNode, PluckNode, TakeNode, DropNode, MatchNode, FlatMapNode } from './ops/sugar.schema';
 
+// Transform op schemas + types
+export { HasNodeSchema, RenameKeysNodeSchema, UpdateNodeSchema, AssertNodeSchema, WalkNodeSchema } from './ops/transform.schema';
+export type { HasNode, RenameKeysNode, UpdateNode, AssertNode, WalkNode } from './ops/transform.schema';
+
 // Guards
 export * from './guards';

@@ -10,6 +10,7 @@ import {
   isNotNode, isAndNode, isOrNode,
   isMergeNode, isCoalesceNode, isCaseNode, isEntriesOfNode, isKeyByNode, isGroupByNode,
   isKeysNode, isValuesNode, isFromEntriesNode, isPickNode, isOmitNode, isTypeNode, isLengthNode,
+  isHasNode, isRenameKeysNode, isUpdateNode, isAssertNode, isWalkNode,
   isDateNode, isDateAddNode, isDateDiffNode,
   isLocaleDateNode, isLocaleMoneyNode, isLocaleNumberNode,
 } from '../schemas/guards';
@@ -22,6 +23,7 @@ import { opEq, opNeq, opGt, opGte, opLt, opLte, opEmpty, opStartsWith, opEndsWit
 import { opNot, opAnd, opOr } from '../ops/logic.ops';
 import { opMerge, opCoalesce, opCase, opEntriesOf, opKeyBy, opGroupBy } from '../ops/structure.ops';
 import { opKeys, opValues, opFromEntries, opPick, opOmit, opType, opLength } from '../ops/object.ops';
+import { opHas, opRenameKeys, opUpdate, opAssert, opWalk } from '../ops/transform.ops';
 import { opDate, opDateAdd, opDateDiff } from '../ops/time.ops';
 import { opLocaleDate, opLocaleMoney, opLocaleNumber } from '../ops/intl.ops';
 
@@ -164,6 +166,12 @@ const resolveHandler = (node: Record<string, unknown>): OpHandler | undefined =>
   if (isOmitNode(node)) return eraseOp(opOmit);
   if (isTypeNode(node)) return eraseOp(opType);
   if (isLengthNode(node)) return eraseOp(opLength);
+  // Transform ops
+  if (isHasNode(node)) return eraseOp(opHas);
+  if (isRenameKeysNode(node)) return eraseOp(opRenameKeys);
+  if (isUpdateNode(node)) return eraseOp(opUpdate);
+  if (isAssertNode(node)) return eraseOp(opAssert);
+  if (isWalkNode(node)) return eraseOp(opWalk);
   // Time ops
   if (isDateNode(node)) return eraseOp(opDate);
   if (isDateAddNode(node)) return eraseOp(opDateAdd);
@@ -281,7 +289,12 @@ const optimizeNode = (
   //    Skip ops whose semantics depend on context shape ($var/$ref/$get/$with
   //    and friends will never satisfy the foldability check anyway, so this
   //    is implicit, but documenting for clarity).
-  if (handler !== undefined && !isConstNode(optimized)) {
+  // $ref and $var READ the context; their only input is a literal string, so
+  // the literal check below would fold them — evaluated against an empty
+  // source. `$ref: '$.x'` escaped by accident (the fold throws "path not
+  // found" and is abandoned); `$ref: '$'` and '$.' folded to `{}` for good.
+  // Never fold what reads the context.
+  if (handler !== undefined && !isConstNode(optimized) && !isRefNode(optimized) && !isVarNode(optimized)) {
     // Check whether every non-handler/non-segments value in the node is
     // foldable. We test all keys (since the structure of each op differs):
     // for math ops the values are arrays; for $with the value is an object

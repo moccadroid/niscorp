@@ -17,8 +17,8 @@ export const RefNodeSchema = z
   .object({
     $ref: z
       .string()
-      .regex(/^\$\./)
-      .describe('JSONPath starting with $. — e.g. "$.user.name", "$.items[0].sku". Only reads from source data, not variables. For variables use $var, for navigating into variables use $get.'),
+      .regex(/^\$(\..*)?$/)
+      .describe('JSONPath from the source root: "$" is the whole source; "$.user.name", "$.items[0].sku" reach into it. Only reads from source data, not variables. For variables use $var, for navigating into variables use $get.'),
   })
   .strict()
   .describe('Read a value from the source data by static JSONPath. Use $ref for source access, $var for variables, $get for navigating into variables or dynamic paths.');

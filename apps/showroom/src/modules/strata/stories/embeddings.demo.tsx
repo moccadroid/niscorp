@@ -1,5 +1,5 @@
 import { DocumentsLab } from '@showroom/modules/strata/documents-lab';
-import { action, grammars } from './grammar.fixtures';
+import { action, grammars, stampAt } from './grammar.fixtures';
 
 // How the migration above reached every Button without walking anything.
 // nova's grammar says where its documents nest: an action holds a layout and,
@@ -17,7 +17,7 @@ export const Demo = () => (
     kind="nisc.nova/action"
     document={action}
     grammars={grammars}
-    stamps={[{ label: 'current', stamp: { 'nisc.nova': 0, 'nisc.prism': 0, 'acme.kit': 1 } }]}
+    stamps={[{ label: 'current', stamp: stampAt(1) }]}
     showLocations
     note="Eleven documents in one action: the action, nine layouts at four depths, and one Prism config. This is the walker's whole knowledge — it comes from the grammar, never from a migration."
   />

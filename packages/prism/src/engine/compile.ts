@@ -1,3 +1,4 @@
+import { explainIssues } from '../utils/issues';
 import { ConfigSchema } from '../schemas/config.schema';
 import { PrismError, ErrorCode } from '../errors';
 import { desugar } from '../sugar/desugar';
@@ -90,7 +91,7 @@ export const compile = async (
   // Validate
   const parsed = ConfigSchema.safeParse(config);
   if (!parsed.success) {
-    const issues = parsed.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; ');
+    const issues = explainIssues(parsed.error.issues).map((i) => `${i.path.join('.') || '(root)'}: ${i.message}`).join('; ');
     throw new PrismError(`Invalid config: ${issues}`, ErrorCode.SCHEMA);
   }
 

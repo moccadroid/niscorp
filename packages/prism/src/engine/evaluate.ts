@@ -1,3 +1,4 @@
+import { explainIssues } from '../utils/issues';
 import type { JsonValue, JsonObject, EvalContext, EvaluateFn, Result } from '../types';
 import type { Config } from '../schemas/config.schema';
 import { ConfigSchema } from '../schemas/config.schema';
@@ -18,6 +19,7 @@ import {
   isNotNode, isAndNode, isOrNode,
   isMergeNode, isCoalesceNode, isCaseNode, isEntriesOfNode, isKeyByNode, isGroupByNode,
   isKeysNode, isValuesNode, isFromEntriesNode, isPickNode, isOmitNode, isTypeNode, isLengthNode,
+  isHasNode, isRenameKeysNode, isUpdateNode, isAssertNode, isWalkNode,
   isDateNode, isDateAddNode, isDateDiffNode,
   isLocaleDateNode, isLocaleMoneyNode, isLocaleNumberNode,
   isJsonObject, isPlainObject,
@@ -35,6 +37,7 @@ import { opEq, opNeq, opGt, opGte, opLt, opLte, opEmpty, opStartsWith, opEndsWit
 import { opNot, opAnd, opOr } from '../ops/logic.ops';
 import { opMerge, opCoalesce, opCase, opEntriesOf, opKeyBy, opGroupBy } from '../ops/structure.ops';
 import { opKeys, opValues, opFromEntries, opPick, opOmit, opType, opLength } from '../ops/object.ops';
+import { opHas, opRenameKeys, opUpdate, opAssert, opWalk } from '../ops/transform.ops';
 import { opDate, opDateAdd, opDateDiff } from '../ops/time.ops';
 import { opLocaleDate, opLocaleMoney, opLocaleNumber } from '../ops/intl.ops';
 
@@ -161,6 +164,13 @@ export const evaluateNode: EvaluateFn = (node: unknown, context: EvalContext): J
   if (isTypeNode(obj)) return opType(obj, context, evaluateNode);
   if (isLengthNode(obj)) return opLength(obj, context, evaluateNode);
 
+  // Transform ops
+  if (isHasNode(obj)) return opHas(obj, context, evaluateNode);
+  if (isRenameKeysNode(obj)) return opRenameKeys(obj, context, evaluateNode);
+  if (isUpdateNode(obj)) return opUpdate(obj, context, evaluateNode);
+  if (isAssertNode(obj)) return opAssert(obj, context, evaluateNode);
+  if (isWalkNode(obj)) return opWalk(obj, context, evaluateNode);
+
   // ───────────────────────────────────────────────────────
   // Time ops
   // ───────────────────────────────────────────────────────
@@ -215,10 +225,7 @@ export const evaluateNode: EvaluateFn = (node: unknown, context: EvalContext): J
 export const evaluate = (config: Config, source: JsonValue): JsonValue => {
   const parsed = ConfigSchema.safeParse(config);
   if (!parsed.success) {
-    const issues = parsed.error.issues.map((i) => ({
-      path: i.path.map(String).join('.') || 'root',
-      message: i.message,
-    }));
+    const issues = explainIssues(parsed.error.issues).map((i) => ({ path: i.path.join('.') || 'root', message: i.message }));
     throw new PrismError('Invalid config', ErrorCode.SCHEMA, { details: { issues } });
   }
 

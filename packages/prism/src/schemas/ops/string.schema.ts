@@ -10,7 +10,9 @@ export const JoinNodeSchema = z
   .object({
     $join: z
       .object({
-        parts: z.array(z.lazy(node)).min(1).describe('Values to concatenate (coerced to string).'),
+        parts: z
+          .lazy(node)
+          .describe('Values to concatenate (coerced to string): a literal list of nodes, or any node that evaluates to an array — a mapped list, a $var.'),
         sep: z.string().optional().default('').describe('Separator between parts. Default: "".'),
       })
       .strict(),

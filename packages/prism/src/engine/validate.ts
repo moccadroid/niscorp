@@ -1,4 +1,5 @@
 import { ConfigSchema } from '../schemas/config.schema';
+import { explainIssues } from '../utils/issues';
 import type { ValidationResult } from '../types';
 
 export const validate = (config: unknown): ValidationResult => {
@@ -6,10 +7,9 @@ export const validate = (config: unknown): ValidationResult => {
   if (!parsed.success) {
     return {
       ok: false,
-      issues: parsed.error.issues.map((i) => ({
-        path: i.path.map((p) => (typeof p === 'symbol' ? String(p) : p)),
-        message: i.message,
-      })),
+      // The branch the config meant, with its full path — not the root union's
+      // "Invalid input" (see utils/issues).
+      issues: explainIssues(parsed.error.issues),
     };
   }
   return { ok: true, data: parsed.data };

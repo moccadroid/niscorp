@@ -40,6 +40,14 @@ export const kit: Sequence = {
 // The grammars a deployment speaks: nova's and Prism's as they ship, then the app's.
 export const grammars: readonly Sequence[] = [NOVA_SEQUENCE, PRISM_SEQUENCE, kit];
 
+// A stamp with nova and Prism where they ship today and the kit at `kit` — so
+// the stories keep saying what they say as nova's and Prism's grammars move on.
+export const stampAt = (kit: number | undefined): Record<string, number> => ({
+  'nisc.nova': NOVA_SEQUENCE.migrations.length,
+  'nisc.prism': PRISM_SEQUENCE.migrations.length,
+  ...(kit === undefined ? {} : { 'acme.kit': kit }),
+});
+
 export const action = {
   id: 'ext.member.acme.classes',
   title: 'Classes',

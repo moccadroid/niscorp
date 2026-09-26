@@ -57,6 +57,10 @@ import {
   PluckNodeSchema, TakeNodeSchema, DropNodeSchema, MatchNodeSchema, FlatMapNodeSchema,
   setNodeSchema as setSugarNode,
 } from './ops/sugar.schema';
+import {
+  HasNodeSchema, RenameKeysNodeSchema, UpdateNodeSchema, AssertNodeSchema, WalkNodeSchema,
+  setNodeSchema as setTransformNode,
+} from './ops/transform.schema';
 
 // ═══���═══════════════════════════════════════════════════════
 // Op keys — used by plain object detection
@@ -75,6 +79,7 @@ export const OP_KEYS = [
   '$localeDate', '$localeMoney', '$localeNumber',
   '$sum', '$avg', '$count', '$min', '$max',
   '$pluck', '$take', '$drop', '$match', '$flatMap',
+  '$has', '$renameKeys', '$update', '$assert', '$walk',
 ] as const;
 
 export const OPTIONAL_FIELDS_KEY = '__optional';
@@ -83,11 +88,8 @@ export const OPTIONAL_FIELDS_KEY = '__optional';
 // Plain object helpers
 // ════════════════════��══════════════════════════════════════
 
-const isOpKey = (key: string): boolean =>
-  (OP_KEYS as readonly string[]).includes(key);
-
-const hasOpKeys = (obj: Record<string, unknown>): boolean =>
-  Object.keys(obj).some(isOpKey);
+// Any key but an op's name — the template branch's key schema.
+const NOT_AN_OP_KEY = new RegExp(`^(?!(?:${OP_KEYS.map((k) => k.replace(/\$/g, '\\$')).join('|')})$)`);
 
 const hasValidOptionalMeta = (obj: Record<string, unknown>): boolean => {
   const meta = obj[OPTIONAL_FIELDS_KEY];
@@ -132,13 +134,20 @@ export const NodeSchema: z.ZodType<unknown> = z.lazy(
       // Sugar
       SumNodeSchema, AvgNodeSchema, CountNodeSchema, MinNodeSchema, MaxNodeSchema,
       PluckNodeSchema, TakeNodeSchema, DropNodeSchema, MatchNodeSchema, FlatMapNodeSchema,
+      // Transform (rewriting a document)
+      HasNodeSchema, RenameKeysNodeSchema, UpdateNodeSchema, AssertNodeSchema, WalkNodeSchema,
       // Primitives
       JsonPrimitiveSchema,
       // Arrays of nodes
       z.array(z.lazy(() => NodeSchema)),
       // Plain objects (no op keys, recursive values)
-      z.record(z.string(), z.lazy(() => NodeSchema))
-        .refine((o) => !hasOpKeys(o), { message: 'Plain object must not contain $ op keys. Use a specific op instead.' })
+      // An op's name is not a template key. Said in the KEY schema, not a
+      // refinement: a refinement leaves this branch structurally matched, and
+      // zod then reports its complaint instead of the union's — so a typo inside
+      // a real op (`{ $get: { pathh } }`) read as "plain object must not contain
+      // $ op keys" at the root. As a key pattern it is also plain JSON Schema
+      // (`propertyNames`), which the grammar snapshot and agent prompts read.
+      z.record(z.string().regex(NOT_AN_OP_KEY, { message: 'An op name cannot be a plain object key. Use the op itself.' }), z.lazy(() => NodeSchema))
         .refine((o) => hasValidOptionalMeta(o), { message: '__optional must be an array of non-empty field name strings.' }),
     ]).describe('A Prism node: an op, a plain JSON value, an array of nodes, or a plain object template.'),
 );
@@ -158,3 +167,4 @@ setObjectNode(NodeSchema);
 setTimeNode(NodeSchema);
 setIntlNode(NodeSchema);
 setSugarNode(NodeSchema);
+setTransformNode(NodeSchema);

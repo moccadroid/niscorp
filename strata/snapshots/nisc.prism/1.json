@@ -1,0 +1,1918 @@
+{
+  "kinds": {
+    "nisc.prism/config": {
+      "$defs": {
+        "__schema0": {
+          "anyOf": [
+            {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            {
+              "items": {
+                "$ref": "#/$defs/__schema0"
+              },
+              "type": "array"
+            },
+            {
+              "additionalProperties": {
+                "$ref": "#/$defs/__schema0"
+              },
+              "propertyNames": {
+                "type": "string"
+              },
+              "type": "object"
+            }
+          ]
+        },
+        "__schema1": {
+          "additionalProperties": false,
+          "properties": {
+            "$get": {
+              "additionalProperties": false,
+              "properties": {
+                "fallback": {
+                  "$ref": "#/$defs/__schema2"
+                },
+                "from": {
+                  "$ref": "#/$defs/__schema2"
+                },
+                "path": {
+                  "items": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "$ref": "#/$defs/__schema2"
+                      }
+                    ]
+                  },
+                  "minItems": 1,
+                  "type": "array"
+                }
+              },
+              "required": [
+                "from",
+                "path"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "$get"
+          ],
+          "type": "object"
+        },
+        "__schema2": {
+          "anyOf": [
+            {
+              "additionalProperties": false,
+              "properties": {
+                "$ref": {
+                  "pattern": "^\\$(\\..*)?$",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "$ref"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "$const": {
+                  "$ref": "#/$defs/__schema0"
+                }
+              },
+              "required": [
+                "$const"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "$var": {
+                  "minLength": 1,
+                  "type": "string"
+                }
+              },
+              "required": [
+                "$var"
+              ],
+              "type": "object"
+            },
+            {
+              "$ref": "#/$defs/__schema1"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "$with": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "let": {
+                      "additionalProperties": {
+                        "$ref": "#/$defs/__schema2"
+                      },
+                      "propertyNames": {
+                        "type": "string"
+                      },
+                      "type": "object"
+                    },
+                    "value": {
+                      "$ref": "#/$defs/__schema2"
+                    }
+                  },
+                  "required": [
+                    "let",
+                    "value"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "$with"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "$map": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "as": {
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "body": {
+                      "$ref": "#/$defs/__schema2"
+                    },
+                    "over": {
+                      "$ref": "#/$defs/__schema2"
+                    }
+                  },
+                  "required": [
+                    "over",
+                    "as",
+                    "body"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "$map"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "$filter": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "as": {
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "over": {
+                      "$ref": "#/$defs/__schema2"
+                    },
+                    "when": {
+                      "$ref": "#/$defs/__schema2"
+                    }
+                  },
+                  "required": [
+                    "over",
+                    "as",
+                    "when"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "$filter"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "$reduce": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "acc": {
+                      "default": "acc",
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "as": {
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "body": {
+                      "$ref": "#/$defs/__schema2"
+                    },
+                    "init": {
+                      "$ref": "#/$defs/__schema2"
+                    },
+                    "over": {
+                      "$ref": "#/$defs/__schema2"
+                    }
+                  },
+                  "required": [
+                    "over",
+                    "as",
+                    "init",
+                    "body"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "$reduce"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "$slice": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "end": {
+                      "maximum": 9007199254740991,
+                      "minimum": -9007199254740991,
+                      "type": "integer"
+                    },
+                    "from": {
+                      "$ref": "#/$defs/__schema2"
+                    },
+                    "start": {
+                      "maximum": 9007199254740991,
+                      "minimum": -9007199254740991,
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "from"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "$slice"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "$flatten": {
+                  "$ref": "#/$defs/__schema2"
+                }
+              },
+              "required": [
+                "$flatten"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "$unique": {
+                  "$ref": "#/$defs/__schema2"
+                }
+              },
+              "required": [
+                "$unique"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "$sortBy": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "as": {
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "by": {
+                      "$ref": "#/$defs/__schema2"
+                    },
+                    "dir": {
+                      "default": "asc",
+                      "enum": [
+                        "asc",
+                        "desc"
+                      ],
+                      "type": "string"
+                    },
+                    "over": {
+                      "$ref": "#/$defs/__schema2"
+                    }
+                  },
+                  "required": [
+                    "over",
+                    "as",
+                    "by"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "$sortBy"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "$add": {
+                  "prefixItems": [
+                    {
+                      "$ref": "#/$defs/__schema2"
+                    },
+                    {
+                      "$ref": "#/$defs/__schema2"
+                    }
+                  ],
+                  "type": "array"
+                }
+              },
+              "required": [
+                "$add"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "$sub": {
+                  "prefixItems": [
+                    {
+                      "$ref": "#/$defs/__schema2"
+                    },
+                    {
+                      "$ref": "#/$defs/__schema2"
+                    }
+                  ],
+                  "type": "array"
+                }
+              },
+              "required": [
+                "$sub"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "$mul": {
+                  "prefixItems": [
+                    {
+                      "$ref": "#/$defs/__schema2"
+                    },
+                    {
+                      "$ref": "#/$defs/__schema2"
+                    }
+                  ],
+                  "type": "array"
+                }
+              },
+              "required": [
+                "$mul"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "$div": {
+                  "prefixItems": [
+                    {
+                      "$ref": "#/$defs/__schema2"
+                    },
+                    {
+                      "$ref": "#/$defs/__schema2"
+                    }
+                  ],
+                  "type": "array"
+                }
+              },
+              "required": [
+                "$div"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "$round": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "digits": {
+                      "default": 0,
+                      "maximum": 9007199254740991,
+                      "minimum": 0,
+                      "type": "integer"
+                    },
+                    "value": {
+                      "$ref": "#/$defs/__schema2"
+                    }
+                  },
+                  "required": [
+                    "value"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "$round"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "$fill": {
+                  "$ref": "#/$defs/__schema2"
+                }
+              },
+              "required": [
+                "$fill"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "$join": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "parts": {
+                      "$ref": "#/$defs/__schema2"
+                    },
+                    "sep": {
+                      "default": "",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "parts"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "$join"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "$toString": {
+                  "$ref": "#/$defs/__schema2"
+                }
+              },
+              "required": [
+                "$toString"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "$interpolate": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "template": {
+                      "type": "string"
+                    },
+                    "values": {
+                      "$ref": "#/$defs/__schema2"
+                    }
+                  },
+                  "required": [
+                    "template",
+                    "values"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "$interpolate"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "$trim": {
+                  "$ref": "#/$defs/__schema2"
+                }
+              },
+              "required": [
+                "$trim"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "$lower": {
+                  "$ref": "#/$defs/__schema2"
+                }
+              },
+              "required": [
+                "$lower"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "$upper": {
+                  "$ref": "#/$defs/__schema2"
+                }
+              },
+              "required": [
+                "$upper"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "$split": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "sep": {
+                      "type": "string"
+                    },
+                    "value": {
+                      "$ref": "#/$defs/__schema2"
+                    }
+                  },
+                  "required": [
+                    "value",
+                    "sep"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "$split"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "$replace": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "replacement": {
+                      "type": "string"
+                    },
+                    "search": {
+                      "type": "string"
+                    },
+                    "value": {
+                      "$ref": "#/$defs/__schema2"
+                    }
+                  },
+                  "required": [
+                    "value",
+                    "search",
+                    "replacement"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "$replace"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "$eq": {
+                  "prefixItems": [
+                    {
+                      "$ref": "#/$defs/__schema2"
+                    },
+                    {
+                      "$ref": "#/$defs/__schema2"
+                    }
+                  ],
+                  "type": "array"
+                }
+              },
+              "required": [
+                "$eq"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "$neq": {
+                  "prefixItems": [
+                    {
+                      "$ref": "#/$defs/__schema2"
+                    },
+                    {
+                      "$ref": "#/$defs/__schema2"
+                    }
+                  ],
+                  "type": "array"
+                }
+              },
+              "required": [
+                "$neq"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "$gt": {
+                  "prefixItems": [
+                    {
+                      "$ref": "#/$defs/__schema2"
+                    },
+                    {
+                      "$ref": "#/$defs/__schema2"
+                    }
+                  ],
+                  "type": "array"
+                }
+              },
+              "required": [
+                "$gt"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "$gte": {
+                  "prefixItems": [
+                    {
+                      "$ref": "#/$defs/__schema2"
+                    },
+                    {
+                      "$ref": "#/$defs/__schema2"
+                    }
+                  ],
+                  "type": "array"
+                }
+              },
+              "required": [
+                "$gte"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "$lt": {
+                  "prefixItems": [
+                    {
+                      "$ref": "#/$defs/__schema2"
+                    },
+                    {
+                      "$ref": "#/$defs/__schema2"
+                    }
+                  ],
+                  "type": "array"
+                }
+              },
+              "required": [
+                "$lt"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "$lte": {
+                  "prefixItems": [
+                    {
+                      "$ref": "#/$defs/__schema2"
+                    },
+                    {
+                      "$ref": "#/$defs/__schema2"
+                    }
+                  ],
+                  "type": "array"
+                }
+              },
+              "required": [
+                "$lte"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "$empty": {
+                  "$ref": "#/$defs/__schema2"
+                }
+              },
+              "required": [
+                "$empty"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "$startsWith": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "prefix": {
+                      "$ref": "#/$defs/__schema2"
+                    },
+                    "value": {
+                      "$ref": "#/$defs/__schema2"
+                    }
+                  },
+                  "required": [
+                    "value",
+                    "prefix"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "$startsWith"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "$endsWith": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "suffix": {
+                      "$ref": "#/$defs/__schema2"
+                    },
+                    "value": {
+                      "$ref": "#/$defs/__schema2"
+                    }
+                  },
+                  "required": [
+                    "value",
+                    "suffix"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "$endsWith"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "$contains": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "search": {
+                      "$ref": "#/$defs/__schema2"
+                    },
+                    "value": {
+                      "$ref": "#/$defs/__schema2"
+                    }
+                  },
+                  "required": [
+                    "value",
+                    "search"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "$contains"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "$not": {
+                  "$ref": "#/$defs/__schema2"
+                }
+              },
+              "required": [
+                "$not"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "$and": {
+                  "items": {
+                    "$ref": "#/$defs/__schema2"
+                  },
+                  "minItems": 1,
+                  "type": "array"
+                }
+              },
+              "required": [
+                "$and"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "$or": {
+                  "items": {
+                    "$ref": "#/$defs/__schema2"
+                  },
+                  "minItems": 1,
+                  "type": "array"
+                }
+              },
+              "required": [
+                "$or"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "$merge": {
+                  "items": {
+                    "$ref": "#/$defs/__schema2"
+                  },
+                  "minItems": 1,
+                  "type": "array"
+                }
+              },
+              "required": [
+                "$merge"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "$coalesce": {
+                  "items": {
+                    "$ref": "#/$defs/__schema2"
+                  },
+                  "minItems": 1,
+                  "type": "array"
+                }
+              },
+              "required": [
+                "$coalesce"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "$case": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "branches": {
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "then": {
+                            "$ref": "#/$defs/__schema2"
+                          },
+                          "when": {
+                            "$ref": "#/$defs/__schema2"
+                          }
+                        },
+                        "required": [
+                          "when",
+                          "then"
+                        ],
+                        "type": "object"
+                      },
+                      "minItems": 1,
+                      "type": "array"
+                    },
+                    "else": {
+                      "$ref": "#/$defs/__schema2"
+                    }
+                  },
+                  "required": [
+                    "branches"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "$case"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "$entriesOf": {
+                  "$ref": "#/$defs/__schema2"
+                }
+              },
+              "required": [
+                "$entriesOf"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "$keyBy": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "as": {
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "key": {
+                      "$ref": "#/$defs/__schema2"
+                    },
+                    "over": {
+                      "$ref": "#/$defs/__schema2"
+                    }
+                  },
+                  "required": [
+                    "over",
+                    "as",
+                    "key"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "$keyBy"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "$groupBy": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "as": {
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "key": {
+                      "$ref": "#/$defs/__schema2"
+                    },
+                    "over": {
+                      "$ref": "#/$defs/__schema2"
+                    }
+                  },
+                  "required": [
+                    "over",
+                    "as",
+                    "key"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "$groupBy"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "$keys": {
+                  "$ref": "#/$defs/__schema2"
+                }
+              },
+              "required": [
+                "$keys"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "$values": {
+                  "$ref": "#/$defs/__schema2"
+                }
+              },
+              "required": [
+                "$values"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "$fromEntries": {
+                  "$ref": "#/$defs/__schema2"
+                }
+              },
+              "required": [
+                "$fromEntries"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "$pick": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "from": {
+                      "$ref": "#/$defs/__schema2"
+                    },
+                    "keys": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "minItems": 1,
+                      "type": "array"
+                    }
+                  },
+                  "required": [
+                    "from",
+                    "keys"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "$pick"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "$omit": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "from": {
+                      "$ref": "#/$defs/__schema2"
+                    },
+                    "keys": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "minItems": 1,
+                      "type": "array"
+                    }
+                  },
+                  "required": [
+                    "from",
+                    "keys"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "$omit"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "$type": {
+                  "$ref": "#/$defs/__schema2"
+                }
+              },
+              "required": [
+                "$type"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "$length": {
+                  "$ref": "#/$defs/__schema2"
+                }
+              },
+              "required": [
+                "$length"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "$date": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "format": {
+                      "type": "string"
+                    },
+                    "utc": {
+                      "default": false,
+                      "type": "boolean"
+                    },
+                    "value": {
+                      "$ref": "#/$defs/__schema2"
+                    }
+                  },
+                  "required": [
+                    "value"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "$date"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "$dateAdd": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "amount": {
+                      "type": "number"
+                    },
+                    "date": {
+                      "$ref": "#/$defs/__schema2"
+                    },
+                    "unit": {
+                      "enum": [
+                        "year",
+                        "month",
+                        "day",
+                        "hour",
+                        "minute",
+                        "second"
+                      ],
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "date",
+                    "amount",
+                    "unit"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "$dateAdd"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "$dateDiff": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "from": {
+                      "$ref": "#/$defs/__schema2"
+                    },
+                    "to": {
+                      "$ref": "#/$defs/__schema2"
+                    },
+                    "unit": {
+                      "enum": [
+                        "year",
+                        "month",
+                        "day",
+                        "hour",
+                        "minute",
+                        "second"
+                      ],
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "from",
+                    "to",
+                    "unit"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "$dateDiff"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "$localeDate": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "fallback": {
+                      "$ref": "#/$defs/__schema2"
+                    },
+                    "locale": {
+                      "$ref": "#/$defs/__schema2"
+                    },
+                    "options": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "dateStyle": {
+                          "enum": [
+                            "full",
+                            "long",
+                            "medium",
+                            "short"
+                          ],
+                          "type": "string"
+                        },
+                        "day": {
+                          "enum": [
+                            "numeric",
+                            "2-digit"
+                          ],
+                          "type": "string"
+                        },
+                        "hour": {
+                          "enum": [
+                            "numeric",
+                            "2-digit"
+                          ],
+                          "type": "string"
+                        },
+                        "hour12": {
+                          "type": "boolean"
+                        },
+                        "minute": {
+                          "enum": [
+                            "numeric",
+                            "2-digit"
+                          ],
+                          "type": "string"
+                        },
+                        "month": {
+                          "enum": [
+                            "numeric",
+                            "2-digit",
+                            "long",
+                            "short",
+                            "narrow"
+                          ],
+                          "type": "string"
+                        },
+                        "second": {
+                          "enum": [
+                            "numeric",
+                            "2-digit"
+                          ],
+                          "type": "string"
+                        },
+                        "timeStyle": {
+                          "enum": [
+                            "full",
+                            "long",
+                            "medium",
+                            "short"
+                          ],
+                          "type": "string"
+                        },
+                        "timeZone": {
+                          "type": "string"
+                        },
+                        "weekday": {
+                          "enum": [
+                            "long",
+                            "short",
+                            "narrow"
+                          ],
+                          "type": "string"
+                        },
+                        "year": {
+                          "enum": [
+                            "numeric",
+                            "2-digit"
+                          ],
+                          "type": "string"
+                        }
+                      },
+                      "type": "object"
+                    },
+                    "value": {
+                      "$ref": "#/$defs/__schema2"
+                    }
+                  },
+                  "required": [
+                    "value",
+                    "locale"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "$localeDate"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "$localeMoney": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "currency": {
+                      "$ref": "#/$defs/__schema2"
+                    },
+                    "digits": {
+                      "maximum": 20,
+                      "minimum": 0,
+                      "type": "integer"
+                    },
+                    "fallback": {
+                      "$ref": "#/$defs/__schema2"
+                    },
+                    "locale": {
+                      "$ref": "#/$defs/__schema2"
+                    },
+                    "minorUnits": {
+                      "type": "boolean"
+                    },
+                    "value": {
+                      "$ref": "#/$defs/__schema2"
+                    }
+                  },
+                  "required": [
+                    "value",
+                    "currency",
+                    "locale"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "$localeMoney"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "$localeNumber": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "compact": {
+                      "type": "boolean"
+                    },
+                    "digits": {
+                      "maximum": 20,
+                      "minimum": 0,
+                      "type": "integer"
+                    },
+                    "fallback": {
+                      "$ref": "#/$defs/__schema2"
+                    },
+                    "locale": {
+                      "$ref": "#/$defs/__schema2"
+                    },
+                    "minDigits": {
+                      "maximum": 20,
+                      "minimum": 0,
+                      "type": "integer"
+                    },
+                    "style": {
+                      "enum": [
+                        "decimal",
+                        "percent"
+                      ],
+                      "type": "string"
+                    },
+                    "value": {
+                      "$ref": "#/$defs/__schema2"
+                    }
+                  },
+                  "required": [
+                    "value",
+                    "locale"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "$localeNumber"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "$sum": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "over": {
+                      "$ref": "#/$defs/__schema2"
+                    }
+                  },
+                  "required": [
+                    "over"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "$sum"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "$avg": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "over": {
+                      "$ref": "#/$defs/__schema2"
+                    }
+                  },
+                  "required": [
+                    "over"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "$avg"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "$count": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "over": {
+                      "$ref": "#/$defs/__schema2"
+                    }
+                  },
+                  "required": [
+                    "over"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "$count"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "$min": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "over": {
+                      "$ref": "#/$defs/__schema2"
+                    }
+                  },
+                  "required": [
+                    "over"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "$min"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "$max": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "over": {
+                      "$ref": "#/$defs/__schema2"
+                    }
+                  },
+                  "required": [
+                    "over"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "$max"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "$pluck": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "key": {
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "over": {
+                      "$ref": "#/$defs/__schema2"
+                    }
+                  },
+                  "required": [
+                    "over",
+                    "key"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "$pluck"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "$take": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "count": {
+                      "maximum": 9007199254740991,
+                      "minimum": 0,
+                      "type": "integer"
+                    },
+                    "from": {
+                      "$ref": "#/$defs/__schema2"
+                    }
+                  },
+                  "required": [
+                    "from",
+                    "count"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "$take"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "$drop": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "count": {
+                      "maximum": 9007199254740991,
+                      "minimum": 0,
+                      "type": "integer"
+                    },
+                    "from": {
+                      "$ref": "#/$defs/__schema2"
+                    }
+                  },
+                  "required": [
+                    "from",
+                    "count"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "$drop"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "$match": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "as": {
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "over": {
+                      "$ref": "#/$defs/__schema2"
+                    },
+                    "search": {
+                      "$ref": "#/$defs/__schema2"
+                    }
+                  },
+                  "required": [
+                    "over",
+                    "as",
+                    "search"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "$match"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "$flatMap": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "as": {
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "body": {
+                      "$ref": "#/$defs/__schema2"
+                    },
+                    "over": {
+                      "$ref": "#/$defs/__schema2"
+                    }
+                  },
+                  "required": [
+                    "over",
+                    "as",
+                    "body"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "$flatMap"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "$has": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "from": {
+                      "$ref": "#/$defs/__schema2"
+                    },
+                    "path": {
+                      "items": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "maximum": 9007199254740991,
+                            "minimum": 0,
+                            "type": "integer"
+                          }
+                        ]
+                      },
+                      "minItems": 1,
+                      "type": "array"
+                    }
+                  },
+                  "required": [
+                    "from",
+                    "path"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "$has"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "$renameKeys": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "from": {
+                      "$ref": "#/$defs/__schema2"
+                    },
+                    "map": {
+                      "additionalProperties": {
+                        "type": "string"
+                      },
+                      "propertyNames": {
+                        "type": "string"
+                      },
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "from",
+                    "map"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "$renameKeys"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "$update": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "as": {
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "from": {
+                      "$ref": "#/$defs/__schema2"
+                    },
+                    "path": {
+                      "items": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "maximum": 9007199254740991,
+                            "minimum": 0,
+                            "type": "integer"
+                          }
+                        ]
+                      },
+                      "minItems": 1,
+                      "type": "array"
+                    },
+                    "value": {
+                      "$ref": "#/$defs/__schema2"
+                    }
+                  },
+                  "required": [
+                    "from",
+                    "path",
+                    "value"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "$update"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "$assert": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "message": {
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "value": {
+                      "$ref": "#/$defs/__schema2"
+                    },
+                    "when": {
+                      "$ref": "#/$defs/__schema2"
+                    }
+                  },
+                  "required": [
+                    "when",
+                    "message",
+                    "value"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "$assert"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "$walk": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "as": {
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "order": {
+                      "enum": [
+                        "post",
+                        "pre"
+                      ],
+                      "type": "string"
+                    },
+                    "over": {
+                      "$ref": "#/$defs/__schema2"
+                    },
+                    "rules": {
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "then": {
+                            "$ref": "#/$defs/__schema2"
+                          },
+                          "when": {
+                            "$ref": "#/$defs/__schema2"
+                          }
+                        },
+                        "required": [
+                          "when",
+                          "then"
+                        ],
+                        "type": "object"
+                      },
+                      "minItems": 1,
+                      "type": "array"
+                    }
+                  },
+                  "required": [
+                    "over",
+                    "as",
+                    "rules"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "$walk"
+              ],
+              "type": "object"
+            },
+            {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            {
+              "items": {
+                "$ref": "#/$defs/__schema2"
+              },
+              "type": "array"
+            },
+            {
+              "additionalProperties": {
+                "$ref": "#/$defs/__schema2"
+              },
+              "propertyNames": {
+                "pattern": "^(?!(?:\\$ref|\\$const|\\$var|\\$get|\\$with|\\$map|\\$filter|\\$reduce|\\$slice|\\$flatten|\\$unique|\\$sortBy|\\$add|\\$sub|\\$mul|\\$div|\\$round|\\$fill|\\$join|\\$toString|\\$interpolate|\\$trim|\\$lower|\\$upper|\\$split|\\$replace|\\$eq|\\$neq|\\$gt|\\$gte|\\$lt|\\$lte|\\$empty|\\$startsWith|\\$endsWith|\\$contains|\\$not|\\$and|\\$or|\\$merge|\\$coalesce|\\$case|\\$entriesOf|\\$keyBy|\\$groupBy|\\$keys|\\$values|\\$fromEntries|\\$pick|\\$omit|\\$type|\\$length|\\$date|\\$dateAdd|\\$dateDiff|\\$localeDate|\\$localeMoney|\\$localeNumber|\\$sum|\\$avg|\\$count|\\$min|\\$max|\\$pluck|\\$take|\\$drop|\\$match|\\$flatMap|\\$has|\\$renameKeys|\\$update|\\$assert|\\$walk)$)",
+                "type": "string"
+              },
+              "type": "object"
+            }
+          ]
+        }
+      },
+      "$ref": "#/$defs/__schema2"
+    }
+  },
+  "sequence": "nisc.prism",
+  "version": 1
+}

@@ -54,6 +54,14 @@ const oldAction = {
   },
 };
 
+// "Stamped current" means: this code's grammars, whatever their versions are
+// now — nova's and Prism's move on their own. What the test controls, it pins.
+const currentStamp = async (): Promise<Record<string, number>> => {
+  const stamp = { ...(await createGrammarUpgrader({ grammars: [kit] })).stamp };
+  expect(stamp['acme.kit']).toBe(1);
+  return stamp;
+};
+
 const quietly = <T>(run: () => Promise<T>): Promise<T> => {
   const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
   return run().finally(() => warn.mockRestore());
@@ -81,14 +89,14 @@ describe('stored documents — upgraded at boot', () => {
     expect(stored).toContain('"text":"Add"');
     expect(stored).toContain('"text":"Delete"');
     expect(stored).not.toContain('"label"');
-    expect(rows[0]?.['grammar']).toEqual({ 'nisc.nova': 0, 'nisc.prism': 0, 'acme.kit': 1 });
+    expect(rows[0]?.['grammar']).toEqual(await currentStamp());
   });
 
   it('a row from before stamps (`{}`) is read as the start of every grammar', async () => {
     const pool = await deploymentWith({});
     await quietly(() => createServer({ charter: {}, actions: {}, grammars: [kit] }, { pool, db: pool, session: 'dev-open' }));
     const { rows } = await pool.query(`SELECT grammar FROM integration_actions`);
-    expect(rows[0]?.['grammar']).toEqual({ 'nisc.nova': 0, 'nisc.prism': 0, 'acme.kit': 1 });
+    expect(rows[0]?.['grammar']).toEqual(await currentStamp());
   });
 
   it('a row written by newer code refuses the boot — TOO_NEW, and the row is left as it was', async () => {
@@ -117,7 +125,7 @@ describe('submitted documents — upgraded at intake', () => {
     const result = runIntake({ integration: 'acme', actions: { 'ext.member.acme.list': { ...oldAction, id: 'ext.member.acme.list' } }, grammar: { 'nisc.nova': 0 } }, await ctx());
     if (!result.ok) throw new Error(result.reasons.join(' | '));
     expect(JSON.stringify(result.bundle.actions)).toContain('"text":"Add"');
-    expect(result.bundle.grammar).toEqual({ 'nisc.nova': 0, 'nisc.prism': 0, 'acme.kit': 1 });
+    expect(result.bundle.grammar).toEqual(await currentStamp());
   });
 
   it('an add-on built on newer grammars than the host is refused with the reason', async () => {

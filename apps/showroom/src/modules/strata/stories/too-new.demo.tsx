@@ -1,5 +1,6 @@
 import { DocumentsLab } from '@showroom/modules/strata/documents-lab';
-import { action, grammars } from './grammar.fixtures';
+import { NOVA_SEQUENCE } from '@niscorp/nova/migrations';
+import { action, grammars, stampAt } from './grammar.fixtures';
 
 // A document written by NEWER code than this — an add-on that already speaks
 // kit 3, submitted to a host that knows kit 1; or a row written by the next
@@ -17,9 +18,9 @@ export const Demo = () => (
     document={action}
     grammars={grammars}
     stamps={[
-      { label: 'written at kit 3', stamp: { 'nisc.nova': 0, 'nisc.prism': 0, 'acme.kit': 3 } },
-      { label: 'nova 2', stamp: { 'nisc.nova': 2, 'nisc.prism': 0, 'acme.kit': 1 } },
-      { label: 'current', stamp: { 'nisc.nova': 0, 'nisc.prism': 0, 'acme.kit': 1 } },
+      { label: 'written at kit 3', stamp: stampAt(3) },
+      { label: 'nova from the future', stamp: { ...stampAt(1), 'nisc.nova': NOVA_SEQUENCE.migrations.length + 2 } },
+      { label: 'current', stamp: stampAt(1) },
     ]}
     note="Newer on any grammar is refused, with each one named. Pick 'current' to see the same document read cleanly."
   />

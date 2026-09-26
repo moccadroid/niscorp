@@ -10,6 +10,8 @@ export const ErrorCode = {
   DATE_INVALID: 'E_DATE_INVALID',
   VAR_NOT_FOUND: 'E_VAR_NOT_FOUND',
   NODE_SHAPE: 'E_NODE_SHAPE',
+  // A config's own `$assert` refused its input.
+  ASSERT: 'E_ASSERT',
 } as const;
 
 export type ErrorCode = (typeof ErrorCode)[keyof typeof ErrorCode];

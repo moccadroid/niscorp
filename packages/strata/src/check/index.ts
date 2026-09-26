@@ -94,8 +94,32 @@ const diffLines = (a: unknown, b: unknown, path: string, out: string[], limit: n
     }
     return;
   }
-  if (Array.isArray(a) && Array.isArray(b) && a.length === b.length) {
-    a.forEach((item, i) => diffLines(item, b[i], `${path}[${i}]`, out, limit));
+  if (Array.isArray(a) && Array.isArray(b)) {
+    // Schema arrays are SETS more often than sequences — a union's `anyOf`, a
+    // `required` list, an `enum` — and one added branch shifts every index
+    // after it. Match elements by what they describe (an object schema by its
+    // property names — for Prism's union, the op), report the ones on one side
+    // only, and diff the ones that changed in place.
+    const text = (v: unknown): string => JSON.stringify(normalize(v));
+    const label = (v: unknown): string =>
+      isRecord(v) && isRecord(v['properties']) ? Object.keys(v['properties']).join(',') : (text(v) ?? '').slice(0, 50);
+    const onlyA = a.filter((x) => !b.some((y) => text(y) === text(x)));
+    const onlyB = b.filter((y) => !a.some((x) => text(x) === text(y)));
+    const byLabel = new Map(onlyB.map((y) => [label(y), y]));
+    for (const x of onlyA) {
+      const partner = byLabel.get(label(x));
+      if (partner !== undefined) {
+        diffLines(x, partner, `${path}[${label(x)}]`, out, limit);
+        byLabel.delete(label(x));
+      } else {
+        out.push(`- ${path}[${label(x)}]`);
+      }
+      if (out.length >= limit) return;
+    }
+    for (const [name] of byLabel) {
+      out.push(`+ ${path}[${name}]`);
+      if (out.length >= limit) return;
+    }
     return;
   }
   out.push(`~ ${path || '(root)'}: ${JSON.stringify(a)?.slice(0, 60)} → ${JSON.stringify(b)?.slice(0, 60)}`);

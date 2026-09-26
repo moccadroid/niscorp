@@ -5,8 +5,11 @@ import { isJsonObject } from '../schemas/guards';
 
 export const opJoin = (node: JoinNode, context: EvalContext, evaluate: EvaluateFn): JsonValue => {
   const { parts, sep = '' } = node.$join;
-  const evaluated = parts.map((p) => String(evaluate(p, context) ?? ''));
-  return evaluated.join(sep);
+  // A literal list is itself a node that evaluates to an array, so literal and
+  // computed parts are one case.
+  const list = evaluate(parts, context);
+  if (!Array.isArray(list)) throw new PrismError('Expected $join.parts to evaluate to an array', ErrorCode.TYPE, { op: '$join' });
+  return list.map((p) => String(p ?? '')).join(sep);
 };
 
 export const opToString = (node: ToStringNode, context: EvalContext, evaluate: EvaluateFn): JsonValue => {

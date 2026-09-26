@@ -21,7 +21,18 @@ import type { JsonValue } from '../types';
 export const PRISM_SEQUENCE: Sequence = {
   id: 'nisc.prism',
   documents: { config: {} },
-  migrations: [],
+  migrations: [
+    {
+      // A MARKER: every change here is an addition, so no stored config needs
+      // rewriting — but a reader at 0 must refuse configs that use them. One
+      // narrowing, checked against the corpus (no captured config uses it): the
+      // five new op names are no longer accepted as plain template keys.
+      description:
+        'Transform ops ($has, $renameKeys, $update, $assert, $walk); $ref "$" for the whole source; $join parts may be any node ' +
+        'that evaluates to an array; an op name is not a template key',
+      steps: [],
+    },
+  ],
 };
 
 // ── the evaluator a migration runs through ──────────────────────

@@ -1,9 +1,9 @@
 import { DocumentsLab, type GrammarEdit } from '@showroom/modules/strata/documents-lab';
-import { action, grammars } from './grammar.fixtures';
+import { action, grammars, stampAt } from './grammar.fixtures';
 
 // An add-on built before the host's kit renamed Button's `label` to `text`
-// stored this action. Its stamp says so: it has seen nova 0 and Prism 0, and
-// never heard of acme.kit. Read by today's code, the one migration it has not
+// stored this action. Its stamp says so: it has seen nova and Prism as they
+// ship, and never heard of acme.kit. Read by today's code, the one migration it has not
 // seen runs — on every Button, at every depth: in the list, inside a loop's
 // card, in a branch — and the document comes back stamped current.
 //
@@ -59,8 +59,8 @@ export const Demo = () => (
     document={action}
     grammars={grammars}
     stamps={[
-      { label: 'before the rename', stamp: { 'nisc.nova': 0, 'nisc.prism': 0 } },
-      { label: 'after it (kit 1)', stamp: { 'nisc.nova': 0, 'nisc.prism': 0, 'acme.kit': 1 } },
+      { label: 'before the rename', stamp: stampAt(undefined) },
+      { label: 'after it (kit 1)', stamp: stampAt(1) },
       { label: 'before stamps ({})', stamp: {} },
     ]}
     edits={edits}

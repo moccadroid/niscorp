@@ -10,6 +10,7 @@ import type { MergeNode, CoalesceNode, CaseNode, EntriesOfNode, KeyByNode, Group
 import type { KeysNode, ValuesNode, FromEntriesNode, PickNode, OmitNode, TypeNode, LengthNode } from './ops/object.schema';
 import type { DateNode, DateAddNode, DateDiffNode } from './ops/time.schema';
 import type { LocaleDateNode, LocaleMoneyNode, LocaleNumberNode } from './ops/intl.schema';
+import type { HasNode, RenameKeysNode, UpdateNode, AssertNode, WalkNode } from './ops/transform.schema';
 import type {
   SumNode, AvgNode, CountNode, MinNode, MaxNode,
   PluckNode, TakeNode, DropNode, MatchNode, FlatMapNode,
@@ -117,6 +118,11 @@ export const isValuesNode = (v: unknown): v is ValuesNode => hasKey(v, '$values'
 export const isFromEntriesNode = (v: unknown): v is FromEntriesNode => hasKey(v, '$fromEntries');
 export const isPickNode = (v: unknown): v is PickNode => hasKey(v, '$pick');
 export const isOmitNode = (v: unknown): v is OmitNode => hasKey(v, '$omit');
+export const isHasNode = (v: unknown): v is HasNode => hasKey(v, '$has');
+export const isRenameKeysNode = (v: unknown): v is RenameKeysNode => hasKey(v, '$renameKeys');
+export const isUpdateNode = (v: unknown): v is UpdateNode => hasKey(v, '$update');
+export const isAssertNode = (v: unknown): v is AssertNode => hasKey(v, '$assert');
+export const isWalkNode = (v: unknown): v is WalkNode => hasKey(v, '$walk');
 export const isTypeNode = (v: unknown): v is TypeNode => hasKey(v, '$type');
 export const isLengthNode = (v: unknown): v is LengthNode => hasKey(v, '$length');
 

@@ -48,9 +48,11 @@ Resolves a JSONPath against the source data. Supports `.key` and `[index]` synta
 { "$ref": "$.user.name" }
 { "$ref": "$.items[0].sku" }
 { "$ref": "$.deeply.nested.value" }
+{ "$ref": "$" }
 ```
 
-Throws `E_MISSING_PATH` if the path doesn't exist.
+`"$"` is the whole source. Throws `E_MISSING_PATH` if the path doesn't exist.
+`$ref` and `$var` read the context, so the compiler never constant-folds them.
 
 ### `$const` — Literal value
 
@@ -257,7 +259,11 @@ Result: `3.14`. `digits` defaults to 0.
 ```json
 { "$join": { "parts": [{ "$ref": "$.first" }, { "$ref": "$.last" }], "sep": " " } }
 ```
-Parts are coerced to strings. `sep` defaults to `""`.
+Parts are coerced to strings. `sep` defaults to `""`. `parts` may also be any
+node that evaluates to an array — a mapped list, a `$var`:
+```json
+{ "$join": { "parts": { "$map": { "over": { "$ref": "$.tags" }, "as": "t", "body": { "$upper": { "$var": "t" } } } }, "sep": ", " } }
+```
 
 ### `$toString` — Stringify
 ```json
@@ -464,6 +470,76 @@ Returns one of: `"string"`, `"number"`, `"boolean"`, `"null"`, `"array"`, `"obje
 { "$length": { "$ref": "$.items" } }
 { "$length": { "$ref": "$.name" } }
 ```
+
+---
+
+## Transform Operations
+
+Rewriting a document rather than deriving a value — built for migrations
+(strata's document steps), useful anywhere a config returns its input with a
+precise edit.
+
+### `$has` — Is the path there at all?
+```json
+{ "$has": { "from": { "$ref": "$.document" }, "path": ["props", "label"] } }
+```
+True when the whole path exists — a key present with `null` counts; a missing
+one does not (which `$get` with a `fallback` cannot tell apart).
+
+### `$renameKeys` — Rename in place
+```json
+{ "$renameKeys": { "from": { "$ref": "$.endpoint" }, "map": { "body": "request", "transform": "response" } } }
+```
+Each renamed key keeps its position. Absent keys are ignored; a rename onto an
+existing key replaces that entry.
+
+### `$update` — One path changed, everything else identical
+```json
+{ "$update": { "from": { "$ref": "$.document" }, "path": ["props", "count"], "value": { "$add": [{ "$var": "current" }, 1] } } }
+```
+The value currently at `path` (null when absent) is bound as `current` (rename
+it with `"as"`). Missing objects along a string path are created; an array index
+that does not exist is `E_MISSING_PATH`.
+
+### `$assert` — Refuse loudly
+```json
+{ "$assert": { "when": { "$has": { "from": { "$ref": "$.document" }, "path": ["id"] } }, "message": "An action without an id cannot be migrated.", "value": { "$ref": "$.document" } } }
+```
+Throws `E_ASSERT` with `message` unless `when` is truthy; otherwise evaluates to
+`value`.
+
+### `$walk` — Rewrite every node of a tree
+```json
+{
+  "$walk": {
+    "over": { "$ref": "$.document" },
+    "as": "n",
+    "rules": [
+      { "when": { "$eq": [{ "$var": "n" }, "$.q"] }, "then": "$.search" },
+      { "when": { "$eq": [{ "$get": { "from": { "$var": "n" }, "path": ["ref"], "fallback": null } }, "q"] },
+        "then": { "$update": { "from": { "$var": "n" }, "path": ["ref"], "value": "search" } } }
+    ]
+  }
+}
+```
+Visits every node — objects, arrays and leaves, at any depth — and replaces it
+with the first rule whose `when` holds (bound to `as`); no rule, the node stays.
+`"order": "post"` (default) rewrites children first, so a node's rules see them
+rewritten; `"pre"` applies the rules first and descends into the result. A
+replacement is never walked again at its own level, so it always terminates. A
+walk visits objects too: guard a string op with a type check
+(`{ "$and": [{ "$eq": [{ "$type": { "$var": "n" } }, "string"] }, …] }`).
+
+---
+
+## The op set only ever grows
+
+Configs are stored — endpoint requests, vex mappings, strata migrations — and a
+migration cannot be migrated by the language it is written in. So an op is
+never removed or reshaped: an old form stays and desugars to the new one.
+`test/transform.test.ts` keeps the record (`EVERY_OP_EVER`) and fails on a
+removal. Changes to the grammar are strata migrations on `nisc.prism`
+(`@niscorp/prism/migrations`), gated by `pnpm check:grammars`.
 
 ---
 
