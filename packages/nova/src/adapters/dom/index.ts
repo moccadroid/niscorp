@@ -46,6 +46,7 @@ export type DomView = {
 };
 
 const CANVAS_SLOT = 'CanvasSlot';
+const ACTION_SLOT = 'ActionSlot';
 
 // The recursion context: the registry, the dispatch in force (frame chrome
 // dispatches nothing; a CanvasSlot switches it to that canvas's), publish,
@@ -107,7 +108,21 @@ const wireEvents = (el: HTMLElement, node: Extract<RenderNode, { type: 'componen
   }
 };
 
-const renderNode = (node: RenderNode, ctx: Ctx): Node => {
+// The per-instance boundary a served tree carries. A list canvas renders
+// several live instances at once, so a click inside THIS boundary must reach
+// THIS instance: its events carry it as their origin (the server's
+// active-instance fallback only holds for a card-deck canvas). An event that
+// already has an origin keeps it — moss's react terminal does the same.
+const inInstance = (node: RenderNode, ctx: Ctx): Ctx => {
+  if (node.type !== 'component' || node.name !== ACTION_SLOT) return ctx;
+  const instanceId = node.props['instanceId'];
+  if (typeof instanceId !== 'string' || instanceId === '') return ctx;
+  const outer = ctx.dispatch;
+  return { ...ctx, dispatch: (event) => outer(event.origin === undefined ? { ...event, origin: instanceId } : event) };
+};
+
+const renderNode = (node: RenderNode, parent: Ctx): Node => {
+  const ctx = inInstance(node, parent);
   if (node.type === 'text') return document.createTextNode(node.value);
   if (node.type === 'fragment') {
     const frag = document.createDocumentFragment();
