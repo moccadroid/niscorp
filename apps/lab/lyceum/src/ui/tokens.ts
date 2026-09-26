@@ -74,6 +74,7 @@ html, body { margin: 0; padding: 0; }
 .${ROOT_CLASS} .cell[data-align="center"] { justify-content: center; align-items: center; text-align: center; }
 .${ROOT_CLASS} .cell[data-align="between"] { justify-content: space-between; }
 .${ROOT_CLASS} .cell[data-pad="none"] { padding: 0; }
+.${ROOT_CLASS} .cell[data-scroll="y"] { overflow-y: auto; min-height: 0; overscroll-behavior: contain; }
 
 /* ── marks: the houses' patterns, and the hatch of "not yet" ── */
 .${ROOT_CLASS} [data-mark="stripes"] { background: repeating-linear-gradient(-45deg, var(--fg) 0 4px, var(--bg) 4px 14px); }
@@ -109,6 +110,11 @@ html, body { margin: 0; padding: 0; }
 .${ROOT_CLASS} .rows [data-kind="mono"] { font-family: var(--mono); }
 .${ROOT_CLASS} .rows [data-kind="missing"] { color: color-mix(in srgb, var(--ink) 45%, var(--paper)); }
 .${ROOT_CLASS} .rows > .empty { display: block; background: var(--paper); padding: .6em; }
+/* a row you can press: the same highlight as every other pressable thing; the
+   selected row wears the signal */
+.${ROOT_CLASS} .rows > [data-press] { cursor: pointer; }
+@media (hover: hover) { .${ROOT_CLASS} .rows > [data-press]:hover > span { background: var(--highlight); color: var(--ink); } }
+.${ROOT_CLASS} .rows > [data-selected] > span { background: var(--signal); color: var(--paper); }
 
 /* ── sigils: the houses' shapes ── */
 .${ROOT_CLASS} .sigil { width: 1em; height: 1em; flex: none; display: inline-block; vertical-align: -.12em; }

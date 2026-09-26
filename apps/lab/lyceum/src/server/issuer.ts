@@ -13,10 +13,17 @@ import { createSignal } from '@niscorp/signal';
 //
 // Unset, it is `groq` when there is a key and `fake` when there is not.
 
+// The tone is a contemporary office — a civil service with badge readers,
+// shared drives and printers — never fantasy, never Victorian: names are
+// ordinary, the dry humour lives in the title and the file.
 export const CardSchema = z.object({
-  name: z.string().describe('A plausible full name for a new employee — first name and surname, no titles, no initials.'),
-  title: z.string().describe('Their job title at the Ministry: dry, bureaucratic, faintly absurd. At most six words.'),
-  quirk: z.string().describe('One line from their personnel file, in the voice of a tired clerk. At most twelve words.'),
+  name: z
+    .string()
+    .describe('An ordinary contemporary full name, as on a real passport or a staff list: first name and surname, from anywhere in the world. No jokes, no puns, no whimsy, no fantasy or old-fashioned names, no titles, no initials.'),
+  title: z.string().describe('Their job title at the Ministry: dry, modern civil-service jargon, faintly absurd. At most six words.'),
+  quirk: z
+    .string()
+    .describe('One line from their personnel file, written by a tired HR clerk about present-day office life (email, meetings, printers, badges, spreadsheets). At most twelve words. No magic, no whimsy.'),
 });
 
 export type Card = z.infer<typeof CardSchema>;
@@ -27,9 +34,8 @@ export type Issuer = {
   write: (seed: string, signal: AbortSignal) => AsyncIterable<string>;
 };
 
-// Variety without a memory: the model is handed a different first letter and
-// department-store flavour per card, so forty cards in a row are not forty
-// "Arthur"s.
+// Variety without a memory: the model is handed a different first letter per
+// card, so forty cards in a row are not forty "Arthur"s.
 const LETTERS = 'ABCDEFGHIJKLMNOPRSTVWZ';
 const hash = (seed: string): number => [...seed].reduce((acc, ch) => (acc * 31 + ch.charCodeAt(0)) >>> 0, 7);
 
@@ -43,7 +49,7 @@ const groqIssuer = (): Issuer => {
       const stream = llm.stepStream(
         {
           messages: [
-            { role: 'system', content: `You issue ID cards at the Ministry. Answer with one JSON object and nothing else, matching this JSON Schema: ${schema}` },
+            { role: 'system', content: `You issue staff ID cards at a present-day government ministry. Answer with one JSON object and nothing else, matching this JSON Schema: ${schema}` },
             { role: 'user', content: `Issue an ID card for somebody who just walked in. Their first name starts with ${letter}.` },
           ],
         },

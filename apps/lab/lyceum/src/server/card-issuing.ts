@@ -37,8 +37,6 @@ export const issueCard = async (deps: {
 }): Promise<Card> => {
   const token = await mintSession(deps.pool, 'registry', REGISTRY_TTL_MS);
   const vex = vexOver(wireAs(deps.server, token));
-  const stream = createStream({ schema: CardSchema, initial: { name: '', title: '', quirk: '' } });
-
   let written = '';
   const write = async (card: Card): Promise<void> => {
     const next = { memberId: deps.memberId, name: card.name.trim() === '' ? deps.placeholder : card.name, title: card.title, quirk: card.quirk };
@@ -48,20 +46,31 @@ export const issueCard = async (deps: {
     await vex(memberIssue.fingerprint, next);
   };
 
-  const controller = new AbortController();
-  let last = 0;
-  for await (const chunk of deps.issuer.write(deps.memberId, controller.signal)) {
-    for (let i = 0; i < chunk.length; i += PACE_CHARS) {
-      stream.write(chunk.slice(i, i + PACE_CHARS));
-      await sleep(PACE_MS);
-      if (Date.now() - last >= WRITE_EVERY_MS) {
-        last = Date.now();
-        await write(stream.current());
+  // One card, streamed into the row as it is written.
+  const attempt = async (seed: string): Promise<Card> => {
+    const stream = createStream({ schema: CardSchema, initial: { name: '', title: '', quirk: '' } });
+    const controller = new AbortController();
+    let last = 0;
+    for await (const chunk of deps.issuer.write(seed, controller.signal)) {
+      for (let i = 0; i < chunk.length; i += PACE_CHARS) {
+        stream.write(chunk.slice(i, i + PACE_CHARS));
+        await sleep(PACE_MS);
+        if (Date.now() - last >= WRITE_EVERY_MS) {
+          last = Date.now();
+          await write(stream.current());
+        }
       }
     }
-  }
-  stream.close();
-  const card = CardSchema.parse(await stream.final());
-  await write(card);
-  return card;
+    stream.close();
+    const card = CardSchema.parse(await stream.final());
+    await write(card);
+    return card;
+  };
+
+  // A model now and then misspells a key (`"nome"` for `"name"`): solid keeps
+  // the card valid by ignoring it, which leaves that field empty. An
+  // incomplete card is issued once more; after that, what arrived stands.
+  const complete = (card: Card): boolean => card.name.trim() !== '' && card.title.trim() !== '' && card.quirk.trim() !== '';
+  const first = await attempt(deps.memberId);
+  return complete(first) ? first : attempt(`${deps.memberId}:again`);
 };

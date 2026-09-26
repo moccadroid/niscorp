@@ -86,7 +86,8 @@ export const Sheet: DomComponent = ({ props, children }) => {
 
 // ── Cell — a place in the grid ──────────────────────────────────
 // area, ink (paper | ink | signal | alert | live | highlight), mark (stripes | dots | bars |
-// checks | hatch), align (start | end | center | between), pad ('none').
+// checks | hatch), align (start | end | center | between), pad ('none'), scroll ('y' — a
+// cell whose content may outgrow it scrolls inside it, and the sheet keeps its shape).
 export const Cell: DomComponent = ({ props, children }) => {
   const node = el('div', 'cell', children);
   placeIn(node, props['area']);
@@ -94,6 +95,7 @@ export const Cell: DomComponent = ({ props, children }) => {
   setData(node, 'mark', oneOf(props['mark'], MARKS));
   setData(node, 'align', oneOf(props['align'], ALIGNS));
   setData(node, 'pad', oneOf(props['pad'], ['none'] as const));
+  setData(node, 'scroll', oneOf(props['scroll'], ['y'] as const));
   return node;
 };
 
@@ -174,8 +176,14 @@ export const Sigil: DomComponent = ({ props }) => sigil(props['shape'], props['s
 // rows: the records; rowKey: the id field; empty: what an empty table says.
 // columns: [{ label, key, w?, kind?: 'text' | 'mono' | 'sigil', missing? }] —
 // `missing` is what a cell says when its value is absent.
-export const Rows: DomComponent = ({ props }) => {
+export const Rows: DomComponent = ({ props, dispatch }) => {
   const columns = records(props['columns']);
+  // A row you can press: `rowRef` names the click, `clickKey` the field its
+  // payload is (default rowKey) — nova's own Table convention. `selected` marks
+  // the row whose `clickKey` equals it.
+  const rowRef = text(props['rowRef']);
+  const clickKey = text(props['clickKey']) ?? text(props['rowKey']) ?? '';
+  const selected = props['selected'];
   const cols = columns.map((column) => `${weight(column['w']) ?? 1}fr`).join(' ');
   const line = (cells: HTMLElement[]): HTMLElement => {
     const row = el('div', '', cells);
@@ -187,8 +195,8 @@ export const Rows: DomComponent = ({ props }) => {
     cell.textContent = text(column['label']) ?? '';
     return cell;
   }));
-  const body = records(props['rows']).map((record) =>
-    line(columns.map((column) => {
+  const body = records(props['rows']).map((record) => {
+    const row = line(columns.map((column) => {
       const cell = el('span', '');
       const kind = oneOf(column['kind'], ['text', 'mono', 'sigil'] as const) ?? 'text';
       const value = record[text(column['key']) ?? ''];
@@ -202,8 +210,15 @@ export const Rows: DomComponent = ({ props }) => {
         cell.textContent = text(value) ?? '';
       }
       return cell;
-    })),
-  );
+    }));
+    const key = record[clickKey];
+    if (selected !== undefined && selected !== null && key === selected) row.setAttribute('data-selected', '');
+    if (rowRef !== undefined) {
+      row.setAttribute('data-press', '');
+      row.addEventListener('click', () => dispatch({ type: 'ui:click', ref: rowRef, payload: key }));
+    }
+    return row;
+  });
   if (body.length === 0) {
     const empty = el('div', 'empty');
     empty.textContent = text(props['empty']) ?? '';
