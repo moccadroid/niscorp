@@ -152,3 +152,47 @@ describe('execute — equivalence with evaluate', () => {
     });
   }
 });
+
+describe('execute — an IR read back from storage', () => {
+  // The annotations are non-enumerable, so JSON (a jsonb row, a file) drops
+  // them. execute() must restore them rather than run the slow chain forever.
+  const stored = async (config: unknown): Promise<Awaited<ReturnType<typeof compile>>> =>
+    JSON.parse(JSON.stringify(await compile(config)));
+
+  it('restores the handler and ref annotations on first execute', async () => {
+    const ir = await stored({ $map: { over: { $ref: '$.rows' }, as: 'r', body: { $upper: { $var: 'r' } } } });
+    const core = ir.core as Record<string, unknown>;
+    expect(Object.getOwnPropertyDescriptor(core, '__op')).toBeUndefined();
+
+    expect(execute(ir, { rows: ['a', 'b'] })).toEqual(['A', 'B']);
+
+    const op = Object.getOwnPropertyDescriptor(core, '__op');
+    expect(typeof op?.value).toBe('function');
+    expect(op?.enumerable).toBe(false);
+    const map = core['$map'] as Record<string, unknown>;
+    const segments = Object.getOwnPropertyDescriptor(map['over'], '__segments');
+    expect(Array.isArray(segments?.value)).toBe(true);
+    // Still pure JSON on the way back out.
+    expect(JSON.stringify(ir.core)).toBe(JSON.stringify((await compile({ $map: { over: { $ref: '$.rows' }, as: 'r', body: { $upper: { $var: 'r' } } } })).core));
+  });
+
+  it('never annotates the data inside a $const it hands back', async () => {
+    const ir = await stored({ $const: { $ref: '$.looks-like-an-op', nested: [{ $upper: 'x' }] } });
+    const out = execute(ir, {}) as Record<string, unknown>;
+    expect(out).toEqual({ $ref: '$.looks-like-an-op', nested: [{ $upper: 'x' }] });
+    expect(Object.getOwnPropertyNames(out)).toEqual(['$ref', 'nested']);
+    const nested = (out['nested'] as unknown[])[0] as object;
+    expect(Object.getOwnPropertyNames(nested)).toEqual(['$upper']);
+  });
+
+  it('answers exactly as the freshly compiled IR does', async () => {
+    const config = {
+      $map: {
+        over: { $ref: '$.items' }, as: 'it',
+        body: { name: { $get: { from: { $var: 'it' }, path: ['name'] } }, big: { $gt: [{ $get: { from: { $var: 'it' }, path: ['n'] } }, 5] } },
+      },
+    };
+    const source = { items: [{ name: 'a', n: 3 }, { name: 'b', n: 9 }] };
+    expect(execute(await stored(config), source)).toEqual(execute(await compile(config), source));
+  });
+});

@@ -231,6 +231,17 @@ const optimizeNode = (
 
   if (!isPlainObject(node)) return node;
 
+  // A $const payload is DATA, returned verbatim — never a subtree to optimize.
+  // Recursing into it folded op-shaped values inside the literal
+  // (`{ $const: [{ $upper: 'x' }] }` came back as `[{ $const: 'X' }]`), which
+  // evaluate() never did.
+  if (isConstNode(node)) {
+    const literal: Record<string, unknown> = { ...node };
+    attachNonEnumerable(literal, HANDLER_KEY, eraseOp(opConst));
+    stats.handlersAttached += 1;
+    return literal;
+  }
+
   // Recursively optimize all values first (post-order — children optimized
   // before parents). After this, every op subtree is already folded if
   // possible, so the parent can check isFoldableLiteral on its children.
@@ -309,3 +320,39 @@ export const optimize = (node: unknown, evaluate: EvaluateFn): OptimizeResult =>
   const result = optimizeNode(node, stats, evaluate);
   return { node: result, stats };
 };
+
+// ═══════════════════════════════════════════════════════════
+// Rehydrate — restore the annotations an IR loses in storage
+//
+// Passes 1 and 2 above write NON-ENUMERABLE properties, so an IR that went
+// through JSON (a jsonb row, a file, the wire) comes back as the bare tree:
+// correct, but every node falls through the evaluator's discriminant chain.
+// This re-attaches exactly those two annotations, in place, to a core that is
+// already desugared and folded — no validation, no folding, no new objects.
+//
+// It does not descend into a `$const` payload: that is data the evaluator
+// returns as-is, and annotating it would hang handlers on values handed back
+// to the caller.
+// ═══════════════════════════════════════════════════════════
+
+const annotateNode = (node: unknown): void => {
+  if (Array.isArray(node)) {
+    for (const child of node) annotateNode(child);
+    return;
+  }
+  if (!isPlainObject(node)) return;
+
+  if (!isConstNode(node)) {
+    for (const value of Object.values(node)) annotateNode(value);
+  }
+
+  if (isRefNode(node)) {
+    const segments: JsonPathSegment[] = parseJsonPath(node.$ref);
+    if (segments.length > 0) attachNonEnumerable(node, SEGMENTS_KEY, segments);
+  }
+
+  const handler = resolveHandler(node);
+  if (handler !== undefined) attachNonEnumerable(node, HANDLER_KEY, handler);
+};
+
+export const rehydrate = (core: unknown): void => annotateNode(core);
