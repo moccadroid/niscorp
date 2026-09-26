@@ -6,6 +6,7 @@ import { lyceumReactions } from './reactions';
 import { doorFunctions } from './functions/door.functions';
 import { assignmentFunctions } from './functions/assignment.functions';
 import { devRuntime } from './runtime';
+import { createIssuer } from './issuer';
 import type { DevRuntime, LyceumRuntime } from './runtime';
 
 // The one composition: lyceum's artifacts, its environment and its code seams
@@ -32,9 +33,13 @@ export const bootOn = async <R extends LyceumRuntime>(runtime: R): Promise<Boote
     return built;
   };
 
+  // Who writes the ID cards — Qwen with a key, the deterministic fake without
+  // (./issuer.ts). Read from the environment the process was started with.
+  const issuer = createIssuer(process.env);
+
   const app = buildLyceum({
     identity: lyceumIdentity,
-    functions: (session) => ({ ...doorFunctions(session, server), ...assignmentFunctions(session, server) }),
+    functions: (session) => ({ ...doorFunctions(session, server, issuer), ...assignmentFunctions(session, server) }),
     reactions: lyceumReactions(server),
   });
   built = await createServer(app, runtime);

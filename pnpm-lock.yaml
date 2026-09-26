@@ -245,6 +245,12 @@ importers:
       '@niscorp/nova':
         specifier: workspace:^
         version: link:../../../packages/nova
+      '@niscorp/signal':
+        specifier: workspace:^
+        version: link:../../../packages/signal
+      '@niscorp/solid':
+        specifier: workspace:^
+        version: link:../../../packages/solid
       '@niscorp/vex':
         specifier: workspace:^
         version: link:../../../packages/vex

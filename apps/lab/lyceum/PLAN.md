@@ -128,6 +128,16 @@ canvas: each slide row may name a tool (`slides.tool_id`), and the speaker's dec
 that tool on the controller while the slide is up — assignment controls only on the
 assignment slides. `assignment-check` (39), `deck-check` (22), `serve-check` (13).
 
+**ID cards — 2026-09-26.** Stepping in is instant; then the Ministry issues your ID card.
+Qwen on Groq (signal, `stepStream`) writes `{ name, title, quirk }` as JSON; solid parses
+the stream into an always-valid partial card; the card is written to the member's row as
+it grows, as the `registry` principal (a real principal in `grants`, through the normal
+door). Nothing is pushed — the phone's ID card and the projector's register are reactive
+reads, so the fields type themselves in everywhere at once. Groq writes a card in ~80 ms,
+so the stream is replayed at a reading pace (~1.5 s) — said so in code and on stage.
+`LYCEUM_ISSUER=groq|fake` (default: groq with a key); the checks always use the
+deterministic fake. Keys come from `.env` (read by vite and `serve.ts`, never edited).
+
 **Next:**
 1. **The UI, continued** — the look is locked on the kitchen sink and the screens that
    exist; the talk's real slides and the persona screen are written against it.

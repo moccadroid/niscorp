@@ -183,6 +183,18 @@ export const memberJoin: SeedMutation = {
   },
 };
 
+// ── the ID card, issued by the Ministry's registry as the model writes it ──
+export const memberIssue: SeedMutation = {
+  fingerprint: 'members/issue',
+  intent: 'Write a member\'s ID card: their name, job title and one line on file',
+  mutation: {
+    op: 'update',
+    table: 'members',
+    set: { name: { $context: 'name' }, title: { $context: 'title' }, quirk: { $context: 'quirk' } },
+    where: { eq: ['members.member_id', { $context: 'memberId' }] },
+  },
+};
+
 // ── Forms: change your own record ──
 //
 // Served at the `personal` reach (behaviors.ts): the engine pins the update to
@@ -308,6 +320,7 @@ export const MEMBER_ENTRIES: readonly (SeedEntry | SeedMutation)[] = [
   memberAssign,
   memberUnassign,
   memberJoin,
+  memberIssue,
   memberRename,
   inquiryByDepartment,
   inquiryNewest,

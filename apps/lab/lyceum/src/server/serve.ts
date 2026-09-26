@@ -19,6 +19,9 @@ import { mountSite } from './site';
 const dist = resolve(dirname(fileURLToPath(import.meta.url)), '../../dist');
 
 const main = async (): Promise<void> => {
+  // Keys (GROQ_API_KEY, TYPESAFE_API_KEY) from apps/lab/lyceum/.env when there
+  // is one; a container passes them in its environment instead.
+  if (existsSync('.env')) process.loadEnvFile('.env');
   const databaseUrl = process.env['DATABASE_URL'] ?? '';
   if (databaseUrl === '') console.warn('[lyceum] no DATABASE_URL — running on in-memory PGlite; everything is gone on restart.');
   const runtime = databaseUrl === '' ? await devRuntime() : await postgresRuntime(databaseUrl);

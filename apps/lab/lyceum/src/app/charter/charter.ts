@@ -38,6 +38,10 @@ export const CHARTER: Charter = {
   // The kit's kitchen sink: every piece of the look on one screen (dev).
   kit: { actions: ['kit.*'] },
 
+  // The Ministry's registry: a principal that is not a person, which issues
+  // ID cards — it writes the card fields as the model writes them.
+  registry: { data: ['members.read', 'members.write.update'] },
+
   // ── machinery: roles nobody wears, each granted exactly its job ──
   // Reads who somebody is, for the identity seam.
   identity: { data: ['members.read', 'grants.read'] },
@@ -57,4 +61,5 @@ export const WEARABLE: readonly (readonly string[])[] = [
   ['speaker'],
   ['stage'],
   ['kit'],
+  ['registry'],
 ];

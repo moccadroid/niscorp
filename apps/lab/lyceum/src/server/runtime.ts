@@ -33,6 +33,10 @@ export const devRuntime = async (): Promise<DevRuntime> => {
     pool: createPglitePool(db, RAW_DATE_PARSERS),
     cache,
     session: 'sessions',
-    close: () => db.close(),
+    // Safe twice: a re-boot in vite closes the old server, which may already
+    // have let go of the database.
+    close: async () => {
+      if (!db.closed) await db.close();
+    },
   };
 };

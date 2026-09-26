@@ -33,6 +33,8 @@ export const STAFF: readonly { principal: string; role: string }[] = [
   { principal: 'stage', role: 'stage' },
   // The kit's kitchen sink — every piece of the look on one screen.
   { principal: 'kit', role: 'kit' },
+  // The Ministry's registry, which issues ID cards (server/card-issuing.ts).
+  { principal: 'registry', role: 'registry' },
 ];
 
 // The deck, in order. Each slide id is an action the stage is granted, each

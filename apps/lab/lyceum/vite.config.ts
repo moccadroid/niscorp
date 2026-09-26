@@ -7,6 +7,7 @@ import { mintSession } from '@niscorp/moss';
 import type { Connection } from '@niscorp/moss';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
+import { existsSync } from 'node:fs';
 import { z } from 'zod';
 import type { Booted } from './src/server/boot';
 
@@ -24,6 +25,11 @@ const BootModuleSchema = z.object({ boot: z.custom<() => Promise<Booted>>((value
 type Running = { listener: ReturnType<typeof getRequestListener>; booted: Booted };
 
 const SESSION_TTL_MS = 12 * 60 * 60 * 1000;
+
+// Keys (GROQ_API_KEY, TYPESAFE_API_KEY) for the dev server, from this app's own
+// .env — read once, before the first boot.
+const here = dirname(fileURLToPath(import.meta.url));
+if (existsSync(resolve(here, '.env'))) process.loadEnvFile(resolve(here, '.env'));
 
 const appServer = (): Plugin => ({
   name: 'lyceum-app-server',
@@ -123,7 +129,6 @@ const appServer = (): Plugin => ({
   },
 });
 
-const here = dirname(fileURLToPath(import.meta.url));
 const workspaceRoot = resolve(here, '../../..');
 
 export default defineConfig({

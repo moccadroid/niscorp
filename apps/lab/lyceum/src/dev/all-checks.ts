@@ -5,7 +5,9 @@ import { spawnSync } from 'node:child_process';
 
 const CHECKS = ['assignment-check', 'deck-check', 'serve-check'];
 
-const failed = CHECKS.filter((name) => spawnSync('node', ['--import', 'tsx', `src/dev/${name}.ts`], { stdio: 'inherit', shell: false }).status !== 0);
+// The checks never call a model: ID cards come from the deterministic issuer.
+const env = { ...process.env, LYCEUM_ISSUER: 'fake' };
+const failed = CHECKS.filter((name) => spawnSync('node', ['--import', 'tsx', `src/dev/${name}.ts`], { stdio: 'inherit', shell: false, env }).status !== 0);
 
 console.log(failed.length === 0 ? `\nall ${CHECKS.length} checks passed` : `\n${failed.length} of ${CHECKS.length} checks failed: ${failed.join(', ')}`);
 process.exit(failed.length === 0 ? 0 : 1);

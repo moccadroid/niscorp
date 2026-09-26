@@ -54,6 +54,13 @@ const main = async (): Promise<void> => {
   check('no department tool exists for them yet', !Object.values(TOOL).some((tool) => memberHello.catalog.actions.includes(tool)));
   check('their card says they are not yet assigned', await member.shows('main', 'Not yet assigned'));
 
+  // ── the Ministry issues their ID card, onto the phone that is open ──
+  const issued = await waitUntil(() => !member.showsNow('main', 'being issued') && !member.showsNow('main', 'pending'));
+  const card = await runtime.db.query<{ name: string; title: string | null; quirk: string | null }>('SELECT name, title, quirk FROM members WHERE member_id = $1', [memberId]);
+  const issuedName = card.rows[0]?.name ?? '';
+  check(`their ID card is issued: a name, a title, a line on file (${issuedName})`, issued && !issuedName.startsWith('Newcomer') && (card.rows[0]?.title ?? '') !== '' && (card.rows[0]?.quirk ?? '') !== '');
+  check('the card on their phone shows what the database says', member.showsNow('main', card.rows[0]?.title ?? '\u0000'));
+
   // ── the speaker and the stage, signed in with the same credential ──
   const speaker = await connect(base, await mintSession(runtime.pool, 'speaker', 60_000));
   const speakerHello = await speaker.hello();
@@ -68,7 +75,7 @@ const main = async (): Promise<void> => {
   check('the stage opens on the first slide', await stage.shows('main', 'The talk is an application'));
   speaker.click('main', 'next');
   check('next moves the stage to the register', await stage.shows('main', 'The register'));
-  check('the register shows the newcomer', await stage.shows('main', 'Newcomer'));
+  check('the register shows them by their issued name', await stage.shows('main', issuedName));
 
   // ── the assignment slide brings its tool to the controller ──
   const assignmentAt = SLIDES.findIndex((slide) => slide.slideId === 'slide.assignment');

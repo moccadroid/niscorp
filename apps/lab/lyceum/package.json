@@ -17,6 +17,8 @@
     "@niscorp/charter": "workspace:^",
     "@niscorp/moss": "workspace:^",
     "@niscorp/nova": "workspace:^",
+    "@niscorp/signal": "workspace:^",
+    "@niscorp/solid": "workspace:^",
     "@niscorp/vex": "workspace:^",
     "pg": "^8.16.3",
     "zod": "^4.3.6"
