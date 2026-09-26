@@ -5,8 +5,11 @@
 // report — printing the per-role closure. A viewer's dangling Edit targets
 // are EXPECTED findings (shown, not hidden), not failures.
 import { resolveRole, resolvePrincipal, verifyCharter } from '@niscorp/charter';
-import { auditClosure, verifyVariants } from '@niscorp/moss';
-import { scopeGrants, createScopePolicy } from '@niscorp/vex';
+import { auditClosure, verifyVariants, MOSS_SEQUENCE } from '@niscorp/moss';
+import { scopeGrants, createScopePolicy, createPostgresCache } from '@niscorp/vex';
+import { createPglitePool } from '@niscorp/vex/pglite';
+import { migrate } from '@niscorp/strata/postgres';
+import { PGlite } from '@electric-sql/pglite';
 import { CHARTER, ASSIGNMENTS } from '@relay/app/charter';
 import { CATALOG_DEFINITIONS } from '@relay/app/action-catalog';
 import { LAYOUT_VARIANTS } from '@relay/app/layout-variants';
@@ -14,7 +17,19 @@ import { scopeBehaviors } from '@relay/app/vex/behaviors';
 import { TABLES } from '@relay/db/schema';
 
 const ids = Object.keys(CATALOG_DEFINITIONS);
-const dataU = scopeGrants(TABLES);
+// THE UNIVERSE MOSS ACTUALLY RESOLVES AGAINST. At boot moss introspects the
+// database, and the database holds more than relay's tables: moss's own
+// (integrations — which carries integration key HASHES — their actions, the
+// generation pointer), the strata ledger, and the vex cache. This check used
+// scopeGrants(TABLES) — relay's tables alone — so `*.read` looked like "every
+// CRM read" here while granting all of those at runtime, and nothing said so.
+// Built the way boot builds it: the same sequences, through the same runner.
+const enginePool = createPglitePool(new PGlite());
+await migrate(enginePool, [MOSS_SEQUENCE, createPostgresCache({ pool: enginePool }).sequence]);
+const ENGINE_TABLES = (await enginePool.query(`SELECT table_name FROM information_schema.tables WHERE table_schema = 'public'`)).rows
+  .map((r) => String(r['table_name']))
+  .sort();
+const dataU = scopeGrants([...TABLES, ...ENGINE_TABLES]);
 const layoutU = Object.keys(LAYOUT_VARIANTS);
 const checks: [string, boolean][] = [];
 const eq = (a: readonly string[], b: readonly string[]): boolean => a.length === b.length && a.every((x, i) => x === b[i]);
@@ -47,7 +62,13 @@ const CRM = ['deals', 'contacts', 'companies'];
 const SALES_WRITES = [...CRM.flatMap((t) => [`${t}.write.insert`, `${t}.write.update`]), 'tasks.write.insert', 'tasks.write.update', 'tasks.write.delete'].sort();
 const ADMIN_WRITES = [...SALES_WRITES, ...CRM.map((t) => `${t}.write.delete`)].sort();
 const SYSTEM_WRITES = [...CRM, 'tasks'].flatMap((t) => [`${t}.write.insert`, `${t}.write.update`, `${t}.write.delete`]).sort();
+checks.push([`the universe includes the engine's tables (${ENGINE_TABLES.join(', ')})`, ENGINE_TABLES.includes('integrations') && ENGINE_TABLES.includes('strata_ledger')]);
 checks.push(['public data = nothing (no data section)', resolvedData('public').length === 0]);
+// No role reads the engine's bookkeeping — least of all integration key hashes.
+for (const role of ['viewer', 'sales', 'admin', 'system']) {
+  const leaked = resolvedData(role).filter((g) => ENGINE_TABLES.some((t) => g.startsWith(`${t}.`)));
+  checks.push([`${role} reads none of the engine's tables${leaked.length > 0 ? ` (holds ${leaked.join(', ')})` : ''}`, leaked.length === 0]);
+}
 checks.push([`viewer data = every read, no write (${READS.length})`, eq(resolvedData('viewer'), READS)]);
 checks.push([`sales data = reads + CRM create/edit + full tasks (${READS.length + SALES_WRITES.length})`, eq(resolvedData('sales'), [...READS, ...SALES_WRITES].sort())]);
 checks.push(['sales holds deals.write.update but NOT deals.write.delete', resolvedData('sales').includes('deals.write.update') && !resolvedData('sales').includes('deals.write.delete')]);

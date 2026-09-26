@@ -7,6 +7,14 @@ import type { Charter } from '@niscorp/charter';
 //
 // The `dev` role is deliberately orthogonal — admin does not imply devtools.
 // Agent roles (ray, agent-unsafe) return when the app server is up.
+// The engine's own tables sit in the same database, so a `*.read` reaches
+// them too: moss's `integrations` (which holds integration key HASHES) and
+// `integration_actions`, its generation pointer, the strata migration ledger,
+// and the vex cache of query definitions. Nobody reading CRM records needs any
+// of it, and the key hashes are credentials. Denied wherever `*.read` is
+// granted — denies do not inherit, so every role that says `*.read` says this.
+const ENGINE_TABLES = ['integrations.*', 'integration_actions.*', 'moss_generation.*', 'strata_ledger.*', 'vex_cache.*'];
+
 export const CHARTER: Charter = {
   public: ['auth.login'],
   // The authenticated floor — every logged-in principal. `settings` is personal
@@ -20,7 +28,7 @@ export const CHARTER: Charter = {
     // exists in a viewer's compiled policy, so vex refuses every mutation.
     // No layout variant either: the base topbar IS the viewer's shape (the
     // floor) — variants enrich upward, never reduce.
-    data: ['*.read'],
+    data: { allow: ['*.read'], deny: ENGINE_TABLES },
   },
   sales: {
     extends: ['viewer'],
@@ -52,5 +60,7 @@ export const CHARTER: Charter = {
   // charter owns the trusted floor too: all reads, the full write namespace
   // where a mutation surface exists; an unlisted verb dies even for the
   // engine.
-  system: { data: ['*.read', 'deals.write.*', 'contacts.write.*', 'companies.write.*', 'tasks.write.*'] },
+  // Its reads include generative ones (the architect), so the engine's tables
+  // are denied here as well: a model-written query is still not a key reader.
+  system: { data: { allow: ['*.read', 'deals.write.*', 'contacts.write.*', 'companies.write.*', 'tasks.write.*'], deny: ENGINE_TABLES } },
 };
