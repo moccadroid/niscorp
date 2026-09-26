@@ -307,6 +307,36 @@ client, enforcement included.
 
 ---
 
+### A read that keeps answering
+
+A shell's vex reads go through the session's wire — an in-process request
+against this server's own mounts. For an entry declaring
+`refresh: 'reactive'`, vex can keep answering after it returned: every
+committed write to a table the query reads, it refetches (once for everybody
+who would get the same rows) and calls back with the caller's new answer if it
+changed (vex DESIGN.md, "Reactive reads").
+
+The wire is the whole seam (`src/follow.ts`). Toward vex it is a `VexLive` — a
+signal and a callback, carried in the in-process request's hono env, where no
+network request can put one. Toward nova it is the response's `onChange`, which
+nova applies through the endpoint's own `response` and `target`; the shell
+re-renders and the change reaches every attached terminal like any data change.
+No app code, no channel, no reaction.
+
+The follow ends when the call's signal aborts (nova aborts it on unmount),
+when the last subscriber leaves (nova unsubscribes when a newer call to the
+same endpoint lands), or at once when nobody takes the response up — a server
+function reading through the same wire follows nothing. An answer that changed
+in the gap between the response and nova's subscription is held and handed
+over on subscribe.
+
+This retires most of "writers announce, viewers react" for data: a screen whose
+reads are reactive needs no channel to stay current. Channels stay for signals
+that are not data — a deck moving to its next slide mounts an action, which no
+data update can do. Not built yet: carrying invalidations between processes
+(the fabric would gain an `invalidate-tables` signal; until then each process's
+rows TTL bounds it) and pausing the follows of a shell with nothing attached.
+
 ## The function seam
 
 The `fn:` escape hatch runs server-side, in-process, next to the durable shell.

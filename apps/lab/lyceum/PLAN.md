@@ -9,7 +9,7 @@ The talk's subject is how software should work, and what it should look like, no
 language models exist. Lyceum does not argue that on slides. It shows it on the room's
 own phones.
 
-## Status and handoff — 2026-09-25
+## Status and handoff — 2026-09-26
 
 Where to pick up. Read this section, then "Vex is never hidden behind a function" and
 "Reactive reads" below — they record decisions made after the plan was first written.
@@ -24,24 +24,27 @@ Where to pick up. Read this section, then "Vex is never hidden behind a function
   the stage wear only their grants. No raw SQL.
 - Five placeholder actions (door, member card, house crest, speaker console, stage
   roster) and the sorting.
-- `src/dev/sorting-check.ts`: 25 of 26 assertions pass over a real websocket.
+- `src/dev/sorting-check.ts`: 26 of 26 assertions pass over a real websocket.
 
 **Proven — the claim the talk stands on.** A member's phone, connected before the
 sorting and never reconnected, receives its house the moment the speaker sorts
 (`invalidateIdentity` → `shells.reset` carries the open connection across). Checked
 headless and in a real browser with the controller in a second tab.
 
-**The one red assertion — and what it exposed.** "The stage shows their house": the
-roster did not refresh after the sort. The sorting wrote through `executeAs`, and moss
-attaches vex's write observer (`onWrite`, which feeds `reactions` and tide facts) to the
-HTTP vex mount only (`packages/moss/src/server.ts` ~622). **Every write made through
-`executeAs` is invisible to reactions and to tide.** `executeAs` was born in `55bdfd8`
-(2026-08-14) to replace raw SQL on no-principal surfaces and inherited raw SQL's
-silence; nothing says it was deliberate (its telemetry IS wired). moss's DESIGN.md
-claims every write passes the observer — the code disagrees. Leave the assertion red
-until the fix below lands; do not weaken it.
+**Reactive reads — built 2026-09-26** (see "Reactive reads" below). The last red
+assertion ("the stage shows their house") is green, unedited: `members/roster`,
+`members/counts` and `members/me` declare `refresh: 'reactive'`, and the roster, the
+controller's counts and the member card follow the room on their own. The reactions
+seam, the `grants/watchers` entry and every `members-changed` channel are deleted.
 
-**Decided in conversation — do these next, in this order:**
+**What the red assertion exposed, and where it stands.** The sorting writes through
+`executeAs`, and moss attaches vex's write observer (`onWrite`, which feeds `reactions`
+and tide facts) to the HTTP vex mount only (`packages/moss/src/server.ts`). **Writes made
+through `executeAs` are still invisible to reactions and to tide.** Reactive reads no
+longer depend on it — invalidation happens inside vex's handler, which every write
+passes — but tide facts and `reactions` still do.
+
+**Next, in this order:**
 1. **Lyceum: the sort writes as the speaker.** Replace `executeAs('hat', …)` in
    `src/server/functions/sorting.functions.ts` with reads and writes over
    `session.wire` as the speaker; grant the speaker `members.write.update` in the
@@ -55,20 +58,9 @@ until the fix below lands; do not weaken it.
    facts; a write fact is stamped from the write's scope, which `executeAs`'s caller
    supplies, so every machinery writer must pass a scope that stamps the right tenant,
    and its reactions need a loop audit.
-3. **vex + moss + nova: reactive reads** (see "Reactive reads"). Then delete
-   `src/server/reactions.ts` and every `members-changed` channel in lyceum.
-4. Continue the order of work from step 4 (the kit).
+3. Continue the order of work from step 4 (the kit).
 
-**Two open questions for step 3** (ask before building): how the touched-tables list
-reaches nova through moss's `{ result }` unwrap (a response header, or the endpoint
-keeping the reply's `meta`); and whether refresh is on by default for every vex read
-(the "nothing declared" answer, with an opt-out) or opted into per endpoint.
-
-**Working-tree notes.** `pnpm install` added lyceum to `pnpm-lock.yaml`; only lyceum's
-part of the lockfile was committed — the rest of the lockfile's uncommitted changes
-belong to another session's signal/qwen work, as do the uncommitted changes under
-`packages/signal`, `packages/cortex`, `apps/lab/{encore,relay,atrium}` and the showroom
-signal stories. `.claude/launch.json` has a `lyceum` entry (port 5197).
+**Working-tree notes.** `.claude/launch.json` has a `lyceum` entry (port 5197).
 
 ## What the room experiences
 
@@ -169,8 +161,10 @@ control; the controller can be a phone.
 
 - **Slides are actions.** A slide may be several actions cooperating over the bus.
 - **The talk's state is one row.** `deck` holds the current slide and phase. The
-  controller's next/back are vex mutations; the write's reaction nudges the stage, which
-  re-reads the row and mounts that slide. The audience's phones react to the same row —
+  controller's next/back are vex mutations. Moving to another slide mounts a
+  different action, which a data update cannot do, so the deck moving on stays a
+  signal: the write's reaction publishes to the stage, which re-reads the row and mounts that
+  slide. The audience's phones react to the same row —
   a slide becoming current is what puts its action on their phones.
 - **Consequences, all free:** a moss restart lands every screen back on the same slide;
   the speaker can close the laptop and continue from a phone; the projector can be any
@@ -209,8 +203,7 @@ personas makes a join instant under load and keeps joins working if generation i
 CHOICE. For each unsorted persona in join order: ask Jev (state: the persona, the house
 sizes so far); write the persona's house and a `sortings` row as the speaker, over the
 speaker's wire; `invalidateIdentity` their principal. The projector's sorting action
-reads `sortings` and plays each one back, refreshed by the write itself (reactive
-reads). Until Jev lands, the choice is "the house with the fewest members" — which
+reads `sortings` reactively and plays each one back as the writes land. Until Jev lands, the choice is "the house with the fewest members" — which
 stays as the fallback when Jev is down.
 
 **The headmaster.** A cortex agent run per message, reading as the asker over their own
@@ -264,38 +257,46 @@ Decided 2026-09-25, after the scaffold reached for `executeAs` twice.
 
 ## Reactive reads
 
-Decided in direction 2026-09-25; two questions open (see Status). A library change
-across vex, moss and nova — lyceum is its first consumer.
+Built 2026-09-26 across nova, vex and moss; lyceum is its first consumer. The design
+record is in the packages' DESIGN docs (vex: "Reactive reads"; moss: "A read that keeps
+answering"; nova: "Later bodies"). What lyceum needs to know:
 
-**The idea: a vex read refreshes itself when a table it read changes.** The query
-already knows what it reads, so freshness is the query's own property — not a listener
-an action declares, and not a registry the host keeps.
+**An entry declares when its answer is refreshed**: `refresh: 'snapshot'` (the default —
+answered once, as every read was) or `'reactive'` (answered again whenever a write lands
+on a table the query reads, on every screen that has it open). Opt-in per entry; nothing
+else changes for an entry that does not say.
 
-- **vex** answers every read with the tables it actually touched (`discoverEntities`
-  over the query it ran). Its write observer already reports the tables every committed
-  write touched (`mutationEffect`).
-- **The holder of a result listens for its tables.** A nova endpoint that loaded data
-  from a query reading `members` and `houses` subscribes to those tables' change signals
-  at call time, and on one re-runs that endpoint under the viewer's own policy. No rows
-  travel.
-- **The host broadcasts which tables changed.** moss publishes table-change signals into
-  living shells (and across processes through the fabric). A client-degrade app's
-  in-browser engine can emit the same signals to its own shell — so the mechanism is not
-  a moss feature, and vex stays independent of moss.
-- **nova stays independent of vex**: its contract is generic — "a result may name the
-  channels that invalidate it"; vex happens to name tables.
+```ts
+export const memberRoster: SeedEntry = { fingerprint: 'members/roster', refresh: 'reactive', … };
+```
 
-**Rules.** Only reads re-run — a mutation endpoint never replays (vex knows every entry's
-kind). Only the endpoint call re-runs, not the action's `onSuccess` chain. Bursts
-coalesce: a sort placing thirty people is one refresh per endpoint, not thirty (moss's
-newest-wins backpressure). Table-level precision: any write to `members` refreshes every
-read of `members` — exact about which tables, blunt about which rows; row-level is not
-attempted.
+**How it works, in one pass:**
+- **vex** keeps the rows of reactive reads in process memory, keyed by the compiled SQL
+  and its bound values — scope is inside both, so callers share rows exactly when they
+  would get the same rows. Every committed write invalidates the tables it changed (and
+  what a delete cascades into); followed reads refetch once per burst, and each caller's
+  own mapping decides whether their answer changed. Bounded by TTL (60 s, which also
+  re-checks followed reads so a missed write heals), entries and bytes; `engine.rows.stats()`.
+- **moss**'s session wire hands vex a follower with every shell read and offers nova the
+  response's `onChange`.
+- **nova** applies a later body exactly as it applied the first — `response`, then
+  `target` — and nothing else. It never learns why. A newer call to the same endpoint
+  replaces the followed one; unmount ends it.
 
-**Why it matters beyond lyceum.** It covers fingerprints computed at runtime and queries
-generated live (the ask action) with nothing registered, and it retires most of the
-"writers announce, viewers react" wiring every app carries. Channels remain for signals
-that are not data — the deck moving on, "the sorting has started".
+**Rules for authors:**
+- Only direct vex reads can be reactive — a server function reading through the wire is
+  not, by design.
+- A reactive entry should `sort`: an unordered read can come back in a different order
+  after a write and count as changed.
+- A reactive entry reads time from `$scope`, never from context: the date is taken when
+  the read is made and is not re-taken. (`refresh: 'clock'`, time as a source of change,
+  is the next mode — not built; do not declare it.)
+- Channels remain for signals that are not data — the deck moving on, "the sorting has
+  started".
+
+**Not built, on purpose:** cross-process invalidation (the fabric gains an
+`invalidate-tables` signal when a second process exists; until then TTL bounds it),
+pausing a shell's follows while nothing is attached, and `refresh: 'clock'`.
 
 ## Timeline (40 minutes, adjustable)
 
@@ -356,8 +357,8 @@ that are not data — the deck moving on, "the sorting has started".
 1. This plan, reviewed. — done
 2. Scaffold: manifest, runtime, terminal; canvases and an empty registry; one action
    renders on a phone against the VPS. — done locally (dev runtime); the VPS is Open
-3. Prove the live role change end to end. — done; follow-ups under Status (the sort
-   as the speaker, `executeAs` writes observed, reactive reads)
+3. Prove the live role change end to end. — done; reactive reads built; follow-ups
+   under Status (the sort as the speaker, `executeAs` writes observed)
 4. Kit: primitives against a kitchen-sink action; the house variants; lock the look.
 5. Data: schema, entries, behaviours; persona generation and the join.
 6. The deck: controller, stage, the `deck` row.

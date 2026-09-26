@@ -258,6 +258,33 @@ union.
 - **`model-bindings.ts`** — walks a `RenderNode[]` collecting
   `(ref, path)` pairs from `model` fields.
 
+### Later bodies, and the calls an instance has made
+
+A response may change after it resolved. `FetchResponse.onChange` is a
+transport saying so — moss offers it for a reactive vex read. `runCall`
+applies every later body exactly as it applied the first: the endpoint's
+`response` transform, then `target`. Nothing else runs — no `onSuccess`, no
+telemetry, no loading flag — because a later body is data, not a call. A body
+the transform rejects is dropped; the screen keeps its last good value. Nova
+does not know why a body changed, and there is nothing in a definition to
+declare: an endpoint whose transport never offers `onChange` behaves exactly
+as before.
+
+The runtime keeps a small ledger per endpoint name (`EndpointCalls`), and it
+does two jobs:
+
+- **An older response never writes over a newer one.** Each call takes a
+  ticket; a response that lands after a newer call to the same endpoint
+  already landed leaves `target` alone. (Before, the slower of two searches
+  won — whichever answered last.) Its `onSuccess` still runs; the call
+  happened.
+- **One followed answer per endpoint.** A newer call that lands stops
+  following the older one — an old search's updates would otherwise keep
+  writing over the new one's rows — and unmount (or dispose) stops them all.
+
+A bare step context (a test driving `executeSteps` directly) has no ledger:
+every response lands as before and none is followed.
+
 ### Two-way binding
 
 When the layout author writes `model: "$.user.name"` on a component, the

@@ -378,6 +378,93 @@ typed context contract, and shape (reads) or effect (`{op, table, columns}`,
 writes). An authoring lint (`lintMutation`) refuses un-keyed update/delete
 defs at seed time.
 
+### Reactive reads (`refresh`)
+
+Agreed and built 2026-09-26. A read can keep answering.
+
+**The declaration is on the entry**, because freshness is a property of the
+question — "the current standings" is live, "the answer as asked" is not:
+
+```ts
+{ fingerprint: 'members/roster', refresh: 'reactive', dsl: { … } }
+```
+
+`refresh` is a mode, not a flag: `'snapshot'` (the default, and what every read
+was before this existed — answered when asked, never again) or `'reactive'`. It
+will grow; `'clock'` — time as a source of change, for a read that depends on
+`today` — is the next state, and is not accepted until it is built, because a
+value the schema takes and the engine ignores would read as live and behave as
+a snapshot. Only a stored entry can be reactive (the mode is authored, never
+generated), and only one whose mapping is compiled, because a later answer must
+never wait on a model. It persists like `reach`: a column in the Postgres
+cache, validated on write, compared by the seed path.
+
+**The caller follows by passing `{ signal, onChange }`** to `execute` — the
+first answer is the returned promise as always; every later answer that
+differs goes to `onChange` until `signal` aborts. Over HTTP there is no
+callback, so `handleQuery` takes an optional in-process `VexLive`, and the
+hono adapter reads one from the request's env — the third argument of hono's
+`app.request`, which only an in-process caller can set. A read nobody follows
+is simply a read answered from the rows cache.
+
+**The rows cache** (`engine/live.ts`) holds two things apart:
+
+- **rows** — key → the rows a reactive query returned. The only large thing,
+  bounded by age (`ttlMs`, default 60 s), count (`maxEntries`) and text
+  (`maxBytes`, measured as each result's JSON length), least-recently-used
+  first out; a result over `maxEntryBytes` is never stored. Evicting rows never
+  breaks anything; it costs one query. It lives in process memory, per engine.
+- **follows** — key → the tables the query reads, how to run it again, and who
+  to tell. Bounded by what is followed, not by this module: a follow ends when
+  its last follower's signal aborts.
+
+**The key is the compiled SQL and its bound values.** Scope compiles into both
+— row rules into the SQL, scope values into the parameters — so two callers
+share rows exactly when they would provably get the same rows. The cache never
+reasons about policy. The MAPPING, which reads `$.scope` (a reader's
+language), runs per caller over the shared rows: one query for twenty
+viewers, twenty cheap mappings.
+
+**A write bumps its tables' versions.** Stored rows remember the versions they
+were read at, and are stale when those moved — invalidation is a counter bump,
+not a walk over the cache. The same stamp closes the race that would otherwise
+poison it: rows fetched by a read that started before a write and finished
+after it carry the versions from before, so they are stale the moment they
+land, and a new read does not join that fetch.
+
+**Who invalidates: the handler, after every committed mutation** —
+`engine.invalidate(tablesChangedBy(writes, schema))`. It sits there, and not in
+any host's observer, because this is the one door every vex write passes: an
+HTTP request, a host's in-process machinery write, a reflex's effect. A read
+that heard about only some writes would be live only sometimes, which is worse
+than a snapshot that says what it is. `tablesChangedBy` adds, for a delete,
+every table that references a deleted one, transitively — a cascade changes
+rows vex never wrote, and the introspected schema carries the reference but
+not its rule, so a delete is assumed to reach them all (over-telling costs a
+refetch; under-telling leaves a screen stale). Writes vex never sees — raw SQL,
+a database trigger — are not invalidations; a host that makes them calls
+`engine.invalidate` itself, and the TTL heals the rest.
+
+**Followed reads refetch once per burst** (`debounceMs`, trailing) — thirty
+writes are one query — and are numbered, so a slow refetch landing after a
+newer one is dropped. Change is decided twice: once per key on the rows (the
+same rows → nobody is mapped), then per follower on its own mapped answer
+(canonical JSON, hashed), so a follower hears only when *its* answer changed.
+Every followed read is also re-checked once per TTL, bypassing the cache — a
+lost invalidation heals within one TTL. A refetch that fails keeps the last
+good answer and says so (`rows.error`).
+
+**Visibility.** `engine.rows.stats()` — entries, bytes, follows, followers,
+hits, misses, evictions, oversized, refreshes — and `rows.evict` /
+`rows.error` events on the engine's `onEvent`. An engine evicting faster than
+it answers warns once a minute: its `rows` limits are too small for what it
+holds.
+
+**Rules for authors.** A reactive entry should `sort` — an unordered read can
+come back in another order after a write and count as changed (harmless: one
+extra answer). It reads time from `$scope`, never context: the values bound
+when the read was made are the ones it refetches with.
+
 ### LLM integration (decoupled)
 
 The engine takes two optional hooks:
@@ -468,6 +555,7 @@ src/
     resolver.ts                  resolve(dsl, schema) → ResolvedQuery
     analyzer.ts                  analyze(resolved, config) → { warnings, errors }
     executor.ts                  executeQuery, buildContextContract, findMissingContext
+    live.ts                      createLiveRows — the rows cache and follows behind refresh: 'reactive'
     engine.types.ts             ResolvedQuery and friends, AnalysisConfig, TestResult
 
   adapters/
@@ -685,6 +773,13 @@ Only `zod` is mandatory. Everything else is pulled in only by the path you use.
 - ~~Intent-aware positive caching~~ — superseded: collisions did bite, and the
   answer is identity, not intent-matching. See **Cache v2 — fingerprints**.
 - Cross-process cache coherence for the tiered backend (an L1 TTL refresh).
+- `refresh: 'clock'` — time as a source of change: a reactive read whose bound
+  scope includes a clock value (`today`) refetches when that value next moves.
+- Cross-process invalidation for reactive reads — a host carries
+  `engine.invalidate` between processes (moss's fabric); until then each
+  process's TTL bounds the staleness.
+- Row-level pruning — for a single-table reactive read, test a written row
+  against the scoped filter and skip the refetch. An optimisation, not a design.
 - Adapter-owned vector serialization — the pgvector `[...]` literal is currently
   formed in the generic binding step; a second adapter would move it behind the
   adapter.
