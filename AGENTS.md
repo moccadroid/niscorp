@@ -87,6 +87,7 @@ Pick per need; every piece works standalone. Nova is the only mandatory one for 
 **Principals**
 
 10. The charter is the app's policy document: role names → glob selections over the app's universes — `actions` (which action ids exist for a principal) and `data` (`table.verb` capabilities, compiled into the Vex `ScopePolicy`). The charter compiles; it never enforces and never shapes. Moss resolves it per principal and refuses to boot incoherent. Assignments (principal → roles) are app data beside it; row-level semantics the charter can't express are `behaviors`, compiled into the policy.
+10a. The `data` universe is the INTROSPECTED database, not your schema file: it holds the engine's own tables too — moss's `integrations` (integration key hashes), `integration_actions`, `moss_generation`, `sessions` (session token hashes, under moss's credential), the `strata_ledger`, the vex cache. A role granted a data wildcard (`*.read`) denies them explicitly (`data: { allow: ['*.read'], deny: [...] }`; denies do not inherit, so every role that grants the wildcard denies). A charter check resolves against the universe boot resolves against — the app's migrations and moss's run on a scratch database, then introspected — or it proves nothing about wildcards.
 11. Per-principal UI is existence or a served variant, never a conditional. An action a principal lacks does not exist in their shell (ring 1); a different shape of the same action is a served variant (ring 2). Layouts and components never branch on roles or capability data. Ring 1 does the deriving: a canvas's `initial` takes a **candidate list** and the first id the principal actually holds mounts — members boot their home, anonymous boots the login, and nobody configures which. An ungranted candidate simply isn't there.
 11a. Per-principal boot has two hooks, and they are twins. `inputs` derives boot **data** — merged over each canvas's static seed, read from action data downstream. `seeds` derives boot **instances** — which actions to push onto which canvases, computed from the session and its own reads over the session's wire, ring-1-filtered like every other mount. A composed surface (a home, an agent's column) is `seeds` plus a `list` canvas; hand-authoring the same arrangement names it twice. Branching chrome on `inputs` is a stopgap where a served variant doesn't exist yet.
 12. Auth is a session token, nothing else — magic link is the default strategy; there are no username/password pairs in a nisc app if it can be avoided. Login is the anonymous principal's application. Session lifecycle is a **capability, not a channel**: login and sign-out are ordinary `fn:` endpoints calling `session.grant(token)` and `session.revoke()`, and the terminal reconnects as the new principal. The server consumes sessions and never mints identity.
@@ -369,13 +370,17 @@ src/
       <entity>.entries.ts    read + mutation entries, one file per entity
       behaviors.ts           row-level scope semantics (single doc)
       resources.ts           entity subgraphs → /api/<name>/vex (single doc)
+    grammars/              only if the app owns a grammar: its strata sequences
+                           (`<app>.kit` — its components' props), manifest field `grammars`
   db/                      the environment (D2): schema DDL, seed — NOT artifacts, not in the library
   lib/                     code helpers (date, etc.) — only what has nowhere better to live
   server/                  moss glue (boot + listener), server fns, and the manifest's
                            non-endpoint session code (onSession observers, the run sink)
   ui/                      the component kit + registry — the only renderer code in the app
-  dev/                     headless checks
+  dev/                     headless checks; strata.ts lists the artifacts for `pnpm strata`
   main.tsx                 the terminal entry
+strata.lock.json           which grammar version the source is written in (rule 20) — committed,
+                           moved only by `pnpm strata verify`
 ```
 
 Why the split: the manifest's data fields are on their way to becoming library rows (deploy = a write, not a rebuild), so keeping them pure and schema-valid now — with `db/` and `lib/` code held firmly outside `app/` — is what makes the tree row-ready. A client-degrade app replaces `server/` with whatever serves its endpoints (per D2) and boots its shell factory from the entry point.
@@ -425,6 +430,7 @@ A review pass checks, in order:
 6. No layout or component branches on roles or capability data (rule 11) — per-principal difference is existence or a served variant.
 6a. Every artifact the manifest carries is pure JSON and parses its schema — a function, a `Date`, an `undefined`, or a class instance in an artifact is a code file masquerading as data. The manifest's declared code fields (`scope`, `functions`, `onSession`, `runs`, and the shell's `inputs` and `seeds` hooks) are the only exceptions; they live outside the artifact tree and are validated by running, not by this check.
 6b. Session code sits in the seam that describes it (rule 7a): no handler registered on `functions` that nothing calls. Tenancy resolves through `scope` and engine-side behaviors, never from a request field.
+6c. No role holding a data wildcard reaches the engine's tables, and the charter check resolves against the universe boot does (rule 10a).
 7. Style guide bans (rule 16): `any`, `enum`, classes, default exports, `function` declarations by grep; type assertions and non-null `!` at the lint/typecheck level — grep can't tell negation from assertion. Declared shim exceptions are honored.
 8. Decision points: each of D1–D5 is recorded in the app's `PLAN.md` with its tier — answered, delegated by name, or derived — never assumed silently.
 9. Versions (rules 17–20): `pnpm check:grammars` and `pnpm check:sources` pass; no DDL outside a sequence; no edited migration, snapshot, early-stamp corpus file or hand-moved lock.

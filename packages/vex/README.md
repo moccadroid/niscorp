@@ -89,6 +89,7 @@ engine.cache;                     // CacheBackend — the live cache
 | Framework adapters | Hono (`@niscorp/vex/hono`), Express (`@niscorp/vex/express`) — discovery + query endpoints |
 | LLM integration | `generateDsl` / `mapToShape` hooks; reference agents built on `@niscorp/cortex` |
 | Safety | Server-side scope policies, query analyzer (cartesian/nesting/index checks), parameterized SQL only |
+| Its own table | The Postgres cache's table is a [strata](../strata/README.md) sequence (`cache.sequence`, `nisc.vex.cache`): `cache.init()` applies it through the ledger once, instead of `IF NOT EXISTS` on every boot. Requires a pool with `transaction` (the PGlite pool has one). |
 
 ## License
 

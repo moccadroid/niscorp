@@ -61,6 +61,24 @@ getNodeJsonSchema(target?) → object
 getConfigJsonSchema(target?) → object
 ```
 
+## Transform ops and the grammar
+
+Besides deriving values, a config can rewrite a document: `$has`,
+`$renameKeys`, `$update`, `$assert` and `$walk` (every node of a tree, by
+rules) — see [DOCS.md § Transform Operations](./DOCS.md#transform-operations).
+They are what strata's document migrations are written in.
+
+**`@niscorp/prism/migrations`** publishes Prism's own grammar — `PRISM_SEQUENCE`
+(`nisc.prism`, kind `nisc.prism/config`), `PRISM_SCHEMAS` — and
+`prismTransform`, the evaluator a migration runs through (strata injects it;
+the config is parsed once, the source must be plain JSON).
+
+**The op set only ever grows.** Configs are stored — endpoint requests, vex
+mappings, migrations — and a migration cannot be migrated by the language it is
+written in: an op is never removed or reshaped; an old form stays as sugar.
+`test/transform.test.ts` keeps the record; a grammar change is a migration on
+`nisc.prism`, gated by `pnpm check:grammars`.
+
 ## License
 
 Apache-2.0

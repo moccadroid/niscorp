@@ -71,9 +71,11 @@ it replaced were. Two consequences, named rather than discovered later:
   created before, and `strata_ledger` is a new table. Both enter the
   introspected grant universe like every engine table (moss's stance: engine
   tables are ordinary and grantable, and a grant is a charter's decision). A
-  charter selecting `*.read` — relay's viewer does — now also reaches them.
-  The ledger holds migration descriptions and checksums; the generation table
-  a counter.
+  charter selecting `*.read` reached them — and, it turned out, had always
+  reached moss's `integrations` (integration key hashes). relay's charter check
+  resolved against relay's tables only, so it never showed. Fixed in relay: the
+  check builds the universe the way boot does, and `*.read` roles deny the
+  engine's tables. Any app granting a data wildcard should do the same.
 - `initIntegrations`, `initSessions`, `cache.init()` and the tide store's
   `migrate` keep their names and now go through the ledger, so a host that is
   not moss's server gets the same guarantees.
@@ -122,8 +124,68 @@ generated rows are a cache invalidated by schema fingerprint and `irVersion`. It
 is not stamped: there is nothing there to preserve across a grammar change.
 `integration_actions` is — its rows are the only copy of what an add-on submitted.
 
-## Next
+## Prism as the migration language (S3)
 
-The snapshot + corpus check that makes a grammar change without a migration fail
-CI, `upgrade --verify` for artifacts in source files, and Prism's `$walk` for the
-migrations that must reach inside a Prism config — stages S3–S5 of the plan.
+**Why Prism, not a second grammar.** Cambria proved migrations-as-data with a
+closed lens vocabulary, but nisc already has one transform language (the
+toolbox: Prism is "every transform"), and a second would be a second thing to
+version. Prism gained what migrations need — `$has` (presence, not
+non-null-ness), `$renameKeys` (order kept), `$update` (one deep path),
+`$assert` (refuse with a sentence), `$walk` (rules over every node) — and a
+config stays data: stored as a row, run in any host, safe when a third party
+wrote it.
+
+**The walker made `$walk` rarer than expected.** Embeddings already find every
+document of a kind at any depth, so most migrations are a flat rule over one
+node. `$walk` is for what a grammar's embeddings do not describe: reaching
+inside a Prism config, or a free-form tree.
+
+**A migration cannot migrate the language it is written in.** So the base case
+is a rule, not a mechanism: a Prism op is never removed or reshaped; an old form
+stays as sugar. `EVERY_OP_EVER` in Prism's tests fails on a removal.
+`irVersion` stays 1 — it versions the IR's container; the op set is versioned by
+`nisc.prism`.
+
+## The gate (S4)
+
+**A snapshot only says something moved.** Each kind's JSON Schema, taken through
+the schema's own Standard JSON Schema hook (descriptions stripped — prose is not
+grammar), recorded per version. Same version, different schema: a migration is
+owed. No JSON Schema compatibility classifier is trusted to judge — none is
+reliable (2026).
+
+**The corpus judges.** Real documents from the lab apps, captured at their
+stamp, must upgrade to the current grammars and parse the current strict
+schemas. That is what caught a breaking rename in the rehearsal: 122 real
+documents would have failed. An early-stamp corpus file is history, like a
+snapshot.
+
+**Arrays in schemas are sets.** A union's `anyOf` gains a branch and every index
+shifts, so the gate's diff matches schema-array elements by what they describe
+(for Prism's union, the op) — its first real catch, Prism's own grammar change,
+read like a changelog because of it. Document diffs stay positional:
+`layout.children[1]` is how a person finds the edit.
+
+## Source (S5)
+
+**No codemods.** A codemod would have to understand every way a person writes
+an object. strata instead fixes the TARGET: the exact JSON each artifact must
+become, and a report of where (the file its id is in, and — found by searching
+the source for the values that change — the file the edit actually lives in,
+usually an imported layout).
+
+**Verify is exact, and it is the only way the lock moves.** Every planned
+artifact equals its expected JSON (key order aside — that is how a person
+happened to write it), every untouched one is still one no migration would
+change, nothing was added or removed since the plan. A person, an agent, a
+script — anyone may edit; the check does not trust any of them. A migration
+whose result fails the current schema stops the plan: no edit could pass.
+
+**The lock is the truth, not a formality.** The lab apps' locks were written at
+`nisc.prism 0` — their source predated the marker — and moved through the loop.
+`init` exists only for a source that never had one.
+
+## Open
+
+npm publishing (every package ships its first version with this in it);
+lyceum and midas capture their own corpus and keep their own locks.

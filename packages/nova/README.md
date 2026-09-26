@@ -310,6 +310,28 @@ can perform their own final async work (e.g. telemetry flush).
 
 ---
 
+## The grammar and its versions
+
+nova's documents — actions, fragments, layouts — are a grammar with a version,
+published at **`@niscorp/nova/migrations`** for [strata](../strata/README.md):
+
+- **`NOVA_SEQUENCE`** — the grammar sequence `nisc.nova`: its kinds
+  (`nisc.nova/action`, `/fragment`, `/layout`), where documents nest inside
+  them (a layout's `children`, `children[]`, `then`, `else`, `do`; an action's
+  `layout` and its endpoints' `request`/`response`, which are Prism configs),
+  and its migrations. Stored and submitted documents carry the stamp they were
+  written at and are upgraded where they are read (moss does this for
+  integration actions).
+- **`NOVA_SCHEMAS`** — the Zod schema behind each kind, snapshotted by the
+  repo's grammar gate (`pnpm check:grammars`).
+
+**Changing a schema here is a migration** (AGENTS.md rule 18): an empty marker
+appended to `NOVA_SEQUENCE` for an addition, document steps — a Prism config
+over one node — for anything else. The gate refuses the change until it has
+one, and checks every captured lab-app document still upgrades and parses.
+
+---
+
 ## Building / dev
 
 ```bash
@@ -327,4 +349,3 @@ expected.
 ## Future work
 
 - SSR support for the React adapter (`getServerSnapshot` on each hook)
-- Schema versioning for non-breaking 1.x evolution

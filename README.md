@@ -31,18 +31,22 @@ If that sounds austere: good.
 
 ## Packages
 
-Eight libraries. Each one is self-sufficient. They also compose.
+Eleven libraries, and one release that pins them together. Each library is self-sufficient. They also compose.
 
 | | Package | Description | Status |
 |---|---|---|---|
 | 📡 | [**`@niscorp/signal`**](packages/signal) | Universal LLM client — stateless, immutable, provider-agnostic. Structured output via Zod, tool calling, validation-retry. | ![](https://img.shields.io/badge/-shipping-22c55e?style=flat-square) |
 | 🧊 | [**`@niscorp/solid`**](packages/solid)   | Structured output streaming — incremental JSON parser with structural sharing. Always-valid, schema-backed object stream over partial JSON. | ![](https://img.shields.io/badge/-shipping-22c55e?style=flat-square) |
-| 💎 | [**`@niscorp/prism`**](packages/prism)   | JSON data-transformation DSL — ~50 ops, compile-time optimization, fingerprint-keyed cache, zero code execution. | ![](https://img.shields.io/badge/-shipping-22c55e?style=flat-square) |
+| 💎 | [**`@niscorp/prism`**](packages/prism)   | JSON data-transformation DSL — ~75 ops (including the transform ops migrations are written in), compile-time optimization, fingerprint-keyed cache, zero code execution. | ![](https://img.shields.io/badge/-shipping-22c55e?style=flat-square) |
 | 🎨 | [**`@niscorp/nova`**](packages/nova)     | Declarative UI runtime — JSON layouts, actions, lifecycles, two-way bindings. Framework-agnostic core, React adapter shipped. | ![](https://img.shields.io/badge/-shipping-22c55e?style=flat-square) |
 | 🧠 | [**`@niscorp/cortex`**](packages/cortex) | Agentic orchestration runtime — typed agents, tool-call loop, plan-mode tick loop, declarative rules engine, human-in-the-loop confirmation. | ![](https://img.shields.io/badge/-shipping-22c55e?style=flat-square) |
 | 🔍 | [**`@niscorp/vex`**](packages/vex)       | Declarative query synthesis — English → constrained JSON DSL → SQL, with semantic (vector) search, scope policies, and shape-based caching. | ![](https://img.shields.io/badge/-shipping-22c55e?style=flat-square) |
 | 🧵 | [**`@niscorp/loom`**](packages/loom)     | Schema → editing UI — compiles a Zod schema into a Nova form that views, creates, and edits valid JSON. Headless compiler plus a plugin host with live preview. | ![](https://img.shields.io/badge/-shipping-22c55e?style=flat-square) |
 | 🌊 | [**`@niscorp/tide`**](packages/tide)     | Automation engine — a reflex turns the clock and the fact into one named effect, through a durable ledger. No run body, no wall clock, five host seams. | ![](https://img.shields.io/badge/-shipping-22c55e?style=flat-square) |
+| 📜 | [**`@niscorp/charter`**](packages/charter) | Policy documents — roles as glob selections over opaque universes (actions, data verbs, layouts), resolved per principal; a verifier that refuses an incoherent charter before it ships. | ![](https://img.shields.io/badge/-shipping-22c55e?style=flat-square) |
+| 🌿 | [**`@niscorp/moss`**](packages/moss)     | The app server — a `defineApp` manifest becomes per-principal applications: resolved catalogs, scoped data, durable server shells streamed to a thin terminal (React, DOM, tty, ink). | ![](https://img.shields.io/badge/-shipping-22c55e?style=flat-square) |
+| 🪨 | [**`@niscorp/strata`**](packages/strata) | Versions — tables as ledgered migration sequences, documents stamped and upgraded through grammar sequences, a CI gate for grammar changes, and `strata upgrade` for artifacts in source. | ![](https://img.shields.io/badge/-shipping-22c55e?style=flat-square) |
+| 📦 | [**`@niscorp/nisc`**](packages/nisc)     | The release — ships no code; pins every package above to the exact version it was tested with. | ![](https://img.shields.io/badge/-shipping-22c55e?style=flat-square) |
 
 > Each package ships its own `README.md` and `DESIGN.md`. **Read the design doc before reading the source.**
 
@@ -109,6 +113,12 @@ pnpm test          # turbo test
 pnpm typecheck     # tsc --noEmit across the workspace
 pnpm lint          # turbo lint
 pnpm format        # prettier write
+
+# the gates CI runs (after pnpm build)
+pnpm check:packages    # every package, packed and installed OUTSIDE the workspace: publint, attw, every subpath imported
+pnpm check:grammars    # nova's and Prism's schemas vs their snapshots; 131 real documents must upgrade and parse
+pnpm check:sources     # each lab app's source is written at the grammars it runs on (strata.lock.json)
+pnpm check:changesets  # a breaking release breaks everything that depends or peers on it
 ```
 
 Working on one package? Filter it:
@@ -117,6 +127,31 @@ Working on one package? Filter it:
 pnpm --filter @niscorp/nova test
 pnpm --filter @niscorp/nova dev      # tsup --watch
 ```
+
+## Working on the packages
+
+**Versions.** Every package versions on its own line; `@niscorp/nisc` is the
+release that pins them together. A change to a package ships with a changeset
+(`pnpm changeset`). Below 1.0 **a minor is breaking**, and a breaking release
+breaks everything that depends or peers on it — `pnpm check:changesets` says
+which lines to add. Nothing is on npm yet; the first release will be a
+deliberate step.
+
+**Dependencies.** A plain `dependency` is used only inside a package — never in
+its published types, never authored by the app. What crosses the API, or
+evaluates an app's artifacts (zod, react, every nisc→nisc edge), is a required
+**peer**, so an app holds one copy. What only one subpath uses (`/agent`,
+`/hono`) is an **optional** peer. zod's floor is 4.2.0: from there a schema
+converts itself (`~standard.jsonSchema`), whichever copy made it.
+`check:packages` enforces all of it.
+
+**Tables and grammars.** No package runs DDL outside a
+[strata](packages/strata) sequence, and changing a schema behind a document kind
+(nova's actions and layouts, Prism's config) is a migration on that grammar —
+the gate refuses it otherwise. Applied migrations, recorded snapshots and
+early-stamp corpus files are history: append, never edit. The rules for apps
+are [AGENTS.md](AGENTS.md) 17–20; the whole plan is
+[docs/plans/versioning.md](docs/plans/versioning.md).
 
 ## Repo layout
 
@@ -130,9 +165,17 @@ niscorp/
 │   ├── cortex/     🧠  agentic orchestration
 │   ├── vex/        🔍  query synthesis
 │   ├── loom/       🧵  schema → editing UI
-│   └── tide/       🌊  automation engine
+│   ├── tide/       🌊  automation engine
+│   ├── charter/    📜  policy documents
+│   ├── moss/       🌿  the app server
+│   ├── strata/     🪨  versions: ledger, grammars, source upgrade
+│   └── nisc/       📦  the release (pins the set)
 ├── apps/
-│   └── showroom/        live demo + inspector
+│   ├── showroom/        live demo + inspector (a module per package)
+│   └── lab/             reference apps built by AGENTS.md (atrium, relay, lyra, …)
+├── strata/              the grammar gate's records: snapshots/, corpus/
+├── scripts/             the check:* gates
+├── .changeset/          pending release notes
 ├── pnpm-workspace.yaml
 └── turbo.json
 ```
@@ -141,8 +184,8 @@ niscorp/
 
 Nisc is **pre-1.0** and under active design.
 
-- **All eight packages** are tested and usable (Vex included — its engine, Postgres adapter, and reference agents are real and demoed live in the showroom), but their public APIs are not frozen. Pin exact versions; expect to update.
-- Breaking changes land without ceremony until each package hits 1.0.
+- **All eleven packages** are tested and usable (Vex included — its engine, Postgres adapter, and reference agents are real and demoed live in the showroom), but their public APIs are not frozen, and none is on npm yet.
+- Below 1.0 a breaking change is a minor version, announced in its changeset — and whatever depends on it breaks with it. The data does not break silently: tables and documents move through [strata](packages/strata) migrations.
 
 ## Contributing
 

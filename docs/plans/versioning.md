@@ -48,6 +48,13 @@ grammar wrote them.
 | `5af8259` peers | moss/nova/vex/loom meet nisc packages as peers; check enforces |
 | `34264be` release | changesets, `@niscorp/nisc`, `scripts/check-changesets.mts` |
 | `80bd372` moss | `PROTOCOL`/`PROTOCOL_MIN`, close 4426, `incompatible` wire status; golden credential rows |
+| `0e23d05` strata S0+S1 | the package; the ledger; vex's cache and moss's tables as sequences, baselines = the old DDL (adoption); pinned checksums; moss `migrations: 'apply' \| 'verify'` |
+| `51323ed` showroom | the strata module: *The ledger*, *Adopt an old database* |
+| `4a5f716` strata S2 | grammar sequences, embeddings, stamps, `createUpgrader`, `upgradeStore`; nova/prism `/migrations`; moss stamps `integration_actions`, upgrades at boot/intake/read; `NiscApp.grammars` |
+| `28aa41d` strata S4 | `/check`; `pnpm check:grammars`; snapshots + the 131-document corpus; `prismTransform` moved into Prism |
+| `2371824` strata S3 | Prism transform ops, `$ref: "$"`, computed `$join`, errors with paths, the never-fold fix, `EVERY_OP_EVER`; `nisc.prism/1` |
+| `e17e419` strata S5+S6 | `/upgrade`, `/node`, `strata.lock.json` in four lab apps, `pnpm check:sources`; AGENTS.md rules 17–20 |
+| `27ba5f1` relay | `*.read` roles deny the engine's tables (integration key hashes); the charter check resolves against the booted universe (AGENTS.md rule 10a) |
 
 ### Traps found on the way (keep)
 
@@ -130,7 +137,10 @@ from its version changes. What nobody has put together, and what nisc needs:
    migration fixes the exact target JSON; the edit is anyone's; `--verify`
    is byte-for-byte.
 
-### What it looks like (sketches — names and shapes open to change)
+### What it looks like
+
+(Sketched before S0; updated to what was built. The API reference is
+[strata's README](../../packages/strata/README.md).)
 
 **A package ships its sequence.** Tables and documents in one list, one ledger.
 
@@ -155,19 +165,22 @@ run once, are recorded, and a deployment that is behind says so.
 **A grammar declares its documents and what nests inside them.**
 
 ```ts
-// packages/nova/src/migrations.ts — exported as @niscorp/nova/migrations
-export const novaSequence: Sequence = {
+// packages/nova/src/migrations/index.ts — exported as @niscorp/nova/migrations
+// (the Zod schema behind each kind is separate data: NOVA_SCHEMAS, read by the gate)
+export const NOVA_SEQUENCE: Sequence = {
   id: 'nisc.nova',
   documents: {
     action: {
-      schema: ActionDefinitionSchema,
       embeds: {
-        'layout': 'nisc.nova/layout',
+        layout: 'nisc.nova/layout',
         'endpoints.*.request': 'nisc.prism/config',
         'endpoints.*.response': 'nisc.prism/config',
       },
     },
-    layout: { schema: LayoutNodeSchema, embeds: { 'children.*': 'nisc.nova/layout' } },
+    layout: {
+      // `*` crosses a record's values, `[]` an array's items — `children` is a lone node or an array
+      embeds: { children: 'nisc.nova/layout', 'children[]': 'nisc.nova/layout', then: 'nisc.nova/layout', else: 'nisc.nova/layout', do: 'nisc.nova/layout' },
+    },
   },
   migrations: [
     // …
@@ -207,61 +220,75 @@ integration_actions
  bookings.list   | { "id": …, … }      | { "nisc.nova": 7, "nisc.prism": 3, "midas.kit": 2 }
 ```
 
-Read path: `upgrade(row.definition, row.grammar, sequences)` → the current
-document, or `StrataError('TOO_NEW' | 'UNKNOWN_SEQUENCE' | 'STEP_FAILED', …)`.
-Written back at current; a background pass rewrites the rest so old
-migrations can one day be squashed.
+Read path: `createUpgrader(grammars, { transform: prismTransform }).upgrade(row.definition, { kind: 'nisc.nova/action', stamp: row.grammar })`
+→ the current document and stamp, or `StrataError` (`TOO_NEW`,
+`UNKNOWN_KIND`, `STEP_FAILED`). moss runs `upgradeStore` over
+`integration_actions` at boot, upgrades on intake and on read. (Squashing old
+migrations is not built — nothing is old enough yet.)
 
 **The ledger.**
 
 ```
 strata_ledger
- sequence   | n  | description                                      | checksum | applied_at
- nisc.vex   | 1  | The cache table                                  | 3f9a0c…  | 2026-10-02 09:14
- nisc.vex   | 2  | Cache rows remember the request that minted them | 81d2e4…  | 2026-10-02 09:14
- nisc.moss  | 1  | Sessions                                         | c07b11…  | 2026-10-02 09:14
- midas.app  | 49 | Studios can close for a holiday                  | 5ae930…  | 2026-10-03 17:40
+ sequence            | n | description                                                              | checksum
+ nisc.moss           | 1 | Integrations, their actions and the generation pointer, converged …     | 1c21031d…
+ nisc.moss           | 2 | Stored integration actions carry the grammar stamp their definition is … | 92bd612e…
+ nisc.moss.sessions  | 1 | The sessions table: a token is stored only as its hash                   | 83a62e02…
+ nisc.vex.cache      | 1 | The vex cache table, converged from any earlier shape                    | c2c5ca08…
 ```
 
-moss checks it at boot: pending migrations refuse the boot in production and
-apply in the dev runtime. An edited, already-applied migration refuses too.
+moss applies it at boot (`migrations: 'apply'`, the default) or refuses to boot
+with anything pending (`'verify'`). An edited, already-applied migration or a
+ledger written by newer code refuses either way.
 
 **CI when somebody changes a grammar.**
 
 ```
-$ pnpm strata check
-[fail] nisc.nova: ActionDefinition changed since nisc.nova/7 (strata/nisc.nova/7.json)
-         + endpoints.*.retry   new optional field
-       Append to packages/nova/src/migrations.ts — an empty marker is enough for
-       an addition: readers at nisc.nova/7 are .strict() and must refuse /8.
-[pass] corpus: 1,184 documents × 9 historic stamps → current, all parse
+$ pnpm check:grammars          # the real first catch — Prism's own S3 change
+[pass] nisc.nova matches strata/snapshots/nisc.nova/0.json
+[fail] nisc.prism changed since nisc.prism/0 (strata/snapshots/nisc.prism/0.json) — and no migration says so
+       nisc.prism/config:
+         ~ $defs.__schema2.anyOf[$ref].properties.$ref.pattern: "^\\$\\." → "^\\$(\\..*)?$"
+         + $defs.__schema2.anyOf[$has]
+         + $defs.__schema2.anyOf[$walk]
+         …
+       Append a migration to nisc.prism — an empty marker is enough for an addition …
+[pass] corpus: 131/131 captured documents upgrade and parse
 ```
 
 **An app upgrading its source.**
 
 ```
-$ pnpm strata upgrade
-  nisc.nova/8  HTTP endpoints: body → request, transform → response
-  14 artifacts change. Expected JSON: .strata/upgrade/   Report: .strata/upgrade/REPORT.md
-    src/app/actions/domains/bookings/bookings.action.ts   endpoints.load
-    …
-  Hand REPORT.md to your agent (or do it), then:  pnpm strata upgrade --verify
+$ pnpm strata upgrade          # the relay rehearsal: a kit renaming the table's `empty` prop
+[plan] nisc.nova 0, nisc.prism 1 → nisc.nova 0, nisc.prism 1, relay.kit 1: 1 migration(s)
+       relay.kit/1  Table: empty → emptyText
+       4 artifact(s) to edit, 21 untouched.
+       src/app/actions/domains/company/companies.action.ts  crm.companies
+       …
+       Report: .strata/upgrade/REPORT.md — edit, then: strata verify
 
-$ pnpm strata upgrade --verify
-[pass] 14/14 artifacts equal their migrated JSON
+$ pnpm strata verify
+[pass] nisc.nova/action:crm.companies matches its migrated JSON
+…
+[pass] 21 artifact(s) no migration touches, still untouched
+[pass] the source is now written at nisc.nova 0, nisc.prism 1, relay.kit 1 — strata.lock.json updated.
 ```
 
 ### Shape of the package
 
-- **core** — zero dependencies, pure: the types (`Sequence`, `Migration`,
-  `Step`, `Stamp`), `upgrade()`, stamp comparison, the typed errors. The Prism
-  evaluator is **injected**, the way nova's `transform` socket is (rule 6), so
-  nova depends on strata's types only and stays usable anywhere.
-- **`/postgres`** — the ledger and bulk row rewrites over the `PgPool` shape
-  vex already defines (pg and PGlite). Modelled on midas's runner.
-- **`/check`** — snapshots, the corpus runner, the `--check` gate.
-- **`/cli`** — `strata migrate | check | upgrade [--verify]`.
-- Each package exports its own sequence as a subpath (`@niscorp/nova/migrations`).
+- **core** — pure, zod its only peer: the grammar (`Sequence`, `Migration`,
+  `Step`), `prepare` / `planMigrations`, `createUpgrader` (stamps, `upgrade`,
+  `locate`, `behind`), the typed errors. The Prism evaluator is **injected**,
+  the way nova's `transform` socket is (rule 6), so nova depends on strata's
+  types only (an optional peer, for its `/migrations` subpath).
+- **`/postgres`** — `migrate`, `status`, `readLedger`, `upgradeStore`, over the
+  `{ query, transaction }` pool shape (pg and PGlite). Modelled on midas's runner.
+- **`/check`** — `snapshotOf`, `compareSnapshot`, `checkCorpus`, `diffJson`.
+- **`/upgrade`** — `planSourceUpgrade`, `verifySourceUpgrade`, `renderReport` (pure).
+- **`/node`** — `runSourceUpgrade`: the lock, the work directory, the commands
+  an app's `src/dev/strata.ts` exposes (`status`, `init`, `upgrade`, `verify`).
+- Each grammar owner exports its sequence and schemas as a subpath
+  (`@niscorp/nova/migrations`, `@niscorp/prism/migrations`).
 
 ### Build order
 
@@ -277,11 +304,13 @@ $ pnpm strata upgrade --verify
 
 ## 6. Open
 
-- **`$ref: '$'`** — the evaluator and two docs say `$` is the whole root; the
-  schema regex refuses it, and `'$.'` works by accident. Proposed: accept `'$'`
-  as canonical, desugar `'$.'` to it. Additive. *Awaiting a yes.*
-- **Ledger placement** — a `strata` schema, or `strata_ledger` in the app's
-  schema beside its tables?
+- **npm publishing** — a deliberate future step. Before it: drop the pending
+  changesets so every package's first release is 0.1.0 with all of this in it.
 - **midas** adopts on its own schedule (D11): its runner becomes strata's
   `midas.app` sequence, its three `zod ^4.0.0` declarations move to `^4.2.0`,
-  and bumping its submodule to niscorp HEAD is strata's acceptance test.
+  it keeps a `strata.lock.json` and captures its own corpus, and bumping its
+  submodule to niscorp HEAD is strata's acceptance test.
+- **lyceum** captures its corpus and takes a lock once it settles.
+- Decided along the way (recorded, the user's call): `$ref: '$'` accepted
+  (S3); the ledger is `strata_ledger` in the app's schema (configurable);
+  `vex_cache` is not stamped (a cache, not a store).

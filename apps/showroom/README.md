@@ -1,6 +1,6 @@
 # Nisc Showroom
 
-A live demo + inspector app for Nisc packages (currently `@niscorp/nova`). Browse stories for components, layouts, and actions; see the source, the rendered output, and the live runtime data side by side.
+A live demo + inspector app for the Nisc packages — one module per package (signal, solid, prism, charter, moss, vex, tide, strata, nova, cortex, loom). Browse stories for components, layouts, and actions; see the source, the rendered output, and the live runtime data side by side.
 
 ## Two-terminal dev workflow
 
