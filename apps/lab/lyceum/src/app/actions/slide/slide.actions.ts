@@ -1,28 +1,27 @@
 import type { ActionDefinition, EndpointConfig } from '@niscorp/nova';
-import { memberCounts } from '@lyceum/app/vex/member.entries';
-import { codeLayout, liveLayout, statementLayout, titleLayout } from './slide.layouts';
+import { departmentsAll, inquiryByDepartment, memberCounts } from '@lyceum/app/vex/member.entries';
+import { assignmentLayout, clearanceLayout, codeLayout, liveLayout, statementLayout, titleLayout } from './slide.layouts';
 
-// THE SLIDES. Each is an action only the stage is granted; the deck (`slides` rows)
-// decides which is on screen and in what order. A slide's words are its data;
-// its layout is one of a few shapes. The words are provisional — the talk's
-// text is written with the story (PLAN.md, Open).
+// THE SLIDES. Each is an action only the stage is granted; the deck (`slides`
+// rows) decides which is on screen and in what order, and which tool the
+// speaker's controller shows alongside. A slide's words are its data; its
+// layout is one of a few shapes. The words are provisional — the talk's text
+// is written with the story.
 
-const counted: Record<string, EndpointConfig> = {
-  counts: { url: '/api/vex', method: 'POST', request: { fingerprint: memberCounts.fingerprint, context: {} }, target: 'counts' },
-};
-const COUNTS = { joined: 0, sorted: 0, unsorted: 0 };
+const read = (fingerprint: string, target: string): EndpointConfig => ({ url: '/api/vex', method: 'POST', request: { fingerprint, context: {} }, target });
+const COUNTS = { joined: 0, assigned: 0, unassigned: 0 };
 
 export const titleSlide: ActionDefinition = {
   id: 'slide.title',
   title: 'The talk is an application',
   data: {
-    kicker: 'Lyceum — tonight',
+    kicker: 'The Ministry — tonight',
     title: 'The talk is an application',
     lines: ['Everything you will see tonight is running — not a recording, not a mock-up.', 'Take your phone out.'],
     counts: COUNTS,
   },
   layout: titleLayout,
-  endpoints: counted,
+  endpoints: { counts: read(memberCounts.fingerprint, 'counts') },
   lifecycle: { mount: [{ call: 'counts' }] },
   triggers: [],
 };
@@ -36,7 +35,7 @@ export const dataSlide: ActionDefinition = {
     file: 'member.card.action.ts',
     code: [
       "{ id: 'member.card',",
-      '  data: { me: {}, loading: true },',
+      '  data: { me: {} },',
       '  endpoints: { load: {',
       "    request: { fingerprint: 'members/me' },",
       "    target: 'me' } },",
@@ -46,7 +45,7 @@ export const dataSlide: ActionDefinition = {
     ].join('\n'),
     marked: [4, 7],
     lines: [
-      'The card on your phone is this object. No component knows who you are; the screen is data, and so is the query behind it.',
+      'The ID card on your phone is this object. No component knows who you are: the screen is data, and so is the query behind it.',
       'A screen is JSON · A query is JSON · A permission is JSON',
     ],
   },
@@ -54,24 +53,48 @@ export const dataSlide: ActionDefinition = {
   triggers: [],
 };
 
-export const existenceSlide: ActionDefinition = {
-  id: 'slide.existence',
-  title: 'If you can’t use it, it isn’t there',
+// Assignment: the four departments, each with its mark and its count so far,
+// filling as the speaker assigns the room.
+export const assignmentSlide: ActionDefinition = {
+  id: 'slide.assignment',
+  title: 'Assignment',
   data: {
     kicker: 'Look at your phone',
-    title: 'If you can’t use it, it isn’t there',
-    points: [
-      { label: '01 · Ring one', text: 'An action you are not granted is never sent to your phone. Not hidden, not disabled — absent.' },
-      { label: '02 · Ring two', text: 'An action you can use may come in your role’s variant. Your house is a mark, not a different screen.' },
-      { label: '03 · Ring three', text: 'Every query runs under your policy. The same question answers you and me differently.' },
-    ],
+    title: 'Assignment',
+    lines: ['Your department is a role. Being assigned is one row changing — and your phone changes with it.'],
+    departments: [],
+    tally: [],
+    counts: COUNTS,
   },
-  layout: statementLayout,
+  layout: assignmentLayout,
+  endpoints: {
+    departments: read(departmentsAll.fingerprint, 'departments'),
+    tally: read(inquiryByDepartment.fingerprint, 'tally'),
+    counts: read(memberCounts.fingerprint, 'counts'),
+  },
+  lifecycle: { mount: [{ call: 'departments' }, { call: 'tally' }, { call: 'counts' }] },
+  triggers: [],
+};
+
+// Clearance: what each department's role is granted, in plain words — and so
+// what exists on its phones.
+export const clearanceSlide: ActionDefinition = {
+  id: 'slide.clearance',
+  title: 'If you can’t use it, it isn’t there',
+  data: {
+    kicker: 'Compare with your neighbour',
+    title: 'If you can’t use it, it isn’t there',
+    lines: ['An action your role is not granted is never sent to your phone. Not hidden, not disabled — it does not exist for you.'],
+    departments: [],
+  },
+  layout: clearanceLayout,
+  endpoints: { departments: read(departmentsAll.fingerprint, 'departments') },
+  lifecycle: { mount: [{ call: 'departments' }] },
   triggers: [],
 };
 
 // Live: the room counted as it changes. Nobody tells this slide anything —
-// its read answers again whenever somebody steps in or is sorted.
+// its reads answer again whenever somebody steps in or is assigned.
 export const liveSlide: ActionDefinition = {
   id: 'slide.live',
   title: 'Nobody announced anything',
@@ -82,7 +105,7 @@ export const liveSlide: ActionDefinition = {
     counts: COUNTS,
   },
   layout: liveLayout,
-  endpoints: counted,
+  endpoints: { counts: read(memberCounts.fingerprint, 'counts') },
   lifecycle: { mount: [{ call: 'counts' }] },
   triggers: [],
 };
@@ -103,4 +126,4 @@ export const endSlide: ActionDefinition = {
   triggers: [],
 };
 
-export const SLIDE_ACTIONS: readonly ActionDefinition[] = [titleSlide, dataSlide, existenceSlide, liveSlide, endSlide];
+export const SLIDE_ACTIONS: readonly ActionDefinition[] = [titleSlide, dataSlide, assignmentSlide, clearanceSlide, liveSlide, endSlide];

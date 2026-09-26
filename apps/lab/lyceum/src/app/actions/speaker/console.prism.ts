@@ -1,8 +1,8 @@
 import { deckGo } from '@lyceum/app/vex/deck.entries';
 
-// Next and back, as positions: one on or one back from the slide on screen,
-// clamped to the deck — so the first slide has no "back" to fall off and the
-// last has no "next".
+// Where the deck goes, as a position: one on, one back — clamped to the deck,
+// so the first slide has no "back" to fall off and the last no "next" — or
+// straight to the slide picked from the list.
 const position = { $ref: '$.current.position' };
 const last = { $sub: [{ $ref: '$.count.slides' }, 1] };
 
@@ -14,4 +14,9 @@ export const deckNextPrism = {
 export const deckBackPrism = {
   fingerprint: deckGo.fingerprint,
   context: { deck: 'talk', position: { $max: { over: [{ $sub: [position, 1] }, 0] } } },
+};
+
+export const deckPickPrism = {
+  fingerprint: deckGo.fingerprint,
+  context: { deck: 'talk', position: { $max: { over: [{ $min: { over: [{ $ref: '$.picked' }, last] } }, 0] } } },
 };

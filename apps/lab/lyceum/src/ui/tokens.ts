@@ -43,7 +43,7 @@ html, body { margin: 0; padding: 0; }
 /* ── the frame: canvases stacked, the last one filling what is left ── */
 .${ROOT_CLASS} .page { display: flex; flex-direction: column; height: 100dvh; }
 .${ROOT_CLASS} .page > [data-canvas] { display: flex; flex-direction: column; min-height: 0; }
-.${ROOT_CLASS} .page > [data-canvas]:last-child { flex: 1 1 auto; }
+.${ROOT_CLASS} .page > [data-canvas]:not(:empty):not(:has(~ [data-canvas]:not(:empty))) { flex: 1 1 auto; }
 .${ROOT_CLASS} .page > [data-canvas] > * { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; }
 /* stacked canvases share one rule where they meet, not two */
 .${ROOT_CLASS} .page > [data-canvas]:not(:empty) ~ [data-canvas] > * > .sheet { border-top: 0; }
@@ -54,6 +54,8 @@ html, body { margin: 0; padding: 0; }
   container-type: inline-size;
 }
 .${ROOT_CLASS} .sheet[data-size="fill"] { flex: 1 1 auto; min-height: 0; }
+/* a sheet inside a cell is part of that cell's grid: its rules, not a second frame */
+.${ROOT_CLASS} .cell > .sheet { border: 0; }
 
 /* ── cell: a place in the grid, and its ink ── */
 /* defaults first, so an ink always out-ranks them */
@@ -85,10 +87,10 @@ html, body { margin: 0; padding: 0; }
 .${ROOT_CLASS} .label {
   font: 700 clamp(10px, 1.15cqw, 20px)/1.2 var(--display); letter-spacing: .08em; text-transform: uppercase;
 }
-.${ROOT_CLASS} .headline { font-family: var(--display); font-weight: 900; text-transform: uppercase; line-height: .92; overflow-wrap: anywhere; }
+.${ROOT_CLASS} .headline { font-family: var(--display); font-weight: 900; text-transform: uppercase; line-height: .92; overflow-wrap: break-word; hyphens: none; }
 .${ROOT_CLASS} .headline[data-level="display"] { font-size: clamp(34px, 7cqw, 170px); }
 .${ROOT_CLASS} .headline[data-level="title"]   { font-size: clamp(22px, 3.8cqw, 96px); }
-.${ROOT_CLASS} .headline[data-level="name"]    { font-size: clamp(18px, 2.4cqw, 56px); line-height: 1; }
+.${ROOT_CLASS} .headline[data-level="name"]    { font-size: clamp(14px, 1.9cqw, 44px); line-height: 1; }
 .${ROOT_CLASS} .text { font-size: clamp(15px, 1.75cqw, 34px); line-height: 1.35; }
 .${ROOT_CLASS} .text[data-tone="muted"] { opacity: 1; color: color-mix(in srgb, var(--fg) 55%, var(--bg)); }
 .${ROOT_CLASS} .figure { display: flex; flex-direction: column; gap: .3em; }
@@ -119,6 +121,15 @@ html, body { margin: 0; padding: 0; }
    default here must not out-rank them */
 .${ROOT_CLASS} .bar > span:not([data-mark]) { background: var(--bg); }
 
+/* ── field: a line you type into — a whole cell of it ── */
+.${ROOT_CLASS} .field {
+  border: 0; outline: 0; width: 100%; background: var(--paper); color: var(--ink);
+  padding: clamp(10px, 1.4cqw, 26px) clamp(12px, 1.6cqw, 30px);
+  font: 500 clamp(18px, 2.2cqw, 40px)/1.2 var(--prose);
+}
+.${ROOT_CLASS} .field::placeholder { color: color-mix(in srgb, var(--ink) 40%, var(--paper)); }
+.${ROOT_CLASS} .field:focus { background: var(--highlight); }
+
 /* ── action: a whole cell you press ── */
 .${ROOT_CLASS} .action {
   background: var(--bg); color: var(--fg); border: 0; cursor: pointer; text-align: left;
@@ -134,11 +145,11 @@ html, body { margin: 0; padding: 0; }
    is yellow and black — a hard cut, no easing, the poster's one motion.
    PRESSED is the hatch over it. Hover is only where a pointer can hover: on a
    phone a tap must not leave a cell stuck lit. */
-.${ROOT_CLASS} [data-ref] { cursor: pointer; user-select: none; -webkit-tap-highlight-color: transparent; }
+.${ROOT_CLASS} [data-ref]:not(input) { cursor: pointer; user-select: none; -webkit-tap-highlight-color: transparent; }
 @media (hover: hover) {
-  .${ROOT_CLASS} [data-ref]:hover { --bg: var(--highlight); --fg: var(--ink); background: var(--bg); color: var(--fg); }
+  {R} [data-ref]:not(input):hover {{ --bg: var(--highlight); --fg: var(--ink); background: var(--bg); color: var(--fg); }
 }
-.${ROOT_CLASS} [data-ref]:active { --bg: var(--highlight); --fg: var(--ink); background: repeating-linear-gradient(-45deg, var(--ink) 0 2px, var(--highlight) 2px 8px); color: var(--ink); }
+.${ROOT_CLASS} [data-ref]:not(input):active { --bg: var(--highlight); --fg: var(--ink); background: repeating-linear-gradient(-45deg, var(--ink) 0 2px, var(--highlight) 2px 8px); color: var(--ink); }
 .${ROOT_CLASS} [data-ref]:focus-visible { outline: var(--rule) solid var(--alert); outline-offset: calc(var(--rule) * -1); }
 .${ROOT_CLASS} .action[data-ink="alert"]:focus-visible { outline-color: var(--signal); }
 `;

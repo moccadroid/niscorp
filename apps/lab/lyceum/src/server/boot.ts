@@ -4,7 +4,7 @@ import { buildLyceum } from '@lyceum/app/app';
 import { lyceumIdentity } from './identity';
 import { lyceumReactions } from './reactions';
 import { doorFunctions } from './functions/door.functions';
-import { sortingFunctions } from './functions/sorting.functions';
+import { assignmentFunctions } from './functions/assignment.functions';
 import { devRuntime } from './runtime';
 import type { DevRuntime, LyceumRuntime } from './runtime';
 
@@ -34,7 +34,7 @@ export const bootOn = async <R extends LyceumRuntime>(runtime: R): Promise<Boote
 
   const app = buildLyceum({
     identity: lyceumIdentity,
-    functions: (session) => ({ ...doorFunctions(session, server), ...sortingFunctions(session, server) }),
+    functions: (session) => ({ ...doorFunctions(session, server), ...assignmentFunctions(session, server) }),
     reactions: lyceumReactions(server),
   });
   built = await createServer(app, runtime);

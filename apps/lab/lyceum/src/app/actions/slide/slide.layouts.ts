@@ -62,16 +62,84 @@ export const codeLayout: LayoutNode = {
 // The room, counted, live: two figures, a bar, and what it means.
 export const liveLayout: LayoutNode = {
   component: 'Sheet',
-  props: { size: 'fill', areas: ['kick kick kick', 'head head head', 'joined sorted words', 'bar bar bar'], rows: ['auto', 1, 'auto', 'auto'] },
+  props: { size: 'fill', areas: ['kick kick kick', 'head head head', 'joined assigned words', 'bar bar bar'], rows: ['auto', 1, 'auto', 'auto'] },
   children: [
     cell('kick', [label('{{$.kicker}}')]),
     cell('head', [{ component: 'Headline', props: { level: 'display' }, children: '{{$.title}}' }], { align: 'end' }),
     cell('joined', [{ component: 'Figure', props: { label: 'In the room', value: '$.counts.joined' } }], { ink: 'live' }),
-    cell('sorted', [{ component: 'Figure', props: { label: 'Sorted', value: '$.counts.sorted' } }], { ink: 'signal' }),
+    cell('assigned', [{ component: 'Figure', props: { label: 'Assigned', value: '$.counts.assigned' } }], { ink: 'signal' }),
     cell('words', [
-      { component: 'Text', children: '{{$.counts.joined}} in the room · {{$.counts.sorted}} sorted' },
+      { component: 'Text', children: '{{$.counts.joined}} in the room · {{$.counts.assigned}} assigned' },
       { component: 'Text', props: { tone: 'muted' }, children: '{{$.lines.0}}' },
     ]),
-    cell('bar', [{ component: 'Bar', props: { segments: [{ value: '$.counts.sorted', ink: 'signal' }, { value: '$.counts.unsorted', mark: 'hatch' }] } }], { pad: 'none' }),
+    cell('bar', [{ component: 'Bar', props: { segments: [{ value: '$.counts.assigned', ink: 'signal' }, { value: '$.counts.unassigned', mark: 'hatch' }] } }], { pad: 'none' }),
+  ],
+};
+
+// Assignment: a block per department — its mark, its sigil, its name —
+// placed by the grid in the row under the headline; then how many each has so
+// far, filling in as the speaker assigns the room.
+export const assignmentLayout: LayoutNode = {
+  component: 'Sheet',
+  props: { size: 'fill', areas: ['kick kick kick kick', 'head head head head', 'words words tally tally'], rows: ['auto', 1, 'auto'] },
+  children: [
+    cell('kick', [label('{{$.kicker}}')]),
+    cell('head', [{ component: 'Headline', props: { level: 'display' }, children: '{{$.title}}' }], { align: 'end' }),
+    cell('words', [
+      { component: 'Text', children: '{{$.lines.0}}' },
+      { component: 'Label', children: '{{$.counts.assigned}} assigned · {{$.counts.unassigned}} waiting' },
+    ]),
+    cell(
+      'tally',
+      [
+        {
+          component: 'Rows',
+          props: { rows: '$.tally', rowKey: 'label', empty: 'Nobody assigned yet.', columns: [{ label: 'Department', key: 'label', w: 2 }, { label: 'People', key: 'value', kind: 'mono', w: 1 }] },
+        },
+      ],
+      { pad: 'none' },
+    ),
+    {
+      for: '$.departments',
+      as: 'department',
+      key: 'department_id',
+      do: {
+        component: 'Cell',
+        props: { mark: '$department.mark' },
+        children: [
+          { component: 'Sigil', props: { shape: '$department.sigil', size: 'large' } },
+          { component: 'Headline', props: { level: 'name' }, children: '{{$department.name}}' },
+        ],
+      },
+    },
+  ],
+};
+
+// Clearance: every department, and what its role is granted, in plain words.
+export const clearanceLayout: LayoutNode = {
+  component: 'Sheet',
+  props: { size: 'fill', areas: ['kick kick', 'head words', 'table table'], cols: [1.4, 1], rows: ['auto', 1, 'auto'] },
+  children: [
+    cell('kick', [label('{{$.kicker}}')]),
+    cell('head', [{ component: 'Headline', props: { level: 'title' }, children: '{{$.title}}' }], { align: 'end' }),
+    cell('words', [{ component: 'Text', children: '{{$.lines.0}}' }], { ink: 'highlight', align: 'end' }),
+    cell(
+      'table',
+      [
+        {
+          component: 'Rows',
+          props: {
+            rows: '$.departments',
+            rowKey: 'department_id',
+            columns: [
+              { label: '', key: 'sigil', kind: 'sigil', w: 0.3 },
+              { label: 'Department', key: 'name', w: 1 },
+              { label: 'Its clearance', key: 'remit', w: 3.2 },
+            ],
+          },
+        },
+      ],
+      { pad: 'none' },
+    ),
   ],
 };

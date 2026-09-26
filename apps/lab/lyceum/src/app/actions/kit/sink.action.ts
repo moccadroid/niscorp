@@ -10,12 +10,12 @@ export const sinkAction: ActionDefinition = {
   title: 'Kitchen sink',
   data: {
     rows: [
-      { id: '1', sigil: 'triangle', name: 'Ada Moreau', house: 'Ravens', fp: 'members/me' },
-      { id: '2', sigil: 'circle', name: 'Ben Okafor', house: 'Owls', fp: 'members/roster' },
-      { id: '3', sigil: 'cross', name: 'Cleo Lind', house: 'Foxes', fp: 'deck/current' },
-      { id: '4', sigil: null, name: 'Dev Rao', house: null, fp: 'members/counts' },
+      { id: '1', sigil: 'triangle', name: 'Ada Moreau', department: 'Records', fp: 'members/me' },
+      { id: '2', sigil: 'circle', name: 'Ben Okafor', department: 'Forms', fp: 'members/register' },
+      { id: '3', sigil: 'cross', name: 'Cleo Lind', department: 'Inquiries', fp: 'deck/current' },
+      { id: '4', sigil: null, name: 'Dev Rao', department: null, fp: 'members/counts' },
     ],
-    code: "{ component: 'Cell',\n  props: { area: 'house',\n           mark: '$.me.house_mark' } }",
+    code: "{ component: 'Cell',\n  props: { area: 'department',\n           mark: '$.me.department_mark' } }",
   },
   layout: sinkLayout,
   triggers: [],

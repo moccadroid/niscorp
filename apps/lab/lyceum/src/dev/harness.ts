@@ -20,7 +20,7 @@ export type Terminal = {
   shows: (canvas: string, text: string) => Promise<boolean>;
   showsNow: (canvas: string, text: string) => boolean;
   session: () => Promise<string>;
-  click: (canvas: string, ref: string) => void;
+  click: (canvas: string, ref: string, payload?: unknown) => void;
   sessionsSeen: () => number;
   isOpen: () => boolean;
   close: () => void;
@@ -74,7 +74,8 @@ export const connect = (base: string, token?: string): Promise<Terminal> =>
           if (first === undefined) throw new Error('no session granted');
           return first;
         },
-        click: (canvas, ref) => socket.send(JSON.stringify({ type: 'event', canvas, event: { type: 'ui:click', ref } })),
+        click: (canvas, ref, payload) =>
+          socket.send(JSON.stringify({ type: 'event', canvas, event: payload === undefined ? { type: 'ui:click', ref } : { type: 'ui:click', ref, payload } })),
         sessionsSeen: () => sessions.length,
         isOpen: () => open,
         close: () => socket.close(),

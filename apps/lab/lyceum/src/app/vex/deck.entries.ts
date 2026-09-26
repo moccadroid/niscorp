@@ -9,10 +9,10 @@ export const deckCurrent: SeedEntry = {
   fingerprint: 'deck/current',
   refresh: 'reactive',
   intent: 'The slide on screen now: its action, its title and its place in the deck',
-  shape: { slide_id: '', title: '', position: 0, number: 0 },
+  shape: { slide_id: '', title: '', position: 0, number: 0, tool_id: '' },
   dsl: {
     from: ['deck', 'slides'],
-    fields: ['slides.slide_id', 'slides.title', 'slides.position'],
+    fields: ['slides.slide_id', 'slides.title', 'slides.position', 'slides.tool_id'],
     filter: { eq: ['deck.deck_id', 'talk'] },
   },
   mapping: {
@@ -21,6 +21,33 @@ export const deckCurrent: SeedEntry = {
     position: { $ref: '$.result.position' },
     // Counted from one, for people.
     number: { $add: [{ $ref: '$.result.position' }, 1] },
+    // A slide with no controls of its own still names a tool: the empty one.
+    tool_id: { $coalesce: [{ $ref: '$.result.tool_id' }, 'tools.none'] },
+  },
+};
+
+// The whole deck, for the controller's picker: every slide, its place and its
+// title, counted from one.
+export const slidesAll: SeedEntry = {
+  fingerprint: 'slides/all',
+  intent: 'Every slide in the deck, in order',
+  shape: [{ position: 0, number: 0, title: '' }],
+  dsl: {
+    from: ['slides'],
+    fields: ['slides.position', 'slides.title'],
+    filter: { gte: ['slides.position', 0] },
+    sort: [{ field: 'slides.position', dir: 'asc' }],
+  },
+  mapping: {
+    $map: {
+      over: { $ref: '$.result' },
+      as: 'slide',
+      body: {
+        position: { $get: { from: { $var: 'slide' }, path: ['position'] } },
+        number: { $add: [{ $get: { from: { $var: 'slide' }, path: ['position'] } }, 1] },
+        title: { $get: { from: { $var: 'slide' }, path: ['title'] } },
+      },
+    },
   },
 };
 
@@ -49,4 +76,4 @@ export const deckGo: SeedMutation = {
   },
 };
 
-export const DECK_ENTRIES: readonly (SeedEntry | SeedMutation)[] = [deckCurrent, slidesCount, deckGo];
+export const DECK_ENTRIES: readonly (SeedEntry | SeedMutation)[] = [deckCurrent, slidesCount, slidesAll, deckGo];

@@ -28,6 +28,8 @@ const main = async (): Promise<void> => {
   const unheld = SLIDES.filter((slide) => !stageHello.catalog.actions.includes(slide.slideId));
   check(`every slide in the deck is an action the stage is granted${unheld.length === 0 ? '' : ` (missing: ${unheld.map((s) => s.slideId).join(', ')})`}`, unheld.length === 0);
   check('the speaker is granted no slide — the controller moves the deck, it does not show it', !SLIDES.some((slide) => speakerHello.catalog.actions.includes(slide.slideId)));
+  const tools = SLIDES.flatMap((slide) => (slide.toolId === undefined ? [] : [slide.toolId]));
+  check('every slide\'s tool is an action the speaker is granted, and the stage is not', tools.every((toolId) => speakerHello.catalog.actions.includes(toolId) && !stageHello.catalog.actions.includes(toolId)));
 
   const total = SLIDES.length;
   const titleOf = (index: number): string => SLIDES[index]?.title ?? '';
@@ -50,6 +52,14 @@ const main = async (): Promise<void> => {
   const row = await runtime.db.query<{ slide_id: string }>('SELECT slide_id FROM deck');
   check('the row holds what the stage shows', row.rows[0]?.slide_id === SLIDES[total - 1]?.slideId);
 
+  // ── the picker: any slide, straight away ──
+  speaker.click('main', 'pick', 2);
+  check('picking a slide from the deck puts it on the stage', await onSlide(2));
+  speaker.click('main', 'pick', total - 1);
+  check('...any slide, in any order', await onSlide(total - 1));
+  speaker.click('main', 'pick', total + 5);
+  check('a pick past the end stays on the last slide', await onSlide(total - 1));
+
   // ── a live slide follows the room ──
   const live = SLIDES.findIndex((slide) => slide.slideId === 'slide.live');
   speaker.click('main', 'back');
@@ -68,8 +78,8 @@ const main = async (): Promise<void> => {
   await runtime.db.exec(`
     UPDATE slides SET title = 'An old title' WHERE slide_id = 'slide.title';
     UPDATE slides SET position = 100 WHERE slide_id = 'slide.data';
-    UPDATE slides SET position = 2 WHERE slide_id = 'slide.existence';
-    UPDATE slides SET position = 3 WHERE slide_id = 'slide.data';
+    UPDATE slides SET position = 2 WHERE slide_id = 'slide.clearance';
+    UPDATE slides SET position = 4 WHERE slide_id = 'slide.data';
     INSERT INTO slides (slide_id, position, title) VALUES ('slide.gone', 99, 'Cut from the talk');
     UPDATE deck SET slide_id = 'slide.gone';
   `);

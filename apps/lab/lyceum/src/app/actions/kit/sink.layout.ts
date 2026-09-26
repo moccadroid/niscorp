@@ -50,7 +50,7 @@ export const sinkLayout: LayoutNode = {
             columns: [
               { label: '', key: 'sigil', kind: 'sigil', w: 0.35 },
               { label: 'Name', key: 'name', w: 2 },
-              { label: 'House', key: 'house', w: 1.5, missing: 'not yet sorted' },
+              { label: 'Department', key: 'department', w: 1.5, missing: 'waiting' },
               { label: 'Fingerprint', key: 'fp', kind: 'mono', w: 2 },
             ],
           },

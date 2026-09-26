@@ -1,15 +1,15 @@
 import type { ActionDefinition } from '@niscorp/nova';
 import { memberMe } from '@lyceum/app/vex/member.entries';
-import { cardLayout } from './card.layout';
+import { badgeLayout } from './badge.layout';
 
-// Your ID card. Everybody in the room has one, assigned or not; it reads the
-// same row the identity seam does, reactively — when you are assigned, or you
-// change your name, the card changes on its own.
-export const cardAction: ActionDefinition = {
-  id: 'member.card',
-  title: 'Your ID card',
+// Your department, on top of your phone. Only the assigned are granted it — for
+// everybody else it does not exist, so its canvas is empty until the
+// assignment writes their department and their shell is rebuilt.
+export const badgeAction: ActionDefinition = {
+  id: 'department.badge',
+  title: 'Your department',
   data: { me: { member_id: '', name: '', title: '', quirk: '', department_id: '', department_name: '', department_remit: '', department_mark: '', department_sigil: '' } },
-  layout: cardLayout,
+  layout: badgeLayout,
   endpoints: {
     load: { url: '/api/vex', method: 'POST', request: { fingerprint: memberMe.fingerprint, context: {} }, target: 'me' },
   },

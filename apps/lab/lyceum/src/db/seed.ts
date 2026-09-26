@@ -1,49 +1,50 @@
-// What exists before anybody walks in: the houses, the two principals that
+// What exists before anybody walks in: the departments, the principals that
 // are not people, and the deck. Everything else is written by the room.
 //
 // Run on every boot, against an empty database or a live one, and it treats
 // the two kinds of row differently:
 //
-//   · AUTHORED rows — the houses' words, the slides and their order — CONVERGE:
-//     whatever this file says is what the database holds, the way vex's seed
-//     path converges its entries. Editing the deck here and restarting is
+//   · AUTHORED rows — the departments' words, the slides and their order —
+//     CONVERGE: whatever this file says is what the database has, the way vex's
+//     seed path converges its entries. Editing the deck here and restarting is
 //     enough; there is no migration to write.
 //   · THE TALK'S STATE — the room, the grants, which slide is on screen — is
 //     left alone. A restart must not reset the talk.
 //
-// When the streamed agenda composes the deck at runtime (PLAN.md), the order
-// becomes the room's data, and stops converging here.
-//
-// The houses are provisional (PLAN.md, Open). Each house_id is also a charter
-// role — sorting a person into a house IS giving them that role — and
-// `sorting-check` asserts the two lists agree.
+// Each department_id is also a charter role — assigning a person to a
+// department IS giving them that role — and `assignment-check` asserts the two
+// lists agree.
 
-type House = { houseId: string; name: string; character: string; mark: string; sigil: string };
+type Department = { departmentId: string; name: string; remit: string; mark: string; sigil: string };
 
-export const HOUSES: readonly House[] = [
-  { houseId: 'ravens', name: 'Ravens', character: 'The curious: they ask the question behind the question and follow it wherever it goes.', mark: 'stripes', sigil: 'triangle' },
-  { houseId: 'owls', name: 'Owls', character: 'The careful: they read the whole thing first and trust what they can check.', mark: 'dots', sigil: 'circle' },
-  { houseId: 'foxes', name: 'Foxes', character: 'The quick: they try it before they are told how, and learn from what breaks.', mark: 'bars', sigil: 'cross' },
-  { houseId: 'stags', name: 'Stags', character: 'The steadfast: they build the thing that is still standing next year.', mark: 'checks', sigil: 'square' },
+// Four departments, four clearances — so four neighbours' phones show four
+// different things.
+export const DEPARTMENTS: readonly Department[] = [
+  { departmentId: 'records', name: 'Records', remit: 'You can read the register: everybody in the room.', mark: 'stripes', sigil: 'triangle' },
+  { departmentId: 'forms', name: 'Forms', remit: 'You can change your own record, and everybody sees it change.', mark: 'dots', sigil: 'circle' },
+  { departmentId: 'inquiries', name: 'Inquiries', remit: 'You can put questions to the records and get answers back.', mark: 'bars', sigil: 'cross' },
+  { departmentId: 'archive', name: 'Archive', remit: 'You can see the history: who arrived when, and where they went.', mark: 'checks', sigil: 'square' },
 ];
 
-// The two principals that are not people, and the role each wears. Their
-// sessions are minted by whoever runs the talk (dev: /dev/as/<principal>).
+// The principals that are not people, and the role each wears. Their sessions
+// are minted by whoever runs the talk (dev: /dev/as/<principal>).
 export const STAFF: readonly { principal: string; role: string }[] = [
   { principal: 'speaker', role: 'speaker' },
   { principal: 'stage', role: 'stage' },
-  // The kit's kitchen sink — every piece of the look on one screen, to lock
-  // it before a feature leans on it (order of work, step 4).
+  // The kit's kitchen sink — every piece of the look on one screen.
   { principal: 'kit', role: 'kit' },
 ];
 
-// The deck, in order. Each id is an action the stage is granted — `deck-check`
-// asserts it. Provisional: the streamed agenda composes the real order.
-export const SLIDES: readonly { slideId: string; title: string }[] = [
+// The deck, in order. Each slide id is an action the stage is granted, each
+// tool id one the speaker is granted — `deck-check` asserts both. The tool is
+// what the controller shows while that slide is up. The words are
+// provisional: the talk's text is written with the story.
+export const SLIDES: readonly { slideId: string; title: string; toolId?: string }[] = [
   { slideId: 'slide.title', title: 'The talk is an application' },
-  { slideId: 'stage.roster', title: 'The room' },
+  { slideId: 'stage.register', title: 'The register' },
   { slideId: 'slide.data', title: 'Everything is data' },
-  { slideId: 'slide.existence', title: 'If you can’t use it, it isn’t there' },
+  { slideId: 'slide.assignment', title: 'Assignment', toolId: 'tools.assignment' },
+  { slideId: 'slide.clearance', title: 'If you can’t use it, it isn’t there', toolId: 'tools.assignment' },
   { slideId: 'slide.live', title: 'Nobody announced anything' },
   { slideId: 'slide.end', title: 'It is all in the folder' },
 ];
@@ -51,17 +52,18 @@ export const SLIDES: readonly { slideId: string; title: string }[] = [
 export const DECK_ID = 'talk';
 
 const quote = (value: string): string => `'${value.replace(/'/g, "''")}'`;
+const nullable = (value: string | undefined): string => (value === undefined ? 'NULL' : quote(value));
 
 const slideIds = SLIDES.map((slide) => quote(slide.slideId)).join(', ');
 
 export const buildSeedSql = (): string =>
   [
-    // Houses: their words converge. None is ever deleted here — a house holds
-    // members, and a house_id is a charter role.
-    ...HOUSES.map(
-      (house, position) =>
-        `INSERT INTO houses (house_id, name, character, mark, sigil, position) VALUES (${quote(house.houseId)}, ${quote(house.name)}, ${quote(house.character)}, ${quote(house.mark)}, ${quote(house.sigil)}, ${position})
-         ON CONFLICT (house_id) DO UPDATE SET name = EXCLUDED.name, character = EXCLUDED.character, mark = EXCLUDED.mark, sigil = EXCLUDED.sigil, position = EXCLUDED.position;`,
+    // Departments: their words converge. None is ever deleted here — a
+    // department has members, and a department_id is a charter role.
+    ...DEPARTMENTS.map(
+      (department, position) =>
+        `INSERT INTO departments (department_id, name, remit, mark, sigil, position) VALUES (${quote(department.departmentId)}, ${quote(department.name)}, ${quote(department.remit)}, ${quote(department.mark)}, ${quote(department.sigil)}, ${position})
+         ON CONFLICT (department_id) DO UPDATE SET name = EXCLUDED.name, remit = EXCLUDED.remit, mark = EXCLUDED.mark, sigil = EXCLUDED.sigil, position = EXCLUDED.position;`,
     ),
     ...STAFF.map((staff) => `INSERT INTO grants (principal, role) VALUES (${quote(staff.principal)}, ${quote(staff.role)}) ON CONFLICT DO NOTHING;`),
 
@@ -71,8 +73,8 @@ export const buildSeedSql = (): string =>
     `UPDATE slides SET position = -1 - position WHERE position >= 0;`,
     ...SLIDES.map(
       (slide, position) =>
-        `INSERT INTO slides (slide_id, position, title) VALUES (${quote(slide.slideId)}, ${position}, ${quote(slide.title)})
-         ON CONFLICT (slide_id) DO UPDATE SET position = EXCLUDED.position, title = EXCLUDED.title;`,
+        `INSERT INTO slides (slide_id, position, title, tool_id) VALUES (${quote(slide.slideId)}, ${position}, ${quote(slide.title)}, ${nullable(slide.toolId)})
+         ON CONFLICT (slide_id) DO UPDATE SET position = EXCLUDED.position, title = EXCLUDED.title, tool_id = EXCLUDED.tool_id;`,
     ),
     // The deck row is the talk's state: seeded once, never reset by a restart —
     // unless the slide it names was taken out of the deck, when it goes back to

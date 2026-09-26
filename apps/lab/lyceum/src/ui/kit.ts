@@ -238,3 +238,20 @@ export const Action: DomComponent = ({ props }) => {
   setData(node, 'ink', oneOf(props['ink'], INKS));
   return node;
 };
+
+// ── Field — a line of text somebody types ───────────────────────
+// area, placeholder, value. Bound with the layout's `model` (nova wires the
+// typing by that convention); `value` is what the field shows when it renders.
+export const Field: DomComponent = ({ props }) => {
+  const node = document.createElement('input');
+  node.type = 'text';
+  node.className = 'field';
+  node.spellcheck = false;
+  node.autocomplete = 'off';
+  const value = text(props['value']);
+  if (value !== undefined) node.value = value;
+  const placeholder = text(props['placeholder']);
+  if (placeholder !== undefined) node.placeholder = placeholder;
+  placeIn(node, props['area']);
+  return node;
+};

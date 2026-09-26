@@ -1,14 +1,14 @@
 import type { Charter } from '@niscorp/charter';
 
-// Written once and never edited during the talk. Every grant the speaker makes
-// on stage is an ASSIGNMENT — a row in `grants`, or a person's `house_id` — and
-// the identity seam turns rows into these roles (PLAN.md, "the charter is
-// written once").
+// Written once and never edited during the talk. Every change the speaker
+// makes on stage is a ROW — a person's `department_id`, or a line in `grants` —
+// and the identity seam turns rows into these roles.
 //
-// A house role is named by its house_id; the sorting gives a person the role
-// by writing that id onto their row.
+// A department role is named by its department_id; assigning a person writes
+// that id onto their row. The four departments differ in CLEARANCE: what their
+// role is granted, and so what exists on their phone.
 
-const ROOM_READS = ['members.read', 'houses.read'];
+const ROOM_READS = ['members.read', 'departments.read'];
 const DECK_READS = ['deck.read', 'slides.read'];
 
 export const CHARTER: Charter = {
@@ -17,21 +17,22 @@ export const CHARTER: Charter = {
   // (the engine stamps whose; vex/behaviors.ts).
   public: { actions: ['door.*'], data: ['members.write.insert'] },
 
-  // Everybody in the room, sorted or not. Never worn alone — the roles below
-  // extend it.
+  // Everybody in the room, assigned or not: the ID card. Never worn alone —
+  // the roles below extend it.
   member: { actions: ['member.*'], data: ROOM_READS },
 
-  unsorted: { extends: ['member'] },
-  ravens: { extends: ['member'], actions: ['house.*'] },
-  owls: { extends: ['member'], actions: ['house.*'] },
-  foxes: { extends: ['member'], actions: ['house.*'] },
-  stags: { extends: ['member'], actions: ['house.*'] },
+  unassigned: { extends: ['member'] },
+  // Every department gets its badge; each gets one clearance of its own.
+  records: { extends: ['member'], actions: ['department.*', 'records.*'] },
+  forms: { extends: ['member'], actions: ['department.*', 'forms.*'], data: ['members.write.update'] },
+  inquiries: { extends: ['member'], actions: ['department.*', 'inquiries.*'] },
+  archive: { extends: ['member'], actions: ['department.*', 'archive.*'] },
 
   // The speaker's controller and the projector: two principals, two devices.
-  // The speaker moves the deck; the stage shows it — every slide is an action
-  // only the stage is granted.
-  // The speaker sorts the room, as themselves.
-  speaker: { actions: ['speaker.*'], data: [...ROOM_READS, ...DECK_READS, 'deck.write.update', 'members.write.update'] },
+  // The speaker moves the deck and assigns the room, as themselves; the
+  // controller's tools change with the slide. The stage shows the deck —
+  // every slide is an action only the stage is granted.
+  speaker: { actions: ['speaker.*', 'tools.*'], data: [...ROOM_READS, ...DECK_READS, 'deck.write.update', 'members.write.update'] },
   stage: { actions: ['stage.*', 'slide.*'], data: [...ROOM_READS, ...DECK_READS] },
 
   // The kit's kitchen sink: every piece of the look on one screen (dev).
@@ -48,11 +49,11 @@ export const CHARTER: Charter = {
 // come from rows and there is no static assignment map to derive them from.
 export const WEARABLE: readonly (readonly string[])[] = [
   ['public'],
-  ['unsorted'],
-  ['ravens'],
-  ['owls'],
-  ['foxes'],
-  ['stags'],
+  ['unassigned'],
+  ['records'],
+  ['forms'],
+  ['inquiries'],
+  ['archive'],
   ['speaker'],
   ['stage'],
   ['kit'],

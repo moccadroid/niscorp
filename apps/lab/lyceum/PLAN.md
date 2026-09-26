@@ -115,6 +115,19 @@ rule 2): closed sets of names, no style or class from a layout. Slides use four 
 shapes (title, statement, code, live); the stage's strip (slide n/N, the room) is its
 own canvas above the slide canvas. The kitchen sink is `kit.sink` — `/dev/as/kit`.
 
+**The Ministry — 2026-09-26.** The story is a thin skin over the framework's own concepts,
+in words nobody has to learn: you step in and get an **ID card** (a session, a
+principal); you are **assigned to a department** (a role); your department's
+**clearance** decides what exists on your phone (the charter); everything you can do is
+a **form** (an action). Four departments, four clearances, four different phones:
+Records reads the register, Forms can change their own record (a write pinned to their
+own row by the personal reach), Inquiries puts stored questions to the records (vex
+replays, reactive), Archive sees the history. Departments are marks and sigils on their
+rows. The controller has a picker (every slide, press one to put it up) and a `tools`
+canvas: each slide row may name a tool (`slides.tool_id`), and the speaker's deck puts
+that tool on the controller while the slide is up — assignment controls only on the
+assignment slides. `assignment-check` (39), `deck-check` (22), `serve-check` (13).
+
 **Next:**
 1. **The UI, continued** — the look is locked on the kitchen sink and the screens that
    exist; the talk's real slides and the persona screen are written against it.
