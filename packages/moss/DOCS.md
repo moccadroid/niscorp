@@ -323,7 +323,17 @@ the engine instead of waiting for somebody's beat.
   by whatever canvases moved. Protocol-level, so a browser's back button, a
   TUI's Escape and an app's own control are one message on one wire, and an app
   authors nothing to receive it.
-- `CLOSE_INVALID_TOKEN = 4401`, `CLOSE_SIGNED_OUT = 4403`.
+- `CLOSE_INVALID_TOKEN = 4401`, `CLOSE_SIGNED_OUT = 4403`,
+  `CLOSE_PROTOCOL_MISMATCH = 4426`.
+- **Protocol version.** `PROTOCOL` is the wire protocol this server speaks and
+  `PROTOCOL_MIN` the oldest it still serves. A terminal names its protocol on
+  the upgrade (`?protocol=N`, beside the token); one that names none speaks `1`,
+  which is every terminal built before the question existed. Outside the range
+  the connection is refused before anything is served: an `error` frame
+  (`client_too_old` or `server_too_old`) and a `4426` close. `hello` carries
+  `protocol`, so a terminal can refuse a server older than it can speak to.
+  Bump `PROTOCOL` when a message changes shape; raise `PROTOCOL_MIN` only when
+  the server stops speaking an old one.
 - A canvas whose layout renders no visible content is served as an empty
   tree (`[]`), so a terminal collapses chrome on `length` alone. An
   `ActionSlot` is a boundary, not content — visibility is decided by what's
@@ -429,7 +439,10 @@ Reconnect is exponential backoff with jitter, capped at 30s, reset when a
 connection opens and on any principal change (a session grant or a close-code
 recovery starts the backoff clean). Two close codes are recoveries, not retries: `4403`
 (signed out) and `4401` (invalid token) both drop the stored token and
-reconnect anonymous — retrying with a stale token would loop forever. Server
+reconnect anonymous — retrying with a stale token would loop forever. A
+`4426` (protocol mismatch, either direction) is neither: the wire stops and
+reports status `incompatible`, because every retry would speak the same
+protocol again — a browser terminal needs a reload for the current build. Server
 `error` frames and unknown message types are `console.warn`ed; `hello` and
 `catalog` are deliberately ignored (the terminal is grant-blind).
 

@@ -137,7 +137,7 @@ RFC 6455 plumbing lives with each runtime's entry (`ws` on Node in `./node`,
 Bun-native later). One connection per client carries every canvas — ten open
 canvases are ten canvas ids on one pipe.
 
-**Down:** `hello` (the resolved catalog on connect), `catalog` (declared for
+**Down:** `hello` (the resolved catalog on connect, and the protocol the server speaks — the terminal names its own on the upgrade), `catalog` (declared for
 catalog pushes — not yet sent; terminals know it and ignore it), `frame` (the
 canvas arrangement — a served layout of `CanvasSlot` markers), `render` (a
 canvas's tree), `render-delta` (the same tree, against the last one — opt-in,

@@ -93,10 +93,15 @@ export const ttyTarget = (config: TtyTargetConfig): Target => (api) => {
 
   // Report real transitions only: up once, down once — never the
   // closed↔connecting flap of every backoff retry.
-  let link: 'unknown' | 'up' | 'down' = 'unknown';
+  let link: 'unknown' | 'up' | 'down' | 'incompatible' = 'unknown';
   const checkStatus = (): void => {
     if (config.status === undefined) return;
     const now = config.status();
+    if (now === 'incompatible') {
+      if (link !== 'incompatible') say('× this terminal and the server speak different protocol versions — update one of them');
+      link = 'incompatible';
+      return;
+    }
     if (now === 'open' && link !== 'up') {
       link = 'up';
       say('✓ connected');

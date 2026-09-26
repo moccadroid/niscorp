@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { createWire, browserEnv } from '../src/client';
 import type { WireEnv } from '../src/client';
-import { CLOSE_INVALID_TOKEN, CLOSE_SIGNED_OUT } from '../src/socket';
+import { CLOSE_INVALID_TOKEN, CLOSE_PROTOCOL_MISMATCH, CLOSE_SIGNED_OUT, PROTOCOL } from '../src/socket';
 import { encodeDelta, frameHash } from '../src/delta';
 
 // ═══════════════════════════════════════════════════════════════
@@ -88,16 +88,24 @@ afterEach(() => {
 
 const URL = 'ws://test/socket';
 
+// What an upgrade url says: where it goes and which credential it carries.
+// The wire adds capability params (protocol, delta) beside the token; the
+// assertions below are about the TARGET and the TOKEN, so they read those.
+const upgrade = (url: string): { target: string; token: string | null } => {
+  const parsed = new globalThis.URL(url);
+  return { target: `${parsed.protocol}//${parsed.host}${parsed.pathname}`, token: parsed.searchParams.get('token') };
+};
+
 describe('the wire — connect + snapshot', () => {
   it('connects immediately, anonymous when the token slot is empty', () => {
     createWire({ url: URL, env: env() });
     expect(FakeSocket.instances).toHaveLength(1);
-    expect(FakeSocket.last().url).toBe(URL); // no ?token
+    expect(upgrade(FakeSocket.last().url)).toEqual({ target: URL, token: null }); // no ?token
   });
 
   it('falls back to the env defaultUrl when no url is configured', () => {
     createWire({ env: env() });
-    expect(FakeSocket.last().url).toBe('ws://default.local/socket');
+    expect(upgrade(FakeSocket.last().url).target).toBe('ws://default.local/socket');
   });
 
   it('rides the stored token up on connect', () => {
@@ -244,7 +252,7 @@ describe('the wire — session lifecycle (become)', () => {
 
     expect(storage.getItem('nisc.token')).toBeNull();
     expect(FakeSocket.instances).toHaveLength(2);
-    expect(FakeSocket.last().url).toBe(URL); // anonymous now
+    expect(upgrade(FakeSocket.last().url)).toEqual({ target: URL, token: null }); // anonymous now
   });
 
   it('INVALID_TOKEN (4401) drops the stale token and reconnects anonymous — never loops on it', () => {
@@ -256,7 +264,7 @@ describe('the wire — session lifecycle (become)', () => {
     // recovered to anonymous at once, not via a backoff retry with the bad token
     expect(storage.getItem('nisc.token')).toBeNull();
     expect(FakeSocket.instances).toHaveLength(2);
-    expect(FakeSocket.last().url).toBe(URL);
+    expect(upgrade(FakeSocket.last().url)).toEqual({ target: URL, token: null });
 
     // and no scheduled retry ever re-sends the stale token, however long we wait
     vi.advanceTimersByTime(120_000);
@@ -502,5 +510,43 @@ describe('browserEnv — the browser host', () => {
     expect(e.tokens.load()).toBeNull();
     e.tokens.save('t');
     e.tokens.clear();
+  });
+});
+
+describe('the wire — protocol', () => {
+  beforeEach(() => {
+    FakeSocket.instances = [];
+    vi.useFakeTimers();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
+
+  it('says which protocol it speaks on every upgrade', () => {
+    createWire({ url: URL, env: env() });
+    expect(FakeSocket.last().url).toContain(`protocol=${PROTOCOL}`);
+  });
+
+  it('a protocol-mismatch close is terminal: status incompatible, no reconnect', () => {
+    const wire = createWire({ url: URL, env: env() });
+    FakeSocket.last().serverClose(CLOSE_PROTOCOL_MISMATCH);
+    expect(wire.status()).toBe('incompatible');
+    vi.advanceTimersByTime(120_000);
+    expect(FakeSocket.instances).toHaveLength(1);
+  });
+
+  it('refuses a server older than it can speak to, then stops', () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const wire = createWire({ url: URL, env: env() });
+    const sock = FakeSocket.last();
+    sock.open();
+    sock.emit({ type: 'hello', protocol: 0, principal: null, catalog: { actions: [], hash: 'x' } });
+    expect(sock.closed).toBe(true);
+    expect(String(error.mock.calls[0]?.[0])).toContain('protocol 0');
+    sock.serverClose(1005);
+    expect(wire.status()).toBe('incompatible');
+    vi.advanceTimersByTime(120_000);
+    expect(FakeSocket.instances).toHaveLength(1);
   });
 });

@@ -41,7 +41,7 @@ export type Connection = {
 
 // ── The envelope ──
 export type ServerMessage =
-  | { type: 'hello'; principal: string | null; catalog: { actions: readonly string[]; hash: string } }
+  | { type: 'hello'; protocol: number; principal: string | null; catalog: { actions: readonly string[]; hash: string } }
   | { type: 'catalog'; actions: readonly string[]; hash: string }
   // the shell's canvas ARRANGEMENT — a rendered layout whose CanvasSlot
   // markers the terminal resolves against its per-canvas trees
@@ -90,6 +90,16 @@ export type ClientMessage =
   // charter grants it, and it reaches a terminal whose every surface is dead.
   | { type: 'reset' };
 
+// The wire protocol this server speaks, and the oldest a terminal may speak to
+// it. A terminal says which it speaks on the upgrade (`?protocol=N`, beside the
+// token — known before the first frame is sent); one that says nothing speaks 1,
+// which is every terminal built before the question existed. Outside the range
+// the connection is refused with a sentence and CLOSE_PROTOCOL_MISMATCH, never
+// served frames it would misread. Bump PROTOCOL when a message changes shape;
+// raise PROTOCOL_MIN only when the server stops speaking an old one.
+export const PROTOCOL = 1;
+export const PROTOCOL_MIN = 1;
+
 // Application close code: the token did not resolve to a principal.
 export const CLOSE_INVALID_TOKEN = 4401;
 // Application close code: the session ended (sign-out, from any of the
@@ -102,6 +112,11 @@ export const CLOSE_SIGNED_OUT = 4403;
 // the process and every other session stay up, and reconnecting later is
 // reasonable — the next build is attempted fresh.
 export const CLOSE_SHELL_FAILED = 4500;
+// Application close code: terminal and server speak protocols the other cannot
+// (see PROTOCOL). Not a retry: reconnecting speaks the same protocol again. A
+// browser terminal needs a reload to fetch the current build; the preceding
+// `error` says which side is behind (`client_too_old` / `server_too_old`).
+export const CLOSE_PROTOCOL_MISMATCH = 4426;
 
 export type SocketContext = {
   session: (token: string) => string | null | Promise<string | null>;
@@ -234,7 +249,19 @@ export const createSocket = (ctx: SocketContext): SocketAccept => {
     // One clock stamped at the handshake serves both the short `socket.upgrade`
     // span and the whole-connection `socket.close` span from the same origin.
     const upClock = emit === undefined ? undefined : spanClock();
-    const token = new URL(url, 'http://nisc.local').searchParams.get('token');
+    const params = new URL(url, 'http://nisc.local').searchParams;
+    const spoken = Number(params.get('protocol') ?? '1');
+    if (!Number.isInteger(spoken) || spoken < PROTOCOL_MIN || spoken > PROTOCOL) {
+      const behind = spoken > PROTOCOL ? 'server' : 'client';
+      send({
+        type: 'error',
+        code: `${behind}_too_old`,
+        message: `This terminal speaks protocol ${params.get('protocol') ?? '1'}; this server speaks ${PROTOCOL_MIN}–${PROTOCOL}. ${behind === 'client' ? 'Reload the terminal to get the current build.' : 'The server has not been updated yet.'}`,
+      });
+      connection.close(CLOSE_PROTOCOL_MISMATCH, 'protocol mismatch');
+      return;
+    }
+    const token = params.get('token');
     let principal: string | null = null;
     if (token !== null && token !== '') {
       principal = await ctx.session(token);
@@ -264,7 +291,7 @@ export const createSocket = (ctx: SocketContext): SocketAccept => {
     // The catalog channel: the application, resolved for YOU, on every
     // (re)connect — reconnect re-sends current state, no replay machinery.
     const { ids, hash } = await ctx.catalog(principal);
-    send({ type: 'hello', principal, catalog: { actions: ids, hash } });
+    send({ type: 'hello', protocol: PROTOCOL, principal, catalog: { actions: ids, hash } });
 
     // The canvas streams: attach to the session's shell (durable per
     // principal — the shell outlives this connection) and it re-sends the
@@ -274,7 +301,7 @@ export const createSocket = (ctx: SocketContext): SocketAccept => {
     // be known before the first frame is sent. A terminal that says nothing is
     // served whole frames forever, which is what every terminal built before
     // this existed does.
-    const wantsDelta = new URL(url, 'http://nisc.local').searchParams.get('delta') === '1';
+    const wantsDelta = params.get('delta') === '1';
 
     const session = await ctx.shells?.session(token, principal);
     if (session !== undefined) {

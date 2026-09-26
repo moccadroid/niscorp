@@ -164,6 +164,9 @@ export const inkTarget = (config: InkTargetConfig = {}): Target => (api) => {
   const StatusLine: FC = () => {
     const status = config.status?.();
     if (status === undefined || status === 'open') return null;
+    if (status === 'incompatible') {
+      return createElement(InkText, { color: 'red' }, '× this terminal and the server speak different protocol versions — update one of them');
+    }
     return status === 'connecting'
       ? createElement(InkText, { color: 'yellow' }, '… connecting')
       : createElement(InkText, { color: 'red' }, '× connection lost — retrying');

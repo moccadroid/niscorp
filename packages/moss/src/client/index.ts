@@ -1,5 +1,5 @@
 import type { NovaEvent, RenderNode } from '@niscorp/nova';
-import { CLOSE_INVALID_TOKEN, CLOSE_SIGNED_OUT } from '../socket';
+import { CLOSE_INVALID_TOKEN, CLOSE_PROTOCOL_MISMATCH, CLOSE_SIGNED_OUT, PROTOCOL, PROTOCOL_MIN } from '../socket';
 import { applyDelta, frameHash } from '../delta';
 import type { DeltaOp } from '../delta';
 
@@ -63,7 +63,10 @@ export type WireSnapshot = {
 // connecting). Status changes notify subscribers like snapshot changes do —
 // a terminal that renders nothing on a dead socket is indistinguishable from
 // a working terminal rendering an empty app, so the state must be readable.
-export type WireStatus = 'connecting' | 'open' | 'closed';
+// `incompatible`: this terminal and the server speak protocols the other
+// cannot (see PROTOCOL in ../socket). Terminal state — the wire stops retrying,
+// because every retry would speak the same protocol again.
+export type WireStatus = 'connecting' | 'open' | 'closed' | 'incompatible';
 
 export type Wire = {
   subscribe: (listener: () => void) => () => void;
@@ -142,6 +145,8 @@ export const createWire = (config: WireConfig = {}): Wire => {
   let token = env.tokens.load();
   let snapshot: WireSnapshot = EMPTY;
   let status: WireStatus = 'connecting';
+  // Set by a protocol mismatch in either direction; ends the reconnect loop.
+  let incompatible = false;
   let socket: WebSocket | null = null;
   let retry: ReturnType<typeof setTimeout> | undefined;
   // Consecutive failed connects — resets to 0 the moment one opens. Drives the
@@ -176,6 +181,7 @@ export const createWire = (config: WireConfig = {}): Wire => {
     bases.clear();
     const params: string[] = [];
     if (token !== null) params.push(`token=${encodeURIComponent(token)}`);
+    params.push(`protocol=${PROTOCOL}`);
     if (config.delta === true) params.push('delta=1');
     const ws = env.socket(`${url()}${params.length > 0 ? `?${params.join('&')}` : ''}`);
     socket = ws;
@@ -192,6 +198,7 @@ export const createWire = (config: WireConfig = {}): Wire => {
         tree?: RenderNode[];
         ops?: DeltaOp[];
         hash?: number;
+        protocol?: number;
         token?: string;
         code?: string;
         message?: string;
@@ -237,6 +244,13 @@ export const createWire = (config: WireConfig = {}): Wire => {
         // onclose), and this is the breadcrumb saying the session expired
         // rather than the network dropping.
         console.warn(`[moss/wire] server error${data.code !== undefined ? ` (${data.code})` : ''}: ${data.message ?? ''}`);
+      } else if (data.type === 'hello' && (data.protocol ?? 1) < PROTOCOL_MIN) {
+        // The other half of the handshake: the server checked this terminal on
+        // the upgrade; this checks the server. One that predates the question
+        // sends no `protocol` and speaks 1.
+        console.error(`[moss/wire] the server speaks protocol ${data.protocol ?? 1}; this terminal needs ${PROTOCOL_MIN}–${PROTOCOL}. The server has not been updated yet.`);
+        incompatible = true;
+        ws.close();
       } else if (data.type !== 'hello' && data.type !== 'catalog') {
         // hello/catalog are known and deliberately ignored (the terminal is
         // grant-blind — it renders what it is served, never what it may do);
@@ -251,6 +265,11 @@ export const createWire = (config: WireConfig = {}): Wire => {
     // reconnect anonymous (the served lock screen). Every other close backs off
     // and retries carrying the current token.
     ws.onclose = (e) => {
+      if (incompatible || e.code === CLOSE_PROTOCOL_MISMATCH) {
+        incompatible = true;
+        setStatus('incompatible');
+        return;
+      }
       setStatus('closed');
       if (e.code === CLOSE_SIGNED_OUT || e.code === CLOSE_INVALID_TOKEN) {
         become(null);

@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { DefinitionValidationError } from '@niscorp/nova';
-import { createSocket, CLOSE_INVALID_TOKEN, CLOSE_SIGNED_OUT, CLOSE_SHELL_FAILED } from '../src/socket';
+import { createSocket, CLOSE_INVALID_TOKEN, CLOSE_SIGNED_OUT, CLOSE_SHELL_FAILED, CLOSE_PROTOCOL_MISMATCH, PROTOCOL, PROTOCOL_MIN } from '../src/socket';
 import type { Connection, ServerMessage, SocketContext } from '../src/socket';
 import type { ShellHost, ShellSession } from '../src/shells';
 
@@ -83,6 +83,37 @@ describe('socket — the authority channel', () => {
     expect(hello?.principal).toBe('usr_1');
     expect(hello?.catalog.hash).toBe('abc123');
     expect(conn.closed).toBeUndefined();
+  });
+
+  it('hello says which protocol the server speaks', async () => {
+    const accept = createSocket(ctxWith());
+    const conn = new FakeConnection();
+    await accept(`/socket?protocol=${PROTOCOL}`, conn);
+    expect(conn.first('hello')?.protocol).toBe(PROTOCOL);
+  });
+
+  it('a terminal that names no protocol speaks 1 — every terminal built before the question', async () => {
+    const accept = createSocket(ctxWith());
+    const conn = new FakeConnection();
+    await accept('/socket', conn);
+    expect(PROTOCOL_MIN).toBeLessThanOrEqual(1);
+    expect(conn.first('hello')).toBeDefined();
+    expect(conn.closed).toBeUndefined();
+  });
+
+  it.each([
+    ['older than the server serves', String(PROTOCOL_MIN - 1), 'client_too_old'],
+    ['newer than the server speaks', String(PROTOCOL + 1), 'server_too_old'],
+    ['not a protocol at all', 'banana', 'client_too_old'],
+  ])('a terminal %s is refused before anything is served: error then close 4426', async (_label, spoken, code) => {
+    const session = recordingSession();
+    const accept = createSocket(ctxWith({ shells: hostFor(session) }));
+    const conn = new FakeConnection();
+    await accept(`/socket?protocol=${spoken}&token=good`, conn);
+    expect(conn.first('error')?.code).toBe(code);
+    expect(conn.closed?.code).toBe(CLOSE_PROTOCOL_MISMATCH);
+    expect(conn.first('hello')).toBeUndefined();
+    expect(session.calls).toEqual([]);
   });
 
   it('an invalid token is refused: error then close 4401', async () => {
