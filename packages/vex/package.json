@@ -2,37 +2,77 @@
   "name": "@niscorp/vex",
   "version": "0.1.0",
   "description": "Declarative query synthesis — intent to SQL with caching and scope policies",
-  "license": "MIT",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/moccadroid/niscorp.git",
+    "directory": "packages/vex"
+  },
   "type": "module",
   "sideEffects": false,
   "exports": {
     ".": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.js",
-      "require": "./dist/index.cjs"
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
     },
     "./agent": {
-      "types": "./dist/agent/index.d.ts",
-      "import": "./dist/agent/index.js",
-      "require": "./dist/agent/index.cjs"
+      "import": {
+        "types": "./dist/agent/index.d.ts",
+        "default": "./dist/agent/index.js"
+      },
+      "require": {
+        "types": "./dist/agent/index.d.cts",
+        "default": "./dist/agent/index.cjs"
+      }
     },
     "./hono": {
-      "types": "./dist/adapters/hono/index.d.ts",
-      "import": "./dist/adapters/hono/index.js"
+      "import": {
+        "types": "./dist/adapters/hono/index.d.ts",
+        "default": "./dist/adapters/hono/index.js"
+      },
+      "require": {
+        "types": "./dist/adapters/hono/index.d.cts",
+        "default": "./dist/adapters/hono/index.cjs"
+      }
     },
     "./express": {
-      "types": "./dist/adapters/express/index.d.ts",
-      "import": "./dist/adapters/express/index.js"
+      "import": {
+        "types": "./dist/adapters/express/index.d.ts",
+        "default": "./dist/adapters/express/index.js"
+      },
+      "require": {
+        "types": "./dist/adapters/express/index.d.cts",
+        "default": "./dist/adapters/express/index.cjs"
+      }
     },
     "./pglite": {
-      "types": "./dist/adapters/pglite/index.d.ts",
-      "import": "./dist/adapters/pglite/index.js",
-      "require": "./dist/adapters/pglite/index.cjs"
+      "import": {
+        "types": "./dist/adapters/pglite/index.d.ts",
+        "default": "./dist/adapters/pglite/index.js"
+      },
+      "require": {
+        "types": "./dist/adapters/pglite/index.d.cts",
+        "default": "./dist/adapters/pglite/index.cjs"
+      }
     }
   },
   "files": [
-    "dist"
+    "dist",
+    "*.md",
+    "LICENSE"
   ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": ">=22.12"
+  },
   "scripts": {
     "build": "tsup",
     "dev": "tsup --watch",
@@ -47,13 +87,17 @@
     "docker:down": "docker compose down"
   },
   "dependencies": {
-    "@niscorp/cortex": "workspace:*",
     "@niscorp/prism": "workspace:*",
     "zod": "^4.3.6"
+  },
+  "peerDependencies": {
+    "@niscorp/cortex": "workspace:^",
+    "hono": "^4"
   },
   "devDependencies": {
     "@electric-sql/pglite": "^0.5.1",
     "@hono/node-server": "^2.0.4",
+    "@niscorp/cortex": "workspace:^",
     "@types/node": "^25.9.1",
     "@types/pg": "^8.15.4",
     "hono": "^4.12.23",
@@ -63,13 +107,16 @@
     "vitest": "^4.1.2"
   },
   "peerDependenciesMeta": {
-    "pg": {
+    "@niscorp/cortex": {
+      "optional": true
+    },
+    "express": {
       "optional": true
     },
     "hono": {
       "optional": true
     },
-    "express": {
+    "pg": {
       "optional": true
     }
   }

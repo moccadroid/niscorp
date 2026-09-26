@@ -4,10 +4,10 @@
 
 **Software, if you let machines write it, shouldn't be code.**
 
-[![License: MIT](https://img.shields.io/badge/license-MIT-black.svg?style=flat-square)](LICENSE)
+[![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-black.svg?style=flat-square)](LICENSE)
 [![Status](https://img.shields.io/badge/status-pre--1.0-orange.svg?style=flat-square)](#status)
 [![pnpm](https://img.shields.io/badge/pnpm-9.15-f69220.svg?style=flat-square)](https://pnpm.io)
-[![Node](https://img.shields.io/badge/node-%E2%89%A518.18-339933.svg?style=flat-square)](https://nodejs.org)
+[![Node](https://img.shields.io/badge/node-%E2%89%A522.12-339933.svg?style=flat-square)](https://nodejs.org)
 [![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178c6.svg?style=flat-square)](https://www.typescriptlang.org)
 [![Live Showroom](https://img.shields.io/badge/Live_Showroom-moccadroid.github.io-4f46e5.svg?style=flat-square)](https://moccadroid.github.io/niscorp/)
 
@@ -83,7 +83,7 @@ pnpm install
 pnpm build
 ```
 
-> **Requires** Node ≥ 18.18 and pnpm. Install pnpm with `brew install pnpm` or `corepack enable`.
+> **Requires** Node ≥ 22.12 and pnpm. Install pnpm with `brew install pnpm` or `corepack enable`.
 
 ## Showroom
 
@@ -152,6 +152,6 @@ Issues and PRs welcome. Read the relevant package's `DESIGN.md` before proposing
 
 ## License
 
-[MIT](LICENSE) © Nisc contributors
+[Apache-2.0](LICENSE) © Nisc contributors
 
 _Built with deliberate constraint. Powered by JSON._

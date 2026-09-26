@@ -2,10 +2,10 @@
   "name": "niscorp",
   "private": true,
   "description": "AI-native application platform",
-  "license": "MIT",
+  "license": "Apache-2.0",
   "packageManager": "pnpm@9.15.0",
   "engines": {
-    "node": ">=18.18.0"
+    "node": ">=22.12"
   },
   "scripts": {
     "preinstall": "npx only-allow pnpm",
@@ -14,11 +14,14 @@
     "test": "turbo test",
     "typecheck": "turbo typecheck",
     "lint": "eslint \"apps/lab/lyra/src/**/*.ts\" \"packages/moss/src/**/*.ts\" \"packages/charter/src/**/*.ts\"",
-    "format": "prettier --write \"**/*.{ts,tsx,json,md}\""
+    "format": "prettier --write \"**/*.{ts,tsx,json,md}\"",
+    "check:packages": "node scripts/check-packages.mts"
   },
   "devDependencies": {
+    "@arethetypeswrong/cli": "^0.18.5",
     "eslint": "^9",
     "prettier": "^3.8.1",
+    "publint": "^0.3.24",
     "turbo": "^2.9.3",
     "typescript": "^6.0.2",
     "typescript-eslint": "^8"

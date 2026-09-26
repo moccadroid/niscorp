@@ -44,19 +44,22 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      # `turbo --concurrency=1` rather than pnpm's `--workspace-concurrency`:
-      # `pnpm build` delegates straight to turbo, which schedules its own work,
-      # so the pnpm flag would pass through and change nothing. Serial matters
-      # for the reason the deploy workflow records — prism's `agent` sub-export
-      # imports cortex while declaring it only as an optional peer, so a
-      # parallel run races prism's DTS pass against cortex's and prism cannot
-      # find the types.
+      # Turbo builds in dependency order. An optional peer that a subpath
+      # imports (prism/agent → cortex) is also a devDependency, which is what
+      # puts the edge in turbo's graph — so the build runs parallel and safe.
       #
       # Both tasks below need this: apps resolve `@niscorp/*` to `dist`, not to
       # source, so an unbuilt package makes typecheck fail on stale types.
-      # Verified cold (no cache): 16 tasks, ~70s.
       - name: Build packages
-        run: npx turbo build --concurrency=1
+        run: pnpm build
+
+      # Inside the workspace every import resolves, declared or not. This packs
+      # each package, lints the manifest (publint), checks every export's types
+      # under node16 ESM and CJS (attw), and installs the tarballs into an
+      # isolated scratch project to import and require every subpath — what a
+      # consumer outside this repo actually gets. See scripts/check-packages.mts.
+      - name: Check packages
+        run: pnpm check:packages
 
       # Every workspace: ten packages and eight apps, tests and checks included.
       # This is the step that would have caught all 110.

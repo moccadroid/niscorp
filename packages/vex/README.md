@@ -92,4 +92,4 @@ engine.cache;                     // CacheBackend — the live cache
 
 ## License
 
-MIT
+Apache-2.0

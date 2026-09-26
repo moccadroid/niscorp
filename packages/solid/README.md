@@ -181,4 +181,4 @@ stream.select<P>(path: string): Stream<P>
 
 ## License
 
-MIT
+Apache-2.0

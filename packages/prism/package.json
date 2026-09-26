@@ -2,7 +2,7 @@
   "name": "@niscorp/prism",
   "version": "0.1.0",
   "description": "Pure JSON transformation DSL with compilation and zero code execution",
-  "license": "MIT",
+  "license": "Apache-2.0",
   "type": "module",
   "sideEffects": false,
   "main": "./dist/index.cjs",
@@ -35,7 +35,7 @@
   },
   "files": [
     "dist",
-    "README.md",
+    "*.md",
     "LICENSE"
   ],
   "scripts": {
@@ -68,14 +68,27 @@
     "url": "https://github.com/moccadroid/niscorp/issues"
   },
   "engines": {
-    "node": ">=18.18.0"
+    "node": ">=22.12"
   },
   "dependencies": {
     "dayjs": "^1.11.20",
-    "@niscorp/cortex": "workspace:*",
     "zod": "^4.3.6"
   },
+  "peerDependencies": {
+    "@niscorp/cortex": "workspace:^",
+    "@niscorp/signal": "workspace:^"
+  },
+  "peerDependenciesMeta": {
+    "@niscorp/cortex": {
+      "optional": true
+    },
+    "@niscorp/signal": {
+      "optional": true
+    }
+  },
   "devDependencies": {
+    "@niscorp/cortex": "workspace:^",
+    "@niscorp/signal": "workspace:^",
     "tsup": "^8.5.1",
     "vitest": "^4.1.2"
   }

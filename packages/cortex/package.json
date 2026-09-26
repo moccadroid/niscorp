@@ -1,20 +1,38 @@
 {
   "name": "@niscorp/cortex",
   "version": "0.2.0",
-  "description": "Agent runtime \u00e2\u20ac\u201d one tool loop, typed envelopes, gates, streamed events",
-  "license": "MIT",
+  "description": "Agent runtime — one tool loop, typed envelopes, gates, streamed events",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/moccadroid/niscorp.git",
+    "directory": "packages/cortex"
+  },
   "type": "module",
   "sideEffects": false,
   "exports": {
     ".": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.js",
-      "require": "./dist/index.cjs"
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
     }
   },
   "files": [
-    "dist"
+    "dist",
+    "*.md",
+    "LICENSE"
   ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": ">=22.12"
+  },
   "scripts": {
     "build": "tsup",
     "dev": "tsup --watch",

@@ -34,14 +34,12 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      # `--workspace-concurrency=1` forces serial topo-order builds.
-      # Necessary because prism's `agent` sub-export imports cortex
-      # but only declares it as an optional peer, so without serial
-      # ordering pnpm runs prism's DTS build in parallel with cortex's
-      # and prism fails to find cortex's types. Builds the showroom
-      # plus all workspace deps it transitively needs.
+      # Builds the showroom plus every workspace package it transitively
+      # needs, in topological order. An optional peer that a subpath
+      # imports (prism/agent → cortex) is also a devDependency, which is
+      # what puts it in the build graph — no serial flag required.
       - name: Build showroom
-        run: pnpm --filter showroom... --workspace-concurrency=1 run build
+        run: pnpm --filter showroom... run build
 
       - uses: actions/configure-pages@v5
 

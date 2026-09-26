@@ -1,25 +1,48 @@
 {
   "name": "@niscorp/tide",
   "version": "0.1.0",
-  "description": "Host-blind automation engine \u00e2\u20ac\u201d a reflex turns the clock and the fact into one named effect, through a durable ledger.",
-  "license": "MIT",
+  "description": "Host-blind automation engine — a reflex turns the clock and the fact into one named effect, through a durable ledger.",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/moccadroid/niscorp.git",
+    "directory": "packages/tide"
+  },
   "type": "module",
   "sideEffects": false,
   "exports": {
     ".": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.js",
-      "require": "./dist/index.cjs"
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
     },
     "./testing": {
-      "types": "./dist/testing.d.ts",
-      "import": "./dist/testing.js",
-      "require": "./dist/testing.cjs"
+      "import": {
+        "types": "./dist/testing.d.ts",
+        "default": "./dist/testing.js"
+      },
+      "require": {
+        "types": "./dist/testing.d.cts",
+        "default": "./dist/testing.cjs"
+      }
     }
   },
   "files": [
-    "dist"
+    "dist",
+    "*.md",
+    "LICENSE"
   ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": ">=22.12"
+  },
   "scripts": {
     "build": "tsup",
     "dev": "tsup --watch",

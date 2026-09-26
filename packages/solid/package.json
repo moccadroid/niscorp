@@ -1,8 +1,8 @@
 {
   "name": "@niscorp/solid",
   "version": "0.1.0",
-  "description": "Structured Output Live Inference Decoding \u00e2\u20ac\u201d always-valid schema-backed object stream over partial JSON",
-  "license": "MIT",
+  "description": "Structured Output Live Inference Decoding — always-valid schema-backed object stream over partial JSON",
+  "license": "Apache-2.0",
   "type": "module",
   "sideEffects": false,
   "main": "./dist/index.cjs",
@@ -15,7 +15,7 @@
         "default": "./dist/index.js"
       },
       "require": {
-        "types": "./dist/index.cts",
+        "types": "./dist/index.d.cts",
         "default": "./dist/index.cjs"
       }
     }
@@ -25,7 +25,7 @@
   },
   "files": [
     "dist",
-    "README.md",
+    "*.md",
     "LICENSE"
   ],
   "scripts": {
@@ -56,7 +56,7 @@
     "url": "https://github.com/moccadroid/niscorp/issues"
   },
   "engines": {
-    "node": ">=18.18.0"
+    "node": ">=22.12"
   },
   "dependencies": {
     "zod": "^4.3.6"
