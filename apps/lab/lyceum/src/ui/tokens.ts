@@ -120,6 +120,21 @@ html, body { margin: 0; padding: 0; }
   padding: clamp(10px, 1.4cqw, 26px) clamp(12px, 1.6cqw, 30px);
   font: 900 clamp(14px, 1.8cqw, 34px)/1 var(--display); text-transform: uppercase; letter-spacing: .02em;
 }
-.${ROOT_CLASS} .action:active { background: var(--fg); color: var(--bg); }
-.${ROOT_CLASS} .action:focus-visible { outline: var(--rule) solid var(--alert); outline-offset: calc(var(--rule) * -1); }
+
+/* ── anything you can press ──
+   Whatever carries a \`ref\` is clickable (nova wires the click by that
+   convention), so the affordance keys on the same thing: [data-ref]. No
+   component opts in and no layout can opt out.
+   HOVER INVERTS: the cell's ink and paper swap — a hard cut, no easing, the
+   poster's one motion. PRESSED is the hatch over the inverted cell. Hover is
+   only where a pointer can hover: on a phone a tap must not leave a cell
+   stuck inverted. */
+.${ROOT_CLASS} [data-ref] { cursor: pointer; user-select: none; -webkit-tap-highlight-color: transparent; }
+@media (hover: hover) {
+  .${ROOT_CLASS} [data-ref]:hover { background: var(--fg); color: var(--bg); }
+  .${ROOT_CLASS} [data-ref]:hover .label, .${ROOT_CLASS} [data-ref]:hover .text { color: var(--bg); }
+}
+.${ROOT_CLASS} [data-ref]:active { background: repeating-linear-gradient(-45deg, var(--bg) 0 2px, var(--fg) 2px 8px); color: var(--bg); }
+.${ROOT_CLASS} [data-ref]:focus-visible { outline: var(--rule) solid var(--alert); outline-offset: calc(var(--rule) * -1); }
+.${ROOT_CLASS} .action[data-ink="alert"]:focus-visible { outline-color: var(--signal); }
 `;
