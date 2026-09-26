@@ -6,22 +6,24 @@ import { lyceumReactions } from './reactions';
 import { doorFunctions } from './functions/door.functions';
 import { sortingFunctions } from './functions/sorting.functions';
 import { devRuntime } from './runtime';
-import type { DevRuntime } from './runtime';
+import type { DevRuntime, LyceumRuntime } from './runtime';
 
 // The one composition: lyceum's artifacts, its environment and its code seams
 // → the server. Used by the standalone listener, by vite's dev plugin, and by
 // the checks — the same boot everywhere.
 
-export type Booted = {
+export type Booted<R extends LyceumRuntime = DevRuntime> = {
   server: MossServer;
-  runtime: DevRuntime;
+  runtime: R;
   app: NiscApp;
   close: () => Promise<void>;
 };
 
-export const boot = async (): Promise<Booted> => {
-  const runtime = await devRuntime();
+// The development boot: in-memory PGlite, reset every time.
+export const boot = async (): Promise<Booted> => bootOn(await devRuntime());
 
+// The boot itself, on whatever environment it is handed.
+export const bootOn = async <R extends LyceumRuntime>(runtime: R): Promise<Booted<R>> => {
   // The seams reach the server they are part of; it exists once createServer
   // returns, and nothing calls a seam before then.
   let built: MossServer | undefined;
@@ -43,7 +45,7 @@ export const boot = async (): Promise<Booted> => {
     app,
     close: async () => {
       built?.close();
-      await runtime.db.close();
+      await runtime.close();
     },
   };
 };

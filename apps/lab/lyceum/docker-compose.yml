@@ -1,0 +1,44 @@
+# Lyceum, the same here and on the server: the app and its Postgres.
+#
+#   docker compose up --build -d          stand it up (http://localhost:8796)
+#   docker compose exec app pnpm mint speaker   a one-time sign-in link
+#   docker compose exec app pnpm mint stage
+#   docker compose down                   stop (the database volume stays)
+#   docker compose down -v                stop and forget the room
+#
+# The audience needs nothing minted: the QR code points at PUBLIC_URL, the door
+# is what an anonymous visitor gets, and "Step in" gives them a session.
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: lyceum
+      POSTGRES_PASSWORD: lyceum
+      POSTGRES_DB: lyceum
+    volumes:
+      - lyceum-data:/var/lib/postgresql/data
+    healthcheck:
+      # Postgres accepts TCP before it accepts queries.
+      test: ['CMD-SHELL', 'pg_isready -U lyceum -d lyceum']
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    restart: unless-stopped
+
+  app:
+    build:
+      context: ../../..
+      dockerfile: apps/lab/lyceum/Dockerfile
+    environment:
+      DATABASE_URL: postgres://lyceum:lyceum@db:5432/lyceum
+      # What `pnpm mint` prints links against — the address people open.
+      PUBLIC_URL: ${PUBLIC_URL:-http://localhost:8796}
+    ports:
+      - '8796:8796'
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  lyceum-data:

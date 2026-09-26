@@ -36,6 +36,8 @@ export const CHARTER: Charter = {
   identity: { data: ['members.read', 'grants.read'] },
   // Lets a person in: writes their member row, nothing else.
   doorkeeper: { data: ['members.write.insert'] },
+  // Redeems a one-time sign-in link: uses it up, and that is all.
+  gatekeeper: { data: ['login_links.write.delete'] },
   // Places people in houses.
   hat: { data: ['members.read', 'members.write.update', 'houses.read'] },
 };

@@ -1,0 +1,11 @@
+# The Dockerfile copies packages/ and this app from the repo root; nothing
+# built or installed on the host goes in — the image builds its own.
+**/node_modules
+**/dist
+**/.turbo
+**/*.tsbuildinfo
+**/coverage
+**/.env
+**/.env.*
+.git
+apps/showroom

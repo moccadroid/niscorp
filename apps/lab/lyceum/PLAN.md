@@ -24,8 +24,8 @@ Where to pick up. Read this section, then "Vex is never hidden behind a function
   the stage wear only their grants. No raw SQL.
 - Five placeholder actions (door, member card, house crest, speaker console, stage
   roster) and the sorting.
-- `src/dev/sorting-check.ts` (28) and `src/dev/deck-check.ts` (14) pass over a real
-  websocket; `src/dev/harness.ts` is the headless terminal both drive.
+- `src/dev/sorting-check.ts` (28), `deck-check.ts` (14) and `serve-check.ts` (11) pass
+  over a real websocket; `src/dev/harness.ts` is the headless terminal they drive.
 
 **Proven — the claim the talk stands on.** A member's phone, connected before the
 sorting and never reconnected, receives its house the moment the speaker sorts
@@ -57,6 +57,28 @@ order, and the talk's real words (the slides carry provisional ones).
 person. `?seat=<name>` gives a tab its own session (`src/main.ts`); `/dev/new` opens a
 fresh seat at the door; `/dev/as/stage` and `/dev/as/speaker` land on `?seat=stage` and
 `?seat=speaker`. A phone at `/` has the one seat it needs.
+
+**Deployable — built 2026-09-26.** `docker compose up --build -d` in this folder stands up
+the app and its Postgres (`docker-compose.yml`; the image is `Dockerfile`, built from the
+repo root). One process, one port (8796): moss (`/api`, `/catalog`, `/socket`), the
+one-time sign-in (`/login`), and the built terminal (`vite build` → `dist/`, everything
+else, no client routing). `DATABASE_URL` selects `src/server/postgres-runtime.ts`;
+schema and seed are idempotent, so a restart keeps the room, the deck's position and
+every session — verified in Docker: a restarted app container reattached the speaker,
+the stage and a member where they were, and the deck moved on from there.
+- **The speaker and the stage sign in with a one-time link**, for testing:
+  `docker compose exec app pnpm mint speaker` prints `PUBLIC_URL/login?token=…`, used up
+  on the first click, expiring after 15 minutes, into the principal's own seat. Redeemed
+  as the `gatekeeper` machinery role (`login/redeem`). **A mailed link replaces how the
+  link travels, not how it is redeemed** — that is the next step for sign-in.
+- **The audience needs nothing minted:** the QR code points at `PUBLIC_URL`; the door and
+  "Step in" do the rest.
+- `/dev/as/*` and `/dev/new` stay dev-only in vite. `src/dev/serve-check.ts` (11) checks
+  the served shape and the link against the dev runtime.
+- The `pg` adapter is lyceum's own (`src/server/pg.ts`); the next app on Postgres is when
+  it moves into vex.
+- **Not yet:** the VPS, the domain and Caddy (TLS + websocket upgrade in front of 8796);
+  a changed deck on a live database is a migration, not a seed.
 
 **What the red assertion exposed, and where it stands.** The sorting writes through
 `executeAs`, and moss attaches vex's write observer (`onWrite`, which feeds `reactions`
@@ -115,7 +137,7 @@ passes — but tide facts and `reactions` still do.
 | # | Decision | Tier | Answer |
 |---|---|---|---|
 | D1 | Posture | answered | Moss server app, deployed on a VPS. No tunnels, no venue wifi dependency for the server. If hosting fails there is no talk. |
-| D2 | Environment | derived | Postgres on the VPS (not PGlite: state must survive a moss restart, and persisting across the whole talk is the point). Vex's Postgres cache. Sessions via moss's `sessions` credential — a QR code carries a magic link; the lab `dev-open` runtime is never deployed. |
+| D2 | Environment | answered | Postgres in Docker beside the app (docker compose, the same here and on the VPS — answered 2026-09-26; not PGlite: state must survive a moss restart). Vex's Postgres cache. Sessions via moss's `sessions` credential. The audience signs in at the door; the speaker and the stage by a one-time link minted on the server (testing), a mailed link later. The lab `dev-open` runtime is never deployed. |
 | D3 | Reads | answered | Vex entries, locked, for everything the app itself reads. The **ask** action is the one generative path: live generation under the asker's own policy (`generateDsl(request, schema, caller)`), with Jev routing in front of it. |
 | D4 | Writes | derived | Vex mutation entries. Every write is a confirmed click or a server function; the headmaster never writes. |
 | D5 | Routing | derived | None. The talk's state is a row (`deck`), not a URL. |

@@ -1,6 +1,11 @@
 // What exists before anybody walks in: the houses, the two principals that
 // are not people, and the deck. Everything else is written by the room.
 //
+// Idempotent (ON CONFLICT DO NOTHING): run on every boot, it fills an empty
+// database and leaves a live one — the room, the deck's position — alone. It
+// does NOT reorder or rename what is already there; a changed deck on a live
+// database is a migration, written when there is one.
+//
 // The houses are provisional (PLAN.md, Open). Each house_id is also a charter
 // role — sorting a person into a house IS giving them that role — and
 // `sorting-check` asserts the two lists agree.
@@ -40,9 +45,10 @@ export const buildSeedSql = (): string =>
   [
     ...HOUSES.map(
       (house, position) =>
-        `INSERT INTO houses (house_id, name, character, colour, position) VALUES (${quote(house.houseId)}, ${quote(house.name)}, ${quote(house.character)}, ${quote(house.colour)}, ${position});`,
+        `INSERT INTO houses (house_id, name, character, colour, position) VALUES (${quote(house.houseId)}, ${quote(house.name)}, ${quote(house.character)}, ${quote(house.colour)}, ${position}) ON CONFLICT DO NOTHING;`,
     ),
-    ...STAFF.map((staff) => `INSERT INTO grants (principal, role) VALUES (${quote(staff.principal)}, ${quote(staff.role)});`),
-    ...SLIDES.map((slide, position) => `INSERT INTO slides (slide_id, position, title) VALUES (${quote(slide.slideId)}, ${position}, ${quote(slide.title)});`),
-    `INSERT INTO deck (deck_id, slide_id) VALUES (${quote(DECK_ID)}, ${quote(SLIDES[0]?.slideId ?? '')});`,
+    ...STAFF.map((staff) => `INSERT INTO grants (principal, role) VALUES (${quote(staff.principal)}, ${quote(staff.role)}) ON CONFLICT DO NOTHING;`),
+    ...SLIDES.map((slide, position) => `INSERT INTO slides (slide_id, position, title) VALUES (${quote(slide.slideId)}, ${position}, ${quote(slide.title)}) ON CONFLICT DO NOTHING;`),
+    // The deck row is the talk's state: seeded once, never reset by a restart.
+    `INSERT INTO deck (deck_id, slide_id) VALUES (${quote(DECK_ID)}, ${quote(SLIDES[0]?.slideId ?? '')}) ON CONFLICT DO NOTHING;`,
   ].join('\n');

@@ -5,7 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "build": "vite build",
     "serve": "tsx src/server/serve.ts",
+    "mint": "tsx src/server/mint-link.ts",
     "typecheck": "tsc --noEmit",
     "check": "tsx src/dev/all-checks.ts"
   },
@@ -16,10 +18,12 @@
     "@niscorp/moss": "workspace:^",
     "@niscorp/nova": "workspace:^",
     "@niscorp/vex": "workspace:^",
+    "pg": "^8.16.3",
     "zod": "^4.3.6"
   },
   "devDependencies": {
     "@types/node": "^24.10.1",
+    "@types/pg": "^8.15.4",
     "tsx": "^4.23.1",
     "typescript": "^6.0.2",
     "vite": "^7.1.12"

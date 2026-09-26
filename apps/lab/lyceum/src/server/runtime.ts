@@ -6,13 +6,17 @@ import { DDL } from '@lyceum/db/schema';
 import { buildSeedSql } from '@lyceum/db/seed';
 
 // The DEVELOPMENT environment: an in-memory PGlite, reset on every boot, for
-// `pnpm dev` and the checks. The talk itself runs on Postgres on the VPS
-// (PLAN.md, D2) — the manifest does not change, only this file's sibling.
+// `pnpm dev` and the checks. The talk itself runs on Postgres
+// (./postgres-runtime.ts) — the manifest does not change, only the environment.
 //
 // Sessions are the real credential even here: 256-bit, hashed at rest,
 // expiring. Stepping in mints one; nothing in lyceum trusts a token because it
 // is well-formed.
-export type DevRuntime = NiscRuntime & { db: PGlite };
+// What every lyceum environment hands the boot: moss's runtime, and a way to
+// let go of the database when the process is done.
+export type LyceumRuntime = NiscRuntime & { close: () => Promise<void> };
+
+export type DevRuntime = LyceumRuntime & { db: PGlite };
 
 export const devRuntime = async (): Promise<DevRuntime> => {
   const db = new PGlite();
@@ -29,5 +33,6 @@ export const devRuntime = async (): Promise<DevRuntime> => {
     pool: createPglitePool(db, RAW_DATE_PARSERS),
     cache,
     session: 'sessions',
+    close: () => db.close(),
   };
 };
