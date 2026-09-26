@@ -17,7 +17,7 @@ import { executeQuery, buildContextContract, findMissingContext, requireScope } 
 import { pruneOptional, presenceOf, presenceSignature, optionalKeysOf } from './optional.js';
 import { createMemoryCache } from '../cache/memory.js';
 import { computeSchemaFingerprint, computeRequestHash, computePolicyKey, mintFingerprint } from '../cache/hash.js';
-import { isEntryFresh, fireAndForget } from '../cache/util.js';
+import { isEntryFresh, isTouchDue, fireAndForget } from '../cache/util.js';
 import { buildValidationContext, resolveParams } from '../utils/context.js';
 import { canonicalHash } from '../utils/canonical.js';
 import { createLiveRows } from './live.js';
@@ -269,10 +269,12 @@ export const createQueryEngine = (engineConfig: QueryEngineConfig): QueryEngine 
     return false;
   };
 
-  // Lifetime = usage: every hit stamps lastUsedAt (off the hot path) so
-  // a GC sweep can evict entries that stopped being replayed.
+  // Lifetime = usage: a hit stamps lastUsedAt (off the hot path) so a GC
+  // sweep can evict entries that stopped being replayed — at most once per
+  // TOUCH_EVERY_MS, not on every replay (cache/util.ts).
   const touch = (key: string, entry: CacheEntry): void => {
-    fireAndForget(cache.set(key, { ...entry, lastUsedAt: Date.now() }));
+    const now = Date.now();
+    if (isTouchDue(entry, now)) fireAndForget(cache.set(key, { ...entry, lastUsedAt: now }));
   };
 
   const resolveFingerprint = async (

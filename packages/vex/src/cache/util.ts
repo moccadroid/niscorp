@@ -13,6 +13,18 @@ export const fireAndForget = (p: Promise<unknown>, onError?: (err: unknown) => v
 };
 
 /**
+ * How often a replay stamps `lastUsedAt`. The stamp rewrites the entry, and
+ * a stamp on EVERY replay made every read a write too; once a minute keeps
+ * what reads it — the sweep (idle limits of days), discovery's "last used" —
+ * accurate to the minute, for a write per fingerprint per minute at most.
+ */
+export const TOUCH_EVERY_MS = 60_000;
+
+/** Whether a replay at `now` should stamp this entry's `lastUsedAt`. */
+export const isTouchDue = (entry: CacheEntry, now: number): boolean =>
+  entry.lastUsedAt === undefined || now - entry.lastUsedAt >= TOUCH_EVERY_MS;
+
+/**
  * Pure freshness check (no side effects). An entry is fresh when it is
  * not past its TTL and was written against the current schema. A
  * different fingerprint means the entry's DSL may reference columns that
