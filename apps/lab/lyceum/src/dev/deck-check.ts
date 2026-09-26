@@ -7,7 +7,7 @@
 import { serve } from '@hono/node-server';
 import { attachSocket } from '@niscorp/moss/node';
 import { mintSession } from '@niscorp/moss';
-import { SLIDES } from '@lyceum/db/seed';
+import { SLIDES, buildSeedSql } from '@lyceum/db/seed';
 import { boot } from '@lyceum/server/boot';
 import { check, connect, finish } from './harness';
 
@@ -61,6 +61,30 @@ const main = async (): Promise<void> => {
   stranger.click('main', 'enter');
   await stranger.session();
   check('somebody stepping in reaches the slide on the stage, unannounced', await stage.shows('main', '1 in the room'));
+
+  // ── the seed converges the deck on a live database, and leaves the talk ──
+  // A database from an older version of SLIDES: a renamed slide, two swapped,
+  // one that is no longer in the deck — and on screen.
+  await runtime.db.exec(`
+    UPDATE slides SET title = 'An old title' WHERE slide_id = 'slide.title';
+    UPDATE slides SET position = 100 WHERE slide_id = 'slide.data';
+    UPDATE slides SET position = 2 WHERE slide_id = 'slide.existence';
+    UPDATE slides SET position = 3 WHERE slide_id = 'slide.data';
+    INSERT INTO slides (slide_id, position, title) VALUES ('slide.gone', 99, 'Cut from the talk');
+    UPDATE deck SET slide_id = 'slide.gone';
+  `);
+  const membersBefore = await runtime.db.query<{ n: number }>('SELECT count(*)::int AS n FROM members');
+  await runtime.db.exec(buildSeedSql());
+  await runtime.db.exec(buildSeedSql());
+  const slides = await runtime.db.query<{ slide_id: string; title: string }>('SELECT slide_id, title FROM slides ORDER BY position');
+  check(
+    'a re-run seed puts the deck back to what SLIDES says — order, titles, nothing extra',
+    JSON.stringify(slides.rows.map((r) => [r.slide_id, r.title])) === JSON.stringify(SLIDES.map((s) => [s.slideId, s.title])),
+  );
+  const deckRow = await runtime.db.query<{ slide_id: string }>('SELECT slide_id FROM deck');
+  check('a deck left on a slide that was cut goes back to the first', deckRow.rows[0]?.slide_id === SLIDES[0]?.slideId);
+  const membersAfter = await runtime.db.query<{ n: number }>('SELECT count(*)::int AS n FROM members');
+  check('the room is left alone', membersBefore.rows[0]?.n === 1 && membersAfter.rows[0]?.n === 1);
 
   stranger.close();
   speaker.close();

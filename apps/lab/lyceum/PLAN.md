@@ -24,7 +24,7 @@ Where to pick up. Read this section, then "Vex is never hidden behind a function
   the stage wear only their grants. No raw SQL.
 - Five placeholder actions (door, member card, house crest, speaker console, stage
   roster) and the sorting.
-- `src/dev/sorting-check.ts` (28), `deck-check.ts` (14) and `serve-check.ts` (11) pass
+- `src/dev/sorting-check.ts` (28), `deck-check.ts` (17) and `serve-check.ts` (11) pass
   over a real websocket; `src/dev/harness.ts` is the headless terminal they drive.
 
 **Proven — the claim the talk stands on.** A member's phone, connected before the
@@ -77,8 +77,12 @@ the stage and a member where they were, and the deck moved on from there.
   the served shape and the link against the dev runtime.
 - The `pg` adapter is lyceum's own (`src/server/pg.ts`); the next app on Postgres is when
   it moves into vex.
-- **Not yet:** the VPS, the domain and Caddy (TLS + websocket upgrade in front of 8796);
-  a changed deck on a live database is a migration, not a seed.
+- **Authored rows converge on every boot; the talk's state does not.** The slides (order
+  and titles) and the houses' words become what `src/db/seed.ts` says — edit, restart,
+  done — while the room, the grants and the slide on screen are left alone (a deck left
+  on a slide that was cut goes back to the first). When the streamed agenda composes the
+  order at runtime, the order becomes room data and stops converging.
+- **Not yet:** the VPS, the domain and Caddy (TLS + websocket upgrade in front of 8796).
 
 **What the red assertion exposed, and where it stands.** The sorting writes through
 `executeAs`, and moss attaches vex's write observer (`onWrite`, which feeds `reactions`

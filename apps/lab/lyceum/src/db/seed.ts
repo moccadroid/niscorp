@@ -1,10 +1,18 @@
 // What exists before anybody walks in: the houses, the two principals that
 // are not people, and the deck. Everything else is written by the room.
 //
-// Idempotent (ON CONFLICT DO NOTHING): run on every boot, it fills an empty
-// database and leaves a live one — the room, the deck's position — alone. It
-// does NOT reorder or rename what is already there; a changed deck on a live
-// database is a migration, written when there is one.
+// Run on every boot, against an empty database or a live one, and it treats
+// the two kinds of row differently:
+//
+//   · AUTHORED rows — the houses' words, the slides and their order — CONVERGE:
+//     whatever this file says is what the database holds, the way vex's seed
+//     path converges its entries. Editing the deck here and restarting is
+//     enough; there is no migration to write.
+//   · THE TALK'S STATE — the room, the grants, which slide is on screen — is
+//     left alone. A restart must not reset the talk.
+//
+// When the streamed agenda composes the deck at runtime (PLAN.md), the order
+// becomes the room's data, and stops converging here.
 //
 // The houses are provisional (PLAN.md, Open). Each house_id is also a charter
 // role — sorting a person into a house IS giving them that role — and
@@ -41,14 +49,32 @@ export const DECK_ID = 'talk';
 
 const quote = (value: string): string => `'${value.replace(/'/g, "''")}'`;
 
+const slideIds = SLIDES.map((slide) => quote(slide.slideId)).join(', ');
+
 export const buildSeedSql = (): string =>
   [
+    // Houses: their words converge. None is ever deleted here — a house holds
+    // members, and a house_id is a charter role.
     ...HOUSES.map(
       (house, position) =>
-        `INSERT INTO houses (house_id, name, character, colour, position) VALUES (${quote(house.houseId)}, ${quote(house.name)}, ${quote(house.character)}, ${quote(house.colour)}, ${position}) ON CONFLICT DO NOTHING;`,
+        `INSERT INTO houses (house_id, name, character, colour, position) VALUES (${quote(house.houseId)}, ${quote(house.name)}, ${quote(house.character)}, ${quote(house.colour)}, ${position})
+         ON CONFLICT (house_id) DO UPDATE SET name = EXCLUDED.name, character = EXCLUDED.character, colour = EXCLUDED.colour, position = EXCLUDED.position;`,
     ),
     ...STAFF.map((staff) => `INSERT INTO grants (principal, role) VALUES (${quote(staff.principal)}, ${quote(staff.role)}) ON CONFLICT DO NOTHING;`),
-    ...SLIDES.map((slide, position) => `INSERT INTO slides (slide_id, position, title) VALUES (${quote(slide.slideId)}, ${position}, ${quote(slide.title)}) ON CONFLICT DO NOTHING;`),
-    // The deck row is the talk's state: seeded once, never reset by a restart.
+
+    // Slides: the deck converges to SLIDES. Positions are unique, so a reorder
+    // would collide with itself mid-way; every existing position is first moved
+    // out of the way (negative), then each authored slide is written to its own.
+    `UPDATE slides SET position = -1 - position WHERE position >= 0;`,
+    ...SLIDES.map(
+      (slide, position) =>
+        `INSERT INTO slides (slide_id, position, title) VALUES (${quote(slide.slideId)}, ${position}, ${quote(slide.title)})
+         ON CONFLICT (slide_id) DO UPDATE SET position = EXCLUDED.position, title = EXCLUDED.title;`,
+    ),
+    // The deck row is the talk's state: seeded once, never reset by a restart —
+    // unless the slide it names was taken out of the deck, when it goes back to
+    // the first one rather than point at nothing.
     `INSERT INTO deck (deck_id, slide_id) VALUES (${quote(DECK_ID)}, ${quote(SLIDES[0]?.slideId ?? '')}) ON CONFLICT DO NOTHING;`,
+    `UPDATE deck SET slide_id = ${quote(SLIDES[0]?.slideId ?? '')} WHERE slide_id NOT IN (${slideIds});`,
+    `DELETE FROM slides WHERE slide_id NOT IN (${slideIds});`,
   ].join('\n');
