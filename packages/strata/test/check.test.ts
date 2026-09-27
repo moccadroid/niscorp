@@ -35,6 +35,26 @@ describe('snapshot — did the grammar change?', () => {
     expect(result.status === 'changed' && result.changes[0]?.lines[0]).toBe('~ properties.title.type: "string" → "number"');
   });
 
+  it('a FIELD named description is grammar — only the keyword is prose', () => {
+    const titled = z.object({ title: z.string() }).strict();
+    const described = z.object({ title: z.string(), description: z.string().optional() }).strict();
+    const retyped = z.object({ title: z.string(), description: z.number().optional() }).strict();
+    const added = compareSnapshot(snapshotOf(forms(), { 'acme.forms/form': titled }), snapshotOf(forms(), { 'acme.forms/form': described }));
+    expect(added.status === 'changed' && added.changes[0]?.lines).toEqual(['+ properties.description']);
+    const changed = compareSnapshot(snapshotOf(forms(), { 'acme.forms/form': described }), snapshotOf(forms(), { 'acme.forms/form': retyped }));
+    expect(changed.status === 'changed' && changed.changes[0]?.lines).toEqual(['~ properties.description.type: "string" → "number"']);
+  });
+
+  it('a FIELD named $ref is grammar — only the keyword is a reference', () => {
+    const op = (pattern: string) => z.object({ $ref: z.string().regex(new RegExp(pattern)) }).strict();
+    const result = compareSnapshot(snapshotOf(forms(), { 'acme.forms/form': op('^\\$') }), snapshotOf(forms(), { 'acme.forms/form': op('^#') }));
+    expect(result.status).toBe('changed');
+  });
+
+  it('the record keeps what the validator wrote — the prose too', () => {
+    expect(JSON.stringify(snapshotOf(forms(), { 'acme.forms/form': formV0 }).kinds)).toContain('What the form is called.');
+  });
+
   it('no recorded snapshot for the current version is "missing"', () => {
     expect(compareSnapshot(undefined, snapshotOf(forms(), { 'acme.forms/form': formV0 }))).toEqual({ status: 'missing' });
   });

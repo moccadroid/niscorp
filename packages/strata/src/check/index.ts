@@ -42,22 +42,45 @@ export type Snapshot = { sequence: string; version: number; kinds: Readonly<Reco
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
 
-// Sorted keys and no prose: `description` is documentation, and rewording a
-// `.describe()` must not demand a migration. `$schema` is the same everywhere.
+const byKey = ([a]: [string, unknown], [b]: [string, unknown]): number => (a < b ? -1 : a > b ? 1 : 0);
+
+// Sorted keys, nothing else — for documents, where every key (a `description`
+// too) is content, and for a snapshot file, which keeps what the validator wrote.
+const sortKeys = (value: unknown): unknown => {
+  if (Array.isArray(value)) return value.map(sortKeys);
+  if (!isRecord(value)) return value;
+  return Object.fromEntries(Object.entries(value).sort(byKey).map(([k, v]) => [k, sortKeys(v)]));
+};
+
+// Where a schema's keys are NAMES, not keywords — a field called `description`
+// or an op called `$ref` is grammar — and where its values are instance data
+// rather than schemas.
+const NAMED = new Set(['properties', 'patternProperties', '$defs', 'definitions', 'dependentSchemas']);
+const DATA = new Set(['const', 'enum', 'default', 'examples']);
+
+// A schema without its prose: the `description` KEYWORD is documentation, and
+// rewording a `.describe()` must not demand a migration. `$schema` is the same
+// everywhere. Applied when comparing, never to what is recorded — so what the
+// gate ignores can change without touching a snapshot file.
 const normalize = (value: unknown): unknown => {
   if (Array.isArray(value)) return value.map(normalize);
   if (!isRecord(value)) return value;
   return Object.fromEntries(
     Object.entries(value)
       .filter(([key]) => key !== 'description' && key !== '$schema')
-      .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
-      .map(([key, v]) => [key, normalize(v)]),
+      .sort(byKey)
+      .map(([key, v]) => [key, NAMED.has(key) && isRecord(v) ? namedSchemas(v, normalize) : DATA.has(key) ? sortKeys(v) : normalize(v)]),
   );
 };
 
-// The grammar as it stands: every kind it declares, as JSON Schema. `schemas`
-// must cover exactly the sequence's kinds — a kind without a schema cannot be
-// checked, and a schema without a kind belongs to some other grammar.
+// A name → schema map, each schema through `each`, the names untouched.
+const namedSchemas = (map: Record<string, unknown>, each: (schema: unknown) => unknown): Record<string, unknown> =>
+  Object.fromEntries(Object.entries(map).sort(byKey).map(([name, schema]) => [name, each(schema)]));
+
+// The grammar as it stands: every kind it declares, as JSON Schema — as the
+// validator wrote it, keys sorted. `schemas` must cover exactly the sequence's
+// kinds — a kind without a schema cannot be checked, and a schema without a
+// kind belongs to some other grammar.
 export const snapshotOf = (sequence: Sequence, schemas: Readonly<Record<string, GrammarSchema>>): Snapshot => {
   const declared = Object.keys(sequence.documents ?? {}).map((k) => `${sequence.id}/${k}`);
   const given = Object.keys(schemas);
@@ -72,21 +95,14 @@ export const snapshotOf = (sequence: Sequence, schemas: Readonly<Record<string, 
   const kinds: Record<string, unknown> = {};
   for (const kind of [...declared].sort()) {
     const schema = schemas[kind];
-    if (schema !== undefined) kinds[kind] = normalize(schema['~standard'].jsonSchema.input({ target: 'draft-2020-12' }));
+    if (schema !== undefined) kinds[kind] = sortKeys(schema['~standard'].jsonSchema.input({ target: 'draft-2020-12' }));
   }
   return { sequence: sequence.id, version: sequence.migrations.length, kinds };
 };
 
 // Stable text for a snapshot file: sorted keys, two-space indent, newline.
-export const snapshotText = (snapshot: Snapshot): string => `${JSON.stringify(normalize(snapshot), null, 2)}\n`;
-
-// What differs between two JSON values, as short lines a person can act on.
-// Sorted keys only — for documents, where every key (a `description` too) is content.
-const sortKeys = (value: unknown): unknown => {
-  if (Array.isArray(value)) return value.map(sortKeys);
-  if (!isRecord(value)) return value;
-  return Object.fromEntries(Object.entries(value).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)).map(([k, v]) => [k, sortKeys(v)]));
-};
+export const snapshotText = (snapshot: Snapshot): string => `${JSON.stringify(sortKeys(snapshot), null, 2)}
+`;
 
 // Schema arrays are compared as sets (`sets`); a document's arrays by position —
 // `layout.children[1]` is how a person finds the thing that changed.
@@ -174,8 +190,16 @@ const respell = (value: Record<string, unknown>): Record<string, unknown> => {
   return node;
 };
 
-const canonical = (schema: unknown): unknown => {
-  if (!isRecord(schema)) return normalize(schema);
+// A schema node's own children — keyword values, and each schema of a name
+// map — but never the names, and never instance data.
+const schemaChildren = (node: Record<string, unknown>): unknown[] =>
+  Object.entries(node).flatMap(([key, child]) =>
+    key === '$ref' || DATA.has(key) ? [] : NAMED.has(key) && isRecord(child) ? Object.values(child) : [child],
+  );
+
+const canonical = (recorded: unknown): unknown => {
+  const schema = normalize(recorded);
+  if (!isRecord(schema)) return schema;
   const defs: Record<string, unknown> = {
     ...(isRecord(schema['definitions']) ? schema['definitions'] : {}),
     ...(isRecord(schema['$defs']) ? schema['$defs'] : {}),
@@ -194,7 +218,7 @@ const canonical = (schema: unknown): unknown => {
     }
     if (!isRecord(value)) return;
     const node = respell(value);
-    for (const [key, child] of Object.entries(node)) if (key !== '$ref') findCycles(child, stack);
+    for (const child of schemaChildren(node)) findCycles(child, stack);
     const ref = node['$ref'];
     if (typeof ref !== 'string') return;
     const { key, node: next } = target(ref);
@@ -217,16 +241,21 @@ const canonical = (schema: unknown): unknown => {
     if (Array.isArray(value)) return value.map(emit);
     if (!isRecord(value)) return value;
     const node = respell(value);
-    const rest = normalize(Object.fromEntries(Object.entries(node).filter(([key]) => key !== '$ref').map(([key, child]) => [key, emit(child)])));
+    const rest: Record<string, unknown> = Object.fromEntries(
+      Object.entries(node)
+        .filter(([key]) => key !== '$ref')
+        .sort(byKey)
+        .map(([key, child]) => [key, NAMED.has(key) && isRecord(child) ? namedSchemas(child, emit) : DATA.has(key) ? child : emit(child)]),
+    );
     const ref = node['$ref'];
     if (typeof ref !== 'string') return rest;
     const { key, node: next } = target(ref);
     const referred = recursive.has(key) ? { $ref: `#/$defs/${nameOf(key, next)}` } : emit(next);
-    return isRecord(rest) && Object.keys(rest).length > 0 ? { ...rest, allOf: [referred] } : referred;
+    return Object.keys(rest).length > 0 ? { ...rest, allOf: [referred] } : referred;
   };
 
   const root = recursive.has('#') ? { $ref: `#/$defs/${nameOf('#', body)}` } : emit(body);
-  return Object.keys(named).length === 0 ? root : normalize({ ...(isRecord(root) ? root : { allOf: [root] }), $defs: named });
+  return Object.keys(named).length === 0 ? root : sortKeys({ ...(isRecord(root) ? root : { allOf: [root] }), $defs: named });
 };
 
 export type SnapshotComparison =

@@ -148,8 +148,8 @@ host keeps the files.
 
 | | |
 |---|---|
-| `snapshotOf(sequence, schemas)` | Each kind's JSON Schema, through the schema's own Standard JSON Schema hook (Zod ≥ 4.2, Valibot, ArkType), descriptions stripped. `schemas` must cover exactly the grammar's kinds. |
-| `compareSnapshot(recorded, current)` | `same`, `missing`, or `changed` with short diff lines (`+ properties.retry`, `~ required[0]: "id" → "key"`). Changed at the same version = a migration is owed. |
+| `snapshotOf(sequence, schemas)` | Each kind's JSON Schema, through the schema's own Standard JSON Schema hook (Zod ≥ 4.2, Valibot, ArkType), as the validator wrote it — keys sorted, nothing removed. `schemas` must cover exactly the grammar's kinds. |
+| `compareSnapshot(recorded, current)` | `same`, `missing`, or `changed` with short diff lines (`+ properties.retry`, `~ required[0]: "id" → "key"`). Changed at the same version = a migration is owed. Both sides are compared without prose (the `description` keyword — a field named `description` is grammar) and in one spelling (definitions inlined unless recursive, `allOf: [{ $ref }]` as `$ref`, a union of bare types as a type list), so a reworded `.describe()` or a validator's respelling is not a change. |
 | `snapshotText(snapshot)` | Stable file text: sorted keys. |
 | `checkCorpus(upgrader, schemas, documents)` | Every captured document, upgraded from its stamp, must pass its kind's current schema. |
 
