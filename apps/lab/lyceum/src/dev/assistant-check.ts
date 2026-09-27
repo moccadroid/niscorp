@@ -15,6 +15,7 @@ import { mintSession } from '@niscorp/moss';
 import { ACTIONS } from '@lyceum/app/action-catalog';
 import { boot } from '@lyceum/server/boot';
 import { OPENABLE_KEYS } from '@lyceum/server/assistant/tools';
+import { assembleFor } from '@lyceum/server/assistant/declarations';
 import { check, connect, finish, waitUntil } from './harness';
 import type { Terminal } from './harness';
 
@@ -106,6 +107,31 @@ const main = async (): Promise<void> => {
   check('a phone\'s assistant sees that person\'s screen: their own card', await forms.shows('body', 'On your screen:'));
   const cardName = (await runtime.db.query<{ name: string }>('SELECT name FROM members WHERE member_id = $1', [formsPerson.memberId])).rows[0]?.name ?? '\u0000';
   check(`…with their name on it (${cardName})`, forms.textOf('body').includes(`On your screen:`) && forms.textOf('body').split('On your screen:')[1]?.includes(cardName) === true);
+
+  // ── what each assistant is grounded on, it may read ──
+  // A declaration applies to whoever holds its action; its grounding reads run
+  // as that person, and nothing swallows a refusal — so each must succeed.
+  const speakerToken = await mintSession(runtime.pool, 'speaker', 60_000);
+  const people = [
+    { who: 'somebody waiting', token: waiting.token, actions: (await waiting.phone.hello()).catalog.actions },
+    { who: 'Forms', token: formsPerson.token, actions: (await forms.hello()).catalog.actions },
+    { who: 'Records', token: recordsPerson.token, actions: (await records.hello()).catalog.actions },
+    { who: 'the speaker', token: speakerToken, actions: (await speaker.hello()).catalog.actions },
+  ];
+  for (const person of people) {
+    for (const declaration of assembleFor(person.actions).from) {
+      for (const ground of declaration.grounding) {
+        const status = (
+          await server.request('/api/vex', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json', authorization: `Bearer ${person.token}` },
+            body: JSON.stringify({ fingerprint: ground.fingerprint, context: ground.context }),
+          })
+        ).status;
+        check(`${person.who}: the ${declaration.id} assistant's grounding "${ground.fingerprint}" is theirs to read (${status})`, status === 200);
+      }
+    }
+  }
 
   // ── 4. the open trigger and the catalog agree ──
   const trigger = ACTIONS['assistant.thread']?.triggers?.find((candidate) => 'ref' in candidate && candidate.ref === 'proposed');

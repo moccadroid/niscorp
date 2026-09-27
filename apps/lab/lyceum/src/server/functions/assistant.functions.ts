@@ -56,14 +56,9 @@ const knowledgeOf = async (session: FunctionSession, assembled: Assembled, tz: s
     assembled.from.flatMap((declaration) =>
       declaration.grounding
         .filter((ground) => ground.upfront)
-        .map(async (ground) => {
-          try {
-            return `## ${ground.as}\n${JSON.stringify(await vex(ground.fingerprint, ground.context))}`;
-          } catch {
-            // A read this person's policy refuses contributes nothing.
-            return '';
-          }
-        }),
+        // A declaration applies only to whoever holds its action, so its reads
+        // are theirs to make: one that fails is a bug, and it says so.
+        .map(async (ground) => `## ${ground.as}\n${JSON.stringify(await vex(ground.fingerprint, ground.context))}`),
     ),
   );
   const facts = grounded.filter((section) => section !== '').join('\n\n');
