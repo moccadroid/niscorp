@@ -2,7 +2,6 @@ import { z } from 'zod';
 import type { FunctionSession } from '@niscorp/moss';
 import type { FunctionHandler } from '@niscorp/nova';
 import { askRecord, asksKnown } from '@lyceum/app/vex/ask.entries';
-import { ASK_SHAPES, HOW_SAID } from '@lyceum/app/actions/ask/ask.shapes';
 import { askEngine } from '../asking';
 import type { Asker, Known } from '../asking';
 import { vexOver } from '../vex-over';
@@ -22,14 +21,9 @@ const AskedSchema = z.object({ draft: z.string() });
 const KnownSchema = z.array(z.object({ question: z.string(), fingerprint: z.string(), shape: z.string() }));
 const MAX_QUESTION = 200;
 
-// How the phone shows an answer of this shape — handed back with the route,
-// because a layout picks a branch by truthiness and cannot look a kind up.
-const display = (kind: string): { figure: boolean; columns: unknown[] } => {
-  const shape = ASK_SHAPES.find((entry) => entry.kind === kind);
-  return { figure: shape?.figure ?? false, columns: shape?.columns ?? [] };
-};
-
-export type Routed = { fingerprint: string; kind: string; how: 'replayed' | 'generated'; said: string; figure: boolean; columns: unknown[] };
+// What the route hands back: which query answers, in which shape, reached how.
+// How that looks is the layouts' (app/actions/shared/answer.layouts.ts).
+export type Routed = { fingerprint: string; kind: string; how: 'replayed' | 'generated' };
 
 // ONE QUESTION, ANSWERED THE ASK'S WAY — as the asker, recorded as theirs:
 // routed (an earlier question's query, or a new one written under their policy),
@@ -47,7 +41,7 @@ export const routeQuestion = async (session: FunctionSession, asker: Asker, aske
 
   if ('replay' in route) {
     await record(route.replay.shape, 'replayed', route.replay.fingerprint);
-    return { fingerprint: route.replay.fingerprint, kind: route.replay.shape, how: 'replayed', said: HOW_SAID['replayed'] ?? '', ...display(route.replay.shape) };
+    return { fingerprint: route.replay.fingerprint, kind: route.replay.shape, how: 'replayed' };
   }
 
   const shape = route.generate;
@@ -60,7 +54,7 @@ export const routeQuestion = async (session: FunctionSession, asker: Asker, aske
     const fingerprint = answered.meta.cache.fingerprint;
     if (fingerprint === undefined) throw new Error('the query was answered but not stored');
     await record(shape.kind, 'generated', fingerprint);
-    return { fingerprint, kind: shape.kind, how: 'generated', said: HOW_SAID['generated'] ?? '', ...display(shape.kind) };
+    return { fingerprint, kind: shape.kind, how: 'generated' };
   } catch (error) {
     // Refused — by the model (it cannot be answered from what this person
     // may read) or by the engine (what it wrote reaches past their policy).

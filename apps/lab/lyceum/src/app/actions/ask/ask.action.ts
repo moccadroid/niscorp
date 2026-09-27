@@ -19,7 +19,7 @@ export const askAction: ActionDefinition = {
     tab: false,
     tabLabel: 'Ask', tabInk: 'paper', nextInk: 'paper',
     draft: '',
-    routed: { fingerprint: '', kind: '', how: '', said: '', figure: false, columns: [] },
+    routed: { fingerprint: '', kind: '', how: '' },
     answer: [],
     asking: false,
     asked: false,

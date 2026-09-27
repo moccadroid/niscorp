@@ -1,7 +1,8 @@
 import type { LayoutNode } from '@niscorp/nova';
+import { answerLayout } from '@lyceum/app/actions/shared/answer.layouts';
 
-// A line to type, a button, and the answer in the shape the router picked: one
-// figure, or rows whose columns came back with the route.
+// A line to type, a button, and the answer in the shape the router picked
+// (shared/answer.layouts.ts).
 export const askLayout: LayoutNode = {
   component: 'Sheet',
   props: { areas: ['kick', 'field', 'go', 'answer'], rows: ['auto', 'auto', 'auto', 'auto'] },
@@ -22,14 +23,7 @@ export const askLayout: LayoutNode = {
           then: {
             component: 'Cell',
             props: { area: 'answer' },
-            children: [
-              {
-                if: '$.routed.figure',
-                then: { component: 'Figure', props: { label: 'The answer', value: '$.answer.value' } },
-                else: { component: 'Rows', props: { rows: '$.answer', columns: '$.routed.columns', empty: 'Nothing on record.' } },
-              },
-              { component: 'Text', props: { tone: 'muted' }, children: '{{$.routed.said}}' },
-            ],
+            children: answerLayout({ kind: '$.routed.kind', how: '$.routed.how', rows: '$.answer' }),
           },
           else: {
             component: 'Cell',

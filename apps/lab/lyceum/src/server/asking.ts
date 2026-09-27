@@ -5,15 +5,15 @@ import type { SignalClient } from '@niscorp/cortex';
 import { createSignal } from '@niscorp/signal';
 import type { ChoiceQuestion } from '@niscorp/signal';
 import type { NiscRuntime } from '@niscorp/moss';
-import { ASK_SHAPES } from '@lyceum/app/actions/ask/ask.shapes';
+import { ASK_SHAPES } from '@lyceum/app/vex/ask.shapes';
 import { BEHAVIORS } from '@lyceum/app/vex/behaviors';
-import type { AskShape } from '@lyceum/app/actions/ask/ask.shapes';
+import type { AskShape } from '@lyceum/app/vex/ask.shapes';
 
 // WHO ANSWERS A QUESTION PUT TO THE RECORDS — the two model seams of the ask.
 //
 //   ROUTING   — a CHOICE, never writing: has an earlier question already asked
 //               for the same thing (then its query is replayed), and which of
-//               the authored shapes (../app/actions/ask/ask.shapes.ts) does the
+//               the authored shapes (../app/vex/ask.shapes.ts) does the
 //               answer take. Jev (TypeSafe, `decide()`) with TYPESAFE_API_KEY;
 //               without it, gpt-oss-120b answers the same questions by
 //               emulation (uncalibrated picks).
@@ -41,7 +41,7 @@ export type Asker = {
   mapToShape: MapToShape;
 };
 
-const DEFAULT_SHAPE: AskShape = ASK_SHAPES[0] ?? { kind: 'list', means: '', shape: [], figure: false, columns: [] };
+const DEFAULT_SHAPE: AskShape = ASK_SHAPES[0] ?? { kind: 'list', means: '', shape: [] };
 const shapeOf = (kind: string): AskShape => ASK_SHAPES.find((shape) => shape.kind === kind) ?? DEFAULT_SHAPE;
 
 // The router is handed at most this many earlier questions — a choice has at

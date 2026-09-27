@@ -1,4 +1,5 @@
 import type { LayoutNode } from '@niscorp/nova';
+import { answerLayout } from '@lyceum/app/actions/shared/answer.layouts';
 
 // One proposal, of three kinds — an automation to read and save, an answer to
 // read, an action to press. The reply says what; the proposal is the thing.
@@ -28,14 +29,7 @@ const proposal: LayoutNode = {
     then: {
       component: 'Cell',
       props: { pad: 'none' },
-      children: [
-        {
-          if: '$p.answer.figure',
-          then: { component: 'Figure', props: { label: 'The answer', value: '$p.answer.value' } },
-          else: { component: 'Rows', props: { rows: '$p.answer.rows', columns: '$p.answer.columns', empty: 'Nothing on record.' } },
-        },
-        { component: 'Text', props: { tone: 'muted' }, children: '{{$p.answer.said}}' },
-      ],
+      children: answerLayout({ kind: '$p.answer.kind', how: '$p.answer.how', rows: '$p.answer.rows' }),
     },
     else: { component: 'Action', ref: 'proposed', props: { ink: 'alert', label: '{{$p.open.label}} →', value: '$p.open' } },
   },

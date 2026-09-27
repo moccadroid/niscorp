@@ -22,7 +22,7 @@ import type { ToolName } from './declarations';
 
 export type Proposal =
   | { open: { action: string; label: string; input: Record<string, unknown> } }
-  | { answer: { how: string; said: string; figure: boolean; columns: unknown[]; rows: unknown; value: unknown } }
+  | { answer: { kind: string; how: string; rows: unknown } }
   | { timer: { timerId: string; reflex: unknown; json: string; intent: string; dueAt: string | null; dueLocal: string } };
 
 export type ToolDeps = {
@@ -89,8 +89,7 @@ export const hostTools = (deps: ToolDeps, offered: ReadonlySet<ToolName>): ToolD
           try {
             const routed = await routeQuestion(deps.session, deps.asker, question);
             const result = await vexOver(deps.session.wire)(routed.fingerprint);
-            const value = typeof result === 'object' && result !== null && 'value' in result ? result.value : undefined;
-            deps.proposals.push({ answer: { how: routed.how, said: routed.said, figure: routed.figure, columns: routed.columns, rows: result, value } });
+            deps.proposals.push({ answer: { kind: routed.kind, how: routed.how, rows: result } });
             return { answered: result };
           } catch (error) {
             return { refused: error instanceof Error ? error.message : String(error) };
