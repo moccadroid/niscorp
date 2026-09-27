@@ -28,10 +28,10 @@ export const CHARTER: Charter = {
 
   unassigned: { extends: ['member'] },
   // Every department gets its badge; each gets one clearance of its own.
-  records: { extends: ['member'], actions: ['department.*', 'records.*'] },
-  forms: { extends: ['member'], actions: ['department.*', 'forms.*'], data: ['members.write.update'] },
-  inquiries: { extends: ['member'], actions: ['department.*', 'inquiries.*'] },
-  archive: { extends: ['member'], actions: ['department.*', 'archive.*'] },
+  records: { extends: ['member'], actions: ['records.*'] },
+  forms: { extends: ['member'], actions: ['forms.*'], data: ['members.write.update'] },
+  inquiries: { extends: ['member'], actions: ['inquiries.*'] },
+  archive: { extends: ['member'], actions: ['archive.*'] },
 
   // The speaker's controller and the projector: two principals, two devices.
   // The speaker moves the deck and assigns the room, as themselves; the

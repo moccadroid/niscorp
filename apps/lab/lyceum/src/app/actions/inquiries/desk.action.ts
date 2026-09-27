@@ -1,4 +1,5 @@
 import type { ActionDefinition } from '@niscorp/nova';
+import { TAB_BUTTON, TAB_INPUT } from '@lyceum/app/actions/shared/tab.layouts';
 import { inquiryByDepartment, inquiryNewest, inquiryWaiting } from '@lyceum/app/vex/member.entries';
 import { deskLayout } from './desk.layout';
 import { askPrism } from './desk.prism';
@@ -9,7 +10,7 @@ import { askPrism } from './desk.prism';
 export const deskAction: ActionDefinition = {
   id: 'inquiries.desk',
   title: 'Put a question to the records',
-  data: {
+  data: { tab: false, tabLabel: 'Inquire',
     questions: [
       { fingerprint: inquiryByDepartment.fingerprint, question: 'How many are in each department?' },
       { fingerprint: inquiryNewest.fingerprint, question: 'Who arrived last?' },
@@ -19,11 +20,13 @@ export const deskAction: ActionDefinition = {
     answer: [],
     error: '',
   },
-  layout: deskLayout,
+  input: TAB_INPUT,
+  layout: { if: '$.tab', then: TAB_BUTTON, else: deskLayout },
   endpoints: {
     ask: { url: '/api/vex', method: 'POST', request: askPrism, target: 'answer', errorTarget: 'error' },
   },
   triggers: [
+    { event: 'ui:click', ref: 'open', do: [{ resetTo: { action: 'inquiries.desk', canvas: 'body' } }] },
     {
       event: 'ui:click',
       ref: 'question',

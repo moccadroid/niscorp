@@ -22,6 +22,9 @@ export type Terminal = {
   textOf: (canvas: string) => string;
   session: () => Promise<string>;
   click: (canvas: string, ref: string, payload?: unknown) => void;
+  // A click on `ref` inside the one instance on `canvas` that shows `text` —
+  // for a list canvas whose instances share a ref (the phone's tabs).
+  clickIn: (canvas: string, ref: string, text: string) => void;
   // What a `model`'d field sends as somebody types (nova's dom adapter).
   type: (canvas: string, ref: string, text: string) => void;
   sessionsSeen: () => number;
@@ -53,6 +56,20 @@ const instanceAround = (nodes: unknown, ref: string, inside?: string): string | 
     const here = node['name'] === 'ActionSlot' && typeof props['instanceId'] === 'string' ? props['instanceId'] : inside;
     if (node['ref'] === ref) return here;
     const found = instanceAround(node['children'], ref, here);
+    if (found !== undefined) return found;
+  }
+  return undefined;
+};
+
+// The ActionSlot on a canvas whose subtree shows `text` — which instance a
+// click on a shared ref means.
+const instanceShowing = (nodes: unknown, text: string): string | undefined => {
+  if (!Array.isArray(nodes)) return undefined;
+  for (const node of nodes) {
+    if (!isRecord(node)) continue;
+    const props = isRecord(node['props']) ? node['props'] : {};
+    if (node['name'] === 'ActionSlot' && typeof props['instanceId'] === 'string' && JSON.stringify(node).includes(text)) return props['instanceId'];
+    const found = instanceShowing(node['children'], text);
     if (found !== undefined) return found;
   }
   return undefined;
@@ -100,6 +117,10 @@ export const connect = (base: string, token?: string): Promise<Terminal> =>
           const origin = instanceAround(JSON.parse(trees.get(canvas) ?? '[]'), ref);
           const event = { type: 'ui:click', ref, ...(payload === undefined ? {} : { payload }), ...(origin === undefined ? {} : { origin }) };
           socket.send(JSON.stringify({ type: 'event', canvas, event }));
+        },
+        clickIn: (canvas, ref, text) => {
+          const origin = instanceShowing(JSON.parse(trees.get(canvas) ?? '[]'), text);
+          socket.send(JSON.stringify({ type: 'event', canvas, event: { type: 'ui:click', ref, ...(origin === undefined ? {} : { origin }) } }));
         },
         type: (canvas, ref, text) => {
           const origin = instanceAround(JSON.parse(trees.get(canvas) ?? '[]'), ref);

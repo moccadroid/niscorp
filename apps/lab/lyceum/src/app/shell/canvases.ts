@@ -4,27 +4,30 @@ import type { ShellManifest } from '@niscorp/moss';
 // configures who sees what; the charter decides by existence (rule 11).
 //
 //   strip  the projector's strip over every slide (stage)
-//   badge  your department (only the assigned are granted it)
-//   main   the controller (speaker), your ID card (members), the door (anyone
+//   main   the controller (speaker), the phone (members), the door (anyone
 //          else); the stage's slides are put here by its deck
 //   head, tools, notes, controls
 //          the controller's four regions (speaker). They are not in the frame:
 //          the controller's own layout places them (speaker/console.layout.ts),
 //          so they exist on the speaker's screen and nowhere else. `tools` is
 //          the slide's tools, a list the speaker's deck reconciles.
-//   desk   your department's own tool — the one thing your clearance lets you
-//          do that the others' does not
-//   ask    the ask — every member's: a question to the records in their own
-//          words (below the desk: what everybody shares comes after what
-//          only your clearance gives you)
+//   self, body, tabs
+//          the phone's three regions (members), placed by the phone's own
+//          layout (member/phone.layout.ts): your card as one line; one thing
+//          at a time; a tab for each thing you hold — a list the phone
+//          reconciles, so the charter decides the tabs by existence
 //   overlay  whatever is opened over the screen, in the `sheet` fragment's
 //          chrome (all slides, on the controller)
 //   deck   the stage's and the speaker's deck: shows nothing, follows the
 //          `deck` row. Not in the frame.
 export const CANVASES: ShellManifest['canvases'] = [
   { id: 'strip', initial: ['stage.strip'] },
-  { id: 'badge', initial: ['department.badge'] },
-  { id: 'main', initial: ['speaker.console', 'member.card', 'kit.sink', 'door.join'] },
+  { id: 'main', initial: ['speaker.console', 'member.phone', 'kit.sink', 'door.join'] },
+  // The phone's three regions (member/phone.layout.ts) — not in the frame.
+  { id: 'self', initial: [{ action: 'member.card', input: { strip: true } }] },
+  { id: 'body', initial: ['member.card'] },
+  // A LIST: one tab per thing this person holds, placed by the phone's reconcile.
+  { id: 'tabs', mode: 'list', actionLayout: { for: '$.instances', as: 'instance', do: { component: 'ActionSlot', props: { instanceId: '$instance.id' } } } },
   { id: 'head', initial: ['speaker.head'] },
   {
     // A LIST: every tool the slide lists is live at once, stacked in order
@@ -43,8 +46,6 @@ export const CANVASES: ShellManifest['canvases'] = [
   },
   { id: 'notes', initial: ['speaker.notes'] },
   { id: 'controls', initial: ['speaker.controls'] },
-  { id: 'desk', initial: ['records.register', 'forms.rename', 'inquiries.desk', 'archive.log'] },
-  { id: 'ask', initial: ['ask.desk'] },
   { id: 'overlay' },
   { id: 'deck', initial: ['stage.deck', 'speaker.deck'] },
 ];

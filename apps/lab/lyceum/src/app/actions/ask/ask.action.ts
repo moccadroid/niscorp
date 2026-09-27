@@ -1,4 +1,5 @@
 import type { ActionDefinition } from '@niscorp/nova';
+import { TAB_BUTTON, TAB_INPUT } from '@lyceum/app/actions/shared/tab.layouts';
 import { askLayout } from './ask.layout';
 import { answerPrism } from './ask.prism';
 
@@ -14,6 +15,8 @@ export const askAction: ActionDefinition = {
   id: 'ask.desk',
   title: 'Ask the records',
   data: {
+    tab: false,
+    tabLabel: 'Ask',
     draft: '',
     routed: { fingerprint: '', kind: '', how: '', said: '', figure: false, columns: [] },
     answer: [],
@@ -21,12 +24,14 @@ export const askAction: ActionDefinition = {
     asked: false,
     error: '',
   },
-  layout: askLayout,
+  input: TAB_INPUT,
+  layout: { if: '$.tab', then: TAB_BUTTON, else: askLayout },
   endpoints: {
     route: { fn: 'ask.route', target: 'routed', errorTarget: 'error' },
     answer: { url: '/api/vex', method: 'POST', request: answerPrism, target: 'answer', errorTarget: 'error' },
   },
   triggers: [
+    { event: 'ui:click', ref: 'open', do: [{ resetTo: { action: 'ask.desk', canvas: 'body' } }] },
     {
       event: 'ui:click',
       ref: 'ask',

@@ -19,6 +19,9 @@ import { check, connect, finish, waitUntil } from './harness';
 
 // Each department's own tool — the one action its clearance adds.
 const TOOL: Record<string, string> = { records: 'records.register', forms: 'forms.rename', inquiries: 'inquiries.desk', archive: 'archive.log' };
+// …and the name it wears as a tab on the phone.
+const TAB: Record<string, string> = { records: 'Register', forms: 'Rename', inquiries: 'Inquire', archive: 'Archive' };
+const anyToolTab = (showsNow: (canvas: string, text: string) => boolean): boolean => Object.values(TAB).some((label) => showsNow('tabs', label));
 
 const main = async (): Promise<void> => {
   // ── the charter and the departments agree: a department_id IS a role ──
@@ -50,16 +53,17 @@ const main = async (): Promise<void> => {
   const memberId = memberHello.principal ?? '';
   check(`they are now a principal of their own (${memberId})`, memberId.startsWith('m_'));
   check('they get the ID card', memberHello.catalog.actions.includes('member.card'));
-  check('no department badge exists for them yet', !memberHello.catalog.actions.includes('department.badge'));
   check('no department tool exists for them yet', !Object.values(TOOL).some((tool) => memberHello.catalog.actions.includes(tool)));
-  check('their card says they are not yet assigned', await member.shows('main', 'Not yet assigned'));
+  check('their card says they are not yet assigned', await member.shows('body', 'Not yet assigned'));
+  check('…and the line across the top says they are waiting', await member.shows('self', 'Waiting'));
+  check('their tabs are what they hold: the card and the ask, no tool', (await member.shows('tabs', 'Card')) && member.showsNow('tabs', 'Ask') && !anyToolTab(member.showsNow));
 
   // ── the Ministry issues their ID card, onto the phone that is open ──
-  const issued = await waitUntil(() => !member.showsNow('main', 'being issued') && !member.showsNow('main', 'pending'));
+  const issued = await waitUntil(() => !member.showsNow('body', 'being issued') && !member.showsNow('body', 'pending'));
   const card = await runtime.db.query<{ name: string; title: string | null; quirk: string | null }>('SELECT name, title, quirk FROM members WHERE member_id = $1', [memberId]);
   const issuedName = card.rows[0]?.name ?? '';
   check(`their ID card is issued: a name, a title, a line on file (${issuedName})`, issued && !issuedName.startsWith('Newcomer') && (card.rows[0]?.title ?? '') !== '' && (card.rows[0]?.quirk ?? '') !== '');
-  check('the card on their phone shows what the database says', member.showsNow('main', card.rows[0]?.title ?? '\u0000'));
+  check('the card on their phone shows what the database says', member.showsNow('body', card.rows[0]?.title ?? '\u0000'));
 
   // ── the speaker and the stage, signed in with the same credential ──
   const speaker = await connect(base, await mintSession(runtime.pool, 'speaker', 60_000));
@@ -90,8 +94,7 @@ const main = async (): Promise<void> => {
   const sessionsBefore = member.sessionsSeen();
   speaker.click('tools', 'assign');
 
-  check('the member\'s open phone receives its department', await member.shows('badge', 'Your department'));
-  check('their card now names the department', await member.shows('main', 'Department of '));
+  check('the member\'s open phone receives its department', await waitUntil(() => !member.showsNow('self', 'Waiting')));
   check('the phone never reconnected', member.isOpen());
   check('no second sign-in was needed', member.sessionsSeen() === sessionsBefore);
 
@@ -99,23 +102,26 @@ const main = async (): Promise<void> => {
   const departmentId = placed.rows[0]?.department_id ?? null;
   const department = DEPARTMENTS.find((candidate) => candidate.departmentId === departmentId);
   check(`the database put them in a real department (${String(departmentId)})`, department !== undefined);
-  check(`the phone shows the department the database says (${department?.name ?? ''})`, department !== undefined && member.showsNow('badge', department.name));
+  check(`the line across the top names the department the database says (${department?.name ?? ''})`, department !== undefined && (await member.shows('self', department.name)));
+  check('their card names it, with its clearance in plain words', department !== undefined && (await member.shows('body', department.remit)));
   const tool = TOOL[departmentId ?? ''] ?? '';
-  const desk = await waitUntil(() => member.showsNow('desk', department?.name ?? '\u0000'));
-  check(`their department's own tool is on their phone (${tool})`, desk);
+  const tab = TAB[departmentId ?? ''] ?? '\u0000';
+  check(`their department's own tool arrives as a tab (${tab})`, await member.shows('tabs', tab));
+  member.clickIn('tabs', 'open', tab);
+  check(`…and pressing it opens the tool, alone, in the body (${tool})`, await waitUntil(() => !member.showsNow('body', 'ID card') && member.showsNow('body', department?.name ?? '\u0000')));
 
   check('the controller counts them assigned', await speaker.shows('head', '1 in the room · 1 assigned'));
 
   // ── unassigning, for testing: the same re-role, backwards ──
   speaker.click('tools', 'unassign');
-  check('unassigning takes the department off the open phone', await member.shows('main', 'Not yet assigned'));
-  check('...and the badge with it', await waitUntil(() => !member.showsNow('badge', 'Your department')));
-  check('...and the department tool', await waitUntil(() => (member.showsNow('desk', 'Records') || member.showsNow('desk', 'Forms') || member.showsNow('desk', 'Inquiries') || member.showsNow('desk', 'Archive')) === false));
+  check('unassigning takes the department off the open phone', await member.shows('self', 'Waiting'));
+  check('...and its tab with it', await waitUntil(() => !anyToolTab(member.showsNow)));
+  check('...and the body is back to the card', await member.shows('body', 'Not yet assigned'));
   check('the phone never reconnected for that either', member.isOpen() && member.sessionsSeen() === sessionsBefore);
   const unplaced = await runtime.db.query<{ department_id: string | null }>('SELECT department_id FROM members WHERE member_id = $1', [memberId]);
   check('the database has them unassigned', unplaced.rows[0]?.department_id === null);
   speaker.click('tools', 'assign');
-  check('and the room can be assigned again', await member.shows('badge', 'Your department'));
+  check('and the room can be assigned again', await waitUntil(() => !member.showsNow('self', 'Waiting') && anyToolTab(member.showsNow)));
 
   // ── leaving the slide takes its tool with it ──
   speaker.click('controls', 'all');

@@ -97,6 +97,18 @@ In order; each lands with its check.
   projector's strip shows the address on every slide. The address is the deployment's
   (`PUBLIC_URL`), handed out by the `room.address` server function.
 
+**The phone** (`member.phone`, the controller's pattern — one action whose layout places
+canvases). Three regions, and only the middle one scrolls: `self`, the ID card as one
+line (name, department or "Waiting"); `body`, one thing at a time; `tabs`, a bar of one
+tab per thing the person HOLDS. The bar is not authored per department: `member.phone`
+lists every candidate (the card, the four tools, the ask) and nova's `reconcile` places
+each, skipping what the shell does not hold — ring 1 made visible, and a neighbour's bar
+differs because their charter does. Each of those actions renders itself as a tab when
+loaded with `{ tab: true }` (`actions/shared/tab.layouts.ts`) and, pressed, resets the
+body to its full self. Assignment rebuilds the shell, so the department's tool arrives
+as a tab without a reload (`assignment-check`). The department badge is gone: the strip
+and the card carry the department. Not yet: the open tab marked in the bar.
+
 **The ask** (`ask.desk`, every member's; `server/functions/ask.functions.ts`,
 `server/asking.ts`). A question typed in your own words. `ask.route` — a function, for
 the two things that cannot be data: a model's choice and a generation — reads what was

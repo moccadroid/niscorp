@@ -1,4 +1,5 @@
 import type { ActionDefinition } from '@niscorp/nova';
+import { TAB_BUTTON, TAB_INPUT } from '@lyceum/app/actions/shared/tab.layouts';
 import { memberMe } from '@lyceum/app/vex/member.entries';
 import { renameLayout } from './rename.layout';
 import { renamePrism } from './rename.prism';
@@ -10,14 +11,16 @@ import { renamePrism } from './rename.prism';
 export const renameAction: ActionDefinition = {
   id: 'forms.rename',
   title: 'Change your record',
-  data: { me: { member_id: '', name: '' }, draft: '', saved: false, error: '' },
-  layout: renameLayout,
+  data: { tab: false, tabLabel: 'Rename', me: { member_id: '', name: '' }, draft: '', saved: false, error: '' },
+  input: TAB_INPUT,
+  layout: { if: '$.tab', then: TAB_BUTTON, else: renameLayout },
   endpoints: {
     load: { url: '/api/vex', method: 'POST', request: { fingerprint: memberMe.fingerprint, context: {} }, target: 'me' },
     save: { url: '/api/vex', method: 'POST', request: renamePrism, errorTarget: 'error' },
   },
   lifecycle: { mount: [{ call: 'load' }] },
   triggers: [
+    { event: 'ui:click', ref: 'open', do: [{ resetTo: { action: 'forms.rename', canvas: 'body' } }] },
     {
       event: 'ui:click',
       ref: 'save',

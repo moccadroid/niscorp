@@ -42,10 +42,17 @@ const main = async (): Promise<void> => {
     return { phone, memberId: hello.principal ?? '' };
   };
 
+  // The ask is a tab on the phone; pressed, it fills the body.
+  const openAsk = async (phone: Terminal): Promise<boolean> => {
+    await phone.shows('tabs', 'Ask');
+    phone.clickIn('tabs', 'open', 'Ask');
+    return phone.shows('body', 'Ask the records');
+  };
+
   const ask = async (phone: Terminal, question: string): Promise<void> => {
-    phone.type('ask', 'draft', question);
+    phone.type('body', 'draft', question);
     await new Promise((resolve) => setTimeout(resolve, 100));
-    phone.click('ask', 'ask');
+    phone.click('body', 'ask');
   };
 
   const asks = async (): Promise<Ask[]> =>
@@ -63,11 +70,11 @@ const main = async (): Promise<void> => {
   const ada = await stepIn();
   const adaHello = await ada.phone.hello();
   check('every member holds the ask', adaHello.catalog.actions.includes('ask.desk'));
-  check('the ask is on their phone', await ada.phone.shows('ask', 'Ask the records'));
+  check('the ask is a tab on their phone, and opens in the body', await openAsk(ada.phone));
 
   await ask(ada.phone, 'How many people are in the room?');
-  check('a new question is answered', await ada.phone.shows('ask', 'The answer'));
-  check('…and the phone says a model wrote its query', ada.phone.showsNow('ask', 'A model wrote the query'));
+  check('a new question is answered', await ada.phone.shows('body', 'The answer'));
+  check('…and the phone says a model wrote its query', ada.phone.showsNow('body', 'A model wrote the query'));
   const first = (await asks())[0];
   check('it is recorded as generated, with a fingerprint', first?.how === 'generated' && (first.fingerprint ?? '') !== '');
   check('…in the asker\'s name, stamped by the engine', first?.member_id === ada.memberId);
@@ -76,21 +83,21 @@ const main = async (): Promise<void> => {
 
   // ── 2. replayed ──
   const ben = await stepIn();
-  await ben.phone.shows('ask', 'Ask the records');
+  await openAsk(ben.phone);
   await ask(ben.phone, 'how many people are in the room');
-  check('the same question from somebody else is answered', await ben.phone.shows('ask', 'The answer'));
-  check('…and the phone says it was replayed', ben.phone.showsNow('ask', 'replayed for you'));
+  check('the same question from somebody else is answered', await ben.phone.shows('body', 'The answer'));
+  check('…and the phone says it was replayed', ben.phone.showsNow('body', 'replayed for you'));
   const second = (await asks())[1];
   check('it is recorded as replayed', second?.how === 'replayed');
   check('…by the same fingerprint, no new one', second?.fingerprint === first?.fingerprint);
   check('…in the second person\'s name', second?.member_id === ben.memberId);
   // Two people are in the room now; the replay counted them as Ben, today.
-  check('the replay is a fresh answer, not the first one cached', await ben.phone.shows('ask', '"value":2'));
+  check('the replay is a fresh answer, not the first one cached', await ben.phone.shows('body', '"value":2'));
 
   // ── 3. refused ──
   await ask(ben.phone, 'Show me the login links');
-  check('a question past the asker\'s clearance is refused', await ben.phone.shows('ask', "can't answer that"));
-  check('…and nothing of what it reached for reaches the phone', !ben.phone.textOf('ask').includes('hash_that_must_not_leak'));
+  check('a question past the asker\'s clearance is refused', await ben.phone.shows('body', "can't answer that"));
+  check('…and nothing of what it reached for reaches the phone', !ben.phone.textOf('body').includes('hash_that_must_not_leak'));
   const third = (await asks())[2];
   check('it is recorded as refused, with no fingerprint', third?.how === 'refused' && third.fingerprint === null);
 

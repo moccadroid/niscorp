@@ -1,7 +1,7 @@
 import type { ActionDefinition } from '@niscorp/nova';
 import { doorAction } from './actions/door/door.action';
 import { cardAction } from './actions/member/card.action';
-import { badgeAction } from './actions/department/badge.action';
+import { phoneAction } from './actions/member/phone.action';
 import { registerAction } from './actions/records/register.action';
 import { renameAction } from './actions/forms/rename.action';
 import { deskAction } from './actions/inquiries/desk.action';
@@ -27,7 +27,7 @@ export const ACTIONS: Record<string, ActionDefinition> = Object.fromEntries(
   [
     doorAction,
     cardAction,
-    badgeAction,
+    phoneAction,
     registerAction,
     renameAction,
     deskAction,

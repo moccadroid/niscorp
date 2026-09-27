@@ -1,4 +1,5 @@
 import type { ActionDefinition } from '@niscorp/nova';
+import { TAB_BUTTON, TAB_INPUT } from '@lyceum/app/actions/shared/tab.layouts';
 import { memberRegister } from '@lyceum/app/vex/member.entries';
 import { registerLayout } from './register.layout';
 
@@ -8,11 +9,12 @@ import { registerLayout } from './register.layout';
 export const registerAction: ActionDefinition = {
   id: 'records.register',
   title: 'The register',
-  data: { rows: [] },
-  layout: registerLayout,
+  data: { tab: false, tabLabel: 'Register', rows: [] },
+  input: TAB_INPUT,
+  layout: { if: '$.tab', then: TAB_BUTTON, else: registerLayout },
   endpoints: {
     load: { url: '/api/vex', method: 'POST', request: { fingerprint: memberRegister.fingerprint, context: {} }, target: 'rows' },
   },
   lifecycle: { mount: [{ call: 'load' }] },
-  triggers: [],
+  triggers: [{ event: 'ui:click', ref: 'open', do: [{ resetTo: { action: 'records.register', canvas: 'body' } }] }],
 };
