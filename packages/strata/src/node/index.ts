@@ -1,5 +1,5 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
-import { join, relative } from 'node:path';
+import { join, relative, sep } from 'node:path';
 import { createUpgrader, type Stamp, type Transform } from '../documents';
 import type { Sequence } from '../schema';
 import type { GrammarSchema } from '../check';
@@ -55,7 +55,9 @@ export const runSourceUpgrade = async (options: SourceUpgradeOptions, argv: read
   const command = argv.find((a) => !a.startsWith('-')) ?? 'status';
   const lockPath = join(options.root, options.lock ?? 'strata.lock.json');
   const work = join(options.root, options.workDir ?? join('.strata', 'upgrade'));
-  const rel = (path: string): string => relative(options.root, path);
+  // POSIX separators on every platform: these paths land in REPORT.md,
+  // plan.json and the log, which agents and committed tooling read.
+  const rel = (path: string): string => relative(options.root, path).split(sep).join('/');
 
   const upgrader = await createUpgrader(options.grammars, { transform: options.transform });
   const descriptions = new Map<string, string>(options.grammars.flatMap((g) => g.migrations.map((m, i): [string, string] => [`${g.id}/${i + 1}`, m.description])));

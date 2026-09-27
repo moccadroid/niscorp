@@ -26,7 +26,10 @@ const readReleases = (): readonly Release[] => {
   const scratch = mkdtempSync(join(tmpdir(), 'nisc-changesets-'));
   try {
     const out = join(scratch, 'status.json');
-    execFileSync(join(root, 'node_modules', '.bin', 'changeset'), ['status', `--output=${out}`], { cwd: root, stdio: 'pipe' });
+    // The CLI's JS entry through this node, not the .bin shim: on Windows the
+    // shim is changeset.cmd, which execFileSync cannot spawn.
+    const cli = join(root, 'node_modules', '@changesets', 'cli', 'bin.js');
+    execFileSync(process.execPath, [cli, 'status', `--output=${out}`], { cwd: root, stdio: 'pipe' });
     const raw: unknown = JSON.parse(readFileSync(out, 'utf8'));
     if (!isRecord(raw) || !Array.isArray(raw['releases'])) throw new Error('changeset status: no releases array');
     return raw['releases'].flatMap((r: unknown): Release[] => {
