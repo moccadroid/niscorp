@@ -569,7 +569,7 @@ Requires the optional `react`/`react-dom` peers.
   into `root`. Registers wire-backed `CanvasSlot` and `ActionSlot` (the
   terminal has no shell for nova's shell-backed ones).
 - `registerWireSlots(registry, { slotWrapper?, fallback?, textWrapper?,
-  errorMarker?, canvasProvider? })` + `TerminalApiContext` — the wire-backed
+  errorMarker?, canvasProvider?, instanceProvider? })` + `TerminalApiContext` — the wire-backed
   slots themselves, shared by every react-shaped target (`terminal/ink`
   imports them); a custom react-shaped target starts here.
 - `TerminalSlotWrapper` — an app component wrapping each action instance at
@@ -616,7 +616,7 @@ createTerminal({ target: ttyTarget({ input: process.stdin, output: process.stdou
 
 ## `@niscorp/moss/terminal/ink`
 
-- `inkTarget({ registry?, slotWrapper?, stdin?, stdout?, status?, onQuit? }):
+- `inkTarget({ registry?, slotWrapper?, stdin?, stdout?, status?, onQuit?, patchConsole? }):
   Target` — the full-screen terminal target: nova's Ink kit
   (`@niscorp/nova/adapters/ink`) on the React adapter's walker, mounted with
   ink's renderer. Interaction is the TTY REPL's numbered addressing plus
@@ -630,7 +630,10 @@ createTerminal({ target: ttyTarget({ input: process.stdin, output: process.stdou
   draft-preserving and `debounce`-honoring (ADAPTER.md §6). `status:
   wire.status` renders a dim connection line while the socket is not open.
   The wire-backed slots are shared with `terminal/react` — same seam,
-  different renderer. ESM-only, like ink.
+  different renderer. `patchConsole` (default on) routes the process's
+  console above the frame; a host rendering several targets in one process
+  (an SSH server, one per connection) turns it off, so its own logs never
+  reach whoever is connected. ESM-only, like ink.
 
 ```typescript
 import { inkTarget } from '@niscorp/moss/terminal/ink';

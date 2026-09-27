@@ -36,6 +36,9 @@ export type WireSlotOptions = {
   // wraps each canvas's rendered tree with a host context (ink provides the
   // per-canvas marker resolver here); the browser omits it
   canvasProvider?: ComponentType<{ canvasId: string; children?: ReactNode }>;
+  // the same, per action instance — inside a list canvas several instances
+  // share refs, so ink resolves markers per instance here
+  instanceProvider?: ComponentType<{ canvasId: string; instanceId: string; children?: ReactNode }>;
 };
 
 // Register the wire-backed structural slots on a registry:
@@ -49,7 +52,7 @@ export type WireSlotOptions = {
 //   with one, the wrapper decides everything. Keyed by instanceId so an
 //   instance swap REMOUNTS: no stale view state crossing instances.
 export const registerWireSlots = (registry: ComponentRegistry<NovaComponent>, options: WireSlotOptions = {}): void => {
-  const { slotWrapper, fallback, textWrapper, errorMarker, canvasProvider } = options;
+  const { slotWrapper, fallback, textWrapper, errorMarker, canvasProvider, instanceProvider } = options;
 
   const CanvasSlot: NovaComponent<{ canvasId?: string }> = ({ canvasId }: { canvasId?: string }) => {
     const api = useContext(TerminalApiContext);
@@ -96,7 +99,7 @@ export const registerWireSlots = (registry: ComponentRegistry<NovaComponent>, op
         textWrapper,
         errorMarker,
       },
-      wrapped,
+      instanceProvider === undefined ? wrapped : createElement(instanceProvider, { canvasId, instanceId }, wrapped),
     );
   };
   registry.register('ActionSlot', ActionSlot, { description: 'An action instance boundary from the server; the app slotWrapper wraps it.' });

@@ -146,14 +146,16 @@ export const ttyTarget = (config: TtyTargetConfig): Target => (api) => {
     timer = setTimeout(paint, debounceMs);
   };
 
-  // Dispatch for a numbered interactive — the canvas was recorded at render
-  // time; frame chrome ('') dispatches nothing, same as every other target.
+  // Dispatch for a numbered interactive — the canvas and the instance were
+  // recorded at render time (the instance is the origin: a list canvas has
+  // several live at once); frame chrome ('') dispatches nothing, same as
+  // every other target.
   const act = (interactive: TtyInteractive, event: NovaEvent): void => {
     if (interactive.canvas === '') {
       say(`[${interactive.index}] is frame chrome — it dispatches nothing`);
       return;
     }
-    api.dispatch(interactive.canvas, event);
+    api.dispatch(interactive.canvas, interactive.origin === undefined ? event : { ...event, origin: interactive.origin });
   };
 
   const fill = (interactive: TtyInteractive, value: string): void =>

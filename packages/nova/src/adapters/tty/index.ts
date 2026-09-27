@@ -35,6 +35,11 @@ export type TtyInteractive = {
   // the canvas whose dispatch this belongs to; '' = frame chrome (dispatches
   // nothing, same as the DOM adapter's frame)
   canvas: string;
+  // the action instance it sits in (the enclosing ActionSlot's instanceId) —
+  // a list canvas renders several live instances at once, so the host stamps
+  // this as the event's origin, exactly as the DOM adapter does. Absent
+  // outside any instance.
+  origin?: string;
   // what was printed — for the host's `refs` listing
   label: string;
   // click/row: the dispatch payload; model/toggle: the current value
@@ -70,6 +75,7 @@ export type TtyView = {
 };
 
 const CANVAS_SLOT = 'CanvasSlot';
+const ACTION_SLOT = 'ActionSlot';
 const RULE_WIDTH = 60;
 
 // The recursion context: the registry, the canvas in force (frame chrome is
@@ -77,6 +83,8 @@ const RULE_WIDTH = 60;
 type Ctx = {
   registry: ComponentRegistry<TtyComponent>;
   canvas: string;
+  // the enclosing action instance, when inside one (an ActionSlot switches it)
+  origin?: string;
   api: TtyRenderApi;
   out: TtyInteractive[];
   // used when a component name is unregistered — a permissive renderer (the
@@ -111,7 +119,9 @@ const renderNode = (node: RenderNode, ctx: Ctx): TtyBlock => {
     const tree = ctx.api.canvasTree(canvasId);
     // an empty canvas collapses entirely — no heading for nothing
     if (tree.length === 0) return { lines: [] };
-    const canvasCtx: Ctx = { ...ctx, canvas: canvasId };
+    // a canvas starts outside any instance, even one placed by an instance's layout
+    const { origin: _outer, ...outside } = ctx;
+    const canvasCtx: Ctx = { ...outside, canvas: canvasId };
     return { lines: [canvasRule(canvasId), ...tree.flatMap((child) => renderNode(child, canvasCtx).lines), ''] };
   }
 
@@ -119,9 +129,12 @@ const renderNode = (node: RenderNode, ctx: Ctx): TtyBlock => {
   const build = entry !== undefined ? entry.component : ctx.fallback;
   if (build === undefined) return errorBlock('COMPONENT_NOT_FOUND', node.name);
 
-  const children = node.children.map((child) => renderNode(child, ctx));
+  // An ActionSlot is an instance boundary: what is inside it belongs to it.
+  const instanceId = node.name === ACTION_SLOT ? node.props['instanceId'] : undefined;
+  const inner: Ctx = typeof instanceId === 'string' && instanceId !== '' ? { ...ctx, origin: instanceId } : ctx;
+  const children = node.children.map((child) => renderNode(child, inner));
   const register: TtyComponentContext['register'] = (item) => {
-    const interactive: TtyInteractive = { index: ctx.out.length + 1, canvas: ctx.canvas, ...item };
+    const interactive: TtyInteractive = { index: ctx.out.length + 1, canvas: ctx.canvas, ...(ctx.origin !== undefined ? { origin: ctx.origin } : {}), ...item };
     ctx.out.push(interactive);
     return interactive.index;
   };

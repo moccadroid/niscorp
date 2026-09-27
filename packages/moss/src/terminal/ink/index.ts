@@ -47,6 +47,12 @@ export type InkTargetConfig = {
   status?: () => WireStatus;
   // called when the ink app exits (Ctrl+C) — the host owns the wire/process
   onQuit?: () => void;
+  // Route the process's console output above the frame (ink's patchConsole).
+  // Default on — right for one terminal owning its process. A host rendering
+  // SEVERAL ink targets in one process (an SSH server, one per connection)
+  // turns it off: the console is the process's, and patching it would hand
+  // the server's own logs to whoever is connected.
+  patchConsole?: boolean;
 };
 
 // How long a typed digit waits for another before acting — only when a
@@ -58,8 +64,10 @@ export const inkTarget = (config: InkTargetConfig = {}): Target => (api) => {
 
   // ── the marker table: the TTY walker over the same trees ──
   // Pure and cheap; rebuilt at the top of every frame render. Identity for
-  // lookup is (canvas, ref, occurrence) — occurrence disambiguates a table's
-  // rows, which share one rowRef in row order.
+  // lookup is (canvas, instance, ref, occurrence) — the instance keeps apart
+  // the live instances of a list canvas, which share refs (a tab bar: every
+  // tab's button is `open`); occurrence disambiguates a table's rows, which
+  // share one rowRef in row order.
   const indexView = createTtyView(ttyRegistry(), api, { fallback: ttyFallback });
   const marks = { list: [] as TtyInteractive[], byKey: new Map<string, TtyInteractive>() };
   const reindex = (): void => {
@@ -67,7 +75,7 @@ export const inkTarget = (config: InkTargetConfig = {}): Target => (api) => {
     marks.byKey.clear();
     const seen = new Map<string, number>();
     for (const item of marks.list) {
-      const base = `${item.canvas}:${item.ref}`;
+      const base = `${item.canvas}:${item.origin ?? ''}:${item.ref}`;
       const occurrence = seen.get(base) ?? 0;
       seen.set(base, occurrence + 1);
       marks.byKey.set(`${base}#${occurrence}`, item);
@@ -80,22 +88,20 @@ export const inkTarget = (config: InkTargetConfig = {}): Target => (api) => {
     }
   };
 
-  // ink resolves markers per canvas — the slot's canvasProvider curries it.
+  // ink resolves markers per canvas and, inside an action instance, per
+  // instance — the slots' canvasProvider and instanceProvider curry them.
+  const resolverFor = (canvasId: string, instanceId: string) => (ref: string, identity: { value?: unknown; occurrence?: number } = {}) => {
+    const base = `${canvasId}:${instanceId}:${ref}`;
+    if (identity.value !== undefined) {
+      const byValue = marks.byKey.get(`${base}@${JSON.stringify(identity.value)}`);
+      if (byValue !== undefined) return byValue.index;
+    }
+    return marks.byKey.get(`${base}#${identity.occurrence ?? 0}`)?.index;
+  };
   const CanvasMarkers: FC<{ canvasId: string; children?: ReactNode }> = ({ canvasId, children }) =>
-    createElement(
-      CanvasMarkersContext.Provider,
-      {
-        value: (ref: string, identity: { value?: unknown; occurrence?: number } = {}) => {
-          const base = `${canvasId}:${ref}`;
-          if (identity.value !== undefined) {
-            const byValue = marks.byKey.get(`${base}@${JSON.stringify(identity.value)}`);
-            if (byValue !== undefined) return byValue.index;
-          }
-          return marks.byKey.get(`${base}#${identity.occurrence ?? 0}`)?.index;
-        },
-      },
-      children,
-    );
+    createElement(CanvasMarkersContext.Provider, { value: resolverFor(canvasId, '') }, children);
+  const InstanceMarkers: FC<{ canvasId: string; instanceId: string; children?: ReactNode }> = ({ canvasId, instanceId, children }) =>
+    createElement(CanvasMarkersContext.Provider, { value: resolverFor(canvasId, instanceId) }, children);
 
   registerWireSlots(registry, {
     slotWrapper: config.slotWrapper,
@@ -103,6 +109,7 @@ export const inkTarget = (config: InkTargetConfig = {}): Target => (api) => {
     textWrapper: TextWrap,
     errorMarker: ErrorMarker,
     canvasProvider: CanvasMarkers,
+    instanceProvider: InstanceMarkers,
   });
 
   // A focused input claims typed digits as text — the kit's Input reports
@@ -132,9 +139,11 @@ export const inkTarget = (config: InkTargetConfig = {}): Target => (api) => {
       // focus follows the number for every kind — visible feedback, and for
       // an input the focus IS the action (typing types from here on)
       focus(markerFocusId(index));
-      if (item.kind === 'toggle') api.dispatch(item.canvas, { type: 'ui:model', ref: item.ref, payload: item.value !== true });
+      // the instance it sits in is the origin (a list canvas has several live)
+      const origin = item.origin === undefined ? {} : { origin: item.origin };
+      if (item.kind === 'toggle') api.dispatch(item.canvas, { type: 'ui:model', ref: item.ref, payload: item.value !== true, ...origin });
       else if (item.kind !== 'model')
-        api.dispatch(item.canvas, item.value === undefined ? { type: 'ui:click', ref: item.ref } : { type: 'ui:click', ref: item.ref, payload: item.value });
+        api.dispatch(item.canvas, item.value === undefined ? { type: 'ui:click', ref: item.ref, ...origin } : { type: 'ui:click', ref: item.ref, payload: item.value, ...origin });
     };
     useInput((input, key) => {
       // While an input is focused, vertical arrows belong to it (it forwards
@@ -203,7 +212,7 @@ export const inkTarget = (config: InkTargetConfig = {}): Target => (api) => {
     ...(config.stdout !== undefined ? { stdout: config.stdout } : {}),
     ...(config.stdin !== undefined ? { stdin: config.stdin } : {}),
     exitOnCtrlC: true,
-    patchConsole: true,
+    patchConsole: config.patchConsole ?? true,
   });
   void instance.waitUntilExit().then(() => config.onQuit?.());
 

@@ -88,6 +88,31 @@ describe('tty view — convention wiring', () => {
     expect(interactives[0]).toMatchObject({ kind: 'toggle', ref: 'chk', value: true });
   });
 
+  it('an interactive inside an ActionSlot carries that instance as its origin — two on one list canvas stay two', () => {
+    const frame = [component('CanvasSlot', { canvasId: 'tabs' })];
+    const tab = (instanceId: string, label: string): RenderNode =>
+      component('ActionSlot', { instanceId, canvasId: 'tabs' }, [{ ...component('Button', {}, [text(label)]), ref: 'open' }]);
+    const { interactives } = view(frame, { tabs: [tab('act-1', 'Card'), tab('act-2', 'Ask')] });
+    expect(interactives.map((i) => [i.index, i.ref, i.origin])).toEqual([
+      [1, 'open', 'act-1'],
+      [2, 'open', 'act-2'],
+    ]);
+  });
+
+  it('a canvas placed inside an instance starts outside it — its own instances are the origin', () => {
+    const frame = [component('CanvasSlot', { canvasId: 'main' })];
+    const phone = component('ActionSlot', { instanceId: 'act-phone', canvasId: 'main' }, [
+      { ...component('Button', {}, [text('Menu')]), ref: 'menu' },
+      component('CanvasSlot', { canvasId: 'body' }),
+    ]);
+    const body = [component('ActionSlot', { instanceId: 'act-card', canvasId: 'body' }, [{ ...component('Button', {}, [text('Edit')]), ref: 'edit' }])];
+    const { interactives } = view(frame, { main: [phone], body });
+    expect(interactives.map((i) => [i.ref, i.canvas, i.origin])).toEqual([
+      ['menu', 'main', 'act-phone'],
+      ['edit', 'body', 'act-card'],
+    ]);
+  });
+
   it('frame chrome interactives register against no canvas', () => {
     const { interactives } = view([{ ...component('Button', {}, [text('Chrome')]), ref: 'chrome-btn' }]);
     expect(interactives[0]).toMatchObject({ ref: 'chrome-btn', canvas: '' });

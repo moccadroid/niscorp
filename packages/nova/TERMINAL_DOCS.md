@@ -39,7 +39,7 @@ canvases collapse entirely.
 ### `TtyInteractive`
 
 ```ts
-{ index, kind, ref, canvas, label, value?, path? }
+{ index, kind, ref, canvas, origin?, label, value?, path? }
 ```
 
 - `index` — the printed `[n]`, 1-based, registration order.
@@ -48,6 +48,11 @@ canvases collapse entirely.
   with the negated boolean, model → the host's own input flow.
 - `canvas` — whose dispatch this belongs to; `''` is frame chrome
   (dispatches nothing).
+- `origin` — the action instance it sits in (the enclosing `ActionSlot`'s
+  `instanceId`; a `CanvasSlot` starts outside any). A list canvas renders
+  several live instances that share refs — a tab bar's every button is
+  `open` — so the host stamps this as the event's `origin`, as the DOM
+  adapter does, or the server's card-deck fallback picks one of them.
 - `value` — click/row: the dispatch payload; model/toggle: the current
   value. `path` — the model path, display only.
 
