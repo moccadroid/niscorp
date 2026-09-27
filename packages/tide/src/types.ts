@@ -256,6 +256,11 @@ export type TideEvent =
   // it means something died holding a task.
   | { type: 'task.reclaimed'; task: Task }
   | { type: 'fact.ingested'; fact: Fact }
+  // A fact refused by its dedupeKey. Not a row — a provider retrying a
+  // webhook forever would grow the table without bound, which is what the
+  // key exists to stop — but not nothing either: without it, a repeat and
+  // a chain that silently stopped read the same.
+  | { type: 'fact.deduped'; fact: NewFact }
   | { type: 'fact.parked'; fact: Fact; reason: string }
   // The `when` said no, or threw. Not a row — one per (fact, reflex) pair
   // is a table that grows faster than the work does — but not nothing

@@ -272,7 +272,7 @@ drive tide; nothing else about the producer is tide's business.
   "target"?: "billing.charge-due",       // manual facts: the one reflex it is aimed at
   "at": 1755600000000,                   // supplied by the caller — tide reads no clocks
   "notBefore"?: 1755859200000,           // a delayed fact: timers as data
-  "dedupeKey"?: "evt_92xk…",             // provider event ids; duplicates drop silently
+  "dedupeKey"?: "evt_92xk…",             // provider event ids; a duplicate is refused, and announced
   "cause"?: "task:…"                     // set by tide when an effect emits — the causality chain
 }
 ```

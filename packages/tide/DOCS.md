@@ -43,6 +43,12 @@ type TideConfig = {
 per-identity registry. Load-time verification sees the union across every
 declared identity, so an unregistered effect is still caught before it runs.
 
+`onEvent` hears every fact the ledger admits — `fact.ingested` whether the host
+ingested it, a handler emitted it or a run settled — and every one it refuses on
+its `dedupeKey`, as `fact.deduped`. All three paths go through one door in the
+engine, and a fact written inside a transaction is announced only once that
+transaction commits, so an event always describes a row that exists.
+
 `leaseMs` is the recovery story for a process that dies between the effect and
 the record. A task still `claimed` past its lease is claimable again; the
 fencing token is what makes that safe.
@@ -208,7 +214,7 @@ type FactInput = {
   target?: string;  by?: string;                          // manual (via `fire`)
   at: number;                 // supplied by the caller — tide reads no clocks
   notBefore?: number;         // a delayed fact: timers as data
-  dedupeKey?: string;         // a repeat drops silently; it is not an error
+  dedupeKey?: string;         // a repeat is refused — no row, a `fact.deduped` event; not an error
   cause?: string;             // set by tide when an effect emits
 };
 ```
@@ -251,7 +257,8 @@ including turning one off.
 ```typescript
 ingest(fact: FactInput, options?: { as?: string; cause?: string; depth?: number }): Promise<Fact | undefined>
 ```
-One write. Undefined means a `dedupeKey` collision — a refusal, not an error.
+One write. Undefined means a `dedupeKey` collision — a refusal, not an error,
+announced as `fact.deduped` so a repeat is never mistaken for silence.
 Matching happens in `advance`, against whatever is loaded when the fact comes
 due, which is what lets a delayed fact meet the reflexes of the day it fires.
 

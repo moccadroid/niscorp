@@ -25,6 +25,7 @@ import { previewReflex } from './engine/preview';
 import type { PreviewOptions } from './engine/preview';
 import { reopenTask } from './engine/execute';
 import { stateOf } from './engine/materialize';
+import { admitFact, announceFact } from './engine/facts';
 
 // ═══════════════════════════════════════════════════════════════
 // createTide — the whole public surface
@@ -222,9 +223,9 @@ export const createTide = (config: TideConfig): Tide => {
     // write belongs to or the depth ceiling resets at every trip through
     // the host's database.
     if (!watchable(result.data)) return undefined;
-    const stored = await config.store.appendIfAbsent('fact', { ...result.data, cause: options?.cause, depth: options?.depth ?? 0, as: options?.as });
-    if (stored !== undefined) deps.emit({ type: 'fact.ingested', fact: stored });
-    return stored;
+    const admission = await admitFact(config.store, { ...result.data, cause: options?.cause, depth: options?.depth ?? 0, as: options?.as });
+    announceFact(deps.emit, admission);
+    return 'stored' in admission ? admission.stored : undefined;
   };
 
   const advance = (options: AdvanceOptions): Promise<AdvanceReport> => runAdvance(deps, options);

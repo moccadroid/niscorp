@@ -2,6 +2,8 @@ import { FactInputSchema } from '../schemas';
 import { TideError } from '../errors';
 import type { AttemptOutcome, FactInput, NewFact, Task, TideCtx, TideStore } from '../types';
 import { evaluateTemplate, withNow } from './runtime';
+import { admitFact, announceFact } from './facts';
+import type { Admission } from './facts';
 import type { EngineDeps } from './runtime';
 
 // ═══════════════════════════════════════════════════════════════
@@ -208,7 +210,7 @@ export const executeTasks = async (deps: EngineDeps, now: number, limit: number)
               notBefore: now + backoffFor(task.attempt, retry?.baseMs ?? 60_000, retry?.backoff ?? 'exponential'),
             } as const);
 
-    const accepted = await record(deps, task, token, {
+    const recorded = await record(deps, task, token, {
       state: next.state,
       notBefore: next.state === 'retrying' ? next.notBefore : task.notBefore,
       output,
@@ -222,7 +224,10 @@ export const executeTasks = async (deps: EngineDeps, now: number, limit: number)
     // Rejected means the fence held — a timed-out attempt finishing late
     // found its token superseded. Its external side effect is exactly what
     // the task key handed to the provider defends against.
-    if (!accepted) continue;
+    if (recorded === undefined) continue;
+    // Announced only now, after the transaction committed: an event is a
+    // report of a row that exists, and a rollback would have taken these back.
+    for (const admission of recorded) announceFact(deps.emit, admission);
 
     report.executed += 1;
     const [settled] = await deps.store.query({ table: 'task', where: { id: task.id }, limit: 1 });
@@ -254,7 +259,11 @@ type Settlement = {
 // The task's landing, the facts it emitted and its run's counters, in ONE
 // transaction. The store used to own this and therefore owned retry
 // semantics with it; it is engine policy, and it now reads as engine policy.
-const record = async (deps: EngineDeps, task: Task, token: string, settlement: Settlement): Promise<boolean> =>
+//
+// Answers what became of each emitted fact, for the caller to announce once
+// the transaction has committed — or `undefined` when the fence refused the
+// attempt and nothing was written at all.
+const record = async (deps: EngineDeps, task: Task, token: string, settlement: Settlement): Promise<readonly Admission[] | undefined> =>
   deps.store.transact(async (tx: TideStore) => {
     const settles = settlement.state === 'done' || settlement.state === 'failed';
 
@@ -275,11 +284,12 @@ const record = async (deps: EngineDeps, task: Task, token: string, settlement: S
         settledAt: settles ? settlement.at : undefined,
       },
     );
-    if (!accepted) return false;
+    if (!accepted) return undefined;
 
     // Emits ride the SUCCESSFUL attempt's transaction. A throwing handler
     // discards its buffer, so a retry cannot double-mint a chain.
-    for (const emit of settlement.emits) await tx.appendIfAbsent('fact', emit);
+    const admissions: Admission[] = [];
+    for (const emit of settlement.emits) admissions.push(await admitFact(tx, emit));
 
     if (settles) {
       const [run] = await tx.query({ table: 'run', where: { id: task.runId }, limit: 1 });
@@ -300,7 +310,7 @@ const record = async (deps: EngineDeps, task: Task, token: string, settlement: S
         );
       }
     }
-    return true;
+    return admissions;
   });
 
 // THE HUMAN RECOVERY VERB, and it must rewind the run.
@@ -349,7 +359,7 @@ export const settleRuns = async (deps: EngineDeps, now: number): Promise<number>
 
   for (const run of settled) {
     deps.emit({ type: 'run.settled', run });
-    const fact = await deps.store.appendIfAbsent('fact', {
+    const admission = await admitFact(deps.store, {
       kind: 'run',
       reflex: run.reflexId,
       runId: run.id,
@@ -362,7 +372,7 @@ export const settleRuns = async (deps: EngineDeps, now: number): Promise<number>
       // selected. Another tenant's digest has no business waking on it.
       as: run.as,
     });
-    if (fact !== undefined) deps.emit({ type: 'fact.ingested', fact });
+    announceFact(deps.emit, admission);
   }
 
   return settled.length;

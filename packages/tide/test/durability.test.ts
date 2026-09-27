@@ -670,3 +670,84 @@ describe('a long outage', () => {
     expect(keys.size).toBe(afterSecond.length);
   });
 });
+
+// ═══════════════════════════════════════════════════════════════
+// every fact that reaches the table is announced, and so is every refusal
+// ═══════════════════════════════════════════════════════════════
+
+describe('the fact door', () => {
+  // A handler continues a chain by emitting a signal; a second reflex hears it.
+  const relay: ReflexInput[] = [
+    { id: 'start', intent: 'Pass the baton on.', on: { manual: {} }, effect: { name: 'pass' } },
+    { id: 'finish', intent: 'Catch the baton.', on: { fact: { signal: 'baton' } }, effect: { name: 'catch' } },
+  ];
+
+  const drain = async (tide: Tide): Promise<void> => {
+    for (let n = 1; n <= 5; n += 1) await tide.advance({ now: T0 + n });
+  };
+
+  const ingestedIds = (events: readonly TideEvent[]): string[] =>
+    events.flatMap((event) => (event.type === 'fact.ingested' ? [event.fact.id] : []));
+
+  it('announces a fact a handler emits — every row in the ledger has its event', async () => {
+    // The handler's emit used to land in the ledger and never reach the event
+    // stream: a watcher saw `finish` start on a fact nobody had announced.
+    const { tide, events, calls } = await harness(relay, {
+      pass: { run: (_input, ctx) => ctx.emit({ kind: 'signal', name: 'baton', at: ctx.now }) },
+      catch: { run: () => 'caught' },
+    });
+    await tide.fire('start', { now: T0 });
+    await drain(tide);
+
+    expect(calls).toHaveLength(2);
+    const ledger = (await tide.ledger.facts()).map((fact) => fact.id).sort();
+    expect(ingestedIds(events).sort()).toEqual(ledger);
+    expect((await tide.ledger.facts()).some((fact) => fact.name === 'baton')).toBe(true);
+  });
+
+  it('announces an emit refused by its dedupeKey, and writes no row for it', async () => {
+    // Before, a landed emit and a refused one were the same silence — a chain
+    // that continued and a chain that was cut could not be told apart.
+    const { tide, events, calls } = await harness(relay, {
+      pass: { run: (_input, ctx) => ctx.emit({ kind: 'signal', name: 'baton', at: ctx.now, dedupeKey: 'lap-1' }) },
+      catch: { run: () => 'caught' },
+    });
+    await tide.fire('start', { now: T0 });
+    await drain(tide);
+    await tide.fire('start', { now: T0 + 10 });
+    for (let n = 11; n <= 15; n += 1) await tide.advance({ now: T0 + n });
+
+    expect(calls).toHaveLength(3); // pass, catch, pass — the second baton never lands
+    const deduped = events.flatMap((event) => (event.type === 'fact.deduped' ? [event.fact] : []));
+    expect(deduped).toHaveLength(1);
+    expect(deduped[0]).toMatchObject({ kind: 'signal', name: 'baton', dedupeKey: 'lap-1', cause: expect.stringMatching(/^task:/) });
+    expect((await tide.ledger.facts()).filter((fact) => fact.name === 'baton')).toHaveLength(1);
+  });
+
+  it('announces a repeated host ingest as deduped, and still answers undefined', async () => {
+    const { tide, events } = await harness([], {});
+    const paid = { kind: 'signal' as const, name: 'paid', at: T0, dedupeKey: 'evt_1' };
+    expect(await tide.ingest(paid, { as: 'studio' })).toBeDefined();
+    expect(await tide.ingest(paid, { as: 'studio' })).toBeUndefined();
+
+    expect(events.map((event) => event.type)).toEqual(['fact.ingested', 'fact.deduped']);
+    expect(events[1]).toMatchObject({ type: 'fact.deduped', fact: { name: 'paid', as: 'studio', depth: 0 } });
+  });
+
+  it('announces nothing for a failed attempt — its buffer was discarded, not refused', async () => {
+    const { tide, events } = await harness(relay, {
+      pass: {
+        run: (_input, ctx) => {
+          ctx.emit({ kind: 'signal', name: 'baton', at: ctx.now });
+          throw new Error('dropped it');
+        },
+      },
+      catch: { run: () => 'caught' },
+    });
+    await tide.fire('start', { now: T0 });
+    await drain(tide);
+
+    expect(events.some((event) => event.type === 'fact.deduped')).toBe(false);
+    expect(events.some((event) => event.type === 'fact.ingested' && event.fact.name === 'baton')).toBe(false);
+  });
+});

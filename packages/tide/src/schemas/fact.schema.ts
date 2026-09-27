@@ -40,7 +40,7 @@ export const FactInputSchema = z
 
     at: z.number().int().describe('Supplied by the caller. Tide reads no clocks.'),
     notBefore: z.number().int().optional().describe('A delayed fact — timers as data, visible and queryable.'),
-    dedupeKey: z.string().optional().describe('Provider event ids. A repeat drops silently; it is not an error.'),
+    dedupeKey: z.string().optional().describe('Provider event ids. A repeat is refused and announced as fact.deduped; it is not an error.'),
     cause: z.string().optional().describe('Set by tide when an effect emits — the causality chain.'),
   })
   .strict()
