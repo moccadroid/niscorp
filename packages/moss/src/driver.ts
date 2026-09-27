@@ -41,7 +41,10 @@ export type TideDriver = {
   // quiescence, so a caller that must see the settled world — a "run now"
   // button whose screen re-reads — can await it; everyone else ignores it.
   wake: () => Promise<void>;
-  stop: () => void;
+  // Stop waking, and resolve once nothing the driver started is still
+  // touching the store — the drain in flight and the next-due read after it.
+  // A host awaits it before closing the database under the engine.
+  stop: () => Promise<void>;
 };
 
 export type TideDriverConfig = {
@@ -80,6 +83,7 @@ export const createTideDriver = (config: TideDriverConfig): TideDriver => {
   let queued = false;
   let stopped = false;
   let cycle: Promise<void> | undefined;
+  let scheduling: Promise<void> | undefined;
   let timer: ReturnType<typeof setTimeout> | undefined;
 
   const drain = async (): Promise<void> => {
@@ -90,9 +94,19 @@ export const createTideDriver = (config: TideDriverConfig): TideDriver => {
     console.error(`[moss:tide-driver] a drain exceeded ${MAX_STEPS_PER_DRAIN} steps — stopping this pass; the janitor will resume it`);
   };
 
+  // Never rejects: it runs detached after every drain, and an unhandled
+  // rejection there would take the host's process down with it.
   const schedule = async (): Promise<void> => {
     if (stopped) return;
-    const due = await tide.nextDue(now());
+    let due: number | undefined;
+    try {
+      due = await tide.nextDue(now());
+    } catch (err) {
+      // Stopping mid-read (the store closing under it) is expected, not news.
+      if (!stopped) console.error('[moss:tide-driver] next due', err);
+      return;
+    }
+    if (stopped) return;
     if (timer !== undefined) clearTimeout(timer);
     if (due === undefined) return; // nothing scheduled — the next ingest wakes us
     const delay = due - now();
@@ -122,7 +136,7 @@ export const createTideDriver = (config: TideDriverConfig): TideDriver => {
       } finally {
         running = false;
         cycle = undefined;
-        void schedule();
+        scheduling = schedule();
       }
     })();
     return cycle;
@@ -148,10 +162,13 @@ export const createTideDriver = (config: TideDriverConfig): TideDriver => {
       return fact;
     },
     wake,
-    stop: () => {
+    stop: async () => {
       stopped = true;
       clearInterval(janitor);
       if (timer !== undefined) clearTimeout(timer);
+      // the drain in flight (it schedules on its way out), then that schedule
+      await cycle;
+      await scheduling;
     },
   };
 };

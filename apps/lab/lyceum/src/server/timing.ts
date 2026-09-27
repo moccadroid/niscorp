@@ -185,9 +185,6 @@ export const startTiming = async (server: MossServer, runtime: LyceumRuntime): P
     actor: (as) => as,
   });
   const driver = createTideDriver({ tide });
-  // The drain the last reload started — awaited on stop, so nothing is still
-  // writing when the database closes (the driver's own stop does not wait).
-  let draining: Promise<void> = Promise.resolve();
 
   // Every saved timer, as the scheduler — the only role that reads them all —
   // held to the deck as it stands.
@@ -203,7 +200,7 @@ export const startTiming = async (server: MossServer, runtime: LyceumRuntime): P
       }
     });
     await tide.load(reflexes, { at: Date.now() });
-    draining = driver.wake();
+    void driver.wake();
     return reflexes.length;
   };
   await reload();
@@ -211,9 +208,7 @@ export const startTiming = async (server: MossServer, runtime: LyceumRuntime): P
     tide,
     driver,
     reload,
-    stop: async () => {
-      driver.stop();
-      await draining;
-    },
+    // Resolves once nothing the driver started is still touching the store.
+    stop: () => driver.stop(),
   };
 };
