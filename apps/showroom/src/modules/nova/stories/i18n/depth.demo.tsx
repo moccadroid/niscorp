@@ -3,7 +3,7 @@ import { createShell, type ActionDefinition } from '@niscorp/nova';
 import { Nova } from '@niscorp/nova/adapters/react';
 import { DEFAULT_PHRASE_KEYS } from '@niscorp/nova/i18n';
 import { GERMAN } from './books';
-import { Aside, LANGUAGE_KIT, LocaleBar } from './kit';
+import { Aside, LANGUAGE_KIT, LanguageStage, LocaleBar } from './kit';
 
 // WHERE THE WORDS ON A REAL SCREEN ACTUALLY LIVE.
 //
@@ -87,9 +87,7 @@ export { shell };
 export const Demo = () => {
   const [at, setAt] = useState('de');
   return (
-    <div style={{ padding: 20, maxWidth: 620 }}>
-      <LocaleBar shell={shell} at={at} onPick={setAt} />
-      <Nova.Shell shell={shell} />
+    <LanguageStage size="tablet" bar={<LocaleBar shell={shell} at={at} onPick={setAt} />} aside={
       <Aside>
         Three column headers translate from two levels inside a spec prop. The <em>Standing</em> and
         <em> Plan</em> cells translate because their fields end in <code>_display</code> — one rule, not
@@ -98,6 +96,8 @@ export const Demo = () => {
         key’s proseness, and <code>options</code> had to be named because nova’s default set covers
         the <code>label</code> inside <code>options: [{'{ label }'}]</code>, not the outer key.
       </Aside>
-    </div>
+    }>
+      <Nova.Shell shell={shell} />
+    </LanguageStage>
   );
 };

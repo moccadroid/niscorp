@@ -2,6 +2,8 @@ import { z } from 'zod';
 import { createSignal, type Message, type SignalResult } from '@niscorp/signal';
 import { Pitch } from '@showroom/chrome/pitch';
 import { ChatView, type ChatViewInitial } from '@showroom/modules/signal/chat/chat-view';
+import { replayRecorded, answerWith } from '@showroom/lib/scripted-model/scripts';
+import { CARDS, suggestionPrompts } from '@showroom/modules/signal/scripted/answers';
 
 // Structured output IS your UI. Mirror your component's props in
 // the schema and drop `result.response` straight into JSX:
@@ -124,7 +126,13 @@ export const snapshot = {
 
 export const structuredRender = 'card' as const;
 
+// No API key: the recorded run above replays for its own prompt, and the
+// "Try:" prompts get the answers written for this page (see scripted/answers).
+replayRecorded('signal/ui-card', snapshot.result.history);
+answerWith('signal/ui-card/try', CARDS);
+
 const initial: ChatViewInitial = {
+  suggestions: suggestionPrompts(CARDS),
   provider,
   model,
   systemPrompt,

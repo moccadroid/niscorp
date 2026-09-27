@@ -8,3 +8,4 @@ export { FinalBadge } from './final-badge';
 export { splitByTokens } from './split-by-tokens';
 export { DemoShell } from './demo-shell';
 export { ModeSwitcher } from './mode-switcher';
+export { Pitch } from './pitch';

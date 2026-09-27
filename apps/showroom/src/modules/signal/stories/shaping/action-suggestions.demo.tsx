@@ -2,6 +2,8 @@ import { z } from 'zod';
 import { createSignal, type Message, type SignalResult } from '@niscorp/signal';
 import { Pitch } from '@showroom/chrome/pitch';
 import { ChatView, type ChatViewInitial } from '@showroom/modules/signal/chat/chat-view';
+import { replayRecorded, answerWith } from '@showroom/lib/scripted-model/scripts';
+import { FOLLOW_UPS, suggestionPrompts } from '@showroom/modules/signal/scripted/answers';
 
 // Two things in one result: a free-form `reply` plus a typed
 // `suggestions` array for your UI to render as clickable chips.
@@ -110,7 +112,13 @@ export const snapshot = {
 
 export const structuredRender = 'json' as const;
 
+// No API key: the recorded run above replays for its own prompt, and the
+// "Try:" prompts get the answers written for this page (see scripted/answers).
+replayRecorded('signal/action-suggestions', snapshot.result.history);
+answerWith('signal/action-suggestions/try', FOLLOW_UPS);
+
 const initial: ChatViewInitial = {
+  suggestions: suggestionPrompts(FOLLOW_UPS),
   provider,
   model,
   systemPrompt,

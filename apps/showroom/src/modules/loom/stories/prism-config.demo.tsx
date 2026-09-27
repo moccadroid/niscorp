@@ -3,6 +3,8 @@ import { LoomEditor, defaultPlugins } from '@niscorp/loom/react';
 import { prism } from '@niscorp/loom/plugins/prism/react';
 import type { LoomArtifact } from '@niscorp/loom';
 import type { JsonObject } from '@niscorp/prism';
+import { Panel } from '@showroom/chrome/stage/ui';
+import { LoomStage } from '../demo-panel';
 
 // The prism plugin in the Loom Editor: edit a Prism transform config and the
 // preview applies it to a sample input and shows the output. The seed is a
@@ -39,10 +41,12 @@ const config = {
 };
 
 export const Demo: FC = () => (
-  <div style={{ padding: 24 }}>
-    <LoomEditor
-      plugins={[...defaultPlugins(), prism({ input })]}
-      artifact={{ type: 'prism', documents: { config } }}
-    />
-  </div>
+  <LoomStage>
+    <Panel title="A prism transform in the editor" aside="edit the config; the preview runs it over the sample input">
+      <LoomEditor
+        plugins={[...defaultPlugins(), prism({ input })]}
+        artifact={{ type: 'prism', documents: { config } }}
+      />
+    </Panel>
+  </LoomStage>
 );

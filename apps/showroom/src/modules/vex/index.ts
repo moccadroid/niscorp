@@ -1,4 +1,6 @@
 import type { DocPage, LibraryModule } from '@showroom/modules/types';
+import { createElement } from 'react';
+import { Intro } from './pages/intro';
 import { stories } from './stories';
 import { buildInspectorTabs } from './inspector-tabs';
 import { VexRuntimeProvider } from './runtime-context';
@@ -17,7 +19,11 @@ import readmeContent from '../../../../../packages/vex/README.md?raw';
 import designContent from '../../../../../packages/vex/DESIGN.md?raw';
 import docsContent from '../../../../../packages/vex/DOCS.md?raw';
 
+// The landing page asks a made-up studio's database real questions through a
+// real engine (world/studio.ts); the stories below run the same engine over a
+// seeded shop database (runtime/).
 const docs: readonly DocPage[] = [
+  { id: 'start', title: 'What vex is for', render: () => createElement(Intro) },
   { id: 'readme', title: 'README', content: readmeContent },
   { id: 'design', title: 'Design', content: designContent },
   { id: 'reference', title: 'Reference', content: docsContent },

@@ -1,71 +1,56 @@
 import type { Story } from '@showroom/modules/types';
 
-import * as ledger from './stories/ledger.demo';
-import ledgerSrc from './stories/ledger.demo?raw';
-import * as adopt from './stories/adopt.demo';
-import adoptSrc from './stories/adopt.demo?raw';
-import * as upgrade from './stories/upgrade.demo';
-import upgradeSrc from './stories/upgrade.demo?raw';
-import * as embeddings from './stories/embeddings.demo';
-import embeddingsSrc from './stories/embeddings.demo?raw';
-import * as tooNew from './stories/too-new.demo';
-import tooNewSrc from './stories/too-new.demo?raw';
-import * as source from './stories/source.demo';
-import sourceSrc from './stories/source.demo?raw';
+import { TimeMachine } from './pages/time-machine';
+import timeMachineSrc from './pages/time-machine?raw';
+import { Everywhere } from './pages/everywhere';
+import everywhereSrc from './pages/everywhere?raw';
+import { Gate } from './pages/gate';
+import gateSrc from './pages/gate?raw';
+import { Tables } from './pages/tables';
+import tablesSrc from './pages/tables?raw';
 
+// Four pages, read in order — the landing page ("What strata is for", a doc)
+// links them. Each is full-width: the migrations and documents are on the page
+// itself, so there is no source pane beside it.
 export const stories: readonly Story[] = [
   {
-    id: 'ledger',
-    name: 'The ledger',
-    description: 'An app\'s tables as a sequence. Boot, boot again, then change the code — append, reword, edit history, break a step, roll back — and watch what strata allows.',
+    id: 'time-machine',
+    name: '1 · The time machine',
+    description: 'One screen, saved by one release and opened by another. Upgraded on read, or refused — and what the app shows without strata.',
+    category: 'Documents',
+    kind: 'documents',
+    doc: true,
+    Demo: TimeMachine,
+    source: timeMachineSrc,
+  },
+  {
+    id: 'everywhere',
+    name: '2 · One change, everywhere',
+    description: 'Deploy a release; the same document catches up in a database row, in your repo, and over the wire.',
+    category: 'Documents',
+    kind: 'documents',
+    doc: true,
+    Demo: Everywhere,
+    source: everywhereSrc,
+  },
+  {
+    id: 'gate',
+    name: '3 · The gate',
+    description: 'Every real screen the lab apps captured, upgraded and parsed in your browser — and what a grammar change without a migration would break.',
+    category: 'Documents',
+    kind: 'documents',
+    doc: true,
+    Demo: Gate,
+    source: gateSrc,
+  },
+  {
+    id: 'tables',
+    name: '4 · The ledger',
+    description: 'The same rules for the tables documents live in, side by side with a plain migration counter, on real Postgres.',
     category: 'Tables',
     kind: 'tables',
-    Demo: ledger.Demo,
-    source: ledgerSrc,
-  },
-  {
-    id: 'adopt',
-    name: 'Adopt an old database',
-    description: 'A vex cache from before strata, missing five later columns and holding two rows. The real baseline vex ships converges it once and records it.',
-    category: 'Tables',
-    kind: 'tables',
-    Demo: adopt.Demo,
-    source: adoptSrc,
-  },
-  {
-    id: 'upgrade',
-    name: 'Upgrade a document',
-    description: 'A nova action stored before the app kit renamed Button\'s label. One Prism migration over one node runs on every Button at every depth, and the document comes back stamped current.',
-    category: 'Documents',
-    kind: 'documents',
-    Demo: upgrade.Demo,
-    source: upgradeSrc,
-  },
-  {
-    id: 'embeddings',
-    name: 'Embeddings',
-    description: 'Where nova\'s grammar says its documents nest — and so everything the walker finds inside one action: layouts at every depth, and the Prism config in its endpoint.',
-    category: 'Documents',
-    kind: 'documents',
-    Demo: embeddings.Demo,
-    source: embeddingsSrc,
-  },
-  {
-    id: 'too-new',
-    name: 'Too new',
-    description: 'A document written by newer code than the reader. Refused by name, before anything renders — the reader upgrades first.',
-    category: 'Documents',
-    kind: 'documents',
-    Demo: tooNew.Demo,
-    source: tooNewSrc,
-  },
-  {
-    id: 'source',
-    name: 'Upgrade your source',
-    description: 'strata upgrade on an artifact in an app\'s TypeScript: the exact expected JSON and a report for whoever edits, then verify — the lock moves only when the edit lands on it.',
-    category: 'Source',
-    kind: 'source',
-    Demo: source.Demo,
-    source: sourceSrc,
+    doc: true,
+    Demo: Tables,
+    source: tablesSrc,
   },
 ];

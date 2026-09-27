@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState, type FC, type ReactNode } from 'react';
 import { z } from 'zod';
 import { createSignal, type Message, type SignalResult, type Tool, type SignalOptions } from '@niscorp/signal';
-import { getKey } from '@showroom/modules/signal/settings/api-key-storage';
-import { createOpenAIClient, type RecipeProvider } from '@showroom/modules/signal/openai-client';
+import { resolveModel, type RecipeProvider } from '@showroom/modules/signal/openai-client';
+import { onScriptedReply, type ScriptedEvent } from '@showroom/lib/scripted-model/scripted-fetch';
 import { useSignalSetter } from '@showroom/modules/signal/runtime-context';
 
 // How to render structured (object) assistant responses: a
@@ -41,6 +41,9 @@ export type ChatMessage = Message & {
   // schema-constrained call, the parsed object is stashed here so the
   // bubble can render it via JsonViewer / CardRenderer instead of text.
   __structured?: unknown;
+  // Who produced this turn when it was not a live model: a recording replayed,
+  // or the showroom's scripted model.
+  __source?: ScriptedEvent['source'];
 };
 
 export type ChatViewInitial = {
@@ -51,6 +54,9 @@ export type ChatViewInitial = {
   tools?: Tool[];
   schema?: z.ZodTypeAny;
   options?: SignalOptions;
+  // Prompts offered as one-click chips. The scripted model (no API key) has
+  // an answer written for each; a live model answers them for real.
+  suggestions?: readonly string[];
   // Pre-filled compose box content (used when there's no snapshot — recipes
   // typed an example input the user can edit and send).
   initialInput?: string;
@@ -163,6 +169,7 @@ const Bubble: FC<{ message: ChatMessage; structuredRender?: StructuredRender }> 
       <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: 0.5, color: labelColor, marginBottom: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <span>{role.toUpperCase()}</span>
         {isSnapshot && <SnapshotBadge />}
+        {message.__source !== undefined && <SourceBadge source={message.__source} />}
       </div>
       {message.__structured !== undefined && role === 'assistant' ? (
         <StructuredBody value={message.__structured} render={structuredRender} />
@@ -203,7 +210,24 @@ const SnapshotBadge: FC = () => (
       letterSpacing: 0.3,
     }}
   >
-    SNAPSHOT
+    RECORDED RUN
+  </span>
+);
+
+// A turn the scripted model produced: a recording replayed, a scripted answer,
+// or a shape-only answer generated from the request's schema.
+const SourceBadge: FC<{ source: NonNullable<ChatMessage['__source']> }> = ({ source }) => (
+  <span
+    title={
+      source === 'recorded'
+        ? 'The words of a real model run, replayed by the scripted provider.'
+        : source === 'scripted'
+          ? 'Written for this page. The signal code that handled it is real.'
+          : 'No script for this prompt: an answer in the requested shape, generated from its schema.'
+    }
+    style={{ fontSize: 9, fontWeight: 700, padding: '2px 6px', background: '#eef2ff', color: '#4f46e5', border: '1px solid #c7d2fe', borderRadius: 3, letterSpacing: 0.3 }}
+  >
+    {source === 'recorded' ? 'REPLAYED RECORDING' : source === 'scripted' ? 'SCRIPTED' : 'GENERATED FROM SCHEMA'}
   </span>
 );
 
@@ -264,11 +288,9 @@ export const ChatView: FC<Props> = ({ initial, onResult }) => {
   const handleSend = (): void => {
     const text = composeText.trim();
     if (text.length === 0) return;
-    const key = getKey(provider);
-    if (key === undefined) {
-      setError(`No API key configured for ${provider}. Configure it in Settings.`);
-      return;
-    }
+    const { apiKey: key, client, scripted } = resolveModel(provider);
+    let source: ScriptedEvent['source'] | undefined;
+    const stopListening = scripted ? onScriptedReply((event) => (source = event.source)) : () => false;
 
     const userMessage: ChatMessage = { role: 'user', content: text };
     const nextConversation: ChatMessage[] = [...conversation, userMessage];
@@ -282,8 +304,6 @@ export const ChatView: FC<Props> = ({ initial, onResult }) => {
       const copy: Message = { ...m };
       return copy;
     });
-
-    const client = createOpenAIClient(provider, key);
 
     // Recipe mode: invoke the authored recipe function. Its file IS
     // the code that runs — nothing is duplicated here.
@@ -315,12 +335,15 @@ export const ChatView: FC<Props> = ({ initial, onResult }) => {
               __structured: result.response,
             }
           : { role: 'assistant', content: String(result.response ?? '') };
+        stopListening();
+        if (source !== undefined) assistantMessage.__source = source;
         setConversation((prev) => [...prev, assistantMessage]);
         setLoading(false);
         if (onResult !== undefined) onResult(result);
         setView({ mode: 'live', loading: false, result, error: undefined });
       })
       .catch((err: unknown) => {
+        stopListening();
         const message = err instanceof Error ? err.message : String(err);
         setError(message);
         setLoading(false);
@@ -348,7 +371,8 @@ export const ChatView: FC<Props> = ({ initial, onResult }) => {
     lastResultRef.current = undefined;
   };
 
-  const hasKey = getKey(provider) !== undefined;
+  const scriptedMode = resolveModel(provider).scripted;
+  const hasKey = true;
 
   return (
     <div
@@ -449,12 +473,41 @@ export const ChatView: FC<Props> = ({ initial, onResult }) => {
         </div>
       )}
 
+      {/* Which model answers, and prompts to try */}
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center', marginBottom: 10 }}>
+        <span
+          style={{
+            fontSize: 11,
+            fontWeight: 700,
+            padding: '2px 9px',
+            borderRadius: 999,
+            border: `1px solid ${scriptedMode ? '#c7d2fe' : '#a7f3d0'}`,
+            background: scriptedMode ? '#eef2ff' : '#ecfdf5',
+            color: scriptedMode ? '#4f46e5' : '#059669',
+          }}
+          title={scriptedMode ? 'No API key: the real signal code runs against a scripted provider. Add a key in Signal → Settings to go live.' : `Live: ${provider}`}
+        >
+          {scriptedMode ? 'scripted model — no key needed' : `live · ${provider}`}
+        </span>
+        {(initial.suggestions ?? []).map((s) => (
+          <button
+            key={s}
+            type="button"
+            disabled={loading}
+            onClick={() => setComposeText(s)}
+            style={{ font: 'inherit', fontSize: 12, padding: '4px 10px', borderRadius: 999, border: '1px solid #e5e7eb', background: '#ffffff', color: '#111827', cursor: 'pointer' }}
+          >
+            {s}
+          </button>
+        ))}
+      </div>
+
       {/* Compose */}
       <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
         <textarea
           value={composeText}
           onChange={(e) => setComposeText(e.target.value)}
-          placeholder={hasKey ? 'Type a message... (Cmd/Ctrl + Enter to send)' : `No API key for ${provider}. Configure in Settings.`}
+          placeholder={scriptedMode ? 'Pick a prompt above, or type your own… (Cmd/Ctrl + Enter)' : 'Type a message… (Cmd/Ctrl + Enter to send)'}
           rows={3}
           disabled={!hasKey || loading}
           onKeyDown={(e) => {

@@ -70,7 +70,7 @@ export const SearchResultsView: FC<Props> = ({ value, pathStatuses }) => {
               }}
             >
               <div>
-                <div style={{ fontSize: 14, fontWeight: 600, color: '#2563eb' }}>
+                <div style={{ fontSize: 14, fontWeight: 600, color: '#4f46e5' }}>
                   {result.title || <Placeholder width={200} />}
                 </div>
                 <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 2 }}>

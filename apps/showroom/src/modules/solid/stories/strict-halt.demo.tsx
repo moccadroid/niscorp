@@ -1,7 +1,8 @@
 import { useRef, useState, type FC } from 'react';
 import { z } from 'zod';
 import { createStream, type StreamError, type ValidationMode } from '@niscorp/solid';
-import { Pitch } from '@showroom/chrome/pitch';
+import { Pitch } from '@showroom/modules/solid/atoms';
+import { Callout } from '@showroom/chrome/stage/ui';
 import {
   DemoShell,
   ErrorPanel,
@@ -122,23 +123,7 @@ const InnerDemo: FC<{ mode: ValidationMode }> = ({ mode }) => {
       <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 8 }}>
         mode: <code style={{ fontFamily: 'ui-monospace, Menlo, monospace' }}>{mode}</code>
       </div>
-      {failed && (
-        <div
-          style={{
-            padding: '12px 16px',
-            marginBottom: 16,
-            background: '#fef2f2',
-            border: '1px solid #fecaca',
-            borderLeft: '4px solid #dc2626',
-            borderRadius: 6,
-            fontSize: 13,
-            color: '#991b1b',
-            fontWeight: 600,
-          }}
-        >
-          Stream failed (strict mode) — no further updates will be applied.
-        </div>
-      )}
+      {failed && <Callout tone="bad" title="Stream failed (strict mode)">No further updates will be applied — what is on screen is frozen.</Callout>}
       <PathBadges statuses={pathStatuses} />
       <ErrorPanel errors={errors} />
       <RawJsonPanel value={value} />

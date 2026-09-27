@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { createShell, type ActionDefinition } from '@niscorp/nova';
 import { Nova } from '@niscorp/nova/adapters/react';
 import { GERMAN } from './books';
-import { Aside, LANGUAGE_KIT, LocaleBar } from './kit';
+import { Aside, LANGUAGE_KIT, LanguageStage, LocaleBar } from './kit';
 
 // "12 OF 20" CANNOT BE A DICTIONARY ROW.
 //
@@ -61,9 +61,7 @@ export { shell };
 export const Demo = () => {
   const [at, setAt] = useState('de');
   return (
-    <div style={{ padding: 20, maxWidth: 620 }}>
-      <LocaleBar shell={shell} at={at} onPick={setAt} />
-      <Nova.Shell shell={shell} />
+    <LanguageStage bar={<LocaleBar shell={shell} at={at} onPick={setAt} />} aside={
       <Aside>
         <code>{'{n} of {total}'}</code> is one dictionary row, not twenty. In <em>noch 3</em> the hole
         has moved to the other side of the word — which is why a pattern is translated whole rather
@@ -71,6 +69,8 @@ export const Demo = () => {
         <code> somebody joins</code> and <code>email them</code> as vocabulary of their own. Switch to
         English: nothing is translated, and the holes still close.
       </Aside>
-    </div>
+    }>
+      <Nova.Shell shell={shell} />
+    </LanguageStage>
   );
 };

@@ -1,6 +1,8 @@
 import { createSignal, type Message, type SignalResult } from '@niscorp/signal';
 import { Pitch } from '@showroom/chrome/pitch';
 import { ChatView, type ChatViewInitial } from '@showroom/modules/signal/chat/chat-view';
+import { replayRecorded, answerWith } from '@showroom/lib/scripted-model/scripts';
+import { TUTOR, suggestionPrompts } from '@showroom/modules/signal/scripted/answers';
 
 // `.history()` pre-seeds the conversation — every message in the array
 // is sent to the model before the new user input. After the call,
@@ -78,7 +80,13 @@ export const snapshot = {
   capturedWith: { provider: 'groq', model },
 };
 
+// No API key: the recorded run above replays for its own prompt, and the
+// "Try:" prompts get the answers written for this page (see scripted/answers).
+replayRecorded('signal/multi-turn', snapshot.result.history);
+answerWith('signal/multi-turn/try', TUTOR);
+
 const initial: ChatViewInitial = {
+  suggestions: suggestionPrompts(TUTOR),
   provider,
   model,
   systemPrompt,

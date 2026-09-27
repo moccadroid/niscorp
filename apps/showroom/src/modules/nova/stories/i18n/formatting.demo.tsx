@@ -3,7 +3,7 @@ import type { LayoutNode } from '@niscorp/nova';
 import { Nova } from '@niscorp/nova/adapters/react';
 import { evaluate } from '@niscorp/prism';
 import { GERMAN } from './books';
-import { Aside, LANGUAGE_KIT } from './kit';
+import { Aside, LANGUAGE_KIT, LanguageStage, PickBar } from './kit';
 
 // THE HALF THAT IS NOT TRANSLATION AT ALL.
 //
@@ -58,31 +58,10 @@ export const Demo = () => {
   const book = tag.startsWith('de') ? GERMAN : undefined;
 
   return (
-    <div style={{ padding: 20, maxWidth: 620, fontFamily: 'system-ui, sans-serif' }}>
-      <div style={{ display: 'flex', gap: 6, marginBottom: 14, flexWrap: 'wrap' }}>
-        {TAGS.map((option) => (
-          <button
-            key={option}
-            type="button"
-            onClick={() => setTag(option)}
-            style={{
-              fontFamily: 'ui-monospace, monospace',
-              fontSize: 13,
-              padding: '5px 12px',
-              borderRadius: 999,
-              cursor: 'pointer',
-              border: `1px solid ${tag === option ? '#2563eb' : '#d1d5db'}`,
-              background: tag === option ? '#2563eb' : '#fff',
-              color: tag === option ? '#fff' : '#374151',
-            }}
-          >
-            {option}
-          </button>
-        ))}
-      </div>
-
-      <Nova.Layout layout={layout} data={data} components={LANGUAGE_KIT} {...(book === undefined ? {} : { phrases: book })} />
-
+    <LanguageStage
+      bar={<PickBar label="Region" mono options={TAGS.map((option) => ({ id: option, label: option }))} at={tag} onPick={setTag} />}
+      status={`Acme Studio · ${tag}`}
+      aside={
       <Aside>
         The three <em>labels</em> come from the book and change only between <code>de-*</code> and
         <code> en-GB</code> — one German book serves Vienna, Hamburg and Zürich. The three
@@ -91,6 +70,9 @@ export const Demo = () => {
         three near-identical copies of a German book was the alternative, and the first wording fix
         would then have landed in three places.
       </Aside>
-    </div>
+      }
+    >
+      <Nova.Layout layout={layout} data={data} components={LANGUAGE_KIT} {...(book === undefined ? {} : { phrases: book })} />
+    </LanguageStage>
   );
 };

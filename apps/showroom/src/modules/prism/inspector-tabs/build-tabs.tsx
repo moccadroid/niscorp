@@ -1,13 +1,13 @@
 import type { InspectorTabDef, Story } from '@showroom/modules/types';
-import type { PrismStory } from '@showroom/modules/prism/story-types';
+import { stories } from '@showroom/modules/prism/stories';
 import { StatsTab } from './stats-tab';
 import { CompiledTab } from './compiled-tab';
 
-// Chrome provides the Source tab. Prism adds Stats + Compiled.
-// The active module always receives one of its own stories, so we
-// cast at entry instead of guarding defensively.
+// Chrome provides the Source tab. Prism adds Stats + Compiled. The story's
+// input and config ride on the PrismStory; finding it by id needs no cast.
 export const buildInspectorTabs = (story: Story): InspectorTabDef[] => {
-  const s = story as PrismStory;
+  const s = stories.find((x) => x.id === story.id);
+  if (s === undefined) return [];
   return [
     { id: 'stats', label: 'Stats', render: () => <StatsTab story={s} /> },
     { id: 'compiled', label: 'Compiled', render: () => <CompiledTab story={s} /> },

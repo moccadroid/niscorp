@@ -1,4 +1,5 @@
 import type { NovaStory } from './story-types';
+import { onStage, type StageFrame } from './stage/on-stage';
 
 // Bindings
 import { story as bindingsConditional } from './stories/bindings/conditional.story';
@@ -68,7 +69,7 @@ import { story as i18nPatterns } from './stories/i18n/patterns.story';
 import { story as i18nHarvest } from './stories/i18n/harvest.story';
 import { story as i18nFormatting } from './stories/i18n/formatting.story';
 
-export const stories: readonly NovaStory[] = [
+const authored: readonly NovaStory[] = [
   // Bindings
   bindingsConditional,
   bindingsMissingPaths,
@@ -130,3 +131,25 @@ export const stories: readonly NovaStory[] = [
   i18nHarvest,
   i18nFormatting,
 ];
+
+// Every story renders on a device (see stage/on-stage.tsx). A phone unless it
+// is listed here: a tablet for the stories whose point is several canvases
+// side by side, and `self` for the demos that draw their own device so their
+// controls can sit beside it.
+const FRAMES: Readonly<Record<string, StageFrame>> = {
+  'multi-canvas': 'tablet',
+  'dashboard-shell': 'tablet',
+  'list-mode-kanban': 'tablet',
+  'conditional-detail': 'tablet',
+  'cross-canvas-messaging': 'tablet',
+  'compose-reuse': 'tablet',
+  'slot-wrapper-auth-gate': 'self',
+  'i18n-switch': 'self',
+  'i18n-keys': 'self',
+  'i18n-depth': 'self',
+  'i18n-patterns': 'self',
+  'i18n-harvest': 'self',
+  'i18n-formatting': 'self',
+};
+
+export const stories: readonly NovaStory[] = authored.map((story) => onStage(story, FRAMES[story.id] ?? 'phone'));

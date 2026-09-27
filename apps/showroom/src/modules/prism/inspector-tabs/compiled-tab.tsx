@@ -1,10 +1,13 @@
 import { useMemo, type FC } from 'react';
 import type { CompiledIr } from '@niscorp/prism';
+import { Chip, INK } from '@showroom/chrome/stage/ui';
 import type { PrismStory } from '@showroom/modules/prism/story-types';
 import { useCompiledIr } from '@showroom/modules/prism/use-compiled-ir';
+import { Block, json } from '@showroom/modules/prism/parts';
+import { Legend } from './stats-tab';
 
 const LEGEND =
-  'The tree the runtime actually evaluates after desugaring, constant folding, handler attachment, and JSONPath segment inlining.';
+  'The tree the runtime actually evaluates, after desugaring, constant folding, handler attachment and path inlining.';
 
 type Props = { story: PrismStory };
 
@@ -53,39 +56,13 @@ export const CompiledTab: FC<Props> = ({ story }) => {
 
   return (
     <div>
-      <div
-        style={{
-          padding: '12px 16px',
-          background: '#f3f4f6',
-          color: '#4b5563',
-          fontSize: 11,
-          borderBottom: '1px solid #e5e7eb',
-          fontStyle: 'italic',
-        }}
-      >
-        {LEGEND}
-      </div>
-      {state.status === 'loading' && (
-        <div style={{ padding: 16, color: '#9ca3af', fontSize: 12 }}>Compiling…</div>
-      )}
+      <Legend>{LEGEND}</Legend>
+      {state.status === 'loading' && <div style={{ padding: 16, color: INK.faint, fontSize: 12.5 }}>Compiling…</div>}
       {state.status === 'ok' && <CompiledView ir={state.ir} />}
       {state.status === 'error' && (
-        <pre
-          style={{
-            margin: 16,
-            padding: 12,
-            background: '#fef2f2',
-            color: '#991b1b',
-            border: '1px solid #fecaca',
-            borderRadius: 6,
-            fontSize: 11,
-            fontFamily: 'ui-monospace, Menlo, monospace',
-            whiteSpace: 'pre-wrap',
-            wordBreak: 'break-word',
-          }}
-        >
-          {state.error}
-        </pre>
+        <div style={{ padding: 16 }}>
+          <Block tone="bad">{state.error}</Block>
+        </div>
       )}
     </div>
   );
@@ -96,59 +73,13 @@ const CompiledView: FC<{ ir: CompiledIr }> = ({ ir }) => {
   const opt = ir.meta.stats.optimizations;
 
   return (
-    <div style={{ padding: 16 }}>
-      <div
-        style={{
-          display: 'flex',
-          gap: 8,
-          flexWrap: 'wrap',
-          marginBottom: 12,
-          fontSize: 11,
-        }}
-      >
-        <Badge label="folded" value={opt.constantsFolded} color="#dcfce7" textColor="#166534" />
-        <Badge label="$ref inlined" value={opt.refsInlined} color="#dbeafe" textColor="#1e3a8a" />
-        <Badge label="handlers attached" value={opt.handlersAttached} color="#fef3c7" textColor="#854d0e" />
+    <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+        <Chip tone="ok">{opt.constantsFolded} folded</Chip>
+        <Chip tone="accent">{opt.refsInlined} $ref inlined</Chip>
+        <Chip tone="warn">{opt.handlersAttached} handlers attached</Chip>
       </div>
-      <pre
-        style={{
-          margin: 0,
-          padding: 12,
-          background: '#f9fafb',
-          color: '#1f2937',
-          border: '1px solid #e5e7eb',
-          borderRadius: 6,
-          fontSize: 11,
-          fontFamily: 'ui-monospace, Menlo, monospace',
-          whiteSpace: 'pre-wrap',
-          wordBreak: 'break-word',
-          overflow: 'auto',
-        }}
-      >
-        {JSON.stringify(decorated, null, 2)}
-      </pre>
+      <Block maxHeight={2000}>{json(decorated)}</Block>
     </div>
   );
 };
-
-const Badge: FC<{ label: string; value: number; color: string; textColor: string }> = ({
-  label,
-  value,
-  color,
-  textColor,
-}) => (
-  <span
-    style={{
-      display: 'inline-block',
-      padding: '4px 10px',
-      background: color,
-      color: textColor,
-      borderRadius: 12,
-      fontWeight: 600,
-      fontFamily: 'ui-monospace, Menlo, monospace',
-      fontSize: 11,
-    }}
-  >
-    {value} {label}
-  </span>
-);

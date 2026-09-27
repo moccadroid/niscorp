@@ -1,9 +1,8 @@
 import { useState } from 'react';
 import { createSignal } from '@niscorp/signal';
 import { Pitch } from '@showroom/chrome/pitch';
-import { NoApiKey } from '@showroom/modules/signal/atoms';
-import { getKey } from '@showroom/modules/signal/settings/api-key-storage';
-import { createOpenAIClient } from '@showroom/modules/signal/openai-client';
+import { resolveModel } from '@showroom/modules/signal/openai-client';
+import { ModelBadge } from '@showroom/modules/signal/atoms/model-badge';
 
 // `signal.embed()` converts text to a dense vector. Same builder
 // pattern — `createSignal('openai').model('text-embedding-3-small')`.
@@ -43,15 +42,14 @@ export const Demo = () => {
   const [result, setResult] = useState<Result | undefined>();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const apiKey = getKey(provider);
+  const scripted = resolveModel(provider).scripted;
 
   const run = async () => {
-    if (!apiKey) return;
     setLoading(true);
     setError('');
 
     try {
-      const client = createOpenAIClient(provider, apiKey);
+      const { apiKey, client } = resolveModel(provider);
       const embedder = createSignal(provider, { client })
         .apiKey(apiKey)
         .model(model);
@@ -72,14 +70,13 @@ export const Demo = () => {
     }
   };
 
-  if (!apiKey) return <NoApiKey provider={provider} />;
-
   return (
     <>
       <Pitch
         headline="Text to vectors. Vectors to similarity."
         body="Embed any text into a dense vector with one call. Compare vectors with cosine similarity to find what's related — no fine-tuning, no keyword matching, no regex. Same builder pattern as chat, different model."
       />
+      <ModelBadge scripted={scripted} note="No API key: signal.embed() runs for real against a scripted provider whose vectors come from a small hand-made concept map — not a model. Add an OpenAI key in Signal → Settings for real embeddings." />
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12, padding: '0 16px' }}>
         {texts.map((t, i) => (
           <input

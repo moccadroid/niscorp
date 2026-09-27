@@ -7,11 +7,16 @@ import {
   StreamShell,
   StreamControls,
   ErrorBanner,
-  NoApiKey,
   type RunState,
 } from '@showroom/modules/signal/atoms';
-import { getKey } from '@showroom/modules/signal/settings/api-key-storage';
-import { createOpenAIClient } from '@showroom/modules/signal/openai-client';
+import { resolveModel } from '@showroom/modules/signal/openai-client';
+import { ModelBadge } from '@showroom/modules/signal/atoms/model-badge';
+import { answerWith } from '@showroom/lib/scripted-model/scripts';
+import { STREAM_DASHBOARD } from '@showroom/modules/signal/scripted/answers';
+
+// No API key: the scripted provider streams the answer written for this
+// page's prompt, token by token, through the real signal stream.
+answerWith('signal/dashboard-stream', STREAM_DASHBOARD);
 import { DashboardCard } from './dashboard-stream.ui';
 
 // Same signal + solid pattern as `structured-stream`, bigger
@@ -74,10 +79,9 @@ const useStream = () => {
   const [state, setState] = useState<RunState>('idle');
   const [error, setError] = useState('');
   const controllerRef = useRef<AbortController | null>(null);
-  const apiKey = getKey(provider);
+  const scripted = resolveModel(provider).scripted;
 
   const start = async (): Promise<void> => {
-    if (apiKey === undefined) return;
     controllerRef.current?.abort();
     const controller = new AbortController();
     controllerRef.current = controller;
@@ -85,7 +89,7 @@ const useStream = () => {
     setError('');
     setState('streaming');
 
-    const client = createOpenAIClient(provider, apiKey);
+    const { apiKey, client } = resolveModel(provider);
     const solid = createStream({ schema, initial });
     solid.on(setValue);
 
@@ -122,18 +126,18 @@ const useStream = () => {
     setState('done');
   };
 
-  return { apiKey, value, state, error, start, stop };
+  return { scripted, value, state, error, start, stop };
 };
 
 export const Demo = () => {
-  const { apiKey, value, state, error, start, stop } = useStream();
-  if (apiKey === undefined) return <NoApiKey provider={provider} />;
+  const { scripted, value, state, error, start, stop } = useStream();
   return (
     <>
       <Pitch
         headline="Watch a dashboard build itself."
         body="Four nested sections stream in left-to-right: header locks in first, then KPI cards appear one by one, alerts populate, and recommendations fill in last. Each section renders the moment its data arrives — no waiting for the full response. This is what structured streaming looks like when solid's finalization meets signal's live connection."
       />
+      <ModelBadge scripted={scripted} />
       <StreamShell>
         <StreamControls state={state} onStart={start} onStop={stop} />
         <ErrorBanner message={error} />

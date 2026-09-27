@@ -3,6 +3,8 @@ import { z } from 'zod';
 import { Roles } from '@niscorp/loom';
 import { LoomEditor, type LoomEditorPlugin } from '@niscorp/loom/react';
 import { useNovaDispatch, type NovaComponent } from '@niscorp/nova/adapters/react';
+import { Grid, Panel } from '@showroom/chrome/stage/ui';
+import { LoomStage } from '../demo-panel';
 
 // The resolver seam: one compiled definition (see the Definition tab),
 // rendered through two different widget kits. The compiler only ever emits
@@ -43,7 +45,7 @@ const AltNumber: NovaComponent<{ value?: unknown }> = ({ value, novaModel }) => 
   return (
     <input
       type="number"
-      value={Number.isFinite(value) ? (value as number) : ''}
+      value={typeof value === 'number' && Number.isFinite(value) ? value : ''}
       onChange={(e) =>
         novaModel && dispatch({ type: 'ui:model', ref: novaModel.ref, payload: e.target.value ? Number(e.target.value) : null })
       }
@@ -73,18 +75,15 @@ const altKit = {
 
 const demoPlugin = (components?: typeof altKit): LoomEditorPlugin => ({ name: 'demo', documents: { value: schema }, ...(components ? { components } : {}) });
 
-const column = { flex: '1 1 280px', minWidth: 260 } as const;
-const heading = { fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.5, color: '#6b7280', marginBottom: 12 } as const;
-
 export const Demo = () => (
-  <div style={{ display: 'flex', gap: 32, padding: 24, flexWrap: 'wrap' }}>
-    <div style={column}>
-      <div style={heading}>Default kit</div>
-      <LoomEditor plugins={[demoPlugin()]} artifact={{ type: 'demo' }} />
-    </div>
-    <div style={column}>
-      <div style={heading}>Alternate kit</div>
-      <LoomEditor plugins={[demoPlugin(altKit)]} artifact={{ type: 'demo' }} />
-    </div>
-  </div>
+  <LoomStage>
+    <Grid min={300} gap={16}>
+      <Panel title="Default kit" aside="loom’s own widgets">
+        <LoomEditor plugins={[demoPlugin()]} artifact={{ type: 'demo' }} />
+      </Panel>
+      <Panel title="Alternate kit" aside="same roles, a dark pill look — on this page">
+        <LoomEditor plugins={[demoPlugin(altKit)]} artifact={{ type: 'demo' }} />
+      </Panel>
+    </Grid>
+  </LoomStage>
 );

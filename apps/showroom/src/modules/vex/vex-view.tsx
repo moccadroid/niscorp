@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type FC, type ReactNode } from 'react';
+import { Btn, Callout, Chip, Grid, INK, Panel, type Tone } from '@showroom/chrome/stage/ui';
 import { useVexBoot, useVexRunSetter } from './runtime-context';
 import { runScenario, type RunOutcome } from './run';
 import { scopePolicy, mutationPolicy } from './runtime/scope';
@@ -6,6 +7,7 @@ import { hasGenerationKey } from './runtime/live';
 import { availableProviders, getLiveConfig, setLiveConfig, PROVIDER_MODELS } from './runtime/live-config';
 import { startRecording, stopRecording } from './runtime/live-debug';
 import { ACCOUNTS } from './runtime/seed-data';
+import { AnswerPhone, Block, prettySql, json } from './parts';
 import type { RecipeProvider } from '@showroom/modules/signal/openai-client';
 import type { VexScenario } from './scenarios';
 import type { Query, ScopeRule, VexEvent } from '@niscorp/vex';
@@ -17,22 +19,12 @@ import type { Query, ScopeRule, VexEvent } from '@niscorp/vex';
 // instant they happen, Generate pulses while the LLM works, and each
 // artifact panel pops in as its stage completes. A displayed
 // "frontier" chases the event-driven target at a capped rate so even
-// the (instant) canned path sweeps through visibly.
+// the (instant) stored-entry path sweeps through visibly.
+//
+// Real: the engine, the compiler, Postgres (PGlite), the cache, the
+// handler. Authored: each story's DSL — with no model key it stands in
+// for what a model would have written, and the stage labels say so.
 // ═══════════════════════════════════════════════════════════
-
-const C = {
-  border: '#e5e7eb',
-  muted: '#6b7280',
-  text: '#1f2937',
-  panel: '#f9fafb',
-  accent: '#4f46e5',
-  green: '#059669',
-  greenBg: '#ecfdf5',
-  amber: '#b45309',
-  amberBg: '#fffbeb',
-  red: '#991b1b',
-  redBg: '#fef2f2',
-};
 
 const KEYFRAMES = `
 @keyframes vexPulse { 0%,100% { box-shadow: 0 0 0 0 rgba(79,70,229,0); } 50% { box-shadow: 0 0 0 5px rgba(79,70,229,0.22); } }
@@ -52,7 +44,13 @@ type Facts = {
   scoped: boolean;
   reshape: boolean;
   live: boolean;
+  // Was the stored DSL found under the story's name? For a live run this
+  // comes off the engine's own cache event; for a stored-entry run it is
+  // known once the run returns.
   cacheHit?: boolean;
+  // This stored-entry run found the slot empty and filled it with the
+  // story's hand-written DSL before replaying it. No model was involved.
+  seeded?: boolean;
   agentMs?: number;
   warnings?: string[];
   rowCount?: number;
@@ -126,7 +124,10 @@ const eventTarget = (e: VexEvent): number | undefined => {
 
 const applyEvent = (f: Facts, e: VexEvent): Facts => {
   switch (e.type) {
-    case 'query.cache': return { ...f, cacheHit: e.hit };
+    // A stored-entry run always replays a warm slot (it fills an empty one
+    // first), so the engine's own verdict would say "hit" even on the run
+    // that filled it. Only a live run's verdict says something here.
+    case 'query.cache': return f.live ? { ...f, cacheHit: e.hit } : f;
     case 'query.dsl': return { ...f, agentMs: e.agentMs };
     case 'query.sql': return { ...f, warnings: e.warnings };
     case 'query.rows': return { ...f, rowCount: e.count, executionMs: e.executionMs };
@@ -150,8 +151,8 @@ const stageInfo = (scenario: VexScenario, label: string, f: Facts): { detail: st
     }
     switch (label) {
       case 'Intent': return { detail: 'parsed', status: 'done' };
-      case 'Replay': return { detail: 'seeded def · replay-only', status: 'done' };
-      case 'Context': return { detail: 'signature satisfied', status: 'done' };
+      case 'Replay': return { detail: 'stored write · never generated', status: 'done' };
+      case 'Context': return { detail: 'every value present', status: 'done' };
       case 'Scope': return f.scoped ? { detail: 'stamp + pin', status: 'done' } : { detail: 'phase granted', status: 'done' };
       case 'Execute': return { detail: f.rowCount !== undefined ? `${f.rowCount} row${f.rowCount === 1 ? '' : 's'} · ${ms(f.executionMs)}` : 'running…', status: 'done' };
     }
@@ -167,15 +168,18 @@ const stageInfo = (scenario: VexScenario, label: string, f: Facts): { detail: st
   switch (label) {
     case 'Intent': return { detail: 'parsed', status: 'done' };
     case 'Cache':
-      return { detail: f.cacheHit === undefined ? 'checking…' : f.cacheHit ? 'HIT' : 'MISS', status: 'done' };
+      if (f.live) return f.cacheHit === undefined ? { detail: 'looking…', status: 'done' } : { detail: 'empty · must generate', status: 'done' };
+      if (f.seeded === true) return { detail: 'empty · story’s DSL stored', status: 'done' };
+      if (f.cacheHit === true) return { detail: 'found · reused', status: 'done' };
+      return { detail: 'looking…', status: 'done' };
     case 'Generate':
-      if (f.cacheHit) return { detail: 'reused · 0 LLM', status: 'skipped' };
-      if (f.live) return { detail: f.agentMs !== undefined ? `LLM ${ms(f.agentMs)}` : 'generating…', status: 'done' };
-      return { detail: 'DSL supplied', status: 'done' };
+      if (f.live) return { detail: f.agentMs !== undefined ? `model · ${ms(f.agentMs)}` : 'model writing…', status: 'done' };
+      if (f.seeded === true) return { detail: 'no model · hand-written', status: 'skipped' };
+      return { detail: 'not needed · no model', status: 'skipped' };
     case 'Scope':
       return f.scoped ? { detail: '+1 filter', status: 'done' } : { detail: 'none', status: 'skipped' };
     case 'Analyze':
-      return (f.warnings?.length ?? 0) > 0 ? { detail: `${f.warnings!.length} warning`, status: 'warn' } : { detail: 'passed', status: 'done' };
+      return (f.warnings?.length ?? 0) > 0 ? { detail: `${f.warnings?.length ?? 0} warning`, status: 'warn' } : { detail: 'passed', status: 'done' };
     case 'Compile SQL':
       return { detail: 'parameterized', status: 'done' };
     case 'Execute':
@@ -187,63 +191,88 @@ const stageInfo = (scenario: VexScenario, label: string, f: Facts): { detail: st
 };
 
 const STATUS_COLOR: Record<StageStatus, { fg: string; bg: string; border: string }> = {
-  done: { fg: C.green, bg: C.greenBg, border: '#a7f3d0' },
-  active: { fg: C.amber, bg: C.amberBg, border: '#fde68a' },
-  warn: { fg: C.amber, bg: C.amberBg, border: '#fde68a' },
-  error: { fg: C.red, bg: C.redBg, border: '#fecaca' },
-  skipped: { fg: C.muted, bg: '#f3f4f6', border: C.border },
-  idle: { fg: '#9ca3af', bg: '#fff', border: C.border },
+  done: { fg: INK.ok, bg: INK.okWash, border: '#a7f3d0' },
+  active: { fg: INK.accent, bg: INK.accentWash, border: '#c7d2fe' },
+  warn: { fg: INK.warn, bg: INK.warnWash, border: '#fde68a' },
+  error: { fg: INK.bad, bg: INK.badWash, border: '#fecaca' },
+  skipped: { fg: INK.soft, bg: INK.wash, border: INK.line },
+  idle: { fg: INK.faint, bg: '#fff', border: INK.line },
+};
+
+// ─── What happened, in one line ──────────────────────────────
+// Where the DSL came from on this run. Three honest answers for a read:
+// a model wrote it just now, the story's hand-written DSL was stored and
+// replayed (first run), or the stored DSL was found and replayed.
+
+const verdictOf = (outcome: RunOutcome, mode: VexScenario['mode']): { tone: Tone; text: string } => {
+  if (mode === 'mutate') {
+    return outcome.cacheHit
+      ? { tone: 'ok', text: 'Replayed the stored write · no model' }
+      : { tone: 'ok', text: 'Write stored, then replayed · writes are never generated' };
+  }
+  if (outcome.live) return { tone: 'warn', text: `Written by a model just now · ${ms(outcome.timing.agentMs)}` };
+  if (outcome.cacheHit) return { tone: 'ok', text: 'Replayed the stored DSL · no model call' };
+  return { tone: 'accent', text: 'First run: the story’s DSL stored, then replayed · no model call' };
+};
+
+const dslAside = (outcome: RunOutcome | undefined): ReactNode => {
+  if (outcome === undefined) return undefined;
+  if (outcome.live) return <Chip tone="warn">written by a model</Chip>;
+  return <Chip>written by hand for this story</Chip>;
 };
 
 // ─── Panels ──────────────────────────────────────────────────
 
-const Panel: FC<{ id?: string; title: string; focused?: boolean; right?: ReactNode; children: ReactNode }> = ({ id, title, focused, right, children }) => (
-  <div id={id} style={{ animation: 'vexPop 0.28s ease both', border: focused ? `1px solid ${C.accent}` : '1px solid transparent', borderRadius: 8, padding: focused ? 8 : 0, transition: 'border-color 0.2s' }}>
-    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-      <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.5, color: C.muted }}>{title}</div>
-      {right}
-    </div>
-    {children}
+// A stage panel that pops in when its stage is reached, and rings when
+// its stage chip is clicked.
+const Artifact: FC<{ id?: string; title: ReactNode; focused?: boolean; aside?: ReactNode; tone?: 'plain' | 'ok' | 'bad'; children: ReactNode }> = ({
+  id,
+  title,
+  focused,
+  aside,
+  tone,
+  children,
+}) => (
+  <div id={id} style={{ animation: 'vexPop 0.28s ease both', minWidth: 0 }}>
+    <Panel title={title} aside={aside} tone={tone} style={focused === true ? { boxShadow: `0 0 0 2px ${INK.accent}` } : undefined}>
+      {children}
+    </Panel>
   </div>
 );
 
-const Code: FC<{ children: string; variant?: 'normal' | 'error' }> = ({ children, variant = 'normal' }) => (
-  <pre style={{ margin: 0, padding: 12, background: variant === 'error' ? C.redBg : C.panel, color: variant === 'error' ? C.red : C.text, border: `1px solid ${variant === 'error' ? '#fecaca' : C.border}`, borderRadius: 6, fontSize: 12, fontFamily: 'ui-monospace, Menlo, monospace', whiteSpace: 'pre-wrap', wordBreak: 'break-word', overflow: 'auto', maxHeight: 300 }}>{children}</pre>
-);
-
 const RowsTable: FC<{ rows: unknown[] }> = ({ rows }) => {
-  if (rows.length === 0) return <Code>(no rows)</Code>;
+  if (rows.length === 0) return <Block>(no rows)</Block>;
   const first = rows[0];
-  if (first === null || typeof first !== 'object') return <Code>{JSON.stringify(rows, null, 2)}</Code>;
-  const cols = Object.keys(first as Record<string, unknown>);
+  if (first === null || typeof first !== 'object' || Array.isArray(first)) return <Block>{json(rows)}</Block>;
+  const cols = Object.keys(first);
   const fmt = (v: unknown): string => (v === null ? '∅' : typeof v === 'object' ? JSON.stringify(v) : String(v));
+  const cellOf = (row: unknown, c: string): unknown => (row !== null && typeof row === 'object' ? Reflect.get(row, c) : undefined);
   return (
-    <div style={{ overflow: 'auto', border: `1px solid ${C.border}`, borderRadius: 6 }}>
+    <div style={{ overflow: 'auto', border: `1px solid ${INK.line}`, borderRadius: 10, maxHeight: 420 }}>
       <table style={{ borderCollapse: 'collapse', width: '100%', fontSize: 12 }}>
-        <thead><tr>{cols.map((c) => (<th key={c} style={{ textAlign: 'left', padding: '6px 10px', background: C.panel, borderBottom: `1px solid ${C.border}`, color: C.muted, fontWeight: 600, whiteSpace: 'nowrap' }}>{c}</th>))}</tr></thead>
+        <thead>
+          <tr>
+            {cols.map((c) => (
+              <th key={c} style={{ textAlign: 'left', padding: '7px 10px', background: INK.wash, borderBottom: `1px solid ${INK.line}`, color: INK.soft, fontWeight: 600, whiteSpace: 'nowrap', fontFamily: 'ui-monospace, Menlo, monospace', fontSize: 11.5 }}>
+                {c}
+              </th>
+            ))}
+          </tr>
+        </thead>
         <tbody>
-          {(rows as Record<string, unknown>[]).slice(0, 50).map((row, i) => (
-            <tr key={i}>{cols.map((c) => (<td key={c} style={{ padding: '6px 10px', borderBottom: '1px solid #f1f5f9', fontFamily: 'ui-monospace, Menlo, monospace', whiteSpace: 'nowrap' }}>{fmt(row[c])}</td>))}</tr>
+          {rows.slice(0, 50).map((row, i) => (
+            <tr key={i}>
+              {cols.map((c) => (
+                <td key={c} style={{ padding: '6px 10px', borderBottom: `1px solid ${INK.wash}`, fontFamily: 'ui-monospace, Menlo, monospace', whiteSpace: 'nowrap', color: INK.text }}>
+                  {fmt(cellOf(row, c))}
+                </td>
+              ))}
+            </tr>
           ))}
         </tbody>
       </table>
     </div>
   );
-};
-
-const CacheBadge: FC<{ outcome: RunOutcome; mutate?: boolean }> = ({ outcome, mutate }) => {
-  const hit = outcome.cacheHit;
-  const c = hit ? STATUS_COLOR.done : STATUS_COLOR.active;
-  const label = mutate
-    ? hit
-      ? 'REPLAYED · seeded definition · 0 LLM'
-      : 'SEEDED + REPLAYED · 0 LLM'
-    : hit
-      ? 'CACHE HIT · DSL reused · 0 LLM calls'
-      : outcome.live
-        ? `GENERATED LIVE · ${ms(outcome.timing.agentMs)}`
-        : 'DSL CACHED · zero LLM';
-  return <span style={{ fontSize: 11, fontWeight: 700, color: c.fg, background: c.bg, border: `1px solid ${c.border}`, padding: '3px 8px', borderRadius: 999, animation: 'vexPop 0.3s ease both' }}>{label}</span>;
 };
 
 const scopeClauseText = (dsl: Query | undefined, scopeKey: string): string | undefined => {
@@ -285,18 +314,45 @@ const writeRulesText = (scenario: VexScenario): string => {
   return lines.join('\n');
 };
 
-const Select: FC<{ label: string; value: string; options: { value: string; label: string }[]; onChange: (v: string) => void; disabled?: boolean }> = ({ label, value, options, onChange, disabled }) => (
-  <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-    <span style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: 0.5, color: C.muted, fontWeight: 600 }}>{label}</span>
-    <select value={value} disabled={disabled} onChange={(e) => onChange(e.target.value)} style={{ padding: '6px 8px', borderRadius: 6, border: `1px solid ${C.border}`, background: '#fff', fontSize: 13, color: C.text }}>
-      {options.map((o) => (<option key={o.value} value={o.value}>{o.label}</option>))}
+const Select: FC<{ label: string; value: string; options: { value: string; label: string }[]; onChange: (v: string) => void; disabled?: boolean; title?: string }> = ({
+  label,
+  value,
+  options,
+  onChange,
+  disabled,
+  title,
+}) => (
+  <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }} title={title}>
+    <span style={{ fontSize: 12, color: INK.soft, fontWeight: 600 }}>{label}</span>
+    <select
+      value={value}
+      disabled={disabled}
+      onChange={(e) => onChange(e.target.value)}
+      style={{ font: 'inherit', padding: '6px 8px', borderRadius: 9, border: `1px solid ${INK.line}`, background: '#fff', fontSize: 13, color: INK.text, cursor: disabled === true ? 'not-allowed' : 'pointer' }}
+    >
+      {options.map((o) => (
+        <option key={o.value} value={o.value}>
+          {o.label}
+        </option>
+      ))}
     </select>
   </label>
 );
 
+const isProvider = (v: string): v is RecipeProvider => v === 'groq' || v === 'openrouter' || v === 'openai';
+
 // ─── Stage strip ─────────────────────────────────────────────
 
-const StageStrip: FC<{ scenario: VexScenario; facts: Facts; frontier: number; finished: boolean; errored: boolean; focused: string | undefined; started: boolean; onPick: (panel: string | undefined) => void }> = ({ scenario, facts, frontier, finished, errored, focused, started, onPick }) => {
+const StageStrip: FC<{ scenario: VexScenario; facts: Facts; frontier: number; finished: boolean; errored: boolean; focused: string | undefined; started: boolean; onPick: (panel: string | undefined) => void }> = ({
+  scenario,
+  facts,
+  frontier,
+  finished,
+  errored,
+  focused,
+  started,
+  onPick,
+}) => {
   const defs = stageDefs(scenario);
   return (
     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'stretch' }}>
@@ -314,11 +370,29 @@ const StageStrip: FC<{ scenario: VexScenario; facts: Facts; frontier: number; fi
         const detail = isError ? 'failed' : reached || isFrontier ? info.detail : '';
         return (
           <div key={d.label} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <button type="button" disabled={!clickable} onClick={() => onPick(isFocused ? undefined : panel)} style={{ minWidth: 96, textAlign: 'left', padding: '8px 10px', borderRadius: 8, border: `1px solid ${isFocused ? C.accent : col.border}`, background: col.bg, color: col.fg, cursor: clickable ? 'pointer' : 'default', animation: isFrontier ? 'vexPulse 1s ease-in-out infinite' : reached || isError ? 'vexPop 0.25s ease both' : undefined, opacity: started && (reached || isFrontier || isError) ? 1 : 0.5, transition: 'opacity 0.2s' }}>
-              <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 0.3 }}>{d.label}</div>
-              <div style={{ fontSize: 11, marginTop: 2, opacity: 0.85, minHeight: 14 }}>{detail}</div>
+            <button
+              type="button"
+              disabled={!clickable}
+              onClick={() => onPick(isFocused ? undefined : panel)}
+              style={{
+                font: 'inherit',
+                minWidth: 104,
+                textAlign: 'left',
+                padding: '8px 11px',
+                borderRadius: 10,
+                border: `1px solid ${isFocused ? INK.accent : col.border}`,
+                background: col.bg,
+                color: col.fg,
+                cursor: clickable ? 'pointer' : 'default',
+                animation: isFrontier ? 'vexPulse 1s ease-in-out infinite' : reached || isError ? 'vexPop 0.25s ease both' : undefined,
+                opacity: started && (reached || isFrontier || isError) ? 1 : 0.55,
+                transition: 'opacity 0.2s',
+              }}
+            >
+              <div style={{ fontSize: 12, fontWeight: 700 }}>{d.label}</div>
+              <div style={{ fontSize: 11, marginTop: 2, opacity: 0.9, minHeight: 14 }}>{detail}</div>
             </button>
-            {i < defs.length - 1 && (<span style={{ color: passed ? C.accent : '#cbd5e1', fontSize: 14, transition: 'color 0.2s' }}>→</span>)}
+            {i < defs.length - 1 && <span style={{ color: passed ? INK.accent : '#cbd5e1', fontSize: 14, transition: 'color 0.2s' }}>→</span>}
           </div>
         );
       })}
@@ -356,7 +430,7 @@ export const VexView: FC<{ scenario: VexScenario }> = ({ scenario }) => {
   const providers = availableProviders();
 
   const pickProvider = (p: RecipeProvider): void => {
-    const model = PROVIDER_MODELS[p][0]!;
+    const model = PROVIDER_MODELS[p][0] ?? '';
     setLiveProvider(p);
     setLiveModel(model);
     setLiveConfig({ provider: p, model });
@@ -402,8 +476,8 @@ export const VexView: FC<{ scenario: VexScenario }> = ({ scenario }) => {
     let resolved = false;
 
     // Chase loop: advance the displayed frontier toward the event-driven
-    // target at a capped rate, so fast (canned) runs still sweep and slow
-    // (live) runs pause on the in-progress stage.
+    // target at a capped rate, so fast (stored-entry) runs still sweep and
+    // slow (live) runs pause on the in-progress stage.
     const chase = async (): Promise<void> => {
       for (;;) {
         if (seq !== runSeq.current) return;
@@ -454,6 +528,7 @@ export const VexView: FC<{ scenario: VexScenario }> = ({ scenario }) => {
     setFacts((f) => ({
       ...f,
       cacheHit: result.cacheHit,
+      seeded: !result.live && result.generated,
       live: result.live,
       error: result.error,
       errorCode: result.errorCode,
@@ -483,6 +558,7 @@ export const VexView: FC<{ scenario: VexScenario }> = ({ scenario }) => {
       rows: result.rows,
       warnings: result.warnings,
       cacheHit: result.cacheHit,
+      live: result.live,
       fingerprint: result.fingerprint,
       scopeClause: scenario.scopeKey ? scopeClauseText(result.dsl, scenario.scopeKey) : undefined,
       timing: result.timing,
@@ -491,117 +567,199 @@ export const VexView: FC<{ scenario: VexScenario }> = ({ scenario }) => {
     });
   }, [boot, scenario, context, scope, live, keyAvailable, running, setRunView]);
 
-  if (boot.status === 'booting') return <Centered>Booting Postgres (WASM) + seeding data…</Centered>;
-  if (boot.status === 'error') return <Centered><span style={{ color: C.red }}>Boot failed: {boot.error}</span></Centered>;
+  if (boot.status === 'booting') return <Centered>Starting Postgres in this page and loading the shop’s data…</Centered>;
+  if (boot.status === 'error')
+    return (
+      <div style={{ padding: 24 }}>
+        <Callout tone="bad" title="Postgres did not start">
+          {boot.error}
+        </Callout>
+      </div>
+    );
 
   const panelReached = (panel: string): boolean => {
     const defs = stageDefs(scenario);
     const idx = defs.findIndex((s) => s.panel === panel);
     return idx >= 0 && idx < frontier;
   };
-  const scopeClause = outcome?.ok && scenario.scopeKey ? scopeClauseText(outcome.dsl, scenario.scopeKey) : undefined;
+  const scopeClause = outcome?.ok === true && scenario.scopeKey !== undefined ? scopeClauseText(outcome.dsl, scenario.scopeKey) : undefined;
+  const verdict = finished && outcome?.ok === true ? verdictOf(outcome, scenario.mode) : undefined;
+  const scopeKey = scenario.scopeKey;
 
   return (
-    <div style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 18 }}>
+    <div style={{ padding: '20px 24px 40px', display: 'flex', flexDirection: 'column', gap: 16, color: INK.text }}>
       <style>{KEYFRAMES}</style>
 
-      {/* Controls */}
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 14, alignItems: 'flex-end' }}>
-        <div style={{ flex: 1, minWidth: 220 }}>
-          <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: 0.5, color: C.muted, fontWeight: 600, marginBottom: 4 }}>Intent</div>
-          <div style={{ fontSize: 15, color: C.text, fontStyle: 'italic' }}>“{scenario.intent}”</div>
+      {/* The ask, and what to change before running it */}
+      <Panel
+        title="The ask"
+        aside={
+          scenario.mode === 'mutate' ? (
+            <Chip>a stored write · replay only</Chip>
+          ) : scenario.mode === 'compile' ? (
+            <Chip>compiled only · never run</Chip>
+          ) : live && keyAvailable ? (
+            <Chip tone="warn">a model writes the DSL</Chip>
+          ) : (
+            <Chip>the story’s DSL · no model</Chip>
+          )
+        }
+      >
+        <div style={{ fontSize: 16, fontStyle: 'italic', lineHeight: 1.45 }}>“{scenario.intent}”</div>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 14, alignItems: 'flex-end' }}>
+          {(scenario.editable ?? []).map((e) => (
+            <Select
+              key={e.key}
+              label={e.label}
+              value={String(context[e.key] ?? e.options[0])}
+              options={e.options.map((v) => ({ value: v, label: v }))}
+              onChange={(v) => setContext((prev) => ({ ...prev, [e.key]: v }))}
+            />
+          ))}
+          {scopeKey !== undefined && (
+            <Select
+              label="Asking as"
+              value={String(scope[scopeKey] ?? ACCOUNTS[0])}
+              options={ACCOUNTS.map((a) => ({ value: a, label: ACCOUNT_LABEL(a) }))}
+              onChange={(v) => setScope((prev) => ({ ...prev, [scopeKey]: v }))}
+            />
+          )}
+          {scenario.mode === 'execute' && (
+            <Select
+              label="Who writes the DSL"
+              value={live ? 'live' : 'canned'}
+              disabled={!keyAvailable}
+              title={keyAvailable ? undefined : 'Asking a model needs a key — set one in Signal → Settings'}
+              options={[
+                { value: 'canned', label: 'Nobody — replay the story’s DSL' },
+                { value: 'live', label: keyAvailable ? 'A model, now' : 'A model (needs a key)' },
+              ]}
+              onChange={(v) => setLive(v === 'live')}
+            />
+          )}
+          {scenario.mode === 'execute' && live && keyAvailable && (
+            <>
+              <Select label="Provider" value={liveProvider} options={providers.map((p) => ({ value: p, label: p }))} onChange={(v) => { if (isProvider(v)) pickProvider(v); }} />
+              <Select label="Model" value={liveModel} options={PROVIDER_MODELS[liveProvider].map((m) => ({ value: m, label: m }))} onChange={pickModel} />
+            </>
+          )}
+          <Btn kind="primary" onClick={() => void run()} disabled={running}>
+            {running ? 'Running…' : started ? '▶ Run again' : '▶ Run'}
+          </Btn>
         </div>
-        {(scenario.editable ?? []).map((e) => (
-          <Select key={e.key} label={e.label} value={String(context[e.key] ?? e.options[0])} options={e.options.map((v) => ({ value: v, label: v }))} onChange={(v) => setContext((prev) => ({ ...prev, [e.key]: v }))} />
-        ))}
-        {scenario.scopeKey !== undefined && (
-          <Select label="Scope" value={String(scope[scenario.scopeKey] ?? ACCOUNTS[0])} options={ACCOUNTS.map((a) => ({ value: a, label: ACCOUNT_LABEL(a) }))} onChange={(v) => setScope((prev) => ({ ...prev, [scenario.scopeKey as string]: v }))} />
-        )}
-        {scenario.mode === 'execute' && (
-          <Select label="Mode" value={live ? 'live' : 'canned'} disabled={!keyAvailable} options={[{ value: 'canned', label: 'Canned (no key)' }, { value: 'live', label: keyAvailable ? 'Live (LLM)' : 'Live (needs key)' }]} onChange={(v) => setLive(v === 'live')} />
-        )}
-        {scenario.mode === 'execute' && live && keyAvailable && (
-          <>
-            <Select label="Provider" value={liveProvider} options={providers.map((p) => ({ value: p, label: p }))} onChange={(v) => pickProvider(v as RecipeProvider)} />
-            <Select label="Model" value={liveModel} options={PROVIDER_MODELS[liveProvider].map((m) => ({ value: m, label: m }))} onChange={pickModel} />
-          </>
-        )}
-        <button onClick={() => void run()} disabled={running} style={{ padding: '8px 22px', borderRadius: 6, border: 'none', background: running ? '#a5b4fc' : C.accent, color: '#fff', fontSize: 14, fontWeight: 700, cursor: running ? 'wait' : 'pointer', alignSelf: 'flex-end' }}>{running ? 'Running…' : '▶ Run'}</button>
-      </div>
+      </Panel>
 
       {/* Pipeline */}
-      <Panel title="Pipeline" right={finished && outcome?.ok ? <CacheBadge outcome={outcome} mutate={scenario.mode === 'mutate'} /> : undefined}>
-        <StageStrip scenario={scenario} facts={facts} frontier={frontier} finished={finished} errored={finished && outcome?.error !== undefined && scenario.mode === 'execute'} focused={focused} started={started} onPick={setFocused} />
+      <Panel title="What happened" aside={verdict !== undefined ? <Chip tone={verdict.tone}>{verdict.text}</Chip> : undefined}>
+        <StageStrip
+          scenario={scenario}
+          facts={facts}
+          frontier={frontier}
+          finished={finished}
+          errored={finished && outcome?.error !== undefined && scenario.mode === 'execute'}
+          focused={focused}
+          started={started}
+          onPick={setFocused}
+        />
         {!started && (
-          <div style={{ fontSize: 13, color: C.muted, marginTop: 12 }}>Press <strong>Run</strong> to execute the pipeline against the in-browser Postgres. Stages light up live as data flows; click any stage to focus its output.</div>
+          <div style={{ fontSize: 13, color: INK.soft, lineHeight: 1.55 }}>
+            Press <b>Run</b> to send this through the real engine, against Postgres running in this page. Each stage lights up as the engine reaches it;
+            click a lit stage to find what it produced.
+          </div>
         )}
       </Panel>
 
       {/* Artifacts — revealed as their stage is reached */}
-      {panelReached('dsl') && (
-        <Panel id="p-dsl" title="Generated DSL" focused={focused === 'dsl'}>
-          <Code>{JSON.stringify(outcome?.dsl ?? scenario.dsl, null, 2)}</Code>
-        </Panel>
-      )}
+      <Grid min={360} gap={16}>
+        {panelReached('dsl') && (
+          <Artifact id="p-dsl" title="The DSL — the query, as JSON" aside={dslAside(outcome)} focused={focused === 'dsl'}>
+            <Block>{json(outcome?.dsl ?? scenario.dsl)}</Block>
+          </Artifact>
+        )}
 
-      {panelReached('mutation') && scenario.mode === 'mutate' && (
-        <Panel id="p-mutation" title={scenario.mutation !== undefined ? 'Seeded mutation — the definition never travels; the wire carries { fingerprint, context }' : 'Wire body — not a request shape'} focused={focused === 'mutation'}>
-          <Code>{JSON.stringify(scenario.mutation ?? scenario.body, null, 2)}</Code>
-        </Panel>
-      )}
+        {panelReached('mutation') && scenario.mode === 'mutate' && (
+          <Artifact
+            id="p-mutation"
+            title={scenario.mutation !== undefined ? 'The stored write' : 'What was sent — not a request shape'}
+            aside={scenario.mutation !== undefined ? 'stays on the server; the wire carries { fingerprint, context }' : undefined}
+            focused={focused === 'mutation'}
+          >
+            <Block>{json(scenario.mutation ?? scenario.body)}</Block>
+          </Artifact>
+        )}
 
-      {panelReached('scope') && scopeClause !== undefined && (
-        <Panel id="p-scope" title="Scope — injected server-side (LLM never sees it)" focused={focused === 'scope'}>
-          <Code>{`AND ${scopeClause}\n   → ${scenario.scopeKey} = ${accountLabelMaybe(String(scope[scenario.scopeKey as string]))}`}</Code>
-        </Panel>
-      )}
+        {panelReached('scope') && scopeClause !== undefined && scopeKey !== undefined && (
+          <Artifact id="p-scope" title="Scope — added on the server" aside="the model never sees it" focused={focused === 'scope'}>
+            <Block>{`AND ${scopeClause}\n   → ${scopeKey} = ${accountLabelMaybe(String(scope[scopeKey]))}`}</Block>
+          </Artifact>
+        )}
 
-      {panelReached('scope') && scenario.mode === 'mutate' && scenario.mutation !== undefined && (
-        <Panel id="p-scope-write" title="Write phases — whether a verb EXISTS is the policy's call; rules are engine-applied" focused={focused === 'scope'}>
-          <Code>{writeRulesText(scenario)}</Code>
-        </Panel>
-      )}
+        {panelReached('scope') && scenario.mode === 'mutate' && scenario.mutation !== undefined && (
+          <Artifact id="p-scope-write" title="Write phases for this table" aside="the policy decides whether a verb exists" focused={focused === 'scope'}>
+            <Block>{writeRulesText(scenario)}</Block>
+          </Artifact>
+        )}
 
-      {outcome?.error !== undefined && finished ? (
-        <Panel id="p-error" title={scenario.mode === 'compile' ? 'Analyzer — rejected before SQL' : scenario.mode === 'mutate' ? `Refused at the wire${outcome.status !== undefined ? ` — ${outcome.status}` : ''}` : 'Error'} focused={focused === 'error'}>
-          <Code variant="error">{outcome.error}</Code>
-        </Panel>
-      ) : (
-        <>
-          {panelReached('warn') && outcome !== undefined && outcome.warnings.length > 0 && (
-            <Panel id="p-warn" title="Analyzer warnings" focused={focused === 'warn'}>
-              <Code variant="error">{outcome.warnings.join('\n')}</Code>
-            </Panel>
+        {outcome?.error !== undefined && finished ? (
+          <Artifact
+            id="p-error"
+            tone="bad"
+            title={scenario.mode === 'compile' ? 'Refused by the analyzer — before any SQL' : scenario.mode === 'mutate' ? `Refused at the wire${outcome.status !== undefined ? ` · ${outcome.status}` : ''}` : 'Error'}
+            focused={focused === 'error'}
+          >
+            <Block tone="bad">{outcome.error}</Block>
+          </Artifact>
+        ) : (
+          <>
+            {panelReached('warn') && outcome !== undefined && outcome.warnings.length > 0 && (
+              <Artifact id="p-warn" title="Analyzer warnings" aside={<Chip tone="warn">ran anyway</Chip>} focused={focused === 'warn'}>
+                <Block tone="warn">{outcome.warnings.join('\n')}</Block>
+              </Artifact>
+            )}
+            {panelReached('sql') && outcome?.sql !== undefined && (
+              <Artifact id="p-sql" title="The SQL vex compiled" aside={<Chip>parameterized</Chip>} focused={focused === 'sql'}>
+                <Block>{prettySql(outcome.sql)}</Block>
+              </Artifact>
+            )}
+            {panelReached('mapping') && scenario.mode === 'execute' && (
+              <Artifact id="p-mapping" title="Shaping the rows (Prism)" focused={focused === 'mapping'}>
+                {scenario.mapping !== undefined ? (
+                  <Block>{json(scenario.mapping)}</Block>
+                ) : (
+                  <div style={{ fontSize: 13, color: INK.soft, lineHeight: 1.5 }}>The rows already have the requested shape, so they pass through unchanged. No model, no reshaping.</div>
+                )}
+              </Artifact>
+            )}
+          </>
+        )}
+      </Grid>
+
+      {outcome?.error === undefined && panelReached('result') && scenario.mode !== 'compile' && outcome !== undefined && (
+        <Artifact
+          id="p-result"
+          tone="ok"
+          title={scenario.mode === 'mutate' ? 'What the write returned (RETURNING *)' : 'The answer'}
+          aside={`${outcome.rows.length} row${outcome.rows.length === 1 ? '' : 's'} · ${ms(outcome.timing.totalMs)}`}
+          focused={focused === 'result'}
+        >
+          {scenario.mode === 'execute' ? (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 20, alignItems: 'flex-start' }}>
+              <div style={{ flex: '1 1 380px', minWidth: 0 }}>
+                <RowsTable rows={outcome.rows} />
+              </div>
+              <div style={{ flex: '0 0 auto', display: 'flex', justifyContent: 'center', width: 'min(280px, 100%)' }}>
+                <AnswerPhone title="The answer" question={scenario.intent} value={outcome.rows} tone="ok" width={270} status="the app" />
+              </div>
+            </div>
+          ) : (
+            <RowsTable rows={outcome.rows} />
           )}
-          {panelReached('sql') && outcome?.sql !== undefined && (
-            <Panel id="p-sql" title="Compiled SQL (parameterized)" focused={focused === 'sql'}>
-              <Code>{outcome.sql}</Code>
-            </Panel>
-          )}
-          {panelReached('mapping') && scenario.mode === 'execute' && (
-            <Panel id="p-mapping" title="Map to shape (Prism)" focused={focused === 'mapping'}>
-              {scenario.mapping !== undefined ? (
-                <Code>{JSON.stringify(scenario.mapping, null, 2)}</Code>
-              ) : (
-                <div style={{ fontSize: 12, color: C.muted }}>Rows already match the requested shape — an identity transform passes them through. No LLM, no reshaping.</div>
-              )}
-            </Panel>
-          )}
-          {panelReached('result') && scenario.mode !== 'compile' && outcome !== undefined && (
-            <Panel id="p-result" title={scenario.mode === 'mutate' ? 'Result — RETURNING *' : 'Result'} focused={focused === 'result'} right={<span style={{ fontSize: 11, color: C.muted }}>{outcome.rows.length} rows · {ms(outcome.timing.totalMs)}</span>}>
-              <RowsTable rows={outcome.rows} />
-            </Panel>
-          )}
-        </>
+        </Artifact>
       )}
 
-      {scenario.note !== undefined && (
-        <div style={{ fontSize: 12, color: C.muted, borderLeft: `3px solid ${C.border}`, paddingLeft: 10 }}>{scenario.note}</div>
-      )}
+      {scenario.note !== undefined && <Callout tone="accent">{scenario.note}</Callout>}
     </div>
   );
 };
 
-const Centered: FC<{ children: ReactNode }> = ({ children }) => (
-  <div style={{ padding: 48, textAlign: 'center', color: C.muted, fontSize: 14 }}>{children}</div>
-);
+const Centered: FC<{ children: ReactNode }> = ({ children }) => <div style={{ padding: 48, textAlign: 'center', color: INK.soft, fontSize: 14 }}>{children}</div>;

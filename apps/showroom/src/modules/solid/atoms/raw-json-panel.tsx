@@ -1,23 +1,12 @@
 import type { FC } from 'react';
+import { Panel } from '@showroom/chrome/stage/ui';
+import { Code } from '@showroom/chrome/stage/ui';
 
-// Fallback view for demos without a dedicated preview component.
+// Fallback view for demos without a dedicated preview component: the value
+// `current()` holds right now, which is what a component would render.
 
 export const RawJsonPanel: FC<{ value: unknown }> = ({ value }) => (
-  <div
-    style={{
-      background: '#1e1e1e',
-      color: '#d4d4d4',
-      borderRadius: 8,
-      padding: 16,
-      fontSize: 12,
-      fontFamily: 'JetBrains Mono, Menlo, Monaco, monospace',
-      lineHeight: 1.6,
-      overflow: 'auto',
-      maxHeight: 400,
-      whiteSpace: 'pre-wrap',
-      wordBreak: 'break-word',
-    }}
-  >
-    {JSON.stringify(value, null, 2)}
-  </div>
+  <Panel title="What your UI would render" aside="stream.current(), live">
+    <Code maxHeight={400}>{JSON.stringify(value, null, 2)}</Code>
+  </Panel>
 );

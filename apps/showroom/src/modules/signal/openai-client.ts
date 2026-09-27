@@ -1,4 +1,6 @@
 import OpenAI from 'openai';
+import { scriptedFetch } from '@showroom/lib/scripted-model/scripted-fetch';
+import { getKey } from '@showroom/modules/signal/settings/api-key-storage';
 
 export type RecipeProvider = 'openai' | 'openrouter' | 'groq';
 
@@ -31,4 +33,23 @@ export const createOpenAIClient = (provider: RecipeProvider, apiKey: string): Op
     baseURL: PROVIDER_BASE_URLS[provider],
     dangerouslyAllowBrowser: true,
   });
+};
+
+// ═══════════════════════════════════════════════════════════
+// The model a demo talks to: the visitor's provider when they stored a key,
+// otherwise the scripted provider — the same SDK and the same signal code,
+// with only the network replaced (see lib/scripted-model). `scripted` lets a
+// page say which one answered.
+// ═══════════════════════════════════════════════════════════
+
+export type ResolvedModel = { apiKey: string; client: OpenAI; scripted: boolean };
+
+export const createScriptedClient = (): OpenAI =>
+  new OpenAI({ apiKey: 'scripted', baseURL: 'https://scripted.model/v1', dangerouslyAllowBrowser: true, fetch: scriptedFetch, maxRetries: 0 });
+
+export const resolveModel = (provider: RecipeProvider): ResolvedModel => {
+  const key = getKey(provider);
+  return key === undefined
+    ? { apiKey: 'scripted', client: createScriptedClient(), scripted: true }
+    : { apiKey: key, client: createOpenAIClient(provider, key), scripted: false };
 };

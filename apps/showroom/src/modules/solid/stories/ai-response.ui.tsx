@@ -42,7 +42,7 @@ export const AIResponseCard: FC<Props> = ({ value, pathStatuses }) => {
             width: 32,
             height: 32,
             borderRadius: 8,
-            background: value.widget.type !== '' ? '#2563eb' : '#e2e8f0',
+            background: value.widget.type !== '' ? '#4f46e5' : '#e2e8f0',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
@@ -138,7 +138,7 @@ export const AIResponseCard: FC<Props> = ({ value, pathStatuses }) => {
           <FinalBadge done={sourcesFinal} />
         </div>
         {value.sources.map((s, i) => (
-          <div key={i} style={{ marginTop: 6, color: '#2563eb', fontSize: 12 }}>
+          <div key={i} style={{ marginTop: 6, color: '#4f46e5', fontSize: 12 }}>
             {s.title || <Placeholder width={150} />}
           </div>
         ))}

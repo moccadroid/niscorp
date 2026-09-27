@@ -3,6 +3,8 @@ import { LoomEditor, defaultPlugins } from '@niscorp/loom/react';
 import { nova } from '@niscorp/loom/plugins/nova/react';
 import type { LoomArtifact } from '@niscorp/loom';
 import { library } from '../content/library';
+import { Panel } from '@showroom/chrome/stage/ui';
+import { LoomStage } from '../demo-panel';
 
 // The Nova plugin in the Loom Editor: a Nova artifact has two documents (layout +
 // data). Edit the component tree or the data and the preview re-renders against the
@@ -32,7 +34,9 @@ const artifact: LoomArtifact = {
 };
 
 export const Demo: FC = () => (
-  <div style={{ padding: 24 }}>
-    <LoomEditor plugins={[...defaultPlugins(), nova({ manifest: library })]} artifact={artifact} />
-  </div>
+  <LoomStage>
+    <Panel title="A nova screen in the editor" aside="layout + data, two documents; the neon kit is on this page">
+      <LoomEditor plugins={[...defaultPlugins(), nova({ manifest: library })]} artifact={artifact} />
+    </Panel>
+  </LoomStage>
 );

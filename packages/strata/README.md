@@ -1,9 +1,16 @@
 # @niscorp/strata
 
-Migrations for nisc. A **sequence** is an append-only list of migrations owned
-by one thing — a package's tables, an app's tables, and (next) a grammar's
-documents. strata applies what is pending **once**, records it in a **ledger**,
-and refuses a database whose history no longer matches the code.
+Versions for nisc. Every document an app writes — a screen, a query, a
+transform — carries a **stamp**: how far along each grammar its writer was.
+Read by newer code, it is upgraded through the migrations in between; read by
+older code, it is refused (`TOO_NEW`), never guessed at. See
+[Documents](#documents).
+
+The tables those documents live in follow the same rules. A **sequence** is an
+append-only list of migrations owned by one thing — a grammar's documents, a
+package's tables, an app's tables. For tables, strata applies what is pending
+**once**, records it in a **ledger**, and refuses a database whose history no
+longer matches the code.
 
 ```bash
 pnpm add @niscorp/strata zod

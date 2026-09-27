@@ -1,6 +1,8 @@
 import { createContext, useContext, useState } from 'react';
 import { createShell, type ActionDefinition, type LayoutNode } from '@niscorp/nova';
 import { Nova, type SlotWrapper } from '@niscorp/nova/adapters/react';
+import { Btn, Chip } from '@showroom/chrome/stage/ui';
+import { Device } from '../../stage/device';
 
 // The SAME `slotWrapper` seam, used as a feature/auth gate instead of animation.
 // Nova hands the wrapper the ActionDefinition; the wrapper decides — entirely
@@ -51,7 +53,7 @@ const secretCard = card('secret-revenue', 'Q3 Revenue', 'Revenue (confidential)'
 // ─── Shell ───
 const shellLayout: LayoutNode = {
   component: 'Stack',
-  props: { direction: 'row', gap: 16, padding: 16 },
+  props: { direction: 'row', gap: 12 },
   children: [
     {
       component: 'Box',
@@ -76,26 +78,23 @@ const shell = createShell({
 });
 
 export { shell };
+// The sign-in toggle is the page's, not the app's: it sits beside the phone,
+// and flips the React context the gate reads.
 export const Demo = () => {
   const [authed, setAuthed] = useState(false);
   return (
     <AuthContext.Provider value={authed}>
-      <div style={{ padding: 12, borderBottom: '1px solid #e5e7eb' }}>
-        <button
-          onClick={() => setAuthed((a) => !a)}
-          style={{
-            padding: '6px 12px',
-            borderRadius: 6,
-            border: '1px solid #d1d5db',
-            background: authed ? '#dcfce7' : '#fff',
-            cursor: 'pointer',
-            font: '500 13px system-ui',
-          }}
-        >
-          {authed ? '🔓 Signed in — click to sign out' : '🔐 Signed out — click to sign in'}
-        </button>
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16 }}>
+        <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+          <Chip tone={authed ? 'ok' : 'idle'}>{authed ? 'signed in' : 'signed out'}</Chip>
+          <Btn kind={authed ? 'plain' : 'primary'} onClick={() => setAuthed((a) => !a)}>
+            {authed ? 'Sign out' : 'Sign in'}
+          </Btn>
+        </div>
+        <Device tone={authed ? 'ok' : 'plain'} status={authed ? 'signed in' : 'signed out'} minHeight={200}>
+          <Nova.Shell shell={shell} slotWrapper={GateSlot} />
+        </Device>
       </div>
-      <Nova.Shell shell={shell} slotWrapper={GateSlot} />
     </AuthContext.Provider>
   );
 };

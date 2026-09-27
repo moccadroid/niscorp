@@ -2,7 +2,7 @@ import { useState, type FC } from 'react';
 import type { ZodType } from 'zod';
 import type { NovaComponent } from '@niscorp/nova/adapters/react';
 import { LoomEditor } from '@niscorp/loom/react';
-import { JsonViewer } from '@showroom/chrome/json-viewer';
+import { Code } from '@showroom/chrome/stage/ui';
 import { DemoPanel } from './demo-panel';
 
 // Showroom helper: render a single-schema Loom editor (one document, `value`) and
@@ -12,13 +12,15 @@ import { DemoPanel } from './demo-panel';
 export const SchemaDemo: FC<{ schema: ZodType; value?: unknown; components?: Record<string, NovaComponent> }> = ({ schema, value, components }) => {
   const [data, setData] = useState<unknown>(value ?? {});
   return (
-    <DemoPanel>
-      <LoomEditor
-        plugins={[{ name: 'demo', documents: { value: schema }, ...(components ? { components } : {}) }]}
-        artifact={{ type: 'demo', ...(value !== undefined ? { documents: { value } } : {}) }}
-        onChange={(docs) => setData(docs['value'])}
-      />
-      <JsonViewer value={data} />
-    </DemoPanel>
+    <DemoPanel
+      form={
+        <LoomEditor
+          plugins={[{ name: 'demo', documents: { value: schema }, ...(components ? { components } : {}) }]}
+          artifact={{ type: 'demo', ...(value !== undefined ? { documents: { value } } : {}) }}
+          onChange={(docs) => setData(docs['value'])}
+        />
+      }
+      output={<Code maxHeight={520}>{JSON.stringify(data, null, 2) ?? 'undefined'}</Code>}
+    />
   );
 };

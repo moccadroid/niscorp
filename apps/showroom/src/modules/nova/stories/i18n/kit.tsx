@@ -1,6 +1,8 @@
 import { z } from 'zod';
 import type { Shell } from '@niscorp/nova';
 import type { NovaComponent } from '@niscorp/nova/adapters/react';
+import { Callout, INK, MONO } from '@showroom/chrome/stage/ui';
+import { Device, type DeviceSize } from '../../stage/device';
 import { LOCALES } from './books';
 
 // ═══════════════════════════════════════════════════════════
@@ -22,30 +24,41 @@ const shell: React.CSSProperties = { fontFamily: 'system-ui, sans-serif', color:
 // were mounted in the old language and pick up the new one because a runtime
 // asks for the book at each render rather than holding one from spawn.
 export const LocaleBar = ({ shell: target, at, onPick }: { shell?: Shell; at: string; onPick?: (tag: string) => void }) => (
-  <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginBottom: 14, flexWrap: 'wrap' }}>
-    <span style={{ ...shell, fontSize: 12, color: '#6b7280', marginRight: 4 }}>Reading in</span>
-    {LOCALES.map((locale) => (
-      <button
-        key={locale.tag}
-        type="button"
-        onClick={() => {
-          target?.setPhrases(locale.book);
-          onPick?.(locale.tag);
-        }}
-        style={{
-          ...shell,
-          fontSize: 13,
-          padding: '5px 12px',
-          borderRadius: 999,
-          cursor: 'pointer',
-          border: `1px solid ${at === locale.tag ? '#2563eb' : '#d1d5db'}`,
-          background: at === locale.tag ? '#2563eb' : '#ffffff',
-          color: at === locale.tag ? '#ffffff' : '#374151',
-        }}
-      >
-        {locale.label}
-      </button>
-    ))}
+  <PickBar label="Reading in" options={LOCALES.map((locale) => ({ id: locale.tag, label: locale.label }))} at={at} onPick={(tag) => {
+    target?.setPhrases(LOCALES.find((locale) => locale.tag === tag)?.book);
+    onPick?.(tag);
+  }} />
+);
+
+// The chip row every language story picks with — a locale here, a region tag
+// in the formatting story. Chrome, never part of the nova tree.
+export const PickBar = ({ label, options, at, onPick, mono = false }: { label: string; options: readonly { id: string; label: string }[]; at: string; onPick: (id: string) => void; mono?: boolean }) => (
+  <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap', justifyContent: 'center' }}>
+    <span style={{ fontSize: 12, color: INK.soft, marginRight: 4 }}>{label}</span>
+    {options.map((option) => {
+      const on = at === option.id;
+      return (
+        <button
+          key={option.id}
+          type="button"
+          onClick={() => onPick(option.id)}
+          style={{
+            font: 'inherit',
+            fontFamily: mono ? MONO : 'inherit',
+            fontSize: 12.5,
+            fontWeight: 650,
+            padding: '4px 12px',
+            borderRadius: 999,
+            cursor: 'pointer',
+            border: `1px solid ${on ? '#c7d2fe' : INK.line}`,
+            background: on ? INK.accentWash : '#ffffff',
+            color: on ? INK.accent : INK.soft,
+          }}
+        >
+          {option.label}
+        </button>
+      );
+    })}
   </div>
 );
 
@@ -53,7 +66,23 @@ export const LocaleBar = ({ shell: target, at, onPick }: { shell?: Shell; at: st
  *  nothing here is translated and that is the point of putting it beside the
  *  thing that is. */
 export const Aside = ({ children }: { children: React.ReactNode }) => (
-  <div style={{ ...shell, fontSize: 12.5, lineHeight: 1.55, color: '#6b7280', marginTop: 14, borderTop: '1px solid #e5e7eb', paddingTop: 10 }}>{children}</div>
+  <div style={{ maxWidth: 620 }}>
+    <Callout tone="accent" title="What to watch">
+      {children}
+    </Callout>
+  </div>
+);
+
+// The language stories' page: the picker above the device, the note below. The
+// device is the stage's phone (or tablet, for the two-card and table screens).
+export const LanguageStage = ({ bar, size = 'phone', status, aside, children }: { bar?: React.ReactNode; size?: DeviceSize; status?: string; aside?: React.ReactNode; children: React.ReactNode }) => (
+  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 18, width: '100%' }}>
+    {bar}
+    <Device size={size} status={status ?? 'Acme Studio · front desk'} minHeight={240}>
+      {children}
+    </Device>
+    {aside}
+  </div>
 );
 
 // ── nova components ──────────────────────────────────────────

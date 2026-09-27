@@ -1,4 +1,6 @@
 import type { DocPage, LibraryModule } from '@showroom/modules/types';
+import { createElement } from 'react';
+import { Intro } from './pages/intro';
 import { stories } from './stories';
 import { buildInspectorTabs } from './inspector-tabs/build-tabs';
 
@@ -11,6 +13,7 @@ import reactDocsContent from '../../../../../packages/nova/REACT_DOCS.md?raw';
 import i18nDocsContent from '../../../../../packages/nova/I18N_DOCS.md?raw';
 
 const docs: readonly DocPage[] = [
+  { id: 'start', title: 'What nova is for', render: () => createElement(Intro) },
   { id: 'readme', title: 'README', content: readmeContent },
   { id: 'design', title: 'Design', content: designContent },
   { id: 'layout', title: 'Layout Guide', content: layoutDocsContent },

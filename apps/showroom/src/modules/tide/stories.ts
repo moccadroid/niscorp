@@ -1,93 +1,79 @@
 import type { Story } from '@showroom/modules/types';
 
-import * as clock from './stories/clock.demo';
-import clockSrc from './stories/clock.demo?raw';
-import * as chain from './stories/chain.demo';
-import chainSrc from './stories/chain.demo?raw';
-import * as fanIn from './stories/fan-in.demo';
-import fanInSrc from './stories/fan-in.demo?raw';
-import * as retry from './stories/retry.demo';
-import retrySrc from './stories/retry.demo?raw';
-import * as webhook from './stories/webhook.demo';
-import webhookSrc from './stories/webhook.demo?raw';
-import * as catchUp from './stories/catch-up.demo';
-import catchUpSrc from './stories/catch-up.demo?raw';
-import * as preview from './stories/preview.demo';
-import previewSrc from './stories/preview.demo?raw';
-import * as calendar from './stories/calendar.demo';
-import calendarSrc from './stories/calendar.demo?raw';
+import { BreaksCron } from './pages/breaks-cron';
+import breaksCronSrc from './pages/breaks-cron?raw';
+import { Billing } from './pages/billing';
+import billingSrc from './pages/billing?raw';
+import { BuildAReflex } from './pages/build-a-reflex';
+import buildSrc from './pages/build-a-reflex?raw';
+import { OneBookingChain } from './pages/chain';
+import chainSrc from './pages/chain?raw';
+import { SameWebhookTwice } from './pages/webhook';
+import webhookSrc from './pages/webhook?raw';
+import { TonightsDigest } from './pages/digest';
+import digestSrc from './pages/digest?raw';
 
+// Six pages, read in order — the landing page ("What tide is for", a doc)
+// links them. Full-width: the reflexes, the phones and the ledger are on the page.
 export const stories: readonly Story[] = [
   {
-    id: 'clock',
-    name: 'The clock',
-    description: 'A nightly reflex. Push time forward and watch occurrences fire — then watch a second push do nothing, because a key fires once.',
-    category: 'Triggers',
-    kind: 'trigger',
-    Demo: clock.Demo,
-    source: clockSrc,
+    id: 'breaks-cron',
+    name: '1 · What breaks cron',
+    description: 'One nightly job, five bad weeks — a crash halfway, both daylight-saving nights, three nights down. Cron and tide side by side.',
+    category: 'Studio',
+    kind: 'studio',
+    doc: true,
+    Demo: BreaksCron,
+    source: breaksCronSrc,
   },
   {
-    id: 'webhook',
-    name: 'Facts & webhooks',
-    description: 'Somebody else\'s write, arriving over HTTP. Duplicate event ids drop silently; a delayed fact is a timer you can see.',
-    category: 'Triggers',
-    kind: 'trigger',
-    Demo: webhook.Demo,
-    source: webhookSrc,
+    id: 'billing',
+    name: '2 · The billing run',
+    description: 'Preview who will be charged, then run it: a declined card and a flaky gateway, against a script that retries everything.',
+    category: 'Studio',
+    kind: 'studio',
+    doc: true,
+    Demo: Billing,
+    source: billingSrc,
   },
   {
-    id: 'catch-up',
-    name: 'Catch-up after downtime',
-    description: 'Five missed nights, three policies: run / latest / skip. Every decision leaves a run row that says which was made.',
-    category: 'Triggers',
-    kind: 'trigger',
-    Demo: catchUp.Demo,
-    source: catchUpSrc,
+    id: 'build-a-reflex',
+    name: '3 · Build a reflex',
+    description: 'Pick when, who and how — see the reflex, preview who would get what, then switch it on and run a week onto six phones.',
+    category: 'Studio',
+    kind: 'studio',
+    doc: true,
+    Demo: BuildAReflex,
+    source: buildSrc,
   },
   {
     id: 'chain',
-    name: 'Chains, not bodies',
-    description: 'Charge → mark paid → receipt, as four reflexes joined by committed rows. Step one hop at a time and watch the flow walk.',
-    category: 'Flows',
-    kind: 'flow',
-    Demo: chain.Demo,
+    name: '4 · One booking, a chain of events',
+    description: 'Mia books, cancels, the class comes and goes: confirmations, reminders, feedback and the waitlist, each hop its own row.',
+    category: 'Studio',
+    kind: 'studio',
+    doc: true,
+    Demo: OneBookingChain,
     source: chainSrc,
   },
   {
-    id: 'fan-in',
-    name: 'Fan-in without a barrier',
-    description: 'Five charges, one summary. A settled run mints a fact carrying its stats, so the digest is an ordinary reflex.',
-    category: 'Flows',
-    kind: 'flow',
-    Demo: fanIn.Demo,
-    source: fanInSrc,
+    id: 'webhook',
+    name: '5 · The same webhook, twice',
+    description: 'A payment provider retries and reorders its events. The usual handler double-books and flips status; tide dedupes and keeps the newest.',
+    category: 'Studio',
+    kind: 'studio',
+    doc: true,
+    Demo: SameWebhookTwice,
+    source: webhookSrc,
   },
   {
-    id: 'retry',
-    name: 'Return vs throw',
-    description: 'A decline is a domain outcome and is DONE; a gateway fault throws and is retried on bounded backoff to a terminal state.',
-    category: 'Semantics',
-    kind: 'semantics',
-    Demo: retry.Demo,
-    source: retrySrc,
-  },
-  {
-    id: 'preview',
-    name: 'Dry run as a verb',
-    description: 'The real pipeline against real data with exactly one function stubbed. The members by name, the message each would get, nothing sent.',
-    category: 'Semantics',
-    kind: 'semantics',
-    Demo: preview.Demo,
-    source: previewSrc,
-  },
-  {
-    id: 'calendar',
-    name: 'DST, honestly',
-    description: 'Occurrence keys are local calendar fields. Across a transition the instant shifts and the key does not — no double-fire, no skip.',
-    category: 'Semantics',
-    kind: 'semantics',
-    Demo: calendar.Demo,
-    source: calendarSrc,
+    id: 'digest',
+    name: '6 · Tonight’s digest',
+    description: 'Six reminders, some failing; one summary email to Olivia when the last lands — and not again after a retry.',
+    category: 'Studio',
+    kind: 'studio',
+    doc: true,
+    Demo: TonightsDigest,
+    source: digestSrc,
   },
 ];

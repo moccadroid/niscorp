@@ -1,7 +1,7 @@
 import { useRef, useState, type FC } from 'react';
 import { z } from 'zod';
 import { createStream, type StreamError, type ValidationMode } from '@niscorp/solid';
-import { Pitch } from '@showroom/chrome/pitch';
+import { Pitch } from '@showroom/modules/solid/atoms';
 import {
   DemoShell,
   ErrorPanel,

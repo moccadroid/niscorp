@@ -6,7 +6,7 @@ import {
   type StreamError,
   type ValidationMode,
 } from '@niscorp/solid';
-import { Pitch } from '@showroom/chrome/pitch';
+import { Pitch } from '@showroom/modules/solid/atoms';
 import {
   DemoShell,
   ErrorPanel,

@@ -1,22 +1,21 @@
 import type { CSSProperties, FC, ReactNode } from 'react';
+import { Code, INK, Mono } from '@showroom/chrome/stage/ui';
 
 // A documentation page (no live demo): a walkthrough of building the `gradient`
 // example plugin, from an empty file to a working editor. Plain styled React.
 
-const mono = 'ui-monospace, SFMono-Regular, Menlo, monospace';
-const page: CSSProperties = { maxWidth: 880, margin: '0 auto', padding: '36px 28px 72px', color: '#1f2937', fontSize: 15.5, lineHeight: 1.65, fontFamily: 'system-ui, sans-serif' };
-const h1: CSSProperties = { fontSize: 28, fontWeight: 800, letterSpacing: -0.4, margin: '0 0 10px', color: '#111827' };
-const h2: CSSProperties = { fontSize: 19, fontWeight: 700, margin: '40px 0 12px', color: '#111827' };
-const para: CSSProperties = { margin: '0 0 14px' };
-const inlineCode: CSSProperties = { fontFamily: mono, fontSize: 13.5, background: '#f1f5f9', borderRadius: 4, padding: '1px 5px', color: '#0f172a' };
-const liStyle: CSSProperties = { marginBottom: 8 };
+const page: CSSProperties = { maxWidth: 880, margin: '0 auto', padding: '32px 28px 72px', color: INK.text, fontSize: 15, lineHeight: 1.65 };
+const h1: CSSProperties = { fontSize: 28, fontWeight: 750, letterSpacing: -0.6, lineHeight: 1.15, margin: '4px 0 10px', color: INK.text };
+const h2: CSSProperties = { fontSize: 18, fontWeight: 700, margin: '36px 0 10px', color: INK.text };
+const para: CSSProperties = { margin: '0 0 14px', color: INK.soft };
+const liStyle: CSSProperties = { marginBottom: 8, color: INK.soft };
 
-const C: FC<{ children: ReactNode }> = ({ children }) => <span style={inlineCode}>{children}</span>;
+const C: FC<{ children: ReactNode }> = ({ children }) => <Mono>{children}</Mono>;
 
 const CodeBlock: FC<{ children: string }> = ({ children }) => (
-  <pre style={{ background: '#1e1e1e', color: '#d4d4d4', borderRadius: 8, padding: '14px 16px', fontSize: 12.5, lineHeight: 1.65, overflowX: 'auto', margin: '0 0 16px', fontFamily: mono, whiteSpace: 'pre' }}>
-    {children}
-  </pre>
+  <div style={{ margin: '0 0 16px' }}>
+    <Code maxHeight={600}>{children}</Code>
+  </div>
 );
 
 const schemaCode = `const gradient = z.object({
@@ -62,6 +61,7 @@ const loadingCode = `<LoomEditor
 
 export const Demo: FC = () => (
   <div style={page}>
+    <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase', color: INK.accent }}>loom · plugins</div>
     <h1 style={h1}>Building a Loom plugin</h1>
 
     <h2 style={h2}>Loom turns a schema into a form</h2>

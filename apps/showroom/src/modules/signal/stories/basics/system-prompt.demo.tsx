@@ -1,6 +1,8 @@
 import { createSignal, type Message, type SignalResult } from '@niscorp/signal';
 import { Pitch } from '@showroom/chrome/pitch';
 import { ChatView, type ChatViewInitial } from '@showroom/modules/signal/chat/chat-view';
+import { replayRecorded, answerWith } from '@showroom/lib/scripted-model/scripts';
+import { HAIKU, suggestionPrompts } from '@showroom/modules/signal/scripted/answers';
 
 // `.systemPrompt()` sets role/tone once. Every `.complete()` on this
 // builder inherits it — no prompt-templating library, no string
@@ -60,7 +62,13 @@ export const snapshot = {
   capturedWith: { provider: 'groq', model },
 };
 
+// No API key: the recorded run above replays for its own prompt, and the
+// "Try:" prompts get the answers written for this page (see scripted/answers).
+replayRecorded('signal/system-prompt', snapshot.result.history);
+answerWith('signal/system-prompt/try', HAIKU);
+
 const initial: ChatViewInitial = {
+  suggestions: suggestionPrompts(HAIKU),
   provider,
   model,
   systemPrompt,

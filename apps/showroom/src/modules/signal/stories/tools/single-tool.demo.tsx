@@ -2,6 +2,8 @@ import { z } from 'zod';
 import { createSignal, defineTool, type Message, type SignalResult } from '@niscorp/signal';
 import { Pitch } from '@showroom/chrome/pitch';
 import { ChatView, type ChatViewInitial } from '@showroom/modules/signal/chat/chat-view';
+import { replayRecorded, answerWith } from '@showroom/lib/scripted-model/scripts';
+import { WEATHER, suggestionPrompts } from '@showroom/modules/signal/scripted/answers';
 
 // Function calling, fully automated. Pass tools via `.tools()`; when
 // the model chooses one, signal invokes `execute`, feeds its return
@@ -104,7 +106,13 @@ export const snapshot = {
   capturedWith: { provider: 'groq', model },
 };
 
+// No API key: the recorded run above replays for its own prompt, and the
+// "Try:" prompts get the answers written for this page (see scripted/answers).
+replayRecorded('signal/single-tool', snapshot.result.history);
+answerWith('signal/single-tool/try', WEATHER);
+
 const initial: ChatViewInitial = {
+  suggestions: suggestionPrompts(WEATHER),
   provider,
   model,
   tools,

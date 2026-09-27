@@ -1,16 +1,8 @@
 import type { FC } from 'react';
+import { INK } from '@showroom/chrome/stage/ui';
 
 // Grey skeleton span for partially-arrived string fields.
 
 export const Placeholder: FC<{ width?: number }> = ({ width = 120 }) => (
-  <span
-    style={{
-      display: 'inline-block',
-      width,
-      height: 14,
-      borderRadius: 4,
-      background: '#e2e8f0',
-      verticalAlign: 'middle',
-    }}
-  />
+  <span style={{ display: 'inline-block', width, maxWidth: '100%', height: 13, borderRadius: 5, background: INK.line, verticalAlign: 'middle' }} />
 );

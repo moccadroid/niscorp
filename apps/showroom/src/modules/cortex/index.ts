@@ -1,26 +1,26 @@
 import type { DocPage, LibraryModule } from '@showroom/modules/types';
+import { createElement } from 'react';
 import { stories } from './stories';
+import { Intro } from './pages/intro';
 
 import readmeContent from '../../../../../packages/cortex/README.md?raw';
 import designContent from '../../../../../packages/cortex/DESIGN.md?raw';
 
-// Cortex v2 demos. Every demo runs a real agent through the real loop
-// against a real provider (key from Signal → Settings); `preview` is
-// the one that works without a key. These demos can't be statically
-// verified — they need a live model — so they are a manual gallery.
+// Cortex. Every page runs the real loop; with no API key the model is the
+// showroom's scripted provider (lib/scripted-model), labelled on each page, and
+// with a key the same agents run live. `preview` needs no model at all.
 
 const docs: readonly DocPage[] = [
+  { id: 'start', title: 'What cortex is for', render: () => createElement(Intro) },
   { id: 'readme', title: 'README', content: readmeContent },
   { id: 'design', title: 'Design', content: designContent },
 ];
 
-const KIND_ORDER: readonly string[] = ['basics', 'loop', 'gates', 'compose'];
+const KIND_ORDER: readonly string[] = ['studio', 'nomodel'];
 
 const KIND_LABELS: Record<string, string> = {
-  basics: 'Basics',
-  loop: 'The loop',
-  gates: 'Gates',
-  compose: 'Composition',
+  studio: 'ACME STUDIO',
+  nomodel: 'NO MODEL NEEDED',
 };
 
 export const cortexModule: LibraryModule = {

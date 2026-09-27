@@ -25,6 +25,8 @@ export type RunView = {
   rows?: unknown[];
   warnings?: string[];
   cacheHit?: boolean;
+  // A model wrote the DSL on this run (live mode).
+  live?: boolean;
   fingerprint?: string;
   scopeClause?: string;
   timing?: { agentMs?: number; executionMs?: number; mappingMs?: number; totalMs?: number };

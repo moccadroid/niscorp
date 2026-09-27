@@ -14,8 +14,8 @@ every boot with `IF NOT EXISTS`, outside any ledger: moss added twelve columns
 that way, tide dropped three. A deployment could not say what shape it was in,
 and a later change had nowhere to go but another `IF NOT EXISTS`.
 
-strata is one path for both: the tables a database holds, and (next) the
-documents stored in them and written in source files.
+strata is one path for both: the documents stored in databases and written in
+source files, and the tables a database holds.
 
 ## Decisions
 

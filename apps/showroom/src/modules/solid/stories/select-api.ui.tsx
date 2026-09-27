@@ -93,7 +93,7 @@ export const SelectApiView: FC<Props> = ({ value, pathStatuses }) => (
                   borderRadius: 3,
                   fontSize: 10,
                   background: '#eff6ff',
-                  color: '#2563eb',
+                  color: '#4f46e5',
                   fontWeight: 500,
                 }}
               >

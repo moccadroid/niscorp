@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { createShell, type ActionDefinition } from '@niscorp/nova';
 import { Nova } from '@niscorp/nova/adapters/react';
 import { GERMAN } from './books';
-import { Aside, LANGUAGE_KIT, LocaleBar } from './kit';
+import { Aside, LANGUAGE_KIT, LanguageStage, LocaleBar } from './kit';
 
 // A LAYOUT IN READABLE ENGLISH, AND A BOOK BESIDE IT.
 //
@@ -59,15 +59,15 @@ export { shell };
 export const Demo = () => {
   const [at, setAt] = useState('de');
   return (
-    <div style={{ padding: 20, maxWidth: 560 }}>
-      <LocaleBar shell={shell} at={at} onPick={setAt} />
-      <Nova.Shell shell={shell} />
+    <LanguageStage bar={<LocaleBar shell={shell} at={at} onPick={setAt} />} aside={
       <Aside>
         The switch calls <code>shell.setPhrases(book)</code>. Nothing remounts — the action instance on
         screen was spawned in one language and renders in another, because a runtime asks for the book
         at every render instead of holding one from spawn. “English” passes <code>undefined</code>: the
         source language has no book, by construction.
       </Aside>
-    </div>
+    }>
+      <Nova.Shell shell={shell} />
+    </LanguageStage>
   );
 };

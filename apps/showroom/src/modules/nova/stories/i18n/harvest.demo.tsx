@@ -3,6 +3,8 @@ import { createShell, type ActionDefinition } from '@niscorp/nova';
 import { Nova } from '@niscorp/nova/adapters/react';
 import { harvestDefinition, missingFrom } from '@niscorp/nova/i18n';
 import { GERMAN } from './books';
+import { Btn, Chip, Grid, INK, MONO, Mono, Panel } from '@showroom/chrome/stage/ui';
+import { Device } from '../../stage/device';
 import { Aside, LANGUAGE_KIT } from './kit';
 
 // THE HALF NOBODY BUILDS, AND THE REASON KEYING ON ENGLISH WORKS AT ALL.
@@ -71,59 +73,64 @@ const shell = createShell({
 
 export { shell };
 
-const mono: React.CSSProperties = { fontFamily: 'ui-monospace, monospace', fontSize: 12.5 };
-
 export const Demo = () => {
-  const [shown, setShown] = useState(0);
+  const [shown, setShown] = useState(false);
   const found = useMemo(() => harvestDefinition(desk), []);
   const absent = useMemo(() => missingFrom(found, GERMAN), [found]);
 
   return (
-    <div style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 18, maxWidth: 720, fontFamily: 'system-ui, sans-serif' }}>
-      <Nova.Shell shell={shell} />
-
-      <div>
-        <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>
-          What this action can say — {found.length} phrases, read from the definition without running it
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 18, width: '100%', maxWidth: 1080 }}>
+      <Grid min={340} gap={20}>
+        <div style={{ display: 'flex', justifyContent: 'center' }}>
+          <Device status="Acme Studio · Deutsch" minHeight={240}>
+            <Nova.Shell shell={shell} />
+          </Device>
         </div>
-        <div style={{ border: '1px solid #e5e7eb', borderRadius: 8, overflow: 'hidden' }}>
-          {found.map((entry) => {
-            const has = GERMAN[entry.phrase] !== undefined;
-            return (
-              <div key={entry.phrase} style={{ display: 'flex', gap: 10, padding: '7px 11px', borderBottom: '1px solid #f3f4f6', background: has ? '#fff' : '#fef2f2', alignItems: 'baseline' }}>
-                <span style={{ ...mono, flex: '0 0 44%' }}>{entry.phrase}</span>
-                <span style={{ ...mono, flex: '0 0 26%', color: has ? '#065f46' : '#b91c1c' }}>{has ? GERMAN[entry.phrase] : '— missing —'}</span>
-                <span style={{ ...mono, color: '#9ca3af', flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis' }}>{entry.where.join('  ')}</span>
-              </div>
-            );
-          })}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14, minWidth: 0 }}>
+          <Panel title="What this action can say" aside={`${found.length} phrases, read from the definition without running it`}>
+            <div style={{ border: `1px solid ${INK.line}`, borderRadius: 10, overflow: 'hidden' }}>
+              {found.map((entry) => {
+                const has = GERMAN[entry.phrase] !== undefined;
+                return (
+                  <div
+                    key={entry.phrase}
+                    style={{ display: 'flex', gap: 10, padding: '7px 11px', borderTop: `1px solid ${INK.line}`, background: has ? '#fff' : INK.badWash, alignItems: 'baseline', fontFamily: MONO, fontSize: 12 }}
+                  >
+                    <span style={{ flex: '0 0 42%' }}>{entry.phrase}</span>
+                    <span style={{ flex: '0 0 28%', color: has ? INK.ok : INK.bad }}>{has ? GERMAN[entry.phrase] : '— missing —'}</span>
+                    <span style={{ color: INK.faint, flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis' }}>{entry.where.join('  ')}</span>
+                  </div>
+                );
+              })}
+            </div>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+              <Chip tone={absent.length === 0 ? 'ok' : 'bad'}>
+                {found.length - absent.length}/{found.length} translated
+              </Chip>
+              <span style={{ fontSize: 12.5, color: INK.soft }}>
+                <Mono>missingFrom()</Mono> reports {absent.length}
+              </span>
+            </div>
+          </Panel>
+          <Panel title="What did the render actually miss?" aside="onPhraseMiss, at runtime">
+            <div>
+              <Btn onClick={() => setShown((v) => !v)}>{shown ? 'Hide the misses' : 'Show the misses'}</Btn>
+            </div>
+            {shown &&
+              (misses.length === 0 ? (
+                <div style={{ fontSize: 12.5, color: INK.soft }}>Nothing missed yet.</div>
+              ) : (
+                <div style={{ fontFamily: MONO, fontSize: 12, color: INK.bad, display: 'flex', flexDirection: 'column', gap: 2 }}>
+                  {misses.map((m) => (
+                    <div key={m.phrase}>
+                      {m.phrase} <span style={{ color: INK.faint }}>at {m.where}</span>
+                    </div>
+                  ))}
+                </div>
+              ))}
+          </Panel>
         </div>
-        <div style={{ fontSize: 13, marginTop: 8, color: absent.length === 0 ? '#065f46' : '#b91c1c' }}>
-          <strong>
-            {found.length - absent.length}/{found.length}
-          </strong>{' '}
-          translated · <code style={mono}>missingFrom()</code> reports {absent.length}
-        </div>
-      </div>
-
-      <div>
-        <button
-          type="button"
-          onClick={() => setShown(misses.length)}
-          style={{ fontSize: 13, padding: '6px 12px', borderRadius: 6, border: '1px solid #d1d5db', background: '#fff', cursor: 'pointer' }}
-        >
-          What did the render actually miss?
-        </button>
-        {shown === 0 ? null : (
-          <div style={{ ...mono, marginTop: 8, color: '#b91c1c' }}>
-            {misses.map((m) => (
-              <div key={m.phrase}>
-                {m.phrase} <span style={{ color: '#9ca3af' }}>at {m.where}</span>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
+      </Grid>
 
       <Aside>
         Two ways of asking the same question. <code>harvestDefinition</code> reads the artifact — every

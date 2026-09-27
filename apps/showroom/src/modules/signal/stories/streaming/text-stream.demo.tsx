@@ -6,11 +6,16 @@ import {
   StreamControls,
   ErrorBanner,
   TextStream,
-  NoApiKey,
   type RunState,
 } from '@showroom/modules/signal/atoms';
-import { getKey } from '@showroom/modules/signal/settings/api-key-storage';
-import { createOpenAIClient } from '@showroom/modules/signal/openai-client';
+import { resolveModel } from '@showroom/modules/signal/openai-client';
+import { ModelBadge } from '@showroom/modules/signal/atoms/model-badge';
+import { answerWith } from '@showroom/lib/scripted-model/scripts';
+import { STREAM_TEXT } from '@showroom/modules/signal/scripted/answers';
+
+// No API key: the scripted provider streams the answer written for this
+// page's prompt, token by token, through the real signal stream.
+answerWith('signal/text-stream', STREAM_TEXT);
 
 // `signal.stream(input)` returns an AsyncIterable of events:
 //   { type: 'text', text: '...' } — incremental tokens
@@ -37,10 +42,9 @@ const useStream = () => {
   const [state, setState] = useState<RunState>('idle');
   const [error, setError] = useState('');
   const controllerRef = useRef<AbortController | null>(null);
-  const apiKey = getKey(provider);
+  const scripted = resolveModel(provider).scripted;
 
   const start = async (): Promise<void> => {
-    if (apiKey === undefined) return;
     controllerRef.current?.abort();
     const controller = new AbortController();
     controllerRef.current = controller;
@@ -48,7 +52,7 @@ const useStream = () => {
     setError('');
     setState('streaming');
 
-    const client = createOpenAIClient(provider, apiKey);
+    const { apiKey, client } = resolveModel(provider);
     const sig = createSignal(provider, { client })
       .apiKey(apiKey)
       .model(model)
@@ -78,18 +82,18 @@ const useStream = () => {
     setState('done');
   };
 
-  return { apiKey, text, state, error, start, stop };
+  return { scripted, text, state, error, start, stop };
 };
 
 export const Demo = () => {
-  const { apiKey, text, state, error, start, stop } = useStream();
-  if (apiKey === undefined) return <NoApiKey provider={provider} />;
+  const { scripted, text, state, error, start, stop } = useStream();
   return (
     <>
       <Pitch
         headline="See every token the moment it arrives."
         body="signal.stream() returns an AsyncIterable of events. Text deltas yield as they arrive from the provider SSE. No buffering, no polling — just a for-await loop. The same builder chain that powers .complete() works here: provider, model, system prompt, tools, schema."
       />
+      <ModelBadge scripted={scripted} />
       <StreamShell>
         <StreamControls state={state} onStart={start} onStop={stop} />
         <ErrorBanner message={error} />

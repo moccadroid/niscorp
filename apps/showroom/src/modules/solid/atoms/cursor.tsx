@@ -8,7 +8,7 @@ export const Cursor: FC = () => (
       display: 'inline-block',
       width: 2,
       height: 14,
-      background: '#2563eb',
+      background: '#4f46e5',
       marginLeft: 1,
       verticalAlign: 'middle',
       animation: 'solid-cursor-blink 1s step-end infinite',

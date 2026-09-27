@@ -1,6 +1,8 @@
 import { createSignal, type Message, type SignalResult } from '@niscorp/signal';
 import { Pitch } from '@showroom/chrome/pitch';
 import { ChatView, type ChatViewInitial } from '@showroom/modules/signal/chat/chat-view';
+import { replayRecorded, answerWith } from '@showroom/lib/scripted-model/scripts';
+import { PLAIN, suggestionPrompts } from '@showroom/modules/signal/scripted/answers';
 
 // A minimal signal call. `createSignal(provider)` starts a builder;
 // each chained method returns a new Signal (immutable). `.complete()`
@@ -58,7 +60,13 @@ export const snapshot = {
   capturedWith: { provider: 'groq', model },
 };
 
+// No API key: the recorded run above replays for its own prompt, and the
+// "Try:" prompts get the answers written for this page (see scripted/answers).
+replayRecorded('signal/plain-completion', snapshot.result.history);
+answerWith('signal/plain-completion/try', PLAIN);
+
 const initial: ChatViewInitial = {
+  suggestions: suggestionPrompts(PLAIN),
   provider,
   model,
   history: snapshot.result.history,

@@ -1,4 +1,6 @@
 import type { DocPage, LibraryModule } from '@showroom/modules/types';
+import { createElement } from 'react';
+import { Intro } from './pages/intro';
 import { stories } from './stories';
 import { buildInspectorTabs } from './inspector-tabs/build-tabs';
 
@@ -6,6 +8,7 @@ import readmeContent from '../../../../../packages/solid/README.md?raw';
 import designContent from '../../../../../packages/solid/DESIGN.md?raw';
 
 const docs: readonly DocPage[] = [
+  { id: 'start', title: 'What solid is for', render: () => createElement(Intro) },
   { id: 'readme', title: 'README', content: readmeContent },
   { id: 'design', title: 'Design', content: designContent },
 ];

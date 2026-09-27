@@ -7,11 +7,16 @@ import {
   StreamShell,
   StreamControls,
   ErrorBanner,
-  NoApiKey,
   type RunState,
 } from '@showroom/modules/signal/atoms';
-import { getKey } from '@showroom/modules/signal/settings/api-key-storage';
-import { createOpenAIClient } from '@showroom/modules/signal/openai-client';
+import { resolveModel } from '@showroom/modules/signal/openai-client';
+import { ModelBadge } from '@showroom/modules/signal/atoms/model-badge';
+import { answerWith } from '@showroom/lib/scripted-model/scripts';
+import { STREAM_WIDGET } from '@showroom/modules/signal/scripted/answers';
+
+// No API key: the scripted provider streams the answer written for this
+// page's prompt, token by token, through the real signal stream.
+answerWith('signal/structured-stream', STREAM_WIDGET);
 import { ResponseCard } from './structured-stream.ui';
 
 // signal + solid, one loop. signal streams JSON tokens; solid
@@ -65,10 +70,9 @@ const useStream = () => {
   const [state, setState] = useState<RunState>('idle');
   const [error, setError] = useState('');
   const controllerRef = useRef<AbortController | null>(null);
-  const apiKey = getKey(provider);
+  const scripted = resolveModel(provider).scripted;
 
   const start = async (): Promise<void> => {
-    if (apiKey === undefined) return;
     controllerRef.current?.abort();
     const controller = new AbortController();
     controllerRef.current = controller;
@@ -76,7 +80,7 @@ const useStream = () => {
     setError('');
     setState('streaming');
 
-    const client = createOpenAIClient(provider, apiKey);
+    const { apiKey, client } = resolveModel(provider);
     const solid = createStream({ schema, initial });
     solid.on(setValue);
 
@@ -113,18 +117,18 @@ const useStream = () => {
     setState('done');
   };
 
-  return { apiKey, value, state, error, start, stop };
+  return { scripted, value, state, error, start, stop };
 };
 
 export const Demo = () => {
-  const { apiKey, value, state, error, start, stop } = useStream();
-  if (apiKey === undefined) return <NoApiKey provider={provider} />;
+  const { scripted, value, state, error, start, stop } = useStream();
   return (
     <>
       <Pitch
         headline="Structured output, streaming, always valid."
         body="This is the full stack: signal handles the LLM connection, retry, and abort. Solid handles the structural invariant — every field is type-checked at value-open, bad values are rejected, and current() is always safe to render. The consumer just pipes text events into solid.write(). Two libraries, zero glue code, one for-await loop."
       />
+      <ModelBadge scripted={scripted} />
       <StreamShell>
         <StreamControls state={state} onStart={start} onStop={stop} />
         <ErrorBanner message={error} />

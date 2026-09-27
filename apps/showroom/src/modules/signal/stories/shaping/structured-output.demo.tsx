@@ -2,6 +2,8 @@ import { z } from 'zod';
 import { createSignal, type Message, type SignalResult } from '@niscorp/signal';
 import { Pitch } from '@showroom/chrome/pitch';
 import { ChatView, type ChatViewInitial } from '@showroom/modules/signal/chat/chat-view';
+import { replayRecorded, answerWith } from '@showroom/lib/scripted-model/scripts';
+import { RECIPES, suggestionPrompts } from '@showroom/modules/signal/scripted/answers';
 
 // `.schema(zodSchema)` constrains the response to a typed shape.
 // Signal picks a per-provider strategy — native JSON-schema mode
@@ -129,7 +131,13 @@ export const snapshot = {
 
 export const structuredRender = 'json' as const;
 
+// No API key: the recorded run above replays for its own prompt, and the
+// "Try:" prompts get the answers written for this page (see scripted/answers).
+replayRecorded('signal/structured-output', snapshot.result.history);
+answerWith('signal/structured-output/try', RECIPES);
+
 const initial: ChatViewInitial = {
+  suggestions: suggestionPrompts(RECIPES),
   provider,
   model,
   schema,

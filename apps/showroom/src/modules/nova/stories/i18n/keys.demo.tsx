@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { createShell, type ActionDefinition } from '@niscorp/nova';
 import { Nova } from '@niscorp/nova/adapters/react';
 import { GERMAN } from './books';
-import { Aside, LANGUAGE_KIT, LocaleBar } from './kit';
+import { Aside, LANGUAGE_KIT, LanguageStage, LocaleBar } from './kit';
 
 // THE GUARD RAIL, ON PURPOSE.
 //
@@ -62,15 +62,15 @@ export { shell };
 export const Demo = () => {
   const [at, setAt] = useState('de');
   return (
-    <div style={{ padding: 20, maxWidth: 620 }}>
-      <LocaleBar shell={shell} at={at} onPick={setAt} />
-      <Nova.Shell shell={shell} />
+    <LanguageStage size="tablet" bar={<LocaleBar shell={shell} at={at} onPick={setAt} />} aside={
       <Aside>
         <strong>“Pass” → “Zehnerblock” is in the book.</strong> The left card holds a member whose
         surname is Pass and never changes — once at <code>name</code> (not a prose key) and once as a
         bound text child (data, not authored). The right card holds the product and translates, at
         <code> caption</code> and as a hand-written text child. Four identical strings; two move.
       </Aside>
-    </div>
+    }>
+      <Nova.Shell shell={shell} />
+    </LanguageStage>
   );
 };
