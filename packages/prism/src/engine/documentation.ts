@@ -24,9 +24,20 @@ export const getConfigJsonSchema = (target: JsonSchemaTarget = 'draft-2020-12'):
 // plain object may never use one as a key) is kept as it is. Definitions only
 // the dropped ops used are removed. Documentation only: validation is always
 // the full ConfigSchema (schemas/profiles.ts).
+//
+// A reference is read in either spelling. Drafts 4–7 ignore keywords beside a
+// `$ref`, so a described reference is written `allOf: [{ $ref }]` there — and
+// zod does so for the root and for a described op in every version but 4.3.
 
 type JsonObject = Record<string, unknown>;
 const isObject = (value: unknown): value is JsonObject => typeof value === 'object' && value !== null && !Array.isArray(value);
+
+// `allOf: [{ $ref }]` → `{ $ref }`; anything else as it is.
+const unwrapRef = (value: unknown): unknown => {
+  const allOf = isObject(value) ? value['allOf'] : undefined;
+  const only: unknown = Array.isArray(allOf) && allOf.length === 1 ? allOf[0] : undefined;
+  return isObject(only) && '$ref' in only ? only : value;
+};
 
 // `#/$defs/x` or `#/definitions/x` → ['$defs', 'x'].
 const refTarget = (ref: unknown): [string, string] | undefined => {
@@ -45,7 +56,8 @@ const resolve = (root: JsonObject, ref: unknown): JsonObject | undefined => {
 
 // The op an alternative is — its one `$`-key — whether written inline or
 // behind a `$ref` to its own definition.
-const opOf = (root: JsonObject, alternative: unknown): string | undefined => {
+const opOf = (root: JsonObject, written: unknown): string | undefined => {
+  const alternative = unwrapRef(written);
   const node = isObject(alternative) && '$ref' in alternative ? resolve(root, alternative['$ref']) : alternative;
   const properties = isObject(node) ? node['properties'] : undefined;
   const key = isObject(properties) ? Object.keys(properties)[0] : undefined;
@@ -64,11 +76,16 @@ const refsIn = (value: unknown, found: Set<string>): void => {
   }
 };
 
-export const getProfileJsonSchema = (ops: readonly OpKey[], target: JsonSchemaTarget = 'draft-2020-12'): object => {
-  const full: unknown = getConfigJsonSchema(target);
+export const getProfileJsonSchema = (ops: readonly OpKey[], target: JsonSchemaTarget = 'draft-2020-12'): object =>
+  narrowConfigJsonSchema(getConfigJsonSchema(target), ops);
+
+// The narrowing itself, over any spelling of the config schema — exported for
+// the tests, which feed it both.
+export const narrowConfigJsonSchema = (full: unknown, ops: readonly OpKey[]): object => {
   if (!isObject(full)) throw new Error('prism: the config JSON Schema is not an object');
   const root = structuredClone(full);
-  const node = resolve(root, root['$ref']);
+  const top = unwrapRef(root);
+  const node = resolve(root, isObject(top) ? top['$ref'] : undefined);
   const alternatives = node?.['anyOf'];
   if (node === undefined || !Array.isArray(alternatives)) throw new Error('prism: the config JSON Schema has no node union to narrow');
 
