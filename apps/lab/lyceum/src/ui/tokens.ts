@@ -29,14 +29,17 @@ export const FONTS_HREF =
 
 export const LYCEUM_CSS = `
 html, body { margin: 0; padding: 0; }
-/* THE READING SIZE. Two kinds of type share this kit. Posters — display
-   headlines, big figures — scale with their sheet (cqw), as they always did.
-   Everything read at arm's length — labels, sentences, tables, buttons, code,
-   notes — has a floor in rem, and rem follows the screen: 16px on a phone,
-   ~24px on a laptop, ~27px on a 1080p projector. So a size below is
-   clamp(the reading floor, the poster size, a cap): a phone and a half-width
-   region get the floor, a projector gets its poster. */
-html { font-size: clamp(16px, calc(0.72vw + 13.3px), 28px); }
+/* THE READING SIZE. A size below is clamp(the reading floor, the poster
+   size, a cap). Posters — the projector — scale: its rem follows the screen
+   (~27px on a 1080p projector), and its sizes follow their sheet (cqw), read
+   from the back row. Every other screen — the controller, a phone, the door —
+   is WORKED at arm's length: 16px rem, and every size at its floor, however
+   wide the window. \`--cq\` is the switch: 1cqw on the projector, 0 elsewhere,
+   so \`calc(N * var(--cq))\` is a poster size there and nothing here. (An
+   unregistered custom property is substituted where it is used, so its cqw is
+   the using element's own container.) */
+html { font-size: 16px; }
+html:has(.page > [data-canvas="strip"]:not(:empty)) { font-size: clamp(16px, calc(0.72vw + 13.3px), 28px); }
 .${ROOT_CLASS} {
   --paper: #ffffff; --ink: #000000; --signal: #1400ff; --alert: #ff3b00; --live: #00c853; --highlight: #ffe600;
   --rule: 3px;
@@ -45,7 +48,9 @@ html { font-size: clamp(16px, calc(0.72vw + 13.3px), 28px); }
   --mono: 'Space Mono', ui-monospace, monospace;
   color-scheme: light; background: var(--paper); color: var(--ink);
   font: 400 1rem/1.4 var(--prose); min-height: 100dvh;
+  --cq: 0px;
 }
+.${ROOT_CLASS} .page:has(> [data-canvas="strip"]:not(:empty)) { --cq: 1cqw; }
 .${ROOT_CLASS} * { box-sizing: border-box; margin: 0; }
 
 /* ── the frame: canvases stacked, the last one filling what is left ── */
@@ -120,8 +125,8 @@ html { font-size: clamp(16px, calc(0.72vw + 13.3px), 28px); }
 .${ROOT_CLASS} [data-ink="highlight"] { --bg: var(--highlight); --fg: var(--ink); }
 .${ROOT_CLASS} .cell {
   background: var(--bg); color: var(--fg);
-  padding: clamp(.55rem, 1.2cqw, 1.4rem) clamp(.7rem, 1.5cqw, 1.75rem);
-  display: flex; flex-direction: column; gap: clamp(.3rem, .6cqw, .75rem); min-width: 0; overflow: hidden;
+  padding: clamp(.55rem, calc(1.2 * var(--cq)), 1.4rem) clamp(.7rem, calc(1.5 * var(--cq)), 1.75rem);
+  display: flex; flex-direction: column; gap: clamp(.3rem, calc(.6 * var(--cq)), .75rem); min-width: 0; overflow: hidden;
 }
 .${ROOT_CLASS} .cell[data-align="end"] { justify-content: flex-end; }
 .${ROOT_CLASS} .cell[data-align="center"] { justify-content: center; align-items: center; text-align: center; }
@@ -142,29 +147,29 @@ html { font-size: clamp(16px, calc(0.72vw + 13.3px), 28px); }
 
 /* ── type ── */
 .${ROOT_CLASS} .label {
-  font: 700 clamp(.78rem, 1.15cqw, 1.2rem)/1.2 var(--display); letter-spacing: .08em; text-transform: uppercase;
+  font: 700 clamp(.78rem, calc(1.15 * var(--cq)), 1.2rem)/1.2 var(--display); letter-spacing: .08em; text-transform: uppercase;
 }
 .${ROOT_CLASS} .headline { font-family: var(--display); font-weight: 900; text-transform: uppercase; line-height: .92; overflow-wrap: break-word; hyphens: none; }
-.${ROOT_CLASS} .headline[data-level="display"] { font-size: clamp(2.2rem, 7cqw, 170px); }
-.${ROOT_CLASS} .headline[data-level="title"]   { font-size: clamp(1.6rem, 3.8cqw, 96px); }
-.${ROOT_CLASS} .headline[data-level="name"]    { font-size: clamp(1.25rem, 1.9cqw, 44px); line-height: 1.05; }
-.${ROOT_CLASS} .text { font-size: clamp(1.06rem, 1.75cqw, 2.2rem); line-height: 1.35; }
+.${ROOT_CLASS} .headline[data-level="display"] { font-size: clamp(2.2rem, calc(7 * var(--cq)), 170px); }
+.${ROOT_CLASS} .headline[data-level="title"]   { font-size: clamp(1.6rem, calc(3.8 * var(--cq)), 96px); }
+.${ROOT_CLASS} .headline[data-level="name"]    { font-size: clamp(1.25rem, calc(1.9 * var(--cq)), 44px); line-height: 1.05; }
+.${ROOT_CLASS} .text { font-size: clamp(1.06rem, calc(1.75 * var(--cq)), 2.2rem); line-height: 1.35; }
 .${ROOT_CLASS} .text[data-tone="muted"] { opacity: 1; color: color-mix(in srgb, var(--fg) 55%, var(--bg)); }
 .${ROOT_CLASS} .figure { display: flex; flex-direction: column; gap: .3em; }
-.${ROOT_CLASS} .figure > .value { font: 900 clamp(2rem, 6cqw, 150px)/.85 var(--display); }
+.${ROOT_CLASS} .figure > .value { font: 900 clamp(2rem, calc(6 * var(--cq)), 150px)/.85 var(--display); }
 /* a countdown reads as a clock: figures that do not jump as they change */
 .${ROOT_CLASS} .countdown > .value { font-variant-numeric: tabular-nums; }
 
 /* ── code: a cell of mono, the lines that matter highlighted ── */
-.${ROOT_CLASS} .code { font: 400 clamp(.8rem, 1.6cqw, 1.5rem)/1.5 var(--mono); white-space: pre; overflow: hidden; }
+.${ROOT_CLASS} .code { font: 400 clamp(.8rem, calc(1.6 * var(--cq)), 1.5rem)/1.5 var(--mono); white-space: pre; overflow: hidden; }
 .${ROOT_CLASS} .code > span { display: block; }
 .${ROOT_CLASS} .code > span[data-marked] { background: var(--highlight); color: var(--ink); margin: 0 -.4em; padding: 0 .4em; }
 
 /* ── rows: a ruled table, headers in the label voice ── */
 .${ROOT_CLASS} .rows { display: grid; gap: var(--rule); background: var(--ink); }
 .${ROOT_CLASS} .rows > div { display: grid; grid-template-columns: var(--cols); gap: var(--rule); }
-.${ROOT_CLASS} .rows > div > span { background: var(--paper); color: var(--ink); padding: .4em .6em; font-size: clamp(1rem, 1.5cqw, 1.6rem); display: flex; align-items: center; gap: .4em; min-width: 0; overflow: hidden; }
-.${ROOT_CLASS} .rows[data-head] > div:first-child > span { font: 700 clamp(.7rem, 1.05cqw, 1.1rem)/1.2 var(--display); letter-spacing: .08em; text-transform: uppercase; }
+.${ROOT_CLASS} .rows > div > span { background: var(--paper); color: var(--ink); padding: .4em .6em; font-size: clamp(1rem, calc(1.5 * var(--cq)), 1.6rem); display: flex; align-items: center; gap: .4em; min-width: 0; overflow: hidden; }
+.${ROOT_CLASS} .rows[data-head] > div:first-child > span { font: 700 clamp(.7rem, calc(1.05 * var(--cq)), 1.1rem)/1.2 var(--display); letter-spacing: .08em; text-transform: uppercase; }
 .${ROOT_CLASS} .rows [data-kind="mono"] { font-family: var(--mono); }
 .${ROOT_CLASS} .rows [data-kind="missing"] { color: color-mix(in srgb, var(--ink) 45%, var(--paper)); }
 .${ROOT_CLASS} .rows > .empty { display: block; background: var(--paper); padding: .6em; }
@@ -176,11 +181,11 @@ html { font-size: clamp(16px, calc(0.72vw + 13.3px), 28px); }
 
 /* ── sigils: the houses' shapes ── */
 .${ROOT_CLASS} .sigil { width: 1em; height: 1em; flex: none; display: inline-block; vertical-align: -.12em; }
-.${ROOT_CLASS} .sigil[data-size="large"] { width: clamp(48px, 12cqw, 260px); height: clamp(48px, 12cqw, 260px); }
+.${ROOT_CLASS} .sigil[data-size="large"] { width: clamp(48px, calc(12 * var(--cq)), 260px); height: clamp(48px, calc(12 * var(--cq)), 260px); }
 .${ROOT_CLASS} .sigil * { fill: currentColor; }
 
 /* ── bar: proportions as cells ── */
-.${ROOT_CLASS} .bar { display: grid; gap: var(--rule); background: var(--ink); min-height: clamp(14px, 2cqw, 40px); }
+.${ROOT_CLASS} .bar { display: grid; gap: var(--rule); background: var(--ink); min-height: clamp(14px, calc(2 * var(--cq)), 40px); }
 /* a segment takes its ink and mark from the same rules a cell does — the
    default here must not out-rank them */
 .${ROOT_CLASS} .bar > span:not([data-mark]) { background: var(--bg); }
@@ -190,8 +195,8 @@ html { font-size: clamp(16px, calc(0.72vw + 13.3px), 28px); }
    a printed form draws one: a writing line in ink under the text, set in from
    the cell's edges, on a faintly recessed ground; the caret is the alert ink. */
 .${ROOT_CLASS} .field {
-  --pad-x: clamp(.8rem, 1.6cqw, 1.8rem);
-  --pad-y: clamp(.9rem, 1.6cqw, 1.8rem);
+  --pad-x: clamp(.8rem, calc(1.6 * var(--cq)), 1.8rem);
+  --pad-y: clamp(.9rem, calc(1.6 * var(--cq)), 1.8rem);
   --well: color-mix(in srgb, var(--ink) 6%, var(--paper));
   border: 0; outline: 0; width: 100%; color: var(--ink); caret-color: var(--alert);
   padding: var(--pad-y) var(--pad-x);
@@ -199,7 +204,7 @@ html { font-size: clamp(16px, calc(0.72vw + 13.3px), 28px); }
     linear-gradient(var(--ink), var(--ink)) no-repeat left var(--pad-x) bottom calc(var(--pad-y) * .55) / calc(100% - var(--pad-x) * 2) var(--rule),
     var(--well);
   /* never under 16px: a phone zooms the page into a smaller field */
-  font: 500 clamp(1.1rem, 2.2cqw, 2.4rem)/1.2 var(--prose);
+  font: 500 clamp(1.1rem, calc(2.2 * var(--cq)), 2.4rem)/1.2 var(--prose);
 }
 .${ROOT_CLASS} .field::placeholder { color: color-mix(in srgb, var(--ink) 40%, var(--paper)); }
 .${ROOT_CLASS} .field:focus { --well: var(--highlight); }
@@ -214,13 +219,13 @@ html { font-size: clamp(16px, calc(0.72vw + 13.3px), 28px); }
 /* ── action: a whole cell you press ── */
 .${ROOT_CLASS} .action {
   background: var(--bg); color: var(--fg); border: 0; cursor: pointer; text-align: left;
-  padding: clamp(.8rem, 1.4cqw, 1.6rem) clamp(.9rem, 1.6cqw, 1.8rem);
-  font: 900 clamp(1rem, 1.8cqw, 2rem)/1.1 var(--display); text-transform: uppercase; letter-spacing: .02em;
+  padding: clamp(.8rem, calc(1.4 * var(--cq)), 1.6rem) clamp(.9rem, calc(1.6 * var(--cq)), 1.8rem);
+  font: 900 clamp(1rem, calc(1.8 * var(--cq)), 2rem)/1.1 var(--display); text-transform: uppercase; letter-spacing: .02em;
   /* a thumb's width at least, whatever the label */
   min-height: max(3.25rem, 48px);
 }
 /* the one thing a screen is for — the door's Step in */
-.${ROOT_CLASS} .action[data-size="large"] { min-height: max(5.5rem, 72px); font-size: clamp(1.4rem, 3cqw, 3rem); }
+.${ROOT_CLASS} .action[data-size="large"] { min-height: max(5.5rem, 72px); font-size: clamp(1.4rem, calc(3 * var(--cq)), 3rem); }
 .${ROOT_CLASS} .action[data-lines="two"] > span { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; height: 2em; }
 
 /* ── anything you can press ──

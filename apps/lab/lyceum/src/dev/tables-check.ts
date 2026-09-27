@@ -47,6 +47,8 @@ const main = async (): Promise<void> => {
   check('lyceum.app/9 is unchanged', turnsOpened !== undefined && (await checksumOf(turnsOpened)) === 'b59f18422384987494d4b03520786bb15e284d0135a5e3ad9597ced5dc518f40');
   const meanings = LYCEUM_SEQUENCE.migrations[9];
   check('lyceum.app/10 is unchanged', meanings !== undefined && (await checksumOf(meanings)) === '6a4d26b4fe3e291e2e581bce088bdd00d30086a7520a72a92ff22b1ab4a7b94b');
+  const repaired = LYCEUM_SEQUENCE.migrations[10];
+  check('lyceum.app/11 is unchanged', repaired !== undefined && (await checksumOf(repaired)) === 'd0ce221e132468ccc27d16217679c77493d2d3c07aa27100dbac5dd08550bc2c');
 
   // ── a fresh database ──
   const fresh = createPglitePool(new PGlite());

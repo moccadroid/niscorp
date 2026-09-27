@@ -220,6 +220,16 @@ export const TABLE_MEANINGS = /* sql */ `
   COMMENT ON TABLE deck IS 'Which slide is on the projector now.';
 `;
 
+// Migration 11: TURNS WRITTEN WRONG, REPAIRED. Before vex bound a list into a
+// jsonb column as JSON, the pg driver sent a JS array as a postgres array
+// literal: an empty `opened` or `proposals` landed as '{}', a jsonb OBJECT, and
+// the conversation could no longer be read. Whatever is not a list is the empty
+// list it was meant to be (a non-empty one never parsed, so none was written).
+export const TURNS_REPAIRED = /* sql */ `
+  UPDATE assistant_turns SET opened = '[]'::jsonb WHERE jsonb_typeof(opened) <> 'array';
+  UPDATE assistant_turns SET proposals = '[]'::jsonb WHERE jsonb_typeof(proposals) <> 'array';
+`;
+
 export const LYCEUM_SEQUENCE: Sequence = {
   id: 'lyceum.app',
   migrations: [
@@ -233,6 +243,7 @@ export const LYCEUM_SEQUENCE: Sequence = {
     { description: "Questions for the speaker: the room's Q&A, one row per question", steps: sqlSteps(QUESTIONS) },
     { description: 'What a turn ran: the vex queries of each assistant turn', steps: sqlSteps(TURNS_OPENED) },
     { description: 'What the tables mean: comments a query writer reads as descriptions', steps: sqlSteps(TABLE_MEANINGS) },
+    { description: 'Turns written wrong, repaired: lists that landed as objects are lists again', steps: sqlSteps(TURNS_REPAIRED) },
   ],
 };
 
