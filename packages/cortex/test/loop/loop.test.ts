@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { z } from 'zod';
-import { defineAgent, defineTool, stepCount, type CortexEvent } from '../../src';
+import { defineAgent, defineTool, repeatedCalls, stepCount, type CortexEvent } from '../../src';
 import { stubSignal } from '../helpers/stub-signal';
 
 const CalcSchema = z.object({ answer: z.number() });
@@ -247,6 +247,57 @@ describe('the loop — respond strategy', () => {
       expect(result.error.code).toBe('stopped');
       expect(result.error.stop).toBe('steps');
     }
+  });
+
+  it('stops a model that keeps sending the call an answer just refused', async () => {
+    const agent = defineAgent({
+      id: 'stuck',
+      instructions: 'add',
+      tools: [calc],
+      output: { schema: CalcSchema },
+      stopWhen: [stepCount(20), repeatedCalls(2)],
+    });
+    // The same wrong call, five times: the tool refuses it the same way each time.
+    const llm = stubSignal(Array.from({ length: 5 }, (_, i) => ({ toolCalls: [{ id: `c${i}`, name: 'calc', args: {} }] })));
+
+    const result = await agent.run('go', { llm }).result;
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.stop).toBe('repeated_calls');
+      expect(result.error.message).toContain('3 times in a row');
+    }
+    // Three identical calls were made, not twenty.
+    expect(llm.requests).toHaveLength(3);
+  });
+
+  it('tells a model that sent empty arguments that it sent nothing', async () => {
+    const llm = stubSignal([
+      { toolCalls: [{ id: 'c1', name: 'calc', args: {} }] },
+      { toolCalls: [{ id: 'c2', name: 'respond', args: { data: { answer: 0 } } }] },
+    ]);
+    await calcAgent.run('go', { llm }).result;
+    const toolMessage = llm.requests[1]?.messages.find((message) => message.role === 'tool');
+    expect(toolMessage?.content).toContain('arrived EMPTY');
+  });
+
+  it('does not count calls that differ as repeats', async () => {
+    const agent = defineAgent({
+      id: 'moving',
+      instructions: 'add',
+      tools: [calc],
+      output: { schema: CalcSchema },
+      stopWhen: [stepCount(20), repeatedCalls(2)],
+    });
+    const llm = stubSignal([
+      { toolCalls: [{ id: 'c1', name: 'calc', args: {} }] },
+      { toolCalls: [{ id: 'c2', name: 'calc', args: {} }] },
+      { toolCalls: [{ id: 'c3', name: 'calc', args: { a: 1, b: 2 } }] },
+      { toolCalls: [{ id: 'c4', name: 'calc', args: {} }] },
+      { toolCalls: [{ id: 'c5', name: 'respond', args: { data: { answer: 3 } } }] },
+    ]);
+
+    const result = await agent.run('go', { llm }).result;
+    expect(result.ok).toBe(true);
   });
 
   it('decodes double-encoded (stringified) tool and respond args', async () => {

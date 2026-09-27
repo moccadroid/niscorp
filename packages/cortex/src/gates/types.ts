@@ -82,6 +82,11 @@ export type RunProgress = {
   usage: Usage;
   elapsedMs: number;
   outputRetries: number;
+  // How many tool calls in a row got back exactly what the one before them
+  // did — the same tool, the same arguments, the same answer. 0 after any
+  // call that differs. A model that keeps sending the call an error just
+  // refused is not making progress; `repeatedCalls` stops it.
+  repeatedCalls: number;
 };
 
 export type StopVerdict = { stop: StopReason; message: string } | null;

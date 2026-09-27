@@ -52,12 +52,33 @@ export type DescribeFieldInput = z.infer<typeof DescribeFieldInputSchema>;
 // The draft query ITSELF at the root — no `dsl` wrapper. Models
 // naturally pass the query object directly, and a wrapper mismatch is
 // fatal on providers (Groq) that validate tool args SERVER-SIDE.
-// Deliberately permissive on the wire: the real validation is this
-// tool's own QuerySchema.safeParse, which returns errors the model can
-// read and fix — that feedback loop is the tool's entire purpose.
+//
+// SHALLOW: every top-level key of the query, and nothing below it. A model
+// takes a tool's parameter schema as the whole contract for its arguments —
+// qwen 3.8 27b does, and does not look the argument's shape up in the prompt
+// (measured 2026-09-27: given an empty object it sent `{}` until its step
+// limit; given `from` and `fields` it wrote only `from` and `fields`, never an
+// aggregate; given these nine keys it wrote correct aggregate + groupBy
+// queries at once). So the schema names every key a query can have. What
+// goes INSIDE each is the DSL spec's, in the prompt: the full recursive
+// schema cannot be the parameters — Groq refuses it (400, measured) — and the
+// real validation is this tool's QuerySchema safeParse, whose errors the model
+// reads and fixes. `test/agent/tools.test.ts` holds these keys to QuerySchema's.
+const inSpec = (what: string): string => `${what} — written as the DSL spec (OUTPUT SCHEMA) says.`;
 const TestQueryInputSchema = z
-  .record(z.string(), z.unknown())
-  .describe('Your draft DSL query — the query object itself (from/fields/…), NOT wrapped in any field.');
+  .object({
+    from: z.array(z.unknown()).describe(inSpec('The data sources: entity names (or subqueries); every entity the query uses is listed here')),
+    fields: z.array(z.unknown()).optional().describe(inSpec('Raw columns to select, `entity.field` or `{ field, as }`; omit for an aggregate-only query')),
+    filter: z.record(z.string(), z.unknown()).optional().describe(inSpec('Filter conditions')),
+    compute: z.record(z.string(), z.unknown()).optional().describe(inSpec('Computed fields: output alias → expression')),
+    aggregate: z.record(z.string(), z.unknown()).optional().describe(inSpec('Aggregates (count, sum, avg, …): output alias → function')),
+    groupBy: z.array(z.unknown()).optional().describe(inSpec('Fields to group by, for aggregates')),
+    sort: z.array(z.unknown()).optional().describe(inSpec('Sort order')),
+    limit: z.number().optional().describe('Maximum rows to return.'),
+    distinct: z.boolean().optional().describe('Eliminate duplicate rows.'),
+  })
+  .catchall(z.unknown())
+  .describe('Your draft DSL query — the query object itself, NOT wrapped in any field.');
 export type TestQueryInput = z.infer<typeof TestQueryInputSchema>;
 
 const CannotSatisfyInputSchema = z.object({
@@ -83,7 +104,14 @@ type TestQueryResult = {
   sql: string;
   warnings: string[];
   errors: string[];
+  // On success only: what the model does now. A passing test is the moment
+  // the run can end, and a model that is not told so tests the same query
+  // again (measured: qwen 3.8 27b, until its stop).
+  next?: string;
 };
+
+const NEXT_AFTER_PASS =
+  'This query runs. If its rows answer the request, you are done: do not test it again — finish now with the envelope, its `data` being exactly this query. If not, change the query and test again.';
 
 // ═══════════════════════════════════════════════════════════════
 // Helpers
@@ -236,7 +264,7 @@ export const createQueryTools = (deps: QueryToolDeps): ReturnType<typeof defineT
 
       try {
         const { rows, sql, warnings } = await deps.read({ ...parseResult.data, limit: 5 });
-        return { rows, sql, warnings, errors: [] };
+        return { rows, sql, warnings, errors: [], next: NEXT_AFTER_PASS };
       } catch (err: unknown) {
         return { rows: [], sql: '', warnings: [], errors: [messageOf(err)] };
       }

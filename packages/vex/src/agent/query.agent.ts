@@ -1,6 +1,6 @@
 import { defineAgent } from '@niscorp/cortex';
 import type { AgentDefinition } from '@niscorp/cortex';
-import { stepCount, outputRetries } from '@niscorp/cortex';
+import { stepCount, outputRetries, repeatedCalls } from '@niscorp/cortex';
 import { QuerySchema } from '../schemas/query.schema.js';
 import type { Query } from '../schemas/query.schema.js';
 
@@ -21,11 +21,13 @@ Context gives you two things:
   source of truth for how every part of a query is written.
 
 Your job is to RETRIEVE the data the request needs: choose the entities, columns,
-filters, computed values, and aggregates the schema supports. You do NOT have to
-reproduce the caller's \`shape\`. A separate step runs after you and reshapes,
-nests, renames, and formats the rows — so never nest or rename to match the shape
-in your query. Just select the underlying columns and values; let that later step
-arrange them.
+filters, computed values, and aggregates the schema supports. A separate step runs
+after you and reshapes, nests, combines and formats the rows, so you never nest.
+But when a key of the shape is exactly ONE column or ONE aggregate, alias it to
+that key (\`{ "field": …, "as": "<key>" }\`, or name the aggregate after the key):
+when every row already has exactly the shape's keys, that later step is skipped.
+A key that needs combining or formatting (a full name from two columns, a date
+written out) you leave to it — select the underlying columns under their own names.
 
 Work this way, every time:
 1. If you are unsure what exists or what values a field holds, inspect it with
@@ -42,7 +44,8 @@ Work this way, every time:
 Worked example (illustrative — real entities and rules come from the schema):
 intent: "each customer's contact line and how much they've spent, biggest first"
 shape:  [{ "contact": "", "spent": 0 }]
-data:   {"from":["customer"],"fields":["customer.name","customer.email","customer.total_spent"],"sort":[{"field":"customer.total_spent","dir":"desc"}]}`;
+data:   {"from":["customer"],"fields":["customer.name","customer.email",{"field":"customer.total_spent","as":"spent"}],"sort":[{"field":"customer.total_spent","dir":"desc"}]}
+(\`spent\` is one column, so it is aliased; \`contact\` combines two, so they are selected as they are.)`;
 
 export const vexQueryDslAgent: AgentDefinition<Query, VexQueryDeps> = defineAgent<Query, VexQueryDeps>({
   id: 'vex.query',
@@ -50,9 +53,13 @@ export const vexQueryDslAgent: AgentDefinition<Query, VexQueryDeps> = defineAgen
   instructions: INSTRUCTIONS,
   context: [
     ({ deps }) => `Database schema:\n${deps.schemaJson}`,
-    ({ deps }) => `DSL specification (JSON Schema) — the single source of truth for your query:\n${deps.dslSpecJson}`,
+    // Named OUTPUT SCHEMA because that is what the finish protocol refers to:
+    // the query this agent returns is the envelope's `data`.
+    ({ deps }) => `OUTPUT SCHEMA — the DSL specification (JSON Schema), the single source of truth for your query:\n${deps.dslSpecJson}`,
   ],
   // The DSL spec above IS the schema documentation; don't inject it twice.
   output: { schema: QuerySchema, doc: 'off' },
-  stopWhen: [stepCount(20), outputRetries(3)],
+  // Three identical testQuery calls with the same error in a row is a model
+  // not reading the error; a fourth would cost a full prompt and change nothing.
+  stopWhen: [stepCount(20), outputRetries(3), repeatedCalls(2)],
 });

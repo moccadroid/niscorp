@@ -107,6 +107,11 @@ export type LoopConfig<TData, TDeps> = {
 // Helpers
 // ───────────────────────────────────────────────────────────
 
+// `{}` where a tool has required parameters: the model called it with
+// nothing, and needs telling so rather than a list of missing keys.
+const isEmptyObject = (value: unknown): boolean =>
+  typeof value === 'object' && value !== null && !Array.isArray(value) && Object.keys(value).length === 0;
+
 const stringify = (value: unknown): string => {
   if (typeof value === 'string') return value;
   try {
@@ -147,11 +152,17 @@ export const runLoop = async <TData, TDeps>(
   };
 
   const elapsedMs = (): number => s.elapsedBase + (Date.now() - s.startedAt);
+  // The last tool call and what it got back, and how many calls in a row
+  // have matched it exactly. Run-local: a resumed run starts counting afresh,
+  // which can only let a stuck model take a few more steps, never stop a
+  // healthy one.
+  const lastCall = { key: '', repeats: 0 };
   const progress = (): RunProgress => ({
     steps: s.steps,
     usage: s.usage,
     elapsedMs: elapsedMs(),
     outputRetries: s.outputRetries,
+    repeatedCalls: lastCall.repeats,
   });
   const meta = (): RunMeta => ({
     usage: s.usage,
@@ -204,6 +215,9 @@ export const runLoop = async <TData, TDeps>(
   const record = (call: NormalizedCall, observation: ToolObservation, message: string): void => {
     cfg.emit({ type: 'tool-end', observation });
     appendToolMessage(call, message);
+    const key = JSON.stringify([observation.toolId, observation.args, message]);
+    lastCall.repeats = key === lastCall.key ? lastCall.repeats + 1 : 0;
+    lastCall.key = key;
   };
 
   // ─── one gated, observed tool call ────────────────────────
@@ -313,7 +327,9 @@ export const runLoop = async <TData, TDeps>(
       const hint =
         typeof args === 'string'
           ? ' (your arguments arrived as ONE STRING — call again with a plain JSON object, e.g. {"key": "value"})'
-          : '';
+          : isEmptyObject(args)
+            ? ` (your arguments arrived EMPTY — nothing was sent. Call ${toolId} again with its arguments filled in, as its parameters describe)`
+            : '';
       record(
         call,
         {

@@ -1,9 +1,7 @@
 import { createSignal } from '@niscorp/signal';
 import type { SignalClient } from '@niscorp/cortex';
 import { createQueryDsl, createShapeMapper } from '@niscorp/vex/agent';
-import type { DatabaseSchema, QueryEngineConfig, Row } from '@niscorp/vex';
-import { compile } from '@niscorp/prism';
-import type { JsonValue } from '@niscorp/prism';
+import type { DatabaseSchema, QueryEngineConfig } from '@niscorp/vex';
 import { getKey } from '@showroom/modules/signal/settings/api-key-storage';
 import { createOpenAIClient } from '@showroom/modules/signal/openai-client';
 import { getLiveConfig } from './live-config';
@@ -65,37 +63,9 @@ export const makeGenerateDsl = (queryJsonSchema: object): GenerateDsl => {
   };
 };
 
-// Identity is valid ONLY when the row's keys match the shape's keys
-// exactly — same set, nothing extra, nothing missing — and the shape is
-// flat. Anything else (extra columns, missing fields, a nested object)
-// needs the real mapper to produce precisely the requested shape.
-const rowsSatisfyShape = (rows: Row[], shape: unknown): boolean => {
-  const target = Array.isArray(shape) ? shape[0] : shape;
-  if (!isPlainObject(target)) return false;
-  const first = rows[0];
-  if (first === undefined) return true; // nothing to map
-  if (!isPlainObject(first)) return false;
-  const shapeKeys = Object.keys(target);
-  const rowKeys = Object.keys(first);
-  if (shapeKeys.length !== rowKeys.length) return false;
-  for (const k of shapeKeys) {
-    if (!(k in first)) return false;
-    if (isPlainObject(target[k])) return false; // nested → real mapping required
-  }
-  return true;
-};
-
-// Engine-level hook: builds Prism's mapping agent on demand. Skips the
-// LLM with an identity transform only when the rows already match the
-// shape exactly.
+// Engine-level hook: builds Prism's mapping agent on demand. Rows that
+// already are the shape skip it — vex's mapper returns the identity for
+// them without a model call (vex/agent rowsFitShape).
 export const makeMapToShape = (): MapToShape => {
-  return async (rows, shape) => {
-    if (rowsSatisfyShape(rows, shape)) {
-      // Identity over the whole set: `$.result` is the rows array → returned
-      // unchanged. Matches the runtime replaying this IR over { result: rows }.
-      const ir = await compile({ $ref: '$.result' });
-      return { ir, transformed: rows as unknown as JsonValue };
-    }
-    return createShapeMapper(buildLlm())(rows, shape);
-  };
+  return async (rows, shape) => createShapeMapper(buildLlm())(rows, shape);
 };

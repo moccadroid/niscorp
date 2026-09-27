@@ -69,4 +69,4 @@ export type {
   StopVerdict,
   RunProgress,
 } from './gates/types';
-export { stepCount, tokens, duration, outputRetries, DEFAULT_STOP_CONDITIONS } from './gates/stop';
+export { stepCount, tokens, duration, outputRetries, repeatedCalls, DEFAULT_STOP_CONDITIONS } from './gates/stop';

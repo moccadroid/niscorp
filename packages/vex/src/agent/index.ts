@@ -98,12 +98,47 @@ export const createQueryDsl = (config: QueryDslConfig): GenerateDsl => {
 // today; this affects only live generation.
 // ═══════════════════════════════════════════════════════════════
 
+const isPlainObject = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value);
+
+// ROWS THAT ARE ALREADY THE SHAPE need no mapping. True only when the shape is
+// flat (every value a scalar example) and the first row has EXACTLY the
+// shape's keys — nothing extra, nothing missing — each holding the kind of
+// value the shape shows (or null). The query agent aliases its columns to a
+// flat shape's keys for exactly this reason. Anything else — a nested shape, a
+// renamed or extra column, a count that came back as text — goes to the
+// mapping agent. No rows is not a fit: there is nothing to prove the columns
+// by, and the IR minted here is replayed later against rows that exist.
+export const rowsFitShape = (rows: readonly Record<string, unknown>[], shape: unknown): boolean => {
+  const example = Array.isArray(shape) ? shape[0] : shape;
+  const first = rows[0];
+  if (!isPlainObject(example) || first === undefined) return false;
+  const keys = Object.keys(example);
+  if (keys.length !== Object.keys(first).length) return false;
+  return keys.every((key) => {
+    const sample = example[key];
+    if (typeof sample === 'object' && sample !== null) return false;
+    if (!(key in first)) return false;
+    const value = first[key];
+    return value === null || typeof value === typeof sample;
+  });
+};
+
+// The identity mapping over the envelope — what a fitting row set replays as.
+const IDENTITY = { $ref: '$.result' };
+
 export const createShapeMapper = (llm: SignalClient): MapToShape => {
   return async (rows, shape) => {
     // Array shape → map the whole set; a non-array shape → map the single
     // (first) row. The envelope here must match the runtime's (engine/runtime.ts).
     const single = !Array.isArray(shape);
     const envelope = { result: single ? (rows[0] ?? null) : rows } as unknown as JsonObject;
+
+    // Already the shape: the identity, with no model call.
+    if (rowsFitShape(rows, shape)) {
+      const ir = await compile(IDENTITY);
+      return { ir, transformed: execute(ir, envelope) };
+    }
 
     const result = await mappingAgent.run(
       { sampleInput: envelope, targetShape: shape },

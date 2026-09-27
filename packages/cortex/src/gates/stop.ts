@@ -33,6 +33,15 @@ export const outputRetries = (max: number): StopCondition =>
       ? { stop: 'output_retries', message: `output retries exhausted (${max})` }
       : null;
 
+// The same call, answered the same way, `max` times running: the model is
+// not reading the answer. Every further step would cost a full prompt and
+// change nothing, so the run ends and says why.
+export const repeatedCalls = (max: number): StopCondition =>
+  (progress: RunProgress): StopVerdict =>
+    progress.repeatedCalls >= max
+      ? { stop: 'repeated_calls', message: `the same tool call got the same answer ${progress.repeatedCalls + 1} times in a row` }
+      : null;
+
 export const DEFAULT_STOP_CONDITIONS: ReadonlyArray<StopCondition> = [stepCount(20), outputRetries(3)];
 
 export const checkStop = (

@@ -87,7 +87,7 @@ export type RunMeta = {
   elapsedMs: number;
 };
 
-export type StopReason = 'steps' | 'tokens' | 'duration' | 'output_retries' | 'custom';
+export type StopReason = 'steps' | 'tokens' | 'duration' | 'output_retries' | 'repeated_calls' | 'custom';
 
 export type ErrorCode =
   | 'model_call_failed'
