@@ -205,6 +205,13 @@ policy, one generation per question (`src/dev/model-check.ts`).
   0.94 even for the identical question); and a replay must agree with the shape Jev picks
   for the new question ("How many people are in Archive?" matched the per-department
   counts at 0.73 — they contain the answer, but it wants one number).
+- **Questions about the asker** ("what's my name?", "which department am I in?", "how
+  many people arrived after me?"): refused until vex could say who "me" is; now the
+  generating engine gets lyceum's behaviors (`members.member_id`, `asks.member_id` ←
+  `userId`) and the agent writes them against `{ $scope: 'userId' }`. On 120b, 2/2 each,
+  with the right answers for the asking member; "after me" needs the caller's row as an
+  aliased subquery source — the DSL could always express it (proved), the agent was told
+  how.
 - **Three rounds of twelve questions:** qwen 27b (`none`) 30/36, 2–30 s, 14–117k tokens;
   gpt-oss-120b (`low`) 30/36, 0.4–9 s, 6–85k tokens. Vex skips the mapping agent for rows
   that already are a flat shape. Both struggle with "which department is the biggest"

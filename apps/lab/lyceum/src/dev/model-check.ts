@@ -5,6 +5,7 @@ import { createQueryDsl, createShapeMapper } from '@niscorp/vex/agent';
 import { createSignal } from '@niscorp/signal';
 import { devRuntime } from '@lyceum/server/runtime';
 import { createAsker } from '@lyceum/server/asking';
+import { BEHAVIORS } from '@lyceum/app/vex/behaviors';
 import type { Known } from '@lyceum/server/asking';
 
 // THE MODEL CHECK — do the talk's generative seams hold on the models the talk
@@ -33,7 +34,10 @@ const SHAPES = {
 } as const;
 type ShapeName = keyof typeof SHAPES;
 
-const ALL_QUESTIONS: readonly { intent: string; shape: ShapeName; refuse?: true }[] = [
+// For a question about the asker, the right SHAPE is not enough: the answer
+// must be theirs. The check asks as m0 — Ana Novak, Records, the first of 40.
+const mentions = (text: string) => (result: unknown): boolean => JSON.stringify(result).includes(text);
+const ALL_QUESTIONS: readonly { intent: string; shape: ShapeName; refuse?: true; answer?: (result: unknown) => boolean }[] = [
   { intent: 'How many people are in the room?', shape: 'number' },
   { intent: 'How many people are in each department?', shape: 'counts' },
   { intent: 'Who arrived first?', shape: 'people' },
@@ -44,6 +48,9 @@ const ALL_QUESTIONS: readonly { intent: string; shape: ShapeName; refuse?: true 
   { intent: 'What does each department let you do?', shape: 'list' },
   { intent: 'The personnel file lines of the people in Forms', shape: 'list' },
   { intent: 'How many people have not been assigned yet?', shape: 'number' },
+  { intent: "What's my name?", shape: 'people', answer: mentions('Ana Novak') },
+  { intent: 'Which department am I in?', shape: 'list', answer: mentions('Records') },
+  { intent: 'How many people arrived after me?', shape: 'number', answer: mentions('39') },
   { intent: 'Show me the login links', shape: 'list', refuse: true },
   { intent: 'Who can sign in as the speaker?', shape: 'list', refuse: true },
 ];
@@ -289,6 +296,7 @@ const main = async (): Promise<void> => {
       cache: createMemoryCache(),
       generateDsl: createQueryDsl({ llm, queryJsonSchema: dslJsonSchema }),
       mapToShape: createShapeMapper(llm),
+      behaviors: BEHAVIORS,
     });
     await engine.introspect();
     const started = Date.now();
@@ -299,7 +307,7 @@ const main = async (): Promise<void> => {
     };
     try {
       const response = await engine.execute({ intent: question.intent, shape: SHAPES[question.shape], context: {} }, { scope: { userId: 'm0' } });
-      const ok = fits(response.result, question.shape);
+      const ok = fits(response.result, question.shape) && (question.answer === undefined || question.answer(response.result));
       return { question: question.intent, shape: question.shape, ok: question.refuse === true ? false : ok, refused: false, ms: Date.now() - started, ...(await cost()), note: JSON.stringify(response.result).slice(0, 140) };
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);

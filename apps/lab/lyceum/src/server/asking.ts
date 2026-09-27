@@ -6,6 +6,7 @@ import { createSignal } from '@niscorp/signal';
 import type { ChoiceQuestion } from '@niscorp/signal';
 import type { NiscRuntime } from '@niscorp/moss';
 import { ASK_SHAPES } from '@lyceum/app/actions/ask/ask.shapes';
+import { BEHAVIORS } from '@lyceum/app/vex/behaviors';
 import type { AskShape } from '@lyceum/app/actions/ask/ask.shapes';
 
 // WHO ANSWERS A QUESTION PUT TO THE RECORDS — the two model seams of the ask.
@@ -165,6 +166,11 @@ export const askEngine = (runtime: NiscRuntime, asker: Asker): Promise<QueryEngi
       cache: runtime.cache ?? createMemoryCache(),
       generateDsl: asker.generateDsl,
       mapToShape: asker.mapToShape,
+      // Who "me" is: the columns lyceum's behaviors bind to the asker's
+      // userId (members.member_id, asks.member_id) — so "what's my name?" is
+      // a filter on the asker's own value, bound by the engine, and one
+      // stored query answers it for everybody.
+      behaviors: BEHAVIORS,
     });
     await engine.introspect();
     return engine;

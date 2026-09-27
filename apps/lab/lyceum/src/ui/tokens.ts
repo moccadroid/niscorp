@@ -172,15 +172,24 @@ html { font-size: clamp(16px, calc(0.72vw + 13.3px), 28px); }
    default here must not out-rank them */
 .${ROOT_CLASS} .bar > span:not([data-mark]) { background: var(--bg); }
 
-/* ── field: a line you type into — a whole cell of it ── */
+/* ── field: a line you type into — a whole cell of it ──
+   It must read as INPUT among cells that are all paper, so it is drawn the way
+   a printed form draws one: a writing line in ink under the text, set in from
+   the cell's edges, on a faintly recessed ground; the caret is the alert ink. */
 .${ROOT_CLASS} .field {
-  border: 0; outline: 0; width: 100%; background: var(--paper); color: var(--ink);
-  padding: clamp(.7rem, 1.4cqw, 1.6rem) clamp(.8rem, 1.6cqw, 1.8rem);
+  --pad-x: clamp(.8rem, 1.6cqw, 1.8rem);
+  --pad-y: clamp(.9rem, 1.6cqw, 1.8rem);
+  --well: color-mix(in srgb, var(--ink) 6%, var(--paper));
+  border: 0; outline: 0; width: 100%; color: var(--ink); caret-color: var(--alert);
+  padding: var(--pad-y) var(--pad-x);
+  background:
+    linear-gradient(var(--ink), var(--ink)) no-repeat left var(--pad-x) bottom calc(var(--pad-y) * .55) / calc(100% - var(--pad-x) * 2) var(--rule),
+    var(--well);
   /* never under 16px: a phone zooms the page into a smaller field */
   font: 500 clamp(1.1rem, 2.2cqw, 2.4rem)/1.2 var(--prose);
 }
 .${ROOT_CLASS} .field::placeholder { color: color-mix(in srgb, var(--ink) 40%, var(--paper)); }
-.${ROOT_CLASS} .field:focus { background: var(--highlight); }
+.${ROOT_CLASS} .field:focus { --well: var(--highlight); }
 
 /* ── qr: ink on paper whatever the cell's ink, square, as large as its place ── */
 .${ROOT_CLASS} .qr { display: block; position: relative; flex: 1 1 auto; min-height: 0; }
