@@ -54,9 +54,10 @@ export const CHARTER: Charter = {
   kit: { actions: ['kit.*'] },
 
   // The speaker's sign-in desk: what a device opening /speaker is given — a
-  // line for an address, and a link mailed if it is the speaker's. Nothing
-  // else exists for it, and it touches no data: the mail goes out server-side.
-  lectern: { actions: ['lectern.*'] },
+  // line for an address, and a link mailed if it is the speaker's — in the
+  // room's look, like every screen. Nothing else exists for it: the mail goes
+  // out server-side.
+  lectern: { actions: ['lectern.*', 'room.*'], data: [...LOOK] },
 
   // The Ministry's registry: a principal that is not a person, which issues
   // ID cards — it writes the card fields as the model writes them.

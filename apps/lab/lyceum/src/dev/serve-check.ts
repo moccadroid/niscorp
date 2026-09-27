@@ -88,10 +88,11 @@ const main = async (): Promise<void> => {
   const deskHello = await desk.hello();
   const otherHello = await (await connect(`ws://127.0.0.1:${address.port}`, otherDesk)).hello();
   check('…a principal of its own: two devices at /speaker are two desks', deskHello.principal !== null && otherHello.principal !== null && deskHello.principal !== otherHello.principal);
-  check(`…which holds the sign-in desk and nothing else (${deskHello.catalog.actions.join(', ')})`, deskHello.catalog.actions.join() === 'lectern.signin');
+  check(`…which holds the sign-in desk and the room's look, nothing else (${deskHello.catalog.actions.join(', ')})`, deskHello.catalog.actions.join() === 'lectern.signin,room.look');
   check('the desk renders on the main canvas', await desk.shows('main', 'Send me a link'));
   const door = await connect(`ws://127.0.0.1:${address.port}`);
-  check('the door does not offer it: a stranger holds only the door', (await door.hello()).catalog.actions.join() === 'door.join');
+  const strangerHolds = (await door.hello()).catalog.actions;
+  check(`the door does not offer it: a stranger holds no desk (${strangerHolds.join(', ')})`, strangerHolds.includes('door.join') && !strangerHolds.includes('lectern.signin'));
   door.close();
 
   const ask = async (email: string): Promise<void> => {

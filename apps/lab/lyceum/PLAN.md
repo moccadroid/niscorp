@@ -282,7 +282,7 @@ probe, Jev routing the ask — is in `MEASURED.md`. The choices it led to are ab
 | audience member | `unassigned`, then one of `records`, `forms`, `inquiries`, `archive` | the ID card, the ask, the assistant; after assignment, the department's own tool. `forms` reaches at `personal`: its update on `members` is pinned to the caller's own row |
 | `stage` (the projector) | `stage` | the slides, the strip, the register. No controls. |
 | `speaker` (the controller) | `speaker` | the controller and its tools, All slides, the look switch |
-| a device at `/speaker` | `lectern` | the speaker's sign-in desk, and nothing else; a principal per device |
+| a device at `/speaker` | `lectern` | the speaker's sign-in desk, in the room's look, and nothing else; a principal per device |
 | `registry` | `registry` | writes ID cards as the model writes them |
 | `clock` | `clock` | what a saved timer runs as: it can put a slide on screen, nothing else |
 | `kit` | `kit` | the kitchen sink (dev) |
