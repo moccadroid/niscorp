@@ -1,40 +1,87 @@
 # Lyceum — the plan
 
-Lyceum is the talk. Not an app demoed during a talk about nisc — the talk itself, built
-as a nisc application: the slides, the projector, the speaker's controller, the
-audience's phones. At the close the speaker points at this folder and says: everything
-you saw today is in here, and it was live.
+Lyceum is the application a technical talk about nisc runs on: the slides, the projector,
+the speaker's controller, the audience's phones and terminals. The talk comes first; lyceum
+is the live proof beside it. At the close the speaker points at this folder: everything
+the room saw was running here.
 
-The talk is about the framework: how software should work, and what it should look like,
-now that language models exist. Lyceum does not argue that on slides. It shows it on the
-room's own phones.
+## Status — 2026-09-27
 
-## Status — 2026-09-26
+Rewritten 2026-09-27. The talk is no longer a feature tour inside a story (the "Ministry"
+skin is kept only as the room's furniture: ID cards and departments). It is a technical
+talk about an architecture, told in the order nisc was built, with lyceum showing each
+piece running. What is built stays below; what the talk needs is under "To build".
 
-Rewritten 2026-09-26. The first version of this plan told a different story (houses, a
-sorting hat, headmasters, personas with secrets); that story was dropped. What was
-decided under it and still holds is kept below; what was only ever part of it is under
-"Ideas from the first plan" — not decided, not to be built from this file.
+## The talk
 
-**The story is the Ministry** — a thin skin over the framework's own concepts, in plain
-words nobody has to learn:
+**The claim.** Code lives in five places — renderer primitives, endpoints, setup,
+authored data, checks. Everything else is a document in a closed grammar, validated by a
+schema and executed by a runtime. That is the architecture to build when models write and
+operate software: a model given a narrow problem, a precise grammar and the right context
+writes documents that a program can check, store, replay and migrate — and a small, fast,
+open model is enough to do it.
 
-| In the room | In nisc |
-|---|---|
-| you step in and get an **ID card** | a session, a principal |
-| you are **assigned to a department** | a role |
-| your department's **clearance** decides what exists on your phone | the charter (ring 1) |
-| everything you can do is a **form** | an action |
+**The order is the history.** Each package came from the same move — take something that
+is normally code, give it a grammar, let a runtime run it — and each proved the move in
+one more domain. About 40 minutes:
 
-Four departments, four clearances, four different phones: **Records** reads the register;
-**Forms** can change their own record (a write pinned to their own row by the personal
-reach); **Inquiries** puts stored questions to the records (vex replays, reactive);
-**Archive** sees the history. A department is a MARK (a pattern) and a SIGIL (a shape) on
-its row, not a colour. Wording rule: no invented vocabulary, nothing whimsical; names on
-ID cards are ordinary names.
+| # | Section | What is said | What the room sees in lyceum |
+|---|---|---|---|
+| 0 | The timer (3) | nothing yet | The speaker, screen shared, asks their assistant for a 30-minute timer that closes the talk. It answers with a tide reflex document and a Save button; the speaker reads it and saves. The controller's countdown is that reflex's due time. |
+| 1 | Nova (7) | GPT-3 could fill a schema, not write React. An action: data, endpoints, triggers, a layout. The server holds the shell; events go up, trees come down; the core is surface-blind. | Everyone joins (door, ID card). One real action file. The speaker switches the room from the poster kit to plain HTML and back — laptops check the DOM and the socket. `ssh` into the same app from a terminal. |
+| 2 | Prism (3) | If everything is data, data-to-data transforms are the core operation. Written by models, checked by schemas, no code strings. | One real transform. |
+| 3 | Models (5) | signal, cortex, solid. nova, prism and vex each ship an agent preloaded with their own grammar. Everything here runs on qwen 27b with reasoning off; routing on Jev, smaller still. | The ID cards streaming in (solid). |
+| 4 | Vex (6) | Intent + shape → a DSL, never SQL → compiled under a scope policy the model never sees → a mapping into the shape → cached under a fingerprint, replayed forever. Joins and complex queries are talked about; the demo schema stays simple. | Everybody asks the records their own question. Jev routes each question to an existing fingerprint or to generation and picks its shape; the projector counts replayed vs generated. |
+| 5 | Moss + charter (6) | One durable shell per principal, the socket. The charter is policy as a document that compiles into two enforcement points: which actions exist in a shell, and the scope policy on every query. | Departments are assigned; neighbours compare phones; the projector shows the charter beside two resolved catalogs. |
+| 6 | The assistant (5) | Anything can go into an agent's context, because it is all data: the screen as a tree, the catalog, each action's input schema. It never acts: it proposes a pre-filled action and the person presses OK. It can only offer what exists for you. | Everybody's assistant on their phone. |
+| 7 | Tide (3) | Back to the timer. A reflex is a row, a fact is a row. A skill-based agent re-reads its instructions on every run and burns tokens to find out there is nothing to do; an agent with grammars writes the automation once and it runs without a model. | The reflex, again. |
+| 8 | Strata (3) | What happens to data in your database when nisc changes: ledgered sequences for tables, grammar migrations for documents — safe because what is migrated is data. | lyceum's own kit grammar migration in the repo. |
+| 9 | Close (2) | The five places; the folder. | The reflex fires and the deck moves to the last slide on its own. |
 
-The talk's text, its title and the order of its slides are **open** — to be written with
-the speaker. The seven slides in `src/db/seed.ts` and their notes are placeholders.
+The text of each slide is written with the speaker; the list in `src/db/seed.ts` is a
+first draft to iterate on.
+
+## To build
+
+In order; each lands with its check.
+
+1. **The model check** — `pnpm models` (built 2026-09-27; results under "Measured"). Vex's
+   seams are measured; each new seam (the tide agent, Jev's routing, the assistant) joins
+   it as it is built. A seam that does not pass is fixed in its grammar's descriptions or
+   its tool contract, not by a bigger model.
+2. **Tide agent** — `@niscorp/tide/agent`, built like `@niscorp/prism/agent`: a cortex
+   agent whose output is tide's reflex schema, validated in the loop; inputs are the
+   intent, the host's effects (names + input schemas), fact kinds and the timezone.
+3. **The ask** (vex for everyone). An action: the question is typed; a server function
+   (a model's choice — Jev through signal's `decide()`) picks an existing fingerprint and
+   its parameters, or generation, and one of a few authored shapes (rows, a number, a
+   table, counts per group, and the default `{ label, value, detail }` list); the action
+   then calls vex directly with the fingerprint, or with intent + that shape. Each shape
+   has its authored layout. Generation runs under the asker's own policy; the role that
+   holds it denies the engine's tables and `login_links` (rule 10a). The projector counts
+   replayed vs generated.
+4. **The assistant** — Midas's rulings (`midas/docs/assistant-structure.md`): the thread
+   is a nova action, the turn runs on the server, replies stream over the shell wire; the
+   charter is the only gate; it never calls anything, it proposes pre-filled actions.
+   Context: the screen's tree (`reflect`), the principal's catalog with each action's
+   `input`. The opening timer runs through the speaker's own assistant.
+5. **The timer** — the reflex saved from the assistant's proposal; the countdown on the
+   controller; the effect is one vex write moving the deck to the closing slide.
+6. **The look switch**, inside lyceum, moss untouched: a `room` row holds the look
+   (`poster` | `plain`); a small action granted to everybody reads it reactively and
+   renders a `Look` marker; lyceum's DOM target wraps two kits and paints with the one
+   the marker names. A plain-HTML kit implements `lyceum.kit` with unstyled semantic
+   HTML. The speaker's controller writes the row.
+7. **The SSH door** — an SSH server in lyceum's process (`ssh2`), any user, no auth; each
+   connection opens its own moss client wire to the local socket and is a stranger at
+   the door; moss's ink target draws it with an ink kit for lyceum's components (relay's
+   ink terminal is the reference). The VPS's admin SSH moves off port 22 so the room types
+   `ssh lyceum.moccadroid.com`.
+8. **More actions per department**, so four clearances show four visibly different phones.
+9. **The slides**, for all of the above.
+10. **The full-room rehearsal** — 100 headless phones against the deployed shape, every
+    phone asking the records and its assistant at once; Groq's per-model token limit is
+    shared by every seam.
 
 ## What is built
 
@@ -46,66 +93,51 @@ the speaker. The seven slides in `src/db/seed.ts` and their notes are placeholde
 - **The ID card.** Qwen on Groq (signal `stepStream`) writes `{ name, title, quirk }`;
   solid parses the stream into an always-valid partial card, written to the member's row
   as it grows by the `registry` principal. The phone and the projector's register are
-  reactive reads, so the card types itself in everywhere at once. Groq is too fast to
-  watch, so the stream is replayed at a reading pace (~1.5 s) — said so in code and on
-  stage. `LYCEUM_ISSUER=groq|fake`; the checks always use the fake.
+  reactive reads, so the card types itself in everywhere at once. The stream is replayed
+  at a reading pace (~1.5 s) — said so in code and on stage. `LYCEUM_ISSUER=groq|fake`;
+  the checks always use the fake.
 - **Assignment.** The speaker assigns everybody waiting to the emptiest department — one
   write per person, as the speaker over their own session, then `invalidateIdentity`:
-  the phone changes department without reconnecting or signing in again.
-- **The way in.** The first slide shows a QR code of the room's address and the address
-  in words; the projector's strip shows the address on every slide. The address is the
-  deployment's (`PUBLIC_URL`), handed out by the `room.address` server function.
+  the phone changes department without reconnecting.
+- **The way in.** The first slide shows a QR code and the address in words; the
+  projector's strip shows the address on every slide. The address is the deployment's
+  (`PUBLIC_URL`), handed out by the `room.address` server function.
 
 **The deck.** Slides are actions only the stage is granted; their order is rows
 (`slides`); the slide on screen is one row (`deck`). The stage's `stage.deck` mounts the
-slide the row names — on mount (a restart lands on the same slide) and on `deck-moved`,
-the one reaction left (`src/server/reactions.ts`): mounting a new slide is navigation,
-which no data update can do. Everything that only *displays* the deck is a reactive read.
+slide the row names — on mount and on `deck-moved`, the one reaction left
+(`src/server/reactions.ts`): mounting a new slide is navigation, which no data update can
+do. Everything that only displays the deck is a reactive read.
 
-**The controller** (`speaker.console`) is an arrangement of four canvases in its own
-layout — a canvas slot inside an action's layout, tested in nova and moss — so what stays
-the same stays where it is:
-- **head** — the room (in it, assigned) and the slide on screen;
-- **tools** — a list canvas holding the slide's tools (`slide_tools` rows, in order);
-  the speaker's deck reconciles it to them (nova's `reconcile` step), so a tool two
-  slides share stays mounted, and a slide with none says so;
-- **notes** — the speaker's notes for the slide (`slide_notes`);
-- **controls** — All slides (a panel over the controller), Back and Next, each saying
-  which slide it goes to.
-Only the speaker is granted it; phones and the projector keep the frame's plain stack.
+**The controller** (`speaker.console`) — four canvases in its own layout: **head** (the
+room, the slide on screen), **tools** (a list canvas the deck reconciles to the slide's
+`slide_tools`), **notes** (`slide_notes`), **controls** (All slides, Back, Next). On a
+phone it narrows to a remote: head, tools, controls.
 
 **The look — "the poster"** (`src/ui/`, the only renderer code). A screen is a `Sheet`, a
 ruled grid whose areas are named in the layout; everything on it is a `Cell` with an ink
-or a mark. Four colours, each with a job, on paper and ink: `signal` (blue) the fact that
-matters, `alert` (orange) what to do next, `live` (green) a number that changes on its
-own, `highlight` (yellow) what the pointer is on — every hover — and what the eye should
-find. "Not yet" is the hatch. Type: Unbounded, Space Grotesk, Space Mono (Google Fonts,
-nothing hosted). Components are configured, never styled (AGENTS.md rule 2). The kitchen
-sink is `kit.sink` — `/dev/as/kit`.
+or a mark. Four colours with jobs: `signal` (blue) the fact that matters, `alert` (orange)
+what to do next, `live` (green) a number that changes on its own, `highlight` (yellow)
+hover and what the eye should find. "Not yet" is the hatch. Type: Unbounded, Space
+Grotesk, Space Mono. Posters scale with their sheet; reading text has a floor in rem.
+Components are configured, never styled (AGENTS.md rule 2). The kitchen sink is
+`kit.sink` — `/dev/as/kit`.
 
-**Versions (strata).** Lyceum's tables are the `lyceum.app` sequence, applied once and
-recorded in the ledger: migration 1 is the original DDL (so a database from before the
-ledger adopts with its rows), migration 2 turns a slide's one tool into `slide_tools`
-rows. The source is locked at `nisc.nova` 1, `nisc.prism` 1 (`strata.lock.json`), and the
-kit's props are a grammar of their own, `lyceum.kit` (`src/ui/kit.props.ts`,
-`src/app/grammars.ts`) — `kit-check` refuses a kit change the sequence does not record.
-Proven on real Postgres in Docker: a pre-ledger database adopted both migrations with
-its rows kept, a second boot ran nothing.
+**Versions (strata).** Lyceum's tables are the `lyceum.app` sequence. The source is
+locked at `nisc.nova` 1, `nisc.prism` 1 (`strata.lock.json`); the kit's props are the
+grammar `lyceum.kit` (`src/ui/kit.props.ts`, `src/app/grammars.ts`), at 1 — `kit-check`
+refuses a kit change the sequence does not record.
 
-**Deployable.** `docker compose up --build -d` stands up the app and its Postgres. One
-process, one port (8796): moss (`/api`, `/catalog`, `/socket`), the one-time sign-in
-(`/login`), and the built terminal. The speaker and the stage sign in with a one-time
-link: `docker compose exec app pnpm mint speaker`, used up on the first click, expiring
-after 15 minutes. A mailed link will replace how the link travels, not how it is
-redeemed. Authored rows (departments, slides, their tools and notes) converge on every
-boot; the room, the grants and the slide on screen are left alone.
+**Deployed** at lyceum.moccadroid.com. `docker compose up --build -d`: the app and its
+Postgres, one process, one port (8796): moss, the one-time sign-in (`/login`), the built
+terminal. The speaker asks for a link at `/speaker`, mailed through Resend to
+`LYCEUM_SPEAKER_EMAIL` (`pnpm mint speaker` is the fallback); `/stage` gives any device a
+stage session. Authored rows converge on every boot; the talk's state is left alone. The
+vex cache is tiered: loaded into memory at boot, writes land in Postgres.
 
-**Dev.** `pnpm dev` (port 5197) keeps one in-memory database for its whole run and lends
-it to every re-boot, so an edit keeps everybody signed in; restart it for a fresh room.
-`/dev/as/speaker`, `/dev/as/stage` and `/dev/as/kit` sign a tab in; `/dev/new` opens a
-fresh seat at the door; `?seat=<name>` gives a tab its own session. Vite listens on this
-machine only — on the wifi, `/dev/as` would sign anybody in as the speaker. To try a real
-phone, `pnpm dev --host` with `PUBLIC_URL` set to this machine's address, knowing that.
+**Dev.** `pnpm dev` (port 5197) keeps one in-memory database for its run and lends it to
+every re-boot. `/dev/as/speaker`, `/dev/as/stage`, `/dev/as/kit`, `/dev/new`,
+`?seat=<name>`. Vite listens on this machine only.
 
 **Checks** (`pnpm check`, each in its own process over its own database): `kit-check`,
 `tables-check`, `assignment-check`, `deck-check`, `serve-check`.
@@ -114,131 +146,108 @@ phone, `pnpm dev --host` with `PUBLIC_URL` set to this machine's address, knowin
 
 | # | Decision | Tier | Answer |
 |---|---|---|---|
-| D1 | Posture | answered | Moss server app, deployed on a VPS. No tunnels, no venue wifi dependency for the server. If hosting fails there is no talk. |
-| D2 | Environment | answered | Postgres in Docker beside the app (docker compose, the same here and on the VPS; not PGlite: state must survive a restart). Vex's Postgres cache. Sessions via moss's `sessions` credential. The audience signs in at the door; the speaker asks for a one-time link at `/speaker`, mailed through Resend to the one address `LYCEUM_SPEAKER_EMAIL` names (answered 2026-09-26; `pnpm mint speaker` stays as the fallback); the stage is `/stage`, open to anyone, because its role writes nothing (`serve-check` asserts it; answered 2026-09-26). Dev (derived): one in-memory PGlite per `pnpm dev`, lent to every re-boot; the checks get a fresh one per boot. |
-| D3 | Reads | answered | Vex entries, locked, for everything the app itself reads; reactive where a screen follows the room or the deck. A generative path, if the talk gets one, runs under the asker's own policy. |
+| D1 | Posture | answered | Moss server app on a VPS. If hosting fails there is no talk. |
+| D2 | Environment | answered | Postgres in Docker beside the app; vex's tiered cache; moss's `sessions` credential. The speaker signs in by a mailed link, the stage at `/stage`. Dev (derived): one in-memory PGlite per `pnpm dev`; each check a fresh one. |
+| D3 | Reads | answered | Vex entries, locked, for everything the app itself reads; reactive where a screen follows the room. **Everybody** also gets a generative path — the ask — under their own policy (answered 2026-09-27). |
 | D4 | Writes | derived | Vex mutation entries, fired by a click or made by a server function as the principal it acts for. |
 | D5 | Routing | derived | None. The talk's state is a row (`deck`), not a URL. |
 
+## Decided 2026-09-27
+
+- **Models** (revised 2026-09-27, after the model check below). The agent seams — vex's
+  query agent and mapper, the tide agent, the assistant — run on `openai/gpt-oss-120b` on
+  Groq at reasoning `low`: as accurate as qwen 27b on the ask (30/36 each), several times
+  faster, and Groq caches its prompt prefix, so a room's generations share it. The ID
+  cards stay on qwen 27b (one streamed call; the join burst stays out of 120b's budget).
+  Routing — which fingerprint answers a question, which shape — is Jev (TypeSafe,
+  `decide()`). The claim on stage: open models, sized to each job, with narrow problems
+  and precise grammars.
+- **The look switch stays inside lyceum.** Moss is not changed for it; its terminal's
+  render target is client chrome, and lyceum's own target does the switching.
+- **SSH** is the terminal door.
+- **Vex for everybody**; other actions are gated per department to show the charter.
+- **The speaker shares the controller's screen** at the start, so the room sees the
+  timer being asked for and saved.
+
+## Measured 2026-09-27 — the model check (`pnpm models`)
+
+Vex's query agent + shape mapper against lyceum's schema, a seeded room of 40, a member's
+policy, one generation per question (`src/dev/model-check.ts`).
+
+- **Groq, this org: 250k tokens per minute per model.** Four qwen generations at once hit it.
+- **gpt-oss-120b caches the prompt prefix on Groq; qwen 3.8 27b does not.** A repeat of
+  the same ~5.9k-token request came back 5,632 tokens cached, prompt time 1.1 s → 0.03 s,
+  and barely moved the rate budget. Qwen pays every call in full. Every generation starts
+  with the same instructions, schema and DSL spec, so on 120b the room shares that prefix.
+- **Qwen takes a tool's parameter schema as the whole contract** for its arguments, and
+  does not look the argument's shape up in the system prompt; 120b does. `testQuery`
+  declared an empty object, so qwen sent `{}` until the step limit (0/10, ~150k tokens a
+  question); declaring `from` and `fields`, it wrote only those. Vex's `testQuery` now
+  declares every top-level DSL key, shallow (Groq refuses the full recursive DSL schema as
+  tool parameters — 400), and qwen at reasoning `none` answers 30/36. Merging the system
+  messages into one, and a `respond` tool, changed nothing.
+- **Three rounds of twelve questions:** qwen 27b (`none`) 30/36, 2–30 s, 14–117k tokens;
+  gpt-oss-120b (`low`) 30/36, 0.4–9 s, 6–85k tokens. Vex skips the mapping agent for rows
+  that already are a flat shape. Both struggle with "which department is the biggest"
+  (aggregate + sort + limit into an array shape). Qwen spends more calls (it re-fetches
+  the schema it already has) and pays each in full.
+
 ## Answered, and still holding
 
-- **Audience.** Meetups and conference rooms, 50–100 people, of whom only some will join.
-  Nothing may assume a venue, a schedule or a speaker list — the app is portable and the
-  data is generated by the room.
+- **Audience.** Meetups and conference rooms, 50–100 people, software engineers who work
+  with AI — a tough crowd. Nothing may assume a venue, a schedule or a speaker list.
 - **The demo data is the room.** No fixture dataset.
-- **The charter is written once and never edited live.** Every change the speaker makes on
-  stage is a row — a person's department, a line in `grants` — applied with
-  `invalidateIdentity`, which carries the open connection across.
-- **Not in the talk:** inviting the room to attack the app, killing the model provider
-  live. Both risk the talk for a payoff that looks the same faked. The hardening list is
-  still tested (see Risks).
-- **Fallbacks are configuration.** Every model seam can be reassigned; the app gets dumber,
-  it does not fail.
+- **The charter is written once and never edited live.** Every change on stage is a row,
+  applied with `invalidateIdentity`.
+- **Not in the talk:** inviting the room to attack the app, killing the provider live.
+- **Fallbacks are configuration.** Every model seam can be reassigned.
 - **Nothing is hardcoded.** The source is the proof, and it will be read.
 
 ## Principals and roles
 
 | Principal | Roles | What exists for them |
 |---|---|---|
-| a stranger | `public` | the door |
-| audience member | `unassigned`, then one of `records`, `forms`, `inquiries`, `archive` | the ID card; after assignment, the department badge and the department's own tool |
+| a stranger (browser or SSH) | `public` | the door |
+| audience member | `unassigned`, then one of `records`, `forms`, `inquiries`, `archive` | the ID card, the ask, the assistant; after assignment, the department's badge and its own tools |
 | `stage` (the projector) | `stage` | the slides, the strip, the register. No controls. |
-| `speaker` (the controller) | `speaker` | the controller and its tools, All slides |
+| `speaker` (the controller) | `speaker` | the controller and its tools, All slides, the look switch |
 | `registry` | `registry` | writes ID cards as the model writes them |
 | `kit` | `kit` | the kitchen sink (dev) |
-| machinery | `identity` (resolves roles), `gatekeeper` (redeems a sign-in link) | a machinery role exists only where NO principal exists yet |
-
-Stage and speaker are separate principals on separate devices. The projector never holds
-a control; the controller can be a phone.
+| machinery | `identity`, `gatekeeper` | a machinery role exists only where NO principal exists yet |
 
 ## The tables
 
 | Table | Holds |
 |---|---|
-| `departments` | name, remit (what the clearance lets you do, in plain words), mark, sigil |
-| `members` | one per person in the room: name, title, quirk (the ID card), department (null until assigned) |
-| `slides` | the deck's order and titles; each slide id is an action |
-| `slide_tools` | a slide's tools on the controller, in order |
-| `slide_notes` | the speaker's notes per slide, in order |
+| `departments` | name, remit, mark, sigil |
+| `members` | one per person: name, title, quirk (the ID card), department (null until assigned) |
+| `slides`, `slide_tools`, `slide_notes` | the deck: order and titles, the controller's tools, the speaker's notes |
 | `deck` | the talk's state: the slide on screen |
 | `grants` | roles beyond a person's department, and the roles of the principals that are not people |
 | `login_links` | one-time sign-in links (hashes only) |
 
 ## Vex is never hidden behind a function
 
-Decided 2026-09-25.
-
-- Actions talk to vex directly through their endpoints. A server function exists only
-  for what cannot be data: a model's choice, session lifecycle (`grant`/`revoke`), an
-  outside call, the deployment's address.
-- When a function does touch data, it does so AS the principal it acts for, over
-  `session.wire` — the same governed door their actions use.
-- `executeAs` is for surfaces with NO principal: the identity read, the stranger at the
-  door, a webhook, an effect nobody is driving.
+Decided 2026-09-25. Actions talk to vex directly through their endpoints. A server
+function exists only for what cannot be data: a model's choice, session lifecycle, an
+outside call, the deployment's address. When a function touches data, it does so AS the
+principal it acts for, over `session.wire`. `executeAs` is for surfaces with no principal.
 
 ## Reactive reads
 
-Built 2026-09-26 across nova, vex and moss; lyceum is its first consumer. The design
-record is in the packages' DESIGN docs (vex: "Reactive reads"; moss: "A read that keeps
-answering"; nova: "Later bodies").
+Built 2026-09-26 (vex "Reactive reads", moss "A read that keeps answering", nova "Later
+bodies"); lyceum is the first consumer. A reactive entry sorts, reads time from `$scope`,
+and is a direct vex read. Channels remain for signals that are not data — the deck moving
+on. Raw-SQL writes do not invalidate; the TTL (60 s) heals them.
 
-**An entry declares when its answer is refreshed**: `refresh: 'snapshot'` (the default)
-or `'reactive'` (answered again whenever a write lands on a table the query reads, on
-every screen that has it open).
+## Risks
 
-**Rules for authors:**
-- Only direct vex reads can be reactive — a server function reading through the wire is
-  not, by design.
-- A reactive entry should `sort`: an unordered read can come back in a different order
-  after a write and count as changed.
-- A reactive entry reads time from `$scope`, never from context.
-- Channels remain for signals that are not data — the deck moving on.
-- Raw-SQL writes do not invalidate; the TTL (60 s) heals them.
-
-**Not built, on purpose:** cross-process invalidation, pausing a shell's follows while
-nothing is attached, `refresh: 'clock'`.
-
-## Next
-
-1. **A rehearsal with a full room** — headless terminals as the room — 100 phones and some margin — against the
-   deployed shape: reactive reads answering on every screen, one server shell per person,
-   ID cards through Groq at once. Nothing has run at that size.
-2. **The VPS, the domain and Caddy** (TLS and the websocket upgrade in front of 8796).
-3. **The talk's content** — its text, title and slide order, with the speaker.
-4. **The ending.** "Start the talk" writes a `talk` row (`ends_at`) through the speaker's
-   own vex. One tide reflex derived from that row — a clock trigger at `ends_at`, rebuilt
-   from the row on boot. Its effect is one vex write (the deck to the closing slide) as a
-   `clock` principal granted only that. No notification system.
-5. Later, in moss: **identity as a reactive read** — re-resolving a principal when the
-   rows it reads change, so writing somebody's department IS the role change.
-
-## Ideas from the first plan — not decided
-
-Written for the first story; none is decided under the Ministry, and none should be
-built from this list without talking it through first.
-
-- **Replies with actions.** An assistant answering with text *and* the app's own actions,
-  chosen from the asker's resolved catalog and filled with their data — it never writes;
-  the person confirms.
-- **The ask.** A question put to the data: routed to a stored entry (Jev chooses the
-  fingerprint and its parameters) or generated fresh under the asker's policy, with the
-  projector tallying replay vs generation.
-- **The board.** Questions from the room, moderated and de-duplicated before the
-  projector; drafted answers streamed into their card.
-- **Badges** from a tide reflex armed live, with the causal chain walked back.
-- **"What's in my app"** — the app explaining itself from the charter, the catalog and
-  `reflect`.
-- **The agenda composing the deck** from the deck's catalog.
-
-## Risks and things to verify first
-
-- **Scale is unmeasured** — see Next, 1.
-- **Model choice per seam must be measured, not assumed.** qwen 27b on Groq at effort
-  `default` looped to its step limit on encore's agent (0/6); `low` and `medium` passed
-  (6/6). Groq's per-model token limit is shared by every seam on one model.
-- **Session tokens.** The case of a token riding in the websocket URL must be closed or
-  understood before the address goes up on the wall.
-- **Statement timeout.** Nothing sets it; set it on the pool.
-- **Event flooding.** Confirm whether moss throttles events per connection.
-- **Projector content.** Anything a person wrote passes moderation before the projector
-  (today: ID cards are written by the model, not by people).
+- **Scale is unmeasured** — To build, 10.
+- **Groq's per-model token limit** is shared by every seam; the ask and the assistant
+  for a whole room in one minute is the heaviest load of the talk. Jev routing to
+  replays is the first relief; the rehearsal measures the rest.
+- **The ask is a generative path for everyone.** A question like "show me the login
+  links" will be typed; the refusal must be shown, not discovered.
+- **Session tokens** in the websocket URL; **statement timeout** unset on the pool;
+  **event flooding** per connection unconfirmed.
+- **Projector content.** Anything a person wrote passes moderation before the projector.

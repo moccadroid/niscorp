@@ -11,14 +11,17 @@
     "typecheck": "tsc --noEmit",
     "check": "tsx src/dev/all-checks.ts",
     "strata": "tsx src/dev/strata.ts",
-    "kit:snapshot": "tsx src/dev/kit-check.ts --write"
+    "kit:snapshot": "tsx src/dev/kit-check.ts --write",
+    "models": "tsx src/dev/model-check.ts"
   },
   "dependencies": {
     "@electric-sql/pglite": "^0.5.1",
     "@hono/node-server": "^2.0.4",
     "@niscorp/charter": "workspace:^",
+    "@niscorp/cortex": "workspace:^",
     "@niscorp/moss": "workspace:^",
     "@niscorp/nova": "workspace:^",
+    "@niscorp/prism": "workspace:^",
     "@niscorp/signal": "workspace:^",
     "@niscorp/solid": "workspace:^",
     "@niscorp/strata": "workspace:^",

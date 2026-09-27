@@ -245,12 +245,18 @@ importers:
       '@niscorp/charter':
         specifier: workspace:^
         version: link:../../../packages/charter
+      '@niscorp/cortex':
+        specifier: workspace:^
+        version: link:../../../packages/cortex
       '@niscorp/moss':
         specifier: workspace:^
         version: link:../../../packages/moss
       '@niscorp/nova':
         specifier: workspace:^
         version: link:../../../packages/nova
+      '@niscorp/prism':
+        specifier: workspace:^
+        version: link:../../../packages/prism
       '@niscorp/signal':
         specifier: workspace:^
         version: link:../../../packages/signal
