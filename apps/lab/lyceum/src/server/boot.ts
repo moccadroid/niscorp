@@ -9,6 +9,9 @@ import { assignmentFunctions } from './functions/assignment.functions';
 import { roomFunctions } from './functions/room.functions';
 import { askFunctions } from './functions/ask.functions';
 import { assistantFunctions } from './functions/assistant.functions';
+import { lecternFunctions } from './functions/lectern.functions';
+import { createMailer } from './mail';
+import type { SendMail } from './mail';
 import { createTimerWriter, startTiming, talkZone } from './timing';
 import { createOrchestrator } from './assistant/orchestrator';
 import type { Timing } from './timing';
@@ -33,7 +36,11 @@ export type Booted<R extends LyceumRuntime = DevRuntime> = {
 // Where people open the room — the deployment's address (PUBLIC_URL), which
 // the projector shows as a QR code. A boot not told falls back to the
 // standalone server's own port on this machine.
-export type BootOptions = { publicUrl?: string };
+//
+// Who the speaker is and how their sign-in link is sent: the speaker's address
+// (LYCEUM_SPEAKER_EMAIL unless told) and a mailer (./mail.ts unless told — a
+// check hands in an outbox).
+export type BootOptions = { publicUrl?: string; speakerEmail?: string; send?: SendMail };
 const DEFAULT_PUBLIC_URL = 'http://localhost:8796';
 
 // The development boot: in-memory PGlite — a fresh one, or the one it is lent.
@@ -63,6 +70,11 @@ export const bootOn = async <R extends LyceumRuntime>(runtime: R, options: BootO
   // stand-in without (./assistant/orchestrator.ts).
   const orchestrator = createOrchestrator(process.env);
   const tz = talkZone(process.env);
+  const speakerMail = {
+    publicUrl,
+    speakerEmail: options.speakerEmail ?? process.env['LYCEUM_SPEAKER_EMAIL'] ?? '',
+    send: options.send ?? createMailer(process.env, publicUrl),
+  };
   let timingUp: Timing | undefined;
   const timing = (): Timing => {
     if (timingUp === undefined) throw new Error('lyceum: the timers are not up yet');
@@ -71,7 +83,7 @@ export const bootOn = async <R extends LyceumRuntime>(runtime: R, options: BootO
 
   const app = buildLyceum({
     identity: lyceumIdentity,
-    functions: (session) => ({ ...doorFunctions(session, server, issuer), ...assignmentFunctions(session, server), ...roomFunctions(publicUrl), ...askFunctions(session, asker), ...assistantFunctions(session, { asker, writer: timerWriter, orchestrator, tz, timing }) }),
+    functions: (session) => ({ ...doorFunctions(session, server, issuer), ...assignmentFunctions(session, server), ...roomFunctions(publicUrl), ...askFunctions(session, asker), ...assistantFunctions(session, { asker, writer: timerWriter, orchestrator, tz, timing }), ...lecternFunctions(server, speakerMail) }),
     reactions: lyceumReactions(server),
   });
   built = await createServer(app, runtime);

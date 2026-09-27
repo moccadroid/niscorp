@@ -22,6 +22,7 @@ import { stageRegisterAction } from './actions/stage/register.action';
 import { deckAction } from './actions/stage/deck.action';
 import { stripAction } from './actions/stage/strip.action';
 import { sinkAction } from './actions/kit/sink.action';
+import { signinAction } from './actions/lectern/signin.action';
 import { SLIDE_ACTIONS } from './actions/slide/slide.actions';
 
 // Ring 1: every action lyceum has. Which role is granted which is the
@@ -51,6 +52,7 @@ export const ACTIONS: Record<string, ActionDefinition> = Object.fromEntries(
     deckAction,
     stripAction,
     sinkAction,
+    signinAction,
     ...SLIDE_ACTIONS,
   ].map((action) => [action.id, action]),
 );

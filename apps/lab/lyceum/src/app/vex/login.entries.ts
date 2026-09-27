@@ -33,4 +33,17 @@ export const loginIssue: SeedMutation = {
   },
 };
 
-export const LOGIN_ENTRIES: readonly SeedMutation[] = [loginRedeem, loginIssue];
+// A device opening /speaker gets a principal of its own for the sign-in desk
+// (actions/lectern/) — its own, so nobody else with the page open watches the
+// speaker type their address. The role is fixed here, never a request's.
+export const lecternGrant: SeedMutation = {
+  fingerprint: 'grants/lectern',
+  intent: 'Grant a fresh principal the speaker sign-in desk',
+  mutation: {
+    op: 'insert',
+    table: 'grants',
+    values: { principal: { $context: 'principal' }, role: 'lectern' },
+  },
+};
+
+export const LOGIN_ENTRIES: readonly SeedMutation[] = [loginRedeem, loginIssue, lecternGrant];

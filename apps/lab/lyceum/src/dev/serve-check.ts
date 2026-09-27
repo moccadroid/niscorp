@@ -17,7 +17,7 @@ import { mintSession } from '@niscorp/moss';
 import { memberAssign, memberJoin } from '@lyceum/app/vex/member.entries';
 import { deckGo } from '@lyceum/app/vex/deck.entries';
 import { DECK_ID } from '@lyceum/db/seed';
-import { check, connect, finish } from './harness';
+import { check, connect, finish, waitUntil } from './harness';
 
 const main = async (): Promise<void> => {
   const dist = await mkdtemp(join(tmpdir(), 'lyceum-dist-'));
@@ -25,10 +25,14 @@ const main = async (): Promise<void> => {
   await writeFile(join(dist, 'index.html'), '<!doctype html><div id="root"></div><!-- the one page -->');
   await writeFile(join(dist, 'assets', 'app.js'), 'console.log("terminal")');
 
-  const { server, runtime, close } = await boot();
   // The mail that would have gone out, caught instead of sent.
   const outbox: Mail[] = [];
-  mountLogin(server, runtime.pool, { publicUrl: 'https://lyceum.test', speakerEmail: 'Speaker@Lyceum.test', send: async (mail) => void outbox.push(mail) });
+  const { server, runtime, close } = await boot(undefined, {
+    publicUrl: 'https://lyceum.test',
+    speakerEmail: 'Speaker@Lyceum.test',
+    send: async (mail) => void outbox.push(mail),
+  });
+  mountLogin(server, runtime.pool);
   mountSite(server, dist);
   const httpServer = serve({ fetch: server.fetch, port: 0 });
   attachSocket(httpServer, server.socket);
@@ -75,16 +79,35 @@ const main = async (): Promise<void> => {
   const hello = await speaker.hello();
   check('the session it minted is the speaker, with the controller', hello.principal === 'speaker' && hello.catalog.actions.includes('speaker.console'));
 
-  // ── the speaker asks by email; only the speaker's address gets a link ──
-  const ask = async (email: string): Promise<string> =>
-    (await fetch(`${http}/speaker`, { method: 'POST', body: new URLSearchParams({ email }) })).text();
-  check('/speaker is a form, not the one page', (await get('/speaker')).text.includes('name="email"'));
-  const wrong = await ask('someone@else.test');
-  check('another address is told the same thing and mailed nothing', wrong.includes('on its way') && outbox.length === 0);
-  const right = await ask('  speaker@lyceum.test ');
+  // ── the speaker asks by email, at a desk only /speaker opens ──
+  const deskPage = await get('/speaker');
+  const deskSession = /"(st_[^"]+)"/.exec(deskPage.text)?.[1];
+  check('/speaker hands the device a session of its own, in the desk\'s seat', deskSession !== undefined && deskPage.text.includes('nisc.token.lectern') && deskPage.text.includes('/?seat=lectern'));
+  const otherDesk = /"(st_[^"]+)"/.exec((await get('/speaker')).text)?.[1];
+  const desk = await connect(`ws://127.0.0.1:${address.port}`, deskSession);
+  const deskHello = await desk.hello();
+  const otherHello = await (await connect(`ws://127.0.0.1:${address.port}`, otherDesk)).hello();
+  check('…a principal of its own: two devices at /speaker are two desks', deskHello.principal !== null && otherHello.principal !== null && deskHello.principal !== otherHello.principal);
+  check(`…which holds the sign-in desk and nothing else (${deskHello.catalog.actions.join(', ')})`, deskHello.catalog.actions.join() === 'lectern.signin');
+  check('the desk renders on the main canvas', await desk.shows('main', 'Send me a link'));
+  const door = await connect(`ws://127.0.0.1:${address.port}`);
+  check('the door does not offer it: a stranger holds only the door', (await door.hello()).catalog.actions.join() === 'door.join');
+  door.close();
+
+  const ask = async (email: string): Promise<void> => {
+    desk.type('main', 'email', email);
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    desk.click('main', 'send');
+    await desk.shows('main', 'on its way');
+  };
+  await ask('someone@else.test');
+  check('another address is told the same thing and mailed nothing', desk.showsNow('main', 'on its way') && outbox.length === 0);
+  await ask('  speaker@lyceum.test ');
+  await waitUntil(() => outbox.length > 0);
   const mailed = outbox[0];
   const mailedToken = /\/login\?token=([\w-]+)/.exec(mailed?.text ?? '')?.[1];
-  check('the speaker\'s address, in any case, is mailed one link to the public address', right === wrong && outbox.length === 1 && mailed?.to === 'speaker@lyceum.test' && (mailed?.text.includes('https://lyceum.test/login?token=') ?? false));
+  check('the speaker\'s address, in any case, is mailed one link to the public address', desk.showsNow('main', 'on its way') && outbox.length === 1 && mailed?.to === 'speaker@lyceum.test' && (mailed?.text.includes('https://lyceum.test/login?token=') ?? false));
+  desk.close();
   const redeemedMail = await get(`/login?token=${mailedToken ?? ''}`);
   check('the mailed link signs the device in as the speaker', redeemedMail.text.includes('nisc.token.speaker') && redeemedMail.text.includes('/?seat=speaker'));
   check('the mailed link works once', (await get(`/login?token=${mailedToken ?? ''}`)).text.includes('used or has expired'));

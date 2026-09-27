@@ -11,6 +11,7 @@ import { existsSync } from 'node:fs';
 import { z } from 'zod';
 import type { PGlite } from '@electric-sql/pglite';
 import type { Booted } from './src/server/boot';
+import type { mountLogin as mountLoginType } from './src/server/login';
 
 // The app server runs INSIDE vite's dev process — one `pnpm dev`, one port.
 // `ssrLoadModule` gives the composition vite's own resolution, so this is the
@@ -25,6 +26,7 @@ const SERVER_DIRS = /[\\/]src[\\/](app|server|db)[\\/]/;
 // from it is a function called `boot`, so that is what is parsed.
 const BootModuleSchema = z.object({ boot: z.custom<(db: PGlite, options: { publicUrl?: string }) => Promise<Booted>>((value) => typeof value === 'function') });
 const RuntimeModuleSchema = z.object({ openDevDatabase: z.custom<() => PGlite>((value) => typeof value === 'function') });
+const LoginModuleSchema = z.object({ mountLogin: z.custom<typeof mountLoginType>((value) => typeof value === 'function') });
 
 type Running = { listener: ReturnType<typeof getRequestListener>; booted: Booted };
 
@@ -50,6 +52,9 @@ const appServer = (): Plugin => ({
     const build = async (): Promise<Running> => {
       const { boot } = BootModuleSchema.parse(await viteServer.ssrLoadModule('/src/server/boot.ts'));
       const booted = await boot(await database, { publicUrl: PUBLIC_URL });
+      // The deployment's own sign-ins (/speaker, /login, /stage), the same here.
+      const { mountLogin } = LoginModuleSchema.parse(await viteServer.ssrLoadModule('/src/server/login.ts'));
+      mountLogin(booted.server, booted.runtime.pool);
       return { listener: getRequestListener(booted.server.fetch), booted };
     };
     let current = build();
@@ -96,8 +101,8 @@ const appServer = (): Plugin => ({
     // DEV ONLY: it lives in vite's middleware and nowhere else, so it cannot
     // ship. It mints a REAL session — the same credential stepping in mints —
     // and only for a principal the `grants` table names; a member signs in by
-    // stepping in, like everybody in the room. The talk's own sign-in for the
-    // speaker and the stage is decided before the VPS (PLAN.md, Open).
+    // stepping in, like everybody in the room. The talk's own sign-ins
+    // (/speaker, /login, /stage) are mounted above, as the deployment has them.
     // ─── /dev/new — a fresh seat: somebody new at the door, in a tab of its own ──
     viteServer.middlewares.use((req, res, next) => {
       if (req.url !== '/dev/new') {
@@ -136,7 +141,7 @@ const appServer = (): Plugin => ({
     });
 
     viteServer.middlewares.use((req, res, next) => {
-      if (req.url !== undefined && (req.url.startsWith('/api') || req.url.startsWith('/catalog'))) {
+      if (req.url !== undefined && /^\/(api|catalog|login|speaker|stage)(\/|\?|$)/.test(req.url)) {
         void current.then(({ listener }) => listener(req, res));
         return;
       }

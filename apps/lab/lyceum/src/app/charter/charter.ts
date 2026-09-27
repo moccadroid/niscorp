@@ -53,6 +53,11 @@ export const CHARTER: Charter = {
   // The kit's kitchen sink: every piece of the look on one screen (dev).
   kit: { actions: ['kit.*'] },
 
+  // The speaker's sign-in desk: what a device opening /speaker is given — a
+  // line for an address, and a link mailed if it is the speaker's. Nothing
+  // else exists for it, and it touches no data: the mail goes out server-side.
+  lectern: { actions: ['lectern.*'] },
+
   // The Ministry's registry: a principal that is not a person, which issues
   // ID cards — it writes the card fields as the model writes them.
   registry: { data: ['members.read', 'members.write.update'] },
@@ -65,8 +70,9 @@ export const CHARTER: Charter = {
   // ── machinery: roles nobody wears, each granted exactly its job ──
   // Reads who somebody is, for the identity seam.
   identity: { data: ['members.read', 'grants.read'] },
-  // Issues a one-time sign-in link and redeems it: writes it, uses it up.
-  gatekeeper: { data: ['login_links.write.insert', 'login_links.write.delete'] },
+  // Issues a one-time sign-in link and redeems it: writes it, uses it up —
+  // and gives a device at /speaker its sign-in desk (a `lectern` grant).
+  gatekeeper: { data: ['login_links.write.insert', 'login_links.write.delete', 'grants.write.insert'] },
   // Reads the saved timers at boot, to load them into tide — and the deck, to
   // hold each to a slide that still exists.
   scheduler: { data: ['timers.read', 'slides.read'] },
@@ -84,6 +90,7 @@ export const WEARABLE: readonly (readonly string[])[] = [
   ['speaker'],
   ['stage'],
   ['kit'],
+  ['lectern'],
   ['registry'],
   ['clock'],
 ];

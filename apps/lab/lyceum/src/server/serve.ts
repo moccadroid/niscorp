@@ -14,7 +14,6 @@ import { bootOn } from './boot';
 import { devRuntime } from './runtime';
 import { postgresRuntime } from './postgres-runtime';
 import { mountLogin } from './login';
-import { createMailer } from './mail';
 import { mountSite } from './site';
 
 // The door draws in colour whatever this process's own stdout is (a container's
@@ -40,7 +39,7 @@ const main = async (): Promise<void> => {
   const publicUrl = process.env['PUBLIC_URL'] ?? `http://localhost:${port}`;
   const { server, close } = await bootOn(runtime, { publicUrl });
 
-  mountLogin(server, runtime.pool, { publicUrl, speakerEmail: process.env['LYCEUM_SPEAKER_EMAIL'] ?? '', send: createMailer(process.env, publicUrl) });
+  mountLogin(server, runtime.pool);
   if (existsSync(dist)) mountSite(server, dist);
   else console.warn(`[lyceum] no ${dist} — serving the app surfaces only; run \`pnpm --filter lyceum build\` for the terminal.`);
 

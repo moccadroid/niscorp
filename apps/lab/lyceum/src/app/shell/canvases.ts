@@ -4,8 +4,9 @@ import type { ShellManifest } from '@niscorp/moss';
 // configures who sees what; the charter decides by existence (rule 11).
 //
 //   strip  the projector's strip over every slide (stage)
-//   main   the controller (speaker), the phone (members), the door (anyone
-//          else); the stage's slides are put here by its deck
+//   main   the controller (speaker), the phone (members), the speaker's
+//          sign-in desk (a device at /speaker), the door (anyone else); the
+//          stage's slides are put here by its deck
 //   head, tools, notes, controls
 //          the controller's four regions (speaker). They are not in the frame:
 //          the controller's own layout places them (speaker/console.layout.ts),
@@ -24,7 +25,7 @@ import type { ShellManifest } from '@niscorp/moss';
 //          `deck` row. Not in the frame.
 export const CANVASES: ShellManifest['canvases'] = [
   { id: 'strip', initial: ['stage.strip'] },
-  { id: 'main', initial: ['speaker.console', 'member.phone', 'kit.sink', 'door.join'] },
+  { id: 'main', initial: ['speaker.console', 'member.phone', 'kit.sink', 'lectern.signin', 'door.join'] },
   // The phone's three regions (member/phone.layout.ts) — not in the frame.
   { id: 'self', initial: [{ action: 'member.card', input: { strip: true } }] },
   { id: 'body', initial: ['member.card'] },
