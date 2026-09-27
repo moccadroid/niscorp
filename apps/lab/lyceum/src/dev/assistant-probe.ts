@@ -37,7 +37,7 @@ const PROBES: readonly { who: Who; say: string; want: Want; containing?: string;
 // What the turn left, read off the trees the person sees: a query's result
 // opened over the screen, or a proposal under the conversation.
 const outcomeIn = (tree: string, overlay: string): Want =>
-  overlay.includes('Vex query ·') ? 'query' : tree.includes('Read it first') ? 'timer' : tree.includes('"ref":"proposed"') ? 'open' : 'none';
+  overlay.includes('"value":"Vex query"') ? 'query' : tree.includes('Read it first') ? 'timer' : tree.includes('"ref":"proposed"') ? 'open' : 'none';
 
 const { boot } = await import('@lyceum/server/boot');
 const main = async (): Promise<void> => {

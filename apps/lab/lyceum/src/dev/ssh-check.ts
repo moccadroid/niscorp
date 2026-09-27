@@ -79,7 +79,7 @@ const main = async (): Promise<void> => {
   const since = (visitor: Visitor, from: number): string => visitor.screen().slice(from);
   const numberOf = (screen: string, label: string): string | undefined => new RegExp(String.raw`\[(\d+)\] \( ${label} \)`).exec(screen.slice(screen.lastIndexOf(`( ${label} )`) - 12))?.[1];
   await waitUntil(() => ada.screen().includes('( Assistant )'));
-  const tabs = ['Card', 'Query', 'Q&A', 'Assistant'].map((label) => numberOf(ada.screen(), label));
+  const tabs = ['Card', 'Q&A', 'Assistant'].map((label) => numberOf(ada.screen(), label));
   check(`every tab has a number of its own (${tabs.join(', ')})`, tabs.every((n) => n !== undefined) && new Set(tabs).size === tabs.length);
   // A number is read off a screen that has stopped changing — as a person
   // reads it: a screen still filling in renumbers what comes after.
@@ -90,28 +90,26 @@ const main = async (): Promise<void> => {
       last = visitor.screen().length;
     }
   };
-  for (const [label, shows] of [['Query', 'Vex query'], ['Q&A', 'a question for the speaker'], ['Assistant', 'Built from'], ['Card', 'ID card']] as const) {
+  for (const [label, shows] of [['Q&A', 'a question for the speaker'], ['Assistant', 'Built from'], ['Card', 'ID card']] as const) {
     await settled(ada);
     const from = ada.screen().length;
     ada.press(numberOf(ada.screen(), label) ?? '');
     check(`typing the ${label} tab's number opens ${label}`, await waitUntil(() => since(ada, from).includes(shows)));
   }
 
-  // ── an answer's table, drawn: its cells carry the rows' values ──
-  // The field's number focuses it; typing types; Tab moves to Run; Enter presses.
+  // ── a vex query's table, drawn: its cells carry the rows' values ──
+  // The assistant's field: its number focuses it, typing types, Enter sends;
+  // the assistant's query opens over the screen, its table drawn.
   await settled(ada);
-  ada.press(numberOf(ada.screen(), 'Query') ?? '');
-  await waitUntil(() => ada.screen().includes('Vex query'));
+  ada.press(numberOf(ada.screen(), 'Assistant') ?? '');
+  await waitUntil(() => ada.screen().includes('Built from'));
   await settled(ada);
-  const field = /\[(\d+)\] ⟨/.exec(ada.screen().slice(ada.screen().lastIndexOf('Vex query')))?.[1];
+  const field = /\[(\d+)\] ⟨/.exec(ada.screen().slice(ada.screen().lastIndexOf('Built from')))?.[1];
   ada.press(field ?? '');
   await settled(ada);
   ada.press('Who is in the room?');
   await settled(ada);
   const asked = ada.screen().length;
-  // One key at a time, as fingers press them — a chunk of two is one keypress.
-  ada.press('\t');
-  await settled(ada);
   ada.press('\r');
   await waitUntil(() => since(ada, asked).includes('Department'));
   await settled(ada);

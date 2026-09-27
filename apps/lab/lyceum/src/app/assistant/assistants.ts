@@ -1,7 +1,8 @@
-// THE ASSISTANT, AS DATA. One assistant on every device; what it knows and what
-// it can do for a person is assembled from these declarations — the shape of
-// moss's bundle `assistants` (instructions, grounding reads, named tools,
-// starters, and the action it `applies` to).
+// THE ASSISTANT, AS DATA. One assistant on every device; what it knows about a
+// person and what it can do for them is assembled from these declarations —
+// what a grant says about the person (`context`), what to read as them
+// (`grounding`), which host tools they get (`tools`), and the action it
+// `applies` to.
 //
 // A declaration applies to whoever HOLDS its action. So the charter builds each
 // person's assistant: `records: { actions: ['records.*'] }` is why a Records
@@ -9,15 +10,17 @@
 // ['speaker.*', …] }` is why only the controller's can automate. Grounding
 // reads run as the person, under their policy. Tools are the host's closed set
 // (server/assistant/tools.ts): `open`, `query`, `automate`.
+//
+// `context` is a FACT about the person, never an instruction: how the
+// assistant behaves is written once, for everybody (server/assistant/
+// orchestrator.ts).
 
 export type AssistantDeclaration = {
   id: string;
   title: string;
-  intro: string;
-  instructions: string;
+  context: string;
   grounding: { as: string; fingerprint: string; context: Record<string, unknown>; upfront: boolean }[];
   tools: string[];
-  starters: string[];
   applies: { screen: string };
 };
 
@@ -25,63 +28,49 @@ export const ASSISTANTS: readonly AssistantDeclaration[] = [
   {
     id: 'room',
     title: 'Your assistant',
-    intro: 'Query the room, or find something on your phone.',
-    instructions:
-      'You are the assistant on a phone in the room. Answer questions about the people in the room and the departments by querying the records. When the person wants to do something their phone offers, propose the action with `open` so they can press it — never claim you did it yourself.',
-    grounding: [{ as: 'This person\'s ID card', fingerprint: 'members/me', context: {}, upfront: true }],
+    context: 'They are in the audience, on their phone.',
+    grounding: [{ as: 'Their ID card', fingerprint: 'members/me', context: {}, upfront: true }],
     tools: ['query', 'open'],
-    starters: ['What\'s my name?', 'Who arrived first?', 'How many of us are here?'],
     applies: { screen: 'member.card' },
   },
   {
     id: 'records',
     title: 'Records',
-    intro: '',
-    instructions: 'This person is in Records: they may read the register — everybody in the room. Their Register tab shows it.',
+    context: 'They are in Records: their Register shows everybody in the room.',
     grounding: [],
     tools: [],
-    starters: ['Who is in Forms?'],
     applies: { screen: 'records.register' },
   },
   {
     id: 'forms',
     title: 'Forms',
-    intro: '',
-    instructions: 'This person is in Forms: they may change their own record. To change their name, propose `forms.rename` with the new name as `draft`.',
+    context: 'They are in Forms: they may change their own record, with forms.rename.',
     grounding: [],
     tools: [],
-    starters: ['Change my name to Ada Lovelace'],
     applies: { screen: 'forms.rename' },
   },
   {
     id: 'inquiries',
     title: 'Inquiries',
-    intro: '',
-    instructions: 'This person is in Inquiries: they may run the stored queries of the Inquiries desk.',
+    context: "They are in Inquiries: their desk runs the department's stored queries.",
     grounding: [],
     tools: [],
-    starters: [],
     applies: { screen: 'inquiries.desk' },
   },
   {
     id: 'archive',
     title: 'Archive',
-    intro: '',
-    instructions: 'This person is in Archive: they may see the history — who arrived when, and where they went.',
+    context: 'They are in Archive: their log shows who arrived when, and where they went.',
     grounding: [],
     tools: [],
-    starters: [],
     applies: { screen: 'archive.log' },
   },
   {
     id: 'controller',
     title: 'The controller\'s assistant',
-    intro: 'Request an automation — it comes back as a document to read before you save it.',
-    instructions:
-      'You assist the speaker running the talk from the controller. When the speaker wants something to happen at a time or after a while, hand the request to `automate` in the speaker\'s own words; it writes the automation and you never write it yourself. The deck below is the talk\'s slides in order.',
-    grounding: [{ as: 'The deck', fingerprint: 'slides/deck', context: {}, upfront: true }],
+    context: "They are the speaker, on the controller that runs the talk. An automation can put one of the deck's slides on screen at a time.",
+    grounding: [{ as: 'The deck, in order', fingerprint: 'slides/deck', context: {}, upfront: true }],
     tools: ['automate', 'open'],
-    starters: ['End the talk in 30 minutes'],
     applies: { screen: 'speaker.console' },
   },
 ];

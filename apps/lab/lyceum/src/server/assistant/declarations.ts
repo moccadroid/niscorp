@@ -7,7 +7,8 @@ import { ENTRIES } from '@lyceum/app/vex';
 // WHO GETS WHICH ASSISTANT — read off what the charter granted, never written
 // down twice. A declaration (app/assistant/assistants.ts) applies to whoever
 // holds its action, so a person's assistant is the declarations their grants
-// select: their instructions, their grounding reads, the union of their tools.
+// select: what they say about the person, their grounding reads, the union of
+// their tools.
 
 export const TOOL_NAMES = ['open', 'query', 'automate'] as const;
 export type ToolName = (typeof TOOL_NAMES)[number];
@@ -16,11 +17,9 @@ const DeclarationSchema = z
   .object({
     id: z.string().regex(/^[a-z][a-z0-9-]*$/),
     title: z.string().min(1),
-    intro: z.string(),
-    instructions: z.string().min(1),
+    context: z.string().min(1),
     grounding: z.array(z.object({ as: z.string().min(1), fingerprint: z.string().min(1), context: z.record(z.string(), z.unknown()), upfront: z.boolean() }).strict()),
     tools: z.array(z.enum(TOOL_NAMES)),
-    starters: z.array(z.string().min(1)).max(6),
     applies: z.object({ screen: z.string().min(1) }).strict(),
   })
   .strict();

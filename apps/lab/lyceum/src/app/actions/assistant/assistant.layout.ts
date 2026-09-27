@@ -27,13 +27,15 @@ const proposal: LayoutNode = {
   else: { component: 'Action', ref: 'proposed', props: { ink: 'alert', label: '{{$p.open.label}} →', value: '$p.open' } },
 };
 
-// One turn of the conversation: what the person wrote, what came back, and —
-// once they acted on it — what came of it.
+// One turn of the conversation: what the person wrote; every vex query the
+// assistant ran for it — pressed, it opens again, replayed now; what came
+// back; and, once they acted on a proposal, what came of it.
 const turn: LayoutNode = {
   component: 'Cell',
   children: [
     { component: 'Label', children: 'You' },
     { component: 'Text', children: '{{$t.message}}' },
+    { for: '$t.opened', as: 'o', do: { component: 'Action', ref: 'reopen', props: { ink: 'live', label: 'Vex query · {{$o.input.intent}} →', value: '$o' } } },
     { component: 'Label', children: 'Assistant' },
     { component: 'Text', children: '{{$t.reply}}' },
     { if: '$t.outcome', then: { component: 'Text', props: { tone: 'muted' }, children: '{{$t.outcome}}' } },
@@ -42,9 +44,8 @@ const turn: LayoutNode = {
 
 // Who this assistant is for this person (built from the declarations their
 // grants selected, able to do what those name); the conversation, oldest
-// first; below it the last turn's proposals, the wait, what went wrong, or —
-// before anything was said — what to try; and at the bottom the line to write
-// in. Blue: the assistant's colour.
+// first; below it the last turn's proposals, the wait, or what went wrong; and
+// at the bottom the line to write in. Blue: the assistant's colour.
 export const assistantLayout: LayoutNode = {
   component: 'Sheet',
   props: { areas: ['kick', 'who', 'talk', 'out', 'field', 'go'], rows: ['auto', 'auto', 'auto', 'auto', 'auto', 'auto'] },
@@ -65,15 +66,7 @@ export const assistantLayout: LayoutNode = {
         else: {
           if: '$.answered',
           then: { component: 'Cell', props: { area: 'out', pad: 'none' }, children: [{ for: '$.reply.proposals', as: 'p', do: proposal }] },
-          else: {
-            component: 'Cell',
-            props: { area: 'out', mark: 'hatch' },
-            children: [
-              { if: '$.saved', then: { component: 'Label', children: 'Saved · tide runs it now — no model is asked again.' } },
-              { component: 'Text', children: '{{$.intro.intro}}' },
-              { for: '$.intro.starters', as: 's', do: { component: 'Action', ref: 'starter', props: { ink: 'paper', label: '{{$s}}', value: '$s' } } },
-            ],
-          },
+          else: { if: '$.saved', then: { component: 'Cell', props: { area: 'out' }, children: [{ component: 'Label', children: 'Saved · tide runs it now — no model is asked again.' }] } },
         },
       },
     },

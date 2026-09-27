@@ -90,7 +90,7 @@ const main = async (): Promise<void> => {
   check('no department tool exists for them yet', !Object.values(TOOL).some((tool) => memberHello.catalog.actions.includes(tool)));
   check('their card says they are not yet assigned', await member.shows('body', 'Not yet assigned'));
   check('…and the line across the top says they are waiting', await member.shows('self', 'Waiting'));
-  check('their tabs are what they hold: the card, the query desk and Q&A, no tool', (await member.shows('tabs', 'Card')) && member.showsNow('tabs', 'Query') && member.showsNow('tabs', 'Q&A') && !anyToolTab(member.showsNow));
+  check('their tabs are what they hold: the card, Q&A and the assistant, no tool', (await member.shows('tabs', 'Card')) && member.showsNow('tabs', 'Q&A') && member.showsNow('tabs', 'Assistant') && !anyToolTab(member.showsNow));
 
   // ── the Ministry issues their ID card, onto the phone that is open ──
   const issued = await waitUntil(() => !member.showsNow('body', 'being issued') && !member.showsNow('body', 'pending'));

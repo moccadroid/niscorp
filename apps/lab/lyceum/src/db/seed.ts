@@ -53,7 +53,7 @@ export const SLIDES: readonly { slideId: string; title: string; tools: readonly 
   { slideId: 'slide.assignment', title: 'Assignment', tools: ['tools.assignment', 'tools.tally'], notes: ['Tell the room to watch their phones', 'Press Assign the room', 'One row changes per person — the phone follows without a reload'] },
   { slideId: 'slide.clearance', title: 'If you can’t use it, it isn’t there', tools: ['tools.assignment'], notes: ['Ask people to compare phones with a neighbour', 'Different departments, different tools — the rest was never sent', 'Not hidden, not disabled: it does not exist for them'] },
   { slideId: 'slide.live', title: 'Nobody announced anything', tools: [], notes: ['Watch the numbers move as people act', 'No channel, no listener — the query knows what it reads', 'This is a reactive vex read'] },
-  { slideId: 'slide.query', title: 'A query from words', tools: [], notes: ['Tell the room: the Query tab on your phone — the records, from plain words', 'Watch the counts: replayed climbs, written-by-a-model stays low', 'Somebody will query for the login links — the refusal is the point'] },
+  { slideId: 'slide.query', title: 'Intent and shape', tools: [], notes: ['Tell the room: ask your assistant about the room — watch it open the vex query it ran', 'Watch the counts: replayed climbs, written-by-a-model stays low', 'Somebody will go for the login links — the refusal is the point'] },
   { slideId: 'slide.end', title: 'It is all in the folder', tools: ['tools.questions'], notes: ['Everything was running on this server as they watched', 'It is all in the folder: apps/lab/lyceum', 'Thank them; take questions'] },
 ];
 

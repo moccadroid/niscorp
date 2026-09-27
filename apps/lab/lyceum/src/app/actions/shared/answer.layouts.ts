@@ -1,7 +1,7 @@
 import type { LayoutNode } from '@niscorp/nova';
 
-// A QUERY'S RESULT, shown by the shape it came in (vex/query.shapes.ts) — on
-// the Query tab and in the result the assistant opens alike. The route hands back
+// A VEX QUERY'S RESULT, shown by the shape it came in (vex/query.shapes.ts) —
+// in the query the assistant opens (actions/query/). The route hands back
 // only WHICH shape and HOW it was reached; what each looks like is written
 // here, one branch per kind, picked by `$eq`. A kind with no branch below falls
 // through to the list's columns; query-check holds every kind to a branch.
@@ -23,7 +23,7 @@ const LIST_COLUMNS = [
 export const answerLayout = (at: AnswerAt): LayoutNode[] => [
   {
     if: { $eq: [at.kind, 'number'] },
-    then: { component: 'Figure', props: { label: 'The answer', value: `${at.rows}.value` } },
+    then: { component: 'Figure', props: { label: 'Result', value: `${at.rows}.value` } },
     else: {
       if: { $eq: [at.kind, 'counts'] },
       then: rows(at, [

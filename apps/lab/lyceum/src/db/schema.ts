@@ -190,6 +190,36 @@ export const QUESTIONS = /* sql */ `
   );
 `;
 
+// Migration 9: WHAT A TURN RAN. The vex queries the assistant ran in a turn —
+// each one's intent, shape and fingerprint — kept with the turn, so the
+// conversation can show them and open any of them again.
+export const TURNS_OPENED = /* sql */ `
+  ALTER TABLE assistant_turns ADD COLUMN opened JSONB NOT NULL DEFAULT '[]'::jsonb;
+`;
+
+// Migration 10: WHAT THE TABLES MEAN, where Postgres keeps it. A query writer
+// sees names — `members` does not say "the people in the room". Vex reads a
+// table's and a column's COMMENT as its description (and leaves it out of the
+// schema fingerprint, so rewording one evicts no query).
+export const TABLE_MEANINGS = /* sql */ `
+  COMMENT ON TABLE members IS 'The people in the room: everybody who has stepped in, one row each. Their ID card is this row.';
+  COMMENT ON COLUMN members.name IS 'Their name, as on their ID card.';
+  COMMENT ON COLUMN members.title IS 'Their job title on their ID card; NULL while it is being written.';
+  COMMENT ON COLUMN members.quirk IS 'The line about them on their ID card; NULL while it is being written.';
+  COMMENT ON COLUMN members.department_id IS 'The department they are assigned to; NULL while they are still waiting to be assigned.';
+  COMMENT ON COLUMN members.joined_at IS 'When they stepped in: arrival time.';
+  COMMENT ON COLUMN members.assigned_at IS 'When they were assigned to their department.';
+  COMMENT ON TABLE departments IS 'The departments of the Ministry that the people in the room are assigned to.';
+  COMMENT ON COLUMN departments.name IS 'The department''s name.';
+  COMMENT ON COLUMN departments.remit IS 'What the department does, in plain words.';
+  COMMENT ON COLUMN departments.mark IS 'The pattern that marks the department.';
+  COMMENT ON COLUMN departments.sigil IS 'The shape that marks the department.';
+  COMMENT ON TABLE queries IS 'Every vex query run in the room: its intent, the shape it answered in, and whether it was replayed, generated or refused.';
+  COMMENT ON TABLE questions IS 'Questions the people in the room sent the speaker (Q&A).';
+  COMMENT ON TABLE slides IS 'The slides of the talk, in order.';
+  COMMENT ON TABLE deck IS 'Which slide is on the projector now.';
+`;
+
 export const LYCEUM_SEQUENCE: Sequence = {
   id: 'lyceum.app',
   migrations: [
@@ -201,6 +231,8 @@ export const LYCEUM_SEQUENCE: Sequence = {
     { description: 'The room: one row, the look every screen paints with', steps: sqlSteps(ROOM) },
     { description: 'A query is a query: asks becomes queries (request, run_at)', steps: sqlSteps(QUERIES) },
     { description: "Questions for the speaker: the room's Q&A, one row per question", steps: sqlSteps(QUESTIONS) },
+    { description: 'What a turn ran: the vex queries of each assistant turn', steps: sqlSteps(TURNS_OPENED) },
+    { description: 'What the tables mean: comments a query writer reads as descriptions', steps: sqlSteps(TABLE_MEANINGS) },
   ],
 };
 

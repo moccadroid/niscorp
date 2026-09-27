@@ -6,7 +6,6 @@ import { registerAction } from './actions/records/register.action';
 import { renameAction } from './actions/forms/rename.action';
 import { deskAction } from './actions/inquiries/desk.action';
 import { logAction } from './actions/archive/log.action';
-import { queryDeskAction } from './actions/query/desk.action';
 import { queryResultAction } from './actions/query/result.action';
 import { questionSendAction } from './actions/questions/send.action';
 import { questionsTool } from './actions/tools/questions.action';
@@ -39,7 +38,6 @@ export const ACTIONS: Record<string, ActionDefinition> = Object.fromEntries(
     renameAction,
     deskAction,
     logAction,
-    queryDeskAction,
     queryResultAction,
     questionSendAction,
     questionsTool,

@@ -119,12 +119,12 @@ export const liveSlide: ActionDefinition = {
 // the numbers climb while the room queries.
 export const querySlide: ActionDefinition = {
   id: 'slide.query',
-  title: 'Query the records',
+  title: 'Vex queries',
   data: {
-    kicker: 'On your phone: Query',
-    title: 'A query from words',
+    kicker: 'On your phone: your assistant',
+    title: 'Intent and shape',
     lines: [
-      'A model writes a query only for a request no stored query fits — under your clearance, never past it. Every request like it after that is a replay.',
+      'Your assistant hands vex an intent; vex picks the shape. A model writes a query only when no stored one fits — under your clearance, never past it. Every one like it after that is a replay.',
       'The model is a compiler that runs once, not an interpreter that runs every time.',
     ],
     tally: { replayed: 0, generated: 0, refused: 0 },

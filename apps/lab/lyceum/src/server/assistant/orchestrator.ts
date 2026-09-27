@@ -20,9 +20,15 @@ import { createSignal } from '@niscorp/signal';
 export type Turn = { message: string; knowledge: string; tools: readonly ToolDefinition[] };
 export type Orchestrator = { kind: 'live' | 'fake'; answer: (turn: Turn) => Promise<string> };
 
-const INSTRUCTIONS = `You are the assistant in this room. You speak for nobody and you do nothing yourself: everything you offer is through your tools, and a tool only PROPOSES — a button the person presses, an answer to read, an automation to read and save.
+// THE ONE PROMPT — how the assistant behaves, the same for everybody. What
+// differs per person is not instruction but knowledge, handed to each run
+// (assistant.functions.ts): who they are, their screen, their actions, the
+// conversation. What each tool does, its own description says.
+const INSTRUCTIONS = `You are the assistant inside Lyceum, an application running live during a talk about how it is built. The person writing to you is using it right now — on their phone if they are in the audience, on the controller if they are the speaker. The sections after this one are about them: who they are, what their screen shows, the actions they have, and your conversation so far.
 
-Work out what the person wants and use the one tool that fits; the ASSISTANT FOR THIS PERSON section says who they are, what they may do, and what you know. If none of your tools fits, or they ask for something they may not do, say so plainly in one sentence — never pretend. Keep replies to one or two sentences: the proposal carries the rest.`;
+When those sections already hold the answer, answer from them. When they don't, use the tool that fits; each tool says what it does. If none of your tools can do what they want, say so.
+
+Reply to them in one or two short, plain sentences. Report only what the sections or a tool result say: never say something happened unless a tool result says it did, and if a tool refused or failed, say so and give its reason, not one of your own. Don't explain the app or its screens unless they ask.`;
 
 const assistantAgent = defineAgent({
   id: 'lyceum.assistant',
@@ -43,7 +49,7 @@ const liveOrchestrator = (): Orchestrator => {
 };
 
 // The stand-in's routing: a time → automate, "change my name to …" → open the
-// rename, anything else → query. Each through the tool the person was given, or
+// rename, anything about the screen → read it back, anything else → query. Each through the tool the person was given, or
 // the same one-line refusal the live assistant owes them.
 const fakeOrchestrator = (): Orchestrator => ({
   kind: 'fake',
@@ -54,7 +60,11 @@ const fakeOrchestrator = (): Orchestrator => ({
     const message = turn.message.trim();
     // "What is on my screen?" — read back what it was handed about the screen.
     if (/\bscreen\b/i.test(message)) {
-      const section = turn.knowledge.split('\n\n').find((part) => part.startsWith('ON THEIR SCREEN')) ?? '';
+      // The section runs to the next heading: a screen has blank lines of its own.
+      const from = turn.knowledge.indexOf('ON THEIR SCREEN');
+      const rest = from === -1 ? '' : turn.knowledge.slice(from);
+      const end = rest.search(/\n\n(THEIR ACTIONS|THE CONVERSATION SO FAR)\n/);
+      const section = end === -1 ? rest : rest.slice(0, end);
       return `On your screen: ${section.slice(section.indexOf('\n') + 1).slice(0, 1200)}`;
     }
     if (/\b(in \d+|minutes?|hours?|at \d)/i.test(message)) {
@@ -65,11 +75,17 @@ const fakeOrchestrator = (): Orchestrator => ({
     const rename = /change my name to (.+)$/i.exec(message)?.[1];
     if (rename !== undefined) {
       if (tool('open') === undefined) return 'I cannot open anything for you.';
-      await call('open', { action: 'forms.rename', label: `Change your name to ${rename}`, input: { draft: rename } });
-      return 'Press the button to file the change.';
+      // A tool call the tool's schema refuses (an action this person does not
+      // have) comes back to the live model as an error; the stand-in says so.
+      try {
+        await call('open', { action: 'forms.rename', label: `Change your name to ${rename}`, input: { draft: rename } });
+      } catch {
+        return 'Renaming is not one of your actions.';
+      }
+      return 'Here is the rename, filled in.';
     }
     if (tool('query') === undefined) return 'I cannot query the records for you.';
-    await call('query', { request: message });
+    await call('query', { intent: message });
     return 'Here is what the records say.';
   },
 });

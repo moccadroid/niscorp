@@ -12,12 +12,12 @@ export const turnsMine: SeedEntry = {
   fingerprint: 'turns/mine',
   refresh: 'reactive',
   intent: "This person's last five turns with the assistant, oldest first",
-  shape: [{ turn_id: '', message: '', reply: '', outcome: '', asked_at: '' }],
+  shape: [{ turn_id: '', message: '', reply: '', outcome: '', opened: [], asked_at: '' }],
   // The newest five, then put in reading order — oldest first, the newest by
   // the input, as a conversation reads.
   dsl: {
     from: ['assistant_turns'],
-    fields: ['assistant_turns.turn_id', 'assistant_turns.message', 'assistant_turns.reply', 'assistant_turns.outcome', 'assistant_turns.asked_at'],
+    fields: ['assistant_turns.turn_id', 'assistant_turns.message', 'assistant_turns.reply', 'assistant_turns.outcome', 'assistant_turns.opened', 'assistant_turns.asked_at'],
     sort: [{ field: 'assistant_turns.asked_at', dir: 'desc' }, { field: 'assistant_turns.turn_id', dir: 'desc' }],
     limit: 5,
   },
@@ -27,7 +27,7 @@ export const turnsMine: SeedEntry = {
 // Record a turn, as the person talking — `member_id` is stamped.
 export const turnRecord: SeedMutation = {
   fingerprint: 'turns/record',
-  intent: 'Record a turn of the conversation: what was asked, replied and proposed',
+  intent: 'Record a turn of the conversation: what was said, replied, proposed and queried',
   mutation: {
     op: 'insert',
     table: 'assistant_turns',
@@ -36,6 +36,7 @@ export const turnRecord: SeedMutation = {
       message: { $context: 'message' },
       reply: { $context: 'reply' },
       proposals: { $context: 'proposals' },
+      opened: { $context: 'opened' },
     },
   },
 };

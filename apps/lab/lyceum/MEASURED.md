@@ -56,6 +56,22 @@ policy, one generation per question (`src/dev/model-check.ts`).
   automate tool — a promise it cannot keep), "Automation request recorded" (only
   proposed), "Press the button…" after a result opened by itself (seen in the browser).
   Steering, next. The probe hangs on exit after printing its total at 2 runs (not at 1).
+- **The one assistant, one prompt** (2026-09-28: the query desk gone — vex queries only
+  through the assistant, opened as what they are; one system prompt for behaviour,
+  per-person facts as knowledge; the screen as the text kit draws it; tool results as
+  facts; same nine probes): first run **17/18** — the speaker's timer reply said "has been
+  saved" of a tool result reading `saved: false`, and the next run repeated its own false
+  line from the conversation instead of calling the tool. The result now says "NOT saved
+  and NOT running": **18/18**, and that reply reads "created but is not yet saved or
+  running". Replies now report, not narrate: "There are 3 people in the room" (from the
+  query), "Slide 1 – 'The talk is an application' is on screen" and, for the speaker with
+  no query tool, "There are three people in the room" read off the controller's own screen.
+  Still weak: Forms' "which department has the most people?" opened its query and replied
+  "I don't have that information right now" both runs — the generated query's rows vary
+  (a replay of the same intent returned `[{Forms, 1}]` and a right answer); the room is a
+  three-way tie, which "the most" does not survive. Before the table comments (migration
+  10), "who is in the room?" was REFUSED by the query writer: "schema does not have
+  information about room occupancy".
 - **Jev routing the ask** (`LYCEUM_PART=route pnpm models`): 16 probes against six
   earlier questions — paraphrases that must replay, the same words about another subject
   that must not, new questions whose shape is the test. **48/48** over three runs, ~250 ms

@@ -43,7 +43,7 @@ export const assistantAction: ActionDefinition = {
     tabInk: 'paper',
     nextInk: 'paper',
     draft: '',
-    intro: { title: 'Assistant', intro: '', builtFrom: '', tools: '', starters: [] },
+    intro: { title: 'Assistant', builtFrom: '', tools: '' },
     reply: { turnId: '', text: '', proposals: [], opened: [] },
     history: [],
     thinking: false,
@@ -95,7 +95,6 @@ export const assistantAction: ActionDefinition = {
     TAB_OPENED,
     { event: 'ui:click', ref: 'send', do: run },
     { event: 'ui:key', ref: 'draft', key: 'Enter', do: run },
-    { event: 'ui:click', ref: 'starter', do: [{ set: 'draft', value: '@event.payload' }, ...run] },
     {
       event: 'ui:click',
       ref: 'save',
@@ -105,6 +104,26 @@ export const assistantAction: ActionDefinition = {
         { set: 'error', value: '' },
         { set: 'chosen', value: '@event.payload' },
         { call: 'save', onSuccess: [{ call: 'arm', onSuccess: [{ call: 'resolve', onSuccess: [{ set: 'answered', value: false }, { set: 'saved', value: true }] }] }] },
+      ],
+    },
+    // A query from the conversation, open again — replayed now, as the person.
+    {
+      event: 'ui:click',
+      ref: 'reopen',
+      do: [
+        {
+          push: {
+            action: '@event.payload.action',
+            canvas: 'overlay',
+            with: ['sheet'],
+            input: {
+              intent: '@event.payload.input.intent',
+              shape: '@event.payload.input.shape',
+              routed: '@event.payload.input.routed',
+              sheetTitle: '@event.payload.input.sheetTitle',
+            },
+          },
+        },
       ],
     },
     {
@@ -118,9 +137,6 @@ export const assistantAction: ActionDefinition = {
             with: ['sheet'],
             input: {
               draft: '@event.payload.input.draft',
-              strip: '@event.payload.input.strip',
-              tab: '@event.payload.input.tab',
-              tabInk: '@event.payload.input.tabInk',
               sheetTitle: '@event.payload.label',
             },
           },
