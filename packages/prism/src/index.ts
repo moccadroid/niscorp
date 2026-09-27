@@ -13,13 +13,15 @@ export { execute } from './engine/execute';
 export { validate } from './engine/validate';
 
 // Documentation
-export { getConfigJsonSchema, getNodeJsonSchema } from './engine/documentation';
+export { getConfigJsonSchema, getNodeJsonSchema, getProfileJsonSchema } from './engine/documentation';
 export type { JsonSchemaTarget } from './engine/documentation';
 
 // Schemas
 export { NodeSchema } from './schemas/node.schema';
 export { ConfigSchema } from './schemas/config.schema';
 export type { Config } from './schemas/config.schema';
+export { MAPPING_OPS } from './schemas/profiles';
+export type { OpKey } from './schemas/profiles';
 
 // Types
 export type {

@@ -81,6 +81,66 @@ const fits = (data: unknown, shape: ShapeName): boolean => {
   return isRecord(example) && fitsItem(data, example);
 };
 
+// The mapper's tasks: rows as a query returns them, a shape they do not fit,
+// and what a right answer must hold.
+const at = (value: unknown, index: number): Record<string, unknown> => {
+  const item: unknown = Array.isArray(value) ? value[index] : undefined;
+  return isRecord(item) ? item : {};
+};
+const MAPPING_TASKS: readonly { name: string; rows: Record<string, unknown>[]; shape: unknown; expect: (result: unknown) => boolean }[] = [
+  {
+    name: 'rename columns into a list',
+    rows: [{ name: 'Forms', remit: 'You can change your own record.' }, { name: 'Records', remit: 'You can read the register.' }],
+    shape: [{ label: '', detail: '' }],
+    expect: (result) => Array.isArray(result) && result.length === 2 && at(result, 0)['label'] === 'Forms' && at(result, 1)['detail'] === 'You can read the register.',
+  },
+  {
+    name: 'join two columns into one',
+    rows: [{ first: 'Ada', last: 'Lovelace' }],
+    shape: [{ name: '' }],
+    expect: (result) => at(result, 0)['name'] === 'Ada Lovelace',
+  },
+  {
+    name: 'a count into a single value',
+    rows: [{ peopleCount: 40 }],
+    shape: { value: 0 },
+    expect: (result) => isRecord(result) && result['value'] === 40,
+  },
+  {
+    name: 'a number into a string slot',
+    rows: [{ department: 'Forms', members: 8 }],
+    shape: [{ label: '', value: '', detail: '' }],
+    expect: (result) => at(result, 0)['label'] === 'Forms' && String(at(result, 0)['value']) === '8',
+  },
+  {
+    name: 'group and count rows',
+    rows: [{ department_id: 'forms' }, { department_id: 'forms' }, { department_id: 'records' }],
+    shape: [{ group: '', count: 0 }],
+    expect: (result) => Array.isArray(result) && result.some((item: unknown) => isRecord(item) && item['group'] === 'forms' && item['count'] === 2),
+  },
+  {
+    name: 'a missing field defaults',
+    rows: [{ name: 'Ana Novak', title: 'Senior Clerk' }],
+    shape: [{ name: '', title: '', department: '' }],
+    expect: (result) => at(result, 0)['name'] === 'Ana Novak' && 'department' in at(result, 0),
+  },
+  {
+    name: 'nest a flat row',
+    rows: [{ name: 'Ana', department_name: 'Forms', department_mark: 'dots' }],
+    shape: [{ name: '', department: { name: '', mark: '' } }],
+    expect: (result) => {
+      const department = at(result, 0)['department'];
+      return isRecord(department) && department['name'] === 'Forms' && department['mark'] === 'dots';
+    },
+  },
+  {
+    name: 'a condition picks the words',
+    rows: [{ name: 'Ana', department_id: null }, { name: 'Ben', department_id: 'forms' }],
+    shape: [{ name: '', status: '' }],
+    expect: (result) => Array.isArray(result) && result.length === 2 && at(result, 0)['status'] !== at(result, 1)['status'],
+  },
+];
+
 type Outcome = { question: string; shape: ShapeName; ok: boolean; refused: boolean; ms: number; tokens: number; calls: number; note: string };
 
 // What a generation COSTS: every model call's reported usage, read off the
@@ -123,6 +183,37 @@ const main = async (): Promise<void> => {
   const llm = base.model(MODEL);
   const adapter = createPostgresAdapter({ pool: runtime.pool });
   const dslJsonSchema = createQueryEngine({ adapter }).getDslSchema();
+
+  // LYCEUM_PART=mapping: the shape mapper alone (prism's mapping agent) on
+  // rows that do NOT already fit their shape, so every task calls the model.
+  if (process.env['LYCEUM_PART'] === 'mapping') {
+    const mapper = createShapeMapper(llm);
+    const tally: { task: string; ok: boolean; tokens: number }[] = [];
+    for (const task of Array.from({ length: RUNS }, () => MAPPING_TASKS).flat()) {
+      const before = meter.tokens;
+      let result: unknown;
+      let note: string;
+      try {
+        result = (await mapper(task.rows, task.shape)).transformed;
+        note = JSON.stringify(result).slice(0, 140);
+      } catch (error) {
+        note = error instanceof Error ? error.message.slice(0, 140) : String(error);
+      }
+      await new Promise((resolve) => setTimeout(resolve, 300));
+      const ok = result !== undefined && task.expect(result);
+      tally.push({ task: task.name, ok, tokens: meter.tokens - before });
+      console.log(`${ok ? '[pass]' : '[fail]'} ${String(meter.tokens - before).padStart(6)} tok  ${task.name} → ${note}`);
+    }
+    console.log(`\n${MODEL} · reasoning ${EFFORT} · mapping · ${RUNS} run(s) per task`);
+    for (const task of MAPPING_TASKS) {
+      const mine = tally.filter((entry) => entry.task === task.name);
+      const tokens = Math.round(mine.reduce((sum, entry) => sum + entry.tokens, 0) / Math.max(mine.length, 1));
+      console.log(`${String(mine.filter((entry) => entry.ok).length).padStart(2)}/${mine.length}  ${String(tokens).padStart(6)} tok  ${task.name}`);
+    }
+    console.log(`\ntotal ${tally.filter((entry) => entry.ok).length}/${tally.length}`);
+    await runtime.close();
+    return;
+  }
 
   const outcomes: Outcome[] = [];
   const ask = async (question: (typeof QUESTIONS)[number]): Promise<Outcome> => {

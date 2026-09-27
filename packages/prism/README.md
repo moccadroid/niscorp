@@ -61,6 +61,15 @@ getNodeJsonSchema(target?) → object
 getConfigJsonSchema(target?) → object
 ```
 
+## Profiles
+
+`getProfileJsonSchema(ops, target?)` is the config JSON Schema documenting only
+the ops you name — derived from the full schema, never restated. `MAPPING_OPS`
+is the set a mapping uses (rows into a shape), about 28% less prompt than the
+whole grammar; the mapping agent is documented with it. A profile narrows what
+a prompt teaches, never what Prism accepts: validation is always the full
+`ConfigSchema`, and a config using an op outside the profile is still valid.
+
 ## Transform ops and the grammar
 
 Besides deriving values, a config can rewrite a document: `$has`,

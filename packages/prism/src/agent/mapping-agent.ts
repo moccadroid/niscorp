@@ -36,6 +36,8 @@ import { z } from 'zod';
 import { defineAgent, type AgentDefinition } from '@niscorp/cortex';
 
 import { ConfigSchema, type Config } from '../schemas';
+import { MAPPING_OPS } from '../schemas/profiles';
+import { getProfileJsonSchema } from '../engine/documentation';
 
 // ───────────────────────────────────────────────────────────
 // Input schema
@@ -71,9 +73,9 @@ export type MappingAgentOutput = Config;
 // ───────────────────────────────────────────────────────────
 //
 // Per niscorp/STYLE_GUIDE.md: every operation, constraint and gotcha
-// lives in the Prism schema's .describe() calls; cortex injects the
-// JSON Schema. If the model gets an op wrong, sharpen the relevant
-// .describe() in @niscorp/prism — do not add prose here.
+// lives in the Prism schema's .describe() calls, and the prompt carries
+// the JSON Schema (OUTPUT_DOC below). If the model gets an op wrong,
+// sharpen the relevant .describe() in @niscorp/prism — do not add prose here.
 
 const INSTRUCTIONS = `You are the Prism mapping agent. Given a sample input row and a target output shape, produce a Prism Config that maps rows of the input shape into the target shape.
 
@@ -83,6 +85,8 @@ Worked example (illustrative only — read the schema for op details):
 INPUT  { "sampleInput": { "first": "Ada", "last": "Lovelace" }, "targetShape": { "fullName": "" } }
 data   { "fullName": { "$interpolate": { "template": "{{f}} {{l}}", "values": { "f": { "$ref": "$.first" }, "l": { "$ref": "$.last" } } } } }`;
 
+const OUTPUT_DOC = `OUTPUT SCHEMA — your output MUST validate against this JSON Schema:\n${JSON.stringify(getProfileJsonSchema(MAPPING_OPS, 'draft-7'))}`;
+
 // ───────────────────────────────────────────────────────────
 // Agent definition — the entire public surface
 // ───────────────────────────────────────────────────────────
@@ -91,5 +95,10 @@ export const mappingAgent: AgentDefinition<Config> = defineAgent<Config>({
   id: 'prism.mapping',
   description: 'Generates a Prism transformation config from a sample input row and a target shape.',
   instructions: INSTRUCTIONS,
-  output: { schema: ConfigSchema },
+  // Validated against the FULL grammar — a config using any op is accepted,
+  // exactly as before — but documented with the mapping profile: the ops a
+  // mapping uses, about 28% less prompt than the whole grammar
+  // (schemas/profiles.ts). The heading is cortex's own (context/schema-doc.ts),
+  // so the finish protocol's "OUTPUT SCHEMA" still names it.
+  output: { schema: ConfigSchema, doc: OUTPUT_DOC },
 });
