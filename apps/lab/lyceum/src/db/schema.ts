@@ -156,6 +156,17 @@ export const ASSISTANT_TURNS = /* sql */ `
   );
 `;
 
+// Migration 6: THE ROOM. One row, the room's own state beside the deck's:
+// which LOOK every screen paints with — the poster kit, or plain HTML. The
+// speaker's controller writes it; every screen reads it (app/actions/room/).
+// A closed set, held by the table: a write of any other word is refused here.
+export const ROOM = /* sql */ `
+  CREATE TABLE room (
+    room_id TEXT PRIMARY KEY,
+    look    TEXT NOT NULL DEFAULT 'poster' CHECK (look IN ('poster', 'plain'))
+  );
+`;
+
 export const LYCEUM_SEQUENCE: Sequence = {
   id: 'lyceum.app',
   migrations: [
@@ -164,6 +175,7 @@ export const LYCEUM_SEQUENCE: Sequence = {
     { description: 'The ask: every question put to the records, and how it was answered', steps: sqlSteps(ASKS) },
     { description: 'Timers: automations the speaker saved, each a tide reflex as a document', steps: sqlSteps(TIMERS) },
     { description: "The assistant's conversations: one row per turn, and what came of it", steps: sqlSteps(ASSISTANT_TURNS) },
+    { description: 'The room: one row, the look every screen paints with', steps: sqlSteps(ROOM) },
   ],
 };
 

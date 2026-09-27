@@ -9,6 +9,8 @@ import type { LayoutNode } from '@niscorp/nova';
 export const frameLayout: LayoutNode = {
   component: 'Page',
   children: [
+    // The look marker, first: it takes no room — the terminal reads it.
+    { component: 'CanvasSlot', props: { canvasId: 'look' } },
     // Over everything, when something is open; it takes no room in the stack.
     { component: 'CanvasSlot', props: { canvasId: 'overlay' } },
     { component: 'CanvasSlot', props: { canvasId: 'strip' } },

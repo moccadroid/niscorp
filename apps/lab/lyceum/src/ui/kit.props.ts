@@ -1,5 +1,6 @@
 import { z } from 'zod';
-import { ALIGNS, INKS, LEVELS, MARKS, SIGILS } from './kit';
+import type { DomComponent } from '@niscorp/nova/adapters/dom';
+import { ALIGNS, INKS, LEVELS, LOOKS, MARKS, SIGILS } from './kit';
 
 // ═══════════════════════════════════════════════════════════════
 // WHAT A LAYOUT MAY SAY TO EACH KIT COMPONENT — the kit's grammar (strata's
@@ -64,6 +65,11 @@ export const KIT_PROPS = z
     Bar: z.object({ segments: z.array(z.object({ value: z.number(), ink, mark }).partial({ ink: true, mark: true }).strict()) }).partial().strict(),
     Action: z.object({ area, ink, label, lines: z.literal('two'), size: z.literal('large') }).partial().strict(),
     Field: z.object({ area, placeholder: z.string(), value: z.string() }).partial().strict(),
+    Look: z.object({ look: z.enum(LOOKS) }).partial().strict(),
   })
   .strict()
   .describe('The props each lyceum kit component accepts, by component name');
+
+// A KIT is one renderer per component this grammar names — every look lyceum
+// paints with (./kit.ts, ./plain.kit.ts) implements the same set.
+export type Kit = Record<keyof z.infer<typeof KIT_PROPS>, DomComponent>;

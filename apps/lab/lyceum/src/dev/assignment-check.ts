@@ -56,7 +56,9 @@ const main = async (): Promise<void> => {
   const stranger = await connect(base);
   const strangerHello = await stranger.hello();
   check('an anonymous connection is the public principal', strangerHello.principal === null);
-  check(`the door is all that exists for them (${strangerHello.catalog.actions.join(', ')})`, strangerHello.catalog.actions.join() === 'door.join');
+  // The door, and the room's look marker — which shows nothing and reads one
+  // word (room.look; the look check). Nothing of the application besides.
+  check(`the door is all that exists for them, beside the look marker (${strangerHello.catalog.actions.join(', ')})`, [...strangerHello.catalog.actions].sort().join() === 'door.join,room.look');
   check('the door renders', await stranger.shows('main', 'Step in'));
 
   // ── stepping in grants a real session ──

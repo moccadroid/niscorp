@@ -1,5 +1,6 @@
 import { encode } from 'uqr';
 import type { DomComponent } from '@niscorp/nova/adapters/dom';
+import type { Kit } from './kit.props';
 
 // ═══════════════════════════════════════════════════════════════
 // LYCEUM'S KIT — the only renderer code in the app (AGENTS.md, layout of an
@@ -21,15 +22,17 @@ export const MARKS = ['stripes', 'dots', 'bars', 'checks', 'hatch'] as const;
 export const SIGILS = ['triangle', 'circle', 'square', 'cross'] as const;
 export const ALIGNS = ['start', 'end', 'center', 'between'] as const;
 export const LEVELS = ['display', 'title', 'name'] as const;
+// The kits a screen can be painted with (./target.ts): this one, and ./plain.kit.ts.
+export const LOOKS = ['poster', 'plain'] as const;
 const AREA = /^[a-z][a-z0-9-]*$/;
 
-const oneOf = <T extends string>(value: unknown, options: readonly T[]): T | undefined =>
+export const oneOf = <T extends string>(value: unknown, options: readonly T[]): T | undefined =>
   options.find((option) => option === value);
 
-const text = (value: unknown): string | undefined =>
+export const text = (value: unknown): string | undefined =>
   typeof value === 'string' ? value : typeof value === 'number' ? String(value) : undefined;
 
-const records = (value: unknown): Record<string, unknown>[] =>
+export const records = (value: unknown): Record<string, unknown>[] =>
   Array.isArray(value) ? value.filter((item): item is Record<string, unknown> => item !== null && typeof item === 'object' && !Array.isArray(item)) : [];
 
 const weight = (value: unknown): number | undefined => (typeof value === 'number' && value > 0 && value <= 100 ? value : undefined);
@@ -170,12 +173,10 @@ export const Figure: DomComponent = ({ props }) => {
 const instantOf = (value: string | undefined): number =>
   value === undefined ? Number.NaN : Date.parse(value.replace(' ', 'T').replace(/([+-]\d\d)$/, '$1:00'));
 
-export const Countdown: DomComponent = ({ props }) => {
-  const label = el('span', 'label');
-  label.textContent = text(props['label']) ?? '';
-  const value = el('span', 'value');
-  const node = el('div', 'figure countdown', [label, value]);
-  const to = instantOf(text(props['to']));
+// Ticks `value` down to `to` inside `node` — shared with the plain kit, whose
+// countdown is on the viewer's clock for the same reason.
+export const tickDown = (node: HTMLElement, value: HTMLElement, toProp: unknown): void => {
+  const to = instantOf(text(toProp));
   const paint = (): boolean => {
     if (Number.isNaN(to)) {
       value.textContent = '—';
@@ -194,6 +195,14 @@ export const Countdown: DomComponent = ({ props }) => {
       if ((shown && !node.isConnected) || !paint()) clearInterval(timer);
     }, 1000);
   }
+};
+
+export const Countdown: DomComponent = ({ props }) => {
+  const label = el('span', 'label');
+  label.textContent = text(props['label']) ?? '';
+  const value = el('span', 'value');
+  const node = el('div', 'figure countdown', [label, value]);
+  tickDown(node, value, props['to']);
   return node;
 };
 
@@ -381,3 +390,12 @@ export const Field: DomComponent = ({ props }) => {
   placeIn(node, props['area']);
   return node;
 };
+
+// ── Look — which kit paints the screen ──────────────────────────
+// look: poster | plain. Shows nothing: the terminal reads it off the tree
+// (./target.ts). Every kit has it, so whichever is painting finds it.
+export const Look: DomComponent = () => el('span', 'look');
+
+// THIS KIT, whole — typed against the grammar, so a component the grammar
+// names and the kit lacks does not compile.
+export const POSTER_KIT: Kit = { Page, Sheet, Cell, Label, Headline, Text, Figure, Countdown, Code, Sigil, Qr, Rows, Bar, Action, Field, Look };

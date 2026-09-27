@@ -21,5 +21,10 @@ export const LYCEUM_KIT: Sequence = {
       description: 'Countdown: the time left until an instant, ticking where it is shown',
       steps: [],
     },
+    {
+      // A MARKER: a component added.
+      description: 'Look: which kit paints the screen, poster or plain',
+      steps: [],
+    },
   ],
 };

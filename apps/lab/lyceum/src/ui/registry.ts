@@ -2,12 +2,13 @@ import { createComponentRegistry } from '@niscorp/nova';
 import type { ComponentRegistry } from '@niscorp/nova';
 import type { DomComponent } from '@niscorp/nova/adapters/dom';
 import { components } from '@niscorp/nova/adapters/dom/components';
-import { Action, Bar, Cell, Code, Countdown, Field, Figure, Headline, Label, Page, Qr, Rows, Sheet, Sigil, Text } from './kit';
+import type { Kit } from './kit.props';
 
-// The one registry, assembled once (AGENTS.md, rule 2). nova's ActionSlot is
-// the per-instance boundary a served tree carries; everything else is ours.
-export const lyceumRegistry = (): ComponentRegistry<DomComponent> => {
+// One registry per kit, assembled once (AGENTS.md, rule 2) — the same names,
+// painted by whichever kit it is given. nova's ActionSlot is the per-instance
+// boundary a served tree carries; everything else is the kit's.
+export const lyceumRegistry = (kit: Kit): ComponentRegistry<DomComponent> => {
   const registry = createComponentRegistry<DomComponent>();
-  registry.registerAll({ Page, Sheet, Cell, Label, Headline, Text, Figure, Countdown, Code, Sigil, Qr, Rows, Bar, Action, Field, ActionSlot: components.ActionSlot });
+  registry.registerAll({ ...kit, ActionSlot: components.ActionSlot });
   return registry;
 };

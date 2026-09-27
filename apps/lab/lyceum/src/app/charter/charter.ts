@@ -10,6 +10,8 @@ import type { Charter } from '@niscorp/charter';
 
 const ROOM_READS = ['members.read', 'departments.read'];
 const DECK_READS = ['deck.read', 'slides.read'];
+// The room's look: every screen reads it, the door's too (app/actions/room/).
+const LOOK = ['room.read'];
 // The ask: what was asked before (the router reads it as the asker) and the
 // asker's own record of asking.
 const ASKING = ['asks.read', 'asks.write.insert'];
@@ -20,7 +22,7 @@ export const CHARTER: Charter = {
   // Anonymous: the door and nothing else — and, once stepping in has made
   // them somebody, the one write that makes them a member: their own row
   // (the engine stamps whose; vex/behaviors.ts).
-  public: { actions: ['door.*'], data: ['members.write.insert'] },
+  public: { actions: ['door.*', 'room.*'], data: ['members.write.insert', ...LOOK] },
 
   // Everybody in the room, assigned or not: the ID card. Never worn alone —
   // the roles below extend it.
@@ -28,7 +30,7 @@ export const CHARTER: Charter = {
   // every clearance shares; what the answer can reach is still theirs.
   // …and an assistant: the same one everybody has, built for each person from
   // what these grants select (app/assistant/assistants.ts).
-  member: { actions: ['member.*', 'ask.*', 'assistant.*'], data: [...ROOM_READS, ...ASKING, ...CONVERSING] },
+  member: { actions: ['member.*', 'ask.*', 'assistant.*', 'room.*'], data: [...ROOM_READS, ...ASKING, ...CONVERSING, ...LOOK] },
 
   unassigned: { extends: ['member'] },
   // Every department gets its badge; each gets one clearance of its own.
@@ -41,8 +43,8 @@ export const CHARTER: Charter = {
   // The speaker moves the deck and assigns the room, as themselves; the
   // controller's tools change with the slide. The stage shows the deck —
   // every slide is an action only the stage is granted.
-  speaker: { actions: ['speaker.*', 'tools.*', 'assistant.*'], data: [...ROOM_READS, ...DECK_READS, 'slide_notes.read', 'slide_tools.read', 'deck.write.update', 'members.write.update', 'timers.read', 'timers.write.insert', ...CONVERSING] },
-  stage: { actions: ['stage.*', 'slide.*'], data: [...ROOM_READS, ...DECK_READS, 'asks.read'] },
+  speaker: { actions: ['speaker.*', 'tools.*', 'assistant.*', 'room.*'], data: [...ROOM_READS, ...DECK_READS, ...LOOK, 'room.write.update', 'slide_notes.read', 'slide_tools.read', 'deck.write.update', 'members.write.update', 'timers.read', 'timers.write.insert', ...CONVERSING] },
+  stage: { actions: ['stage.*', 'slide.*', 'room.*'], data: [...ROOM_READS, ...DECK_READS, 'asks.read', ...LOOK] },
 
   // The kit's kitchen sink: every piece of the look on one screen (dev).
   kit: { actions: ['kit.*'] },

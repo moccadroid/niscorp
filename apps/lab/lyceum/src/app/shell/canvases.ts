@@ -18,6 +18,8 @@ import type { ShellManifest } from '@niscorp/moss';
 //          reconciles, so the charter decides the tabs by existence
 //   overlay  whatever is opened over the screen, in the `sheet` fragment's
 //          chrome (all slides, on the controller)
+//   look   the room's look (room/look.action.ts): a marker, on every screen
+//          whose principal holds it; the terminal paints with the kit it names
 //   deck   the stage's and the speaker's deck: shows nothing, follows the
 //          `deck` row. Not in the frame.
 export const CANVASES: ShellManifest['canvases'] = [
@@ -48,4 +50,5 @@ export const CANVASES: ShellManifest['canvases'] = [
   { id: 'controls', initial: ['speaker.controls'] },
   { id: 'overlay' },
   { id: 'deck', initial: ['stage.deck', 'speaker.deck'] },
+  { id: 'look', initial: ['room.look'] },
 ];

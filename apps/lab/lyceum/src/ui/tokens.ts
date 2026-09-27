@@ -59,6 +59,8 @@ html { font-size: clamp(16px, calc(0.72vw + 13.3px), 28px); }
 .${ROOT_CLASS} .page > [data-canvas] { display: flex; flex-direction: column; min-height: 0; }
 .${ROOT_CLASS} .page > [data-canvas]:not(:empty):not(:has(~ [data-canvas]:not(:empty))) { flex: 1 1 auto; }
 .${ROOT_CLASS} .page > [data-canvas] > * { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; }
+/* the look marker takes no room: the terminal reads it (target.ts) */
+.${ROOT_CLASS} .page > [data-canvas="look"] { display: none; }
 /* the overlay canvas: over the whole screen when something is open, out of
    the stack either way */
 .${ROOT_CLASS} .page > [data-canvas="overlay"]:not(:empty) {

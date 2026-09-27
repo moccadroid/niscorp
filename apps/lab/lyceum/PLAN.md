@@ -56,11 +56,7 @@ In order; each lands with its check.
    replies; the reply text held to what the tools did (see "Measured"); `open` proposed
    where `ask` was the tool (see "Measured").
 5. ~~**The timer**~~ — built 2026-09-27 (see "What is built").
-6. **The look switch**, inside lyceum, moss untouched: a `room` row holds the look
-   (`poster` | `plain`); a small action granted to everybody reads it reactively and
-   renders a `Look` marker; lyceum's DOM target wraps two kits and paints with the one
-   the marker names. A plain-HTML kit implements `lyceum.kit` with unstyled semantic
-   HTML. The speaker's controller writes the row.
+6. ~~**The look switch**~~ — built 2026-09-27 (see "What is built", "Two looks").
 7. **The SSH door** — an SSH server in lyceum's process (`ssh2`), any user, no auth; each
    connection opens its own moss client wire to the local socket and is a stranger at
    the door; moss's ink target draws it with an ink kit for lyceum's components (relay's
@@ -176,9 +172,21 @@ Grotesk, Space Mono. Posters scale with their sheet; reading text has a floor in
 Components are configured, never styled (AGENTS.md rule 2). The kitchen sink is
 `kit.sink` — `/dev/as/kit`.
 
+**Two looks, one tree** (`src/ui/plain.kit.ts`, `room.look`, `tools.look`). The room's
+look is one row (`room`, migration 6; `poster` | `plain`, the closed set held by the
+table's CHECK). `room.look` — granted to everybody, the door included — sits on a `look`
+canvas and renders only a `Look` marker from a reactive read of that row; lyceum's DOM
+target (`src/ui/target.ts`) reads the marker on every update and paints with the kit it
+names — the poster and its stylesheet, or plain HTML with none. Both kits are typed
+against the grammar (`Kit`, `src/ui/kit.props.ts`), so neither can lack a component. The
+switch is the controller's tool on "Everything is data": one write, and every screen in
+the room repaints — nothing is sent to switch, and the trees do not change. Moss is
+untouched. `look-check` asserts the marker on four kinds of screen, the switch reaching
+all of them, the phone's tree unchanged, and a word outside the set refused.
+
 **Versions (strata).** Lyceum's tables are the `lyceum.app` sequence. The source is
 locked at `nisc.nova` 1, `nisc.prism` 1 (`strata.lock.json`); the kit's props are the
-grammar `lyceum.kit` (`src/ui/kit.props.ts`, `src/app/grammars.ts`), at 1 — `kit-check`
+grammar `lyceum.kit` (`src/ui/kit.props.ts`, `src/app/grammars.ts`), at 3 — `kit-check`
 refuses a kit change the sequence does not record.
 
 **Deployed** at lyceum.moccadroid.com. `docker compose up --build -d`: the app and its
@@ -193,7 +201,7 @@ every re-boot. `/dev/as/speaker`, `/dev/as/stage`, `/dev/as/kit`, `/dev/new`,
 `?seat=<name>`. Vite listens on this machine only.
 
 **Checks** (`pnpm check`, each in its own process over its own database): `kit-check`,
-`tables-check`, `assignment-check`, `deck-check`, `serve-check`, `ask-check`, `timer-check`, `assistant-check`. The ask
+`tables-check`, `assignment-check`, `deck-check`, `serve-check`, `ask-check`, `timer-check`, `assistant-check`, `look-check`. The ask
 check also passes live (`LYCEUM_ASK=live node --env-file=.env --import tsx
 src/dev/ask-check.ts`).
 
@@ -327,6 +335,7 @@ policy, one generation per question (`src/dev/model-check.ts`).
 | `asks` | every question put to the records: the asker, the words, the shape, how it was answered (replayed, generated, refused), the fingerprint |
 | `slides`, `slide_tools`, `slide_notes` | the deck: order and titles, the controller's tools, the speaker's notes |
 | `deck` | the talk's state: the slide on screen |
+| `room` | the room's state: the look every screen paints with |
 | `grants` | roles beyond a person's department, and the roles of the principals that are not people |
 | `login_links` | one-time sign-in links (hashes only) |
 
