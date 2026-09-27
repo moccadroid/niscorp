@@ -24,7 +24,9 @@ export const CHARTER: Charter = {
   // the roles below extend it.
   // Everybody may put a question to the records (the ask) — the one tool
   // every clearance shares; what the answer can reach is still theirs.
-  member: { actions: ['member.*', 'ask.*'], data: [...ROOM_READS, ...ASKING] },
+  // …and an assistant: the same one everybody has, built for each person from
+  // what these grants select (app/assistant/assistants.ts).
+  member: { actions: ['member.*', 'ask.*', 'assistant.*'], data: [...ROOM_READS, ...ASKING] },
 
   unassigned: { extends: ['member'] },
   // Every department gets its badge; each gets one clearance of its own.
@@ -37,7 +39,7 @@ export const CHARTER: Charter = {
   // The speaker moves the deck and assigns the room, as themselves; the
   // controller's tools change with the slide. The stage shows the deck —
   // every slide is an action only the stage is granted.
-  speaker: { actions: ['speaker.*', 'tools.*'], data: [...ROOM_READS, ...DECK_READS, 'slide_notes.read', 'slide_tools.read', 'deck.write.update', 'members.write.update', 'timers.read', 'timers.write.insert'] },
+  speaker: { actions: ['speaker.*', 'tools.*', 'assistant.*'], data: [...ROOM_READS, ...DECK_READS, 'slide_notes.read', 'slide_tools.read', 'deck.write.update', 'members.write.update', 'timers.read', 'timers.write.insert'] },
   stage: { actions: ['stage.*', 'slide.*'], data: [...ROOM_READS, ...DECK_READS, 'asks.read'] },
 
   // The kit's kitchen sink: every piece of the look on one screen (dev).

@@ -12,7 +12,8 @@
     "check": "tsx src/dev/all-checks.ts",
     "strata": "tsx src/dev/strata.ts",
     "kit:snapshot": "tsx src/dev/kit-check.ts --write",
-    "models": "tsx src/dev/model-check.ts"
+    "models": "tsx src/dev/model-check.ts",
+    "probe:assistant": "tsx src/dev/assistant-probe.ts"
   },
   "dependencies": {
     "@electric-sql/pglite": "^0.5.1",

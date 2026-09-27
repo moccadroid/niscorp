@@ -3,6 +3,7 @@ import { createTide, occurrencesBetween, ReflexSchema, zonedParts } from '@nisco
 import type { Reflex, Tide } from '@niscorp/tide';
 import { createReflexAgent, effectProblem } from '@niscorp/tide/agent';
 import type { OfferedEffect } from '@niscorp/tide/agent';
+import { defineTool } from '@niscorp/cortex';
 import { ConfigSchema, evaluate } from '@niscorp/prism';
 import { createSignal } from '@niscorp/signal';
 import { createTideDriver, createTideStore, mintSession } from '@niscorp/moss';
@@ -33,13 +34,15 @@ import type { LyceumRuntime } from './runtime';
 export const talkZone = (env: Record<string, string | undefined>): string => env['LYCEUM_TZ'] ?? 'Europe/Vienna';
 
 // What a timer may do: the host's vocabulary, offered to the model with the
-// schema of its input. One effect, because the talk's clock needs one.
+// schema of its input — WHAT IT DOES, and nothing about any particular request.
+// Which slide a request means is for the model to work out from the deck,
+// handed to it as facts (the assistant's grounding), never from a hint here.
 const SLIDE_IDS = SLIDES.map((slide) => slide.slideId);
 export const TIMER_EFFECTS: readonly OfferedEffect[] = [
   {
     name: 'deck.show',
-    does: `Put a slide on the projector. The talk's slides, in order: ${SLIDE_IDS.join(', ')} — the talk ends on the last one.`,
-    input: z.object({ slideId: z.enum(SLIDE_IDS).describe('The slide to put on screen.') }).strict(),
+    does: 'Put a slide on the projector.',
+    input: z.object({ slideId: z.enum(SLIDE_IDS).describe('The slide to put on screen, by its id.') }).strict(),
   },
 ];
 
@@ -57,33 +60,72 @@ export const dueOf = (reflex: Reflex, now: number): number | undefined =>
 
 // ── writing a timer ──
 
-export type TimerWriter = { kind: 'live' | 'fake'; write: (intent: string, now: number, tz: string) => Promise<Reflex> };
+// A reflex, or a reason there is none: a request the offered effects cannot
+// do, or one that does not say when, is REFUSED in words — never answered with
+// an invented reflex.
+export type Written = { reflex: Reflex } | { refused: string };
+
+// `facts`: what the host knows that the request may refer to — the deck, as the
+// asker read it. Handed to the agent as context for this run.
+export type TimerWriter = { kind: 'live' | 'fake'; write: (intent: string, now: number, tz: string, facts: string) => Promise<Written> };
+
+// The agent's way out, added to the run: tide's agent must otherwise return a
+// reflex. Watched on the run's events, as vex's query agent watches its own.
+const CannotSatisfySchema = z.object({ reason: z.string().describe('Why no reflex the offered effects allow does what was asked — in words for the person who asked.') });
+const cannotSatisfy = defineTool({
+  id: 'cannotSatisfy',
+  name: 'cannotSatisfy',
+  description:
+    'Refuse: call this INSTEAD of writing a reflex when none of the offered effects does what was asked, or when the request does not say when it should happen. This ends the run.',
+  input: CannotSatisfySchema,
+  execute: (input) => ({ acknowledged: true, reason: input.reason }),
+});
 
 const liveWriter = (): TimerWriter => {
   const llm = createSignal('groq', { options: { reasoningEffort: 'low' } }).model('openai/gpt-oss-120b');
   const agent = createReflexAgent({ effects: TIMER_EFFECTS });
   return {
     kind: 'live',
-    write: async (intent, now, tz) => {
-      const result = await agent.run({ intent, now: localNow(now, tz), tz }, { llm }).result;
-      if (!result.ok) throw new Error(`The assistant could not write that timer: ${result.error.message}`);
-      return result.output.data;
+    write: async (intent, now, tz, facts) => {
+      let refused: string | undefined;
+      const run = agent.run(
+        { intent, now: localNow(now, tz), tz },
+        {
+          llm,
+          tools: [cannotSatisfy],
+          producers: [() => facts],
+          onEvent: (event) => {
+            if (event.type === 'tool-end' && event.observation.kind === 'result' && event.observation.toolId === 'cannotSatisfy') {
+              refused = CannotSatisfySchema.safeParse(event.observation.args).data?.reason ?? 'That cannot be automated here.';
+              run.abort();
+            }
+          },
+        },
+      );
+      const result = await run.result;
+      if (refused !== undefined) return { refused };
+      if (!result.ok) throw new Error(`The automation could not be written: ${result.error.message}`);
+      return { reflex: result.output.data };
     },
   };
 };
 
 // "in 30 minutes", "in an hour" → a one-shot clock that far from now, closing
-// the talk. Enough to drive the real path in a check.
+// the talk; anything without a time is refused. Enough to drive the real path
+// in a check — it measures nothing about a model.
 const fakeWriter = (): TimerWriter => ({
   kind: 'fake',
   write: async (intent, now, tz) => {
-    const minutes = /(\d+)\s*min/i.exec(intent)?.[1] ?? (/an hour/i.test(intent) ? '60' : '30');
-    return ReflexSchema.parse({
-      id: `timer-${minutes}m`,
-      intent: `Put the closing slide on screen in ${minutes} minutes.`,
-      on: { clock: { at: localNow(now + Number(minutes) * 60_000, tz), tz } },
-      effect: { name: 'deck.show', input: { slideId: SLIDE_IDS.at(-1) ?? '' } },
-    });
+    const minutes = /(\d+)\s*min/i.exec(intent)?.[1] ?? (/an hour/i.test(intent) ? '60' : undefined);
+    if (minutes === undefined) return { refused: 'That does not say when.' };
+    return {
+      reflex: ReflexSchema.parse({
+        id: `timer-${minutes}m`,
+        intent: `Put the closing slide on screen in ${minutes} minutes.`,
+        on: { clock: { at: localNow(now + Number(minutes) * 60_000, tz), tz } },
+        effect: { name: 'deck.show', input: { slideId: SLIDE_IDS.at(-1) ?? '' } },
+      }),
+    };
   },
 });
 

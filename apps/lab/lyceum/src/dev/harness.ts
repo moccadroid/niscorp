@@ -61,6 +61,18 @@ const instanceAround = (nodes: unknown, ref: string, inside?: string): string | 
   return undefined;
 };
 
+// The `value` prop of the first node carrying `ref` — a click's payload.
+const valueOf = (nodes: unknown, ref: string): unknown => {
+  if (!Array.isArray(nodes)) return undefined;
+  for (const node of nodes) {
+    if (!isRecord(node)) continue;
+    if (node['ref'] === ref) return isRecord(node['props']) ? node['props']['value'] : undefined;
+    const found = valueOf(node['children'], ref);
+    if (found !== undefined) return found;
+  }
+  return undefined;
+};
+
 // The ActionSlot on a canvas whose subtree shows `text` — which instance a
 // click on a shared ref means.
 const instanceShowing = (nodes: unknown, text: string): string | undefined => {
@@ -114,8 +126,12 @@ export const connect = (base: string, token?: string): Promise<Terminal> =>
           return first;
         },
         click: (canvas, ref, payload) => {
-          const origin = instanceAround(JSON.parse(trees.get(canvas) ?? '[]'), ref);
-          const event = { type: 'ui:click', ref, ...(payload === undefined ? {} : { payload }), ...(origin === undefined ? {} : { origin }) };
+          const tree: unknown = JSON.parse(trees.get(canvas) ?? '[]');
+          const origin = instanceAround(tree, ref);
+          // What a real click sends: the pressed node's own `value`, unless the
+          // check says otherwise (nova's dom adapter).
+          const sent = payload === undefined ? valueOf(tree, ref) : payload;
+          const event = { type: 'ui:click', ref, ...(sent === undefined ? {} : { payload: sent }), ...(origin === undefined ? {} : { origin }) };
           socket.send(JSON.stringify({ type: 'event', canvas, event }));
         },
         clickIn: (canvas, ref, text) => {

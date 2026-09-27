@@ -6,6 +6,7 @@ import { createSignal } from '@niscorp/signal';
 import { devRuntime } from '@lyceum/server/runtime';
 import { createAsker } from '@lyceum/server/asking';
 import { BEHAVIORS } from '@lyceum/app/vex/behaviors';
+import { SLIDES } from '@lyceum/db/seed';
 import { armable, createTimerWriter } from '@lyceum/server/timing';
 import type { Known } from '@lyceum/server/asking';
 
@@ -246,17 +247,27 @@ const measureRoutes = async (): Promise<void> => {
   console.log(`\nrouting on ${decider} · ${RUNS} run(s) · total ${passed}/${total}`);
 };
 
-// LYCEUM_PART=tide: the speaker's assistant writing timers (server/timing.ts,
-// the reflex agent on gpt-oss-120b). From a fixed now — 19:05 in Vienna — does
-// it write the right clock and the right slide, in a document the host arms?
+// LYCEUM_PART=tide: the `automate` tool's writer (server/timing.ts, tide's
+// reflex agent on gpt-oss-120b), from a fixed now — 19:05 in Vienna — handed
+// the deck the way the controller's grounding hands it: ids, numbers, titles,
+// and nothing about what any request means. PROBES WRITTEN BEFORE ANY RUN:
+// slides named by their title, not their id; requests no offered effect can
+// do, and one that never says when — each must be REFUSED, not answered with an
+// invented reflex; and the original "end the talk", with no hint left in the
+// effect's description.
 const TIDE_NOW = Date.UTC(2026, 8, 27, 17, 5);
-const TIMER_PROBES: readonly { intent: string; at: string; slideId: string }[] = [
+const DECK_FACTS = `## The deck
+${JSON.stringify(SLIDES.map((slide, index) => ({ slide_id: slide.slideId, number: index + 1, title: slide.title })))}`;
+const TIMER_PROBES: readonly { intent: string; at?: string; slideId?: string }[] = [
   { intent: 'End the talk in 30 minutes', at: '2026-09-27T19:35', slideId: 'slide.end' },
-  { intent: 'Close the talk at half past nine', at: '2026-09-27T21:30', slideId: 'slide.end' },
-  { intent: 'In 45 minutes, put the last slide up', at: '2026-09-27T19:50', slideId: 'slide.end' },
-  { intent: 'Show the assignment slide in 10 minutes', at: '2026-09-27T19:15', slideId: 'slide.assignment' },
-  { intent: 'wrap up at 9pm', at: '2026-09-27T21:00', slideId: 'slide.end' },
-  { intent: 'give me an hour, then end it', at: '2026-09-27T20:05', slideId: 'slide.end' },
+  { intent: 'Put the register up at eight', at: '2026-09-27T20:00', slideId: 'stage.register' },
+  { intent: 'Go back to the title slide in 5 minutes', at: '2026-09-27T19:10', slideId: 'slide.title' },
+  { intent: 'In 20 minutes, switch to the slide where the room asks questions', at: '2026-09-27T19:25', slideId: 'slide.ask' },
+  { intent: 'At quarter to ten, wrap it up', at: '2026-09-27T21:45', slideId: 'slide.end' },
+  // must be refused
+  { intent: 'Email me in ten minutes' },
+  { intent: 'Remind me to drink water at nine' },
+  { intent: 'End the talk' },
 ];
 
 const measureTimers = async (): Promise<void> => {
@@ -270,19 +281,26 @@ const measureTimers = async (): Promise<void> => {
       let got: string;
       let ok = false;
       try {
-        const reflex = armable(await writer.write(probe.intent, TIDE_NOW, 'Europe/Vienna'));
-        const at = 'clock' in reflex.on ? reflex.on.clock.at : '(not a clock)';
-        const input: unknown = reflex.effect.input;
-        const slideId = typeof input === 'object' && input !== null && 'slideId' in input ? String(input.slideId) : '';
-        got = `${at} ${slideId}`;
-        ok = at === probe.at && slideId === probe.slideId;
+        const written = await writer.write(probe.intent, TIDE_NOW, 'Europe/Vienna', DECK_FACTS);
+        if ('refused' in written) {
+          got = `refused: ${written.refused.slice(0, 90)}`;
+          ok = probe.at === undefined;
+        } else {
+          const reflex = armable(written.reflex);
+          const at = 'clock' in reflex.on ? reflex.on.clock.at : '(not a clock)';
+          const input: unknown = reflex.effect.input;
+          const slideId = typeof input === 'object' && input !== null && 'slideId' in input ? String(input.slideId) : '';
+          got = `${at} ${slideId}`;
+          ok = at === probe.at && slideId === probe.slideId;
+        }
       } catch (error) {
         got = `error ${error instanceof Error ? error.message.slice(0, 120) : String(error)}`;
       }
       await new Promise((resolve) => setTimeout(resolve, 300));
       passed += ok ? 1 : 0;
       total += 1;
-      console.log(`${ok ? '[pass]' : '[fail]'} ${String(Date.now() - started).padStart(5)}ms ${String(meter.tokens - before).padStart(6)} tok  ${probe.intent} → ${got}${ok ? '' : `  (wanted ${probe.at} ${probe.slideId})`}`);
+      const wanted = probe.at === undefined ? 'a refusal' : `${probe.at} ${probe.slideId ?? ''}`;
+      console.log(`${ok ? '[pass]' : '[fail]'} ${String(Date.now() - started).padStart(5)}ms ${String(meter.tokens - before).padStart(6)} tok  ${probe.intent} → ${got}${ok ? '' : `  (wanted ${wanted})`}`);
     }
   }
   console.log(`

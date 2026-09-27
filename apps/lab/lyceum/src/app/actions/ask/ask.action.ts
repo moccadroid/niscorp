@@ -1,5 +1,6 @@
 import type { ActionDefinition } from '@niscorp/nova';
-import { TAB_BUTTON, TAB_INPUT, TAB_OPENED } from '@lyceum/app/actions/shared/tab.layouts';
+import { z } from 'zod';
+import { TAB_BUTTON, TAB_OPENED } from '@lyceum/app/actions/shared/tab.layouts';
 import { askLayout } from './ask.layout';
 import { answerPrism } from './ask.prism';
 
@@ -24,7 +25,13 @@ export const askAction: ActionDefinition = {
     asked: false,
     error: '',
   },
-  input: TAB_INPUT,
+  input: z.toJSONSchema(
+    z.object({
+      tab: z.boolean().optional().describe("Render as a tab on the phone: a button that opens it in the phone's body."),
+      tabInk: z.enum(['paper', 'ink']).optional().describe("The tab's ink: `ink` marks the tab whose action is open in the body."),
+      draft: z.string().optional().describe('A question, put in the field ready to ask.'),
+    }),
+  ),
   layout: { if: '$.tab', then: TAB_BUTTON, else: askLayout },
   endpoints: {
     route: { fn: 'ask.route', target: 'routed', errorTarget: 'error' },

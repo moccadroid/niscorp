@@ -1,5 +1,6 @@
 import type { ActionDefinition } from '@niscorp/nova';
-import { TAB_BUTTON, TAB_INPUT, TAB_OPENED } from '@lyceum/app/actions/shared/tab.layouts';
+import { z } from 'zod';
+import { TAB_BUTTON, TAB_OPENED } from '@lyceum/app/actions/shared/tab.layouts';
 import { memberMe } from '@lyceum/app/vex/member.entries';
 import { renameLayout } from './rename.layout';
 import { renamePrism } from './rename.prism';
@@ -12,7 +13,13 @@ export const renameAction: ActionDefinition = {
   id: 'forms.rename',
   title: 'Change your record',
   data: { tab: false, tabLabel: 'Rename', tabInk: 'paper', nextInk: 'paper', me: { member_id: '', name: '' }, draft: '', saved: false, error: '' },
-  input: TAB_INPUT,
+  input: z.toJSONSchema(
+    z.object({
+      tab: z.boolean().optional().describe("Render as a tab on the phone: a button that opens it in the phone's body."),
+      tabInk: z.enum(['paper', 'ink']).optional().describe("The tab's ink: `ink` marks the tab whose action is open in the body."),
+      draft: z.string().optional().describe('A new name, put in the field ready to file.'),
+    }),
+  ),
   layout: { if: '$.tab', then: TAB_BUTTON, else: renameLayout },
   endpoints: {
     load: { url: '/api/vex', method: 'POST', request: { fingerprint: memberMe.fingerprint, context: {} }, target: 'me' },

@@ -43,7 +43,8 @@ const main = async (): Promise<void> => {
   const stage = await connect(base, await mintSession(first.runtime.pool, 'stage', 60_000));
   await speaker.hello();
   await stage.hello();
-  check('the first slide brings the assistant to the controller', await speaker.shows('tools', 'Assistant'));
+  check('the first slide brings the assistant to the controller', await speaker.shows('tools', 'Built from'));
+  check('…the speaker assistant, built from the controller declaration, able to automate', speaker.showsNow('tools', 'Built from controller') && speaker.showsNow('tools', 'automate'));
   check('there is no timer yet', await speaker.shows('head', 'No timer'));
 
   // ── 1. asked for, and read ──

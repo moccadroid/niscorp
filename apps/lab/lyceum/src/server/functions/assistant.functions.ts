@@ -1,40 +1,89 @@
-import { randomBytes } from 'node:crypto';
 import { z } from 'zod';
+import type { FunctionSession } from '@niscorp/moss';
 import type { FunctionHandler } from '@niscorp/nova';
-import { armable, dueOf, localNow } from '../timing';
+import { ACTIONS } from '@lyceum/app/action-catalog';
+import { assembleFor } from '../assistant/declarations';
+import type { Assembled } from '../assistant/declarations';
+import { hostTools } from '../assistant/tools';
+import type { Proposal } from '../assistant/tools';
+import type { Orchestrator } from '../assistant/orchestrator';
+import type { Asker } from '../asking';
 import type { TimerWriter, Timing } from '../timing';
+import { localNow } from '../timing';
+import { vexOver } from '../vex-over';
 
-// THE SPEAKER'S ASSISTANT, first form: ask for an automation in words; get the
-// document back to read; save it. Two functions, for the two things that are
-// not data (PLAN.md, "Vex is never hidden behind a function"):
+// THE ASSISTANT'S FUNCTIONS — for what is not data (PLAN.md, "Vex is never
+// hidden behind a function"): assembling this person's assistant from what the
+// charter granted them, and a model's turn. Saving an automation it proposed
+// is still the person's own vex write (`timers/save`), and `timers.arm` loads
+// the saved ones into tide.
 //
-//   assistant.propose  a model's choice — the reflex agent writes the timer.
-//                      Returned, never saved: the speaker reads it first.
-//   timers.arm         loading the saved timers into tide — the running
-//                      engine, not a table.
-//
-// Saving is neither: it is the speaker's own vex write (`timers/save`), made
-// by the action itself between the two.
+//   assistant.intro  who this assistant is for this person: the declarations
+//                    their grants select, its words, its starters
+//   assistant.turn   one message in; a reply and the proposals it left
+//   timers.arm       the saved timers into tide
 
 const DraftSchema = z.object({ draft: z.string() });
 
-export const assistantFunctions = (writer: TimerWriter, tz: string, timing: () => Timing): Record<string, FunctionHandler> => ({
-  'assistant.propose': async (data) => {
-    const intent = DraftSchema.parse(data).draft.trim();
-    if (intent === '') throw new Error('Ask for something first — "end the talk in 30 minutes".');
-    const now = Date.now();
-    // The host's word on the document, before anybody reads it: tide's schema,
-    // an offered effect with an input it accepts, and run as the clock.
-    const reflex = armable(await writer.write(intent, now, tz));
-    const due = dueOf(reflex, now);
+// What the assistant is handed about this person — assembled, not authored:
+// their declarations' instructions, the grounding read AS them now, and the
+// actions they can be offered.
+const knowledgeOf = async (session: FunctionSession, assembled: Assembled, tz: string): Promise<{ knowledge: string; facts: string }> => {
+  const vex = vexOver(session.wire);
+  const grounded = await Promise.all(
+    assembled.from.flatMap((declaration) =>
+      declaration.grounding
+        .filter((ground) => ground.upfront)
+        .map(async (ground) => {
+          try {
+            return `## ${ground.as}\n${JSON.stringify(await vex(ground.fingerprint, ground.context))}`;
+          } catch {
+            // A read this person's policy refuses contributes nothing.
+            return '';
+          }
+        }),
+    ),
+  );
+  const facts = grounded.filter((section) => section !== '').join('\n\n');
+  const offerable = session.actions
+    .filter((id) => ACTIONS[id]?.input !== undefined)
+    .map((id) => `- ${id}: ${ACTIONS[id]?.title ?? id}; input ${JSON.stringify(ACTIONS[id]?.input)}`);
+  const knowledge = [
+    `ASSISTANT FOR THIS PERSON — built from: ${assembled.from.map((declaration) => declaration.id).join(', ') || 'nothing'}`,
+    ...assembled.from.map((declaration) => declaration.instructions),
+    `Now: ${localNow(Date.now(), tz)} (${tz}).`,
+    facts === '' ? '' : `WHAT YOU KNOW\n${facts}`,
+    offerable.length === 0 ? '' : `ACTIONS YOU CAN OFFER (with \`open\`)\n${offerable.join('\n')}`,
+  ]
+    .filter((part) => part !== '')
+    .join('\n\n');
+  return { knowledge, facts };
+};
+
+export const assistantFunctions = (
+  session: FunctionSession,
+  deps: { asker: Asker; writer: TimerWriter; orchestrator: Orchestrator; tz: string; timing: () => Timing },
+): Record<string, FunctionHandler> => ({
+  'assistant.intro': async () => {
+    const assembled = assembleFor(session.actions);
+    const main = assembled.from[assembled.from.length - 1];
     return {
-      timerId: `${reflex.id}-${randomBytes(3).toString('hex')}`,
-      reflex,
-      json: JSON.stringify(reflex, null, 2),
-      intent: reflex.intent,
-      dueAt: due === undefined ? null : new Date(due).toISOString(),
-      dueLocal: due === undefined ? '' : localNow(due, tz).slice(11),
+      title: main?.title ?? 'Assistant',
+      intro: assembled.from.map((declaration) => declaration.intro).filter((intro) => intro !== '').join(' '),
+      builtFrom: assembled.from.map((declaration) => declaration.id).join(' · '),
+      tools: [...assembled.tools].join(' · '),
+      starters: assembled.from.flatMap((declaration) => declaration.starters).slice(0, 4),
     };
   },
-  'timers.arm': async () => ({ armed: await timing().reload() }),
+  'assistant.turn': async (data) => {
+    const message = DraftSchema.parse(data).draft.trim();
+    if (message === '') throw new Error('Ask something first.');
+    const assembled = assembleFor(session.actions);
+    const { knowledge, facts } = await knowledgeOf(session, assembled, deps.tz);
+    const proposals: Proposal[] = [];
+    const tools = hostTools({ session, asker: deps.asker, writer: deps.writer, tz: deps.tz, facts, proposals }, assembled.tools);
+    const reply = await deps.orchestrator.answer({ message, knowledge, tools });
+    return { text: reply, proposals };
+  },
+  'timers.arm': async () => ({ armed: await deps.timing().reload() }),
 });

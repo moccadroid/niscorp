@@ -52,11 +52,9 @@ In order; each lands with its check.
 2. ~~**Tide agent**~~ — built 2026-09-27 (`createReflexAgent({ effects })`, see "What is built").
 3. ~~**The ask**~~ — built 2026-09-27 (see "What is built"). Not yet: parameterised
    replays (Jev choosing a fingerprint's context values), the ask on the controller.
-4. **The assistant** — a first form is built for the speaker (the timer tool). Still to
-   come, on Midas's rulings (`midas/docs/assistant-structure.md`): a thread as a nova
-   action, the turn on the server, replies over the shell wire; the charter the only
-   gate; it proposes pre-filled actions and never calls one. Context: the screen's tree
-   (`reflect`), the principal's catalog with each action's `input`. For everybody.
+4. ~~**The assistant**~~ — built 2026-09-27 (see "What is built"). Not yet: streaming
+   replies; the reply text held to what the tools did (see "Measured"); the screen's tree
+   in its context.
 5. ~~**The timer**~~ — built 2026-09-27 (see "What is built").
 6. **The look switch**, inside lyceum, moss untouched: a `room` row holds the look
    (`poster` | `plain`); a small action granted to everybody reads it reactively and
@@ -122,9 +120,24 @@ The projector's `slide.ask` counts replayed / generated / refused (a reactive re
 the questions never go on the wall. `LYCEUM_ASK=live|fake`; the checks use the fake,
 which writes real DSL so the engine, the policy and the replay are the real ones.
 
+**The assistant** (`assistant.thread` — a tab on every phone, a tool on the controller's
+first slide; `app/assistant/assistants.ts`, `server/assistant/`). One assistant, assembled
+per person from DECLARATIONS — data in the shape of moss's bundle `assistants`
+(instructions, grounding reads, named tools, starters) — each applying to whoever holds its
+action: `room` (`member.card`), one per department tool, `controller` (`speaker.console`).
+So the charter's grants build it, and it says so at its top: "built from room · forms · it
+can ask · open". Grounding is read as the person; declarations naming an action, a read or
+a tool that does not exist refuse to boot. The turn (`assistant.turn`; gpt-oss-120b,
+`LYCEUM_ASSISTANT=live|fake`) routes to the host's three tools, the only code: `open`
+proposes an action the person holds, pre-filled from its declared input; `ask` runs the
+ask's own path; `automate` (controller only) hands the request, with the deck as facts, to
+tide's reflex agent — which can refuse. Every tool leaves a PROPOSAL: a button, an answer,
+a document to read and save; nothing runs without a press. `assistant-check` asserts the
+assembly per person and the bounds; `pnpm probe:assistant` measures it live.
+
 **The timer** — the talk's first minute and its last. On slide 1 the controller's tool is
-the speaker's assistant (`tools.assistant`): "End the talk in 30 minutes" goes to the reflex
-agent (`@niscorp/tide/agent`, gpt-oss-120b; `LYCEUM_TIMER=live|fake`), which writes a tide
+the speaker's assistant: "End the talk in 30 minutes" is routed to `automate`, and tide's
+reflex agent (`@niscorp/tide/agent`, gpt-oss-120b; `LYCEUM_TIMER=live|fake`) writes a tide
 REFLEX — shown as the document it is, to be read. Save is the speaker's own vex write
 (`timers/save`, the reflex as a JSONB row, `saved_by` stamped); then `timers.arm` loads the
 saved timers into tide (`server/timing.ts`: moss's durable store and driver, and at every
@@ -174,7 +187,7 @@ every re-boot. `/dev/as/speaker`, `/dev/as/stage`, `/dev/as/kit`, `/dev/new`,
 `?seat=<name>`. Vite listens on this machine only.
 
 **Checks** (`pnpm check`, each in its own process over its own database): `kit-check`,
-`tables-check`, `assignment-check`, `deck-check`, `serve-check`, `ask-check`, `timer-check`. The ask
+`tables-check`, `assignment-check`, `deck-check`, `serve-check`, `ask-check`, `timer-check`, `assistant-check`. The ask
 check also passes live (`LYCEUM_ASK=live node --env-file=.env --import tsx
 src/dev/ask-check.ts`).
 
@@ -204,6 +217,16 @@ src/dev/ask-check.ts`).
 - **Vex for everybody**; other actions are gated per department to show the charter.
 - **The speaker shares the controller's screen** at the start, so the room sees the
   timer being asked for and saved.
+- **One assistant, built per person by the charter** (answered 2026-09-27). The same
+  `assistant` action on every device; what it knows and can do is assembled from
+  DECLARATIONS (data: instructions, grounding reads, named tools, starters — the shape of
+  moss's bundle `assistants`), each keyed to an action. A declaration applies to whoever
+  holds its action, so the charter's grants select it — no new charter section, no
+  second list. Grounding reads run as the person, under their policy. Tools are the only
+  code: `open` (propose an action they hold, pre-filled), `ask` (the ask pipeline),
+  `automate` (the tide reflex agent, handed the deck as grounding; it can refuse). Only
+  the controller gets `automate`. Replies in one piece for now; nothing runs without a
+  press. Lyceum uses only machinery that exists — no package changes for this.
 
 ## Measured 2026-09-27 — the model check (`pnpm models`)
 
@@ -223,8 +246,21 @@ policy, one generation per question (`src/dev/model-check.ts`).
   tool parameters — 400), and qwen at reasoning `none` answers 30/36. Merging the system
   messages into one, and a `respond` tool, changed nothing.
 - **The reflex agent writing timers** (`LYCEUM_PART=tide pnpm models`), from a fixed 19:05
-  in Vienna: "in 30 minutes", "at half past nine", "at 9pm", "give me an hour, then end
-  it", a non-closing slide — 12/12 to the minute and the slide, ~1 s and ~2.3k tokens each.
+  in Vienna, given the deck as facts (ids, numbers, titles) and an effect that says only
+  what it does. The first measurement (12/12) was not honest: the effect's description
+  said "the talk ends on the last one", and every probe but one ended the talk. Probes
+  rewritten BEFORE the next run — slides by title, requests to refuse, a request with no
+  time: **13/16**. "End the talk in 30 minutes" 2/2 from the titles alone; slides by
+  title 4/4; "email me…", "remind me to drink water…" refused 4/4. Misses: "put the
+  register up at eight" at 19:05 → 08:00 TOMORROW, 0/2; "end the talk" with no time
+  refused 1/2 (the other run scheduled it for now — arguably a reading, not an error).
+- **The one assistant, live** (`pnpm probe:assistant`), four people, probes written
+  first: **16/16** on what was PROPOSED — a question answered, Forms offered its rename
+  pre-filled, Records asking the same offered nothing, the speaker's "end the talk"
+  written as a timer, a member's "end the talk" and the speaker's question (no `ask`
+  tool) and a reminder no effect can do all given nothing. The REPLY TEXT is not held to
+  that yet: once the speaker's assistant, with no tool for it, answered "who is in the
+  room?" with an invention; its timer reply says "recorded" of what is only proposed.
 - **Jev routing the ask** (`LYCEUM_PART=route pnpm models`): 16 probes against six
   earlier questions — paraphrases that must replay, the same words about another subject
   that must not, new questions whose shape is the test. **48/48** over three runs, ~250 ms

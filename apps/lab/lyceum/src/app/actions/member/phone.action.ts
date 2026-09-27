@@ -23,6 +23,7 @@ export const phoneAction: ActionDefinition = {
       { action: 'inquiries.desk', input: { tab: true } },
       { action: 'archive.log', input: { tab: true } },
       { action: 'ask.desk', input: { tab: true } },
+      { action: 'assistant.thread', input: { tab: true } },
     ],
   },
   layout: phoneLayout,

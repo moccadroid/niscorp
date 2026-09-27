@@ -10,6 +10,7 @@ import { roomFunctions } from './functions/room.functions';
 import { askFunctions } from './functions/ask.functions';
 import { assistantFunctions } from './functions/assistant.functions';
 import { createTimerWriter, startTiming, talkZone } from './timing';
+import { createOrchestrator } from './assistant/orchestrator';
 import type { Timing } from './timing';
 import { createAsker } from './asking';
 import { devRuntime } from './runtime';
@@ -58,6 +59,9 @@ export const bootOn = async <R extends LyceumRuntime>(runtime: R, options: BootO
   // Who writes the speaker's timers — the reflex agent with a key, the
   // deterministic fake without (./timing.ts) — and where the talk's clocks are.
   const timerWriter = createTimerWriter(process.env);
+  // The one assistant's turn — gpt-oss-120b with a key, the deterministic
+  // stand-in without (./assistant/orchestrator.ts).
+  const orchestrator = createOrchestrator(process.env);
   const tz = talkZone(process.env);
   let timingUp: Timing | undefined;
   const timing = (): Timing => {
@@ -67,7 +71,7 @@ export const bootOn = async <R extends LyceumRuntime>(runtime: R, options: BootO
 
   const app = buildLyceum({
     identity: lyceumIdentity,
-    functions: (session) => ({ ...doorFunctions(session, server, issuer), ...assignmentFunctions(session, server), ...roomFunctions(publicUrl), ...askFunctions(session, asker), ...assistantFunctions(timerWriter, tz, timing) }),
+    functions: (session) => ({ ...doorFunctions(session, server, issuer), ...assignmentFunctions(session, server), ...roomFunctions(publicUrl), ...askFunctions(session, asker), ...assistantFunctions(session, { asker, writer: timerWriter, orchestrator, tz, timing }) }),
     reactions: lyceumReactions(server),
   });
   built = await createServer(app, runtime);

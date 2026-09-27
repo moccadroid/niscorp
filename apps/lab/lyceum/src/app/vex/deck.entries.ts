@@ -141,6 +141,31 @@ export const deckGo: SeedMutation = {
   },
 };
 
+// The deck as the assistant knows it: every slide's id, its number and its
+// title. Ids included, because an automation names the slide it shows.
+export const slidesDeck: SeedEntry = {
+  fingerprint: 'slides/deck',
+  intent: 'Every slide in the deck with its id, number and title, in order',
+  shape: [{ slide_id: '', number: 0, title: '' }],
+  dsl: {
+    from: ['slides'],
+    fields: ['slides.slide_id', 'slides.position', 'slides.title'],
+    filter: { gte: ['slides.position', 0] },
+    sort: [{ field: 'slides.position', dir: 'asc' }],
+  },
+  mapping: {
+    $map: {
+      over: { $ref: '$.result' },
+      as: 'slide',
+      body: {
+        slide_id: { $get: { from: { $var: 'slide' }, path: ['slide_id'] } },
+        number: { $add: [{ $get: { from: { $var: 'slide' }, path: ['position'] } }, 1] },
+        title: { $get: { from: { $var: 'slide' }, path: ['title'] } },
+      },
+    },
+  },
+};
+
 // Put a named slide on screen — what a timer does when it fires (as the
 // `clock` principal, whose only grant is this write). By id rather than by
 // position: an automation names what it means, and the foreign key refuses a
@@ -156,4 +181,4 @@ export const deckShow: SeedMutation = {
   },
 };
 
-export const DECK_ENTRIES: readonly (SeedEntry | SeedMutation)[] = [deckCurrent, slidesAll, slideNotes, slideTools, deckGo, deckShow];
+export const DECK_ENTRIES: readonly (SeedEntry | SeedMutation)[] = [deckCurrent, slidesAll, slidesDeck, slideNotes, slideTools, deckGo, deckShow];
