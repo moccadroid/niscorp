@@ -17,4 +17,9 @@ export const BEHAVIORS: ScopeBehaviors = {
       update: [{ match: 'member_id', to: 'userId' }],
     },
   },
+  // A question is recorded as the person who asked it: the engine stamps
+  // `member_id`, and a request cannot put a question in anybody else's name.
+  asks: {
+    default: { insert: [{ set: 'member_id', to: 'userId' }] },
+  },
 };

@@ -10,6 +10,9 @@ import type { Charter } from '@niscorp/charter';
 
 const ROOM_READS = ['members.read', 'departments.read'];
 const DECK_READS = ['deck.read', 'slides.read'];
+// The ask: what was asked before (the router reads it as the asker) and the
+// asker's own record of asking.
+const ASKING = ['asks.read', 'asks.write.insert'];
 
 export const CHARTER: Charter = {
   // Anonymous: the door and nothing else — and, once stepping in has made
@@ -19,7 +22,9 @@ export const CHARTER: Charter = {
 
   // Everybody in the room, assigned or not: the ID card. Never worn alone —
   // the roles below extend it.
-  member: { actions: ['member.*'], data: ROOM_READS },
+  // Everybody may put a question to the records (the ask) — the one tool
+  // every clearance shares; what the answer can reach is still theirs.
+  member: { actions: ['member.*', 'ask.*'], data: [...ROOM_READS, ...ASKING] },
 
   unassigned: { extends: ['member'] },
   // Every department gets its badge; each gets one clearance of its own.
@@ -33,7 +38,7 @@ export const CHARTER: Charter = {
   // controller's tools change with the slide. The stage shows the deck —
   // every slide is an action only the stage is granted.
   speaker: { actions: ['speaker.*', 'tools.*'], data: [...ROOM_READS, ...DECK_READS, 'slide_notes.read', 'slide_tools.read', 'deck.write.update', 'members.write.update'] },
-  stage: { actions: ['stage.*', 'slide.*'], data: [...ROOM_READS, ...DECK_READS] },
+  stage: { actions: ['stage.*', 'slide.*'], data: [...ROOM_READS, ...DECK_READS, 'asks.read'] },
 
   // The kit's kitchen sink: every piece of the look on one screen (dev).
   kit: { actions: ['kit.*'] },

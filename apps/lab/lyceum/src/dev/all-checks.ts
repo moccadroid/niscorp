@@ -3,10 +3,11 @@
 // the order of the suite part of its meaning.
 import { spawnSync } from 'node:child_process';
 
-const CHECKS = ['kit-check', 'tables-check', 'assignment-check', 'deck-check', 'serve-check'];
+const CHECKS = ['kit-check', 'tables-check', 'assignment-check', 'deck-check', 'serve-check', 'ask-check'];
 
-// The checks never call a model: ID cards come from the deterministic issuer.
-const env = { ...process.env, LYCEUM_ISSUER: 'fake' };
+// The checks never call a model: ID cards come from the deterministic issuer,
+// and the ask from the deterministic router and query writer.
+const env = { ...process.env, LYCEUM_ISSUER: 'fake', LYCEUM_ASK: 'fake' };
 const failed = CHECKS.filter((name) => spawnSync('node', ['--import', 'tsx', `src/dev/${name}.ts`], { stdio: 'inherit', shell: false, env }).status !== 0);
 
 console.log(failed.length === 0 ? `\nall ${CHECKS.length} checks passed` : `\n${failed.length} of ${CHECKS.length} checks failed: ${failed.join(', ')}`);

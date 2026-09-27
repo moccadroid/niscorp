@@ -1,6 +1,7 @@
 import type { ActionDefinition, EndpointConfig } from '@niscorp/nova';
 import { departmentsAll, inquiryByDepartment, memberCounts } from '@lyceum/app/vex/member.entries';
-import { assignmentLayout, clearanceLayout, codeLayout, liveLayout, statementLayout, titleLayout } from './slide.layouts';
+import { asksTally } from '@lyceum/app/vex/ask.entries';
+import { askLayout, assignmentLayout, clearanceLayout, codeLayout, liveLayout, statementLayout, titleLayout } from './slide.layouts';
 
 // THE SLIDES. Each is an action only the stage is granted; the deck (`slides`
 // rows) decides which is on screen and in what order, and which tool the
@@ -113,6 +114,27 @@ export const liveSlide: ActionDefinition = {
   triggers: [],
 };
 
+// The ask: everybody's questions, counted as they are answered — replayed from
+// a stored query, written new by a model, or refused. A reactive read: the
+// numbers climb while the room asks.
+export const askSlide: ActionDefinition = {
+  id: 'slide.ask',
+  title: 'Ask the records',
+  data: {
+    kicker: 'On your phone: Ask the records',
+    title: 'Ask it anything',
+    lines: [
+      'A model writes a query only for a question nobody has asked — under your clearance, never past it. Every question after that is a replay.',
+      'The model is a compiler that runs once, not an interpreter that runs every time.',
+    ],
+    tally: { replayed: 0, generated: 0, refused: 0 },
+  },
+  layout: askLayout,
+  endpoints: { tally: read(asksTally.fingerprint, 'tally') },
+  lifecycle: { mount: [{ call: 'tally' }] },
+  triggers: [],
+};
+
 export const endSlide: ActionDefinition = {
   id: 'slide.end',
   title: 'It is all in the folder',
@@ -129,4 +151,4 @@ export const endSlide: ActionDefinition = {
   triggers: [],
 };
 
-export const SLIDE_ACTIONS: readonly ActionDefinition[] = [titleSlide, dataSlide, assignmentSlide, clearanceSlide, liveSlide, endSlide];
+export const SLIDE_ACTIONS: readonly ActionDefinition[] = [titleSlide, dataSlide, assignmentSlide, clearanceSlide, liveSlide, askSlide, endSlide];

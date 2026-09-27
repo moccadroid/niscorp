@@ -104,10 +104,29 @@ export const SLIDE_TOOLS = /* sql */ `
   ALTER TABLE slides DROP COLUMN tool_id;
 `;
 
+// Migration 3: THE ASK. Every question somebody put to the records, how it was
+// answered — `replayed` (an earlier question's stored query), `generated` (a
+// new one, written by the model under the asker's policy) or `refused` — and
+// the fingerprint it replays by. `member_id` is the asker's, stamped by the
+// engine (vex/behaviors.ts); the projector reads only the counts, never the
+// words (a person wrote them, and nothing a person wrote goes up unread).
+export const ASKS = /* sql */ `
+  CREATE TABLE asks (
+    ask_id      TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+    member_id   TEXT NOT NULL,
+    question    TEXT NOT NULL,
+    shape       TEXT NOT NULL,
+    how         TEXT NOT NULL CHECK (how IN ('replayed', 'generated', 'refused')),
+    fingerprint TEXT,
+    asked_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+  );
+`;
+
 export const LYCEUM_SEQUENCE: Sequence = {
   id: 'lyceum.app',
   migrations: [
     { description: "The Ministry's tables: departments, members, the deck and its notes, grants, sign-in links", steps: sqlSteps(DDL) },
     { description: "A slide's tools are rows (slide_tools), not one column on the slide", steps: sqlSteps(SLIDE_TOOLS) },
+    { description: 'The ask: every question put to the records, and how it was answered', steps: sqlSteps(ASKS) },
   ],
 };

@@ -48,6 +48,7 @@ export const SLIDES: readonly { slideId: string; title: string; tools: readonly 
   { slideId: 'slide.assignment', title: 'Assignment', tools: ['tools.assignment', 'tools.tally'], notes: ['Tell the room to watch their phones', 'Press Assign the room', 'One row changes per person — the phone follows without a reload'] },
   { slideId: 'slide.clearance', title: 'If you can’t use it, it isn’t there', tools: ['tools.assignment'], notes: ['Ask people to compare phones with a neighbour', 'Different departments, different tools — the rest was never sent', 'Not hidden, not disabled: it does not exist for them'] },
   { slideId: 'slide.live', title: 'Nobody announced anything', tools: [], notes: ['Watch the numbers move as people act', 'No channel, no listener — the query knows what it reads', 'This is a reactive vex read'] },
+  { slideId: 'slide.ask', title: 'Ask it anything', tools: [], notes: ['Tell the room: the last box on your phone — ask the records anything', 'Watch the counts: replayed climbs, written-by-a-model stays low', 'Somebody will ask for the login links — the refusal is the point'] },
   { slideId: 'slide.end', title: 'It is all in the folder', tools: [], notes: ['Everything was running on this server as they watched', 'It is all in the folder: apps/lab/lyceum', 'Thank them; take questions'] },
 ];
 

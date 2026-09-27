@@ -12,7 +12,7 @@ export const renameLayout: LayoutNode = {
       component: 'Cell',
       props: { area: 'rest' },
       children: [
-        { if: '$.error', then: { component: 'Text', children: '{{$.error}}' } },
+        { if: '$.error', then: { component: 'Text', children: '{{$.error.message}}' } },
         { if: '$.saved', then: { component: 'Text', props: { tone: 'muted' }, children: 'Filed. Every screen that shows your name has it now.' } },
       ],
     },

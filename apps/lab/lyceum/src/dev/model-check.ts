@@ -4,6 +4,8 @@ import type { ScopePolicy } from '@niscorp/vex';
 import { createQueryDsl, createShapeMapper } from '@niscorp/vex/agent';
 import { createSignal } from '@niscorp/signal';
 import { devRuntime } from '@lyceum/server/runtime';
+import { createAsker } from '@lyceum/server/asking';
+import type { Known } from '@lyceum/server/asking';
 
 // THE MODEL CHECK — do the talk's generative seams hold on the models the talk
 // runs? Not part of `pnpm check`: it calls Groq, costs tokens and is measured,
@@ -175,7 +177,70 @@ globalThis.fetch = async (input, init) => {
   return response;
 };
 
+// LYCEUM_PART=route: the ask's router (server/asking.ts, live) — Jev with
+// TYPESAFE_API_KEY. Given what has been asked before, does it send a question
+// to the earlier question that asks for the same thing — and only then — and
+// pick the right shape for a new one? Paraphrases must replay; the same words
+// about a different subject must not.
+const KNOWN: readonly Known[] = [
+  { question: 'How many people are in the room?', fingerprint: 'fp_room', shape: 'number' },
+  { question: 'Who is in Records?', fingerprint: 'fp_records', shape: 'people' },
+  { question: 'How many people are in each department?', fingerprint: 'fp_per_dept', shape: 'counts' },
+  { question: 'Who arrived first?', fingerprint: 'fp_first', shape: 'people' },
+  { question: 'What does each department let you do?', fingerprint: 'fp_remits', shape: 'list' },
+  { question: 'How many people have not been assigned yet?', fingerprint: 'fp_waiting', shape: 'number' },
+];
+const ROUTES: readonly { question: string; replays?: string; shape?: string }[] = [
+  { question: 'how many of us are here', replays: 'fp_room' },
+  { question: 'What is the headcount right now?', replays: 'fp_room' },
+  { question: 'who works in records', replays: 'fp_records' },
+  { question: 'Members of the Records department', replays: 'fp_records' },
+  { question: 'Department sizes', replays: 'fp_per_dept' },
+  { question: "What is each department's clearance?", replays: 'fp_remits' },
+  { question: 'Who was the first to arrive?', replays: 'fp_first' },
+  { question: 'How many are still waiting for a department?', replays: 'fp_waiting' },
+  // the same words about something else — must NOT replay
+  { question: 'Who is in Forms?', shape: 'people' },
+  { question: 'Who arrived last?', shape: 'people' },
+  { question: 'How many people are in Archive?', shape: 'number' },
+  { question: 'How many people have a title with Clerk in it?', shape: 'number' },
+  // new questions — the shape is the test
+  { question: 'How many people per job title?', shape: 'counts' },
+  { question: 'List every department and its mark', shape: 'list' },
+  { question: 'Who has the longest job title?', shape: 'people' },
+  { question: 'How many departments are there?', shape: 'number' },
+];
+
+const measureRoutes = async (): Promise<void> => {
+  const asker = createAsker({ ...process.env, LYCEUM_ASK: 'live' });
+  const decider = (process.env['TYPESAFE_API_KEY'] ?? '') !== '' ? 'Jev (typesafe)' : `${MODEL}, emulating decide()`;
+  let passed = 0;
+  let total = 0;
+  for (let run = 0; run < RUNS; run += 1) {
+    for (const probe of ROUTES) {
+      const started = Date.now();
+      let got: string;
+      try {
+        const route = await asker.route(probe.question, KNOWN);
+        got = 'replay' in route ? `replay ${route.replay.fingerprint}` : `new ${route.generate.kind}`;
+      } catch (error) {
+        got = `error ${error instanceof Error ? error.message.slice(0, 100) : String(error)}`;
+      }
+      const want = probe.replays !== undefined ? `replay ${probe.replays}` : `new ${probe.shape ?? ''}`;
+      const ok = got === want;
+      passed += ok ? 1 : 0;
+      total += 1;
+      console.log(`${ok ? '[pass]' : '[fail]'} ${String(Date.now() - started).padStart(5)}ms  ${probe.question} → ${got}${ok ? '' : `  (wanted ${want})`}`);
+    }
+  }
+  console.log(`\nrouting on ${decider} · ${RUNS} run(s) · total ${passed}/${total}`);
+};
+
 const main = async (): Promise<void> => {
+  if (process.env['LYCEUM_PART'] === 'route') {
+    await measureRoutes();
+    return;
+  }
   const runtime = await devRuntime();
   await runtime.db.exec(seedRoom());
 

@@ -79,6 +79,21 @@ export const liveLayout: LayoutNode = {
   ],
 };
 
+// The ask: the room's questions, counted by how they were answered. Counts
+// only — the questions were written by people and do not go up on the wall.
+export const askLayout: LayoutNode = {
+  component: 'Sheet',
+  props: { size: 'fill', areas: ['kick kick kick', 'head head head', 'replayed generated refused', 'words words words'], rows: ['auto', 1, 'auto', 'auto'] },
+  children: [
+    cell('kick', [label('{{$.kicker}}')]),
+    cell('head', [{ component: 'Headline', props: { level: 'display' }, children: '{{$.title}}' }], { align: 'end' }),
+    cell('replayed', [{ component: 'Figure', props: { label: 'Replayed — no model', value: '$.tally.replayed' } }], { ink: 'live' }),
+    cell('generated', [{ component: 'Figure', props: { label: 'Written by a model', value: '$.tally.generated' } }], { ink: 'signal' }),
+    cell('refused', [{ component: 'Figure', props: { label: 'Refused', value: '$.tally.refused' } }], { mark: 'hatch' }),
+    cell('words', [{ component: 'Text', children: '{{$.lines.0}}' }, { component: 'Text', props: { tone: 'muted' }, children: '{{$.lines.1}}' }]),
+  ],
+};
+
 // Assignment: a block per department — its mark, its sigil, its name —
 // placed by the grid in the row under the headline; then how many each has so
 // far, filling in as the speaker assigns the room.

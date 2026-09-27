@@ -22,6 +22,8 @@ export type Terminal = {
   textOf: (canvas: string) => string;
   session: () => Promise<string>;
   click: (canvas: string, ref: string, payload?: unknown) => void;
+  // What a `model`'d field sends as somebody types (nova's dom adapter).
+  type: (canvas: string, ref: string, text: string) => void;
   sessionsSeen: () => number;
   isOpen: () => boolean;
   close: () => void;
@@ -97,6 +99,11 @@ export const connect = (base: string, token?: string): Promise<Terminal> =>
         click: (canvas, ref, payload) => {
           const origin = instanceAround(JSON.parse(trees.get(canvas) ?? '[]'), ref);
           const event = { type: 'ui:click', ref, ...(payload === undefined ? {} : { payload }), ...(origin === undefined ? {} : { origin }) };
+          socket.send(JSON.stringify({ type: 'event', canvas, event }));
+        },
+        type: (canvas, ref, text) => {
+          const origin = instanceAround(JSON.parse(trees.get(canvas) ?? '[]'), ref);
+          const event = { type: 'ui:model', ref, payload: text, ...(origin === undefined ? {} : { origin }) };
           socket.send(JSON.stringify({ type: 'event', canvas, event }));
         },
         sessionsSeen: () => sessions.length,

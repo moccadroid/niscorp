@@ -15,5 +15,6 @@ export const frameLayout: LayoutNode = {
     { component: 'CanvasSlot', props: { canvasId: 'badge' } },
     { component: 'CanvasSlot', props: { canvasId: 'main' } },
     { component: 'CanvasSlot', props: { canvasId: 'desk' } },
+    { component: 'CanvasSlot', props: { canvasId: 'ask' } },
   ],
 };

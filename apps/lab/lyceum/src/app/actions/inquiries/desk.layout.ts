@@ -15,7 +15,7 @@ export const deskLayout: LayoutNode = {
       component: 'Cell',
       props: { pad: 'none' },
       children: [
-        { if: '$.error', then: { component: 'Text', children: '{{$.error}}' } },
+        { if: '$.error', then: { component: 'Text', children: '{{$.error.message}}' } },
         {
           if: '$.asked',
           then: {

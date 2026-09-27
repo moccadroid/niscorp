@@ -16,7 +16,7 @@ export const doorLayout: LayoutNode = {
       props: { area: 'body' },
       children: [
         { component: 'Text', children: 'Tonight the talk is an application, and you are in it.' },
-        { if: '$.error', then: { component: 'Text', props: { tone: 'muted' }, children: '{{$.error}}' } },
+        { if: '$.error', then: { component: 'Text', props: { tone: 'muted' }, children: '{{$.error.message}}' } },
       ],
     },
     {

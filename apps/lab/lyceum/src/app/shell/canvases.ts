@@ -14,6 +14,9 @@ import type { ShellManifest } from '@niscorp/moss';
 //          the slide's tools, a list the speaker's deck reconciles.
 //   desk   your department's own tool — the one thing your clearance lets you
 //          do that the others' does not
+//   ask    the ask — every member's: a question to the records in their own
+//          words (below the desk: what everybody shares comes after what
+//          only your clearance gives you)
 //   overlay  whatever is opened over the screen, in the `sheet` fragment's
 //          chrome (all slides, on the controller)
 //   deck   the stage's and the speaker's deck: shows nothing, follows the
@@ -41,6 +44,7 @@ export const CANVASES: ShellManifest['canvases'] = [
   { id: 'notes', initial: ['speaker.notes'] },
   { id: 'controls', initial: ['speaker.controls'] },
   { id: 'desk', initial: ['records.register', 'forms.rename', 'inquiries.desk', 'archive.log'] },
+  { id: 'ask', initial: ['ask.desk'] },
   { id: 'overlay' },
   { id: 'deck', initial: ['stage.deck', 'speaker.deck'] },
 ];

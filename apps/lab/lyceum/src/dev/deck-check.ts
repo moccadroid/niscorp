@@ -100,9 +100,11 @@ const main = async (): Promise<void> => {
   check('Close shuts the list and changes nothing', (await waitUntil(() => !speaker.showsNow('overlay', 'All slides'))) && (await onSlide(total - 1)));
 
   // ── a live slide follows the room ──
-  const live = SLIDES.findIndex((slide) => slide.slideId === 'slide.live');
   speaker.click('controls', 'back');
-  check('back shows the slide before it', await onSlide(live));
+  check('back shows the slide before it', await onSlide(total - 2));
+  const live = SLIDES.findIndex((slide) => slide.slideId === 'slide.live');
+  await pick(live);
+  check('the live slide is on the stage', await onSlide(live));
   check('the live slide counts an empty room', await stage.shows('main', '0 in the room'));
 
   const stranger = await connect(base);

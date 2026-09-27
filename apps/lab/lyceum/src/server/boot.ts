@@ -7,6 +7,8 @@ import { lyceumReactions } from './reactions';
 import { doorFunctions } from './functions/door.functions';
 import { assignmentFunctions } from './functions/assignment.functions';
 import { roomFunctions } from './functions/room.functions';
+import { askFunctions } from './functions/ask.functions';
+import { createAsker } from './asking';
 import { devRuntime } from './runtime';
 import { createIssuer } from './issuer';
 import type { DevRuntime, LyceumRuntime } from './runtime';
@@ -45,10 +47,13 @@ export const bootOn = async <R extends LyceumRuntime>(runtime: R, options: BootO
   // Who writes the ID cards — Qwen with a key, the deterministic fake without
   // (./issuer.ts). Read from the environment the process was started with.
   const issuer = createIssuer(process.env);
+  // Who routes and writes the answers to the ask — Jev and gpt-oss-120b with
+  // keys, the deterministic fake without (./asking.ts).
+  const asker = createAsker(process.env);
 
   const app = buildLyceum({
     identity: lyceumIdentity,
-    functions: (session) => ({ ...doorFunctions(session, server, issuer), ...assignmentFunctions(session, server), ...roomFunctions(publicUrl) }),
+    functions: (session) => ({ ...doorFunctions(session, server, issuer), ...assignmentFunctions(session, server), ...roomFunctions(publicUrl), ...askFunctions(session, asker) }),
     reactions: lyceumReactions(server),
   });
   built = await createServer(app, runtime);
