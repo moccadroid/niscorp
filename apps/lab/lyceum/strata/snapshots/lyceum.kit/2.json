@@ -1,12 +1,15 @@
 {
   "kinds": {
     "lyceum.kit/props": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "additionalProperties": false,
+      "description": "The props each lyceum kit component accepts, by component name",
       "properties": {
         "Action": {
           "additionalProperties": false,
           "properties": {
             "area": {
+              "description": "A grid area name from the enclosing Sheet",
               "type": "string"
             },
             "ink": {
@@ -89,6 +92,7 @@
               "type": "string"
             },
             "area": {
+              "description": "A grid area name from the enclosing Sheet",
               "type": "string"
             },
             "ink": {
@@ -145,6 +149,7 @@
               "type": "string"
             },
             "to": {
+              "description": "The instant counted down to",
               "type": "string"
             }
           },
@@ -154,6 +159,7 @@
           "additionalProperties": false,
           "properties": {
             "area": {
+              "description": "A grid area name from the enclosing Sheet",
               "type": "string"
             },
             "placeholder": {
@@ -172,13 +178,9 @@
               "type": "string"
             },
             "value": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "number"
-                }
+              "type": [
+                "string",
+                "number"
               ]
             }
           },
