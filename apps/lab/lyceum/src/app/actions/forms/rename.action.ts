@@ -1,5 +1,5 @@
 import type { ActionDefinition } from '@niscorp/nova';
-import { TAB_BUTTON, TAB_INPUT } from '@lyceum/app/actions/shared/tab.layouts';
+import { TAB_BUTTON, TAB_INPUT, TAB_OPENED } from '@lyceum/app/actions/shared/tab.layouts';
 import { memberMe } from '@lyceum/app/vex/member.entries';
 import { renameLayout } from './rename.layout';
 import { renamePrism } from './rename.prism';
@@ -11,7 +11,7 @@ import { renamePrism } from './rename.prism';
 export const renameAction: ActionDefinition = {
   id: 'forms.rename',
   title: 'Change your record',
-  data: { tab: false, tabLabel: 'Rename', me: { member_id: '', name: '' }, draft: '', saved: false, error: '' },
+  data: { tab: false, tabLabel: 'Rename', tabInk: 'paper', nextInk: 'paper', me: { member_id: '', name: '' }, draft: '', saved: false, error: '' },
   input: TAB_INPUT,
   layout: { if: '$.tab', then: TAB_BUTTON, else: renameLayout },
   endpoints: {
@@ -20,7 +20,8 @@ export const renameAction: ActionDefinition = {
   },
   lifecycle: { mount: [{ call: 'load' }] },
   triggers: [
-    { event: 'ui:click', ref: 'open', do: [{ resetTo: { action: 'forms.rename', canvas: 'body' } }] },
+    { event: 'ui:click', ref: 'open', do: [{ set: 'nextInk', value: 'ink' }, { emit: { channel: 'tab-opened' } }, { resetTo: { action: 'forms.rename', canvas: 'body' } }] },
+    TAB_OPENED,
     {
       event: 'ui:click',
       ref: 'save',

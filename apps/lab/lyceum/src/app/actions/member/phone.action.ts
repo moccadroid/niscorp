@@ -16,7 +16,8 @@ export const phoneAction: ActionDefinition = {
   title: 'Your phone',
   data: {
     tabs: [
-      { action: 'member.card', input: { tab: true } },
+      // The body opens on the card, so its tab starts marked.
+      { action: 'member.card', input: { tab: true, tabInk: 'ink' } },
       { action: 'records.register', input: { tab: true } },
       { action: 'forms.rename', input: { tab: true } },
       { action: 'inquiries.desk', input: { tab: true } },

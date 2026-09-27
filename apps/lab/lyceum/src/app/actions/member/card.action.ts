@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import type { ActionDefinition } from '@niscorp/nova';
 import { memberMe } from '@lyceum/app/vex/member.entries';
-import { TAB_BUTTON } from '@lyceum/app/actions/shared/tab.layouts';
+import { TAB_BUTTON, TAB_OPENED } from '@lyceum/app/actions/shared/tab.layouts';
 import { cardLayout, cardStripLayout } from './card.layout';
 
 // Your ID card. Everybody in the room has one, assigned or not; it reads the
@@ -18,11 +18,14 @@ export const cardAction: ActionDefinition = {
     tab: false,
     strip: false,
     tabLabel: 'Card',
+    tabInk: 'paper',
+    nextInk: 'paper',
   },
   input: z.toJSONSchema(
     z.object({
       tab: z.boolean().optional().describe('Render as a tab on the phone: a button that opens the card in the phone\'s body.'),
       strip: z.boolean().optional().describe('Render as one line — name and department — across the top of the phone.'),
+      tabInk: z.enum(['paper', 'ink']).optional().describe('The tab\'s ink: `ink` marks the tab whose action is open in the body.'),
     }),
   ),
   layout: { if: '$.tab', then: TAB_BUTTON, else: { if: '$.strip', then: cardStripLayout, else: cardLayout } },
@@ -30,5 +33,8 @@ export const cardAction: ActionDefinition = {
     load: { url: '/api/vex', method: 'POST', request: { fingerprint: memberMe.fingerprint, context: {} }, target: 'me' },
   },
   lifecycle: { mount: [{ call: 'load' }] },
-  triggers: [{ event: 'ui:click', ref: 'open', do: [{ resetTo: { action: 'member.card', canvas: 'body' } }] }],
+  triggers: [
+    { event: 'ui:click', ref: 'open', do: [{ set: 'nextInk', value: 'ink' }, { emit: { channel: 'tab-opened' } }, { resetTo: { action: 'member.card', canvas: 'body' } }] },
+    TAB_OPENED,
+  ],
 };

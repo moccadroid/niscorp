@@ -1,5 +1,5 @@
 import type { ActionDefinition } from '@niscorp/nova';
-import { TAB_BUTTON, TAB_INPUT } from '@lyceum/app/actions/shared/tab.layouts';
+import { TAB_BUTTON, TAB_INPUT, TAB_OPENED } from '@lyceum/app/actions/shared/tab.layouts';
 import { askLayout } from './ask.layout';
 import { answerPrism } from './ask.prism';
 
@@ -16,7 +16,7 @@ export const askAction: ActionDefinition = {
   title: 'Ask the records',
   data: {
     tab: false,
-    tabLabel: 'Ask',
+    tabLabel: 'Ask', tabInk: 'paper', nextInk: 'paper',
     draft: '',
     routed: { fingerprint: '', kind: '', how: '', said: '', figure: false, columns: [] },
     answer: [],
@@ -31,7 +31,8 @@ export const askAction: ActionDefinition = {
     answer: { url: '/api/vex', method: 'POST', request: answerPrism, target: 'answer', errorTarget: 'error' },
   },
   triggers: [
-    { event: 'ui:click', ref: 'open', do: [{ resetTo: { action: 'ask.desk', canvas: 'body' } }] },
+    { event: 'ui:click', ref: 'open', do: [{ set: 'nextInk', value: 'ink' }, { emit: { channel: 'tab-opened' } }, { resetTo: { action: 'ask.desk', canvas: 'body' } }] },
+    TAB_OPENED,
     {
       event: 'ui:click',
       ref: 'ask',

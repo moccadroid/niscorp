@@ -1,5 +1,5 @@
 import type { ActionDefinition } from '@niscorp/nova';
-import { TAB_BUTTON, TAB_INPUT } from '@lyceum/app/actions/shared/tab.layouts';
+import { TAB_BUTTON, TAB_INPUT, TAB_OPENED } from '@lyceum/app/actions/shared/tab.layouts';
 import { archiveHistory } from '@lyceum/app/vex/member.entries';
 import { logLayout } from './log.layout';
 
@@ -8,12 +8,15 @@ import { logLayout } from './log.layout';
 export const logAction: ActionDefinition = {
   id: 'archive.log',
   title: 'The archive',
-  data: { tab: false, tabLabel: 'Archive', rows: [] },
+  data: { tab: false, tabLabel: 'Archive', tabInk: 'paper', nextInk: 'paper', rows: [] },
   input: TAB_INPUT,
   layout: { if: '$.tab', then: TAB_BUTTON, else: logLayout },
   endpoints: {
     load: { url: '/api/vex', method: 'POST', request: { fingerprint: archiveHistory.fingerprint, context: {} }, target: 'rows' },
   },
   lifecycle: { mount: [{ call: 'load' }] },
-  triggers: [{ event: 'ui:click', ref: 'open', do: [{ resetTo: { action: 'archive.log', canvas: 'body' } }] }],
+  triggers: [
+    { event: 'ui:click', ref: 'open', do: [{ set: 'nextInk', value: 'ink' }, { emit: { channel: 'tab-opened' } }, { resetTo: { action: 'archive.log', canvas: 'body' } }] },
+    TAB_OPENED,
+  ],
 };

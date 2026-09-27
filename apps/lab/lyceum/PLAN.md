@@ -107,7 +107,8 @@ differs because their charter does. Each of those actions renders itself as a ta
 loaded with `{ tab: true }` (`actions/shared/tab.layouts.ts`) and, pressed, resets the
 body to its full self. Assignment rebuilds the shell, so the department's tool arrives
 as a tab without a reload (`assignment-check`). The department badge is gone: the strip
-and the card carry the department. Not yet: the open tab marked in the bar.
+and the card carry the department. The open tab is ink: the tabs agree among themselves over a payload-less
+`tab-opened` channel, each taking its own `nextInk` (`shared/tab.layouts.ts`).
 
 **The ask** (`ask.desk`, every member's; `server/functions/ask.functions.ts`,
 `server/asking.ts`). A question typed in your own words. `ask.route` — a function, for

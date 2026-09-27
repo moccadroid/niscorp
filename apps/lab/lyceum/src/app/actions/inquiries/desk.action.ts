@@ -1,5 +1,5 @@
 import type { ActionDefinition } from '@niscorp/nova';
-import { TAB_BUTTON, TAB_INPUT } from '@lyceum/app/actions/shared/tab.layouts';
+import { TAB_BUTTON, TAB_INPUT, TAB_OPENED } from '@lyceum/app/actions/shared/tab.layouts';
 import { inquiryByDepartment, inquiryNewest, inquiryWaiting } from '@lyceum/app/vex/member.entries';
 import { deskLayout } from './desk.layout';
 import { askPrism } from './desk.prism';
@@ -10,7 +10,7 @@ import { askPrism } from './desk.prism';
 export const deskAction: ActionDefinition = {
   id: 'inquiries.desk',
   title: 'Put a question to the records',
-  data: { tab: false, tabLabel: 'Inquire',
+  data: { tab: false, tabLabel: 'Inquire', tabInk: 'paper', nextInk: 'paper',
     questions: [
       { fingerprint: inquiryByDepartment.fingerprint, question: 'How many are in each department?' },
       { fingerprint: inquiryNewest.fingerprint, question: 'Who arrived last?' },
@@ -26,7 +26,8 @@ export const deskAction: ActionDefinition = {
     ask: { url: '/api/vex', method: 'POST', request: askPrism, target: 'answer', errorTarget: 'error' },
   },
   triggers: [
-    { event: 'ui:click', ref: 'open', do: [{ resetTo: { action: 'inquiries.desk', canvas: 'body' } }] },
+    { event: 'ui:click', ref: 'open', do: [{ set: 'nextInk', value: 'ink' }, { emit: { channel: 'tab-opened' } }, { resetTo: { action: 'inquiries.desk', canvas: 'body' } }] },
+    TAB_OPENED,
     {
       event: 'ui:click',
       ref: 'question',

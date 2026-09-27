@@ -21,7 +21,25 @@ import { check, connect, finish, waitUntil } from './harness';
 const TOOL: Record<string, string> = { records: 'records.register', forms: 'forms.rename', inquiries: 'inquiries.desk', archive: 'archive.log' };
 // …and the name it wears as a tab on the phone.
 const TAB: Record<string, string> = { records: 'Register', forms: 'Rename', inquiries: 'Inquire', archive: 'Archive' };
-const anyToolTab = (showsNow: (canvas: string, text: string) => boolean): boolean => Object.values(TAB).some((label) => showsNow('tabs', label));
+// The ink of the tab labelled `label` on the tabs canvas — `ink` marks the
+// one whose action is open in the body.
+const tabInk = (tree: string, label: string): unknown => {
+  const find = (node: unknown): unknown => {
+    if (Array.isArray(node)) {
+      for (const child of node) {
+        const found = find(child);
+        if (found !== undefined) return found;
+      }
+      return undefined;
+    }
+    if (typeof node !== 'object' || node === null) return undefined;
+    const props: unknown = 'props' in node ? node.props : undefined;
+    if (typeof props === 'object' && props !== null && 'label' in props && props.label === label && 'ink' in props) return props.ink;
+    return 'children' in node ? find(node.children) : undefined;
+  };
+  return find(JSON.parse(tree === '' ? '[]' : tree));
+};
+const anyToolTab =(showsNow: (canvas: string, text: string) => boolean): boolean => Object.values(TAB).some((label) => showsNow('tabs', label));
 
 const main = async (): Promise<void> => {
   // ── the charter and the departments agree: a department_id IS a role ──
@@ -109,6 +127,7 @@ const main = async (): Promise<void> => {
   check(`their department's own tool arrives as a tab (${tab})`, await member.shows('tabs', tab));
   member.clickIn('tabs', 'open', tab);
   check(`…and pressing it opens the tool, alone, in the body (${tool})`, await waitUntil(() => !member.showsNow('body', 'ID card') && member.showsNow('body', department?.name ?? '\u0000')));
+  check('…and its tab is the one marked open, the card\'s no longer', await waitUntil(() => tabInk(member.textOf('tabs'), tab) === 'ink' && tabInk(member.textOf('tabs'), 'Card') === 'paper'));
 
   check('the controller counts them assigned', await speaker.shows('head', '1 in the room · 1 assigned'));
 
