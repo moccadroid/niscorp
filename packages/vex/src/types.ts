@@ -28,8 +28,9 @@ export type GenerateDsl = (request: QueryRequest, schema: DatabaseSchema, caller
 
 /**
  * Result mapping from the raw row set to the requested shape. The mapping runs
- * ONCE over `{ result: rows }`, so `transformed` is whatever it produced — an
- * array, a single object, or a scalar. Wire to Prism's mapping agent.
+ * ONCE over `{ result }` — the rows for an array shape, the single (first) row
+ * for an object shape — so `transformed` is whatever it produced: an array, a
+ * single object, or a scalar. Wire to Prism's mapping agent.
  */
 export type MapToShape = (rows: Row[], shape: unknown) => Promise<{ ir: CompiledIr; transformed: JsonValue }>;
 

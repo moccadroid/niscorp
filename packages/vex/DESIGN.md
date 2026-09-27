@@ -492,8 +492,10 @@ exported from the `@niscorp/vex/agent` subpath — `createQueryDsl` (fills
   `caller.read`; the tool set holds no adapter and no SQL.
   `createQueryDsl` wraps it into the `generateDsl` hook.
 - The **mapping agent** is Prism's exported `mappingAgent`; `createShapeMapper`
-  wraps each raw row as `{ result: row }`, runs the agent once to get a transform
-  config, compiles it to IR, and applies the IR row-by-row.
+  builds the same envelope the runtime replays against — `{ result: rows }` for an
+  array shape, `{ result: rows[0] ?? null }` for an object shape — runs the agent
+  once to get a transform config, compiles it to IR, and applies the IR once over
+  that envelope (the identity, with no model call, when the rows already fit).
 
 > The reference agents are a separate concern from the deterministic core: they
 > live behind the `@niscorp/vex/agent` subpath, so `@niscorp/cortex`,

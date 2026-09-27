@@ -87,10 +87,10 @@ export const createQueryDsl = (config: QueryDslConfig): GenerateDsl => {
 // ═══════════════════════════════════════════════════════════════
 // mapToShape hook factory — runs Prism's mappingAgent
 //
-// The mapping runs ONCE over the whole row set as { result: rows }, and its
-// output IS the result (array / object / scalar). The { result: rows } envelope
-// here must match the runtime's cache-hit path (engine/runtime.ts), which
-// replays the cached IR against the same envelope. Keep them in lockstep.
+// The mapping runs ONCE over { result }, and its output IS the result (array /
+// object / scalar). An array shape puts the rows in $.result; an object shape
+// puts the single (first) row there. The envelope here must match the
+// runtime's cache-hit path (engine/runtime.ts), which replays the cached IR against the same envelope. Keep them in lockstep.
 //
 // NOTE: for the agent to actually author a whole-set mapping (a `$map` over
 // `$.result` for arrays), its instructions must teach that — tracked as a

@@ -223,7 +223,7 @@ export const todosOpen: SeedEntry = {
     filter: { eq: ['todos.done', false] },
     sort: [{ field: 'todos.due_date', dir: 'asc' }],
   },
-  mapping: { /* Prism over { result: rows }; omit when the DSL already aliases to the shape */ },
+  mapping: { /* Prism over { result }: the rows (array shape) or the one row (object shape); omit when the DSL already aliases to the shape */ },
 };
 ```
 
@@ -231,7 +231,7 @@ export const todosOpen: SeedEntry = {
 - **Under moss (the D1 default), hand the entries to `defineApp({ entries })`.** The server derives the data layer: boots the engine, prewarms protected, serves locked replay-only endpoints, and compiles each principal's `ScopePolicy` from the charter's `data` section. The app never touches an engine.
 - **A client-degrade app boots its own engine** — database adapter + cache backend + `ScopePolicy` — `introspect()` once at startup, memoized behind a single accessor. Prewarm at boot through the cache backend's own `set()`: key = the entry's `fingerprint`, `prismIr` = `await compile(mapping ?? { $ref: '$.result' })` (`@niscorp/prism`), plus the shape, the schema fingerprint, and `protected: true` — a seeded entry can never be replaced by a stray request. Seed the identity IR for mapping-less entries explicitly — a NULL IR falls through to the LLM mapper. Throw on duplicate names while seeding.
 - **The fingerprint is the cache key.** Every entry replays as `{ fingerprint, context }` — no shape, no intent on the wire. Id fields still follow `<entity>_id` (self-describing rows); never a shared `{ value, label }`.
-- **The mapping owns the result shape.** Vex evaluates it over `{ result: rows }` and returns the output verbatim — array, object, or scalar; the entry's stored shape picks array-vs-single. Formatting (money, dates) lives here, in shared helpers.
+- **The mapping owns the result shape.** Vex evaluates it over `{ result, context, scope }` and returns the output verbatim — array, object, or scalar. The entry's stored shape picks what `$.result` is: an **array** shape → `$.result` is the rows (map with `$map`, or `{ $ref: '$.result' }` for identity); an **object** shape → `$.result` is the single (first) row, `null` when none came back (read fields as `$.result.monthly`, never `[0, …]`). Formatting (money, dates) lives here, in shared helpers.
 - **App reads are replay-only.** Moss serves its endpoints locked; a client-degrade app passes `{ locked: true }` itself. An unknown fingerprint (a missed prewarm, a discipline break) is a 500, never a silent LLM call. With no AI features, also wire no hooks: warm-only, enforced twice.
 - **Live queries are the opt-in LLM path.** Wire `createQueryDsl` / `createShapeMapper` (`@niscorp/vex/agent`) as the engine's `generateDsl` / `mapToShape` hooks; a request without a fingerprint generates, caches, and mints one (`meta.cache.fingerprint`) — embed that to replay the proven query. App reads stay locked and never depend on this path; agents and ad-hoc features do.
 - **Freshness is the entry's.** `refresh: 'snapshot'` (the default) answers once; `refresh: 'reactive'` answers again when a write lands on a table the query reads. Declare it on reads that are on screen while others write — a roster, a count, a board. A reactive entry sorts, and reads time from `$scope`, never context.
