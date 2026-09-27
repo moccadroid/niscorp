@@ -20,5 +20,5 @@ RUN pnpm --filter "lyceum^..." run build && pnpm --filter lyceum run build
 WORKDIR /repo/apps/lab/lyceum
 ENV NODE_ENV=production
 ENV PORT=8796
-EXPOSE 8796
+EXPOSE 8796 2222
 CMD ["pnpm", "serve"]

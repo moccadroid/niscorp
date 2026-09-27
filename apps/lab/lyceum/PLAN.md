@@ -57,11 +57,8 @@ In order; each lands with its check.
    where `ask` was the tool (see "Measured").
 5. ~~**The timer**~~ — built 2026-09-27 (see "What is built").
 6. ~~**The look switch**~~ — built 2026-09-27 (see "What is built", "Two looks").
-7. **The SSH door** — an SSH server in lyceum's process (`ssh2`), any user, no auth; each
-   connection opens its own moss client wire to the local socket and is a stranger at
-   the door; moss's ink target draws it with an ink kit for lyceum's components (relay's
-   ink terminal is the reference). The VPS's admin SSH moves off port 22 so the room types
-   `ssh lyceum.moccadroid.com`.
+7. ~~**The SSH door**~~ — built 2026-09-27 (see "What is built"). Not yet on the server:
+   the VPS's own sshd moves off port 22, then `SSH_PORT=22` in the compose file.
 8. **More actions per department**, so four clearances show four visibly different phones.
 9. **The slides**, for all of the above.
 10. **The full-room rehearsal** — 100 headless phones against the deployed shape, every
@@ -184,6 +181,21 @@ the room repaints — nothing is sent to switch, and the trees do not change. Mo
 untouched. `look-check` asserts the marker on four kinds of screen, the switch reaching
 all of them, the phone's tree unchanged, and a word outside the set refused.
 
+**The SSH door** (`src/server/ssh-door.ts`, `src/ui/ink.kit.ts`). `ssh` into the room:
+any user name, no password, and you are a stranger at the door, as a phone that opens
+the address is. The door is a TERMINAL HOST, not a second server: each connection opens
+its own moss wire to the room's socket, and moss's ink target draws the same trees a
+phone gets with a third kit — the grammar in a terminal (a sheet is a column of ruled
+cells, an ink a coloured rule, everything pressable a typed `[n]`). Stepping in grants
+that wire a session for as long as the connection lasts. The host key is made on first
+start and kept (`LYCEUM_SSH_HOST_KEY`; a volume in the compose file). `pnpm serve` opens
+it with `LYCEUM_SSH_PORT`; under `pnpm dev`, `pnpm ssh` opens it against the dev server
+(`ssh -p 2222 localhost`). Two package fixes came out of it: ink's console patching can
+be turned off (several targets in one process must not hand a visitor the server's
+logs), and a typed number now reaches its own instance on a list canvas — before, every
+phone tab printed `[1]` and every number opened the last tab. `ssh-check` drives it
+with a real SSH client: in, stepped in, each tab by its number, Ctrl+C out.
+
 **Versions (strata).** Lyceum's tables are the `lyceum.app` sequence. The source is
 locked at `nisc.nova` 1, `nisc.prism` 1 (`strata.lock.json`); the kit's props are the
 grammar `lyceum.kit` (`src/ui/kit.props.ts`, `src/app/grammars.ts`), at 3 — `kit-check`
@@ -201,7 +213,7 @@ every re-boot. `/dev/as/speaker`, `/dev/as/stage`, `/dev/as/kit`, `/dev/new`,
 `?seat=<name>`. Vite listens on this machine only.
 
 **Checks** (`pnpm check`, each in its own process over its own database): `kit-check`,
-`tables-check`, `assignment-check`, `deck-check`, `serve-check`, `ask-check`, `timer-check`, `assistant-check`, `look-check`. The ask
+`tables-check`, `assignment-check`, `deck-check`, `serve-check`, `ask-check`, `timer-check`, `assistant-check`, `look-check`, `ssh-check`. The ask
 check also passes live (`LYCEUM_ASK=live node --env-file=.env --import tsx
 src/dev/ask-check.ts`).
 

@@ -2,6 +2,9 @@ import type { SeedEntry, SeedMutation } from '@niscorp/vex';
 
 // ── the room: which look every screen paints with ──
 
+// The room's one row — its key, in one place: the entries, the seed, the switch.
+export const TALK_ROOM = 'talk';
+
 // Reactive: every screen follows the room row without being told. It answers
 // with the look's name and, for the controller's switch, which one it is — so a
 // layout marks the one in use without comparing anything itself. A single-row
@@ -14,7 +17,7 @@ export const roomLook: SeedEntry = {
   dsl: {
     from: ['room'],
     fields: ['room.look'],
-    filter: { eq: ['room.room_id', 'talk'] },
+    filter: { eq: ['room.room_id', TALK_ROOM] },
   },
   mapping: {
     $with: {

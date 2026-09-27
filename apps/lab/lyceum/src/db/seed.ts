@@ -14,6 +14,7 @@
 // Each department_id is also a charter role — assigning a person to a
 // department IS giving them that role — and `assignment-check` asserts the two
 // lists agree.
+import { TALK_ROOM } from '@lyceum/app/vex/room.entries';
 
 type Department = { departmentId: string; name: string; remit: string; mark: string; sigil: string };
 
@@ -85,7 +86,7 @@ export const buildSeedSql = (): string =>
     // the first one rather than point at nothing.
     `INSERT INTO deck (deck_id, slide_id) VALUES (${quote(DECK_ID)}, ${quote(SLIDES[0]?.slideId ?? '')}) ON CONFLICT DO NOTHING;`,
     // The room row: seeded once; its look is the talk's state, like the deck's.
-    `INSERT INTO room (room_id) VALUES (${quote(DECK_ID)}) ON CONFLICT DO NOTHING;`,
+    `INSERT INTO room (room_id) VALUES (${quote(TALK_ROOM)}) ON CONFLICT DO NOTHING;`,
     `UPDATE deck SET slide_id = ${quote(SLIDES[0]?.slideId ?? '')} WHERE slide_id NOT IN (${slideIds});`,
     `DELETE FROM slides WHERE slide_id NOT IN (${slideIds});`,
     // The tools and the notes converge to SLIDES too: replaced whole, every boot.

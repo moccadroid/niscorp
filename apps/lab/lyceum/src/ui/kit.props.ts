@@ -71,5 +71,7 @@ export const KIT_PROPS = z
   .describe('The props each lyceum kit component accepts, by component name');
 
 // A KIT is one renderer per component this grammar names — every look lyceum
-// paints with (./kit.ts, ./plain.kit.ts) implements the same set.
-export type Kit = Record<keyof z.infer<typeof KIT_PROPS>, DomComponent>;
+// paints with implements the same set: in a browser (./kit.ts, ./plain.kit.ts)
+// a DOM component each, in a terminal (./ink.kit.ts) an ink one.
+export type KitOf<Component> = Record<keyof z.infer<typeof KIT_PROPS>, Component>;
+export type Kit = KitOf<DomComponent>;

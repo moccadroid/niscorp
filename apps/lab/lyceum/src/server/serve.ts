@@ -17,6 +17,16 @@ import { mountLogin } from './login';
 import { createMailer } from './mail';
 import { mountSite } from './site';
 
+// The door draws in colour whatever this process's own stdout is (a container's
+// is no terminal) — so colour is forced before ink's colours are first loaded.
+const openDoor = async (port: number, socketUrl: string): Promise<{ close: () => Promise<void> }> => {
+  process.env['FORCE_COLOR'] ??= '3';
+  const { openSshDoor } = await import('./ssh-door');
+  const door = await openSshDoor({ port, socketUrl, hostKeyFile: process.env['LYCEUM_SSH_HOST_KEY'] ?? '.lyceum/ssh_host_ed25519_key' });
+  console.log(`lyceum's ssh door on port ${door.port}`);
+  return door;
+};
+
 const dist = resolve(dirname(fileURLToPath(import.meta.url)), '../../dist');
 
 const main = async (): Promise<void> => {
@@ -38,9 +48,14 @@ const main = async (): Promise<void> => {
   attachSocket(httpServer, server.socket);
   console.log(`lyceum listening on http://localhost:${port}`);
 
+  // The SSH door, when asked for: a terminal host in this process, a client
+  // of the socket above like any phone (./ssh-door.ts).
+  const sshPort = Number(process.env['LYCEUM_SSH_PORT'] ?? 0);
+  const door = sshPort > 0 ? await openDoor(sshPort, `ws://127.0.0.1:${port}/socket`) : undefined;
+
   const stop = (): void => {
     httpServer.close();
-    void close().finally(() => process.exit(0));
+    void Promise.all([close(), door?.close()]).finally(() => process.exit(0));
   };
   process.on('SIGTERM', stop);
   process.on('SIGINT', stop);

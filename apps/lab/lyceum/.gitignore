@@ -1,0 +1,2 @@
+# The SSH door's host key (src/server/ssh-door.ts) — a secret, made on first start.
+.lyceum/
