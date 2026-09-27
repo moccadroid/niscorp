@@ -35,7 +35,11 @@ export const CHARTER: Charter = {
   unassigned: { extends: ['member'] },
   // Every department gets its badge; each gets one clearance of its own.
   records: { extends: ['member'], actions: ['records.*'] },
-  forms: { extends: ['member'], actions: ['forms.*'], data: ['members.write.update'] },
+  // Forms may change a member's record — their OWN: the role reaches at the
+  // `personal` profile (vex/behaviors.ts), which pins every update it makes on
+  // `members` to the caller's row. Reach is the role's and is not inherited,
+  // so the speaker's assignment and the registry's cards still reach the room.
+  forms: { extends: ['member'], actions: ['forms.*'], data: ['members.write.update'], scoping: 'personal' },
   inquiries: { extends: ['member'], actions: ['inquiries.*'] },
   archive: { extends: ['member'], actions: ['archive.*'] },
 

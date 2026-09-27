@@ -3,7 +3,7 @@
 // the order of the suite part of its meaning.
 import { spawnSync } from 'node:child_process';
 
-const CHECKS = ['kit-check', 'tables-check', 'assignment-check', 'deck-check', 'serve-check', 'ask-check', 'timer-check', 'assistant-check', 'look-check', 'ssh-check'];
+const CHECKS = ['kit-check', 'tables-check', 'assignment-check', 'deck-check', 'serve-check', 'access-check', 'ask-check', 'timer-check', 'assistant-check', 'look-check', 'ssh-check'];
 
 // The checks never call a model: ID cards come from the deterministic issuer,
 // the ask from the deterministic router and query writer, the timers from the

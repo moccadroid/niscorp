@@ -6,9 +6,11 @@ import type { ScopeBehaviors } from '@niscorp/vex';
 // is inserted by the person it belongs to, and the engine stamps its id from
 // their session's `userId`. A request cannot name somebody else's id.
 //
-// `personal` — the reach an entry can ask for (`members/rename`): an update
+// `personal` — the reach of the Forms role (charter.ts, `scoping`): an update
 // only ever reaches the caller's own row. Forms can change their record; the
-// grant says they may update members, this says which member.
+// grant says they may update members, this says which member — for every
+// entry they replay, not only the one written for them. `members/rename` also
+// asks for it, so a rename stays personal whoever holds the verb.
 export const BEHAVIORS: ScopeBehaviors = {
   members: {
     default: { insert: [{ set: 'member_id', to: 'userId' }] },
