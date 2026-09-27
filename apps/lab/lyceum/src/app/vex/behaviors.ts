@@ -26,4 +26,13 @@ export const BEHAVIORS: ScopeBehaviors = {
   timers: {
     default: { insert: [{ set: 'saved_by', to: 'userId' }] },
   },
+  // A conversation is its person's alone: written as them, read and resolved
+  // only by them — the speaker's included.
+  assistant_turns: {
+    default: {
+      read: [{ match: 'member_id', to: 'userId' }],
+      insert: [{ set: 'member_id', to: 'userId' }],
+      update: [{ match: 'member_id', to: 'userId' }],
+    },
+  },
 };

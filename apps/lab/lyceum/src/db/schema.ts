@@ -138,6 +138,24 @@ export const TIMERS = /* sql */ `
   );
 `;
 
+// Migration 5: THE ASSISTANT'S CONVERSATIONS. One row per turn — what was
+// asked, what was replied, what was proposed — and its OUTCOME once somebody
+// acted on a proposal ("saved · fires at 18:56"). Written as the person asking;
+// `member_id` is theirs, stamped by the engine, and they read only their own
+// (vex/behaviors.ts). The history on the screen, and the context the model gets
+// for the next turn, are reads of these rows.
+export const ASSISTANT_TURNS = /* sql */ `
+  CREATE TABLE assistant_turns (
+    turn_id   TEXT PRIMARY KEY,
+    member_id TEXT NOT NULL,
+    message   TEXT NOT NULL,
+    reply     TEXT NOT NULL,
+    proposals JSONB NOT NULL,
+    outcome   TEXT,
+    asked_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+  );
+`;
+
 export const LYCEUM_SEQUENCE: Sequence = {
   id: 'lyceum.app',
   migrations: [
@@ -145,6 +163,7 @@ export const LYCEUM_SEQUENCE: Sequence = {
     { description: "A slide's tools are rows (slide_tools), not one column on the slide", steps: sqlSteps(SLIDE_TOOLS) },
     { description: 'The ask: every question put to the records, and how it was answered', steps: sqlSteps(ASKS) },
     { description: 'Timers: automations the speaker saved, each a tide reflex as a document', steps: sqlSteps(TIMERS) },
+    { description: "The assistant's conversations: one row per turn, and what came of it", steps: sqlSteps(ASSISTANT_TURNS) },
   ],
 };
 

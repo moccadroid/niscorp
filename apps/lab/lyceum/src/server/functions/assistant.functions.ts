@@ -1,7 +1,9 @@
+import { randomBytes } from 'node:crypto';
 import { z } from 'zod';
 import type { FunctionSession } from '@niscorp/moss';
 import type { FunctionHandler } from '@niscorp/nova';
 import { ACTIONS } from '@lyceum/app/action-catalog';
+import { turnRecord, turnsMine } from '@lyceum/app/vex/assistant.entries';
 import { assembleFor } from '../assistant/declarations';
 import type { Assembled } from '../assistant/declarations';
 import { hostTools } from '../assistant/tools';
@@ -25,11 +27,17 @@ import { vexOver } from '../vex-over';
 
 const DraftSchema = z.object({ draft: z.string() });
 
+// The conversation so far, oldest first — this person's own turns, read as them.
+const TurnsSchema = z.array(z.object({ message: z.string(), reply: z.string(), outcome: z.string().nullable() }));
+const CONVERSATION_TURNS = 6;
+
 // What the assistant is handed about this person — assembled, not authored:
-// their declarations' instructions, the grounding read AS them now, and the
-// actions they can be offered.
+// their declarations' instructions, the grounding read AS them now, the
+// actions they can be offered, and the conversation so far.
 const knowledgeOf = async (session: FunctionSession, assembled: Assembled, tz: string): Promise<{ knowledge: string; facts: string }> => {
   const vex = vexOver(session.wire);
+  const earlier = TurnsSchema.parse(await vex(turnsMine.fingerprint)).slice(0, CONVERSATION_TURNS).reverse();
+  const conversation = earlier.map((turn) => `Person: ${turn.message}\nYou: ${turn.reply}${turn.outcome === null ? '' : `\n(${turn.outcome})`}`).join('\n');
   const grounded = await Promise.all(
     assembled.from.flatMap((declaration) =>
       declaration.grounding
@@ -54,6 +62,7 @@ const knowledgeOf = async (session: FunctionSession, assembled: Assembled, tz: s
     `Now: ${localNow(Date.now(), tz)} (${tz}).`,
     facts === '' ? '' : `WHAT YOU KNOW\n${facts}`,
     offerable.length === 0 ? '' : `ACTIONS YOU CAN OFFER (with \`open\`)\n${offerable.join('\n')}`,
+    conversation === '' ? '' : `THE CONVERSATION SO FAR\n${conversation}`,
   ]
     .filter((part) => part !== '')
     .join('\n\n');
@@ -83,7 +92,11 @@ export const assistantFunctions = (
     const proposals: Proposal[] = [];
     const tools = hostTools({ session, asker: deps.asker, writer: deps.writer, tz: deps.tz, facts, proposals }, assembled.tools);
     const reply = await deps.orchestrator.answer({ message, knowledge, tools });
-    return { text: reply, proposals };
+    // The turn is a row, written as the person — their history, and the next
+    // turn's conversation so far.
+    const turnId = `turn_${randomBytes(8).toString('hex')}`;
+    await vexOver(session.wire)(turnRecord.fingerprint, { turnId, message, reply, proposals });
+    return { turnId, text: reply, proposals };
   },
   'timers.arm': async () => ({ armed: await deps.timing().reload() }),
 });

@@ -132,7 +132,11 @@ a tool that does not exist refuse to boot. The turn (`assistant.turn`; gpt-oss-1
 proposes an action the person holds, pre-filled from its declared input; `ask` runs the
 ask's own path; `automate` (controller only) hands the request, with the deck as facts, to
 tide's reflex agent — which can refuse. Every tool leaves a PROPOSAL: a button, an answer,
-a document to read and save; nothing runs without a press. `assistant-check` asserts the
+a document to read and save; nothing runs without a press. Every turn is a row
+(`assistant_turns`, migration 5) written as the person — the history under the input, a
+reactive read of their own turns only, and the conversation the model is handed next;
+acting on a proposal writes its outcome ("Saved · fires at 18:56") and the proposal
+leaves the screen. `assistant-check` asserts the
 assembly per person and the bounds; `pnpm probe:assistant` measures it live.
 
 **The timer** — the talk's first minute and its last. On slide 1 the controller's tool is

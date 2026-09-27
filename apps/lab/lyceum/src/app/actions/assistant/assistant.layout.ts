@@ -47,7 +47,7 @@ const proposal: LayoutNode = {
 // proposals, or (before anything was asked) what to try.
 export const assistantLayout: LayoutNode = {
   component: 'Sheet',
-  props: { areas: ['kick', 'who', 'field', 'go', 'out'], rows: ['auto', 'auto', 'auto', 'auto', 'auto'] },
+  props: { areas: ['kick', 'who', 'field', 'go', 'out', 'history'], rows: ['auto', 'auto', 'auto', 'auto', 'auto', 'auto'] },
   children: [
     { component: 'Cell', props: { area: 'kick', ink: 'signal' }, children: [{ component: 'Label', children: '{{$.intro.title}}' }] },
     {
@@ -71,19 +71,40 @@ export const assistantLayout: LayoutNode = {
             children: [
               { component: 'Text', children: '{{$.reply.text}}' },
               { for: '$.reply.proposals', as: 'p', do: proposal },
-              { if: '$.saved', then: { component: 'Label', children: 'Saved · tide runs it now — no model is asked again.' } },
             ],
           },
           else: {
             component: 'Cell',
             props: { area: 'out', mark: 'hatch' },
             children: [
+              { if: '$.saved', then: { component: 'Label', children: 'Saved · tide runs it now — no model is asked again.' } },
               { component: 'Text', children: '{{$.intro.intro}}' },
               { for: '$.intro.starters', as: 's', do: { component: 'Action', ref: 'starter', props: { ink: 'paper', label: '{{$s}}', value: '$s' } } },
             ],
           },
         },
       },
+    },
+    // The conversation so far, newest first — what was asked, what came back,
+    // and what came of it.
+    {
+      component: 'Cell',
+      props: { area: 'history', pad: 'none' },
+      children: [
+        {
+          component: 'Rows',
+          props: {
+            rows: '$.history',
+            rowKey: 'turn_id',
+            empty: 'Nothing asked yet.',
+            columns: [
+              { label: 'You asked', key: 'message', w: 2 },
+              { label: 'Reply', key: 'reply', w: 3 },
+              { label: 'What came of it', key: 'outcome', w: 2, missing: '—' },
+            ],
+          },
+        },
+      ],
     },
   ],
 };

@@ -59,6 +59,8 @@ const main = async (): Promise<void> => {
   // ── 2. saved, and armed ──
   speaker.click('tools', 'save');
   check('Save says it is saved', await speaker.shows('tools', 'Saved'));
+  check('…and the proposal is done with: it leaves the screen', await waitUntil(() => !speaker.showsNow('tools', 'Read it first')));
+  check('…and the history says what came of it', await speaker.shows('tools', 'Saved · fires at'));
   const saved = (await first.runtime.db.query<Timer>('SELECT timer_id, reflex, saved_by, due_at::text FROM timers')).rows[0];
   check('it is a row: the reflex as a document', saved?.reflex.effect?.name === 'deck.show' && saved.reflex.as === 'clock');
   check('…saved as the speaker, stamped by the engine', saved?.saved_by === 'speaker');

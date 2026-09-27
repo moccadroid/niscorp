@@ -16,7 +16,7 @@ import { check, finish } from './harness';
 
 // What migration 1 creates, and what the whole sequence leaves.
 const BASELINE_TABLES = ['departments', 'members', 'slides', 'slide_notes', 'deck', 'grants', 'login_links'];
-const TABLES = [...BASELINE_TABLES, 'slide_tools', 'asks', 'timers'];
+const TABLES = [...BASELINE_TABLES, 'slide_tools', 'asks', 'timers', 'assistant_turns'];
 // What the boot migrates: lyceum's sequence and tide's (db/schema.ts).
 const BOOT_TABLES = [...TABLES, ...TIDE_TABLES];
 const ALL = LYCEUM_SEQUENCE.migrations.map((_, index) => `lyceum.app/${index + 1}`).join();
@@ -35,6 +35,8 @@ const main = async (): Promise<void> => {
   check('lyceum.app/3 is unchanged', asks !== undefined && (await checksumOf(asks)) === '2b23d46ac39621353aea5d577160255b282f606b097c2a29aed01c23b3668686');
   const timers = LYCEUM_SEQUENCE.migrations[3];
   check('lyceum.app/4 is unchanged', timers !== undefined && (await checksumOf(timers)) === 'cfff32da4f9923cee3258967f12b089f53aadd98eafd23974c1efa249ed49c6c');
+  const turns = LYCEUM_SEQUENCE.migrations[4];
+  check('lyceum.app/5 is unchanged', turns !== undefined && (await checksumOf(turns)) === '0d648f27a9dd330c6c2e9cf8c839654c1aa44662b29c6c8f113f957a7828eb72');
 
   // ── a fresh database ──
   const fresh = createPglitePool(new PGlite());

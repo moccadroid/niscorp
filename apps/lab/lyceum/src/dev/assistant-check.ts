@@ -67,6 +67,12 @@ const main = async (): Promise<void> => {
   check('…and nothing was proposed or saved', !waiting.phone.showsNow('body', 'Read it first') && (await runtime.db.query('SELECT 1 FROM timers')).rows.length === 0);
   await say(waiting.phone, 'body', 'How many people are in the room?');
   check('a question goes the ask\'s way, and the answer is shown', await waiting.phone.shows('body', 'The answer'));
+  check('every turn is kept: the history shows both, newest first', await waitUntil(() => {
+    const tree = waiting.phone.textOf('body');
+    const newest = tree.lastIndexOf('How many people are in the room?');
+    const older = tree.lastIndexOf('End the talk in 30 minutes');
+    return newest !== -1 && older !== -1 && newest < older;
+  }));
 
   // ── 3. bounded by what the person holds ──
   const formsPerson = await stepIn();
@@ -85,6 +91,7 @@ const main = async (): Promise<void> => {
   check('placed in Records, theirs is built from room and records', await records.shows('body', 'Built from room · records'));
   await say(records, 'body', 'Change my name to Ada Lovelace');
   check('Records, asking the same, is offered no rename — they do not hold it', !records.showsNow('body', 'Change your name to'));
+  check('a history is its person\'s alone: Records sees their own turn, none of anybody else\'s', (await records.shows('body', '"message":"Change my name to Ada Lovelace"')) && !records.showsNow('body', 'How many people are in the room?'));
 
   // ── the controller's ──
   const speaker = await connect(base, await mintSession(runtime.pool, 'speaker', 60_000));

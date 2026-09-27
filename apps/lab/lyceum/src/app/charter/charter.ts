@@ -13,6 +13,8 @@ const DECK_READS = ['deck.read', 'slides.read'];
 // The ask: what was asked before (the router reads it as the asker) and the
 // asker's own record of asking.
 const ASKING = ['asks.read', 'asks.write.insert'];
+// The assistant's conversation: each person's own turns (behaviors.ts).
+const CONVERSING = ['assistant_turns.read', 'assistant_turns.write.insert', 'assistant_turns.write.update'];
 
 export const CHARTER: Charter = {
   // Anonymous: the door and nothing else — and, once stepping in has made
@@ -26,7 +28,7 @@ export const CHARTER: Charter = {
   // every clearance shares; what the answer can reach is still theirs.
   // …and an assistant: the same one everybody has, built for each person from
   // what these grants select (app/assistant/assistants.ts).
-  member: { actions: ['member.*', 'ask.*', 'assistant.*'], data: [...ROOM_READS, ...ASKING] },
+  member: { actions: ['member.*', 'ask.*', 'assistant.*'], data: [...ROOM_READS, ...ASKING, ...CONVERSING] },
 
   unassigned: { extends: ['member'] },
   // Every department gets its badge; each gets one clearance of its own.
@@ -39,7 +41,7 @@ export const CHARTER: Charter = {
   // The speaker moves the deck and assigns the room, as themselves; the
   // controller's tools change with the slide. The stage shows the deck —
   // every slide is an action only the stage is granted.
-  speaker: { actions: ['speaker.*', 'tools.*', 'assistant.*'], data: [...ROOM_READS, ...DECK_READS, 'slide_notes.read', 'slide_tools.read', 'deck.write.update', 'members.write.update', 'timers.read', 'timers.write.insert'] },
+  speaker: { actions: ['speaker.*', 'tools.*', 'assistant.*'], data: [...ROOM_READS, ...DECK_READS, 'slide_notes.read', 'slide_tools.read', 'deck.write.update', 'members.write.update', 'timers.read', 'timers.write.insert', ...CONVERSING] },
   stage: { actions: ['stage.*', 'slide.*'], data: [...ROOM_READS, ...DECK_READS, 'asks.read'] },
 
   // The kit's kitchen sink: every piece of the look on one screen (dev).

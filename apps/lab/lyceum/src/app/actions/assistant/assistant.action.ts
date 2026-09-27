@@ -1,5 +1,6 @@
 import type { ActionDefinition } from '@niscorp/nova';
 import { timerSave } from '@lyceum/app/vex/timer.entries';
+import { turnResolve, turnsMine } from '@lyceum/app/vex/assistant.entries';
 import { TAB_BUTTON, TAB_INPUT, TAB_OPENED } from '@lyceum/app/actions/shared/tab.layouts';
 import { assistantLayout } from './assistant.layout';
 
@@ -32,11 +33,12 @@ export const assistantAction: ActionDefinition = {
     nextInk: 'paper',
     draft: '',
     intro: { title: 'Assistant', intro: '', builtFrom: '', tools: '', starters: [] },
-    reply: { text: '', proposals: [] },
+    reply: { turnId: '', text: '', proposals: [] },
+    history: [],
     thinking: false,
     answered: false,
     saved: false,
-    chosen: { timerId: '', reflex: {}, intent: '', dueAt: null },
+    chosen: { timerId: '', reflex: {}, intent: '', dueAt: null, dueLocal: '' },
     error: '',
   },
   input: TAB_INPUT,
@@ -59,8 +61,24 @@ export const assistantAction: ActionDefinition = {
       errorTarget: 'error',
     },
     arm: { fn: 'timers.arm', errorTarget: 'error' },
+    // The conversation, newest first — this person's own turns, reactive: a
+    // turn recorded or resolved reaches the screen on its own.
+    history: { url: '/api/vex', method: 'POST', request: { fingerprint: turnsMine.fingerprint, context: {} }, target: 'history' },
+    // What came of the turn whose proposal was acted on.
+    resolve: {
+      url: '/api/vex',
+      method: 'POST',
+      request: {
+        fingerprint: turnResolve.fingerprint,
+        context: {
+          turnId: { $ref: '$.reply.turnId' },
+          outcome: { $interpolate: { template: 'Saved · fires at {{at}}', values: { at: { $ref: '$.chosen.dueLocal' } } } },
+        },
+      },
+      errorTarget: 'error',
+    },
   },
-  lifecycle: { mount: [{ call: 'intro' }] },
+  lifecycle: { mount: [{ call: 'intro' }, { call: 'history' }] },
   triggers: [
     { event: 'ui:click', ref: 'open', do: [{ set: 'nextInk', value: 'ink' }, { emit: { channel: 'tab-opened' } }, { resetTo: { action: 'assistant.thread', canvas: 'body' } }] },
     TAB_OPENED,
@@ -69,7 +87,13 @@ export const assistantAction: ActionDefinition = {
     {
       event: 'ui:click',
       ref: 'save',
-      do: [{ set: 'error', value: '' }, { set: 'chosen', value: '@event.payload' }, { call: 'save', onSuccess: [{ call: 'arm', onSuccess: [{ set: 'saved', value: true }] }] }],
+      // Saved, armed, and the turn's outcome written — then the proposal is
+      // done with: it leaves the screen, and the history says what came of it.
+      do: [
+        { set: 'error', value: '' },
+        { set: 'chosen', value: '@event.payload' },
+        { call: 'save', onSuccess: [{ call: 'arm', onSuccess: [{ call: 'resolve', onSuccess: [{ set: 'answered', value: false }, { set: 'saved', value: true }] }] }] },
+      ],
     },
     {
       event: 'ui:click',
