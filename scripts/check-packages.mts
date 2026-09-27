@@ -16,13 +16,30 @@
 //
 // Run after `pnpm build`: `pnpm check:packages`. Exits non-zero on any failure.
 
-import { execFileSync } from 'node:child_process';
+import { execFileSync, execSync } from 'node:child_process';
 import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 
 const root = resolve(import.meta.dirname, '..');
-const bin = (name: string): string => join(root, 'node_modules', '.bin', name);
+
+// Everything is spawned so it runs on Windows too, where execFileSync cannot
+// spawn a .cmd: node is this node, a tool is its JS entry run by this node
+// (not the .bin shim), and pnpm — pnpm.cmd there — goes through the shell as
+// one command string. Everywhere else, no shell.
+type Spawn = (cwd: string) => string;
+const nodeRun = (args: readonly string[]): Spawn => (cwd) => execFileSync(process.execPath, args, { cwd, stdio: 'pipe', encoding: 'utf8' });
+const tool = (pkg: string, name: string, args: readonly string[]): Spawn => {
+  const manifest: unknown = JSON.parse(readFileSync(join(root, 'node_modules', pkg, 'package.json'), 'utf8'));
+  const bins = isRecord(manifest) ? manifest['bin'] : undefined;
+  const entry = isRecord(bins) ? bins[name] : undefined;
+  if (typeof entry !== 'string') throw new Error(`${pkg}: no bin named ${name}`);
+  return nodeRun([join(root, 'node_modules', pkg, entry), ...args]);
+};
+const pnpm = (args: readonly string[]): Spawn => (cwd) =>
+  process.platform === 'win32'
+    ? execSync(['pnpm', ...args.map((arg) => `"${arg}"`)].join(' '), { cwd, stdio: 'pipe', encoding: 'utf8' })
+    : execFileSync('pnpm', args, { cwd, stdio: 'pipe', encoding: 'utf8' });
 
 // Subpaths that are ESM-only on purpose: ink is ESM-only with top-level await,
 // so these cannot offer a `require` condition. attw skips them; the smoke pass
@@ -78,9 +95,9 @@ const atLeast = (version: readonly number[], floor: readonly number[]): boolean 
   return true;
 };
 
-const run = (label: string, cmd: string, args: readonly string[], cwd: string): void => {
+const run = (label: string, spawn: Spawn, cwd: string): void => {
   try {
-    execFileSync(cmd, args, { cwd, stdio: 'pipe', encoding: 'utf8' });
+    spawn(cwd);
     results.push({ label, ok: true });
   } catch (error) {
     const detail = isRecord(error) ? `${String(error['stdout'] ?? '')}${String(error['stderr'] ?? '')}` : String(error);
@@ -123,13 +140,12 @@ for (const { dir, manifest } of packages) {
     const ok = atLeast(minVersionOf(zodPeer), minVersionOf(ZOD_FLOOR));
     results.push({ label: `zod peer floor of ${manifest.name}`, ok, ...(ok ? {} : { detail: `${zodPeer} admits versions below ${ZOD_FLOOR}` }) });
   }
-  run(`publint ${manifest.name}`, bin('publint'), ['--strict'], dir);
+  run(`publint ${manifest.name}`, tool('publint', 'publint', ['--strict']), dir);
   const exclude = ESM_ONLY[manifest.name] ?? [];
   if (Object.keys(manifest.exports).length === 0) continue;
   run(
     `attw ${manifest.name}`,
-    bin('attw'),
-    ['--pack', '.', '--profile', 'node16', ...(exclude.length > 0 ? ['--exclude-entrypoints', ...exclude] : [])],
+    tool('@arethetypeswrong/cli', 'attw', ['--pack', '.', '--profile', 'node16', ...(exclude.length > 0 ? ['--exclude-entrypoints', ...exclude] : [])]),
     dir,
   );
 }
@@ -140,7 +156,7 @@ try {
   const tarballs: Record<string, string> = {};
   for (const { dir, manifest } of packages) {
     // `pnpm pack` is what rewrites `workspace:^` into a real range.
-    const out = execFileSync('pnpm', ['pack', '--pack-destination', scratch], { cwd: dir, encoding: 'utf8' });
+    const out = pnpm(['pack', '--pack-destination', scratch])(dir);
     const file = out.trim().split('\n').at(-1) ?? '';
     tarballs[manifest.name] = `file:${file}`;
   }
@@ -174,17 +190,17 @@ try {
   // import this check exists to catch. With hoisting off, a package sees only
   // what its own manifest declares.
   writeFileSync(join(scratch, '.npmrc'), 'hoist=false\n');
-  run('install tarballs', 'pnpm', ['install', '--ignore-workspace', '--reporter=silent'], scratch);
+  run('install tarballs', pnpm(['install', '--ignore-workspace', '--reporter=silent']), scratch);
 
   if (results.at(-1)?.ok === true) {
     for (const { manifest } of packages) {
       for (const [key, entry] of Object.entries(manifest.exports)) {
         const specifier = key === '.' ? manifest.name : `${manifest.name}/${key.slice(2)}`;
         if (entry.import !== undefined) {
-          run(`import ${specifier}`, 'node', ['--input-type=module', '-e', `await import(${JSON.stringify(specifier)})`], scratch);
+          run(`import ${specifier}`, nodeRun(['--input-type=module', '-e', `await import(${JSON.stringify(specifier)})`]), scratch);
         }
         if (entry.require !== undefined) {
-          run(`require ${specifier}`, 'node', ['--input-type=commonjs', '-e', `require(${JSON.stringify(specifier)})`], scratch);
+          run(`require ${specifier}`, nodeRun(['--input-type=commonjs', '-e', `require(${JSON.stringify(specifier)})`]), scratch);
         }
       }
     }
@@ -195,14 +211,14 @@ try {
     // through the schema's own copy. Converted by nisc's copy instead, a
     // pre-4.1.13 schema loses every `.describe()` without an error.
     const probe = (label: string, body: string): void =>
-      run(label, 'node', ['--input-type=module', '-e', `
+      run(label, nodeRun(['--input-type=module', '-e', `
         import { z as other } from 'zod-other';
         import { z as own } from 'zod';
         if (other === own) throw new Error('zod-other resolved to the app copy — the scenario proves nothing');
         const schema = other.object({ field: other.string().describe('SENTINEL_DESCRIPTION') });
         ${body}
         if (!JSON.stringify(out).includes('SENTINEL_DESCRIPTION')) throw new Error('description lost: ' + JSON.stringify(out));
-      `], scratch);
+      `]), scratch);
     probe(`second zod: signal wire schema`, `
       const { resolveTransport } = await import('@niscorp/signal');
       const caps = { nativeTools: true, nativeJsonMode: true, validatesToolArgs: false, supportsEmbedding: false,
