@@ -138,13 +138,105 @@ const diffLines = (a: unknown, b: unknown, path: string, out: string[], limit: n
   out.push(`~ ${path || '(root)'}: ${JSON.stringify(a)?.slice(0, 60)} → ${JSON.stringify(b)?.slice(0, 60)}`);
 };
 
+// ── canonical form ──────────────────────────────────────────────
+//
+// A snapshot records what the validator WROTE, and validators spell one schema
+// many ways: they name and inline definitions as they please (zod numbers them
+// in visit order, and 4.3 and 4.4 visit differently), write a described
+// reference as `allOf: [{ $ref }]` or as `$ref`, and a union of bare types as
+// `anyOf: [{ type }, …]` or `type: […]`. None of that is the grammar, so a
+// comparison reads both sides in one spelling: every definition inlined unless
+// it is recursive, the recursive ones renamed by first use, and every schema
+// identity above written one way. A snapshot FILE stays what the validator
+// wrote — only the comparison is canonical.
+
+const REF_PREFIX = /^#\/(\$defs|definitions)\//;
+
+// One spelling for the equivalences the node itself can show.
+const respell = (value: Record<string, unknown>): Record<string, unknown> => {
+  let node = value;
+  const anyOf = node['anyOf'];
+  if (!('type' in node) && Array.isArray(anyOf) && anyOf.length > 0 && anyOf.every((m) => isRecord(m) && Object.keys(m).length === 1 && typeof m['type'] === 'string')) {
+    const { anyOf: _union, ...rest } = node;
+    node = { ...rest, type: anyOf.map((m) => (isRecord(m) ? m['type'] : undefined)) };
+  }
+  const type = node['type'];
+  if (Array.isArray(type)) {
+    const types = [...new Set(type.map(String))].sort();
+    node = { ...node, type: types.length === 1 ? types[0] : types };
+  }
+  const allOf = node['allOf'];
+  const only: unknown = Array.isArray(allOf) && allOf.length === 1 ? allOf[0] : undefined;
+  if (!('$ref' in node) && isRecord(only) && Object.keys(only).length === 1 && typeof only['$ref'] === 'string') {
+    const { allOf: _wrapper, ...rest } = node;
+    node = { ...rest, $ref: only['$ref'] };
+  }
+  return node;
+};
+
+const canonical = (schema: unknown): unknown => {
+  if (!isRecord(schema)) return normalize(schema);
+  const defs: Record<string, unknown> = {
+    ...(isRecord(schema['definitions']) ? schema['definitions'] : {}),
+    ...(isRecord(schema['$defs']) ? schema['$defs'] : {}),
+  };
+  const { $defs: _defs, definitions: _definitions, ...body } = schema;
+  const target = (ref: string): { key: string; node: unknown } =>
+    ref === '#' ? { key: '#', node: body } : { key: ref, node: defs[ref.replace(REF_PREFIX, '')] };
+
+  // Which targets are reached from inside their own expansion: those, and
+  // only those, stay definitions.
+  const recursive = new Set<string>();
+  const findCycles = (value: unknown, stack: readonly string[]): void => {
+    if (Array.isArray(value)) {
+      for (const item of value) findCycles(item, stack);
+      return;
+    }
+    if (!isRecord(value)) return;
+    const node = respell(value);
+    for (const [key, child] of Object.entries(node)) if (key !== '$ref') findCycles(child, stack);
+    const ref = node['$ref'];
+    if (typeof ref !== 'string') return;
+    const { key, node: next } = target(ref);
+    if (stack.includes(key)) recursive.add(key);
+    else findCycles(next, [...stack, key]);
+  };
+  findCycles(body, ['#']);
+
+  const names = new Map<string, string>();
+  const named: Record<string, unknown> = {};
+  const nameOf = (key: string, node: unknown): string => {
+    const known = names.get(key);
+    if (known !== undefined) return known;
+    const name = `d${names.size}`;
+    names.set(key, name);
+    named[name] = emit(node);
+    return name;
+  };
+  const emit = (value: unknown): unknown => {
+    if (Array.isArray(value)) return value.map(emit);
+    if (!isRecord(value)) return value;
+    const node = respell(value);
+    const rest = normalize(Object.fromEntries(Object.entries(node).filter(([key]) => key !== '$ref').map(([key, child]) => [key, emit(child)])));
+    const ref = node['$ref'];
+    if (typeof ref !== 'string') return rest;
+    const { key, node: next } = target(ref);
+    const referred = recursive.has(key) ? { $ref: `#/$defs/${nameOf(key, next)}` } : emit(next);
+    return isRecord(rest) && Object.keys(rest).length > 0 ? { ...rest, allOf: [referred] } : referred;
+  };
+
+  const root = recursive.has('#') ? { $ref: `#/$defs/${nameOf('#', body)}` } : emit(body);
+  return Object.keys(named).length === 0 ? root : normalize({ ...(isRecord(root) ? root : { allOf: [root] }), $defs: named });
+};
+
 export type SnapshotComparison =
   | { status: 'same' }
   | { status: 'missing' }
   | { status: 'changed'; changes: readonly { kind: string; lines: readonly string[] }[] };
 
 // `recorded` is the snapshot kept for the grammar's CURRENT version (or
-// undefined if none was kept). Changed means: a migration is owed.
+// undefined if none was kept). Changed means: a migration is owed. Both sides
+// are read in canonical form, so a validator's respelling is not a change.
 export const compareSnapshot = (recorded: Snapshot | undefined, current: Snapshot): SnapshotComparison => {
   if (recorded === undefined) return { status: 'missing' };
   const changes: { kind: string; lines: string[] }[] = [];
@@ -152,7 +244,7 @@ export const compareSnapshot = (recorded: Snapshot | undefined, current: Snapsho
     const lines: string[] = [];
     if (!(kind in recorded.kinds)) lines.push('+ (a new kind)');
     else if (!(kind in current.kinds)) lines.push('- (the kind is gone)');
-    else diffLines(normalize(recorded.kinds[kind]), normalize(current.kinds[kind]), '', lines, 12);
+    else diffLines(canonical(recorded.kinds[kind]), canonical(current.kinds[kind]), '', lines, 12);
     if (lines.length > 0) changes.push({ kind, lines });
   }
   return changes.length === 0 ? { status: 'same' } : { status: 'changed', changes };

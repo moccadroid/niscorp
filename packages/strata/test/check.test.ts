@@ -51,6 +51,73 @@ describe('snapshot — did the grammar change?', () => {
   });
 });
 
+// A recursive grammar as one validator writes it: the node union behind a
+// numbered definition, a described reference inlined beside its description,
+// a union of bare types as `anyOf`, one non-recursive definition of its own.
+const recursiveAsWritten = {
+  $schema: 'https://json-schema.org/draft/2020-12/schema',
+  description: 'A node.',
+  $ref: '#/$defs/__schema2',
+  $defs: {
+    __schema0: { anyOf: [{ type: 'string' }, { type: 'number' }, { type: 'null' }] },
+    __schema1: { type: 'object', properties: { $not: { $ref: '#/$defs/__schema2' } }, required: ['$not'], additionalProperties: false },
+    __schema2: {
+      description: 'A node: an op or a primitive.',
+      anyOf: [
+        { $ref: '#/$defs/__schema0' },
+        { $ref: '#/$defs/__schema1' },
+        { type: 'object', properties: { $add: { type: 'array', prefixItems: [{ $ref: '#/$defs/__schema2' }, { $ref: '#/$defs/__schema2' }] } }, required: ['$add'], additionalProperties: false },
+      ],
+    },
+  },
+};
+
+// The same grammar as another version writes it: definitions renamed and
+// inlined differently, a described root as `allOf: [{ $ref }]`, the primitive
+// union as a type list in another order. `change` departs from it for real.
+const respelled = (change: { primitives?: string[]; closeAdd?: boolean; addNeg?: boolean } = {}) => {
+  const node = { $ref: '#/$defs/__schema0' };
+  const op = (name: string, value: unknown) => ({ type: 'object', properties: { [name]: value }, required: [name], additionalProperties: false });
+  return {
+    $schema: 'https://json-schema.org/draft/2020-12/schema',
+    description: 'A node.',
+    allOf: [node],
+    $defs: {
+      __schema0: {
+        description: 'A node: an op or a primitive.',
+        anyOf: [
+          { type: change.primitives ?? ['null', 'string', 'number'] },
+          op('$not', { description: 'Negated.', ...node }),
+          op('$add', { type: 'array', prefixItems: [node, node], ...(change.closeAdd === true ? { items: false } : {}) }),
+          ...(change.addNeg === true ? [op('$neg', node)] : []),
+        ],
+      },
+    },
+  };
+};
+
+const snapshotWith = (schema: unknown) => ({ sequence: 'acme.nodes', version: 1, kinds: { 'acme.nodes/node': schema } });
+
+describe('snapshot — a validator\'s spelling is not a change', () => {
+  it('the same recursive grammar, written two ways, is the same', () => {
+    expect(compareSnapshot(snapshotWith(recursiveAsWritten), snapshotWith(respelled()))).toEqual({ status: 'same' });
+  });
+
+  it('a change inside the recursive definition is still a change, and says where', () => {
+    const result = compareSnapshot(snapshotWith(recursiveAsWritten), snapshotWith(respelled({ addNeg: true })));
+    expect(result.status === 'changed' && result.changes[0]?.lines).toEqual(['+ $defs.d0.anyOf[$neg]']);
+  });
+
+  it('closing a tuple is a change — a description that admits more is not the same one', () => {
+    const result = compareSnapshot(snapshotWith(recursiveAsWritten), snapshotWith(respelled({ closeAdd: true })));
+    expect(result.status === 'changed' && result.changes[0]?.lines).toEqual(['+ $defs.d0.anyOf[$add].properties.$add.items']);
+  });
+
+  it('a primitive dropped from the union is a change', () => {
+    expect(compareSnapshot(snapshotWith(recursiveAsWritten), snapshotWith(respelled({ primitives: ['string', 'number'] }))).status).toBe('changed');
+  });
+});
+
 describe('corpus — do old documents survive?', () => {
   const old = [
     { id: 'signup', kind: 'acme.forms/form', stamp: { 'acme.forms': 0 }, document: { title: 'Sign up' } },
