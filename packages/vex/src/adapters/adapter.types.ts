@@ -14,6 +14,11 @@ export type ParamSlot = {
   // stringifies it so drivers don't turn a JS array into an ARRAY literal.
   type: 'string' | 'number' | 'boolean' | 'string[]' | 'number[]' | 'json';
   dimensions?: number;
+  // The value is written into a json/jsonb COLUMN: an array or object binds as
+  // its JSON text. Left to a driver, a JS array becomes a postgres ARRAY literal
+  // — `[]` arrives as '{}', which jsonb reads as an OBJECT — and PGlite, which
+  // does not, cannot show it.
+  encode?: 'json';
 };
 
 export type ContextContract = Record<

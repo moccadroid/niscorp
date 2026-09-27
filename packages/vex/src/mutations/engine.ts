@@ -372,11 +372,24 @@ const compileValue = (v: MutationValue, ctx: CompilationContext): string => {
   return compileFieldOrValue(v, ctx);
 };
 
-const compileConflict = (m: { table: string; onConflict?: ResolvedOnConflict }, ctx: CompilationContext): string => {
+// A value written into a json/jsonb column: the slot its context value binds
+// through is marked, so the array or object goes over the wire as JSON text.
+const compileColumnValue = (table: string, column: string, v: MutationValue, ctx: CompilationContext, schema: DatabaseSchema): string => {
+  const before = ctx.paramSlots.length;
+  const sql = compileValue(v, ctx);
+  const json = findEntity(table, schema)?.fields.find((f) => f.name === column)?.normalizedType === 'json';
+  if (json && typeof v === 'object' && v !== null && '$context' in v) {
+    const slot = ctx.paramSlots[before];
+    if (slot !== undefined) ctx.paramSlots[before] = { ...slot, encode: 'json' };
+  }
+  return sql;
+};
+
+const compileConflict = (m: { table: string; onConflict?: ResolvedOnConflict }, ctx: CompilationContext, schema: DatabaseSchema): string => {
   const c = m.onConflict;
   if (c === undefined) return '';
   if (c.set === undefined) return ` ON CONFLICT (${c.target.join(', ')}) DO NOTHING`;
-  const sets = Object.entries(c.set).map(([col, v]) => `${col} = ${compileValue(v, ctx)}`);
+  const sets = Object.entries(c.set).map(([col, v]) => `${col} = ${compileColumnValue(m.table, col, v, ctx, schema)}`);
   let where = '';
   if (c.where !== undefined) {
     indexFilterFields(c.where, ctx.aliasMap);
@@ -401,8 +414,8 @@ const compileMutation = (m: ResolvedMutation, schema: DatabaseSchema): Compiled 
   if (m.op === 'insert') {
     const entries = Object.entries(m.values);
     const cols = entries.map(([c]) => c);
-    const vals = entries.map(([, v]) => compileValue(v, ctx));
-    return { sql: `INSERT INTO ${m.table} (${cols.join(', ')}) VALUES (${vals.join(', ')})${compileConflict(m, ctx)} RETURNING *`, slots: ctx.paramSlots };
+    const vals = entries.map(([c, v]) => compileColumnValue(m.table, c, v, ctx, schema));
+    return { sql: `INSERT INTO ${m.table} (${cols.join(', ')}) VALUES (${vals.join(', ')})${compileConflict(m, ctx, schema)} RETURNING *`, slots: ctx.paramSlots };
   }
   if (m.op === 'insertEach') {
     const entity = findEntity(m.table, schema);
@@ -422,12 +435,12 @@ const compileMutation = (m: ResolvedMutation, schema: DatabaseSchema): Compiled 
     ctx.paramSlots.push({ key: m.items.$context, kind: 'context', type: 'json' });
     const source = `jsonb_array_elements($${ctx.paramCounter.value}::jsonb) AS item`;
     return {
-      sql: `INSERT INTO ${m.table} (${cols.join(', ')}) SELECT ${exprs.join(', ')} FROM ${source}${compileConflict(m, ctx)} RETURNING *`,
+      sql: `INSERT INTO ${m.table} (${cols.join(', ')}) SELECT ${exprs.join(', ')} FROM ${source}${compileConflict(m, ctx, schema)} RETURNING *`,
       slots: ctx.paramSlots,
     };
   }
   if (m.op === 'update') {
-    const sets = Object.entries(m.set).map(([c, v]) => `${c} = ${compileValue(v, ctx)}`);
+    const sets = Object.entries(m.set).map(([c, v]) => `${c} = ${compileColumnValue(m.table, c, v, ctx, schema)}`);
     indexFilterFields(m.where, ctx.aliasMap);
     const where = compileFilter(m.where, ctx);
     return { sql: `UPDATE ${m.table} SET ${sets.join(', ')} WHERE ${where} RETURNING *`, slots: ctx.paramSlots };
@@ -499,6 +512,7 @@ export const executeWrites = async (client: MutationClient, def: MutationDefinit
       // would otherwise turn a JS array into a postgres ARRAY literal, which
       // `::jsonb` refuses. Anything but an array fails loudly here.
       const bound = params.map((value, i) => {
+        if (c.slots[i]?.encode === 'json') return value !== null && typeof value === 'object' ? JSON.stringify(value) : value;
         if (c.slots[i]?.type !== 'json') return value;
         if (!Array.isArray(value)) {
           throw new VexError('invalid_request', `"${c.slots[i]?.key ?? ''}" must be an array of objects (one inserted row per element).`);
