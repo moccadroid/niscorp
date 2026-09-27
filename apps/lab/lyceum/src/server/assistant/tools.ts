@@ -6,7 +6,8 @@ import type { FunctionSession } from '@niscorp/moss';
 import { ACTIONS } from '@lyceum/app/action-catalog';
 import { routeQuestion } from '../functions/ask.functions';
 import type { Asker } from '../asking';
-import { armable, dueOf, localNow } from '../timing';
+import { slidesDeck } from '@lyceum/app/vex/deck.entries';
+import { armable, dueOf, localNow, slideIdsOf } from '../timing';
 import type { TimerWriter } from '../timing';
 import { vexOver } from '../vex-over';
 import type { ToolName } from './declarations';
@@ -108,9 +109,11 @@ export const hostTools = (deps: ToolDeps, offered: ReadonlySet<ToolName>): ToolD
         input: z.object({ request: z.string().describe('What should happen, and when, in the person\'s words.') }),
         execute: async ({ request }) => {
           const now = Date.now();
-          const written = await deps.writer.write(request, now, deps.tz, deps.facts);
+          // The slides a timer may name: the deck's rows, read as this person.
+          const slideIds = slideIdsOf(await vexOver(deps.session.wire)(slidesDeck.fingerprint));
+          const written = await deps.writer.write({ intent: request, now, tz: deps.tz, facts: deps.facts, slideIds });
           if ('refused' in written) return { refused: written.refused };
-          const reflex = armable(written.reflex);
+          const reflex = armable(written.reflex, slideIds);
           const due = dueOf(reflex, now);
           deps.proposals.push({
             timer: {

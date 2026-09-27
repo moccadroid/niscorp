@@ -90,6 +90,14 @@ const main = async (): Promise<void> => {
   // ── 5. a restart keeps it ──
   const second = await boot(db);
   check('the next boot loads the saved timer into tide', (await second.timing.reload()) === 1);
+
+  // ── 6. a timer is held to the deck as it stands, not as the source had it ──
+  // A slide cut from the deck: the saved timer naming it is not loaded.
+  await db.query("UPDATE deck SET slide_id = (SELECT slide_id FROM slides ORDER BY position LIMIT 1) WHERE deck_id = 'talk'");
+  await db.query('DELETE FROM slide_notes WHERE slide_id = $1', [closing?.slideId ?? '']);
+  await db.query('DELETE FROM slide_tools WHERE slide_id = $1', [closing?.slideId ?? '']);
+  await db.query('DELETE FROM slides WHERE slide_id = $1', [closing?.slideId ?? '']);
+  check('a saved timer naming a slide cut from the deck is not loaded', (await second.timing.reload()) === 0);
   await second.close();
   await db.close();
   finish();

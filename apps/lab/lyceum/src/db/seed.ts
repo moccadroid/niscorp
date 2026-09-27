@@ -1,3 +1,5 @@
+import { TALK_DECK } from '@lyceum/app/vex/deck.entries';
+
 // What exists before anybody walks in: the departments, the principals that
 // are not people, and the deck. Everything else is written by the room.
 //
@@ -55,7 +57,8 @@ export const SLIDES: readonly { slideId: string; title: string; tools: readonly 
   { slideId: 'slide.end', title: 'It is all in the folder', tools: [], notes: ['Everything was running on this server as they watched', 'It is all in the folder: apps/lab/lyceum', 'Thank them; take questions'] },
 ];
 
-export const DECK_ID = 'talk';
+// The deck the entries read (app/vex/deck.entries.ts).
+export const DECK_ID = TALK_DECK;
 
 const quote = (value: string): string => `'${value.replace(/'/g, "''")}'`;
 

@@ -258,6 +258,7 @@ const measureRoutes = async (): Promise<void> => {
 const TIDE_NOW = Date.UTC(2026, 8, 27, 17, 5);
 const DECK_FACTS = `## The deck
 ${JSON.stringify(SLIDES.map((slide, index) => ({ slide_id: slide.slideId, number: index + 1, title: slide.title })))}`;
+const DECK_SLIDE_IDS = SLIDES.map((slide) => slide.slideId);
 const TIMER_PROBES: readonly { intent: string; at?: string; slideId?: string }[] = [
   { intent: 'End the talk in 30 minutes', at: '2026-09-27T19:35', slideId: 'slide.end' },
   { intent: 'Put the register up at eight', at: '2026-09-27T20:00', slideId: 'stage.register' },
@@ -281,12 +282,12 @@ const measureTimers = async (): Promise<void> => {
       let got: string;
       let ok = false;
       try {
-        const written = await writer.write(probe.intent, TIDE_NOW, 'Europe/Vienna', DECK_FACTS);
+        const written = await writer.write({ intent: probe.intent, now: TIDE_NOW, tz: 'Europe/Vienna', facts: DECK_FACTS, slideIds: DECK_SLIDE_IDS });
         if ('refused' in written) {
           got = `refused: ${written.refused.slice(0, 90)}`;
           ok = probe.at === undefined;
         } else {
-          const reflex = armable(written.reflex);
+          const reflex = armable(written.reflex, DECK_SLIDE_IDS);
           const at = 'clock' in reflex.on ? reflex.on.clock.at : '(not a clock)';
           const input: unknown = reflex.effect.input;
           const slideId = typeof input === 'object' && input !== null && 'slideId' in input ? String(input.slideId) : '';

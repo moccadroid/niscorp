@@ -2,6 +2,10 @@ import type { SeedEntry, SeedMutation } from '@niscorp/vex';
 
 // ── the deck: which slide is on screen, and moving it ──
 
+// The talk's deck — the one row of `deck`, by its key. Named once, here: the
+// reads below filter on it, the seed creates it, and a timer writes to it.
+export const TALK_DECK = 'talk';
+
 // Reactive: the controller follows the deck without being told. The stage
 // follows it too, but a new slide is a new ACTION on its canvas, which no
 // data update can mount — so the stage also hears `deck-moved` (reactions).
@@ -34,7 +38,7 @@ export const deckCurrent: SeedEntry = {
   dsl: {
     from: [
       'slides',
-      { as: 'cur', query: { from: ['deck', 'slides'], fields: [{ field: 'slides.position', as: 'at' }], filter: { eq: ['deck.deck_id', 'talk'] } } },
+      { as: 'cur', query: { from: ['deck', 'slides'], fields: [{ field: 'slides.position', as: 'at' }], filter: { eq: ['deck.deck_id', TALK_DECK] } } },
     ],
     fields: ['slides.slide_id', 'slides.title', 'slides.position', 'cur.at'],
     filter: { gte: ['slides.position', 0] },
@@ -104,7 +108,7 @@ export const slideNotes: SeedEntry = {
   dsl: {
     from: ['deck', 'slides', 'slide_notes'],
     fields: ['slide_notes.position', 'slide_notes.note'],
-    filter: { eq: ['deck.deck_id', 'talk'] },
+    filter: { eq: ['deck.deck_id', TALK_DECK] },
     sort: [{ field: 'slide_notes.position', dir: 'asc' }],
   },
 };
@@ -119,7 +123,7 @@ export const slideTools: SeedEntry = {
   dsl: {
     from: ['deck', 'slides', 'slide_tools'],
     fields: ['slide_tools.position', 'slide_tools.tool_id'],
-    filter: { eq: ['deck.deck_id', 'talk'] },
+    filter: { eq: ['deck.deck_id', TALK_DECK] },
     sort: [{ field: 'slide_tools.position', dir: 'asc' }],
   },
 };

@@ -67,8 +67,9 @@ export const CHARTER: Charter = {
   identity: { data: ['members.read', 'grants.read'] },
   // Issues a one-time sign-in link and redeems it: writes it, uses it up.
   gatekeeper: { data: ['login_links.write.insert', 'login_links.write.delete'] },
-  // Reads the saved timers at boot, to load them into tide.
-  scheduler: { data: ['timers.read'] },
+  // Reads the saved timers at boot, to load them into tide — and the deck, to
+  // hold each to a slide that still exists.
+  scheduler: { data: ['timers.read', 'slides.read'] },
 };
 
 // The role combinations a principal can resolve to — declared, because roles
