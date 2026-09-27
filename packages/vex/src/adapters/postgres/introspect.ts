@@ -108,12 +108,18 @@ const extractVectorDimensions = (pgType: string): number | undefined => {
 // SQL queries for introspection
 // ═══════════════════════════════════════════════════════════════
 
+// A table's and a column's COMMENT is its description: what the schema's author
+// says it means, where Postgres keeps that — and what a query writer needs
+// beside a name ("members" are the people in the room). Not part of the schema
+// fingerprint: rewording a comment changes no query.
 const TABLES_QUERY = `
-  SELECT table_name
-  FROM information_schema.tables
-  WHERE table_schema = $1
-    AND table_type = 'BASE TABLE'
-  ORDER BY table_name
+  SELECT t.table_name, obj_description(cl.oid, 'pg_class') AS description
+  FROM information_schema.tables t
+  JOIN pg_namespace ns ON ns.nspname = t.table_schema
+  JOIN pg_class cl ON cl.relname = t.table_name AND cl.relnamespace = ns.oid
+  WHERE t.table_schema = $1
+    AND t.table_type = 'BASE TABLE'
+  ORDER BY t.table_name
 `;
 
 const COLUMNS_QUERY = `
@@ -139,7 +145,15 @@ const COLUMNS_QUERY = `
          AND a.attname = c.column_name
          AND a.attnum > 0),
       c.data_type
-    ) AS full_type
+    ) AS full_type,
+    (SELECT col_description(a.attrelid, a.attnum)
+     FROM pg_attribute a
+     JOIN pg_class cl ON a.attrelid = cl.oid
+     JOIN pg_namespace ns ON cl.relnamespace = ns.oid
+     WHERE cl.relname = c.table_name
+       AND ns.nspname = $1
+       AND a.attname = c.column_name
+       AND a.attnum > 0) AS description
   FROM information_schema.columns c
   WHERE c.table_schema = $1
   ORDER BY c.table_name, c.ordinal_position
@@ -288,6 +302,7 @@ export const introspectPostgres = async (
     const fullType = row['full_type'] as string;
     const isNullable = row['is_nullable'] as string;
     const colDefault = row['column_default'] as string | null;
+    const colDescription = row['description'] as string | null;
 
     const tablePks = pkMap.get(table);
     const isPk = tablePks !== undefined && tablePks.has(colName);
@@ -302,6 +317,7 @@ export const introspectPostgres = async (
       nullable: isNullable === 'YES',
       primaryKey: isPk,
       ...(colDefault !== null ? { defaultValue: colDefault } : {}),
+      ...(colDescription !== null && colDescription !== '' ? { description: colDescription } : {}),
       ...(vecDims !== undefined ? { vectorDimensions: vecDims } : {}),
     };
 
@@ -389,9 +405,11 @@ export const introspectPostgres = async (
 
   const entities: EntitySchema[] = filteredTables.map((row) => {
     const tableName = row['table_name'] as string;
+    const tableDescription = row['description'] as string | null;
     return {
       name: tableName,
       table: tableName,
+      ...(tableDescription !== null && tableDescription !== '' ? { description: tableDescription } : {}),
       fields: columnsByTable.get(tableName) ?? [],
       relations: relationsByTable.get(tableName) ?? [],
       indexes: indexesByTable.get(tableName) ?? [],

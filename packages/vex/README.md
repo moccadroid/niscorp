@@ -24,7 +24,8 @@ const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
 const adapter = createPostgresAdapter({ pool });
 const engine = createQueryEngine({ adapter });
 
-await engine.introspect(); // discover tables, columns, relations, indexes
+await engine.introspect(); // discover tables, columns, relations, indexes — and their
+                           // COMMENTs, as descriptions the query writer reads
 
 // Generate once — the intent + the shape drive the DSL and the mapping.
 // No fingerprint given, so the engine mints one and returns it.
