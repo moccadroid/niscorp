@@ -1,7 +1,7 @@
 import { Children, createElement, useEffect, useState } from 'react';
 import { Box, Text as InkText } from 'ink';
 import { renderUnicodeCompact } from 'uqr';
-import { Input, Mark, Table, useActionable } from '@niscorp/nova/adapters/ink';
+import { Input, Mark, useActionable } from '@niscorp/nova/adapters/ink';
 import { createComponentRegistry } from '@niscorp/nova';
 import type { ComponentRegistry } from '@niscorp/nova';
 import type { NovaComponent } from '@niscorp/nova/adapters/react';
@@ -111,9 +111,52 @@ const Qr: NovaComponent = ({ ...props }) => {
   return value === '' ? null : h(InkText, {}, renderUnicodeCompact(value));
 };
 
-// nova's own terminal table — the same data contract as lyceum's Rows (rows,
-// columns by key and label, rowKey, rowRef, clickKey, empty).
-const Rows: NovaComponent = ({ ...props }) => h(Table, props);
+// A ruled table in lyceum's own grammar (./kit.props.ts: each column's `key`,
+// `label`, `kind`, `missing`) — nova's terminal Table speaks a different one
+// (`cell.key`), so it is not borrowed. Widths are the values', capped; a row
+// you can press (`rowRef`) carries its own [n], its payload `clickKey`.
+const CELL_CAP = 32;
+const cellOf = (record: Record<string, unknown>, column: Record<string, unknown>): string => {
+  const value = record[text(column['key']) ?? ''];
+  if (value === null || value === undefined || value === '') return text(column['missing']) ?? '';
+  const kind = oneOf(column['kind'], ['text', 'mono', 'sigil'] as const) ?? 'text';
+  if (kind === 'sigil') {
+    const shape = oneOf(value, SIGILS);
+    return shape === undefined ? '' : GLYPHS[shape];
+  }
+  const said = typeof value === 'object' ? JSON.stringify(value) : (text(value) ?? String(value));
+  return said.length > CELL_CAP ? `${said.slice(0, CELL_CAP - 1)}…` : said;
+};
+
+const PressableRow: NovaComponent = ({ ...props }) => {
+  const rowRef = text(props['rowRef']);
+  const { marker, isFocused } = useActionable(rowRef, props['payload']);
+  return h(InkText, {}, h(Mark, { index: marker }), h(InkText, { inverse: isFocused || props['selected'] === true }, text(props['line']) ?? ''));
+};
+
+const Rows: NovaComponent = ({ ...props }) => {
+  const columns = records(props['columns']);
+  const body = records(props['rows']);
+  if (body.length === 0) return h(InkText, { dimColor: true }, text(props['empty']) ?? '');
+  const rowRef = text(props['rowRef']);
+  const clickKey = text(props['clickKey']) ?? text(props['rowKey']) ?? '';
+  const header = columns.map((column) => text(column['label']) ?? '');
+  const cells = body.map((record) => columns.map((column) => cellOf(record, column)));
+  const widths = header.map((label, i) => Math.max(label.length, ...cells.map((row) => row[i]?.length ?? 0)));
+  const line = (row: string[]): string => row.map((cell, i) => cell.padEnd(widths[i] ?? 0)).join('  ').trimEnd();
+  const labelled = header.some((label) => label !== '');
+  return h(
+    Box,
+    { flexDirection: 'column' },
+    labelled ? h(InkText, { dimColor: true, bold: true }, line(header)) : null,
+    cells.map((row, i) => {
+      const key = body[i]?.[clickKey];
+      return rowRef === undefined
+        ? h(InkText, { key: i }, line(row))
+        : h(PressableRow, { key: i, rowRef, payload: key, line: line(row), selected: props['selected'] !== undefined && props['selected'] !== null && key === props['selected'] });
+    }),
+  );
+};
 
 // Proportions as a bar of blocks, forty cells wide, each segment in its ink.
 const BAR_CELLS = 40;
