@@ -11,12 +11,14 @@ import { buildSeedSql } from '@lyceum/db/seed';
 // of the process and lends it to every re-boot (vite.config.ts), so an edit
 // keeps the room: sessions, members and the deck survive it. The tables go
 // through strata's ledger (a borrowed database finds them already applied) and
-// the seed converges, so both run again on the borrowed one. The talk itself runs on Postgres
-// (./postgres-runtime.ts) — the manifest does not change, only the environment.
+// the seed converges, so both run again on the borrowed one. The talk itself
+// runs on Postgres (./postgres-runtime.ts) — the manifest does not change, only
+// the environment.
 //
 // Sessions are the real credential even here: 256-bit, hashed at rest,
 // expiring. Stepping in mints one; nothing in lyceum trusts a token because it
 // is well-formed.
+
 // What every lyceum environment hands the boot: moss's runtime, and a way to
 // let go of the database when the process is done.
 export type LyceumRuntime = NiscRuntime & { close: () => Promise<void> };
