@@ -21,7 +21,8 @@
     "check:grammars": "node scripts/check-grammars.mts",
     "strata:snapshot": "node scripts/check-grammars.mts --write",
     "strata:corpus": "node scripts/capture-corpus.mts",
-    "check:sources": "node scripts/check-sources.mts"
+    "check:sources": "node scripts/check-sources.mts",
+    "check:fact-door": "node scripts/check-fact-door.mts"
   },
   "devDependencies": {
     "@arethetypeswrong/cli": "^0.18.5",

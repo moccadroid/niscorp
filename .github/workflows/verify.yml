@@ -77,6 +77,12 @@ jobs:
       - name: Check app sources
         run: pnpm check:sources
 
+      # Tide writes facts through one door (engine/facts.ts), which is also
+      # where they are announced. A second writer is how an emitted chain once
+      # went missing from the event stream. See scripts/check-fact-door.mts.
+      - name: Check the tide fact door
+        run: pnpm check:fact-door
+
       # Every package change on a PR carries a changeset, and a breaking release
       # (a major, or a minor below 1.0) is refused until everything that depends
       # or peers on it is released as breaking too — Changesets alone would ship
