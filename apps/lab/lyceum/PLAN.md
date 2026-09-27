@@ -53,8 +53,8 @@ In order; each lands with its check.
 3. ~~**The ask**~~ — built 2026-09-27 (see "What is built"). Not yet: parameterised
    replays (Jev choosing a fingerprint's context values), the ask on the controller.
 4. ~~**The assistant**~~ — built 2026-09-27 (see "What is built"). Not yet: streaming
-   replies; the reply text held to what the tools did (see "Measured"); the screen's tree
-   in its context.
+   replies; the reply text held to what the tools did (see "Measured"); `open` proposed
+   where `ask` was the tool (see "Measured").
 5. ~~**The timer**~~ — built 2026-09-27 (see "What is built").
 6. **The look switch**, inside lyceum, moss untouched: a `room` row holds the look
    (`poster` | `plain`); a small action granted to everybody reads it reactively and
@@ -136,8 +136,10 @@ a document to read and save; nothing runs without a press. Every turn is a row
 (`assistant_turns`, migration 5) written as the person — the history under the input, a
 reactive read of their own turns only, and the conversation the model is handed next;
 acting on a proposal writes its outcome ("Saved · fires at 18:56") and the proposal
-leaves the screen. `assistant-check` asserts the
-assembly per person and the bounds; `pnpm probe:assistant` measures it live.
+leaves the screen. It sees the person's SCREEN: nova's own reading of their live shell
+(`describeShell` from `@niscorp/nova/reflect`) — every canvas but the tab bar, what is on
+it, its data — minus the assistant's own bookkeeping. `assistant-check` asserts the
+assembly per person, the bounds, and what it sees; `pnpm probe:assistant` measures it live.
 
 **The timer** — the talk's first minute and its last. On slide 1 the controller's tool is
 the speaker's assistant: "End the talk in 30 minutes" is routed to `automate`, and tide's
@@ -265,6 +267,13 @@ policy, one generation per question (`src/dev/model-check.ts`).
   tool) and a reminder no effect can do all given nothing. The REPLY TEXT is not held to
   that yet: once the speaker's assistant, with no tool for it, answered "who is in the
   room?" with an invention; its timer reply says "recorded" of what is only proposed.
+- **The one assistant, screen aware** (`pnpm probe:assistant 2`, one probe added BEFORE
+  the run: the speaker's "What slide is on screen right now?" must name the slide in the
+  reply): **15/18**. The screen 2/2 ("The current slide on screen is slide.title – 'The
+  talk is an application'"). Misses, all one kind: a question the `ask` should answer
+  given an `open` button instead — Forms' "Which department has the most people?" 0/2,
+  the waiting member's "How many people are in the room?" 1/2. Not tuned: a routing
+  quality problem, to be fixed in the tools' contract, not by naming these sentences.
 - **Jev routing the ask** (`LYCEUM_PART=route pnpm models`): 16 probes against six
   earlier questions — paraphrases that must replay, the same words about another subject
   that must not, new questions whose shape is the test. **48/48** over three runs, ~250 ms

@@ -52,6 +52,11 @@ const fakeOrchestrator = (): Orchestrator => ({
     const call = async (name: string, input: unknown): Promise<unknown> =>
       tool(name)?.config.execute(input, { runId: 'fake', agentId: 'lyceum.assistant', agentPath: [], signal: new AbortController().signal, forward: () => undefined });
     const message = turn.message.trim();
+    // "What is on my screen?" — read back what it was handed about the screen.
+    if (/\bscreen\b/i.test(message)) {
+      const section = turn.knowledge.split('\n\n').find((part) => part.startsWith('ON THEIR SCREEN')) ?? '';
+      return `On your screen: ${section.slice(section.indexOf('\n') + 1).slice(0, 1200)}`;
+    }
     if (/\b(in \d+|minutes?|hours?|at \d)/i.test(message)) {
       if (tool('automate') === undefined) return 'I cannot set up automations for you.';
       await call('automate', { request: message });

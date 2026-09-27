@@ -21,7 +21,8 @@ const RUNS = Number(process.argv[2] ?? 2);
 
 type Want = 'timer' | 'answer' | 'open' | 'none';
 type Who = 'waiting' | 'forms' | 'records' | 'speaker';
-const PROBES: readonly { who: Who; say: string; want: Want; containing?: string }[] = [
+// `saying`: what the REPLY must say — for what only the screen can tell it.
+const PROBES: readonly { who: Who; say: string; want: Want; containing?: string; saying?: string }[] = [
   { who: 'waiting', say: 'How many people are in the room?', want: 'answer' },
   { who: 'waiting', say: 'End the talk in 30 minutes', want: 'none' },
   { who: 'forms', say: 'Change my name to Ada Lovelace', want: 'open', containing: 'Ada Lovelace' },
@@ -30,11 +31,17 @@ const PROBES: readonly { who: Who; say: string; want: Want; containing?: string 
   { who: 'speaker', say: 'End the talk in 30 minutes', want: 'timer', containing: 'slide.end' },
   { who: 'speaker', say: 'Who is in the room?', want: 'none' },
   { who: 'speaker', say: 'Remind me to drink water in 10 minutes', want: 'none' },
+  { who: 'speaker', say: 'What slide is on screen right now?', want: 'none', saying: 'The talk is an application' },
 ];
 
 // Which proposal the reply left, read off the tree the person sees.
-const proposalIn = (tree: string): Want =>
-  tree.includes('Read it first') ? 'timer' : tree.includes('The answer') || tree.includes('"name":"Rows"') ? 'answer' : tree.includes('"ref":"proposed"') ? 'open' : 'none';
+// The history under the input is a Rows too, always there — an answer is a
+// Figure, or a Rows other than the history (whose rows are keyed turn_id).
+const proposalIn = (tree: string): Want => {
+  const rows = tree.split('"name":"Rows"').length - 1;
+  const history = tree.split('"rowKey":"turn_id"').length - 1;
+  return tree.includes('Read it first') ? 'timer' : tree.includes('The answer') || rows > history ? 'answer' : tree.includes('"ref":"proposed"') ? 'open' : 'none';
+};
 
 const { boot } = await import('@lyceum/server/boot');
 const main = async (): Promise<void> => {
@@ -89,8 +96,8 @@ const main = async (): Promise<void> => {
       })();
       const tree = terminal.textOf(canvas);
       const got = settled ? proposalIn(tree) : 'none';
-      const ok = settled && got === probe.want && (probe.containing === undefined || tree.includes(probe.containing));
-      const reply = /"value":"([^"]{0,120})/.exec(tree.slice(tree.indexOf('"Text"', tree.indexOf('Ask →'))))?.[1] ?? '';
+      const reply = /"value":"([^"]{0,160})/.exec(tree.slice(tree.indexOf('"Text"', tree.indexOf('Ask →'))))?.[1] ?? '';
+      const ok = settled && got === probe.want && (probe.containing === undefined || tree.includes(probe.containing)) && (probe.saying === undefined || reply.toLowerCase().includes(probe.saying.toLowerCase()));
       passed += ok ? 1 : 0;
       total += 1;
       console.log(`${ok ? '[pass]' : '[fail]'} ${String(Date.now() - started).padStart(6)}ms  ${probe.who.padEnd(8)} ${probe.say} → ${got}${ok ? '' : ` (wanted ${probe.want})`} · "${reply}"`);

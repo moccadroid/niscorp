@@ -98,6 +98,15 @@ const main = async (): Promise<void> => {
   await speaker.hello();
   check('the controller\'s assistant is built from the controller declaration, and can automate', (await speaker.shows('tools', 'Built from controller')) && speaker.showsNow('tools', 'automate'));
 
+  // ── what it sees: the person's own screen, read off the live shell ──
+  await say(speaker, 'tools', 'What is on my screen?');
+  check('the speaker\'s assistant sees the slide on screen, from the controller\'s own canvases', await speaker.shows('tools', 'The talk is an application'));
+  check('…and not its own bookkeeping', !speaker.showsNow('tools', 'THE CONVERSATION'));
+  await say(forms, 'body', 'What is on my screen?');
+  check('a phone\'s assistant sees that person\'s screen: their own card', await forms.shows('body', 'On your screen:'));
+  const cardName = (await runtime.db.query<{ name: string }>('SELECT name FROM members WHERE member_id = $1', [formsPerson.memberId])).rows[0]?.name ?? '\u0000';
+  check(`…with their name on it (${cardName})`, forms.textOf('body').includes(`On your screen:`) && forms.textOf('body').split('On your screen:')[1]?.includes(cardName) === true);
+
   // ── 4. the open trigger and the catalog agree ──
   const trigger = ACTIONS['assistant.thread']?.triggers?.find((candidate) => 'ref' in candidate && candidate.ref === 'proposed');
   const pushed = trigger?.do[0];

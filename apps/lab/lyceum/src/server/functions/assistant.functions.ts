@@ -2,6 +2,7 @@ import { randomBytes } from 'node:crypto';
 import { z } from 'zod';
 import type { FunctionSession } from '@niscorp/moss';
 import type { FunctionHandler } from '@niscorp/nova';
+import { describeShell } from '@niscorp/nova/reflect';
 import { ACTIONS } from '@lyceum/app/action-catalog';
 import { turnRecord, turnsMine } from '@lyceum/app/vex/assistant.entries';
 import { assembleFor } from '../assistant/declarations';
@@ -30,6 +31,19 @@ const DraftSchema = z.object({ draft: z.string() });
 // The conversation so far, oldest first — this person's own turns, read as them.
 const TurnsSchema = z.array(z.object({ message: z.string(), reply: z.string(), outcome: z.string().nullable() }));
 const CONVERSATION_TURNS = 6;
+
+// WHAT IS ON THEIR SCREEN — nova's own reading of the live shell (reflect's
+// describeShell): every canvas they have, what is on it, and its data. Not the
+// tab bar (buttons, not content), and not the assistant's own bookkeeping —
+// its reply, its history, its tab state — which it would otherwise read back.
+const NOT_CONTENT = new Set(['tab', 'tabLabel', 'tabInk', 'nextInk', 'strip', 'reply', 'history', 'intro', 'chosen', 'thinking', 'answered', 'saved', 'error', 'draft']);
+const screenOf = (session: FunctionSession): string =>
+  describeShell(session.shell, {
+    only: Object.keys(session.shell.getState().canvases).filter((canvas) => canvas !== 'tabs'),
+    collapseOver: 8,
+    head: 5,
+    clean: (data) => Object.fromEntries(Object.entries(data).filter(([key]) => !NOT_CONTENT.has(key))),
+  });
 
 // What the assistant is handed about this person — assembled, not authored:
 // their declarations' instructions, the grounding read AS them now, the
@@ -62,6 +76,7 @@ const knowledgeOf = async (session: FunctionSession, assembled: Assembled, tz: s
     `Now: ${localNow(Date.now(), tz)} (${tz}).`,
     facts === '' ? '' : `WHAT YOU KNOW\n${facts}`,
     offerable.length === 0 ? '' : `ACTIONS YOU CAN OFFER (with \`open\`)\n${offerable.join('\n')}`,
+    `ON THEIR SCREEN (canvas: what is on it, the top one starred — then each one's data)\n${screenOf(session)}`,
     conversation === '' ? '' : `THE CONVERSATION SO FAR\n${conversation}`,
   ]
     .filter((part) => part !== '')
