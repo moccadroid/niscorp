@@ -3,7 +3,7 @@ import { createMemoryCache, createPostgresCache, createTieredCache } from '@nisc
 import { createPglitePool, RAW_DATE_PARSERS } from '@niscorp/vex/pglite';
 import type { NiscRuntime } from '@niscorp/moss';
 import { migrate } from '@niscorp/strata/postgres';
-import { LYCEUM_SEQUENCE } from '@lyceum/db/schema';
+import { LYCEUM_SEQUENCES } from '@lyceum/db/schema';
 import { buildSeedSql } from '@lyceum/db/seed';
 
 // The DEVELOPMENT environment: an in-memory PGlite, for `pnpm dev` and the
@@ -28,7 +28,7 @@ export const openDevDatabase = (): PGlite => new PGlite();
 // `borrowed`: a database somebody else opened and will close — the dev server's.
 export const devRuntime = async (borrowed?: PGlite): Promise<DevRuntime> => {
   const db = borrowed ?? openDevDatabase();
-  await migrate(createPglitePool(db), [LYCEUM_SEQUENCE]);
+  await migrate(createPglitePool(db), [...LYCEUM_SEQUENCES]);
   await db.exec(buildSeedSql());
 
   // Two pools over one database: app reads get raw date strings; the cache

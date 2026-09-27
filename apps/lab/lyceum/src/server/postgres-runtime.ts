@@ -1,7 +1,7 @@
 import pg from 'pg';
 import { createMemoryCache, createPostgresCache, createTieredCache } from '@niscorp/vex';
 import { migrate } from '@niscorp/strata/postgres';
-import { LYCEUM_SEQUENCE } from '@lyceum/db/schema';
+import { LYCEUM_SEQUENCES } from '@lyceum/db/schema';
 import { buildSeedSql } from '@lyceum/db/seed';
 import { createPgPool, RAW_DATE_PARSERS } from './pg';
 import type { LyceumRuntime } from './runtime';
@@ -17,7 +17,7 @@ const STATEMENT_TIMEOUT_MS = 5_000;
 
 export const postgresRuntime = async (databaseUrl: string): Promise<LyceumRuntime> => {
   const pool = new pg.Pool({ connectionString: databaseUrl, max: 10, statement_timeout: STATEMENT_TIMEOUT_MS });
-  await migrate(createPgPool(pool), [LYCEUM_SEQUENCE]);
+  await migrate(createPgPool(pool), [...LYCEUM_SEQUENCES]);
   await pool.query(buildSeedSql());
 
   // One pool, two readings of it: app reads get raw date strings, the vex

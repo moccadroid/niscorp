@@ -22,4 +22,8 @@ export const BEHAVIORS: ScopeBehaviors = {
   asks: {
     default: { insert: [{ set: 'member_id', to: 'userId' }] },
   },
+  // A timer is saved by whoever saved it (the speaker): stamped, not sent.
+  timers: {
+    default: { insert: [{ set: 'saved_by', to: 'userId' }] },
+  },
 };

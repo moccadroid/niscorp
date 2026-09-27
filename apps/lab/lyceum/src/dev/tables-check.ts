@@ -10,12 +10,15 @@ import { PGlite } from '@electric-sql/pglite';
 import { createPglitePool } from '@niscorp/vex/pglite';
 import { checksumOf } from '@niscorp/strata';
 import { migrate, readLedger } from '@niscorp/strata/postgres';
-import { DDL, LYCEUM_SEQUENCE } from '@lyceum/db/schema';
+import { TIDE_TABLES } from '@niscorp/moss';
+import { DDL, LYCEUM_SEQUENCE, LYCEUM_SEQUENCES } from '@lyceum/db/schema';
 import { check, finish } from './harness';
 
 // What migration 1 creates, and what the whole sequence leaves.
 const BASELINE_TABLES = ['departments', 'members', 'slides', 'slide_notes', 'deck', 'grants', 'login_links'];
-const TABLES = [...BASELINE_TABLES, 'slide_tools', 'asks'];
+const TABLES = [...BASELINE_TABLES, 'slide_tools', 'asks', 'timers'];
+// What the boot migrates: lyceum's sequence and tide's (db/schema.ts).
+const BOOT_TABLES = [...TABLES, ...TIDE_TABLES];
 const ALL = LYCEUM_SEQUENCE.migrations.map((_, index) => `lyceum.app/${index + 1}`).join();
 
 const tablesOf = async (pool: ReturnType<typeof createPglitePool>): Promise<string[]> =>
@@ -30,13 +33,15 @@ const main = async (): Promise<void> => {
   check('lyceum.app/2 is unchanged', slideTools !== undefined && (await checksumOf(slideTools)) === '8185a9c82a089b2e5ab1cfe7cf07e46d21cb9df464596a96d3cac5da55244aa4');
   const asks = LYCEUM_SEQUENCE.migrations[2];
   check('lyceum.app/3 is unchanged', asks !== undefined && (await checksumOf(asks)) === '2b23d46ac39621353aea5d577160255b282f606b097c2a29aed01c23b3668686');
+  const timers = LYCEUM_SEQUENCE.migrations[3];
+  check('lyceum.app/4 is unchanged', timers !== undefined && (await checksumOf(timers)) === 'cfff32da4f9923cee3258967f12b089f53aadd98eafd23974c1efa249ed49c6c');
 
   // ── a fresh database ──
   const fresh = createPglitePool(new PGlite());
-  await migrate(fresh, [LYCEUM_SEQUENCE]);
-  check('a fresh database gets every table', JSON.stringify(await tablesOf(fresh)) === JSON.stringify([...TABLES].sort()));
-  check(`...and the ledger records every migration (${ALL})`, (await readLedger(fresh)).map((r) => `${r.sequence}/${r.n}`).join() === ALL);
-  check('a second boot runs nothing', (await migrate(fresh, [LYCEUM_SEQUENCE])).applied.length === 0);
+  await migrate(fresh, [...LYCEUM_SEQUENCES]);
+  check('a fresh database gets every table, lyceum and tide both, before the server looks', JSON.stringify(await tablesOf(fresh)) === JSON.stringify([...BOOT_TABLES].sort()));
+  check(`...and the ledger records every one of lyceum's migrations (${ALL})`, (await readLedger(fresh)).filter((r) => r.sequence === 'lyceum.app').map((r) => `${r.sequence}/${r.n}`).join() === ALL);
+  check('a second boot runs nothing', (await migrate(fresh, [...LYCEUM_SEQUENCES])).applied.length === 0);
 
   // ── the live talk's database: it ran the old DDL on every boot and holds rows ──
   const db = new PGlite();

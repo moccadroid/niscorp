@@ -1,4 +1,5 @@
 import { sqlSteps, type Sequence } from '@niscorp/strata';
+import { TIDE_SEQUENCE } from '@niscorp/moss';
 
 // The Ministry's tables. Who somebody IS in the talk — not yet assigned, a
 // department, the speaker, the projector — is read from these rows by the
@@ -122,11 +123,36 @@ export const ASKS = /* sql */ `
   );
 `;
 
+// Migration 4: TIMERS. An automation the speaker asked for and saved — the tide
+// reflex itself, as a document, beside when it fires (for the countdown on the
+// controller). The reflex is data: this row is what is loaded into tide on every
+// boot, and nothing about it is code. `saved_by` is stamped by the engine.
+export const TIMERS = /* sql */ `
+  CREATE TABLE timers (
+    timer_id TEXT PRIMARY KEY,
+    reflex   JSONB NOT NULL,
+    intent   TEXT NOT NULL,
+    due_at   TIMESTAMPTZ,
+    saved_by TEXT NOT NULL,
+    saved_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  );
+`;
+
 export const LYCEUM_SEQUENCE: Sequence = {
   id: 'lyceum.app',
   migrations: [
     { description: "The Ministry's tables: departments, members, the deck and its notes, grants, sign-in links", steps: sqlSteps(DDL) },
     { description: "A slide's tools are rows (slide_tools), not one column on the slide", steps: sqlSteps(SLIDE_TOOLS) },
     { description: 'The ask: every question put to the records, and how it was answered', steps: sqlSteps(ASKS) },
+    { description: 'Timers: automations the speaker saved, each a tide reflex as a document', steps: sqlSteps(TIMERS) },
   ],
 };
+
+// EVERY TABLE LYCEUM'S BOOT MUST FIND, in one ledgered run before the server
+// starts: its own, and tide's (the talk's timers run on moss's durable tide
+// store). Tide's store would create its tables itself on first use — but that
+// is after moss's engine has introspected the database, and an engine that
+// introspected a different schema than the one a later query was generated
+// under treats that query as stale and evicts it. One schema, before anybody
+// looks at it.
+export const LYCEUM_SEQUENCES: readonly Sequence[] = [LYCEUM_SEQUENCE, TIDE_SEQUENCE];

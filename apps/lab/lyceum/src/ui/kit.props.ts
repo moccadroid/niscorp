@@ -40,6 +40,7 @@ export const KIT_PROPS = z
     Headline: z.object({ level: z.enum(LEVELS) }).partial().strict(),
     Text: z.object({ tone: z.literal('muted') }).partial().strict(),
     Figure: z.object({ label, value: z.union([z.string(), z.number()]) }).partial().strict(),
+    Countdown: z.object({ label, to: z.string().describe('The instant counted down to') }).partial().strict(),
     Code: z.object({ text: z.string(), marked: z.array(z.number()) }).partial().strict(),
     Sigil: z.object({ shape: z.enum(SIGILS), size: z.literal('large') }).partial().strict(),
     Qr: z.object({ value: z.string() }).partial().strict(),

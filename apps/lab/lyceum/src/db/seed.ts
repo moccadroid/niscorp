@@ -35,6 +35,8 @@ export const STAFF: readonly { principal: string; role: string }[] = [
   { principal: 'kit', role: 'kit' },
   // The Ministry's registry, which issues ID cards (server/card-issuing.ts).
   { principal: 'registry', role: 'registry' },
+  // The talk's clock, which saved timers run as (server/timing.ts).
+  { principal: 'clock', role: 'clock' },
 ];
 
 // The deck, in order. Each slide id is an action the stage is granted, each
@@ -42,7 +44,7 @@ export const STAFF: readonly { principal: string; role: string }[] = [
 // what the controller shows while that slide is up, stacked in this order. The words are
 // provisional: the talk's text is written with the story.
 export const SLIDES: readonly { slideId: string; title: string; tools: readonly string[]; notes: readonly string[] }[] = [
-  { slideId: 'slide.title', title: 'The talk is an application', tools: [], notes: ['Say hello; say it is running, not a recording', 'Ask everyone to take their phone out and scan the code', 'Wait for the register to fill before moving on'] },
+  { slideId: 'slide.title', title: 'The talk is an application', tools: ['tools.assistant'], notes: ['Say hello; say it is running, not a recording', 'Ask everyone to take their phone out and scan the code', 'Wait for the register to fill before moving on'] },
   { slideId: 'stage.register', title: 'The register', tools: [], notes: ['Point at the names arriving — each one is a row', 'The model wrote the ID cards while they watched', 'Nobody has a department yet'] },
   { slideId: 'slide.data', title: 'Everything is data', tools: [], notes: ['Actions, layouts, queries, policy: all JSON with a schema', 'The code is only at the edges — a renderer, an endpoint, the boot', 'Show one file if there is time'] },
   { slideId: 'slide.assignment', title: 'Assignment', tools: ['tools.assignment', 'tools.tally'], notes: ['Tell the room to watch their phones', 'Press Assign the room', 'One row changes per person — the phone follows without a reload'] },

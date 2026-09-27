@@ -16,5 +16,10 @@ export const LYCEUM_KIT: Sequence = {
       description: 'Sheet: a narrow arrangement for phone-width screens; Action: size large',
       steps: [],
     },
+    {
+      // A MARKER: a component added.
+      description: 'Countdown: the time left until an instant, ticking where it is shown',
+      steps: [],
+    },
   ],
 };

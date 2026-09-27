@@ -141,4 +141,19 @@ export const deckGo: SeedMutation = {
   },
 };
 
-export const DECK_ENTRIES: readonly (SeedEntry | SeedMutation)[] = [deckCurrent, slidesAll, slideNotes, slideTools, deckGo];
+// Put a named slide on screen — what a timer does when it fires (as the
+// `clock` principal, whose only grant is this write). By id rather than by
+// position: an automation names what it means, and the foreign key refuses a
+// slide that is not in the deck.
+export const deckShow: SeedMutation = {
+  fingerprint: 'deck/show',
+  intent: 'Put a named slide on screen',
+  mutation: {
+    op: 'update',
+    table: 'deck',
+    set: { slide_id: { $context: 'slideId' } },
+    where: { eq: ['deck.deck_id', { $context: 'deck' }] },
+  },
+};
+
+export const DECK_ENTRIES: readonly (SeedEntry | SeedMutation)[] = [deckCurrent, slidesAll, slideNotes, slideTools, deckGo, deckShow];

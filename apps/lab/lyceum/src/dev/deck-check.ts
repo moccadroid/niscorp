@@ -38,7 +38,7 @@ const main = async (): Promise<void> => {
 
   // What each tool says, so the tool region can be read: exactly a slide's
   // tools, in the slide's order — or, with none, that there are none.
-  const SAYS: Record<string, string> = { 'tools.assignment': 'Assign the room', 'tools.tally': 'Departments so far' };
+  const SAYS: Record<string, string> = { 'tools.assignment': 'Assign the room', 'tools.tally': 'Departments so far', 'tools.assistant': 'ask for an automation' };
   const toolsAre = (expected: readonly string[]): Promise<boolean> =>
     waitUntil(() => {
       const shown = Object.keys(SAYS).filter((tool) => speaker.showsNow('tools', SAYS[tool] ?? '\u0000'));
@@ -51,7 +51,9 @@ const main = async (): Promise<void> => {
   const regions = ['head', 'tools', 'notes', 'controls'];
   check('the controller places its four regions itself', await waitUntil(() => regions.every((region) => speaker.showsNow('main', `"canvasId":"${region}"`))));
   check('none of them exists for the stage', !['speaker.console', 'speaker.head', 'speaker.notes', 'speaker.controls'].some((id) => stageHello.catalog.actions.includes(id)));
-  check('a slide without a tool says so, rather than leave a hole', await speaker.shows('tools', 'Nothing to press on this slide'));
+  // (A slide without a tool says so rather than leave a hole — asserted per
+  // slide in the walk below, where `toolsAre([])` wants the hatch.)
+  check('the first slide has its tools on the controller', await toolsAre(SLIDES[0]?.tools ?? []));
 
   // ── the way in: the first slide's code and address, the strip's address ──
   check('the first slide carries the code to scan, saying the room\'s address', await stage.shows('main', '"name":"Qr"') && stage.showsNow('main', '"value":"http://localhost:8796"'));

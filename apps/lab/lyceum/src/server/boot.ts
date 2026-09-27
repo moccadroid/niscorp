@@ -8,6 +8,9 @@ import { doorFunctions } from './functions/door.functions';
 import { assignmentFunctions } from './functions/assignment.functions';
 import { roomFunctions } from './functions/room.functions';
 import { askFunctions } from './functions/ask.functions';
+import { assistantFunctions } from './functions/assistant.functions';
+import { createTimerWriter, startTiming, talkZone } from './timing';
+import type { Timing } from './timing';
 import { createAsker } from './asking';
 import { devRuntime } from './runtime';
 import { createIssuer } from './issuer';
@@ -21,6 +24,8 @@ export type Booted<R extends LyceumRuntime = DevRuntime> = {
   server: MossServer;
   runtime: R;
   app: NiscApp;
+  // The talk's timers: tide, its driver, and reloading the saved ones.
+  timing: Timing;
   close: () => Promise<void>;
 };
 
@@ -50,19 +55,33 @@ export const bootOn = async <R extends LyceumRuntime>(runtime: R, options: BootO
   // Who routes and writes the answers to the ask — Jev and gpt-oss-120b with
   // keys, the deterministic fake without (./asking.ts).
   const asker = createAsker(process.env);
+  // Who writes the speaker's timers — the reflex agent with a key, the
+  // deterministic fake without (./timing.ts) — and where the talk's clocks are.
+  const timerWriter = createTimerWriter(process.env);
+  const tz = talkZone(process.env);
+  let timingUp: Timing | undefined;
+  const timing = (): Timing => {
+    if (timingUp === undefined) throw new Error('lyceum: the timers are not up yet');
+    return timingUp;
+  };
 
   const app = buildLyceum({
     identity: lyceumIdentity,
-    functions: (session) => ({ ...doorFunctions(session, server, issuer), ...assignmentFunctions(session, server), ...roomFunctions(publicUrl), ...askFunctions(session, asker) }),
+    functions: (session) => ({ ...doorFunctions(session, server, issuer), ...assignmentFunctions(session, server), ...roomFunctions(publicUrl), ...askFunctions(session, asker), ...assistantFunctions(timerWriter, tz, timing) }),
     reactions: lyceumReactions(server),
   });
   built = await createServer(app, runtime);
+  // Tide stands on the server it writes through, so it starts once that is up
+  // — loading every timer saved before this boot.
+  timingUp = await startTiming(built, runtime);
 
   return {
     server: built,
     runtime,
     app,
+    timing: timingUp,
     close: async () => {
+      await timingUp?.stop();
       built?.close();
       await runtime.close();
     },

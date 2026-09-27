@@ -147,6 +147,8 @@ html { font-size: clamp(16px, calc(0.72vw + 13.3px), 28px); }
 .${ROOT_CLASS} .text[data-tone="muted"] { opacity: 1; color: color-mix(in srgb, var(--fg) 55%, var(--bg)); }
 .${ROOT_CLASS} .figure { display: flex; flex-direction: column; gap: .3em; }
 .${ROOT_CLASS} .figure > .value { font: 900 clamp(2rem, 6cqw, 150px)/.85 var(--display); }
+/* a countdown reads as a clock: figures that do not jump as they change */
+.${ROOT_CLASS} .countdown > .value { font-variant-numeric: tabular-nums; }
 
 /* ── code: a cell of mono, the lines that matter highlighted ── */
 .${ROOT_CLASS} .code { font: 400 clamp(.8rem, 1.6cqw, 1.5rem)/1.5 var(--mono); white-space: pre; overflow: hidden; }

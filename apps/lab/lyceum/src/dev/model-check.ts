@@ -6,6 +6,7 @@ import { createSignal } from '@niscorp/signal';
 import { devRuntime } from '@lyceum/server/runtime';
 import { createAsker } from '@lyceum/server/asking';
 import { BEHAVIORS } from '@lyceum/app/vex/behaviors';
+import { armable, createTimerWriter } from '@lyceum/server/timing';
 import type { Known } from '@lyceum/server/asking';
 
 // THE MODEL CHECK — do the talk's generative seams hold on the models the talk
@@ -245,7 +246,54 @@ const measureRoutes = async (): Promise<void> => {
   console.log(`\nrouting on ${decider} · ${RUNS} run(s) · total ${passed}/${total}`);
 };
 
+// LYCEUM_PART=tide: the speaker's assistant writing timers (server/timing.ts,
+// the reflex agent on gpt-oss-120b). From a fixed now — 19:05 in Vienna — does
+// it write the right clock and the right slide, in a document the host arms?
+const TIDE_NOW = Date.UTC(2026, 8, 27, 17, 5);
+const TIMER_PROBES: readonly { intent: string; at: string; slideId: string }[] = [
+  { intent: 'End the talk in 30 minutes', at: '2026-09-27T19:35', slideId: 'slide.end' },
+  { intent: 'Close the talk at half past nine', at: '2026-09-27T21:30', slideId: 'slide.end' },
+  { intent: 'In 45 minutes, put the last slide up', at: '2026-09-27T19:50', slideId: 'slide.end' },
+  { intent: 'Show the assignment slide in 10 minutes', at: '2026-09-27T19:15', slideId: 'slide.assignment' },
+  { intent: 'wrap up at 9pm', at: '2026-09-27T21:00', slideId: 'slide.end' },
+  { intent: 'give me an hour, then end it', at: '2026-09-27T20:05', slideId: 'slide.end' },
+];
+
+const measureTimers = async (): Promise<void> => {
+  const writer = createTimerWriter({ ...process.env, LYCEUM_TIMER: 'live' });
+  let passed = 0;
+  let total = 0;
+  for (let run = 0; run < RUNS; run += 1) {
+    for (const probe of TIMER_PROBES) {
+      const started = Date.now();
+      const before = meter.tokens;
+      let got: string;
+      let ok = false;
+      try {
+        const reflex = armable(await writer.write(probe.intent, TIDE_NOW, 'Europe/Vienna'));
+        const at = 'clock' in reflex.on ? reflex.on.clock.at : '(not a clock)';
+        const input: unknown = reflex.effect.input;
+        const slideId = typeof input === 'object' && input !== null && 'slideId' in input ? String(input.slideId) : '';
+        got = `${at} ${slideId}`;
+        ok = at === probe.at && slideId === probe.slideId;
+      } catch (error) {
+        got = `error ${error instanceof Error ? error.message.slice(0, 120) : String(error)}`;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 300));
+      passed += ok ? 1 : 0;
+      total += 1;
+      console.log(`${ok ? '[pass]' : '[fail]'} ${String(Date.now() - started).padStart(5)}ms ${String(meter.tokens - before).padStart(6)} tok  ${probe.intent} → ${got}${ok ? '' : `  (wanted ${probe.at} ${probe.slideId})`}`);
+    }
+  }
+  console.log(`
+timers on ${MODEL} · reasoning ${EFFORT} · ${RUNS} run(s) · total ${passed}/${total}`);
+};
+
 const main = async (): Promise<void> => {
+  if (process.env['LYCEUM_PART'] === 'tide') {
+    await measureTimers();
+    return;
+  }
   if (process.env['LYCEUM_PART'] === 'route') {
     await measureRoutes();
     return;

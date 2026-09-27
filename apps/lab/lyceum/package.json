@@ -25,6 +25,7 @@
     "@niscorp/signal": "workspace:^",
     "@niscorp/solid": "workspace:^",
     "@niscorp/strata": "workspace:^",
+    "@niscorp/tide": "workspace:^",
     "@niscorp/vex": "workspace:^",
     "pg": "^8.16.3",
     "uqr": "^0.1.3",

@@ -49,18 +49,15 @@ In order; each lands with its check.
    seams are measured; each new seam (the tide agent, Jev's routing, the assistant) joins
    it as it is built. A seam that does not pass is fixed in its grammar's descriptions or
    its tool contract, not by a bigger model.
-2. **Tide agent** — `@niscorp/tide/agent`, built like `@niscorp/prism/agent`: a cortex
-   agent whose output is tide's reflex schema, validated in the loop; inputs are the
-   intent, the host's effects (names + input schemas), fact kinds and the timezone.
+2. ~~**Tide agent**~~ — built 2026-09-27 (`createReflexAgent({ effects })`, see "What is built").
 3. ~~**The ask**~~ — built 2026-09-27 (see "What is built"). Not yet: parameterised
    replays (Jev choosing a fingerprint's context values), the ask on the controller.
-4. **The assistant** — Midas's rulings (`midas/docs/assistant-structure.md`): the thread
-   is a nova action, the turn runs on the server, replies stream over the shell wire; the
-   charter is the only gate; it never calls anything, it proposes pre-filled actions.
-   Context: the screen's tree (`reflect`), the principal's catalog with each action's
-   `input`. The opening timer runs through the speaker's own assistant.
-5. **The timer** — the reflex saved from the assistant's proposal; the countdown on the
-   controller; the effect is one vex write moving the deck to the closing slide.
+4. **The assistant** — a first form is built for the speaker (the timer tool). Still to
+   come, on Midas's rulings (`midas/docs/assistant-structure.md`): a thread as a nova
+   action, the turn on the server, replies over the shell wire; the charter the only
+   gate; it proposes pre-filled actions and never calls one. Context: the screen's tree
+   (`reflect`), the principal's catalog with each action's `input`. For everybody.
+5. ~~**The timer**~~ — built 2026-09-27 (see "What is built").
 6. **The look switch**, inside lyceum, moss untouched: a `room` row holds the look
    (`poster` | `plain`); a small action granted to everybody reads it reactively and
    renders a `Look` marker; lyceum's DOM target wraps two kits and paints with the one
@@ -125,6 +122,21 @@ The projector's `slide.ask` counts replayed / generated / refused (a reactive re
 the questions never go on the wall. `LYCEUM_ASK=live|fake`; the checks use the fake,
 which writes real DSL so the engine, the policy and the replay are the real ones.
 
+**The timer** — the talk's first minute and its last. On slide 1 the controller's tool is
+the speaker's assistant (`tools.assistant`): "End the talk in 30 minutes" goes to the reflex
+agent (`@niscorp/tide/agent`, gpt-oss-120b; `LYCEUM_TIMER=live|fake`), which writes a tide
+REFLEX — shown as the document it is, to be read. Save is the speaker's own vex write
+(`timers/save`, the reflex as a JSONB row, `saved_by` stamped); then `timers.arm` loads the
+saved timers into tide (`server/timing.ts`: moss's durable store and driver, and at every
+boot as the `scheduler` machinery role). Every timer runs as the `clock` principal —
+stamped by the host whatever the document said — whose one grant is `deck.write.update`:
+its effect `deck.show` replays `deck/show` over the clock's own session, so the stage
+follows it like any other deck move. The controller's head counts down (`Countdown`, a kit
+primitive ticking on the viewer's clock — `lyceum.kit` 2). Tide's tables are migrated with
+lyceum's before the server starts: created later, they changed the schema under moss's
+engine, which then evicted every generated query as stale (`LYCEUM_SEQUENCES`).
+`timer-check` runs it end to end, restart included.
+
 **The deck.** Slides are actions only the stage is granted; their order is rows
 (`slides`); the slide on screen is one row (`deck`). The stage's `stage.deck` mounts the
 slide the row names — on mount and on `deck-moved`, the one reaction left
@@ -162,7 +174,7 @@ every re-boot. `/dev/as/speaker`, `/dev/as/stage`, `/dev/as/kit`, `/dev/new`,
 `?seat=<name>`. Vite listens on this machine only.
 
 **Checks** (`pnpm check`, each in its own process over its own database): `kit-check`,
-`tables-check`, `assignment-check`, `deck-check`, `serve-check`, `ask-check`. The ask
+`tables-check`, `assignment-check`, `deck-check`, `serve-check`, `ask-check`, `timer-check`. The ask
 check also passes live (`LYCEUM_ASK=live node --env-file=.env --import tsx
 src/dev/ask-check.ts`).
 
@@ -210,6 +222,9 @@ policy, one generation per question (`src/dev/model-check.ts`).
   declares every top-level DSL key, shallow (Groq refuses the full recursive DSL schema as
   tool parameters — 400), and qwen at reasoning `none` answers 30/36. Merging the system
   messages into one, and a `respond` tool, changed nothing.
+- **The reflex agent writing timers** (`LYCEUM_PART=tide pnpm models`), from a fixed 19:05
+  in Vienna: "in 30 minutes", "at half past nine", "at 9pm", "give me an hour, then end
+  it", a non-closing slide — 12/12 to the minute and the slide, ~1 s and ~2.3k tokens each.
 - **Jev routing the ask** (`LYCEUM_PART=route pnpm models`): 16 probes against six
   earlier questions — paraphrases that must replay, the same words about another subject
   that must not, new questions whose shape is the test. **48/48** over three runs, ~250 ms

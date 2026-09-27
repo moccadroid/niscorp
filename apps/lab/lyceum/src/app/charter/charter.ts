@@ -37,7 +37,7 @@ export const CHARTER: Charter = {
   // The speaker moves the deck and assigns the room, as themselves; the
   // controller's tools change with the slide. The stage shows the deck —
   // every slide is an action only the stage is granted.
-  speaker: { actions: ['speaker.*', 'tools.*'], data: [...ROOM_READS, ...DECK_READS, 'slide_notes.read', 'slide_tools.read', 'deck.write.update', 'members.write.update'] },
+  speaker: { actions: ['speaker.*', 'tools.*'], data: [...ROOM_READS, ...DECK_READS, 'slide_notes.read', 'slide_tools.read', 'deck.write.update', 'members.write.update', 'timers.read', 'timers.write.insert'] },
   stage: { actions: ['stage.*', 'slide.*'], data: [...ROOM_READS, ...DECK_READS, 'asks.read'] },
 
   // The kit's kitchen sink: every piece of the look on one screen (dev).
@@ -47,11 +47,18 @@ export const CHARTER: Charter = {
   // ID cards — it writes the card fields as the model writes them.
   registry: { data: ['members.read', 'members.write.update'] },
 
+  // The talk's clock: a principal that is not a person, which a saved timer
+  // runs as (server/timing.ts). It can put a slide on screen and nothing else —
+  // whatever a model wrote into a timer, this is all it can reach.
+  clock: { data: ['deck.write.update'] },
+
   // ── machinery: roles nobody wears, each granted exactly its job ──
   // Reads who somebody is, for the identity seam.
   identity: { data: ['members.read', 'grants.read'] },
   // Issues a one-time sign-in link and redeems it: writes it, uses it up.
   gatekeeper: { data: ['login_links.write.insert', 'login_links.write.delete'] },
+  // Reads the saved timers at boot, to load them into tide.
+  scheduler: { data: ['timers.read'] },
 };
 
 // The role combinations a principal can resolve to — declared, because roles
@@ -67,4 +74,5 @@ export const WEARABLE: readonly (readonly string[])[] = [
   ['stage'],
   ['kit'],
   ['registry'],
+  ['clock'],
 ];

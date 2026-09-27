@@ -161,6 +161,42 @@ export const Figure: DomComponent = ({ props }) => {
   return el('div', 'figure', [label, value]);
 };
 
+// ── Countdown — time left until an instant, ticking where it is shown ──
+// to: the instant (ISO, or Postgres's own "YYYY-MM-DD HH:MM:SS+ZZ"); label:
+// what it counts down to. The one thing here on the viewer's clock rather than
+// the server's: a tree re-sent every second would be a render a second for
+// nothing, so the kit ticks it. Nothing to count to: a dash. At zero it stays
+// at zero, marked done.
+const instantOf = (value: string | undefined): number =>
+  value === undefined ? Number.NaN : Date.parse(value.replace(' ', 'T').replace(/([+-]\d\d)$/, '$1:00'));
+
+export const Countdown: DomComponent = ({ props }) => {
+  const label = el('span', 'label');
+  label.textContent = text(props['label']) ?? '';
+  const value = el('span', 'value');
+  const node = el('div', 'figure countdown', [label, value]);
+  const to = instantOf(text(props['to']));
+  const paint = (): boolean => {
+    if (Number.isNaN(to)) {
+      value.textContent = '—';
+      return false;
+    }
+    const seconds = Math.ceil(Math.max(0, to - Date.now()) / 1000);
+    value.textContent = `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
+    if (seconds === 0) node.setAttribute('data-done', '');
+    return seconds > 0;
+  };
+  if (paint()) {
+    // Stops at zero, or once the node has been on the page and left it.
+    let shown = false;
+    const timer = setInterval(() => {
+      shown ||= node.isConnected;
+      if ((shown && !node.isConnected) || !paint()) clearInterval(timer);
+    }, 1000);
+  }
+  return node;
+};
+
 // ── Code — mono, with the lines that matter marked ──────────────
 // text: the source; marked: 1-based line numbers to mark.
 export const Code: DomComponent = ({ props }) => {

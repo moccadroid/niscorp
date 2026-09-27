@@ -34,7 +34,8 @@ const documents = async () => {
     }
   })();
   for (const name of files) {
-    const module: Record<string, unknown> = await import(`${fragmentsDir}/${name}`);
+    // By URL, not by path: on Windows an absolute path is not an import specifier.
+    const module: Record<string, unknown> = await import(new URL(`../app/shell/fragments/${name}`, import.meta.url).href);
     for (const value of Object.values(module)) if (isFragment(value)) fragments.push({ kind: 'nisc.nova/fragment', id: value.id, document: value });
   }
   // The shell's own layouts are nova layouts too: the frame, and each canvas's
