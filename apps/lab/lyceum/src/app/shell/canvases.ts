@@ -52,4 +52,8 @@ export const CANVASES: ShellManifest['canvases'] = [
   { id: 'overlay' },
   { id: 'deck', initial: ['stage.deck', 'speaker.deck'] },
   { id: 'look', initial: ['room.look'] },
+  // The Q&A tab's two regions (questions/desk.action.ts): its form, and the
+  // person's own questions — placed when the tab is pressed.
+  { id: 'qa-form' },
+  { id: 'qa-mine' },
 ];

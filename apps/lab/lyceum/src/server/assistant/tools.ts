@@ -49,9 +49,11 @@ export type ToolDeps = {
   opened: Opened[];
 };
 
-// The assistant itself, and what only a tool opens, are not the person's to be
-// offered: which actions exist for them at all is the charter's.
-const NOT_OFFERED: ReadonlySet<string> = new Set(['assistant.thread', 'query.result']);
+// Not the person's to be offered — which actions exist for them at all is the
+// charter's: the assistant itself; what only a tool opens (query.result); what
+// only another action opens, with an id nobody types (questions.edit, from the
+// list); and a tab's surface, whose form is offered on its own (questions.desk).
+const NOT_OFFERED: ReadonlySet<string> = new Set(['assistant.thread', 'query.result', 'questions.edit', 'questions.desk']);
 
 // How an action is DRAWN — as a tab on the phone, as the card's strip — is the
 // phone's business, not something a person asks for. These input keys are the

@@ -26,7 +26,7 @@ export const phoneAction: ActionDefinition = {
       { action: 'forms.rename', input: { tab: true } },
       { action: 'inquiries.desk', input: { tab: true } },
       { action: 'archive.log', input: { tab: true } },
-      { action: 'questions.send', input: { tab: true } },
+      { action: 'questions.desk', input: { tab: true } },
       { action: 'assistant.thread', input: { tab: true } },
     ],
   },

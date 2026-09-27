@@ -24,9 +24,17 @@ export const BEHAVIORS: ScopeBehaviors = {
   queries: {
     default: { insert: [{ set: 'member_id', to: 'userId' }] },
   },
-  // A question for the speaker is sent as its sender, the same way.
+  // A question for the speaker is its sender's: sent as them, and read, edited
+  // and deleted by them alone. The speaker's reach is `room` (charter.ts): every
+  // question, to read.
   questions: {
-    default: { insert: [{ set: 'member_id', to: 'userId' }] },
+    default: {
+      insert: [{ set: 'member_id', to: 'userId' }],
+      read: [{ match: 'member_id', to: 'userId' }],
+      update: [{ match: 'member_id', to: 'userId' }],
+      delete: [{ match: 'member_id', to: 'userId' }],
+    },
+    room: {},
   },
   // A timer is saved by whoever saved it (the speaker): stamped, not sent.
   timers: {

@@ -120,11 +120,16 @@ intents never go on the wall. `LYCEUM_QUERY=live|fake`; the checks use the fake,
 writes real DSL so the engine, the policy and the replay are real. Jev's own words still
 say "question" — they are the measured contract (48/48).
 
-**Q&A** (`questions.send`, a tab on every phone; `tools.questions` on the controller's
-last slide). A question for the speaker is a row written as its sender (`questions`,
-migration 8). Only the controller reads them — a reactive list with the sender's name; a
-member replaying that read is refused by policy, and nothing goes on the projector.
-Orange. Enter sends and the field empties (`Field` `enter: 'clears'`, `lyceum.kit` 4).
+**Q&A** (the `questions.desk` tab; `tools.questions` on the controller's last slide).
+The tab places two actions on canvases of its own: the form (`questions.send`) and the
+person's own questions (`questions.mine`), newest first — two and not one, so the
+assistant can offer the form alone, pre-filled. A question pressed opens over the screen
+(`questions.edit`): change its words, or delete it. A question is a row written as its
+sender (`questions`, migration 8); a member reads, edits and deletes their OWN only (the
+table's default behaviour), and the speaker reads everybody's (the speaker's `room`
+reach — `scoping` on the role, every other table at its default). Replaying the
+controller's read, a member gets their own and never anybody else's; nothing goes on the
+projector. Orange. Enter sends and the field empties.
 
 **The assistant** (`assistant.thread` — a tab on every phone, a tool on the controller's
 first slide; `app/assistant/assistants.ts`, `server/assistant/`). One assistant, assembled

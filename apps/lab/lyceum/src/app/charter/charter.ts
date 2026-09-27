@@ -15,8 +15,9 @@ const LOOK = ['room.read'];
 // Queries from words: the ones run before (the router reads them, as the
 // caller) and the caller's own record of running one.
 const QUERYING = ['queries.read', 'queries.write.insert'];
-// The room's Q&A: a question for the speaker, written as its sender.
-const QUESTIONING = ['questions.write.insert'];
+// The room's Q&A: questions for the speaker — sent, read, edited and deleted by
+// their sender, their own only (vex/behaviors.ts).
+const QUESTIONING = ['questions.write.insert', 'questions.read', 'questions.write.update', 'questions.write.delete'];
 // The assistant's conversation: each person's own turns (behaviors.ts).
 const CONVERSING = ['assistant_turns.read', 'assistant_turns.write.insert', 'assistant_turns.write.update'];
 
@@ -50,7 +51,9 @@ export const CHARTER: Charter = {
   // The speaker moves the deck and assigns the room, as themselves; the
   // controller's tools change with the slide. The stage shows the deck —
   // every slide is an action only the stage is granted.
-  speaker: { actions: ['speaker.*', 'tools.*', 'assistant.*', 'room.*'], data: [...ROOM_READS, ...DECK_READS, ...LOOK, 'room.write.update', 'slide_notes.read', 'slide_tools.read', 'deck.write.update', 'members.write.update', 'timers.read', 'timers.write.insert', 'questions.read', ...CONVERSING] },
+  // The speaker reaches every question in the room (`room`, vex/behaviors.ts)
+  // — a member reaches their own. Every other table reads at its default.
+  speaker: { scoping: 'room', actions: ['speaker.*', 'tools.*', 'assistant.*', 'room.*'], data: [...ROOM_READS, ...DECK_READS, ...LOOK, 'room.write.update', 'slide_notes.read', 'slide_tools.read', 'deck.write.update', 'members.write.update', 'timers.read', 'timers.write.insert', 'questions.read', ...CONVERSING] },
   stage: { actions: ['stage.*', 'slide.*', 'room.*'], data: [...ROOM_READS, ...DECK_READS, 'queries.read', ...LOOK] },
 
   // The kit's kitchen sink: every piece of the look on one screen (dev).

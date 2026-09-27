@@ -8,6 +8,9 @@ import { deskAction } from './actions/inquiries/desk.action';
 import { logAction } from './actions/archive/log.action';
 import { queryResultAction } from './actions/query/result.action';
 import { questionSendAction } from './actions/questions/send.action';
+import { questionDeskAction } from './actions/questions/desk.action';
+import { questionsMineAction } from './actions/questions/mine.action';
+import { questionEditAction } from './actions/questions/edit.action';
 import { questionsTool } from './actions/tools/questions.action';
 import { consoleAction } from './actions/speaker/console.action';
 import { headAction } from './actions/speaker/head.action';
@@ -40,6 +43,9 @@ export const ACTIONS: Record<string, ActionDefinition> = Object.fromEntries(
     logAction,
     queryResultAction,
     questionSendAction,
+    questionDeskAction,
+    questionsMineAction,
+    questionEditAction,
     questionsTool,
     consoleAction,
     headAction,
