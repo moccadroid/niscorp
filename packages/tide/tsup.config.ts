@@ -11,7 +11,9 @@ export default defineConfig({
   // store has to be able to run the checks tide holds its own reference
   // implementation to. It pulls in no test framework — each check is a
   // function that throws — so it costs nothing to publish.
-  entry: { index: 'src/index.ts', testing: 'src/testing.ts' },
+  // The third is the reflex agent, on its own subpath so cortex stays an
+  // optional peer: the engine itself still imports nothing but zod.
+  entry: { index: 'src/index.ts', testing: 'src/testing.ts', agent: 'src/agent/index.ts' },
   format: ['esm', 'cjs'],
   dts: true,
   sourcemap: true,

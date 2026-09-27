@@ -21,6 +21,16 @@
         "default": "./dist/index.cjs"
       }
     },
+    "./agent": {
+      "import": {
+        "types": "./dist/agent.d.ts",
+        "default": "./dist/agent.js"
+      },
+      "require": {
+        "types": "./dist/agent.d.cts",
+        "default": "./dist/agent.cjs"
+      }
+    },
     "./testing": {
       "import": {
         "types": "./dist/testing.d.ts",
@@ -51,12 +61,19 @@
     "typecheck": "tsc --noEmit -p tsconfig.test.json"
   },
   "peerDependencies": {
+    "@niscorp/cortex": "workspace:^",
     "zod": "^4.2.0"
   },
   "devDependencies": {
+    "@niscorp/cortex": "workspace:^",
     "tsup": "^8.5.1",
     "typescript": "^6.0.2",
     "vitest": "^4.1.2",
     "zod": "^4.3.6"
+  },
+  "peerDependenciesMeta": {
+    "@niscorp/cortex": {
+      "optional": true
+    }
   }
 }

@@ -102,6 +102,18 @@ Four tables, and only two of them grow with events:
 
 The port is six capabilities, not twenty-seven nouns: `transact`, `appendIfAbsent`, `claim`, `cas`, `query`, `remove`. `createMemoryStore()` is the reference implementation. `STORE_CONTRACT`, exported from `@niscorp/tide/testing`, is the same set of checks both it and any other store must pass — importable so a host's store is held to one definition rather than to two readings of a comment.
 
+## The reflex agent — `@niscorp/tide/agent`
+
+A model can WRITE a reflex; it never runs one. `createReflexAgent({ effects })` is a cortex agent whose output is tide's own `ReflexSchema`: it is handed what somebody wants automated, the local `now` and timezone, and the effects the host offers (a name, what it does, a Zod schema for its input), and returns one reflex. A reflex naming an effect that is not offered, or an input that effect's schema refuses, goes back to the model to correct in the same run (`effectProblem`). The host decides who it runs as (`as`) and loads it; from then on it runs with no model at all. Cortex is an optional peer, used only by this subpath.
+
+```typescript
+import { createReflexAgent } from '@niscorp/tide/agent';
+
+const agent = createReflexAgent({ effects: [{ name: 'deck.show', does: 'Put a slide on the projector', input: z.object({ slideId: z.string() }) }] });
+const result = await agent.run({ intent: 'end the talk in 30 minutes', now: '2026-09-27T19:05', tz: 'Europe/Vienna' }, { llm }).result;
+if (result.ok) await tide.load([{ ...result.output.data, as: 'clock' }], { at: Date.now() });
+```
+
 ## Hosts
 
 Tide imports no host. Under **moss** the seams are filled with vex (selection under the actor's scope policy, mutations auto-registered as effects), prism (transform), cortex agents (effects), moss's `ActorContext` (identity), and `createTideStore(pool)` from `@niscorp/moss` for persistence. In plain Node they are filled with raw SQL and plain functions. Nothing above the seam can tell the difference.
