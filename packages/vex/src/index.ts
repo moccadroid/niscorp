@@ -36,7 +36,7 @@ export { checkScope, scopeResolved, applyScope, VexScopeError } from './scope/ap
 // in either direction.
 export { SCOPE_VERBS, scopeGrants, createScopePolicy } from './scope/grants.js';
 export type { ScopeBehaviors, NamedScopeBehaviors, ScopeRules } from './scope/grants.js';
-export { scopeProfiles, mergeScopePolicies } from './scope/grants.js';
+export { scopeProfiles, mergeScopePolicies, scopeBindings } from './scope/grants.js';
 
 // ─── Cache ───────────────────────────────────────────────────
 export { createMemoryCache } from './cache/memory.js';
@@ -76,7 +76,7 @@ export type { VexEvent, VexEventHandler } from './events.js';
 export { VexError } from './errors.js';
 
 // ─── Types ───────────────────────────────────────────────────
-export type { QueryEngine, QueryEngineConfig, ExecuteOptions, GenerateDsl, GenerationCaller, MapToShape } from './types.js';
+export type { QueryEngine, QueryEngineConfig, ExecuteOptions, GenerateDsl, GenerationCaller, ScopeBinding, MapToShape } from './types.js';
 export type { Query, Source, SortEntry } from './schemas/query.schema.js';
 export type { Filter } from './schemas/filter.schema.js';
 export type { ComputeExpression } from './schemas/compute.schema.js';

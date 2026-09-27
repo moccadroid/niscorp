@@ -465,6 +465,41 @@ come back in another order after a write and count as changed (harmless: one
 extra answer). It reads time from `$scope`, never context: the values bound
 when the read was made are the ones it refetches with.
 
+### Who "me" is (`behaviors`, `GenerationCaller.bindings`)
+
+Built 2026-09-27. A generated query can mean the caller — "what's my name?",
+"my orders", "after me" — without the model ever seeing who that is.
+
+**The meaning comes from what the host declared, never from a name.** The
+host's behaviors (the `ScopeBehaviors` its policies are compiled from) bind
+columns to scope keys: `{ set: 'member_id', to: 'userId' }`,
+`{ match: 'studio_id', to: 'tenantId' }`. Scope values are always the caller's
+own, so a column bound to a key the caller carries holds that value on the
+caller's own rows — whether it is called `user_id`, `guest_id` or `id`.
+
+**Why the behaviors and not the policy.** A compiled policy keeps only the
+phases a caller is granted. A member who may only read `members` has
+`members: { read: [] }`; the rule that says `member_id` is them lives on an
+insert they do not hold. So the engine takes the behaviors themselves
+(`QueryEngineConfig.behaviors`) and reads every reach and every phase.
+
+**What a generation is handed**: `GenerationCaller.bindings` — every column
+bound to a scope key this caller actually carries, on a table their policy lets
+them read. Keys and columns, never values. A caller carrying none of the keys —
+machinery, an `executeAs` job — has no self, and is told so; nothing else about
+it is special. The reference agent turns the bindings into one context line
+(`describeCaller`): filter such a column with `{ $scope: key }` to mean the
+caller, and read the caller's row as an aliased subquery source to compare other
+rows against it.
+
+**Safety is unchanged.** The bindings are guidance for the model; access is
+still the policy, and the value is still bound by the engine. A query written
+this way is stored like any other and answers for whoever replays it — one
+"what's my name?" serves everybody.
+
+**Checked at `introspect`**: every column a behavior names must exist, or the
+engine refuses to start.
+
 ### LLM integration (decoupled)
 
 The engine takes two optional hooks:

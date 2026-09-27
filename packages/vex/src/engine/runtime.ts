@@ -11,6 +11,7 @@ import { QueryRequestSchema } from '../schemas/request.schema.js';
 import { QuerySchema } from '../schemas/query.schema.js';
 import { discoverEntities } from '../scope/discover.js';
 import { checkScope, scopeResolved, canReadTable } from '../scope/apply.js';
+import { behaviorColumns, scopeBindings } from '../scope/grants.js';
 import { resolve } from './resolver.js';
 import { analyze } from './analyzer.js';
 import { executeQuery, buildContextContract, findMissingContext, requireScope } from './executor.js';
@@ -72,7 +73,7 @@ const DEFAULT_MAX_PRESENCE_VARIANTS = 32;
 // ═══════════════════════════════════════════════════════════════
 
 export const createQueryEngine = (engineConfig: QueryEngineConfig): QueryEngine => {
-  const { adapter, scope: scopePolicy, generateDsl, mapToShape, embed } = engineConfig;
+  const { adapter, scope: scopePolicy, generateDsl, mapToShape, embed, behaviors } = engineConfig;
   const emit = engineConfig.onEvent ?? (() => {});
   const maxNestingDepth = engineConfig.config?.maxNestingDepth ?? DEFAULT_MAX_NESTING_DEPTH;
   const defaultLimit = engineConfig.config?.defaultLimit ?? DEFAULT_LIMIT;
@@ -142,6 +143,15 @@ export const createQueryEngine = (engineConfig: QueryEngineConfig): QueryEngine 
       ? { entities: engineConfig.config.entities }
       : undefined;
     const schema = await adapter.introspect(options);
+    // The behaviors are read for who a caller is (GenerationCaller.bindings):
+    // a rule naming a table or a column the database does not have would tell
+    // a generation something false, so it refuses here, at boot.
+    if (behaviors !== undefined) {
+      const missing = behaviorColumns(behaviors).filter(({ entity, field }) => !schema.entities.some((e) => e.name === entity && e.fields.some((f) => f.name === field)));
+      if (missing.length > 0) {
+        throw new VexError('execution_error', `The behaviors name columns the database does not have: ${missing.map((m) => `${m.entity}.${m.field}`).join(', ')}.`);
+      }
+    }
     cachedSchema = schema;
     cachedFingerprint = computeSchemaFingerprint(schema);
     return schema;
@@ -333,7 +343,8 @@ export const createQueryEngine = (engineConfig: QueryEngineConfig): QueryEngine 
   // the database — and a schema holding only the tables that policy lets the
   // caller read. The DSL it writes is still caller-neutral (scope is applied
   // again on every replay); what it SAW while writing it is the caller's.
-  const callerOf = (policy: ScopePolicy | undefined, scope: ScopeValues): GenerationCaller => ({
+  const callerOf = (policy: ScopePolicy | undefined, scope: ScopeValues, tables: readonly string[]): GenerationCaller => ({
+    bindings: scopeBindings(behaviors ?? {}, tables, scope),
     read: async (dsl) => {
       const { compiled, warnings } = runPipeline(pruneOptional(dsl, 'all'), policy);
       requireScope(compiled, scope);
@@ -372,7 +383,7 @@ export const createQueryEngine = (engineConfig: QueryEngineConfig): QueryEngine 
 
     const generate = async (): Promise<Query> => {
       try {
-        return await generateDsl(validRequest, agentSchema, callerOf(policy, scope));
+        return await generateDsl(validRequest, agentSchema, callerOf(policy, scope, agentSchema.entities.map((e) => e.name)));
       } catch (err) {
         // Cache a negative result so a known-impossible request doesn't
         // re-run the agent. TTL'd — a schema change may make it possible.

@@ -4,7 +4,7 @@ import { mappingAgent } from '@niscorp/prism/agent';
 import { compile, execute } from '@niscorp/prism';
 import type { JsonObject } from '@niscorp/prism';
 import { createQueryTools } from './tools.js';
-import { vexQueryDslAgent } from './query.agent.js';
+import { describeCaller, vexQueryDslAgent } from './query.agent.js';
 import type { Query } from '../schemas/query.schema.js';
 import type { GenerateDsl, MapToShape } from '../types.js';
 import type { SignalClient } from '@niscorp/cortex';
@@ -13,7 +13,7 @@ import type { SignalClient } from '@niscorp/cortex';
 // Re-exports
 // ═══════════════════════════════════════════════════════════════
 
-export { vexQueryDslAgent } from './query.agent.js';
+export { vexQueryDslAgent, describeCaller } from './query.agent.js';
 export type { VexQueryDeps } from './query.agent.js';
 export { createQueryTools } from './tools.js';
 export type { QueryToolDeps } from './tools.js';
@@ -59,6 +59,7 @@ export const createQueryDsl = (config: QueryDslConfig): GenerateDsl => {
       deps: {
         schemaJson: JSON.stringify(schema),
         dslSpecJson: JSON.stringify(config.queryJsonSchema),
+        caller: describeCaller(caller.bindings),
       },
       tools,
       onEvent: (event) => {

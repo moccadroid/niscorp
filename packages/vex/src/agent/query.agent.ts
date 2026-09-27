@@ -3,6 +3,7 @@ import type { AgentDefinition } from '@niscorp/cortex';
 import { stepCount, outputRetries, repeatedCalls } from '@niscorp/cortex';
 import { QuerySchema } from '../schemas/query.schema.js';
 import type { Query } from '../schemas/query.schema.js';
+import type { ScopeBinding } from '../types.js';
 
 // Per-invocation deps: the introspected database schema and the DSL
 // JSON Schema arrive per call (they vary with adapter and scope), so
@@ -10,7 +11,24 @@ import type { Query } from '../schemas/query.schema.js';
 export type VexQueryDeps = {
   schemaJson: string;
   dslSpecJson: string;
+  // Who the caller is, in the schema's terms (describeCaller). Absent — a run
+  // built without it — reads as a caller nothing identifies.
+  caller?: string;
 };
+
+// WHO THE CALLER IS, for the agent: the columns their scope keys are bound to
+// (GenerationCaller.bindings) — the keys and the columns, never a value. With
+// none, the agent is told plainly that nothing here identifies them, so a
+// question about "me" is refused for the right reason rather than guessed at.
+export const describeCaller = (bindings: readonly ScopeBinding[]): string =>
+  bindings.length === 0
+    ? 'The caller: no column in this schema is bound to anything that identifies the caller, so a request about "me", "my" or "mine" cannot be answered.'
+    : [
+        'The caller — the person or service this query is for — is identified by server-side scope values bound to these columns:',
+        ...bindings.map((b) => `- ${b.entity}.${b.field} is the caller's { "$scope": "${b.key}" }`),
+        'Such a column holds that value on the caller\'s own rows. To mean the caller or what is theirs ("me", "my", "mine", "our"), filter the column with { "$scope": "<key>" } — the server binds the caller\'s own value; you never see or write it.',
+        'To compare other rows with the caller\'s own values ("after me", "older than me", "more than mine"), read the caller\'s row as a subquery source with an alias of its own — filtered by { "$scope": "<key>" } — and compare the outer rows against that alias\'s fields.',
+      ].join('\n');
 
 const INSTRUCTIONS = `You are Vex's query agent. You turn a caller's request — a natural-language \`intent\` and an example \`shape\` of the data they want back — into ONE query in Vex's DSL.
 
@@ -53,6 +71,7 @@ export const vexQueryDslAgent: AgentDefinition<Query, VexQueryDeps> = defineAgen
   instructions: INSTRUCTIONS,
   context: [
     ({ deps }) => `Database schema:\n${deps.schemaJson}`,
+    ({ deps }) => deps.caller ?? describeCaller([]),
     // Named OUTPUT SCHEMA because that is what the finish protocol refers to:
     // the query this agent returns is the envelope's `data`.
     ({ deps }) => `OUTPUT SCHEMA — the DSL specification (JSON Schema), the single source of truth for your query:\n${deps.dslSpecJson}`,

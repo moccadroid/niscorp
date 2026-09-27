@@ -8,6 +8,7 @@ import type { TestResult } from './engine/engine.types.js';
 import type { VexEventHandler } from './events.js';
 import type { CompiledIr, JsonValue } from '@niscorp/prism';
 import type { LiveRowsConfig, LiveRowsStats } from './engine/live.js';
+import type { ScopeBehaviors } from './scope/grants.js';
 
 /**
  * Who a generation is for, as a capability rather than an identity. `read` runs
@@ -18,7 +19,19 @@ import type { LiveRowsConfig, LiveRowsStats } from './engine/live.js';
  */
 export type GenerationCaller = {
   read: (dsl: Query) => Promise<{ rows: Row[]; sql: string; warnings: string[] }>;
+  /**
+   * WHO "ME" IS, as columns: every column the host's behaviors bind to a scope
+   * key this caller actually carries, on a table they may read — the keys and
+   * the columns, never the values. A generator uses them to say "the caller"
+   * or "theirs": filter the column with `{ $scope: key }`, and the engine binds
+   * the caller's own value. Empty when nothing identifies the caller (no
+   * behaviors given, or a caller carrying none of the keys they bind).
+   */
+  bindings: ScopeBinding[];
 };
+
+/** One column a scope key is bound to by the host's behaviors. */
+export type ScopeBinding = { entity: string; field: string; key: string };
 
 /**
  * DSL generation from intent + shape. Wire to a Cortex agent (see agent/).
@@ -48,6 +61,16 @@ export type QueryEngineConfig = {
   onEvent?: VexEventHandler;
   /** Optional LLM-backed query generation (cache misses fail without it). */
   generateDsl?: GenerateDsl;
+  /**
+   * The host's behaviors — the same document its policies are compiled from
+   * (`createScopePolicy`). Read here for one thing: which columns a scope key
+   * is bound to, so a generation can be told who its caller is in the
+   * schema's own terms (GenerationCaller.bindings). A compiled policy cannot
+   * say it — it keeps only the phases a caller is granted, and the rule that
+   * stamps a member's id lives on a write a reader does not hold. Checked at
+   * `introspect`: every rule names a table and a column that exist.
+   */
+  behaviors?: ScopeBehaviors;
   /** Optional LLM-backed result mapping (raw rows used as-is without it). */
   mapToShape?: MapToShape;
   /**

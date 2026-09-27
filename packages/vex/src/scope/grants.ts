@@ -1,4 +1,6 @@
-import type { ScopePolicy, ScopeMatch, ScopeRule } from './scope.types.js';
+import type { ScopePolicy, ScopeMatch, ScopeRule, ScopeValues } from './scope.types.js';
+import { isSetMatch } from './scope.types.js';
+import type { ScopeBinding } from '../types.js';
 
 // ═══════════════════════════════════════════════════════════════
 // Grants — a ScopePolicy described as strings.
@@ -85,6 +87,50 @@ const onlyMatches = (rules: ScopeRule[]): ScopeMatch[] => rules.filter((r): r is
 // keeps matches only (nothing to set). Ungranted phases are absent, and
 // `default: 'deny'` refuses them — deny by absence.
 const VERBS: ReadonlySet<string> = new Set(SCOPE_VERBS);
+
+// ═══════════════════════════════════════════════════════════════
+// WHO "ME" IS, READ OFF THE BEHAVIORS.
+//
+// A rule binds a column to a scope key — `{ set: 'member_id', to: 'userId' }`,
+// `{ match: 'studio_id', to: 'tenantId' }` — and the scope values are always
+// the caller's own. So a column bound to a key the caller carries holds that
+// value on the caller's own rows, whatever either is called: this is read from
+// what the host DECLARED, never guessed from a name. Every reach and every
+// phase counts, because which column is the caller's does not depend on what
+// this caller may do to it — a reader holds no insert, yet the insert's stamp
+// is what says `member_id` is them.
+// ═══════════════════════════════════════════════════════════════
+
+/** Every rule a table declares, in every reach and phase, as (column, key) pairs. */
+const bindingsOf = (entry: ScopeRules | NamedScopeBehaviors): { field: string; key: string }[] =>
+  (isRuleSet(entry) ? [entry] : Object.values(entry)).flatMap((rules) =>
+    RULE_KEYS.flatMap((phase) =>
+      (rules[phase] ?? []).map((rule: ScopeRule) =>
+        'set' in rule ? { field: rule.set, key: rule.to } : isSetMatch(rule) ? { field: rule.match, key: rule.in } : { field: rule.match, key: rule.to },
+      ),
+    ),
+  );
+
+/**
+ * The columns the behaviors bind to scope keys, on the given tables, for the
+ * keys present in `scope` — sorted, one per (table, column, key).
+ */
+export const scopeBindings = (behaviors: ScopeBehaviors, tables: readonly string[], scope: ScopeValues): ScopeBinding[] => {
+  const seen = new Map<string, ScopeBinding>();
+  for (const table of tables) {
+    const entry = behaviors[table];
+    if (entry === undefined) continue;
+    for (const { field, key } of bindingsOf(entry)) {
+      if (scope[key] === undefined || scope[key] === null) continue;
+      seen.set(`${table}.${field}:${key}`, { entity: table, field, key });
+    }
+  }
+  return [...seen.values()].sort((a, b) => `${a.entity}.${a.field}:${a.key}`.localeCompare(`${b.entity}.${b.field}:${b.key}`));
+};
+
+/** Every (table, column) any rule names — for checking them against a schema. */
+export const behaviorColumns = (behaviors: ScopeBehaviors): { entity: string; field: string }[] =>
+  Object.entries(behaviors).flatMap(([table, entry]) => bindingsOf(entry).map(({ field }) => ({ entity: table, field })));
 
 /** Every profile name any table declares. A profile nobody declares is a typo. */
 export const scopeProfiles = (behaviors: ScopeBehaviors): ReadonlySet<string> => {
