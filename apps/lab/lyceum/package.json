@@ -29,7 +29,7 @@
     "@niscorp/vex": "workspace:^",
     "pg": "^8.16.3",
     "uqr": "^0.1.3",
-    "zod": "^4.3.6"
+    "zod": "^4.6.5"
   },
   "devDependencies": {
     "@types/node": "^24.10.1",

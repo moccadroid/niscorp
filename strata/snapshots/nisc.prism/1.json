@@ -349,6 +349,9 @@
               "additionalProperties": false,
               "properties": {
                 "$add": {
+                  "items": false,
+                  "maxItems": 2,
+                  "minItems": 2,
                   "prefixItems": [
                     {
                       "$ref": "#/$defs/__schema2"
@@ -369,6 +372,9 @@
               "additionalProperties": false,
               "properties": {
                 "$sub": {
+                  "items": false,
+                  "maxItems": 2,
+                  "minItems": 2,
                   "prefixItems": [
                     {
                       "$ref": "#/$defs/__schema2"
@@ -389,6 +395,9 @@
               "additionalProperties": false,
               "properties": {
                 "$mul": {
+                  "items": false,
+                  "maxItems": 2,
+                  "minItems": 2,
                   "prefixItems": [
                     {
                       "$ref": "#/$defs/__schema2"
@@ -409,6 +418,9 @@
               "additionalProperties": false,
               "properties": {
                 "$div": {
+                  "items": false,
+                  "maxItems": 2,
+                  "minItems": 2,
                   "prefixItems": [
                     {
                       "$ref": "#/$defs/__schema2"
@@ -620,6 +632,9 @@
               "additionalProperties": false,
               "properties": {
                 "$eq": {
+                  "items": false,
+                  "maxItems": 2,
+                  "minItems": 2,
                   "prefixItems": [
                     {
                       "$ref": "#/$defs/__schema2"
@@ -640,6 +655,9 @@
               "additionalProperties": false,
               "properties": {
                 "$neq": {
+                  "items": false,
+                  "maxItems": 2,
+                  "minItems": 2,
                   "prefixItems": [
                     {
                       "$ref": "#/$defs/__schema2"
@@ -660,6 +678,9 @@
               "additionalProperties": false,
               "properties": {
                 "$gt": {
+                  "items": false,
+                  "maxItems": 2,
+                  "minItems": 2,
                   "prefixItems": [
                     {
                       "$ref": "#/$defs/__schema2"
@@ -680,6 +701,9 @@
               "additionalProperties": false,
               "properties": {
                 "$gte": {
+                  "items": false,
+                  "maxItems": 2,
+                  "minItems": 2,
                   "prefixItems": [
                     {
                       "$ref": "#/$defs/__schema2"
@@ -700,6 +724,9 @@
               "additionalProperties": false,
               "properties": {
                 "$lt": {
+                  "items": false,
+                  "maxItems": 2,
+                  "minItems": 2,
                   "prefixItems": [
                     {
                       "$ref": "#/$defs/__schema2"
@@ -720,6 +747,9 @@
               "additionalProperties": false,
               "properties": {
                 "$lte": {
+                  "items": false,
+                  "maxItems": 2,
+                  "minItems": 2,
                   "prefixItems": [
                     {
                       "$ref": "#/$defs/__schema2"

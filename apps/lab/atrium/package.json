@@ -29,7 +29,7 @@
     "openai": "^6.33.0",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
-    "zod": "^4.3.6"
+    "zod": "^4.6.5"
   },
   "devDependencies": {
     "@hono/node-server": "^2.0.4",
