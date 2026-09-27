@@ -1,6 +1,7 @@
 import type { ActionDefinition } from '@niscorp/nova';
 import { deckCurrent, slidesAll } from '@lyceum/app/vex/deck.entries';
 import { deckPickPrism } from './console.prism';
+import { slidesLayout } from './slides.layout';
 
 // EVERY SLIDE, over the controller: the deck as a numbered list, the slide on
 // screen marked. Press one and it goes up, and the sheet closes. Opened from
@@ -16,19 +17,7 @@ export const slidesAction: ActionDefinition = {
     picked: 0,
     error: '',
   },
-  layout: {
-    component: 'Rows',
-    props: {
-      rows: '$.slides',
-      rowKey: 'position',
-      rowRef: 'pick',
-      selected: '$.current.position',
-      columns: [
-        { label: '#', key: 'number', kind: 'mono', w: 0.4 },
-        { label: 'Slide', key: 'title', w: 5 },
-      ],
-    },
-  },
+  layout: slidesLayout,
   endpoints: {
     all: { url: '/api/vex', method: 'POST', request: { fingerprint: slidesAll.fingerprint, context: {} }, target: 'slides' },
     current: { url: '/api/vex', method: 'POST', request: { fingerprint: deckCurrent.fingerprint, context: {} }, target: 'current' },
