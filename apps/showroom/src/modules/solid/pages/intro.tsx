@@ -145,6 +145,10 @@ export const Intro: FC = () => {
       stream.onError(() => {
         if (live) setLanes((ls) => ({ ...ls, [mode]: { ...ls[mode], refused: ls[mode].refused + 1, failed: ls[mode].failed || mode === 'strict' } }));
       });
+      stream.final().then(
+        () => patch(mode, { done: true }),
+        () => patch(mode, { failed: true, done: true }),
+      );
       return { mode, stream };
     });
 
@@ -154,15 +158,7 @@ export const Intro: FC = () => {
       if (!live) return;
       if (i >= chunks.length) {
         clearInterval(timer);
-        // Ask final() after close: a strict stream's failure rejects a final()
-        // asked after it; in this build one asked before the failure stays pending.
-        for (const { mode, stream } of streams) {
-          stream.close();
-          stream.final().then(
-            () => patch(mode, { done: true }),
-            () => patch(mode, { failed: true, done: true }),
-          );
-        }
+        for (const { stream } of streams) stream.close();
         setRunning(false);
         return;
       }
