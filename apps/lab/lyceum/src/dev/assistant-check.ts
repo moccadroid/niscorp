@@ -14,7 +14,7 @@ import { attachSocket } from '@niscorp/moss/node';
 import { mintSession } from '@niscorp/moss';
 import { ACTIONS } from '@lyceum/app/action-catalog';
 import { boot } from '@lyceum/server/boot';
-import { OPENABLE_KEYS } from '@lyceum/server/assistant/tools';
+import { OPENABLE_KEYS, offerableActions } from '@lyceum/server/assistant/tools';
 import { assembleFor } from '@lyceum/server/assistant/declarations';
 import { check, connect, finish, waitUntil } from './harness';
 import type { Terminal } from './harness';
@@ -51,10 +51,13 @@ const main = async (): Promise<void> => {
     phone.clickIn('tabs', 'open', 'Assistant');
     return phone.shows('body', 'Built from');
   };
-  const say = async (phone: Terminal, canvas: string, message: string): Promise<void> => {
+  // Written, then sent — by the button, or by Enter in the field.
+  const say = async (phone: Terminal, canvas: string, message: string, by: 'button' | 'enter' = 'button'): Promise<void> => {
     phone.type(canvas, 'draft', message);
     await new Promise((resolve) => setTimeout(resolve, 100));
-    phone.click(canvas, 'ask');
+    if (by === 'enter') phone.key(canvas, 'draft', 'Enter');
+    else phone.click(canvas, 'send');
+    await waitUntil(() => phone.showsNow(canvas, 'Thinking'));
     await waitUntil(() => !phone.showsNow(canvas, 'Thinking'));
   };
 
@@ -62,17 +65,24 @@ const main = async (): Promise<void> => {
   const waiting = await stepIn();
   check('everybody in the room has the assistant, as a tab', await openAssistant(waiting.phone));
   check('…built from the room declaration alone, before a department', waiting.phone.showsNow('body', 'Built from room ·'));
-  check('…able to ask and open, not to automate', waiting.phone.showsNow('body', 'it can ask · open') && !waiting.phone.showsNow('body', 'automate'));
+  check('…able to query and open, not to automate', waiting.phone.showsNow('body', 'it can query · open') && !waiting.phone.showsNow('body', 'automate'));
   await say(waiting.phone, 'body', 'End the talk in 30 minutes');
   check('asked to automate, it says it cannot — it has no such tool', await waiting.phone.shows('body', 'cannot set up automations'));
   check('…and nothing was proposed or saved', !waiting.phone.showsNow('body', 'Read it first') && (await runtime.db.query('SELECT 1 FROM timers')).rows.length === 0);
-  await say(waiting.phone, 'body', 'How many people are in the room?');
-  check('a question goes the ask\'s way, and the answer is shown', await waiting.phone.shows('body', 'The answer'));
-  check('every turn is kept: the history shows both, newest first', await waitUntil(() => {
+  await say(waiting.phone, 'body', 'How many people are in the room?', 'enter');
+  check('Enter sends; a query opens its result over the screen at once — no button in between', await waiting.phone.shows('overlay', 'Vex query · How many people are in the room?'));
+  check('…the result itself, replayed as the person', await waiting.phone.shows('overlay', 'The answer') && !waiting.phone.showsNow('body', '"ref":"proposed"'));
+  check('every turn is kept: the conversation reads oldest first, the newest by the input', await waitUntil(() => {
     const tree = waiting.phone.textOf('body');
-    const newest = tree.lastIndexOf('How many people are in the room?');
-    const older = tree.lastIndexOf('End the talk in 30 minutes');
-    return newest !== -1 && older !== -1 && newest < older;
+    const newest = tree.indexOf('How many people are in the room?');
+    const older = tree.indexOf('End the talk in 30 minutes');
+    return newest !== -1 && older !== -1 && older < newest;
+  }));
+  check('…and the field is empty again for the next message', waiting.phone.showsNow('body', '"name":"Field","props":{"area":"field","value":""'));
+  for (const n of [1, 2, 3, 4]) await say(waiting.phone, 'body', `Who is number ${n}?`);
+  check('the conversation shows the last five turns: the first has left the screen', await waitUntil(() => {
+    const tree = waiting.phone.textOf('body');
+    return tree.includes('Who is number 4?') && tree.includes('How many people are in the room?') && !tree.includes('End the talk in 30 minutes');
   }));
 
   // ── 3. bounded by what the person holds ──
@@ -92,7 +102,7 @@ const main = async (): Promise<void> => {
   check('placed in Records, theirs is built from room and records', await records.shows('body', 'Built from room · records'));
   await say(records, 'body', 'Change my name to Ada Lovelace');
   check('Records, asking the same, is offered no rename — they do not hold it', !records.showsNow('body', 'Change your name to'));
-  check('a history is its person\'s alone: Records sees their own turn, none of anybody else\'s', (await records.shows('body', '"message":"Change my name to Ada Lovelace"')) && !records.showsNow('body', 'How many people are in the room?'));
+  check('a history is its person\'s alone: Records sees their own turn, none of anybody else\'s', (await records.shows('body', '{"type":"text","value":"Change my name to Ada Lovelace"}')) && !records.showsNow('body', 'How many people are in the room?'));
 
   // ── the controller's ──
   const speaker = await connect(base, await mintSession(runtime.pool, 'speaker', 60_000));
@@ -132,6 +142,11 @@ const main = async (): Promise<void> => {
       }
     }
   }
+
+  // ── one way to each thing: what a tool does is not also a button ──
+  const held = ['query.desk', 'query.result', 'forms.rename', 'questions.send'];
+  check('with the query tool, `open` offers neither the query desk nor a result — the tool is the way', JSON.stringify(offerableActions(held, new Set(['query', 'open']))) === JSON.stringify(['forms.rename', 'questions.send']));
+  check('…without it, the desk is offered like any action', offerableActions(held, new Set(['open'])).includes('query.desk'));
 
   // ── 4. the open trigger and the catalog agree ──
   const trigger = ACTIONS['assistant.thread']?.triggers?.find((candidate) => 'ref' in candidate && candidate.ref === 'proposed');

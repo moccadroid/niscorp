@@ -9,6 +9,12 @@ import { renamePrism } from './rename.prism';
 // served at the personal reach — the engine pins it to your own row. Your
 // name changes on your ID card, on the register, on the projector: every
 // screen that reads it, without anybody telling them.
+// Filing the change: the button, or Enter in the field.
+const file = [
+  { set: 'error', value: '' },
+  { call: 'save', onSuccess: [{ set: 'draft', value: '' }, { set: 'saved', value: true }] },
+];
+
 export const renameAction: ActionDefinition = {
   id: 'forms.rename',
   title: 'Change your record',
@@ -29,13 +35,7 @@ export const renameAction: ActionDefinition = {
   triggers: [
     { event: 'ui:click', ref: 'open', do: [{ set: 'nextInk', value: 'ink' }, { emit: { channel: 'tab-opened' } }, { resetTo: { action: 'forms.rename', canvas: 'body' } }] },
     TAB_OPENED,
-    {
-      event: 'ui:click',
-      ref: 'save',
-      do: [
-        { set: 'error', value: '' },
-        { call: 'save', onSuccess: [{ set: 'draft', value: '' }, { set: 'saved', value: true }] },
-      ],
-    },
+    { event: 'ui:click', ref: 'save', do: file },
+    { event: 'ui:key', ref: 'draft', key: 'Enter', do: file },
   ],
 };

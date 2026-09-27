@@ -79,9 +79,9 @@ export const liveLayout: LayoutNode = {
   ],
 };
 
-// The ask: the room's questions, counted by how they were answered. Counts
-// only — the questions were written by people and do not go up on the wall.
-export const askLayout: LayoutNode = {
+// Queries from words, counted by how they were answered. Counts only — the
+// requests were written by people and do not go up on the wall.
+export const querySlideLayout: LayoutNode = {
   component: 'Sheet',
   props: { size: 'fill', areas: ['kick kick kick', 'head head head', 'replayed generated refused', 'words words words'], rows: ['auto', 1, 'auto', 'auto'] },
   children: [

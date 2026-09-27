@@ -4,7 +4,7 @@ import { phoneLayout } from './phone.layout';
 // THE PHONE — what everybody in the room holds, whatever their department.
 //
 // The tabs are not authored per department. This lists EVERY candidate — the
-// card, the four departments' tools, the ask — and `reconcile` places each as a
+// card, the four departments' tools, the query desk, Q&A — and `reconcile` places each as a
 // tab on the `tabs` canvas; a candidate this shell does not hold is skipped,
 // exactly as an ungranted `initial` candidate is. So the bar is ring 1 made
 // visible: a neighbour in another department has other tabs, because their
@@ -26,7 +26,8 @@ export const phoneAction: ActionDefinition = {
       { action: 'forms.rename', input: { tab: true } },
       { action: 'inquiries.desk', input: { tab: true } },
       { action: 'archive.log', input: { tab: true } },
-      { action: 'ask.desk', input: { tab: true } },
+      { action: 'query.desk', input: { tab: true } },
+      { action: 'questions.send', input: { tab: true } },
       { action: 'assistant.thread', input: { tab: true } },
     ],
   },

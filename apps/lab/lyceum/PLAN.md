@@ -31,7 +31,7 @@ one more domain. About 40 minutes:
 | 1 | Nova (7) | GPT-3 could fill a schema, not write React. An action: data, endpoints, triggers, a layout. The server holds the shell; events go up, trees come down; the core is surface-blind. | Everyone joins (door, ID card). One real action file. The speaker switches the room from the poster kit to plain HTML and back — laptops check the DOM and the socket. `ssh` into the same app from a terminal. |
 | 2 | Prism (3) | If everything is data, data-to-data transforms are the core operation. Written by models, checked by schemas, no code strings. | One real transform. |
 | 3 | Models (5) | signal, cortex, solid. nova, prism and vex each ship an agent preloaded with their own grammar. Everything here runs on qwen 27b with reasoning off; routing on Jev, smaller still. | The ID cards streaming in (solid). |
-| 4 | Vex (6) | Intent + shape → a DSL, never SQL → compiled under a scope policy the model never sees → a mapping into the shape → cached under a fingerprint, replayed forever. Joins and complex queries are talked about; the demo schema stays simple. | Everybody asks the records their own question. Jev routes each question to an existing fingerprint or to generation and picks its shape; the projector counts replayed vs generated. |
+| 4 | Vex (6) | Intent + shape → a DSL, never SQL → compiled under a scope policy the model never sees → a mapping into the shape → cached under a fingerprint, replayed forever. Joins and complex queries are talked about; the demo schema stays simple. | Everybody queries the records in their own words. Jev routes each request to an existing fingerprint or to generation and picks its shape; the projector counts replayed vs generated. |
 | 5 | Moss + charter (6) | One durable shell per principal, the socket. The charter is policy as a document that compiles into two enforcement points: which actions exist in a shell, and the scope policy on every query. | Departments are assigned; neighbours compare phones; the projector shows the charter beside two resolved catalogs. |
 | 6 | The assistant (5) | Anything can go into an agent's context, because it is all data: the screen as a tree, the catalog, each action's input schema. It never acts: it proposes a pre-filled action and the person presses OK. It can only offer what exists for you. | Everybody's assistant on their phone. |
 | 7 | Tide (3) | Back to the timer. A reflex is a row, a fact is a row. A skill-based agent re-reads its instructions on every run and burns tokens to find out there is nothing to do; an agent with grammars writes the automation once and it runs without a model. | The reflex, again. |
@@ -50,11 +50,11 @@ In order; each lands with its check.
    it as it is built. A seam that does not pass is fixed in its grammar's descriptions or
    its tool contract, not by a bigger model.
 2. ~~**Tide agent**~~ — built 2026-09-27 (`createReflexAgent({ effects })`, see "What is built").
-3. ~~**The ask**~~ — built 2026-09-27 (see "What is built"). Not yet: parameterised
-   replays (Jev choosing a fingerprint's context values), the ask on the controller.
-4. ~~**The assistant**~~ — built 2026-09-27 (see "What is built"). Not yet: streaming
-   replies; the reply text held to what the tools did (see "Measured"); `open` proposed
-   where `ask` was the tool (see "Measured").
+3. ~~**The query desk**~~ (was "the ask") — built 2026-09-27 (see "What is built"). Not
+   yet: parameterised replays (Jev choosing a fingerprint's context values).
+4. ~~**The assistant**~~ — built 2026-09-27, reworked the same day (see "What is built").
+   Not yet: streaming replies; STEERING — its replies describe the mechanics its prompt
+   describes ("press the button") rather than what happened (see "Measured").
 5. ~~**The timer**~~ — built 2026-09-27 (see "What is built").
 6. ~~**The look switch**~~ — built 2026-09-27 (see "What is built", "Two looks").
 7. ~~**The SSH door**~~ — built 2026-09-27 (see "What is built"). Not yet on the server:
@@ -89,7 +89,7 @@ In order; each lands with its check.
 canvases). Three regions, and only the middle one scrolls: `self`, the ID card as one
 line (name, department or "Waiting"); `body`, one thing at a time; `tabs`, a bar of one
 tab per thing the person HOLDS. The bar is not authored per department: `member.phone`
-lists every candidate (the card, the four tools, the ask) and nova's `reconcile` places
+lists every candidate (the card, the four tools, the query desk, Q&A) and nova's `reconcile` places
 each, skipping what the shell does not hold — ring 1 made visible, and a neighbour's bar
 differs because their charter does. Each of those actions renders itself as a tab when
 loaded with `{ tab: true }` (`actions/shared/tab.layouts.ts`) and, pressed, resets the
@@ -98,20 +98,29 @@ as a tab without a reload (`assignment-check`). The department badge is gone: th
 and the card carry the department. The open tab is ink: the tabs agree among themselves over a payload-less
 `tab-opened` channel, each taking its own `nextInk` (`shared/tab.layouts.ts`).
 
-**The ask** (`ask.desk`, every member's; `server/functions/ask.functions.ts`,
-`server/asking.ts`). A question typed in your own words. `ask.route` — a function, for
-the two things that cannot be data: a model's choice and a generation — reads what was
-asked before (as you), and Jev decides in one call whether an earlier question asks for
-the same information and which authored shape the answer takes
-(`app/vex/ask.shapes.ts`: a list, one number, counts per group, people; each drawn by `actions/shared/answer.layouts.ts`). A match
-whose stored shape agrees is REPLAYED; anything else is GENERATED by vex's agents on
-gpt-oss-120b under your policy, against the same cache moss replays from; a generation
-the model or the engine refuses is REFUSED. The function records the ask as you
-(`asks`, migration 3) and returns the fingerprint and how to show it; the phone then
-replays the fingerprint through vex itself — the answer never comes from a function.
-The projector's `slide.ask` counts replayed / generated / refused (a reactive read);
-the questions never go on the wall. `LYCEUM_ASK=live|fake`; the checks use the fake,
-which writes real DSL so the engine, the policy and the replay are the real ones.
+**The query desk** (`query.desk`, every member's; `server/functions/query.functions.ts`,
+`server/querying.ts`). A vex query from a request in plain words — "ask" is kept for the
+room's Q&A only (decided 2026-09-27: this is software; it is a query). `query.route` — a
+function, for the two things that cannot be data: a model's choice and a generation —
+reads the earlier requests (as you), and Jev decides in one call whether one wants the
+same information and which authored shape the result takes (`app/vex/query.shapes.ts`:
+a list, one number, counts per group, people; each drawn by
+`actions/shared/answer.layouts.ts`). A match whose stored shape agrees is REPLAYED;
+anything else is GENERATED by vex's agents on gpt-oss-120b under your policy, against
+the same cache moss replays from; a generation the model or the engine refuses is
+REFUSED. The function records the query as you (`queries`, migration 7 renamed it from
+`asks`) and returns the fingerprint and how to show it; the phone then replays the
+fingerprint through vex itself — the result never comes from a function. Enter runs it.
+Green (`live`). The projector's `slide.query` counts replayed / generated / refused (a
+reactive read); the requests never go on the wall. `LYCEUM_QUERY=live|fake`; the checks
+use the fake, which writes real DSL so the engine, the policy and the replay are real.
+Jev's own words still say "question" — they are the measured contract (48/48).
+
+**Q&A** (`questions.send`, a tab on every phone; `tools.questions` on the controller's
+last slide). A question for the speaker is a row written as its sender (`questions`,
+migration 8). Only the controller reads them — a reactive list with the sender's name; a
+member replaying that read is refused by policy, and nothing goes on the projector.
+Orange. Enter sends and the field empties (`Field` `enter: 'clears'`, `lyceum.kit` 4).
 
 **The assistant** (`assistant.thread` — a tab on every phone, a tool on the controller's
 first slide; `app/assistant/assistants.ts`, `server/assistant/`). One assistant, assembled
@@ -119,17 +128,22 @@ per person from DECLARATIONS — data in the shape of moss's bundle `assistants`
 (instructions, grounding reads, named tools, starters) — each applying to whoever holds its
 action: `room` (`member.card`), one per department tool, `controller` (`speaker.console`).
 So the charter's grants build it, and it says so at its top: "built from room · forms · it
-can ask · open". Grounding is read as the person; declarations naming an action, a read or
+can query · open". Grounding is read as the person; declarations naming an action, a read or
 a tool that does not exist refuse to boot. The turn (`assistant.turn`; gpt-oss-120b,
 `LYCEUM_ASSISTANT=live|fake`) routes to the host's three tools, the only code: `open`
-proposes an action the person holds, pre-filled from its declared input; `ask` runs the
-ask's own path; `automate` (controller only) hands the request, with the deck as facts, to
-tide's reflex agent — which can refuse. Every tool leaves a PROPOSAL: a button, an answer,
-a document to read and save; nothing runs without a press. Every turn is a row
-(`assistant_turns`, migration 5) written as the person — the history under the input, a
-reactive read of their own turns only, and the conversation the model is handed next;
-acting on a proposal writes its outcome ("Saved · fires at 18:56") and the proposal
-leaves the screen. It sees the person's SCREEN: nova's own reading of their live shell
+proposes an action the person holds, pre-filled from its declared input; `query` runs the
+query desk's own path and OPENS the result over the screen (`query.result`, reconciled
+onto the overlay in the sheet's chrome — the same result screen, no button first: a
+query changes nothing); `automate` (controller only) hands the request, with the deck as
+facts, to tide's reflex agent — which can refuse. What CHANGES something waits for a
+press: an action to open, an automation to read and save. One way to each thing: `open`
+does not offer the query desk to anybody who has the `query` tool (offered both ways,
+the model picked the button). Every turn is a row (`assistant_turns`, migration 5)
+written as the person; the screen shows the conversation — the last five turns, oldest
+first, the input under them — a reactive read of their own turns only, and the model is
+handed the same five. Acting on a proposal writes its outcome ("Saved · fires at
+18:56") and the proposal leaves the screen. Blue (`signal`); Enter sends and the field
+empties. It sees the person's SCREEN: nova's own reading of their live shell
 (`describeShell` from `@niscorp/nova/reflect`) — every canvas but the tab bar, what is on
 it, its data — minus the assistant's own bookkeeping. `assistant-check` asserts the
 assembly per person, the bounds, and what it sees; `pnpm probe:assistant` measures it live.
@@ -216,10 +230,10 @@ every re-boot. `/dev/as/speaker`, `/dev/as/stage`, `/dev/as/kit`, `/dev/new`,
 
 **Checks** (`pnpm check`, each in its own process over its own database):
 `artifacts-check`, `kit-check`, `tables-check`, `assignment-check`, `deck-check`,
-`serve-check`, `access-check`, `ask-check`, `timer-check`, `assistant-check`,
-`look-check`, `ssh-check`. The ask
-check also passes live (`LYCEUM_ASK=live node --env-file=.env --import tsx
-src/dev/ask-check.ts`).
+`serve-check`, `access-check`, `query-check`, `timer-check`, `assistant-check`,
+`look-check`, `questions-check`, `ssh-check`. The query
+check also passes live (`LYCEUM_QUERY=live node --env-file=.env --import tsx
+src/dev/query-check.ts`).
 
 ## Decision points
 
@@ -227,7 +241,7 @@ src/dev/ask-check.ts`).
 |---|---|---|---|
 | D1 | Posture | answered | Moss server app on a VPS. If hosting fails there is no talk. |
 | D2 | Environment | answered | Postgres in Docker beside the app; vex's tiered cache; moss's `sessions` credential. The speaker signs in by a mailed link, the stage at `/stage`. Dev (derived): one in-memory PGlite per `pnpm dev`; each check a fresh one. |
-| D3 | Reads | answered | Vex entries, locked, for everything the app itself reads; reactive where a screen follows the room. **Everybody** also gets a generative path — the ask — under their own policy (answered 2026-09-27). |
+| D3 | Reads | answered | Vex entries, locked, for everything the app itself reads; reactive where a screen follows the room. **Everybody** also gets a generative path — the query desk — under their own policy (answered 2026-09-27). |
 | D4 | Writes | derived | Vex mutation entries, fired by a click or made by a server function as the principal it acts for. |
 | D5 | Routing | derived | None. The talk's state is a row (`deck`), not a URL. |
 
@@ -235,7 +249,7 @@ src/dev/ask-check.ts`).
 
 - **Models** (revised 2026-09-27, after the model check — `MEASURED.md`). The agent seams — vex's
   query agent and mapper, the tide agent, the assistant — run on `openai/gpt-oss-120b` on
-  Groq at reasoning `low`: as accurate as qwen 27b on the ask (30/36 each), several times
+  Groq at reasoning `low`: as accurate as qwen 27b on the query desk (30/36 each), several times
   faster, and Groq caches its prompt prefix, so a room's generations share it. The ID
   cards stay on qwen 27b (one streamed call; the join burst stays out of 120b's budget).
   Routing — which fingerprint answers a question, which shape — is Jev (TypeSafe,
@@ -253,7 +267,7 @@ src/dev/ask-check.ts`).
   moss's bundle `assistants`), each keyed to an action. A declaration applies to whoever
   holds its action, so the charter's grants select it — no new charter section, no
   second list. Grounding reads run as the person, under their policy. Tools are the only
-  code: `open` (propose an action they hold, pre-filled), `ask` (the ask pipeline),
+  code: `open` (propose an action they hold, pre-filled), `query` (the query desk's path),
   `automate` (the tide reflex agent, handed the deck as grounding; it can refuse). Only
   the controller gets `automate`. Replies in one piece for now; nothing runs without a
   press. Lyceum uses only machinery that exists — no package changes for this.
@@ -261,7 +275,7 @@ src/dev/ask-check.ts`).
 ## Measured
 
 What the models did against lyceum — the model check (`pnpm models`), the assistant
-probe, Jev routing the ask — is in `MEASURED.md`. The choices it led to are above.
+probe, Jev routing the query desk — is in `MEASURED.md`. The choices it led to are above.
 
 ## Answered, and still holding
 
@@ -279,7 +293,7 @@ probe, Jev routing the ask — is in `MEASURED.md`. The choices it led to are ab
 | Principal | Roles | What exists for them |
 |---|---|---|
 | a stranger (browser or SSH) | `public` | the door |
-| audience member | `unassigned`, then one of `records`, `forms`, `inquiries`, `archive` | the ID card, the ask, the assistant; after assignment, the department's own tool. `forms` reaches at `personal`: its update on `members` is pinned to the caller's own row |
+| audience member | `unassigned`, then one of `records`, `forms`, `inquiries`, `archive` | the ID card, the query desk, Q&A, the assistant; after assignment, the department's own tool. `forms` reaches at `personal`: its update on `members` is pinned to the caller's own row |
 | `stage` (the projector) | `stage` | the slides, the strip, the register. No controls. |
 | `speaker` (the controller) | `speaker` | the controller and its tools, All slides, the look switch |
 | a device at `/speaker` | `lectern` | the speaker's sign-in desk, in the room's look, and nothing else; a principal per device |
@@ -294,7 +308,8 @@ probe, Jev routing the ask — is in `MEASURED.md`. The choices it led to are ab
 |---|---|
 | `departments` | name, remit, mark, sigil |
 | `members` | one per person: name, title, quirk (the ID card), department (null until assigned) |
-| `asks` | every question put to the records: the asker, the words, the shape, how it was answered (replayed, generated, refused), the fingerprint |
+| `queries` | every query run from words (was `asks`): who ran it, the request, the shape, how it was answered (replayed, generated, refused), the fingerprint |
+| `questions` | the room's Q&A: a question for the speaker and its sender |
 | `slides`, `slide_tools`, `slide_notes` | the deck: order and titles, the controller's tools, the speaker's notes |
 | `deck` | the talk's state: the slide on screen |
 | `room` | the room's state: the look every screen paints with |
@@ -321,10 +336,10 @@ on. Raw-SQL writes do not invalidate; the TTL (60 s) heals them.
 ## Risks
 
 - **Scale is unmeasured** — To build, 10.
-- **Groq's per-model token limit** is shared by every seam; the ask and the assistant
+- **Groq's per-model token limit** is shared by every seam; the query desk and the assistant
   for a whole room in one minute is the heaviest load of the talk. Jev routing to
   replays is the first relief; the rehearsal measures the rest.
-- **The ask is a generative path for everyone.** A question like "show me the login
+- **The query desk is a generative path for everyone.** A question like "show me the login
   links" will be typed; the refusal must be shown, not discovered.
 - **Session tokens** in the websocket URL; **statement timeout** unset on the pool;
   **event flooding** per connection unconfirmed.

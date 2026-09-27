@@ -4,8 +4,8 @@ import { defineTool } from '@niscorp/cortex';
 import type { ToolDefinition } from '@niscorp/cortex';
 import type { FunctionSession } from '@niscorp/moss';
 import { ACTIONS } from '@lyceum/app/action-catalog';
-import { routeQuestion } from '../functions/ask.functions';
-import type { Asker } from '../asking';
+import { routeQuery } from '../functions/query.functions';
+import type { Querier } from '../querying';
 import { slidesDeck } from '@lyceum/app/vex/deck.entries';
 import { armable, dueOf, localNow, slideIdsOf } from '../timing';
 import type { TimerWriter } from '../timing';
@@ -14,28 +14,54 @@ import type { ToolName } from './declarations';
 
 // THE ASSISTANT'S TOOLS — the host's closed set, and the only code in it. Each
 // is offered only when a declaration the person's grants select names it
-// (declarations.ts). None acts: each leaves a PROPOSAL the person presses —
-// an action to open, an answer to read, an automation to read and save.
+// (declarations.ts). Nothing that CHANGES anything happens without a press:
+// `open` and `automate` leave a PROPOSAL — an action to press, an automation to
+// read and save. A query changes nothing, so `query` shows its result at once,
+// over the screen.
 //
 //   open      an action this person holds, pre-filled from its declared input
-//   ask       the ask's own path (routeQuestion) — as the person, recorded
+//   query     a vex query from words (routeQuery), as the person, recorded;
+//             its result opens over their screen (`query.result`)
 //   automate  tide's reflex agent, handed the grounding as facts; it can refuse
 
 export type Proposal =
   | { open: { action: string; label: string; input: Record<string, unknown> } }
-  | { answer: { kind: string; how: string; rows: unknown } }
   | { timer: { timerId: string; reflex: unknown; json: string; intent: string; dueAt: string | null; dueLocal: string } };
+
+// An action a tool opened over the screen — the reply's `opened` rows, which
+// the assistant's turn trigger reconciles onto the overlay.
+export type Opened = { action: string; input: Record<string, unknown> };
 
 export type ToolDeps = {
   session: FunctionSession;
-  asker: Asker;
+  querier: Querier;
   writer: TimerWriter;
   tz: string;
   // What the assistant was grounded on this turn — handed to `automate` as facts.
   facts: string;
   // Where proposals collect, for the reply.
   proposals: Proposal[];
+  // What was opened over the screen this turn.
+  opened: Opened[];
 };
+
+// Actions only a tool opens — `open` does not offer them, and their input is
+// the tool's, not a person's to pre-fill.
+export const OPENED_BY_TOOLS: ReadonlySet<string> = new Set(['query.result']);
+
+// Actions a tool DOES — offered through `open` only to somebody without that
+// tool. The query desk is what `query` does; offered both ways, the model
+// picked the button about as often as the tool, and the person got a button
+// that opened a desk to type the same words into again.
+const DONE_BY_TOOLS: Readonly<Record<string, ToolName>> = { 'query.desk': 'query' };
+
+// What `open` may offer this person: an action they hold, with an input
+// contract, that no tool opens and no tool they have does.
+export const offerableActions = (held: readonly string[], offered: ReadonlySet<ToolName>): string[] =>
+  held.filter((id) => {
+    const doneBy = DONE_BY_TOOLS[id];
+    return ACTIONS[id]?.input !== undefined && !OPENED_BY_TOOLS.has(id) && (doneBy === undefined || !offered.has(doneBy));
+  });
 
 // The keys an action declares as openable (rule 14), from its `input` JSON
 // Schema — what `open` may pre-fill, and nothing else.
@@ -47,7 +73,7 @@ const openableKeys = (actionId: string): string[] => {
 
 // Every openable key in the catalog — the assistant action's open trigger
 // carries exactly these (a navigation step resolves its input key by key).
-export const OPENABLE_KEYS: readonly string[] = [...new Set(Object.keys(ACTIONS).flatMap(openableKeys))].sort();
+export const OPENABLE_KEYS: readonly string[] = [...new Set(Object.keys(ACTIONS).filter((id) => !OPENED_BY_TOOLS.has(id)).flatMap(openableKeys))].sort();
 
 export const hostTools = (deps: ToolDeps, offered: ReadonlySet<ToolName>): ToolDefinition[] => {
   const tools: ToolDefinition[] = [];
@@ -65,7 +91,7 @@ export const hostTools = (deps: ToolDeps, offered: ReadonlySet<ToolName>): ToolD
         }),
         execute: (asked) => {
           const definition = ACTIONS[asked.action];
-          if (definition === undefined || !deps.session.actions.includes(asked.action)) return { refused: `"${asked.action}" is not something this person holds.` };
+          if (definition === undefined || !offerableActions(deps.session.actions, offered).includes(asked.action)) return { refused: `"${asked.action}" is not something this person holds.` };
           const keys = openableKeys(asked.action);
           const unknownKeys = Object.keys(asked.input ?? {}).filter((key) => !keys.includes(key));
           if (unknownKeys.length > 0) return { refused: `"${asked.action}" takes no input ${unknownKeys.join(', ')}; it takes: ${keys.join(', ') || 'nothing'}.` };
@@ -79,19 +105,19 @@ export const hostTools = (deps: ToolDeps, offered: ReadonlySet<ToolName>): ToolD
     );
   }
 
-  if (offered.has('ask')) {
+  if (offered.has('query')) {
     tools.push(
       defineTool({
-        id: 'ask',
-        name: 'ask',
-        description: 'Put a question to the records — the people in the room, the departments, what was asked — in plain words. Answered under this person\'s own policy.',
-        input: z.object({ question: z.string().describe('The question, in plain words.') }),
-        execute: async ({ question }) => {
+        id: 'query',
+        name: 'query',
+        description: "Run a vex query against the records from a request in plain words — the people in the room, the departments, earlier queries — under this person's own policy. The result opens over their screen; you get its rows.",
+        input: z.object({ request: z.string().describe('What to query for, in plain words.') }),
+        execute: async ({ request }) => {
           try {
-            const routed = await routeQuestion(deps.session, deps.asker, question);
-            const result = await vexOver(deps.session.wire)(routed.fingerprint);
-            deps.proposals.push({ answer: { kind: routed.kind, how: routed.how, rows: result } });
-            return { answered: result };
+            const routed = await routeQuery(deps.session, deps.querier, request);
+            const rows = await vexOver(deps.session.wire)(routed.fingerprint);
+            deps.opened.push({ action: 'query.result', input: { routed, sheetTitle: `Vex query · ${request}` } });
+            return { rows };
           } catch (error) {
             return { refused: error instanceof Error ? error.message : String(error) };
           }

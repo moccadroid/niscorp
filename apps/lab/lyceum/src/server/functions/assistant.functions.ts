@@ -7,10 +7,10 @@ import { ACTIONS } from '@lyceum/app/action-catalog';
 import { turnRecord, turnsMine } from '@lyceum/app/vex/assistant.entries';
 import { assembleFor } from '../assistant/declarations';
 import type { Assembled } from '../assistant/declarations';
-import { hostTools } from '../assistant/tools';
-import type { Proposal } from '../assistant/tools';
+import { hostTools, offerableActions } from '../assistant/tools';
+import type { Opened, Proposal } from '../assistant/tools';
 import type { Orchestrator } from '../assistant/orchestrator';
-import type { Asker } from '../asking';
+import type { Querier } from '../querying';
 import type { TimerWriter, Timing } from '../timing';
 import { localNow } from '../timing';
 import { vexOver } from '../vex-over';
@@ -28,9 +28,9 @@ import { vexOver } from '../vex-over';
 
 const DraftSchema = z.object({ draft: z.string() });
 
-// The conversation so far, oldest first — this person's own turns, read as them.
+// The conversation so far — this person's last turns, oldest first, read as
+// them (`turns/mine`, the same rows their screen shows).
 const TurnsSchema = z.array(z.object({ message: z.string(), reply: z.string(), outcome: z.string().nullable() }));
-const CONVERSATION_TURNS = 6;
 
 // WHAT IS ON THEIR SCREEN — nova's own reading of the live shell (reflect's
 // describeShell): every canvas they have, what is on it, and its data. Not the
@@ -50,7 +50,7 @@ const screenOf = (session: FunctionSession): string =>
 // actions they can be offered, and the conversation so far.
 const knowledgeOf = async (session: FunctionSession, assembled: Assembled, tz: string): Promise<{ knowledge: string; facts: string }> => {
   const vex = vexOver(session.wire);
-  const earlier = TurnsSchema.parse(await vex(turnsMine.fingerprint)).slice(0, CONVERSATION_TURNS).reverse();
+  const earlier = TurnsSchema.parse(await vex(turnsMine.fingerprint));
   const conversation = earlier.map((turn) => `Person: ${turn.message}\nYou: ${turn.reply}${turn.outcome === null ? '' : `\n(${turn.outcome})`}`).join('\n');
   const grounded = await Promise.all(
     assembled.from.flatMap((declaration) =>
@@ -62,9 +62,7 @@ const knowledgeOf = async (session: FunctionSession, assembled: Assembled, tz: s
     ),
   );
   const facts = grounded.filter((section) => section !== '').join('\n\n');
-  const offerable = session.actions
-    .filter((id) => ACTIONS[id]?.input !== undefined)
-    .map((id) => `- ${id}: ${ACTIONS[id]?.title ?? id}; input ${JSON.stringify(ACTIONS[id]?.input)}`);
+  const offerable = offerableActions(session.actions, assembled.tools).map((id) => `- ${id}: ${ACTIONS[id]?.title ?? id}; input ${JSON.stringify(ACTIONS[id]?.input)}`);
   const knowledge = [
     `ASSISTANT FOR THIS PERSON — built from: ${assembled.from.map((declaration) => declaration.id).join(', ') || 'nothing'}`,
     ...assembled.from.map((declaration) => declaration.instructions),
@@ -81,7 +79,7 @@ const knowledgeOf = async (session: FunctionSession, assembled: Assembled, tz: s
 
 export const assistantFunctions = (
   session: FunctionSession,
-  deps: { asker: Asker; writer: TimerWriter; orchestrator: Orchestrator; tz: string; timing: () => Timing },
+  deps: { querier: Querier; writer: TimerWriter; orchestrator: Orchestrator; tz: string; timing: () => Timing },
 ): Record<string, FunctionHandler> => ({
   'assistant.intro': async () => {
     const assembled = assembleFor(session.actions);
@@ -100,13 +98,14 @@ export const assistantFunctions = (
     const assembled = assembleFor(session.actions);
     const { knowledge, facts } = await knowledgeOf(session, assembled, deps.tz);
     const proposals: Proposal[] = [];
-    const tools = hostTools({ session, asker: deps.asker, writer: deps.writer, tz: deps.tz, facts, proposals }, assembled.tools);
+    const opened: Opened[] = [];
+    const tools = hostTools({ session, querier: deps.querier, writer: deps.writer, tz: deps.tz, facts, proposals, opened }, assembled.tools);
     const reply = await deps.orchestrator.answer({ message, knowledge, tools });
     // The turn is a row, written as the person — their history, and the next
     // turn's conversation so far.
     const turnId = `turn_${randomBytes(8).toString('hex')}`;
     await vexOver(session.wire)(turnRecord.fingerprint, { turnId, message, reply, proposals });
-    return { turnId, text: reply, proposals };
+    return { turnId, text: reply, proposals, opened };
   },
   'timers.arm': async () => ({ armed: await deps.timing().reload() }),
 });

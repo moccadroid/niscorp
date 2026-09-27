@@ -2,7 +2,7 @@ import type { SeedEntry, SeedMutation } from '@niscorp/vex';
 
 // ── the assistant's conversations ──
 //
-// A turn is a row, written as the person asking; they read only their own
+// A turn is a row, written as the person talking; they read only their own
 // (behaviors.ts pins every read and write to `member_id` = their userId). The
 // history under the assistant is `turns/mine`, reactive — a turn recorded, or
 // its outcome set, reaches the screen with nobody announcing it — and the model
@@ -11,17 +11,20 @@ import type { SeedEntry, SeedMutation } from '@niscorp/vex';
 export const turnsMine: SeedEntry = {
   fingerprint: 'turns/mine',
   refresh: 'reactive',
-  intent: 'This person\'s conversation with the assistant, newest first',
-  shape: [{ turn_id: '', message: '', reply: '', outcome: '' }],
+  intent: "This person's last five turns with the assistant, oldest first",
+  shape: [{ turn_id: '', message: '', reply: '', outcome: '', asked_at: '' }],
+  // The newest five, then put in reading order — oldest first, the newest by
+  // the input, as a conversation reads.
   dsl: {
     from: ['assistant_turns'],
-    fields: ['assistant_turns.turn_id', 'assistant_turns.message', 'assistant_turns.reply', 'assistant_turns.outcome'],
+    fields: ['assistant_turns.turn_id', 'assistant_turns.message', 'assistant_turns.reply', 'assistant_turns.outcome', 'assistant_turns.asked_at'],
     sort: [{ field: 'assistant_turns.asked_at', dir: 'desc' }, { field: 'assistant_turns.turn_id', dir: 'desc' }],
-    limit: 20,
+    limit: 5,
   },
+  mapping: { $sortBy: { over: { $ref: '$.result' }, as: 'turn', by: { $get: { from: { $var: 'turn' }, path: ['asked_at'] } } } },
 };
 
-// Record a turn, as the person asking — `member_id` is stamped.
+// Record a turn, as the person talking — `member_id` is stamped.
 export const turnRecord: SeedMutation = {
   fingerprint: 'turns/record',
   intent: 'Record a turn of the conversation: what was asked, replied and proposed',

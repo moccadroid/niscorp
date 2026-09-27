@@ -50,7 +50,7 @@ const main = async (): Promise<void> => {
   // ── 1. asked for, and read ──
   speaker.type('tools', 'draft', 'End the talk in 30 minutes');
   await new Promise((resolve) => setTimeout(resolve, 100));
-  speaker.click('tools', 'ask');
+  speaker.click('tools', 'send');
   check('the assistant answers with a document to read', await speaker.shows('tools', 'Read it first'));
   check('…a tide reflex that puts a slide on screen', speaker.showsNow('tools', 'deck.show'));
   check('…run as the clock, whatever it said', speaker.showsNow('tools', '\\"as\\": \\"clock\\"'));

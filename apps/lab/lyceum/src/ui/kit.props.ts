@@ -64,7 +64,7 @@ export const KIT_PROPS = z
       .strict(),
     Bar: z.object({ segments: z.array(z.object({ value: z.number(), ink, mark }).partial({ ink: true, mark: true }).strict()) }).partial().strict(),
     Action: z.object({ area, ink, label, lines: z.literal('two'), size: z.literal('large') }).partial().strict(),
-    Field: z.object({ area, placeholder: z.string(), value: z.string() }).partial().strict(),
+    Field: z.object({ area, placeholder: z.string(), value: z.string(), enter: z.literal('clears') }).partial().strict(),
     Look: z.object({ look: z.enum(LOOKS) }).partial().strict(),
   })
   .strict()

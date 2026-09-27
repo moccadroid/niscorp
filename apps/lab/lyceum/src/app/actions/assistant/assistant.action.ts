@@ -10,6 +10,8 @@ import { assistantLayout } from './assistant.layout';
 // and shown at the top — "built from room · records". A turn is a function (a
 // model's choice); saving an automation it proposed is the person's own vex
 // write; opening an action it proposed is a navigation step, over the screen.
+// What a turn OPENED by itself — a query's result — the turn's own success
+// reconciles onto the overlay, in the sheet's chrome.
 //
 // The open trigger's input names every key the catalog declares openable — a
 // navigation step resolves its input key by key, and the server fills every one
@@ -20,7 +22,16 @@ const run = [
   { set: 'answered', value: false },
   { set: 'saved', value: false },
   { set: 'thinking', value: true },
-  { call: 'turn', onSuccess: [{ set: 'answered', value: true }, { set: 'thinking', value: false }], onError: [{ set: 'thinking', value: false }] },
+  {
+    call: 'turn',
+    onSuccess: [
+      { set: 'answered', value: true },
+      { set: 'thinking', value: false },
+      { set: 'draft', value: '' },
+      { reconcile: { to: '$.reply.opened', action: 'action', input: 'input', canvas: 'overlay', with: ['sheet'] } },
+    ],
+    onError: [{ set: 'thinking', value: false }],
+  },
 ];
 
 export const assistantAction: ActionDefinition = {
@@ -33,7 +44,7 @@ export const assistantAction: ActionDefinition = {
     nextInk: 'paper',
     draft: '',
     intro: { title: 'Assistant', intro: '', builtFrom: '', tools: '', starters: [] },
-    reply: { turnId: '', text: '', proposals: [] },
+    reply: { turnId: '', text: '', proposals: [], opened: [] },
     history: [],
     thinking: false,
     answered: false,
@@ -61,8 +72,8 @@ export const assistantAction: ActionDefinition = {
       errorTarget: 'error',
     },
     arm: { fn: 'timers.arm', errorTarget: 'error' },
-    // The conversation, newest first — this person's own turns, reactive: a
-    // turn recorded or resolved reaches the screen on its own.
+    // The conversation, its last five turns oldest first — this person's own,
+    // reactive: a turn recorded or resolved reaches the screen on its own.
     history: { url: '/api/vex', method: 'POST', request: { fingerprint: turnsMine.fingerprint, context: {} }, target: 'history' },
     // What came of the turn whose proposal was acted on.
     resolve: {
@@ -82,7 +93,8 @@ export const assistantAction: ActionDefinition = {
   triggers: [
     { event: 'ui:click', ref: 'open', do: [{ set: 'nextInk', value: 'ink' }, { emit: { channel: 'tab-opened' } }, { resetTo: { action: 'assistant.thread', canvas: 'body' } }] },
     TAB_OPENED,
-    { event: 'ui:click', ref: 'ask', do: run },
+    { event: 'ui:click', ref: 'send', do: run },
+    { event: 'ui:key', ref: 'draft', key: 'Enter', do: run },
     { event: 'ui:click', ref: 'starter', do: [{ set: 'draft', value: '@event.payload' }, ...run] },
     {
       event: 'ui:click',

@@ -6,7 +6,7 @@ import { createSignal } from '@niscorp/signal';
 // what differs per person is handed to each run — the knowledge assembled from
 // their declarations (instructions, grounding read as them, the actions they
 // can be offered) and the tools those declarations name. It decides what the
-// person wants and hands it to the right tool: a question to `ask`, something
+// person wants and hands it to the right tool: a query to `query`, something
 // to happen later to `automate` (tide's agent does the writing), something to
 // do on their phone to `open`. It never acts; it answers and proposes.
 //
@@ -43,7 +43,7 @@ const liveOrchestrator = (): Orchestrator => {
 };
 
 // The stand-in's routing: a time → automate, "change my name to …" → open the
-// rename, anything else → ask. Each through the tool the person was given, or
+// rename, anything else → query. Each through the tool the person was given, or
 // the same one-line refusal the live assistant owes them.
 const fakeOrchestrator = (): Orchestrator => ({
   kind: 'fake',
@@ -68,8 +68,8 @@ const fakeOrchestrator = (): Orchestrator => ({
       await call('open', { action: 'forms.rename', label: `Change your name to ${rename}`, input: { draft: rename } });
       return 'Press the button to file the change.';
     }
-    if (tool('ask') === undefined) return 'I cannot answer questions about the room for you.';
-    await call('ask', { question: message });
+    if (tool('query') === undefined) return 'I cannot query the records for you.';
+    await call('query', { request: message });
     return 'Here is what the records say.';
   },
 });

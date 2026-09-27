@@ -76,7 +76,7 @@ export const dueOf = (reflex: Reflex, now: number): number | undefined =>
 export type Written = { reflex: Reflex } | { refused: string };
 
 // `facts`: what the host knows that the request may refer to — the deck, as the
-// asker read it. Handed to the agent as context for this run. `slideIds`: the
+// caller read it. Handed to the agent as context for this run. `slideIds`: the
 // deck's slides, as rows — what the offered effect may name.
 export type TimerRequest = { intent: string; now: number; tz: string; facts: string; slideIds: readonly string[] };
 export type TimerWriter = { kind: 'live' | 'fake'; write: (request: TimerRequest) => Promise<Written> };

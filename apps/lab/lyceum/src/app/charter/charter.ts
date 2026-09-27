@@ -12,9 +12,11 @@ const ROOM_READS = ['members.read', 'departments.read'];
 const DECK_READS = ['deck.read', 'slides.read'];
 // The room's look: every screen reads it, the door's too (app/actions/room/).
 const LOOK = ['room.read'];
-// The ask: what was asked before (the router reads it as the asker) and the
-// asker's own record of asking.
-const ASKING = ['asks.read', 'asks.write.insert'];
+// Queries from words: the ones run before (the router reads them, as the
+// caller) and the caller's own record of running one.
+const QUERYING = ['queries.read', 'queries.write.insert'];
+// The room's Q&A: a question for the speaker, written as its sender.
+const QUESTIONING = ['questions.write.insert'];
 // The assistant's conversation: each person's own turns (behaviors.ts).
 const CONVERSING = ['assistant_turns.read', 'assistant_turns.write.insert', 'assistant_turns.write.update'];
 
@@ -26,11 +28,12 @@ export const CHARTER: Charter = {
 
   // Everybody in the room, assigned or not: the ID card. Never worn alone —
   // the roles below extend it.
-  // Everybody may put a question to the records (the ask) — the one tool
-  // every clearance shares; what the answer can reach is still theirs.
+  // Everybody may query the records from words — the one tool every
+  // clearance shares; what the result can reach is still theirs. And send the
+  // speaker a question (Q&A).
   // …and an assistant: the same one everybody has, built for each person from
   // what these grants select (app/assistant/assistants.ts).
-  member: { actions: ['member.*', 'ask.*', 'assistant.*', 'room.*'], data: [...ROOM_READS, ...ASKING, ...CONVERSING, ...LOOK] },
+  member: { actions: ['member.*', 'query.*', 'questions.*', 'assistant.*', 'room.*'], data: [...ROOM_READS, ...QUERYING, ...QUESTIONING, ...CONVERSING, ...LOOK] },
 
   unassigned: { extends: ['member'] },
   // Every department gets its badge; each gets one clearance of its own.
@@ -47,8 +50,8 @@ export const CHARTER: Charter = {
   // The speaker moves the deck and assigns the room, as themselves; the
   // controller's tools change with the slide. The stage shows the deck —
   // every slide is an action only the stage is granted.
-  speaker: { actions: ['speaker.*', 'tools.*', 'assistant.*', 'room.*'], data: [...ROOM_READS, ...DECK_READS, ...LOOK, 'room.write.update', 'slide_notes.read', 'slide_tools.read', 'deck.write.update', 'members.write.update', 'timers.read', 'timers.write.insert', ...CONVERSING] },
-  stage: { actions: ['stage.*', 'slide.*', 'room.*'], data: [...ROOM_READS, ...DECK_READS, 'asks.read', ...LOOK] },
+  speaker: { actions: ['speaker.*', 'tools.*', 'assistant.*', 'room.*'], data: [...ROOM_READS, ...DECK_READS, ...LOOK, 'room.write.update', 'slide_notes.read', 'slide_tools.read', 'deck.write.update', 'members.write.update', 'timers.read', 'timers.write.insert', 'questions.read', ...CONVERSING] },
+  stage: { actions: ['stage.*', 'slide.*', 'room.*'], data: [...ROOM_READS, ...DECK_READS, 'queries.read', ...LOOK] },
 
   // The kit's kitchen sink: every piece of the look on one screen (dev).
   kit: { actions: ['kit.*'] },

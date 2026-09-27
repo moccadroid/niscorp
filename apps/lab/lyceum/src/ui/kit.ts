@@ -375,8 +375,9 @@ export const Action: DomComponent = ({ props }) => {
 };
 
 // ── Field — a line of text somebody types ───────────────────────
-// area, placeholder, value. Bound with the layout's `model` (nova wires the
-// typing by that convention); `value` is what the field shows when it renders.
+// area, placeholder, value, enter ('clears'). Bound with the layout's `model`
+// (nova wires the typing by that convention); `value` is what the field shows
+// when it renders.
 export const Field: DomComponent = ({ props }) => {
   const node = document.createElement('input');
   node.type = 'text';
@@ -388,7 +389,20 @@ export const Field: DomComponent = ({ props }) => {
   const placeholder = text(props['placeholder']);
   if (placeholder !== undefined) node.placeholder = placeholder;
   placeIn(node, props['area']);
+  clearsOnEnter(node, props['enter']);
   return node;
+};
+
+// A field whose Enter SENDS it (`enter: 'clears'`) empties when Enter is
+// pressed. The browser keeps a focused field's typing over whatever the server
+// sends — so a server that empties the field is not seen while the person is
+// still in it; the field has to say so itself. The text already went up with
+// every keystroke; Enter only says "send".
+export const clearsOnEnter = (node: HTMLInputElement, enter: unknown): void => {
+  if (oneOf(enter, ['clears'] as const) === undefined) return;
+  node.addEventListener('keydown', (event) => {
+    if (event instanceof KeyboardEvent && event.key === 'Enter') node.value = '';
+  });
 };
 
 // ── Look — which kit paints the screen ──────────────────────────

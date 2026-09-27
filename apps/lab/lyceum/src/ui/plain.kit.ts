@@ -1,6 +1,6 @@
 import type { DomComponent } from '@niscorp/nova/adapters/dom';
 import type { Kit } from './kit.props';
-import { LEVELS, Qr as PosterQr, SIGILS, oneOf, records, text, tickDown } from './kit';
+import { LEVELS, Qr as PosterQr, SIGILS, clearsOnEnter, oneOf, records, text, tickDown } from './kit';
 
 // ═══════════════════════════════════════════════════════════════
 // THE PLAIN KIT — the same grammar (./kit.props.ts) as the poster, painted as
@@ -125,6 +125,7 @@ const Field: DomComponent = ({ props }) => {
   if (value !== undefined) node.value = value;
   const placeholder = text(props['placeholder']);
   if (placeholder !== undefined) node.placeholder = placeholder;
+  clearsOnEnter(node, props['enter']);
   return node;
 };
 

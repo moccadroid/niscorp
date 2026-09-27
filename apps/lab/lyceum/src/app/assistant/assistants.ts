@@ -8,7 +8,7 @@
 // member's assistant knows the register, and `speaker: { actions:
 // ['speaker.*', …] }` is why only the controller's can automate. Grounding
 // reads run as the person, under their policy. Tools are the host's closed set
-// (server/assistant/tools.ts): `open`, `ask`, `automate`.
+// (server/assistant/tools.ts): `open`, `query`, `automate`.
 
 export type AssistantDeclaration = {
   id: string;
@@ -25,11 +25,11 @@ export const ASSISTANTS: readonly AssistantDeclaration[] = [
   {
     id: 'room',
     title: 'Your assistant',
-    intro: 'Ask about the room, or where to find something on your phone.',
+    intro: 'Query the room, or find something on your phone.',
     instructions:
-      'You are the assistant on a phone in the room. Answer questions about the people in the room and the departments by asking the records. When the person wants to do something their phone offers, propose the action with `open` so they can press it — never claim you did it yourself.',
+      'You are the assistant on a phone in the room. Answer questions about the people in the room and the departments by querying the records. When the person wants to do something their phone offers, propose the action with `open` so they can press it — never claim you did it yourself.',
     grounding: [{ as: 'This person\'s ID card', fingerprint: 'members/me', context: {}, upfront: true }],
-    tools: ['ask', 'open'],
+    tools: ['query', 'open'],
     starters: ['What\'s my name?', 'Who arrived first?', 'How many of us are here?'],
     applies: { screen: 'member.card' },
   },
@@ -57,7 +57,7 @@ export const ASSISTANTS: readonly AssistantDeclaration[] = [
     id: 'inquiries',
     title: 'Inquiries',
     intro: '',
-    instructions: 'This person is in Inquiries: they may put the stored questions of the Inquiries desk to the records.',
+    instructions: 'This person is in Inquiries: they may run the stored queries of the Inquiries desk.',
     grounding: [],
     tools: [],
     starters: [],
@@ -76,7 +76,7 @@ export const ASSISTANTS: readonly AssistantDeclaration[] = [
   {
     id: 'controller',
     title: 'The controller\'s assistant',
-    intro: 'Ask for an automation — it comes back as a document to read before you save it.',
+    intro: 'Request an automation — it comes back as a document to read before you save it.',
     instructions:
       'You assist the speaker running the talk from the controller. When the speaker wants something to happen at a time or after a while, hand the request to `automate` in the speaker\'s own words; it writes the automation and you never write it yourself. The deck below is the talk\'s slides in order.',
     grounding: [{ as: 'The deck', fingerprint: 'slides/deck', context: {}, upfront: true }],

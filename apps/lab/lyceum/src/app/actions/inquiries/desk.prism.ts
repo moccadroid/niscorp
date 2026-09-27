@@ -1,5 +1,5 @@
-// The question you pressed, replayed by its fingerprint.
-export const askPrism = {
-  fingerprint: { $ref: '$.asked' },
+// The stored query you pressed, replayed by its fingerprint.
+export const runPrism = {
+  fingerprint: { $ref: '$.chosen' },
   context: {},
 };

@@ -167,6 +167,29 @@ export const ROOM = /* sql */ `
   );
 `;
 
+// Migration 7: A QUERY IS A QUERY. Migration 3 named the table after a person
+// asking; what it records is a vex query run from words — the request, the
+// shape it was answered in, how (replayed, generated, refused), the
+// fingerprint. Renamed, rows kept.
+export const QUERIES = /* sql */ `
+  ALTER TABLE asks RENAME TO queries;
+  ALTER TABLE queries RENAME COLUMN ask_id TO query_id;
+  ALTER TABLE queries RENAME COLUMN question TO request;
+  ALTER TABLE queries RENAME COLUMN asked_at TO run_at;
+`;
+
+// Migration 8: QUESTIONS FOR THE SPEAKER — the room's Q&A. One row per
+// question, written as the person asking (`member_id` stamped by the engine,
+// vex/behaviors.ts). Kept, not yet shown anywhere but the controller.
+export const QUESTIONS = /* sql */ `
+  CREATE TABLE questions (
+    question_id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+    member_id   TEXT NOT NULL REFERENCES members (member_id),
+    text        TEXT NOT NULL CHECK (length(text) BETWEEN 1 AND 500),
+    sent_at     TIMESTAMPTZ NOT NULL DEFAULT now()
+  );
+`;
+
 export const LYCEUM_SEQUENCE: Sequence = {
   id: 'lyceum.app',
   migrations: [
@@ -176,6 +199,8 @@ export const LYCEUM_SEQUENCE: Sequence = {
     { description: 'Timers: automations the speaker saved, each a tide reflex as a document', steps: sqlSteps(TIMERS) },
     { description: "The assistant's conversations: one row per turn, and what came of it", steps: sqlSteps(ASSISTANT_TURNS) },
     { description: 'The room: one row, the look every screen paints with', steps: sqlSteps(ROOM) },
+    { description: 'A query is a query: asks becomes queries (request, run_at)', steps: sqlSteps(QUERIES) },
+    { description: "Questions for the speaker: the room's Q&A, one row per question", steps: sqlSteps(QUESTIONS) },
   ],
 };
 

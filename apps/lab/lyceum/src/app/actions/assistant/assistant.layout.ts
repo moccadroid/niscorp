@@ -1,8 +1,8 @@
 import type { LayoutNode } from '@niscorp/nova';
-import { answerLayout } from '@lyceum/app/actions/shared/answer.layouts';
 
-// One proposal, of three kinds — an automation to read and save, an answer to
-// read, an action to press. The reply says what; the proposal is the thing.
+// A proposal — something that CHANGES something, so it waits for a press: an
+// automation to read and save, or an action to open. (A query changes nothing:
+// its result opens over the screen by itself, and is no proposal.)
 const proposal: LayoutNode = {
   if: '$p.timer',
   then: {
@@ -24,24 +24,30 @@ const proposal: LayoutNode = {
       },
     ],
   },
-  else: {
-    if: '$p.answer',
-    then: {
-      component: 'Cell',
-      props: { pad: 'none' },
-      children: answerLayout({ kind: '$p.answer.kind', how: '$p.answer.how', rows: '$p.answer.rows' }),
-    },
-    else: { component: 'Action', ref: 'proposed', props: { ink: 'alert', label: '{{$p.open.label}} →', value: '$p.open' } },
-  },
+  else: { component: 'Action', ref: 'proposed', props: { ink: 'alert', label: '{{$p.open.label}} →', value: '$p.open' } },
 };
 
-// Who this assistant is for this person — built from the declarations their
-// grants selected, and able to do what those name — then a line to ask with,
-// and one of four below: what went wrong, the wait, the reply with its
-// proposals, or (before anything was asked) what to try.
+// One turn of the conversation: what the person wrote, what came back, and —
+// once they acted on it — what came of it.
+const turn: LayoutNode = {
+  component: 'Cell',
+  children: [
+    { component: 'Label', children: 'You' },
+    { component: 'Text', children: '{{$t.message}}' },
+    { component: 'Label', children: 'Assistant' },
+    { component: 'Text', children: '{{$t.reply}}' },
+    { if: '$t.outcome', then: { component: 'Text', props: { tone: 'muted' }, children: '{{$t.outcome}}' } },
+  ],
+};
+
+// Who this assistant is for this person (built from the declarations their
+// grants selected, able to do what those name); the conversation, oldest
+// first; below it the last turn's proposals, the wait, what went wrong, or —
+// before anything was said — what to try; and at the bottom the line to write
+// in. Blue: the assistant's colour.
 export const assistantLayout: LayoutNode = {
   component: 'Sheet',
-  props: { areas: ['kick', 'who', 'field', 'go', 'out', 'history'], rows: ['auto', 'auto', 'auto', 'auto', 'auto', 'auto'] },
+  props: { areas: ['kick', 'who', 'talk', 'out', 'field', 'go'], rows: ['auto', 'auto', 'auto', 'auto', 'auto', 'auto'] },
   children: [
     { component: 'Cell', props: { area: 'kick', ink: 'signal' }, children: [{ component: 'Label', children: '{{$.intro.title}}' }] },
     {
@@ -49,8 +55,7 @@ export const assistantLayout: LayoutNode = {
       props: { area: 'who' },
       children: [{ component: 'Text', props: { tone: 'muted' }, children: 'Built from {{$.intro.builtFrom}} · it can {{$.intro.tools}}' }],
     },
-    { component: 'Field', ref: 'draft', model: '$.draft', props: { area: 'field', value: '$.draft', placeholder: 'Ask your assistant' } },
-    { component: 'Action', ref: 'ask', props: { area: 'go', ink: 'alert', label: 'Ask →' } },
+    { component: 'Cell', props: { area: 'talk', pad: 'none' }, children: [{ component: 'Sheet', children: [{ for: '$.history', as: 't', do: turn }] }] },
     {
       if: '$.error',
       then: { component: 'Cell', props: { area: 'out' }, children: [{ component: 'Text', children: '{{$.error.message}}' }] },
@@ -59,14 +64,7 @@ export const assistantLayout: LayoutNode = {
         then: { component: 'Cell', props: { area: 'out', mark: 'hatch' }, children: [{ component: 'Text', children: 'Thinking…' }] },
         else: {
           if: '$.answered',
-          then: {
-            component: 'Cell',
-            props: { area: 'out' },
-            children: [
-              { component: 'Text', children: '{{$.reply.text}}' },
-              { for: '$.reply.proposals', as: 'p', do: proposal },
-            ],
-          },
+          then: { component: 'Cell', props: { area: 'out', pad: 'none' }, children: [{ for: '$.reply.proposals', as: 'p', do: proposal }] },
           else: {
             component: 'Cell',
             props: { area: 'out', mark: 'hatch' },
@@ -79,26 +77,7 @@ export const assistantLayout: LayoutNode = {
         },
       },
     },
-    // The conversation so far, newest first — what was asked, what came back,
-    // and what came of it.
-    {
-      component: 'Cell',
-      props: { area: 'history', pad: 'none' },
-      children: [
-        {
-          component: 'Rows',
-          props: {
-            rows: '$.history',
-            rowKey: 'turn_id',
-            empty: 'Nothing asked yet.',
-            columns: [
-              { label: 'You asked', key: 'message', w: 2 },
-              { label: 'Reply', key: 'reply', w: 3 },
-              { label: 'What came of it', key: 'outcome', w: 2, missing: '—' },
-            ],
-          },
-        },
-      ],
-    },
+    { component: 'Field', ref: 'draft', model: '$.draft', props: { area: 'field', value: '$.draft', placeholder: 'Message your assistant', enter: 'clears' } },
+    { component: 'Action', ref: 'send', props: { area: 'go', ink: 'signal', label: 'Send →' } },
   ],
 };

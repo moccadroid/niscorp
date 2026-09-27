@@ -7,13 +7,13 @@
 // Flat, every one: a flat shape whose keys are single columns comes back from
 // the query already in shape, and vex skips the mapping model for it.
 
-export type AskShape = {
+export type QueryShape = {
   kind: string;
   means: string;
   shape: unknown;
 };
 
-export const ASK_SHAPES: readonly AskShape[] = [
+export const QUERY_SHAPES: readonly QueryShape[] = [
   {
     kind: 'list',
     means: 'A list of things, each with a name and a line about it — the answer to most "which" and "what" questions.',

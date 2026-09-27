@@ -26,5 +26,10 @@ export const LYCEUM_KIT: Sequence = {
       description: 'Look: which kit paints the screen, poster or plain',
       steps: [],
     },
+    {
+      // A MARKER: a prop added.
+      description: "Field: enter 'clears' — a field whose Enter sends it empties",
+      steps: [],
+    },
   ],
 };

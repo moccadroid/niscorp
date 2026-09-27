@@ -4,12 +4,12 @@ export const deskLayout: LayoutNode = {
   component: 'Sheet',
   props: { areas: ['kick'], rows: ['auto'] },
   children: [
-    { component: 'Cell', props: { area: 'kick', ink: 'live' }, children: [{ component: 'Label', children: 'Inquiries · put a question to the records' }] },
-    // One whole-cell action per question — each carries its fingerprint.
+    { component: 'Cell', props: { area: 'kick', ink: 'live' }, children: [{ component: 'Label', children: 'Inquiries · stored queries' }] },
+    // One whole-cell action per stored query — each carries its fingerprint.
     {
-      for: '$.questions',
+      for: '$.queries',
       as: 'q',
-      do: { component: 'Action', ref: 'question', props: { label: '{{$q.question}}', value: '$q.fingerprint' } },
+      do: { component: 'Action', ref: 'query', props: { label: '{{$q.label}}', value: '$q.fingerprint' } },
     },
     {
       component: 'Cell',
@@ -17,12 +17,12 @@ export const deskLayout: LayoutNode = {
       children: [
         { if: '$.error', then: { component: 'Text', children: '{{$.error.message}}' } },
         {
-          if: '$.asked',
+          if: '$.chosen',
           then: {
             component: 'Rows',
-            props: { rows: '$.answer', rowKey: 'label', empty: 'Nothing on record.', columns: [{ label: 'Answer', key: 'label', w: 2 }, { label: '', key: 'value', kind: 'mono', w: 1 }] },
+            props: { rows: '$.result', rowKey: 'label', empty: 'Nothing on record.', columns: [{ label: 'Result', key: 'label', w: 2 }, { label: '', key: 'value', kind: 'mono', w: 1 }] },
           },
-          else: { component: 'Cell', props: { mark: 'hatch' }, children: [{ component: 'Text', children: 'Pick a question.' }] },
+          else: { component: 'Cell', props: { mark: 'hatch' }, children: [{ component: 'Text', children: 'Pick a query.' }] },
         },
       ],
     },

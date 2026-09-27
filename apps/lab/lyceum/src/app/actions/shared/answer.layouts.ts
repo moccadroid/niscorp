@@ -1,10 +1,10 @@
 import type { LayoutNode } from '@niscorp/nova';
 
-// AN ANSWER FROM THE RECORDS, shown by the shape it came in (vex/ask.shapes.ts)
-// — on the Ask tab and in the assistant's proposals alike. The route hands back
+// A QUERY'S RESULT, shown by the shape it came in (vex/query.shapes.ts) — on
+// the Query tab and in the result the assistant opens alike. The route hands back
 // only WHICH shape and HOW it was reached; what each looks like is written
 // here, one branch per kind, picked by `$eq`. A kind with no branch below falls
-// through to the list's columns; ask-check holds every kind to a branch.
+// through to the list's columns; query-check holds every kind to a branch.
 //
 // `at` names where the three live in the action's data: the kind, how it was
 // answered, the rows (and, for one number, their `value`).
@@ -46,14 +46,14 @@ export const answerLayout = (at: AnswerAt): LayoutNode[] => [
       },
     },
   },
-  // How it was reached — the point of the ask.
+  // How it was reached — the point of the query.
   {
     if: { $eq: [at.how, 'replayed'] },
-    then: { component: 'Text', props: { tone: 'muted' }, children: 'Somebody asked this before. Their query was replayed for you — no model wrote anything.' },
+    then: { component: 'Text', props: { tone: 'muted' }, children: 'Replayed: this query was on record from an earlier request. No model wrote anything.' },
     else: {
       component: 'Text',
       props: { tone: 'muted' },
-      children: 'Nobody had asked this. A model wrote the query just now, under your clearance, and it is stored: the next person to ask gets it replayed.',
+      children: 'Generated: no query on record fitted, so a model wrote this one just now, under your clearance. It is stored — the next request like it replays it.',
     },
   },
 ];

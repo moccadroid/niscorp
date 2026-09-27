@@ -27,6 +27,8 @@ export type Terminal = {
   clickIn: (canvas: string, ref: string, text: string) => void;
   // What a `model`'d field sends as somebody types (nova's dom adapter).
   type: (canvas: string, ref: string, text: string) => void;
+  // A key pressed in a `model`'d field (nova's dom adapter sends `ui:key`).
+  key: (canvas: string, ref: string, key: string) => void;
   sessionsSeen: () => number;
   isOpen: () => boolean;
   close: () => void;
@@ -142,6 +144,10 @@ export const connect = (base: string, token?: string): Promise<Terminal> =>
           const origin = instanceAround(JSON.parse(trees.get(canvas) ?? '[]'), ref);
           const event = { type: 'ui:model', ref, payload: text, ...(origin === undefined ? {} : { origin }) };
           socket.send(JSON.stringify({ type: 'event', canvas, event }));
+        },
+        key: (canvas, ref, key) => {
+          const origin = instanceAround(JSON.parse(trees.get(canvas) ?? '[]'), ref);
+          socket.send(JSON.stringify({ type: 'event', canvas, event: { type: 'ui:key', ref, key, ...(origin === undefined ? {} : { origin }) } }));
         },
         sessionsSeen: () => sessions.length,
         isOpen: () => open,

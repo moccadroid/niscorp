@@ -9,7 +9,7 @@ import { ENTRIES } from '@lyceum/app/vex';
 // holds its action, so a person's assistant is the declarations their grants
 // select: their instructions, their grounding reads, the union of their tools.
 
-export const TOOL_NAMES = ['open', 'ask', 'automate'] as const;
+export const TOOL_NAMES = ['open', 'query', 'automate'] as const;
 export type ToolName = (typeof TOOL_NAMES)[number];
 
 const DeclarationSchema = z

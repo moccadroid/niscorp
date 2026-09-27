@@ -21,7 +21,7 @@ import { CANVASES } from '@lyceum/app/shell/canvases';
 import { frameLayout } from '@lyceum/app/shell/frame.layout';
 import { FRAGMENTS } from '@lyceum/app/shell/fragments/sheet.fragment';
 import { ENTRIES } from '@lyceum/app/vex';
-import { ASK_SHAPES } from '@lyceum/app/vex/ask.shapes';
+import { QUERY_SHAPES } from '@lyceum/app/vex/query.shapes';
 import { BEHAVIORS } from '@lyceum/app/vex/behaviors';
 import { check, finish } from './harness';
 
@@ -70,7 +70,7 @@ pure('shell frame', frameLayout);
 pure('fragments', FRAGMENTS);
 pure('assistant declarations', ASSISTANTS);
 pure('the kit grammar', LYCEUM_KIT);
-pure('answer shapes', ASK_SHAPES);
+pure('answer shapes', QUERY_SHAPES);
 
 // …and the check bites: a function slipped into a copy is caught.
 check('the purity check bites: a function in an action is caught', impurity({ ...ACTIONS, sneaky: { data: { format: (): string => '' } } }, '') !== '');

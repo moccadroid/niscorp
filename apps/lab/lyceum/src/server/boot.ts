@@ -7,7 +7,7 @@ import { lyceumReactions } from './reactions';
 import { doorFunctions } from './functions/door.functions';
 import { assignmentFunctions } from './functions/assignment.functions';
 import { roomFunctions } from './functions/room.functions';
-import { askFunctions } from './functions/ask.functions';
+import { queryFunctions } from './functions/query.functions';
 import { assistantFunctions } from './functions/assistant.functions';
 import { lecternFunctions } from './functions/lectern.functions';
 import { createMailer } from './mail';
@@ -15,7 +15,7 @@ import type { SendMail } from './mail';
 import { createTimerWriter, startTiming, talkZone } from './timing';
 import { createOrchestrator } from './assistant/orchestrator';
 import type { Timing } from './timing';
-import { createAsker } from './asking';
+import { createQuerier } from './querying';
 import { devRuntime } from './runtime';
 import { createIssuer } from './issuer';
 import type { DevRuntime, LyceumRuntime } from './runtime';
@@ -60,9 +60,9 @@ export const bootOn = async <R extends LyceumRuntime>(runtime: R, options: BootO
   // Who writes the ID cards — Qwen with a key, the deterministic fake without
   // (./issuer.ts). Read from the environment the process was started with.
   const issuer = createIssuer(process.env);
-  // Who routes and writes the answers to the ask — Jev and gpt-oss-120b with
-  // keys, the deterministic fake without (./asking.ts).
-  const asker = createAsker(process.env);
+  // Who routes requests to queries and writes new ones — Jev and gpt-oss-120b with
+  // keys, the deterministic fake without (./querying.ts).
+  const querier = createQuerier(process.env);
   // Who writes the speaker's timers — the reflex agent with a key, the
   // deterministic fake without (./timing.ts) — and where the talk's clocks are.
   const timerWriter = createTimerWriter(process.env);
@@ -83,7 +83,7 @@ export const bootOn = async <R extends LyceumRuntime>(runtime: R, options: BootO
 
   const app = buildLyceum({
     identity: lyceumIdentity,
-    functions: (session) => ({ ...doorFunctions(session, server, issuer), ...assignmentFunctions(session, server), ...roomFunctions(publicUrl), ...askFunctions(session, asker), ...assistantFunctions(session, { asker, writer: timerWriter, orchestrator, tz, timing }), ...lecternFunctions(server, speakerMail) }),
+    functions: (session) => ({ ...doorFunctions(session, server, issuer), ...assignmentFunctions(session, server), ...roomFunctions(publicUrl), ...queryFunctions(session, querier), ...assistantFunctions(session, { querier, writer: timerWriter, orchestrator, tz, timing }), ...lecternFunctions(server, speakerMail) }),
     reactions: lyceumReactions(server),
   });
   built = await createServer(app, runtime);

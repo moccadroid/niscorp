@@ -79,7 +79,7 @@ const main = async (): Promise<void> => {
   const since = (visitor: Visitor, from: number): string => visitor.screen().slice(from);
   const numberOf = (screen: string, label: string): string | undefined => new RegExp(String.raw`\[(\d+)\] \( ${label} \)`).exec(screen.slice(screen.lastIndexOf(`( ${label} )`) - 12))?.[1];
   await waitUntil(() => ada.screen().includes('( Assistant )'));
-  const tabs = ['Card', 'Ask', 'Assistant'].map((label) => numberOf(ada.screen(), label));
+  const tabs = ['Card', 'Query', 'Q&A', 'Assistant'].map((label) => numberOf(ada.screen(), label));
   check(`every tab has a number of its own (${tabs.join(', ')})`, tabs.every((n) => n !== undefined) && new Set(tabs).size === tabs.length);
   // A number is read off a screen that has stopped changing — as a person
   // reads it: a screen still filling in renumbers what comes after.
@@ -90,7 +90,7 @@ const main = async (): Promise<void> => {
       last = visitor.screen().length;
     }
   };
-  for (const [label, shows] of [['Ask', 'Ask the records'], ['Assistant', 'Built from'], ['Card', 'ID card']] as const) {
+  for (const [label, shows] of [['Query', 'Vex query'], ['Q&A', 'a question for the speaker'], ['Assistant', 'Built from'], ['Card', 'ID card']] as const) {
     await settled(ada);
     const from = ada.screen().length;
     ada.press(numberOf(ada.screen(), label) ?? '');
@@ -98,12 +98,12 @@ const main = async (): Promise<void> => {
   }
 
   // ── an answer's table, drawn: its cells carry the rows' values ──
-  // The field's number focuses it; typing types; Tab moves to Ask; Enter presses.
+  // The field's number focuses it; typing types; Tab moves to Run; Enter presses.
   await settled(ada);
-  ada.press(numberOf(ada.screen(), 'Ask') ?? '');
-  await waitUntil(() => ada.screen().includes('Ask the records'));
+  ada.press(numberOf(ada.screen(), 'Query') ?? '');
+  await waitUntil(() => ada.screen().includes('Vex query'));
   await settled(ada);
-  const field = /\[(\d+)\] ⟨/.exec(ada.screen().slice(ada.screen().lastIndexOf('Ask the records')))?.[1];
+  const field = /\[(\d+)\] ⟨/.exec(ada.screen().slice(ada.screen().lastIndexOf('Vex query')))?.[1];
   ada.press(field ?? '');
   await settled(ada);
   ada.press('Who is in the room?');
@@ -120,7 +120,7 @@ const main = async (): Promise<void> => {
   // answered — the person's name is on their card strip too, above it.
   const screen = ada.screen();
   const head = screen.lastIndexOf('Department');
-  const table = screen.slice(head, screen.indexOf('asked', head));
+  const table = screen.slice(head, head + screen.slice(head).search(/Generated:|Replayed:/));
   check(`an answer's table shows its values — somebody in the room by name (${names.join(', ')})`, head !== -1 && names.some((name) => name !== '' && table.includes(name)));
 
   // ── 3 ──

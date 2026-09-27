@@ -4,11 +4,11 @@ import type { ScopePolicy } from '@niscorp/vex';
 import { createQueryDsl, createShapeMapper } from '@niscorp/vex/agent';
 import { createSignal } from '@niscorp/signal';
 import { devRuntime } from '@lyceum/server/runtime';
-import { createAsker } from '@lyceum/server/asking';
+import { createQuerier } from '@lyceum/server/querying';
 import { BEHAVIORS } from '@lyceum/app/vex/behaviors';
 import { SLIDES } from '@lyceum/db/seed';
 import { armable, createTimerWriter } from '@lyceum/server/timing';
-import type { Known } from '@lyceum/server/asking';
+import type { Known } from '@lyceum/server/querying';
 
 // THE MODEL CHECK — do the talk's generative seams hold on the models the talk
 // runs? Not part of `pnpm check`: it calls Groq, costs tokens and is measured,
@@ -36,10 +36,10 @@ const SHAPES = {
 } as const;
 type ShapeName = keyof typeof SHAPES;
 
-// For a question about the asker, the right SHAPE is not enough: the answer
+// For a question about the querier, the right SHAPE is not enough: the answer
 // must be theirs. The check asks as m0 — Ana Novak, Records, the first of 40.
 const mentions = (text: string) => (result: unknown): boolean => JSON.stringify(result).includes(text);
-// `as`: another asker than m0 — m4 is Eun-ji Silva, not yet in a department.
+// `as`: another querier than m0 — m4 is Eun-ji Silva, not yet in a department.
 const ALL_QUESTIONS: readonly { intent: string; shape: ShapeName; refuse?: true; answer?: (result: unknown) => boolean; as?: string }[] = [
   { intent: 'How many people are in the room?', shape: 'number' },
   { intent: 'How many people are in each department?', shape: 'counts' },
@@ -188,18 +188,18 @@ globalThis.fetch = async (input, init) => {
   return response;
 };
 
-// LYCEUM_PART=route: the ask's router (server/asking.ts, live) — Jev with
+// LYCEUM_PART=route: the query router (server/querying.ts, live) — Jev with
 // TYPESAFE_API_KEY. Given what has been asked before, does it send a question
 // to the earlier question that asks for the same thing — and only then — and
 // pick the right shape for a new one? Paraphrases must replay; the same words
 // about a different subject must not.
 const KNOWN: readonly Known[] = [
-  { question: 'How many people are in the room?', fingerprint: 'fp_room', shape: 'number' },
-  { question: 'Who is in Records?', fingerprint: 'fp_records', shape: 'people' },
-  { question: 'How many people are in each department?', fingerprint: 'fp_per_dept', shape: 'counts' },
-  { question: 'Who arrived first?', fingerprint: 'fp_first', shape: 'people' },
-  { question: 'What does each department let you do?', fingerprint: 'fp_remits', shape: 'list' },
-  { question: 'How many people have not been assigned yet?', fingerprint: 'fp_waiting', shape: 'number' },
+  { request: 'How many people are in the room?', fingerprint: 'fp_room', shape: 'number' },
+  { request: 'Who is in Records?', fingerprint: 'fp_records', shape: 'people' },
+  { request: 'How many people are in each department?', fingerprint: 'fp_per_dept', shape: 'counts' },
+  { request: 'Who arrived first?', fingerprint: 'fp_first', shape: 'people' },
+  { request: 'What does each department let you do?', fingerprint: 'fp_remits', shape: 'list' },
+  { request: 'How many people have not been assigned yet?', fingerprint: 'fp_waiting', shape: 'number' },
 ];
 const ROUTES: readonly { question: string; replays?: string; shape?: string }[] = [
   { question: 'how many of us are here', replays: 'fp_room' },
@@ -223,7 +223,7 @@ const ROUTES: readonly { question: string; replays?: string; shape?: string }[] 
 ];
 
 const measureRoutes = async (): Promise<void> => {
-  const asker = createAsker({ ...process.env, LYCEUM_ASK: 'live' });
+  const querier = createQuerier({ ...process.env, LYCEUM_QUERY: 'live' });
   const decider = (process.env['TYPESAFE_API_KEY'] ?? '') !== '' ? 'Jev (typesafe)' : `${MODEL}, emulating decide()`;
   let passed = 0;
   let total = 0;
@@ -232,7 +232,7 @@ const measureRoutes = async (): Promise<void> => {
       const started = Date.now();
       let got: string;
       try {
-        const route = await asker.route(probe.question, KNOWN);
+        const route = await querier.route(probe.question, KNOWN);
         got = 'replay' in route ? `replay ${route.replay.fingerprint}` : `new ${route.generate.kind}`;
       } catch (error) {
         got = `error ${error instanceof Error ? error.message.slice(0, 100) : String(error)}`;
@@ -263,7 +263,7 @@ const TIMER_PROBES: readonly { intent: string; at?: string; slideId?: string }[]
   { intent: 'End the talk in 30 minutes', at: '2026-09-27T19:35', slideId: 'slide.end' },
   { intent: 'Put the register up at eight', at: '2026-09-27T20:00', slideId: 'stage.register' },
   { intent: 'Go back to the title slide in 5 minutes', at: '2026-09-27T19:10', slideId: 'slide.title' },
-  { intent: 'In 20 minutes, switch to the slide where the room asks questions', at: '2026-09-27T19:25', slideId: 'slide.ask' },
+  { intent: 'In 20 minutes, switch to the slide where the room asks questions', at: '2026-09-27T19:25', slideId: 'slide.query' },
   { intent: 'At quarter to ten, wrap it up', at: '2026-09-27T21:45', slideId: 'slide.end' },
   // must be refused
   { intent: 'Email me in ten minutes' },

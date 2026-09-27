@@ -38,7 +38,7 @@ const main = async (): Promise<void> => {
 
   // What each tool says, so the tool region can be read: exactly a slide's
   // tools, in the slide's order — or, with none, that there are none.
-  const SAYS: Record<string, string> = { 'tools.assignment': 'Assign the room', 'tools.tally': 'Departments so far', 'assistant.thread': 'Built from', 'tools.look': 'The look' };
+  const SAYS: Record<string, string> = { 'tools.assignment': 'Assign the room', 'tools.tally': 'Departments so far', 'assistant.thread': 'Built from', 'tools.look': 'The look', 'tools.questions': 'Questions from the room' };
   const toolsAre = (expected: readonly string[]): Promise<boolean> =>
     waitUntil(() => {
       const shown = Object.keys(SAYS).filter((tool) => speaker.showsNow('tools', SAYS[tool] ?? '\u0000'));
