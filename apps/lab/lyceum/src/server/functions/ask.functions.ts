@@ -21,6 +21,20 @@ const AskedSchema = z.object({ draft: z.string() });
 const KnownSchema = z.array(z.object({ question: z.string(), fingerprint: z.string(), shape: z.string() }));
 const MAX_QUESTION = 200;
 
+// WHY A QUESTION WAS REFUSED, in words for the person who asked. The model's own
+// reason is theirs to read — it was only ever shown the tables they may read.
+// The engine's is not: it names what the query reached for, which is exactly
+// what their clearance does not cover. That becomes a sentence; anything else
+// goes to the log and is answered in general terms.
+const VexCodeSchema = z.object({ code: z.string(), message: z.string() });
+const refusalOf = (error: unknown): string => {
+  const vex = VexCodeSchema.safeParse(error);
+  if (vex.success && vex.data.code === 'unsatisfiable') return vex.data.message;
+  if (vex.success && vex.data.code === 'scope_denied') return 'It reaches records your clearance does not cover.';
+  console.error('[lyceum] a question could not be answered:', error);
+  return 'Something went wrong writing the query.';
+};
+
 // What the route hands back: which query answers, in which shape, reached how.
 // How that looks is the layouts' (app/actions/shared/answer.layouts.ts).
 export type Routed = { fingerprint: string; kind: string; how: 'replayed' | 'generated' };
@@ -60,8 +74,7 @@ export const routeQuestion = async (session: FunctionSession, asker: Asker, aske
     // may read) or by the engine (what it wrote reaches past their policy).
     // Recorded, and said plainly.
     await record(shape.kind, 'refused', null);
-    const reason = error instanceof Error ? error.message : String(error);
-    throw new Error(`The records can't answer that for you. ${reason}`);
+    throw new Error(`The records can't answer that for you. ${refusalOf(error)}`);
   }
 };
 

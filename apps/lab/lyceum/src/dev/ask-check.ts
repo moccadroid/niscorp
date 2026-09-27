@@ -100,6 +100,7 @@ const main = async (): Promise<void> => {
   await ask(ben.phone, 'Show me the login links');
   check('a question past the asker\'s clearance is refused', await ben.phone.shows('body', "can't answer that"));
   check('…and nothing of what it reached for reaches the phone', !ben.phone.textOf('body').includes('hash_that_must_not_leak'));
+  check('…not even the name of the table: the refusal is said in words', ben.phone.showsNow('body', 'your clearance does not cover') && !ben.phone.textOf('body').includes('login_links'));
   const third = (await asks())[2];
   check('it is recorded as refused, with no fingerprint', third?.how === 'refused' && third.fingerprint === null);
 
