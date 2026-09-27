@@ -12,6 +12,8 @@
 import { serve } from '@hono/node-server';
 import { attachSocket } from '@niscorp/moss/node';
 import { mintSession } from '@niscorp/moss';
+import { z } from 'zod';
+import { ACTIONS } from '@lyceum/app/action-catalog';
 import { CHARTER } from '@lyceum/app/charter/charter';
 import { DEPARTMENTS, SLIDES } from '@lyceum/db/seed';
 import { boot } from '@lyceum/server/boot';
@@ -44,6 +46,18 @@ const anyToolTab =(showsNow: (canvas: string, text: string) => boolean): boolean
 const main = async (): Promise<void> => {
   // ── the charter and the departments agree: a department_id IS a role ──
   for (const department of DEPARTMENTS) check(`department "${department.departmentId}" is a charter role`, CHARTER[department.departmentId] !== undefined);
+
+  // ── the phone's tab list and the actions that can be tabs agree ──
+  // The phone lists its candidates by hand (the order is authored); an action
+  // renders as a tab by declaring `tab` in its input. Two places, so they are
+  // held to each other: a new tool that can be a tab and is not on the phone —
+  // or a listed tab that cannot render as one — is red here.
+  const listed = z.array(z.object({ action: z.string() })).parse(ACTIONS['member.phone']?.data?.['tabs']).map((tab) => tab.action);
+  const tabbable = Object.values(ACTIONS)
+    .filter((action) => z.object({ properties: z.object({ tab: z.unknown() }) }).safeParse(action.input).success)
+    .map((action) => action.id);
+  for (const id of tabbable) check(`"${id}" can be a tab, and the phone lists it`, listed.includes(id));
+  for (const id of listed) check(`the phone's tab "${id}" is an action that renders as one`, tabbable.includes(id));
 
   const { server, runtime, close } = await boot();
   const httpServer = serve({ fetch: server.fetch, port: 0 });

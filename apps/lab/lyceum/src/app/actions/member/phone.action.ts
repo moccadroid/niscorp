@@ -11,6 +11,10 @@ import { phoneLayout } from './phone.layout';
 // charter grants other actions, and nothing anywhere asks which department
 // anybody is in. Being assigned rebuilds the shell (identity changed), this
 // mounts again, and the new department's tool arrives as a tab.
+//
+// The list is the bar's ORDER, which is authored. Which actions can be a tab
+// is theirs to say (`tab` in their input); assignment-check holds the two to
+// each other, so a new tool is not forgotten here.
 export const phoneAction: ActionDefinition = {
   id: 'member.phone',
   title: 'Your phone',
