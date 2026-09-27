@@ -74,7 +74,7 @@ type Reflex = {
 
 **Load refuses**, in one pass: a reflex that does not parse, a duplicate id, an
 unregistered effect, `when` on a non-fact trigger, `each` mode with no
-`unitKey`, a poll with no selection, a run subscription to a reflex that is not
+`unitKey`, a run subscription to a reflex that is not
 loaded, and an **unguarded cycle**.
 
 **`enabled` is the host's.** Tide reads it off the reflex it is handed and
@@ -102,9 +102,6 @@ holds no copy. To pause an automation, write your own row and `load` again.
 // another reflex's run settled — fan-in and dependency
 { "fact": { "run": "billing.charge-due" } }
 
-// a pull, for hosts with no write choke point
-{ "poll": { "everyMs": 300000, "entity": "orders", "cursor": "updated_at" } }
-
 // only by hand
 { "manual": {} }
 ```
@@ -117,22 +114,19 @@ spring-forward local time shifts past the gap; an ambiguous fall-back time takes
 the first occurrence. Both match Temporal's `disambiguation: 'compatible'`.
 
 A clock reflex with **no arming time** establishes its baseline on the first
-tick and mints nothing — materializing from the epoch would backfill decades.
+`advance` and mints nothing — materializing from the epoch would backfill decades.
 Pass `load(reflexes, { at })` to arm it at a known moment.
 
 **A paused clock still moves.** A disarmed reflex materializes nothing, but its
-watermark keeps up with the tick — so eight days paused is eight days of
+watermark keeps up with each `advance` — so eight days paused is eight days of
 nothing, not eight occurrences waiting to be minted the moment it comes back.
 A reflex that *enters* the loaded set re-baselines to the `at` passed to `load`,
 for the same reason: coming back is not the same as never having left.
 
-**Poll semantics.** The first run establishes the cursor and mints nothing —
-pointing a new poll at an existing table must not report every historical row as
-new. It needs a monotonic `cursor`, so it sees appends and cursor-advancing
-updates, not deletes and not in-place edits. The cursor need not be *unique*:
-rows tied at the same value are tracked by identity, so two members joining in
-the same millisecond both produce a fact. The delta becomes ordinary write
-facts on `entity`, which the polling reflex consumes and anyone else may watch.
+**There is no poll.** A data change is a write fact the host pushes when it
+sees its own write; an external source with no write choke point enters through
+an importer that ingests write facts at the door. A poll could only re-discover
+what was already pushed, one interval late — see `DESIGN.md`.
 
 ---
 
@@ -165,7 +159,7 @@ type Policy = {
   inside the claim, not by a filter applied around it.
 
 **There is no `coalesce`.** It cost two port methods, a table, an exactly-once
-promise and a `DELETE … RETURNING` on every tick, and nothing ever set it. A
+promise and a `DELETE … RETURNING` on every `advance`, and nothing ever set it. A
 digest that genuinely needs batching is a *delayed run*: the first fact of a
 group mints one at `now + window` under `cause: 'coalesce:<key>:<start>'`, the
 rest collide on `UNIQUE(reflexId, cause)` and are refused, and when it comes due
@@ -186,7 +180,7 @@ $ = { params,        // the reflex's knobs
       facts?,        // runs carrying more than one fact, in `at` order
       row?,          // per-unit in `each` mode
       rows?,         // in `batch` mode
-      now }          // the tick's LOGICAL now — never a wall-clock read
+      now }          // the advance's LOGICAL now — never a wall-clock read
 ```
 
 Truthiness is one predicate, shared by the matcher and by `preview`: `false`,
@@ -237,8 +231,8 @@ through its selection, and zero rows is an ordinary outcome. Reality is the
 cancellation token.
 
 **Dedupe is keyed on `(kind, entity, name, dedupeKey)`.** `entity` is in the key
-because two polls over different tables that happened to agree on a cursor value
-were otherwise duplicates of each other, and one of them lost its rows.
+because two sources over different tables whose event ids happen to agree are
+not duplicates of each other, and without it one of them loses its rows.
 
 ---
 
@@ -249,16 +243,16 @@ load(reflexes, options?: { at?: number }): Promise<LoadReport>
 ```
 Validates, hashes versions, derives and verifies the graph, and arms. `at` is
 the host's boot time; arming persists, so a restart does not reopen the past.
-`LoadReport` carries `{ loaded, cycles, unverifiable, warnings }` — guarded
-cycles are legal and reported; effects with no `touches` are reported as
-unverifiable edges. Calling it again is how a host changes what is running,
+`LoadReport` carries `{ loaded, cycles, blind, warnings }` — guarded
+cycles are legal and reported; effects with no `writes` are reported as
+blind edges. Calling it again is how a host changes what is running,
 including turning one off.
 
 ```typescript
-ingest(fact: FactInput, options?: { as?: string }): Promise<Fact | undefined>
+ingest(fact: FactInput, options?: { as?: string; cause?: string; depth?: number }): Promise<Fact | undefined>
 ```
 One write. Undefined means a `dedupeKey` collision — a refusal, not an error.
-Matching happens in the tick, against whatever is loaded when the fact comes
+Matching happens in `advance`, against whatever is loaded when the fact comes
 due, which is what lets a delayed fact meet the reflexes of the day it fires.
 
 **`as` is whose fact this is**, and it is the tenant boundary at the intake. A
@@ -274,13 +268,21 @@ a multi-tenant host that forgets one gets silence rather than a leak. An event
 that genuinely concerns every tenant is ingested once per tenant, by the only
 party that can know which those are.
 
+**`cause` and `depth` are the chain thread**, and they exist for one producer: a
+bridge that mints an effect handler's own writes back in as facts. It forwards
+the task's `ctx.depth` (and a `cause`) with the write, so the chain ceiling
+survives the trip through the host's database instead of resetting at every
+hop. Like `as`, they are the host's word at the door — a `cause` that arrived
+inside the fact is discarded. Anything else ingests with neither: `depth`
+defaults to 0.
+
 ```typescript
-tick(options: { now: number; limit?: number }): Promise<TickReport>
+advance(options: { now: number; limit?: number }): Promise<AdvanceReport>
 ```
-Materialize → poll → match → fan out → claim → execute → settle. Idempotent and
+Materialize → match → fan out → claim → execute → settle. Idempotent and
 safe to run concurrently. `limit` (default 100) bounds facts, fan-outs and
-claims per pass. A chain advances one hop per tick — nudge for latency, tick for
-the guarantee.
+claims per pass. A chain advances one hop per call, so the driver drains to quiescence and
+then sleeps until `nextDue`.
 
 ```typescript
 fire(reflexId, { now, input?, by? }): Promise<Fact | undefined>
@@ -292,7 +294,7 @@ Sugar over `ingest`: mints a `manual` fact aimed at one reflex. Works on a
 retry(taskId, now): Promise<boolean>
 ```
 Reopens a `failed` task **and rewinds its run** from `settled` back to `fanned`,
-in one transaction, so the next tick actually claims it. The run keeps
+in one transaction, so the next `advance` actually claims it. The run keeps
 `drained`, so re-settling does not announce a second time: the digest that
 already went out saying twelve failed is not sent again.
 
@@ -305,7 +307,7 @@ rows by name, each unit's resolved input, and whatever the handler's `preview`
 hook renders.
 
 ```typescript
-graph(): GraphReport      // edges, cycles, unverifiable, errors, warnings
+graph(): GraphReport      // edges, cycles, blind, errors, warnings
 sweep(now, retention): Promise<number>   // { facts?, runs?, tasks? } horizons in ms
 ```
 
@@ -364,7 +366,7 @@ restore would then re-charge the invoice.
 | `store` | `TideStore` — six capabilities; see below |
 | `transform` | `(config: unknown, source: Row) => unknown` |
 | `select` | `(query: unknown, ctx: SelectCtx) => AsyncIterable<Row> \| Iterable<Row> \| Promise<Iterable<Row>>` |
-| `effects` | `name → { run(input, ctx), touches?, preview? }` |
+| `effects` | `name → { run(input, ctx), writes?, preview? }` |
 | `actor` | `(as: string \| undefined) => unknown` — threaded into `select` and `run`, opaque throughout |
 
 ```typescript
@@ -478,12 +480,12 @@ versionOf(reflex): string      // the content hash, excluding `enabled`
 | `store` | a selection exists but no `select` seam is wired |
 
 Runtime failures are **not** exceptions: a handler that throws becomes a
-recorded attempt, a `when` that throws becomes a recorded non-match, and a tick
+recorded attempt, a `when` that throws becomes a recorded non-match, and an `advance`
 does not crash because one reflex is broken.
 
 **A fan-out failure is two different things and the engine tells them apart.**
 A `TideError` is tide's own refusal — a duplicate unit key, a missing `select`
-seam — which means the reflex is wrong and will be wrong again next tick, so the
+seam — which means the reflex is wrong and will be wrong again next `advance`, so the
 run is `skipped` with a note. Anything else came out of a host seam: a
 selection, a transform, a database. That is a bad minute, not a bad reflex, so
 the run stays `pending` and is retried — a row past its due time that a query
