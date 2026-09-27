@@ -72,6 +72,16 @@ const fakeOrchestrator = (): Orchestrator => ({
       await call('automate', { request: message });
       return 'Here it is — read it, then save it.';
     }
+    // "…my questions" — open their own questions, over the screen.
+    if (/\bmy questions\b/i.test(message)) {
+      if (tool('open') === undefined) return 'I cannot open anything for you.';
+      try {
+        await call('open', { action: 'questions.mine', label: 'Your questions' });
+      } catch {
+        return 'Your questions are not one of your actions.';
+      }
+      return 'Here are your questions.';
+    }
     const rename = /change my name to (.+)$/i.exec(message)?.[1];
     if (rename !== undefined) {
       if (tool('open') === undefined) return 'I cannot open anything for you.';

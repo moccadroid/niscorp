@@ -17,6 +17,7 @@ const file = [
 
 export const renameAction: ActionDefinition = {
   id: 'forms.rename',
+  description: 'A form to change the person\'s own name on their ID card; the new name is filed only when they press File the change. Forms only.',
   title: 'Change your record',
   data: { tab: false, tabLabel: 'Rename', tabInk: 'paper', nextInk: 'paper', me: { member_id: '', name: '' }, draft: '', saved: false, error: '' },
   input: z.toJSONSchema(

@@ -9,6 +9,7 @@ import { runPrism } from './desk.prism';
 // reactive read, so it changes while you look at it.
 export const deskAction: ActionDefinition = {
   id: 'inquiries.desk',
+  description: 'The Inquiries desk: the department\'s stored queries — how many are in each department, who arrived last, who is still waiting — one press each. Inquiries only.',
   title: 'Stored queries',
   data: { tab: false, tabLabel: 'Inquire', tabInk: 'paper', nextInk: 'paper',
     queries: [

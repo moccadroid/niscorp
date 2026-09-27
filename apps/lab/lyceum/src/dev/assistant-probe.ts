@@ -27,6 +27,8 @@ const PROBES: readonly { who: Who; say: string; want: Want; containing?: string;
   { who: 'waiting', say: 'End the talk in 30 minutes', want: 'none' },
   { who: 'forms', say: 'Change my name to Ada Lovelace', want: 'open', containing: 'Ada Lovelace' },
   { who: 'forms', say: 'Which department has the most people?', want: 'query' },
+  // Added 2026-09-28, before the run: an action with nothing to pre-fill.
+  { who: 'waiting', say: 'Show me my questions', want: 'open' },
   { who: 'records', say: 'Change my name to Ada Lovelace', want: 'none' },
   { who: 'speaker', say: 'End the talk in 30 minutes', want: 'timer', containing: 'slide.end' },
   { who: 'speaker', say: 'Who is in the room?', want: 'none' },
@@ -37,7 +39,7 @@ const PROBES: readonly { who: Who; say: string; want: Want; containing?: string;
 // What the turn left, read off the trees the person sees: a query's result
 // opened over the screen, or a proposal under the conversation.
 const outcomeIn = (tree: string, overlay: string): Want =>
-  overlay.includes('"value":"Vex query"') ? 'query' : tree.includes('Read it first') ? 'timer' : tree.includes('"ref":"proposed"') ? 'open' : 'none';
+  overlay.includes('"value":"Vex query"') ? 'query' : tree.includes('Read it first') ? 'timer' : overlay.includes('"ref":"close"') ? 'open' : 'none';
 
 const { boot } = await import('@lyceum/server/boot');
 const main = async (): Promise<void> => {

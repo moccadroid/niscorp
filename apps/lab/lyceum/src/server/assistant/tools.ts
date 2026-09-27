@@ -15,11 +15,13 @@ import type { ToolName } from './declarations';
 
 // THE ASSISTANT'S TOOLS — the host's closed set, and the only code in it. Each
 // is offered only when a declaration the person's grants select names it
-// (declarations.ts). What CHANGES something waits for a press: `open` and
-// `automate` leave a proposal on the screen. A query changes nothing, so
-// `query` opens the vex query and its result at once, over the screen.
+// (declarations.ts). Opening something changes nothing — an action opened
+// pre-filled still waits for its own press ("File the change") — so `open`
+// and `query` open over the screen at once, and the conversation keeps what
+// they opened. What would CHANGE something by itself waits for a press: an
+// automation is shown to read, and runs only once saved.
 //
-//   open      one of this person's actions, pre-filled, as a button
+//   open      one of this person's actions, pre-filled, over their screen
 //   query     a vex query — intent and shape — run as the person, recorded;
 //             it opens over their screen (`query.result`)
 //   automate  tide's reflex agent, handed the grounding as facts; it can refuse
@@ -27,14 +29,12 @@ import type { ToolName } from './declarations';
 // A tool's RESULT is what the model reports from, so it says what happened in
 // facts — never how the screen works.
 
-export type Proposal =
-  | { open: { action: string; label: string; input: Record<string, unknown> } }
-  | { timer: { timerId: string; reflex: unknown; json: string; intent: string; dueAt: string | null; dueLocal: string } };
+export type Proposal = { timer: { timerId: string; reflex: unknown; json: string; intent: string; dueAt: string | null; dueLocal: string } };
 
 // An action a tool opened over the screen — the turn's `opened` rows: the
 // assistant's turn trigger reconciles them onto the overlay, and the turn keeps
-// them, so the conversation can open them again.
-export type Opened = { action: string; input: Record<string, unknown> };
+// them, so the conversation can open them again (by `label`, in `ink`).
+export type Opened = { action: string; label: string; ink: 'live' | 'paper'; input: Record<string, unknown> };
 
 export type ToolDeps = {
   session: FunctionSession;
@@ -93,10 +93,10 @@ export const hostTools = (deps: ToolDeps, offered: ReadonlySet<ToolName>): ToolD
         id: 'open',
         name: 'open',
         description:
-          "Offer one of this person's actions (THEIR ACTIONS) as a button on their screen, pre-filled with values for its pre-fill keys. Nothing happens until they press it and use the action.",
+          "Open one of this person's actions (THEIR ACTIONS) over their screen, pre-filled with values for its pre-fill keys. Opening changes nothing: what the action does, they still do themselves in it.",
         input: z.object({
           action: z.enum([firstAction, ...moreActions]).describe('Which of their actions.'),
-          label: z.string().describe('The button\'s words, saying what it does, e.g. "Change your name to Ada".'),
+          label: z.string().describe('What it is, in a few words, e.g. "Change your name to Ada" — its title over their screen, and its line in the conversation.'),
           input: z.record(z.string(), z.string()).optional().describe("Values for the action's pre-fill keys, as listed under THEIR ACTIONS."),
         }),
         execute: (asked) => {
@@ -106,10 +106,12 @@ export const hostTools = (deps: ToolDeps, offered: ReadonlySet<ToolName>): ToolD
           const unknownKeys = Object.keys(asked.input ?? {}).filter((key) => !keys.includes(key));
           if (unknownKeys.length > 0) return { refused: `"${asked.action}" cannot be pre-filled with ${unknownKeys.join(', ')}; its pre-fill keys: ${keys.join(', ') || 'none'}.` };
           // Every pre-fill key filled — the action's own default where the
-          // model gave none — so the trigger never hands an action `undefined`.
+          // model gave none — so reopening it from the conversation never hands
+          // an action `undefined`.
           const input = Object.fromEntries(OPENABLE_KEYS.map((key) => [key, asked.input?.[key] ?? definition.data?.[key] ?? '']));
-          deps.proposals.push({ open: { action: asked.action, label: asked.label, input } });
-          return { offered: { action: asked.action, label: asked.label, prefilled: asked.input ?? {} } };
+          deps.opened.push({ action: asked.action, label: asked.label, ink: 'paper', input: { ...input, sheetTitle: asked.label } });
+          // Its state, in words a reply cannot turn into "done": nothing is.
+          return { opened: { action: asked.action, label: asked.label, prefilled: asked.input ?? {}, status: 'open on their screen — NOTHING has changed; whatever the action does, they do in it themselves' } };
         },
       }),
     );
@@ -128,7 +130,7 @@ export const hostTools = (deps: ToolDeps, offered: ReadonlySet<ToolName>): ToolD
             const routed = await routeQuery(deps.session, deps.querier, intent);
             const rows = await vexOver(deps.session.wire)(routed.fingerprint);
             const shape = QUERY_SHAPES.find((entry) => entry.kind === routed.kind)?.shape ?? null;
-            deps.opened.push({ action: 'query.result', input: { intent, shape: JSON.stringify(shape), routed, sheetTitle: 'Vex query' } });
+            deps.opened.push({ action: 'query.result', label: `Vex query · ${intent}`, ink: 'live', input: { intent, shape: JSON.stringify(shape), routed, sheetTitle: 'Vex query' } });
             return { query: { intent, shape: routed.kind, fingerprint: routed.fingerprint, how: routed.how }, rows };
           } catch (error) {
             return { failed: error instanceof Error ? error.message : String(error) };

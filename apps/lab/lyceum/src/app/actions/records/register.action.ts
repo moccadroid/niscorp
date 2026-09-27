@@ -8,6 +8,7 @@ import { registerLayout } from './register.layout';
 // not hidden, it is not there.
 export const registerAction: ActionDefinition = {
   id: 'records.register',
+  description: 'The register: everybody in the room, with job title and department, as they arrive. Records only. Shows; changes nothing.',
   title: 'The register',
   data: { tab: false, tabLabel: 'Register', tabInk: 'paper', nextInk: 'paper', rows: [] },
   input: TAB_INPUT,

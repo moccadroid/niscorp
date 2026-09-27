@@ -9,6 +9,7 @@ import { TAB_BUTTON, TAB_INPUT, TAB_OPENED } from '@lyceum/app/actions/shared/ta
 // are the same action, and only the press means "open".
 export const questionDeskAction: ActionDefinition = {
   id: 'questions.desk',
+  description: 'The Q&A tab: the question form, and under it the person\'s own questions.',
   title: 'Q&A',
   data: { tab: false, tabLabel: 'Q&A', tabInk: 'paper', nextInk: 'paper' },
   input: TAB_INPUT,

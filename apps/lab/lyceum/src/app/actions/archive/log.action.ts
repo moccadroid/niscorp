@@ -7,6 +7,7 @@ import { logLayout } from './log.layout';
 // A reactive read: new arrivals and assignments land at the top as they happen.
 export const logAction: ActionDefinition = {
   id: 'archive.log',
+  description: 'The archive: who arrived when, and which department they went to. Archive only. Shows; changes nothing.',
   title: 'The archive',
   data: { tab: false, tabLabel: 'Archive', tabInk: 'paper', nextInk: 'paper', rows: [] },
   input: TAB_INPUT,

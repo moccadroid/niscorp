@@ -1,4 +1,5 @@
 import type { ActionDefinition } from '@niscorp/nova';
+import { z } from 'zod';
 import { questionsMine } from '@lyceum/app/vex/question.entries';
 
 // YOUR QUESTIONS — the ones this person sent, newest first; nobody else's
@@ -7,8 +8,12 @@ import { questionsMine } from '@lyceum/app/vex/question.entries';
 // edit or delete (questions.edit).
 export const questionsMineAction: ActionDefinition = {
   id: 'questions.mine',
+  description: 'The questions this person has sent the speaker, newest first; pressing one opens it to edit or delete. Shows; changes nothing.',
   title: 'Your questions',
   data: { questions: [] },
+  // Openable by anybody who holds it — a tab, the assistant — with nothing to
+  // pre-fill: its contract is empty, and declared (rule 14).
+  input: z.toJSONSchema(z.object({})),
   layout: {
     component: 'Sheet',
     props: { areas: ['kick', 'list'] },

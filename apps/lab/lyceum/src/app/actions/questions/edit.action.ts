@@ -9,6 +9,7 @@ import { questionDelete, questionEdit, questionOne } from '@lyceum/app/vex/quest
 
 export const questionEditAction: ActionDefinition = {
   id: 'questions.edit',
+  description: 'One of the person\'s questions, to change its words or delete it; nothing changes until they press Save or Delete it.',
   title: 'Your question',
   data: { questionId: '', question: { question_id: '', text: '' }, draft: '', error: '' },
   input: z.toJSONSchema(

@@ -14,6 +14,7 @@ const send = [
 
 export const questionSendAction: ActionDefinition = {
   id: 'questions.send',
+  description: 'A form to send the speaker a question; it is sent only when they press Send.',
   title: 'Send the speaker a question',
   data: { draft: '', sent: false, error: '' },
   input: z.toJSONSchema(

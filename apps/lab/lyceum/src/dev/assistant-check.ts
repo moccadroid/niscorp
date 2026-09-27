@@ -6,7 +6,7 @@
 //
 //   1. built from the declarations a person's grants select — shown to them;
 //   2. what it can do follows: only the controller can automate;
-//   3. a tool is bounded by what the person holds — Forms is offered its rename,
+//   3. a tool is bounded by what the person holds — Forms gets its rename opened,
 //      pre-filled, and it opens over the screen; Records, asking the same, is not;
 //   4. the open trigger carries exactly the keys the catalog declares openable.
 import { serve } from '@hono/node-server';
@@ -72,7 +72,7 @@ const main = async (): Promise<void> => {
   await say(waiting.phone, 'body', 'How many people are in the room?', 'enter');
   check('Enter sends; the assistant runs a vex query, and it opens over the screen at once — no button in between', await waiting.phone.shows('overlay', '"value":"Vex query"'));
   check('…shown as the query it is: its intent, its shape, its fingerprint', waiting.phone.showsNow('overlay', 'How many people are in the room?') && waiting.phone.showsNow('overlay', 'Shape · number') && waiting.phone.showsNow('overlay', 'Fingerprint'));
-  check('…and its result, replayed as the person', await waiting.phone.shows('overlay', '"label":"Result"') && !waiting.phone.showsNow('body', '"ref":"proposed"'));
+  check('…and its result, replayed as the person', await waiting.phone.shows('overlay', '"label":"Result"'));
   check('the conversation keeps the query: under the turn, a button that opens it again', await waiting.phone.shows('body', 'Vex query · How many people are in the room?'));
   waiting.phone.click('overlay', 'close');
   await waitUntil(() => !waiting.phone.showsNow('overlay', '"value":"Vex query"'));
@@ -99,9 +99,14 @@ const main = async (): Promise<void> => {
   const forms = await place(formsPerson.memberId, formsPerson.token, 'forms');
   check('placed in Forms, their assistant is built from room and forms', (await openAssistant(forms)) && (await forms.shows('body', 'Built from room · forms')));
   await say(forms, 'body', 'Change my name to Ada Lovelace');
-  check('Forms is offered the rename, as a button to press', await forms.shows('body', 'Change your name to Ada Lovelace'));
-  forms.click('body', 'proposed');
-  check('…which opens the rename over the screen, pre-filled', await forms.shows('overlay', '"value":"Ada Lovelace"'));
+  check('Forms gets the rename opened over the screen at once, pre-filled — filing it is still theirs', (await forms.shows('overlay', '"value":"Ada Lovelace"')) && forms.showsNow('overlay', 'File the change'));
+  check('…and the conversation keeps it, to open again', await forms.shows('body', 'Change your name to Ada Lovelace →'));
+  forms.click('overlay', 'close');
+  await waitUntil(() => !forms.showsNow('overlay', '"ref":"close"'));
+  await say(forms, 'body', 'Show me my questions');
+  check('an action with nothing to pre-fill opens too: their own questions, over the screen', await forms.shows('overlay', 'Your questions'));
+  forms.click('overlay', 'close');
+  await waitUntil(() => !forms.showsNow('overlay', '"ref":"close"'));
 
   const recordsPerson = await stepIn();
   recordsPerson.phone.close();
@@ -109,7 +114,7 @@ const main = async (): Promise<void> => {
   await openAssistant(records);
   check('placed in Records, theirs is built from room and records', await records.shows('body', 'Built from room · records'));
   await say(records, 'body', 'Change my name to Ada Lovelace');
-  check('Records, asking the same, is offered no rename — they do not hold it', !records.showsNow('body', 'Change your name to'));
+  check('Records, asking the same, gets no rename — they do not hold it', !records.showsNow('overlay', 'File the change') && !records.showsNow('body', 'Change your name to'));
   check('a history is its person\'s alone: Records sees their own turn, none of anybody else\'s', (await records.shows('body', '{"type":"text","value":"Change my name to Ada Lovelace"}')) && !records.showsNow('body', 'How many people are in the room?'));
 
   // ── the controller's ──
@@ -154,14 +159,19 @@ const main = async (): Promise<void> => {
   // ── what `open` may offer: the charter's actions, and only what a person asks for ──
   const held = ['assistant.thread', 'query.result', 'forms.rename', 'member.card', 'questions.send'];
   check('`open` offers what the charter gave them — not the assistant itself, not a result only a tool opens', JSON.stringify(offerableActions(held)) === JSON.stringify(['forms.rename', 'member.card', 'questions.send']));
+  const undescribed = offerableActions(Object.keys(ACTIONS)).filter((id) => (ACTIONS[id]?.description ?? '') === '');
+  check(`every action the assistant can open says what it is — a description to reason from${undescribed.length === 0 ? '' : ` (missing: ${undescribed.join(', ')})`}`, undescribed.length === 0);
+  check('…and an action whose contract is empty, declared: openable with nothing to pre-fill', offerableActions(['questions.mine']).includes('questions.mine') && prefillOf('questions.mine').length === 0);
   check('…pre-filled only with what a person asks for: how the phone draws an action (tab, strip) is not offered', JSON.stringify(prefillOf('forms.rename').map((entry) => entry.key)) === JSON.stringify(['draft']) && prefillOf('member.card').length === 0);
 
-  // ── 4. the open trigger and the catalog agree ──
-  const trigger = ACTIONS['assistant.thread']?.triggers?.find((candidate) => 'ref' in candidate && candidate.ref === 'proposed');
+  // ── 4. reopening from the conversation carries every key an opened action takes ──
+  const trigger = ACTIONS['assistant.thread']?.triggers?.find((candidate) => 'ref' in candidate && candidate.ref === 'reopen');
   const pushed = trigger?.do[0];
   const target = pushed !== undefined && 'push' in pushed && typeof pushed.push === 'object' ? pushed.push : undefined;
   const keys = target !== undefined ? Object.keys(target.input ?? {}).filter((key) => key !== 'sheetTitle').sort() : [];
-  check(`the open trigger carries exactly the catalog's openable keys (${OPENABLE_KEYS.join(', ')})`, JSON.stringify(keys) === JSON.stringify(OPENABLE_KEYS));
+  const resultKeys = Object.keys(Reflect.get(Object(ACTIONS['query.result']?.input), 'properties') ?? {});
+  const wanted = [...new Set([...OPENABLE_KEYS, ...resultKeys])].sort();
+  check(`the reopen trigger carries exactly the pre-fill keys and a vex query's (${wanted.join(', ')})`, JSON.stringify(keys) === JSON.stringify(wanted));
 
   for (const phone of [waiting.phone, forms, records, speaker]) phone.close();
   httpServer.close();

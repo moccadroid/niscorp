@@ -12,6 +12,7 @@ import { cardLayout, cardStripLayout } from './card.layout';
 // line across the top of the phone (`strip`); a tab (`tab`, shared/tab.layouts).
 export const cardAction: ActionDefinition = {
   id: 'member.card',
+  description: 'The person\'s ID card: their name, job title, the line about them, and their department once assigned. Shows; changes nothing.',
   title: 'Your ID card',
   data: {
     me: { member_id: '', name: '', title: '', quirk: '', department_id: '', department_name: '', department_remit: '', department_mark: '', department_sigil: '' },

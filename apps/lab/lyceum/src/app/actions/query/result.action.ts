@@ -11,6 +11,7 @@ import { queryResultLayout } from './result.layout';
 // their policy, and current whenever it is opened.
 export const queryResultAction: ActionDefinition = {
   id: 'query.result',
+  description: 'One vex query, opened: its intent, its shape, its fingerprint, and its result, replayed as the person.',
   title: 'Vex query',
   data: {
     intent: '',

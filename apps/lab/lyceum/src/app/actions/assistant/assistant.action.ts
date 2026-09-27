@@ -36,6 +36,7 @@ const run = [
 
 export const assistantAction: ActionDefinition = {
   id: 'assistant.thread',
+  description: 'The conversation with the assistant.',
   title: 'Your assistant',
   data: {
     tab: false,
@@ -106,7 +107,8 @@ export const assistantAction: ActionDefinition = {
         { call: 'save', onSuccess: [{ call: 'arm', onSuccess: [{ call: 'resolve', onSuccess: [{ set: 'answered', value: false }, { set: 'saved', value: true }] }] }] },
       ],
     },
-    // A query from the conversation, open again — replayed now, as the person.
+    // Something the assistant opened, open again from the conversation — a
+    // query replayed now, as the person; an action pre-filled as it was.
     {
       event: 'ui:click',
       ref: 'reopen',
@@ -117,27 +119,11 @@ export const assistantAction: ActionDefinition = {
             canvas: 'overlay',
             with: ['sheet'],
             input: {
+              draft: '@event.payload.input.draft',
               intent: '@event.payload.input.intent',
               shape: '@event.payload.input.shape',
               routed: '@event.payload.input.routed',
               sheetTitle: '@event.payload.input.sheetTitle',
-            },
-          },
-        },
-      ],
-    },
-    {
-      event: 'ui:click',
-      ref: 'proposed',
-      do: [
-        {
-          push: {
-            action: '@event.payload.action',
-            canvas: 'overlay',
-            with: ['sheet'],
-            input: {
-              draft: '@event.payload.input.draft',
-              sheetTitle: '@event.payload.label',
             },
           },
         },

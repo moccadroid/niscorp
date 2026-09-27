@@ -1,8 +1,9 @@
 import type { LayoutNode } from '@niscorp/nova';
 
-// A proposal — something that CHANGES something, so it waits for a press: an
-// automation to read and save, or an action to open. (A query changes nothing:
-// its result opens over the screen by itself, and is no proposal.)
+// A proposal — something that would CHANGE something by itself, so it waits
+// for a press: an automation to read and save. (What was opened — an action, a
+// vex query — changes nothing, opened over the screen by itself, and is kept in
+// the conversation.)
 const proposal: LayoutNode = {
   if: '$p.timer',
   then: {
@@ -24,18 +25,18 @@ const proposal: LayoutNode = {
       },
     ],
   },
-  else: { component: 'Action', ref: 'proposed', props: { ink: 'alert', label: '{{$p.open.label}} →', value: '$p.open' } },
 };
 
-// One turn of the conversation: what the person wrote; every vex query the
-// assistant ran for it — pressed, it opens again, replayed now; what came
-// back; and, once they acted on a proposal, what came of it.
+// One turn of the conversation: what the person wrote; everything the
+// assistant opened for it — a vex query (green), an action — pressed, it opens
+// again (a query replayed now); what came back; and, once they acted on a
+// proposal, what came of it.
 const turn: LayoutNode = {
   component: 'Cell',
   children: [
     { component: 'Label', children: 'You' },
     { component: 'Text', children: '{{$t.message}}' },
-    { for: '$t.opened', as: 'o', do: { component: 'Action', ref: 'reopen', props: { ink: 'live', label: 'Vex query · {{$o.input.intent}} →', value: '$o' } } },
+    { for: '$t.opened', as: 'o', do: { component: 'Action', ref: 'reopen', props: { ink: '$o.ink', label: '{{$o.label}} →', value: '$o' } } },
     { component: 'Label', children: 'Assistant' },
     { component: 'Text', children: '{{$t.reply}}' },
     { if: '$t.outcome', then: { component: 'Text', props: { tone: 'muted' }, children: '{{$t.outcome}}' } },

@@ -36,7 +36,7 @@ const TurnsSchema = z.array(
     message: z.string(),
     reply: z.string(),
     outcome: z.string().nullable(),
-    opened: z.array(z.object({ input: z.object({ intent: z.string() }).partial() })),
+    opened: z.array(z.object({ label: z.string() })),
   }),
 );
 
@@ -56,7 +56,7 @@ const knowledgeOf = async (session: FunctionSession, assembled: Assembled, tz: s
     .map((turn) =>
       [
         `Person: ${turn.message}`,
-        ...turn.opened.map((opened) => `(you ran a vex query: ${opened.input.intent ?? ''})`),
+        ...turn.opened.map((opened) => `(you opened on their screen: ${opened.label})`),
         `You: ${turn.reply}`,
         ...(turn.outcome === null ? [] : [`(${turn.outcome})`]),
       ].join('\n'),
@@ -74,7 +74,8 @@ const knowledgeOf = async (session: FunctionSession, assembled: Assembled, tz: s
   const facts = grounded.join('\n');
   const actions = offerableActions(session.actions).map((id) => {
     const prefill = prefillOf(id);
-    return `- ${id} — ${ACTIONS[id]?.title ?? id}.${prefill.length === 0 ? '' : ` Pre-fill: ${prefill.map((entry) => `${entry.key} (${entry.means})`).join('; ')}.`}`;
+    const action = ACTIONS[id];
+    return `- ${id} — ${action?.title ?? id}: ${action?.description ?? ''}${prefill.length === 0 ? '' : ` Pre-fill: ${prefill.map((entry) => `${entry.key} (${entry.means})`).join('; ')}.`}`;
   });
   const knowledge = [
     `THE PERSON\n${[...assembled.from.map((declaration) => declaration.context), facts].filter((line) => line !== '').join('\n')}`,

@@ -36,7 +36,8 @@ export const TEXT_KIT: KitOf<TtyComponent> = {
   Sheet: ({ children }) => block(...lines(children)),
   // An ink or a mark is how a cell looks; in words it has neither.
   Cell: ({ children }) => block(...lines(children)),
-  Label: ({ children }) => block(lines(children).join(' ').toUpperCase()),
+  // Capitals are the poster's look, not the words: a label reads as written.
+  Label: ({ children }) => block(lines(children).join(' ')),
   Headline: ({ children }) => block(...lines(children)),
   Text: ({ children }) => block(...lines(children)),
   Figure: ({ props }) => block(`${text(props['label']) ?? ''}: ${text(props['value']) ?? '—'}`),
