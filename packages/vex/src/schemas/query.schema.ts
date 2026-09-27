@@ -69,7 +69,7 @@ const FieldRefSchema = z
 export const QuerySchema: z.ZodType<Query> = z.lazy(() =>
   z
     .object({
-      from: z.array(SourceSchema).min(1).describe('Data sources — entity names or subqueries. Every entity used anywhere in the query must be listed here.'),
+      from: z.array(SourceSchema).min(1).describe('Data sources — entity names or subqueries. Every entity used anywhere in the query must be listed here. Listed entities are JOINED FOR YOU along their foreign keys — a nullable key as a LEFT JOIN, so a row whose key is empty is kept, with the joined columns null. Never restate a join as a filter comparing the two keys: that throws those rows away.'),
       fields: z.array(FieldRefSchema).optional().describe('Raw columns to select — each `entity.field`, or `{ field, as }` to alias the output key (no SELECT *). Optional: omit it for an aggregate-only query (e.g. a bare COUNT). Do not list compute or aggregate aliases here — those are added automatically.'),
       filter: FilterSchema.optional().describe('Filter conditions'),
       compute: z.record(IdentifierSchema, ComputeExpressionSchema).optional().describe('Computed fields — key is output alias, value is the expression'),
