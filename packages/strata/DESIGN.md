@@ -149,16 +149,33 @@ stays as sugar. `EVERY_OP_EVER` in Prism's tests fails on a removal.
 ## The gate (S4)
 
 **A snapshot only says something moved.** Each kind's JSON Schema, taken through
-the schema's own Standard JSON Schema hook (descriptions stripped — prose is not
-grammar), recorded per version. Same version, different schema: a migration is
-owed. No JSON Schema compatibility classifier is trusted to judge — none is
-reliable (2026).
+the schema's own Standard JSON Schema hook, recorded per version as the
+validator wrote it. Same version, different schema: a migration is owed. No
+JSON Schema compatibility classifier is trusted to judge — none is reliable
+(2026).
+
+**The comparison ignores prose and spelling, the record keeps both.** Before
+comparing, both sides lose the `description` keyword (a reworded `.describe()`
+is not a grammar change — but a field named `description` is) and are read in
+one spelling: definitions inlined unless recursive, `allOf: [{ $ref }]` as
+`$ref`, a union of bare types as a type list. zod 4.3 → 4.6 respelled both nisc
+grammars without changing either; that must not be a migration. Keeping the
+normalizing out of the record means strata can refine it without touching a
+recorded file.
+
+**A snapshot is a fingerprint, not history.** The grammar version is history —
+its migrations and the documents captured at its stamp. The snapshot is what a
+RECORDER (the validator, then strata) made of it, and a recorder can be wrong
+or improve: zod 4.3 described Prism's tuples as open, and strata once dropped a
+field named `description`. Then the current version is re-recorded —
+`pnpm strata:snapshot --rebaseline`, refused unless the corpus passes, in a
+commit that changes nothing else in the grammar. Not a marker migration: that
+would bump every app's lock and every stored stamp to say nothing happened.
 
 **The corpus judges.** Real documents from the lab apps, captured at their
 stamp, must upgrade to the current grammars and parse the current strict
 schemas. That is what caught a breaking rename in the rehearsal: 122 real
-documents would have failed. An early-stamp corpus file is history, like a
-snapshot.
+documents would have failed. An early-stamp corpus file is history.
 
 **Arrays in schemas are sets.** A union's `anyOf` gains a branch and every index
 shifts, so the gate's diff matches schema-array elements by what they describe

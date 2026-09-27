@@ -4,7 +4,11 @@
 //    of LYCEUM_KIT (strata/snapshots/lyceum.kit/<n>.json). Same version, a
 //    different schema → red: append a migration to LYCEUM_KIT (an empty marker
 //    for an addition; steps that rewrite the layout nodes for anything else),
-//    then record the new version with `pnpm kit:snapshot`.
+//    then record the new version with `pnpm kit:snapshot`. When the grammar did
+//    not change but its RECORDER did (zod describing the same props differently,
+//    strata reading them differently): `pnpm kit:snapshot --rebaseline`, in a
+//    commit of its own — it re-records the current version only if check 2
+//    passes. The kit version is history; its snapshot is a fingerprint.
 // 2. Every layout the app carries — actions, fragments, the frame, the canvases'
 //    action layouts — names only components the kit has, and passes each only
 //    props that component declares. Values are not typed here (a layout binds
@@ -22,6 +26,7 @@ import { KIT_PROPS } from '@lyceum/ui/kit.props';
 import { check, finish } from './harness';
 
 const write = process.argv.includes('--write');
+const rebaseline = process.argv.includes('--rebaseline');
 const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value);
 
 // ── 1. the snapshot ──
@@ -39,7 +44,7 @@ if (result.status === 'missing' && write) {
   writeFileSync(file, snapshotText(current));
 }
 const detail = result.status === 'changed' ? `: ${result.changes.flatMap((c) => c.lines).slice(0, 6).join('; ')} — append a migration to LYCEUM_KIT, then pnpm kit:snapshot` : '';
-check(
+if (!rebaseline) check(
   result.status === 'missing' && !write
     ? `lyceum.kit is at ${current.version} and nothing records what that means — pnpm kit:snapshot`
     : `the kit's props match lyceum.kit/${current.version}${detail}`,
@@ -79,5 +84,17 @@ walk(frameLayout, 'the frame');
 for (const canvas of CANVASES) walk(canvas.actionLayout, `canvas ${canvas.id}`);
 
 check(`every layout names only kit components and their declared props${problems.length === 0 ? '' : ` — ${problems.slice(0, 8).join('; ')}`}`, problems.length === 0);
+
+// ── a rebaseline stands on check 2 ──
+// It rewrites whatever the recorder writes differently now — the spelling too.
+if (rebaseline && (!existsSync(file) || readFileSync(file, 'utf8') !== snapshotText(current))) {
+  const recorded = problems.length === 0;
+  if (recorded) {
+    mkdirSync(dirname(file), { recursive: true });
+    writeFileSync(file, snapshotText(current));
+  }
+  const was = result.status === 'changed' ? ` (was: ${result.changes.flatMap((c) => c.lines).slice(0, 6).join('; ')})` : '';
+  check(recorded ? `lyceum.kit/${current.version} re-recorded${was} — commit it alone` : `lyceum.kit/${current.version} NOT re-recorded — the layouts must speak the kit first`, recorded);
+}
 
 finish();
