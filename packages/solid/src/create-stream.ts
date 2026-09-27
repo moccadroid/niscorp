@@ -47,7 +47,16 @@ export const createStream = <T>(options: CreateStreamOptions<T>): Stream<T> => {
     if (isFailed) return;
     isFailed = true;
     isClosed = true;
-    failureError = new Error('[solid] stream failed validation');
+    const error = new Error('[solid] stream failed validation');
+    failureError = error;
+    // A final() taken before the violation is holding this promise; it must
+    // reject too, not wait for a close() that the failed state ignores.
+    if (!finalState.resolved) {
+      // Pre-caught so a stream nobody awaited doesn't raise an unhandled
+      // rejection; callers holding the promise still see it reject.
+      finalState.promise.catch(() => {});
+      finalState.reject(error);
+    }
   };
 
   const tracker = createFinalizationTracker();

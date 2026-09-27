@@ -263,6 +263,20 @@ describe('createStream — final()', () => {
     expect(result.widget.type).toBe('card');
   });
 
+  it('strict: a final() taken before the violation rejects with it', async () => {
+    const stream = createStream({
+      schema: z.object({ name: z.string(), count: z.number() }),
+      mode: 'strict',
+    });
+    const early = stream.final();
+
+    stream.write('{"name":"a","count":"not a number"}');
+    stream.close();
+
+    await expect(early).rejects.toThrow('[solid] stream failed validation');
+    await expect(stream.final()).rejects.toThrow('[solid] stream failed validation');
+  });
+
   it('onFinal fires once', () => {
     const stream = createStream({ schema: ResponseSchema, initial: INITIAL });
     const listener = vi.fn();
