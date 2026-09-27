@@ -45,10 +45,11 @@ const turn: LayoutNode = {
 // Who this assistant is for this person (built from the declarations their
 // grants selected, able to do what those name); the conversation, oldest
 // first; below it the last turn's proposals, the wait, or what went wrong; and
-// at the bottom the line to write in. Blue: the assistant's colour.
+// at the bottom the line to write in — the conversation takes the room between.
+// Blue: the assistant's colour.
 export const assistantLayout: LayoutNode = {
   component: 'Sheet',
-  props: { areas: ['kick', 'who', 'talk', 'out', 'field', 'go'], rows: ['auto', 'auto', 'auto', 'auto', 'auto', 'auto'] },
+  props: { size: 'fill', areas: ['kick', 'who', 'talk', 'out', 'field', 'go'], rows: ['auto', 'auto', 1, 'auto', 'auto', 'auto'] },
   children: [
     { component: 'Cell', props: { area: 'kick', ink: 'signal' }, children: [{ component: 'Label', children: '{{$.intro.title}}' }] },
     {
@@ -56,7 +57,8 @@ export const assistantLayout: LayoutNode = {
       props: { area: 'who' },
       children: [{ component: 'Text', props: { tone: 'muted' }, children: 'Built from {{$.intro.builtFrom}} · it can {{$.intro.tools}}' }],
     },
-    { component: 'Cell', props: { area: 'talk', pad: 'none' }, children: [{ component: 'Sheet', children: [{ for: '$.history', as: 't', do: turn }] }] },
+    // The conversation takes the room there is, scrolls, and opens on its newest turn.
+    { component: 'Cell', props: { area: 'talk', pad: 'none', scroll: 'end' }, children: [{ component: 'Sheet', children: [{ for: '$.history', as: 't', do: turn }] }] },
     {
       if: '$.error',
       then: { component: 'Cell', props: { area: 'out' }, children: [{ component: 'Text', children: '{{$.error.message}}' }] },

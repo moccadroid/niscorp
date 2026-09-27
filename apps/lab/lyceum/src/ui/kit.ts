@@ -124,7 +124,8 @@ export const Sheet: DomComponent = ({ props, children }) => {
 // ── Cell — a place in the grid ──────────────────────────────────
 // area, ink (paper | ink | signal | alert | live | highlight), mark (stripes | dots | bars |
 // checks | hatch), align (start | end | center | between), pad ('none'), scroll ('y' — a
-// cell whose content may outgrow it scrolls inside it, and the sheet keeps its shape).
+// cell whose content may outgrow it scrolls inside it, and the sheet keeps its shape;
+// 'end' — the same, held at its end: a conversation shows its newest turn).
 export const Cell: DomComponent = ({ props, children }) => {
   const node = el('div', 'cell', children);
   placeIn(node, props['area']);
@@ -132,7 +133,7 @@ export const Cell: DomComponent = ({ props, children }) => {
   setData(node, 'mark', oneOf(props['mark'], MARKS));
   setData(node, 'align', oneOf(props['align'], ALIGNS));
   setData(node, 'pad', oneOf(props['pad'], ['none'] as const));
-  setData(node, 'scroll', oneOf(props['scroll'], ['y'] as const));
+  setData(node, 'scroll', oneOf(props['scroll'], ['y', 'end'] as const));
   return node;
 };
 

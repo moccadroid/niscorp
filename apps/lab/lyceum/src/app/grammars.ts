@@ -31,5 +31,10 @@ export const LYCEUM_KIT: Sequence = {
       description: "Field: enter 'clears' — a field whose Enter sends it empties",
       steps: [],
     },
+    {
+      // A MARKER: a value added to a closed set.
+      description: "Cell: scroll 'end' — a scrolling cell held at its end",
+      steps: [],
+    },
   ],
 };

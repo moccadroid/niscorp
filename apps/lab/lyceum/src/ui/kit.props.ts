@@ -36,7 +36,7 @@ export const KIT_PROPS = z
       })
       .partial()
       .strict(),
-    Cell: z.object({ area, ink, mark, align: z.enum(ALIGNS), pad: z.literal('none'), scroll: z.literal('y') }).partial().strict(),
+    Cell: z.object({ area, ink, mark, align: z.enum(ALIGNS), pad: z.literal('none'), scroll: z.enum(['y', 'end']) }).partial().strict(),
     Label: z.object({}).strict(),
     Headline: z.object({ level: z.enum(LEVELS) }).partial().strict(),
     Text: z.object({ tone: z.literal('muted') }).partial().strict(),

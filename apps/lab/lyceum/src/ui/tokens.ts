@@ -128,6 +128,9 @@ html { font-size: clamp(16px, calc(0.72vw + 13.3px), 28px); }
 .${ROOT_CLASS} .cell[data-align="between"] { justify-content: space-between; }
 .${ROOT_CLASS} .cell[data-pad="none"] { padding: 0; }
 .${ROOT_CLASS} .cell[data-scroll="y"] { overflow-y: auto; min-height: 0; overscroll-behavior: contain; }
+/* held at its end: a reversed column opens scrolled to its last line, and the
+   screen is rebuilt on every update, so it stays there */
+.${ROOT_CLASS} .cell[data-scroll="end"] { overflow-y: auto; min-height: 0; overscroll-behavior: contain; flex-direction: column-reverse; }
 
 /* ── marks: the houses' patterns, and the hatch of "not yet" ── */
 .${ROOT_CLASS} [data-mark="stripes"] { background: repeating-linear-gradient(-45deg, var(--fg) 0 4px, var(--bg) 4px 14px); }
