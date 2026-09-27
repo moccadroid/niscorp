@@ -96,12 +96,16 @@ const main = async (): Promise<void> => {
         while (Date.now() < deadline && terminal.showsNow(canvas, 'Thinking')) await new Promise((resolve) => setTimeout(resolve, 200));
         return !terminal.showsNow(canvas, 'Thinking');
       })();
+      // The turn is a row the conversation reads reactively: wait until the
+      // newest turn on screen is THIS one, then read its reply.
+      const lastOf = (tree: string, who: 'You' | 'Assistant'): string => {
+        const said = [...tree.matchAll(new RegExp(`"value":"${who}"\\}\\]\\},\\{"type":"component","name":"Text","props":\\{\\},"children":\\[\\{"type":"text","value":"([^"]{0,160})`, 'g'))];
+        return said[said.length - 1]?.[1] ?? '';
+      };
+      await waitUntil(() => lastOf(terminal.textOf(canvas), 'You') === probe.say);
       const tree = terminal.textOf(canvas);
-      await new Promise((resolve) => setTimeout(resolve, 300));
       const got = settled ? outcomeIn(tree, terminal.textOf('overlay')) : 'none';
-      // The newest reply: the last turn in the conversation.
-      const replies = [...tree.matchAll(/"value":"Assistant"\}\]\},\{"type":"component","name":"Text","props":\{\},"children":\[\{"type":"text","value":"([^"]{0,160})/g)];
-      const reply = replies[replies.length - 1]?.[1] ?? '';
+      const reply = lastOf(tree, 'Assistant');
       const ok = settled && got === probe.want && (probe.containing === undefined || tree.includes(probe.containing)) && (probe.saying === undefined || reply.toLowerCase().includes(probe.saying.toLowerCase()));
       passed += ok ? 1 : 0;
       total += 1;

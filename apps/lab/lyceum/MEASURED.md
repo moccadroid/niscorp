@@ -44,6 +44,18 @@ policy, one generation per question (`src/dev/model-check.ts`).
   given an `open` button instead — Forms' "Which department has the most people?" 0/2,
   the waiting member's "How many people are in the room?" 1/2. Not tuned: a routing
   quality problem, to be fixed in the tools' contract, not by naming these sentences.
+- **The one assistant, one way to each thing** (2026-09-27, after `ask` became `query`,
+  its result opening over the screen, and `open` no longer offering the query desk to
+  whoever holds `query`; same nine probes, `query` read off the overlay; prompt text
+  otherwise untouched): **16/18**, plus a separate 1-run pass at 9/9. Misroutes to a
+  button: **0 of 27 turns** (were 3 of 18) — the structural fix, measured. Both misses
+  are Forms' "Which department has the most people?": run 1 the query GENERATION failed
+  (vex's query agent hit its 20-step limit) and the reply called that "not authorized";
+  run 2 the model refused without querying, citing the failed turn in its conversation.
+  Reply text is still unheld: "Okay, we'll wrap up in 30 minutes" (a member with no
+  automate tool — a promise it cannot keep), "Automation request recorded" (only
+  proposed), "Press the button…" after a result opened by itself (seen in the browser).
+  Steering, next. The probe hangs on exit after printing its total at 2 runs (not at 1).
 - **Jev routing the ask** (`LYCEUM_PART=route pnpm models`): 16 probes against six
   earlier questions — paraphrases that must replay, the same words about another subject
   that must not, new questions whose shape is the test. **48/48** over three runs, ~250 ms
