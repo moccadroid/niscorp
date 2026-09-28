@@ -9,7 +9,7 @@
   },
   "scripts": {
     "preinstall": "npx only-allow pnpm",
-    "prepare": "git config core.hooksPath .githooks",
+    "prepare": "node scripts/install-hooks.mts",
     "build": "turbo build",
     "dev": "turbo dev",
     "test": "turbo test",

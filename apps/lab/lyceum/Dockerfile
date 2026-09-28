@@ -10,6 +10,8 @@ WORKDIR /repo
 
 # Dependencies first, so a source edit does not reinstall them.
 COPY pnpm-lock.yaml pnpm-workspace.yaml package.json tsconfig.json ./
+# The root `prepare` script; with no git in the image it skips.
+COPY scripts/install-hooks.mts ./scripts/
 COPY packages ./packages
 COPY apps/lab/lyceum ./apps/lab/lyceum
 RUN pnpm install --frozen-lockfile --filter "lyceum..."
