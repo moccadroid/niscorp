@@ -9,6 +9,7 @@
   },
   "scripts": {
     "preinstall": "npx only-allow pnpm",
+    "prepare": "git config core.hooksPath .githooks",
     "build": "turbo build",
     "dev": "turbo dev",
     "test": "turbo test",
@@ -22,7 +23,8 @@
     "strata:snapshot": "node scripts/check-grammars.mts --write",
     "strata:corpus": "node scripts/capture-corpus.mts",
     "check:sources": "node scripts/check-sources.mts",
-    "check:fact-door": "node scripts/check-fact-door.mts"
+    "check:fact-door": "node scripts/check-fact-door.mts",
+    "verify": "pnpm build && pnpm check:packages && pnpm check:grammars && pnpm check:sources && pnpm check:fact-door && pnpm typecheck && pnpm test"
   },
   "devDependencies": {
     "@arethetypeswrong/cli": "^0.18.5",

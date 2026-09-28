@@ -9,6 +9,10 @@ import { createTideDriver } from '../src/driver';
 // unhandled, and took the whole process down.
 
 const idle: AdvanceReport = {
+  now: 0,
+  succeeded: 0,
+  failed: 0,
+  retrying: 0,
   materialized: 0,
   skippedOccurrences: 0,
   factsMatched: 0,
