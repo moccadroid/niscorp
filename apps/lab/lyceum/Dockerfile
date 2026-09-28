@@ -22,5 +22,7 @@ RUN pnpm --filter "lyceum^..." run build && pnpm --filter lyceum run build
 WORKDIR /repo/apps/lab/lyceum
 ENV NODE_ENV=production
 ENV PORT=8796
-EXPOSE 8796 2222
+# Only the web port: a host that routes by EXPOSE (Railway) must not pick the
+# SSH door's. docker-compose publishes 2222 itself.
+EXPOSE 8796
 CMD ["pnpm", "serve"]
