@@ -1,7 +1,13 @@
 name: Deploy showroom to GitHub Pages
 
+# Deploys only what Verify passed: it runs after a Verify run on a push to main
+# finishes, and only if that run succeeded. A red main is never published, and
+# a Verify run cancelled by a newer push deploys nothing — the newer one will.
+# A manual dispatch deploys the branch it is run on, on the operator's word.
 on:
-  push:
+  workflow_run:
+    workflows: [Verify]
+    types: [completed]
     branches: [main]
   workflow_dispatch:
 
@@ -18,9 +24,16 @@ concurrency:
 
 jobs:
   build:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.event == 'push')
     runs-on: ubuntu-latest
     steps:
+      # The commit Verify checked — not whatever main is by the time this runs.
       - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
 
       - uses: pnpm/action-setup@v4
         with:
