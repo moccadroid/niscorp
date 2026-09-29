@@ -37,7 +37,7 @@ const main = async (): Promise<void> => {
   const runtime = databaseUrl === '' ? await devRuntime() : await postgresRuntime(databaseUrl);
   const port = Number(process.env['PORT'] ?? 8796);
   const publicUrl = process.env['PUBLIC_URL'] ?? `http://localhost:${port}`;
-  const { server, close } = await bootOn(runtime, { publicUrl });
+  const { server, close } = await bootOn(runtime, { publicUrl, sshAddress: process.env['LYCEUM_SSH_ADDRESS'] ?? '' });
 
   mountLogin(server, runtime.pool);
   if (existsSync(dist)) mountSite(server, dist);

@@ -47,26 +47,24 @@ export const STAFF: readonly { principal: string; role: string }[] = [
 // what the controller shows while that slide is up, stacked in this order. The words are
 // provisional: the talk's text is written with the story.
 export const SLIDES: readonly { slideId: string; title: string; tools: readonly string[]; notes: readonly string[] }[] = [
-  // ── 0 · the cold open: nothing explained yet ──
-  { slideId: 'slide.title', title: 'The talk is an application', tools: ['assistant.thread'], notes: ['Say hello; say it is running, not a recording', 'Ask everyone to take their phone out and scan the code', 'Explain nothing yet'] },
-  { slideId: 'stage.register', title: 'The register', tools: [], notes: ['The names arriving are rows', 'Each ID card is being written by a model as they watch: qwen on Groq, streamed; solid keeps every partial card valid', 'Nobody has a department yet'] },
-  { slideId: 'slide.terminal', title: 'The same app, in a terminal', tools: ['tools.terminal'], notes: ['Open a terminal, ssh in, step in, press a tab by its number', 'Same door, same tabs, same server — a third kit over the same trees', 'Say it: nobody wrote a screen for the phone, and none for this'] },
-  { slideId: 'slide.timer', title: 'Remember this timer', tools: ['assistant.thread'], notes: ['Share the controller', 'Ask: "Show the last slide in 30 minutes" — rehearsed words, nothing else', 'Read the document aloud before Save: a trigger, an effect, no "as"', 'Save; point at the countdown. "We come back to this."'] },
+  // ── the opening: nova, and what follows from it ──
+  { slideId: 'slide.title', title: 'nisc', tools: ['assistant.thread'], notes: ['Say it is live: the slides, your phones and the controller are one app on one server', 'Ask everyone to join — phones, and laptops with devtools', 'The profiles are written by a model as people join'] },
+  { slideId: 'stage.register', title: 'Everyone who has joined', tools: [], notes: ['Each line is a row, written as its person joins', 'The title and the line about them are written by a model and streamed in; the partial result is valid at every step', 'Move on once most people are in'] },
+  { slideId: 'slide.timer', title: 'A timer, written by a model', tools: ['assistant.thread'], notes: ['Share the controller', 'Ask: "Show the last slide in 30 minutes"', 'Read the reflex out loud: a trigger, an effect. Press Save', 'The countdown on the wall starts. Say nothing more about it'] },
+  { slideId: 'slide.problem', title: 'Models write code faster than anyone can review it', tools: [], notes: ['Everyone here writes code with models; nobody reads all of it', 'Lowdefy: make it small enough to read. nisc: make it checkable by a program', 'The start: GPT-3 could fill in a schema long before it could write an app'] },
+  { slideId: 'slide.data', title: 'An action', tools: [], notes: ['This is the form they have under Q&A', 'Walk the four parts: data, endpoints, triggers, layout', 'The right side is its layout, rendered on this slide from the same JSON'] },
+  { slideId: 'slide.shell', title: 'A shell holds your actions', tools: [], notes: ['No pages: canvases and action instances', 'Stack shows the top one; list shows them all — the tab bar', 'Here the shell is on the server, one per person. Events up, trees down'] },
+  { slideId: 'slide.compare', title: 'Isn’t this json-render?', tools: [], notes: ['Name json-render and A2UI — they are good', 'They describe a view; nova runs an action, and owns its state', 'That is what makes the next three slides possible'] },
+  { slideId: 'slide.push', title: 'Pushing actions', tools: ['tools.push'], notes: ['Push a colour to everyone', 'A header to half the room', 'The button to one person — ask who got it'] },
+  { slideId: 'slide.clearance', title: 'There is no front-end gate', tools: ['tools.push'], notes: ['Ask them to compare with a neighbour', 'Laptops: find the button in the websocket frames — it is not there', 'Take the button back; it leaves their phone'] },
+  { slideId: 'slide.looks', title: 'The server sends a tree. A kit draws it.', tools: ['tools.look'], notes: ['Switch to plain HTML — every phone changes', 'Switch back', 'The SSH command on the slide: the same trees in a terminal'] },
+  { slideId: 'slide.screen', title: 'It can read your screen', tools: [], notes: ['Everyone: open the assistant, ask what is on your screen', 'It is handed the tree, as text, and the actions they hold', 'The person with the button gets a different answer'] },
+  { slideId: 'slide.prepare', title: 'The model fills in the form. A person sends it.', tools: [], notes: ['Taco Bell: 18,000 cups of water. McDonald’s: 260 McNuggets', 'Ask your assistant to send me a question — it opens the form, filled in', 'The model never writes. You press Send, or you do not'] },
+  { slideId: 'slide.census', title: 'Is JSON enough for a real app?', tools: [], notes: ['The objection: JSON UIs hit a wall', 'This app: about half its lines are data in app/, every file parsed against its schema', 'Counted from the source the server runs, without comments'] },
 
-  // ── 1 · the problem ──
-  { slideId: 'slide.problem', title: 'Code is the least checkable thing a model can write', tools: [], notes: ['This room writes code with models every day — no need to sell that', 'Go down the five: validate, policy, replay, migrate, read as state', 'Each is something you can do to a document and cannot do to code'] },
+  // ── not yet rewritten: the earlier draft, from here on ──
   { slideId: 'slide.thesis', title: 'Code lives in five places', tools: [], notes: ['The five places, fast', 'Everything else: a closed grammar, a Zod schema at the boundary, a runtime', 'The claim for models: a narrow problem and a precise grammar is what makes a small one enough'] },
-  { slideId: 'slide.census', title: 'Is JSON enough for a real app?', tools: [], notes: ['The objection everybody has: JSON UIs hit a wall', 'Answer with this app: about half its lines are data in app/, every file parsed against its schema', 'The numbers are counted from the source the server runs, without comments — read them off the wall'] },
-
-  // ── 2 · nova ──
-  { slideId: 'slide.data', title: 'The screen is a document', tools: [], notes: ['The card on their phone is this object', 'Point at the layout: one action, three sizes', 'Point at the endpoint: a fingerprint, not a fetch'] },
-  { slideId: 'slide.shell', title: 'Events go up, trees come down', tools: [], notes: ['One shell per person, on the server', 'Canvases host actions; actions render layouts', 'The client is a terminal — that is why the SSH door was cheap'] },
-  { slideId: 'slide.looks', title: 'One row, and every screen repaints', tools: ['tools.look'], notes: ['Switch to plain — the whole room repaints', 'Laptops: open devtools, nothing was sent', 'Switch back', 'Four kits, one grammar: poster, plain, ink, text'] },
-  { slideId: 'slide.screen', title: 'The assistant sees your screen as data', tools: ['tools.screen'], notes: ['The fourth kit draws the tree as words', 'That is the assistant’s view: only what the charter put on the screen', 'Not a screenshot, not a scraped DOM'] },
-
-  // ── 3 · charter ──
   { slideId: 'slide.assignment', title: 'Assignment', tools: ['tools.assignment', 'tools.tally'], notes: ['Tell the room to watch their phones', 'Press Assign the room', 'One row changes per person — the phone follows without a reload'] },
-  { slideId: 'slide.clearance', title: 'If you can’t use it, it isn’t there', tools: ['tools.assignment'], notes: ['Ask people to compare phones with a neighbour', 'Different departments, different tools — the rest was never sent', 'Not hidden, not disabled: it does not exist for them'] },
   { slideId: 'slide.charter', title: 'Policy is a document that compiles twice', tools: [], notes: ['Roles select actions and data verbs by glob', 'Compiles twice: which actions exist in a shell, and the scope policy on every query', 'The charter never enforces; moss refuses to boot an incoherent one'] },
   { slideId: 'slide.stamped', title: 'A request cannot say who you are', tools: [], notes: ['The objection: the client can forge an id', 'It has no field to put one in — the engine stamps it from the session', 'Forms may update members; this says which member'] },
 

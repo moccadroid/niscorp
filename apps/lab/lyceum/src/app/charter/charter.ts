@@ -54,7 +54,7 @@ export const CHARTER: Charter = {
   // The speaker reaches every question in the room (`room`, vex/behaviors.ts)
   // — a member reaches their own. Every other table reads at its default.
   speaker: { scoping: 'room', actions: ['speaker.*', 'tools.*', 'assistant.*', 'room.*'], data: [...ROOM_READS, ...DECK_READS, ...LOOK, 'room.write.update', 'slide_notes.read', 'slide_tools.read', 'deck.write.update', 'members.write.update', 'timers.read', 'timers.write.insert', 'questions.read', ...CONVERSING] },
-  stage: { actions: ['stage.*', 'slide.*', 'room.*'], data: [...ROOM_READS, ...DECK_READS, 'queries.read', ...LOOK] },
+  stage: { actions: ['stage.*', 'slide.*', 'room.*'], data: [...ROOM_READS, ...DECK_READS, 'queries.read', 'timers.read', ...LOOK] },
 
   // The kit's kitchen sink: every piece of the look on one screen (dev).
   kit: { actions: ['kit.*'] },

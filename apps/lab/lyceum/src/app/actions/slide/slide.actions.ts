@@ -1,11 +1,11 @@
 import type { ActionDefinition, EndpointConfig } from '@niscorp/nova';
 import { departmentsAll, inquiryByDepartment, memberCounts } from '@lyceum/app/vex/member.entries';
 import { queriesTally } from '@lyceum/app/vex/query.entries';
+import { OPENING_SLIDES } from './opening.actions';
 import {
   assignmentLayout,
   beatLayout,
   censusLayout,
-  clearanceLayout,
   codeLayout,
   figuresLayout,
   liveLayout,
@@ -13,7 +13,6 @@ import {
   pointsLayout,
   querySlideLayout,
   statementLayout,
-  titleLayout,
 } from './slide.layouts';
 
 // THE SLIDES. Each is an action only the stage is granted; the deck (`slides`
@@ -30,8 +29,6 @@ const read = (fingerprint: string, target: string): EndpointConfig => ({ url: '/
 const say = (...texts: string[]): { text: string }[] => texts.map((text) => ({ text }));
 const code = (...lines: string[]): string => lines.join('\n');
 const COUNTS = { joined: 0, assigned: 0, unassigned: 0 };
-// Where people open the room — the deployment's, handed out by the server.
-const ADDRESS = { url: '', host: '' };
 
 // A slide that only says something: its words are its data, nothing to load.
 const still = (id: string, title: string, layout: ActionDefinition['layout'], data: Record<string, unknown>): ActionDefinition => ({
@@ -42,65 +39,7 @@ const still = (id: string, title: string, layout: ActionDefinition['layout'], da
   triggers: [],
 });
 
-// ── 0 · the cold open ──
-
-export const titleSlide: ActionDefinition = {
-  id: 'slide.title',
-  title: 'The talk is an application',
-  data: {
-    kicker: 'The Ministry — tonight',
-    title: 'The talk is an application',
-    lines: ['Everything you will see tonight is running — not a recording, not a mock-up.', 'Take your phone out.'],
-    counts: COUNTS,
-    address: ADDRESS,
-  },
-  layout: titleLayout,
-  endpoints: { counts: read(memberCounts.fingerprint, 'counts'), address: { fn: 'room.address', target: 'address' } },
-  lifecycle: { mount: [{ call: 'counts' }, { call: 'address' }] },
-  triggers: [],
-};
-
-export const terminalSlide = still('slide.terminal', 'The same app, in a terminal', codeLayout, {
-  kicker: 'Nobody wrote this screen',
-  file: 'a terminal, beside the slides',
-  code: code('$ ssh -p 2222 lyceum.moccadroid.com', '', '  THE MINISTRY', '  ─────────────', '  [1] Step in'),
-  marked: [1],
-  lines: say(
-    'The door your phone showed, in a terminal: any user name, no password. Step in and you are somebody, with the same tabs, each pressed by its number.',
-    'Not a second app. The terminal opens its own connection to the same server and draws the same trees with a third kit.',
-  ),
-  tag: 'One app · no screen written for the phone · none for the terminal',
-  pending: "The deployed server's door is not on port 22 yet: the VPS's own sshd moves off it first (PLAN, To build 7). The screen shown here is a sketch.",
-});
-
-export const timerSlide = still('slide.timer', 'Remember this timer', beatLayout, {
-  kicker: 'Before anything is explained',
-  lines: say(
-    'The speaker asks their assistant for the end of the talk. What comes back is not a promise — it is a document, to read before it is saved.',
-    'We come back to it at the end.',
-  ),
-  steps: [
-    { n: '1', text: 'The speaker asks: "Show the last slide in 30 minutes."' },
-    { n: '2', text: 'The assistant answers with a tide reflex — a draft, and a Save button.' },
-    { n: '3', text: 'The speaker reads it, and presses Save.' },
-    { n: '4', text: 'The controller counts down to its due time.' },
-  ],
-  pending: "The room watches this on the controller — today by the speaker sharing their screen, outside lyceum. The projector has no view of the controller's assistant.",
-});
-
 // ── 1 · the problem ──
-
-export const problemSlide = still('slide.problem', 'Code is the least checkable thing a model can write', pointsLayout, {
-  kicker: 'Why',
-  points: [
-    { label: 'Before it runs', text: 'You cannot validate it. You find out by running it.' },
-    { label: 'Policy', text: 'You cannot filter it by who is asking.' },
-    { label: 'Replay', text: 'You cannot replay a decision it made. It decides again, every time.' },
-    { label: 'Upgrades', text: 'You cannot migrate it when the framework moves.' },
-    { label: 'Agents', text: 'An agent cannot read it as state. It reads your source, or a screenshot.' },
-  ],
-  lines: say('Models are getting good at writing code. The code is still the problem.'),
-});
 
 export const thesisSlide = still('slide.thesis', 'Code lives in five places', pointsLayout, {
   kicker: 'The claim',
@@ -132,78 +71,6 @@ export const censusSlide: ActionDefinition = {
 
 // ── 2 · nova ──
 
-export const dataSlide = still('slide.data', 'The screen is a document', codeLayout, {
-  kicker: 'Nova',
-  file: 'app/actions/member/card.action.ts',
-  code: code(
-    'export const cardAction: ActionDefinition = {',
-    "  id: 'member.card',",
-    "  data: { me: { name: '', title: '', … }, tab: false, strip: false },",
-    '  input: z.toJSONSchema(z.object({',
-    "    tab: z.boolean().optional().describe('Render as a tab …'),",
-    "    strip: z.boolean().optional().describe('Render as one line …'),",
-    '  })),',
-    "  layout: { if: '$.tab', then: TAB_BUTTON,",
-    "            else: { if: '$.strip', then: cardStripLayout, else: cardLayout } },",
-    '  endpoints: {',
-    "    load: { url: '/api/vex', method: 'POST', target: 'me',",
-    "            request: { fingerprint: 'members/me', context: {} } },",
-    '  },',
-    "  lifecycle: { mount: [{ call: 'load' }] },",
-    '};',
-  ),
-  marked: [8, 9, 12],
-  lines: say(
-    'The ID card on your phone is this object: data, endpoints, a layout, triggers. One action, three sizes — the card, the strip across the top, the tab.',
-    'No component knows who you are. The query behind it is a document too.',
-  ),
-  tag: 'A screen is JSON · A query is JSON · A permission is JSON',
-});
-
-export const shellSlide = still('slide.shell', 'Events go up, trees come down', pointsLayout, {
-  kicker: 'Nova, held by moss',
-  points: [
-    { label: 'Shell', text: 'One per person, held on the server.' },
-    { label: 'Canvases', text: 'The regions of a screen: a stack of cards, or a tray.' },
-    { label: 'Actions', text: 'Data, endpoints, triggers, a layout.' },
-    { label: 'Up', text: 'Events: a press, a field typed in.' },
-    { label: 'Down', text: 'Render trees. The client is a terminal.' },
-  ],
-  lines: say('The core never learns what draws it. A browser, a terminal, a line of text: each is a kit over the same tree.'),
-});
-
-export const looksSlide = still('slide.looks', 'One row, and every screen repaints', codeLayout, {
-  kicker: 'Look at your phone',
-  file: 'ui/target.ts — the whole switch, abridged',
-  code: code(
-    'const paint = (): void => {',
-    "  const look = lookIn(api.canvasTree('look')) ?? 'poster';",
-    "  style.disabled = look !== 'poster';",
-    '  views[look].render();',
-    '};',
-  ),
-  marked: [2, 4],
-  lines: say(
-    'The speaker writes one row. Every screen in the room swaps its kit — the poster for plain HTML — and the tree it paints does not change.',
-    'Open devtools: nothing was sent to switch.',
-  ),
-  tag: 'Four kits over one grammar · poster · plain · ink (SSH) · text',
-});
-
-export const screenSlide = still('slide.screen', 'The assistant sees your screen as data', beatLayout, {
-  kicker: 'The fourth kit',
-  lines: say(
-    'The text kit draws the same tree as words. That is what your assistant is handed each turn: exactly what the charter put on your screen.',
-    'Not a screenshot. Not a scraped DOM.',
-  ),
-  steps: [
-    { n: '1', text: 'A phone in the room, on the projector.' },
-    { n: '2', text: 'Beside it, the same tree as the text kit draws it.' },
-    { n: '3', text: 'Its owner asks their assistant what is on their screen. It answers from that.' },
-  ],
-  pending: 'The stage cannot show a phone and its text-kit drawing side by side yet, and the controller cannot pick a phone to show.',
-});
-
 // ── 3 · charter ──
 
 // Assignment: the four departments, each with its mark and its count so far,
@@ -226,24 +93,6 @@ export const assignmentSlide: ActionDefinition = {
     counts: read(memberCounts.fingerprint, 'counts'),
   },
   lifecycle: { mount: [{ call: 'departments' }, { call: 'tally' }, { call: 'counts' }] },
-  triggers: [],
-};
-
-// Clearance: what each department's role is granted, in plain words — and so
-// what exists on its phones.
-export const clearanceSlide: ActionDefinition = {
-  id: 'slide.clearance',
-  title: 'If you can’t use it, it isn’t there',
-  data: {
-    kicker: 'Compare with your neighbour',
-    title: 'If you can’t use it, it isn’t there',
-    lines: ['An action your role is not granted is never sent to your phone. Not hidden, not disabled — it does not exist for you.'],
-    departments: [],
-    pending: "Today the four departments differ by one tab each. Each needs more actions of its own before neighbours' phones differ at arm's length (PLAN, To build 8).",
-  },
-  layout: clearanceLayout,
-  endpoints: { departments: read(departmentsAll.fingerprint, 'departments') },
-  lifecycle: { mount: [{ call: 'departments' }] },
   triggers: [],
 };
 
@@ -583,18 +432,10 @@ export const endSlide: ActionDefinition = {
 };
 
 export const SLIDE_ACTIONS: readonly ActionDefinition[] = [
-  titleSlide,
-  terminalSlide,
-  timerSlide,
-  problemSlide,
-  thesisSlide,
+  ...OPENING_SLIDES,
   censusSlide,
-  dataSlide,
-  shellSlide,
-  looksSlide,
-  screenSlide,
+  thesisSlide,
   assignmentSlide,
-  clearanceSlide,
   charterSlide,
   stampedSlide,
   liveSlide,

@@ -111,6 +111,16 @@ const Bar: DomComponent = ({ props }) =>
       .join(' · '),
   );
 
+// What passes between two ends, as a list: one item per lane, with its arrow.
+const Flow: DomComponent = ({ props }) =>
+  el('figure', [
+    say('figcaption', `${text(props['from']) ?? ''} ⇄ ${text(props['to']) ?? ''}`),
+    el('ul', records(props['lanes']).map((lane) => say('li', `${lane['toward'] === 'from' ? '←' : '→'} ${text(lane['label']) ?? ''}`))),
+  ]);
+
+// Bars, as the numbers they are.
+const Columns: DomComponent = ({ props }) => el('dl', records(props['bars']).flatMap((bar) => [say('dt', text(bar['label']) ?? ''), say('dd', text(bar['value']) ?? '0')]));
+
 const Action: DomComponent = ({ props }) => {
   const node = say('button', text(props['label']) ?? '');
   node.setAttribute('type', 'button');
@@ -131,4 +141,4 @@ const Field: DomComponent = ({ props }) => {
 
 const Look: DomComponent = () => el('span');
 
-export const PLAIN_KIT: Kit = { Page, Sheet, Cell, Label, Headline, Text, Figure, Countdown, Code, Sigil, Qr, Rows, Bar, Action, Field, Look };
+export const PLAIN_KIT: Kit = { Page, Sheet, Cell, Label, Headline, Text, Figure, Countdown, Code, Sigil, Qr, Rows, Bar, Flow, Columns, Action, Field, Look };

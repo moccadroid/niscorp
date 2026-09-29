@@ -28,16 +28,10 @@ const cue = (id: string, title: string, lines: string[], pending: string): Actio
 
 export const CUE_TOOLS: readonly ActionDefinition[] = [
   cue(
-    'tools.terminal',
-    'Open the terminal door',
-    ['In a terminal beside the slides: ssh -p 2222 lyceum.moccadroid.com', 'Any user name, no password. Step in; press a tab by its number.'],
-    '',
-  ),
-  cue(
-    'tools.screen',
-    'Show a phone as the assistant sees it',
-    ['Pick a phone in the room. The projector shows it beside its text-kit drawing.'],
-    'There is nothing to pick a phone with, and no stage view to put it on.',
+    'tools.push',
+    'Push an action',
+    ['To everyone: a colour. To a group: a header. To one person: a button nobody else has.', 'Take each back the same way.'],
+    'There is no panel yet, and no colour, header or button actions to push.',
   ),
   cue(
     'tools.refusal',

@@ -61,6 +61,12 @@ export const TEXT_KIT: KitOf<TtyComponent> = {
     return block(...(header.some((label) => label !== '') ? [header.join(' | ')] : []), ...said);
   },
   Bar: ({ props }) => block(records(props['segments']).map((segment) => text(segment['value']) ?? '').filter((value) => value !== '').join(' · ')),
+  Flow: ({ props }) =>
+    block(
+      `${text(props['from']) ?? ''} ⇄ ${text(props['to']) ?? ''}`,
+      ...records(props['lanes']).map((lane) => `${lane['toward'] === 'from' ? '←' : '→'} ${text(lane['label']) ?? ''}`),
+    ),
+  Columns: ({ props }) => block(records(props['bars']).map((bar) => `${text(bar['label']) ?? ''}: ${text(bar['value']) ?? '0'}`).join(' · ')),
   Action: ({ props }) => block(`[button: ${text(props['label']) ?? ''}]`),
   Field: ({ props }) => {
     const value = text(props['value']) ?? '';

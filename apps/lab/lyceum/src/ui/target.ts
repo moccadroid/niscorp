@@ -39,6 +39,22 @@ const lookIn = (nodes: readonly RenderNode[]): (typeof LOOKS)[number] | undefine
   return undefined;
 };
 
+// Which action instance is on the stage's `main` canvas — the slide. A new one
+// is a slide arriving; the same one is the slide updating.
+const slideIn = (nodes: readonly RenderNode[]): string | undefined => {
+  for (const node of nodes) {
+    if (node.type !== 'component' && node.type !== 'fragment') continue;
+    const instance = node.type === 'component' ? node.props['instanceId'] : undefined;
+    if (typeof instance === 'string') return instance;
+    const inner = slideIn(node.children);
+    if (inner !== undefined) return inner;
+  }
+  return undefined;
+};
+
+// How long a slide's cells take to wipe in (./tokens.ts, "a slide arriving").
+const ENTERING_MS = 2200;
+
 export const lyceumTarget = (config: { root: HTMLElement }): Target => (api) => {
   const { root } = config;
   const style = dress(root.ownerDocument);
@@ -46,7 +62,17 @@ export const lyceumTarget = (config: { root: HTMLElement }): Target => (api) => 
     poster: createDomView(root, lyceumRegistry(POSTER_KIT), api, { fallback }),
     plain: createDomView(root, lyceumRegistry(PLAIN_KIT), api, { fallback }),
   };
+  let slide: string | undefined;
+  let arrived = 0;
   const paint = (): void => {
+    const now = slideIn(api.canvasTree('main'));
+    if (now !== slide) {
+      slide = now;
+      arrived = Date.now();
+    }
+    const elapsed = Date.now() - arrived;
+    root.toggleAttribute('data-enter', now !== undefined && elapsed < ENTERING_MS);
+    root.style.setProperty('--enter-elapsed', `${elapsed}ms`);
     const look = lookIn(api.canvasTree('look')) ?? 'poster';
     style.disabled = look !== 'poster';
     root.classList.toggle(ROOT_CLASS, look === 'poster');

@@ -4,62 +4,140 @@
     {
       "name": "lyra",
       "runtimeExecutable": "pnpm",
-      "runtimeArgs": ["--filter", "lyra", "dev", "--port", "5180", "--strictPort", "--no-open"],
+      "runtimeArgs": [
+        "--filter",
+        "lyra",
+        "dev",
+        "--port",
+        "5180",
+        "--strictPort",
+        "--no-open"
+      ],
       "port": 5180
     },
     {
       "name": "lyra-admin",
       "runtimeExecutable": "pnpm",
-      "runtimeArgs": ["--filter", "lyra-admin", "dev"],
+      "runtimeArgs": [
+        "--filter",
+        "lyra-admin",
+        "dev"
+      ],
       "port": 5190
     },
     {
       "name": "lyra-integrations",
       "runtimeExecutable": "pnpm",
-      "runtimeArgs": ["--filter", "lyra-integrations", "serve"],
+      "runtimeArgs": [
+        "--filter",
+        "lyra-integrations",
+        "serve"
+      ],
       "port": 8799
     },
     {
       "name": "atrium-integrations",
       "runtimeExecutable": "pnpm",
-      "runtimeArgs": ["--filter", "atrium", "integrations"],
+      "runtimeArgs": [
+        "--filter",
+        "atrium",
+        "integrations"
+      ],
       "port": 8788
     },
     {
       "name": "atrium",
       "runtimeExecutable": "pnpm",
-      "runtimeArgs": ["--filter", "atrium", "dev", "--port", "5175", "--strictPort", "--no-open"],
+      "runtimeArgs": [
+        "--filter",
+        "atrium",
+        "dev",
+        "--port",
+        "5175",
+        "--strictPort",
+        "--no-open"
+      ],
       "port": 5175
     },
     {
       "name": "atrium-admin",
       "runtimeExecutable": "pnpm",
-      "runtimeArgs": ["--filter", "atrium", "admin"],
+      "runtimeArgs": [
+        "--filter",
+        "atrium",
+        "admin"
+      ],
       "port": 8790
     },
     {
       "name": "relay",
       "runtimeExecutable": "pnpm",
-      "runtimeArgs": ["--filter", "relay", "dev", "--port", "5174", "--strictPort", "--no-open"],
+      "runtimeArgs": [
+        "--filter",
+        "relay",
+        "dev",
+        "--port",
+        "5174",
+        "--strictPort",
+        "--no-open"
+      ],
       "port": 5174
     },
     {
       "name": "encore",
       "runtimeExecutable": "pnpm",
-      "runtimeArgs": ["--filter", "encore", "dev", "--port", "5195", "--strictPort", "--no-open"],
+      "runtimeArgs": [
+        "--filter",
+        "encore",
+        "dev",
+        "--port",
+        "5195",
+        "--strictPort",
+        "--no-open"
+      ],
       "port": 5195
     },
     {
       "name": "showroom",
       "runtimeExecutable": "pnpm",
-      "runtimeArgs": ["--filter", "showroom", "dev", "--port", "5199", "--strictPort", "--no-open"],
+      "runtimeArgs": [
+        "--filter",
+        "showroom",
+        "dev",
+        "--port",
+        "5199",
+        "--strictPort",
+        "--no-open"
+      ],
       "port": 5199
     },
     {
       "name": "lyceum",
       "runtimeExecutable": "pnpm",
-      "runtimeArgs": ["--filter", "lyceum", "dev", "--port", "5197", "--strictPort", "--no-open"],
+      "runtimeArgs": [
+        "--filter",
+        "lyceum",
+        "dev",
+        "--port",
+        "5197",
+        "--strictPort",
+        "--no-open"
+      ],
       "port": 5197
+    },
+    {
+      "name": "lyceum-talk",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": [
+        "--filter",
+        "lyceum",
+        "dev",
+        "--port",
+        "5198",
+        "--strictPort",
+        "--no-open"
+      ],
+      "port": 5198
     }
   ]
 }

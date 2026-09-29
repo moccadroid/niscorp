@@ -110,9 +110,9 @@ const main = async (): Promise<void> => {
   const stage = await connect(base, await mintSession(runtime.pool, 'stage', 60_000));
   const stageHello = await stage.hello();
   check('the stage gets the register and no controls', stageHello.catalog.actions.includes('stage.register') && !stageHello.catalog.actions.includes('speaker.console'));
-  check('the stage opens on the first slide', await stage.shows('main', 'The talk is an application'));
+  check('the stage opens on the first slide', await stage.shows('main', 'An architecture for applications that language models write and operate.'));
   speaker.click('controls', 'next');
-  check('next moves the stage to the register', await stage.shows('main', 'The register'));
+  check('next moves the stage to the register', await stage.shows('main', 'Everyone who has joined'));
   check('the register shows them by their issued name', await stage.shows('main', issuedName));
 
   // ── the assignment slide brings its tool to the controller ──

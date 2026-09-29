@@ -175,6 +175,35 @@ const Bar: NovaComponent = ({ ...props }) => {
   );
 };
 
+// What passes between two ends: one line per lane, its arrow in its ink.
+const Flow: NovaComponent = ({ ...props }) =>
+  h(
+    Box,
+    { flexDirection: 'column' },
+    h(InkText, { bold: true }, `${text(props['from']) ?? ''}  ⇄  ${text(props['to']) ?? ''}`),
+    records(props['lanes']).map((lane, i) => {
+      const ink = oneOf(lane['ink'], INKS);
+      const colour = ink === undefined ? undefined : COLOUR[ink];
+      return h(InkText, { key: i, ...(colour === undefined ? {} : { color: colour }) }, `${lane['toward'] === 'from' ? '  <── ' : '  ──> '}${text(lane['label']) ?? ''}`);
+    }),
+  );
+
+// Bars as rows of blocks, forty cells for the largest, each in its ink.
+const Columns: NovaComponent = ({ ...props }) => {
+  const bars = records(props['bars']);
+  const most = Math.max(1, ...bars.map((bar) => (typeof bar['value'] === 'number' ? bar['value'] : 0)));
+  return h(
+    Box,
+    { flexDirection: 'column' },
+    bars.map((bar, i) => {
+      const value = typeof bar['value'] === 'number' ? bar['value'] : 0;
+      const ink = oneOf(bar['ink'], INKS);
+      const colour = ink === undefined ? undefined : COLOUR[ink];
+      return h(InkText, { key: i }, `${(text(bar['label']) ?? '').padEnd(12)} `, h(InkText, colour === undefined ? {} : { color: colour }, '█'.repeat(Math.round((value / most) * BAR_CELLS))), ` ${value}`);
+    }),
+  );
+};
+
 // A button: its [n], its label, the alert ink in colour.
 const Action: NovaComponent = ({ novaRef, ...props }) => {
   const { marker, isFocused } = useActionable(novaRef, props['value']);
@@ -193,7 +222,7 @@ const Field: NovaComponent = (props) => h(Input, props);
 // The look belongs to a browser; a terminal has one.
 const Look: NovaComponent = () => null;
 
-export const INK_KIT: KitOf<NovaComponent> = { Page, Sheet, Cell, Label, Headline, Text, Figure, Countdown, Code, Sigil, Qr, Rows, Bar, Action, Field, Look };
+export const INK_KIT: KitOf<NovaComponent> = { Page, Sheet, Cell, Label, Headline, Text, Figure, Countdown, Code, Sigil, Qr, Rows, Bar, Flow, Columns, Action, Field, Look };
 
 // The terminal's registry: this kit, assembled once. moss's ink target adds
 // the wire-backed slots (ActionSlot, CanvasSlot) itself.

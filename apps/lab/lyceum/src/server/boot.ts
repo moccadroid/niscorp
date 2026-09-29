@@ -40,7 +40,11 @@ export type Booted<R extends LyceumRuntime = DevRuntime> = {
 // Who the speaker is and how their sign-in link is sent: the speaker's address
 // (LYCEUM_SPEAKER_EMAIL unless told) and a mailer (./mail.ts unless told — a
 // check hands in an outbox).
-export type BootOptions = { publicUrl?: string; speakerEmail?: string; send?: SendMail };
+//
+// How people reach the SSH door from outside, as the command they type — the
+// deployment's (LYCEUM_SSH_ADDRESS; a proxy picks the host and port, not the
+// app). Empty: the projector does not show one.
+export type BootOptions = { publicUrl?: string; sshAddress?: string; speakerEmail?: string; send?: SendMail };
 const DEFAULT_PUBLIC_URL = 'http://localhost:8796';
 
 // The development boot: in-memory PGlite — a fresh one, or the one it is lent.
@@ -85,7 +89,7 @@ export const bootOn = async <R extends LyceumRuntime>(runtime: R, options: BootO
 
   const app = buildLyceum({
     identity: lyceumIdentity,
-    functions: (session) => ({ ...doorFunctions(session, server, issuer), ...assignmentFunctions(session, server), ...roomFunctions(publicUrl, census), ...assistantFunctions(session, { querier, writer: timerWriter, orchestrator, tz, timing }), ...lecternFunctions(server, speakerMail) }),
+    functions: (session) => ({ ...doorFunctions(session, server, issuer), ...assignmentFunctions(session, server), ...roomFunctions(publicUrl, options.sshAddress ?? '', census), ...assistantFunctions(session, { querier, writer: timerWriter, orchestrator, tz, timing }), ...lecternFunctions(server, speakerMail) }),
     reactions: lyceumReactions(server),
   });
   built = await createServer(app, runtime);

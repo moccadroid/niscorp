@@ -117,7 +117,8 @@ html:has(.page > [data-canvas="strip"]:not(:empty)) { font-size: clamp(16px, cal
 
 /* ── cell: a place in the grid, and its ink ── */
 /* defaults first, so an ink always out-ranks them */
-.${ROOT_CLASS} :where(.cell, .bar > span, .action) { --bg: var(--paper); --fg: var(--ink); }
+.${ROOT_CLASS} :where(.cell, .bar > span, .action, .flow-lane) { --bg: var(--paper); --fg: var(--ink); }
+.${ROOT_CLASS} :where(.columns-fill) { --bg: var(--ink); --fg: var(--paper); }
 .${ROOT_CLASS} [data-ink="ink"] { --bg: var(--ink); --fg: var(--paper); }
 .${ROOT_CLASS} [data-ink="signal"] { --bg: var(--signal); --fg: var(--paper); }
 .${ROOT_CLASS} [data-ink="alert"] { --bg: var(--alert); --fg: var(--ink); }
@@ -215,6 +216,59 @@ html:has(.page > [data-canvas="strip"]:not(:empty)) { font-size: clamp(16px, cal
 .${ROOT_CLASS} .qr > svg { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
 .${ROOT_CLASS} .qr .qr-ground { fill: var(--paper); }
 .${ROOT_CLASS} .qr path { fill: var(--ink); }
+
+/* ── flow: two ends, and what passes between them ──
+   A lane is a cell; its dots are its ink's foreground, running along a rule
+   toward the end the lane names. They never stop (the kit starts each lane
+   where the wall clock says it is, so a re-render does not make them jump). */
+.${ROOT_CLASS} .flow { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: var(--rule); background: var(--ink); flex: 1 1 auto; min-height: 0; }
+.${ROOT_CLASS} .flow-end {
+  background: var(--ink); color: var(--paper); display: flex; align-items: center; justify-content: center; text-align: center;
+  padding: clamp(.6rem, calc(1.2 * var(--cq)), 1.4rem);
+  font: 900 clamp(1rem, calc(2.2 * var(--cq)), 56px)/1 var(--display); text-transform: uppercase; max-width: 5.5em;
+}
+.${ROOT_CLASS} .flow-lanes { display: grid; gap: var(--rule); background: var(--ink); }
+.${ROOT_CLASS} .flow-lane { background: var(--bg); color: var(--fg); display: flex; flex-direction: column; justify-content: center; gap: clamp(.4rem, calc(1 * var(--cq)), 1.2rem); padding: clamp(.6rem, calc(1.2 * var(--cq)), 1.4rem) clamp(.8rem, calc(1.8 * var(--cq)), 2rem); }
+.${ROOT_CLASS} .flow-track { position: relative; height: clamp(12px, calc(1.8 * var(--cq)), 40px); background: linear-gradient(var(--fg), var(--fg)) center / 100% var(--rule) no-repeat; }
+.${ROOT_CLASS} .flow-dot {
+  position: absolute; top: 50%; left: 0; width: clamp(12px, calc(1.8 * var(--cq)), 40px); aspect-ratio: 1; background: var(--fg);
+  transform: translate(-50%, -50%); animation: flow-to 2400ms linear infinite;
+}
+.${ROOT_CLASS} .flow-lane[data-toward="from"] .flow-dot { animation-name: flow-from; }
+@keyframes flow-to { from { left: 0%; } to { left: 100%; } }
+@keyframes flow-from { from { left: 100%; } to { left: 0%; } }
+
+/* ── columns: numbers as bars, standing on one rule ── */
+.${ROOT_CLASS} .columns { --value: clamp(1.1rem, calc(2.8 * var(--cq)), 72px); display: flex; gap: clamp(.6rem, calc(1.6 * var(--cq)), 2rem); flex: 1 1 auto; min-height: clamp(160px, calc(20 * var(--cq)), 520px); }
+.${ROOT_CLASS} .columns-bar { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; gap: .35em; }
+.${ROOT_CLASS} .columns-value { position: absolute; bottom: 100%; left: 0; padding-bottom: .12em; font: 900 var(--value)/1 var(--display); }
+.${ROOT_CLASS} .columns-track { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; justify-content: flex-end; padding-top: calc(var(--value) * 1.2); border-bottom: var(--rule) solid currentColor; }
+.${ROOT_CLASS} .columns-fill { position: relative; width: 100%; flex: none; background: var(--bg); }
+
+/* ── a slide arriving: its cells wipe in, one after the next ──
+   Only when the slide itself changes — the terminal (./target.ts) marks the
+   page for the moment after a new slide mounts, and says how far into it a
+   re-render lands, so a count changing mid-way does not start it over. Every
+   other update paints still. */
+.${ROOT_CLASS}[data-enter] .page > [data-canvas="main"] > * > .sheet > .cell {
+  animation: enter 520ms cubic-bezier(.2, .8, .2, 1) both;
+  animation-delay: calc(var(--i, 0) * 110ms - var(--enter-elapsed, 0ms));
+}
+.${ROOT_CLASS}[data-enter] .page > [data-canvas="main"] > * > .sheet > .cell:nth-child(1) { --i: 0; }
+.${ROOT_CLASS}[data-enter] .page > [data-canvas="main"] > * > .sheet > .cell:nth-child(2) { --i: 1; }
+.${ROOT_CLASS}[data-enter] .page > [data-canvas="main"] > * > .sheet > .cell:nth-child(3) { --i: 2; }
+.${ROOT_CLASS}[data-enter] .page > [data-canvas="main"] > * > .sheet > .cell:nth-child(4) { --i: 3; }
+.${ROOT_CLASS}[data-enter] .page > [data-canvas="main"] > * > .sheet > .cell:nth-child(5) { --i: 4; }
+.${ROOT_CLASS}[data-enter] .page > [data-canvas="main"] > * > .sheet > .cell:nth-child(6) { --i: 5; }
+.${ROOT_CLASS}[data-enter] .page > [data-canvas="main"] > * > .sheet > .cell:nth-child(7) { --i: 6; }
+.${ROOT_CLASS}[data-enter] .page > [data-canvas="main"] > * > .sheet > .cell:nth-child(8) { --i: 7; }
+.${ROOT_CLASS}[data-enter] .page > [data-canvas="main"] > * > .sheet > .cell:nth-child(9) { --i: 8; }
+.${ROOT_CLASS}[data-enter] .page > [data-canvas="main"] > * > .sheet > .cell:nth-child(10) { --i: 9; }
+.${ROOT_CLASS}[data-enter] .page > [data-canvas="main"] > * > .sheet > .cell:nth-child(11) { --i: 10; }
+.${ROOT_CLASS}[data-enter] .page > [data-canvas="main"] > * > .sheet > .cell:nth-child(12) { --i: 11; }
+.${ROOT_CLASS}[data-enter] .page > [data-canvas="main"] > * > .sheet > .cell:nth-child(13) { --i: 12; }
+.${ROOT_CLASS}[data-enter] .page > [data-canvas="main"] > * > .sheet > .cell:nth-child(14) { --i: 13; }
+@keyframes enter { from { clip-path: inset(0 100% 0 0); } to { clip-path: inset(0 0 0 0); } }
 
 /* ── action: a whole cell you press ── */
 .${ROOT_CLASS} .action {

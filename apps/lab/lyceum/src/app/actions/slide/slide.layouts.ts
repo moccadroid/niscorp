@@ -11,27 +11,6 @@ const cell = (area: string, children: LayoutNode[], props: Record<string, unknow
 
 const label = (words: string): LayoutNode => ({ component: 'Label', children: words });
 
-// The title: the claim, the way in beside it — the code to scan and the
-// address to type — the room counted under it, one line to act on.
-export const titleLayout: LayoutNode = {
-  component: 'Sheet',
-  props: {
-    size: 'fill',
-    areas: ['kick kick kick join', 'head head head join', 'body body cta count'],
-    // the code is the one thing on this slide somebody at the back must read
-    cols: [1, 1, 1, 1.5],
-    rows: ['auto', 1, 'auto'],
-  },
-  children: [
-    cell('kick', [label('{{$.kicker}}')]),
-    cell('head', [{ component: 'Headline', props: { level: 'display' }, children: '{{$.title}}' }], { align: 'end' }),
-    cell('body', [{ component: 'Text', children: '{{$.lines.0}}' }]),
-    cell('cta', [{ component: 'Text', children: '{{$.lines.1}}' }], { ink: 'alert' }),
-    cell('join', [label('Scan to step in'), { component: 'Qr', props: { value: '$.address.url' } }, { component: 'Headline', props: { level: 'name' }, children: '{{$.address.host}}' }]),
-    cell('count', [{ component: 'Figure', props: { label: 'In the room', value: '$.counts.joined' } }], { ink: 'live', align: 'end' }),
-  ],
-};
-
 // A statement: the claim, then its points as numbered cells. The points are
 // placed by the grid itself, one cell each, in the row under the headline.
 export const statementLayout: LayoutNode = {
@@ -111,13 +90,27 @@ export const figuresLayout: LayoutNode = {
 // stale (server/census.ts).
 export const censusLayout: LayoutNode = {
   component: 'Sheet',
-  props: { size: 'fill', areas: ['kick kick kick', 'head head head', 'one two three', 'words words words'], rows: ['auto', 1, 'auto', 'auto'] },
+  props: { size: 'fill', areas: ['kick chart', 'head chart', 'share chart', 'words words'], cols: [1.2, 1], rows: ['auto', 1, 'auto', 'auto'] },
   children: [
     cell('kick', [label('{{$.kicker}}')]),
     cell('head', [{ component: 'Headline', props: { level: 'display' }, children: '{{$.title}}' }], { align: 'end' }),
-    cell('one', [{ component: 'Figure', props: { label: 'lines of data — app/, every file parsed against its schema', value: '$.census.data' } }], { ink: 'live' }),
-    cell('two', [{ component: 'Figure', props: { label: 'lines of code — kits, server, tables, entry', value: '$.census.code' } }], { ink: 'signal' }),
-    cell('three', [{ component: 'Figure', props: { label: 'percent of the app is data', value: '$.census.share' } }]),
+    cell(
+      'chart',
+      [
+        label('Lines that hold code'),
+        {
+          component: 'Columns',
+          props: {
+            bars: [
+              { label: 'Data · app/', value: '$.census.data', ink: 'live' },
+              { label: 'Code · the rest', value: '$.census.code', ink: 'signal' },
+              { label: 'Checks · dev/', value: '$.census.checkLines', ink: 'ink' },
+            ],
+          },
+        },
+      ],
+    ),
+    cell('share', [{ component: 'Figure', props: { label: 'percent of the app is data — every file in app/ parsed against its schema', value: '$.census.share' } }], { ink: 'live' }),
     cell('words', [
       { component: 'Text', children: 'Slides, a projector, a controller, everyone’s phones, an SSH terminal, an assistant, timers, Q&A. Beside it, {{$.census.checks}} checks in {{$.census.checkLines}} lines, each on its own database.' },
       { component: 'Text', props: { tone: 'muted' }, children: 'Counted from the source this server runs. Comments and blank lines are not counted.' },
@@ -240,35 +233,5 @@ export const assignmentLayout: LayoutNode = {
         ],
       },
     },
-  ],
-};
-
-// Clearance: every department, and what its role is granted, in plain words.
-export const clearanceLayout: LayoutNode = {
-  component: 'Sheet',
-  props: { size: 'fill', areas: ['kick kick', 'head words', 'table table', 'todo todo'], cols: [1.4, 1], rows: ['auto', 1, 'auto', 'auto'] },
-  children: [
-    cell('kick', [label('{{$.kicker}}')]),
-    cell('head', [{ component: 'Headline', props: { level: 'title' }, children: '{{$.title}}' }], { align: 'end' }),
-    cell('words', [{ component: 'Text', children: '{{$.lines.0}}' }], { ink: 'highlight', align: 'end' }),
-    cell(
-      'table',
-      [
-        {
-          component: 'Rows',
-          props: {
-            rows: '$.departments',
-            rowKey: 'department_id',
-            columns: [
-              { label: '', key: 'sigil', kind: 'sigil', w: 0.3 },
-              { label: 'Department', key: 'name', w: 1 },
-              { label: 'Its clearance', key: 'remit', w: 3.2 },
-            ],
-          },
-        },
-      ],
-      { pad: 'none' },
-    ),
-    todo,
   ],
 };

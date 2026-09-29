@@ -63,6 +63,15 @@ export const KIT_PROPS = z
       .partial()
       .strict(),
     Bar: z.object({ segments: z.array(z.object({ value: z.number(), ink, mark }).partial({ ink: true, mark: true }).strict()) }).partial().strict(),
+    Flow: z
+      .object({
+        from: z.string().describe('What the first end is'),
+        to: z.string().describe('What the second end is'),
+        lanes: z.array(z.object({ label, toward: z.enum(['to', 'from']), ink }).partial({ ink: true }).strict()),
+      })
+      .partial()
+      .strict(),
+    Columns: z.object({ bars: z.array(z.object({ label, value: z.number(), ink, mark }).partial({ ink: true, mark: true }).strict()) }).partial().strict(),
     Action: z.object({ area, ink, label, lines: z.literal('two'), size: z.literal('large') }).partial().strict(),
     Field: z.object({ area, placeholder: z.string(), value: z.string(), enter: z.literal('clears') }).partial().strict(),
     Look: z.object({ look: z.enum(LOOKS) }).partial().strict(),

@@ -36,5 +36,10 @@ export const LYCEUM_KIT: Sequence = {
       description: "Cell: scroll 'end' — a scrolling cell held at its end",
       steps: [],
     },
+    {
+      // A MARKER: two components added.
+      description: 'Flow: two ends and what passes between them; Columns: numbers as bars',
+      steps: [],
+    },
   ],
 };

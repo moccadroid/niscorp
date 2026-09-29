@@ -124,7 +124,7 @@ const main = async (): Promise<void> => {
 
   // ── what it sees: the person's own screen, read off the live shell ──
   await say(speaker, 'tools', 'What is on my screen?');
-  check('the speaker\'s assistant sees the slide on screen, from the controller\'s own canvases', await speaker.shows('tools', 'The talk is an application'));
+  check('the speaker\'s assistant sees the slide on screen, from the controller\'s own canvases', await speaker.shows('tools', 'Ask everyone to join'));
   check('…and not its own bookkeeping', !speaker.showsNow('tools', 'THE CONVERSATION'));
   await say(forms, 'body', 'What is on my screen?');
   check('a phone\'s assistant sees that person\'s screen: their own card', await forms.shows('body', 'On your screen:'));

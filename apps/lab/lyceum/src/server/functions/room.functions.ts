@@ -8,7 +8,7 @@ import type { Census } from '../census';
 //
 // And how big the app running the room is — counted from its source, for the
 // slide that answers "is JSON enough?" (../census.ts). Also on the wall anyway.
-export const roomFunctions = (publicUrl: string, census: () => Promise<Census>): Record<string, FunctionHandler> => ({
-  'room.address': async () => ({ url: publicUrl, host: new URL(publicUrl).host }),
+export const roomFunctions = (publicUrl: string, sshAddress: string, census: () => Promise<Census>): Record<string, FunctionHandler> => ({
+  'room.address': async () => ({ url: publicUrl, host: new URL(publicUrl).host, ssh: sshAddress }),
   'room.census': census,
 });

@@ -1,20 +1,20 @@
 import type { LayoutNode } from '@niscorp/nova';
 
-// Everybody who stepped in as a ruled table — their department's sigil, their
+// Everybody who joined, as a ruled table — their department's sigil, their
 // name, their title, their department or the lack of one — the way in beside
 // it while the room is still arriving, and the count.
 export const registerLayout: LayoutNode = {
   component: 'Sheet',
   props: { size: 'fill', areas: ['kick join', 'head join', 'table join', 'table count'], cols: [3, 1.1], rows: ['auto', 'auto', 1, 'auto'] },
   children: [
-    { component: 'Cell', props: { area: 'kick' }, children: [{ component: 'Label', children: 'The register' }] },
-    { component: 'Cell', props: { area: 'head' }, children: [{ component: 'Headline', props: { level: 'title' }, children: 'Everybody who stepped in' }] },
+    { component: 'Cell', props: { area: 'kick' }, children: [{ component: 'Label', children: 'Joining' }] },
+    { component: 'Cell', props: { area: 'head' }, children: [{ component: 'Headline', props: { level: 'title' }, children: 'Everyone who has joined' }] },
     {
       component: 'Cell',
       props: { area: 'join' },
-      children: [{ component: 'Label', children: 'Scan to step in' }, { component: 'Qr', props: { value: '$.address.url' } }, { component: 'Label', children: '{{$.address.host}}' }],
+      children: [{ component: 'Label', children: 'Scan to join' }, { component: 'Qr', props: { value: '$.address.url' } }, { component: 'Label', children: '{{$.address.host}}' }],
     },
-    { component: 'Cell', props: { area: 'count', ink: 'live', align: 'end' }, children: [{ component: 'Figure', props: { label: 'In the room', value: '$.counts.joined' } }] },
+    { component: 'Cell', props: { area: 'count', ink: 'live', align: 'end' }, children: [{ component: 'Figure', props: { label: 'Joined', value: '$.counts.joined' } }] },
     {
       component: 'Cell',
       props: { area: 'table', pad: 'none' },
@@ -28,7 +28,7 @@ export const registerLayout: LayoutNode = {
             columns: [
               { label: '', key: 'department_sigil', kind: 'sigil', w: 0.35 },
               { label: 'Name', key: 'name', w: 2.2 },
-              { label: 'Title', key: 'title', w: 3, missing: 'being issued' },
+              { label: 'Title', key: 'title', w: 3, missing: 'a model is writing it' },
               { label: 'Department', key: 'department_name', w: 1.5, missing: 'waiting' },
             ],
           },

@@ -357,6 +357,59 @@ export const Bar: DomComponent = ({ props }) => {
   return node;
 };
 
+// ── Flow — two ends, and what passes between them ─────────────────
+// from, to: what each end is. lanes: [{ label, toward: 'to' | 'from', ink? }] —
+// one lane per kind of message, its dots running toward the end it names. The
+// dots never stop. The page is rebuilt on every update, so each lane starts
+// where the wall clock says it is, not at its beginning: an update does not
+// make the dots jump back.
+const FLOW_PERIOD_MS = 2400;
+const TOWARDS = ['to', 'from'] as const;
+
+export const Flow: DomComponent = ({ props }) => {
+  const end = (value: unknown): HTMLElement => {
+    const node = el('div', 'flow-end');
+    node.textContent = text(value) ?? '';
+    return node;
+  };
+  const phase = -(Date.now() % FLOW_PERIOD_MS);
+  const lanes = records(props['lanes']).map((lane) => {
+    const label = el('span', 'label');
+    label.textContent = text(lane['label']) ?? '';
+    const dots = [0, 1, 2].map((i) => {
+      const dot = el('span', 'flow-dot');
+      dot.style.animationDelay = `${phase - (i * FLOW_PERIOD_MS) / 3}ms`;
+      return dot;
+    });
+    const node = el('div', 'flow-lane', [label, el('div', 'flow-track', dots)]);
+    setData(node, 'toward', oneOf(lane['toward'], TOWARDS) ?? 'to');
+    setData(node, 'ink', oneOf(lane['ink'], INKS));
+    return node;
+  });
+  return el('div', 'flow', [end(props['from']), el('div', 'flow-lanes', lanes), end(props['to'])]);
+};
+
+// ── Columns — numbers as bars, side by side ─────────────────────
+// bars: [{ label, value, ink?, mark? }]. Heights are proportional to the
+// largest; each bar carries its value on top of it and its label under it.
+export const Columns: DomComponent = ({ props }) => {
+  const bars = records(props['bars']);
+  const values = bars.map((bar) => (typeof bar['value'] === 'number' && bar['value'] > 0 ? bar['value'] : 0));
+  const most = Math.max(1, ...values);
+  const columns = bars.map((bar, i) => {
+    const value = el('span', 'columns-value');
+    value.textContent = text(bar['value']) ?? '0';
+    const fill = el('span', 'columns-fill', [value]);
+    fill.style.height = `${((values[i] ?? 0) / most) * 100}%`;
+    setData(fill, 'ink', oneOf(bar['ink'], INKS));
+    setData(fill, 'mark', oneOf(bar['mark'], MARKS));
+    const label = el('span', 'label');
+    label.textContent = text(bar['label']) ?? '';
+    return el('div', 'columns-bar', [el('div', 'columns-track', [fill]), label]);
+  });
+  return el('div', 'columns', columns);
+};
+
 // ── Action — a whole cell you press ─────────────────────────────
 // area, ink, label, lines ('two' — the label always takes exactly two lines,
 // clamped: a row of actions whose labels change keeps its height), size
@@ -413,4 +466,4 @@ export const Look: DomComponent = () => el('span', 'look');
 
 // THIS KIT, whole — typed against the grammar, so a component the grammar
 // names and the kit lacks does not compile.
-export const POSTER_KIT: Kit = { Page, Sheet, Cell, Label, Headline, Text, Figure, Countdown, Code, Sigil, Qr, Rows, Bar, Action, Field, Look };
+export const POSTER_KIT: Kit = { Page, Sheet, Cell, Label, Headline, Text, Figure, Countdown, Code, Sigil, Qr, Rows, Bar, Flow, Columns, Action, Field, Look };
