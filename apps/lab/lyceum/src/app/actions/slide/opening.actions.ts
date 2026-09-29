@@ -65,11 +65,18 @@ export const answerSlide = still('slide.answer', 'Make it something a program ca
 
 export const novaSlide = still('slide.nova', 'Nova', novaLayout, {
   claim: 'The UI is data.',
-  steps: [
-    { area: 'one', n: '1', title: 'A model writes it', text: 'An action, as JSON: data, endpoints, triggers, a layout.' },
-    { area: 'two', n: '2', title: 'A schema checks it', text: 'Before anything runs.' },
-    { area: 'three', n: '3', title: 'Nova runs it', text: 'A renderer draws it, on any screen.' },
-  ],
+  // The Send button of the Q&A form, as it is in send.layout.ts.
+  json: code(
+    '{',
+    "  component: 'Action',",
+    "  ref: 'send',",
+    '  props: {',
+    "    area: 'go',",
+    "    ink: 'alert',",
+    "    label: 'Send →',",
+    '  },',
+    '}',
+  ),
 });
 
 // The Q&A form: its source in the middle, its layout rendered on the right

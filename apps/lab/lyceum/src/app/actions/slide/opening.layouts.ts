@@ -70,13 +70,20 @@ export const answerLayout: LayoutNode = {
 };
 
 // 7 · Nova: the name, the claim, and how it works in three steps.
+// One real node of the Q&A form goes through all three: its JSON, checked,
+// and drawn — the drawn one is that same node, rendered here (no ref: on the
+// projector it is not pressable).
 export const novaLayout: LayoutNode = {
   component: 'Sheet',
-  props: { size: 'fill', areas: ['name name name', 'claim claim claim', 'one two three'], rows: [1, 'auto', 'auto'] },
+  props: { size: 'fill', areas: ['name json', 'name check', 'name drawn'], cols: [1, 1.1], rows: ['auto', 'auto', 1] },
   children: [
-    cell('name', [headline('display', '{{$.title}}')], { align: 'end' }),
-    cell('claim', [headline('title', '{{$.claim}}')], { ink: 'signal' }),
-    { for: '$.steps', as: 'step', key: 'area', do: { component: 'Cell', props: { area: '$step.area' }, children: [label('{{$step.n}}'), headline('name', '{{$step.title}}'), text('{{$step.text}}')] } },
+    cell('name', [headline('display', '{{$.title}}'), headline('title', '{{$.claim}}')], { ink: 'signal', align: 'end' }),
+    cell('json', [label('1 · A model writes it'), { component: 'Code', props: { text: '$.json' } }], { ink: 'ink', align: 'end' }),
+    cell('check', [label('2 · A schema checks it'), headline('title', 'Valid')], { ink: 'highlight' }),
+    cell('drawn', [
+      label('3 · Nova runs it, a renderer draws it'),
+      { component: 'Sheet', props: { size: 'fill', areas: ['button'] }, children: [cell('button', [{ component: 'Action', props: { ink: 'alert', label: 'Send →' } }], { align: 'center' })] },
+    ]),
   ],
 };
 
@@ -89,7 +96,7 @@ export const actionLayout: LayoutNode = {
     cell('kick', [label('{{$.kicker}}')]),
     cell('head', [headline('title', '{{$.title}}')], { align: 'end' }),
     cell('code', [label('{{$.file}}'), { component: 'Code', props: { text: '$.code', marked: '$.marked' } }], { ink: 'ink' }),
-    cell('form', [label('Its layout, rendered'), sendLayout]),
+    cell('form', [label('Its layout, rendered'), sendLayout], { ink: 'signal' }),
   ],
 };
 
