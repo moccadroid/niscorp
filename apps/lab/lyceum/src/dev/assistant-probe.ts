@@ -32,7 +32,8 @@ const PROBES: readonly { who: Who; say: string; want: Want; containing?: string;
   { who: 'records', say: 'Change my name to Ada Lovelace', want: 'none' },
   { who: 'speaker', say: 'End the talk in 30 minutes', want: 'timer', containing: 'slide.end' },
   { who: 'speaker', say: 'Who is in the room?', want: 'none' },
-  { who: 'speaker', say: 'Remind me to drink water in 10 minutes', want: 'none' },
+  // SPEC CHANGE 2026-09-29 (was none — no effect could remind): `notify` can.
+  { who: 'speaker', say: 'Remind me to drink water in 10 minutes', want: 'timer' },
   { who: 'speaker', say: 'What slide is on screen right now?', want: 'none', saying: 'The talk is an application' },
 ];
 

@@ -74,7 +74,6 @@ export const assistantLayout: LayoutNode = {
         else: {
           if: '$.answered',
           then: { component: 'Cell', props: { area: 'out', pad: 'none' }, children: [{ for: '$.reply.proposals', as: 'p', do: proposal }] },
-          else: { if: '$.saved', then: { component: 'Cell', props: { area: 'out' }, children: [{ component: 'Label', children: 'Saved · tide runs it now — no model is asked again.' }] } },
         },
       },
     },

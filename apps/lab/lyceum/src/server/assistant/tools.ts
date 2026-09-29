@@ -186,7 +186,9 @@ export const hostTools = (deps: ToolDeps, offered: ReadonlySet<ToolName>): ToolD
               reasoning: read,
             },
           });
-          // Its state, in words a reply cannot turn into "saved": it is not.
+          // Its state, in words a reply cannot turn into "saved": it is not — but
+          // it IS written and in front of them. (Cut to "NOT saved and NOT running"
+          // alone, it was reported as a failure: "I cannot set a timer".)
           return { written: { intent: draft.intent, when, reasoning: read, status: 'NOT saved and NOT running — it waits on their screen until they read it and save it' } };
         },
       }),

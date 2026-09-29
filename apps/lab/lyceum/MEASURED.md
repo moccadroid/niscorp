@@ -4,6 +4,24 @@ What the models actually did against lyceum, measured before each seam's design 
 settled. Not a plan: the choices these led to are recorded in `PLAN.md` ("Decided").
 Probes are written before a run and not rewritten to pass.
 
+## 2026-09-29 — the assistant's reply wording (`pnpm probe:assistant`, 1 run × 3)
+
+What changed: the assistant's prompt says a reply never claims something happened OR WILL
+happen unless a tool result says so, and never tells them what to press; the "Saved" banner
+under the conversation is gone — the turn's outcome says it once ("Saved · tide runs it at
+19:35 — no model is asked again."). One probe's SPEC changed: the speaker's "Remind me to
+drink water in 10 minutes" expects a timer (was none — no effect could remind; `notify` can).
+
+- Tried first: the `automate` result cut to "NOT saved and NOT running" (no "waits on their
+  screen… save it"). The model read it as a FAILURE — "I cannot set a timer for you", "I
+  couldn't create that reminder" of timers it had proposed; once "Your reminder has been
+  set". Restored.
+- With the result restored: 28/30 routed (the two misses: "which department has the most
+  people?", the query writer giving up — as before). Timer replies true 6/6 — 4 still add
+  "save it to activate". The waiting member's "End the talk in 30 minutes": "I can't end
+  the talk for you" 3/3 (was "The talk will conclude in 30 minutes" — a promise nothing
+  keeps).
+
 ## 2026-09-29 — the same changes, one at a time (`LYCEUM_PART=tide`, 8 runs each)
 
 Each configuration built on the real path (tide's source rewritten, rebuilt, restored after),

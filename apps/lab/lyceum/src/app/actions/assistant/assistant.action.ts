@@ -19,7 +19,6 @@ import { assistantLayout } from './assistant.layout';
 const run = [
   { set: 'error', value: '' },
   { set: 'answered', value: false },
-  { set: 'saved', value: false },
   { set: 'thinking', value: true },
   {
     call: 'turn',
@@ -48,7 +47,6 @@ export const assistantAction: ActionDefinition = {
     history: [],
     thinking: false,
     answered: false,
-    saved: false,
     chosen: { timerId: '', draft: {}, json: '', intent: '', when: '', reasoning: '' },
     savedTimer: { dueLocal: '' },
     error: '',
@@ -72,7 +70,7 @@ export const assistantAction: ActionDefinition = {
         fingerprint: turnResolve.fingerprint,
         context: {
           turnId: { $ref: '$.reply.turnId' },
-          outcome: { $interpolate: { template: 'Saved · fires at {{at}}', values: { at: { $ref: '$.savedTimer.dueLocal' } } } },
+          outcome: { $interpolate: { template: 'Saved · tide runs it at {{at}} — no model is asked again.', values: { at: { $ref: '$.savedTimer.dueLocal' } } } },
         },
       },
       errorTarget: 'error',
@@ -92,7 +90,7 @@ export const assistantAction: ActionDefinition = {
       do: [
         { set: 'error', value: '' },
         { set: 'chosen', value: '@event.payload' },
-        { call: 'save', onSuccess: [{ call: 'resolve', onSuccess: [{ set: 'answered', value: false }, { set: 'saved', value: true }] }] },
+        { call: 'save', onSuccess: [{ call: 'resolve', onSuccess: [{ set: 'answered', value: false }] }] },
       ],
     },
     // Something the assistant opened, open again from the conversation — a
