@@ -14,12 +14,6 @@ const label = (words: string): LayoutNode => ({ component: 'Label', children: wo
 const text = (words: string, muted = false): LayoutNode => ({ component: 'Text', ...(muted ? { props: { tone: 'muted' } } : {}), children: words });
 const headline = (level: 'display' | 'title' | 'name', words: string): LayoutNode => ({ component: 'Headline', props: { level }, children: words });
 
-// NOT BUILT YET, hatched — an empty `pending` draws nothing.
-const todo: LayoutNode = {
-  if: '$.pending',
-  then: cell('todo', [label('Not built yet'), text('{{$.pending}}')], { mark: 'hatch' }),
-};
-
 // 1 · The name, one line, and how to join: the code, the address, the SSH
 // command where the deployment has one.
 export const openingTitleLayout: LayoutNode = {
@@ -86,27 +80,38 @@ export const novaLayout: LayoutNode = {
   ],
 };
 
-// 8 · An action: its source, and beside it its layout, rendered from the same
-// JSON a phone renders.
+// 8 · An action: its source, whole, and beside it its layout, rendered from
+// the same JSON a phone renders.
 export const actionLayout: LayoutNode = {
   component: 'Sheet',
-  props: { size: 'fill', areas: ['kick code form', 'head code form'], cols: [0.85, 1.5, 0.9], rows: ['auto', 1] },
+  props: { size: 'fill', areas: ['code head', 'code form'], cols: [2.2, 0.9], rows: ['auto', 1] },
   children: [
-    cell('kick', [label('{{$.kicker}}')]),
-    cell('head', [headline('title', '{{$.title}}')], { align: 'end' }),
+    cell('head', [label('{{$.kicker}}'), headline('title', '{{$.title}}')]),
     cell('code', [label('{{$.file}}'), { component: 'Code', props: { text: '$.code', marked: '$.marked' } }], { ink: 'ink' }),
-    cell('form', [label('Its layout, rendered'), sendLayout], { ink: 'highlight' }),
+    cell('form', [label('Its layout, rendered'), sendLayout]),
   ],
 };
 
-// A demo slide: the name, the claim, and what is not built yet.
-export const demoLayout: LayoutNode = {
+// A point: the claim, and the one line that says why it matters.
+export const pointLayout: LayoutNode = {
   component: 'Sheet',
-  props: { size: 'fill', areas: ['kick', 'head', 'todo'], rows: ['auto', 1, 'auto'] },
+  props: { size: 'fill', areas: ['kick', 'head', 'line'], rows: ['auto', 1, 'auto'] },
   children: [
     cell('kick', [label('{{$.kicker}}')]),
     cell('head', [headline('display', '{{$.title}}')], { align: 'end' }),
-    todo,
+    cell('line', [headline('name', '{{$.line}}')], { ink: 'signal' }),
+  ],
+};
+
+// A point with the code it is about beside it.
+export const pointCodeLayout: LayoutNode = {
+  component: 'Sheet',
+  props: { size: 'fill', areas: ['kick kick', 'head head', 'code line'], cols: [1.15, 1], rows: ['auto', 1, 'auto'] },
+  children: [
+    cell('kick', [label('{{$.kicker}}')]),
+    cell('head', [headline('display', '{{$.title}}')], { align: 'end' }),
+    cell('line', [headline('name', '{{$.line}}')], { ink: 'signal' }),
+    cell('code', [label('{{$.file}}'), { component: 'Code', props: { text: '$.code', marked: '$.marked' } }], { ink: 'ink' }),
   ],
 };
 
@@ -120,32 +125,5 @@ export const looksLayout: LayoutNode = {
     cell('styled', [headline('name', 'With a stylesheet')], { ink: 'signal' }),
     cell('plain', [headline('name', 'Without one')]),
     cell('term', [headline('name', 'In a terminal'), { if: '$.address.ssh', then: { component: 'Code', props: { text: '$.address.ssh' } } }], { ink: 'ink' }),
-  ],
-};
-
-// 12 · The obvious question, and the difference in three rows.
-export const compareLayout: LayoutNode = {
-  component: 'Sheet',
-  props: { size: 'fill', areas: ['head', 'table'], rows: [1, 'auto'] },
-  children: [
-    cell('head', [headline('display', '{{$.title}}')], { align: 'end' }),
-    cell(
-      'table',
-      [
-        {
-          component: 'Rows',
-          props: {
-            rows: '$.rows',
-            rowKey: 'what',
-            columns: [
-              { label: '', key: 'what', w: 0.8 },
-              { label: 'json-render · A2UI', key: 'theirs', w: 1.2 },
-              { label: 'Nova', key: 'ours', w: 1.2 },
-            ],
-          },
-        },
-      ],
-      { pad: 'none' },
-    ),
   ],
 };

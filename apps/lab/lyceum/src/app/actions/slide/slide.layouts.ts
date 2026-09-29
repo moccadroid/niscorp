@@ -90,7 +90,7 @@ export const figuresLayout: LayoutNode = {
 // stale (server/census.ts).
 export const censusLayout: LayoutNode = {
   component: 'Sheet',
-  props: { size: 'fill', areas: ['kick chart', 'head chart', 'share chart'], cols: [1.2, 1], rows: ['auto', 1, 'auto'] },
+  props: { size: 'fill', areas: ['kick chart', 'head chart', 'share chart'], cols: [1.1, 1.5], rows: ['auto', 1, 'auto'] },
   children: [
     cell('kick', [label('{{$.kicker}}')]),
     cell('head', [{ component: 'Headline', props: { level: 'display' }, children: '{{$.title}}' }], { align: 'end' }),
@@ -103,12 +103,14 @@ export const censusLayout: LayoutNode = {
           props: {
             bars: [
               { label: 'Data', value: '$.census.data', ink: 'live' },
-              { label: 'Code', value: '$.census.code', ink: 'signal' },
+              { label: 'Renderers', value: '$.census.renderers', ink: 'signal' },
+              { label: 'Endpoints', value: '$.census.endpoints', ink: 'signal' },
+              { label: 'Setup', value: '$.census.setup', ink: 'signal' },
               { label: 'Tests', value: '$.census.checkLines', ink: 'ink' },
             ],
           },
         },
-        { component: 'Text', props: { tone: 'muted' }, children: 'Data: app/, every file checked against its schema. Code: the renderers, the server, the database. Comments and blank lines not counted.' },
+        { component: 'Text', props: { tone: 'muted' }, children: 'Data: every file checked against its schema. Renderers: the component kits. Endpoints: what actions call, model calls included. Setup: boot, server, database.' },
       ],
     ),
     cell('share', [{ component: 'Figure', props: { label: 'percent of this app is data', value: '$.census.share' } }], { ink: 'live' }),

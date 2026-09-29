@@ -11,13 +11,19 @@ import { CHECKS } from '@lyceum/dev/suite';
 // `//` inside a string is not one.
 //
 // `data` is app/: the authored artifacts, each parsing its schema
-// (artifacts-check). `code` is everything else the app runs: the kits (ui/),
-// the server (server/), the tables and seed (db/), the terminal entry. The
-// checks (dev/) are counted apart. Counted once per server — boot makes one
-// counter and hands it to the room's functions (./boot.ts): the source does not
-// change under a running server.
+// (artifacts-check). The code is counted by the place it lives, the way the
+// talk names them: RENDERERS (ui/ — the component kits), ENDPOINTS (what an
+// action calls: server/functions/, the assistant, and the model calls behind
+// them), SETUP (everything else that boots and serves: the rest of server/,
+// the tables and seed in db/, the terminal entry). The checks (dev/) are
+// counted apart. Counted once per server — boot makes one counter and hands
+// it to the room's functions (./boot.ts): the source does not change under a
+// running server.
 
-export type Census = { data: number; code: number; share: number; checks: number; checkLines: number };
+export type Census = { data: number; renderers: number; endpoints: number; setup: number; code: number; share: number; checks: number; checkLines: number };
+
+// The model calls an endpoint makes, which live beside the server's setup.
+const ENDPOINT_FILES = ['querying.ts', 'timing.ts', 'issuer.ts', 'card-issuing.ts'];
 
 const SRC = fileURLToPath(new URL('..', import.meta.url));
 
@@ -45,12 +51,17 @@ const filesUnder = async (folder: string): Promise<string[]> => {
 
 const count = async (): Promise<Census> => {
   const [app, ui, server, db, dev] = await Promise.all(['app', 'ui', 'server', 'db', 'dev'].map(filesUnder));
-  const [data, code, checkLines] = await Promise.all([
+  const inServer = (file: string): string => file.slice(join(SRC, 'server').length + 1).replaceAll('\\', '/');
+  const isEndpoint = (file: string): boolean => /^(functions|assistant)\//.test(inServer(file)) || ENDPOINT_FILES.includes(inServer(file));
+  const [data, renderers, endpoints, setup, checkLines] = await Promise.all([
     linesOf(app ?? []),
-    linesOf([...(ui ?? []), ...(server ?? []), ...(db ?? []), join(SRC, 'main.ts')]),
+    linesOf(ui ?? []),
+    linesOf((server ?? []).filter(isEndpoint)),
+    linesOf([...(server ?? []).filter((file) => !isEndpoint(file)), ...(db ?? []), join(SRC, 'main.ts')]),
     linesOf(dev ?? []),
   ]);
-  return { data, code, share: Math.round((100 * data) / (data + code)), checks: CHECKS.length, checkLines };
+  const code = renderers + endpoints + setup;
+  return { data, renderers, endpoints, setup, code, share: Math.round((100 * data) / (data + code)), checks: CHECKS.length, checkLines };
 };
 
 // A counter that counts on its first call and answers the same after.

@@ -3,12 +3,12 @@ import {
   actionLayout,
   aloneLayout,
   answerLayout,
-  compareLayout,
-  demoLayout,
   looksLayout,
   novaLayout,
   openingTitleLayout,
   originLayout,
+  pointCodeLayout,
+  pointLayout,
   problemLayout,
 } from './opening.layouts';
 
@@ -17,7 +17,8 @@ import {
 // a row, and any renderer can draw it. The slides carry the anchors; what is
 // argued is in the notes (db/seed.ts).
 //
-// `pending` is a demo that is not built yet, drawn hatched.
+// A demo that is not built yet is hatched on the controller, not here: its
+// cue says what should happen (actions/tools/cue.actions.ts).
 
 const code = (...lines: string[]): string => lines.join('\n');
 // Where people join — the deployment's, handed out by the server.
@@ -28,7 +29,7 @@ const address: EndpointConfig = { fn: 'room.address', target: 'address' };
 const still = (id: string, title: string, layout: ActionDefinition['layout'], data: Record<string, unknown>): ActionDefinition => ({
   id,
   title,
-  data: { title, pending: '', ...data },
+  data: { title, ...data },
   layout,
   triggers: [],
 });
@@ -69,45 +70,46 @@ export const novaSlide = still('slide.nova', 'Nova', novaLayout, {
   ],
 });
 
-// The Q&A form: its source on the left, its layout rendered on the right (the
-// same `sendLayout` a phone renders, placed on this slide).
+// The Q&A form: its source, whole, on the left; its layout rendered on the
+// right (the same `sendLayout` a phone renders, placed on this slide).
 export const actionSlide = still('slide.data', 'An action', actionLayout, {
   kicker: 'Nova',
-  file: 'app/actions/questions/send.action.ts, abridged',
+  file: 'send.action.ts',
   code: code(
+    'const send = [',
+    "  { set: 'error', value: '' },",
+    "  { call: 'send', onSuccess: [{ set: 'draft', value: '' }, …] },",
+    '];',
+    '',
     'export const questionSendAction = {',
     "  id: 'questions.send',",
-    "  data: { draft: '', sent: false, … },",
+    "  data: { draft: '', sent: false, error: '' },",
     '  layout: sendLayout,',
     '  endpoints: {',
-    '    send: {',
-    "      url: '/api/vex', method: 'POST',",
-    '      request: {',
-    "        fingerprint: 'questions/send',",
-    '        context: {',
-    "          text: { $ref: '$.draft' } },",
-    '      } },',
+    "    send: { url: '/api/vex', method: 'POST', request: {",
+    "      fingerprint: 'questions/send',",
+    "      context: { text: { $ref: '$.draft' } } } },",
     '  },',
     '  triggers: [',
-    "    { event: 'ui:click', ref: 'send', … },",
-    "    { event: 'ui:key', key: 'Enter', … },",
+    "    { event: 'ui:click', ref: 'send', do: send },",
+    "    { event: 'ui:key', ref: 'draft', key: 'Enter', do: send },",
     '  ],',
     '};',
   ),
-  marked: [3, 4, 5, 14],
+  marked: [3, 8, 9, 10, 16],
   draft: '',
   sent: false,
   error: '',
 });
 
-export const xraySlide = still('slide.xray', 'Your screen is data.', demoLayout, {
+export const xraySlide = still('slide.xray', 'Your screen is data.', pointLayout, {
   kicker: 'Nova',
-  pending: 'The X-ray: everyone gets a tab that shows their own screen as the data it is — every action on it, and each one’s data.',
+  line: 'Nothing on it is code. You can read every part of it — and so can a program, or a model.',
 });
 
-export const pushSlide = still('slide.clearance', 'Three of you just got a button.', demoLayout, {
+export const pushSlide = still('slide.clearance', 'Three of you just got a button.', pointLayout, {
   kicker: 'Nova',
-  pending: 'Giving an action to three people from the controller, and taking it back. The button plays a sound.',
+  line: 'Nobody else did. It is not hidden from you — it was never sent. Who gets which action is decided per person, on the server.',
 });
 
 export const looksSlide: ActionDefinition = {
@@ -120,12 +122,29 @@ export const looksSlide: ActionDefinition = {
   triggers: [],
 };
 
-export const compareSlide = still('slide.compare', 'Isn’t this json-render?', compareLayout, {
-  rows: [
-    { what: 'The model writes', theirs: 'A view', ours: 'An action: data, endpoints, triggers, a layout' },
-    { what: 'State lives', theirs: 'In the host app’s store', ours: 'In the action' },
-    { what: 'It runs', theirs: 'In the browser', ours: 'Anywhere — here, on the server' },
-  ],
+export const questionSlide = still('slide.compare', 'Isn’t this json-render?', pointLayout, {
+  kicker: 'The obvious question',
+  line: 'Or Google’s A2UI. Good projects, heading the same way: a model writes JSON, a renderer draws it.',
+});
+
+export const behaviourSlide = still('slide.behaviour', 'Behaviour is data too.', pointCodeLayout, {
+  kicker: 'Nova, unlike them',
+  line: 'In json-render, a button calls a function in your app. In Nova, what it does is data — checked before it runs.',
+  file: 'send.action.ts',
+  code: code(
+    'const send = [',
+    "  { set: 'error', value: '' },",
+    "  { call: 'send', onSuccess: [ … ] },",
+    '];',
+    '',
+    "{ event: 'ui:click', ref: 'send', do: send },",
+  ),
+  marked: [3, 6],
+});
+
+export const stateSlide = still('slide.state', 'The state lives in the action.', pointLayout, {
+  kicker: 'Nova, unlike them',
+  line: 'Not in your app’s store. So an action runs anywhere — a browser, a server, a terminal. That is why the last three slides worked.',
 });
 
 export const OPENING_SLIDES: readonly ActionDefinition[] = [
@@ -139,5 +158,7 @@ export const OPENING_SLIDES: readonly ActionDefinition[] = [
   xraySlide,
   pushSlide,
   looksSlide,
-  compareSlide,
+  questionSlide,
+  behaviourSlide,
+  stateSlide,
 ];

@@ -28,10 +28,22 @@ const cue = (id: string, title: string, lines: string[], pending: string): Actio
 
 export const CUE_TOOLS: readonly ActionDefinition[] = [
   cue(
-    'tools.push',
-    'Push an action',
-    ['To everyone: a colour. To a group: a header. To one person: a button nobody else has.', 'Take each back the same way.'],
-    'There is no panel yet, and no colour, header or button actions to push.',
+    'tools.xray',
+    'Give everyone the X-ray',
+    ['Everyone’s main screen gets a large blue X-ray button. Pressed, it shows their screen as data: every action on it, and each one’s data.', 'Take it back the same way.'],
+    'There is no X-ray action yet, and nothing to give it with.',
+  ),
+  cue(
+    'tools.button',
+    'Give three people the button',
+    ['Three people, picked at random, get a button on their main screen. Pressed, it plays a sound.', 'Take it back the same way.'],
+    'There is no button action yet, and nothing to give it with.',
+  ),
+  cue(
+    'tools.renderers',
+    'Draw it another way',
+    ['React, then Vue: the same data, drawn by another renderer.', 'Terminal: the projector goes black and types out the SSH command.'],
+    'Only the stylesheet switch exists (above). React, Vue and the terminal view do not.',
   ),
   cue(
     'tools.refusal',
