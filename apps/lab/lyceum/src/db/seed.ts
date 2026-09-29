@@ -56,7 +56,7 @@ export const SLIDES: readonly { slideId: string; title: string; tools: readonly 
   // ── 1 · the problem ──
   { slideId: 'slide.problem', title: 'Code is the least checkable thing a model can write', tools: [], notes: ['This room writes code with models every day — no need to sell that', 'Go down the five: validate, policy, replay, migrate, read as state', 'Each is something you can do to a document and cannot do to code'] },
   { slideId: 'slide.thesis', title: 'Code lives in five places', tools: [], notes: ['The five places, fast', 'Everything else: a closed grammar, a Zod schema at the boundary, a runtime', 'The claim for models: a narrow problem and a precise grammar is what makes a small one enough'] },
-  { slideId: 'slide.census', title: 'Is JSON enough for a real app?', tools: [], notes: ['The objection everybody has: JSON UIs hit a wall', 'Answer with this app: every line of app/ is an artifact; four renderers in ui/', 'The numbers are counted from the source as the slide comes up — read them off the wall'] },
+  { slideId: 'slide.census', title: 'Is JSON enough for a real app?', tools: [], notes: ['The objection everybody has: JSON UIs hit a wall', 'Answer with this app: about half its lines are data in app/, every file parsed against its schema', 'The numbers are counted from the source the server runs, without comments — read them off the wall'] },
 
   // ── 2 · nova ──
   { slideId: 'slide.data', title: 'The screen is a document', tools: [], notes: ['The card on their phone is this object', 'Point at the layout: one action, three sizes', 'Point at the endpoint: a fingerprint, not a fetch'] },

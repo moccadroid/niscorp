@@ -85,7 +85,7 @@ const main = async (): Promise<void> => {
     check(`...and its notes on the controller`, await speaker.shows('notes', SLIDES[index]?.notes[0] ?? '\u0000'));
     if (SLIDES[index]?.slideId === 'slide.census') {
       const counted = await createCensus()();
-      check(`...and the census is counted from the source (${counted.app} lines of app/, ${counted.checks} checks)`, counted.app > 0 && counted.checks === CHECKS.length && (await stage.shows('main', `"value":${counted.app}`)));
+      check(`...and the census is counted from the source (${counted.data} lines of data, ${counted.code} of code, ${counted.share}%, ${counted.checks} checks)`, counted.data > 0 && counted.code > 0 && counted.checks === CHECKS.length && (await stage.shows('main', `"value":${counted.data}`)) && stage.showsNow('main', `"value":${counted.share}`));
     }
     if (SLIDES[index]?.slideId === 'stage.register') check('...and the register carries the code to scan while the room arrives', await stage.shows('main', '"name":"Qr"') && stage.showsNow('main', '"value":"http://localhost:8796"'));
     check(`...and exactly its tools, in order (${(SLIDES[index]?.tools ?? []).join(', ') || 'none'})`, await toolsAre(SLIDES[index]?.tools ?? []));

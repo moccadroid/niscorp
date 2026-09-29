@@ -107,20 +107,20 @@ export const figuresLayout: LayoutNode = {
   ],
 };
 
-// The app's own size, counted from its source when the slide mounts — so it
-// cannot go stale (server/census.ts).
+// The app's own size, counted from its source by the server — so it cannot go
+// stale (server/census.ts).
 export const censusLayout: LayoutNode = {
   component: 'Sheet',
   props: { size: 'fill', areas: ['kick kick kick', 'head head head', 'one two three', 'words words words'], rows: ['auto', 1, 'auto', 'auto'] },
   children: [
     cell('kick', [label('{{$.kicker}}')]),
     cell('head', [{ component: 'Headline', props: { level: 'display' }, children: '{{$.title}}' }], { align: 'end' }),
-    cell('one', [{ component: 'Figure', props: { label: 'lines in app/ — every one a JSON artifact', value: '$.census.app' } }], { ink: 'live' }),
-    cell('two', [{ component: 'Figure', props: { label: 'lines in ui/ — four renderers', value: '$.census.ui' } }], { ink: 'signal' }),
-    cell('three', [{ component: 'Figure', props: { label: 'checks, each on its own database', value: '$.census.checks' } }]),
+    cell('one', [{ component: 'Figure', props: { label: 'lines of data — app/, every file parsed against its schema', value: '$.census.data' } }], { ink: 'live' }),
+    cell('two', [{ component: 'Figure', props: { label: 'lines of code — kits, server, tables, entry', value: '$.census.code' } }], { ink: 'signal' }),
+    cell('three', [{ component: 'Figure', props: { label: 'percent of the app is data', value: '$.census.share' } }]),
     cell('words', [
-      { component: 'Text', children: 'Slides, a projector, a controller, the room’s phones, a terminal door, an assistant, timers, Q&A. The server glue and the model seams are {{$.census.server}} lines; the checks {{$.census.dev}}.' },
-      { component: 'Text', props: { tone: 'muted' }, children: 'Counted from the source as this slide came up. artifacts-check parses every file in app/ against its schema.' },
+      { component: 'Text', children: 'Slides, a projector, a controller, everyone’s phones, an SSH terminal, an assistant, timers, Q&A. Beside it, {{$.census.checks}} checks in {{$.census.checkLines}} lines, each on its own database.' },
+      { component: 'Text', props: { tone: 'muted' }, children: 'Counted from the source this server runs. Comments and blank lines are not counted.' },
     ]),
   ],
 };

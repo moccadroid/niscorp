@@ -122,7 +122,7 @@ export const censusSlide: ActionDefinition = {
   data: {
     kicker: 'The objection, answered by this app',
     title: 'Is JSON enough for a real app?',
-    census: { app: 0, ui: 0, server: 0, dev: 0, checks: 0 },
+    census: { data: 0, code: 0, share: 0, checks: 0, checkLines: 0 },
   },
   layout: censusLayout,
   endpoints: { census: { fn: 'room.census', target: 'census' } },
