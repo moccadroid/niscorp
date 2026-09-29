@@ -48,17 +48,109 @@ export const statementLayout: LayoutNode = {
   ],
 };
 
-// Words beside code: the claim and a sentence on the left, the artifact it is
-// about on the right, the lines that matter marked.
+// NOT BUILT YET: what should happen on this slide and does not yet, in a
+// hatched cell — so a walk through the deck shows every missing beat. A slide
+// whose `pending` is empty draws nothing here, and its row collapses.
+const todo: LayoutNode = {
+  if: '$.pending',
+  then: cell('todo', [label('Not built yet'), { component: 'Text', children: '{{$.pending}}' }], { mark: 'hatch' }),
+};
+
+// The slide's sentences, one Text each, in the cell they are given.
+const sentences: LayoutNode = { for: '$.lines', as: 'line', do: { component: 'Text', children: '{{$line.text}}' } };
+
+// Words beside code: the claim and its sentences on the left, the artifact it
+// is about on the right with the lines that matter marked, a tag under both.
 export const codeLayout: LayoutNode = {
   component: 'Sheet',
-  props: { size: 'fill', areas: ['kick code', 'head code', 'body code', 'tags tags'], cols: [1, 1.25], rows: ['auto', 1, 'auto', 'auto'] },
+  props: { size: 'fill', areas: ['kick code', 'head code', 'body code', 'tags tags', 'todo todo'], cols: [1, 1.25], rows: ['auto', 1, 'auto', 'auto', 'auto'] },
   children: [
     cell('kick', [label('{{$.kicker}}')]),
     cell('head', [{ component: 'Headline', props: { level: 'title' }, children: '{{$.title}}' }], { align: 'end' }),
-    cell('body', [{ component: 'Text', children: '{{$.lines.0}}' }]),
+    cell('body', [sentences]),
     cell('code', [label('{{$.file}}'), { component: 'Code', props: { text: '$.code', marked: '$.marked' } }], { ink: 'ink' }),
-    cell('tags', [label('{{$.lines.1}}')], { ink: 'highlight' }),
+    { if: '$.tag', then: cell('tags', [label('{{$.tag}}')], { ink: 'highlight' }) },
+    todo,
+  ],
+};
+
+// A claim and its points: numbered or labelled rows under the headline, then
+// what they add up to.
+export const pointsLayout: LayoutNode = {
+  component: 'Sheet',
+  props: { size: 'fill', areas: ['kick', 'head', 'points', 'words', 'todo'], rows: ['auto', 1, 'auto', 'auto', 'auto'] },
+  children: [
+    cell('kick', [label('{{$.kicker}}')]),
+    cell('head', [{ component: 'Headline', props: { level: 'display' }, children: '{{$.title}}' }], { align: 'end' }),
+    cell(
+      'points',
+      [{ component: 'Rows', props: { rows: '$.points', rowKey: 'label', columns: [{ label: '', key: 'label', kind: 'mono', w: 1 }, { label: '', key: 'text', w: 4 }] } }],
+      { pad: 'none' },
+    ),
+    { if: '$.lines.0', then: cell('words', [sentences], { ink: 'highlight' }) },
+    todo,
+  ],
+};
+
+// Three numbers, each one measured, and what they say.
+export const figuresLayout: LayoutNode = {
+  component: 'Sheet',
+  props: { size: 'fill', areas: ['kick kick kick', 'head head head', 'one two three', 'words words words', 'todo todo todo'], rows: ['auto', 1, 'auto', 'auto', 'auto'] },
+  children: [
+    cell('kick', [label('{{$.kicker}}')]),
+    cell('head', [{ component: 'Headline', props: { level: 'display' }, children: '{{$.title}}' }], { align: 'end' }),
+    cell('one', [{ component: 'Figure', props: { label: '$.figures.0.label', value: '$.figures.0.value' } }], { ink: 'live' }),
+    cell('two', [{ component: 'Figure', props: { label: '$.figures.1.label', value: '$.figures.1.value' } }], { ink: 'signal' }),
+    cell('three', [{ component: 'Figure', props: { label: '$.figures.2.label', value: '$.figures.2.value' } }]),
+    cell('words', [sentences]),
+    todo,
+  ],
+};
+
+// A demo: the claim and why on the left; on the right, what happens in the
+// room, step by step.
+export const beatLayout: LayoutNode = {
+  component: 'Sheet',
+  props: { size: 'fill', areas: ['kick demo', 'head demo', 'body demo', 'todo todo'], cols: [1, 1.2], rows: ['auto', 1, 'auto', 'auto'] },
+  children: [
+    cell('kick', [label('{{$.kicker}}')]),
+    cell('head', [{ component: 'Headline', props: { level: 'title' }, children: '{{$.title}}' }], { align: 'end' }),
+    cell('body', [sentences]),
+    cell(
+      'demo',
+      [label('In the room'), { component: 'Rows', props: { rows: '$.steps', rowKey: 'n', columns: [{ label: '', key: 'n', kind: 'mono', w: 0.4 }, { label: '', key: 'text', w: 5 }] } }],
+      { ink: 'ink' },
+    ),
+    todo,
+  ],
+};
+
+// The map: every row a thing nisc does, in three columns.
+export const mapLayout: LayoutNode = {
+  component: 'Sheet',
+  props: { size: 'fill', areas: ['kick', 'head', 'table', 'todo'], rows: ['auto', 1, 'auto', 'auto'] },
+  children: [
+    cell('kick', [label('{{$.kicker}}')]),
+    cell('head', [{ component: 'Headline', props: { level: 'title' }, children: '{{$.title}}' }], { align: 'end' }),
+    cell(
+      'table',
+      [
+        {
+          component: 'Rows',
+          props: {
+            rows: '$.rows',
+            rowKey: 'easy',
+            columns: [
+              { label: 'Easy', key: 'easy', w: 1 },
+              { label: 'Only here', key: 'only', w: 1 },
+              { label: 'Sounds fishy — lyceum does it', key: 'proven', w: 1 },
+            ],
+          },
+        },
+      ],
+      { pad: 'none' },
+    ),
+    todo,
   ],
 };
 
@@ -136,7 +228,7 @@ export const assignmentLayout: LayoutNode = {
 // Clearance: every department, and what its role is granted, in plain words.
 export const clearanceLayout: LayoutNode = {
   component: 'Sheet',
-  props: { size: 'fill', areas: ['kick kick', 'head words', 'table table'], cols: [1.4, 1], rows: ['auto', 1, 'auto'] },
+  props: { size: 'fill', areas: ['kick kick', 'head words', 'table table', 'todo todo'], cols: [1.4, 1], rows: ['auto', 1, 'auto', 'auto'] },
   children: [
     cell('kick', [label('{{$.kicker}}')]),
     cell('head', [{ component: 'Headline', props: { level: 'title' }, children: '{{$.title}}' }], { align: 'end' }),
@@ -159,5 +251,6 @@ export const clearanceLayout: LayoutNode = {
       ],
       { pad: 'none' },
     ),
+    todo,
   ],
 };

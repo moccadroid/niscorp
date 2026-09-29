@@ -29,6 +29,7 @@ import { stripAction } from './actions/stage/strip.action';
 import { sinkAction } from './actions/kit/sink.action';
 import { signinAction } from './actions/lectern/signin.action';
 import { SLIDE_ACTIONS } from './actions/slide/slide.actions';
+import { CUE_TOOLS } from './actions/tools/cue.actions';
 
 // Ring 1: every action lyceum has. Which role is granted which is the
 // charter's business.
@@ -64,5 +65,6 @@ export const ACTIONS: Record<string, ActionDefinition> = Object.fromEntries(
     sinkAction,
     signinAction,
     ...SLIDE_ACTIONS,
+    ...CUE_TOOLS,
   ].map((action) => [action.id, action]),
 );

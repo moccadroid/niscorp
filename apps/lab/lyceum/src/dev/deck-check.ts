@@ -8,6 +8,7 @@ import { serve } from '@hono/node-server';
 import { attachSocket } from '@niscorp/moss/node';
 import { mintSession } from '@niscorp/moss';
 import { SLIDES, buildSeedSql } from '@lyceum/db/seed';
+import { CUE_TOOLS } from '@lyceum/app/actions/tools/cue.actions';
 import { boot } from '@lyceum/server/boot';
 import { check, connect, finish, waitUntil } from './harness';
 
@@ -38,7 +39,15 @@ const main = async (): Promise<void> => {
 
   // What each tool says, so the tool region can be read: exactly a slide's
   // tools, in the slide's order — or, with none, that there are none.
-  const SAYS: Record<string, string> = { 'tools.assignment': 'Assign the room', 'tools.tally': 'Departments so far', 'assistant.thread': 'Built from', 'tools.look': 'The look', 'tools.questions': 'Questions from the room' };
+  // A cue says its own title.
+  const SAYS: Record<string, string> = {
+    'tools.assignment': 'Assign the room',
+    'tools.tally': 'Departments so far',
+    'assistant.thread': 'Built from',
+    'tools.look': 'The look',
+    'tools.questions': 'Questions from the room',
+    ...Object.fromEntries(CUE_TOOLS.map((cue) => [cue.id, cue.title])),
+  };
   const toolsAre = (expected: readonly string[]): Promise<boolean> =>
     waitUntil(() => {
       const shown = Object.keys(SAYS).filter((tool) => speaker.showsNow('tools', SAYS[tool] ?? '\u0000'));
@@ -118,11 +127,13 @@ const main = async (): Promise<void> => {
   // ── the seed converges the deck on a live database, and leaves the talk ──
   // A database from an older version of SLIDES: a renamed slide, two swapped,
   // one that is no longer in the deck — and on screen.
+  const dataAt = SLIDES.findIndex((slide) => slide.slideId === 'slide.data');
+  const clearanceAt = SLIDES.findIndex((slide) => slide.slideId === 'slide.clearance');
   await runtime.db.exec(`
     UPDATE slides SET title = 'An old title' WHERE slide_id = 'slide.title';
     UPDATE slides SET position = 100 WHERE slide_id = 'slide.data';
-    UPDATE slides SET position = 2 WHERE slide_id = 'slide.clearance';
-    UPDATE slides SET position = 4 WHERE slide_id = 'slide.data';
+    UPDATE slides SET position = ${dataAt} WHERE slide_id = 'slide.clearance';
+    UPDATE slides SET position = ${clearanceAt} WHERE slide_id = 'slide.data';
     INSERT INTO slides (slide_id, position, title) VALUES ('slide.gone', 99, 'Cut from the talk');
     UPDATE deck SET slide_id = 'slide.gone';
   `);
