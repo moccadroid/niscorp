@@ -26,6 +26,7 @@ import type { RowsSource } from './live.js';
 import type { Refresh } from '../cache/cache.types.js';
 import type { Row } from '../adapters/adapter.types.js';
 import { VexError } from '../errors.js';
+import { depthRefusal, exceedsDepth } from '@niscorp/strata';
 import type { CompiledIr, JsonObject, JsonValue } from '@niscorp/prism';
 import { execute as executePrism } from '@niscorp/prism';
 
@@ -504,6 +505,7 @@ export const createQueryEngine = (engineConfig: QueryEngineConfig): QueryEngine 
     request: QueryRequest,
     options?: ExecuteOptions,
   ): Promise<QueryResponse> => {
+    if (exceedsDepth(request)) throw new VexError('invalid_request', `Invalid request: ${depthRefusal()}`);
     const parsed = QueryRequestSchema.safeParse(request);
     if (!parsed.success) {
       throw new VexError('invalid_request', `Invalid request: ${parsed.error.message}`);

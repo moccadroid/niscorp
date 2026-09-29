@@ -1,5 +1,6 @@
 import { QuerySchema } from '../schemas/query.schema.js';
 import { MutationDefinitionSchema } from '../mutations/schema.js';
+import { depthRefusal, exceedsDepth } from '@niscorp/strata';
 import type { CacheEntry } from './cache.types.js';
 import { isRefresh } from './cache.types.js';
 
@@ -48,6 +49,7 @@ export const validateEntry = (entry: CacheEntry): string | null => {
   }
 
   if (entry.kind === 'ok') {
+    if (exceedsDepth(entry.dsl)) return `invalid dsl: ${depthRefusal()}`;
     const parsed = QuerySchema.safeParse(entry.dsl);
     if (!parsed.success) return `invalid dsl: ${parsed.error.message}`;
     if (entry.prismIr !== undefined && !isCompiledIr(entry.prismIr)) {
@@ -60,6 +62,7 @@ export const validateEntry = (entry: CacheEntry): string | null => {
   }
 
   if (entry.kind === 'mutation') {
+    if (exceedsDepth(entry.mutation)) return `invalid mutation: ${depthRefusal()}`;
     const parsed = MutationDefinitionSchema.safeParse(entry.mutation);
     return parsed.success ? null : `invalid mutation: ${parsed.error.message}`;
   }

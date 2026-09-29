@@ -51,3 +51,13 @@ describe('runIntake — a chain that never ends', () => {
     expect(runIntake(bundle({ 'ext.staff.acme.viewer': viewer, 'ext.staff.acme.writer': writer }), ctx()).ok).toBe(true);
   });
 });
+
+describe('runIntake — a payload nested past the depth limit', () => {
+  it('is refused, not thrown', () => {
+    let layout: unknown = { component: 'Text' };
+    for (let i = 0; i < 20_000; i++) layout = { component: 'Box', children: [layout] };
+    const result = runIntake(bundle({ 'ext.staff.acme.deep': { id: 'ext.staff.acme.deep', layout } }), ctx());
+    expect(result.ok).toBe(false);
+    expect(reasonsOf(result)[0]).toContain('nests deeper than 256');
+  });
+});

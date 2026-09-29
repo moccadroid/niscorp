@@ -1,6 +1,6 @@
 import type { Sequence } from '@niscorp/strata';
 import { migrate, type DocumentStore } from '@niscorp/strata/postgres';
-import { StrataError, type Upgrader } from '@niscorp/strata';
+import { StrataError, depthRefusal, exceedsDepth, type Upgrader } from '@niscorp/strata';
 import { GENERATION_DDL } from './generation';
 import { z } from 'zod';
 import { ActionDefinitionSchema, LayoutNodeSchema, paletteEntryOf } from '@niscorp/nova';
@@ -624,6 +624,9 @@ const upgradeBundle = (payload: unknown, upgrader: Upgrader | undefined): { ok: 
 };
 
 export const runIntake = (payload: unknown, ctx: IntakeContext): IntakeResult => {
+  // Before anything reads it — the upgrader walks it and the schema recurses
+  // on it, and either overflows the stack on a deep enough payload.
+  if (exceedsDepth(payload)) return { ok: false, reasons: [depthRefusal()] };
   const upgraded = upgradeBundle(payload, ctx.upgrader);
   if (!upgraded.ok) return upgraded;
   const parsed = BundleSchema.safeParse(upgraded.payload);

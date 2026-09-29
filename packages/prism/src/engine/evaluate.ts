@@ -4,6 +4,7 @@ import type { Config } from '../schemas/config.schema';
 import { ConfigSchema } from '../schemas/config.schema';
 import { OPTIONAL_FIELDS_KEY } from '../schemas/node.schema';
 import { PrismError, ErrorCode } from '../errors';
+import { depthRefusal, exceedsDepth } from '@niscorp/strata';
 import { desugar } from '../sugar/desugar';
 
 // ─────────────────────────────────────────────────────────
@@ -223,6 +224,7 @@ export const evaluateNode: EvaluateFn = (node: unknown, context: EvalContext): J
 // ═══════════════════════════════════════════════════════════
 
 export const evaluate = (config: Config, source: JsonValue): JsonValue => {
+  if (exceedsDepth(config)) throw new PrismError('Invalid config', ErrorCode.SCHEMA, { details: { issues: [{ path: 'root', message: depthRefusal() }] } });
   const parsed = ConfigSchema.safeParse(config);
   if (!parsed.success) {
     const issues = explainIssues(parsed.error.issues).map((i) => ({ path: i.path.join('.') || 'root', message: i.message }));
