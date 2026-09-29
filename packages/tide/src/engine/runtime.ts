@@ -18,6 +18,7 @@ export type EngineDeps = {
   effectsFor: (as: string | undefined) => EffectRegistry;
   actorFor: (as: string | undefined) => unknown;
   maxChainDepth: number;
+  maxChainFacts: number;
   maxFanOut: number;
   // How long a claim is good for. Expiry is the reclaim; there is no reaper.
   leaseMs: number;
