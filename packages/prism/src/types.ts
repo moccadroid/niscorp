@@ -10,12 +10,17 @@ export type JsonObject = { [key: string]: JsonValue };
 // Evaluation Context
 // ═══════════════════════════════════════════════════════════
 
+import type { Budget } from './engine/budget';
+
 export type EvalContext = {
   // The binding root for `$ref` paths — any JSON value. `$` resolves to it as-is
   // (object, array, or scalar); `getByPath` walks from there. Not forced to an
   // object: a transform over an array/scalar reply binds `$` directly.
   readonly source: JsonValue;
   readonly vars: Record<string, JsonValue>;
+  // What this evaluation may still cost (engine/budget.ts). Ops extend a
+  // context by spreading it, so every nested evaluation spends the same one.
+  readonly budget?: Budget;
 };
 
 // ═══════════════════════════════════════════════════════════

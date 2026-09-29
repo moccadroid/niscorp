@@ -3,6 +3,7 @@ import type { MapNode, FilterNode, ReduceNode, SliceNode, FlattenNode, UniqueNod
 import { PrismError, ErrorCode } from '../errors';
 import { isJsonArray } from '../schemas/guards';
 import { compare } from '../utils/compare';
+import { measure } from '../engine/budget';
 
 const requireArray = (value: JsonValue, op: string): JsonValue[] => {
   if (!isJsonArray(value))
@@ -40,6 +41,8 @@ export const opReduce = (node: ReduceNode, context: EvalContext, evaluate: Evalu
       ...context,
       vars: { ...context.vars, [as]: item, [accName]: accumulator },
     });
+    // Fed back each item: the one place a value can double itself.
+    measure(accumulator, context.budget);
   }
   return accumulator;
 };

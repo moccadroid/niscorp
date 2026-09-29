@@ -6,6 +6,7 @@ import { OPTIONAL_FIELDS_KEY } from '../schemas/node.schema';
 import { PrismError, ErrorCode } from '../errors';
 import { depthRefusal, exceedsDepth } from '@niscorp/strata';
 import { desugar } from '../sugar/desugar';
+import { createBudget, measure, measureString, spendStep, type Limits } from './budget';
 
 // ─────────────────────────────────────────────────────────
 // Guards (local imports to avoid barrel cycles)
@@ -62,7 +63,19 @@ type AttachedFn = (node: Record<string, unknown>, context: EvalContext, evaluate
 
 const isAttachedFn = (value: unknown): value is AttachedFn => typeof value === 'function';
 
+// Every node an evaluation visits spends from its budget, and what it makes
+// is measured (./budget.ts). One place, because every op evaluates its
+// children through here.
 export const evaluateNode: EvaluateFn = (node: unknown, context: EvalContext): JsonValue => {
+  const { budget } = context;
+  if (budget === undefined) return evaluateUnbudgeted(node, context);
+  spendStep(budget);
+  const out = evaluateUnbudgeted(node, context);
+  measureString(out, budget);
+  return out;
+};
+
+const evaluateUnbudgeted = (node: unknown, context: EvalContext): JsonValue => {
   // Primitives
   if (node === null || node === undefined) return null;
   if (typeof node === 'string' || typeof node === 'number' || typeof node === 'boolean') return node;
@@ -223,7 +236,7 @@ export const evaluateNode: EvaluateFn = (node: unknown, context: EvalContext): J
 // Public Entry Points
 // ═══════════════════════════════════════════════════════════
 
-export const evaluate = (config: Config, source: JsonValue): JsonValue => {
+export const evaluate = (config: Config, source: JsonValue, limits?: Partial<Limits>): JsonValue => {
   if (exceedsDepth(config)) throw new PrismError('Invalid config', ErrorCode.SCHEMA, { details: { issues: [{ path: 'root', message: depthRefusal() }] } });
   const parsed = ConfigSchema.safeParse(config);
   if (!parsed.success) {
@@ -232,12 +245,15 @@ export const evaluate = (config: Config, source: JsonValue): JsonValue => {
   }
 
   const desugared = desugar(parsed.data);
-  return evaluateNode(desugared, { source, vars: {} });
+  const budget = createBudget(limits);
+  const result = evaluateNode(desugared, { source, vars: {}, budget });
+  measure(result, budget);
+  return result;
 };
 
-export const evaluateSafe = (config: Config, source: JsonValue): Result<JsonValue> => {
+export const evaluateSafe = (config: Config, source: JsonValue, limits?: Partial<Limits>): Result<JsonValue> => {
   try {
-    return { ok: true, data: evaluate(config, source) };
+    return { ok: true, data: evaluate(config, source, limits) };
   } catch (error) {
     return { ok: false, error: error instanceof Error ? error : new Error(String(error)) };
   }
