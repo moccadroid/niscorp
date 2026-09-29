@@ -14,19 +14,20 @@ export const WEEKDAYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as con
 
 const HHMM = /^([01]\d|2[0-3]):[0-5]\d$/;
 const MMDD = /^(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/;
-const LOCAL_DATETIME = /^\d{4}-\d{2}-\d{2}T([01]\d|2[0-3]):[0-5]\d$/;
+// Seconds are optional: a one-shot can name the second it fires on.
+const LOCAL_DATETIME = /^\d{4}-\d{2}-\d{2}T([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$/;
 
 export const ClockUnitSchema = z.enum(['day', 'week', 'month', 'year']);
 
 export const ClockRecurringSchema = z
   .object({
-    every: ClockUnitSchema.describe('The calendar period this reflex recurs on.'),
+    every: ClockUnitSchema.describe('The calendar period it repeats on. A repeating clock fires on every such period until the reflex is removed — only for a request that says it repeats.'),
     on: z
       .union([z.number().int().min(1).max(31), z.enum(WEEKDAYS), z.string().regex(MMDD)])
       .optional()
       .describe('week → a weekday; month → 1..31 (clamped to month end); year → "MM-DD". Omitted for day.'),
     at: z.string().regex(HHMM).describe('Local wall-clock time, "HH:MM".'),
-    tz: z.string().describe('IANA timezone name — the owning tenant\'s zone.'),
+    tz: z.string().describe('IANA timezone name.'),
   })
   .strict()
   .superRefine((clock, ctx) => {
@@ -37,18 +38,21 @@ export const ClockRecurringSchema = z
     if (clock.every === 'month' && typeof clock.on !== 'number') fail('a monthly clock needs `on` as a day number');
     if (clock.every === 'year' && !(typeof clock.on === 'string' && MMDD.test(clock.on)))
       fail('a yearly clock needs `on` as "MM-DD"');
-  });
+  })
+  .describe('Repeats: fires on every day, week, month or year, at a time of day, until the reflex is removed.');
 
 export const ClockOnceSchema = z
   .object({
-    at: z.string().regex(LOCAL_DATETIME).describe('One-shot local datetime, "YYYY-MM-DDTHH:MM".'),
+    at: z.string().regex(LOCAL_DATETIME).describe('A fixed local date and time, once: "YYYY-MM-DDTHH:MM" or, to the second, "YYYY-MM-DDTHH:MM:SS".'),
     tz: z.string().describe('IANA timezone name.'),
   })
-  .strict();
+  .strict()
+  .describe('Once: fires at one date and time, then never again.');
 
 export const ClockTriggerSchema = z
   .object({ clock: z.union([ClockRecurringSchema, ClockOnceSchema]) })
-  .strict();
+  .strict()
+  .describe('Fires on the calendar: once, at a date and time, or repeating at a time of day.');
 
 export const OpSchema = z.enum(['insert', 'update', 'delete']);
 
@@ -61,11 +65,13 @@ export const WriteTriggerSchema = z
       })
       .strict(),
   })
-  .strict();
+  .strict()
+  .describe('Fires when a row of an entity is written — created, changed or deleted.');
 
 export const SignalTriggerSchema = z
-  .object({ fact: z.object({ signal: z.string().describe('The named intake — a webhook, an inbound SMS.') }).strict() })
-  .strict();
+  .object({ fact: z.object({ signal: z.string().describe('A named external intake.') }).strict() })
+  .strict()
+  .describe('Fires when an event arrives from outside, on a named intake.');
 
 export const RunTriggerSchema = z
   .object({
@@ -73,7 +79,8 @@ export const RunTriggerSchema = z
       .object({ run: z.string().describe('A reflex id — fires when THAT reflex\'s run settles. Fan-in and dependency.') })
       .strict(),
   })
-  .strict();
+  .strict()
+  .describe('Fires when another reflex has run: one automation after another.');
 
 // There is NO poll trigger, and the absence is a decision. Polls existed
 // for hosts with no write choke point — run a selection, diff a cursor,
@@ -83,7 +90,10 @@ export const RunTriggerSchema = z
 // interval late. An external source with no choke point enters through an
 // importer that ingests write facts at the door — the same shape, without
 // a reflex secretly re-querying.
-export const ManualTriggerSchema = z.object({ manual: z.object({}).strict() }).strict();
+export const ManualTriggerSchema = z
+  .object({ manual: z.object({}).strict() })
+  .strict()
+  .describe('Fires only when somebody fires it by hand.');
 
 export const TriggerSchema = z.union([
   ClockTriggerSchema,

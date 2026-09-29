@@ -96,8 +96,13 @@ holds no copy. To pause an automation, write your own row and `load` again.
              "on": 1..31 | "mon".."sun" | "MM-DD",   // omitted for `day`
              "at": "HH:MM", "tz": "Europe/Vienna" } }
 
-// the clock — one shot
+// the clock — one shot; seconds optional
 { "clock": { "at": "2026-09-14T09:00", "tz": "Europe/Vienna" } }
+{ "clock": { "at": "2026-09-14T09:00:30", "tz": "Europe/Vienna" } }
+
+// a timer — in a DRAFT only (ReflexDraftSchema), never stored: anchorDraft
+// fixes it to a one-shot clock when the draft is saved
+{ "timer": { "hours": 0, "minutes": 5, "seconds": 0 } }        // each optional, > 0 in total
 
 // a write somebody made (pushed by the host)
 { "fact": { "entity": "invoices", "op": "insert" } }   // `op` optional

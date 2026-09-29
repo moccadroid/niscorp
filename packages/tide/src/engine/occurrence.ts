@@ -144,13 +144,12 @@ export const occurrencesBetween = (clock: Clock, after: number, through: number,
   if (!isRecurring(clock)) {
     const [date = '', time = ''] = clock.at.split('T');
     const ymd = splitInts(date, '-');
-    const hm = splitInts(time, ':');
-    const at = zonedToUtc(
-      { year: at2(ymd, 0), month: at2(ymd, 1), day: at2(ymd, 2) },
-      at2(hm, 0),
-      at2(hm, 1),
-      clock.tz,
-    );
+    const hms = splitInts(time, ':');
+    // The second is added to the resolved minute: an offset changes on a
+    // minute boundary, never inside one, so the minute decides the edge.
+    const at =
+      zonedToUtc({ year: at2(ymd, 0), month: at2(ymd, 1), day: at2(ymd, 2) }, at2(hms, 0), at2(hms, 1), clock.tz) +
+      at2(hms, 2) * 1000;
     return at > after && at <= through ? [{ key: clock.at, at }] : [];
   }
 

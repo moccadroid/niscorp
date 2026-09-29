@@ -14,6 +14,11 @@ export type { MemoryStore } from './store/memory';
 // ── the grammar ─────────────────────────────────────────────────
 export {
   ReflexSchema,
+  ReflexDraftSchema,
+  draftSchemaOf,
+  DRAFT_TRIGGERS,
+  TimerSchema,
+  TimerTriggerSchema,
   SelectionSchema,
   EffectRefSchema,
   TriggerSchema,
@@ -35,6 +40,11 @@ export {
 export type {
   Reflex,
   ReflexInput,
+  ReflexDraft,
+  DraftChoice,
+  DraftField,
+  DraftTrigger,
+  Timer,
   Selection,
   EffectRef,
   Trigger,
@@ -103,6 +113,7 @@ export type { GraphReport, Edge } from './engine/graph';
 // ── occurrence math, exported because a host that renders a
 // schedule needs the same answers the engine uses ───────────────
 export { occurrencesBetween, occurrenceKey, zonedParts, zonedToUtc, daysInMonth } from './engine/occurrence';
+export { anchorDraft, timerMs } from './engine/anchor';
 export type { Occurrence, LocalParts, LocalDay } from './engine/occurrence';
 
 export { versionOf } from './engine/runtime';

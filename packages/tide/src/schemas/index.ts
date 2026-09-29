@@ -23,5 +23,5 @@ export type { Policy, Retry } from './policy.schema';
 export { FactInputSchema, FactKindSchema } from './fact.schema';
 export type { FactInput, FactKind } from './fact.schema';
 
-export { ReflexSchema, SelectionSchema, EffectRefSchema } from './reflex.schema';
-export type { Reflex, ReflexInput, Selection, EffectRef } from './reflex.schema';
+export { ReflexSchema, ReflexDraftSchema, draftSchemaOf, DRAFT_TRIGGERS, TimerSchema, TimerTriggerSchema, SelectionSchema, EffectRefSchema } from './reflex.schema';
+export type { Reflex, ReflexInput, ReflexDraft, DraftChoice, DraftField, DraftTrigger, Timer, Selection, EffectRef } from './reflex.schema';

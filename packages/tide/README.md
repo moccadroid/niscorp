@@ -104,14 +104,28 @@ The port is six capabilities, not twenty-seven nouns: `transact`, `appendIfAbsen
 
 ## The reflex agent — `@niscorp/tide/agent`
 
-A model can WRITE a reflex; it never runs one. `createReflexAgent({ effects })` is a cortex agent whose output is tide's own `ReflexSchema`: it is handed what somebody wants automated, the local `now` and timezone, and the effects the host offers (a name, what it does, a Zod schema for its input), and returns one reflex. A reflex naming an effect that is not offered, or an input that effect's schema refuses, goes back to the model to correct in the same run (`effectProblem`). The host decides who it runs as (`as`) and loads it; from then on it runs with no model at all. Cortex is an optional peer, used only by this subpath.
+A model can WRITE a reflex; it never runs one. `createReflexAgent({ effects, triggers, fields })` is a cortex agent handed what somebody wants automated, the local `now` and timezone, and what the host offers:
+
+- **effects** — each a name, a `description` (one to three sentences on what it does and what it is for: the model chooses by it) and a Zod schema for its input;
+- **triggers** — which trigger kinds a draft may use (`clock`, `timer`, `write`, `signal`, `run`, `manual`; every kind if the option is left out — an empty list is an error), so a draft only ever uses what the host can run;
+- **fields** — the extra fields a draft may carry (`params`, `select`, `when`; none if none are named).
+
+The draft's shape is built from that choice (`draftSchemaOf`, from tide's own schemas, each with its description) — it is what the model is shown and what it is held to. A draft never carries who it runs as, its policy or whether it is enabled: those are the host's, and `anchorDraft` completes them. Its `id` is only a short name — the host may give the stored reflex its own id when it is saved; and a `run` trigger names another reflex's id, so a host that offers it must tell the model which reflexes exist.
+
+It answers with ONE of three things (`answerSchemaOf`): a reflex draft; a `{ question }` back, when the request can be read as different automations and nothing in the conversation decides which; or a `{ refused }`, when no offered effect does what was asked. A question ends the run like any answer — nothing waits. When the person answers it, or corrects a draft they have not saved, the host runs the agent again over the conversation: `reflexConversation({ now, tz, earlier, latest })` turns the earlier requests and the agent's answers to them — as it gave them, reasoning first — and the latest words into the turns of a chat. A draft naming an effect that is not offered, or an input that effect's schema refuses, goes back to the model to correct in the same run (`effectProblem`). The host shows it, and when somebody saves it, anchors it (`anchorDraft`) and decides who it runs as (`as`); from then on it runs with no model at all. Cortex is an optional peer, used only by this subpath.
+
+A draft's trigger may be a **timer** — `{ "timer": { "minutes": 5 } }`, "this long from now". A timer is sugar and is never stored: `anchorDraft(draft, { at, tz })` fixes it to a one-shot clock at the moment of saving plus its length, to the second (rounded up — never short), so time spent reading the draft is not taken off it, and a restart re-loads the same instant.
 
 ```typescript
-import { createReflexAgent } from '@niscorp/tide/agent';
+import { anchorDraft } from '@niscorp/tide';
+import { createReflexAgent, isDraft, reflexConversation } from '@niscorp/tide/agent';
 
-const agent = createReflexAgent({ effects: [{ name: 'deck.show', does: 'Put a slide on the projector', input: z.object({ slideId: z.string() }) }] });
-const result = await agent.run({ intent: 'end the talk in 30 minutes', now: '2026-09-27T19:05', tz: 'Europe/Vienna' }, { llm }).result;
-if (result.ok) await tide.load([{ ...result.output.data, as: 'clock' }], { at: Date.now() });
+const agent = createReflexAgent({ effects: [{ name: 'digest.send', description: 'Send the weekly digest to the team.', input: z.object({}) }], triggers: ['clock', 'timer'] });
+const result = await agent.run(earlier.length === 0 ? { intent, now, tz } : reflexConversation({ now, tz, earlier, latest: intent }), { llm }).result;
+if (result.ok && isDraft(result.output.data)) {
+  // …shown to the person; when they save it:
+  await tide.load([{ ...anchorDraft(result.output.data, { at: Date.now(), tz }), as: owner }], { at: Date.now() });
+}
 ```
 
 ## Hosts
