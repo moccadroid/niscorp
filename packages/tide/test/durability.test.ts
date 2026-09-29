@@ -751,3 +751,63 @@ describe('the fact door', () => {
     expect(events.some((event) => event.type === 'fact.ingested' && event.fact.name === 'baton')).toBe(false);
   });
 });
+
+describe('the fence holds across engines', () => {
+  // Two engines over one store — two processes, in effect. Each mints its own
+  // claim tokens, so a token alone cannot tell their claims apart. An attempt
+  // that ran past its lease and finishes late — while the reclaim is still
+  // running — must be discarded: the reclaim bumped `attempt`, and the fence
+  // checks it.
+  it('a late attempt from an engine whose lease lapsed does not overwrite a reclaim still in flight', async () => {
+    const store = createMemoryStore();
+    const reflex: ReflexInput = { id: 'slow', intent: 'Do slow work.', on: { manual: {} }, effect: { name: 'work' } };
+    const gate = () => {
+      let open: () => void = () => undefined;
+      const shut = new Promise<void>((resolve) => {
+        open = resolve;
+      });
+      return { shut, open: () => open() };
+    };
+    const aGate = gate();
+    const bGate = gate();
+    const engine = (run: () => Promise<unknown>) =>
+      createTide({ store, transform: testTransform, leaseMs: 1_000, effects: { work: { run } } });
+    const a = engine(async () => {
+      await aGate.shut;
+      return 'from a';
+    });
+    const b = engine(async () => {
+      await bGate.shut;
+      return 'from b';
+    });
+    await a.load([reflex], { at: T0 });
+    await b.load([reflex], { at: T0 });
+    await a.fire('slow', { now: T0 });
+
+    const drain = async (tide: Tide, now: number): Promise<void> => {
+      for (let i = 0; i < 10; i += 1) await tide.advance({ now });
+    };
+    const settle = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 20));
+
+    // A claims the task and stalls in the effect; its lease lapses; B takes
+    // the task back and stalls too.
+    const aRun = drain(a, T0);
+    await settle();
+    const bRun = drain(b, T0 + 5_000);
+    await settle();
+
+    // A finishes first, late: refused.
+    aGate.open();
+    await aRun;
+    const [afterA] = await store.query({ table: 'task', where: {}, limit: 10 });
+    expect(afterA?.state).toBe('claimed');
+    expect(afterA?.output).toBeUndefined();
+
+    // B, the live claim, lands.
+    bGate.open();
+    await bRun;
+    const [afterB] = await store.query({ table: 'task', where: {}, limit: 10 });
+    expect(afterB?.state).toBe('done');
+    expect(afterB?.output).toBe('from b');
+  });
+});

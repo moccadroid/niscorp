@@ -50,13 +50,9 @@ const backoffFor = (attempt: number, base: number, kind: 'fixed' | 'exponential'
 //
 // A counter rather than a clock or a random: tide reads no clock, and a
 // headless check that replays the same tick twice has to get the same
-// answers. Uniqueness within a process is all a fence needs — across
-// processes the store's own claim is what serialises, not the token's shape.
-let tokens = 0;
-const nextToken = (): string => {
-  tokens += 1;
-  return `tok_${tokens.toString(36)}`;
-};
+// answers. The counter is the engine's (`deps.nextToken`), so two engines —
+// two processes — can mint the same token; the fence pairs it with the task's
+// attempt, which the store bumps on every claim (record, below).
 
 // CLAIMING IS ONE STEP, and it takes back lapsed leases in the same breath.
 //
@@ -115,7 +111,7 @@ export const executeTasks = async (deps: EngineDeps, now: number, limit: number)
     ).map((task) => task.id),
   );
 
-  const token = nextToken();
+  const token = deps.nextToken();
   const claimed = await claimTasks(deps, now, limit, token);
 
   for (const task of claimed) {
@@ -267,13 +263,15 @@ const record = async (deps: EngineDeps, task: Task, token: string, settlement: S
   deps.store.transact(async (tx: TideStore) => {
     const settles = settlement.state === 'done' || settlement.state === 'failed';
 
-    // THE FENCE. `expect` is the token, so an attempt that timed out and
-    // finished late finds itself superseded and is discarded rather than
-    // overwriting the live one.
+    // THE FENCE. `expect` is the token AND the attempt this claim made, so an
+    // attempt that timed out and finished late finds itself superseded and is
+    // discarded rather than overwriting the live one. The attempt is what
+    // makes it hold across engines: every claim bumps it in the store, so no
+    // two claims of one task share it, while two engines' tokens can collide.
     const accepted = await tx.cas(
       'task',
       task.id,
-      { token },
+      { token, attempt: task.attempt },
       {
         state: settlement.state,
         token: undefined,

@@ -24,6 +24,10 @@ export type EngineDeps = {
   emit: (event: TideEvent) => void;
   reflexes: () => readonly LoadedReflex[];
   find: (id: string) => LoadedReflex | undefined;
+  // This engine's claim tokens (execute.ts). Unique within the engine only;
+  // the fence pairs the token with the task's attempt, which is what tells
+  // two engines' claims apart.
+  nextToken: () => string;
 };
 
 // ── the environment templates evaluate against ──────────────────

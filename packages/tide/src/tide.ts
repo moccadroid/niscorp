@@ -100,6 +100,7 @@ export const createTide = (config: TideConfig): Tide => {
     return effectsCache;
   };
 
+  let tokens = 0;
   const deps: EngineDeps = {
     store: config.store,
     transform: config.transform,
@@ -112,6 +113,10 @@ export const createTide = (config: TideConfig): Tide => {
     emit: config.onEvent ?? (() => undefined),
     reflexes: () => [...loaded.values()],
     find: (id) => loaded.get(id),
+    nextToken: () => {
+      tokens += 1;
+      return `tok_${tokens.toString(36)}`;
+    },
   };
 
   // ── load ─────────────────────────────────────────────────────
