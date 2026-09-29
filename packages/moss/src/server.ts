@@ -21,6 +21,7 @@ import { mintWrites } from './tide';
 import { memoKey, memoKeyOf, resolveCatalogForRoles, resolvePolicyAtReachForRoles, resolvePolicyForRoles, resolveVariantsForRoles, verifyVariants, wearableOf } from './principal';
 import type { Catalog } from './principal';
 import type { LayoutNode } from '@niscorp/nova';
+import { chainCycles } from '@niscorp/nova/reflect';
 import {
   buildContract,
   callIntegrationWith,
@@ -275,6 +276,13 @@ export const createServer = async (app: NiscApp, runtime: NiscRuntime): Promise<
   );
   if (report.errors.length > 0) {
     throw new Error(`Charter is incoherent — refusing to serve:\n${report.errors.map((e) => `  ${e.rule}: ${e.detail}`).join('\n')}`);
+  }
+  // CHAINS THAT NEVER END, said at boot. A trigger that re-emits its own
+  // channel (or a mount that reloads itself, …) is valid data; nova stops it
+  // at its budget when it runs, and this names it before anybody opens it.
+  // Said, not refused: the app still serves, as it would have before.
+  for (const cycle of chainCycles(app.actions)) {
+    console.error(`[moss] a chain of steps that never ends: ${cycle.path} — nova stops it at its budget when it runs (RUNAWAY_CHAIN)`);
   }
   // A DECLARED REACH HAS TO NAME A PROFILE THAT EXISTS.
   //

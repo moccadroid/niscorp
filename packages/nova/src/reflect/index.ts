@@ -10,12 +10,15 @@
 //   grammar — what an action does with its data keys (gestured / declared /
 //             loaded / lifecycle / mount-input)
 //   graph   — the action adjacency (actionGraph)
+//   cycles  — chains that never end, found in the definitions (chainCycles)
 //   audit   — classification over auditAction (classifyAudit, auditCatalog)
 export { walkNodes, componentsOf, refsOf, loopVarsOf, isRecord } from './walk';
 export { snapshotShell, describeInstance, describeShell } from './shell';
 export type { ShellSnapshot, CanvasRef, InstanceRef, InstanceModel, DescribeShellOptions } from './shell';
 export { gesturedKeys, declaredKeys, loadedKeys, lifecycleKeys, mountInputKeys } from './grammar';
 export { actionGraph } from './graph';
+export { chainCycles } from './cycles';
+export type { ChainCycle, ChainStep } from './cycles';
 export type { ActionGraph, ActionNode } from './graph';
 export { classifyAudit, auditCatalog } from './audit';
 export type { IssueClass, ClassifiedIssue, CatalogAuditRow } from './audit';
