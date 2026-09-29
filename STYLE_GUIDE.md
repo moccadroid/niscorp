@@ -82,6 +82,20 @@ When an LLM agent produces or consumes a typed shape, **the Zod schema is the on
 
 The reason for the schemas in the first place is that the system becomes self-explanatory and we have ONE source of truth. Code that violates this is wrong — fix the schema's `.describe()` calls, not the prompt.
 
+### What a model decides on has a `description`
+
+Whatever is offered to a model to decide on — an effect, a tool, an action, a shape to answer in — carries a `description`: one to three sentences saying what it does and what it is for. The model decides by that, never by a name or an id, which make it guess. The field is called `description`; not `does`, not `means`, not anything else. This binds apps as well as packages.
+
+### Package prompts serve every app
+
+A package's agent prompt, its schemas' `.describe()`s and its worked example say what the grammar is and what it can express — never what some app asked for. Nothing in them comes from an app: not its names, its phrasings, its domain, its data, its fixed clocks, nor an example taken from a case that failed. Doc comments beside a prompt follow the same rule; they are where the next edit copies from.
+
+When an agent gets a case wrong, the fix is in the grammar (what it can express, how its fields are described) or in the tool's contract — stated as it would have been written had that case never happened. If the only sentence that fixes it names the case, the grammar is missing something; add that instead. Apps measure; packages generalise.
+
+**Every edit to a package's prompt or descriptions is reviewed by a subagent before it lands**, given this section, the diff, and read access to the apps' probes. It names any line that reads as fitted to a use case. A flagged line is rewritten or removed, not argued with.
+
+This binds packages only. An app's prompt may be about its app — being fitted to its own case can be the point.
+
 ---
 
 ## Unused Parameters
