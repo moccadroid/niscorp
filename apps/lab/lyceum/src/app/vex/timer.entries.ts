@@ -11,11 +11,11 @@ import type { SeedEntry, SeedMutation } from '@niscorp/vex';
 // role at boot, when there is no principal.
 export const timersAll: SeedEntry = {
   fingerprint: 'timers/all',
-  intent: 'Every saved timer, with its reflex document, oldest first',
-  shape: [{ timer_id: '', reflex: {}, intent: '' }],
+  intent: 'Every saved timer, with its reflex document and who saved it, oldest first',
+  shape: [{ timer_id: '', reflex: {}, intent: '', saved_by: '' }],
   dsl: {
     from: ['timers'],
-    fields: ['timers.timer_id', 'timers.reflex', 'timers.intent'],
+    fields: ['timers.timer_id', 'timers.reflex', 'timers.intent', 'timers.saved_by'],
     sort: [{ field: 'timers.saved_at', dir: 'asc' }, { field: 'timers.timer_id', dir: 'asc' }],
     limit: 200,
   },

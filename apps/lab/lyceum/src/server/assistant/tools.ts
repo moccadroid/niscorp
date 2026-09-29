@@ -8,8 +8,8 @@ import { QUERY_SHAPES } from '@lyceum/app/vex/query.shapes';
 import { routeQuery } from './vex-query';
 import type { Querier } from '../querying';
 import { slidesDeck } from '@lyceum/app/vex/deck.entries';
-import { armable, dueOf, localNow, slideIdsOf } from '../timing';
-import type { TimerWriter } from '../timing';
+import { proposable, slideIdsOf, whenWords } from '../timing';
+import type { TimerRequest, TimerWriter, Written } from '../timing';
 import { vexOver } from '../vex-over';
 import type { ToolName } from './declarations';
 
@@ -29,7 +29,11 @@ import type { ToolName } from './declarations';
 // A tool's RESULT is what the model reports from, so it says what happened in
 // facts — never how the screen works.
 
-export type Proposal = { timer: { timerId: string; reflex: unknown; json: string; intent: string; dueAt: string | null; dueLocal: string } };
+// A timer proposal is a DRAFT: nothing about when it fires is fixed until it
+// is saved (`timers.save` anchors it then). `when` says it in words;
+// `reasoning` is how the writer read the request — shown, so the person can
+// see it and correct it.
+export type Proposal = { timer: { timerId: string; draft: unknown; json: string; intent: string; when: string; reasoning: string } };
 
 // An action a tool opened over the screen — the turn's `opened` rows: the
 // assistant's turn trigger reconciles them onto the overlay, and the turn keeps
@@ -47,13 +51,19 @@ export type ToolDeps = {
   proposals: Proposal[];
   // What was opened over the screen this turn.
   opened: Opened[];
+  // This automation so far, from the recorded turns — handed to `automate`.
+  earlier: TimerRequest['earlier'];
+  // What the automation writer answered this turn, with its reasoning — kept on
+  // the turn, so a reply or a correction goes back to it with both.
+  wrote: Written[];
 };
 
 // Not the person's to be offered — which actions exist for them at all is the
 // charter's: the assistant itself; what only a tool opens (query.result); what
 // only another action opens, with an id nobody types (questions.edit, from the
-// list); and a tab's surface, whose form is offered on its own (questions.desk).
-const NOT_OFFERED: ReadonlySet<string> = new Set(['assistant.thread', 'query.result', 'questions.edit', 'questions.desk']);
+// list); a tab's surface, whose form is offered on its own (questions.desk); and
+// what only an automation's `notify` opens (speaker.notification).
+const NOT_OFFERED: ReadonlySet<string> = new Set(['assistant.thread', 'query.result', 'questions.edit', 'questions.desk', 'speaker.notification']);
 
 // How an action is DRAWN — as a tab on the phone, as the card's strip — is the
 // phone's business, not something a person asks for. These input keys are the
@@ -67,10 +77,10 @@ const inputProperties = (actionId: string): Record<string, unknown> => {
 };
 
 // What an action can be pre-filled with: its declared input, less the phone's.
-export const prefillOf = (actionId: string): { key: string; means: string }[] =>
+export const prefillOf = (actionId: string): { key: string; description: string }[] =>
   Object.entries(inputProperties(actionId))
     .filter(([key]) => !PRESENTATION_KEYS.has(key))
-    .map(([key, property]) => ({ key, means: typeof property === 'object' && property !== null && 'description' in property && typeof property.description === 'string' ? property.description : '' }));
+    .map(([key, property]) => ({ key, description: typeof property === 'object' && property !== null && 'description' in property && typeof property.description === 'string' ? property.description : '' }));
 
 // What `open` may offer this person: the actions the charter gave them (what
 // exists for them at all) that declare an `input` — an action's public,
@@ -149,26 +159,35 @@ export const hostTools = (deps: ToolDeps, offered: ReadonlySet<ToolName>): ToolD
           "Hand a request for something to happen at a time, or after a while, to the automation writer, in the person's own words. It writes an automation and puts it on their screen to read; it runs only once they save it. It can refuse what no automation can do.",
         input: z.object({ request: z.string().describe("What should happen, and when, in the person's words.") }),
         execute: async ({ request }) => {
-          const now = Date.now();
           // The slides a timer may name: the deck's rows, read as this person.
           const slideIds = slideIdsOf(await vexOver(deps.session.wire)(slidesDeck.fingerprint));
-          const written = await deps.writer.write({ intent: request, now, tz: deps.tz, facts: deps.facts, slideIds });
-          if ('refused' in written) return { refused: written.refused };
-          const reflex = armable(written.reflex, slideIds);
-          const due = dueOf(reflex, now);
-          const dueLocal = due === undefined ? '' : localNow(due, deps.tz).slice(11);
+          const written = await deps.writer.write({ intent: request, now: Date.now(), tz: deps.tz, facts: deps.facts, slideIds, earlier: deps.earlier });
+          const { answer, reasoning } = written;
+          const read = reasoning ?? '';
+          if ('refused' in answer) {
+            deps.wrote.push(written);
+            return { refused: answer.refused, reasoning: read };
+          }
+          if ('question' in answer) {
+            deps.wrote.push(written);
+            // Nothing is written and nothing waits: the question is the answer.
+            return { asked: answer.question, reasoning: read, status: 'NOTHING was written. Put this question to the person, in these words, and nothing else about the automation.' };
+          }
+          const draft = proposable(answer, slideIds);
+          deps.wrote.push({ answer: draft, reasoning });
+          const when = whenWords(draft);
           deps.proposals.push({
             timer: {
-              timerId: `${reflex.id}-${randomBytes(3).toString('hex')}`,
-              reflex,
-              json: JSON.stringify(reflex, null, 2),
-              intent: reflex.intent,
-              dueAt: due === undefined ? null : new Date(due).toISOString(),
-              dueLocal,
+              timerId: `${draft.id}-${randomBytes(3).toString('hex')}`,
+              draft,
+              json: JSON.stringify(draft, null, 2),
+              intent: draft.intent,
+              when,
+              reasoning: read,
             },
           });
           // Its state, in words a reply cannot turn into "saved": it is not.
-          return { written: { intent: reflex.intent, wouldFire: dueLocal, status: 'NOT saved and NOT running — it waits on their screen until they read it and save it' } };
+          return { written: { intent: draft.intent, when, reasoning: read, status: 'NOT saved and NOT running — it waits on their screen until they read it and save it' } };
         },
       }),
     );

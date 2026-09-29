@@ -1,5 +1,5 @@
 // THE SHAPES AN ANSWER CAN TAKE. Nobody types a shape: the router (Jev) picks
-// one of these for a question, by what each `means`, and vex answers in it —
+// one of these for a question, by each one's `description`, and vex answers in it —
 // the shape a generated query is written to, and the one a replay must agree
 // with. How each is SHOWN is the layouts' business
 // (actions/shared/answer.layouts.ts), by its `kind`.
@@ -9,29 +9,29 @@
 
 export type QueryShape = {
   kind: string;
-  means: string;
+  description: string;
   shape: unknown;
 };
 
 export const QUERY_SHAPES: readonly QueryShape[] = [
   {
     kind: 'list',
-    means: 'A list of things, each with a name and a line about it — the answer to most "which" and "what" questions.',
+    description: 'A list of things, each with a name and a line about it — the answer to most "which" and "what" questions.',
     shape: [{ label: '', detail: '' }],
   },
   {
     kind: 'number',
-    means: 'One number — how many, how much, how long.',
+    description: 'One number — how many, how much, how long.',
     shape: { value: 0 },
   },
   {
     kind: 'counts',
-    means: 'A count for each group — how many per department, per title, per anything.',
+    description: 'A count for each group — how many per department, per title, per anything.',
     shape: [{ group: '', count: 0 }],
   },
   {
     kind: 'people',
-    means: 'People in the room — who they are: name, job title, department.',
+    description: 'People in the room — who they are: name, job title, department.',
     shape: [{ name: '', title: '', department: '' }],
   },
 ];

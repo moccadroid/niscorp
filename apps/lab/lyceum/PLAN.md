@@ -168,15 +168,30 @@ Enter sends and the field empties. `assistant-check` and `query-check` assert it
 deterministic stand-in; `pnpm probe:assistant` measures it live.
 
 **The timer** — the talk's first minute and its last. On slide 1 the controller's tool is
-the speaker's assistant: "End the talk in 30 minutes" is routed to `automate`, and tide's
-reflex agent (`@niscorp/tide/agent`, gpt-oss-120b; `LYCEUM_TIMER=live|fake`) writes a tide
-REFLEX — shown as the document it is, to be read. Save is the speaker's own vex write
-(`timers/save`, the reflex as a JSONB row, `saved_by` stamped); then `timers.arm` loads the
-saved timers into tide (`server/timing.ts`: moss's durable store and driver, and at every
-boot as the `scheduler` machinery role). Every timer runs as the `clock` principal —
-stamped by the host whatever the document said — whose one grant is `deck.write.update`:
-its effect `deck.show` replays `deck/show` over the clock's own session, so the stage
-follows it like any other deck move. The controller's head counts down (`Countdown`, a kit
+the speaker's assistant: "Show the last slide in 30 minutes" is routed to `automate`, and
+tide's reflex agent (`@niscorp/tide/agent`, gpt-oss-120b; `LYCEUM_TIMER=live|fake`) writes
+a tide reflex DRAFT — shown as the document it is, to be read, its when in words ("30 min
+after you save"). A draft's trigger may be a TIMER, a length (tide's sugar, never stored);
+Save (`timers.save`, 2026-09-29) anchors it AT THE PRESS — the one thing that cannot be
+data, the clock — to a one-shot clock to the second, rounded up, so reading time is never
+taken off it; then it is the speaker's own vex write (`timers/save`, the reflex as a JSONB
+row, `saved_by` stamped) over their session, and the saved timers are loaded into tide
+(`server/timing.ts`: moss's durable store and driver, and at every boot as the `scheduler`
+machinery role — a restart loads the same instant). Every timer runs as the `clock`
+principal — stamped by the host whatever the document said. Two effects, each offered
+with a `description`: `deck.show` replays `deck/show` over the clock's own session, so
+the stage follows it like any other deck move; `notify` shows a message to whoever saved
+the automation — moss's `shells.deliver` into their live shell, only if a terminal of
+theirs is attached right then, never later; `speaker.head` hears it and opens
+`speaker.notification` over the controller. Nothing is stored for it: tide's ledger
+records what came of each run (`shown`, or why not). The clock holds `deck.write.update`,
+nothing else. The writer is offered only clock and timer triggers (`DRAFT_HERE`: tide
+builds the draft from the host's choice) and answers with a draft, a QUESTION (a request
+that can be read two ways) or a refusal — each with its reasoning, which the proposal
+shows ("How I read it"). The turn keeps the answer and the reasoning
+(`assistant_turns.writer_answer`, `writer_reasoning`, migration 12), so a reply to a
+question, or a correction of a draft not yet saved, goes back to the writer as the
+conversation (`reflexConversation`). The controller's head counts down (`Countdown`, a kit
 primitive ticking on the viewer's clock — `lyceum.kit` 2). Tide's tables are migrated with
 lyceum's before the server starts: created later, they changed the schema under moss's
 engine, which then evicted every generated query as stale (`LYCEUM_SEQUENCES`).

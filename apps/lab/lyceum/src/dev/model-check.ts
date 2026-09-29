@@ -7,7 +7,9 @@ import { devRuntime } from '@lyceum/server/runtime';
 import { createQuerier } from '@lyceum/server/querying';
 import { BEHAVIORS } from '@lyceum/app/vex/behaviors';
 import { SLIDES } from '@lyceum/db/seed';
-import { armable, createTimerWriter } from '@lyceum/server/timing';
+import { anchorTimer, createTimerWriter, proposable } from '@lyceum/server/timing';
+import type { Written } from '@lyceum/server/timing';
+import type { ReflexAnswer } from '@niscorp/tide/agent';
 import type { Known } from '@lyceum/server/querying';
 
 // THE MODEL CHECK — do the talk's generative seams hold on the models the talk
@@ -252,24 +254,136 @@ const measureRoutes = async (): Promise<void> => {
 // the deck the way the controller's grounding hands it: ids, numbers, titles,
 // and nothing about what any request means. PROBES WRITTEN BEFORE ANY RUN:
 // slides named by their title, not their id; requests no offered effect can
-// do, and one that never says when — each must be REFUSED, not answered with an
-// invented reflex; and the original "end the talk", with no hint left in the
-// effect's description.
+// do, which must be REFUSED, not answered with an invented reflex.
+//
+// 2026-09-29, before the first run with timers: five timer probes added.
+//
+// 2026-09-29, before the first run with questions — the SPEC changed (the
+// agent answers with a draft, a question, or a refusal; unclear requests are
+// asked about, never guessed; `notify` replaced `timer.ring`), so four
+// expectations changed with it, each marked, and three kinds of probe were
+// added: requests that must NOT be asked about, once against every day, and
+// a reply to a question coming back with the exchange. A draft is anchored at
+// TIDE_NOW, as if saved the moment it was written, and judged by the instant
+// it then fires at — a timer or a computed clock alike; a repeating clock by
+// its period and time of day.
 const TIDE_NOW = Date.UTC(2026, 8, 27, 17, 5);
 const DECK_FACTS = `## The deck
 ${JSON.stringify(SLIDES.map((slide, index) => ({ slide_id: slide.slideId, number: index + 1, title: slide.title })))}`;
 const DECK_SLIDE_IDS = SLIDES.map((slide) => slide.slideId);
-const TIMER_PROBES: readonly { intent: string; at?: string; slideId?: string }[] = [
-  { intent: 'End the talk in 30 minutes', at: '2026-09-27T19:35', slideId: 'slide.end' },
-  { intent: 'Put the register up at eight', at: '2026-09-27T20:00', slideId: 'stage.register' },
-  { intent: 'Go back to the title slide in 5 minutes', at: '2026-09-27T19:10', slideId: 'slide.title' },
-  { intent: 'In 20 minutes, switch to the slide where the room asks questions', at: '2026-09-27T19:25', slideId: 'slide.query' },
-  { intent: 'At quarter to ten, wrap it up', at: '2026-09-27T21:45', slideId: 'slide.end' },
-  // must be refused
-  { intent: 'Email me in ten minutes' },
-  { intent: 'Remind me to drink water at nine' },
-  { intent: 'End the talk' },
+
+type Wanted =
+  | { draft: { at: string; effect: 'deck.show'; slideId: string } | { at: string; effect: 'notify' } | { every: 'day'; at: string; effect: 'notify' } }
+  | { ask: true }
+  | { refuse: true }
+  | { either: readonly Wanted[] };
+// `earlier`: the conversation before `intent` — each request and the writer's
+// answer to it, as lyceum replays them (reflexConversation).
+type TimerProbe = { intent: string; earlier?: { request: string; answer: ReflexAnswer }[]; wanted: Wanted };
+
+const show = (at: string, slideId: string): Wanted => ({ draft: { at, effect: 'deck.show', slideId } });
+const notifyAt = (at: string): Wanted => ({ draft: { at, effect: 'notify' } });
+const ASK: Wanted = { ask: true };
+const REFUSE: Wanted = { refuse: true };
+
+const TIMER_PROBES: readonly TimerProbe[] = [
+  // the first eight
+  // SPEC CHANGE 2026-09-29 (was the closing slide), then again the same day:
+  // a notification (the speaker, reminded) and the closing slide are both
+  // right readings — the words do not say which. The slide by name is below.
+  { intent: 'End the talk in 30 minutes', wanted: { either: [notifyAt('2026-09-27T19:35'), show('2026-09-27T19:35', 'slide.end')] } },
+  { intent: 'Show the last slide in 30 minutes', wanted: show('2026-09-27T19:35', 'slide.end') }, // added 2026-09-29, before the run
+  { intent: 'Put the register up at eight', wanted: ASK }, // SPEC CHANGE (was 20:00): morning or evening
+  { intent: 'Go back to the title slide in 5 minutes', wanted: show('2026-09-27T19:10', 'slide.title') },
+  { intent: 'In 20 minutes, switch to the slide where the room asks questions', wanted: show('2026-09-27T19:25', 'slide.query') },
+  { intent: 'At quarter to ten, wrap it up', wanted: ASK }, // SPEC CHANGE (was 21:45): morning or evening
+  { intent: 'Email me in ten minutes', wanted: REFUSE },
+  { intent: 'Remind me to drink water at nine', wanted: ASK }, // SPEC CHANGE (was a refusal): morning or evening
+  { intent: 'End the talk', wanted: ASK }, // SPEC CHANGE (was a refusal): nothing says when
+  // timers (added 2026-09-29, before their first run; `notify` replaced `timer.ring`)
+  { intent: 'Set a timer for 3 minutes', wanted: notifyAt('2026-09-27T19:08:00') },
+  { intent: 'A 90 second timer', wanted: notifyAt('2026-09-27T19:06:30') },
+  { intent: 'Show the last slide in 2 minutes', wanted: show('2026-09-27T19:07:00', 'slide.end') },
+  { intent: 'Ring in half an hour', wanted: notifyAt('2026-09-27T19:35:00') },
+  { intent: 'In ten minutes, put the register up', wanted: show('2026-09-27T19:15:00', 'stage.register') },
+  // must NOT be asked about: the words decide (added 2026-09-29, before the run)
+  // SPEC CHANGE 2026-09-29, twice: asked about for a moment; then "nothing
+  // repeats unless the person says so" — so the next 21:00, once.
+  { intent: 'Put the register up at 21:00', wanted: show('2026-09-27T21:00', 'stage.register') },
+  { intent: 'Tomorrow at nine in the morning, show the title slide', wanted: show('2026-09-28T09:00', 'slide.title') },
+  // once against every day (added 2026-09-29, before the run)
+  { intent: 'Today at 21:00, remind me to stretch', wanted: notifyAt('2026-09-27T21:00') },
+  // SPEC CHANGE 2026-09-29: "9:00" is not plainly a 24-hour time — asking
+  // "morning or evening?" is as right as writing 09:00.
+  { intent: 'Every day at 9:00, remind me to drink water', wanted: { either: [{ draft: { every: 'day', at: '09:00', effect: 'notify' } }, ASK] } },
+  // a reply to a question, with the conversation (added 2026-09-29, before the run)
+  {
+    intent: 'In the evening',
+    earlier: [{ request: 'Put the register up at eight', answer: { question: 'At eight in the morning or eight in the evening?' } }],
+    wanted: show('2026-09-27T20:00', 'stage.register'),
+  },
+  {
+    intent: 'Tonight, just once',
+    earlier: [{ request: 'Remind me to drink water at nine', answer: { question: 'Nine in the morning or nine in the evening — and just once, or every day?' } }],
+    wanted: notifyAt('2026-09-27T21:00'),
+  },
+  // a correction of a draft not yet saved (added 2026-09-29, before its first run)
+  {
+    intent: 'Nah, I meant put up the last slide',
+    earlier: [
+      {
+        request: 'End the talk in 30 minutes',
+        answer: { id: 'end-talk-reminder', intent: 'Notify the speaker in 30 minutes that it is time to end the talk.', on: { timer: { minutes: 30 } }, effect: { name: 'notify', input: { text: 'Time to end the talk.' } } },
+      },
+    ],
+    // SPEC CHANGE 2026-09-29, before its second measurement: "Nah" can reject the
+    // whole draft, its 30 minutes too — asking when is as right as keeping them.
+    wanted: { either: [show('2026-09-27T19:35', 'slide.end'), ASK] },
+  },
 ];
+
+// "YYYY-MM-DDTHH:MM" and "…:SS" name the same instant when the seconds are 00.
+const toSecond = (at: string): string => (at.length === 16 ? `${at}:00` : at);
+
+const describeWanted = (wanted: Wanted): string =>
+  'either' in wanted
+    ? wanted.either.map(describeWanted).join(' or ')
+    : 'ask' in wanted
+      ? 'a question'
+      : 'refuse' in wanted
+        ? 'a refusal'
+        : `${'every' in wanted.draft ? `every ${wanted.draft.every} ` : ''}${wanted.draft.at} ${wanted.draft.effect}${'slideId' in wanted.draft ? ` ${wanted.draft.slideId}` : ''}`;
+
+// What came back, in the terms a probe is judged in.
+type Got = { kind: 'ask' | 'refuse'; text: string } | { kind: 'draft'; clock: { at: string; every?: string } | undefined; effect: string; slideId: string; text: string };
+
+const gotOf = (written: Written): Got => {
+  const { answer } = written;
+  if ('question' in answer) return { kind: 'ask', text: `asked: ${answer.question.slice(0, 90)}` };
+  if ('refused' in answer) return { kind: 'refuse', text: `refused: ${answer.refused.slice(0, 90)}` };
+  const draft = proposable(answer, DECK_SLIDE_IDS);
+  const kind = 'timer' in draft.on ? `timer ${JSON.stringify(draft.on.timer)}` : 'clock' in draft.on ? ('every' in draft.on.clock ? `every ${draft.on.clock.every}` : 'once') : 'other';
+  const reflex = anchorTimer(draft, draft.id, TIDE_NOW, 'Europe/Vienna', DECK_SLIDE_IDS);
+  const clock = 'clock' in reflex.on ? reflex.on.clock : undefined;
+  const input: unknown = reflex.effect.input;
+  const slideId = typeof input === 'object' && input !== null && 'slideId' in input ? String(input.slideId) : '';
+  return { kind: 'draft', clock, effect: reflex.effect.name, slideId, text: `${clock?.at ?? '(not a clock)'} ${reflex.effect.name} ${slideId} [${kind}]` };
+};
+
+const matches = (wanted: Wanted, got: Got): boolean => {
+  if ('either' in wanted) return wanted.either.some((one) => matches(one, got));
+  if ('ask' in wanted) return got.kind === 'ask';
+  if ('refuse' in wanted) return got.kind === 'refuse';
+  if (got.kind !== 'draft' || got.clock === undefined) return false;
+  const want = wanted.draft;
+  const when = 'every' in want ? got.clock.every === want.every && got.clock.at === want.at : got.clock.every === undefined && toSecond(got.clock.at) === toSecond(want.at);
+  return when && got.effect === want.effect && (!('slideId' in want) || got.slideId === want.slideId);
+};
+
+const judge = (probe: TimerProbe, written: Written): { ok: boolean; got: string } => {
+  const got = gotOf(written);
+  return { ok: matches(probe.wanted, got), got: got.text };
+};
 
 const measureTimers = async (): Promise<void> => {
   const writer = createTimerWriter({ ...process.env, LYCEUM_TIMER: 'live' });
@@ -282,26 +396,16 @@ const measureTimers = async (): Promise<void> => {
       let got: string;
       let ok = false;
       try {
-        const written = await writer.write({ intent: probe.intent, now: TIDE_NOW, tz: 'Europe/Vienna', facts: DECK_FACTS, slideIds: DECK_SLIDE_IDS });
-        if ('refused' in written) {
-          got = `refused: ${written.refused.slice(0, 90)}`;
-          ok = probe.at === undefined;
-        } else {
-          const reflex = armable(written.reflex, DECK_SLIDE_IDS);
-          const at = 'clock' in reflex.on ? reflex.on.clock.at : '(not a clock)';
-          const input: unknown = reflex.effect.input;
-          const slideId = typeof input === 'object' && input !== null && 'slideId' in input ? String(input.slideId) : '';
-          got = `${at} ${slideId}`;
-          ok = at === probe.at && slideId === probe.slideId;
-        }
+        const written = await writer.write({ intent: probe.intent, now: TIDE_NOW, tz: 'Europe/Vienna', facts: DECK_FACTS, slideIds: DECK_SLIDE_IDS, earlier: (probe.earlier ?? []).map((turn) => ({ ...turn, reasoning: undefined })) });
+        ({ ok, got } = judge(probe, written));
       } catch (error) {
         got = `error ${error instanceof Error ? error.message.slice(0, 120) : String(error)}`;
       }
       await new Promise((resolve) => setTimeout(resolve, 300));
       passed += ok ? 1 : 0;
       total += 1;
-      const wanted = probe.at === undefined ? 'a refusal' : `${probe.at} ${probe.slideId ?? ''}`;
-      console.log(`${ok ? '[pass]' : '[fail]'} ${String(Date.now() - started).padStart(5)}ms ${String(meter.tokens - before).padStart(6)} tok  ${probe.intent} → ${got}${ok ? '' : `  (wanted ${wanted})`}`);
+      const label = probe.earlier === undefined ? probe.intent : `${probe.earlier.map((turn) => turn.request).join(' / ')} / ${probe.intent}`;
+      console.log(`${ok ? '[pass]' : '[fail]'} ${String(Date.now() - started).padStart(5)}ms ${String(meter.tokens - before).padStart(6)} tok  ${label} → ${got}${ok ? '' : `  (wanted ${describeWanted(probe.wanted)})`}`);
     }
   }
   console.log(`

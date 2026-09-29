@@ -71,7 +71,8 @@ export const CHARTER: Charter = {
 
   // The talk's clock: a principal that is not a person, which a saved timer
   // runs as (server/timing.ts). It can put a slide on screen and nothing else —
-  // whatever a model wrote into a timer, this is all it can reach.
+  // whatever a model wrote into a timer, this is all it can reach. (`notify`
+  // writes nothing: it shows a message in a live shell, server-side.)
   clock: { data: ['deck.write.update'] },
 
   // ── machinery: roles nobody wears, each granted exactly its job ──

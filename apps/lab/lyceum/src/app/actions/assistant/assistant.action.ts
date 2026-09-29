@@ -1,5 +1,4 @@
 import type { ActionDefinition } from '@niscorp/nova';
-import { timerSave } from '@lyceum/app/vex/timer.entries';
 import { turnResolve, turnsMine } from '@lyceum/app/vex/assistant.entries';
 import { TAB_BUTTON, TAB_INPUT, TAB_OPENED } from '@lyceum/app/actions/shared/tab.layouts';
 import { assistantLayout } from './assistant.layout';
@@ -50,7 +49,8 @@ export const assistantAction: ActionDefinition = {
     thinking: false,
     answered: false,
     saved: false,
-    chosen: { timerId: '', reflex: {}, intent: '', dueAt: null, dueLocal: '' },
+    chosen: { timerId: '', draft: {}, json: '', intent: '', when: '', reasoning: '' },
+    savedTimer: { dueLocal: '' },
     error: '',
   },
   input: TAB_INPUT,
@@ -58,21 +58,9 @@ export const assistantAction: ActionDefinition = {
   endpoints: {
     intro: { fn: 'assistant.intro', target: 'intro' },
     turn: { fn: 'assistant.turn', target: 'reply', errorTarget: 'error' },
-    save: {
-      url: '/api/vex',
-      method: 'POST',
-      request: {
-        fingerprint: timerSave.fingerprint,
-        context: {
-          timerId: { $ref: '$.chosen.timerId' },
-          reflex: { $ref: '$.chosen.reflex' },
-          intent: { $ref: '$.chosen.intent' },
-          dueAt: { $ref: '$.chosen.dueAt' },
-        },
-      },
-      errorTarget: 'error',
-    },
-    arm: { fn: 'timers.arm', errorTarget: 'error' },
+    // Saving anchors the draft at the press — the clock, which is not data —
+    // then writes it as this person and loads it into tide.
+    save: { fn: 'timers.save', target: 'savedTimer', errorTarget: 'error' },
     // The conversation, its last five turns oldest first — this person's own,
     // reactive: a turn recorded or resolved reaches the screen on its own.
     history: { url: '/api/vex', method: 'POST', request: { fingerprint: turnsMine.fingerprint, context: {} }, target: 'history' },
@@ -84,7 +72,7 @@ export const assistantAction: ActionDefinition = {
         fingerprint: turnResolve.fingerprint,
         context: {
           turnId: { $ref: '$.reply.turnId' },
-          outcome: { $interpolate: { template: 'Saved · fires at {{at}}', values: { at: { $ref: '$.chosen.dueLocal' } } } },
+          outcome: { $interpolate: { template: 'Saved · fires at {{at}}', values: { at: { $ref: '$.savedTimer.dueLocal' } } } },
         },
       },
       errorTarget: 'error',
@@ -104,7 +92,7 @@ export const assistantAction: ActionDefinition = {
       do: [
         { set: 'error', value: '' },
         { set: 'chosen', value: '@event.payload' },
-        { call: 'save', onSuccess: [{ call: 'arm', onSuccess: [{ call: 'resolve', onSuccess: [{ set: 'answered', value: false }, { set: 'saved', value: true }] }] }] },
+        { call: 'save', onSuccess: [{ call: 'resolve', onSuccess: [{ set: 'answered', value: false }, { set: 'saved', value: true }] }] },
       ],
     },
     // Something the assistant opened, open again from the conversation — a

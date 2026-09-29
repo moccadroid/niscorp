@@ -41,7 +41,7 @@ export type Querier = {
   mapToShape: MapToShape;
 };
 
-const DEFAULT_SHAPE: QueryShape = QUERY_SHAPES[0] ?? { kind: 'list', means: '', shape: [] };
+const DEFAULT_SHAPE: QueryShape = QUERY_SHAPES[0] ?? { kind: 'list', description: '', shape: [] };
 const shapeOf = (kind: string): QueryShape => QUERY_SHAPES.find((shape) => shape.kind === kind) ?? DEFAULT_SHAPE;
 
 // The router is handed at most this many earlier requests — a choice has at
@@ -74,7 +74,7 @@ const liveQuerier = (env: Record<string, string | undefined>): Querier => {
       const shape: ChoiceQuestion = {
         type: 'choice',
         instructions: 'What shape does the answer to this question take?',
-        criteria: Object.fromEntries(QUERY_SHAPES.map((entry) => [entry.kind, entry.means])),
+        criteria: Object.fromEntries(QUERY_SHAPES.map((entry) => [entry.kind, entry.description])),
       };
       const earlier = Object.fromEntries(candidates.map((entry, index) => [`q${index}`, entry.request]));
       const result = await decider.decide({ state: { question, earlier }, questions: candidates.length === 0 ? { shape } : { same, shape } });

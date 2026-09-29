@@ -230,6 +230,16 @@ export const TURNS_REPAIRED = /* sql */ `
   UPDATE assistant_turns SET proposals = '[]'::jsonb WHERE jsonb_typeof(proposals) <> 'array';
 `;
 
+// Migration 12: WHAT THE AUTOMATION WRITER ANSWERED. Tide's reflex agent
+// answers a request with a draft, a question or a refusal, and its reasoning;
+// the turn keeps both, so the person's reply — or their correction of a draft
+// they have not saved — goes back to the agent as the conversation, its own
+// answer replayed as it gave it. NULL on every turn it did not write in.
+export const TURNS_WRITER = /* sql */ `
+  ALTER TABLE assistant_turns ADD COLUMN writer_answer JSONB;
+  ALTER TABLE assistant_turns ADD COLUMN writer_reasoning TEXT;
+`;
+
 export const LYCEUM_SEQUENCE: Sequence = {
   id: 'lyceum.app',
   migrations: [
@@ -244,6 +254,7 @@ export const LYCEUM_SEQUENCE: Sequence = {
     { description: 'What a turn ran: the vex queries of each assistant turn', steps: sqlSteps(TURNS_OPENED) },
     { description: 'What the tables mean: comments a query writer reads as descriptions', steps: sqlSteps(TABLE_MEANINGS) },
     { description: 'Turns written wrong, repaired: lists that landed as objects are lists again', steps: sqlSteps(TURNS_REPAIRED) },
+    { description: 'What the automation writer answered, and why, on the turn it answered in', steps: sqlSteps(TURNS_WRITER) },
   ],
 };
 

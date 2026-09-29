@@ -18,6 +18,7 @@ import { notesAction } from './actions/speaker/notes.action';
 import { controlsAction } from './actions/speaker/controls.action';
 import { speakerDeckAction } from './actions/speaker/deck.action';
 import { slidesAction } from './actions/speaker/slides.action';
+import { notificationAction } from './actions/speaker/notification.action';
 import { assignmentTool } from './actions/tools/assignment.action';
 import { tallyTool } from './actions/tools/tally.action';
 import { lookTool } from './actions/tools/look.action';
@@ -54,6 +55,7 @@ export const ACTIONS: Record<string, ActionDefinition> = Object.fromEntries(
     controlsAction,
     speakerDeckAction,
     slidesAction,
+    notificationAction,
     assignmentTool,
     tallyTool,
     lookTool,

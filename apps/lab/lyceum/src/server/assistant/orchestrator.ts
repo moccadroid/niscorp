@@ -48,7 +48,7 @@ const liveOrchestrator = (): Orchestrator => {
   };
 };
 
-// The stand-in's routing: a time → automate, "change my name to …" → open the
+// The stand-in's routing: a time, or a correction ("I meant …") → automate, "change my name to …" → open the
 // rename, anything about the screen → read it back, anything else → query. Each through the tool the person was given, or
 // the same one-line refusal the live assistant owes them.
 const fakeOrchestrator = (): Orchestrator => ({
@@ -67,10 +67,12 @@ const fakeOrchestrator = (): Orchestrator => ({
       const section = end === -1 ? rest : rest.slice(0, end);
       return `On your screen: ${section.slice(section.indexOf('\n') + 1).slice(0, 1200)}`;
     }
-    if (/\b(in \d+|minutes?|hours?|at \d)/i.test(message)) {
+    if (/\b(in \d+|minutes?|hours?|at \d|I meant)/i.test(message)) {
       if (tool('automate') === undefined) return 'I cannot set up automations for you.';
-      await call('automate', { request: message });
-      return 'Here it is — read it, then save it.';
+      const result = await call('automate', { request: message });
+      // The writer asked back: the question is the reply, in its own words.
+      const asked = typeof result === 'object' && result !== null && 'asked' in result && typeof result.asked === 'string' ? result.asked : undefined;
+      return asked ?? 'Here it is — read it, then save it.';
     }
     // "…my questions" — open their own questions, over the screen.
     if (/\bmy questions\b/i.test(message)) {

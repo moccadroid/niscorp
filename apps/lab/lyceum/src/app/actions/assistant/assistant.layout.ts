@@ -17,7 +17,12 @@ const proposal: LayoutNode = {
           {
             component: 'Cell',
             props: { area: 'what', ink: 'highlight' },
-            children: [{ component: 'Label', children: 'Read it first · fires at {{$p.timer.dueLocal}}' }, { component: 'Text', children: '{{$p.timer.intent}}' }],
+            children: [
+              { component: 'Label', children: 'Read it first · {{$p.timer.when}}' },
+              { component: 'Text', children: '{{$p.timer.intent}}' },
+              // How the writer read the request — so it can be corrected.
+              { component: 'Text', children: 'How I read it: {{$p.timer.reasoning}}' },
+            ],
           },
           { component: 'Cell', props: { area: 'doc' }, children: [{ component: 'Code', props: { text: '$p.timer.json' } }] },
           { component: 'Action', ref: 'save', props: { area: 'save', ink: 'alert', label: 'Save — tide runs it', value: '$p.timer' } },

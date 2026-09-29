@@ -6,7 +6,10 @@ import { headLayout } from './head.layout';
 
 // The top of the controller: the room, the slide on screen, and the time left
 // on the newest timer. All three reads are reactive — the head follows the
-// deck, the room and the timers, whoever moved them.
+// deck, the room and the timers, whoever moved them. It is always on the
+// controller, so it is what hears a saved automation's `notify` (published
+// into the speaker's live shell, server/timing.ts) and opens the notification
+// over the screen.
 export const headAction: ActionDefinition = {
   id: 'speaker.head',
   title: 'Where the talk is',
@@ -22,5 +25,10 @@ export const headAction: ActionDefinition = {
     timer: { url: '/api/vex', method: 'POST', request: { fingerprint: timerNext.fingerprint, context: {} }, target: 'timer' },
   },
   lifecycle: { mount: [{ call: 'counts' }, { call: 'current' }, { call: 'timer' }] },
-  triggers: [],
+  triggers: [
+    {
+      message: 'notify',
+      do: [{ push: { action: 'speaker.notification', canvas: 'overlay', with: ['sheet'], input: { text: '@event.payload.text', sheetTitle: 'Notification' } } }],
+    },
+  ],
 };
