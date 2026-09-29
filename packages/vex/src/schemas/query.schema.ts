@@ -44,7 +44,7 @@ const SubquerySourceSchema = z
     query: z.lazy((): z.ZodType<Query> => QuerySchema).describe('A nested query'),
   })
   .strict()
-  .describe('Subquery data source');
+  .describe('Subquery data source: a nested query read as a table under `as`, its columns referenced as `<as>.<field>` anywhere in the outer query. Joined by foreign key like an entity when one links them; otherwise every outer row is paired with every subquery row (a cross join), so a one-row subquery puts its values beside each outer row.');
 
 const SourceSchema = z
   .union([

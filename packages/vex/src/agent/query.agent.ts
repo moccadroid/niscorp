@@ -27,7 +27,6 @@ export const describeCaller = (bindings: readonly ScopeBinding[]): string =>
         'The caller — the person or service this query is for — is identified by server-side scope values bound to these columns:',
         ...bindings.map((b) => `- ${b.entity}.${b.field} is the caller's { "$scope": "${b.key}" }`),
         'Such a column holds that value on the caller\'s own rows. To mean the caller or what is theirs ("me", "my", "mine", "our"), filter the column with { "$scope": "<key>" } — the server binds the caller\'s own value; you never see or write it.',
-        'To compare other rows with the caller\'s own values ("after me", "older than me", "more than mine"), read the caller\'s row as a subquery source with an alias of its own — filtered by { "$scope": "<key>" } — and compare the outer rows against that alias\'s fields.',
       ].join('\n');
 
 const INSTRUCTIONS = `You are Vex's query agent. You turn a caller's request — a natural-language \`intent\` and an example \`shape\` of the data they want back — into ONE query in Vex's DSL.

@@ -52,7 +52,7 @@ export type RemoveSelfEffect = { removeSelf: true };
 
 // Make a canvas EQUAL a list read from the action's data — the declarative
 // verb (shell/reconcile.ts) as a step. Every other navigation step moves ONE
-// action; a surface whose actions come from rows (a slide's tools, a set of
+// action; a surface whose actions come from rows (a set of tools, a set of
 // cards) has as many as the rows say, and a fixed list of steps cannot.
 // Missing actions are pushed, ones no longer listed are removed, ones already
 // there stay mounted. A row naming an action this shell does not have (not

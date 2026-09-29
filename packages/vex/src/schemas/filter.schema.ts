@@ -63,7 +63,7 @@ const ExistsSchema: z.ZodType<ExistsQuery> = z.lazy(() =>
   z
     .object({
       from: z.array(z.string()).min(1).describe('Entities the subquery reads. Joined by foreign key like any other from.'),
-      filter: FilterSchema.optional().describe('The correlation, and any extra condition. Reference the outer query by its own entity path: { eq: ["tasks.issue_id", "issues.id"] }.'),
+      filter: FilterSchema.optional().describe('The correlation, and any extra condition. Reference the outer query by its own entity path: { eq: ["<inner>.<fk>", "<outer>.id"] }.'),
     })
     .strict(),
 );

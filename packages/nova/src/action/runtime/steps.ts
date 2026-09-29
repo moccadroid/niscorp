@@ -271,8 +271,8 @@ const resolveNavInput = (effect: NavigationEffect, ctx: StepContext): Navigation
 
 // Resolve a `reconcile` step: read its list and turn each row into the action it
 // names (and that action's input, when the step names a field for it). A value
-// that is not a list is an empty one — the canvas empties, which is what a
-// slide with no tools means.
+// that is not a list is an empty one — the canvas empties, which is what an
+// empty list means.
 const resolveReconcile = (step: ReconcileEffect, ctx: StepContext): NavigationEffect => {
   const { to, action, input, ...rest } = step.reconcile;
   const rows = resolve(to, createScopeChain(ctx.dataStore.get()), ctx.extras);
