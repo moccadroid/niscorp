@@ -66,6 +66,7 @@ type PipelineResult = {
 const DEFAULT_MAX_NESTING_DEPTH = 2;
 const DEFAULT_LIMIT = 100;
 const DEFAULT_MAX_LIMIT = 1000;
+const DEFAULT_STATEMENT_TIMEOUT_MS = 10_000;
 const DEFAULT_UNSATISFIABLE_TTL_MS = 300_000;
 const DEFAULT_MAX_PRESENCE_VARIANTS = 32;
 
@@ -144,6 +145,12 @@ export const createQueryEngine = (engineConfig: QueryEngineConfig): QueryEngine 
       ? { entities: engineConfig.config.entities }
       : undefined;
     const schema = await adapter.introspect(options);
+    // Every read bounded, from here on. Said once when the database cannot
+    // enforce it (PGlite, a pool that cannot transact) — dev, not production.
+    const readLimit = engineConfig.config?.statementTimeoutMs ?? DEFAULT_STATEMENT_TIMEOUT_MS;
+    if (adapter.limitReads !== undefined && (await adapter.limitReads(readLimit)) === 'unenforced' && readLimit > 0) {
+      console.warn(`[vex] reads are not bounded: this database cannot enforce statement_timeout (${readLimit}ms asked). Fine for development; production wants Postgres.`);
+    }
     // The behaviors are read for who a caller is (GenerationCaller.bindings):
     // a rule naming a table or a column the database does not have would tell
     // a generation something false, so it refuses here, at boot.
