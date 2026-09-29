@@ -3,13 +3,15 @@ import {
   actionLayout,
   aloneLayout,
   answerLayout,
+  differenceLayout,
   looksLayout,
   novaLayout,
   openingTitleLayout,
   originLayout,
-  pointCodeLayout,
-  pointLayout,
   problemLayout,
+  questionLayout,
+  threeLayout,
+  xrayLayout,
 } from './opening.layouts';
 
 // THE OPENING — up to the census. Where it started, the problem, our answer,
@@ -70,47 +72,42 @@ export const novaSlide = still('slide.nova', 'Nova', novaLayout, {
   ],
 });
 
-// The Q&A form: its source, whole, on the left; its layout rendered on the
-// right (the same `sendLayout` a phone renders, placed on this slide).
+// The Q&A form: its source in the middle, its layout rendered on the right
+// (the same `sendLayout` a phone renders, placed on this slide). The marked
+// lines follow a click: the trigger runs `send`, which calls the endpoint.
 export const actionSlide = still('slide.data', 'An action', actionLayout, {
   kicker: 'Nova',
   file: 'send.action.ts',
   code: code(
     'const send = [',
     "  { set: 'error', value: '' },",
-    "  { call: 'send', onSuccess: [{ set: 'draft', value: '' }, …] },",
+    "  { call: 'send', onSuccess: [ … ] },",
     '];',
     '',
     'export const questionSendAction = {',
     "  id: 'questions.send',",
-    "  data: { draft: '', sent: false, error: '' },",
+    "  data: { draft: '', sent: false, … },",
     '  layout: sendLayout,',
     '  endpoints: {',
-    "    send: { url: '/api/vex', method: 'POST', request: {",
-    "      fingerprint: 'questions/send',",
-    "      context: { text: { $ref: '$.draft' } } } },",
+    "    send: { url: '/api/vex', … },",
     '  },',
     '  triggers: [',
-    "    { event: 'ui:click', ref: 'send', do: send },",
-    "    { event: 'ui:key', ref: 'draft', key: 'Enter', do: send },",
+    "    { event: 'ui:click', ref: 'send',",
+    '      do: send },',
+    "    { event: 'ui:key', key: 'Enter',",
+    '      do: send },',
     '  ],',
     '};',
   ),
-  marked: [3, 8, 9, 10, 16],
+  marked: [3, 8, 9, 10, 14, 15],
   draft: '',
   sent: false,
   error: '',
 });
 
-export const xraySlide = still('slide.xray', 'Your screen is data.', pointLayout, {
-  kicker: 'Nova',
-  line: 'Nothing on it is code. You can read every part of it — and so can a program, or a model.',
-});
+export const xraySlide = still('slide.xray', 'Your screen is data.', xrayLayout, {});
 
-export const pushSlide = still('slide.clearance', 'Three of you just got a button.', pointLayout, {
-  kicker: 'Nova',
-  line: 'Nobody else did. It is not hidden from you — it was never sent. Who gets which action is decided per person, on the server.',
-});
+export const pushSlide = still('slide.clearance', 'Three of you just got a button.', threeLayout, {});
 
 export const looksSlide: ActionDefinition = {
   id: 'slide.looks',
@@ -122,29 +119,31 @@ export const looksSlide: ActionDefinition = {
   triggers: [],
 };
 
-export const questionSlide = still('slide.compare', 'Isn’t this json-render?', pointLayout, {
-  kicker: 'The obvious question',
-  line: 'Or Google’s A2UI. Good projects, heading the same way: a model writes JSON, a renderer draws it.',
-});
+export const questionSlide = still('slide.compare', 'Isn’t this json-render?', questionLayout, {});
 
-export const behaviourSlide = still('slide.behaviour', 'Behaviour is data too.', pointCodeLayout, {
-  kicker: 'Nova, unlike them',
-  line: 'In json-render, a button calls a function in your app. In Nova, what it does is data — checked before it runs.',
-  file: 'send.action.ts',
+export const behaviourSlide = still('slide.behaviour', 'What a button does', differenceLayout, {
+  kicker: 'Difference one',
+  theirs: 'Calls a function in your app.',
+  ours: 'Is data.',
+  oursInk: 'ink',
   code: code(
+    "{ event: 'ui:click', ref: 'send', do: send }",
+    '',
     'const send = [',
     "  { set: 'error', value: '' },",
     "  { call: 'send', onSuccess: [ … ] },",
     '];',
-    '',
-    "{ event: 'ui:click', ref: 'send', do: send },",
   ),
-  marked: [3, 6],
+  marked: [1, 5],
 });
 
-export const stateSlide = still('slide.state', 'The state lives in the action.', pointLayout, {
-  kicker: 'Nova, unlike them',
-  line: 'Not in your app’s store. So an action runs anywhere — a browser, a server, a terminal. That is why the last three slides worked.',
+export const stateSlide = still('slide.state', 'Where the state lives', differenceLayout, {
+  kicker: 'Difference two',
+  theirs: 'In your app’s store.',
+  ours: 'In the action. So it runs anywhere.',
+  oursInk: 'signal',
+  code: '',
+  marked: [],
 });
 
 export const OPENING_SLIDES: readonly ActionDefinition[] = [

@@ -80,50 +80,71 @@ export const novaLayout: LayoutNode = {
   ],
 };
 
-// 8 · An action: its source, whole, and beside it its layout, rendered from
-// the same JSON a phone renders.
+// 8 · An action: the name bottom-left, its source in the middle, its layout
+// rendered on the right from the same JSON a phone renders.
 export const actionLayout: LayoutNode = {
   component: 'Sheet',
-  props: { size: 'fill', areas: ['code head', 'code form'], cols: [2.2, 0.9], rows: ['auto', 1] },
+  props: { size: 'fill', areas: ['kick code form', 'head code form'], cols: [0.85, 1.5, 0.9], rows: ['auto', 1] },
   children: [
-    cell('head', [label('{{$.kicker}}'), headline('title', '{{$.title}}')]),
+    cell('kick', [label('{{$.kicker}}')]),
+    cell('head', [headline('title', '{{$.title}}')], { align: 'end' }),
     cell('code', [label('{{$.file}}'), { component: 'Code', props: { text: '$.code', marked: '$.marked' } }], { ink: 'ink' }),
     cell('form', [label('Its layout, rendered'), sendLayout]),
   ],
 };
 
-// A point: the claim, and the one line that says why it matters.
-export const pointLayout: LayoutNode = {
+// 9 · Your screen is data: the claim, and beside it the button they are about
+// to get.
+export const xrayLayout: LayoutNode = {
   component: 'Sheet',
-  props: { size: 'fill', areas: ['kick', 'head', 'line'], rows: ['auto', 1, 'auto'] },
+  props: { size: 'fill', areas: ['head xray'], cols: [1.25, 1] },
   children: [
-    cell('kick', [label('{{$.kicker}}')]),
     cell('head', [headline('display', '{{$.title}}')], { align: 'end' }),
-    cell('line', [headline('name', '{{$.line}}')], { ink: 'signal' }),
+    cell('xray', [label('On your phone'), headline('display', 'X-ray')], { ink: 'signal', align: 'center' }),
   ],
 };
 
-// A point with the code it is about beside it.
-export const pointCodeLayout: LayoutNode = {
+// 10 · Three of you got a button: the claim, and beside it the button three
+// phones just got.
+export const threeLayout: LayoutNode = {
   component: 'Sheet',
-  props: { size: 'fill', areas: ['kick kick', 'head head', 'code line'], cols: [1.15, 1], rows: ['auto', 1, 'auto'] },
+  props: { size: 'fill', areas: ['head press'], cols: [1.25, 1] },
   children: [
-    cell('kick', [label('{{$.kicker}}')]),
     cell('head', [headline('display', '{{$.title}}')], { align: 'end' }),
-    cell('line', [headline('name', '{{$.line}}')], { ink: 'signal' }),
-    cell('code', [label('{{$.file}}'), { component: 'Code', props: { text: '$.code', marked: '$.marked' } }], { ink: 'ink' }),
+    cell('press', [label('On three phones'), headline('display', 'Press')], { ink: 'alert', align: 'center' }),
   ],
 };
 
-// 11 · One set of data, three ways to draw it.
+// 11 · One set of data, three ways to draw it — the three take the slide.
 export const looksLayout: LayoutNode = {
   component: 'Sheet',
-  props: { size: 'fill', areas: ['kick kick kick', 'head head head', 'styled plain term'], rows: ['auto', 1, 'auto'] },
+  props: { size: 'fill', areas: ['head head head', 'styled plain term'], rows: ['auto', 1] },
   children: [
-    cell('kick', [label('{{$.kicker}}')]),
+    cell('head', [headline('title', '{{$.title}}')]),
+    cell('styled', [headline('title', 'Styled')], { ink: 'signal', align: 'end' }),
+    cell('plain', [headline('title', 'Unstyled')], { align: 'end' }),
+    cell('term', [headline('title', 'Terminal'), { if: '$.address.ssh', then: { component: 'Code', props: { text: '$.address.ssh' } } }], { ink: 'ink', align: 'end' }),
+  ],
+};
+
+// 12 · The question, and the two projects it is about.
+export const questionLayout: LayoutNode = {
+  component: 'Sheet',
+  props: { size: 'fill', areas: ['head head', 'one two'], rows: [1, 'auto'] },
+  children: [
     cell('head', [headline('display', '{{$.title}}')], { align: 'end' }),
-    cell('styled', [headline('name', 'With a stylesheet')], { ink: 'signal' }),
-    cell('plain', [headline('name', 'Without one')]),
-    cell('term', [headline('name', 'In a terminal'), { if: '$.address.ssh', then: { component: 'Code', props: { text: '$.address.ssh' } } }], { ink: 'ink' }),
+    cell('one', [label('Vercel'), headline('title', 'json-render')]),
+    cell('two', [label('Google'), headline('title', 'A2UI')]),
+  ],
+};
+
+// 13, 14 · One difference, side by side: theirs on paper, ours in ink.
+export const differenceLayout: LayoutNode = {
+  component: 'Sheet',
+  props: { size: 'fill', areas: ['head head', 'theirs ours'], cols: [1, 1.3], rows: ['auto', 1] },
+  children: [
+    cell('head', [label('{{$.kicker}}'), headline('display', '{{$.title}}')]),
+    cell('theirs', [label('json-render'), headline('title', '{{$.theirs}}')], { align: 'end' }),
+    cell('ours', [label('Nova'), headline('title', '{{$.ours}}'), { if: '$.code', then: { component: 'Code', props: { text: '$.code', marked: '$.marked' } } }], { ink: '$.oursInk', align: 'end' }),
   ],
 };
