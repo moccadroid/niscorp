@@ -40,6 +40,11 @@ export type NiscRuntime = {
   // against a rebuild on the next connect — an operational decision about a
   // deployment, not something an application is written against.
   shellIdleMs?: number;
+  // How long a server shell's endpoint call waits for its reply before it
+  // fails to the action's `onError` (default: nova's, 30 seconds). An
+  // endpoint that is slow by nature says so itself (`timeoutMs`); this is the
+  // deployment's floor for everything else.
+  endpointTimeoutMs?: number;
   // How often a live socket's credential is re-verified through `session`
   // (default: 60 seconds; `0` disables it). The HTTP surfaces re-ask on every
   // request; this is what makes the socket ask too, so a `session` that gives

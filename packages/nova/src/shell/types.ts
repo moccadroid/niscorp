@@ -152,6 +152,9 @@ export type ShellConfig = {
   fetch?: FetchFn;
   // Handlers for `{ fn: '<name>' }` endpoints. See `EndpointConfigSchema`.
   functions?: Record<string, FunctionHandler>;
+  // How long an endpoint call waits for its reply before it fails to
+  // `onError` (default 30000). An endpoint's own `timeoutMs` wins over it.
+  endpointTimeoutMs?: number;
   telemetry?: ShellTelemetry;
   strict?: boolean;
   onError?: OnErrorHandler;

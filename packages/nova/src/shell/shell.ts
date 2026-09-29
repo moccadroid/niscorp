@@ -360,6 +360,7 @@ export const createShell = (config: ShellConfig): Shell => {
     ...(config.transform === undefined ? {} : { transform: config.transform }),
     ...(config.fetch === undefined ? {} : { fetch: config.fetch }),
     ...(config.functions === undefined ? {} : { functions: config.functions }),
+    ...(config.endpointTimeoutMs === undefined ? {} : { endpointTimeoutMs: config.endpointTimeoutMs }),
     strict,
     ...(config.onError === undefined ? {} : { onError: config.onError }),
     i18n: language,

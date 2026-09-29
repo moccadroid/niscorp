@@ -157,6 +157,7 @@ export const createActionRuntime = (config: ActionRuntimeConfig): ActionRuntime 
     dataStore,
     endpoints: definition.endpoints ?? {},
     functions: config.functions ?? {},
+    ...(config.endpointTimeoutMs === undefined ? {} : { endpointTimeoutMs: config.endpointTimeoutMs }),
     eventBus: config.eventBus,
     messageBus: config.messageBus,
     ...(config.fetch === undefined ? {} : { fetch: config.fetch }),

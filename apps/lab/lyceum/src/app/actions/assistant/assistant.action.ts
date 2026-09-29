@@ -55,7 +55,10 @@ export const assistantAction: ActionDefinition = {
   layout: { if: '$.tab', then: TAB_BUTTON, else: assistantLayout },
   endpoints: {
     intro: { fn: 'assistant.intro', target: 'intro' },
-    turn: { fn: 'assistant.turn', target: 'reply', errorTarget: 'error' },
+    // A turn is model calls end to end (the answer, a query it writes, a timer
+    // it drafts), and a full room shares one provider's rate limit: it may take
+    // longer than the shell's 30s, so it says how long it may take.
+    turn: { fn: 'assistant.turn', target: 'reply', errorTarget: 'error', timeoutMs: 120_000 },
     // Saving anchors the draft at the press — the clock, which is not data —
     // then writes it as this person and loads it into tide.
     save: { fn: 'timers.save', target: 'savedTimer', errorTarget: 'error' },

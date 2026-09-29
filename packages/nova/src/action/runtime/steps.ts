@@ -54,6 +54,8 @@ export type StepContext = {
   dataStore: DataStore;
   endpoints: Record<string, EndpointConfig>;
   functions: Record<string, FunctionHandler>;
+  // The shell's default wait for a reply; an endpoint's `timeoutMs` wins.
+  endpointTimeoutMs?: number;
   eventBus: EventBus;
   messageBus: MessageBus;
   fetch?: FetchFn;
@@ -189,6 +191,7 @@ const runCall = async (
     transform: ctx.transform,
     signal: ctx.signal,
     functions: ctx.functions,
+    ...(ctx.endpointTimeoutMs === undefined ? {} : { timeoutMs: ctx.endpointTimeoutMs }),
   });
   if (ctx.signal.aborted) return;
   if (!result.ok && result.error.aborted === true) return;

@@ -25,6 +25,12 @@ const HttpEndpointSchema = z
       ),
     target: z.string().optional().describe('Data path to store the result at on success.'),
     errorTarget: z.string().optional().describe('Data path to store the error at on failure.'),
+    timeoutMs: z
+      .number()
+      .int()
+      .positive()
+      .optional()
+      .describe('How long to wait for the reply, in ms, before the call fails to onError. Defaults to the shell default (30000). Set it on an endpoint that is slow by nature — a model call that may take minutes.'),
   })
   .strict()
   .describe('A named HTTP call. `request`/`response` shape the body/reply via the injected transform.');
@@ -39,6 +45,12 @@ const FunctionEndpointSchema = z
       ),
     target: z.string().optional().describe('Data path to store the return value at on success.'),
     errorTarget: z.string().optional().describe('Data path to store the error at on failure.'),
+    timeoutMs: z
+      .number()
+      .int()
+      .positive()
+      .optional()
+      .describe('How long to wait for the reply, in ms, before the call fails to onError. Defaults to the shell default (30000). Set it on an endpoint that is slow by nature — a model call that may take minutes.'),
   })
   .strict()
   .describe('A named local function call. Handler is provided via `ShellConfig.functions`.');

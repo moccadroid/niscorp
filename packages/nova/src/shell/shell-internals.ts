@@ -85,6 +85,7 @@ export type RuntimeFactoryDeps = {
   transform?: TransformFn;
   fetch?: FetchFn;
   functions?: Record<string, FunctionHandler>;
+  endpointTimeoutMs?: number;
   strict: boolean;
   onError?: OnErrorHandler;
   instanceIdFn: IdFactory;
@@ -110,6 +111,7 @@ export const createRuntimeFactory = (deps: RuntimeFactoryDeps) => (
     ...(deps.transform === undefined ? {} : { transform: deps.transform }),
     ...(deps.fetch === undefined ? {} : { fetch: deps.fetch }),
     ...(deps.functions === undefined ? {} : { functions: deps.functions }),
+    ...(deps.endpointTimeoutMs === undefined ? {} : { endpointTimeoutMs: deps.endpointTimeoutMs }),
     onNavigate: (effect) => deps.onNavigate(canvasId, effect),
     ...(deps.onEndpoint === undefined ? {} : { onEndpoint: deps.onEndpoint }),
     strict: deps.strict,
