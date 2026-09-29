@@ -56,7 +56,7 @@ export const SLIDES: readonly { slideId: string; title: string; tools: readonly 
   // ── 1 · the problem ──
   { slideId: 'slide.problem', title: 'Code is the least checkable thing a model can write', tools: [], notes: ['This room writes code with models every day — no need to sell that', 'Go down the five: validate, policy, replay, migrate, read as state', 'Each is something you can do to a document and cannot do to code'] },
   { slideId: 'slide.thesis', title: 'Code lives in five places', tools: [], notes: ['The five places, fast', 'Everything else: a closed grammar, a Zod schema at the boundary, a runtime', 'The claim for models: a narrow problem and a precise grammar is what makes a small one enough'] },
-  { slideId: 'slide.census', title: 'Is JSON enough for a real app?', tools: [], notes: ['The objection everybody has: JSON UIs hit a wall', 'Answer with this app: 3,513 lines of app/, all artifacts; four renderers in 1,262', 'Counted with wc -l on 2026-09-29 — recount before the talk'] },
+  { slideId: 'slide.census', title: 'Is JSON enough for a real app?', tools: [], notes: ['The objection everybody has: JSON UIs hit a wall', 'Answer with this app: every line of app/ is an artifact; four renderers in ui/', 'The numbers are counted from the source as the slide comes up — read them off the wall'] },
 
   // ── 2 · nova ──
   { slideId: 'slide.data', title: 'The screen is a document', tools: [], notes: ['The card on their phone is this object', 'Point at the layout: one action, three sizes', 'Point at the endpoint: a fingerprint, not a fetch'] },
@@ -96,7 +96,7 @@ export const SLIDES: readonly { slideId: string; title: string; tools: readonly 
   { slideId: 'slide.strata', title: 'When the grammar changes, documents migrate', tools: [], notes: ['If everything is JSON, what happens when nisc changes?', 'Grammars are ledgered sequences — even this app’s component props', 'strata upgrade writes the expected JSON; verify holds the edit to it'] },
 
   // ── 9 · how it holds, and the close ──
-  { slideId: 'slide.checks', title: 'Thirteen checks, no browser, no mocks', tools: [], notes: ['Each check boots the real manifest over its own database', 'ssh-check drives a real SSH client', 'The fake model writes real DSL, so the engine and the policy are real'] },
+  { slideId: 'slide.checks', title: 'Every check boots the real app', tools: [], notes: ['Each check boots the real manifest over its own database', 'ssh-check drives a real SSH client', 'The fake model writes real DSL, so the engine and the policy are real'] },
   { slideId: 'slide.map', title: 'One platform, three kinds of surprise', tools: ['tools.fire'], notes: ['Easy, only here, sounds fishy — read one row of each', 'One charter, one tree, one engine under all of it', 'If the timer will not land in time, fire it now'] },
   { slideId: 'slide.end', title: 'It is all in the folder', tools: ['tools.questions'], notes: ['The timer moved the deck here — nobody pressed Next', 'It is all in the folder: apps/lab/lyceum', 'Thank them; take questions'] },
 ];

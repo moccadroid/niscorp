@@ -9,6 +9,8 @@ import { attachSocket } from '@niscorp/moss/node';
 import { mintSession } from '@niscorp/moss';
 import { SLIDES, buildSeedSql } from '@lyceum/db/seed';
 import { CUE_TOOLS } from '@lyceum/app/actions/tools/cue.actions';
+import { census } from '@lyceum/server/census';
+import { CHECKS } from './suite';
 import { boot } from '@lyceum/server/boot';
 import { check, connect, finish, waitUntil } from './harness';
 
@@ -81,6 +83,10 @@ const main = async (): Promise<void> => {
     speaker.click('controls', 'next');
     check(`next shows slide ${index + 1} on the stage (${titleOf(index)})`, await onSlide(index));
     check(`...and its notes on the controller`, await speaker.shows('notes', SLIDES[index]?.notes[0] ?? '\u0000'));
+    if (SLIDES[index]?.slideId === 'slide.census') {
+      const counted = await census();
+      check(`...and the census is counted from the source (${counted.app} lines of app/, ${counted.checks} checks)`, counted.app > 0 && counted.checks === CHECKS.length && (await stage.shows('main', `"value":${counted.app}`)));
+    }
     if (SLIDES[index]?.slideId === 'stage.register') check('...and the register carries the code to scan while the room arrives', await stage.shows('main', '"name":"Qr"') && stage.showsNow('main', '"value":"http://localhost:8796"'));
     check(`...and exactly its tools, in order (${(SLIDES[index]?.tools ?? []).join(', ') || 'none'})`, await toolsAre(SLIDES[index]?.tools ?? []));
   }

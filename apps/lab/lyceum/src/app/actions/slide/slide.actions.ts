@@ -4,6 +4,7 @@ import { queriesTally } from '@lyceum/app/vex/query.entries';
 import {
   assignmentLayout,
   beatLayout,
+  censusLayout,
   clearanceLayout,
   codeLayout,
   figuresLayout,
@@ -113,18 +114,21 @@ export const thesisSlide = still('slide.thesis', 'Code lives in five places', po
   lines: say('Everything else is a document in a closed grammar: a schema at the boundary, a runtime to run it. A small model can write those — and a program can check what it wrote.'),
 });
 
-export const censusSlide = still('slide.census', 'Is JSON enough for a real app?', figuresLayout, {
-  kicker: 'The objection, answered by this app',
-  figures: [
-    { label: 'lines in app/ — every one a JSON artifact', value: '3,513' },
-    { label: 'lines in ui/ — four renderers', value: '1,262' },
-    { label: 'checks, each on its own database', value: 13 },
-  ],
-  lines: say(
-    'Slides, a projector, a controller, the room\'s phones, a terminal door, an assistant, timers, Q&A. The server glue and the model seams are 2,154 lines.',
-    'artifacts-check parses every file in app/ against its schema.',
-  ),
-});
+// The app's size, counted from its own source by the server as the slide
+// mounts — never typed in, so never stale.
+export const censusSlide: ActionDefinition = {
+  id: 'slide.census',
+  title: 'Is JSON enough for a real app?',
+  data: {
+    kicker: 'The objection, answered by this app',
+    title: 'Is JSON enough for a real app?',
+    census: { app: 0, ui: 0, server: 0, dev: 0, checks: 0 },
+  },
+  layout: censusLayout,
+  endpoints: { census: { fn: 'room.census', target: 'census' } },
+  lifecycle: { mount: [{ call: 'census' }] },
+  triggers: [],
+};
 
 // ── 2 · nova ──
 
@@ -541,7 +545,7 @@ export const strataSlide = still('slide.strata', 'When the grammar changes, docu
 
 // ── 9 · how it holds ──
 
-export const checksSlide = still('slide.checks', 'Thirteen checks, no browser, no mocks', pointsLayout, {
+export const checksSlide = still('slide.checks', 'Every check boots the real app', pointsLayout, {
   kicker: 'Every feature ships a check',
   points: [
     { label: 'The real app', text: 'Each check boots the manifest, headless, and drives it over a real socket.' },
@@ -555,7 +559,7 @@ export const checksSlide = still('slide.checks', 'Thirteen checks, no browser, n
 export const mapSlide = still('slide.map', 'One platform, three kinds of surprise', mapLayout, {
   kicker: 'What you saw',
   rows: [
-    { easy: 'A new renderer is a kit — four in 1,262 lines', only: 'An agent sees your screen as the data it is', proven: 'Model-written queries in production, refused live' },
+    { easy: 'A new renderer is a kit — four, over one grammar', only: 'An agent sees your screen as the data it is', proven: 'Model-written queries in production, refused live' },
     { easy: 'Live screens with no pub/sub: reactive reads', only: 'Absent, not hidden: an ungranted action is never sent', proven: 'A model-written automation that cannot overreach' },
     { easy: "Each person's assistant, from grants they already have", only: 'One charter compiles the UI, the queries and the assistant', proven: 'JSON screens for a whole app, every file checked' },
     { easy: 'Replay instead of regenerate: fingerprints and Jev', only: 'A grammar change is a data migration', proven: 'Open, mid-size models are enough — measured' },

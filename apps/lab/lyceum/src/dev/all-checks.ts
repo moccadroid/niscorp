@@ -2,8 +2,7 @@
 // checks ship the app different histories, and a shared database would make
 // the order of the suite part of its meaning.
 import { spawnSync } from 'node:child_process';
-
-const CHECKS = ['artifacts-check', 'kit-check', 'tables-check', 'assignment-check', 'deck-check', 'serve-check', 'access-check', 'query-check', 'timer-check', 'assistant-check', 'look-check', 'questions-check', 'ssh-check'];
+import { CHECKS } from './suite';
 
 // The checks never call a model: ID cards come from the deterministic issuer,
 // queries from the deterministic router and query writer, the timers from the
