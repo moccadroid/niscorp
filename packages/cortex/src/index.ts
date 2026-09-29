@@ -52,6 +52,9 @@ export type { SchemaIssue } from './utils/schema-issues';
 export { schemaDoc } from './context/schema-doc';
 export { inputMessages, estimateTokens, toolGuidesMessage } from './context/assemble';
 export type { ContextEntry, Producer, ProducerArgs, RunInput, AgentInfo } from './context/assemble';
+// The turns a RunInput or a ContextEntry may be — signal's, named here so a
+// caller building a conversation needs no second import.
+export type { Message } from '@niscorp/signal';
 
 // ─── Gates, hooks, stop conditions ──────────────────────────
 export { policyGate } from './gates/policy';
