@@ -90,31 +90,28 @@ export const figuresLayout: LayoutNode = {
 // stale (server/census.ts).
 export const censusLayout: LayoutNode = {
   component: 'Sheet',
-  props: { size: 'fill', areas: ['kick chart', 'head chart', 'share chart', 'words words'], cols: [1.2, 1], rows: ['auto', 1, 'auto', 'auto'] },
+  props: { size: 'fill', areas: ['kick chart', 'head chart', 'share chart'], cols: [1.2, 1], rows: ['auto', 1, 'auto'] },
   children: [
     cell('kick', [label('{{$.kicker}}')]),
     cell('head', [{ component: 'Headline', props: { level: 'display' }, children: '{{$.title}}' }], { align: 'end' }),
     cell(
       'chart',
       [
-        label('Lines that hold code'),
+        label('This app, in lines of code'),
         {
           component: 'Columns',
           props: {
             bars: [
-              { label: 'Data · app/', value: '$.census.data', ink: 'live' },
-              { label: 'Code · the rest', value: '$.census.code', ink: 'signal' },
-              { label: 'Checks · dev/', value: '$.census.checkLines', ink: 'ink' },
+              { label: 'Data', value: '$.census.data', ink: 'live' },
+              { label: 'Code', value: '$.census.code', ink: 'signal' },
+              { label: 'Tests', value: '$.census.checkLines', ink: 'ink' },
             ],
           },
         },
+        { component: 'Text', props: { tone: 'muted' }, children: 'Data: app/, every file checked against its schema. Code: the renderers, the server, the database. Comments and blank lines not counted.' },
       ],
     ),
-    cell('share', [{ component: 'Figure', props: { label: 'percent of the app is data — every file in app/ parsed against its schema', value: '$.census.share' } }], { ink: 'live' }),
-    cell('words', [
-      { component: 'Text', children: 'Slides, a projector, a controller, everyone’s phones, an SSH terminal, an assistant, timers, Q&A. Beside it, {{$.census.checks}} checks in {{$.census.checkLines}} lines, each on its own database.' },
-      { component: 'Text', props: { tone: 'muted' }, children: 'Counted from the source this server runs. Comments and blank lines are not counted.' },
-    ]),
+    cell('share', [{ component: 'Figure', props: { label: 'percent of this app is data', value: '$.census.share' } }], { ink: 'live' }),
   ],
 };
 

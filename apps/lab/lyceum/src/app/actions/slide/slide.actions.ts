@@ -299,7 +299,7 @@ export const declarationsSlide = still('slide.declarations', 'The charter builds
   ),
   marked: [5, 6],
   lines: say(
-    'A declaration applies to whoever holds its action. The speaker\'s assistant can automate because the speaker holds the console — there is no second list of who gets what.',
+    'A declaration applies to everyone who has its action. The speaker\'s assistant can automate because the speaker has the console — there is no second list of who gets what.',
     'Its grounding reads run as the person, under their policy.',
   ),
 });
@@ -309,10 +309,10 @@ export const proposesSlide = still('slide.proposes', 'It never acts', figuresLay
   figures: [
     { label: 'assistant probes, on what it proposed', value: '18/18' },
     { label: 'host tools — the only code', value: 3 },
-    { label: 'actions it can offer that you do not hold', value: 0 },
+    { label: 'actions it can offer that you do not have', value: 0 },
   ],
   lines: say(
-    'It proposes: an action you hold, pre-filled, as a button. You press it, and it runs through your endpoints, under your policy. The worst a prompt injection gets is a button for something you could already do.',
+    'It proposes: an action you have, pre-filled, as a button. You press it, and it runs through your endpoints, under your policy. The worst a prompt injection gets is a button for something you could already do.',
     'Measured weak spot: its reply text. "saved: false" was once reported as "saved" — the tool result now says NOT saved and NOT running.',
   ),
 });
@@ -392,7 +392,7 @@ export const strataSlide = still('slide.strata', 'When the grammar changes, docu
   ),
 });
 
-// ── 9 · how it holds ──
+// ── 9 · how it stays correct ──
 
 export const checksSlide = still('slide.checks', 'Every check boots the real app', pointsLayout, {
   kicker: 'Every feature ships a check',
