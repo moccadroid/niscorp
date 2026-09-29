@@ -5,6 +5,7 @@ import type { MessageBus } from '@shared/message-bus';
 import type { Unsubscribe } from '@shared/common';
 import type { TriggerConfig } from '../schemas';
 import { executeSteps, type StepContext } from './steps';
+import { asCause, isRunaway, nextCause, rootCause, runawayMessage, type Cause } from './cause';
 
 // ═══════════════════════════════════════════════════════════
 // Trigger subscriptions for an action.
@@ -46,13 +47,21 @@ const toNovaError = (err: unknown): NovaError => {
 const fireTrigger = (
   trigger: TriggerConfig,
   buildContext: () => StepContext,
-  event?: unknown,
+  event: unknown,
+  cause: Cause,
 ): void => {
-  const base = buildContext();
-  if (base.signal.aborted) return;
+  const built = buildContext();
+  if (built.signal.aborted) return;
   // A suspended action (backgrounded under a stack) reacts to nothing — only the
   // active top of a canvas handles events/messages.
-  if (base.suspended === true) return;
+  if (built.suspended === true) return;
+  // A chain past its budget stops here, and says so (./cause.ts).
+  if (isRunaway(cause)) {
+    const what = trigger.message === undefined ? 'A trigger' : `The trigger on "${trigger.message}"`;
+    built.onError(new NovaError(ErrorCodes.runaway, runawayMessage(cause, what), { channel: trigger.message, depth: cause.depth, hops: cause.root.hops }));
+    return;
+  }
+  const base: StepContext = { ...built, cause };
   // Expose the firing event to the trigger's steps as `@event`, mirroring
   // how `@error` is injected on failed calls — so a step can reference
   // `{{@event.payload}}` (e.g. the clicked list index).
@@ -90,7 +99,8 @@ export const attachTriggers = (
         if (origin !== undefined && origin !== ownInstanceId) return;
         if (expectedRef !== undefined && eventRef(event) !== expectedRef) return;
         if (expectedKey !== undefined && eventKey(event) !== expectedKey) return;
-        fireTrigger(trigger, buildContext, event);
+        // A gesture starts a chain.
+        fireTrigger(trigger, buildContext, event, rootCause());
       });
       unsubscribes.push(off);
       continue;
@@ -103,8 +113,10 @@ export const attachTriggers = (
       // happened". Wrapped as `{ payload }` so a listener writes
       // `@event.payload` whether it was woken by a click or by an
       // announcement; `@event` is the firing thing in both cases.
-      const off = messageBus.subscribe(trigger.message, (payload: unknown) => {
-        fireTrigger(trigger, buildContext, { payload });
+      // One hop on from whatever emitted it; a host's publish carries no
+      // cause and starts a chain of its own.
+      const off = messageBus.subscribe(trigger.message, (payload: unknown, _from?: string, cause?: unknown) => {
+        fireTrigger(trigger, buildContext, { payload }, nextCause(asCause(cause)));
       });
       unsubscribes.push(off);
     }

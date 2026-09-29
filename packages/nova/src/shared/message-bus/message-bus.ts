@@ -9,20 +9,20 @@ import type { ChannelHandler, MessageBus } from './types';
 export const createMessageBus = (): MessageBus => {
   const handlers = new Map<string, ChannelHandler[]>();
 
-  const dispatch = (channel: string, payload: unknown, from: string | undefined): void => {
+  const dispatch = (channel: string, payload: unknown, from: string | undefined, cause?: unknown): void => {
     const list = handlers.get(channel);
     if (list === undefined) return;
     for (const handler of list.slice()) {
       try {
-        handler(payload, from);
+        handler(payload, from, cause);
       } catch {
         // handler errors must not crash the bus
       }
     }
   };
 
-  const publish = (channel: string, payload?: unknown): void => {
-    dispatch(channel, payload, undefined);
+  const publish = (channel: string, payload?: unknown, cause?: unknown): void => {
+    dispatch(channel, payload, undefined, cause);
   };
 
   const send = (from: string, to: string, payload?: unknown): void => {

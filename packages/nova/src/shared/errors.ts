@@ -15,6 +15,7 @@ export const ErrorCodes = {
   shellDisposed: 'SHELL_DISPOSED',
   lifecycle: 'LIFECYCLE_ERROR',
   mutation: 'MUTATION_ERROR',
+  runaway: 'RUNAWAY_CHAIN',
 } as const;
 
 export type ErrorCode = (typeof ErrorCodes)[keyof typeof ErrorCodes];
