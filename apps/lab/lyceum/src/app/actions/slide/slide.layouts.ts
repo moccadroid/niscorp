@@ -22,7 +22,7 @@ export const censusLayout: LayoutNode = {
     cell(
       'chart',
       [
-        label('This app, in lines of code'),
+        label('Lines of code'),
         {
           component: 'Columns',
           props: {
@@ -35,9 +35,8 @@ export const censusLayout: LayoutNode = {
             ],
           },
         },
-        { component: 'Text', props: { tone: 'muted' }, children: 'Data: every file checked against its schema. Renderers: the component kits. Endpoints: what actions call, model calls included. Setup: boot, server, database.' },
       ],
     ),
-    cell('share', [{ component: 'Figure', props: { label: 'percent of this app (tests aside) is JSON data', value: '$.census.share' } }], { ink: 'live' }),
+    cell('share', [{ component: 'Figure', props: { label: '% data (tests aside)', value: '$.census.share' } }], { ink: 'live' }),
   ],
 };

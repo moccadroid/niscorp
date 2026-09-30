@@ -39,14 +39,14 @@ const still = (id: string, title: string, layout: ActionDefinition['layout'], da
 export const titleSlide: ActionDefinition = {
   id: 'slide.title',
   title: 'nisc',
-  data: { title: 'nisc', line: 'Apps written as JSON documents: a model writes them, a program checks them.', address: ADDRESS },
+  data: { title: 'nisc', line: 'Apps as checked JSON.', address: ADDRESS },
   layout: openingTitleLayout,
   endpoints: { address },
   lifecycle: { mount: [{ call: 'address' }] },
   triggers: [],
 };
 
-export const timerSlide = still('slide.timer', 'First: I ask my assistant for a timer.', aloneLayout, {});
+export const timerSlide = still('slide.timer', 'First, a timer.', aloneLayout, {});
 
 export const originSlide = still('slide.origin', 'GPT-3 could not write a React app.', originLayout, {
   kicker: '2020',
@@ -55,16 +55,16 @@ export const originSlide = still('slide.origin', 'GPT-3 could not write a React 
 });
 
 export const problemSlide = still('slide.problem', 'Models write code faster than anyone can review it.', problemLayout, {
-  usual: { label: 'One answer: Lowdefy', text: 'Keep the config small enough for a person to review it.' },
+  usual: { label: 'Lowdefy', text: 'Small enough to review.' },
 });
 
-export const answerSlide = still('slide.answer', 'Our answer: a program checks it, not a person.', answerLayout, {
+export const answerSlide = still('slide.answer', 'A program checks it. Not a person.', answerLayout, {
   kicker: 'Our answer',
-  line: 'The UI, the queries, the permissions, the automations: each one is a JSON document with a schema.',
+  line: '',
 });
 
 export const novaSlide = still('slide.nova', 'Nova', novaLayout, {
-  claim: 'The UI, written as JSON.',
+  claim: 'The UI as JSON.',
   // The Send button of the Q&A form, as it is in send.layout.ts.
   json: code(
     '{',
@@ -82,7 +82,7 @@ export const novaSlide = still('slide.nova', 'Nova', novaLayout, {
 // The Q&A form: its source in the middle, its layout rendered on the right
 // (the same `sendLayout` a phone renders, placed on this slide). The marked
 // lines follow a click: the trigger runs `send`, which calls the endpoint.
-export const actionSlide = still('slide.data', 'One action: a question form, as JSON.', actionLayout, {
+export const actionSlide = still('slide.data', 'An action', actionLayout, {
   kicker: 'Nova',
   file: 'send.action.ts',
   code: code(
@@ -112,14 +112,14 @@ export const actionSlide = still('slide.data', 'One action: a question form, as 
   error: '',
 });
 
-export const xraySlide = still('slide.xray', 'Your phone’s screen, as the JSON behind it.', xrayLayout, {});
+export const xraySlide = still('slide.xray', 'Your screen, as JSON.', xrayLayout, {});
 
 export const pushSlide = still('slide.clearance', 'Three of you just got a button.', threeLayout, {});
 
 export const looksSlide: ActionDefinition = {
   id: 'slide.looks',
-  title: 'The server sends the screen as JSON. Any renderer draws it.',
-  data: { kicker: 'Nova', title: 'The server sends the screen as JSON. Any renderer draws it.', address: ADDRESS },
+  title: 'One screen, any renderer.',
+  data: { kicker: 'Nova', title: 'One screen, any renderer.', address: ADDRESS },
   layout: looksLayout,
   endpoints: { address },
   lifecycle: { mount: [{ call: 'address' }] },
@@ -128,10 +128,10 @@ export const looksSlide: ActionDefinition = {
 
 export const questionSlide = still('slide.compare', 'Isn’t this json-render?', questionLayout, {});
 
-export const behaviourSlide = still('slide.behaviour', 'What happens when you press a button', differenceLayout, {
+export const behaviourSlide = still('slide.behaviour', 'A button', differenceLayout, {
   kicker: 'Difference 1',
-  theirs: 'It calls a function you wrote.',
-  ours: 'It runs steps written as JSON.',
+  theirs: 'Calls your function.',
+  ours: 'JSON steps.',
   oursInk: 'ink',
   code: code(
     "{ event: 'ui:click', ref: 'send', do: send }",
@@ -144,10 +144,10 @@ export const behaviourSlide = still('slide.behaviour', 'What happens when you pr
   marked: [1, 5],
 });
 
-export const stateSlide = still('slide.state', 'Where a screen keeps its data', differenceLayout, {
+export const stateSlide = still('slide.state', 'State', differenceLayout, {
   kicker: 'Difference 2',
-  theirs: 'In your app’s store (Redux, Zustand).',
-  ours: 'In the action itself. There is no app store.',
+  theirs: 'In your app’s store.',
+  ours: 'In the action.',
   oursInk: 'signal',
   code: '',
   marked: [],

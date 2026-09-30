@@ -15,7 +15,7 @@ export const censusSlide: ActionDefinition = {
   id: 'slide.census',
   title: 'Is JSON enough for a real app?',
   data: {
-    kicker: 'This app, counted from its source',
+    kicker: 'This app',
     title: 'Is JSON enough for a real app?',
     census: { data: 0, renderers: 0, endpoints: 0, setup: 0, code: 0, share: 0, checks: 0, checkLines: 0 },
   },

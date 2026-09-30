@@ -20,7 +20,7 @@ export const verdictsLayout: LayoutNode = {
   props: { size: 'fill', areas: ['head head head', 'leak crash explode'], rows: ['auto', 1] },
   children: [
     cell('head', [label('{{$.kicker}}'), headline('display', '{{$.title}}')]),
-    { for: '$.verdicts', as: 'verdict', key: 'area', do: { component: 'Cell', props: { area: '$verdict.area', ink: '$verdict.ink', align: 'end' }, children: [label('{{$verdict.label}}'), headline('display', '{{$verdict.verdict}}'), text('{{$verdict.what}}')] } },
+    { for: '$.verdicts', as: 'verdict', key: 'area', do: { component: 'Cell', props: { area: '$verdict.area', ink: '$verdict.ink', align: 'end' }, children: [label('{{$verdict.label}}'), headline('display', '{{$verdict.verdict}}')] } },
   ],
 };
 
@@ -32,8 +32,8 @@ export const loopLayout: LayoutNode = {
   children: [
     cell('head', [headline('display', '{{$.title}}')]),
     cell('code', [label('{{$.file}}'), { component: 'Code', props: { text: '$.code', marked: '$.marked' } }], { ink: 'ink', align: 'end' }),
-    cell('found', [label('Now found before it runs'), headline('title', '{{$.found}}')], { ink: 'highlight' }),
-    cell('limits', [label('Limits for everything else'), { for: '$.limits', as: 'limit', do: headline('name', '{{$limit.text}}') }], { ink: 'signal' }),
+    cell('found', [headline('title', '{{$.found}}')], { ink: 'highlight' }),
+    cell('limits', [label('Limits'), { for: '$.limits', as: 'limit', do: headline('name', '{{$limit.text}}') }], { ink: 'signal' }),
   ],
 };
 
@@ -42,20 +42,18 @@ export const loopLayout: LayoutNode = {
 // reason it refused, as the check wrote them.
 export const installLayout: LayoutNode = {
   component: 'Sheet',
-  props: { size: 'fill', areas: ['head head', 'checks answer'], cols: [1, 1.2], rows: ['auto', 1] },
+  props: { size: 'fill', areas: ['head', 'answer'], rows: ['auto', 1] },
   children: [
     cell('head', [label('{{$.kicker}}'), headline('display', '{{$.title}}')]),
-    cell('checks', [label('Before it runs, a program checks that:'), { for: '$.checks', as: 'check', do: headline('name', '{{$check.text}}') }], { ink: 'ink', align: 'end' }),
     cell(
       'answer',
       [
-        label('Acme, from'),
         { component: 'Code', props: { text: '$.vendor.url' } },
-        { if: { $eq: ['$.vendor.status', 'not installed'] }, then: [headline('display', 'Not installed'), headline('title', 'Nothing from Acme is in this app yet.')] },
-        { if: { $eq: ['$.vendor.status', 'refused'] }, then: [headline('display', 'Refused'), headline('title', 'Nothing was installed. Nothing ran.')] },
-        { if: { $eq: ['$.vendor.status', 'pending'] }, then: [headline('display', 'Passed'), headline('title', 'Waiting for my approval. Not on your phones yet.')] },
-        { if: { $eq: ['$.vendor.status', 'approved'] }, then: [headline('display', 'Installed'), headline('title', 'On your phones now.')] },
-        { if: '$.vendor.reasons', then: { component: 'Rows', props: { rows: '$.vendor.reasons', rowKey: 'reason', empty: '', columns: [{ label: 'What the check reported', key: 'reason', w: 1 }] } } },
+        { if: { $eq: ['$.vendor.status', 'not installed'] }, then: headline('display', 'Not installed') },
+        { if: { $eq: ['$.vendor.status', 'refused'] }, then: headline('display', 'Refused') },
+        { if: { $eq: ['$.vendor.status', 'pending'] }, then: headline('display', 'Passed') },
+        { if: { $eq: ['$.vendor.status', 'approved'] }, then: headline('display', 'On your phones') },
+        { if: '$.vendor.reasons', then: { component: 'Rows', props: { rows: '$.vendor.reasons', rowKey: 'reason', empty: '', columns: [{ label: 'Why', key: 'reason', w: 1 }] } } },
       ],
       { ink: 'signal', align: 'end' },
     ),
