@@ -202,6 +202,285 @@ The same review found the earlier plan had **no stated problem** and ordered the
 - Two questions to answer: why was this only built now (the pieces existed — why did none of it take off?), and why is this a future of software architecture?
 - Dropped then: killing the model provider live, inviting the room to attack the app. Hosting must be real; if it fails there is no talk.
 
+## 12. The architecture, as you approved it (Sep 23–25)
+
+The answers from the first thread that you accepted after several rounds, verbatim, with your reaction to each. This is the architectural argument the talk sells; the talk's slides should never contradict it.
+
+### What React taught us — composition in control flow vs. in data
+
+*You: "that's a lot better... it's not all of it... but it's a lot better... the best thing is, that you stepped away from 'this only makes sense with ai models'"*
+
+> I went back over what you told me and took it more slowly. Here's where I've landed.
+>
+> Your point about React wasn't really "code is opaque". It was that **composition lives in control flow.** A higher-order component isn't a thing; it's what happens when a function runs. The structure of the app only exists while the process is executing, inside the bundle. So the only moment the app's shape can change is the build, and the only one who can change it is whoever runs the build.
+>
+> In nisc, composition is data too: which actions sit on which canvas, which fragments wrap them, which fingerprint feeds them, which reflex fires. That moves the boundary. **A running nisc system is open at its seams.** Something can read it, recompose it and extend it *while it runs*, and it doesn't matter whether that something is the charter, a seed, an operator, Jev or the 120b agent.
+>
+> That's why Jev fits without anyone designing for it. Encore doesn't ask Jev to generate anything; it asks Jev to **compose**, choosing which existing pieces mount. Once composition is data, it becomes a selection problem, and selection is exactly what a 100 ms model is good at. In a React app there's nothing to select from at runtime, because the composition was compiled away.
+>
+> The same thing explains "the problem stays solved". A classic system only gains capability through the build. Here, when something works out a new read, a new screen or a new reflex, the result is a new piece in the catalog. So the fingerprint cache isn't really a performance feature. **It's the system's record of what it has learned to do**, and it grows through use rather than through deploys.
+>
+> That also answers my own metadata-platform question. Salesforce and XAML were *configuration*: people authoring in an editor, the running system still sealed, code as the way out. What's different here is accumulation. The grammars are targets that something can author against *at runtime*, and whatever works gets kept.
+>
+> So the room's mental model — software changes at build time and is fixed while it runs — is the thing to break. Is that closer to what you mean? Or is it still off?
+
+### Each package: the problem it exists for, what it is, what it makes possible
+
+*You: "good rundown..."*
+
+> I've now read the design docs of all ten packages, and the source of the ones I hadn't gone through before. Here is each one: the problem it exists for, what it is, and what it makes possible in the others. I'll start with the packages that face the model, then the concern languages, then the one that composes them.
+>
+> ## signal: what a model says conforms, or you get the evidence
+>
+> **Why it exists.** Every other package treats model output as untrusted input. Something has to hold one contract across providers that each fail differently, and signal is that thing: "what comes out conforms to the schema that went in, on every provider — or you get a typed failure with evidence."
+>
+> **How it holds that contract:**
+> - A provider's quirks are a registry row plus a wire strategy, never an `if (groq)` branch.
+> - Repairs only count if they pass the caller's schema.
+> - What a model can do is measured per model and recorded with the date it was measured.
+>
+> **`decide()` adds a second kind of model.** A decision model returns probabilities over options and writes no text. Its gate is derived from the questions it was asked. A chat model can stand in for it, but its answers are marked `calibrated: false`.
+>
+> **What it makes possible.** A model becomes a replaceable part. Cortex's loop is built on `step`/`stepStream`, and Jev was added as a new kind of adapter with no changes above signal.
+>
+> ## solid: only valid state exists, even mid-stream
+>
+> **Why it exists.** Structured output arrives as partial JSON, and the rest of the stack only accepts valid objects.
+>
+> **How it works.** Solid reverses the usual order. The state is a valid object from the start, built from schema defaults, and streamed fields overwrite it as they arrive.
+> - Parsing is incremental, so each chunk costs only its own length.
+> - Structural sharing means `===` tells you which subtree changed.
+> - Fields are finalized left to right, following the order the model writes them.
+>
+> **What it makes possible.** A model's answer (an envelope, a layout, a form value) can be rendered while it's still being written without ever passing through an invalid state. It extends "only valid data exists" to the moment of generation.
+>
+> ## cortex: the model as an author with a typed exit
+>
+> **Why it exists.** Agents have to be something the rest of the stack can consume.
+>
+> **How it works:**
+> - One tool loop, and every agent returns `{ response, data, reasoning }`, with `data` validated against a schema.
+> - Context comes from **producers**, so knowledge is owned by whoever owns it: a library exports its own guide, a tool carries its own guide, an app exports its shared facts. Nothing is summarised into a prompt on someone else's behalf.
+> - Gates run before every tool call, a run is an event stream, and suspended runs can be serialised.
+> - v2 deleted v1's plan interpreter and rules engine, and the doc records why.
+>
+> **What it makes possible.** A library can offer "author me" as an agent whose output schema is *its own grammar*: `vex.query`, prism's mapping agent, nova's layout agent. The model's target language is the library's schema, so no library owns any model plumbing.
+>
+> ## prism: functions as data
+>
+> **Why it exists.** Every place two data shapes meet needs a function, and a function is code. Prism is where derivation lives: shaping, formatting, branching.
+>
+> **How it works.** About 50 operations as JSON, no code execution, compiled to a fingerprinted IR.
+>
+> **What it makes possible.** Every other package can hold a function without holding code:
+> - **nova** doesn't know prism. An endpoint's `request`/`response` are opaque configs run by a `transform` the host injects.
+> - **vex** stores a prism IR as the mapping of every cached entry, so turning rows into a shape is replayed, not recomputed.
+> - **tide**'s templates (`effect.input`, `when`) are prism.
+>
+> Because the mapping agent's output is an IR, a mapping a model wrote once is cached like any query.
+>
+> ## vex: one endpoint, and a store of named questions
+>
+> **Why it exists.** Data access is normally a hand-written endpoint per question. Vex replaces that with one closed query grammar, a deterministic compiler, and a fingerprint store of questions that have already been answered.
+>
+> **How it works:**
+> - Scope is applied inside the engine on every run, so a stored question doesn't belong to any particular caller.
+> - Writes are replay-only in a narrower grammar, and scope stamps identity onto them.
+> - Discovery describes itself: entries, their derived context signatures, and their effects.
+>
+> **What it makes possible:**
+> - **nova** actions reach data by fingerprint, with no fetch code.
+> - **charter**'s `data` section compiles into vex's `ScopePolicy`.
+> - **tide**'s selections are vex replays run under the reflex's own principal.
+> - **tide**'s facts come from vex's write observer. Vex is the one choke point every write passes through, and that's what makes every write observable.
+> - **moss** derives its entire data layer from the entries.
+> - Derived signatures let an integration or an agent find out what to call without being told.
+>
+> ## nova: UI as a behavioural contract held in shell state
+>
+> **Why it exists.** In a normal UI stack, behaviour and state live in component code. Nova puts all of it into the shell's data.
+>
+> **How it works:**
+> - The unit is the **action**: data, layout, endpoints, triggers, lifecycle, and an `input` schema, which is its public contract for anyone who opens it.
+> - A shell holds canvases, and canvases hold instances, either stacked or as a list.
+> - Layouts are JSON over a registry of components that know nothing about the domain.
+> - Fragments are composed when an action is loaded.
+> - The renderer outputs framework-free `RenderNode[]`, and adapters turn that into React, DOM, TTY or Ink.
+>
+> **What it makes possible.** The action is the unit everything else deals in:
+> - charter grants it;
+> - moss serves it;
+> - integrations ship it;
+> - Jev selects it;
+> - loom compiles into it;
+> - devtools are built out of it.
+>
+> Because the shell is data, it can run on a server and be read by anything (`reflect`). The TTY adapter's numbered list of interactive elements is a complete set of actions an agent can take.
+>
+> ## tide: *when*, as an artifact
+>
+> **Why it exists.** The most consequential code in an application (billing, reminders, dunning) is normally scheduled imperative code that sits outside every guarantee.
+>
+> **How it works:**
+> - A reflex is JSON: a trigger, an optional selection, and exactly one named effect. There is no run body.
+> - Multi-step flows are chains through facts.
+> - The ledger is four tables, and idempotency is enforced by unique constraints.
+> - The wall clock is never read.
+> - Tide is blind to identity, but every run records who it ran `as`.
+> - Five seams are left for the host to fill: store, select, transform, effects, identity.
+>
+> **What it makes possible.** Tide owns none of these; each comes from another package:
+> - its selections are vex;
+> - its templates are prism;
+> - its facts come from vex's write observer;
+> - its effects are the only code, one function wide, and their writes are derived from the vex mutation behind them.
+>
+> An automation becomes a tenant's row: armed by writing it, previewable before it runs, and governed by the charter as a principal.
+>
+> ## charter: one policy document, compiled, never enforced
+>
+> **Why it exists.** The usual alternative is route guards, component wrappers and row-level security: three security models in three places.
+>
+> **How it works:**
+> - Roles select glob patterns over opaque string universes (actions, data verbs, layout variants).
+> - A verifier refuses anything incoherent: an unused deny is an error, and there's an audit of what each role can reach.
+> - The engine is 376 lines with no dependencies.
+> - It never enforces anything. It compiles into each target's own native contract: nova's action map, vex's `ScopePolicy`, layout variants.
+>
+> **What it makes possible.** Moss's per-principal resolution, and "what can this role reach" becomes something you compute (via nova's `reflect`) rather than something you audit by hand.
+>
+> ## loom: an editor for anything that has a schema
+>
+> **Why it exists.** Every artifact in the stack is defined in Zod, so an editor for any of them can be compiled rather than built by hand.
+>
+> **How it works.** Zod schema → field model → nova action plus layouts, rendered through abstract roles such as `loom:text`, with a plugin host around it.
+>
+> **What it makes possible:**
+> - People edit the same artifacts models write: vex queries, prism configs, nova layouts, moss configuration fields.
+> - It's built on nova on purpose, so it's also the test of nova's expressiveness. The doc's rule: when nova can't express something, grow nova.
+>
+> ## moss: the trusted side
+>
+> **Why it exists.** The other nine are self-sufficient but have no home. Something has to hold the trusted side: where definitions and policy live, where shells run, where each principal is resolved.
+>
+> **How it works.** It takes a manifest (artifacts) and a runtime (environment) and provides:
+> - per-principal resolution through charter;
+> - a data layer derived from vex entries, with locked endpoints and compiled policies;
+> - durable nova shells on the server, streamed to thin terminals;
+> - the function seam, where the code edge lives, per session;
+> - the tide driver, fed by vex's write observer;
+> - integration intake;
+> - a generation pointer so multiple processes stay in sync;
+> - telemetry.
+>
+> **What it adds.** No vocabulary of its own. Reads and writes are vex, UI is nova, policy is charter, time is tide. It fills the seams the others left open, and running on the server is what keeps all this data open to the system while sealed from the client.
+>
+> ## What shows up across all ten
+>
+> Three patterns hold in every package. None is an extra feature on top.
+>
+> **1. Each concern is a closed language plus its runtime, and the languages nest inside each other as opaque payloads.** A nova action holds a prism config, which holds a vex fingerprint. A tide reflex holds a vex selection, a prism template and an effect name. A vex entry holds a prism IR. No package interprets another's language. The host plugs the interpreters into seams: nova's `transform`, tide's five seams, vex's hooks, charter's universes and compilers. That's why each package works standalone and why they compose.
+>
+> **2. The schema is written once and read everywhere.** The same Zod schema is the validation, the model's instructions (through `.describe()` and JSON Schema), the editor (loom), the public contract (an action's `input`, vex's derived signatures), and the docs.
+>
+> **3. Models are kept out of the core.** Vex's engine has no LLM code. Nova's design keeps LLM tooling out of its core. Agents live in separate subpaths. The whole system runs without a model, and models plug in as authors at the hooks.
+>
+> I'm not going to guess at the root again; you said binding-by-name isn't it. Where in this does it sit for you?
+
+### What nisc is, why it is unique
+
+*You: "better..." — then asked why it was only built now*
+
+> Here's my own answer.
+>
+> **What nisc is: an application where every behaviour is written in a language whose properties can be decided without running it.**
+>
+> Code gave that up. Once behaviour lives in a Turing-complete language, every interesting question about it is undecidable in general. Rice's theorem says that for any non-trivial property of what a program does, no general procedure can tell you whether an arbitrary program has it. "Does this screen ever read that table?", "What can this role reach?", "Does this change break anything?", "What does this job write?" For code, the only honest answer is "run it and see", or "read it and trust whoever wrote it". So the system can't know itself, and neither can anything else: not the policy, not a reviewer, not a model.
+>
+> Nisc moves behaviour into closed languages where those questions have answers you can compute:
+> - `discoverEntities` tells you every table a query touches.
+> - `mutationEffect` tells you what a write writes.
+> - tide *derives* what a reflex writes instead of trusting a declaration.
+> - the charter's closure audit computes what a role can reach.
+> - an action's `input` schema is its complete public contract.
+> - `lintMutation` refuses an unbounded write before it's ever stored.
+>
+> The places where something undecidable is genuinely needed (an effect handler, a `fn:` endpoint, a component) are kept to the edges, each one function wide.
+>
+> **Why it's unique.** None of the individual pieces is new: JSON UI (Block Kit, server-driven UI), query languages (GraphQL, Hasura), policy as data (OPA, Cedar), workflows as JSON (Step Functions), transform languages (JSONata). Every one of those systems keeps one layer in code, the **glue**: the server that decides which JSON to emit, the resolvers, the handler that wires a block to an action. The glue is where composition lives, so it's also where the system stops being knowable. Nisc is the only one I know of where the glue is data too: the manifest, canvases, seeds, fingerprints inside endpoints, languages nested inside one another. There's no Turing-complete layer holding the whole thing together, so the whole application can be decided, not just its parts.
+>
+> That's why the things you listed come out without being designed:
+> - **Every writer is a principal:** the only way to act is through an interpreter that has to resolve *for whom*.
+> - **An integration can ship its own UI:** an artifact can be checked on intake, so where it came from stops mattering.
+> - **The open data is safe:** anything can be checked before it's accepted, and moss keeps the checking on the trusted side.
+> - **Small models work:** choosing inside a space you can enumerate is a small problem.
+> - **Solved problems stay solved:** two equal artifacts are the same artifact, so a fingerprint is an identity.
+> - **Hot swap:** you verify before you adopt.
+>
+> **Why you built it.** I can only infer this. My guess is you wanted software that something other than its author can take part in: read it, change it, run it, extend it while it's live, whether that's a model, a customer, a policy or an operator. You found that what blocks this isn't how capable the models are. It's that code is unknowable to anything except running it. And the tax got paid over and over: every app rebuilt the same glue, and every "let the model do it" became either unreviewable code or a model doing every step itself.
+>
+> Two caveats so I'm not overselling "decidable":
+> - Nova's message channels can form cycles (emit → listener → emit).
+> - The effect and function edges are ordinary code.
+>
+> The claim is that the undecidable parts are few, named and fenced, not that there are none.
+>
+> Is that the thing, or is it still one level short?
+
+### Why it was only built now — and why it is a future of software architecture
+
+*You: "you're very close now..." — then asked what it gives that other AI-native software cannot*
+
+> **Why none of it took off before.** 4GLs, CASE tools, model-driven architecture, BPEL/BPMN, rules engines, XAML, low-code and server-driven UI all tried to make applications out of data, and they all died the same way: **the author was a person.**
+>
+> A closed language is expensive for a person to write in. You can't abstract, you can't compress, it's verbose, and the moment the grammar doesn't fit you hit a wall. So people escaped into code, the escape hatch grew, and the data layer shrank to a leftover. Expressiveness wins when a human writes everything, because it's how a human saves effort.
+>
+> What they were giving up in return (a system whose behaviour you can decide without running it) had almost no one to benefit from it. The only thing that ever read the whole application was its author, and the author already had the code. So the trade was high authoring cost for a property nobody could use, and code won every time.
+>
+> On top of that, the grammars belonged to vendors. When the grammar didn't fit, you couldn't extend it; you could only leave.
+>
+> **What changed:**
+> 1. **Writing closed languages stopped being expensive.** Models fill a constrained schema more reliably than they write code, verbosity costs them nothing, and structured output became dependable in the last year or two. The authoring cost that killed every earlier attempt is close to zero now.
+> 2. **Someone showed up who can use decidability.** For the first time there's a reader that isn't the author, operating at runtime: a model choosing, composing, extending. It can only do that safely in a space it can enumerate and a host can check.
+> 3. **Trust flipped.** You trusted a human author and reviewed their work. You can't trust a model author, so you have to check the *artifact*. Checking needs a language where the questions can be answered. What used to be nice-to-have is now required.
+> 4. **The economics changed.** Model calls are slow and cost money. An artifact you can check is also one you can cache, so you author once and replay forever. Code generated at runtime can't be cached safely, so every run pays again.
+> 5. **The groundwork now exists:** Zod and JSON Schema everywhere, a Postgres that runs in the browser, and decision models fast enough to choose while someone is still typing.
+>
+> The escape-hatch spiral doesn't repeat either. When a grammar here can't express something, you grow the grammar, because you own it. And nobody writes artifacts by hand, so verbosity is never the reason to escape.
+>
+> **Why I think you believe it's the future:** the share of software that gets changed by someone other than its author will keep growing: models, customers, integrations, operators, other systems. A code architecture can only accept a change through human review and a deploy, so the rate of change is capped by how fast people can review. And the flood of generated code is making that review both more expensive and less reliable. An architecture made of checkable languages accepts a change by *verifying* it, so the limit on change becomes verification, which is machine-speed.
+>
+> Code doesn't disappear; it shrinks to the core: interpreters, edges, components. The application becomes data that anything with permission can read and change while it runs.
+>
+> Where would you push back on that?
+
+### What this architecture gives that other "AI-native" software cannot
+
+*You moved on to designing the app (lyceum) from here*
+
+> On PGlite: yes, I did, and it had no business being there. It's a convenience, not a reason. Dropping it.
+>
+> **What other "AI-native" software is built like.** There are three shapes, and in all of them the model stays outside the application:
+> - **The model as the runtime** (OpenClaw and agent frameworks). Every behaviour is inference. Nothing builds up over time, nothing can be checked before it happens, and safety is a fence around something nondeterministic.
+> - **The model writing code** (v0, Lovable, Bolt). The model takes part once, at build time, and what it produces is another sealed application. Changing it means regenerating, reviewing and deploying.
+> - **The model beside the app** (copilots, function calling). It sees the application only through a second, narrow interface of hand-written tools. Anything it can do, someone had to build a tool for. It can't see the screen, compose the UI, or extend anything.
+>
+> **What nisc does differently: the model and the application share one material, and the model still doesn't run it.** The artifacts the app is made of are the same things a model reads and writes. The runtime that executes the app is the same one that checks whatever the model produced. There's no separate "AI interface", because the application *is* the interface. That opens up possibilities none of the three shapes can reach:
+>
+> - **Intelligence can go anywhere, at any grain and at any time.** One query, a screen, a reflex, which pieces are composed right now. At build time, at runtime, or on every keystroke. Where a model sits becomes a deployment decision: Jev on composition, a large model on authoring, no model on replay.
+> - **The application doesn't depend on any model.** Lyra runs with none. In the other three shapes the prompt *is* the application, so it's built around one model's abilities and dies without it. Here the app gets better when you drop a better model into a seam, and keeps running when you remove it. AI is added on top, not load-bearing.
+> - **The system learns without training.** What its models work out gets checked and becomes part of the application: stored, readable, revocable. That memory lives in artifacts you can read and diff, not in weights or a prompt history.
+> - **Trust can be given in steps.** Every contribution is checked before it takes effect, so a model's reach can be granted the same way a person's is (the charter's rings) instead of all or nothing.
+> - **Building and running stop being separate moments.** Humans, models, integrations and operators all change the same material under the same rules while it runs. Nobody is special-cased, so working together is how the system is built, not a feature added later.
+>
+> In one sentence: the others make AI either the engine or the author of a sealed thing. Nisc makes it a participant in the application's own material, with a deterministic runtime underneath.
+
+## 13. Two mechanisms worth knowing for the talk
+
+**How Jev routes a request (vex queries from words).** The assistant hands vex an intent. `routeQuery` (`server/assistant/vex-query.ts`, over `server/querying.ts`) asks Jev (TypeSafe `decide()`) one question with two answers: does an earlier request want the same information, and which of the authored shapes (`app/vex/query.shapes.ts`: a list, one number, counts per group, people) does the answer take? A match whose stored shape agrees is **replayed** (no model); anything else is **generated** by vex's agents on gpt-oss-120b under the person's policy, or **refused** with the reason. Jev never writes a query — it only chooses. Two lessons, both structure rather than prompting: the earlier requests go in the decision's *state*, not its options (as options, the identical question scored 0.94 "new"); and a replay must agree with the shape ("How many in Archive?" matched the per-group counts at 0.73 — it wants one number). Measured 48/48 over three runs, ~250 ms a decision (`MEASURED.md`).
+
+**"Iframe but native" (safety research).** An integration's UI rendered with a different kit inside the host app, without an iframe. Proven headlessly (21 of 21 assertions, in the uncommitted research worktree `.claude/worktrees/safety-research`), not built into lyceum. The design split it arrived at: **for the talk**, a third kit shipped by the host and chosen by namespace; **for real third-party integrations** (Midas), the host's own components with the integration's style tokens as data — because a kit is code, and loading someone else's code in the browser defeats the point of the architecture.
+
 ## Appendix — in your own words
 
 Your messages from the talk-planning threads, verbatim (images left out), so the background history and the reasoning survive in your words, not only in my summaries. Oldest first.
