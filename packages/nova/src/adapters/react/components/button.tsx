@@ -1,5 +1,5 @@
 import { useState, type CSSProperties, type MouseEvent } from 'react';
-import { z } from 'zod';
+import { ButtonPropsSchema, type ButtonProps } from '../../primitive-props';
 import { useNovaDispatch, type NovaComponent, type NovaComponentProps } from '@react';
 
 // ═══════════════════════════════════════════════════════════
@@ -9,25 +9,7 @@ import { useNovaDispatch, type NovaComponent, type NovaComponentProps } from '@r
 // `ref` (injected as `novaRef`). Without a ref, clicks are no-ops.
 // ═══════════════════════════════════════════════════════════
 
-export const ButtonPropsSchema = z
-  .object({
-    label: z
-      .string()
-      .optional()
-      .describe('Button label. If absent, children are used.'),
-    variant: z
-      .enum(['primary', 'secondary', 'ghost'])
-      .optional()
-      .describe('Visual variant. Default: primary.'),
-    disabled: z
-      .boolean()
-      .optional()
-      .describe('Whether the button is disabled. Default: false.'),
-  })
-  .strict()
-  .describe("Clickable button. Click events fire as `ui:click` with the layout node's ref.");
-
-export type ButtonProps = z.infer<typeof ButtonPropsSchema>;
+export { ButtonPropsSchema, type ButtonProps };
 
 type Variant = 'primary' | 'secondary' | 'ghost';
 

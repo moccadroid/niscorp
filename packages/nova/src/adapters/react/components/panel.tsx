@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { PanelPropsSchema, type PanelProps } from '../../primitive-props';
 import { useNovaDispatch } from '@react';
 import type { NovaComponent, NovaComponentProps } from '@react';
 
@@ -9,16 +9,7 @@ import type { NovaComponent, NovaComponentProps } from '@react';
 // prop-ref convention as Table's rowRef).
 // ═══════════════════════════════════════════════════════════
 
-export const PanelPropsSchema = z
-  .object({
-    title: z.string().optional().describe('Optional header title.'),
-    backRef: z.string().optional().describe('When set, the header grows a ← (before the title) that fires ui:click with this ref.'),
-    closeRef: z.string().optional().describe('When set, the header grows a ✕ that fires ui:click with this ref.'),
-  })
-  .strict()
-  .describe('A framed, elevated surface with an optional title.');
-
-export type PanelProps = z.infer<typeof PanelPropsSchema>;
+export { PanelPropsSchema, type PanelProps };
 
 export const Panel: NovaComponent<PanelProps> = ({ title, backRef, closeRef, children }: NovaComponentProps & PanelProps) => {
   const dispatch = useNovaDispatch();

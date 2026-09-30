@@ -502,8 +502,8 @@ yet beyond a placeholder:
 
 - ~~**React adapter.**~~ **Implemented.** See "React adapter" below.
 - ~~**Headless component primitives.**~~ **Implemented.** Reference kits
-  ship at `/adapters/react/components`, `/adapters/dom/components`,
-  `/adapters/tty/components`, and `/adapters/ink`.
+  ship at `/adapters/react/components`, `/adapters/vue/components`,
+  `/adapters/dom/components`, `/adapters/tty/components`, and `/adapters/ink`.
 - **Wire protocol.** No serialization format for shipping *definitions*
   across processes. Serving rendered trees over a socket is moss's job;
   nova ships the surface it targets (`RenderApi`, ActionSlot-preserving
@@ -579,8 +579,8 @@ Deliberate boundaries:
 
 - **Adapter-only, never core.** `slotWrapper` is a React component — it lives
   in `src/adapters/react`, not in `ShellConfig` or any schema. The core stays
-  serializable data + a state machine; a future Vue adapter would expose its
-  own equivalent. Nothing here touches `LayoutNode`, so a model-authored (or
+  serializable data + a state machine; the Vue adapter exposes its own
+  equivalent (a Vue component handed the same identity props). Nothing here touches `LayoutNode`, so a model-authored (or
   DB-stored) layout never carries animation/gate concerns.
 - **One seam: `ActionSlot`.** That is the single place an instance's content
   mounts and unmounts. `CanvasSlot` is a router (it expands to `ActionSlot`s),

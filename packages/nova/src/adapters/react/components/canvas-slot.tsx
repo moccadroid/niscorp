@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { CanvasSlotPropsSchema, type CanvasSlotProps } from '../../primitive-props';
 import { RenderTree, useCanvasRenderTree } from '@react';
 import type { NovaComponent, NovaComponentProps } from '@react';
 
@@ -8,17 +8,7 @@ import type { NovaComponent, NovaComponentProps } from '@react';
 // the shell-tier layout tree.
 // ═══════════════════════════════════════════════════════════
 
-export const CanvasSlotPropsSchema = z
-  .object({
-    canvasId: z
-      .string()
-      .optional()
-      .describe('Id of the canvas to render. Usually bound from a loop, e.g. "$.c.id".'),
-  })
-  .strict()
-  .describe('Renders a canvas by id, recursing into its actionLayout. Resolves to nothing when canvasId is missing.');
-
-export type CanvasSlotProps = z.infer<typeof CanvasSlotPropsSchema>;
+export { CanvasSlotPropsSchema, type CanvasSlotProps };
 
 export const CanvasSlot: NovaComponent<CanvasSlotProps> = ({
   canvasId,

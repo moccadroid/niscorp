@@ -3,15 +3,20 @@
 Nova's core is framework-free. It renders layout trees into `RenderNode[]`
 and owns all state, events, and subscriptions. An adapter binds that to a UI
 framework. Adapters live under `src/adapters/`, one folder per framework with
-its own export subpath. Four reference implementations ship: the React
-adapter (`@niscorp/nova/adapters/react`), the plain-DOM adapter
+its own export subpath. Five reference implementations ship: the React
+adapter (`@niscorp/nova/adapters/react`), the Vue adapter
+(`@niscorp/nova/adapters/vue` — Vue 3 render functions in plain TS, no SFC
+compiler; provide/inject for the render context, composables bridging the
+shell subscriptions into shallowRefs, children handed to a component as its
+default slot, the same primitive kit at `/adapters/vue/components` over the
+SAME props schemas as React's), the plain-DOM adapter
 (`@niscorp/nova/adapters/dom`, `createDomView` — no framework at all), the
 line-terminal adapter (`@niscorp/nova/adapters/tty`, `createTtyView` — a
 pure render to `{ text, interactives }`; the host maps commands onto the
 numbered interactives), and the full-screen terminal kit
 (`@niscorp/nova/adapters/ink` — an Ink component vocabulary riding the React
-adapter's walker; Tab cycles focus, Enter activates). A Vue or Svelte
-adapter is a sibling folder, built the same way.
+adapter's walker; Tab cycles focus, Enter activates). A Svelte adapter is
+a sibling folder, built the same way.
 
 A react-shaped host that is not the DOM threads three optional seams through
 `NovaRenderProvider`: `fallback` (unregistered names render their children

@@ -8,6 +8,8 @@ export default defineConfig([
       // path and public path match: @niscorp/nova/adapters/react, /adapters/dom.
       'adapters/react/index': 'src/adapters/react/index.ts',
       'adapters/react/components/index': 'src/adapters/react/components/index.ts',
+      'adapters/vue/index': 'src/adapters/vue/index.ts',
+      'adapters/vue/components/index': 'src/adapters/vue/components/index.ts',
       'adapters/dom/index': 'src/adapters/dom/index.ts',
       'adapters/dom/components/index': 'src/adapters/dom/components/index.ts',
       'adapters/tty/index': 'src/adapters/tty/index.ts',
@@ -26,7 +28,7 @@ export default defineConfig([
     clean: false,
     treeshake: true,
     target: 'es2022',
-    external: ['react', '@niscorp/cortex', '@niscorp/prism'],
+    external: ['react', 'vue', '@niscorp/cortex', '@niscorp/prism'],
   },
   {
     // ink is ESM-only, so this entry ships esm only (no require condition in

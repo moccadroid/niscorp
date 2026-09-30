@@ -1,5 +1,5 @@
 import { useContext, useMemo } from 'react';
-import { z } from 'zod';
+import { ActionSlotPropsSchema, type ActionSlotProps } from '../../primitive-props';
 import { scopeDispatch } from '@shared/event-bus';
 import { RenderTree, useRenderTree, useShell, useSlotWrapper } from '@react';
 import type { NovaComponent, NovaComponentProps, NovaRenderContextValue } from '@react';
@@ -16,21 +16,8 @@ import { NovaRenderContext } from '@react/context';
 // that; it just hands the wrapper identity and the rendered tree.
 // ═══════════════════════════════════════════════════════════
 
-// The AUTHORING contract: what a layout node may set on an ActionSlot —
-// instanceId only, strict. The identity props flattenRenderTree stamps on a
-// served marker (canvasId / definitionId) are runtime OUTPUT, never authored;
-// widening this schema would advertise them to the layout agent's palette.
-export const ActionSlotPropsSchema = z
-  .object({
-    instanceId: z
-      .string()
-      .optional()
-      .describe('Id of the action instance to render. Usually bound from canvas scope, e.g. "$.active.id" or "$.i.id".'),
-  })
-  .strict()
-  .describe('Renders an action instance by id. Resolves to nothing when instanceId is missing.');
-
-export type ActionSlotProps = z.infer<typeof ActionSlotPropsSchema>;
+// The authoring contract (instanceId only, strict) lives in ../../primitive-props.
+export { ActionSlotPropsSchema, type ActionSlotProps };
 
 export const ActionSlot: NovaComponent<ActionSlotProps> = ({
   instanceId,

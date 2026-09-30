@@ -1,5 +1,5 @@
 import type { FC } from 'react';
-import { z } from 'zod';
+import { JsonTreePropsSchema, type JsonTreeProps } from '../../primitive-props';
 import type { NovaComponent, NovaComponentProps } from '@react';
 
 // ═══════════════════════════════════════════════════════════
@@ -30,15 +30,7 @@ const JsonNode: FC<{ value: unknown; name?: string }> = ({ value, name }) => {
   return <div style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{text}</div>;
 };
 
-export const JsonTreePropsSchema = z
-  .object({
-    value: z.unknown().optional().describe('The value to render.'),
-    label: z.string().optional().describe('A name for the root node.'),
-  })
-  .strict()
-  .describe('A collapsible view of any JSON value.');
-
-export type JsonTreeProps = z.infer<typeof JsonTreePropsSchema>;
+export { JsonTreePropsSchema, type JsonTreeProps };
 
 export const JsonTree: NovaComponent<JsonTreeProps> = ({ value, label }: NovaComponentProps & JsonTreeProps) => (
   <div style={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize: 12, lineHeight: 1.5 }}>

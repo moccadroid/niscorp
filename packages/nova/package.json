@@ -41,6 +41,26 @@
         "default": "./dist/adapters/react/components/index.cjs"
       }
     },
+    "./adapters/vue": {
+      "import": {
+        "types": "./dist/adapters/vue/index.d.ts",
+        "default": "./dist/adapters/vue/index.js"
+      },
+      "require": {
+        "types": "./dist/adapters/vue/index.d.cts",
+        "default": "./dist/adapters/vue/index.cjs"
+      }
+    },
+    "./adapters/vue/components": {
+      "import": {
+        "types": "./dist/adapters/vue/components/index.d.ts",
+        "default": "./dist/adapters/vue/components/index.js"
+      },
+      "require": {
+        "types": "./dist/adapters/vue/components/index.d.cts",
+        "default": "./dist/adapters/vue/components/index.cjs"
+      }
+    },
     "./adapters/dom": {
       "import": {
         "types": "./dist/adapters/dom/index.d.ts",
@@ -162,6 +182,7 @@
     "@testing-library/react": "^16.1.0",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.0",
+    "@vue/test-utils": "^2.5.1",
     "ink": "^7.1.1",
     "ink-testing-library": "^4.0.0",
     "ink-text-input": "^6.0.0",
@@ -170,6 +191,7 @@
     "react-dom": "^19.2.4",
     "tsup": "^8.5.1",
     "vitest": "^4.1.2",
+    "vue": "^3.5.43",
     "zod": "^4.6.5"
   },
   "peerDependencies": {
@@ -179,7 +201,8 @@
     "ink": "^7.1.1",
     "ink-text-input": "^6.0.0",
     "react": "^19.2.4",
-    "zod": "^4.2.0"
+    "zod": "^4.2.0",
+    "vue": "^3.5.0"
   },
   "peerDependenciesMeta": {
     "@niscorp/cortex": {
@@ -195,6 +218,9 @@
       "optional": true
     },
     "react": {
+      "optional": true
+    },
+    "vue": {
       "optional": true
     }
   }

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ChangeEvent, type CSSProperties } from 'react';
-import { z } from 'zod';
+import { InputPropsSchema, type InputProps } from '../../primitive-props';
 import { useNovaDispatch, type NovaComponent, type NovaComponentProps } from '@react';
 
 // ═══════════════════════════════════════════════════════════
@@ -17,33 +17,7 @@ import { useNovaDispatch, type NovaComponent, type NovaComponentProps } from '@r
 //    but a remote one drops keystrokes without them.
 // ═══════════════════════════════════════════════════════════
 
-export const InputPropsSchema = z
-  .object({
-    type: z
-      .enum(['text', 'number', 'email', 'password'])
-      .optional()
-      .describe('Input type. Default: text.'),
-    placeholder: z
-      .string()
-      .optional()
-      .describe('Placeholder text shown when empty.'),
-    disabled: z
-      .boolean()
-      .optional()
-      .describe('Whether the input is disabled. Default: false.'),
-    value: z
-      .string()
-      .optional()
-      .describe('Current value. Typically supplied via model binding.'),
-    debounce: z
-      .number()
-      .optional()
-      .describe('Milliseconds to coalesce keystrokes before dispatching ui:model. Default: 0 (every keystroke). Set it when the shell is remote to cut round-trips.'),
-  })
-  .strict()
-  .describe('Text input bound to data via the `model` field on the layout node.');
-
-export type InputProps = z.infer<typeof InputPropsSchema>;
+export { InputPropsSchema, type InputProps };
 
 const computeStyle = (isDisabled: boolean, isFocused: boolean, isHovered: boolean): CSSProperties => {
   const borderColor = isDisabled
