@@ -1,6 +1,8 @@
-import { encode } from 'uqr';
 import type { DomComponent } from '@niscorp/nova/adapters/dom';
 import type { Kit } from './kit.props';
+import { areaOf, SIGIL_SHAPES, flowDelays, instantOf, narrowOf, qrOf, remaining, sheetStyle, templateOf, text, weight } from './kit.shape';
+
+export { text } from './kit.shape';
 
 // ═══════════════════════════════════════════════════════════════
 // LYCEUM'S KIT — the only renderer code in the app (AGENTS.md, layout of an
@@ -22,20 +24,15 @@ export const MARKS = ['stripes', 'dots', 'bars', 'checks', 'hatch'] as const;
 export const SIGILS = ['triangle', 'circle', 'square', 'cross'] as const;
 export const ALIGNS = ['start', 'end', 'center', 'between'] as const;
 export const LEVELS = ['display', 'title', 'name'] as const;
-// The kits a screen can be painted with (./target.ts): this one, and ./plain.kit.ts.
-export const LOOKS = ['poster', 'plain'] as const;
-const AREA = /^[a-z][a-z0-9-]*$/;
+// The renderers a screen can be drawn by (./target.ts): nova's DOM adapter with
+// this kit, React with ./react.kit.ts, Vue with ./vue.kit.ts. One look.
+export const LOOKS = ['dom', 'react', 'vue'] as const;
 
 export const oneOf = <T extends string>(value: unknown, options: readonly T[]): T | undefined =>
   options.find((option) => option === value);
 
-export const text = (value: unknown): string | undefined =>
-  typeof value === 'string' ? value : typeof value === 'number' ? String(value) : undefined;
-
 export const records = (value: unknown): Record<string, unknown>[] =>
   Array.isArray(value) ? value.filter((item): item is Record<string, unknown> => item !== null && typeof item === 'object' && !Array.isArray(item)) : [];
-
-const weight = (value: unknown): number | undefined => (typeof value === 'number' && value > 0 && value <= 100 ? value : undefined);
 
 const el = (tag: string, className: string, children: Node[] = []): HTMLElement => {
   const node = document.createElement(tag);
@@ -49,8 +46,8 @@ const setData = (node: HTMLElement, key: string, value: string | undefined): voi
 };
 
 const placeIn = (node: HTMLElement, area: unknown): void => {
-  const name = text(area);
-  if (name !== undefined && AREA.test(name)) node.style.gridArea = name;
+  const name = areaOf(area);
+  if (name !== undefined) node.style.gridArea = name;
 };
 
 // ── Page — the frame: canvases stacked, the last one filling the screen ──
@@ -66,54 +63,17 @@ export const Page: DomComponent = ({ children }) => el('div', 'page', children);
 //        tall as its content (a strip).
 // narrow: { areas, rows?, cols? } — the arrangement on a phone-width screen,
 //        in the same words. A cell whose area it leaves out is not shown there.
-type Template = { areas: string; rows: string; cols: string; names: Set<string> } | undefined;
-
-const templateOf = (areasProp: unknown, rowsProp: unknown, colsProp: unknown, size: 'fill' | 'auto'): Template => {
-  const rows = (Array.isArray(areasProp) ? areasProp : [])
-    .map((row) => text(row)?.trim().split(/\s+/) ?? [])
-    .filter((names) => names.length > 0 && names.every((name) => name === '.' || AREA.test(name)));
-  const width = Math.max(0, ...rows.map((names) => names.length));
-  if (rows.length === 0 || !rows.every((names) => names.length === width)) return undefined;
-  const cols = Array.isArray(colsProp) ? colsProp.map(weight) : [];
-  const declared = Array.isArray(rowsProp) ? rowsProp : [];
-  return {
-    areas: rows.map((names) => `"${names.join(' ')}"`).join(' '),
-    cols: Array.from({ length: width }, (_, i) => `${cols[i] ?? 1}fr`).join(' '),
-    rows: rows
-      .map((_, i) => {
-        const row = declared[i];
-        if (row === 'auto') return 'auto';
-        const w = weight(row);
-        if (w !== undefined) return `${w}fr`;
-        return size === 'fill' && i === rows.length - 1 ? '1fr' : 'auto';
-      })
-      .join(' '),
-    names: new Set(rows.flat()),
-  };
-};
-
 export const Sheet: DomComponent = ({ props, children }) => {
   const node = el('div', 'sheet', children);
   const size = oneOf(props['size'], ['fill', 'auto'] as const) ?? 'auto';
   setData(node, 'size', size);
-  const wide = templateOf(props['areas'], props['rows'], props['cols'], size);
-  if (wide === undefined) {
-    node.style.gridTemplateColumns = '1fr';
-    node.style.gridTemplateRows = size === 'fill' ? '1fr' : 'auto';
-  } else {
-    node.style.gridTemplateAreas = wide.areas;
-    node.style.gridTemplateColumns = wide.cols;
-    node.style.gridTemplateRows = wide.rows;
+  const narrow = narrowOf(props['narrow'], size);
+  for (const [key, value] of Object.entries(sheetStyle(templateOf(props['areas'], props['rows'], props['cols'], size), narrow, size))) {
+    if (key.startsWith('--')) node.style.setProperty(key, value);
+    else Reflect.set(node.style, key, value);
   }
-  const narrowProp = props['narrow'];
-  const narrow = typeof narrowProp === 'object' && narrowProp !== null && !Array.isArray(narrowProp)
-    ? templateOf(Reflect.get(narrowProp, 'areas'), Reflect.get(narrowProp, 'rows'), Reflect.get(narrowProp, 'cols'), size)
-    : undefined;
   if (narrow !== undefined) {
     node.setAttribute('data-narrow', '');
-    node.style.setProperty('--narrow-areas', narrow.areas);
-    node.style.setProperty('--narrow-rows', narrow.rows);
-    node.style.setProperty('--narrow-cols', narrow.cols);
     for (const child of children) {
       if (child instanceof HTMLElement && child.style.gridArea !== '' && !narrow.names.has(child.style.gridArea.split(' ')[0] ?? '')) child.setAttribute('data-narrow-hidden', '');
     }
@@ -171,22 +131,14 @@ export const Figure: DomComponent = ({ props }) => {
 // the server's: a tree re-sent every second would be a render a second for
 // nothing, so the kit ticks it. Nothing to count to: a dash. At zero it stays
 // at zero, marked done.
-const instantOf = (value: string | undefined): number =>
-  value === undefined ? Number.NaN : Date.parse(value.replace(' ', 'T').replace(/([+-]\d\d)$/, '$1:00'));
-
-// Ticks `value` down to `to` inside `node` — shared with the plain kit, whose
-// countdown is on the viewer's clock for the same reason.
-export const tickDown = (node: HTMLElement, value: HTMLElement, toProp: unknown): void => {
+// Ticks `value` down to `to` inside `node`.
+const tickDown = (node: HTMLElement, value: HTMLElement, toProp: unknown): void => {
   const to = instantOf(text(toProp));
   const paint = (): boolean => {
-    if (Number.isNaN(to)) {
-      value.textContent = '—';
-      return false;
-    }
-    const seconds = Math.ceil(Math.max(0, to - Date.now()) / 1000);
-    value.textContent = `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
-    if (seconds === 0) node.setAttribute('data-done', '');
-    return seconds > 0;
+    const now = remaining(to, Date.now());
+    value.textContent = now.shown;
+    if (now.done) node.setAttribute('data-done', '');
+    return now.running;
   };
   if (paint()) {
     // Stops at zero, or once the node has been on the page and left it.
@@ -223,16 +175,6 @@ export const Code: DomComponent = ({ props }) => {
 // ── Sigil — a shape ─────────────────────────────────────────────
 // shape: triangle | circle | square | cross. size: 'large' or text size.
 const SVG = 'http://www.w3.org/2000/svg';
-const SHAPES: Record<(typeof SIGILS)[number], { tag: string; attrs: Record<string, string> }[]> = {
-  triangle: [{ tag: 'polygon', attrs: { points: '50,4 96,92 4,92' } }],
-  circle: [{ tag: 'circle', attrs: { cx: '50', cy: '50', r: '46' } }],
-  square: [{ tag: 'rect', attrs: { x: '6', y: '6', width: '88', height: '88' } }],
-  cross: [
-    { tag: 'rect', attrs: { x: '36', y: '4', width: '28', height: '92' } },
-    { tag: 'rect', attrs: { x: '4', y: '36', width: '92', height: '28' } },
-  ],
-};
-
 const sigil = (shape: unknown, large: boolean): HTMLElement => {
   const svg = document.createElementNS(SVG, 'svg');
   svg.setAttribute('viewBox', '0 0 100 100');
@@ -240,7 +182,7 @@ const sigil = (shape: unknown, large: boolean): HTMLElement => {
   svg.setAttribute('aria-hidden', 'true');
   if (large) svg.setAttribute('data-size', 'large');
   const known = oneOf(shape, SIGILS);
-  for (const part of known === undefined ? [] : SHAPES[known]) {
+  for (const part of known === undefined ? [] : SIGIL_SHAPES[known]) {
     const node = document.createElementNS(SVG, part.tag);
     for (const [key, value] of Object.entries(part.attrs)) node.setAttribute(key, value);
     svg.appendChild(node);
@@ -265,11 +207,9 @@ export const Qr: DomComponent = ({ props }) => {
   const value = text(props['value']) ?? '';
   const holder = el('span', 'qr');
   if (value === '') return holder;
-  const { data, size } = encode(value);
-  const quiet = 4;
-  const modules = data.flatMap((row, y) => row.flatMap((dark, x) => (dark ? [`M${x + quiet} ${y + quiet}h1v1h-1z`] : [])));
+  const qr = qrOf(value);
   const svg = document.createElementNS(SVG, 'svg');
-  svg.setAttribute('viewBox', `0 0 ${size + quiet * 2} ${size + quiet * 2}`);
+  svg.setAttribute('viewBox', qr.viewBox);
   svg.setAttribute('shape-rendering', 'crispEdges');
   svg.setAttribute('role', 'img');
   svg.setAttribute('aria-label', value);
@@ -278,7 +218,7 @@ export const Qr: DomComponent = ({ props }) => {
   ground.setAttribute('height', '100%');
   ground.setAttribute('class', 'qr-ground');
   const path = document.createElementNS(SVG, 'path');
-  path.setAttribute('d', modules.join(''));
+  path.setAttribute('d', qr.d);
   svg.append(ground, path);
   holder.appendChild(svg);
   return holder;
@@ -363,7 +303,6 @@ export const Bar: DomComponent = ({ props }) => {
 // dots never stop. The page is rebuilt on every update, so each lane starts
 // where the wall clock says it is, not at its beginning: an update does not
 // make the dots jump back.
-const FLOW_PERIOD_MS = 2400;
 const TOWARDS = ['to', 'from'] as const;
 
 export const Flow: DomComponent = ({ props }) => {
@@ -372,13 +311,13 @@ export const Flow: DomComponent = ({ props }) => {
     node.textContent = text(value) ?? '';
     return node;
   };
-  const phase = -(Date.now() % FLOW_PERIOD_MS);
+  const delays = flowDelays(Date.now());
   const lanes = records(props['lanes']).map((lane) => {
     const label = el('span', 'label');
     label.textContent = text(lane['label']) ?? '';
-    const dots = [0, 1, 2].map((i) => {
+    const dots = delays.map((delay) => {
       const dot = el('span', 'flow-dot');
-      dot.style.animationDelay = `${phase - (i * FLOW_PERIOD_MS) / 3}ms`;
+      dot.style.animationDelay = delay;
       return dot;
     });
     const node = el('div', 'flow-lane', [label, el('div', 'flow-track', dots)]);
@@ -460,7 +399,7 @@ export const clearsOnEnter = (node: HTMLInputElement, enter: unknown): void => {
 };
 
 // ── Look — which kit paints the screen ──────────────────────────
-// look: poster | plain. Shows nothing: the terminal reads it off the tree
+// look: dom | react | vue. Shows nothing: the terminal reads it off the tree
 // (./target.ts). Every kit has it, so whichever is painting finds it.
 export const Look: DomComponent = () => el('span', 'look');
 

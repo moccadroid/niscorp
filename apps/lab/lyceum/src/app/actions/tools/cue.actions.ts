@@ -28,12 +28,6 @@ const cue = (id: string, title: string, lines: string[], pending: string): Actio
 
 export const CUE_TOOLS: readonly ActionDefinition[] = [
   cue(
-    'tools.xray',
-    'Give everyone the X-ray',
-    ['Everyone’s main screen gets a large blue X-ray button. Pressed, it shows their screen as data: every action on it, and each one’s data.', 'Take it back the same way.'],
-    'There is no X-ray action yet, and nothing to give it with.',
-  ),
-  cue(
     'tools.button',
     'Give three people the button',
     ['Three people, picked at random, get a button on their main screen. Pressed, it plays a sound.', 'Take it back the same way.'],
@@ -41,9 +35,9 @@ export const CUE_TOOLS: readonly ActionDefinition[] = [
   ),
   cue(
     'tools.renderers',
-    'Draw it another way',
-    ['React, then Vue: the same data, drawn by another renderer.', 'Terminal: the projector goes black and types out the SSH command.'],
-    'Only the stylesheet switch exists (above). React, Vue and the terminal view do not.',
+    'The terminal',
+    ['The projector goes black and types out the SSH command. The same trees, in a terminal.'],
+    'The switch above draws each surface with DOM, React or Vue. The projector’s terminal view does not exist yet.',
   ),
   cue(
     'tools.order',

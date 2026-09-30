@@ -133,6 +133,10 @@ html:has(.page > [data-canvas="strip"]:not(:empty)) { font-size: clamp(16px, cal
 .${ROOT_CLASS} .cell[data-align="center"] { justify-content: center; align-items: center; text-align: center; }
 .${ROOT_CLASS} .cell[data-align="between"] { justify-content: space-between; }
 .${ROOT_CLASS} .cell[data-pad="none"] { padding: 0; }
+/* A cell holding nothing but an empty canvas takes no room — its row closes up,
+   and the next cell covers the rule the empty row would have left doubled. */
+.${ROOT_CLASS} .cell:has(> [data-canvas]:only-child:empty) { display: none; }
+.${ROOT_CLASS} .cell:has(> [data-canvas]:only-child:empty) + .cell { margin-top: calc(var(--rule) * -1); }
 .${ROOT_CLASS} .cell[data-scroll="y"] { overflow-y: auto; min-height: 0; overscroll-behavior: contain; }
 /* held at its end: a reversed column opens scrolled to its last line, and the
    screen is rebuilt on every update, so it stays there */
@@ -297,4 +301,13 @@ html:has(.page > [data-canvas="strip"]:not(:empty)) { font-size: clamp(16px, cal
 .${ROOT_CLASS} [data-ref]:not(input):active { --bg: var(--highlight); --fg: var(--ink); background: repeating-linear-gradient(-45deg, var(--ink) 0 2px, var(--highlight) 2px 8px); color: var(--ink); }
 .${ROOT_CLASS} [data-ref]:focus-visible { outline: var(--rule) solid var(--alert); outline-offset: calc(var(--rule) * -1); }
 .${ROOT_CLASS} .action[data-ink="alert"]:focus-visible { outline-color: var(--signal); }
+
+/* WHICH RENDERER DREW THIS: the React and Vue kits put their name in the
+   bottom corner of the page (the DOM kit, the default, puts none). Small,
+   out of the way, and on every screen that renderer draws. */
+.${ROOT_CLASS} .page > .renderer {
+  position: fixed; right: 0; bottom: 0; z-index: 10; pointer-events: none;
+  padding: .2em .6em; background: var(--signal); color: var(--paper);
+  font: 700 clamp(.7rem, calc(.9 * var(--cq)), 1rem)/1.2 var(--mono); letter-spacing: .06em; text-transform: uppercase;
+}
 `;

@@ -1,12 +1,37 @@
 import type { LayoutNode } from '@niscorp/nova';
 
-// Two buttons, one per kit; the one the room wears now is marked.
+// A row per surface, a button per renderer; the one drawing it now is marked.
 export const lookLayout: LayoutNode = {
   component: 'Sheet',
-  props: { areas: ['kick kick', 'poster plain'] },
+  props: {
+    areas: [
+      'kick kick kick kick',
+      'phones phones-dom phones-react phones-vue',
+      'stage stage-dom stage-react stage-vue',
+      'controller controller-dom controller-react controller-vue',
+    ],
+    cols: [2, 1, 1, 1],
+  },
   children: [
-    { component: 'Cell', props: { area: 'kick', ink: 'ink' }, children: [{ component: 'Label', children: 'The look — the same trees, another kit' }] },
-    { component: 'Action', ref: 'look', props: { area: 'poster', ink: { $if: '$.room.poster', $then: 'highlight', $else: 'paper' }, label: 'Poster', value: 'poster' } },
-    { component: 'Action', ref: 'look', props: { area: 'plain', ink: { $if: '$.room.plain', $then: 'highlight', $else: 'paper' }, label: 'Plain HTML', value: 'plain' } },
+    { component: 'Cell', props: { area: 'kick', ink: 'ink' }, children: [{ component: 'Label', children: 'Renderers — the same trees, drawn by another' }] },
+    { for: '$.rows', as: 'row', do: { component: 'Cell', props: { area: '$row.surface' }, children: [{ component: 'Label', children: '{{$row.label}}' }] } },
+    {
+      for: '$.rows',
+      as: 'row',
+      do: {
+        for: '$row.choices',
+        as: 'choice',
+        do: {
+          component: 'Action',
+          ref: 'renderer',
+          props: {
+            area: '{{$row.surface}}-{{$choice.value.renderer}}',
+            ink: { $if: '$choice.on', $then: 'highlight', $else: 'paper' },
+            label: '{{$choice.label}}',
+            value: '$choice.value',
+          },
+        },
+      },
+    },
   ],
 };

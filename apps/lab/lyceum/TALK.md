@@ -58,9 +58,9 @@ Status: ✅ built and checked · 🟧 slide built, demo not built (hatched cue o
 | 6 | `slide.answer` | full blue: "Our answer — Make it something a program can check." | — | ✅ |
 | 7 | `slide.nova` | blue: "NOVA — The UI is data." Right: 1 the real Send button's JSON (from `send.layout.ts`), 2 "Valid", 3 that node rendered as the real button | — | ✅ |
 | 8 | `slide.data` | "An action": `send.action.ts` source (click → `send` steps → endpoint marked) beside its layout rendered, on blue | — | ✅ |
-| 9 | `slide.xray` | "Your screen is data." + blue "On your phone: X-RAY" | cue `tools.xray` | 🟧 |
+| 9 | `slide.xray` | "Your screen is data." + blue "On your phone: X-RAY" | `tools.xray` (give / take back) | ✅ |
 | 10 | `slide.clearance` | "Three of you just got a button." + orange "On three phones: PRESS" | cue `tools.button` | 🟧 |
-| 11 | `slide.looks` | "The server sends data. Your phone draws it." Styled / Unstyled / Terminal | `tools.look` + cue `tools.renderers` | ✅ look switch; 🟧 React/Vue/Terminal |
+| 11 | `slide.looks` | "The server sends data. Your phone draws it." DOM / React / Vue / Terminal | `tools.look` (3×3: phones, stage, controller × DOM, React, Vue) + cue `tools.renderers` | ✅ renderer switch; 🟧 projector terminal view |
 | 12 | `slide.compare` | "Isn't this json-render?" + Vercel · json-render, Google · A2UI | — | ✅ |
 | 13 | `slide.behaviour` | "What a button does": json-render "Calls a function in your app." vs Nova "Is data." + the real trigger | — | ✅ |
 | 14 | `slide.state` | "Where the state lives": "In your app's store." vs "In the action. So it runs anywhere." | — | ✅ |
@@ -95,7 +95,7 @@ The notes for every slide are in `src/db/seed.ts`.
 - **8 An action:** the Q&A form; data (the draft), layout (drawn on this slide from the same JSON), tap Send → trigger runs `send` → which calls the endpoint `send` by name; no fetch, no handler code.
 - **9 X-ray:** give everyone the X-ray; press the big blue button; that's your screen as data; nothing on it is code — you, a program or a model can read all of it; take a minute; take it back.
 - **10 The button:** give it to three people; raise your hand if it's you; volume up, press it; everyone else: it was never sent to you; laptops: search the websocket frames; no code changed — rows changed, shells rebuilt; take it back.
-- **11 Looks:** switch to plain HTML; same data, different components; only one value was sent; switch back; terminal: the command is on screen — connect.
+- **11 Looks:** phones to React (same trees, same stylesheet, the corner says React; laptops: inspect the root element); stage to Vue — two frameworks at once; one row changed on the server; all back to DOM; terminal: the command is on screen — connect.
 - **12–14:** json-render and A2UI are good and point the same way; they describe a view, the host keeps state and code; in Nova behaviour is data and the action keeps its own state — so it runs on a server, one shell per person, and any renderer can draw it.
 - **15 Census:** the usual objection; this app is the slides, projector, controller, phones, SSH, assistant, timers; half of it is data; the code is in three places, each about a third the size of the data; counted live, comments don't count.
 - **16–19 Safety:** see §7.
@@ -113,12 +113,12 @@ The notes for every slide are in `src/db/seed.ts`.
 
 ## 6. Demos: built, not built, and ideas
 
-**Built and working:** joining + streamed profiles; the register; the timer (tide reflex written by gpt-oss-120b, read, saved, counting down; `notify` effect); the look switch (styled ↔ plain HTML — note: it still repaints the controller too); the SSH terminal (`ssh -p 26466 sakura.proxy.rlwy.net` on Railway); Q&A on phones; the assistant with vex queries; the census.
+**Built and working:** joining + streamed profiles; the register; the timer (tide reflex written by gpt-oss-120b, read, saved, counting down; `notify` effect); the renderer switch (each surface — phones, stage, controller — drawn by nova's DOM adapter, React or Vue, all in the one stylesheet; React/Vue kits put their name in the corner; the plain kit is gone); the X-ray; the SSH terminal (`ssh -p 26466 sakura.proxy.rlwy.net` on Railway); Q&A on phones; the assistant with vex queries; the census.
 
 **Agreed, not built (hatched cues on the controller):**
-- **X-ray** — arrives on everyone's *main screen* as a large blue button (not a tab); pressed, it shows their own screen as data: every action on it and each one's data. Taken back the same way.
+- ~~**X-ray**~~ — BUILT 2026-09-30: the controller's tool writes an `xray` grant row per member (`grants/xray/give`, one `insertEach`); a reaction on those writes rebuilds every member's shell, and the phone's `given` region mounts the large blue button by ring 1. Pressed, it opens over the screen: every action instance on their shell, its canvas and its data as JSON (`xray.screen`, their own shell only), with Look again. Take it back deletes the rows. `xray-check`.
 - **The button** — given to three random people (a few in case one doesn't play along), on their main screen; pressed, it plays a sound. Not called "fart". The point is selective pushing: some have it, the rest were never sent it.
-- **Renderer switch** — React, then Vue, then Terminal: the projector goes black and types out the SSH command, daring people to connect. Lyceum is pure DOM today; React/Vue need adapters (a Vue adapter is a sibling of nova's React one) plus kits. The earlier idea: all look identical except a thin border naming the renderer.
+- **Renderer switch** — React and Vue BUILT 2026-09-30 (nova `adapters/vue` + moss `terminal/vue`; lyceum `react.kit.ts`/`vue.kit.ts`; a `renderers` row per surface). Still to build: Terminal — the projector goes black and types out the SSH command, daring people to connect.
 - **Giving/taking actions** — the controller gives an action to everyone / a group / a person by writing grant rows; shells rebuild live (the mechanism exists: grants + `invalidateIdentity`).
 
 **Ideas discussed and kept for later:**
@@ -162,8 +162,8 @@ The notes for every slide are in `src/db/seed.ts`.
 ## 10. Still to build or decide
 
 - ~~Slides for the rest of the talk~~ (drafted as 20–30; kept for the reasoning): Moss + Charter (one shell per person; policy as a document that compiles into two enforcement points — which actions exist, and the scope on every query), Prism, Vex (intent + shape, compiled under a policy the model never sees, cached by fingerprint and replayed; Jev picks a stored query or a new one and the shape), the assistant (screen as data, it prepares and the person presses, the drive-through examples: Taco Bell 18,000 cups of water, McDonald's/IBM 260 McNuggets), Tide (back to the timer; a reflex is a row; skills re-read every run and burn tokens, grammars write the automation once), Strata (what happens to your data when nisc changes; grammars migrate like tables), the close (the timer fires and the deck moves on its own; the five places code lives; it's all in the folder).
-- **The demos in §6** (X-ray, button, give/take, renderer switch).
-- **The look switch repaints the controller** — decide whether the speaker and stage should keep a fixed look.
+- **The demos in §6** (button, give/take for three people, the projector's terminal view).
+- ~~The look switch repaints the controller~~ — decided 2026-09-30: every surface has its own row on the switch, the controller included.
 - **`model-check`** still seeds departments; it can't run until its fixture room is rewritten (it's the recorded measurement behind `MEASURED.md` — rewriting changes what the numbers compare against).
 - **`PLAN.md`** is out of date (departments, the old talk table, VPS vs Railway, "open offers a button", starters, kit version).
 - **Slides 16–19** are drafted and committed, but not yet looked at on the projector (18's code is now bottom-left instead of centred line by line). **27–30** likewise.

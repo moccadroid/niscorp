@@ -10,9 +10,8 @@ import { TALK_DECK } from '@lyceum/app/vex/deck.entries';
 //     CONVERGE: whatever this file says is what the database has, the way vex's
 //     seed path converges its entries. Editing the deck here and restarting is
 //     enough; there is no migration to write.
-//   · THE TALK'S STATE — the room, the grants, which slide is on screen — is
+//   · THE TALK'S STATE — the renderers, the grants, which slide is on screen — is
 //     left alone. A restart must not reset the talk.
-import { TALK_ROOM } from '@lyceum/app/vex/room.entries';
 
 // The principals that are not people, and the role each wears. Their sessions
 // are minted by whoever runs the talk (dev: /dev/as/<principal>).
@@ -41,9 +40,9 @@ export const SLIDES: readonly { slideId: string; title: string; tools: readonly 
   { slideId: 'slide.answer', title: 'Make it something a program can check.', tools: [], notes: ['Our answer: do not make it readable. Make it checkable.', 'Every part of the app is a document with a schema.', 'A model writes the document. A program checks it. A runtime runs it.', 'Code only lives at the edges: drawing, data access, setup, tests.', 'It starts with the UI.'] },
   { slideId: 'slide.nova', title: 'Nova', tools: [], notes: ['This is Nova. It is the UI part.', 'A screen is made of actions.', 'An action is JSON: its data, where the data comes from, what a tap does, and a layout.', 'A model writes it, a schema checks it, Nova runs it.', 'Nova does not draw. A renderer does. That comes back in a minute.'] },
   { slideId: 'slide.data', title: 'An action', tools: [], notes: ['This is the question form on your phone, under Q&A.', 'data: your draft, and whether it was sent.', 'layout: the form on the right — drawn on this slide from that same JSON.', 'Tap Send: the trigger on the button runs the steps in send.', 'Those steps call the endpoint named send. A write, by name. No fetch, no handler code.'] },
-  { slideId: 'slide.xray', title: 'Your screen is data.', tools: ['tools.xray'], notes: ['[Give everyone the X-ray]', 'You have a big blue button. Press it.', 'That is your screen, as data: every action on it, and each one’s data.', 'Nothing on it is code. You can read all of it — so can a program, or a model.', 'Tap around, then look again. Take a minute.', '[Take it back]'] },
+  { slideId: 'slide.xray', title: 'Your screen is data.', tools: ['tools.xray'], notes: ['[Give everyone the X-ray]', 'You have a big blue button. Press it.', 'That is your screen, as data: every action on it, and each one’s data.', 'Nothing on it is code. You can read all of it — so can a program, or a model.', 'Tap around, then press Look again. Take a minute.', '[Take it back]'] },
   { slideId: 'slide.clearance', title: 'Three of you just got a button.', tools: ['tools.button'], notes: ['[Give the button to three people]', 'Three of you just got a button. If it is you: raise your hand.', 'Turn your volume up and press it.', 'Everyone else: it is not hidden from you. It was never sent to you.', 'Laptops: search the websocket frames for it. It is not there.', 'Who gets which action is decided per person, on the server. No code changed.', '[Take it back]'] },
-  { slideId: 'slide.looks', title: 'The server sends data. Your phone draws it.', tools: ['tools.look', 'tools.renderers'], notes: ['[Switch the look to plain HTML]', 'Your phones just lost their stylesheet. Same data, drawn by different components.', 'Nothing was sent to you except one value. Laptops: check.', '[Switch back]', '[Terminal] The same data, in a terminal. The command is on the screen — go on, connect.'] },
+  { slideId: 'slide.looks', title: 'The server sends data. Your phone draws it.', tools: ['tools.look', 'tools.renderers'], notes: ['So far everything was drawn by one small DOM renderer.', '[Phones: React] Your phones are drawn by React now. Same trees, same stylesheet. The corner says React.', 'Laptops: inspect the root element. React has put its container on it.', '[Stage: Vue] The projector is Vue. Your phones are still React — the same trees, two frameworks, at the same time.', 'What changed on the server is one row: which renderer draws which screen.', '[All three back to DOM]', '[Terminal] The same trees, in a terminal. The command is on the screen — go on, connect.'] },
   { slideId: 'slide.compare', title: 'Isn’t this json-render?', tools: [], notes: ['If you have seen json-render from Vercel, or Google’s A2UI: yes, same direction.', 'They are good. A model writes JSON, a renderer draws it.', 'Two differences matter, and they are why Nova could do what you just saw.'] },
   { slideId: 'slide.behaviour', title: 'What a button does', tools: [], notes: ['In json-render, a button calls a function in your app. Code, written by hand.', 'In Nova, what a button does is data too: set this value, call that endpoint.', 'So a model can write the behaviour, and a schema checks it before it runs.'] },
   { slideId: 'slide.state', title: 'Where the state lives', tools: [], notes: ['In json-render, state lives in your app’s store: Redux, Zustand.', 'In Nova, each action keeps its own state.', 'So an action does not care where it runs: a browser, a server, a terminal.', 'That is why the shell can run on the server, one per person — and why the X-ray, the button and the looks just worked.'] },
@@ -93,8 +92,6 @@ export const buildSeedSql = (): string =>
     // unless the slide it names was taken out of the deck, when it goes back to
     // the first one rather than point at nothing.
     `INSERT INTO deck (deck_id, slide_id) VALUES (${quote(DECK_ID)}, ${quote(SLIDES[0]?.slideId ?? '')}) ON CONFLICT DO NOTHING;`,
-    // The room row: seeded once; its look is the talk's state, like the deck's.
-    `INSERT INTO room (room_id) VALUES (${quote(TALK_ROOM)}) ON CONFLICT DO NOTHING;`,
     `UPDATE deck SET slide_id = ${quote(SLIDES[0]?.slideId ?? '')} WHERE slide_id NOT IN (${slideIds});`,
     `DELETE FROM slides WHERE slide_id NOT IN (${slideIds});`,
     // The tools and the notes converge to SLIDES too: replaced whole, every boot.

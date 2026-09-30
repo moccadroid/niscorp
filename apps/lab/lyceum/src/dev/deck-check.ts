@@ -44,7 +44,8 @@ const main = async (): Promise<void> => {
   // A cue says its own title.
   const SAYS: Record<string, string> = {
     'assistant.thread': 'Built from',
-    'tools.look': 'The look',
+    'tools.look': 'Renderers — the same trees',
+    'tools.xray': 'X-ray — everybody’s own screen',
     ...Object.fromEntries(CUE_TOOLS.map((cue) => [cue.id, cue.title])),
   };
   const toolsAre = (expected: readonly string[]): Promise<boolean> =>

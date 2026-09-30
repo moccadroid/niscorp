@@ -15,7 +15,9 @@ import { speakerDeckAction } from './actions/speaker/deck.action';
 import { slidesAction } from './actions/speaker/slides.action';
 import { notificationAction } from './actions/speaker/notification.action';
 import { lookTool } from './actions/tools/look.action';
-import { lookAction } from './actions/room/look.action';
+import { LOOK_ACTIONS } from './actions/look/look.actions';
+import { xrayTool } from './actions/tools/xray.action';
+import { XRAY_ACTIONS } from './actions/xray/xray.actions';
 import { assistantAction } from './actions/assistant/assistant.action';
 import { stageRegisterAction } from './actions/stage/register.action';
 import { deckAction } from './actions/stage/deck.action';
@@ -45,7 +47,7 @@ export const ACTIONS: Record<string, ActionDefinition> = Object.fromEntries(
     slidesAction,
     notificationAction,
     lookTool,
-    lookAction,
+    xrayTool,
     assistantAction,
     stageRegisterAction,
     deckAction,
@@ -54,5 +56,7 @@ export const ACTIONS: Record<string, ActionDefinition> = Object.fromEntries(
     signinAction,
     ...SLIDE_ACTIONS,
     ...CUE_TOOLS,
+    ...LOOK_ACTIONS,
+    ...XRAY_ACTIONS,
   ].map((action) => [action.id, action]),
 );

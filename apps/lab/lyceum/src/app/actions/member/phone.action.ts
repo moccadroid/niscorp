@@ -22,8 +22,16 @@ export const phoneAction: ActionDefinition = {
       { action: 'questions.desk', input: { tab: true } },
       { action: 'assistant.thread', input: { tab: true } },
     ],
+    // What the speaker gives people on stage, over the body: each exists only
+    // for a person granted it, so the same reconcile skips it for the rest.
+    given: [{ action: 'xray.button', input: {} }],
   },
   layout: phoneLayout,
-  lifecycle: { mount: [{ reconcile: { canvas: 'tabs', to: '$.tabs', action: 'action', input: 'input', own: 'canvas' } }] },
+  lifecycle: {
+    mount: [
+      { reconcile: { canvas: 'tabs', to: '$.tabs', action: 'action', input: 'input', own: 'canvas' } },
+      { reconcile: { canvas: 'given', to: '$.given', action: 'action', input: 'input', own: 'canvas' } },
+    ],
+  },
   triggers: [],
 };

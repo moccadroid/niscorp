@@ -1,23 +1,30 @@
+import { createElement } from 'react';
+import { createComponentRegistry } from '@niscorp/nova';
+import type { RenderNode } from '@niscorp/nova';
 import { createDomView } from '@niscorp/nova/adapters/dom';
 import { fallback } from '@niscorp/nova/adapters/dom/components';
-import type { RenderNode } from '@niscorp/nova';
+import type { NovaComponent } from '@niscorp/nova/adapters/react';
 import type { Target } from '@niscorp/moss/terminal';
+import { reactTarget } from '@niscorp/moss/terminal/react';
 import { FONTS_HREF, LYCEUM_CSS, ROOT_CLASS } from './tokens';
 import { LOOKS, POSTER_KIT, oneOf } from './kit';
-import { PLAIN_KIT } from './plain.kit';
+import { REACT_KIT } from './react.kit';
+import { vueRenderer } from './vue.kit';
 import { lyceumRegistry } from './registry';
 
-// The terminal's render target: nova's DOM view, painted with one of lyceum's
-// two kits. WHICH is in the tree: the room's `Look` marker (app/actions/room/),
-// on the `look` canvas of every screen whose principal holds it. Each update
-// reads it and paints with that kit — the poster with its stylesheet, plain
-// HTML with none. Nothing is sent to switch: the speaker writes the room row,
-// the marker's reactive read changes, and the next tree names the other kit.
-// No marker (a screen that does not hold it): the poster.
-const dressed = new WeakMap<Document, HTMLStyleElement>();
-const dress = (doc: Document): HTMLStyleElement => {
-  const done = dressed.get(doc);
-  if (done !== undefined) return done;
+// The terminal's render target: the same trees, drawn by one of three
+// renderers — nova's DOM adapter with lyceum's kit, moss's React target with
+// the React port of it, moss's Vue target with the Vue port. All three wear
+// the one stylesheet (./tokens.ts), so they look the same; what differs is who
+// builds the elements. WHICH is in the tree: the `Look` marker on the `look`
+// canvas (app/actions/look/), one per surface. Each update reads it; when it
+// names another renderer, the one drawing now is taken down and the other
+// mounted on the same root. Nothing is sent to switch: the speaker writes the
+// surface's row, the marker's reactive read changes, and the next tree names
+// the other renderer. No marker (a screen with none): DOM.
+const dressed = new WeakSet<Document>();
+const dress = (doc: Document): void => {
+  if (dressed.has(doc)) return;
   const fonts = doc.createElement('link');
   fonts.rel = 'stylesheet';
   fonts.href = FONTS_HREF;
@@ -26,8 +33,7 @@ const dress = (doc: Document): HTMLStyleElement => {
   style.setAttribute('data-lyceum', '');
   style.textContent = LYCEUM_CSS;
   doc.head.appendChild(style);
-  dressed.set(doc, style);
-  return style;
+  dressed.add(doc);
 };
 
 const lookIn = (nodes: readonly RenderNode[]): (typeof LOOKS)[number] | undefined => {
@@ -55,38 +61,64 @@ const slideIn = (nodes: readonly RenderNode[]): string | undefined => {
 // How long a slide's cells take to wipe in (./tokens.ts, "a slide arriving").
 const ENTERING_MS = 2200;
 
-export const lyceumTarget = (config: { root: HTMLElement }): Target => (api) => {
+// nova's DOM adapter, with the kit.
+const domRenderer = (root: HTMLElement): Target => (api) => {
+  const view = createDomView(root, lyceumRegistry(POSTER_KIT), api, { fallback });
+  view.render();
+  return { update: view.render, destroy: view.destroy };
+};
+
+// moss's React target, with the React kit. The DOM adapter draws a canvas as a
+// `<div data-canvas>` and an action instance as a `<div>`, and the stylesheet
+// lays the screen out by those; React's wire slots draw neither, so the kit
+// wraps them.
+const reactRenderer = (root: HTMLElement): Target => {
+  const registry = createComponentRegistry<NovaComponent>();
+  registry.registerAll(REACT_KIT);
+  const target = reactTarget({ root, registry, slotWrapper: ({ children }) => createElement('div', { 'data-component': 'ActionSlot' }, children) });
+  const wire = registry.get('CanvasSlot')?.component;
+  if (wire === undefined) throw new Error('moss registered no CanvasSlot');
+  const CanvasSlot: NovaComponent = (props) => createElement('div', { 'data-canvas': props['canvasId'] }, createElement(wire, props));
+  registry.register('CanvasSlot', CanvasSlot);
+  return target;
+};
+
+export const lyceumTarget = (config: { root: HTMLElement }): Target => {
   const { root } = config;
-  const style = dress(root.ownerDocument);
-  const views = {
-    poster: createDomView(root, lyceumRegistry(POSTER_KIT), api, { fallback }),
-    plain: createDomView(root, lyceumRegistry(PLAIN_KIT), api, { fallback }),
-  };
-  let slide: string | undefined;
-  let arrived = 0;
-  const paint = (): void => {
-    const now = slideIn(api.canvasTree('main'));
-    if (now !== slide) {
-      slide = now;
-      arrived = Date.now();
-    }
-    const elapsed = Date.now() - arrived;
-    root.toggleAttribute('data-enter', now !== undefined && elapsed < ENTERING_MS);
-    root.style.setProperty('--enter-elapsed', `${elapsed}ms`);
-    const look = lookIn(api.canvasTree('look')) ?? 'poster';
-    style.disabled = look !== 'poster';
-    root.classList.toggle(ROOT_CLASS, look === 'poster');
-    root.setAttribute('data-look', look);
-    views[look].render();
-  };
-  paint();
-  return {
-    update: paint,
-    destroy: () => {
-      views.poster.destroy();
-      root.classList.remove(ROOT_CLASS);
-      root.removeAttribute('data-look');
-      style.disabled = false;
-    },
+  const renderers: Record<(typeof LOOKS)[number], Target> = { dom: domRenderer(root), react: reactRenderer(root), vue: vueRenderer(root) };
+  return (api) => {
+    dress(root.ownerDocument);
+    root.classList.add(ROOT_CLASS);
+    let drawing: { look: (typeof LOOKS)[number]; mount: ReturnType<Target> } | undefined;
+    let slide: string | undefined;
+    let arrived = 0;
+    const paint = (): void => {
+      const now = slideIn(api.canvasTree('main'));
+      if (now !== slide) {
+        slide = now;
+        arrived = Date.now();
+      }
+      const elapsed = Date.now() - arrived;
+      root.toggleAttribute('data-enter', now !== undefined && elapsed < ENTERING_MS);
+      root.style.setProperty('--enter-elapsed', `${elapsed}ms`);
+      const look = lookIn(api.canvasTree('look')) ?? 'dom';
+      root.setAttribute('data-look', look);
+      if (drawing !== undefined && drawing.look === look) {
+        drawing.mount.update();
+        return;
+      }
+      drawing?.mount.destroy();
+      root.replaceChildren();
+      drawing = { look, mount: renderers[look](api) };
+    };
+    paint();
+    return {
+      update: paint,
+      destroy: () => {
+        drawing?.mount.destroy();
+        root.classList.remove(ROOT_CLASS);
+        root.removeAttribute('data-look');
+      },
+    };
   };
 };

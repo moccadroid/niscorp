@@ -122,14 +122,15 @@ export const threeLayout: LayoutNode = {
   ],
 };
 
-// 11 · One set of data, three ways to draw it — the three take the slide.
+// 11 · One set of trees, four things that draw them — the four take the slide.
 export const looksLayout: LayoutNode = {
   component: 'Sheet',
-  props: { size: 'fill', areas: ['head head head', 'styled plain term'], rows: ['auto', 1] },
+  props: { size: 'fill', areas: ['head head head head', 'dom react vue term'], rows: ['auto', 1] },
   children: [
     cell('head', [headline('title', '{{$.title}}')]),
-    cell('styled', [headline('title', 'Styled')], { ink: 'signal', align: 'end' }),
-    cell('plain', [headline('title', 'Unstyled')], { align: 'end' }),
+    cell('dom', [headline('title', 'DOM')], { ink: 'signal', align: 'end' }),
+    cell('react', [headline('title', 'React')], { align: 'end' }),
+    cell('vue', [headline('title', 'Vue')], { align: 'end' }),
     cell('term', [headline('title', 'Terminal'), { if: '$.address.ssh', then: { component: 'Code', props: { text: '$.address.ssh' } } }], { ink: 'ink', align: 'end' }),
   ],
 };

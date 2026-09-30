@@ -1,19 +1,32 @@
 import type { ActionDefinition } from '@niscorp/nova';
-import { TALK_ROOM, roomLook, roomLookSet } from '@lyceum/app/vex/room.entries';
+import { allRenderers, setRenderer } from '@lyceum/app/vex/renderer.entries';
 import { lookLayout } from './look.layout';
 
-// The controller's switch for the room's look: two kits, one tree. Pressing
-// one writes the room row; every screen — phones, the projector, this one —
-// reads it reactively and repaints with that kit.
+// The controller's switch: which renderer draws each surface — the phones, the
+// projector, this controller — DOM, React or Vue, set one surface at a time.
+// Pressing one writes that surface's row; every screen of that surface reads it
+// reactively and is drawn again (src/ui/target.ts). So is this switch, when
+// its own row changes.
 export const lookTool: ActionDefinition = {
   id: 'tools.look',
-  title: 'The look',
-  data: { room: { look: 'poster', poster: true, plain: false }, chosen: '', error: '' },
+  title: 'The renderers',
+  data: { rows: [], surface: '', renderer: '', error: '' },
   layout: lookLayout,
   endpoints: {
-    room: { url: '/api/vex', method: 'POST', request: { fingerprint: roomLook.fingerprint, context: {} }, target: 'room' },
-    set: { url: '/api/vex', method: 'POST', request: { fingerprint: roomLookSet.fingerprint, context: { room: TALK_ROOM, look: { $ref: '$.chosen' } } }, errorTarget: 'error' },
+    rows: { url: '/api/vex', method: 'POST', request: { fingerprint: allRenderers.fingerprint, context: {} }, target: 'rows' },
+    set: {
+      url: '/api/vex',
+      method: 'POST',
+      request: { fingerprint: setRenderer.fingerprint, context: { surface: { $ref: '$.surface' }, renderer: { $ref: '$.renderer' } } },
+      errorTarget: 'error',
+    },
   },
-  lifecycle: { mount: [{ call: 'room' }] },
-  triggers: [{ event: 'ui:click', ref: 'look', do: [{ set: 'chosen', value: '@event.payload' }, { call: 'set' }] }],
+  lifecycle: { mount: [{ call: 'rows' }] },
+  triggers: [
+    {
+      event: 'ui:click',
+      ref: 'renderer',
+      do: [{ set: 'surface', value: '@event.payload.surface' }, { set: 'renderer', value: '@event.payload.renderer' }, { call: 'set' }],
+    },
+  ],
 };

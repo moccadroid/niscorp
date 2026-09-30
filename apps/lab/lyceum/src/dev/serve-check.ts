@@ -88,7 +88,7 @@ const main = async (): Promise<void> => {
   const deskHello = await desk.hello();
   const otherHello = await (await connect(`ws://127.0.0.1:${address.port}`, otherDesk)).hello();
   check('…a principal of its own: two devices at /speaker are two desks', deskHello.principal !== null && otherHello.principal !== null && deskHello.principal !== otherHello.principal);
-  check(`…which holds the sign-in desk and the room's look, nothing else (${deskHello.catalog.actions.join(', ')})`, deskHello.catalog.actions.join() === 'lectern.signin,room.look');
+  check(`…which has the sign-in desk and the phones' renderer marker, nothing else (${deskHello.catalog.actions.join(', ')})`, deskHello.catalog.actions.join() === 'lectern.signin,look.phones');
   check('the desk renders on the main canvas', await desk.shows('main', 'Send me a link'));
   const door = await connect(`ws://127.0.0.1:${address.port}`);
   const strangerHolds = (await door.hello()).catalog.actions;

@@ -17,7 +17,8 @@ import { check, finish } from './harness';
 // What migration 1 creates, and what the whole sequence leaves.
 const BASELINE_TABLES = ['departments', 'members', 'slides', 'slide_notes', 'deck', 'grants', 'login_links'];
 // Migration 13 drops `departments`: the talk sorts nobody into one any more.
-const TABLES = [...BASELINE_TABLES.filter((table) => table !== 'departments'), 'slide_tools', 'queries', 'timers', 'assistant_turns', 'room', 'questions'];
+// Migration 14 replaces `room` (one look for every screen) with `renderers`.
+const TABLES = [...BASELINE_TABLES.filter((table) => table !== 'departments'), 'slide_tools', 'queries', 'timers', 'assistant_turns', 'questions', 'renderers'];
 // What the boot migrates: lyceum's sequence and tide's (db/schema.ts).
 const BOOT_TABLES = [...TABLES, ...TIDE_TABLES];
 const ALL = LYCEUM_SEQUENCE.migrations.map((_, index) => `lyceum.app/${index + 1}`).join();

@@ -252,6 +252,23 @@ export const NO_DEPARTMENTS = /* sql */ `
   COMMENT ON COLUMN members.joined_at IS 'When they joined: arrival time.';
 `;
 
+// Migration 14: A RENDERER PER SURFACE. The room had one look for every
+// screen, poster or plain. Now each surface — the phones, the projector, the
+// speaker's controller — is drawn by a renderer of its own: nova's DOM adapter,
+// React or Vue, all three wearing the same stylesheet. One row per surface, set
+// from the controller; every screen reads its own (app/actions/look/). Both
+// columns are closed sets, held by the table.
+export const RENDERERS = /* sql */ `
+  CREATE TABLE renderers (
+    surface  TEXT PRIMARY KEY CHECK (surface IN ('phones', 'stage', 'controller')),
+    position INTEGER NOT NULL UNIQUE,
+    renderer TEXT NOT NULL DEFAULT 'dom' CHECK (renderer IN ('dom', 'react', 'vue'))
+  );
+  INSERT INTO renderers (surface, position) VALUES ('phones', 0), ('stage', 1), ('controller', 2);
+  COMMENT ON TABLE renderers IS 'Which renderer draws each kind of screen: the phones, the projector (stage), the speaker''s controller.';
+  DROP TABLE room;
+`;
+
 export const LYCEUM_SEQUENCE: Sequence = {
   id: 'lyceum.app',
   migrations: [
@@ -268,6 +285,7 @@ export const LYCEUM_SEQUENCE: Sequence = {
     { description: 'Turns written wrong, repaired: lists that landed as objects are lists again', steps: sqlSteps(TURNS_REPAIRED) },
     { description: 'What the automation writer answered, and why, on the turn it answered in', steps: sqlSteps(TURNS_WRITER) },
     { description: 'No departments: a member is a member; who has which action is a grant', steps: sqlSteps(NO_DEPARTMENTS) },
+    { description: 'A renderer per surface: phones, stage and controller each drawn by DOM, React or Vue; the room row goes', steps: sqlSteps(RENDERERS) },
   ],
 };
 
