@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { enforcementFor, parseTimeout } from '../../src/adapters/postgres/statement-timeout.js';
 import { createPostgresAdapter } from '../../src/adapters/postgres/postgres.adapter.js';
 import type { PgPool } from '../../src/adapters/postgres/introspect.js';
+import type { CompiledQuery } from '../../src/adapters/adapter.types.js';
 
 // Where a read's time limit is enforced: on the connection when it already
 // is (free), per statement when it is not (SET LOCAL in a transaction), and
@@ -49,7 +50,7 @@ describe('enforcementFor', () => {
 });
 
 describe('the postgres adapter', () => {
-  const read = { sql: 'SELECT 1', paramSlots: [] };
+  const read: CompiledQuery = { sql: 'SELECT 1', paramSlots: [], contextContract: {} };
 
   it('wraps each read in SET LOCAL when the connection does not enforce the limit', async () => {
     const log: string[] = [];

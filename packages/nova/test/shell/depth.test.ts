@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import type { ActionDefinition, LayoutNode } from '@action';
+import type { ActionDefinition } from '@action';
+import type { LayoutNode } from '@layout';
 import { createLayoutStore } from '@layout';
 import { createShell } from '@shell';
 import { DefinitionValidationError } from '@shared/errors';
