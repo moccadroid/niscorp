@@ -124,7 +124,7 @@ const main = async (): Promise<void> => {
 
   const stranger = await connect(base);
   await stranger.hello();
-  stranger.click('main', 'enter');
+  stranger.click('main', 'pick');
   await stranger.session();
   check('somebody joining reaches the slide on the stage, unannounced', await stage.shows('main', '"label":"Joined","value":1'));
 

@@ -30,8 +30,8 @@ const main = async (): Promise<void> => {
 
   const stepIn = async (): Promise<{ phone: Terminal; memberId: string; token: string }> => {
     const door = await connect(base);
-    await door.shows('main', 'Step in');
-    door.click('main', 'enter');
+    await door.shows('main', '"ref":"pick"');
+    door.click('main', 'pick');
     const token = await door.session();
     door.close();
     const phone = await connect(base, token);
@@ -40,7 +40,6 @@ const main = async (): Promise<void> => {
   };
   const openAssistant = async (phone: Terminal): Promise<boolean> => {
     await phone.shows('main', '"label":"Assistant"');
-    phone.click('main', 'tab', 'assistant.thread');
     return phone.shows('body', 'Built from');
   };
   // Written, then sent — by the button, or by Enter in the field.
@@ -89,14 +88,10 @@ const main = async (): Promise<void> => {
   const asker = await stepIn();
   await openAssistant(asker.phone);
   await say(asker.phone, 'body', 'Send the speaker a question: Will the slides be online?');
-  check('a member gets the question form opened over the screen at once, pre-filled — sending it is still theirs', (await asker.phone.shows('overlay', '"value":"Will the slides be online?"')) && asker.phone.showsNow('overlay', 'Send →'));
-  check('…and the conversation keeps it, to open again', await asker.phone.shows('body', 'Your question: Will the slides be online? →'));
-  asker.phone.click('overlay', 'close');
-  await waitUntil(() => !asker.phone.showsNow('overlay', '"ref":"close"'));
-  await say(asker.phone, 'body', 'Show me my questions');
-  check('an action with nothing to pre-fill opens too: their own questions, over the screen', await asker.phone.shows('overlay', 'Your questions'));
-  asker.phone.click('overlay', 'close');
-  await waitUntil(() => !asker.phone.showsNow('overlay', '"ref":"close"'));
+  // The question form is not a member's until Q&A is installed (Acme, an
+  // integration the speaker installs on stage): until then the assistant has
+  // no form to open, and says so rather than inventing one.
+  check('a member asking to send a question before Q&A is installed gets no form: there is none to open', (await waitUntil(() => /cannot open anything|not one of your actions/.test(asker.phone.textOf('body')))) && !asker.phone.showsNow('overlay', 'Your question'));
   check('a history is its person\'s alone: theirs has their own turns, none of anybody else\'s', asker.phone.showsNow('body', 'Will the slides be online?') && !asker.phone.showsNow('body', 'How many people are in the room?'));
 
   // ── the controller's ──
@@ -111,7 +106,7 @@ const main = async (): Promise<void> => {
   check('the speaker\'s assistant sees the slide on screen, from the controller\'s own canvases', await speaker.shows('tools', 'Ask everyone to join'));
   check('…and not its own bookkeeping', !speaker.showsNow('tools', 'THE CONVERSATION'));
   await say(asker.phone, 'body', 'What is on my screen?');
-  check('a phone\'s assistant sees that person\'s screen: their own card', await asker.phone.shows('body', 'On your screen:'));
+  check('a phone\'s assistant sees that person\'s screen: their own phone', await asker.phone.shows('body', 'On your screen:'));
   const cardName = (await runtime.db.query<{ name: string }>('SELECT name FROM members WHERE member_id = $1', [asker.memberId])).rows[0]?.name ?? '\u0000';
   check(`…with their name on it (${cardName})`, asker.phone.textOf('body').includes(`On your screen:`) && asker.phone.textOf('body').split('On your screen:')[1]?.includes(cardName) === true);
 
@@ -140,11 +135,11 @@ const main = async (): Promise<void> => {
   }
 
   // ── what `open` may offer: the charter's actions, and only what a person asks for ──
-  const granted = ['assistant.thread', 'query.result', 'member.card', 'questions.send'];
-  check('`open` offers what the charter gave them — not the assistant itself, not a result only a tool opens', JSON.stringify(offerableActions(granted)) === JSON.stringify(['member.card', 'questions.send']));
+  const granted = ['assistant.thread', 'query.result', 'xray.switch', 'questions.send'];
+  check('`open` offers what the charter gave them — not the assistant itself, not a result only a tool opens', JSON.stringify(offerableActions(granted)) === JSON.stringify(['xray.switch', 'questions.send']));
   const undescribed = offerableActions(Object.keys(ACTIONS)).filter((id) => (ACTIONS[id]?.description ?? '') === '');
   check(`every action the assistant can open says what it is — a description to reason from${undescribed.length === 0 ? '' : ` (missing: ${undescribed.join(', ')})`}`, undescribed.length === 0);
-  check('…and an action whose contract is empty, declared: openable with nothing to pre-fill', offerableActions(['questions.mine']).includes('questions.mine') && prefillOf('questions.mine').length === 0);
+  check('…and an action whose contract is empty, declared: openable with nothing to pre-fill', offerableActions(['xray.switch']).includes('xray.switch') && prefillOf('xray.switch').length === 0);
   check('…pre-filled only with what a person asks for: how the phone draws an action (a tab) is not offered', JSON.stringify(prefillOf('questions.send').map((entry) => entry.key)) === JSON.stringify(['draft']) && prefillOf('member.card').length === 0);
 
   // ── 4. reopening from the conversation carries every key an opened action takes ──

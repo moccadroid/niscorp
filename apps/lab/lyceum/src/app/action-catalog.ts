@@ -1,12 +1,8 @@
 import type { ActionDefinition } from '@niscorp/nova';
 import { doorAction } from './actions/door/door.action';
-import { cardAction } from './actions/member/card.action';
 import { phoneAction } from './actions/member/phone.action';
 import { queryResultAction } from './actions/query/result.action';
 import { questionSendAction } from './actions/questions/send.action';
-import { questionDeskAction } from './actions/questions/desk.action';
-import { questionsMineAction } from './actions/questions/mine.action';
-import { questionEditAction } from './actions/questions/edit.action';
 import { consoleAction } from './actions/speaker/console.action';
 import { headAction } from './actions/speaker/head.action';
 import { notesAction } from './actions/speaker/notes.action';
@@ -24,6 +20,7 @@ import { signinAction } from './actions/lectern/signin.action';
 import { SLIDE_ACTIONS } from './actions/slide/slide.actions';
 import { xrayTool } from './actions/tools/xray.action';
 import { xrayDocumentAction } from './actions/xray/document.action';
+import { xraySwitchAction } from './actions/xray/switch.action';
 import { CUE_TOOLS } from './actions/tools/cue.actions';
 
 // Ring 1: every action lyceum has. Which role is granted which is the
@@ -31,13 +28,9 @@ import { CUE_TOOLS } from './actions/tools/cue.actions';
 export const ACTIONS: Record<string, ActionDefinition> = Object.fromEntries(
   [
     doorAction,
-    cardAction,
     phoneAction,
     queryResultAction,
     questionSendAction,
-    questionDeskAction,
-    questionsMineAction,
-    questionEditAction,
     consoleAction,
     headAction,
     notesAction,
@@ -48,6 +41,7 @@ export const ACTIONS: Record<string, ActionDefinition> = Object.fromEntries(
     lookTool,
     xrayTool,
     xrayDocumentAction,
+    xraySwitchAction,
     assistantAction,
     stageRegisterAction,
     deckAction,

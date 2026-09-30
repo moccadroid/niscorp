@@ -20,8 +20,8 @@ export const STAFF: readonly { principal: string; role: string }[] = [
   { principal: 'stage', role: 'stage' },
   // The kit's kitchen sink — every piece of the look on one screen.
   { principal: 'kit', role: 'kit' },
-  // The Ministry's registry, which issues ID cards (server/card-issuing.ts).
-  { principal: 'registry', role: 'registry' },
+  // The moderator, which judges names and questions (server/moderation.ts).
+  { principal: 'moderator', role: 'moderator' },
   // The talk's clock, which saved timers run as (server/timing.ts).
   { principal: 'clock', role: 'clock' },
 ];
@@ -77,6 +77,9 @@ const slideIds = SLIDES.map((slide) => quote(slide.slideId)).join(', ');
 
 export const buildSeedSql = (): string =>
   [
+    // The ID cards' registry is gone (the moderator took its place): its grant
+    // goes from databases seeded before.
+    `DELETE FROM grants WHERE principal = 'registry';`,
     ...STAFF.map((staff) => `INSERT INTO grants (principal, role) VALUES (${quote(staff.principal)}, ${quote(staff.role)}) ON CONFLICT DO NOTHING;`),
 
     // Slides: the deck converges to SLIDES. Positions are unique, so a reorder

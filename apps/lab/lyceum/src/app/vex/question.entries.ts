@@ -22,18 +22,54 @@ export const questionSend: SeedMutation = {
 export const questionsAll: SeedEntry = {
   fingerprint: 'questions/all',
   refresh: 'reactive',
-  intent: 'Every question sent to the speaker, newest first, with its sender',
+  intent: 'Every question sent to the speaker that the moderator found fit to show, newest first, with its sender',
   shape: [{ question_id: '', text: '', sender: '' }],
   dsl: {
-    from: ['questions', 'members'],
+    from: ['questions', 'members', 'question_verdicts'],
     fields: ['questions.question_id', 'questions.text', { field: 'members.name', as: 'sender' }],
+    filter: { eq: ['question_verdicts.appropriate', true] },
     sort: [{ field: 'questions.sent_at', dir: 'desc' }, { field: 'questions.question_id', dir: 'desc' }],
     limit: 200,
   },
 };
 
-// The questions this person sent, newest first. Reactive: sent, edited or
-// deleted, the list follows.
+// ── the moderator's (server/moderation.ts): what there is to judge ──
+//
+// Every question and every verdict; the moderator judges the questions no
+// verdict names. Reactive — a question sent is news to it too.
+export const questionsToJudge: SeedEntry = {
+  fingerprint: 'questions/to-judge',
+  intent: 'Every question sent to the speaker, with its words, for the moderator',
+  shape: [{ question_id: '', text: '' }],
+  dsl: {
+    from: ['questions'],
+    fields: ['questions.question_id', 'questions.text'],
+    sort: [{ field: 'questions.sent_at', dir: 'asc' }, { field: 'questions.question_id', dir: 'asc' }],
+    limit: 1000,
+  },
+};
+
+export const verdictsAll: SeedEntry = {
+  fingerprint: 'questions/verdicts',
+  intent: 'Which questions the moderator has already judged',
+  shape: [{ question_id: '' }],
+  dsl: {
+    from: ['question_verdicts'],
+    fields: ['question_verdicts.question_id'],
+    limit: 1000,
+  },
+};
+
+export const questionJudge: SeedMutation = {
+  fingerprint: 'questions/judge',
+  intent: 'Record whether a question is fit to show, and the words that were judged',
+  mutation: {
+    op: 'insert',
+    table: 'question_verdicts',
+    values: { question_id: { $context: 'questionId' }, text: { $context: 'text' }, appropriate: { $context: 'appropriate' }, score: { $context: 'score' } },
+  },
+};
+
 export const questionsMine: SeedEntry = {
   fingerprint: 'questions/mine',
   refresh: 'reactive',
@@ -48,36 +84,4 @@ export const questionsMine: SeedEntry = {
 };
 
 // One of this person's questions, to edit.
-export const questionOne: SeedEntry = {
-  fingerprint: 'questions/one',
-  intent: 'One question this person sent, by its id',
-  shape: { question_id: '', text: '' },
-  dsl: {
-    from: ['questions'],
-    fields: ['questions.question_id', 'questions.text'],
-    filter: { eq: ['questions.question_id', { $context: 'questionId' }] },
-  },
-};
-
-export const questionEdit: SeedMutation = {
-  fingerprint: 'questions/edit',
-  intent: 'Change the words of a question this person sent',
-  mutation: {
-    op: 'update',
-    table: 'questions',
-    set: { text: { $context: 'text' } },
-    where: { eq: ['questions.question_id', { $context: 'questionId' }] },
-  },
-};
-
-export const questionDelete: SeedMutation = {
-  fingerprint: 'questions/delete',
-  intent: 'Take back a question this person sent',
-  mutation: {
-    op: 'delete',
-    table: 'questions',
-    where: { eq: ['questions.question_id', { $context: 'questionId' }] },
-  },
-};
-
-export const QUESTION_ENTRIES: readonly (SeedEntry | SeedMutation)[] = [questionSend, questionsAll, questionsMine, questionOne, questionEdit, questionDelete];
+export const QUESTION_ENTRIES: readonly (SeedEntry | SeedMutation)[] = [questionSend, questionsAll, questionsMine, questionsToJudge, verdictsAll, questionJudge];

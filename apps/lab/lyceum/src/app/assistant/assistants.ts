@@ -28,9 +28,9 @@ export const ASSISTANTS: readonly AssistantDeclaration[] = [
     id: 'room',
     title: 'Your assistant',
     context: 'They are in the audience, on their phone.',
-    grounding: [{ as: 'Their ID card', fingerprint: 'members/me', context: {}, upfront: true }],
+    grounding: [{ as: 'The name they chose', fingerprint: 'members/me', context: {}, upfront: true }],
     tools: ['query', 'open'],
-    applies: { screen: 'member.card' },
+    applies: { screen: 'member.phone' },
   },
   {
     id: 'controller',

@@ -1,6 +1,7 @@
 import type { MossServer, NiscApp } from '@niscorp/moss';
 import { xrayGive, xrayTake } from '@lyceum/app/vex/grant.entries';
 import { STAFF } from '@lyceum/db/seed';
+import type { Moderation } from './moderation';
 
 // THE DECK MOVED — a signal, not data. A slide is an action, and putting a new
 // one on the stage's canvas is a navigation no data update can make, so the
@@ -8,7 +9,11 @@ import { STAFF } from '@lyceum/db/seed';
 // hears `deck-moved`, and only the stage's deck listens; it re-reads the row
 // under its own policy and mounts that slide. (Reads that only DISPLAY the deck
 // — the controller's "slide 3 / 6" — are reactive and need none of this.)
-export const lyceumReactions = (server: () => MossServer): NonNullable<NiscApp['reactions']> => [
+export const lyceumReactions = (server: () => MossServer, moderation: Moderation): NonNullable<NiscApp['reactions']> => [
+  // A QUESTION WAS SENT: the moderator judges what it has not judged yet
+  // (./moderation.ts). Until it has, the question is on nobody's screen but its
+  // sender's; judged fit, the controller's list shows it on its own (reactive).
+  { table: 'questions', op: 'insert', run: () => moderation.judgeQuestions() },
   {
     table: 'deck',
     run: (_event, tools) => {

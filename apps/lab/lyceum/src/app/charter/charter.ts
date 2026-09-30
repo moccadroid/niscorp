@@ -12,9 +12,10 @@ const LOOK = ['renderers.read'];
 // Queries from words: the ones run before (the router reads them, as the
 // caller) and the caller's own record of running one.
 const QUERYING = ['queries.read', 'queries.write.insert'];
-// The room's Q&A: questions for the speaker — sent, read, edited and deleted by
-// their sender, their own only (vex/behaviors.ts).
-const QUESTIONING = ['questions.write.insert', 'questions.read', 'questions.write.update', 'questions.write.delete'];
+// The room's Q&A: questions for the speaker — sent and read by their sender,
+// their own only (vex/behaviors.ts). Not edited, not taken back: a question is
+// judged once, as it was sent (server/moderation.ts).
+const QUESTIONING = ['questions.write.insert', 'questions.read'];
 // The assistant's conversation: each person's own turns (behaviors.ts).
 const CONVERSING = ['assistant_turns.read', 'assistant_turns.write.insert', 'assistant_turns.write.update'];
 
@@ -29,7 +30,7 @@ export const CHARTER: Charter = {
   // speaker a question (Q&A).
   // …and an assistant: the same one everybody has, built for each person from
   // what these grants select (app/assistant/assistants.ts).
-  member: { actions: ['member.*', 'query.*', 'questions.*', 'assistant.*'], data: [...ROOM_READS, ...QUERYING, ...QUESTIONING, ...CONVERSING, ...LOOK] },
+  member: { actions: ['member.*', 'query.*', 'assistant.*'], data: [...ROOM_READS, ...QUERYING, ...QUESTIONING, ...CONVERSING, ...LOOK] },
 
   // The speaker's controller and the projector: two principals, two devices.
   // The speaker moves the deck, as themselves; the controller's tools change
@@ -37,7 +38,7 @@ export const CHARTER: Charter = {
   // every slide is an action only the stage is granted.
   // The speaker reaches every question in the room (`room`, vex/behaviors.ts)
   // — a member reaches their own. Every other table reads at its default.
-  speaker: { scoping: 'room', actions: ['speaker.*', 'tools.*', 'assistant.*'], data: [...ROOM_READS, ...DECK_READS, ...LOOK, 'renderers.write.update', 'grants.read', 'grants.write.insert', 'grants.write.delete', 'slide_notes.read', 'slide_tools.read', 'deck.write.update', 'timers.read', 'timers.write.insert', 'questions.read', ...CONVERSING] },
+  speaker: { scoping: 'room', actions: ['speaker.*', 'tools.*', 'assistant.*'], data: [...ROOM_READS, ...DECK_READS, ...LOOK, 'renderers.write.update', 'grants.read', 'grants.write.insert', 'grants.write.delete', 'slide_notes.read', 'slide_tools.read', 'deck.write.update', 'timers.read', 'timers.write.insert', 'questions.read', 'question_verdicts.read', ...CONVERSING] },
   stage: { actions: ['stage.*', 'slide.*'], data: [...ROOM_READS, ...DECK_READS, 'queries.read', 'timers.read', ...LOOK] },
 
   // Given on stage, taken back the same way: a grant row per member
@@ -54,9 +55,11 @@ export const CHARTER: Charter = {
   // out server-side.
   lectern: { actions: ['lectern.*'], data: [...LOOK] },
 
-  // The Ministry's registry: a principal that is not a person, which issues
-  // ID cards — it writes the card fields as the model writes them.
-  registry: { data: ['members.read', 'members.write.update'] },
+  // The moderator: a principal that is not a person. It judges what people
+  // write that the room could see (server/moderation.ts) — every question,
+  // at `room` reach — and keeps the typed names it refused. It reads who has
+  // which name, so the door offers names nobody has.
+  moderator: { scoping: 'room', data: ['members.read', 'refused_names.write.insert', 'questions.read', 'question_verdicts.read', 'question_verdicts.write.insert'] },
 
   // The talk's clock: a principal that is not a person, which a saved timer
   // runs as (server/timing.ts). It can put a slide on screen and nothing else —
@@ -85,6 +88,6 @@ export const WEARABLE: readonly (readonly string[])[] = [
   ['stage'],
   ['kit'],
   ['lectern'],
-  ['registry'],
+  ['moderator'],
   ['clock'],
 ];

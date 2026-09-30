@@ -40,14 +40,13 @@ const main = async (): Promise<void> => {
   // Somebody steps in, reconnects as themselves, and opens their assistant.
   const stepIn = async (): Promise<{ phone: Terminal; memberId: string }> => {
     const door = await connect(base);
-    await door.shows('main', 'Step in');
-    door.click('main', 'enter');
+    await door.shows('main', '"ref":"pick"');
+    door.click('main', 'pick');
     const token = await door.session();
     door.close();
     const phone = await connect(base, token);
     const hello = await phone.hello();
     await phone.shows('main', '"label":"Assistant"');
-    phone.click('main', 'tab', 'assistant.thread');
     await phone.shows('body', 'Built from');
     return { phone, memberId: hello.principal ?? '' };
   };
@@ -118,7 +117,7 @@ const main = async (): Promise<void> => {
   // has its own branch in the answer layout.
   const branches = JSON.stringify(answerLayout({ kind: '$k', how: '$h', rows: '$r' }));
   for (const { kind } of QUERY_SHAPES) check(`the answer layout has a branch for "${kind}"`, branches.includes(JSON.stringify({ $eq: ['$k', kind] })));
-  await say(ada.phone, 'How many people are there per job title?');
+  await say(ada.phone, 'How many questions has each person sent?');
   check('a count per group is shown with its own columns', await ada.phone.shows('overlay', '"label":"Group"'));
 
   ada.phone.close();

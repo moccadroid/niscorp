@@ -23,7 +23,7 @@ import { CHECKS } from '@lyceum/dev/suite';
 export type Census = { data: number; renderers: number; endpoints: number; setup: number; code: number; share: number; checks: number; checkLines: number };
 
 // The model calls an endpoint makes, which live beside the server's setup.
-const ENDPOINT_FILES = ['querying.ts', 'timing.ts', 'issuer.ts', 'card-issuing.ts'];
+const ENDPOINT_FILES = ['querying.ts', 'timing.ts', 'moderation.ts', 'decider.ts'];
 
 const SRC = fileURLToPath(new URL('..', import.meta.url));
 

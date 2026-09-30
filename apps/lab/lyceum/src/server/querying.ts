@@ -7,6 +7,7 @@ import type { ChoiceQuestion } from '@niscorp/signal';
 import type { NiscRuntime } from '@niscorp/moss';
 import { QUERY_SHAPES } from '@lyceum/app/vex/query.shapes';
 import { BEHAVIORS } from '@lyceum/app/vex/behaviors';
+import { createDecider } from './decider';
 import type { QueryShape } from '@lyceum/app/vex/query.shapes';
 
 // WHO TURNS A REQUEST IN WORDS INTO A VEX QUERY — the two model seams.
@@ -52,7 +53,8 @@ const KNOWN_LIMIT = 200;
 
 const liveQuerier = (env: Record<string, string | undefined>): Querier => {
   const llm = createSignal('groq', { options: { reasoningEffort: 'low' } }).model('openai/gpt-oss-120b');
-  const decider = (env['TYPESAFE_API_KEY'] ?? '') !== '' ? createSignal('typesafe') : llm;
+  // The one decider (./decider.ts): the router is one of its questions.
+  const decider = createDecider(env);
   const dslSchema = createQueryEngine({ adapter: createPostgresAdapter({ pool: { query: () => Promise.reject(new Error('unused')) } }) }).getDslSchema();
 
   return {
@@ -113,9 +115,9 @@ const fakeKind = (request: string): string => {
 // real generation would be: by the engine, under the caller's policy.
 const FAKE_DSL: Record<string, Query> = {
   number: { from: ['members'], aggregate: { value: { count: '*' } } },
-  counts: { from: ['members'], fields: [{ field: 'members.title', as: 'group' }], aggregate: { count: { count: '*' } }, groupBy: ['members.title'], sort: [{ field: 'members.title', dir: 'asc' }] },
-  people: { from: ['members'], fields: ['members.name', 'members.title'], sort: [{ field: 'members.joined_at', dir: 'asc' }] },
-  list: { from: ['members'], fields: [{ field: 'members.name', as: 'label' }, { field: 'members.quirk', as: 'detail' }], sort: [{ field: 'members.joined_at', dir: 'asc' }] },
+  counts: { from: ['members'], fields: [{ field: 'members.name', as: 'group' }], aggregate: { count: { count: '*' } }, groupBy: ['members.name'], sort: [{ field: 'members.name', dir: 'asc' }] },
+  people: { from: ['members'], fields: ['members.name'], sort: [{ field: 'members.joined_at', dir: 'asc' }] },
+  list: { from: ['members'], fields: [{ field: 'members.name', as: 'label' }, { field: 'members.joined_at', as: 'detail' }], sort: [{ field: 'members.joined_at', dir: 'asc' }] },
   forbidden: { from: ['login_links'], fields: ['login_links.principal'] },
 };
 

@@ -26,12 +26,12 @@ export const QUERY_SHAPES: readonly QueryShape[] = [
   },
   {
     kind: 'counts',
-    description: 'A count for each group — how many per title, per hour, per anything.',
+    description: 'A count for each group — how many per person, per hour, per anything.',
     shape: [{ group: '', count: 0 }],
   },
   {
     kind: 'people',
-    description: 'People in the audience — who they are: name and job title.',
-    shape: [{ name: '', title: '' }],
+    description: 'People in the audience — who they are, by the names they chose.',
+    shape: [{ name: '' }],
   },
 ];

@@ -33,8 +33,7 @@ export const answerLayout = (at: AnswerAt): LayoutNode[] => [
       else: {
         if: { $eq: [at.kind, 'people'] },
         then: rows(at, [
-          { label: 'Name', key: 'name', w: 2 },
-          { label: 'Title', key: 'title', w: 2 },
+          { label: 'Name', key: 'name', w: 1 },
         ]),
         else: {
           if: { $eq: [at.kind, 'list'] },

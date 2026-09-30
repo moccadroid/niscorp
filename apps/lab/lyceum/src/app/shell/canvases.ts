@@ -51,8 +51,4 @@ export const CANVASES: ShellManifest['canvases'] = [
   { id: 'controls', initial: ['speaker.controls'] },
   { id: 'overlay' },
   { id: 'deck', initial: ['stage.deck', 'speaker.deck'] },
-  // Q&A's two regions (questions/desk.action.ts): its form, and the person's
-  // own questions — placed while Q&A is open.
-  { id: 'qa-form' },
-  { id: 'qa-mine' },
 ];

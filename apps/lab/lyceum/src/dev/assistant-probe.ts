@@ -16,7 +16,7 @@ if (existsSync('.env')) process.loadEnvFile('.env');
 process.env['LYCEUM_ASSISTANT'] = 'live';
 process.env['LYCEUM_QUERY'] = 'live';
 process.env['LYCEUM_TIMER'] = 'live';
-process.env['LYCEUM_ISSUER'] = 'fake';
+process.env['LYCEUM_MODERATION'] = 'fake';
 const RUNS = Number(process.argv[2] ?? 2);
 
 type Want = 'timer' | 'query' | 'open' | 'none';
@@ -59,14 +59,13 @@ const main = async (): Promise<void> => {
 
   const person = async (): Promise<Terminal> => {
     const door = await connect(base);
-    await door.shows('main', 'Step in');
-    door.click('main', 'enter');
+    await door.shows('main', '"ref":"pick"');
+    door.click('main', 'pick');
     const token = await door.session();
     door.close();
     const phone = await connect(base, token);
     await phone.hello();
     await phone.shows('main', '"label":"Assistant"');
-    phone.click('main', 'tab', 'assistant.thread');
     await phone.shows('body', 'Built from');
     return phone;
   };

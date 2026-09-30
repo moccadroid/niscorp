@@ -14,7 +14,8 @@ import { hashLinkToken, mountLogin } from '@lyceum/server/login';
 import { mountSite } from '@lyceum/server/site';
 import type { Mail } from '@lyceum/server/mail';
 import { mintSession } from '@niscorp/moss';
-import { memberIssue, memberJoin } from '@lyceum/app/vex/member.entries';
+import { memberJoin } from '@lyceum/app/vex/member.entries';
+import { questionJudge } from '@lyceum/app/vex/question.entries';
 import { deckGo } from '@lyceum/app/vex/deck.entries';
 import { DECK_ID } from '@lyceum/db/seed';
 import { check, connect, finish, waitUntil } from './harness';
@@ -140,9 +141,9 @@ const main = async (): Promise<void> => {
   check('the speaker can move the deck', (await replay(session ?? '', deckGo.fingerprint, { deck: DECK_ID, position: 2 })) === 200);
   const stageWrites = [
     await replay(stageSession ?? '', deckGo.fingerprint, { deck: DECK_ID, position: 1 }),
-    await replay(stageSession ?? '', memberIssue.fingerprint, { memberId: 'm_newcomer', name: 'Forged', title: 'Forged', quirk: 'Forged' }),
+    await replay(stageSession ?? '', questionJudge.fingerprint, { questionId: 'anything', text: 'Forged', appropriate: true, score: 1 }),
   ];
-  check('a stage session cannot move the deck or write anybody\'s card', stageWrites.every((status) => status !== 200));
+  check('a stage session cannot move the deck or judge anybody\'s question', stageWrites.every((status) => status !== 200));
 
   speaker.close();
   httpServer.close();

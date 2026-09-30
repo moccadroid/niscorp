@@ -31,10 +31,10 @@ const main = async (): Promise<void> => {
   const base = `ws://127.0.0.1:${address.port}`;
 
   const stranger = await connect(base);
-  await stranger.shows('main', 'Step in');
+  await stranger.shows('main', '"ref":"pick"');
   const door = await connect(base);
-  await door.shows('main', 'Step in');
-  door.click('main', 'enter');
+  await door.shows('main', '"ref":"pick"');
+  door.click('main', 'pick');
   const token = await door.session();
   door.close();
   const phone = await connect(base, token);

@@ -269,6 +269,40 @@ export const RENDERERS = /* sql */ `
   DROP TABLE room;
 `;
 
+// Migration 15: A NAME YOU CHOOSE, AND WHAT MAY BE SHOWN. The ID card goes: a
+// member is the name they chose at the door — picked from the offered ones
+// (server/names.ts) or typed — and nothing else about them is written. A name
+// is taken once. A typed name the moderator refuses is kept, for reference,
+// and never shown. A question is shown only once the moderator has found it
+// fit: its verdict is a row of its own, written by the moderator alone, so the
+// person who asked cannot write it (they may edit their question, and an edit
+// is judged again). Names already taken twice keep a suffix, so the rule holds
+// for the rows that are there.
+export const NAMES_AND_VERDICTS = /* sql */ `
+  UPDATE members m SET name = m.name || ' ' || substr(m.member_id, 3, 4)
+    WHERE EXISTS (SELECT 1 FROM members o WHERE o.name = m.name AND o.member_id < m.member_id);
+  ALTER TABLE members DROP COLUMN title;
+  ALTER TABLE members DROP COLUMN quirk;
+  ALTER TABLE members ADD CONSTRAINT members_name_unique UNIQUE (name);
+  COMMENT ON TABLE members IS 'The people in the audience: everybody who has joined, one row each, by the name they chose.';
+  COMMENT ON COLUMN members.name IS 'The name they chose when they joined: one of the offered names, or one they typed that was fit to show. Unique.';
+  CREATE TABLE refused_names (
+    refused_id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+    text       TEXT NOT NULL,
+    score      REAL NOT NULL,
+    refused_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  );
+  COMMENT ON TABLE refused_names IS 'Names somebody typed when joining that the moderator found not fit to show. Kept for reference; never shown.';
+  CREATE TABLE question_verdicts (
+    question_id TEXT PRIMARY KEY REFERENCES questions (question_id) ON DELETE CASCADE,
+    text        TEXT NOT NULL,
+    appropriate BOOLEAN NOT NULL,
+    score       REAL NOT NULL,
+    judged_at   TIMESTAMPTZ NOT NULL DEFAULT now()
+  );
+  COMMENT ON TABLE question_verdicts IS 'The moderator''s verdict on each question for the speaker: whether it is fit to show, and the text it judged (an edited question is judged again). A question with no verdict has not been checked yet.';
+`;
+
 export const LYCEUM_SEQUENCE: Sequence = {
   id: 'lyceum.app',
   migrations: [
@@ -286,6 +320,7 @@ export const LYCEUM_SEQUENCE: Sequence = {
     { description: 'What the automation writer answered, and why, on the turn it answered in', steps: sqlSteps(TURNS_WRITER) },
     { description: 'No departments: a member is a member; who has which action is a grant', steps: sqlSteps(NO_DEPARTMENTS) },
     { description: 'A renderer per surface: phones, stage and controller each drawn by DOM, React or Vue; the room row goes', steps: sqlSteps(RENDERERS) },
+    { description: 'A name you choose, and what may be shown: no ID card; names unique; refused names kept; a verdict per question, written by the moderator', steps: sqlSteps(NAMES_AND_VERDICTS) },
   ],
 };
 

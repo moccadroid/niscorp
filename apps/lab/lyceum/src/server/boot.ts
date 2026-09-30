@@ -19,7 +19,7 @@ import { createOrchestrator } from './assistant/orchestrator';
 import type { Timing } from './timing';
 import { createQuerier } from './querying';
 import { devRuntime } from './runtime';
-import { createIssuer } from './issuer';
+import { createModerator, startModeration } from './moderation';
 import type { DevRuntime, LyceumRuntime } from './runtime';
 
 // The one composition: lyceum's artifacts, its environment and its code seams
@@ -63,9 +63,10 @@ export const bootOn = async <R extends LyceumRuntime>(runtime: R, options: BootO
     return built;
   };
 
-  // Who writes the ID cards — Qwen with a key, the deterministic fake without
-  // (./issuer.ts). Read from the environment the process was started with.
-  const issuer = createIssuer(process.env);
+  // Whether what people write may be shown — the one decider with a key, the
+  // deterministic fake without (./moderation.ts) — and the moderator at work:
+  // names at the door, questions as they arrive.
+  const moderation = startModeration(server, runtime.pool, createModerator(process.env));
   // Who routes requests to queries and writes new ones — Jev and gpt-oss-120b with
   // keys, the deterministic fake without (./querying.ts).
   const querier = createQuerier(process.env);
@@ -92,8 +93,8 @@ export const bootOn = async <R extends LyceumRuntime>(runtime: R, options: BootO
   const renderers = followRenderers();
   const app = buildLyceum({
     identity: lyceumIdentity,
-    functions: (session) => ({ ...doorFunctions(session, server, issuer), ...roomFunctions(session, publicUrl, options.sshAddress ?? '', census), ...assistantFunctions(session, { querier, writer: timerWriter, orchestrator, tz, timing }), ...lecternFunctions(server, speakerMail), ...xrayFunctions(session) }),
-    reactions: [...lyceumReactions(server), renderers.reaction],
+    functions: (session) => ({ ...doorFunctions(session, server, moderation), ...roomFunctions(session, publicUrl, options.sshAddress ?? '', census), ...assistantFunctions(session, { querier, writer: timerWriter, orchestrator, tz, timing }), ...lecternFunctions(server, speakerMail), ...xrayFunctions(session) }),
+    reactions: [...lyceumReactions(server, moderation), renderers.reaction],
     inputs: phoneInputs,
     onSession: renderers.onSession,
   });

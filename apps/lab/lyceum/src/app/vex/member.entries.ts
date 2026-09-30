@@ -35,11 +35,11 @@ export const identityGrants: SeedEntry = {
 export const memberMe: SeedEntry = {
   fingerprint: 'members/me',
   refresh: 'reactive',
-  intent: 'The signed-in member: their ID card',
-  shape: { member_id: '', name: '', title: '', quirk: '' },
+  intent: 'The signed-in member: the name they chose',
+  shape: { member_id: '', name: '' },
   dsl: {
     from: ['members'],
-    fields: ['members.member_id', 'members.name', 'members.title', 'members.quirk'],
+    fields: ['members.member_id', 'members.name'],
     filter: { eq: ['members.member_id', { $scope: 'userId' }] },
   },
 };
@@ -47,11 +47,11 @@ export const memberMe: SeedEntry = {
 export const memberRegister: SeedEntry = {
   fingerprint: 'members/register',
   refresh: 'reactive',
-  intent: 'Everybody who joined, in the order they arrived, with their title',
-  shape: [{ member_id: '', name: '', title: '' }],
+  intent: 'Everybody who joined, in the order they arrived, by name',
+  shape: [{ member_id: '', name: '' }],
   dsl: {
     from: ['members'],
-    fields: ['members.member_id', 'members.name', 'members.title'],
+    fields: ['members.member_id', 'members.name'],
     sort: [{ field: 'members.joined_at', dir: 'asc' }, { field: 'members.member_id', dir: 'asc' }],
     limit: 500,
   },
@@ -78,22 +78,17 @@ export const memberJoin: SeedMutation = {
   },
 };
 
-// ── the ID card, issued by the Ministry's registry as the model writes it ──
-export const memberIssue: SeedMutation = {
-  fingerprint: 'members/issue',
-  intent: 'Write a member\'s ID card: their name, job title and one line on file',
+// ── a typed name the moderator refused, kept for reference (server/moderation.ts) ──
+export const nameRefuse: SeedMutation = {
+  fingerprint: 'names/refuse',
+  intent: 'Keep a name somebody typed that was not fit to show, with how sure the moderator was',
   mutation: {
-    op: 'update',
-    table: 'members',
-    set: { name: { $context: 'name' }, title: { $context: 'title' }, quirk: { $context: 'quirk' } },
-    where: { eq: ['members.member_id', { $context: 'memberId' }] },
+    op: 'insert',
+    table: 'refused_names',
+    values: { text: { $context: 'text' }, score: { $context: 'score' } },
   },
 };
 
-// ── Forms: change your own record ──
-//
-// Served at the `personal` reach (behaviors.ts): the engine pins the update to
-// the caller's own row, whatever `memberId` a request names.
 export const MEMBER_ENTRIES: readonly (SeedEntry | SeedMutation)[] = [
   identityMember,
   identityGrants,
@@ -101,5 +96,5 @@ export const MEMBER_ENTRIES: readonly (SeedEntry | SeedMutation)[] = [
   memberRegister,
   memberCounts,
   memberJoin,
-  memberIssue,
+  nameRefuse,
 ];
