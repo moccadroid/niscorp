@@ -36,3 +36,25 @@ export const loopLayout: LayoutNode = {
     cell('limits', [label('Where reading cannot see'), { for: '$.limits', as: 'limit', do: headline('name', '{{$limit.text}}') }], { ink: 'signal' }),
   ],
 };
+
+// Somebody else's screen, installed: on the left what the install check tests,
+// on the right what it answered just now — the address, the status, and every
+// reason it refused, as the check wrote them.
+export const installLayout: LayoutNode = {
+  component: 'Sheet',
+  props: { size: 'fill', areas: ['head head', 'checks answer'], cols: [1, 1.2], rows: ['auto', 1] },
+  children: [
+    cell('head', [label('{{$.kicker}}'), headline('display', '{{$.title}}')]),
+    cell('checks', [label('The install check'), { for: '$.checks', as: 'check', do: headline('name', '{{$check.text}}') }], { ink: 'ink', align: 'end' }),
+    cell(
+      'answer',
+      [
+        label('Acme'),
+        { component: 'Code', props: { text: '$.vendor.url' } },
+        headline('display', '{{$.vendor.status}}'),
+        { component: 'Rows', props: { rows: '$.vendor.reasons', rowKey: 'reason', empty: '', columns: [{ label: 'Refused because', key: 'reason', w: 1 }] } },
+      ],
+      { ink: 'signal', align: 'end' },
+    ),
+  ],
+};

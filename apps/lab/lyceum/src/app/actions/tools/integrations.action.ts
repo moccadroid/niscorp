@@ -26,7 +26,7 @@ export const integrationsTool: ActionDefinition = {
         component: 'Cell',
         props: { area: 'why' },
         children: [
-          { component: 'Rows', props: { rows: '$.vendor.reasons', rowKey: 'reason', empty: '', columns: [{ label: 'Intake', key: 'reason', w: 1 }] } },
+          { component: 'Rows', props: { rows: '$.vendor.reasons', rowKey: 'reason', empty: '', columns: [{ label: 'Refused because', key: 'reason', w: 1 }] } },
           { if: '$.error', then: { component: 'Text', children: '{{$.error.message}}' } },
         ],
       },

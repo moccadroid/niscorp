@@ -13,7 +13,8 @@ import type { FunctionHandler } from '@niscorp/nova';
 //
 // These are moss's operator routes, called in-process with the key this boot
 // minted (server/boot.ts); nothing outside the server holds it. Only the
-// speaker may call them.
+// speaker may call them — and the stage may read where Acme stands, for the
+// install slide (slide.install), which is told when that changes.
 
 export const VENDOR_ID = 'acme';
 
@@ -48,7 +49,7 @@ export const integrationFunctions = (session: FunctionSession, server: () => Mos
   // Where Acme stands now: its address, moss's status for it (absent → not
   // installed; `pending`; `approved`), and what intake last refused it for.
   const state = async (): Promise<VendorState> => {
-    if (session.principal !== 'speaker') throw new Error('Only the speaker installs integrations.');
+    if (session.principal !== 'speaker' && session.principal !== 'stage') throw new Error('Only the speaker and the stage read where Acme stands.');
     const res = await server().request('/operator/integrations', { headers: { 'x-operator-key': operatorKey } });
     const row = ListSchema.parse(await res.json()).integrations.find((integration) => integration.id === VENDOR_ID);
     if (row === undefined) return { id: VENDOR_ID, url: addresses.good, status: 'not installed', reasons: [] };
@@ -67,6 +68,10 @@ export const integrationFunctions = (session: FunctionSession, server: () => Mos
   const rebuildShells = (): void => {
     for (const shell of server().shells?.list() ?? []) server().invalidateIdentity(shell.principal);
   };
+  // The install slide on the projector reads the state again.
+  const tellStage = (): void => {
+    server().shells?.deliver('stage', 'integration-changed');
+  };
 
   return {
     'integrations.state': state,
@@ -75,17 +80,20 @@ export const integrationFunctions = (session: FunctionSession, server: () => Mos
       const { which } = WhichSchema.parse(data);
       const { ok, answer } = await operator('/integrations', 'POST', { id: VENDOR_ID, url: addresses[which] });
       const now = await state();
+      tellStage();
       return { ...now, url: addresses[which], status: ok ? now.status : 'refused', reasons: asRows(answer.reasons ?? (ok ? [] : [answer.message ?? 'refused'])) };
     },
     'integrations.approve': async () => {
       await operator(`/integrations/${VENDOR_ID}/approve`, 'POST');
       rebuildShells();
+      tellStage();
       return state();
     },
     // For rehearsals: gone again, from every seat.
     'integrations.remove': async () => {
       await operator(`/integrations/${VENDOR_ID}`, 'DELETE');
       rebuildShells();
+      tellStage();
       return state();
     },
   };

@@ -134,7 +134,7 @@ export const onceLayout: LayoutNode = {
   children: [
     cell('head', [headline('display', '{{$.title}}')]),
     cell('agent', [label('An agent with a skill'), headline('title', 'Reads its instructions again, every run.')], { align: 'end' }),
-    cell('reflex', [label('A reflex'), headline('title', 'Written once. Runs with no model.')], { ink: 'live', align: 'end' }),
+    cell('reflex', [label('An automation'), headline('title', 'Written once. Runs with no model.')], { ink: 'live', align: 'end' }),
   ],
 };
 

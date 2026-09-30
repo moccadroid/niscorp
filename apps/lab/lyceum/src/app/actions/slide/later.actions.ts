@@ -33,7 +33,7 @@ const still = (id: string, title: string, layout: ActionDefinition['layout'], da
   triggers: [],
 });
 
-export const mossSlide = still('slide.moss', 'Your shell runs on the server.', mossLayout, {
+export const mossSlide = still('slide.moss', 'Your screen runs on the server.', mossLayout, {
   kicker: 'Moss',
   from: 'Your shell, on the server',
   to: 'Your phone',
@@ -61,7 +61,7 @@ export const charterSlide = still('slide.charter', 'Who gets what is one documen
 });
 
 // The questions rule from app/vex/behaviors.ts.
-export const twiceSlide = still('slide.twice', 'Checked in two places.', twiceLayout, {
+export const twiceSlide = still('slide.twice', 'Enforced in two places.', twiceLayout, {
   shell: 'An action you are not granted is never sent to you.',
   code: code(
     'questions: {',
@@ -94,7 +94,7 @@ export const vexSlide = still('slide.vex', 'A query is a document too.', vexLayo
 });
 
 export const wordsSlide = still('slide.words', 'Asked in words.', wordsLayout, {
-  kicker: 'The assistant’s queries — a small model picks which way',
+  kicker: 'Queries from your assistant',
   outcomes: [
     { area: 'again', ink: 'live', label: 'Asked before', what: 'Replayed. No model.' },
     { area: 'new', ink: 'signal', label: 'New', what: 'Written once, then stored.' },
@@ -106,7 +106,7 @@ export const waterSlide = still('slide.water', '18,000 cups of water.', incident
   kicker: 'A drive-through AI took this order, 2025',
 });
 
-export const pressSlide = still('slide.press', 'It prepares. You press.', pressLayout, {
+export const pressSlide = still('slide.press', 'It cannot press Send.', pressLayout, {
   can: [{ text: 'Reads your screen.' }, { text: 'Opens an action, filled in.' }],
 });
 
