@@ -140,4 +140,55 @@ The notes for every slide are in `src/db/seed.ts`.
 - **The look switch repaints the controller** — decide whether the speaker and stage should keep a fixed look.
 - **`model-check`** still seeds departments; it can't run until its fixture room is rewritten (it's the recorded measurement behind `MEASURED.md` — rewriting changes what the numbers compare against).
 - **`PLAN.md`** is out of date (departments, the old talk table, VPS vs Railway, "open offers a button", starters, kit version).
-- **Slides 16–19** are drafted but not yet looked at on the projector or committed.
+- **Slides 16–19** are drafted and committed, but not yet looked at on the projector.
+
+## 11. Learnings from the other threads
+
+### Competition research (thread "NISC alternative libraries research")
+
+Nothing found does all of what nisc does. The field, by which part of nisc it overlaps:
+
+| Project | Overlaps | Notes |
+|---|---|---|
+| **Lowdefy** | the whole idea | YAML config "interpreted, not executed", blocks, events → actions, requests, operators, auth + roles, agents in YAML (v5.3). ~3k stars, in production for internal tools. Has `_js` escape hatches; no canvases, no per-person server shells, no grammar versioning, no deterministic query cache. |
+| **amis** (Baidu) | nova + prism | The most complete JSON UI grammar (~18.9k stars, runs Aisuda). Its grammar is its component library: fat components that fetch, an implicit scope chain, JS strings (`custom`, adaptors). Frontend only, no policy, no versioning. |
+| **json-render** (Vercel) | nova's catalog/registry | ~18k stars, Jan 2026. Zod catalog → registry → specs; renderers for React, Vue, Svelte, Solid, RN, Ink, PDF, email. No data layer, no auth. |
+| **A2UI** (Google) | moss → terminal protocol | The agent streams a component list + data model to a client that renders from a trusted catalog. A wire protocol, not an app framework. |
+| **Frappe** (ERPNext) | charter + data | A DocType is JSON defining table, forms, lists and per-role permissions; behaviour is Python. |
+| **DivKit** (Yandex) | nova as server-driven UI | JSON layouts + actions rendered natively on iOS, Android, Web, Flutter. UI only. |
+| LiveView / Hotwire | moss's server-held UI | Per-session state on the server, streamed output — but views are code. |
+| MCP Apps | — | Sandboxed iframe HTML: the opposite approach. |
+
+**What nobody else has:** strata (every document stamped with its grammar version, upgraded where it is read, a grammar change is a migration); vex (replay by `{ fingerprint, context }`, a generated query becomes a locked artifact, the model path strictly opt-in); ring 1 (an ungranted action does not exist in the shell — everyone else uses `visible` conditions); canvases (stack/list, composed from rows); checked partial LLM output (solid); no code strings anywhere.
+
+**What Lowdefy can that nisc can't (yet):** ship today (nisc's npm release comes before the talk); give non-Postgres data vex's guarantees (a `fn` or HTTP endpoint reaches anything, but replay, scope and reactive reads need Postgres). YAML, password login and JS escape hatches are irrelevant or deliberately absent. A ready-made agent-chat action with cortex tool approval is 2–4 hours of work (cortex already has the approval bridge).
+
+**From Lowdefy's pitch, worth borrowing:** its problem statement ("AI generates code fast, the maintenance doesn't scale" — quote it, show where they stop); "secure by default, public only when stated" (ring 1 already works that way); "one update upgrades all apps" — make that claim, with strata as the evidence; putting numbers on it (the census does). The frame that matters: Lowdefy makes the output small enough for a human to review; nisc makes the reviewer a program.
+
+### What lyceum's own documents say makes nisc special (thread "Lyceum fingerprint matching for Vex queries")
+
+1. Everything the app does is a document with a schema, run by a runtime; code only at the edges; every package is the same move in one more domain.
+2. That shape is what makes models useful: narrow problem + precise grammar + context → a mid-size open model is enough; output checked before it runs, stored, replayed, migrated; a failure is fixed in the grammar's descriptions or the tool contract, not with a bigger model.
+3. A model's work is compiled once and replayed: "the model is a compiler that runs once, not an interpreter that runs every time". Jev only chooses between existing queries.
+4. Policy the model cannot get around: generation runs as the asker and sees only their tables; what it writes compiles under the same policy; a request cannot name another person's id; one charter compiles into two enforcement points; a model-written automation runs as `clock`, which can do one thing.
+5. Per-person UI by existence, not condition: "not hidden, not disabled — it does not exist for you".
+6. The UI doesn't know what draws it: the same tree as a styled page, plain HTML, a terminal, or text for the assistant.
+7. An agent's context is just data: the screen, the actions with input schemas, grounding reads — under the person's policy. It proposes; the person presses.
+8. Screens stay current with no pub/sub: reactive reads ("the query knows what it reads").
+9. Automations without an agent loop: a reflex is a row, written once, run without a model, surviving a restart.
+10. Versions of documents: a framework change is a checked data migration.
+11. Proof, not assertion: live, in the folder, nothing hard-coded, measurements (bad runs and void results included) written down.
+
+The same review found the earlier plan had **no stated problem** and ordered the talk by the author's history rather than the audience's reasons — both fixed by the current opening (origin → problem → answer → Nova).
+
+### From the deck review (thread "Lyceum talk outline and demo")
+
+- **A useful frame for every demo:** *easy* (this takes real work elsewhere), *only here* (falls out of the architecture), *fishy but proven* (lyceum proves it). Name the "only here" moments out loud — "try this in yours" — instead of letting them pass as effects.
+- **Show real code** where it converts experts faster than a slide: the charter (10–20 lines), `behaviors.ts` (identity stamped by the engine), a vex seed entry, the assistant declarations, `query.shapes.ts`.
+- **Objections to answer on the way:** "JSON UIs always hit a wall" (the census); "the client can forge an id" (it has no field for one — the engine stamps it from the session); "why isn't Claude writing React enough?" (the problem slide).
+- **Measured numbers (from `MEASURED.md` — re-check before they go on a slide):** Jev routing 48/48 over three runs, ~250 ms a decision; generated queries 30/36 on gpt-oss-120b (same as qwen 27b); Groq prompt-prefix cache 1.1 s → 0.03 s, shared by the room; the tide writer ~225/240 on clean timer requests but 1/12 correcting a draft; assistant proposals 18/18, its reply text the weak spot.
+- **Jev's two structural lessons:** the earlier questions go in the *state*, not the options (as options: 0.94 "new" for the identical question); a replay must agree with the shape ("How many in Archive?" matched the per-group counts at 0.73 — it wants one number).
+- **Stage the live-model risk:** the opening timer uses a rehearsed phrasing ("Show the last slide in 30 minutes"); decide before going on stage whether `LYCEUM_TIMER=fake` is the fallback, not in the moment.
+- **Admit the stream pacing:** the profile stream is replayed at a reading pace (~1.5 s) — say so on stage.
+- **The measurement culture is a selling point:** probes written before a run, void results kept, the prompt-leak incident admitted.
+
