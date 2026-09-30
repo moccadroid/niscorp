@@ -20,11 +20,3 @@ export const cardLayout: LayoutNode = {
     },
   ],
 };
-
-// The card as ONE LINE, across the top of the phone: who you are, always in
-// sight and never taking the screen.
-export const cardStripLayout: LayoutNode = {
-  component: 'Sheet',
-  props: { areas: ['who'] },
-  children: [{ component: 'Cell', props: { area: 'who' }, children: [{ component: 'Label', children: '{{$.me.name}}' }] }],
-};

@@ -1,14 +1,13 @@
 // LOOK CHECK — one tree, three renderers. Which renderer draws a screen is a
-// row per surface (the phones, the projector, the controller), read reactively
-// by a marker the charter gives each principal for its surface; the terminal
-// draws with the renderer the marker names (src/ui/target.ts). So switching a
-// surface is one write by the speaker, and nothing announces it.
+// row per surface (the phones, the projector, the controller); the server
+// puts it in each screen's frame (server/renderers.ts), and the terminal draws
+// with the renderer the frame names (src/ui/target.ts). It is not an action:
+// nobody's screen has it as something on it.
 //
-//   1. every screen carries its surface's marker — a stranger at the door and a
-//      phone the phones', the projector the stage's, the controller its own —
-//      each naming DOM;
+//   1. every screen's frame names DOM — a stranger at the door, a phone, the
+//      projector, the controller — and no screen has a renderer action;
 //   2. the speaker's switch is a tool on a slide; pressing React for the phones
-//      moves the phones' markers and no other surface's, the trees otherwise
+//      moves the phones' frames and no other surface's, the trees otherwise
 //      the same; the stage and the controller move on their own rows;
 //   3. surfaces and renderers are closed sets, kept by the table: any other
 //      word is refused;
@@ -50,12 +49,12 @@ const main = async (): Promise<void> => {
     { name: 'the projector', screen: stage, surface: 'stage' },
     { name: 'the controller', screen: speaker, surface: 'controller' },
   ];
-  const named = (screen: Terminal, renderer: string): Promise<boolean> => screen.shows('look', `"look":"${renderer}"`);
+  const named = (screen: Terminal, renderer: string): Promise<boolean> => screen.shows('frame', `"look":"${renderer}"`);
 
   // ── 1 ──
   for (const { name, screen, surface } of screens) {
-    check(`${name} carries the marker for the ${surface}`, await screen.shows('look', `look.${surface}`));
-    check('...naming DOM', await named(screen, 'dom'));
+    check(`${name}: its frame names DOM (the ${surface})`, await named(screen, 'dom'));
+    check('...and no action on it is about renderers', !(await screen.hello()).catalog.actions.some((id) => id.startsWith('look.')));
   }
 
   // ── 2 ──
@@ -77,16 +76,16 @@ const main = async (): Promise<void> => {
   };
   const before = await settled(phone, 'body');
   speaker.click('tools', 'renderer', { surface: 'phones', renderer: 'react' });
-  check('pressing React for the phones: the stranger’s marker names react', await named(stranger, 'react'));
+  check('pressing React for the phones: the stranger’s frame names react', await named(stranger, 'react'));
   check('...and the phone’s', await named(phone, 'react'));
   await new Promise((resolve) => setTimeout(resolve, 300));
-  check('...the projector’s still names DOM', stage.showsNow('look', '"look":"dom"'));
-  check('...and so does the controller’s', speaker.showsNow('look', '"look":"dom"'));
+  check('...the projector’s still names DOM', stage.showsNow('frame', '"look":"dom"'));
+  check('...and so does the controller’s', speaker.showsNow('frame', '"look":"dom"'));
   check('...the switch marks React on the phones’ row', await waitUntil(() => speaker.showsNow('tools', '"area":"phones-react","ink":"highlight"')));
-  check('...while the phone’s own tree is the same tree — only the marker moved', (await settled(phone, 'body')) === before);
+  check('...while the phone’s own tree is the same tree — only the frame moved', (await settled(phone, 'body')) === before);
   speaker.click('tools', 'renderer', { surface: 'stage', renderer: 'vue' });
   check('pressing Vue for the stage: the projector names vue', await named(stage, 'vue'));
-  check('...while the phones stay on react', phone.showsNow('look', '"look":"react"'));
+  check('...while the phones stay on react', phone.showsNow('frame', '"look":"react"'));
   speaker.click('tools', 'renderer', { surface: 'controller', renderer: 'vue' });
   check('the controller switches itself', await named(speaker, 'vue'));
   for (const surface of ['phones', 'stage', 'controller']) speaker.click('tools', 'renderer', { surface, renderer: 'dom' });

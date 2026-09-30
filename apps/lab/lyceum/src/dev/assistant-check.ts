@@ -145,7 +145,7 @@ const main = async (): Promise<void> => {
   const undescribed = offerableActions(Object.keys(ACTIONS)).filter((id) => (ACTIONS[id]?.description ?? '') === '');
   check(`every action the assistant can open says what it is — a description to reason from${undescribed.length === 0 ? '' : ` (missing: ${undescribed.join(', ')})`}`, undescribed.length === 0);
   check('…and an action whose contract is empty, declared: openable with nothing to pre-fill', offerableActions(['questions.mine']).includes('questions.mine') && prefillOf('questions.mine').length === 0);
-  check('…pre-filled only with what a person asks for: how the phone draws an action (tab, strip) is not offered', JSON.stringify(prefillOf('questions.send').map((entry) => entry.key)) === JSON.stringify(['draft']) && prefillOf('member.card').length === 0);
+  check('…pre-filled only with what a person asks for: how the phone draws an action (a tab) is not offered', JSON.stringify(prefillOf('questions.send').map((entry) => entry.key)) === JSON.stringify(['draft']) && prefillOf('member.card').length === 0);
 
   // ── 4. reopening from the conversation carries every key an opened action takes ──
   const trigger = ACTIONS['assistant.thread']?.triggers?.find((candidate) => 'ref' in candidate && candidate.ref === 'reopen');

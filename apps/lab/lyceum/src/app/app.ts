@@ -5,7 +5,7 @@ import { ACTIONS } from './action-catalog';
 import { ENTRIES } from './vex';
 import { BEHAVIORS } from './vex/behaviors';
 import { CANVASES } from './shell/canvases';
-import { frameLayout } from './shell/frame.layout';
+import { RENDERER_STORE, frameLayout } from './shell/frame.layout';
 import { FRAGMENTS } from './shell/fragments/sheet.fragment';
 import { LYCEUM_KIT } from './grammars';
 
@@ -20,6 +20,7 @@ export type LyceumSeams = {
   functions: NonNullable<NiscApp['functions']>;
   reactions: NonNullable<NiscApp['reactions']>;
   seeds: NonNullable<NiscApp['shell']>['seeds'];
+  onSession: NonNullable<NiscApp['onSession']>;
 };
 
 export const buildLyceum = (seams: LyceumSeams): NiscApp =>
@@ -33,9 +34,11 @@ export const buildLyceum = (seams: LyceumSeams): NiscApp =>
     identity: seams.identity,
     functions: seams.functions,
     reactions: seams.reactions,
+    onSession: seams.onSession,
     shell: {
       canvases: CANVASES,
       layout: frameLayout,
+      layoutStore: RENDERER_STORE,
       fragments: FRAGMENTS,
       seeds: seams.seeds,
     },

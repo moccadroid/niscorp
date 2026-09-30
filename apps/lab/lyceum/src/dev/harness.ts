@@ -13,6 +13,8 @@ const MessageSchema = z.looseObject({ type: z.string() });
 const HelloSchema = z.object({ type: z.literal('hello'), principal: z.string().nullable(), catalog: z.object({ actions: z.array(z.string()) }) });
 const SessionSchema = z.object({ type: z.literal('session'), token: z.string() });
 const RenderSchema = z.object({ type: z.literal('render'), canvas: z.string(), tree: z.unknown() });
+// The frame arrives as its own message; it is kept under the name `frame`.
+const FrameSchema = z.object({ type: z.literal('frame'), tree: z.unknown() });
 
 export type Terminal = {
   hello: () => Promise<z.infer<typeof HelloSchema>>;
@@ -105,6 +107,8 @@ export const connect = (base: string, token?: string): Promise<Terminal> =>
       if (asSession.success) sessions.push(asSession.data.token);
       const asRender = RenderSchema.safeParse(message);
       if (asRender.success) trees.set(asRender.data.canvas, JSON.stringify(asRender.data.tree));
+      const asFrame = FrameSchema.safeParse(message);
+      if (asFrame.success) trees.set('frame', JSON.stringify(asFrame.data.tree));
     });
     socket.addEventListener('close', () => {
       open = false;

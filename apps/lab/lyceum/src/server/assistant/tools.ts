@@ -65,10 +65,10 @@ export type ToolDeps = {
 // what only an automation's `notify` opens (speaker.notification).
 const NOT_OFFERED: ReadonlySet<string> = new Set(['assistant.thread', 'query.result', 'questions.edit', 'questions.desk', 'speaker.notification']);
 
-// How an action is DRAWN — as a tab on the phone, as the card's strip — is the
+// How an action is DRAWN — as a tab on the phone — is the
 // phone's business, not something a person asks for. These input keys are the
 // phone's; everything else an action declares (rule 14) can be pre-filled.
-const PRESENTATION_KEYS: ReadonlySet<string> = new Set(['tab', 'tabInk', 'strip']);
+const PRESENTATION_KEYS: ReadonlySet<string> = new Set(['tab', 'tabInk']);
 
 const inputProperties = (actionId: string): Record<string, unknown> => {
   const schema: unknown = ACTIONS[actionId]?.input;

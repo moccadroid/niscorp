@@ -16,12 +16,12 @@ import { lyceumRegistry } from './registry';
 // renderers — nova's DOM adapter with lyceum's kit, moss's React target with
 // the React port of it, moss's Vue target with the Vue port. All three wear
 // the one stylesheet (./tokens.ts), so they look the same; what differs is who
-// builds the elements. WHICH is in the tree: the `Look` marker on the `look`
-// canvas (app/actions/look/), one per surface. Each update reads it; when it
+// builds the elements. WHICH is in the frame: a `Look` the server sets for
+// this screen's surface (server/renderers.ts). Each update reads it; when it
 // names another renderer, the one drawing now is taken down and the other
 // mounted on the same root. Nothing is sent to switch: the speaker writes the
-// surface's row, the marker's reactive read changes, and the next tree names
-// the other renderer. No marker (a screen with none): DOM.
+// surface's row, the server sets the frame's `Look` anew, and the next frame
+// names the other renderer. No `Look`: DOM.
 const dressed = new WeakSet<Document>();
 const dress = (doc: Document): void => {
   if (dressed.has(doc)) return;
@@ -101,7 +101,7 @@ export const lyceumTarget = (config: { root: HTMLElement }): Target => {
       const elapsed = Date.now() - arrived;
       root.toggleAttribute('data-enter', now !== undefined && elapsed < ENTERING_MS);
       root.style.setProperty('--enter-elapsed', `${elapsed}ms`);
-      const look = lookIn(api.canvasTree('look')) ?? 'dom';
+      const look = lookIn(api.frame()) ?? 'dom';
       root.setAttribute('data-look', look);
       if (drawing !== undefined && drawing.look === look) {
         drawing.mount.update();

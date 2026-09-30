@@ -67,7 +67,7 @@ const main = async (): Promise<void> => {
   // ── 3 ──
   ada.clickIn('tabs', 'open', 'X-ray');
   check('pressed, the body shows the screen as data', await ada.shows('body', 'your screen, as data'));
-  check('...listing the actions on it by name', await ada.shows('body', 'Your ID card'));
+  check('...listing the actions on it by name', await ada.shows('body', 'Your ID card · member.card'));
   check('...with their data, as JSON', await ada.shows('body', '\\"member_id\\"'));
   const ids = (await runtime.db.query<{ member_id: string }>('SELECT member_id FROM members ORDER BY joined_at, member_id')).rows.map((row) => row.member_id);
   const seen = ada.textOf('body');

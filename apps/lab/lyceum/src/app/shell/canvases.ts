@@ -12,11 +12,11 @@ import type { ShellManifest } from '@niscorp/moss';
 //          the controller's own layout places them (speaker/console.layout.ts),
 //          so they exist on the speaker's screen and nowhere else. `tools` is
 //          the slide's tools, a list the speaker's deck reconciles.
-//   self, body, tabs
-//          the phone's three regions (members), placed by the phone's own
-//          layout (member/phone.layout.ts): your card as one line; one thing
-//          at a time; a tab for each thing you hold — a list the phone
-//          reconciles, so the charter decides the tabs by existence
+//   body, tabs
+//          the phone's two canvases (members), placed by the phone's own
+//          layout (member/phone.layout.ts): one thing at a time; a tab for
+//          each thing the person is granted that can be one — a list the
+//          manifest's `seeds` fill (server/seeds.ts)
 //   overlay  whatever is opened over the screen, in the `sheet` fragment's
 //          chrome (all slides, on the controller)
 //   look   which renderer draws this screen (look/look.actions.ts): a marker
@@ -29,7 +29,6 @@ export const CANVASES: ShellManifest['canvases'] = [
   { id: 'strip', initial: ['stage.strip'] },
   { id: 'main', initial: ['speaker.console', 'member.phone', 'kit.sink', 'lectern.signin', 'door.join'] },
   // The phone's three regions (member/phone.layout.ts) — not in the frame.
-  { id: 'self', initial: [{ action: 'member.card', input: { strip: true } }] },
   { id: 'body', initial: ['member.card'] },
   // A LIST: one tab per thing this person holds, placed by the phone's reconcile.
   { id: 'tabs', mode: 'list', actionLayout: { for: '$.instances', as: 'instance', do: { component: 'ActionSlot', props: { instanceId: '$instance.id' } } } },
@@ -53,7 +52,6 @@ export const CANVASES: ShellManifest['canvases'] = [
   { id: 'controls', initial: ['speaker.controls'] },
   { id: 'overlay' },
   { id: 'deck', initial: ['stage.deck', 'speaker.deck'] },
-  { id: 'look', initial: ['look.controller', 'look.stage', 'look.phones'] },
   // The Q&A tab's two regions (questions/desk.action.ts): its form, and the
   // person's own questions — placed when the tab is pressed.
   { id: 'qa-form' },

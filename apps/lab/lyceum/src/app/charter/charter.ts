@@ -7,7 +7,7 @@ import type { Charter } from '@niscorp/charter';
 const ROOM_READS = ['members.read'];
 const DECK_READS = ['deck.read', 'slides.read'];
 // Which renderer draws each surface: every screen reads its own row, the
-// door's too (app/actions/look/).
+// door's too (server/renderers.ts).
 const LOOK = ['renderers.read'];
 // Queries from words: the ones run before (the router reads them, as the
 // caller) and the caller's own record of running one.
@@ -22,14 +22,14 @@ export const CHARTER: Charter = {
   // Anonymous: the door and nothing else — and, once stepping in has made
   // them somebody, the one write that makes them a member: their own row
   // (the engine stamps whose; vex/behaviors.ts).
-  public: { actions: ['door.*', 'look.phones'], data: ['members.write.insert', ...LOOK] },
+  public: { actions: ['door.*'], data: ['members.write.insert', ...LOOK] },
 
   // Everybody who joined: the ID card. Everybody may query the records from words — the one tool every
   // clearance shares; what the result can reach is still theirs. And send the
   // speaker a question (Q&A).
   // …and an assistant: the same one everybody has, built for each person from
   // what these grants select (app/assistant/assistants.ts).
-  member: { actions: ['member.*', 'query.*', 'questions.*', 'assistant.*', 'look.phones'], data: [...ROOM_READS, ...QUERYING, ...QUESTIONING, ...CONVERSING, ...LOOK] },
+  member: { actions: ['member.*', 'query.*', 'questions.*', 'assistant.*'], data: [...ROOM_READS, ...QUERYING, ...QUESTIONING, ...CONVERSING, ...LOOK] },
 
   // The speaker's controller and the projector: two principals, two devices.
   // The speaker moves the deck, as themselves; the controller's tools change
@@ -37,8 +37,8 @@ export const CHARTER: Charter = {
   // every slide is an action only the stage is granted.
   // The speaker reaches every question in the room (`room`, vex/behaviors.ts)
   // — a member reaches their own. Every other table reads at its default.
-  speaker: { scoping: 'room', actions: ['speaker.*', 'tools.*', 'assistant.*', 'look.controller'], data: [...ROOM_READS, ...DECK_READS, ...LOOK, 'renderers.write.update', 'grants.read', 'grants.write.insert', 'grants.write.delete', 'slide_notes.read', 'slide_tools.read', 'deck.write.update', 'timers.read', 'timers.write.insert', 'questions.read', ...CONVERSING] },
-  stage: { actions: ['stage.*', 'slide.*', 'look.stage'], data: [...ROOM_READS, ...DECK_READS, 'queries.read', 'timers.read', ...LOOK] },
+  speaker: { scoping: 'room', actions: ['speaker.*', 'tools.*', 'assistant.*'], data: [...ROOM_READS, ...DECK_READS, ...LOOK, 'renderers.write.update', 'grants.read', 'grants.write.insert', 'grants.write.delete', 'slide_notes.read', 'slide_tools.read', 'deck.write.update', 'timers.read', 'timers.write.insert', 'questions.read', ...CONVERSING] },
+  stage: { actions: ['stage.*', 'slide.*'], data: [...ROOM_READS, ...DECK_READS, 'queries.read', 'timers.read', ...LOOK] },
 
   // Given on stage, taken back the same way: a grant row per member
   // (vex/grant.entries.ts). The X-ray is somebody's own screen as data; it
@@ -52,7 +52,7 @@ export const CHARTER: Charter = {
   // line for an address, and a link mailed if it is the speaker's — drawn by
   // the phones' renderer. Nothing else exists for it: the mail goes
   // out server-side.
-  lectern: { actions: ['lectern.*', 'look.phones'], data: [...LOOK] },
+  lectern: { actions: ['lectern.*'], data: [...LOOK] },
 
   // The Ministry's registry: a principal that is not a person, which issues
   // ID cards — it writes the card fields as the model writes them.

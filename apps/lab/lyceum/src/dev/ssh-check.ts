@@ -115,7 +115,7 @@ const main = async (): Promise<void> => {
   await settled(ada);
   const names = (await runtime.db.query<{ name: string }>('SELECT name FROM members')).rows.map((row) => row.name);
   // The table's own lines: after its header, before the line saying how it was
-  // answered — the person's name is on their card strip too, above it.
+  // answered — the person's name is across the top of their phone too, above it.
   const screen = ada.screen();
   const head = screen.lastIndexOf('Title');
   const table = screen.slice(head, head + screen.slice(head).search(/Generated:|Replayed:/));
