@@ -31,7 +31,7 @@ export const loopLayout: LayoutNode = {
   props: { size: 'fill', areas: ['head head', 'code found', 'code limits'], cols: [1.1, 1], rows: ['auto', 'auto', 1] },
   children: [
     cell('head', [headline('display', '{{$.title}}')]),
-    cell('code', [label('{{$.file}}'), { component: 'Code', props: { text: '$.code', marked: '$.marked' } }], { ink: 'ink', align: 'center' }),
+    cell('code', [label('{{$.file}}'), { component: 'Code', props: { text: '$.code', marked: '$.marked' } }], { ink: 'ink', align: 'end' }),
     cell('found', [label('Found by reading it'), headline('title', '{{$.found}}')], { ink: 'highlight' }),
     cell('limits', [label('Where reading cannot see'), { for: '$.limits', as: 'limit', do: headline('name', '{{$limit.text}}') }], { ink: 'signal' }),
   ],

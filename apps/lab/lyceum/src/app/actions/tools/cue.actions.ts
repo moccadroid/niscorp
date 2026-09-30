@@ -45,4 +45,10 @@ export const CUE_TOOLS: readonly ActionDefinition[] = [
     ['React, then Vue: the same data, drawn by another renderer.', 'Terminal: the projector goes black and types out the SSH command.'],
     'Only the stylesheet switch exists (above). React, Vue and the terminal view do not.',
   ),
+  cue(
+    'tools.order',
+    'Give everyone the order form',
+    ['Everyone gets an order form on their main screen: an item, a quantity, Send.', 'Asked for 18,000 cups of water, their assistant opens it filled in. Nobody presses Send.', 'Take it back the same way.'],
+    'There is no order form yet, and nothing to give it with.',
+  ),
 ];

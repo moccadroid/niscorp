@@ -1,5 +1,6 @@
 import type { ActionDefinition } from '@niscorp/nova';
 import { OPENING_SLIDES } from './opening.actions';
+import { LATER_SLIDES } from './later.actions';
 import { SAFETY_SLIDES } from './safety.actions';
 import { censusLayout } from './slide.layouts';
 
@@ -24,4 +25,4 @@ export const censusSlide: ActionDefinition = {
   triggers: [],
 };
 
-export const SLIDE_ACTIONS: readonly ActionDefinition[] = [...OPENING_SLIDES, censusSlide, ...SAFETY_SLIDES];
+export const SLIDE_ACTIONS: readonly ActionDefinition[] = [...OPENING_SLIDES, censusSlide, ...SAFETY_SLIDES, ...LATER_SLIDES];

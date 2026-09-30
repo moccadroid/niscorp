@@ -36,6 +36,20 @@ export const timerNext: SeedEntry = {
   },
 };
 
+// The newest timer AS IT IS STORED — its reflex document — for the slide that
+// shows the timer set at the start of the talk. Read as the stage.
+export const timerDocument: SeedEntry = {
+  fingerprint: 'timers/document',
+  intent: 'The newest saved timer as it is stored: its reflex document, and when it fires',
+  shape: { timer_id: '', reflex: {}, due_at: '' },
+  dsl: {
+    from: ['timers'],
+    fields: ['timers.timer_id', 'timers.reflex', 'timers.due_at'],
+    sort: [{ field: 'timers.saved_at', dir: 'desc' }, { field: 'timers.timer_id', dir: 'desc' }],
+    limit: 1,
+  },
+};
+
 // Save a timer, as the speaker — `saved_by` is stamped by the engine.
 export const timerSave: SeedMutation = {
   fingerprint: 'timers/save',
@@ -52,4 +66,4 @@ export const timerSave: SeedMutation = {
   },
 };
 
-export const TIMER_ENTRIES: readonly (SeedEntry | SeedMutation)[] = [timersAll, timerNext, timerSave];
+export const TIMER_ENTRIES: readonly (SeedEntry | SeedMutation)[] = [timersAll, timerNext, timerDocument, timerSave];

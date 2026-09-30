@@ -38,11 +38,13 @@ The working record for the nisc talk that lyceum runs. It holds what we agreed, 
 5. **The obvious question:** isn't this json-render / A2UI? Two differences matter: behaviour is data too, and the state lives in the action (so it runs anywhere — which is why the demos worked).
 6. **Is JSON enough for a real app?** This app, counted live.
 7. **What's the worst a model can write?** We tried to break it; what broke; how a closed grammar let us find and fix it. Review the result, not the code.
-8. **Then (not yet built as slides):** Moss + Charter, Prism, Vex (with Jev routing), the assistant, Tide (the timer's payoff, the OpenClaw contrast), Strata, the close.
+8. **The rest of nisc (slides 20–30, drafted 2026-09-30):** Moss + Charter (one shell per person; who gets what is one document, checked in two places), Vex (a query is a document, replayed by name; asked in words, a small model picks), the assistant (18,000 cups of water; it prepares, you press), Tide (the timer from the start, as the row it is; automations without an agent loop), Strata (a grammar change is a migration), the end (the slide the timer puts up). Prism has no slide of its own: it is said on the Vex slide (the mapping is Prism) — its own slide was judged not worth the minute.
+
+**Timing (estimate):** slides 1–19 run about 30 minutes, leaving 10–15 for 20–30 — about a minute a slide. Depth goes to Moss + Charter, the assistant and Tide; Vex, Strata and Prism get one beat each.
 
 The history order of the packages (Sep 27 outline) still holds as the background logic: nova (GPT-3 JSON) → prism (data-to-data) → signal/cortex → solid (streaming) → vex (intent + shape) → moss (the app server) → charter (policy, because moss needed it) → tide (automation as data) → strata (versions, because everything is data).
 
-## 4. The deck as built (19 slides)
+## 4. The deck as built (30 slides)
 
 Status: ✅ built and checked · 🟧 slide built, demo not built (hatched cue on the controller) · ✏️ drafted, not yet looked at on the projector.
 
@@ -67,6 +69,19 @@ Status: ✅ built and checked · 🟧 slide built, demo not built (hatched cue o
 | 17 | `slide.broke` | "We tried to break it." Leak: Held (green) · Crash: Two holes · Explode: Broke (orange) | — | ✏️ |
 | 18 | `slide.loop` | "Three lines froze the server." The echo action beside: found by reading it; limits: 64 hops / 1,024 per chain, 256 levels, a timeout on every endpoint and query | — | ✏️ |
 | 19 | `slide.review` | full blue: "So — Review the result, not the code." | — | ✏️ |
+| 20 | `slide.moss` | kicker Moss, "Your shell runs on the server." + a blue Flow across the bottom: your shell on the server ↔ your phone, lanes "What to draw" / "What you pressed" | — | 👁 |
+| 21 | `slide.charter` | "Who gets what is one document." across the top; blue "Charter"; two real roles from `charter.ts` (member, clock — clock marked) | — | 👁 |
+| 22 | `slide.twice` | "Checked in two places." orange: 1 · Your shell — Which actions exist. / blue: 2 · Every query — Which rows it reaches. + the real `questions` rule from `behaviors.ts` | — | 👁 |
+| 23 | `slide.vex` | kicker Vex, "A query is a document too." the real `members/counts` entry (intent + shape marked) beside, in yellow, what the strip sends: `{ fingerprint: 'members/counts', context: {} }` | — | 👁 |
+| 24 | `slide.words` | "Asked in words." Asked before: Replayed. No model. (green) · New: Written once, then stored. (blue) · Past your policy: Refused, with why. | assistant | 👁 |
+| 25 | `slide.water` | "18,000 cups of water." on orange; kicker "A drive-through AI took this order, 2025" | — | 👁 |
+| 26 | `slide.press` | "It prepares. You press." The assistant: Reads your screen. Opens an action, filled in. / orange: Only you — Send | cue `tools.order` | 👁 (demo 🟧) |
+| 27 | `slide.tide` | kicker Tide, "The timer from the start is a row." the saved timer's reflex document, LIVE (`room.timer` → `timers/document`, `effect` and `as` marked) + green countdown "Fires in" | — | ✏️ |
+| 28 | `slide.once` | "Automations without an agent loop" An agent with a skill: Reads its instructions again, every run. / green: A reflex: Written once. Runs with no model. | — | ✏️ |
+| 29 | `slide.strata` | kicker Strata, "A grammar change is a migration." + this app's real `strata.lock.json` + blue "A stored document — Upgraded where it is read." | — | ✏️ |
+| 30 | `slide.end` | "It is all in one folder." + `apps/lab/lyceum` + blue "Questions — On your phone, under Q&A." The timer's target. | — | ✏️ |
+
+👁 = looked at on the projector (1600×900) and fixed until it read right. 27–30 could not be looked at yet: another session was rewriting the kit and the page did not load.
 
 The notes for every slide are in `src/db/seed.ts`.
 
@@ -84,6 +99,17 @@ The notes for every slide are in `src/db/seed.ts`.
 - **12–14:** json-render and A2UI are good and point the same way; they describe a view, the host keeps state and code; in Nova behaviour is data and the action keeps its own state — so it runs on a server, one shell per person, and any renderer can draw it.
 - **15 Census:** the usual objection; this app is the slides, projector, controller, phones, SSH, assistant, timers; half of it is data; the code is in three places, each about a third the size of the data; counted live, comments don't count.
 - **16–19 Safety:** see §7.
+- **20 Moss:** everything tonight runs on one server; each of you has a shell there; your phone gets what to draw and sends back what you pressed; that is why only three phones got the button; laptops: the websocket frames.
+- **21 Charter:** one document; roles list actions and data as patterns; member is you; clock is what the timer runs as — it can move the slide, nothing else, whatever a model writes; giving an action is a row.
+- **22 Two places:** the charter enforces nothing, it compiles into two checks; your shell (not hidden, never sent); every query in the engine (stamped from your session; a request has no field for someone else's id); usually three places, three rule sets.
+- **23 Vex:** this query is the joined count; intent, shape, query; the screen sends only its name; reactive — answers again when someone joins; policy applied in the engine; reshaping is Prism, a function as data, stored with it.
+- **24 In words:** ask the assistant; a small model (Jev) only picks: asked before + which shape; replayed, or written under your policy and stored, or refused with why; "a compiler that runs once, not an interpreter that runs every time".
+- **25 Water:** Taco Bell 2025, 18,000 waters; McDonald's/IBM 2024, 260 McNuggets; the model was not the problem — it was allowed to act.
+- **26 Press:** it reads your screen, opens an action filled in, cannot press; [give everyone the order form]; ask for 18,000 waters; you see it, you don't press; a second small model could check it first.
+- **27 Tide:** back to the timer; as stored; runs as clock — saving stamped it, not the model; no model running; survives a restart.
+- **28 Once:** an agent with a skill (OpenClaw) reads its instructions every run, tokens every run, different every run; here a model wrote it once, I read and saved it, it runs with no model.
+- **29 Strata:** what happens to all the documents when nisc changes; grammars have migrations; the check refuses a change without one; documents carry their version, upgraded when read; newer than the reader is refused; the lock moves only after a check.
+- **30 End:** [if the timer put it up] that was the timer, as clock, no model; each part a document a program can check; it is all in one folder; questions under Q&A.
 
 ## 6. Demos: built, not built, and ideas
 
@@ -131,16 +157,19 @@ The notes for every slide are in `src/db/seed.ts`.
 - **Census (live):** ~3,400 lines of data (app/), ~1,200 renderers, ~1,100 endpoints (model calls included), ~860 setup, ~2,360 tests; ~52–54% of the app is data. Comments and blank lines not counted. It changes with the code — never type it into a slide.
 - **Deployment:** Railway, deploying `main` after CI passes ("Wait for CI" on). SSH: `ssh -p 26466 sakura.proxy.rlwy.net` — set `LYCEUM_SSH_ADDRESS` to that on Railway so slides 1 and 11 show it.
 - **Grammars:** lyceum source at `nisc.nova 2`, `nisc.prism 1`, `lyceum.kit 6` (Flow and Columns added for the slides).
-- **The timer's target:** "Show the last slide" lands on the last slide of the deck — currently `slide.review`; the close needs rebuilding when the deck grows.
+- **The timer's target:** "Show the last slide" lands on the last slide of the deck — now `slide.end` (checked live 2026-09-30: gpt-oss-120b picked `slide.end` for "Show the last slide in 30 minutes"). **Timing risk:** set at ~minute 5, it fires at ~minute 35 and skips whatever is left — the talk has to reach slide 29 by then, or the phrase becomes "in 35 minutes".
 
 ## 10. Still to build or decide
 
-- **Slides for the rest of the talk:** Moss + Charter (one shell per person; policy as a document that compiles into two enforcement points — which actions exist, and the scope on every query), Prism, Vex (intent + shape, compiled under a policy the model never sees, cached by fingerprint and replayed; Jev picks a stored query or a new one and the shape), the assistant (screen as data, it prepares and the person presses, the drive-through examples: Taco Bell 18,000 cups of water, McDonald's/IBM 260 McNuggets), Tide (back to the timer; a reflex is a row; skills re-read every run and burn tokens, grammars write the automation once), Strata (what happens to your data when nisc changes; grammars migrate like tables), the close (the timer fires and the deck moves on its own; the five places code lives; it's all in the folder).
+- ~~Slides for the rest of the talk~~ (drafted as 20–30; kept for the reasoning): Moss + Charter (one shell per person; policy as a document that compiles into two enforcement points — which actions exist, and the scope on every query), Prism, Vex (intent + shape, compiled under a policy the model never sees, cached by fingerprint and replayed; Jev picks a stored query or a new one and the shape), the assistant (screen as data, it prepares and the person presses, the drive-through examples: Taco Bell 18,000 cups of water, McDonald's/IBM 260 McNuggets), Tide (back to the timer; a reflex is a row; skills re-read every run and burn tokens, grammars write the automation once), Strata (what happens to your data when nisc changes; grammars migrate like tables), the close (the timer fires and the deck moves on its own; the five places code lives; it's all in the folder).
 - **The demos in §6** (X-ray, button, give/take, renderer switch).
 - **The look switch repaints the controller** — decide whether the speaker and stage should keep a fixed look.
 - **`model-check`** still seeds departments; it can't run until its fixture room is rewritten (it's the recorded measurement behind `MEASURED.md` — rewriting changes what the numbers compare against).
 - **`PLAN.md`** is out of date (departments, the old talk table, VPS vs Railway, "open offers a button", starters, kit version).
-- **Slides 16–19** are drafted and committed, but not yet looked at on the projector.
+- **Slides 16–19** are drafted and committed, but not yet looked at on the projector (18's code is now bottom-left instead of centred line by line). **27–30** likewise.
+- **The order form** (slide 26's demo, cue `tools.order`): an order action given to everyone; the assistant opens it filled in; nobody presses. Not built.
+- **The end slide's link:** it says `apps/lab/lyceum`; the repo is `github.com/moccadroid/niscorp` — decide whether it is public by the talk and put the real link (or a QR) there.
+- **Prism** has no slide; say whether it needs one.
 
 ## 11. Learnings from the other threads
 
