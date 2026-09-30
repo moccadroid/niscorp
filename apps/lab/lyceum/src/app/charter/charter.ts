@@ -25,9 +25,9 @@ export const CHARTER: Charter = {
   // (the engine stamps whose; vex/behaviors.ts).
   public: { actions: ['door.*'], data: ['members.write.insert', ...LOOK] },
 
-  // Everybody who joined: the ID card. Everybody may query the records from words — the one tool every
-  // clearance shares; what the result can reach is still theirs. And send the
-  // speaker a question (Q&A).
+  // Everybody who joined: their phone. Everybody may query the records from
+  // words; what the result can reach is still theirs. And send the speaker a
+  // question — through Acme, once it is installed.
   // …and an assistant: the same one everybody has, built for each person from
   // what these grants select (app/assistant/assistants.ts).
   // …and any integration's screens for members (`ext.member.*`): an

@@ -2,6 +2,8 @@
 
 The working record for the nisc talk that lyceum runs. It holds what we agreed, what is built, what is not, and the ideas we discussed and kept, parked or dropped. The deck itself is data in `src/db/seed.ts` (`SLIDES`: order, controller tools, speaker notes) and `src/app/actions/slide/`; this file is the reasoning behind it. Updated 2026-09-30.
 
+**Read §14 first.** Sections 1–13 are the record as it was written; §14 lists what the app changed under them on 2026-09-30 (names instead of ID cards, the phone as a list, Acme as the Q&A, one decider for routing and moderation). Where they disagree, §14 and the code win.
+
 ---
 
 ## 1. What the talk is
@@ -509,6 +511,34 @@ The answers from the first thread that you accepted after several rounds, verbat
 **How Jev routes a request (vex queries from words).** The assistant hands vex an intent. `routeQuery` (`server/assistant/vex-query.ts`, over `server/querying.ts`) asks Jev (TypeSafe `decide()`) one question with two answers: does an earlier request want the same information, and which of the authored shapes (`app/vex/query.shapes.ts`: a list, one number, counts per group, people) does the answer take? A match whose stored shape agrees is **replayed** (no model); anything else is **generated** by vex's agents on gpt-oss-120b under the person's policy, or **refused** with the reason. Jev never writes a query — it only chooses. Two lessons, both structure rather than prompting: the earlier requests go in the decision's *state*, not its options (as options, the identical question scored 0.94 "new"); and a replay must agree with the shape ("How many in Archive?" matched the per-group counts at 0.73 — it wants one number). Measured 48/48 over three runs, ~250 ms a decision (`MEASURED.md`).
 
 **"Iframe but native" (safety research).** An integration's UI rendered with a different kit inside the host app, without an iframe. Proven headlessly (21 of 21 assertions, in the uncommitted research worktree `.claude/worktrees/safety-research`), not built into lyceum. The design split it arrived at: **for the talk**, a third kit shipped by the host and chosen by namespace; **for real third-party integrations** (Midas), the host's own components with the integration's style tokens as data — because a kit is code, and loading someone else's code in the browser defeats the point of the architecture.
+
+## 14. 2026-09-30: what changed
+
+The app changed under the record above. Nothing in §1–13 is rewritten; this is what no longer holds, and what holds instead. Each line is true of the code on `main`.
+
+**The app**
+- **No ID cards, no profiles, no Qwen.** A person chooses a name at the door: one of twelve offered (an adjective and an animal, 50 × 50, `server/names.ts`), or one they type. Nothing else about them is written. `members.name` is unique; `title` and `quirk` are gone (migration 15). Solid's streaming demo is gone with it.
+- **One decider** (`server/decider.ts`): Jev with `TYPESAFE_API_KEY`, gpt-oss-120b without. It answers every narrow question: which earlier query a request matches and in which shape, and whether something a person wrote may be shown. One yes/no question for moderation; yes at 0.5 and above.
+- **Moderation.** A typed name is judged at the door; refused, it goes to `refused_names` (kept, never shown) and the person gets an offered name. Every question is judged by the `moderator` principal, which writes `question_verdicts` — a table of its own, so nobody can approve their own question. The speaker's read (`questions/all`) returns only questions judged fit. Questions are not edited or deleted.
+- **The phone is a list canvas.** The name across the top; under it `body`, a list of the actions the person has that belong on a phone, one block each: the assistant, every integration approved for members (`ext.member.*`), the X-ray once given (`server/phone.ts`). No tabs, no bar. A grant or an install rebuilds the shell and a new block appears — "build up their app slowly" (§6) is now how the phone works.
+- **The Q&A is Acme** (`apps/lab/lyceum-vendor-demo`): a third party's integration, a static file on GitHub Pages, installed on "Checked in two places" with the controller's `tools.integrations`. The broken twin is refused with its loop's path; Acme is accepted, pending, approved, then on every phone, drawn with lyceum's kit. Lyceum's own Q&A actions are gone. `questions.send` stays only as the action slide 8 shows as code; nobody has it. This is the "iframe but native" idea from §6, done through the real intake.
+- **The X-ray** is a block on the phone's list with a switch, not a button and not on a bar.
+- **Roles:** `registry` is gone; `moderator` replaced it. `member` is `['member.*', 'query.*', 'assistant.*', 'ext.member.*']`.
+
+**The deck** (notes in `src/db/seed.ts`)
+- **1 Title:** "When you join, you choose a name: tap one, or type your own." — no model writes a profile.
+- **2 Register:** names people chose; one typed by hand was checked before it went up. The streaming line is gone.
+- **8 An action:** the form shown is not on your phone yet; one comes later in the talk, from outside the app.
+- **9 X-ray:** "The X-ray is on your phone now. Switch it on."
+- **21 Charter:** the excerpt shows the member role as it is now, `ext.member.*` included.
+- **22 Two places:** now carries the Acme demo — install the broken one (refused, the loop named), install Acme (pending), approve (on every phone); each question goes through the same small model that routes queries, and one not fit to show is kept and never shown.
+- **30 End:** "Questions: on your phone, in Acme."
+
+**§9, corrected:** models are gpt-oss-120b for the agents and the decider (Jev) for routing and moderation — no qwen. Grammars: `nisc.nova 2`, `nisc.prism 1`, `lyceum.kit 8`.
+
+**Still not built:** a screen for the speaker to read the room's questions — `questions/all` returns only the fit ones, and nothing shows it. And, unchanged from §6 and §10: the button (slide 10, `tools.button`), the projector's terminal view (slide 11, `tools.renderers`), the order form (slide 26, `tools.order`). Each would now be an action given by a grant and a new place on the phone's list in `server/phone.ts`; the cues' "on their main screen" means that list.
+
+**§10, updated:** `PLAN.md` was rewritten in place the same day. `model-check` still seeds departments and ID cards and does not run; `MEASURED.md`'s Qwen and ID-card numbers are for the retired feature.
 
 ## Appendix — in your own words
 

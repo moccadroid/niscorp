@@ -4,9 +4,10 @@
 import { spawnSync } from 'node:child_process';
 import { CHECKS } from './suite';
 
-// The checks never call a model: ID cards come from the deterministic issuer,
-// queries from the deterministic router and query writer, the timers from the
-// deterministic timer writer, the assistant from its deterministic stand-in.
+// The checks never call a model: names and questions are judged by the
+// deterministic moderator, queries by the deterministic router and query
+// writer, the timers written by the deterministic timer writer, the assistant
+// answered by its deterministic stand-in.
 const env = { ...process.env, LYCEUM_MODERATION: 'fake', LYCEUM_QUERY: 'fake', LYCEUM_TIMER: 'fake', LYCEUM_ASSISTANT: 'fake' };
 const failed = CHECKS.filter((name) => spawnSync('node', ['--import', 'tsx', `src/dev/${name}.ts`], { stdio: 'inherit', shell: false, env }).status !== 0);
 

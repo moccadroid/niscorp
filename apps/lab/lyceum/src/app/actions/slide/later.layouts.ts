@@ -159,6 +159,6 @@ export const endLayout: LayoutNode = {
   children: [
     cell('head', [headline('display', '{{$.title}}')], { align: 'end' }),
     cell('where', [label('Open source'), { component: 'Qr', props: { value: '$.repo' } }, headline('name', '{{$.repoWords}}'), code('$.folder')], { ink: 'ink' }),
-    cell('ask', [label('Questions'), headline('title', 'On your phone, under Q&A.')], { ink: 'signal' }),
+    cell('ask', [label('Questions'), headline('title', 'On your phone, in Acme.')], { ink: 'signal' }),
   ],
 };

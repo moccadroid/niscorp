@@ -12,15 +12,11 @@ import type { ShellManifest } from '@niscorp/moss';
 //          the controller's own layout places them (speaker/console.layout.ts),
 //          so they exist on the speaker's screen and nowhere else. `tools` is
 //          the slide's tools, a list the speaker's deck reconciles.
-//   body   the phone's one canvas (members), placed by the phone's own
-//          layout (member/phone.layout.ts): one thing at a time, put there by
-//          the phone's bar
+//   body   the phone's list (members), placed by the phone's own layout
+//          (member/phone.layout.ts): every action the person holds that
+//          belongs on a phone, one under another (server/phone.ts)
 //   overlay  whatever is opened over the screen, in the `sheet` fragment's
 //          chrome (all slides, on the controller)
-//   look   which renderer draws this screen (look/look.actions.ts): a marker
-//          per surface — the controller's, the projector's, or the phones'
-//          (everybody else) — whichever the principal is granted; the terminal
-//          draws the screen with the renderer it names
 //   deck   the stage's and the speaker's deck: shows nothing, follows the
 //          `deck` row. Not in the frame.
 export const CANVASES: ShellManifest['canvases'] = [
@@ -28,8 +24,8 @@ export const CANVASES: ShellManifest['canvases'] = [
   { id: 'main', initial: ['speaker.console', 'member.phone', 'kit.sink', 'lectern.signin', 'door.join'] },
   // The phone's three regions (member/phone.layout.ts) — not in the frame.
   // A LIST: the middle of the phone — the actions it holds, one under another
-  // (member/phone.action.ts reconciles it: the card, installed integrations,
-  // whatever the bar slots in).
+  // (member/phone.action.ts reconciles it: the assistant, installed
+  // integrations, the X-ray once given).
   { id: 'body', mode: 'list', actionLayout: { for: '$.instances', as: 'instance', do: { component: 'ActionSlot', props: { instanceId: '$instance.id' } } } },
   { id: 'head', initial: ['speaker.head'] },
   {

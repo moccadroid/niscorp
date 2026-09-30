@@ -9,7 +9,7 @@ import { STAFF } from '@lyceum/db/seed';
 // GitHub Pages); lyceum knows only its address. Install hands that address to
 // moss, which fetches the bundle and runs intake — the answer is what intake
 // said, reasons and all. Approve turns it on: moss rebuilds every shell, and
-// the phone's tab bar, which lists Acme among its candidates, now has it.
+// every phone's list, which takes any `ext.member.*` a person holds, has it.
 //
 // These are moss's operator routes, called in-process with the key this boot
 // minted (server/boot.ts); nothing outside the server holds it. Only the
@@ -59,10 +59,10 @@ export const integrationFunctions = (session: FunctionSession, server: () => Mos
 
   // A NEW ACTION ON EVERY PHONE, OR GONE FROM IT. moss folds an approved
   // integration into every living shell as it stands (adopt) — which keeps each
-  // person's screen, and also keeps the phone's tab bar as it was placed at
-  // mount. So each member's shell is rebuilt, as the X-ray's grants are
-  // (server/reactions.ts): the bar mounts again and Acme is a candidate that
-  // exists, or no longer does. The staff are never given it.
+  // person's screen, and also keeps the phone's list as it was placed when the
+  // shell was built. So each member's shell is rebuilt, as the X-ray's grants
+  // are (server/reactions.ts): the list is derived again, with Acme on it or
+  // not. The staff are never given it.
   const rebuildMembers = (): void => {
     const staff = new Set(STAFF.map((principal) => principal.principal));
     for (const shell of server().shells?.list() ?? []) if (!staff.has(shell.principal)) server().invalidateIdentity(shell.principal);

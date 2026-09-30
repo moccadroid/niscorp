@@ -50,7 +50,7 @@ export const charterSlide = still('slide.charter', 'Who gets what is one documen
   code: code(
     'member: {',
     "  actions: ['member.*', 'query.*',",
-    "    'questions.*', 'assistant.*', 'room.*'],",
+    "    'assistant.*', 'ext.member.*'],",
     '  data: [...ROOM_READS, ...QUERYING,',
     '    ...QUESTIONING, ...CONVERSING, ...LOOK],',
     '},',

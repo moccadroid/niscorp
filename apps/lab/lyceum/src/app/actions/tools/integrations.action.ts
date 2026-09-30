@@ -4,7 +4,7 @@ import type { ActionDefinition } from '@niscorp/nova';
 // Acme (apps/lab/lyceum-vendor-demo) is a bundle on another domain; this shows
 // where, installs it (moss fetches it and intake checks it — the answer is
 // intake's, reasons and all), approves it (every shell is rebuilt, and the
-// phones have an Acme tab), and removes it again for the next rehearsal. The
+// phones have Acme on their list), and removes it again for the next rehearsal. The
 // broken twin — a trigger that re-emits its own channel — is refused with the
 // loop's path. server/functions/integration.functions.ts does the calls.
 export const integrationsTool: ActionDefinition = {

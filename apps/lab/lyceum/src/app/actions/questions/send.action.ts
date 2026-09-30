@@ -4,9 +4,9 @@ import { questionSend } from '@lyceum/app/vex/question.entries';
 import { sendLayout } from './send.layout';
 
 // A QUESTION FOR THE SPEAKER — the form alone: a line and Send (Enter sends
-// too). A write as the sender, and that is all. On the phone it sits on the Q&A
-// tab above the person's own questions (questions.desk); the assistant offers it
-// by itself, pre-filled, over the screen.
+// too). A write as the sender, and that is all. Nobody holds it: the room's
+// questions come through Acme. It is the action slide 8 shows as code, and its
+// layout is that slide's preview.
 const send = [
   { set: 'error', value: '' },
   { call: 'send', onSuccess: [{ set: 'draft', value: '' }, { set: 'sent', value: true }] },
