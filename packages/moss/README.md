@@ -14,6 +14,7 @@ pnpm add @niscorp/moss zod
 # listener) comes with it as regular dependencies. The one optional peer
 # pair is React, needed only for the ./terminal/react render target:
 pnpm add react react-dom
+# (or Vue, needed only for the ./terminal/vue render target: pnpm add vue)
 ```
 
 ## The shape
@@ -50,6 +51,7 @@ up. What paints them is a **render target**, and targets are interchangeable
 over one wire:
 
 - **`terminal/react`** — the browser, with the app's styled component kit
+- **`terminal/vue`** — the same, for an app whose kit is Vue
 - **`terminal/dom`** — the browser, zero framework, nova's reference kit
 - **`terminal/tty`** — a REPL in a real terminal: frames print as text,
   numbers act (`6` clicks, words fill the input)
@@ -87,6 +89,7 @@ never in moss core.
 - **`@niscorp/moss/client/node`** — the Node host env: `nodeEnv({ url, tokenFile? })` runs the same wire on a plain Node (or Bun) process — token in a file, the runtime's WHATWG WebSocket.
 - **`@niscorp/moss/terminal`** — the terminal: `createTerminal` (one target, one wire) and `mountTerminal` (hot-swaps render targets on a hotkey over one wire; the session survives the swap). Framework-blind, surface-blind.
 - **`@niscorp/moss/terminal/react`** — the React render target: `reactTarget({ root, registry, slotWrapper? })` binds the app's component registry to the wire via nova's React adapter.
+- **`@niscorp/moss/terminal/vue`** — the Vue render target: `vueTarget({ root, registry, slotWrapper? })` binds the app's Vue component registry to the wire via nova's Vue adapter; updates re-render reactively, never remount.
 - **`@niscorp/moss/terminal/dom`** — the plain-DOM render target: `domTarget({ root })` renders with nova's DOM adapter and default kit. Zero framework.
 - **`@niscorp/moss/terminal/tty`** — the line-terminal render target: `ttyTarget({ input, output })` runs the app as a REPL in a real terminal — served frames print as text with numbered markers, typing acts on them (numbers tap, words fill), and the same events ride the wire. Zero framework, zero DOM.
 - **`@niscorp/moss/terminal/ink`** — the full-screen terminal render target: `inkTarget()` runs the app as a TUI — nova's Ink kit on the React adapter's walker. Same `[n]` addressing as the REPL (typed digits click/flip/focus), plus Tab/arrows and live typing. ESM-only, like ink.

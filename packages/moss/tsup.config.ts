@@ -1,13 +1,15 @@
 import { defineConfig } from 'tsup';
 
-// React and nova's adapters are the consumer's (or a workspace dep's) — the
+// React, Vue and nova's adapters are the consumer's (or a workspace dep's) — the
 // terminal subpaths bind them but never bundle them.
 const EXTERNAL = [
   'react',
   'react-dom',
   'react-dom/client',
+  'vue',
   '@niscorp/nova',
   '@niscorp/nova/adapters/react',
+  '@niscorp/nova/adapters/vue',
   '@niscorp/nova/adapters/dom',
   '@niscorp/nova/adapters/dom/components',
   '@niscorp/nova/adapters/tty',
@@ -25,6 +27,7 @@ export default defineConfig([
       'client/node': 'src/client/node.ts',
       'terminal/index': 'src/terminal/index.ts',
       'terminal/react/index': 'src/terminal/react/index.ts',
+      'terminal/vue/index': 'src/terminal/vue/index.ts',
       'terminal/dom/index': 'src/terminal/dom/index.ts',
       'terminal/tty/index': 'src/terminal/tty/index.ts',
     },

@@ -1,9 +1,9 @@
 # Moss — API Reference
 
-Six entry points: `@niscorp/moss` (the server), `@niscorp/moss/node` (the Node
+Seven entry points: `@niscorp/moss` (the server), `@niscorp/moss/node` (the Node
 listener), `@niscorp/moss/client` (the wire), `@niscorp/moss/terminal` (the
-terminal), `@niscorp/moss/terminal/react` and `@niscorp/moss/terminal/dom` (the
-render targets). API is pre-1.0 and moves.
+terminal), `@niscorp/moss/terminal/react`, `@niscorp/moss/terminal/vue` and
+`@niscorp/moss/terminal/dom` (the render targets). API is pre-1.0 and moves.
 
 ## `@niscorp/moss`
 
@@ -576,6 +576,25 @@ Requires the optional `react`/`react-dom` peers.
   the `ActionSlot` boundary; the terminal twin of nova's client-shell
   SlotWrapper. Served trees carry identity only, so the props are
   `{ canvasId, instanceId, definitionId }` — `definitionId`, not `action`.
+
+## `@niscorp/moss/terminal/vue`
+
+Requires the optional `vue` peer.
+
+- `vueTarget({ root, registry, slotWrapper? }): Target` — the app's Vue
+  component registry bound to the wire via nova's Vue adapter, mounted on
+  `root` with `createApp`. Registers wire-backed `CanvasSlot` and
+  `ActionSlot` — the same origin rule as the react target (an event from
+  inside an instance boundary carries that instance as `origin` unless it
+  already has one). `update` never remounts: the target's reads of the wire
+  depend on a revision the conductor bumps, so only the frame and the canvas
+  slots re-render and Vue patches in place — focus and input drafts survive.
+- `TerminalApiKey` — the injection key of the live `TerminalApi` (a kit
+  component reading `frame()` / `canvasTree()` in its render re-renders on
+  wire updates).
+- `TerminalSlotWrapper` — a Vue component wrapping each action instance at
+  the `ActionSlot` boundary, handed `{ canvasId, instanceId, definitionId }`
+  as props and the content as its default slot.
 
 ## `@niscorp/moss/terminal/dom`
 

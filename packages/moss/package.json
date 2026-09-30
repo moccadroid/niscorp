@@ -71,6 +71,16 @@
         "default": "./dist/terminal/react/index.cjs"
       }
     },
+    "./terminal/vue": {
+      "import": {
+        "types": "./dist/terminal/vue/index.d.ts",
+        "default": "./dist/terminal/vue/index.js"
+      },
+      "require": {
+        "types": "./dist/terminal/vue/index.d.cts",
+        "default": "./dist/terminal/vue/index.cjs"
+      }
+    },
     "./terminal/dom": {
       "import": {
         "types": "./dist/terminal/dom/index.d.ts",
@@ -131,7 +141,8 @@
     "ink": "^7.1.1",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
-    "zod": "^4.2.0"
+    "zod": "^4.2.0",
+    "vue": "^3.5.0"
   },
   "peerDependenciesMeta": {
     "ink": {
@@ -141,6 +152,9 @@
       "optional": true
     },
     "react-dom": {
+      "optional": true
+    },
+    "vue": {
       "optional": true
     }
   },
@@ -157,11 +171,13 @@
     "@types/react-dom": "^19.2.3",
     "@types/ws": "^8.18.1",
     "ink": "^7.1.1",
+    "jsdom": "^25.0.1",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
     "tsup": "^8.5.1",
     "typescript": "^6.0.2",
     "vitest": "^4.1.2",
+    "vue": "^3.5.43",
     "zod": "^4.6.5"
   }
 }
