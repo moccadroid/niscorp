@@ -132,6 +132,8 @@ export const strataSlide = still('slide.strata', 'A grammar change is a migratio
 });
 
 export const endSlide = still('slide.end', 'It is all in one folder.', endLayout, {
+  repo: 'https://github.com/moccadroid/niscorp',
+  repoWords: 'github.com/moccadroid/niscorp',
   folder: 'apps/lab/lyceum',
 });
 

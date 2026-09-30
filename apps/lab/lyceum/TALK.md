@@ -168,7 +168,7 @@ The notes for every slide are in `src/db/seed.ts`.
 - **`PLAN.md`** is out of date (departments, the old talk table, VPS vs Railway, "open offers a button", starters, kit version).
 - **Slides 16–19** are drafted and committed, but not yet looked at on the projector (18's code is now bottom-left instead of centred line by line). **27–30** likewise.
 - **The order form** (slide 26's demo, cue `tools.order`): an order action given to everyone; the assistant opens it filled in; nobody presses. Not built.
-- **The end slide's link:** it says `apps/lab/lyceum`; the repo is `github.com/moccadroid/niscorp` — decide whether it is public by the talk and put the real link (or a QR) there.
+- **npm:** all of niscorp is open source and public on GitHub (`github.com/moccadroid/niscorp`, on the end slide as a QR + words + `apps/lab/lyceum`); what is missing is the npm release. The end slide's note says "not on npm yet" — change it when it ships.
 - **Prism** has no slide; say whether it needs one.
 
 ## 11. Learnings from the other threads

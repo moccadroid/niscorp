@@ -151,13 +151,14 @@ export const strataLayout: LayoutNode = {
   ],
 };
 
-// The end: where it all is, and where the questions go.
+// The end: where it all is — the public repository, as a code to scan and in
+// words, and the folder this app is in — and where the questions go.
 export const endLayout: LayoutNode = {
   component: 'Sheet',
-  props: { size: 'fill', areas: ['head where', 'head ask'], cols: [1.4, 1] },
+  props: { size: 'fill', areas: ['head where', 'head ask'], cols: [1.4, 1], rows: [1, 'auto'] },
   children: [
     cell('head', [headline('display', '{{$.title}}')], { align: 'end' }),
-    cell('where', [label('The app'), code('$.folder')], { ink: 'ink' }),
+    cell('where', [label('Open source'), { component: 'Qr', props: { value: '$.repo' } }, headline('name', '{{$.repoWords}}'), code('$.folder')], { ink: 'ink' }),
     cell('ask', [label('Questions'), headline('title', 'On your phone, under Q&A.')], { ink: 'signal' }),
   ],
 };
