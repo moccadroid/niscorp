@@ -1,5 +1,6 @@
 import type { ActionDefinition } from '@niscorp/nova';
 import { OPENING_SLIDES } from './opening.actions';
+import { SAFETY_SLIDES } from './safety.actions';
 import { censusLayout } from './slide.layouts';
 
 // THE SLIDES. Each is an action only the stage is granted; the deck (`slides`
@@ -23,4 +24,4 @@ export const censusSlide: ActionDefinition = {
   triggers: [],
 };
 
-export const SLIDE_ACTIONS: readonly ActionDefinition[] = [...OPENING_SLIDES, censusSlide];
+export const SLIDE_ACTIONS: readonly ActionDefinition[] = [...OPENING_SLIDES, censusSlide, ...SAFETY_SLIDES];
