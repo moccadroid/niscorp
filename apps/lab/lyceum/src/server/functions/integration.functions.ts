@@ -1,15 +1,15 @@
 import { z } from 'zod';
 import type { FunctionSession, MossServer } from '@niscorp/moss';
 import type { FunctionHandler } from '@niscorp/nova';
-import { STAFF } from '@lyceum/db/seed';
 
 // INSTALLING SOMEBODY ELSE'S SCREEN — the controller's Integrations tool
 // (app/actions/tools/integrations.action.ts). Acme is a third party whose
 // bundle is a file on another domain (apps/lab/lyceum-vendor-demo, published on
 // GitHub Pages); lyceum knows only its address. Install hands that address to
 // moss, which fetches the bundle and runs intake — the answer is what intake
-// said, reasons and all. Approve turns it on: moss rebuilds every shell, and
-// every phone's list, which takes any `ext.member.*` a person holds, has it.
+// said, reasons and all. Approve turns it on: every shell is rebuilt, and each
+// of Acme's screens is on the seat it attached to — the phones, the
+// controller, the last slide.
 //
 // These are moss's operator routes, called in-process with the key this boot
 // minted (server/boot.ts); nothing outside the server holds it. Only the
@@ -57,15 +57,15 @@ export const integrationFunctions = (session: FunctionSession, server: () => Mos
     return { id: row.id, url: row.url, status: refused ? 'refused' : row.status, reasons: asRows(row.lastError === null ? [] : row.lastError.split('; ')) };
   };
 
-  // A NEW ACTION ON EVERY PHONE, OR GONE FROM IT. moss folds an approved
+  // ITS SCREENS ON EVERY SEAT, OR GONE FROM THEM. moss folds an approved
   // integration into every living shell as it stands (adopt) — which keeps each
-  // person's screen, and also keeps the phone's list as it was placed when the
-  // shell was built. So each member's shell is rebuilt, as the X-ray's grants
-  // are (server/reactions.ts): the list is derived again, with Acme on it or
-  // not. The staff are never given it.
-  const rebuildMembers = (): void => {
-    const staff = new Set(STAFF.map((principal) => principal.principal));
-    for (const shell of server().shells?.list() ?? []) if (!staff.has(shell.principal)) server().invalidateIdentity(shell.principal);
+  // screen, and also keeps what was placed when the shell was built: the
+  // phone's list, the controller's and the last slide's `attached` canvas
+  // (server/attached.ts). So every shell is rebuilt, as the X-ray's grants
+  // rebuild the phones (server/reactions.ts): what rides each seat is read
+  // again, with Acme on it or not.
+  const rebuildShells = (): void => {
+    for (const shell of server().shells?.list() ?? []) server().invalidateIdentity(shell.principal);
   };
 
   return {
@@ -79,13 +79,13 @@ export const integrationFunctions = (session: FunctionSession, server: () => Mos
     },
     'integrations.approve': async () => {
       await operator(`/integrations/${VENDOR_ID}/approve`, 'POST');
-      rebuildMembers();
+      rebuildShells();
       return state();
     },
-    // For rehearsals: gone again, from every phone.
+    // For rehearsals: gone again, from every seat.
     'integrations.remove': async () => {
       await operator(`/integrations/${VENDOR_ID}`, 'DELETE');
-      rebuildMembers();
+      rebuildShells();
       return state();
     },
   };

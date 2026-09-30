@@ -17,6 +17,10 @@ import type { ShellManifest } from '@niscorp/moss';
 //          belongs on a phone, one under another (server/phone.ts)
 //   overlay  whatever is opened over the screen, in the `sheet` fragment's
 //          chrome (all slides, on the controller)
+//   attached  integration screens attached to a seat (app/attachable.ts): the
+//          controller's region (speaker/console.layout.ts) and the last
+//          slide's (slide/later.layouts.ts). Seeded when the shell is built
+//          (server/attached.ts); nothing on it until something is installed.
 //   deck   the stage's and the speaker's deck: shows nothing, follows the
 //          `deck` row. Not in the frame.
 export const CANVASES: ShellManifest['canvases'] = [
@@ -44,6 +48,9 @@ export const CANVASES: ShellManifest['canvases'] = [
     },
   },
   { id: 'notes', initial: ['speaker.notes'] },
+  // A LIST: whatever integrations attached here, one under another; empty,
+  // nothing at all.
+  { id: 'attached', mode: 'list', actionLayout: { if: '$.active', then: { for: '$.instances', as: 'instance', do: { component: 'ActionSlot', props: { instanceId: '$instance.id' } } } } },
   { id: 'controls', initial: ['speaker.controls'] },
   { id: 'overlay' },
   { id: 'deck', initial: ['stage.deck', 'speaker.deck'] },

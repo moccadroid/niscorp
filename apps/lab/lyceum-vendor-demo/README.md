@@ -7,11 +7,15 @@ It is not part of lyceum. Nothing in lyceum imports it. It is published as a
 static file on GitHub Pages — `https://moccadroid.github.io/niscorp/vendor/bundle`
 — and lyceum learns of it the way it would learn of any integration: the
 speaker installs it from the controller, moss fetches that URL, intake checks
-it, the speaker approves it, and its screen appears on every phone.
+it, the speaker approves it, and its screens appear where it said they go.
 
-What it ships is data only: one action (`ext.member.acme.ask`), written in
-lyceum's component vocabulary and calling lyceum's own queries. There is no
-Acme server. No Acme code runs anywhere.
+What it ships is data only: three actions, written in lyceum's component
+vocabulary and calling lyceum's own queries, each attached to a seat lyceum
+offers — `ext.member.acme.ask` on every phone (ask a question),
+`ext.speaker.acme.questions` on the controller (every question, and whether
+lyceum's moderator found it fit to show), `ext.stage.acme.questions` on the
+last slide (only the fit ones). There is no Acme server. No Acme code runs
+anywhere.
 
 `vendor-broken/bundle` is the same bundle with a trigger that re-emits its own
 channel — a loop. Intake refuses it, and says where the loop is.

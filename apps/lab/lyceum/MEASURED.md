@@ -4,7 +4,7 @@ What the models actually did against lyceum, measured before each seam's design 
 settled. Not a plan: the choices these led to are recorded in `PLAN.md` ("Decided").
 Probes are written before a run and not rewritten to pass.
 
-**2026-09-30:** the ID cards are gone, and Qwen with them: lyceum uses it nowhere now. The ID-card numbers below measure a retired feature, and the Qwen comparisons are why gpt-oss-120b was chosen. The model check's seeded room (departments, cards) no longer matches lyceum's tables.
+**2026-09-30:** the ID cards are gone, and Qwen with them: lyceum uses it nowhere now. The ID-card numbers below measure a retired feature, and the Qwen comparisons are why gpt-oss-120b was chosen. The model check's seeded room was rewritten the same day (chosen names and the queries they ran): every number below was measured against the old room, with departments and cards.
 
 ## 2026-09-29 — the assistant's reply wording (`pnpm probe:assistant`, 1 run × 3)
 

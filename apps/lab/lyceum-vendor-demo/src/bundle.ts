@@ -2,17 +2,22 @@ import type { ActionDefinition } from '@niscorp/nova';
 
 // ACME'S BUNDLE — what a third party ships to lyceum: data, nothing else.
 //
-// One action under Acme's own namespace (`ext.<audience>.<integration>.*`, the
-// only one intake lets it use), written in lyceum's published component
-// vocabulary and drawn by lyceum's kit like everything else on the phone. It
-// sends and lists through lyceum's own queries by fingerprint —
-// `questions/send` and `questions/mine`, served to every member — so Acme
-// needs no server: the question lands in lyceum's
-// Q&A, as the person who asked, under the person's policy.
+// Three actions under Acme's own namespace (`ext.<audience>.<integration>.*`,
+// the only one intake lets it use), one per audience lyceum fences off for
+// integrations — members, the speaker, the stage — written in lyceum's
+// published component vocabulary and drawn by lyceum's kit like everything
+// else. They send and read through lyceum's own queries by fingerprint, so
+// Acme needs no server: a question lands in lyceum's Q&A as the person who
+// asked, and every read runs under the reader's own policy.
 //
-// Where it appears is lyceum's business: the phone lists Acme among the things
-// the speaker gives people, and until the integration is installed and
-// approved there is nothing by that name to place.
+//   ext.member.acme.ask         the phone: ask, and see what you asked
+//   ext.speaker.acme.questions  the controller: every question, and what the
+//                               moderator made of it — fit, not fit, not yet
+//   ext.stage.acme.questions    the last slide: the questions fit to show
+//
+// Where each goes is declared here (`attachments`) and checked at intake
+// against the seats lyceum offers; until the integration is installed and
+// approved there is nothing by these names to place.
 
 const send = [
   { set: 'error', value: '' },
@@ -60,6 +65,112 @@ export const ask: ActionDefinition = {
   ],
 };
 
+// ── the speaker's: every question ──
+//
+// Two of lyceum's reads, side by side: every question with who sent it, and
+// every verdict the moderator wrote. Joined where they are drawn — a question
+// with no verdict yet is still there, "not checked yet".
+const questionsWithVerdicts = {
+  $with: {
+    let: {
+      byId: { $keyBy: { over: { $ref: '$.verdicts' }, as: 'verdict', key: { $get: { from: { $var: 'verdict' }, path: ['question_id'] } } } },
+    },
+    value: {
+      $map: {
+        over: { $ref: '$.questions' },
+        as: 'question',
+        body: {
+          $with: {
+            let: { verdict: { $get: { from: { $var: 'byId' }, path: [{ $get: { from: { $var: 'question' }, path: ['question_id'] } }], fallback: { $const: null } } } },
+            value: {
+              $merge: [
+                { $var: 'question' },
+                {
+                  shown: {
+                    $case: {
+                      branches: [
+                        { when: { $eq: [{ $var: 'verdict' }, { $const: null }] }, then: { $const: 'Not checked yet' } },
+                        { when: { $get: { from: { $var: 'verdict' }, path: ['appropriate'] } }, then: { $const: 'Fit to show' } },
+                      ],
+                      else: { $const: 'Not fit to show' },
+                    },
+                  },
+                },
+              ],
+            },
+          },
+        },
+      },
+    },
+  },
+};
+
+export const everyQuestion: ActionDefinition = {
+  id: 'ext.speaker.acme.questions',
+  title: 'Acme · Every question',
+  description: 'Acme Ask Anything, for the speaker: every question the room sent, and whether it is fit to show.',
+  data: { questions: [], verdicts: [] },
+  layout: {
+    component: 'Sheet',
+    props: { size: 'fill', areas: ['kick', 'list'], rows: ['auto', 1] },
+    children: [
+      { component: 'Cell', props: { area: 'kick', ink: 'ink' }, children: [{ component: 'Label', children: 'Acme · Every question' }] },
+      {
+        component: 'Cell',
+        props: { area: 'list', pad: 'none', scroll: 'y' },
+        children: [
+          {
+            component: 'Rows',
+            props: {
+              rows: { $prism: questionsWithVerdicts },
+              rowKey: 'question_id',
+              empty: 'No questions yet.',
+              columns: [
+                { label: 'Question', key: 'text', w: 3 },
+                { label: 'From', key: 'sender', w: 1.2 },
+                { label: 'Shown', key: 'shown', w: 1.2 },
+              ],
+            },
+          },
+        ],
+      },
+    ],
+  },
+  // Both reactive on lyceum's side: a question sent, or a verdict written,
+  // answers again on its own.
+  endpoints: {
+    questions: { url: '/api/vex', method: 'POST', request: { fingerprint: 'questions/every', context: {} }, target: 'questions' },
+    verdicts: { url: '/api/vex', method: 'POST', request: { fingerprint: 'questions/verdicts', context: {} }, target: 'verdicts' },
+  },
+  lifecycle: { mount: [{ call: 'questions' }, { call: 'verdicts' }] },
+  triggers: [],
+};
+
+// ── the stage's: what may be shown ──
+//
+// lyceum's `questions/shown` — only what its moderator found fit, and no names:
+// lyceum's engine gives the projector nothing else to read.
+export const fitQuestions: ActionDefinition = {
+  id: 'ext.stage.acme.questions',
+  title: 'Acme · Questions',
+  description: 'Acme Ask Anything, on the projector: the questions fit to show, newest first.',
+  data: { questions: [] },
+  layout: {
+    component: 'Rows',
+    props: {
+      rows: '$.questions',
+      rowKey: 'question_id',
+      empty: 'No questions yet.',
+      columns: [{ label: 'Question', key: 'text', w: 1 }],
+    },
+  },
+  endpoints: {
+    questions: { url: '/api/vex', method: 'POST', request: { fingerprint: 'questions/shown', context: {} }, target: 'questions' },
+  },
+  lifecycle: { mount: [{ call: 'questions' }] },
+  triggers: [],
+};
+
 export const ACME_BUNDLE = {
   integration: 'acme',
   // The grammars these documents are written in; the host upgrades from here.
@@ -69,7 +180,9 @@ export const ACME_BUNDLE = {
     tagline: 'Questions for whoever is on stage.',
     description: 'A question box from Acme. It sends through the host\'s own Q&A, as you.',
   },
-  actions: { [ask.id]: ask },
+  actions: { [ask.id]: ask, [everyQuestion.id]: everyQuestion, [fitQuestions.id]: fitQuestions },
+  // Which of lyceum's seats each screen rides.
+  attachments: { [ask.id]: 'member.phone', [everyQuestion.id]: 'speaker.console', [fitQuestions.id]: 'slide.end' },
 };
 
 // THE SAME BUNDLE, BROKEN: a trigger that re-emits its own channel. Valid

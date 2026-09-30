@@ -152,13 +152,15 @@ export const strataLayout: LayoutNode = {
 };
 
 // The end: where it all is — the public repository, as a code to scan and in
-// words, and the folder this app is in — and where the questions go.
+// words, and the folder this app is in — and where the questions go. Under
+// that, whatever an integration attached to this slide (`attached`, the
+// stage's): Acme's list of the questions found fit to show, once installed.
 export const endLayout: LayoutNode = {
   component: 'Sheet',
-  props: { size: 'fill', areas: ['head where', 'head ask'], cols: [1.4, 1], rows: [1, 'auto'] },
+  props: { size: 'fill', areas: ['head where', 'head ask'], cols: [1.4, 1], rows: [1, 1] },
   children: [
     cell('head', [headline('display', '{{$.title}}')], { align: 'end' }),
     cell('where', [label('Open source'), { component: 'Qr', props: { value: '$.repo' } }, headline('name', '{{$.repoWords}}'), code('$.folder')], { ink: 'ink' }),
-    cell('ask', [label('Questions'), headline('title', 'On your phone, in Acme.')], { ink: 'signal' }),
+    cell('ask', [label('Questions'), headline('title', 'On your phone, in Acme.'), { component: 'CanvasSlot', props: { canvasId: 'attached' } }], { ink: 'signal', scroll: 'y' }),
   ],
 };

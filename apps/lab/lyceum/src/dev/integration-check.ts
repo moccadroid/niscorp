@@ -9,16 +9,20 @@
 //      bundle is refused by intake, with the path round its loop, and no phone
 //      changes;
 //   3. installing Acme is accepted and held as pending — still on no phone;
-//   4. approved, Acme is on every phone — an action on the phone's list,
-//      drawn from its own layout;
+//   4. approved, each of Acme's screens is on the seat it attached to: the
+//      ask on every phone's list, drawn from its own layout; every question
+//      on the controller; the fit ones on the last slide;
 //   5. a question asked there lands in lyceum's Q&A as the person who asked;
-//   6. removed, it is gone again.
+//      the controller shows it with the moderator's verdict — a question not
+//      fit to show too, marked so — and the last slide, on the projector,
+//      shows the fit one and never the other;
+//   6. removed, it is gone again, from every seat.
 import { createServer } from 'node:http';
 import { serve } from '@hono/node-server';
 import { attachSocket } from '@niscorp/moss/node';
 import { mintSession } from '@niscorp/moss';
 import { SLIDES } from '@lyceum/db/seed';
-import { questionsAll } from '@lyceum/app/vex/question.entries';
+import { questionsShown } from '@lyceum/app/vex/question.entries';
 import { boot } from '@lyceum/server/boot';
 import { ACME_BROKEN_BUNDLE, ACME_BUNDLE } from '../../../lyceum-vendor-demo/src/bundle';
 import { check, connect, finish, waitUntil } from './harness';
@@ -59,9 +63,12 @@ const main = async (): Promise<void> => {
   const ben = await join();
   const speaker = await connect(base, await mintSession(runtime.pool, 'speaker', 60_000));
   await speaker.hello();
+  const stage = await connect(base, await mintSession(runtime.pool, 'stage', 60_000));
+  await stage.hello();
 
   // ── 1 ──
   check('before anything is installed, no phone has Acme', !ada.showsNow('body', 'ext.member.acme.ask'));
+  check('...nor the controller, nor the projector', !speaker.showsNow('attached', 'ext.speaker.acme') && !stage.showsNow('attached', 'ext.stage.acme'));
 
   // ── 2 ──
   const at = SLIDES.findIndex((slide) => slide.tools.includes('tools.integrations'));
@@ -88,6 +95,9 @@ const main = async (): Promise<void> => {
   check('...Acme is on the first phone, on its list', await ada.shows('body', 'ext.member.acme.ask'));
   check('...drawn from its own layout', ada.showsNow('body', 'Acme · Ask Anything'));
   check('...and on the second', await ben.shows('body', 'ext.member.acme.ask'));
+  check('...every question on the controller, in its own region', await speaker.shows('attached', 'Acme · Every question'));
+  check('...and the projector holds the fit ones, for the last slide', await stage.shows('attached', 'ext.stage.acme.questions'));
+  check('...a phone has neither: each screen is on its own seat', !ada.showsNow('body', 'ext.speaker.acme') && !ada.showsNow('body', 'ext.stage.acme'));
 
   // ── 5 ──
   ada.type('body', 'question', 'Who wrote this screen?');
@@ -98,24 +108,46 @@ const main = async (): Promise<void> => {
   const ids = (await runtime.db.query<{ member_id: string }>('SELECT member_id FROM members ORDER BY joined_at, member_id')).rows.map((row) => row.member_id);
   check('...and it is in lyceum’s Q&A, as the person who asked', asked.rows.length === 1 && asked.rows[0]?.member_id === ids[0]);
   check('...and on Acme’s own list of their questions', await ada.shows('body', 'Who wrote this screen?'));
-  // The moderator judges it (fit), and then the speaker's list has it.
-  const speakerRead = async (): Promise<string> =>
-    (await server.request('/api/vex', { method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${await mintSession(runtime.pool, 'speaker', 60_000)}` }, body: JSON.stringify({ fingerprint: questionsAll.fingerprint, context: {} }) })).text();
+  // The moderator judges it (fit), and then the projector may show it.
+  const stageRead = async (): Promise<string> =>
+    (await server.request('/api/vex', { method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${await mintSession(runtime.pool, 'stage', 60_000)}` }, body: JSON.stringify({ fingerprint: questionsShown.fingerprint, context: {} }) })).text();
   let seen = '';
   for (let i = 0; i < 100 && !seen.includes('Who wrote this screen?'); i += 1) {
-    seen = await speakerRead();
+    seen = await stageRead();
     if (!seen.includes('Who wrote this screen?')) await new Promise((resolve) => setTimeout(resolve, 50));
   }
-  check('...and, found fit to show, it is on the speaker’s list', seen.includes('Who wrote this screen?'));
+  check('...and, found fit to show, the projector may read it', seen.includes('Who wrote this screen?'));
+  check('...on the controller, as fit to show', await speaker.shows('attached', 'Fit to show') && speaker.showsNow('attached', 'Who wrote this screen?'));
+
+  // One not fit to show: the controller has it, marked; the projector never.
+  ada.type('body', 'question', 'Is the speaker an idiot?');
+  await new Promise((resolve) => setTimeout(resolve, 200));
+  ada.click('body', 'ask');
+  check('a question not fit to show is on the controller too', await speaker.shows('attached', 'Is the speaker an idiot?'));
+  check('...marked not fit to show', await speaker.shows('attached', 'Not fit to show'));
+  const last = SLIDES.length;
+  for (let step = at + 1; step < last; step += 1) {
+    speaker.click('controls', 'next');
+    await speaker.shows('head', `slide ${step + 1} of`);
+  }
+  check('on the last slide, the projector shows Acme’s list', (await stage.shows('main', '"canvasId":"attached"')) && (await stage.shows('attached', 'Who wrote this screen?')));
+  check('...and never the question not fit to show', !stage.showsNow('attached', 'idiot') && !stage.showsNow('main', 'idiot'));
 
   // ── 6 ──
+  // Back to the Integrations tool's slide, where Remove is.
+  for (let step = last - 1; step > at; step -= 1) {
+    speaker.click('controls', 'back');
+    await speaker.shows('head', `slide ${step} of`);
+  }
   speaker.click('tools', 'remove');
   check('removed: Acme is gone from the first phone', await waitUntil(() => !ada.showsNow('body', 'ext.member.acme.ask')));
   check('...and from the second', await waitUntil(() => !ben.showsNow('body', 'ext.member.acme.ask')));
+  check('...and from the controller and the projector', await waitUntil(() => !speaker.showsNow('attached', 'ext.speaker.acme') && !stage.showsNow('attached', 'ext.stage.acme')));
 
   ada.close();
   ben.close();
   speaker.close();
+  stage.close();
   httpServer.close();
   vendor.close();
   await close();

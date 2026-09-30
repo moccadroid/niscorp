@@ -10,6 +10,7 @@ import { createCensus } from './census';
 import { assistantFunctions } from './functions/assistant.functions';
 import { lecternFunctions } from './functions/lectern.functions';
 import { phoneInputs } from './phone';
+import { attachedSeeds } from './attached';
 import { xrayFunctions } from './functions/xray.functions';
 import { followRenderers } from './renderers';
 import { integrationFunctions, vendorAddresses } from './functions/integration.functions';
@@ -103,7 +104,8 @@ export const bootOn = async <R extends LyceumRuntime>(runtime: R, options: BootO
     identity: lyceumIdentity,
     functions: (session) => ({ ...doorFunctions(session, server, moderation), ...roomFunctions(session, publicUrl, options.sshAddress ?? '', census), ...assistantFunctions(session, { querier, writer: timerWriter, orchestrator, tz, timing }), ...lecternFunctions(server, speakerMail), ...xrayFunctions(session), ...integrationFunctions(session, server, operatorKey, vendor) }),
     reactions: [...lyceumReactions(server, moderation), renderers.reaction],
-    inputs: phoneInputs,
+    inputs: phoneInputs(runtime.pool),
+    seeds: attachedSeeds(runtime.pool),
     onSession: renderers.onSession,
     components: Object.fromEntries(Object.entries(KIT_PROPS.shape).map(([name, propsSchema]) => [name, { meta: { propsSchema } }])),
   });

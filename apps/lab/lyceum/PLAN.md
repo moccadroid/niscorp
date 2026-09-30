@@ -40,9 +40,6 @@ with every missing beat visible (`src/app/actions/tools/cue.actions.ts`):
 - `tools.renderers` (slide 11): the projector as a terminal, typing out the SSH command.
 - `tools.order` (slide 26): an order form the assistant fills in and nobody presses.
   Needs an action, a grant, a place on the list.
-- **The speaker's questions.** No screen shows the room's questions: `questions/all` is
-  a read nothing uses. The talk ends with "Questions: on your phone, in Acme", and the
-  speaker has nowhere to read them.
 
 ## To build
 
@@ -51,15 +48,13 @@ In order; each lands with its check.
 1. **The model check** — `pnpm models` (built 2026-09-27; results in `MEASURED.md`). Vex's
    seams are measured; each new seam joins it as it is built. A seam that does not pass is
    fixed in its grammar's descriptions or its tool contract, not by a bigger model. Its
-   seeded room still has departments and ID cards, which lyceum's tables no longer have,
-   so it does not run until that room is rewritten — and a rewrite changes what the
-   recorded numbers compare against.
+   seeded room was rewritten 2026-09-30 — chosen names and the queries they ran, the
+   app's own shapes — so numbers recorded before then are against the old room.
 2. ~~**Tide agent**~~, ~~**Vex queries**~~, ~~**The assistant**~~, ~~**The timer**~~,
    ~~**The renderers**~~, ~~**The SSH door**~~, ~~**The X-ray**~~, ~~**Names and
    moderation**~~, ~~**Acme**~~ — built (see "What is built"). Not yet: parameterised
    replays (Jev choosing a fingerprint's context values); streaming replies.
-3. **The cues above** — the button, the terminal projector, the order form — and a screen
-   for the speaker's questions.
+3. **The cues above** — the button, the terminal projector, the order form.
 4. **The full-room rehearsal** — 100 headless phones against the deployed shape, every
    phone asking the records and its assistant at once; Groq's per-model token limit is
    shared by every seam.
@@ -83,8 +78,8 @@ In order; each lands with its check.
 **The phone** (`member.phone`). The name the person chose across the top, and under it
 `body`, a LIST canvas: every action they hold that belongs on a phone, one under another,
 each its own block. What is on it is derived when their shell is built
-(`server/phone.ts`, the shell's `inputs`): the assistant; every integration installed and
-approved for members (`ext.member.*`); the X-ray once given. Ring 1 decides; the phone
+(`server/phone.ts`, the shell's `inputs`): the assistant; every integration screen
+installed, approved and attached to the phone (`member.phone`); the X-ray once given. Ring 1 decides; the phone
 only reads it. A grant or an install rebuilds the shell (`invalidateIdentity`), and the
 list follows — so through the talk, things arrive on everybody's phone as they are given.
 
@@ -93,8 +88,11 @@ that the room could see — a typed name, a question for the speaker — is one 
 question to the decider: fit to show on a projector in front of a hundred people? Yes at
 0.5 and above. The `moderator` is a principal that is not a person: it writes
 `question_verdicts`, a table of its own, so nobody who asks can approve their own
-question. The speaker's read of the questions (`questions/all`) returns only those judged fit.
-A question is not edited or taken back: it is judged once, as it was sent.
+question. The speaker reads every question and every verdict. The stage reads verdicts
+at its own reach, `projector` (`app/vex/behaviors.ts`), which the engine limits to
+`appropriate = true` whatever an action asks for, and it reads no question at all — so
+nothing unjudged or unfit can reach the projector, by the engine, not by which query a
+screen calls. A question is not edited or taken back: it is judged once, as it was sent.
 `LYCEUM_MODERATION=live|fake`; the fake refuses a few words and passes everything else.
 
 **Acme — the room's Q&A** (`apps/lab/lyceum-vendor-demo`; `tools.integrations` on "Checked
@@ -103,10 +101,16 @@ Pages (`LYCEUM_VENDOR_URL`); lyceum knows only its address. The controller's too
 installs it through moss's operator routes: moss fetches the bundle and intake checks it
 — every component and prop is one lyceum's kit has, every endpoint a fingerprint lyceum
 serves, no chain of steps that never ends. Its broken twin (`LYCEUM_VENDOR_BROKEN_URL`)
-is refused with the loop's path. Installed, Acme is pending; approved, every member's
-shell is rebuilt and `ext.member.acme.ask` is on every phone, drawn with lyceum's kit.
-A question asked there is a row in lyceum's `questions`, as the person who asked. Remove
-takes it off again, for the next rehearsal. Lyceum's own `questions.send` is held by
+is refused with the loop's path. Acme ships three screens and says where each goes
+(moss `attachments`), against the seats lyceum offers (`app/attachable.ts`), and intake
+refuses any other: `ext.member.acme.ask` on the phone (ask, and see what you asked);
+`ext.speaker.acme.questions` on the controller, a region of its own on every slide
+(every question, its sender, and fit / not fit / not checked yet — two of lyceum's reads
+joined in a `$prism` binding); `ext.stage.acme.questions` on the last slide (the fit
+ones, by their words, no names). Installed, Acme is pending; approved, every shell is
+rebuilt and each seat reads what rides it (`server/attached.ts`). A question asked
+there is a row in lyceum's `questions`, as the person who asked. Remove takes it off
+every seat again, for the next rehearsal. Lyceum's own `questions.send` is held by
 nobody: it is the action slide 8 shows as code, and its layout is that slide's preview.
 
 **Vex queries** — run by the assistant, never typed at (decided 2026-09-27: vex is not
@@ -277,7 +281,9 @@ every re-boot. `/dev/as/speaker`, `/dev/as/stage`, `/dev/as/kit`, `/dev/new`,
 - **The phone is a list canvas** (2026-09-30). Everything on it is an action on `body`,
   one under another; no tabs, no bar. A new thing given or installed is a new block.
 - **The Q&A is Acme** (2026-09-30), a third party's integration installed on stage — not
-  offered until it is installed. Lyceum's own Q&A actions are gone.
+  offered until it is installed. Lyceum's own Q&A actions are gone. Acme puts a screen on
+  three seats: every phone, the controller (every question, even the unfit ones, with the
+  verdict), the last slide (only the fit ones).
 - **The renderer switch stays inside lyceum.** Moss is not changed for it; its terminal's
   render target is client chrome, and lyceum's own target does the switching.
 - **SSH** is the terminal door.
@@ -314,8 +320,8 @@ for a feature that is gone.
 |---|---|---|
 | a stranger (browser or SSH) | `public` | the door |
 | audience member | `member`, and `xray` while it is given | the phone: the assistant, integrations installed for members (Acme), the X-ray once given |
-| `stage` (the projector) | `stage` | the slides, the strip, the register. No controls. |
-| `speaker` (the controller) | `speaker` | the controller and its tools, All slides, the renderer switch; every question judged fit (`room` reach) |
+| `stage` (the projector) | `stage` | the slides, the strip, the register; an integration's screen on the last slide. No controls. Verdicts at the `projector` reach: only the fit ones, and no question |
+| `speaker` (the controller) | `speaker` | the controller and its tools, All slides, the renderer switch, an integration's screen on the controller; every question and every verdict (`room` reach) |
 | a device at `/speaker` | `lectern` | the speaker's sign-in desk and nothing else; a principal per device |
 | `moderator` | `moderator` | judges typed names and every question; writes `question_verdicts` and `refused_names`, nothing else |
 | `clock` | `clock` | what a saved timer runs as: it can put a slide on screen, nothing else |
@@ -366,5 +372,7 @@ on. Raw-SQL writes do not invalidate; the TTL (60 s) heals them.
 - **Acme is fetched from GitHub Pages at install.** If Pages is down on the night, the
   install fails and says why; `LYCEUM_VENDOR_URL` can point at any other copy.
 - **Session tokens** still travel in the websocket URL (a moss case, open).
-- **Moderation is a model's judgement.** A question it wrongly finds fit is shown
-  wherever questions are shown; nothing puts them on the projector today.
+- **Moderation is a model's judgement.** A question it wrongly finds fit goes up on the
+  last slide. The speaker sees every question and its verdict on the controller first.
+  A question the model cannot judge (the provider down) is "not checked yet" on the
+  controller and never on the projector; moderation tries again on the next question.
