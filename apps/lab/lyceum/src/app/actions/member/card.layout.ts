@@ -1,10 +1,11 @@
 import type { LayoutNode } from '@niscorp/nova';
 
-// The ID card, in full — in the phone's body. What a model has not written yet
-// is hatched: "not yet" has a pattern, not a grey.
+// The ID card, in full — first on the phone's list, as tall as what is on it.
+// What a model has not written yet is hatched: "not yet" has a pattern, not a
+// grey.
 export const cardLayout: LayoutNode = {
   component: 'Sheet',
-  props: { size: 'fill', areas: ['kick kick', 'name name', 'title quirk'], cols: [1, 1], rows: ['auto', 'auto', 1] },
+  props: { areas: ['kick kick', 'name name', 'title quirk'], cols: [1, 1] },
   children: [
     { component: 'Cell', props: { area: 'kick' }, children: [{ component: 'Label', children: 'ID card' }] },
     { component: 'Cell', props: { area: 'name' }, children: [{ component: 'Headline', props: { level: 'title' }, children: '{{$.me.name}}' }] },

@@ -1,10 +1,11 @@
 import type { LayoutNode } from '@niscorp/nova';
 
 // THE PHONE'S ARRANGEMENT (the controller's pattern, speaker/console.layout.ts).
-// Who you are across the top, always; one thing at a time in the body, which
-// scrolls inside itself; the bar where the thumb is — a button for each thing
-// the person has, the open one inked. Nothing on the phone scrolls away but
-// the body.
+// Who you are across the top, always; in the middle the LIST of what this
+// phone holds (the `body` list canvas), one action under another, scrolling
+// inside itself; the bar where the thumb is — at most two buttons, each inked
+// while its action is on the list. Nothing on the phone scrolls away but the
+// list.
 export const phoneLayout: LayoutNode = {
   component: 'Sheet',
   props: { size: 'fill', areas: ['self', 'body', 'bar'], rows: ['auto', 1, 'auto'] },
@@ -25,7 +26,7 @@ export const phoneLayout: LayoutNode = {
               do: {
                 component: 'Action',
                 ref: 'tab',
-                props: { area: '$tab.area', ink: { $if: { $eq: ['$tab.action', '$.open'] }, $then: 'ink', $else: 'paper' }, label: '{{$tab.label}}', value: '$tab.action' },
+                props: { area: '$tab.area', ink: { $if: '$tab.on', $then: 'ink', $else: 'paper' }, label: '{{$tab.label}}', value: '$tab.action' },
               },
             },
             {

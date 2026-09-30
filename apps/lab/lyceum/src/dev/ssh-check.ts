@@ -74,13 +74,13 @@ const main = async (): Promise<void> => {
   check('typing the number steps in: they are a member now, with a card', await waitUntil(() => ada.screen().includes('ID card')));
   check('...a new person in the room', (await runtime.db.query('SELECT 1 FROM members')).rows.length === before + 1);
 
-  // ── the phone's tabs: one list canvas, one ref each, every one its own ──
+  // ── the phone's bar: one ref, a number for each button ──
   // The screen since `from`, and the number printed beside a label in it.
   const since = (visitor: Visitor, from: number): string => visitor.screen().slice(from);
   const numberOf = (screen: string, label: string): string | undefined => new RegExp(String.raw`\[(\d+)\] \( ${label} \)`).exec(screen.slice(screen.lastIndexOf(`( ${label} )`) - 12))?.[1];
   await waitUntil(() => ada.screen().includes('( Assistant )'));
-  const tabs = ['Card', 'Q&A', 'Assistant'].map((label) => numberOf(ada.screen(), label));
-  check(`every tab has a number of its own (${tabs.join(', ')})`, tabs.every((n) => n !== undefined) && new Set(tabs).size === tabs.length);
+  const tabs = ['Q&A', 'Assistant'].map((label) => numberOf(ada.screen(), label));
+  check(`every button on the bar has a number of its own (${tabs.join(', ')})`, tabs.every((n) => n !== undefined) && new Set(tabs).size === tabs.length);
   // A number is read off a screen that has stopped changing — as a person
   // reads it: a screen still filling in renumbers what comes after.
   const settled = async (visitor: Visitor): Promise<void> => {
@@ -90,19 +90,18 @@ const main = async (): Promise<void> => {
       last = visitor.screen().length;
     }
   };
-  for (const [label, shows] of [['Q&A', 'a question for the speaker'], ['Assistant', 'Built from'], ['Card', 'ID card']] as const) {
+  // Each button's number slots its action into the phone's list.
+  for (const [label, shows] of [['Q&A', 'a question for the speaker'], ['Assistant', 'Built from']] as const) {
     await settled(ada);
     const from = ada.screen().length;
     ada.press(numberOf(ada.screen(), label) ?? '');
-    check(`typing the ${label} tab's number opens ${label}`, await waitUntil(() => since(ada, from).includes(shows)));
+    check(`typing the ${label} button's number puts ${label} on the list`, await waitUntil(() => since(ada, from).includes(shows)));
   }
 
   // ── a vex query's table, drawn: its cells carry the rows' values ──
-  // The assistant's field: its number focuses it, typing types, Enter sends;
-  // the assistant's query opens over the screen, its table drawn.
-  await settled(ada);
-  ada.press(numberOf(ada.screen(), 'Assistant') ?? '');
-  await waitUntil(() => ada.screen().includes('Built from'));
+  // The assistant's field — the assistant is on the list since its button was
+  // pressed above: its number focuses it, typing types, Enter sends; the
+  // assistant's query opens over the screen, its table drawn.
   await settled(ada);
   const field = /\[(\d+)\] ⟨/.exec(ada.screen().slice(ada.screen().lastIndexOf('Built from')))?.[1];
   ada.press(field ?? '');
@@ -114,11 +113,14 @@ const main = async (): Promise<void> => {
   await waitUntil(() => since(ada, asked).includes('Title'));
   await settled(ada);
   const names = (await runtime.db.query<{ name: string }>('SELECT name FROM members')).rows.map((row) => row.name);
-  // The table's own lines: after its header, before the line saying how it was
-  // answered — the person's name is across the top of their phone too, above it.
+  // The table's own lines: back from the line saying how it was answered to
+  // its header. Read from that line, not from the last 'Title' on the screen —
+  // the ID card stays on the phone's list and its own 'Title' is drawn again
+  // after the answer; the person's name is across the top of their phone too.
   const screen = ada.screen();
-  const head = screen.lastIndexOf('Title');
-  const table = screen.slice(head, head + screen.slice(head).search(/Generated:|Replayed:/));
+  const end = Math.max(screen.lastIndexOf('Generated:'), screen.lastIndexOf('Replayed:'));
+  const head = screen.lastIndexOf('Title', end);
+  const table = end === -1 ? '' : screen.slice(head, end);
   check(`an answer's table shows its values — somebody in the room by name (${names.join(', ')})`, head !== -1 && names.some((name) => name !== '' && table.includes(name)));
 
   // ── 3 ──

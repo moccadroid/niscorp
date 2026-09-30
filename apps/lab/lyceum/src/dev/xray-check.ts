@@ -90,7 +90,9 @@ const main = async (): Promise<void> => {
   ada.click('main', 'tab', 'questions.desk');
   await ada.shows('qa-form', 'questions.send');
   const form = instanceOf(ada, 'qa-form', 'questions.send');
-  check(`after opening Q&A, its form is on the screen instead (${form ?? 'none'})`, form !== undefined && instanceOf(ada, 'body', 'member.card') === undefined);
+  // The phone's middle is a list: Q&A slots in under the card, and both are on
+  // the screen — the X-ray opens whichever id is tapped.
+  check(`after opening Q&A, its form is on the screen too, under the card (${form ?? 'none'})`, form !== undefined && instanceOf(ada, 'body', 'member.card') !== undefined);
   ada.publish('xray-open', { instance: form ?? '', action: 'questions.send' });
   check('...and tapping its id shows the form’s document', await ada.shows('overlay', '\\"id\\": \\"questions.send\\"'));
   ada.click('overlay', 'close');

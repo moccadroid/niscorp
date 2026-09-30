@@ -27,7 +27,10 @@ export const CANVASES: ShellManifest['canvases'] = [
   { id: 'strip', initial: ['stage.strip'] },
   { id: 'main', initial: ['speaker.console', 'member.phone', 'kit.sink', 'lectern.signin', 'door.join'] },
   // The phone's three regions (member/phone.layout.ts) — not in the frame.
-  { id: 'body', initial: ['member.card'] },
+  // A LIST: the middle of the phone — the actions it holds, one under another
+  // (member/phone.action.ts reconciles it: the card, installed integrations,
+  // whatever the bar slots in).
+  { id: 'body', mode: 'list', actionLayout: { for: '$.instances', as: 'instance', do: { component: 'ActionSlot', props: { instanceId: '$instance.id' } } } },
   { id: 'head', initial: ['speaker.head'] },
   {
     // A LIST: every tool the slide lists is live at once, stacked in order
