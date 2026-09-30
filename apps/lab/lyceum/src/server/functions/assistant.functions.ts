@@ -65,9 +65,8 @@ const earlierOf = (turns: z.infer<typeof TurnsSchema>): TimerRequest['earlier'] 
 };
 
 // The assistant's own conversation — left out of the screen it is shown,
-// having it separately. Its tab stays: the tab is on their screen.
-const conversationOf = (session: FunctionSession) => (instanceId: string, definitionId: string): boolean =>
-  definitionId === 'assistant.thread' && session.shell.getRuntime(instanceId)?.getData()['tab'] !== true;
+// having it separately.
+const isConversation = (_instanceId: string, definitionId: string): boolean => definitionId === 'assistant.thread';
 
 // What the model is handed about the person — assembled, never authored per
 // person: what their grants say about them, what was read AS them, their
@@ -104,7 +103,7 @@ const knowledgeOf = async (session: FunctionSession, assembled: Assembled, tz: s
   const knowledge = [
     `THE PERSON\n${[...assembled.from.map((declaration) => declaration.context), facts].filter((line) => line !== '').join('\n')}`,
     `NOW\n${localNow(Date.now(), tz)} (${tz})`,
-    `ON THEIR SCREEN — what it shows right now, as text; this conversation left out\n${screenText(session.shell, conversationOf(session))}`,
+    `ON THEIR SCREEN — what it shows right now, as text; this conversation left out\n${screenText(session.shell, isConversation)}`,
     actions.length === 0 ? '' : `THEIR ACTIONS — what the charter gives them${assembled.tools.has('open') ? '; `open` can offer any of these' : ''}\n${actions.join('\n')}`,
     conversation === '' ? '' : `THE CONVERSATION SO FAR\n${conversation}`,
   ]

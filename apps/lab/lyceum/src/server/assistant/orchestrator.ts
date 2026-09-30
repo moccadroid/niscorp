@@ -74,16 +74,6 @@ const fakeOrchestrator = (): Orchestrator => ({
       const asked = typeof result === 'object' && result !== null && 'asked' in result && typeof result.asked === 'string' ? result.asked : undefined;
       return asked ?? 'Here it is — read it, then save it.';
     }
-    // "…my questions" — open their own questions, over the screen.
-    if (/\bmy questions\b/i.test(message)) {
-      if (tool('open') === undefined) return 'I cannot open anything for you.';
-      try {
-        await call('open', { action: 'questions.mine', label: 'Your questions' });
-      } catch {
-        return 'Your questions are not one of your actions.';
-      }
-      return 'Here are your questions.';
-    }
     const question = /send the speaker a question: (.+)$/i.exec(message)?.[1];
     if (question !== undefined) {
       if (tool('open') === undefined) return 'I cannot open anything for you.';

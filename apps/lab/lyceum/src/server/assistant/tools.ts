@@ -60,16 +60,9 @@ export type ToolDeps = {
 
 // Not the person's to be offered — which actions exist for them at all is the
 // charter's: the assistant itself; what only a tool opens (query.result); what
-// only another action opens, with an id nobody types (questions.edit, from the
-// list); a tab's surface, whose form is offered on its own (questions.desk); and
-// what only an automation's `notify` opens (speaker.notification); what only
-// the X-ray opens, on an action somebody tapped (xray.document).
-const NOT_OFFERED: ReadonlySet<string> = new Set(['assistant.thread', 'query.result', 'questions.edit', 'questions.desk', 'speaker.notification', 'xray.document']);
-
-// How an action is DRAWN — as a tab on the phone — is the
-// phone's business, not something a person asks for. These input keys are the
-// phone's; everything else an action declares (rule 14) can be pre-filled.
-const PRESENTATION_KEYS: ReadonlySet<string> = new Set(['tab', 'tabInk']);
+// only an automation's `notify` opens (speaker.notification); and what only the
+// X-ray opens, on an action somebody tapped (xray.document).
+const NOT_OFFERED: ReadonlySet<string> = new Set(['assistant.thread', 'query.result', 'speaker.notification', 'xray.document']);
 
 const inputProperties = (actionId: string): Record<string, unknown> => {
   const schema: unknown = ACTIONS[actionId]?.input;
@@ -77,11 +70,9 @@ const inputProperties = (actionId: string): Record<string, unknown> => {
   return typeof properties === 'object' && properties !== null ? Object.fromEntries(Object.entries(properties)) : {};
 };
 
-// What an action can be pre-filled with: its declared input, less the phone's.
+// What an action can be pre-filled with: its declared input (rule 14).
 export const prefillOf = (actionId: string): { key: string; description: string }[] =>
-  Object.entries(inputProperties(actionId))
-    .filter(([key]) => !PRESENTATION_KEYS.has(key))
-    .map(([key, property]) => ({ key, description: typeof property === 'object' && property !== null && 'description' in property && typeof property.description === 'string' ? property.description : '' }));
+  Object.entries(inputProperties(actionId)).map(([key, property]) => ({ key, description: typeof property === 'object' && property !== null && 'description' in property && typeof property.description === 'string' ? property.description : '' }));
 
 // What `open` may offer this person: the actions the charter gave them (what
 // exists for them at all) that declare an `input` — an action's public,

@@ -54,7 +54,7 @@ const main = async (): Promise<void> => {
 
   // ── 1 + 2. somebody waiting: the room's assistant, no automation ──
   const waiting = await stepIn();
-  check('everybody who joined has the assistant, as a tab', await openAssistant(waiting.phone));
+  check('everybody who joined has the assistant, on their list', await openAssistant(waiting.phone));
   check('…built from the room declaration', waiting.phone.showsNow('body', 'Built from room ·'));
   check('…able to query and open, not to automate', waiting.phone.showsNow('body', 'it can query · open') && !waiting.phone.showsNow('body', 'automate'));
   await say(waiting.phone, 'body', 'End the talk in 30 minutes');
@@ -140,7 +140,7 @@ const main = async (): Promise<void> => {
   const undescribed = offerableActions(Object.keys(ACTIONS)).filter((id) => (ACTIONS[id]?.description ?? '') === '');
   check(`every action the assistant can open says what it is — a description to reason from${undescribed.length === 0 ? '' : ` (missing: ${undescribed.join(', ')})`}`, undescribed.length === 0);
   check('…and an action whose contract is empty, declared: openable with nothing to pre-fill', offerableActions(['xray.switch']).includes('xray.switch') && prefillOf('xray.switch').length === 0);
-  check('…pre-filled only with what a person asks for: how the phone draws an action (a tab) is not offered', JSON.stringify(prefillOf('questions.send').map((entry) => entry.key)) === JSON.stringify(['draft']) && prefillOf('member.card').length === 0);
+  check('…pre-filled only with what its contract declares: a question takes its draft, nothing else', JSON.stringify(prefillOf('questions.send').map((entry) => entry.key)) === JSON.stringify(['draft']));
 
   // ── 4. reopening from the conversation carries every key an opened action takes ──
   const trigger = ACTIONS['assistant.thread']?.triggers?.find((candidate) => 'ref' in candidate && candidate.ref === 'reopen');
