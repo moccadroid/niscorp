@@ -192,3 +192,13 @@ The same review found the earlier plan had **no stated problem** and ordered the
 - **Admit the stream pacing:** the profile stream is replayed at a reading pace (~1.5 s) — say so on stage.
 - **The measurement culture is a selling point:** probes written before a run, void results kept, the prompt-leak incident admitted.
 
+### From the first talk conversations (Sep 23–25)
+
+- The pitch problem: people resist nisc not with hostility but with endless "but what if…" — the talk has to answer those before they are asked.
+- It is not "another library that lets you do X". The cool things are side effects of an architecture shift; sell the architecture, not the features.
+- AI makes it magical, but it solves other problems too (apart from generation): a charter, seeds, operators — and a simple UI can edit all of that data, because it is data.
+- "Open data" sounds dangerous — with a browser shell the user holds all the data. Moss is where it becomes safe: a server-rendered shell, so all that open data can be digested however we want.
+- An integration can ship its own UI and interactions into the host app — nobody else can do this.
+- Two questions to answer: why was this only built now (the pieces existed — why did none of it take off?), and why is this a future of software architecture?
+- Dropped then: killing the model provider live, inviting the room to attack the app. Hosting must be real; if it fails there is no talk.
+
