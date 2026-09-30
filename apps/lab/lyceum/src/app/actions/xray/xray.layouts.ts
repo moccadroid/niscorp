@@ -1,6 +1,6 @@
 import type { LayoutNode } from '@niscorp/nova';
 
-// Every action on the screen, one under the other: where it is, what it is,
+// Every action on the screen, one under the other: what it is
 // and its data as it stands. Look again after tapping around.
 export const xrayViewLayout: LayoutNode = {
   component: 'Sheet',
@@ -21,7 +21,7 @@ export const xrayViewLayout: LayoutNode = {
               do: {
                 component: 'Cell',
                 children: [
-                  { component: 'Label', children: '{{$instance.canvas}} · {{$instance.action}}' },
+                  { component: 'Label', children: '{{$instance.name}}' },
                   { component: 'Code', props: { text: '$instance.data' } },
                 ],
               },
