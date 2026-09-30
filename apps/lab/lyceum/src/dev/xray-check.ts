@@ -4,8 +4,8 @@
 //   2. the speaker's tool is on the X-ray slide; Give writes a grant per
 //      member, and the X-ray is a button on every phone’s bar — not on the door, which
 //      has no member row to give it to;
-//   3. pressed, the body shows the person's own screen as data: the actions
-//      on it, their canvases, and their data — their own card, nobody else's;
+//   3. pressed, the body shows the person's own screen as data: every action
+//      on it, whole — data, triggers, layout — their own card, nobody else's;
 //   4. Take it back deletes the grants, and the tab is gone from the phones.
 import { serve } from '@hono/node-server';
 import { attachSocket } from '@niscorp/moss/node';
@@ -69,6 +69,7 @@ const main = async (): Promise<void> => {
   check('pressed, the body shows the screen as data', await ada.shows('body', 'your screen, as data'));
   check('...listing the actions on it by name', await ada.shows('body', 'Your phone · member.phone'));
   check('...with their data, as JSON', await ada.shows('body', '\\"member_id\\"'));
+  check('...and the whole action, not only its data: its triggers and its layout', ada.showsNow('body', '\\"triggers\\"') && ada.showsNow('body', '\\"layout\\"'));
   const ids = (await runtime.db.query<{ member_id: string }>('SELECT member_id FROM members ORDER BY joined_at, member_id')).rows.map((row) => row.member_id);
   const seen = ada.textOf('body');
   check('...their own row, not anybody else’s', ids.length === 2 && ids.filter((id) => seen.includes(id)).length === 1);

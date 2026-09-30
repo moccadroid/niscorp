@@ -3,12 +3,13 @@ import { xrayViewLayout } from './xray.layouts';
 
 // THE X-RAY — somebody's own screen, as data. The speaker gives it to everybody
 // (tools/xray.action.ts): a grant row each, and it is on their phone's bar
-// (member/phone.action.ts). Opened, it shows every action on the screen and
-// its data — what the shell on the server holds for this person, read as them
+// (member/phone.action.ts). Opened, it shows every action on the screen, whole —
+// its data, endpoints, triggers and layout, as the shell on the server runs it
+// for this person, read as them
 // (server/functions/xray.functions.ts). Nothing on it is code.
 export const xrayAction: ActionDefinition = {
   id: 'xray.view',
-  description: 'The person\'s own screen as data: every action on it and its data.',
+  description: 'The person\'s own screen as data: every action on it — its data, endpoints, triggers and layout.',
   title: 'X-ray',
   data: { screen: [], loading: true },
   layout: xrayViewLayout,
