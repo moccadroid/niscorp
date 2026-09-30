@@ -37,13 +37,8 @@ export const CHARTER: Charter = {
   // every slide is an action only the stage is granted.
   // The speaker reaches every question in the room (`room`, vex/behaviors.ts)
   // — a member reaches their own. Every other table reads at its default.
-  speaker: { scoping: 'room', actions: ['speaker.*', 'tools.*', 'assistant.*'], data: [...ROOM_READS, ...DECK_READS, ...LOOK, 'renderers.write.update', 'grants.read', 'grants.write.insert', 'grants.write.delete', 'slide_notes.read', 'slide_tools.read', 'deck.write.update', 'timers.read', 'timers.write.insert', 'questions.read', ...CONVERSING] },
+  speaker: { scoping: 'room', actions: ['speaker.*', 'tools.*', 'assistant.*'], data: [...ROOM_READS, ...DECK_READS, ...LOOK, 'renderers.write.update', 'slide_notes.read', 'slide_tools.read', 'deck.write.update', 'timers.read', 'timers.write.insert', 'questions.read', ...CONVERSING] },
   stage: { actions: ['stage.*', 'slide.*'], data: [...ROOM_READS, ...DECK_READS, 'queries.read', 'timers.read', ...LOOK] },
-
-  // Given on stage, taken back the same way: a grant row per member
-  // (vex/grant.entries.ts). The X-ray is somebody's own screen as data; it
-  // reads the shell they already have, and no table.
-  xray: { actions: ['xray.*'] },
 
   // The kit's kitchen sink: every piece of the look on one screen (dev).
   kit: { actions: ['kit.*'] },
@@ -80,7 +75,6 @@ export const CHARTER: Charter = {
 export const WEARABLE: readonly (readonly string[])[] = [
   ['public'],
   ['member'],
-  ['member', 'xray'],
   ['speaker'],
   ['stage'],
   ['kit'],

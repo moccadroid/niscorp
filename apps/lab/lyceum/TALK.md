@@ -58,7 +58,7 @@ Status: ✅ built and checked · 🟧 slide built, demo not built (hatched cue o
 | 6 | `slide.answer` | full blue: "Our answer — Make it something a program can check." | — | ✅ |
 | 7 | `slide.nova` | blue: "NOVA — The UI is data." Right: 1 the real Send button's JSON (from `send.layout.ts`), 2 "Valid", 3 that node rendered as the real button | — | ✅ |
 | 8 | `slide.data` | "An action": `send.action.ts` source (click → `send` steps → endpoint marked) beside its layout rendered, on blue | — | ✅ |
-| 9 | `slide.xray` | "Your screen is data." + blue "On your phone: X-RAY" | `tools.xray` (give / take back) | ✅ |
+| 9 | `slide.xray` | "Your screen is data." + blue "On your phone: X-RAY" | cue `tools.xray` | 🟧 being redesigned |
 | 10 | `slide.clearance` | "Three of you just got a button." + orange "On three phones: PRESS" | cue `tools.button` | 🟧 |
 | 11 | `slide.looks` | "The server sends data. Your phone draws it." DOM / React / Vue / Terminal | `tools.look` (3×3: phones, stage, controller × DOM, React, Vue) + cue `tools.renderers` | ✅ renderer switch; 🟧 projector terminal view |
 | 12 | `slide.compare` | "Isn't this json-render?" + Vercel · json-render, Google · A2UI | — | ✅ |
@@ -93,7 +93,7 @@ The notes for every slide are in `src/db/seed.ts`.
 - **4–6:** the origin, the problem, our answer — as in §3.
 - **7 Nova:** a screen is made of actions; an action is JSON; a model writes it, a schema checks it, Nova runs it; Nova doesn't draw, a renderer does.
 - **8 An action:** the Q&A form; data (the draft), layout (drawn on this slide from the same JSON), tap Send → trigger runs `send` → which calls the endpoint `send` by name; no fetch, no handler code.
-- **9 X-ray:** give everyone the X-ray; press the X-ray tab; that's your screen as data; nothing on it is code — you, a program or a model can read all of it; take a minute; take it back.
+- **9 X-ray:** give everyone the X-ray; press the big blue button; that's your screen as data; nothing on it is code — you, a program or a model can read all of it; take a minute; take it back.
 - **10 The button:** give it to three people; raise your hand if it's you; volume up, press it; everyone else: it was never sent to you; laptops: search the websocket frames; no code changed — rows changed, shells rebuilt; take it back.
 - **11 Looks:** phones to React (same trees, same stylesheet, the corner says React; laptops: inspect the root element); stage to Vue — two frameworks at once; one row changed on the server; all back to DOM; terminal: the command is on screen — connect.
 - **12–14:** json-render and A2UI are good and point the same way; they describe a view, the host keeps state and code; in Nova behaviour is data and the action keeps its own state — so it runs on a server, one shell per person, and any renderer can draw it.
@@ -113,10 +113,10 @@ The notes for every slide are in `src/db/seed.ts`.
 
 ## 6. Demos: built, not built, and ideas
 
-**Built and working:** joining + streamed profiles; the register; the timer (tide reflex written by gpt-oss-120b, read, saved, counting down; `notify` effect); the renderer switch (each surface — phones, stage, controller — drawn by nova's DOM adapter, React or Vue, all in the one stylesheet; React/Vue kits put their name in the corner; the plain kit is gone); the X-ray; the SSH terminal (`ssh -p 26466 sakura.proxy.rlwy.net` on Railway); Q&A on phones; the assistant with vex queries; the census.
+**Built and working:** joining + streamed profiles; the register; the timer (tide reflex written by gpt-oss-120b, read, saved, counting down; `notify` effect); the renderer switch (each surface — phones, stage, controller — drawn by nova's DOM adapter, React or Vue, all in the one stylesheet; React/Vue kits put their name in the corner; the plain kit is gone); the SSH terminal (`ssh -p 26466 sakura.proxy.rlwy.net` on Railway); Q&A on phones; the assistant with vex queries; the census.
 
 **Agreed, not built (hatched cues on the controller):**
-- ~~**X-ray**~~ — BUILT 2026-09-30: the controller's tool writes an `xray` grant row per member (`grants/xray/give`, one `insertEach`); a reaction on those writes rebuilds every member's shell (each phone goes back to its card), and the X-ray is a fourth tab in the phone's bar, like the assistant — the bar lists it, ring 1 skips it for anyone not granted it. Pressed, the body shows every action instance on their shell, its canvas and its data as JSON (`xray.screen`, their own shell only; the X-ray view itself left out), with Look again. Decided 2026-09-30: what is given on stage is a tab, not a region of its own. Take it back deletes the rows. `xray-check`.
+- **X-ray** — a first version (built 2026-09-30) was REMOVED the same day: it listed each action's data (later each whole action as JSON) on a separate page, so it did not show what is on the screen — pressing Q&A showed the same thing, the actions actually on screen were not there, and raw layout JSON with its conditionals is unreadable. Being redesigned. What stays from it: the phone's bar is the phone's own buttons (a person's granted list, `inputs`), every action exists once, the name across the top is the phone's.
 - **The button** — given to three random people (a few in case one doesn't play along), on their main screen; pressed, it plays a sound. Not called "fart". The point is selective pushing: some have it, the rest were never sent it.
 - **Renderer switch** — React and Vue BUILT 2026-09-30 (nova `adapters/vue` + moss `terminal/vue`; lyceum `react.kit.ts`/`vue.kit.ts`; a `renderers` row per surface). Still to build: Terminal — the projector goes black and types out the SSH command, daring people to connect.
 - **Giving/taking actions** — the controller gives an action to everyone / a group / a person by writing grant rows; shells rebuild live (the mechanism exists: grants + `invalidateIdentity`).

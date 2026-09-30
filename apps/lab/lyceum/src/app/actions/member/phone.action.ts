@@ -10,13 +10,12 @@ import { phoneLayout } from './phone.layout';
 // `buttons` is the bar as authored: every action that can be on it, in order,
 // with its word. What a person actually gets is `bar` — the buttons whose
 // action they are granted, laid out — derived from their grants when their
-// shell is built (server/phone.ts). So what the speaker gives on stage, the
-// X-ray, is a button for whoever has the grant, and not there for anyone else.
+// shell is built (server/phone.ts). So something the speaker gives on stage is
+// a button for whoever has the grant, and not there for anyone else.
 export const PHONE_BUTTONS: readonly { action: string; label: string }[] = [
   { action: 'member.card', label: 'Card' },
   { action: 'questions.desk', label: 'Q&A' },
   { action: 'assistant.thread', label: 'Assistant' },
-  { action: 'xray.view', label: 'X-ray' },
 ];
 
 export const phoneAction: ActionDefinition = {
