@@ -45,22 +45,4 @@ export const CUE_TOOLS: readonly ActionDefinition[] = [
     ['React, then Vue: the same data, drawn by another renderer.', 'Terminal: the projector goes black and types out the SSH command.'],
     'Only the stylesheet switch exists (above). React, Vue and the terminal view do not.',
   ),
-  cue(
-    'tools.refusal',
-    'Put a refusal on the wall',
-    ['The latest refused query: its reason on the projector, never its words.'],
-    'Refused queries are only counted.',
-  ),
-  cue(
-    'tools.reflex',
-    'Show the saved timer',
-    ['Put the reflex the speaker saved on the projector, as the row it is.'],
-    'The slide shows a sketch of a reflex.',
-  ),
-  cue(
-    'tools.fire',
-    'Fire the timer now',
-    ['Rehearsal fallback: run the saved timer now, so the close lands on cue whatever the clock says.'],
-    'Nothing can run a saved timer early.',
-  ),
 ];

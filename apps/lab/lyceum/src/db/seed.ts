@@ -63,42 +63,6 @@ export const SLIDES: readonly { slideId: string; title: string; tools: readonly 
   { slideId: 'slide.behaviour', title: 'What a button does', tools: [], notes: ['In json-render, a button calls a function in your app. Code, written by hand.', 'In Nova, what a button does is data too: set this value, call that endpoint.', 'So a model can write the behaviour, and a schema checks it before it runs.'] },
   { slideId: 'slide.state', title: 'Where the state lives', tools: [], notes: ['In json-render, state lives in your app’s store: Redux, Zustand.', 'In Nova, each action keeps its own state.', 'So an action does not care where it runs: a browser, a server, a terminal.', 'That is why the shell can run on the server, one per person — and why the X-ray, the button and the looks just worked.'] },
   { slideId: 'slide.census', title: 'Is JSON enough for a real app?', tools: [], notes: ['The usual objection: JSON is fine for a demo, not for a real app.', 'This app is the slides, the projector, my controller, your phones, SSH, an assistant, timers.', 'Half of it is data.', 'The code is in three places: the renderers, the endpoints, the setup. Each is a third the size of the data.', 'Counted from the source this server runs, right now. Comments do not count.'] },
-
-  // ── not yet rewritten: the earlier draft, from here on ──
-  { slideId: 'slide.thesis', title: 'Code lives in five places', tools: [], notes: ['The five places, fast', 'Everything else: a closed grammar, a Zod schema at the boundary, a runtime', 'The claim for models: a narrow problem and a precise grammar is what makes a small one enough'] },
-  { slideId: 'slide.assignment', title: 'Assignment', tools: ['tools.assignment', 'tools.tally'], notes: ['Tell the room to watch their phones', 'Press Assign the room', 'One row changes per person — the phone follows without a reload'] },
-  { slideId: 'slide.charter', title: 'Policy is a document that compiles twice', tools: [], notes: ['Roles select actions and data verbs by glob', 'Compiles twice: which actions exist in a shell, and the scope policy on every query', 'The charter never enforces; moss refuses to boot an incoherent one'] },
-  { slideId: 'slide.stamped', title: 'A request cannot say who you are', tools: [], notes: ['The objection: the client can forge an id', 'It has no field to put one in — the engine stamps it from the session', 'Forms may update members; this says which member'] },
-
-  // ── 4 · vex ──
-  { slideId: 'slide.live', title: 'Nobody announced anything', tools: [], notes: ['Watch the numbers move as people act', 'No channel, no listener — the query knows what it reads', 'This is a reactive vex read'] },
-  { slideId: 'slide.entry', title: 'A query is a document', tools: [], notes: ['The card’s read, whole', 'refresh: reactive — why the numbers moved', '$scope: who you are, bound by the engine, never sent'] },
-  { slideId: 'slide.pipeline', title: 'The model is a compiler that runs once', tools: [], notes: ['Intent and shape in; a DSL, never SQL', 'Compiled under a policy the model never sees', 'Cached under a fingerprint — every one like it after is a replay, no model'] },
-  { slideId: 'slide.routing', title: 'A small model that only chooses', tools: [], notes: ['Jev never writes; it chooses — same information as an earlier request? which shape?', '48/48 over three runs, about 250 ms a decision', 'Earlier questions in the option text: 0.94 "new" for the identical question. In the state: certain', 'The shape guard: "How many in Archive?" matched the per-department counts at 0.73 — it wants one number'] },
-  { slideId: 'slide.query', title: 'The room asks the records', tools: [], notes: ['Tell the room: ask your assistant about the room — watch it open the vex query it ran', 'Watch the counts: replayed climbs, written-by-a-model stays low', 'The requests never go on the wall — people wrote them'] },
-  { slideId: 'slide.refusal', title: 'Somebody asked for the login links', tools: ['tools.refusal'], notes: ['Somebody will have asked — point at Refused', 'There is no prompt saying no. The table was never shown to the model', 'Generation runs as the asker; the engine compiles under the same policy'] },
-  { slideId: 'slide.models', title: 'Not a frontier model', tools: [], notes: ['gpt-oss-120b on Groq at reasoning low; qwen writes the ID cards; Jev routes', 'Groq caches the prompt prefix: 1.1 s to 0.03 s — the room shares one', 'Narrow problems, precise grammars: that is the argument, not the model'] },
-
-  // ── 5 · prism ──
-  { slideId: 'slide.prism', title: 'Transforms are data too', tools: [], notes: ['Every body and every result is shaped by a Prism config', 'No code strings, no formatting in components', 'It says which member; the engine decides'] },
-
-  // ── 6 · the assistant ──
-  { slideId: 'slide.assistant', title: 'Everything it knows is data', tools: [], notes: ['Five sections, assembled every turn', 'One prompt for everybody: behaviour. Per person: knowledge', 'Their actions come with their input schemas — that is what it can pre-fill'] },
-  { slideId: 'slide.declarations', title: 'The charter builds each assistant', tools: [], notes: ['A declaration applies to everyone who has its action', 'The speaker’s can automate because the speaker has the console', 'Grounding reads run as the person'] },
-  { slideId: 'slide.proposes', title: 'It never acts', tools: [], notes: ['open offers an enum of exactly your actions; query opens a result; automate is the speaker’s', 'Anything that changes something waits for a press', '18/18 on proposals; the reply text is the weak spot — say so'] },
-
-  // ── 7 · tide ──
-  { slideId: 'slide.reflex', title: 'The timer is a row', tools: ['tools.reflex'], notes: ['Back to the first minute', 'The draft said 30 minutes; Save anchored it to the second', 'A skill agent re-reads its instructions to learn there is nothing to do; this runs without a model'] },
-  { slideId: 'slide.clock', title: 'Whatever the model wrote, this is all it can reach', tools: [], notes: ['The clock has one verb: deck.write.update', 'The host stamps as: clock, whatever the document said', 'Its effect is its own vex write, through the same door'] },
-  { slideId: 'slide.measured', title: 'Measured, bad runs included', tools: [], notes: ['225/240 on clean timer requests; 1/12 correcting a draft — show both', 'Probes written before a run, never rewritten to pass', 'The leak: a package prompt carried lyceum’s probe; two scores voided and kept'] },
-
-  // ── 8 · strata ──
-  { slideId: 'slide.strata', title: 'When the grammar changes, documents migrate', tools: [], notes: ['If everything is JSON, what happens when nisc changes?', 'Grammars are ledgered sequences — even this app’s component props', 'strata upgrade writes the expected JSON; verify checks the edit against it'] },
-
-  // ── 9 · how it stays correct, and the close ──
-  { slideId: 'slide.checks', title: 'Every check boots the real app', tools: [], notes: ['Each check boots the real manifest over its own database', 'ssh-check drives a real SSH client', 'The fake model writes real DSL, so the engine and the policy are real'] },
-  { slideId: 'slide.map', title: 'One platform, three kinds of surprise', tools: ['tools.fire'], notes: ['Easy, only here, sounds fishy — read one row of each', 'One charter, one tree, one engine under all of it', 'If the timer will not land in time, fire it now'] },
-  { slideId: 'slide.end', title: 'It is all in the folder', tools: ['tools.questions'], notes: ['The timer moved the deck here — nobody pressed Next', 'It is all in the folder: apps/lab/lyceum', 'Thank them; take questions'] },
 ];
 
 // The deck the entries read (app/vex/deck.entries.ts).

@@ -119,16 +119,16 @@ const main = async (): Promise<void> => {
   // ── a live slide follows the room ──
   speaker.click('controls', 'back');
   check('back shows the slide before it', await onSlide(total - 2));
-  const live = SLIDES.findIndex((slide) => slide.slideId === 'slide.live');
+  const live = SLIDES.findIndex((slide) => slide.slideId === 'stage.register');
   await pick(live);
-  check('the live slide is on the stage', await onSlide(live));
-  check('the live slide counts an empty room', await stage.shows('main', '0 in the room'));
+  check('the register is on the stage', await onSlide(live));
+  check('the register counts an empty room', await stage.shows('main', '"label":"Joined","value":0'));
 
   const stranger = await connect(base);
   await stranger.hello();
   stranger.click('main', 'enter');
   await stranger.session();
-  check('somebody stepping in reaches the slide on the stage, unannounced', await stage.shows('main', '1 in the room'));
+  check('somebody joining reaches the slide on the stage, unannounced', await stage.shows('main', '"label":"Joined","value":1'));
 
   // ── the seed converges the deck on a live database, and leaves the talk ──
   // A database from an older version of SLIDES: a renamed slide, two swapped,
