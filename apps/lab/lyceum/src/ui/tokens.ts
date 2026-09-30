@@ -111,10 +111,13 @@ html:has(.page > [data-canvas="strip"]:not(:empty)) { font-size: clamp(16px, cal
 /* THE PHONE'S LIST (member/phone.action.ts): every action on it is as tall as
    it is, one under another, each with its rule under it — nothing stretches to
    fill what is left; the list scrolls instead. */
+.${ROOT_CLASS} .cell > [data-canvas="body"] { gap: 14px; padding: 14px 10px 24px; }
 .${ROOT_CLASS} .cell > [data-canvas="body"] > *,
 .${ROOT_CLASS} .cell > [data-canvas="body"] > *:last-child { flex: 0 0 auto; }
+/* each action its own block: framed all round, space between, so two never
+   read as one */
 .${ROOT_CLASS} .cell > [data-canvas="body"] > * > .sheet,
-.${ROOT_CLASS} .cell > [data-canvas="body"] > * > .sheet[data-size="fill"] { flex: 0 0 auto; border-bottom: var(--rule) solid var(--ink); }
+.${ROOT_CLASS} .cell > [data-canvas="body"] > * > .sheet[data-size="fill"] { flex: 0 0 auto; border: var(--rule) solid var(--ink); box-shadow: 6px 6px 0 var(--ink); }
 
 /* the phone's tabs: side by side, equally wide, one rule between them — not
    stacked like the other list regions */
