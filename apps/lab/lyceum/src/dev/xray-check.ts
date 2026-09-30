@@ -43,7 +43,7 @@ const main = async (): Promise<void> => {
 
   // ── 1 ──
   await ada.shows('tabs', 'Assistant');
-  check('before anything is given, a phone has no X-ray tab', !ada.showsNow('tabs', 'xray.tab'));
+  check('before anything is given, a phone has no X-ray tab', !ada.showsNow('tabs', 'xray.view'));
 
   // ── 2 ──
   const at = SLIDES.findIndex((slide) => slide.tools.includes('tools.xray'));
@@ -57,8 +57,8 @@ const main = async (): Promise<void> => {
   await speaker.shows('tools', 'People who have it');
   await new Promise((resolve) => setTimeout(resolve, 300));
   speaker.click('tools', 'give');
-  check('pressing Give: the X-ray is a tab on the first phone', await ada.shows('tabs', 'xray.tab'));
-  check('...and on the second', await ben.shows('tabs', 'xray.tab'));
+  check('pressing Give: the X-ray is a tab on the first phone', await ada.shows('tabs', 'xray.view'));
+  check('...and on the second', await ben.shows('tabs', 'xray.view'));
   check('...and the tool counts both', await speaker.shows('tools', '"label":"People who have it","value":2'));
   const grants = (await runtime.db.query<{ n: number }>("SELECT count(*)::int AS n FROM grants WHERE role = 'xray'")).rows[0]?.n;
   check(`...as one grant row each (${String(grants)})`, grants === 2);
@@ -88,7 +88,7 @@ const main = async (): Promise<void> => {
 // Gone: the tab bar stops showing the X-ray, within a few seconds.
 const waitGone = async (screen: Terminal): Promise<boolean> => {
   for (let tries = 0; tries < 200; tries += 1) {
-    if (!screen.showsNow('tabs', 'xray.tab')) return true;
+    if (!screen.showsNow('tabs', 'xray.view')) return true;
     await new Promise((resolve) => setTimeout(resolve, 25));
   }
   return false;

@@ -2,8 +2,8 @@ import { z } from 'zod';
 import type { ActionDefinition, LayoutNode } from '@niscorp/nova';
 
 // A TAB ON THE PHONE. The phone (member/phone.action.ts) has a bar of one tab
-// per thing its person HAS — composed, not authored: the bar lists every
-// candidate and nova's `reconcile` places only the actions this shell holds.
+// per thing its person has — composed, not authored: the manifest's `seeds`
+// (server/seeds.ts) put on it every granted action whose input declares `tab`.
 // So each of those actions renders itself small when it is loaded with
 // `{ tab: true }` — this button, named by its own `tabLabel` — and, pressed,
 // resets the phone's body to its full self:

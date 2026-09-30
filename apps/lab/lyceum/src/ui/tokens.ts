@@ -109,14 +109,11 @@ html:has(.page > [data-canvas="strip"]:not(:empty)) { font-size: clamp(16px, cal
 .${ROOT_CLASS} .cell > [data-canvas] > * > .sheet { border: 0; flex: 0 0 auto; border-bottom: var(--rule) solid var(--ink); }
 .${ROOT_CLASS} .cell > [data-canvas] > * > .sheet[data-size="fill"] { flex: 1 1 auto; border-bottom: 0; }
 
-/* the phone's tabs: side by side, one rule between them — not stacked like
-   the other list regions. Each as wide as its word needs, the room left over
-   shared out, so a fourth tab (something given on stage) still fits a phone
-   on one line. */
+/* the phone's tabs: side by side, equally wide, one rule between them — not
+   stacked like the other list regions */
 .${ROOT_CLASS} .cell > [data-canvas="tabs"] { flex-direction: row; gap: var(--rule); background: var(--ink); overflow: hidden; }
 .${ROOT_CLASS} .cell > [data-canvas="tabs"] > *,
-.${ROOT_CLASS} .cell > [data-canvas="tabs"] > *:last-child { flex: 1 1 auto; min-width: 0; }
-.${ROOT_CLASS} .cell > [data-canvas="tabs"] .action { padding-inline: .7rem; font-size: .85rem; white-space: nowrap; }
+.${ROOT_CLASS} .cell > [data-canvas="tabs"] > *:last-child { flex: 1 1 0; min-width: 0; }
 
 /* ── cell: a place in the grid, and its ink ── */
 /* defaults first, so an ink always out-ranks them */
@@ -305,8 +302,7 @@ html:has(.page > [data-canvas="strip"]:not(:empty)) { font-size: clamp(16px, cal
 .${ROOT_CLASS} .action[data-ink="alert"]:focus-visible { outline-color: var(--signal); }
 
 /* WHICH RENDERER DREW THIS: the React and Vue kits put their name in the
-   bottom corner of the page (the DOM kit, the default, puts none). Small,
-   out of the way, and on every screen that renderer draws. */
+   bottom corner of the page (the DOM kit, the default, puts none). */
 .${ROOT_CLASS} .page > .renderer {
   position: fixed; right: 0; bottom: 0; z-index: 10; pointer-events: none;
   padding: .2em .6em; background: var(--signal); color: var(--paper);
