@@ -87,6 +87,7 @@ export type Tide = {
 };
 
 const DEFAULT_MAX_CHAIN_DEPTH = 24;
+const DEFAULT_MAX_CHAIN_FACTS = 10_000;
 const DEFAULT_MAX_FAN_OUT = 10_000;
 const DEFAULT_LEASE_MS = 300_000;
 
@@ -108,6 +109,7 @@ export const createTide = (config: TideConfig): Tide => {
     effectsFor,
     actorFor: config.actor ?? ((as) => as),
     maxChainDepth: config.maxChainDepth ?? DEFAULT_MAX_CHAIN_DEPTH,
+    maxChainFacts: config.maxChainFacts ?? DEFAULT_MAX_CHAIN_FACTS,
     maxFanOut: config.maxFanOut ?? DEFAULT_MAX_FAN_OUT,
     leaseMs: config.leaseMs ?? DEFAULT_LEASE_MS,
     emit: config.onEvent ?? (() => undefined),
@@ -228,7 +230,7 @@ export const createTide = (config: TideConfig): Tide => {
     // write belongs to or the depth ceiling resets at every trip through
     // the host's database.
     if (!watchable(result.data)) return undefined;
-    const admission = await admitFact(config.store, { ...result.data, cause: options?.cause, depth: options?.depth ?? 0, as: options?.as });
+    const admission = await admitFact(config.store, { ...result.data, cause: options?.cause, depth: options?.depth ?? 0, as: options?.as }, deps.maxChainFacts);
     announceFact(deps.emit, admission);
     return 'stored' in admission ? admission.stored : undefined;
   };

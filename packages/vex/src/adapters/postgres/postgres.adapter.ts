@@ -4,6 +4,7 @@ import type { ResolvedQuery } from '../../engine/engine.types.js';
 import { introspectPostgres } from './introspect.js';
 import type { PgPool } from './introspect.js';
 import { compileQuery } from './compile.js';
+import { enforcementFor, type TimeoutEnforcement } from './statement-timeout.js';
 
 // ═══════════════════════════════════════════════════════════════
 // Config
@@ -74,8 +75,30 @@ export const createPostgresAdapter = (config: PostgresAdapterConfig): DatabaseAd
   const compile = (resolved: ResolvedQuery): CompiledQuery =>
     compileQuery(resolved);
 
+  // How reads are bounded (./statement-timeout.ts): unbounded until the
+  // engine asks; then plain when the connection already enforces the limit,
+  // wrapped per statement when it does not.
+  let perStatementMs: number | undefined;
+  const limitReads = async (ms: number): Promise<TimeoutEnforcement> => {
+    perStatementMs = undefined;
+    if (ms <= 0) return 'unenforced';
+    const enforcement = await enforcementFor(pool, ms);
+    if (enforcement === 'statement') perStatementMs = Math.round(ms);
+    return enforcement;
+  };
+
   const execute = async (query: CompiledQuery, params: BoundParams): Promise<Row[]> => {
-    const result = await pool.query(query.sql, params);
+    const { transaction } = pool;
+    const limit = perStatementMs;
+    const result =
+      limit === undefined || transaction === undefined
+        ? await pool.query(query.sql, params)
+        : await transaction(async (tx) => {
+            // SET cannot take a bind parameter; the limit is an integer the
+            // engine configured, never request data.
+            await tx.query(`SET LOCAL statement_timeout = ${limit}`);
+            return tx.query(query.sql, params);
+          });
     return coerceNumericColumns(result.rows, result.fields as PgField[]);
   };
 
@@ -85,5 +108,6 @@ export const createPostgresAdapter = (config: PostgresAdapterConfig): DatabaseAd
     compile,
     execute,
     capabilities,
+    limitReads,
   };
 };

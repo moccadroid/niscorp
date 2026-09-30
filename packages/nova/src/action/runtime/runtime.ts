@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { createDataStore } from '@shared/data-store';
 import type { DataStore } from '@shared/data-store';
 import { createIdFactory } from '@shared/ids';
-import { DefinitionValidationError } from '@shared/errors';
+import { DefinitionValidationError, ErrorCodes, NovaError } from '@shared/errors';
 import type { RenderNode } from '@layout/types';
 import type { Mutation, Step } from '../schemas';
 import { StepSchema } from '../schemas';
@@ -23,6 +23,7 @@ import { collectModelBindings } from './model-bindings';
 import { renderRuntime } from './render';
 import { executeSteps, noopOnError, type EndpointCalls, type StepContext } from './steps';
 import { attachTriggers, type TriggerHandle } from './triggers';
+import { ambientCause, isRunaway, nextCause, runawayMessage, type Cause } from './cause';
 
 const defaultInstanceIdFactory = createIdFactory('act');
 
@@ -121,10 +122,42 @@ export const createActionRuntime = (config: ActionRuntimeConfig): ActionRuntime 
   const onNavigate =
     config.onNavigate === undefined ? undefined : (effect: NavigationEffect): void => config.onNavigate!(stamp(effect));
 
-  const buildContext = (signal: AbortSignal = abortController.signal): StepContext => ({
+  // RELOADS MERGE. A `reload` asked for while one is running does not start a
+  // second mount beside it (a trigger that reloads and re-emits would double
+  // them every turn): it marks the running one to go round once more, with
+  // the newest cause, and returns. Each round is one hop, so a mount that
+  // reloads itself ends where its budget does (./cause.ts).
+  let reloading = false;
+  let reloadAgain: { cause: Cause | undefined } | undefined;
+  const reload = async (cause: Cause | undefined): Promise<void> => {
+    if (reloading) {
+      reloadAgain = { cause };
+      return;
+    }
+    reloading = true;
+    try {
+      let next: { cause: Cause | undefined } | undefined = { cause };
+      while (next !== undefined) {
+        reloadAgain = undefined;
+        const hop = nextCause(next.cause);
+        if (isRunaway(hop)) {
+          onError(new NovaError(ErrorCodes.runaway, runawayMessage(hop, `Reloading "${definition.id}"`), { depth: hop.depth, hops: hop.root.hops }));
+          return;
+        }
+        await runLifecycleHook('mount', definition, () => buildContext(abortController.signal, hop));
+        next = reloadAgain;
+      }
+    } finally {
+      reloading = false;
+      reloadAgain = undefined;
+    }
+  };
+
+  const buildContext = (signal: AbortSignal = abortController.signal, cause?: Cause): StepContext => ({
     dataStore,
     endpoints: definition.endpoints ?? {},
     functions: config.functions ?? {},
+    ...(config.endpointTimeoutMs === undefined ? {} : { endpointTimeoutMs: config.endpointTimeoutMs }),
     eventBus: config.eventBus,
     messageBus: config.messageBus,
     ...(config.fetch === undefined ? {} : { fetch: config.fetch }),
@@ -146,9 +179,8 @@ export const createActionRuntime = (config: ActionRuntimeConfig): ActionRuntime 
     // `resume` performs, made available as a step for canvases that never
     // suspend (a list keeps every card active, so nothing else would ever
     // re-read one).
-    onReload: async () => {
-      await runLifecycleHook('mount', definition, buildContext);
-    },
+    onReload: reload,
+    ...(cause === undefined ? {} : { cause }),
   });
 
   const setStatus = (next: ActionStatus): void => {
@@ -239,7 +271,16 @@ export const createActionRuntime = (config: ActionRuntimeConfig): ActionRuntime 
       dataStore.update(() => next);
     }
     attach();
-    await runLifecycleHook('mount', definition, buildContext);
+    // A mount a chain caused (a trigger's push) is one hop further down it;
+    // one nothing caused starts its own. Read before the first await — the
+    // navigation that set it is still on the stack (./cause.ts).
+    const parent = ambientCause();
+    const cause = nextCause(parent);
+    if (isRunaway(cause)) {
+      onError(new NovaError(ErrorCodes.runaway, runawayMessage(cause, `Mounting "${definition.id}"`), { depth: cause.depth, hops: cause.root.hops }));
+    } else {
+      await runLifecycleHook('mount', definition, () => buildContext(abortController.signal, cause));
+    }
     setStatus('active');
   };
 

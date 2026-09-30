@@ -10,6 +10,7 @@ import type {
 } from '../action';
 import { ActionDefinitionSchema, ActionFragmentSchema } from '../action';
 import { createActionRuntime } from '../action/runtime/runtime';
+import { depthRefusal, exceedsDepth } from '@niscorp/strata';
 import type { RuntimeRegistry } from './runtime-registry';
 import type { Shell } from './types';
 import type { ComponentRegistry, LayoutStore } from '../layout';
@@ -32,6 +33,12 @@ import type { CanvasState } from './types';
 export const validateActions = (actions: Record<string, ActionDefinition>): void => {
   const failures: DefinitionValidationFailure[] = [];
   for (const [actionId, def] of Object.entries(actions)) {
+    // Asked before the schema reads it: a recursive schema overflows the
+    // stack on a deep enough document instead of refusing it (strata depth.ts).
+    if (exceedsDepth(def)) {
+      failures.push({ id: actionId, issues: [{ code: 'custom', path: [], message: depthRefusal(), input: undefined }] });
+      continue;
+    }
     const result = ActionDefinitionSchema.safeParse(def);
     if (!result.success) failures.push({ id: actionId, issues: result.error.issues });
   }
@@ -46,6 +53,10 @@ export const validateActions = (actions: Record<string, ActionDefinition>): void
 export const validateFragments = (fragments: Record<string, ActionFragment>): void => {
   const failures: DefinitionValidationFailure[] = [];
   for (const [fragmentId, frag] of Object.entries(fragments)) {
+    if (exceedsDepth(frag)) {
+      failures.push({ id: fragmentId, issues: [{ code: 'custom', path: [], message: depthRefusal(), input: undefined }] });
+      continue;
+    }
     const result = ActionFragmentSchema.safeParse(frag);
     if (!result.success) failures.push({ id: fragmentId, issues: result.error.issues });
   }
@@ -74,6 +85,7 @@ export type RuntimeFactoryDeps = {
   transform?: TransformFn;
   fetch?: FetchFn;
   functions?: Record<string, FunctionHandler>;
+  endpointTimeoutMs?: number;
   strict: boolean;
   onError?: OnErrorHandler;
   instanceIdFn: IdFactory;
@@ -99,6 +111,7 @@ export const createRuntimeFactory = (deps: RuntimeFactoryDeps) => (
     ...(deps.transform === undefined ? {} : { transform: deps.transform }),
     ...(deps.fetch === undefined ? {} : { fetch: deps.fetch }),
     ...(deps.functions === undefined ? {} : { functions: deps.functions }),
+    ...(deps.endpointTimeoutMs === undefined ? {} : { endpointTimeoutMs: deps.endpointTimeoutMs }),
     onNavigate: (effect) => deps.onNavigate(canvasId, effect),
     ...(deps.onEndpoint === undefined ? {} : { onEndpoint: deps.onEndpoint }),
     strict: deps.strict,

@@ -632,6 +632,46 @@ describe('the chain ceiling', () => {
   });
 });
 
+describe('the breadth ceiling', () => {
+  // Depth caps how long a chain runs, not how wide: a reflex that writes two
+  // facts per fact it sees doubles each hop, and under the depth ceiling alone
+  // this one ran 8,191 effects before anything parked (maxChainDepth 12).
+  const split: ReflexInput = { id: 'split', intent: 'Each ping writes two more.', on: { fact: { entity: 'ping' } }, when: { $not: false }, effect: { name: 'split' } };
+  const splitting: EffectRegistry = {
+    split: {
+      writes: ['ping'],
+      run: (_input: unknown, ctx) => {
+        for (let i = 0; i < 2; i += 1) ctx.emit({ kind: 'write', entity: 'ping', op: 'insert', row: { i }, at: ctx.now });
+        return { ok: true };
+      },
+    },
+  };
+
+  it('parks what a chain mints past maxChainFacts, counted on its root', async () => {
+    const { tide, calls } = await harness([split], splitting, { maxChainDepth: 12, maxChainFacts: 50 });
+    await tide.ingest({ kind: 'write', entity: 'ping', op: 'insert', row: {}, at: T0 });
+    for (let step = 0; step < 40; step += 1) await tide.advance({ now: T0 + step * 1_000 });
+
+    const facts = await tide.ledger.facts();
+    const root = facts.find((fact) => fact.root === undefined);
+    expect(root?.descendants).toBeGreaterThan(50);
+    expect(facts.filter((fact) => fact.parked?.includes('maxChainFacts')).length).toBeGreaterThan(0);
+    // Every fact past the budget parked instead of running: the effects that
+    // ran are the ones admitted under it, not 2^12.
+    expect(calls.length).toBeLessThanOrEqual(51);
+  });
+
+  it('a second root has its own budget', async () => {
+    const { tide } = await harness([split], splitting, { maxChainDepth: 12, maxChainFacts: 50 });
+    await tide.ingest({ kind: 'write', entity: 'ping', op: 'insert', row: { n: 1 }, at: T0 });
+    await tide.ingest({ kind: 'write', entity: 'ping', op: 'insert', row: { n: 2 }, at: T0 });
+    for (let step = 0; step < 40; step += 1) await tide.advance({ now: T0 + step * 1_000 });
+    const roots = (await tide.ledger.facts()).filter((fact) => fact.root === undefined);
+    expect(roots).toHaveLength(2);
+    for (const root of roots) expect(root.descendants).toBeGreaterThan(50);
+  });
+});
+
 describe('arming', () => {
   const nightly: ReflexInput = {
     id: 'nightly',

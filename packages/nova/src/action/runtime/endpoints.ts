@@ -31,7 +31,7 @@ export type EndpointResult =
   // `response` (see FetchResponse.onChange). Absent for function endpoints and
   // for any transport that answers once.
   | { ok: true; data: unknown; status: number; onChange?: (handler: (data: unknown) => void) => Unsubscribe }
-  | { ok: false; error: { status: number; message: string; data: unknown; aborted?: boolean } };
+  | { ok: false; error: { status: number; message: string; data: unknown; aborted?: boolean; timedOut?: boolean } };
 
 const defaultFetch: FetchFn = () => {
   throw new Error('No fetch implementation provided to action runtime');
@@ -59,13 +59,38 @@ export type CallEndpointOptions = {
   transform?: TransformFn;
   signal?: AbortSignal;
   functions?: Record<string, FunctionHandler>;
+  // The shell's default wait for the reply; the endpoint's own `timeoutMs` wins.
+  timeoutMs?: number;
 };
 
+export const DEFAULT_ENDPOINT_TIMEOUT_MS = 30_000;
+
+// A CALL THAT NEVER ANSWERS FAILS. A route that hangs used to leave the action
+// loading for as long as it lived — nothing failed, so nothing said so. Past
+// its wait the call fails to `onError` (not as an abort: an abort is the
+// action going away, and is silent), and the transport is told to stop through
+// the signal it was handed. It bounds the FIRST answer only: a reply that
+// keeps answering (a reactive read under moss) follows on after it.
 export const callEndpoint = async (
   options: CallEndpointOptions,
 ): Promise<EndpointResult> => {
-  if ('fn' in options.endpoint) return callFunctionEndpoint(options.endpoint, options);
-  return callHttpEndpoint(options.endpoint, options);
+  const wait = options.endpoint.timeoutMs ?? options.timeoutMs ?? DEFAULT_ENDPOINT_TIMEOUT_MS;
+  const expiry = new AbortController();
+  const signal = options.signal === undefined ? expiry.signal : AbortSignal.any([options.signal, expiry.signal]);
+  const called = { ...options, signal };
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const expired = new Promise<EndpointResult>((settle) => {
+    timer = setTimeout(() => {
+      settle({ ok: false, error: { status: 0, message: `no reply within ${wait}ms`, data: undefined, timedOut: true } });
+      expiry.abort();
+    }, wait);
+  });
+  try {
+    const call = 'fn' in options.endpoint ? callFunctionEndpoint(options.endpoint, called) : callHttpEndpoint(options.endpoint, called);
+    return await Promise.race([call, expired]);
+  } finally {
+    clearTimeout(timer);
+  }
 };
 
 const callHttpEndpoint = async (
@@ -107,14 +132,29 @@ const callHttpEndpoint = async (
     return { ok: false, error: { status: 0, message, data: undefined } };
   }
 
-  const payload = await tryParseJson(response);
-
+  // A REPLY IS JSON. An endpoint's reply lands in `target`, runs through
+  // `response`, and is read by a layout — all of it JSON. A success whose body
+  // is not JSON (an HTML page, a proxy's text) used to land as whatever the
+  // fallback read, and under a transport that cannot read a body twice that
+  // was `undefined`: an empty screen that said it had succeeded. It is an
+  // error now, and `onError` hears it. No Content is the one success with no
+  // body. A FAILED reply stays tolerant — its text is still worth a message.
   if (!response.ok) {
+    const failed = await tryParseJson(response);
     const message =
-      hasKey(payload, 'message') && typeof payload['message'] === 'string'
-        ? payload['message']
+      hasKey(failed, 'message') && typeof failed['message'] === 'string'
+        ? failed['message']
         : `HTTP ${response.status}`;
-    return { ok: false, error: { status: response.status, message, data: payload } };
+    return { ok: false, error: { status: response.status, message, data: failed } };
+  }
+  if (response.status === 204 || response.status === 205) {
+    return { ok: true, data: undefined, status: response.status };
+  }
+  let payload: unknown;
+  try {
+    payload = await response.json();
+  } catch {
+    return { ok: false, error: { status: response.status, message: `the reply is not JSON (HTTP ${response.status})`, data: undefined } };
   }
 
   // `response` shapes the reply via the injected evaluator — over the reply

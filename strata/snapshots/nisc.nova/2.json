@@ -1,0 +1,2043 @@
+{
+  "kinds": {
+    "nisc.nova/action": {
+      "$defs": {
+        "__schema0": {
+          "$ref": "#/$defs/__schema1"
+        },
+        "__schema1": {
+          "anyOf": [
+            {
+              "additionalProperties": false,
+              "description": "A node that instantiates a component from the registry.",
+              "properties": {
+                "children": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/$defs/__schema0"
+                    },
+                    {
+                      "items": {
+                        "$ref": "#/$defs/__schema0"
+                      },
+                      "type": "array"
+                    }
+                  ],
+                  "description": "Child layout content (a single node or an array of nodes)."
+                },
+                "component": {
+                  "description": "The registry name of the component to render.",
+                  "type": "string"
+                },
+                "events": {
+                  "additionalProperties": {},
+                  "description": "Map of event name to event configuration handled by the action runtime.",
+                  "propertyNames": {
+                    "type": "string"
+                  },
+                  "type": "object"
+                },
+                "model": {
+                  "description": "A two-way binding path, e.g. \"$.name\".",
+                  "type": "string"
+                },
+                "props": {
+                  "additionalProperties": {},
+                  "description": "Component props; values may be bindings to be resolved at render time.",
+                  "propertyNames": {
+                    "type": "string"
+                  },
+                  "type": "object"
+                },
+                "ref": {
+                  "description": "A stable identifier used to target this component from event handlers.",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "component"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "description": "A node that conditionally renders one of two branches.",
+              "properties": {
+                "else": {
+                  "$ref": "#/$defs/__schema0",
+                  "description": "Layout to render when condition is falsy."
+                },
+                "if": {
+                  "description": "Resolvable value evaluated for truthiness."
+                },
+                "then": {
+                  "$ref": "#/$defs/__schema0",
+                  "description": "Layout to render when condition is truthy."
+                }
+              },
+              "required": [
+                "if",
+                "then"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "description": "A node that iterates an array binding and renders a layout for each item.",
+              "properties": {
+                "as": {
+                  "description": "Name to bind each iterated item under in the inner scope.",
+                  "type": "string"
+                },
+                "do": {
+                  "$ref": "#/$defs/__schema0",
+                  "description": "Layout rendered once per iterated item."
+                },
+                "for": {
+                  "description": "Resolvable value that resolves to an iterable array."
+                },
+                "key": {
+                  "description": "Optional key path on each item used for stable identity.",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "for",
+                "as",
+                "do"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "description": "A reference to a stored layout, inlined during render.",
+              "properties": {
+                "ref": {
+                  "description": "Identifier of a layout stored in the layout store to inline at this position.",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "ref"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "description": "A placeholder that a fragment-merge fills with a composing action's layout. Only meaningful inside an ActionFragment's layout.",
+              "properties": {
+                "slot": {
+                  "description": "Name of a slot placeholder. When an ActionFragment is composed with an action (a push/replace `with`), the fragment's `{ slot: \"body\" }` node is replaced by the composing action's own layout. An unfilled slot renders nothing.",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "slot"
+              ],
+              "type": "object"
+            },
+            {
+              "items": {
+                "$ref": "#/$defs/__schema0"
+              },
+              "type": "array"
+            },
+            {
+              "description": "A primitive layout value rendered as text.",
+              "type": [
+                "string",
+                "number",
+                "boolean",
+                "null"
+              ]
+            }
+          ],
+          "description": "Any layout node: component, conditional, loop, layout ref, slot, array of nodes, or a primitive text value."
+        },
+        "__schema2": {
+          "anyOf": [
+            {
+              "anyOf": [
+                {
+                  "additionalProperties": false,
+                  "description": "Set a field at a path to a literal value.",
+                  "properties": {
+                    "set": {
+                      "description": "Data path to write to, e.g. \"user.name\" or \"items.0.title\".",
+                      "type": "string"
+                    },
+                    "value": {
+                      "description": "Literal value to write at the path."
+                    }
+                  },
+                  "required": [
+                    "set",
+                    "value"
+                  ],
+                  "type": "object"
+                },
+                {
+                  "additionalProperties": false,
+                  "description": "Set a field at a path by copying from another path.",
+                  "properties": {
+                    "from": {
+                      "description": "Data path (or template path) to read the value from.",
+                      "type": "string"
+                    },
+                    "set": {
+                      "description": "Data path to write to.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "set",
+                    "from"
+                  ],
+                  "type": "object"
+                },
+                {
+                  "additionalProperties": false,
+                  "description": "Flip a boolean at the given path.",
+                  "properties": {
+                    "toggle": {
+                      "description": "Boolean data path to flip.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "toggle"
+                  ],
+                  "type": "object"
+                },
+                {
+                  "additionalProperties": false,
+                  "description": "Increment a numeric field.",
+                  "properties": {
+                    "by": {
+                      "description": "Amount to increment by; defaults to 1.",
+                      "type": "number"
+                    },
+                    "increment": {
+                      "description": "Numeric data path to increment.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "increment"
+                  ],
+                  "type": "object"
+                },
+                {
+                  "additionalProperties": false,
+                  "description": "Decrement a numeric field.",
+                  "properties": {
+                    "by": {
+                      "description": "Amount to decrement by; defaults to 1.",
+                      "type": "number"
+                    },
+                    "decrement": {
+                      "description": "Numeric data path to decrement.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "decrement"
+                  ],
+                  "type": "object"
+                },
+                {
+                  "additionalProperties": false,
+                  "description": "Append a value to an array field.",
+                  "properties": {
+                    "push": {
+                      "description": "Array data path to append to.",
+                      "type": "string"
+                    },
+                    "value": {
+                      "description": "Value to append."
+                    }
+                  },
+                  "required": [
+                    "push"
+                  ],
+                  "type": "object"
+                },
+                {
+                  "additionalProperties": false,
+                  "description": "Remove the last element from an array field.",
+                  "properties": {
+                    "pop": {
+                      "description": "Array data path to remove the last element from.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "pop"
+                  ],
+                  "type": "object"
+                },
+                {
+                  "additionalProperties": false,
+                  "description": "Remove an element at a specific index of an array field.",
+                  "properties": {
+                    "index": {
+                      "anyOf": [
+                        {
+                          "maximum": 9007199254740991,
+                          "minimum": -9007199254740991,
+                          "type": "integer"
+                        },
+                        {
+                          "type": "string"
+                        }
+                      ],
+                      "description": "Index to remove. A string is a template (e.g. \"{{@event.payload}}\") resolved before applying."
+                    },
+                    "removeAt": {
+                      "description": "Array data path to remove an element from.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "removeAt",
+                    "index"
+                  ],
+                  "type": "object"
+                },
+                {
+                  "additionalProperties": false,
+                  "description": "Move an array element from one index to another.",
+                  "properties": {
+                    "from": {
+                      "anyOf": [
+                        {
+                          "maximum": 9007199254740991,
+                          "minimum": -9007199254740991,
+                          "type": "integer"
+                        },
+                        {
+                          "type": "string"
+                        }
+                      ],
+                      "description": "Index to move. A string is a template (e.g. \"{{@event.payload}}\") resolved before applying."
+                    },
+                    "move": {
+                      "description": "Array data path to reorder within.",
+                      "type": "string"
+                    },
+                    "to": {
+                      "anyOf": [
+                        {
+                          "maximum": 9007199254740991,
+                          "minimum": -9007199254740991,
+                          "type": "integer"
+                        },
+                        {
+                          "type": "string"
+                        }
+                      ],
+                      "description": "Destination index. A string is a template resolved before applying."
+                    }
+                  },
+                  "required": [
+                    "move",
+                    "from",
+                    "to"
+                  ],
+                  "type": "object"
+                },
+                {
+                  "additionalProperties": false,
+                  "description": "Clear an array or object field.",
+                  "properties": {
+                    "clear": {
+                      "description": "Array or object data path to clear.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "clear"
+                  ],
+                  "type": "object"
+                },
+                {
+                  "additionalProperties": false,
+                  "description": "Reset a field to its initial value from the action definition.",
+                  "properties": {
+                    "reset": {
+                      "description": "Data path to reset to its initial (definition.data) value.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "reset"
+                  ],
+                  "type": "object"
+                }
+              ],
+              "description": "A single immutable mutation applied to the action data."
+            },
+            {
+              "anyOf": [
+                {
+                  "additionalProperties": false,
+                  "description": "Invoke a named endpoint with optional success/error step branches.",
+                  "properties": {
+                    "call": {
+                      "description": "Name of the endpoint to invoke.",
+                      "type": "string"
+                    },
+                    "onError": {
+                      "description": "Steps to run after an error response (with @error scope available).",
+                      "items": {
+                        "$ref": "#/$defs/__schema2"
+                      },
+                      "type": "array"
+                    },
+                    "onSuccess": {
+                      "description": "Steps to run after a successful response.",
+                      "items": {
+                        "$ref": "#/$defs/__schema2"
+                      },
+                      "type": "array"
+                    }
+                  },
+                  "required": [
+                    "call"
+                  ],
+                  "type": "object"
+                },
+                {
+                  "additionalProperties": false,
+                  "description": "Publish a payload to a message channel.",
+                  "properties": {
+                    "emit": {
+                      "additionalProperties": false,
+                      "description": "Channel + payload to publish.",
+                      "properties": {
+                        "channel": {
+                          "description": "Channel name to publish on.",
+                          "type": "string"
+                        },
+                        "payload": {
+                          "description": "Payload to publish; templates are resolved against the current data."
+                        }
+                      },
+                      "required": [
+                        "channel"
+                      ],
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "emit"
+                  ],
+                  "type": "object"
+                },
+                {
+                  "additionalProperties": false,
+                  "description": "Push a new action onto a canvas (escapes via onNavigate callback).",
+                  "properties": {
+                    "push": {
+                      "additionalProperties": false,
+                      "description": "Push parameters.",
+                      "properties": {
+                        "action": {
+                          "description": "Definition id of the action to push onto a canvas — MUST be an id that actually exists (an unknown id fails at click time, invisible to a mount check).",
+                          "type": "string"
+                        },
+                        "canvas": {
+                          "description": "Canvas id to push onto; defaults to the current canvas.",
+                          "type": "string"
+                        },
+                        "input": {
+                          "additionalProperties": {},
+                          "description": "Initial input merged into the new action data. Keys must belong to the target action's declared input contract — invented keys are silently useless.",
+                          "propertyNames": {
+                            "type": "string"
+                          },
+                          "type": "object"
+                        },
+                        "with": {
+                          "description": "Fragment ids to compose the action with before it is instantiated. Each wraps the action (the action fills its `{ slot }`) and contributes its triggers/data; the action wins on conflict. See ActionFragment.",
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        }
+                      },
+                      "required": [
+                        "action"
+                      ],
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "push"
+                  ],
+                  "type": "object"
+                },
+                {
+                  "additionalProperties": false,
+                  "description": "Pop the current action (escapes via onNavigate callback).",
+                  "properties": {
+                    "pop": {
+                      "const": true,
+                      "description": "Sentinel literal — must be true.",
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "pop"
+                  ],
+                  "type": "object"
+                },
+                {
+                  "additionalProperties": false,
+                  "description": "Replace the current action (escapes via onNavigate callback).",
+                  "properties": {
+                    "replace": {
+                      "additionalProperties": false,
+                      "description": "Replace parameters.",
+                      "properties": {
+                        "action": {
+                          "description": "Definition id of the replacement action.",
+                          "type": "string"
+                        },
+                        "canvas": {
+                          "description": "Canvas id to replace on; defaults to the current canvas.",
+                          "type": "string"
+                        },
+                        "input": {
+                          "additionalProperties": {},
+                          "description": "Initial input merged into the new action data.",
+                          "propertyNames": {
+                            "type": "string"
+                          },
+                          "type": "object"
+                        },
+                        "with": {
+                          "description": "Fragment ids to compose the action with before it is instantiated. Each wraps the action (the action fills its `{ slot }`) and contributes its triggers/data; the action wins on conflict. See ActionFragment.",
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        }
+                      },
+                      "required": [
+                        "action"
+                      ],
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "replace"
+                  ],
+                  "type": "object"
+                },
+                {
+                  "additionalProperties": false,
+                  "description": "Pop a canvas down to a given instance (escapes via onNavigate callback).",
+                  "properties": {
+                    "popTo": {
+                      "additionalProperties": false,
+                      "description": "Pop-to-instance parameters.",
+                      "properties": {
+                        "canvas": {
+                          "description": "Canvas id to pop on; defaults to the current canvas.",
+                          "type": "string"
+                        },
+                        "instance": {
+                          "description": "Pop the canvas until this instance id is on top (no-op if absent).",
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "instance"
+                      ],
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "popTo"
+                  ],
+                  "type": "object"
+                },
+                {
+                  "additionalProperties": false,
+                  "description": "Clear a canvas and push a single new root action (escapes via onNavigate callback).",
+                  "properties": {
+                    "resetTo": {
+                      "additionalProperties": false,
+                      "description": "Reset parameters.",
+                      "properties": {
+                        "action": {
+                          "description": "Definition id of the new root action.",
+                          "type": "string"
+                        },
+                        "canvas": {
+                          "description": "Canvas id to reset; defaults to the current canvas.",
+                          "type": "string"
+                        },
+                        "input": {
+                          "additionalProperties": {},
+                          "description": "Initial input merged into the new root action.",
+                          "propertyNames": {
+                            "type": "string"
+                          },
+                          "type": "object"
+                        },
+                        "with": {
+                          "description": "Fragment ids to compose the action with. See ActionFragment.",
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        }
+                      },
+                      "required": [
+                        "action"
+                      ],
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "resetTo"
+                  ],
+                  "type": "object"
+                },
+                {
+                  "additionalProperties": false,
+                  "description": "Remove one instance anywhere in a canvas stack (escapes via onNavigate callback).",
+                  "properties": {
+                    "removeInstance": {
+                      "additionalProperties": false,
+                      "description": "Remove-instance parameters.",
+                      "properties": {
+                        "canvas": {
+                          "description": "Canvas id to remove from; defaults to the current canvas.",
+                          "type": "string"
+                        },
+                        "instance": {
+                          "description": "Instance id to unmount and drop from the stack (no-op if absent).",
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "instance"
+                      ],
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "removeInstance"
+                  ],
+                  "type": "object"
+                },
+                {
+                  "additionalProperties": false,
+                  "description": "Close the firing instance — the list-card X (escapes via onNavigate callback).",
+                  "properties": {
+                    "removeSelf": {
+                      "const": true,
+                      "description": "Sentinel literal — must be true. Removes the firing instance (desugars to removeInstance).",
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "removeSelf"
+                  ],
+                  "type": "object"
+                },
+                {
+                  "additionalProperties": false,
+                  "description": "Make a canvas hold exactly the actions a list names: push the missing, remove the unlisted, keep the rest mounted (escapes via onNavigate callback).",
+                  "properties": {
+                    "reconcile": {
+                      "additionalProperties": false,
+                      "description": "Reconcile parameters.",
+                      "properties": {
+                        "action": {
+                          "description": "The row field naming the action to place, e.g. \"tool_id\". Rows without it are skipped.",
+                          "type": "string"
+                        },
+                        "canvas": {
+                          "description": "Canvas id to reconcile; defaults to the current canvas.",
+                          "type": "string"
+                        },
+                        "input": {
+                          "description": "The row field holding that action's input (an object), if any.",
+                          "type": "string"
+                        },
+                        "own": {
+                          "description": "What this step may remove: \"pushed\" (default) only what this action placed there; \"canvas\" everything on it — for an action that owns the canvas outright.",
+                          "enum": [
+                            "pushed",
+                            "canvas"
+                          ],
+                          "type": "string"
+                        },
+                        "to": {
+                          "description": "Binding to the desired list, e.g. \"$.tools\" — an array of rows; anything else is an empty list.",
+                          "type": "string"
+                        },
+                        "with": {
+                          "description": "Fragment ids to compose each placed action with. See ActionFragment.",
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        }
+                      },
+                      "required": [
+                        "to",
+                        "action"
+                      ],
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "reconcile"
+                  ],
+                  "type": "object"
+                },
+                {
+                  "additionalProperties": false,
+                  "description": "Re-read the firing instance in place — the list-card open.",
+                  "properties": {
+                    "reload": {
+                      "const": true,
+                      "description": "Sentinel literal — must be true. Re-runs this instance's mount hook.",
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "reload"
+                  ],
+                  "type": "object"
+                }
+              ],
+              "description": "An effect that touches the outside world."
+            }
+          ],
+          "description": "A step is either a mutation or an effect."
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "description": "Definition of an action: layout + data + behavior.",
+      "properties": {
+        "data": {
+          "additionalProperties": {},
+          "description": "Static default data merged with input on mount.",
+          "propertyNames": {
+            "type": "string"
+          },
+          "type": "object"
+        },
+        "description": {
+          "description": "Free-form description.",
+          "type": "string"
+        },
+        "endpoints": {
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "additionalProperties": false,
+                "description": "A named HTTP call. `request`/`response` shape the body/reply via the injected transform.",
+                "properties": {
+                  "errorTarget": {
+                    "description": "Data path to store the error at on failure.",
+                    "type": "string"
+                  },
+                  "headers": {
+                    "additionalProperties": {
+                      "type": "string"
+                    },
+                    "description": "Static request headers.",
+                    "propertyNames": {
+                      "type": "string"
+                    },
+                    "type": "object"
+                  },
+                  "method": {
+                    "description": "HTTP method.",
+                    "enum": [
+                      "GET",
+                      "POST",
+                      "PUT",
+                      "PATCH",
+                      "DELETE"
+                    ],
+                    "type": "string"
+                  },
+                  "request": {
+                    "description": "Transform config run by the injected evaluator over the ACTION DATA to build the request body — EVALUATED ON EVERY CALL, so body values can follow screen state. Static parts are literal JSON; a dynamic part is an evaluator op over the data root, e.g. { \"q\": { \"$ref\": \"$.search\" } } makes body field q carry the current $.search each call. Requires an injected transform."
+                  },
+                  "response": {
+                    "description": "Transform config run by the injected evaluator over the reply as received (`$` is the reply — object, array, or scalar) to produce the value stored at `target`. Requires an injected transform."
+                  },
+                  "target": {
+                    "description": "Data path to store the result at on success.",
+                    "type": "string"
+                  },
+                  "timeoutMs": {
+                    "description": "How long to wait for the reply, in ms, before the call fails to onError. Defaults to the shell default (30000). Set it on an endpoint that is slow by nature — a model call that may take minutes.",
+                    "exclusiveMinimum": 0,
+                    "maximum": 9007199254740991,
+                    "type": "integer"
+                  },
+                  "url": {
+                    "description": "Template URL, e.g. \"/api/users/{{$.userId}}\".",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "url",
+                  "method"
+                ],
+                "type": "object"
+              },
+              {
+                "additionalProperties": false,
+                "description": "A named local function call. Handler is provided via `ShellConfig.functions`.",
+                "properties": {
+                  "errorTarget": {
+                    "description": "Data path to store the error at on failure.",
+                    "type": "string"
+                  },
+                  "fn": {
+                    "description": "Key of a function registered in `ShellConfig.functions`. The host must register the name before the action runs.",
+                    "type": "string"
+                  },
+                  "target": {
+                    "description": "Data path to store the return value at on success.",
+                    "type": "string"
+                  },
+                  "timeoutMs": {
+                    "description": "How long to wait for the reply, in ms, before the call fails to onError. Defaults to the shell default (30000). Set it on an endpoint that is slow by nature — a model call that may take minutes.",
+                    "exclusiveMinimum": 0,
+                    "maximum": 9007199254740991,
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "fn"
+                ],
+                "type": "object"
+              }
+            ],
+            "description": "An endpoint — either an HTTP call or a local function."
+          },
+          "description": "Named endpoints — HTTP calls or local functions.",
+          "propertyNames": {
+            "type": "string"
+          },
+          "type": "object"
+        },
+        "id": {
+          "description": "Stable definition id.",
+          "type": "string"
+        },
+        "input": {
+          "additionalProperties": {},
+          "description": "JSON Schema of the data keys an opener may seed when loading this action — its public, openable-input contract (author in Zod, convert with z.toJSONSchema). Fields must be a subset of `data`. Descriptive only: the runtime does not validate loads against it.",
+          "propertyNames": {
+            "type": "string"
+          },
+          "type": "object"
+        },
+        "layout": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "$ref": "#/$defs/__schema0"
+            }
+          ],
+          "description": "Either a layout id stored in the layout store, or an inline LayoutNode."
+        },
+        "lifecycle": {
+          "additionalProperties": false,
+          "description": "Lifecycle hooks.",
+          "properties": {
+            "mount": {
+              "description": "Steps to run when the action mounts.",
+              "items": {
+                "$ref": "#/$defs/__schema2"
+              },
+              "type": "array"
+            },
+            "resume": {
+              "description": "Steps to run when the action resumes.",
+              "items": {
+                "$ref": "#/$defs/__schema2"
+              },
+              "type": "array"
+            },
+            "suspend": {
+              "description": "Steps to run when the action is suspended.",
+              "items": {
+                "$ref": "#/$defs/__schema2"
+              },
+              "type": "array"
+            },
+            "unmount": {
+              "description": "Steps to run when the action unmounts.",
+              "items": {
+                "$ref": "#/$defs/__schema2"
+              },
+              "type": "array"
+            }
+          },
+          "type": "object"
+        },
+        "name": {
+          "description": "Human-readable name.",
+          "type": "string"
+        },
+        "title": {
+          "description": "A resolvable label for this instance, evaluated against its own data (e.g. '{{$.view.record.name}}'). Exposed as `instance.title` on a canvas's actionLayout scope so stack-nav chrome can label crumbs/tabs; falls back to `name` then the action id.",
+          "type": "string"
+        },
+        "triggers": {
+          "description": "Event/message triggers.",
+          "items": {
+            "additionalProperties": false,
+            "description": "Binds an event or message source to an ordered sequence of steps.",
+            "properties": {
+              "do": {
+                "description": "Ordered steps to execute when the trigger fires. Steps may reference the firing event as \"@event\" — \"@event.payload\" is the fired value (a table row click: the row's clickKey/rowKey field; an input's ui:model: the typed text).",
+                "items": {
+                  "$ref": "#/$defs/__schema2"
+                },
+                "type": "array"
+              },
+              "event": {
+                "description": "UI event type to listen for: \"ui:click\" (activations, incl. table rows), \"ui:model\" (an input's value changed), \"ui:key\".",
+                "type": "string"
+              },
+              "key": {
+                "description": "Key to filter \"ui:key\" events by, e.g. \"ArrowDown\".",
+                "type": "string"
+              },
+              "message": {
+                "description": "Message bus channel name to listen on (fired by an `emit` step, possibly from another action).",
+                "type": "string"
+              },
+              "ref": {
+                "description": "Component ref to filter events by — MUST match a `ref` carried by a node in this action's layout; a trigger on a ref no layout node carries never fires.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "do"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "type": "object"
+    },
+    "nisc.nova/fragment": {
+      "$defs": {
+        "__schema0": {
+          "$ref": "#/$defs/__schema1"
+        },
+        "__schema1": {
+          "anyOf": [
+            {
+              "additionalProperties": false,
+              "description": "A node that instantiates a component from the registry.",
+              "properties": {
+                "children": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/$defs/__schema0"
+                    },
+                    {
+                      "items": {
+                        "$ref": "#/$defs/__schema0"
+                      },
+                      "type": "array"
+                    }
+                  ],
+                  "description": "Child layout content (a single node or an array of nodes)."
+                },
+                "component": {
+                  "description": "The registry name of the component to render.",
+                  "type": "string"
+                },
+                "events": {
+                  "additionalProperties": {},
+                  "description": "Map of event name to event configuration handled by the action runtime.",
+                  "propertyNames": {
+                    "type": "string"
+                  },
+                  "type": "object"
+                },
+                "model": {
+                  "description": "A two-way binding path, e.g. \"$.name\".",
+                  "type": "string"
+                },
+                "props": {
+                  "additionalProperties": {},
+                  "description": "Component props; values may be bindings to be resolved at render time.",
+                  "propertyNames": {
+                    "type": "string"
+                  },
+                  "type": "object"
+                },
+                "ref": {
+                  "description": "A stable identifier used to target this component from event handlers.",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "component"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "description": "A node that conditionally renders one of two branches.",
+              "properties": {
+                "else": {
+                  "$ref": "#/$defs/__schema0",
+                  "description": "Layout to render when condition is falsy."
+                },
+                "if": {
+                  "description": "Resolvable value evaluated for truthiness."
+                },
+                "then": {
+                  "$ref": "#/$defs/__schema0",
+                  "description": "Layout to render when condition is truthy."
+                }
+              },
+              "required": [
+                "if",
+                "then"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "description": "A node that iterates an array binding and renders a layout for each item.",
+              "properties": {
+                "as": {
+                  "description": "Name to bind each iterated item under in the inner scope.",
+                  "type": "string"
+                },
+                "do": {
+                  "$ref": "#/$defs/__schema0",
+                  "description": "Layout rendered once per iterated item."
+                },
+                "for": {
+                  "description": "Resolvable value that resolves to an iterable array."
+                },
+                "key": {
+                  "description": "Optional key path on each item used for stable identity.",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "for",
+                "as",
+                "do"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "description": "A reference to a stored layout, inlined during render.",
+              "properties": {
+                "ref": {
+                  "description": "Identifier of a layout stored in the layout store to inline at this position.",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "ref"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "description": "A placeholder that a fragment-merge fills with a composing action's layout. Only meaningful inside an ActionFragment's layout.",
+              "properties": {
+                "slot": {
+                  "description": "Name of a slot placeholder. When an ActionFragment is composed with an action (a push/replace `with`), the fragment's `{ slot: \"body\" }` node is replaced by the composing action's own layout. An unfilled slot renders nothing.",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "slot"
+              ],
+              "type": "object"
+            },
+            {
+              "items": {
+                "$ref": "#/$defs/__schema0"
+              },
+              "type": "array"
+            },
+            {
+              "description": "A primitive layout value rendered as text.",
+              "type": [
+                "string",
+                "number",
+                "boolean",
+                "null"
+              ]
+            }
+          ],
+          "description": "Any layout node: component, conditional, loop, layout ref, slot, array of nodes, or a primitive text value."
+        },
+        "__schema2": {
+          "anyOf": [
+            {
+              "anyOf": [
+                {
+                  "additionalProperties": false,
+                  "description": "Set a field at a path to a literal value.",
+                  "properties": {
+                    "set": {
+                      "description": "Data path to write to, e.g. \"user.name\" or \"items.0.title\".",
+                      "type": "string"
+                    },
+                    "value": {
+                      "description": "Literal value to write at the path."
+                    }
+                  },
+                  "required": [
+                    "set",
+                    "value"
+                  ],
+                  "type": "object"
+                },
+                {
+                  "additionalProperties": false,
+                  "description": "Set a field at a path by copying from another path.",
+                  "properties": {
+                    "from": {
+                      "description": "Data path (or template path) to read the value from.",
+                      "type": "string"
+                    },
+                    "set": {
+                      "description": "Data path to write to.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "set",
+                    "from"
+                  ],
+                  "type": "object"
+                },
+                {
+                  "additionalProperties": false,
+                  "description": "Flip a boolean at the given path.",
+                  "properties": {
+                    "toggle": {
+                      "description": "Boolean data path to flip.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "toggle"
+                  ],
+                  "type": "object"
+                },
+                {
+                  "additionalProperties": false,
+                  "description": "Increment a numeric field.",
+                  "properties": {
+                    "by": {
+                      "description": "Amount to increment by; defaults to 1.",
+                      "type": "number"
+                    },
+                    "increment": {
+                      "description": "Numeric data path to increment.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "increment"
+                  ],
+                  "type": "object"
+                },
+                {
+                  "additionalProperties": false,
+                  "description": "Decrement a numeric field.",
+                  "properties": {
+                    "by": {
+                      "description": "Amount to decrement by; defaults to 1.",
+                      "type": "number"
+                    },
+                    "decrement": {
+                      "description": "Numeric data path to decrement.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "decrement"
+                  ],
+                  "type": "object"
+                },
+                {
+                  "additionalProperties": false,
+                  "description": "Append a value to an array field.",
+                  "properties": {
+                    "push": {
+                      "description": "Array data path to append to.",
+                      "type": "string"
+                    },
+                    "value": {
+                      "description": "Value to append."
+                    }
+                  },
+                  "required": [
+                    "push"
+                  ],
+                  "type": "object"
+                },
+                {
+                  "additionalProperties": false,
+                  "description": "Remove the last element from an array field.",
+                  "properties": {
+                    "pop": {
+                      "description": "Array data path to remove the last element from.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "pop"
+                  ],
+                  "type": "object"
+                },
+                {
+                  "additionalProperties": false,
+                  "description": "Remove an element at a specific index of an array field.",
+                  "properties": {
+                    "index": {
+                      "anyOf": [
+                        {
+                          "maximum": 9007199254740991,
+                          "minimum": -9007199254740991,
+                          "type": "integer"
+                        },
+                        {
+                          "type": "string"
+                        }
+                      ],
+                      "description": "Index to remove. A string is a template (e.g. \"{{@event.payload}}\") resolved before applying."
+                    },
+                    "removeAt": {
+                      "description": "Array data path to remove an element from.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "removeAt",
+                    "index"
+                  ],
+                  "type": "object"
+                },
+                {
+                  "additionalProperties": false,
+                  "description": "Move an array element from one index to another.",
+                  "properties": {
+                    "from": {
+                      "anyOf": [
+                        {
+                          "maximum": 9007199254740991,
+                          "minimum": -9007199254740991,
+                          "type": "integer"
+                        },
+                        {
+                          "type": "string"
+                        }
+                      ],
+                      "description": "Index to move. A string is a template (e.g. \"{{@event.payload}}\") resolved before applying."
+                    },
+                    "move": {
+                      "description": "Array data path to reorder within.",
+                      "type": "string"
+                    },
+                    "to": {
+                      "anyOf": [
+                        {
+                          "maximum": 9007199254740991,
+                          "minimum": -9007199254740991,
+                          "type": "integer"
+                        },
+                        {
+                          "type": "string"
+                        }
+                      ],
+                      "description": "Destination index. A string is a template resolved before applying."
+                    }
+                  },
+                  "required": [
+                    "move",
+                    "from",
+                    "to"
+                  ],
+                  "type": "object"
+                },
+                {
+                  "additionalProperties": false,
+                  "description": "Clear an array or object field.",
+                  "properties": {
+                    "clear": {
+                      "description": "Array or object data path to clear.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "clear"
+                  ],
+                  "type": "object"
+                },
+                {
+                  "additionalProperties": false,
+                  "description": "Reset a field to its initial value from the action definition.",
+                  "properties": {
+                    "reset": {
+                      "description": "Data path to reset to its initial (definition.data) value.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "reset"
+                  ],
+                  "type": "object"
+                }
+              ],
+              "description": "A single immutable mutation applied to the action data."
+            },
+            {
+              "anyOf": [
+                {
+                  "additionalProperties": false,
+                  "description": "Invoke a named endpoint with optional success/error step branches.",
+                  "properties": {
+                    "call": {
+                      "description": "Name of the endpoint to invoke.",
+                      "type": "string"
+                    },
+                    "onError": {
+                      "description": "Steps to run after an error response (with @error scope available).",
+                      "items": {
+                        "$ref": "#/$defs/__schema2"
+                      },
+                      "type": "array"
+                    },
+                    "onSuccess": {
+                      "description": "Steps to run after a successful response.",
+                      "items": {
+                        "$ref": "#/$defs/__schema2"
+                      },
+                      "type": "array"
+                    }
+                  },
+                  "required": [
+                    "call"
+                  ],
+                  "type": "object"
+                },
+                {
+                  "additionalProperties": false,
+                  "description": "Publish a payload to a message channel.",
+                  "properties": {
+                    "emit": {
+                      "additionalProperties": false,
+                      "description": "Channel + payload to publish.",
+                      "properties": {
+                        "channel": {
+                          "description": "Channel name to publish on.",
+                          "type": "string"
+                        },
+                        "payload": {
+                          "description": "Payload to publish; templates are resolved against the current data."
+                        }
+                      },
+                      "required": [
+                        "channel"
+                      ],
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "emit"
+                  ],
+                  "type": "object"
+                },
+                {
+                  "additionalProperties": false,
+                  "description": "Push a new action onto a canvas (escapes via onNavigate callback).",
+                  "properties": {
+                    "push": {
+                      "additionalProperties": false,
+                      "description": "Push parameters.",
+                      "properties": {
+                        "action": {
+                          "description": "Definition id of the action to push onto a canvas — MUST be an id that actually exists (an unknown id fails at click time, invisible to a mount check).",
+                          "type": "string"
+                        },
+                        "canvas": {
+                          "description": "Canvas id to push onto; defaults to the current canvas.",
+                          "type": "string"
+                        },
+                        "input": {
+                          "additionalProperties": {},
+                          "description": "Initial input merged into the new action data. Keys must belong to the target action's declared input contract — invented keys are silently useless.",
+                          "propertyNames": {
+                            "type": "string"
+                          },
+                          "type": "object"
+                        },
+                        "with": {
+                          "description": "Fragment ids to compose the action with before it is instantiated. Each wraps the action (the action fills its `{ slot }`) and contributes its triggers/data; the action wins on conflict. See ActionFragment.",
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        }
+                      },
+                      "required": [
+                        "action"
+                      ],
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "push"
+                  ],
+                  "type": "object"
+                },
+                {
+                  "additionalProperties": false,
+                  "description": "Pop the current action (escapes via onNavigate callback).",
+                  "properties": {
+                    "pop": {
+                      "const": true,
+                      "description": "Sentinel literal — must be true.",
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "pop"
+                  ],
+                  "type": "object"
+                },
+                {
+                  "additionalProperties": false,
+                  "description": "Replace the current action (escapes via onNavigate callback).",
+                  "properties": {
+                    "replace": {
+                      "additionalProperties": false,
+                      "description": "Replace parameters.",
+                      "properties": {
+                        "action": {
+                          "description": "Definition id of the replacement action.",
+                          "type": "string"
+                        },
+                        "canvas": {
+                          "description": "Canvas id to replace on; defaults to the current canvas.",
+                          "type": "string"
+                        },
+                        "input": {
+                          "additionalProperties": {},
+                          "description": "Initial input merged into the new action data.",
+                          "propertyNames": {
+                            "type": "string"
+                          },
+                          "type": "object"
+                        },
+                        "with": {
+                          "description": "Fragment ids to compose the action with before it is instantiated. Each wraps the action (the action fills its `{ slot }`) and contributes its triggers/data; the action wins on conflict. See ActionFragment.",
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        }
+                      },
+                      "required": [
+                        "action"
+                      ],
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "replace"
+                  ],
+                  "type": "object"
+                },
+                {
+                  "additionalProperties": false,
+                  "description": "Pop a canvas down to a given instance (escapes via onNavigate callback).",
+                  "properties": {
+                    "popTo": {
+                      "additionalProperties": false,
+                      "description": "Pop-to-instance parameters.",
+                      "properties": {
+                        "canvas": {
+                          "description": "Canvas id to pop on; defaults to the current canvas.",
+                          "type": "string"
+                        },
+                        "instance": {
+                          "description": "Pop the canvas until this instance id is on top (no-op if absent).",
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "instance"
+                      ],
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "popTo"
+                  ],
+                  "type": "object"
+                },
+                {
+                  "additionalProperties": false,
+                  "description": "Clear a canvas and push a single new root action (escapes via onNavigate callback).",
+                  "properties": {
+                    "resetTo": {
+                      "additionalProperties": false,
+                      "description": "Reset parameters.",
+                      "properties": {
+                        "action": {
+                          "description": "Definition id of the new root action.",
+                          "type": "string"
+                        },
+                        "canvas": {
+                          "description": "Canvas id to reset; defaults to the current canvas.",
+                          "type": "string"
+                        },
+                        "input": {
+                          "additionalProperties": {},
+                          "description": "Initial input merged into the new root action.",
+                          "propertyNames": {
+                            "type": "string"
+                          },
+                          "type": "object"
+                        },
+                        "with": {
+                          "description": "Fragment ids to compose the action with. See ActionFragment.",
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        }
+                      },
+                      "required": [
+                        "action"
+                      ],
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "resetTo"
+                  ],
+                  "type": "object"
+                },
+                {
+                  "additionalProperties": false,
+                  "description": "Remove one instance anywhere in a canvas stack (escapes via onNavigate callback).",
+                  "properties": {
+                    "removeInstance": {
+                      "additionalProperties": false,
+                      "description": "Remove-instance parameters.",
+                      "properties": {
+                        "canvas": {
+                          "description": "Canvas id to remove from; defaults to the current canvas.",
+                          "type": "string"
+                        },
+                        "instance": {
+                          "description": "Instance id to unmount and drop from the stack (no-op if absent).",
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "instance"
+                      ],
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "removeInstance"
+                  ],
+                  "type": "object"
+                },
+                {
+                  "additionalProperties": false,
+                  "description": "Close the firing instance — the list-card X (escapes via onNavigate callback).",
+                  "properties": {
+                    "removeSelf": {
+                      "const": true,
+                      "description": "Sentinel literal — must be true. Removes the firing instance (desugars to removeInstance).",
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "removeSelf"
+                  ],
+                  "type": "object"
+                },
+                {
+                  "additionalProperties": false,
+                  "description": "Make a canvas hold exactly the actions a list names: push the missing, remove the unlisted, keep the rest mounted (escapes via onNavigate callback).",
+                  "properties": {
+                    "reconcile": {
+                      "additionalProperties": false,
+                      "description": "Reconcile parameters.",
+                      "properties": {
+                        "action": {
+                          "description": "The row field naming the action to place, e.g. \"tool_id\". Rows without it are skipped.",
+                          "type": "string"
+                        },
+                        "canvas": {
+                          "description": "Canvas id to reconcile; defaults to the current canvas.",
+                          "type": "string"
+                        },
+                        "input": {
+                          "description": "The row field holding that action's input (an object), if any.",
+                          "type": "string"
+                        },
+                        "own": {
+                          "description": "What this step may remove: \"pushed\" (default) only what this action placed there; \"canvas\" everything on it — for an action that owns the canvas outright.",
+                          "enum": [
+                            "pushed",
+                            "canvas"
+                          ],
+                          "type": "string"
+                        },
+                        "to": {
+                          "description": "Binding to the desired list, e.g. \"$.tools\" — an array of rows; anything else is an empty list.",
+                          "type": "string"
+                        },
+                        "with": {
+                          "description": "Fragment ids to compose each placed action with. See ActionFragment.",
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        }
+                      },
+                      "required": [
+                        "to",
+                        "action"
+                      ],
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "reconcile"
+                  ],
+                  "type": "object"
+                },
+                {
+                  "additionalProperties": false,
+                  "description": "Re-read the firing instance in place — the list-card open.",
+                  "properties": {
+                    "reload": {
+                      "const": true,
+                      "description": "Sentinel literal — must be true. Re-runs this instance's mount hook.",
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "reload"
+                  ],
+                  "type": "object"
+                }
+              ],
+              "description": "An effect that touches the outside world."
+            }
+          ],
+          "description": "A step is either a mutation or an effect."
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "description": "A reusable partial action — layout + wired behavior — merged into a concrete action at a push `with`. Abstract: only exists merged, never instantiated alone.",
+      "properties": {
+        "data": {
+          "additionalProperties": {},
+          "description": "Partial default data; deep-merged under the action (the action wins on conflict).",
+          "propertyNames": {
+            "type": "string"
+          },
+          "type": "object"
+        },
+        "description": {
+          "description": "Free-form description.",
+          "type": "string"
+        },
+        "endpoints": {
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "additionalProperties": false,
+                "description": "A named HTTP call. `request`/`response` shape the body/reply via the injected transform.",
+                "properties": {
+                  "errorTarget": {
+                    "description": "Data path to store the error at on failure.",
+                    "type": "string"
+                  },
+                  "headers": {
+                    "additionalProperties": {
+                      "type": "string"
+                    },
+                    "description": "Static request headers.",
+                    "propertyNames": {
+                      "type": "string"
+                    },
+                    "type": "object"
+                  },
+                  "method": {
+                    "description": "HTTP method.",
+                    "enum": [
+                      "GET",
+                      "POST",
+                      "PUT",
+                      "PATCH",
+                      "DELETE"
+                    ],
+                    "type": "string"
+                  },
+                  "request": {
+                    "description": "Transform config run by the injected evaluator over the ACTION DATA to build the request body — EVALUATED ON EVERY CALL, so body values can follow screen state. Static parts are literal JSON; a dynamic part is an evaluator op over the data root, e.g. { \"q\": { \"$ref\": \"$.search\" } } makes body field q carry the current $.search each call. Requires an injected transform."
+                  },
+                  "response": {
+                    "description": "Transform config run by the injected evaluator over the reply as received (`$` is the reply — object, array, or scalar) to produce the value stored at `target`. Requires an injected transform."
+                  },
+                  "target": {
+                    "description": "Data path to store the result at on success.",
+                    "type": "string"
+                  },
+                  "timeoutMs": {
+                    "description": "How long to wait for the reply, in ms, before the call fails to onError. Defaults to the shell default (30000). Set it on an endpoint that is slow by nature — a model call that may take minutes.",
+                    "exclusiveMinimum": 0,
+                    "maximum": 9007199254740991,
+                    "type": "integer"
+                  },
+                  "url": {
+                    "description": "Template URL, e.g. \"/api/users/{{$.userId}}\".",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "url",
+                  "method"
+                ],
+                "type": "object"
+              },
+              {
+                "additionalProperties": false,
+                "description": "A named local function call. Handler is provided via `ShellConfig.functions`.",
+                "properties": {
+                  "errorTarget": {
+                    "description": "Data path to store the error at on failure.",
+                    "type": "string"
+                  },
+                  "fn": {
+                    "description": "Key of a function registered in `ShellConfig.functions`. The host must register the name before the action runs.",
+                    "type": "string"
+                  },
+                  "target": {
+                    "description": "Data path to store the return value at on success.",
+                    "type": "string"
+                  },
+                  "timeoutMs": {
+                    "description": "How long to wait for the reply, in ms, before the call fails to onError. Defaults to the shell default (30000). Set it on an endpoint that is slow by nature — a model call that may take minutes.",
+                    "exclusiveMinimum": 0,
+                    "maximum": 9007199254740991,
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "fn"
+                ],
+                "type": "object"
+              }
+            ],
+            "description": "An endpoint — either an HTTP call or a local function."
+          },
+          "description": "Named endpoints, merged under the action (the action wins on a name clash).",
+          "propertyNames": {
+            "type": "string"
+          },
+          "type": "object"
+        },
+        "id": {
+          "description": "Stable fragment id, referenced from a push/replace `with: [...]`.",
+          "type": "string"
+        },
+        "kind": {
+          "const": "fragment",
+          "description": "Discriminator — marks this as an abstract, merge-only fragment.",
+          "type": "string"
+        },
+        "layout": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "$ref": "#/$defs/__schema0"
+            }
+          ],
+          "description": "The wrapping (chrome) layout, or a layout id. Put a `{ slot: \"body\" }` node where the composing action's own layout is dropped in."
+        },
+        "lifecycle": {
+          "additionalProperties": false,
+          "description": "Lifecycle hooks; per-hook steps run before the action's.",
+          "properties": {
+            "mount": {
+              "description": "Steps to run when the action mounts.",
+              "items": {
+                "$ref": "#/$defs/__schema2"
+              },
+              "type": "array"
+            },
+            "resume": {
+              "description": "Steps to run when the action resumes.",
+              "items": {
+                "$ref": "#/$defs/__schema2"
+              },
+              "type": "array"
+            },
+            "suspend": {
+              "description": "Steps to run when the action is suspended.",
+              "items": {
+                "$ref": "#/$defs/__schema2"
+              },
+              "type": "array"
+            },
+            "unmount": {
+              "description": "Steps to run when the action unmounts.",
+              "items": {
+                "$ref": "#/$defs/__schema2"
+              },
+              "type": "array"
+            }
+          },
+          "type": "object"
+        },
+        "name": {
+          "description": "Human-readable name.",
+          "type": "string"
+        },
+        "triggers": {
+          "description": "Pre-wired triggers (e.g. a modal's close/cancel). Concatenated before the action's triggers.",
+          "items": {
+            "additionalProperties": false,
+            "description": "Binds an event or message source to an ordered sequence of steps.",
+            "properties": {
+              "do": {
+                "description": "Ordered steps to execute when the trigger fires. Steps may reference the firing event as \"@event\" — \"@event.payload\" is the fired value (a table row click: the row's clickKey/rowKey field; an input's ui:model: the typed text).",
+                "items": {
+                  "$ref": "#/$defs/__schema2"
+                },
+                "type": "array"
+              },
+              "event": {
+                "description": "UI event type to listen for: \"ui:click\" (activations, incl. table rows), \"ui:model\" (an input's value changed), \"ui:key\".",
+                "type": "string"
+              },
+              "key": {
+                "description": "Key to filter \"ui:key\" events by, e.g. \"ArrowDown\".",
+                "type": "string"
+              },
+              "message": {
+                "description": "Message bus channel name to listen on (fired by an `emit` step, possibly from another action).",
+                "type": "string"
+              },
+              "ref": {
+                "description": "Component ref to filter events by — MUST match a `ref` carried by a node in this action's layout; a trigger on a ref no layout node carries never fires.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "do"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "kind",
+        "id"
+      ],
+      "type": "object"
+    },
+    "nisc.nova/layout": {
+      "$defs": {
+        "__schema0": {
+          "anyOf": [
+            {
+              "additionalProperties": false,
+              "description": "A node that instantiates a component from the registry.",
+              "properties": {
+                "children": {
+                  "anyOf": [
+                    {
+                      "$ref": "#"
+                    },
+                    {
+                      "items": {
+                        "$ref": "#"
+                      },
+                      "type": "array"
+                    }
+                  ],
+                  "description": "Child layout content (a single node or an array of nodes)."
+                },
+                "component": {
+                  "description": "The registry name of the component to render.",
+                  "type": "string"
+                },
+                "events": {
+                  "additionalProperties": {},
+                  "description": "Map of event name to event configuration handled by the action runtime.",
+                  "propertyNames": {
+                    "type": "string"
+                  },
+                  "type": "object"
+                },
+                "model": {
+                  "description": "A two-way binding path, e.g. \"$.name\".",
+                  "type": "string"
+                },
+                "props": {
+                  "additionalProperties": {},
+                  "description": "Component props; values may be bindings to be resolved at render time.",
+                  "propertyNames": {
+                    "type": "string"
+                  },
+                  "type": "object"
+                },
+                "ref": {
+                  "description": "A stable identifier used to target this component from event handlers.",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "component"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "description": "A node that conditionally renders one of two branches.",
+              "properties": {
+                "else": {
+                  "$ref": "#",
+                  "description": "Layout to render when condition is falsy."
+                },
+                "if": {
+                  "description": "Resolvable value evaluated for truthiness."
+                },
+                "then": {
+                  "$ref": "#",
+                  "description": "Layout to render when condition is truthy."
+                }
+              },
+              "required": [
+                "if",
+                "then"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "description": "A node that iterates an array binding and renders a layout for each item.",
+              "properties": {
+                "as": {
+                  "description": "Name to bind each iterated item under in the inner scope.",
+                  "type": "string"
+                },
+                "do": {
+                  "$ref": "#",
+                  "description": "Layout rendered once per iterated item."
+                },
+                "for": {
+                  "description": "Resolvable value that resolves to an iterable array."
+                },
+                "key": {
+                  "description": "Optional key path on each item used for stable identity.",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "for",
+                "as",
+                "do"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "description": "A reference to a stored layout, inlined during render.",
+              "properties": {
+                "ref": {
+                  "description": "Identifier of a layout stored in the layout store to inline at this position.",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "ref"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "description": "A placeholder that a fragment-merge fills with a composing action's layout. Only meaningful inside an ActionFragment's layout.",
+              "properties": {
+                "slot": {
+                  "description": "Name of a slot placeholder. When an ActionFragment is composed with an action (a push/replace `with`), the fragment's `{ slot: \"body\" }` node is replaced by the composing action's own layout. An unfilled slot renders nothing.",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "slot"
+              ],
+              "type": "object"
+            },
+            {
+              "items": {
+                "$ref": "#"
+              },
+              "type": "array"
+            },
+            {
+              "description": "A primitive layout value rendered as text.",
+              "type": [
+                "string",
+                "number",
+                "boolean",
+                "null"
+              ]
+            }
+          ],
+          "description": "Any layout node: component, conditional, loop, layout ref, slot, array of nodes, or a primitive text value."
+        }
+      },
+      "$ref": "#/$defs/__schema0",
+      "$schema": "https://json-schema.org/draft/2020-12/schema"
+    }
+  },
+  "sequence": "nisc.nova",
+  "version": 2
+}

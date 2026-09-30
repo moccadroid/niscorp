@@ -490,3 +490,30 @@ describe('write facts on postgres', () => {
     expect(calls).toEqual([{ who: 'm_9', from: 'lumen' }]);
   });
 });
+
+describe('the breadth ceiling on postgres', () => {
+  // The chain's root and its count are columns (nisc.moss.tide migration 2):
+  // a reflex writing two facts per fact it sees is held to maxChainFacts.
+  it('counts a chain on its root and parks past maxChainFacts', async () => {
+    const split: ReflexInput = { id: 'split', intent: 'Each ping writes two more.', on: { fact: { entity: 'ping' } }, when: { always: true }, effect: { name: 'split' } };
+    const effects: EffectRegistry = {
+      split: {
+        writes: ['ping'],
+        run: (_input: unknown, ctx) => {
+          for (let i = 0; i < 2; i += 1) ctx.emit({ kind: 'write', entity: 'ping', op: 'insert', row: { i }, at: ctx.now });
+          return { ok: true };
+        },
+      },
+    };
+    const { tide, calls, pool } = await harness([split], effects, { maxChainDepth: 12, maxChainFacts: 20 });
+    await tide.ingest({ kind: 'write', entity: 'ping', op: 'insert', row: {}, at: T0 });
+    for (let step = 0; step < 30; step += 1) await tide.advance({ now: T0 + step * 1_000 });
+
+    const roots = await pool.query('SELECT descendants FROM tide_fact WHERE root IS NULL');
+    expect(roots.rows).toHaveLength(1);
+    expect(Number(roots.rows[0]?.['descendants'])).toBeGreaterThan(20);
+    const parked = await pool.query("SELECT count(*)::int AS n FROM tide_fact WHERE parked LIKE '%maxChainFacts%'");
+    expect(Number(parked.rows[0]?.['n'])).toBeGreaterThan(0);
+    expect(calls.length).toBeLessThanOrEqual(21);
+  });
+});

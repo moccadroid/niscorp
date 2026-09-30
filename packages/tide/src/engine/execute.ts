@@ -287,7 +287,7 @@ const record = async (deps: EngineDeps, task: Task, token: string, settlement: S
     // Emits ride the SUCCESSFUL attempt's transaction. A throwing handler
     // discards its buffer, so a retry cannot double-mint a chain.
     const admissions: Admission[] = [];
-    for (const emit of settlement.emits) admissions.push(await admitFact(tx, emit));
+    for (const emit of settlement.emits) admissions.push(await admitFact(tx, emit, deps.maxChainFacts));
 
     if (settles) {
       const [run] = await tx.query({ table: 'run', where: { id: task.runId }, limit: 1 });
@@ -369,7 +369,7 @@ export const settleRuns = async (deps: EngineDeps, now: number): Promise<number>
       // A settlement is news about THIS reflex's work — counts of rows it
       // selected. Another tenant's digest has no business waking on it.
       as: run.as,
-    });
+    }, deps.maxChainFacts);
     announceFact(deps.emit, admission);
   }
 

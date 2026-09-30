@@ -87,6 +87,10 @@ export type QueryEngineConfig = {
     rejectUnindexedFilters?: boolean;
     entities?: string[];
     unsatisfiableTtlMs?: number;          // negative-cache TTL, default 300_000 (5 min)
+    // How long one read may run on the database before it is cancelled
+    // (default 10_000; 0: unbounded). Enforced by the database, at the
+    // cheapest place it can be — see adapters/postgres/statement-timeout.ts.
+    statementTimeoutMs?: number;
     // How many distinct optional-key combinations one entry may compile before
     // it warns. Not a limit on what runs — a note that an entry has stopped
     // being a question. Default 32.

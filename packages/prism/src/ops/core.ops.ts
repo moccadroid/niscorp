@@ -3,6 +3,7 @@ import type { RefNode, ConstNode, VarNode, GetNode, WithNode } from '../schemas'
 import { PrismError, ErrorCode } from '../errors';
 import { parseJsonPathCached, getByPath, type JsonPathSegment } from '../utils/jsonpath';
 import { isJsonObject, isJsonArray } from '../schemas/guards';
+import { measure } from '../engine/budget';
 
 // The optimizer attaches pre-parsed segments here at compile time so the
 // runtime can skip the JSONPath parser entirely.
@@ -68,6 +69,8 @@ export const opWith = (node: WithNode, context: EvalContext, evaluate: EvaluateF
   const extendedVars = { ...context.vars };
   for (const [name, expr] of Object.entries(declarations)) {
     extendedVars[name] = evaluate(expr, context);
+    // Read any number of times below: nested, a binding of [x, x] doubles.
+    measure(extendedVars[name] ?? null, context.budget);
   }
   return evaluate(value, { ...context, vars: extendedVars });
 };

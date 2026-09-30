@@ -161,6 +161,14 @@ describe('handler', () => {
       expect((result.body as Record<string, unknown>)['error']).toBe('invalid_request');
     });
 
+    it('refuses a request nested past the depth limit, instead of overflowing the schema', async () => {
+      let filter: unknown = { eq: ['t.a', 1] };
+      for (let i = 0; i < 2000; i++) filter = { and: [filter] };
+      const result = await handleQuery({ engine }, { intent: 'x', shape: {}, dsl: { from: ['t'], fields: ['t.a'], filter } }, {});
+      expect(result.status).toBe(400);
+      expect(String((result.body as Record<string, unknown>)['message'])).toContain('nests deeper than 256');
+    });
+
     it('rejects a request with neither shape nor fingerprint', async () => {
       const result = await handleQuery({ engine }, { intent: 'test' }, {});
       expect(result.status).toBe(400);

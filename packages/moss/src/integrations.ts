@@ -1,11 +1,11 @@
 import type { Sequence } from '@niscorp/strata';
 import { migrate, type DocumentStore } from '@niscorp/strata/postgres';
-import { StrataError, type Upgrader } from '@niscorp/strata';
+import { StrataError, depthRefusal, exceedsDepth, type Upgrader } from '@niscorp/strata';
 import { GENERATION_DDL } from './generation';
 import { z } from 'zod';
 import { ActionDefinitionSchema, LayoutNodeSchema, paletteEntryOf } from '@niscorp/nova';
 import type { ActionDefinition, ComponentMeta, LayoutPaletteEntry } from '@niscorp/nova';
-import { walkNodes, isRecord } from '@niscorp/nova/reflect';
+import { chainCycles, walkNodes, isRecord } from '@niscorp/nova/reflect';
 import { isBinding } from '@niscorp/nova/i18n';
 import type { PgPool } from '@niscorp/vex';
 import { hashIntegrationKey } from './assert';
@@ -552,6 +552,9 @@ export type IntakeContext = {
   // upgraded from the bundle's `grammar` stamp BEFORE they are parsed — an
   // action in an older grammar would fail today's strict schema otherwise.
   upgrader?: Upgrader;
+  // The host's own actions — a bundle's triggers can close a loop through
+  // them (the host emits what the integration listens to, and back).
+  hostActions?: Readonly<Record<string, ActionDefinition>>;
 };
 
 // THE HOST'S VOCABULARY, gathered from the manifest for one intake. The one
@@ -575,6 +578,7 @@ export const intakeContextOf = (
   tools: new Set(app.assistantTools ?? []),
   checks: new Set(app.publishChecks ?? []),
   regions: new Set(app.editorRegions ?? []),
+  hostActions: app.actions,
 });
 
 const AUDIENCE = /^[a-z][a-z0-9-]*$/;
@@ -620,6 +624,9 @@ const upgradeBundle = (payload: unknown, upgrader: Upgrader | undefined): { ok: 
 };
 
 export const runIntake = (payload: unknown, ctx: IntakeContext): IntakeResult => {
+  // Before anything reads it — the upgrader walks it and the schema recurses
+  // on it, and either overflows the stack on a deep enough payload.
+  if (exceedsDepth(payload)) return { ok: false, reasons: [depthRefusal()] };
   const upgraded = upgradeBundle(payload, ctx.upgrader);
   if (!upgraded.ok) return upgraded;
   const parsed = BundleSchema.safeParse(upgraded.payload);
@@ -742,6 +749,20 @@ export const runIntake = (payload: unknown, ctx: IntakeContext): IntakeResult =>
       } else if (!ctx.fingerprints.has(fingerprint)) {
         reasons.push(`action ${id}: endpoint "${name}" calls "${fingerprint}", which this app does not serve`);
       }
+    }
+  }
+
+  // ── no chain of steps that never ends ──
+  //
+  // A trigger that re-emits its own channel is valid data, and nova stops it
+  // at its budget when it runs — but a bundle is a stranger's code path into
+  // every principal's shell, so a loop is refused here rather than run. Walked
+  // with the host's actions, since a loop can close through the host's
+  // triggers; a loop the host has on its own is the host's to answer (boot
+  // names it) and does not refuse somebody else's bundle.
+  for (const cycle of chainCycles({ ...(ctx.hostActions ?? {}), ...bundle.actions })) {
+    if (cycle.steps.some((step) => bundle.actions[step.action] !== undefined)) {
+      reasons.push(`a chain of steps that never ends: ${cycle.path}`);
     }
   }
 

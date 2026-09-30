@@ -12,6 +12,8 @@ export const ErrorCode = {
   NODE_SHAPE: 'E_NODE_SHAPE',
   // A config's own `$assert` refused its input.
   ASSERT: 'E_ASSERT',
+  // An evaluation past its budget (engine/budget.ts).
+  BUDGET: 'E_BUDGET',
 } as const;
 
 export type ErrorCode = (typeof ErrorCode)[keyof typeof ErrorCode];

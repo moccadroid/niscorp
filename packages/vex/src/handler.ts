@@ -14,6 +14,7 @@ import type { CacheEntry } from './cache/cache.types.js';
 import type { QueryResponse } from './schemas/request.schema.js';
 import type { Query } from './schemas/query.schema.js';
 import { VexError } from './errors.js';
+import { depthRefusal, exceedsDepth } from '@niscorp/strata';
 import { canReadTable } from './scope/apply.js';
 
 // ═══════════════════════════════════════════════════════════════
@@ -397,6 +398,8 @@ const runQuery = async (
 ): Promise<QueryResult> => {
   const { engine } = config;
 
+  // Before the schema: a deep enough body overflows it (strata depth.ts).
+  if (exceedsDepth(body)) return { status: 400, body: { error: 'invalid_request', message: depthRefusal() } };
   const parsed = QueryRequestSchema.safeParse(body);
   if (!parsed.success) {
     return {

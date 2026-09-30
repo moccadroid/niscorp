@@ -26,6 +26,7 @@ import { opKeys, opValues, opFromEntries, opPick, opOmit, opType, opLength } fro
 import { opHas, opRenameKeys, opUpdate, opAssert, opWalk } from '../ops/transform.ops';
 import { opDate, opDateAdd, opDateDiff } from '../ops/time.ops';
 import { opLocaleDate, opLocaleMoney, opLocaleNumber } from '../ops/intl.ops';
+import { createBudget } from './budget';
 
 // ═══════════════════════════════════════════════════════════
 // Compile-time optimizer
@@ -308,7 +309,9 @@ const optimizeNode = (
     });
     if (allFoldable) {
       // Try to evaluate at compile time. Use an empty source/vars context.
-      const emptyCtx: EvalContext = { source: {}, vars: {} };
+      // Budgeted like any evaluation: a literal subtree can blow up too, and
+      // one that would is left for the runtime, which refuses it there.
+      const emptyCtx: EvalContext = { source: {}, vars: {}, budget: createBudget() };
       try {
         const folded = handler(optimized, emptyCtx, evaluate);
         const replacement: Record<string, unknown> = { $const: folded };

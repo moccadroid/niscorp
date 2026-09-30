@@ -1,6 +1,7 @@
 import { explainIssues } from '../utils/issues';
 import { ConfigSchema } from '../schemas/config.schema';
 import { PrismError, ErrorCode } from '../errors';
+import { depthRefusal, exceedsDepth } from '@niscorp/strata';
 import { desugar } from '../sugar/desugar';
 import type { CompileOptions, CompiledIr, JsonValue } from '../types';
 import { isJsonObject } from '../schemas/guards';
@@ -88,7 +89,9 @@ export const compile = async (
   config: unknown,
   options?: CompileOptions,
 ): Promise<CompiledIr> => {
-  // Validate
+  // Validate — depth first: a deep enough config overflows the schema
+  // instead of failing it (strata depth.ts).
+  if (exceedsDepth(config)) throw new PrismError(`Invalid config: ${depthRefusal()}`, ErrorCode.SCHEMA);
   const parsed = ConfigSchema.safeParse(config);
   if (!parsed.success) {
     const issues = explainIssues(parsed.error.issues).map((i) => `${i.path.join('.') || '(root)'}: ${i.message}`).join('; ');

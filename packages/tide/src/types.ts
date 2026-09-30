@@ -54,6 +54,15 @@ export type Fact = FactInput & {
   // will. The override is recorded rather than faked by rewriting depth,
   // which would make the ledger lie about causality.
   released?: boolean;
+  // THE CHAIN THIS FACT BELONGS TO — the id of the fact that started it,
+  // absent on a root (a fact the host ingested, or the first facts of a run
+  // nothing caused). Stamped at the door (engine/facts.ts), never by a handler.
+  root?: string;
+  // On a root only: how many facts its chain has minted beneath it. Depth
+  // caps how LONG a chain runs; this caps how WIDE — a reflex that writes two
+  // facts per fact it sees doubles each hop, and under a depth ceiling of 24
+  // that is 2^24 runs before anything parks.
+  descendants?: number;
 };
 
 export type RunState = 'pending' | 'fanned' | 'settled' | 'skipped';
@@ -218,6 +227,9 @@ export type TideConfig = {
   // rather than fired — the runtime backstop behind the load-time cycle
   // rules, and nearly free because causality is already recorded.
   maxChainDepth?: number;
+  // A chain that has minted more facts than this beneath its root has the
+  // rest PARKED — the breadth twin of maxChainDepth. Default 10,000.
+  maxChainFacts?: number;
   // KEEP A WRITE FACT NOTHING WATCHES? Default true, which is what the ledger
   // means today: `ledger.facts()` is every write the host committed, and
   // `causeChain` walks it — an audit trail that answers "why did this person

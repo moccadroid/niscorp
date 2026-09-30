@@ -36,7 +36,9 @@ export const RAW_DATE_PARSERS: Record<number, (value: string) => unknown> = { 10
 
 export const createPglitePool = (db: PgliteLike, parsers?: Record<number, (value: string) => unknown>): PgPool => {
   const options = parsers !== undefined ? { parsers } : undefined;
-  const pool: PgPool = { query: (text, values) => db.query(text, values, options) };
+  // PGlite runs Postgres on one thread, where `statement_timeout`'s timer
+  // never fires (a 2s sleep ran its 2.9s under a 200ms limit).
+  const pool: PgPool = { query: (text, values) => db.query(text, values, options), statementTimeouts: false };
 
   // PASSED THROUGH, not reimplemented. Wrapping BEGIN/COMMIT by hand over a
   // single `query` would be wrong on a real pool — the statements could land

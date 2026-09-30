@@ -89,6 +89,9 @@ describe('executeSteps — emit', () => {
       [{ emit: { channel: 'cart-updated', payload: { user: '{{$.id}}' } } }],
       makeCtx({ dataStore, messageBus }),
     );
+    // Delivered on a later task, not inside the steps' own turn (steps.ts).
+    expect(fn).not.toHaveBeenCalled();
+    await new Promise((resolve) => setTimeout(resolve, 0));
     expect(fn).toHaveBeenCalledTimes(1);
     const payload = fn.mock.calls[0]?.[0];
     expect(payload).toEqual({ user: 'u1' });

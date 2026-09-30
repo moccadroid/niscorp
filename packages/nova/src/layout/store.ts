@@ -1,4 +1,5 @@
 import { DefinitionValidationError } from '../shared/errors';
+import { depthRefusal, exceedsDepth } from '@niscorp/strata';
 import {
   isComponentNode,
   isConditionalNode,
@@ -14,6 +15,10 @@ export const createLayoutStore = (): LayoutStore => {
   const get = (id: string): LayoutNode | undefined => layouts.get(id);
 
   const set = (id: string, layout: LayoutNode): void => {
+    // Before the schema: a deep enough layout overflows it (strata depth.ts).
+    if (exceedsDepth(layout)) {
+      throw new DefinitionValidationError(`Invalid layout for id "${id}"`, { failures: [{ id, issues: [{ code: 'custom', path: [], message: depthRefusal(), input: undefined }] }] });
+    }
     const result = LayoutNodeSchema.safeParse(layout);
     if (!result.success) {
       throw new DefinitionValidationError(`Invalid layout for id "${id}"`, {

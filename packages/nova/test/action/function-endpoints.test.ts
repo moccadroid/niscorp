@@ -62,7 +62,11 @@ describe('callEndpoint — function variant', () => {
       functions: { withSignal: handler },
       signal: controller.signal,
     });
-    expect(captured).toBe(controller.signal);
+    // Not the same object — the call's signal also carries its timeout — but
+    // the action going away still reaches the handler.
+    expect(captured?.aborted).toBe(false);
+    controller.abort();
+    expect(captured?.aborted).toBe(true);
   });
 
   it('returns ok=false when the handler throws', async () => {

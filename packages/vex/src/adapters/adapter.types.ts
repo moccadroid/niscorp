@@ -49,6 +49,10 @@ export type DatabaseAdapter = {
   compile: (resolved: ResolvedQuery) => CompiledQuery;
   execute: (query: CompiledQuery, params: BoundParams) => Promise<Row[]>;
   capabilities: AdapterCapabilities;
+  // Bound every later read to `ms` (0: unbounded), and say how the database
+  // enforces it. Called once by the engine at introspect. An adapter without
+  // it runs reads unbounded.
+  limitReads?: (ms: number) => Promise<'connection' | 'statement' | 'unenforced'>;
 };
 
 export type AdapterCapabilities = {

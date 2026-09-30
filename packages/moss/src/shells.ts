@@ -539,6 +539,7 @@ export const createShellHost = (ctx: ShellHostContext): ShellHost => {
         ),
       fetch: wire,
       functions,
+      ...(ctx.runtime.endpointTimeoutMs === undefined ? {} : { endpointTimeoutMs: ctx.runtime.endpointTimeoutMs }),
       // An EMPTY book is withheld rather than passed: the pass is active when
       // either of these is present, and an app that does no i18n at all should
       // not pay a matcher per render for a dictionary with nothing in it.

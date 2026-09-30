@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { depthRefusal, exceedsDepth } from '@niscorp/strata';
 import { defineTool } from '@niscorp/cortex';
 import { QuerySchema } from '../schemas/query.schema.js';
 import type { Query } from '../schemas/query.schema.js';
@@ -254,6 +255,7 @@ export const createQueryTools = (deps: QueryToolDeps): ReturnType<typeof defineT
       'Pass the query object DIRECTLY as the arguments. Returns rows, SQL, warnings, and errors.',
     input: TestQueryInputSchema,
     execute: async (input: TestQueryInput): Promise<TestQueryResult> => {
+      if (exceedsDepth(input)) return { rows: [], sql: '', warnings: [], errors: [depthRefusal()] };
       const parseResult = QuerySchema.safeParse(input);
       if (!parseResult.success) {
         const validationErrors = parseResult.error.issues.map(

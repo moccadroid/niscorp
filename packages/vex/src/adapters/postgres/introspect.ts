@@ -29,6 +29,10 @@ export type PgPool = {
   // genuinely cannot transact should say so by omission rather than by
   // pretending and breaking atomicity quietly.
   transaction?: <T>(fn: (tx: { query: PgQuery }) => Promise<T>) => Promise<T>;
+  // False when the database behind the pool cannot enforce
+  // `statement_timeout` at all (PGlite: single-threaded, the timer never
+  // fires) — see ./statement-timeout.ts. Absent means it can.
+  statementTimeouts?: false;
 };
 
 // ═══════════════════════════════════════════════════════════════

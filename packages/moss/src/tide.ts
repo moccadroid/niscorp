@@ -191,6 +191,7 @@ const BIGINT_COLUMNS = new Set([
   'not_before',
   'delivered_at',
   'depth',
+  'descendants',
   'due_at',
   'created_at',
   'settled_at',
@@ -333,7 +334,19 @@ const statementsOf = (ddl: string): { kind: 'sql'; sql: string }[] =>
 
 export const TIDE_SEQUENCE: Sequence = {
   id: 'nisc.moss.tide',
-  migrations: [{ description: 'The tide store: facts, runs, work and reflex state, converged from any earlier shape', steps: statementsOf(TIDE_DDL) }],
+  migrations: [
+    { description: 'The tide store: facts, runs, work and reflex state, converged from any earlier shape', steps: statementsOf(TIDE_DDL) },
+    {
+      // A fact's chain: the root it belongs to, and — on a root — how many facts
+      // the chain has minted beneath it. Nullable: every existing fact is a
+      // root nothing has been counted against yet.
+      description: 'A fact carries its chain root, and a root counts what its chain minted (tide maxChainFacts)',
+      steps: [
+        { kind: 'sql', sql: 'ALTER TABLE tide_fact ADD COLUMN IF NOT EXISTS root text' },
+        { kind: 'sql', sql: 'ALTER TABLE tide_fact ADD COLUMN IF NOT EXISTS descendants integer' },
+      ],
+    },
+  ],
 };
 
 export type TideStoreOptions = {

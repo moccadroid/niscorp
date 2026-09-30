@@ -8,6 +8,8 @@ export { evaluate, evaluateSafe } from './engine/evaluate';
 // Compilation
 export { compile } from './engine/compile';
 export { execute } from './engine/execute';
+export { DEFAULT_LIMITS } from './engine/budget';
+export type { Limits } from './engine/budget';
 
 // Validation
 export { validate } from './engine/validate';

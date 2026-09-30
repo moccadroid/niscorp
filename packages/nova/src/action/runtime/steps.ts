@@ -20,6 +20,8 @@ import type {
   Unsubscribe,
 } from '../types';
 import { callEndpoint } from './endpoints';
+import { withCause, type Cause } from './cause';
+import { nextTask } from './next-task';
 
 // Wall-clock for endpoint durations. `performance` is present in node, the
 // browser, and jsdom; `Date.now` is the universal fallback.
@@ -52,14 +54,20 @@ export type StepContext = {
   dataStore: DataStore;
   endpoints: Record<string, EndpointConfig>;
   functions: Record<string, FunctionHandler>;
+  // The shell's default wait for a reply; an endpoint's `timeoutMs` wins.
+  endpointTimeoutMs?: number;
   eventBus: EventBus;
   messageBus: MessageBus;
   fetch?: FetchFn;
   transform?: TransformFn;
   onNavigate?: NavigateHandler;
-  // Re-runs this instance's `mount` hook (the `reload` effect). Supplied by
-  // the runtime, which owns the definition and its lifecycle.
-  onReload?: () => Promise<void>;
+  // Re-runs this instance's `mount` hook (the `reload` effect), one hop on
+  // from `cause`. Supplied by the runtime, which owns the definition and its
+  // lifecycle.
+  onReload?: (cause: Cause | undefined) => Promise<void>;
+  // How far this chain has run from the gesture that started it (./cause.ts).
+  // Absent in a bare step context: the steps are then a root.
+  cause?: Cause;
   // Reports a completed `call` step upward (the runtime stamps instance/canvas
   // and forwards to telemetry). Aborted calls are not reported.
   onEndpoint?: (event: EndpointEventInit) => void;
@@ -183,6 +191,7 @@ const runCall = async (
     transform: ctx.transform,
     signal: ctx.signal,
     functions: ctx.functions,
+    ...(ctx.endpointTimeoutMs === undefined ? {} : { timeoutMs: ctx.endpointTimeoutMs }),
   });
   if (ctx.signal.aborted) return;
   if (!result.ok && result.error.aborted === true) return;
@@ -222,9 +231,12 @@ const runCall = async (
   }
 };
 
+// The mount a navigation starts is one hop further down this chain: the shell
+// spawns and mounts synchronously, and the mount reads the cause from here.
 const navigate = (effect: NavigationEffect, ctx: StepContext): void => {
-  if (ctx.onNavigate === undefined) return;
-  ctx.onNavigate(effect);
+  const { onNavigate } = ctx;
+  if (onNavigate === undefined) return;
+  withCause(ctx.cause, () => onNavigate(effect));
 };
 
 // Resolve a push/replace effect's `input` against the firing scope (current
@@ -331,11 +343,19 @@ export const executeSteps = async (steps: Step[], ctx: StepContext): Promise<voi
       // emits then pops: the listener is the action UNDERNEATH, suspended
       // while the confirm sits over it, and a suspended action reacts to
       // nothing. Publishing synchronously delivers to it before the pop
-      // reveals it — the message is lost. A microtask lets the same turn's
-      // pop resume the listener (its status flips active synchronously) so
-      // the message lands on a live subscriber. Resolved values are captured
+      // reveals it — the message is lost. Deferring lets the same turn's pop
+      // resume the listener (its status flips active synchronously) so the
+      // message lands on a live subscriber. Resolved values are captured
       // above, so a later data change cannot alter what was announced.
-      queueMicrotask(() => ctx.messageBus.publish(channel, payload));
+      //
+      // A TASK, NOT A MICROTASK. A listener that emits again queues another
+      // delivery, and a chain of microtasks never lets the event loop turn:
+      // under a server hosting many shells, one action whose trigger re-emits
+      // its own channel froze every other principal's shell, the socket and
+      // HTTP with it. A task (./next-task.ts) yields between hops, so a chain costs its own
+      // shell time and nobody else's; ./cause.ts is what ends it.
+      const { messageBus, cause } = ctx;
+      nextTask(() => messageBus.publish(channel, payload, cause));
       continue;
     }
     if ('push' in step) {
@@ -376,7 +396,7 @@ export const executeSteps = async (steps: Step[], ctx: StepContext): Promise<voi
       // Re-read in place. The runtime supplies the handler (it owns the
       // definition and the lifecycle); an action with no mount hook reloads to
       // nothing, which is correct rather than an error.
-      await ctx.onReload?.();
+      await ctx.onReload?.(ctx.cause);
       if (ctx.signal.aborted) return;
       continue;
     }

@@ -2,6 +2,7 @@ import type { JsonValue, JsonObject, CompiledIr } from '../types';
 import { evaluateNode } from './evaluate';
 import { rehydrate } from './optimize';
 import { primeJsonPathCache } from '../utils/jsonpath';
+import { createBudget, measure, type Limits } from './budget';
 
 // Cores whose runtime annotations are known present. An IR fresh from
 // compile() has them; one read back from storage (a jsonb row, a file) has
@@ -11,7 +12,7 @@ import { primeJsonPathCache } from '../utils/jsonpath';
 // path. Keyed weakly, so a dropped IR is not kept alive.
 const hydrated = new WeakSet<object>();
 
-export const execute = (ir: CompiledIr, source: JsonObject): JsonValue => {
+export const execute = (ir: CompiledIr, source: JsonObject, limits?: Partial<Limits>): JsonValue => {
   // Prime the JSONPath cache with paths from compilation
   if (ir.tables.paths.length > 0) {
     primeJsonPathCache(ir.tables.paths);
@@ -24,5 +25,8 @@ export const execute = (ir: CompiledIr, source: JsonObject): JsonValue => {
   }
 
   // Evaluate the already-desugared core directly (no validation, no desugaring)
-  return evaluateNode(core, { source, vars: {} });
+  const budget = createBudget(limits);
+  const result = evaluateNode(core, { source, vars: {}, budget });
+  measure(result, budget);
+  return result;
 };

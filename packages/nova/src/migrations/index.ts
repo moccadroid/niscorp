@@ -48,6 +48,11 @@ export const NOVA_SEQUENCE: Sequence = {
       description: 'The `reconcile` step: make a canvas hold exactly the actions a list in the action\'s data names',
       steps: [],
     },
+    {
+      // A MARKER: an addition. An endpoint may say how long its reply may take.
+      description: 'The endpoint `timeoutMs`: how long to wait for the reply before the call fails',
+      steps: [],
+    },
   ],
 };
 

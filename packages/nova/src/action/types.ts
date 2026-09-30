@@ -130,6 +130,8 @@ export type ActionRuntimeConfig = {
   transform?: TransformFn;
   fetch?: FetchFn;
   functions?: Record<string, FunctionHandler>;
+  // The shell's default wait for an endpoint's reply (ShellConfig).
+  endpointTimeoutMs?: number;
   onNavigate?: NavigateHandler;
   onEndpoint?: EndpointHandler;
   strict?: boolean;
