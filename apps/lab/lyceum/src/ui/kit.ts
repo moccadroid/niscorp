@@ -21,7 +21,7 @@ export { text } from './kit.shape';
 
 export const INKS = ['paper', 'ink', 'signal', 'alert', 'live', 'highlight'] as const;
 export const MARKS = ['stripes', 'dots', 'bars', 'checks', 'hatch'] as const;
-export const SIGILS = ['triangle', 'circle', 'square', 'cross'] as const;
+export const SIGILS = ['triangle', 'circle', 'square', 'cross', 'check', 'x'] as const;
 export const ALIGNS = ['start', 'end', 'center', 'between'] as const;
 export const LEVELS = ['display', 'title', 'name'] as const;
 // The renderers a screen can be drawn by (./target.ts): nova's DOM adapter with
@@ -173,7 +173,7 @@ export const Code: DomComponent = ({ props }) => {
 };
 
 // ── Sigil — a shape ─────────────────────────────────────────────
-// shape: triangle | circle | square | cross. size: 'large' or text size.
+// shape: triangle | circle | square | cross | check | x. size: 'large' or text size.
 const SVG = 'http://www.w3.org/2000/svg';
 const sigil = (shape: unknown, large: boolean): HTMLElement => {
   const svg = document.createElementNS(SVG, 'svg');
@@ -256,7 +256,12 @@ export const Rows: DomComponent = ({ props, dispatch }) => {
       const kind = oneOf(column['kind'], ['text', 'mono', 'sigil'] as const) ?? 'text';
       const value = record[text(column['key']) ?? ''];
       if (kind === 'sigil') {
+        // No shape: the column's `missing` words, as for any other kind.
         if (value !== null && value !== undefined) cell.appendChild(sigil(value, false));
+        else {
+          cell.setAttribute('data-kind', 'missing');
+          cell.textContent = text(column['missing']) ?? '';
+        }
       } else if (value === null || value === undefined || value === '') {
         cell.setAttribute('data-kind', 'missing');
         cell.textContent = text(column['missing']) ?? '';

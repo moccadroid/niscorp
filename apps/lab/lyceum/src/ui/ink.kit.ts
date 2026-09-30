@@ -99,7 +99,7 @@ const Code: NovaComponent = ({ ...props }) => {
   );
 };
 
-const GLYPHS: Record<(typeof SIGILS)[number], string> = { triangle: '▲', circle: '●', square: '■', cross: '✚' };
+const GLYPHS: Record<(typeof SIGILS)[number], string> = { triangle: '▲', circle: '●', square: '■', cross: '✚', check: '✔', x: '✖' };
 const Sigil: NovaComponent = ({ ...props }) => {
   const shape = oneOf(props['shape'], SIGILS);
   return shape === undefined ? null : h(InkText, {}, GLYPHS[shape]);

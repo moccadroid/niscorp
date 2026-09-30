@@ -111,7 +111,7 @@ export const remaining = (
 
 // ── the shapes ──
 export const SIGIL_SHAPES: Record<
-  'triangle' | 'circle' | 'square' | 'cross',
+  'triangle' | 'circle' | 'square' | 'cross' | 'check' | 'x',
   { tag: string; attrs: Record<string, string> }[]
 > = {
   triangle: [{ tag: 'polygon', attrs: { points: '50,4 96,92 4,92' } }],
@@ -121,6 +121,9 @@ export const SIGIL_SHAPES: Record<
     { tag: 'rect', attrs: { x: '36', y: '4', width: '28', height: '92' } },
     { tag: 'rect', attrs: { x: '4', y: '36', width: '92', height: '28' } },
   ],
+  // yes, and no
+  check: [{ tag: 'polygon', attrs: { points: '4,54 22,36 40,54 78,12 96,30 40,90' } }],
+  x: [{ tag: 'polygon', attrs: { points: '18,4 50,36 82,4 96,18 64,50 96,82 82,96 50,64 18,96 4,82 36,50 4,18' } }],
 };
 
 // ── the QR code: one path of square modules, with the standard quiet zone ──

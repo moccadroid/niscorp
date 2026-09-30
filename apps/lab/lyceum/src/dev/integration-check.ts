@@ -117,14 +117,14 @@ const main = async (): Promise<void> => {
     if (!seen.includes('Who wrote this screen?')) await new Promise((resolve) => setTimeout(resolve, 50));
   }
   check('...and, found fit to show, the projector may read it', seen.includes('Who wrote this screen?'));
-  check('...on the controller, as fit to show', await speaker.shows('attached', 'Fit to show') && speaker.showsNow('attached', 'Who wrote this screen?'));
+  check('...on the controller, marked fit to show', await speaker.shows('attached', '"shown":"check"') && speaker.showsNow('attached', 'Who wrote this screen?'));
 
   // One not fit to show: the controller has it, marked; the projector never.
   ada.type('body', 'question', 'Is the speaker an idiot?');
   await new Promise((resolve) => setTimeout(resolve, 200));
   ada.click('body', 'ask');
   check('a question not fit to show is on the controller too', await speaker.shows('attached', 'Is the speaker an idiot?'));
-  check('...marked not fit to show', await speaker.shows('attached', 'Not fit to show'));
+  check('...marked not fit to show', await speaker.shows('attached', '"shown":"x"'));
   const last = SLIDES.length;
   for (let step = at + 1; step < last; step += 1) {
     speaker.click('controls', 'next');

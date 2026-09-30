@@ -268,11 +268,9 @@ const Rows: NovaComponent = (props: Props) => {
         const kind = oneOf(column['kind'], ['text', 'mono', 'sigil'] as const) ?? 'text';
         const value = record[text(column['key']) ?? ''];
         if (kind === 'sigil')
-          return h(
-            'span',
-            { key: i },
-            value === null || value === undefined ? null : sigil(value, false),
-          );
+          return value === null || value === undefined
+            ? h('span', { key: i, 'data-kind': 'missing' }, text(column['missing']) ?? '')
+            : h('span', { key: i }, sigil(value, false));
         if (value === null || value === undefined || value === '')
           return h('span', { key: i, 'data-kind': 'missing' }, text(column['missing']) ?? '');
         return h('span', { key: i, 'data-kind': kind }, text(value) ?? '');

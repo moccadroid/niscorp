@@ -74,5 +74,10 @@ export const LYCEUM_KIT: Sequence = {
       description: 'Xray: whether this screen shows the actions it is made of',
       steps: [],
     },
+    {
+      // A MARKER: two shapes added to a closed set.
+      description: 'Sigil: check and x — yes and no, as shapes',
+      steps: [],
+    },
   ],
 };

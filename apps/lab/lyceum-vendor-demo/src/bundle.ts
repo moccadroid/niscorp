@@ -68,8 +68,9 @@ export const ask: ActionDefinition = {
 // ── the speaker's: every question ──
 //
 // Two of lyceum's reads, side by side: every question with who sent it, and
-// every verdict the moderator wrote. Joined where they are drawn — a question
-// with no verdict yet is still there, "not checked yet".
+// every verdict the moderator wrote. Joined where they are drawn: a check for
+// fit to show, an x for not, and a question with no verdict yet still there,
+// marked as waiting.
 const questionsWithVerdicts = {
   $with: {
     let: {
@@ -89,10 +90,10 @@ const questionsWithVerdicts = {
                   shown: {
                     $case: {
                       branches: [
-                        { when: { $eq: [{ $var: 'verdict' }, { $const: null }] }, then: { $const: 'Not checked yet' } },
-                        { when: { $get: { from: { $var: 'verdict' }, path: ['appropriate'] } }, then: { $const: 'Fit to show' } },
+                        { when: { $eq: [{ $var: 'verdict' }, { $const: null }] }, then: { $const: null } },
+                        { when: { $get: { from: { $var: 'verdict' }, path: ['appropriate'] } }, then: { $const: 'check' } },
                       ],
-                      else: { $const: 'Not fit to show' },
+                      else: { $const: 'x' },
                     },
                   },
                 },
@@ -128,7 +129,7 @@ export const everyQuestion: ActionDefinition = {
               columns: [
                 { label: 'Question', key: 'text', w: 3 },
                 { label: 'From', key: 'sender', w: 1.2 },
-                { label: 'Shown', key: 'shown', w: 1.2 },
+                { label: 'Shown', key: 'shown', kind: 'sigil', w: 0.6, missing: '…' },
               ],
             },
           },
@@ -174,7 +175,8 @@ export const fitQuestions: ActionDefinition = {
 export const ACME_BUNDLE = {
   integration: 'acme',
   // The grammars these documents are written in; the host upgrades from here.
-  grammar: { 'nisc.nova': 2, 'nisc.prism': 1 },
+  // lyceum.kit 9: the check and the x.
+  grammar: { 'nisc.nova': 2, 'nisc.prism': 1, 'lyceum.kit': 9 },
   meta: {
     title: 'Acme Ask Anything',
     tagline: 'Questions for whoever is on stage.',

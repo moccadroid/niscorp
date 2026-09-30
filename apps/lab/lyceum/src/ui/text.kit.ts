@@ -16,7 +16,7 @@ import { SIGILS, oneOf, records, text } from './kit';
 
 const lines = (children: TtyBlock[]): string[] => children.flatMap((child) => child.lines);
 const block = (...said: string[]): TtyBlock => ({ lines: said.filter((line) => line !== '') });
-const GLYPHS: Record<(typeof SIGILS)[number], string> = { triangle: '▲', circle: '●', square: '■', cross: '✚' };
+const GLYPHS: Record<(typeof SIGILS)[number], string> = { triangle: '▲', circle: '●', square: '■', cross: '✚', check: '✔', x: '✖' };
 
 const cellOf = (record: Record<string, unknown>, column: Record<string, unknown>): string => {
   const value = record[text(column['key']) ?? ''];
