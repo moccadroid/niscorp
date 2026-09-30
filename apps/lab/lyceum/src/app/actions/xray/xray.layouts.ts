@@ -1,29 +1,34 @@
 import type { LayoutNode } from '@niscorp/nova';
 
-// The button: the whole width of the phone, blue, one word.
-export const xrayButtonLayout: LayoutNode = {
-  component: 'Sheet',
-  props: { areas: ['open'] },
-  children: [{ component: 'Action', ref: 'open', props: { area: 'open', ink: 'signal', size: 'large', label: 'X-ray' } }],
-};
-
-// Every action on the screen, one after the other: where it is, what it is,
+// Every action on the screen, one under the other: where it is, what it is,
 // and its data as it stands. Look again after tapping around.
 export const xrayViewLayout: LayoutNode = {
   component: 'Sheet',
-  props: { areas: ['again'] },
+  props: { size: 'fill', areas: ['kick again', 'list list'], cols: [2, 1], rows: ['auto', 1] },
   children: [
+    { component: 'Cell', props: { area: 'kick' }, children: [{ component: 'Label', children: 'X-ray · your screen, as data' }] },
     { component: 'Action', ref: 'again', props: { area: 'again', ink: 'ink', label: 'Look again' } },
     {
-      for: '$.screen',
-      as: 'instance',
-      do: {
-        component: 'Cell',
-        children: [
-          { component: 'Label', children: '{{$instance.canvas}} · {{$instance.action}}' },
-          { component: 'Code', props: { text: '$instance.data' } },
-        ],
-      },
+      component: 'Cell',
+      props: { area: 'list', pad: 'none', scroll: 'y' },
+      children: [
+        {
+          component: 'Sheet',
+          children: [
+            {
+              for: '$.screen',
+              as: 'instance',
+              do: {
+                component: 'Cell',
+                children: [
+                  { component: 'Label', children: '{{$instance.canvas}} · {{$instance.action}}' },
+                  { component: 'Code', props: { text: '$instance.data' } },
+                ],
+              },
+            },
+          ],
+        },
+      ],
     },
   ],
 };

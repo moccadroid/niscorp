@@ -109,11 +109,14 @@ html:has(.page > [data-canvas="strip"]:not(:empty)) { font-size: clamp(16px, cal
 .${ROOT_CLASS} .cell > [data-canvas] > * > .sheet { border: 0; flex: 0 0 auto; border-bottom: var(--rule) solid var(--ink); }
 .${ROOT_CLASS} .cell > [data-canvas] > * > .sheet[data-size="fill"] { flex: 1 1 auto; border-bottom: 0; }
 
-/* the phone's tabs: side by side, equally wide, one rule between them — not
-   stacked like the other list regions */
+/* the phone's tabs: side by side, one rule between them — not stacked like
+   the other list regions. Each as wide as its word needs, the room left over
+   shared out, so a fourth tab (something given on stage) still fits a phone
+   on one line. */
 .${ROOT_CLASS} .cell > [data-canvas="tabs"] { flex-direction: row; gap: var(--rule); background: var(--ink); overflow: hidden; }
 .${ROOT_CLASS} .cell > [data-canvas="tabs"] > *,
-.${ROOT_CLASS} .cell > [data-canvas="tabs"] > *:last-child { flex: 1 1 0; min-width: 0; }
+.${ROOT_CLASS} .cell > [data-canvas="tabs"] > *:last-child { flex: 1 1 auto; min-width: 0; }
+.${ROOT_CLASS} .cell > [data-canvas="tabs"] .action { padding-inline: .7rem; font-size: .85rem; white-space: nowrap; }
 
 /* ── cell: a place in the grid, and its ink ── */
 /* defaults first, so an ink always out-ranks them */
@@ -133,10 +136,6 @@ html:has(.page > [data-canvas="strip"]:not(:empty)) { font-size: clamp(16px, cal
 .${ROOT_CLASS} .cell[data-align="center"] { justify-content: center; align-items: center; text-align: center; }
 .${ROOT_CLASS} .cell[data-align="between"] { justify-content: space-between; }
 .${ROOT_CLASS} .cell[data-pad="none"] { padding: 0; }
-/* A cell holding nothing but an empty canvas takes no room — its row closes up,
-   and the next cell covers the rule the empty row would have left doubled. */
-.${ROOT_CLASS} .cell:has(> [data-canvas]:only-child:empty) { display: none; }
-.${ROOT_CLASS} .cell:has(> [data-canvas]:only-child:empty) + .cell { margin-top: calc(var(--rule) * -1); }
 .${ROOT_CLASS} .cell[data-scroll="y"] { overflow-y: auto; min-height: 0; overscroll-behavior: contain; }
 /* held at its end: a reversed column opens scrolled to its last line, and the
    screen is rebuilt on every update, so it stays there */
@@ -168,6 +167,9 @@ html:has(.page > [data-canvas="strip"]:not(:empty)) { font-size: clamp(16px, cal
 /* ── code: a cell of mono, the lines that matter highlighted ── */
 .${ROOT_CLASS} .code { font: 400 clamp(.8rem, calc(1.6 * var(--cq)), 1.5rem)/1.5 var(--mono); white-space: pre; overflow: hidden; }
 .${ROOT_CLASS} .code > span { display: block; }
+/* code in a cell that scrolls (a phone reading a document, not a slide showing
+   one) wraps its long lines instead of cutting them off */
+.${ROOT_CLASS} .cell[data-scroll] .code { white-space: pre-wrap; overflow-wrap: anywhere; }
 .${ROOT_CLASS} .code > span[data-marked] { background: var(--highlight); color: var(--ink); margin: 0 -.4em; padding: 0 .4em; }
 
 /* ── rows: a ruled table, headers in the label voice ── */

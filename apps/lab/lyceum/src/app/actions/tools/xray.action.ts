@@ -4,7 +4,7 @@ import { xrayGive, xrayGiven, xrayTake } from '@lyceum/app/vex/grant.entries';
 
 // The controller's X-ray: give it to everybody who has joined, or take it back.
 // Giving writes a grant row per member (vex/grant.entries.ts); their shells are
-// rebuilt with it and the X-ray button is on their phones. Taking it back
+// rebuilt with it and the X-ray is a tab on their phones. Taking it back
 // deletes the rows, and it is gone the same way. How many have it is a
 // reactive read, so the tool follows.
 export const xrayTool: ActionDefinition = {

@@ -1,12 +1,12 @@
 // X-RAY CHECK — giving everybody an action, and taking it back, is rows.
 //
-//   1. before anything is given, a phone has nothing over its body;
+//   1. before anything is given, a phone's tabs are the usual three;
 //   2. the speaker's tool is on the X-ray slide; Give writes a grant per
-//      member, and the X-ray button is on every phone — not on the door, which
+//      member, and the X-ray is a tab on every phone — not on the door, which
 //      has no member row to give it to;
-//   3. pressed, it opens the person's own screen as data: the actions on it,
-//      their canvases, and their data — their own card, nobody else's;
-//   4. Take it back deletes the grants, and the button is gone from the phones.
+//   3. pressed, the body shows the person's own screen as data: the actions
+//      on it, their canvases, and their data — their own card, nobody else's;
+//   4. Take it back deletes the grants, and the tab is gone from the phones.
 import { serve } from '@hono/node-server';
 import { attachSocket } from '@niscorp/moss/node';
 import { mintSession } from '@niscorp/moss';
@@ -42,7 +42,8 @@ const main = async (): Promise<void> => {
   await speaker.hello();
 
   // ── 1 ──
-  check('before anything is given, a phone has nothing over its body', !ada.showsNow('given', 'xray.button'));
+  await ada.shows('tabs', 'Assistant');
+  check('before anything is given, a phone has no X-ray tab', !ada.showsNow('tabs', 'xray.tab'));
 
   // ── 2 ──
   const at = SLIDES.findIndex((slide) => slide.tools.includes('tools.xray'));
@@ -56,20 +57,20 @@ const main = async (): Promise<void> => {
   await speaker.shows('tools', 'People who have it');
   await new Promise((resolve) => setTimeout(resolve, 300));
   speaker.click('tools', 'give');
-  check('pressing Give: the X-ray is on the first phone', await ada.shows('given', 'X-ray'));
-  check('...and on the second', await ben.shows('given', 'X-ray'));
+  check('pressing Give: the X-ray is a tab on the first phone', await ada.shows('tabs', 'xray.tab'));
+  check('...and on the second', await ben.shows('tabs', 'xray.tab'));
   check('...and the tool counts both', await speaker.shows('tools', '"label":"People who have it","value":2'));
   const grants = (await runtime.db.query<{ n: number }>("SELECT count(*)::int AS n FROM grants WHERE role = 'xray'")).rows[0]?.n;
   check(`...as one grant row each (${String(grants)})`, grants === 2);
   check('the door has no X-ray: nobody there to give it to', !stranger.showsNow('main', 'X-ray'));
 
   // ── 3 ──
-  ada.click('given', 'open');
-  check('pressed, the X-ray opens over the screen', await ada.shows('overlay', 'Your screen, as data'));
-  check('...listing the actions on it and their canvases', await ada.shows('overlay', 'body · member.card'));
-  check('...with their data, as JSON', await ada.shows('overlay', '\\"member_id\\"'));
+  ada.clickIn('tabs', 'open', 'X-ray');
+  check('pressed, the body shows the screen as data', await ada.shows('body', 'your screen, as data'));
+  check('...listing the actions on it and their canvases', await ada.shows('body', 'self · member.card'));
+  check('...with their data, as JSON', await ada.shows('body', '\\"member_id\\"'));
   const ids = (await runtime.db.query<{ member_id: string }>('SELECT member_id FROM members ORDER BY joined_at, member_id')).rows.map((row) => row.member_id);
-  const seen = ada.textOf('overlay');
+  const seen = ada.textOf('body');
   check('...their own card, not anybody else’s', ids.length === 2 && ids.filter((id) => seen.includes(id)).length === 1);
 
   // ── 4 ──
@@ -84,10 +85,10 @@ const main = async (): Promise<void> => {
   finish();
 };
 
-// Gone: the given canvas stops showing the button, within a few seconds.
+// Gone: the tab bar stops showing the X-ray, within a few seconds.
 const waitGone = async (screen: Terminal): Promise<boolean> => {
   for (let tries = 0; tries < 200; tries += 1) {
-    if (!screen.showsNow('given', 'X-ray')) return true;
+    if (!screen.showsNow('tabs', 'xray.tab')) return true;
     await new Promise((resolve) => setTimeout(resolve, 25));
   }
   return false;
