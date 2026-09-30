@@ -11,6 +11,7 @@ import { speakerDeckAction } from './actions/speaker/deck.action';
 import { slidesAction } from './actions/speaker/slides.action';
 import { notificationAction } from './actions/speaker/notification.action';
 import { lookTool } from './actions/tools/look.action';
+import { integrationsTool } from './actions/tools/integrations.action';
 import { assistantAction } from './actions/assistant/assistant.action';
 import { stageRegisterAction } from './actions/stage/register.action';
 import { deckAction } from './actions/stage/deck.action';
@@ -42,6 +43,7 @@ export const ACTIONS: Record<string, ActionDefinition> = Object.fromEntries(
     xrayTool,
     xrayDocumentAction,
     xraySwitchAction,
+    integrationsTool,
     assistantAction,
     stageRegisterAction,
     deckAction,

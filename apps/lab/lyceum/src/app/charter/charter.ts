@@ -30,7 +30,10 @@ export const CHARTER: Charter = {
   // speaker a question (Q&A).
   // …and an assistant: the same one everybody has, built for each person from
   // what these grants select (app/assistant/assistants.ts).
-  member: { actions: ['member.*', 'query.*', 'assistant.*'], data: [...ROOM_READS, ...QUERYING, ...QUESTIONING, ...CONVERSING, ...LOOK] },
+  // …and any integration's screens for members (`ext.member.*`): an
+  // integration can only land inside this fence, and only once installed and
+  // approved (the controller's Integrations tool) — Acme's Q&A among them.
+  member: { actions: ['member.*', 'query.*', 'assistant.*', 'ext.member.*'], data: [...ROOM_READS, ...QUERYING, ...QUESTIONING, ...CONVERSING, ...LOOK] },
 
   // The speaker's controller and the projector: two principals, two devices.
   // The speaker moves the deck, as themselves; the controller's tools change

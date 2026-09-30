@@ -2,26 +2,17 @@ import type { ActionDefinition } from '@niscorp/nova';
 
 // ACME'S BUNDLE — what a third party ships to lyceum: data, nothing else.
 //
-// Two screens under Acme's own namespace (`ext.<audience>.<integration>.*`, the
-// only one intake lets it use). They are written against lyceum's published
-// component vocabulary (Sheet, Cell, Field, Action, …) and call lyceum's own
-// queries by fingerprint — `questions/send` and `questions/mine`, served to
-// every member — so Acme needs no server: the questions land where lyceum's own
-// Q&A puts them, as the person who asked, under the person's policy.
+// One action under Acme's own namespace (`ext.<audience>.<integration>.*`, the
+// only one intake lets it use), written in lyceum's published component
+// vocabulary and drawn by lyceum's kit like everything else on the phone. It
+// sends and lists through lyceum's own queries by fingerprint —
+// `questions/send` and `questions/mine`, served to every member — so Acme
+// needs no server: the question lands in lyceum's
+// Q&A, as the person who asked, under the person's policy.
 //
-// It takes a tab on the phone the way lyceum's own tabs do: the phone lists
-// Acme's action among its candidates, and until the integration is installed
-// and approved there is nothing by that name to place.
-
-const TAB_INPUT = {
-  $schema: 'https://json-schema.org/draft/2020-12/schema',
-  type: 'object',
-  properties: {
-    tab: { type: 'boolean', description: 'Render as a tab on the phone: a button with the action\'s name that opens it in the phone\'s body.' },
-    tabInk: { type: 'string', enum: ['paper', 'ink'], description: 'The tab\'s ink: `ink` marks the tab whose action is open in the body.' },
-  },
-  additionalProperties: false,
-};
+// Where it appears is lyceum's business: the phone lists Acme among the things
+// the speaker gives people, and until the integration is installed and
+// approved there is nothing by that name to place.
 
 const send = [
   { set: 'error', value: '' },
@@ -30,55 +21,42 @@ const send = [
 
 export const ask: ActionDefinition = {
   id: 'ext.member.acme.ask',
-  title: 'Ask Anything',
-  description: 'Acme Ask Anything: send the speaker a question, and see the ones you sent.',
-  data: { tab: false, tabLabel: 'Acme', tabInk: 'paper', nextInk: 'paper', draft: '', sent: false, error: '', mine: [] },
-  input: TAB_INPUT,
+  title: 'Acme · Ask Anything',
+  description: 'Acme Ask Anything: send the speaker a question.',
+  data: { draft: '', sent: false, error: '', mine: [] },
   layout: {
-    if: '$.tab',
-    then: { component: 'Action', ref: 'open', props: { ink: '$.tabInk', label: '{{$.tabLabel}}' } },
-    else: {
-      component: 'Sheet',
-      props: { size: 'fill', areas: ['brand', 'field', 'go', 'out', 'mine'], rows: ['auto', 'auto', 'auto', 'auto', 1] },
-      children: [
-        { component: 'Cell', props: { area: 'brand' }, children: [{ component: 'Label', children: 'Acme · Ask Anything' }] },
-        { component: 'Field', ref: 'draft', model: '$.draft', props: { area: 'field', value: '$.draft', placeholder: 'Ask the speaker anything', enter: 'clears' } },
-        { component: 'Action', ref: 'send', props: { area: 'go', label: 'Ask →' } },
-        {
-          if: '$.error',
-          then: { component: 'Cell', props: { area: 'out' }, children: [{ component: 'Text', children: '{{$.error.message}}' }] },
-          else: {
-            if: '$.sent',
-            then: { component: 'Cell', props: { area: 'out' }, children: [{ component: 'Text', children: 'Asked. The speaker has it.' }] },
-            else: { component: 'Cell', props: { area: 'out' }, children: [{ component: 'Text', props: { tone: 'muted' }, children: 'Powered by Acme.' }] },
-          },
+    component: 'Sheet',
+    props: { areas: ['kick kick', 'field go', 'out out', 'mine mine'], cols: [2, 1] },
+    children: [
+      { component: 'Cell', props: { area: 'kick', ink: 'ink' }, children: [{ component: 'Label', children: 'Acme · Ask Anything' }] },
+      { component: 'Field', ref: 'question', model: '$.draft', props: { area: 'field', value: '$.draft', placeholder: 'Ask the speaker anything', enter: 'clears' } },
+      { component: 'Action', ref: 'ask', props: { area: 'go', ink: 'alert', label: 'Ask →' } },
+      {
+        if: '$.error',
+        then: { component: 'Cell', props: { area: 'out' }, children: [{ component: 'Text', children: '{{$.error.message}}' }] },
+        else: {
+          if: '$.sent',
+          then: { component: 'Cell', props: { area: 'out' }, children: [{ component: 'Text', children: 'Asked. The speaker has it.' }] },
+          else: { component: 'Cell', props: { area: 'out' }, children: [{ component: 'Text', props: { tone: 'muted' }, children: 'An integration, installed from outside this app.' }] },
         },
-        {
-          component: 'Cell',
-          props: { area: 'mine', scroll: 'y' },
-          children: [{ component: 'Rows', props: { rows: '$.mine', rowKey: 'question_id', empty: 'Nothing asked yet.', columns: [{ label: '', key: 'text', w: 1 }] } }],
-        },
-      ],
-    },
+      },
+      {
+        component: 'Cell',
+        props: { area: 'mine', pad: 'none' },
+        children: [{ component: 'Rows', props: { rows: '$.mine', rowKey: 'question_id', empty: 'You have not asked anything yet.', columns: [{ label: 'Your questions', key: 'text', w: 1 }] } }],
+      },
+    ],
   },
   endpoints: {
     send: { url: '/api/vex', method: 'POST', request: { fingerprint: 'questions/send', context: { text: { $ref: '$.draft' } } }, errorTarget: 'error' },
+    // The person's own questions, newest first — lyceum's read, reactive: one
+    // asked is on the list on its own.
     mine: { url: '/api/vex', method: 'POST', request: { fingerprint: 'questions/mine', context: {} }, target: 'mine' },
   },
   lifecycle: { mount: [{ call: 'mine' }] },
   triggers: [
-    {
-      event: 'ui:click',
-      ref: 'open',
-      do: [
-        { set: 'nextInk', value: 'ink' },
-        { emit: { channel: 'tab-opened' } },
-        { resetTo: { action: 'ext.member.acme.ask', canvas: 'body' } },
-      ],
-    },
-    { message: 'tab-opened', do: [{ set: 'tabInk', value: '$.nextInk' }, { set: 'nextInk', value: 'paper' }] },
-    { event: 'ui:click', ref: 'send', do: send },
-    { event: 'ui:key', ref: 'draft', key: 'Enter', do: send },
+    { event: 'ui:click', ref: 'ask', do: send },
+    { event: 'ui:key', ref: 'question', key: 'Enter', do: send },
   ],
 };
 

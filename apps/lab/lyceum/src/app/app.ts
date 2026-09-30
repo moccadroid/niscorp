@@ -22,6 +22,9 @@ export type LyceumSeams = {
   reactions: NonNullable<NiscApp['reactions']>;
   inputs: NonNullable<NiscApp['shell']>['inputs'];
   onSession: NonNullable<NiscApp['onSession']>;
+  // The kit's components and the props each accepts — what an integration's
+  // layouts are checked against at intake. Zod schemas, so code: handed in.
+  components: NonNullable<NonNullable<NiscApp['shell']>['components']>;
 };
 
 export const buildLyceum = (seams: LyceumSeams): NiscApp =>
@@ -42,5 +45,6 @@ export const buildLyceum = (seams: LyceumSeams): NiscApp =>
       layoutStore: FRAME_STORE,
       fragments: FRAGMENTS,
       inputs: seams.inputs,
+      components: seams.components,
     },
   });

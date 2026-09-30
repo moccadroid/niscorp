@@ -1,0 +1,125 @@
+// INTEGRATION CHECK — somebody else's screen, installed live.
+//
+// Acme (apps/lab/lyceum-vendor-demo) is served here from a local HTTP server —
+// at the talk it is a file on GitHub Pages — and lyceum knows it only by its
+// address (LYCEUM_VENDOR_URL).
+//
+//   1. before anything is installed, no phone has Acme;
+//   2. the speaker's Integrations tool is on its slide; installing the BROKEN
+//      bundle is refused by intake, with the path round its loop, and no phone
+//      changes;
+//   3. installing Acme is accepted and held as pending — still on no phone;
+//   4. approved, Acme is on every phone — an action on the phone's list,
+//      drawn from its own layout;
+//   5. a question asked there lands in lyceum's Q&A as the person who asked;
+//   6. removed, it is gone again.
+import { createServer } from 'node:http';
+import { serve } from '@hono/node-server';
+import { attachSocket } from '@niscorp/moss/node';
+import { mintSession } from '@niscorp/moss';
+import { SLIDES } from '@lyceum/db/seed';
+import { questionsAll } from '@lyceum/app/vex/question.entries';
+import { boot } from '@lyceum/server/boot';
+import { ACME_BROKEN_BUNDLE, ACME_BUNDLE } from '../../../lyceum-vendor-demo/src/bundle';
+import { check, connect, finish, waitUntil } from './harness';
+import type { Terminal } from './harness';
+
+const main = async (): Promise<void> => {
+  // Acme's host: two static files, nothing else.
+  const vendor = createServer((req, res) => {
+    const bundle = req.url === '/vendor/bundle' ? ACME_BUNDLE : req.url === '/vendor-broken/bundle' ? ACME_BROKEN_BUNDLE : undefined;
+    res.writeHead(bundle === undefined ? 404 : 200, { 'content-type': 'application/octet-stream' });
+    res.end(bundle === undefined ? '' : JSON.stringify(bundle));
+  });
+  await new Promise<void>((resolve) => vendor.listen(0, '127.0.0.1', resolve));
+  const vendorAddress = vendor.address();
+  if (vendorAddress === null || typeof vendorAddress === 'string') throw new Error('no vendor port');
+  process.env['LYCEUM_VENDOR_URL'] = `http://127.0.0.1:${vendorAddress.port}/vendor`;
+  process.env['LYCEUM_VENDOR_BROKEN_URL'] = `http://127.0.0.1:${vendorAddress.port}/vendor-broken`;
+
+  const { server, runtime, close } = await boot();
+  const httpServer = serve({ fetch: server.fetch, port: 0 });
+  attachSocket(httpServer, server.socket);
+  const address = httpServer.address();
+  if (address === null || typeof address === 'string') throw new Error('no port');
+  const base = `ws://127.0.0.1:${address.port}`;
+
+  const join = async (): Promise<Terminal> => {
+    const door = await connect(base);
+    await door.shows('main', '"ref":"pick"');
+    door.click('main', 'pick');
+    const token = await door.session();
+    door.close();
+    const phone = await connect(base, token);
+    await phone.hello();
+    await phone.shows('body', 'assistant.thread');
+    return phone;
+  };
+  const ada = await join();
+  const ben = await join();
+  const speaker = await connect(base, await mintSession(runtime.pool, 'speaker', 60_000));
+  await speaker.hello();
+
+  // ── 1 ──
+  check('before anything is installed, no phone has Acme', !ada.showsNow('body', 'ext.member.acme.ask'));
+
+  // ── 2 ──
+  const at = SLIDES.findIndex((slide) => slide.tools.includes('tools.integrations'));
+  check(`the Integrations tool is on a slide (${SLIDES[at]?.title ?? 'none'})`, at >= 0);
+  for (let step = 0; step < at; step += 1) {
+    speaker.click('controls', 'next');
+    await speaker.shows('head', `slide ${step + 2} of`);
+  }
+  check('...and it is on the controller there, showing where Acme lives', await speaker.shows('tools', '/vendor'));
+  speaker.click('tools', 'broken');
+  check('installing the broken bundle is refused', await speaker.shows('tools', '"value":"refused"'));
+  check('...by intake, with the path round its loop', await speaker.shows('tools', 'acme-echo —emit (ext.member.acme.ask)→ acme-echo'));
+  check('...and no phone has it', !ada.showsNow('body', 'ext.member.acme.ask'));
+
+  // ── 3 ──
+  speaker.click('tools', 'install');
+  check('installing Acme is accepted and pending', await speaker.shows('tools', '"value":"pending"'));
+  await new Promise((resolve) => setTimeout(resolve, 300));
+  check('...and still no phone has it', !ada.showsNow('body', 'ext.member.acme.ask'));
+
+  // ── 4 ──
+  speaker.click('tools', 'approve');
+  check('approved', await speaker.shows('tools', '"value":"approved"'));
+  check('...Acme is on the first phone, on its list', await ada.shows('body', 'ext.member.acme.ask'));
+  check('...drawn from its own layout', ada.showsNow('body', 'Acme · Ask Anything'));
+  check('...and on the second', await ben.shows('body', 'ext.member.acme.ask'));
+
+  // ── 5 ──
+  ada.type('body', 'question', 'Who wrote this screen?');
+  await new Promise((resolve) => setTimeout(resolve, 200));
+  ada.click('body', 'ask');
+  check('a question asked in Acme says it went', await ada.shows('body', 'Asked. The speaker has it.'));
+  const asked = await runtime.db.query<{ text: string; member_id: string }>("SELECT text, member_id FROM questions WHERE text = 'Who wrote this screen?'");
+  const ids = (await runtime.db.query<{ member_id: string }>('SELECT member_id FROM members ORDER BY joined_at, member_id')).rows.map((row) => row.member_id);
+  check('...and it is in lyceum’s Q&A, as the person who asked', asked.rows.length === 1 && asked.rows[0]?.member_id === ids[0]);
+  check('...and on Acme’s own list of their questions', await ada.shows('body', 'Who wrote this screen?'));
+  // The moderator judges it (fit), and then the speaker's list has it.
+  const speakerRead = async (): Promise<string> =>
+    (await server.request('/api/vex', { method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${await mintSession(runtime.pool, 'speaker', 60_000)}` }, body: JSON.stringify({ fingerprint: questionsAll.fingerprint, context: {} }) })).text();
+  let seen = '';
+  for (let i = 0; i < 100 && !seen.includes('Who wrote this screen?'); i += 1) {
+    seen = await speakerRead();
+    if (!seen.includes('Who wrote this screen?')) await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+  check('...and, found fit to show, it is on the speaker’s list', seen.includes('Who wrote this screen?'));
+
+  // ── 6 ──
+  speaker.click('tools', 'remove');
+  check('removed: Acme is gone from the first phone', await waitUntil(() => !ada.showsNow('body', 'ext.member.acme.ask')));
+  check('...and from the second', await waitUntil(() => !ben.showsNow('body', 'ext.member.acme.ask')));
+
+  ada.close();
+  ben.close();
+  speaker.close();
+  httpServer.close();
+  vendor.close();
+  await close();
+  finish();
+};
+
+void main();

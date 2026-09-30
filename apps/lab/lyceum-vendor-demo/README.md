@@ -9,7 +9,7 @@ static file on GitHub Pages — `https://moccadroid.github.io/niscorp/vendor/bun
 speaker installs it from the controller, moss fetches that URL, intake checks
 it, the speaker approves it, and its screen appears on every phone.
 
-What it ships is data only: two screens (`ext.member.acme.*`), written in
+What it ships is data only: one action (`ext.member.acme.ask`), written in
 lyceum's component vocabulary and calling lyceum's own queries. There is no
 Acme server. No Acme code runs anywhere.
 

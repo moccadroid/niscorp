@@ -12,6 +12,9 @@ import { lecternFunctions } from './functions/lectern.functions';
 import { phoneInputs } from './phone';
 import { xrayFunctions } from './functions/xray.functions';
 import { followRenderers } from './renderers';
+import { integrationFunctions, vendorAddresses } from './functions/integration.functions';
+import { randomBytes } from 'node:crypto';
+import { KIT_PROPS } from '@lyceum/ui/kit.props';
 import { createMailer } from './mail';
 import type { SendMail } from './mail';
 import { createTimerWriter, startTiming, talkZone } from './timing';
@@ -90,15 +93,21 @@ export const bootOn = async <R extends LyceumRuntime>(runtime: R, options: BootO
     return timingUp;
   };
 
+  // The operator routes (installing an integration) are called in-process by
+  // the speaker's Integrations tool with this key; it never leaves the server.
+  const operatorKey = runtime.operatorKey ?? randomBytes(32).toString('hex');
+  const vendor = vendorAddresses(process.env);
+
   const renderers = followRenderers();
   const app = buildLyceum({
     identity: lyceumIdentity,
-    functions: (session) => ({ ...doorFunctions(session, server, moderation), ...roomFunctions(session, publicUrl, options.sshAddress ?? '', census), ...assistantFunctions(session, { querier, writer: timerWriter, orchestrator, tz, timing }), ...lecternFunctions(server, speakerMail), ...xrayFunctions(session) }),
+    functions: (session) => ({ ...doorFunctions(session, server, moderation), ...roomFunctions(session, publicUrl, options.sshAddress ?? '', census), ...assistantFunctions(session, { querier, writer: timerWriter, orchestrator, tz, timing }), ...lecternFunctions(server, speakerMail), ...xrayFunctions(session), ...integrationFunctions(session, server, operatorKey, vendor) }),
     reactions: [...lyceumReactions(server, moderation), renderers.reaction],
     inputs: phoneInputs,
     onSession: renderers.onSession,
+    components: Object.fromEntries(Object.entries(KIT_PROPS.shape).map(([name, propsSchema]) => [name, { meta: { propsSchema } }])),
   });
-  built = await createServer(app, runtime);
+  built = await createServer(app, { ...runtime, operatorKey });
   // Tide stands on the server it writes through, so it starts once that is up
   // — loading every timer saved before this boot.
   timingUp = await startTiming(built, runtime);

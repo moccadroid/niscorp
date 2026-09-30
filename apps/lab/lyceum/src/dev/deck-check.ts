@@ -46,6 +46,7 @@ const main = async (): Promise<void> => {
     'assistant.thread': 'Built from',
     'tools.look': 'Renderers — the same trees',
     'tools.xray': 'X-ray — everybody’s own screen',
+    'tools.integrations': 'Integrations — somebody else’s screen',
     ...Object.fromEntries(CUE_TOOLS.map((cue) => [cue.id, cue.title])),
   };
   const toolsAre = (expected: readonly string[]): Promise<boolean> =>
