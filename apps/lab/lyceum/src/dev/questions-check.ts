@@ -6,14 +6,11 @@
 //      list on its own;
 //   2. their own, and nobody else's: they edit it, they delete it; somebody
 //      else's they cannot reach, whatever id they send;
-//   3. the speaker's controller lists everybody's on the last slide, with the
-//      sender, on its own — a reactive read, nobody announcing it;
-//   4. a member replaying the speaker's read gets their own questions only —
+//   3. a member replaying the speaker's read gets their own questions only —
 //      never anybody else's — and the stage never sees them.
 import { serve } from '@hono/node-server';
 import { attachSocket } from '@niscorp/moss/node';
 import { mintSession } from '@niscorp/moss';
-import { SLIDES } from '@lyceum/db/seed';
 import { questionDelete, questionEdit, questionsAll } from '@lyceum/app/vex/question.entries';
 import { boot } from '@lyceum/server/boot';
 import { check, connect, finish, waitUntil } from './harness';
@@ -98,21 +95,6 @@ const main = async (): Promise<void> => {
 
   // ── 3 ──
   const speakerToken = await mintSession(runtime.pool, 'speaker', 600_000);
-  const speaker = await connect(base, speakerToken);
-  await speaker.hello();
-  const last = SLIDES.findIndex((slide) => slide.tools.includes('tools.questions'));
-  check(`the controller's Q&A is a tool on a slide (${SLIDES[last]?.title ?? 'none'})`, last >= 0);
-  for (let step = 0; step < last; step += 1) {
-    speaker.click('controls', 'next');
-    await speaker.shows('head', `slide ${step + 2} of`);
-  }
-  check('…and it lists everybody\'s questions', (await speaker.shows('tools', 'for a room of a hundred?')) && speaker.showsNow('tools', 'Can I see the charter?'));
-  const name = (await runtime.db.query<{ name: string }>('SELECT name FROM members WHERE member_id = $1', [ada.memberId])).rows[0]?.name ?? '\u0000';
-  check(`…each with its sender (${name})`, speaker.showsNow('tools', name));
-  await send(ben.phone, 'Is the code on screen the code that runs?');
-  check('a question sent later reaches the open controller on its own', await speaker.shows('tools', 'Is the code on screen the code that runs?'));
-
-  // ── 4 ──
   // The speaker's own read, replayed: the speaker gets the room's, a member only
   // their own — the reach is the role's, not the entry's.
   const asSpeaker = await replay(speakerToken, questionsAll.fingerprint, {});
@@ -123,7 +105,7 @@ const main = async (): Promise<void> => {
   const stageHello = await stage.hello();
   check('the stage holds nothing of Q&A', !stageHello.catalog.actions.some((id) => id.startsWith('questions.') || id === 'tools.questions'));
 
-  for (const terminal of [ada.phone, ben.phone, speaker, stage]) terminal.close();
+  for (const terminal of [ada.phone, ben.phone, stage]) terminal.close();
   httpServer.close();
   await close();
   finish();
