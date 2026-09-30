@@ -316,12 +316,15 @@ html:has(.page > [data-canvas="strip"]:not(:empty)) { font-size: clamp(16px, cal
 .${ROOT_CLASS} .xray-tag { display: none; }
 .${ROOT_CLASS}[data-xray] [data-action] { position: relative; outline: var(--rule) solid var(--signal); outline-offset: calc(var(--rule) * -1); }
 .${ROOT_CLASS}[data-xray] .xray-tag {
-  display: block; position: absolute; top: 0; right: 0; z-index: 20; cursor: pointer;
-  padding: .15em .5em; background: var(--signal); color: var(--paper);
-  font: 700 .72rem/1.3 var(--mono); letter-spacing: .02em;
+  display: block; position: absolute; top: 0; right: 0; z-index: 1; cursor: pointer;
+  /* a finger's worth: this is tapped on a phone */
+  min-height: 36px; padding: .5em .8em; background: var(--signal); color: var(--paper);
+  font: 700 1rem/1.2 var(--mono); letter-spacing: .01em;
 }
 /* nested boxes share corners: each level down puts its tag in the other one */
 .${ROOT_CLASS}[data-xray] [data-action] [data-action] > .xray-tag { right: auto; left: 0; }
 .${ROOT_CLASS}[data-xray] [data-action] [data-action] [data-action] > .xray-tag { left: auto; right: 0; }
 .${ROOT_CLASS}[data-xray] [data-action] [data-action] [data-action] [data-action] > .xray-tag { right: auto; left: 0; }
+/* over the screen, the corner at the top is the sheet's Close: the tag goes to the bottom */
+.${ROOT_CLASS}[data-xray] [data-canvas="overlay"] [data-action] > .xray-tag { top: auto; bottom: 0; }
 `;

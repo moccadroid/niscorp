@@ -21,7 +21,8 @@ export const xrayDocumentAction: ActionDefinition = {
     children: [
       {
         component: 'Cell',
-        props: { area: 'json', scroll: 'y' },
+        // No scroll of its own: the sheet's body scrolls (shell/fragments).
+        props: { area: 'json' },
         children: [{ if: '$.error', then: { component: 'Text', children: '{{$.error.message}}' }, else: { component: 'Code', props: { text: '$.document.json' } } }],
       },
     ],
