@@ -11,6 +11,9 @@ import { SLIDES, buildSeedSql } from '@lyceum/db/seed';
 import { CUE_TOOLS } from '@lyceum/app/actions/tools/cue.actions';
 import { createCensus } from '@lyceum/server/census';
 import { CHECKS } from './suite';
+import { readFileSync } from 'node:fs';
+import { z } from 'zod';
+import { strataSlide } from '@lyceum/app/actions/slide/later.actions';
 import { boot } from '@lyceum/server/boot';
 import { check, connect, finish, waitUntil } from './harness';
 
@@ -43,8 +46,8 @@ const main = async (): Promise<void> => {
   // tools, in the slide's order — or, with none, that there are none.
   // A cue says its own title.
   const SAYS: Record<string, string> = {
-    'assistant.thread': 'Built from',
-    'tools.look': 'Renderers — the same trees',
+    'assistant.thread': 'Can: ',
+    'tools.look': 'Which renderer draws',
     'tools.xray': 'X-ray — everybody’s own screen',
     'tools.integrations': 'Integrations — somebody else’s screen',
     ...Object.fromEntries(CUE_TOOLS.map((cue) => [cue.id, cue.title])),
@@ -154,6 +157,12 @@ const main = async (): Promise<void> => {
   check('a deck left on a slide that was cut goes back to the first', deckRow.rows[0]?.slide_id === SLIDES[0]?.slideId);
   const membersAfter = await runtime.db.query<{ n: number }>('SELECT count(*)::int AS n FROM members');
   check('the room is left alone', membersBefore.rows[0]?.n === 1 && membersAfter.rows[0]?.n === 1);
+
+  // The Strata slide prints this app's strata.lock.json: every version on it is
+  // the one the lock records, so the slide cannot go stale when a grammar moves.
+  const lock = z.object({ grammar: z.record(z.string(), z.number()) }).parse(JSON.parse(readFileSync(new URL('../../strata.lock.json', import.meta.url), 'utf8')));
+  const printed = String(strataSlide.data?.['code'] ?? '');
+  check('the Strata slide prints the lock as it is', Object.entries(lock.grammar).every(([grammar, version]) => printed.includes(`"${grammar}": ${version}`)));
 
   stranger.close();
   speaker.close();

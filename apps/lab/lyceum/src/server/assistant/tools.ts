@@ -125,14 +125,14 @@ export const hostTools = (deps: ToolDeps, offered: ReadonlySet<ToolName>): ToolD
         id: 'query',
         name: 'query',
         description:
-          "Query the records with vex — the people in the audience — for what you were not already given. You give the intent; vex picks the shape, replays a stored query that fits or writes a new one, under this person's own clearance. The query and its result open on their screen; you get the rows back.",
+          "Query the records with vex — the people in the audience — for what you were not already given. You give the intent; vex picks the shape, replays a stored query that fits or writes a new one, under this person's own permissions. The query and its result open on their screen; you get the rows back.",
         input: z.object({ intent: z.string().describe('What to find, in plain words, e.g. "the people who joined in the last ten minutes".') }),
         execute: async ({ intent }) => {
           try {
             const routed = await routeQuery(deps.session, deps.querier, intent);
             const rows = await vexOver(deps.session.wire)(routed.fingerprint);
             const shape = QUERY_SHAPES.find((entry) => entry.kind === routed.kind)?.shape ?? null;
-            deps.opened.push({ action: 'query.result', label: `Vex query · ${intent}`, ink: 'live', input: { intent, shape: JSON.stringify(shape), routed, sheetTitle: 'Vex query' } });
+            deps.opened.push({ action: 'query.result', label: `Query · ${intent}`, ink: 'live', input: { intent, shape: JSON.stringify(shape), routed, sheetTitle: 'Query' } });
             return { query: { intent, shape: routed.kind, fingerprint: routed.fingerprint, how: routed.how }, rows };
           } catch (error) {
             return { failed: error instanceof Error ? error.message : String(error) };

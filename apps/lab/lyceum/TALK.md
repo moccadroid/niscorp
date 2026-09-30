@@ -21,7 +21,8 @@ The working record for the nisc talk that lyceum runs. It holds what we agreed, 
 - **Language:** plain, engineer-to-engineer, short factual sentences. Never aphoristic or literary, never patronizing, never stage directions dressed as slides. Never the old app vocabulary ("the door", "step in", "the room", "ID card" as a concept, "clearance", "departments").
 - **Banned word: "hold"** ("actions you hold", "which role a person holds"). Say "has", "is granted", "can use".
 - **A slide is an anchor:** the name of the thing, one claim, one picture. What is argued is *said*.
-- **Notes are bullets**, each one a line the speaker can say as written; actions in `[brackets]`. Never uneven prose with facts buried in it.
+- **Notes are terse cues** (keyword fragments: "charter enforces nothing → 2 checks"), at most six per slide, never enough to scroll; actions in `[brackets]`. Never sentences. (Changed 2026-09-30; was "a line the speaker can say as written".)
+- **Say what is happening.** Every headline, label and line states literally what is going on, in words a newcomer gets on first read: "Another company wrote a screen for this app", not "Installing someone else's screen". No compressed, clever or slogan phrasing. Raw machine output only beside a plain sentence saying what it means.
 - **Design each slide on its own.** Never stamp one template (big headline + blue sentence bar) across slides. A picture where a sentence would go. "The core statement" means the point in a few words, not a paragraph.
 - **Don't crowd, don't waste space.** The better answer gets its own slide rather than sitting beside the worse one.
 - **Name things before showing them** — Nova is introduced as the answer before any mechanism.

@@ -25,7 +25,7 @@ const proposal: LayoutNode = {
             ],
           },
           { component: 'Cell', props: { area: 'doc' }, children: [{ component: 'Code', props: { text: '$p.timer.json' } }] },
-          { component: 'Action', ref: 'save', props: { area: 'save', ink: 'alert', label: 'Save — tide runs it', value: '$p.timer' } },
+          { component: 'Action', ref: 'save', props: { area: 'save', ink: 'alert', label: 'Save', value: '$p.timer' } },
         ],
       },
     ],
@@ -61,7 +61,7 @@ export const assistantLayout: LayoutNode = {
     {
       component: 'Cell',
       props: { area: 'who' },
-      children: [{ component: 'Text', props: { tone: 'muted' }, children: 'Built from {{$.intro.builtFrom}} · it can {{$.intro.tools}}' }],
+      children: [{ component: 'Text', props: { tone: 'muted' }, children: 'Can: {{$.intro.tools}}' }],
     },
     // The conversation takes the room there is, scrolls, and opens on its newest turn.
     { component: 'Cell', props: { area: 'talk', pad: 'none', scroll: 'end' }, children: [{ component: 'Sheet', children: [{ for: '$.history', as: 't', do: turn }] }] },

@@ -31,8 +31,8 @@ const MAX_INTENT = 200;
 const VexCodeSchema = z.object({ code: z.string(), message: z.string() });
 const refusalOf = (error: unknown): string => {
   const vex = VexCodeSchema.safeParse(error);
-  if (vex.success && vex.data.code === 'unsatisfiable') return `The records do not hold that: ${vex.data.message}`;
-  if (vex.success && vex.data.code === 'scope_denied') return 'That reaches records your clearance does not cover.';
+  if (vex.success && vex.data.code === 'unsatisfiable') return `No data answers that: ${vex.data.message}`;
+  if (vex.success && vex.data.code === 'scope_denied') return 'Your permissions do not reach that data.';
   console.error('[lyceum] a query could not be written:', error);
   return 'The query could not be written.';
 };

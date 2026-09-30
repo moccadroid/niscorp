@@ -13,7 +13,7 @@ export const lookLayout: LayoutNode = {
     cols: [2, 1, 1, 1],
   },
   children: [
-    { component: 'Cell', props: { area: 'kick', ink: 'ink' }, children: [{ component: 'Label', children: 'Renderers — the same trees, drawn by another' }] },
+    { component: 'Cell', props: { area: 'kick', ink: 'ink' }, children: [{ component: 'Label', children: 'Which renderer draws each kind of screen' }] },
     { for: '$.rows', as: 'row', do: { component: 'Cell', props: { area: '$row.surface' }, children: [{ component: 'Label', children: '{{$row.label}}' }] } },
     {
       for: '$.rows',

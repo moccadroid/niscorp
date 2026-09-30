@@ -75,7 +75,7 @@ const main = async (): Promise<void> => {
   // ── 2 ──
   const before = (await runtime.db.query('SELECT 1 FROM members')).rows.length;
   ada.press(marker ?? '');
-  check(`typing the number steps in as ${chosen}: their phone, the assistant on its list`, await waitUntil(() => ada.screen().includes('Built from')));
+  check(`typing the number steps in as ${chosen}: their phone, the assistant on its list`, await waitUntil(() => ada.screen().includes('Can: ')));
   check('...a member now, by that name', (await runtime.db.query('SELECT 1 FROM members WHERE name = $1', [chosen])).rows.length === 1);
   check('...a new person in the room', (await runtime.db.query('SELECT 1 FROM members')).rows.length === before + 1);
 
@@ -96,7 +96,7 @@ const main = async (): Promise<void> => {
   // focuses it, typing types, Enter sends; the assistant's query opens over the
   // screen, its table drawn.
   await settled(ada);
-  const field = /\[(\d+)\] ⟨/.exec(ada.screen().slice(ada.screen().lastIndexOf('Built from')))?.[1];
+  const field = /\[(\d+)\] ⟨/.exec(ada.screen().slice(ada.screen().lastIndexOf('Can: ')))?.[1];
   ada.press(field ?? '');
   await settled(ada);
   ada.press('Who is in the room?');

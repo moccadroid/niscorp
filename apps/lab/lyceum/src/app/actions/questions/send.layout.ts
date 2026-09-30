@@ -14,7 +14,7 @@ export const sendLayout: LayoutNode = {
       else: {
         if: '$.sent',
         then: { component: 'Cell', props: { area: 'out' }, children: [{ component: 'Text', children: 'Sent. The speaker has it.' }] },
-        else: { component: 'Cell', props: { area: 'out', mark: 'hatch' }, children: [{ component: 'Text', props: { tone: 'muted' }, children: 'Questions go to the speaker, not onto the screen.' }] },
+        else: { component: 'Cell', props: { area: 'out', mark: 'hatch' }, children: [{ component: 'Text', props: { tone: 'muted' }, children: 'A question for the speaker.' }] },
       },
     },
   ],

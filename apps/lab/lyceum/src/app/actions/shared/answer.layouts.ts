@@ -12,7 +12,7 @@ export type AnswerAt = { kind: string; how: string; rows: string };
 
 const rows = (at: AnswerAt, columns: { label: string; key: string; w: number; kind?: 'mono' }[]): LayoutNode => ({
   component: 'Rows',
-  props: { rows: at.rows, columns, empty: 'Nothing on record.' },
+  props: { rows: at.rows, columns, empty: 'No results.' },
 });
 
 const LIST_COLUMNS = [
@@ -47,11 +47,11 @@ export const answerLayout = (at: AnswerAt): LayoutNode[] => [
   // How it was reached — the point of the query.
   {
     if: { $eq: [at.how, 'replayed'] },
-    then: { component: 'Text', props: { tone: 'muted' }, children: 'Replayed: this query was on record from an earlier request. No model wrote anything.' },
+    then: { component: 'Text', props: { tone: 'muted' }, children: 'Replayed: an earlier request stored this query. No model wrote anything.' },
     else: {
       component: 'Text',
       props: { tone: 'muted' },
-      children: 'Generated: no query on record fitted, so a model wrote this one just now, under your clearance. It is stored — the next request like it replays it.',
+      children: 'Generated: no stored query fitted, so a model wrote this one now, under your permissions. It is stored; the next request like it replays it.',
     },
   },
 ];

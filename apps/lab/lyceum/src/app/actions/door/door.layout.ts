@@ -23,7 +23,7 @@ export const doorLayout: LayoutNode = {
     },
     { component: 'Action', ref: 'more', props: { area: 'more', ink: 'paper', label: 'Other names' } },
     { component: 'Field', ref: 'draft', model: '$.draft', props: { area: 'own', value: '$.draft', placeholder: 'Or type your own' } },
-    { component: 'Action', ref: 'own', props: { area: 'use', ink: 'ink', label: { $if: '$.entering', $then: 'Stepping in…', $else: 'Use this name →' } } },
+    { component: 'Action', ref: 'own', props: { area: 'use', ink: 'ink', label: { $if: '$.entering', $then: 'Joining…', $else: 'Use this name →' } } },
     {
       if: '$.refused.name',
       then: {

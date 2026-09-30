@@ -22,16 +22,16 @@ const still = (id: string, title: string, layout: ActionDefinition['layout'], da
 export const worstSlide = still('slide.worst', 'What is the worst a model can write?', aloneLayout, {});
 
 export const brokeSlide = still('slide.broke', 'We tried to break it.', verdictsLayout, {
-  kicker: 'With valid data only',
+  kicker: 'Using only documents that pass the schema',
   verdicts: [
-    { area: 'leak', ink: 'live', label: 'Leak', verdict: 'Held', what: 'No request left the server. No table it may not read, however it was named.' },
-    { area: 'crash', ink: 'alert', label: 'Crash', verdict: 'Two holes', what: 'A layout nested 20,000 deep. A loop that doubled every turn.' },
-    { area: 'explode', ink: 'alert', label: 'Run forever', verdict: 'Broke', what: 'Three lines froze the server for everyone.' },
+    { area: 'leak', ink: 'live', label: 'Leak data', verdict: 'Nothing leaked', what: 'No request left the server. Tables it may not read stayed unreadable.' },
+    { area: 'crash', ink: 'alert', label: 'Crash the server', verdict: 'Two bugs', what: 'A layout nested 20,000 levels deep. A loop that doubled every step.' },
+    { area: 'explode', ink: 'alert', label: 'Run forever', verdict: 'Froze it', what: 'One small action froze the server for everyone.' },
   ],
 });
 
-export const loopSlide = still('slide.loop', 'Three lines froze the server.', loopLayout, {
-  file: 'the action, reduced',
+export const loopSlide = still('slide.loop', 'This action froze the server.', loopLayout, {
+  file: 'The action (shortened)',
   code: code(
     '{',
     "  id: 'echo',",
@@ -42,7 +42,7 @@ export const loopSlide = still('slide.loop', 'Three lines froze the server.', lo
     '}',
   ),
   marked: [4, 5],
-  found: 'Every loop, before it runs.',
+  found: 'An action that triggers itself.',
   limits: [
     { text: '64 hops deep, 1,024 per chain' },
     { text: '256 levels per document' },
@@ -50,9 +50,9 @@ export const loopSlide = still('slide.loop', 'Three lines froze the server.', lo
   ],
 });
 
-export const reviewSlide = still('slide.review', 'Review the result, not the code.', answerLayout, {
-  kicker: 'What we found',
-  line: 'A checked document can be wrong. It cannot leak, crash or run forever.',
+export const reviewSlide = still('slide.review', 'Nobody has to read these documents. Tests check what they do.', answerLayout, {
+  kicker: 'What this means',
+  line: 'A document that passes the schema can be wrong. It cannot leak data, crash the server or run forever.',
 });
 
 // SOMEBODY ELSE'S SCREEN, installed on stage: the install check's answer, live.
@@ -62,15 +62,15 @@ export const reviewSlide = still('slide.review', 'Review the result, not the cod
 const readInstall = [{ call: 'vendor' }];
 export const installSlide: ActionDefinition = {
   id: 'slide.install',
-  title: 'Installing someone else’s screen.',
+  title: 'Another company wrote a screen for this app.',
   data: {
-    kicker: 'Acme — a bundle on GitHub',
-    title: 'Installing someone else’s screen.',
+    kicker: 'An integration: Acme, a JSON file on GitHub',
+    title: 'Another company wrote a screen for this app.',
     checks: [
-      { text: 'Every component and prop is this app’s.' },
-      { text: 'Every call goes to a query this app serves.' },
-      { text: 'Every place is one this app offers.' },
-      { text: 'No chain of steps loops back on itself.' },
+      { text: 'It uses only components this app has.' },
+      { text: 'It calls only queries this app has.' },
+      { text: 'It shows up only where this app allows.' },
+      { text: 'It has no infinite loops.' },
     ],
     vendor: { id: '', url: '', status: '', reasons: [] },
   },

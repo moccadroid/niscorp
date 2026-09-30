@@ -82,13 +82,13 @@ const main = async (): Promise<void> => {
   check('installing the broken bundle is refused', await speaker.shows('tools', '"value":"refused"'));
   check('...by intake, with the path round its loop', await speaker.shows('tools', 'acme-echo —emit (ext.member.acme.ask)→ acme-echo'));
   check('...and for nothing else: the loop is its only fault', !speaker.showsNow('tools', 'no such action'));
-  check('the projector shows the same answer, live: refused, and the loop', (await stage.shows('main', 'refused')) && (await stage.shows('main', 'acme-echo —emit (ext.member.acme.ask)→ acme-echo')));
+  check('the projector shows the same answer, live: refused, and the loop', (await stage.shows('main', 'Nothing was installed. Nothing ran.')) && (await stage.shows('main', 'acme-echo —emit (ext.member.acme.ask)→ acme-echo')));
   check('...and no phone has it', !ada.showsNow('body', 'ext.member.acme.ask'));
 
   // ── 3 ──
   speaker.click('tools', 'install');
   check('installing Acme is accepted and pending', await speaker.shows('tools', '"value":"pending"'));
-  check('...and so does the projector, the refusal gone', (await stage.shows('main', 'pending')) && !stage.showsNow('main', 'acme-echo'));
+  check('...and so does the projector, the refusal gone', (await stage.shows('main', 'Waiting for my approval.')) && !stage.showsNow('main', 'acme-echo'));
   await new Promise((resolve) => setTimeout(resolve, 300));
   check('...and still no phone has it', !ada.showsNow('body', 'ext.member.acme.ask'));
 

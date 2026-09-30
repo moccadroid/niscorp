@@ -60,8 +60,14 @@ const main = async (): Promise<void> => {
   const stage = await connect(base, await mintSession(first.runtime.pool, 'stage', 60_000));
   await speaker.hello();
   await stage.hello();
-  check('the first slide brings the assistant to the controller', await speaker.shows('tools', 'Built from'));
-  check('…the speaker assistant, built from the controller declaration, able to automate', speaker.showsNow('tools', 'Built from controller') && speaker.showsNow('tools', 'automate'));
+  // To the timer slide: it brings the speaker's assistant to the controller.
+  const timerAt = SLIDES.findIndex((slide) => slide.slideId === 'slide.timer');
+  for (let step = 0; step < timerAt; step += 1) {
+    speaker.click('controls', 'next');
+    await speaker.shows('head', `slide ${step + 2} of`);
+  }
+  check('the timer slide brings the assistant to the controller', await speaker.shows('tools', 'Can: '));
+  check('…the speaker\'s assistant, able to automate', speaker.showsNow('tools', 'automate'));
   check('there is no timer yet', await speaker.shows('head', 'No timer'));
 
   // ── 1. asked for, and read ──
@@ -82,7 +88,7 @@ const main = async (): Promise<void> => {
   speaker.click('tools', 'save');
   check('Save says it is saved', await speaker.shows('tools', 'Saved'));
   check('…and the proposal is done with: it leaves the screen', await waitUntil(() => !speaker.showsNow('tools', 'Read it first')));
-  check('…and the history says what came of it — once', (await speaker.shows('tools', 'Saved · tide runs it at')) && speaker.textOf('tools').split('Saved').length === 2);
+  check('…and the history says what came of it — once', (await speaker.shows('tools', 'Saved · runs at')) && speaker.textOf('tools').split('Saved').length === 2);
   const saved = (await first.runtime.db.query<Timer>('SELECT timer_id, reflex, saved_by, due_at::text FROM timers')).rows[0];
   check('it is a row: the reflex as a document', saved?.reflex.effect?.name === 'deck.show' && saved.reflex.as === 'clock');
   check('…a stored reflex, with the timer fixed to a clock — never a timer', ReflexSchema.safeParse(saved?.reflex).success);

@@ -47,7 +47,7 @@ const PROBES: readonly { who: Who; say: string; want: Want; containing?: string;
 // What the turn left, read off the trees the person sees: a query's result
 // opened over the screen, or a proposal under the conversation.
 const outcomeIn = (tree: string, overlay: string): Want =>
-  overlay.includes('"value":"Vex query"') ? 'query' : tree.includes('Read it first') ? 'timer' : overlay.includes('"ref":"close"') ? 'open' : 'none';
+  overlay.includes('"value":"Query"') ? 'query' : tree.includes('Read it first') ? 'timer' : overlay.includes('"ref":"close"') ? 'open' : 'none';
 
 const { boot } = await import('@lyceum/server/boot');
 const main = async (): Promise<void> => {
@@ -67,7 +67,7 @@ const main = async (): Promise<void> => {
     const phone = await connect(base, token);
     await phone.hello();
     await phone.shows('main', '"label":"Assistant"');
-    await phone.shows('body', 'Built from');
+    await phone.shows('body', 'Can: ');
     return phone;
   };
   const people: Record<Who, { terminal: Terminal; canvas: string }> = {
@@ -75,7 +75,7 @@ const main = async (): Promise<void> => {
     speaker: { terminal: await connect(base, await mintSession(booted.runtime.pool, 'speaker', 3_600_000)), canvas: 'tools' },
   };
   await people.speaker.terminal.hello();
-  await people.speaker.terminal.shows('tools', 'Built from');
+  await people.speaker.terminal.shows('tools', 'Can: ');
 
   let passed = 0;
   let total = 0;

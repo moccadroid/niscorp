@@ -96,7 +96,7 @@ export const actionLayout: LayoutNode = {
     cell('kick', [label('{{$.kicker}}')]),
     cell('head', [headline('title', '{{$.title}}')], { align: 'end' }),
     cell('code', [label('{{$.file}}'), { component: 'Code', props: { text: '$.code', marked: '$.marked' } }], { ink: 'ink' }),
-    cell('form', [label('Its layout, rendered'), sendLayout], { ink: 'signal' }),
+    cell('form', [label('The same JSON, drawn'), sendLayout], { ink: 'signal' }),
   ],
 };
 
@@ -107,7 +107,7 @@ export const xrayLayout: LayoutNode = {
   props: { size: 'fill', areas: ['head xray'], cols: [1.25, 1] },
   children: [
     cell('head', [headline('display', '{{$.title}}')], { align: 'end' }),
-    cell('xray', [label('On your phone'), headline('display', 'X-ray')], { ink: 'signal', align: 'center' }),
+    cell('xray', [label('On your phone now'), headline('display', 'Switch on the X-ray')], { ink: 'signal', align: 'center' }),
   ],
 };
 
@@ -118,7 +118,7 @@ export const threeLayout: LayoutNode = {
   props: { size: 'fill', areas: ['head press'], cols: [1.25, 1] },
   children: [
     cell('head', [headline('display', '{{$.title}}')], { align: 'end' }),
-    cell('press', [label('On three phones'), headline('display', 'Press')], { ink: 'alert', align: 'center' }),
+    cell('press', [label('On three phones'), headline('display', 'Press it')], { ink: 'alert', align: 'center' }),
   ],
 };
 

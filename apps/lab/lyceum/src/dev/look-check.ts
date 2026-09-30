@@ -64,7 +64,7 @@ const main = async (): Promise<void> => {
     speaker.click('controls', 'next');
     await speaker.shows('head', `slide ${step + 2} of`);
   }
-  check('...and it is on the controller there', await speaker.shows('tools', 'Renderers'));
+  check('...and it is on the controller there', await speaker.shows('tools', 'Which renderer draws'));
   // The phone's card is still being written (the issuer); wait for it to settle.
   const settled = async (screen: Terminal, canvas: string): Promise<string> => {
     for (let last = screen.textOf(canvas); ; ) {

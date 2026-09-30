@@ -32,8 +32,8 @@ export const loopLayout: LayoutNode = {
   children: [
     cell('head', [headline('display', '{{$.title}}')]),
     cell('code', [label('{{$.file}}'), { component: 'Code', props: { text: '$.code', marked: '$.marked' } }], { ink: 'ink', align: 'end' }),
-    cell('found', [label('Found by reading it'), headline('title', '{{$.found}}')], { ink: 'highlight' }),
-    cell('limits', [label('Where reading cannot see'), { for: '$.limits', as: 'limit', do: headline('name', '{{$limit.text}}') }], { ink: 'signal' }),
+    cell('found', [label('Now found before it runs'), headline('title', '{{$.found}}')], { ink: 'highlight' }),
+    cell('limits', [label('Limits for everything else'), { for: '$.limits', as: 'limit', do: headline('name', '{{$limit.text}}') }], { ink: 'signal' }),
   ],
 };
 
@@ -45,14 +45,17 @@ export const installLayout: LayoutNode = {
   props: { size: 'fill', areas: ['head head', 'checks answer'], cols: [1, 1.2], rows: ['auto', 1] },
   children: [
     cell('head', [label('{{$.kicker}}'), headline('display', '{{$.title}}')]),
-    cell('checks', [label('The install check'), { for: '$.checks', as: 'check', do: headline('name', '{{$check.text}}') }], { ink: 'ink', align: 'end' }),
+    cell('checks', [label('Before it runs, a program checks that:'), { for: '$.checks', as: 'check', do: headline('name', '{{$check.text}}') }], { ink: 'ink', align: 'end' }),
     cell(
       'answer',
       [
-        label('Acme'),
+        label('Acme, from'),
         { component: 'Code', props: { text: '$.vendor.url' } },
-        headline('display', '{{$.vendor.status}}'),
-        { component: 'Rows', props: { rows: '$.vendor.reasons', rowKey: 'reason', empty: '', columns: [{ label: 'Refused because', key: 'reason', w: 1 }] } },
+        { if: { $eq: ['$.vendor.status', 'not installed'] }, then: [headline('display', 'Not installed'), headline('title', 'Nothing from Acme is in this app yet.')] },
+        { if: { $eq: ['$.vendor.status', 'refused'] }, then: [headline('display', 'Refused'), headline('title', 'Nothing was installed. Nothing ran.')] },
+        { if: { $eq: ['$.vendor.status', 'pending'] }, then: [headline('display', 'Passed'), headline('title', 'Waiting for my approval. Not on your phones yet.')] },
+        { if: { $eq: ['$.vendor.status', 'approved'] }, then: [headline('display', 'Installed'), headline('title', 'On your phones now.')] },
+        { if: '$.vendor.reasons', then: { component: 'Rows', props: { rows: '$.vendor.reasons', rowKey: 'reason', empty: '', columns: [{ label: 'What the check reported', key: 'reason', w: 1 }] } } },
       ],
       { ink: 'signal', align: 'end' },
     ),

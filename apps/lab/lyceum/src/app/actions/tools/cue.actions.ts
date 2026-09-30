@@ -30,7 +30,7 @@ export const CUE_TOOLS: readonly ActionDefinition[] = [
   cue(
     'tools.button',
     'Give three people the button',
-    ['Three people, picked at random, get a button on their main screen. Pressed, it plays a sound.', 'Take it back the same way.'],
+    ['Three people, picked at random, get a button on their phone. Pressed, it plays a sound.', 'Take it back the same way.'],
     'There is no button action yet, and nothing to give it with.',
   ),
   cue(
@@ -42,7 +42,7 @@ export const CUE_TOOLS: readonly ActionDefinition[] = [
   cue(
     'tools.order',
     'Give everyone the order form',
-    ['Everyone gets an order form on their main screen: an item, a quantity, Send.', 'Asked for 18,000 cups of water, their assistant opens it filled in. Nobody presses Send.', 'Take it back the same way.'],
+    ['Everyone gets an order form on their phone: an item, a quantity, Send.', 'Asked for 18,000 cups of water, their assistant opens it filled in. Nobody presses Send.', 'Take it back the same way.'],
     'There is no order form yet, and nothing to give it with.',
   ),
 ];

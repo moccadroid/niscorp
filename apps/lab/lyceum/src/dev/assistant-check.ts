@@ -15,6 +15,7 @@ import { attachSocket } from '@niscorp/moss/node';
 import { mintSession } from '@niscorp/moss';
 import { ACTIONS } from '@lyceum/app/action-catalog';
 import { boot } from '@lyceum/server/boot';
+import { SLIDES } from '@lyceum/db/seed';
 import { OPENABLE_KEYS, offerableActions, prefillOf } from '@lyceum/server/assistant/tools';
 import { assembleFor } from '@lyceum/server/assistant/declarations';
 import { check, connect, finish, waitUntil } from './harness';
@@ -40,7 +41,7 @@ const main = async (): Promise<void> => {
   };
   const openAssistant = async (phone: Terminal): Promise<boolean> => {
     await phone.shows('main', '"label":"Assistant"');
-    return phone.shows('body', 'Built from');
+    return phone.shows('body', 'Can: ');
   };
   // Written, then sent — by the button, or by Enter in the field.
   const say = async (phone: Terminal, canvas: string, message: string, by: 'button' | 'enter' = 'button'): Promise<void> => {
@@ -55,22 +56,22 @@ const main = async (): Promise<void> => {
   // ── 1 + 2. somebody waiting: the room's assistant, no automation ──
   const waiting = await stepIn();
   check('everybody who joined has the assistant, on their list', await openAssistant(waiting.phone));
-  check('…built from the room declaration', waiting.phone.showsNow('body', 'Built from room ·'));
-  check('…able to query and open, not to automate', waiting.phone.showsNow('body', 'it can query · open') && !waiting.phone.showsNow('body', 'automate'));
+  check('…with a member\'s tools: it can query, not automate', waiting.phone.showsNow('body', 'Can: query') && !waiting.phone.showsNow('body', 'automate'));
+  check('…able to query and open, not to automate', waiting.phone.showsNow('body', 'Can: query · open') && !waiting.phone.showsNow('body', 'automate'));
   await say(waiting.phone, 'body', 'End the talk in 30 minutes');
   check('asked to automate, it says it cannot — it has no such tool', await waiting.phone.shows('body', 'cannot set up automations'));
   check('…and nothing was proposed or saved', !waiting.phone.showsNow('body', 'Read it first') && (await runtime.db.query('SELECT 1 FROM timers')).rows.length === 0);
   await say(waiting.phone, 'body', 'How many people are in the room?', 'enter');
-  check('Enter sends; the assistant runs a vex query, and it opens over the screen at once — no button in between', await waiting.phone.shows('overlay', '"value":"Vex query"'));
+  check('Enter sends; the assistant runs a vex query, and it opens over the screen at once — no button in between', await waiting.phone.shows('overlay', '"value":"Query"'));
   check('…shown as the query it is: its intent, its shape, its fingerprint', waiting.phone.showsNow('overlay', 'How many people are in the room?') && waiting.phone.showsNow('overlay', 'Shape · number') && waiting.phone.showsNow('overlay', 'Fingerprint'));
   check('…and its result, replayed as the person', await waiting.phone.shows('overlay', '"label":"Result"'));
-  check('the conversation keeps the query: under the turn, a button that opens it again', await waiting.phone.shows('body', 'Vex query · How many people are in the room?'));
+  check('the conversation keeps the query: under the turn, a button that opens it again', await waiting.phone.shows('body', 'Query · How many people are in the room?'));
   waiting.phone.click('overlay', 'close');
-  await waitUntil(() => !waiting.phone.showsNow('overlay', '"value":"Vex query"'));
+  await waitUntil(() => !waiting.phone.showsNow('overlay', '"value":"Query"'));
   waiting.phone.click('body', 'reopen');
   check('…pressed, the query opens again, replayed now', (await waiting.phone.shows('overlay', 'Shape · number')) && (await waiting.phone.shows('overlay', '"label":"Result"')));
   waiting.phone.click('overlay', 'close');
-  await waitUntil(() => !waiting.phone.showsNow('overlay', '"value":"Vex query"'));
+  await waitUntil(() => !waiting.phone.showsNow('overlay', '"value":"Query"'));
   check('every turn is kept: the conversation reads oldest first, the newest by the input', await waitUntil(() => {
     const tree = waiting.phone.textOf('body');
     const newest = tree.indexOf('How many people are in the room?');
@@ -97,13 +98,18 @@ const main = async (): Promise<void> => {
   // ── the controller's ──
   const speaker = await connect(base, await mintSession(runtime.pool, 'speaker', 60_000));
   await speaker.hello();
-  check('the controller\'s assistant is built from the controller declaration, and can automate', (await speaker.shows('tools', 'Built from controller')) && speaker.showsNow('tools', 'automate'));
+  // To the timer slide, which brings the speaker's assistant to the controller.
+  for (let step = 0; step < SLIDES.findIndex((slide) => slide.slideId === 'slide.timer'); step += 1) {
+    speaker.click('controls', 'next');
+    await speaker.shows('head', `slide ${step + 2} of`);
+  }
+  check('the controller\'s assistant can automate', (await speaker.shows('tools', 'Can: ')) && speaker.showsNow('tools', 'automate'));
   await say(speaker, 'tools', 'Send the speaker a question: Will the slides be online?');
   check('the speaker, asking the same, gets no form — the question form is not theirs', !speaker.showsNow('overlay', 'Your question') && !speaker.showsNow('tools', 'Your question:') && /cannot open anything|not one of your actions/.test(speaker.textOf('tools')));
 
   // ── what it sees: the person's own screen, read off the live shell ──
   await say(speaker, 'tools', 'What is on my screen?');
-  check('the speaker\'s assistant sees the slide on screen, from the controller\'s own canvases', await speaker.shows('tools', 'Ask everyone to join'));
+  check('the speaker\'s assistant sees the slide on screen, from the controller\'s own canvases', await speaker.shows('tools', 'share the controller screen'));
   check('…and not its own bookkeeping', !speaker.showsNow('tools', 'THE CONVERSATION'));
   await say(asker.phone, 'body', 'What is on my screen?');
   check('a phone\'s assistant sees that person\'s screen: their own phone', await asker.phone.shows('body', 'On your screen:'));

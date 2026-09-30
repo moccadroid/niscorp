@@ -70,7 +70,7 @@ export const memberCounts: SeedEntry = {
 
 export const memberJoin: SeedMutation = {
   fingerprint: 'members/join',
-  intent: 'Step into the room as yourself',
+  intent: 'Join as a member, under the name you chose',
   mutation: {
     op: 'insert',
     table: 'members',

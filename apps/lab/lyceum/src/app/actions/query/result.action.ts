@@ -12,7 +12,7 @@ import { queryResultLayout } from './result.layout';
 export const queryResultAction: ActionDefinition = {
   id: 'query.result',
   description: 'One vex query, opened: its intent, its shape, its fingerprint, and its result, replayed as the person.',
-  title: 'Vex query',
+  title: 'Query',
   data: {
     intent: '',
     shape: '',

@@ -47,7 +47,7 @@ const main = async (): Promise<void> => {
     const phone = await connect(base, token);
     const hello = await phone.hello();
     await phone.shows('main', '"label":"Assistant"');
-    await phone.shows('body', 'Built from');
+    await phone.shows('body', 'Can: ');
     return { phone, memberId: hello.principal ?? '' };
   };
 
@@ -79,7 +79,7 @@ const main = async (): Promise<void> => {
   const ada = await stepIn();
   check('there is no query tab: vex is not something anybody talks to', !ada.phone.showsNow('main', '"label":"Query"'));
   await say(ada.phone, 'How many people are in the room?');
-  check('the assistant runs a vex query, and it opens over the screen', await ada.phone.shows('overlay', '"value":"Vex query"'));
+  check('the assistant runs a vex query, and it opens over the screen', await ada.phone.shows('overlay', '"value":"Query"'));
   check('…as the query it is: its intent, its shape, its fingerprint', ada.phone.showsNow('overlay', 'How many people are in the room?') && ada.phone.showsNow('overlay', 'Shape · number') && ada.phone.showsNow('overlay', 'Fingerprint'));
   check('…with its result, and that a model wrote it just now', (await ada.phone.shows('overlay', '"label":"Result"')) && ada.phone.showsNow('overlay', 'a model wrote this one'));
   const first = (await queries())[0];
@@ -92,7 +92,7 @@ const main = async (): Promise<void> => {
   // ── 2. replayed ──
   const ben = await stepIn();
   await say(ben.phone, 'how many people are in the room');
-  check('the same intent from somebody else opens its query too', await ben.phone.shows('overlay', '"value":"Vex query"'));
+  check('the same intent from somebody else opens its query too', await ben.phone.shows('overlay', '"value":"Query"'));
   check('…and it says it was replayed', await ben.phone.shows('overlay', 'Replayed:'));
   const second = (await queries())[1];
   check('it is recorded as replayed', second?.how === 'replayed');
@@ -105,7 +105,7 @@ const main = async (): Promise<void> => {
   await say(ben.phone, 'Show me the login links');
   const refusedQuery = (await queries())[2];
   check('an intent past the caller\'s clearance is refused, and recorded with no fingerprint', refusedQuery?.how === 'refused' && refusedQuery.fingerprint === null);
-  check('…nothing opens over the screen', !ben.phone.showsNow('overlay', '"value":"Vex query"'));
+  check('…nothing opens over the screen', !ben.phone.showsNow('overlay', '"value":"Query"'));
   check('…and nothing of what it reached for reaches the phone', !ben.phone.textOf('body').includes('hash_that_must_not_leak') && !ben.phone.textOf('overlay').includes('hash_that_must_not_leak'));
 
   // ── 4. the projector's tally ──

@@ -33,9 +33,9 @@ const still = (id: string, title: string, layout: ActionDefinition['layout'], da
   triggers: [],
 });
 
-export const mossSlide = still('slide.moss', 'Your screen runs on the server.', mossLayout, {
+export const mossSlide = still('slide.moss', 'Your screen runs on the server. Your phone only draws it.', mossLayout, {
   kicker: 'Moss',
-  from: 'Your shell, on the server',
+  from: 'Your actions and their data, on the server',
   to: 'Your phone',
   lanes: [
     { label: 'What to draw', toward: 'to', ink: 'signal' },
@@ -44,14 +44,14 @@ export const mossSlide = still('slide.moss', 'Your screen runs on the server.', 
 });
 
 // Two roles from app/charter/charter.ts, as written.
-export const charterSlide = still('slide.charter', 'Who gets what is one document.', documentLayout, {
+export const charterSlide = still('slide.charter', 'Who can use what: one file, the charter.', documentLayout, {
   kicker: 'Charter',
-  file: 'charter.ts, two of its roles',
+  file: 'charter.ts — two of its roles, as written',
   code: code(
     'member: {',
     "  actions: ['member.*', 'query.*',",
     "    'assistant.*', 'ext.member.*'],",
-    '  data: [...ROOM_READS, ...QUERYING,',
+    '  data: [...MEMBERS_READ, ...QUERYING,',
     '    ...QUESTIONING, ...CONVERSING, ...LOOK],',
     '},',
     '',
@@ -61,8 +61,8 @@ export const charterSlide = still('slide.charter', 'Who gets what is one documen
 });
 
 // The questions rule from app/vex/behaviors.ts.
-export const twiceSlide = still('slide.twice', 'Enforced in two places.', twiceLayout, {
-  shell: 'An action you are not granted is never sent to you.',
+export const twiceSlide = still('slide.twice', 'The charter is enforced in two places.', twiceLayout, {
+  shell: 'Only the actions you are given are sent to your phone.',
   code: code(
     'questions: {',
     '  default: {',
@@ -74,9 +74,9 @@ export const twiceSlide = still('slide.twice', 'Enforced in two places.', twiceL
 });
 
 // members/counts from app/vex/member.entries.ts — the strip's joined count.
-export const vexSlide = still('slide.vex', 'A query is a document too.', vexLayout, {
+export const vexSlide = still('slide.vex', 'A query is stored as JSON and run by name.', vexLayout, {
   kicker: 'Vex',
-  file: 'members/counts, as stored',
+  file: 'The joined count, as stored',
   stored: code(
     '{',
     "  fingerprint: 'members/counts',",
@@ -93,45 +93,45 @@ export const vexSlide = still('slide.vex', 'A query is a document too.', vexLayo
   sent: code('{', "  fingerprint: 'members/counts',", '  context: {},', '}'),
 });
 
-export const wordsSlide = still('slide.words', 'Asked in words.', wordsLayout, {
-  kicker: 'Queries from your assistant',
+export const wordsSlide = still('slide.words', 'Ask your assistant. A small model decides how to answer.', wordsLayout, {
+  kicker: 'Vex, from your assistant',
   outcomes: [
-    { area: 'again', ink: 'live', label: 'Asked before', what: 'Replayed. No model.' },
-    { area: 'new', ink: 'signal', label: 'New', what: 'Written once, then stored.' },
-    { area: 'cannot', ink: 'paper', label: 'Past your policy', what: 'Refused, with why.' },
+    { area: 'again', ink: 'live', label: 'Asked before', what: 'The stored query runs again. No model.' },
+    { area: 'new', ink: 'signal', label: 'New question', what: 'A model writes a query. It is checked, run and stored.' },
+    { area: 'cannot', ink: 'paper', label: 'Not allowed for you', what: 'Refused, and you are told why.' },
   ],
 });
 
 export const waterSlide = still('slide.water', '18,000 cups of water.', incidentLayout, {
-  kicker: 'A drive-through AI took this order, 2025',
+  kicker: 'Someone ordered this from Taco Bell’s drive-through AI, 2025',
 });
 
-export const pressSlide = still('slide.press', 'It cannot press Send.', pressLayout, {
-  can: [{ text: 'Reads your screen.' }, { text: 'Opens an action, filled in.' }],
+export const pressSlide = still('slide.press', 'The assistant fills in forms. It cannot press Send.', pressLayout, {
+  can: [{ text: 'It reads your screen.' }, { text: 'It opens a form, filled in.' }],
 });
 
 // The timer saved at the start of the talk, read as the stage: the row's
 // reflex document, printed, and when it fires.
 export const tideSlide: ActionDefinition = {
   id: 'slide.tide',
-  title: 'The timer from the start is a row.',
-  data: { kicker: 'Tide', title: 'The timer from the start is a row.', timer: { code: '', marked: [], due_at: '' } },
+  title: 'The timer from the start is a row in the database.',
+  data: { kicker: 'Tide', title: 'The timer from the start is a row in the database.', timer: { code: '', marked: [], due_at: '' } },
   layout: tideLayout,
   endpoints: { timer: { fn: 'room.timer', target: 'timer' } },
   lifecycle: { mount: [{ call: 'timer' }] },
   triggers: [],
 };
 
-export const onceSlide = still('slide.once', 'Automations without an agent loop', onceLayout, {});
+export const onceSlide = still('slide.once', 'When the timer fires, no model runs.', onceLayout, {});
 
 // This app's strata.lock.json, as committed.
-export const strataSlide = still('slide.strata', 'A grammar change is a migration.', strataLayout, {
+export const strataSlide = still('slide.strata', 'When nisc changes, stored documents are upgraded.', strataLayout, {
   kicker: 'Strata',
-  file: 'strata.lock.json — what this source is written in',
-  code: code('{', '  "grammar": {', '    "lyceum.kit": 6,', '    "nisc.nova": 2,', '    "nisc.prism": 1', '  }', '}'),
+  file: 'strata.lock.json — which version of each grammar this app is written in',
+  code: code('{', '  "grammar": {', '    "lyceum.kit": 9,', '    "nisc.nova": 2,', '    "nisc.prism": 1', '  }', '}'),
 });
 
-export const endSlide = still('slide.end', 'It is all in one folder.', endLayout, {
+export const endSlide = still('slide.end', 'All of this is one app, in one folder.', endLayout, {
   repo: 'https://github.com/moccadroid/niscorp',
   repoWords: 'github.com/moccadroid/niscorp',
   folder: 'apps/lab/lyceum',

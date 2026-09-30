@@ -67,7 +67,7 @@ export const assistantAction: ActionDefinition = {
         fingerprint: turnResolve.fingerprint,
         context: {
           turnId: { $ref: '$.reply.turnId' },
-          outcome: { $interpolate: { template: 'Saved · tide runs it at {{at}} — no model is asked again.', values: { at: { $ref: '$.savedTimer.dueLocal' } } } },
+          outcome: { $interpolate: { template: 'Saved · runs at {{at}}, with no model.', values: { at: { $ref: '$.savedTimer.dueLocal' } } } },
         },
       },
       errorTarget: 'error',

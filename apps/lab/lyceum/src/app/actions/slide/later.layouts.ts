@@ -49,8 +49,8 @@ export const twiceLayout: LayoutNode = {
   props: { size: 'fill', areas: ['head head', 'shell query'], cols: [1, 1.2], rows: ['auto', 1] },
   children: [
     cell('head', [headline('display', '{{$.title}}')]),
-    cell('shell', [label('1 · Your shell'), headline('title', 'Which actions exist.'), text('{{$.shell}}')], { ink: 'alert', align: 'end' }),
-    cell('query', [label('2 · Every query'), headline('title', 'Which rows it reaches.'), code('$.code', '$.marked')], { ink: 'signal', align: 'end' }),
+    cell('shell', [label('1 · On the server, for your screen'), headline('title', '{{$.shell}}')], { ink: 'alert', align: 'end' }),
+    cell('query', [label('2 · In every query'), headline('title', 'You only get the rows you may read.'), code('$.code', '$.marked')], { ink: 'signal', align: 'end' }),
   ],
 };
 
@@ -62,7 +62,7 @@ export const vexLayout: LayoutNode = {
   children: [
     cell('head', [label('{{$.kicker}}'), headline('display', '{{$.title}}')]),
     cell('stored', [label('{{$.file}}'), code('$.stored', '$.marked')], { ink: 'ink', align: 'end' }),
-    cell('sent', [label('What the strip sends, every time'), code('$.sent')], { ink: 'highlight', align: 'end' }),
+    cell('sent', [label('What the screen sends to run it'), code('$.sent')], { ink: 'highlight', align: 'end' }),
   ],
 };
 
@@ -101,8 +101,8 @@ export const pressLayout: LayoutNode = {
   props: { size: 'fill', areas: ['head head', 'can cannot'], cols: [1.3, 1], rows: ['auto', 1] },
   children: [
     cell('head', [headline('display', '{{$.title}}')]),
-    cell('can', [label('The assistant'), { for: '$.can', as: 'line', do: headline('title', '{{$line.text}}') }], { align: 'end' }),
-    cell('cannot', [label('Only you'), headline('display', 'Send')], { ink: 'alert', align: 'end' }),
+    cell('can', [label('Your assistant'), { for: '$.can', as: 'line', do: headline('title', '{{$line.text}}') }], { align: 'end' }),
+    cell('cannot', [label('Only you press'), headline('display', 'Send')], { ink: 'alert', align: 'end' }),
   ],
 };
 
@@ -133,8 +133,8 @@ export const onceLayout: LayoutNode = {
   props: { size: 'fill', areas: ['head head', 'agent reflex'], cols: [1, 1.2], rows: ['auto', 1] },
   children: [
     cell('head', [headline('display', '{{$.title}}')]),
-    cell('agent', [label('An agent with a skill'), headline('title', 'Reads its instructions again, every run.')], { align: 'end' }),
-    cell('reflex', [label('An automation'), headline('title', 'Written once. Runs with no model.')], { ink: 'live', align: 'end' }),
+    cell('agent', [label('An agent with a skill (OpenClaw)'), headline('title', 'Every run, a model reads the instructions and decides what to do.')], { align: 'end' }),
+    cell('reflex', [label('This timer'), headline('title', 'A model wrote it once. It runs without a model.')], { ink: 'live', align: 'end' }),
   ],
 };
 
@@ -147,7 +147,7 @@ export const strataLayout: LayoutNode = {
     cell('kick', [label('{{$.kicker}}')]),
     cell('head', [headline('display', '{{$.title}}')], { align: 'end' }),
     cell('lock', [label('{{$.file}}'), code('$.code')], { ink: 'ink', align: 'end' }),
-    cell('read', [label('A stored document'), headline('title', 'Upgraded where it is read.')], { ink: 'signal' }),
+    cell('read', [label('A stored document'), headline('title', 'Upgraded to the current version when it is read.')], { ink: 'signal' }),
   ],
 };
 

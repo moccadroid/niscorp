@@ -56,7 +56,7 @@ export const allRenderers: SeedEntry = {
           $case: {
             branches: [
               { when: { $eq: [{ $get: { from: { $var: 'row' }, path: ['surface'] } }, { $const: 'phones' }] }, then: { $const: 'Phones' } },
-              { when: { $eq: [{ $get: { from: { $var: 'row' }, path: ['surface'] } }, { $const: 'stage' }] }, then: { $const: 'Stage' } },
+              { when: { $eq: [{ $get: { from: { $var: 'row' }, path: ['surface'] } }, { $const: 'stage' }] }, then: { $const: 'Projector' } },
             ],
             else: { $const: 'Controller' },
           },
