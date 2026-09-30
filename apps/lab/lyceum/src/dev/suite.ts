@@ -12,6 +12,7 @@ export const CHECKS: readonly string[] = [
   'timer-check',
   'assistant-check',
   'look-check',
+  'xray-check',
   'questions-check',
   'ssh-check',
 ];

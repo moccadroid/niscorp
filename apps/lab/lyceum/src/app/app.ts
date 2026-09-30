@@ -5,7 +5,7 @@ import { ACTIONS } from './action-catalog';
 import { ENTRIES } from './vex';
 import { BEHAVIORS } from './vex/behaviors';
 import { CANVASES } from './shell/canvases';
-import { RENDERER_STORE, frameLayout } from './shell/frame.layout';
+import { FRAME_STORE, frameLayout } from './shell/frame.layout';
 import { FRAGMENTS } from './shell/fragments/sheet.fragment';
 import { LYCEUM_KIT } from './grammars';
 
@@ -39,7 +39,7 @@ export const buildLyceum = (seams: LyceumSeams): NiscApp =>
     shell: {
       canvases: CANVASES,
       layout: frameLayout,
-      layoutStore: RENDERER_STORE,
+      layoutStore: FRAME_STORE,
       fragments: FRAGMENTS,
       inputs: seams.inputs,
     },

@@ -28,12 +28,6 @@ const cue = (id: string, title: string, lines: string[], pending: string): Actio
 
 export const CUE_TOOLS: readonly ActionDefinition[] = [
   cue(
-    'tools.xray',
-    'Give everyone the X-ray',
-    ['Being redesigned: the X-ray should show what is on the screen — every action on it, where it sits, and what it is.'],
-    'There is no X-ray yet.',
-  ),
-  cue(
     'tools.button',
     'Give three people the button',
     ['Three people, picked at random, get a button on their main screen. Pressed, it plays a sound.', 'Take it back the same way.'],

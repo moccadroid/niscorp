@@ -12,13 +12,22 @@ import type { LayoutNode } from '@niscorp/nova';
 // reads it (src/ui/target.ts).
 export const RENDERER_REF = 'renderer';
 
-// What it draws until the server says otherwise: nova's DOM adapter.
-export const RENDERER_STORE: Record<string, LayoutNode> = { [RENDERER_REF]: { component: 'Look', props: { look: 'dom' } } };
+// Whether this screen shows the actions it is made of: an `Xray` the person
+// switches with their X-ray button (server/functions/xray.functions.ts). Frame,
+// like the renderer; the browser draws the outlines (src/ui/target.ts).
+export const XRAY_REF = 'xray';
+
+// What they draw until the server says otherwise: nova's DOM adapter, no X-ray.
+export const FRAME_STORE: Record<string, LayoutNode> = {
+  [RENDERER_REF]: { component: 'Look', props: { look: 'dom' } },
+  [XRAY_REF]: { component: 'Xray', props: { on: false } },
+};
 
 export const frameLayout: LayoutNode = {
   component: 'Page',
   children: [
     { ref: RENDERER_REF },
+    { ref: XRAY_REF },
     // Over everything, when something is open; it takes no room in the stack.
     { component: 'CanvasSlot', props: { canvasId: 'overlay' } },
     { component: 'CanvasSlot', props: { canvasId: 'strip' } },

@@ -8,5 +8,8 @@ import { PHONE_BUTTONS } from '@lyceum/app/actions/member/phone.action';
 export const phoneInputs: NonNullable<ShellManifest['inputs']> = ({ actions }): Record<string, Record<string, unknown>> => {
   if (!actions.includes('member.phone')) return {};
   const tabs = PHONE_BUTTONS.filter((button) => actions.includes(button.action)).map((button, index) => ({ ...button, area: `tab-${index}` }));
-  return { main: { bar: { areas: [tabs.map((tab) => tab.area).join(' ')], tabs } } };
+  // The X-ray, when it was given: a switch after the tabs.
+  const switches = actions.includes('xray.document') ? [{ area: `tab-${tabs.length}` }] : [];
+  const areas = [...tabs, ...switches].map((place) => place.area).join(' ');
+  return { main: { bar: { areas: [areas], tabs, switches } } };
 };

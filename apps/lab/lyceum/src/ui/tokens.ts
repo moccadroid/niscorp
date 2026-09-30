@@ -308,4 +308,20 @@ html:has(.page > [data-canvas="strip"]:not(:empty)) { font-size: clamp(16px, cal
   padding: .2em .6em; background: var(--signal); color: var(--paper);
   font: 700 clamp(.7rem, calc(.9 * var(--cq)), 1rem)/1.2 var(--mono); letter-spacing: .06em; text-transform: uppercase;
 }
+
+/* THE X-RAY: the screen as it is, with every action on it outlined and its id
+   in the corner — nested the way the screen is composed. The tag is the one
+   thing to tap: it opens that action as its document. Off, the tag is not
+   there at all. */
+.${ROOT_CLASS} .xray-tag { display: none; }
+.${ROOT_CLASS}[data-xray] [data-action] { position: relative; outline: var(--rule) solid var(--signal); outline-offset: calc(var(--rule) * -1); }
+.${ROOT_CLASS}[data-xray] .xray-tag {
+  display: block; position: absolute; top: 0; right: 0; z-index: 20; cursor: pointer;
+  padding: .15em .5em; background: var(--signal); color: var(--paper);
+  font: 700 .72rem/1.3 var(--mono); letter-spacing: .02em;
+}
+/* nested boxes share corners: each level down puts its tag in the other one */
+.${ROOT_CLASS}[data-xray] [data-action] [data-action] > .xray-tag { right: auto; left: 0; }
+.${ROOT_CLASS}[data-xray] [data-action] [data-action] [data-action] > .xray-tag { left: auto; right: 0; }
+.${ROOT_CLASS}[data-xray] [data-action] [data-action] [data-action] [data-action] > .xray-tag { right: auto; left: 0; }
 `;

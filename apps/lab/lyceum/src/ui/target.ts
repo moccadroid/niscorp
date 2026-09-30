@@ -45,6 +45,15 @@ const lookIn = (nodes: readonly RenderNode[]): (typeof LOOKS)[number] | undefine
   return undefined;
 };
 
+// Whether the frame says this screen is X-rayed (server/functions/xray.functions.ts).
+const xrayIn = (nodes: readonly RenderNode[]): boolean => {
+  for (const node of nodes) {
+    if (node.type === 'component' && node.name === 'Xray') return node.props['on'] === true;
+    if ((node.type === 'component' || node.type === 'fragment') && xrayIn(node.children)) return true;
+  }
+  return false;
+};
+
 // Which action instance is on the stage's `main` canvas — the slide. A new one
 // is a slide arriving; the same one is the slide updating.
 const slideIn = (nodes: readonly RenderNode[]): string | undefined => {
@@ -75,7 +84,13 @@ const domRenderer = (root: HTMLElement): Target => (api) => {
 const reactRenderer = (root: HTMLElement): Target => {
   const registry = createComponentRegistry<NovaComponent>();
   registry.registerAll(REACT_KIT);
-  const target = reactTarget({ root, registry, slotWrapper: ({ children }) => createElement('div', { 'data-component': 'ActionSlot' }, children) });
+  const target = reactTarget({
+    root,
+    registry,
+    // The instance box, as the DOM kit draws it (./registry.ts).
+    slotWrapper: ({ instanceId, definitionId, children }) =>
+      createElement('div', { 'data-action': definitionId ?? '', 'data-instance': instanceId ?? '' }, createElement('span', { className: 'xray-tag' }, definitionId ?? ''), children),
+  });
   const wire = registry.get('CanvasSlot')?.component;
   if (wire === undefined) throw new Error('moss registered no CanvasSlot');
   const CanvasSlot: NovaComponent = (props) => createElement('div', { 'data-canvas': props['canvasId'] }, createElement(wire, props));
@@ -89,6 +104,21 @@ export const lyceumTarget = (config: { root: HTMLElement }): Target => {
   return (api) => {
     dress(root.ownerDocument);
     root.classList.add(ROOT_CLASS);
+    // X-RAYED, every action on the screen is outlined with its id as a tag
+    // (every renderer draws the same box, ./registry.ts). A tapped tag opens
+    // that action: the terminal says which instance, and the phone opens it
+    // (member/phone.action.ts). Caught before the action's own element sees
+    // the tap, so the tag never presses what is under it.
+    const openTag = (event: Event): void => {
+      if (!root.hasAttribute('data-xray') || !(event.target instanceof Element)) return;
+      const tag = event.target.closest('.xray-tag');
+      const box = tag?.parentElement;
+      if (tag === null || tag === undefined || box === null || box === undefined) return;
+      event.stopPropagation();
+      event.preventDefault();
+      api.publish('xray-open', { instance: box.getAttribute('data-instance') ?? '', action: box.getAttribute('data-action') ?? '' });
+    };
+    root.addEventListener('click', openTag, true);
     let drawing: { look: (typeof LOOKS)[number]; mount: ReturnType<Target> } | undefined;
     let slide: string | undefined;
     let arrived = 0;
@@ -103,6 +133,7 @@ export const lyceumTarget = (config: { root: HTMLElement }): Target => {
       root.style.setProperty('--enter-elapsed', `${elapsed}ms`);
       const look = lookIn(api.frame()) ?? 'dom';
       root.setAttribute('data-look', look);
+      root.toggleAttribute('data-xray', xrayIn(api.frame()));
       if (drawing !== undefined && drawing.look === look) {
         drawing.mount.update();
         return;
@@ -116,8 +147,10 @@ export const lyceumTarget = (config: { root: HTMLElement }): Target => {
       update: paint,
       destroy: () => {
         drawing?.mount.destroy();
+        root.removeEventListener('click', openTag, true);
         root.classList.remove(ROOT_CLASS);
         root.removeAttribute('data-look');
+        root.removeAttribute('data-xray');
       },
     };
   };

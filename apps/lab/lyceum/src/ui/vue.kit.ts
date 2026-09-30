@@ -486,6 +486,7 @@ const Field: NovaComponent = stateful((props) => {
 });
 
 const Look = functional(() => h('span', { class: 'look' }));
+const Xray = functional(() => h('span', { class: 'look' }));
 
 // THIS KIT, whole — typed against the grammar, like the DOM and React ones.
 export const VUE_KIT: KitOf<NovaComponent> = {
@@ -507,6 +508,7 @@ export const VUE_KIT: KitOf<NovaComponent> = {
   Action,
   Field,
   Look,
+  Xray,
 };
 
 // moss's Vue target, with this kit. As with React (./target.ts), the DOM
@@ -515,9 +517,11 @@ export const VUE_KIT: KitOf<NovaComponent> = {
 export const vueRenderer = (root: HTMLElement): Target => {
   const registry = createComponentRegistry<NovaComponent>();
   registry.registerAll(VUE_KIT);
-  const slotWrapper = functional((_props, children) =>
-    h('div', { 'data-component': 'ActionSlot' }, children),
-  );
+  // The instance box, as the DOM kit draws it (./registry.ts).
+  const slotWrapper = functional((props, children) => {
+    const action = text(props['definitionId']) ?? '';
+    return h('div', { 'data-action': action, 'data-instance': text(props['instanceId']) ?? '' }, [h('span', { class: 'xray-tag' }, action), ...children]);
+  });
   const target = vueTarget({ root, registry, slotWrapper });
   const wire = registry.get('CanvasSlot')?.component;
   if (wire === undefined) throw new Error('moss registered no CanvasSlot');

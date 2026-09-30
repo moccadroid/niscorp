@@ -24,6 +24,9 @@ export type Terminal = {
   textOf: (canvas: string) => string;
   session: () => Promise<string>;
   click: (canvas: string, ref: string, payload?: unknown) => void;
+  // A channel message from the terminal, as the browser sends one (a tapped
+  // X-ray tag, src/ui/target.ts).
+  publish: (channel: string, payload?: unknown) => void;
   // A click on `ref` inside the one instance on `canvas` that shows `text` —
   // for a list canvas whose instances share a ref (the phone's tabs).
   clickIn: (canvas: string, ref: string, text: string) => void;
@@ -140,6 +143,7 @@ export const connect = (base: string, token?: string): Promise<Terminal> =>
           const event = { type: 'ui:click', ref, ...(sent === undefined ? {} : { payload: sent }), ...(origin === undefined ? {} : { origin }) };
           socket.send(JSON.stringify({ type: 'event', canvas, event }));
         },
+        publish: (channel, payload) => socket.send(JSON.stringify(payload === undefined ? { type: 'publish', channel } : { type: 'publish', channel, payload })),
         clickIn: (canvas, ref, text) => {
           const origin = instanceShowing(JSON.parse(trees.get(canvas) ?? '[]'), text);
           socket.send(JSON.stringify({ type: 'event', canvas, event: { type: 'ui:click', ref, ...(origin === undefined ? {} : { origin }) } }));

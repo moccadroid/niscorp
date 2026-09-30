@@ -73,6 +73,7 @@ export const TEXT_KIT: KitOf<TtyComponent> = {
     return block(value === '' ? `[text field: ${text(props['placeholder']) ?? ''}]` : `[text field, typed: ${value}]`);
   },
   Look: () => block(),
+  Xray: () => block(),
 };
 
 const registry = createComponentRegistry<TtyComponent>();

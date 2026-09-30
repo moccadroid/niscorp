@@ -22,6 +22,8 @@ import { stripAction } from './actions/stage/strip.action';
 import { sinkAction } from './actions/kit/sink.action';
 import { signinAction } from './actions/lectern/signin.action';
 import { SLIDE_ACTIONS } from './actions/slide/slide.actions';
+import { xrayTool } from './actions/tools/xray.action';
+import { xrayDocumentAction } from './actions/xray/document.action';
 import { CUE_TOOLS } from './actions/tools/cue.actions';
 
 // Ring 1: every action lyceum has. Which role is granted which is the
@@ -44,6 +46,8 @@ export const ACTIONS: Record<string, ActionDefinition> = Object.fromEntries(
     slidesAction,
     notificationAction,
     lookTool,
+    xrayTool,
+    xrayDocumentAction,
     assistantAction,
     stageRegisterAction,
     deckAction,

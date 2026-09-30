@@ -10,6 +10,7 @@ import { createCensus } from './census';
 import { assistantFunctions } from './functions/assistant.functions';
 import { lecternFunctions } from './functions/lectern.functions';
 import { phoneInputs } from './phone';
+import { xrayFunctions } from './functions/xray.functions';
 import { followRenderers } from './renderers';
 import { createMailer } from './mail';
 import type { SendMail } from './mail';
@@ -91,7 +92,7 @@ export const bootOn = async <R extends LyceumRuntime>(runtime: R, options: BootO
   const renderers = followRenderers();
   const app = buildLyceum({
     identity: lyceumIdentity,
-    functions: (session) => ({ ...doorFunctions(session, server, issuer), ...roomFunctions(session, publicUrl, options.sshAddress ?? '', census), ...assistantFunctions(session, { querier, writer: timerWriter, orchestrator, tz, timing }), ...lecternFunctions(server, speakerMail) }),
+    functions: (session) => ({ ...doorFunctions(session, server, issuer), ...roomFunctions(session, publicUrl, options.sshAddress ?? '', census), ...assistantFunctions(session, { querier, writer: timerWriter, orchestrator, tz, timing }), ...lecternFunctions(server, speakerMail), ...xrayFunctions(session) }),
     reactions: [...lyceumReactions(server), renderers.reaction],
     inputs: phoneInputs,
     onSession: renderers.onSession,

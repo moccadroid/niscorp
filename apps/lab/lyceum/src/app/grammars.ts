@@ -69,5 +69,10 @@ export const LYCEUM_KIT: Sequence = {
         },
       ],
     },
+    {
+      // A MARKER: a component added.
+      description: 'Xray: whether this screen shows the actions it is made of',
+      steps: [],
+    },
   ],
 };

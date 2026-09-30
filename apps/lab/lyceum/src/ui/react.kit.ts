@@ -423,6 +423,7 @@ const Field: NovaComponent = (props: Props) => {
 };
 
 const Look: NovaComponent = () => h('span', { className: 'look' });
+const Xray: NovaComponent = () => h('span', { className: 'look' });
 
 // THIS KIT, whole — typed against the grammar, like the DOM one.
 export const REACT_KIT: KitOf<NovaComponent> = {
@@ -444,4 +445,5 @@ export const REACT_KIT: KitOf<NovaComponent> = {
   Action,
   Field,
   Look,
+  Xray,
 };

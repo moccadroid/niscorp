@@ -403,6 +403,10 @@ export const clearsOnEnter = (node: HTMLInputElement, enter: unknown): void => {
 // (./target.ts). Every kit has it, so whichever is painting finds it.
 export const Look: DomComponent = () => el('span', 'look');
 
+// ── Xray — whether the screen shows the actions it is made of ───
+// on: boolean. Shows nothing, like Look: the terminal reads it off the frame.
+export const Xray: DomComponent = () => el('span', 'look');
+
 // THIS KIT, whole — typed against the grammar, so a component the grammar
 // names and the kit lacks does not compile.
-export const POSTER_KIT: Kit = { Page, Sheet, Cell, Label, Headline, Text, Figure, Countdown, Code, Sigil, Qr, Rows, Bar, Flow, Columns, Action, Field, Look };
+export const POSTER_KIT: Kit = { Page, Sheet, Cell, Label, Headline, Text, Figure, Countdown, Code, Sigil, Qr, Rows, Bar, Flow, Columns, Action, Field, Look, Xray };

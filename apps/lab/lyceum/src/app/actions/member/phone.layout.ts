@@ -28,6 +28,11 @@ export const phoneLayout: LayoutNode = {
                 props: { area: '$tab.area', ink: { $if: { $eq: ['$tab.action', '$.open'] }, $then: 'ink', $else: 'paper' }, label: '{{$tab.label}}', value: '$tab.action' },
               },
             },
+            {
+              for: '$.bar.switches',
+              as: 'switch',
+              do: { component: 'Action', ref: 'xray', props: { area: '$switch.area', ink: { $if: '$.xray', $then: 'signal', $else: 'paper' }, label: 'X-ray' } },
+            },
           ],
         },
       ],

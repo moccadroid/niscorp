@@ -62,8 +62,9 @@ export type ToolDeps = {
 // charter's: the assistant itself; what only a tool opens (query.result); what
 // only another action opens, with an id nobody types (questions.edit, from the
 // list); a tab's surface, whose form is offered on its own (questions.desk); and
-// what only an automation's `notify` opens (speaker.notification).
-const NOT_OFFERED: ReadonlySet<string> = new Set(['assistant.thread', 'query.result', 'questions.edit', 'questions.desk', 'speaker.notification']);
+// what only an automation's `notify` opens (speaker.notification); what only
+// the X-ray opens, on an action somebody tapped (xray.document).
+const NOT_OFFERED: ReadonlySet<string> = new Set(['assistant.thread', 'query.result', 'questions.edit', 'questions.desk', 'speaker.notification', 'xray.document']);
 
 // How an action is DRAWN — as a tab on the phone — is the
 // phone's business, not something a person asks for. These input keys are the

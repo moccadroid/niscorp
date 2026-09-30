@@ -12,6 +12,12 @@ import { phoneLayout } from './phone.layout';
 // action they are granted, laid out — derived from their grants when their
 // shell is built (server/phone.ts). So something the speaker gives on stage is
 // a button for whoever has the grant, and not there for anyone else.
+//
+// THE X-RAY is one of those: given on stage, it is a switch on the bar, not a
+// button that opens something. On, the screen shows the actions it is made of,
+// each outlined with its id (server/functions/xray.functions.ts sets it in the
+// frame; src/ui/target.ts draws it). Tapping an id opens that action, as the
+// JSON document it is, over the screen.
 export const PHONE_BUTTONS: readonly { action: string; label: string }[] = [
   { action: 'member.card', label: 'Card' },
   { action: 'questions.desk', label: 'Q&A' },
@@ -25,12 +31,22 @@ export const phoneAction: ActionDefinition = {
     me: { member_id: '', name: '', title: '', quirk: '' },
     // The body opens on the card (shell/canvases.ts), so the card is open.
     open: 'member.card',
-    bar: { areas: [], tabs: [] },
+    xray: false,
+    bar: { areas: [], tabs: [], switches: [] },
   },
   layout: phoneLayout,
   endpoints: {
     me: { url: '/api/vex', method: 'POST', request: { fingerprint: memberMe.fingerprint, context: {} }, target: 'me' },
+    xray: { fn: 'xray.set' },
   },
   lifecycle: { mount: [{ call: 'me' }] },
-  triggers: [{ event: 'ui:click', ref: 'tab', do: [{ set: 'open', value: '@event.payload' }, { resetTo: { action: '@event.payload', canvas: 'body' } }] }],
+  triggers: [
+    { event: 'ui:click', ref: 'tab', do: [{ set: 'open', value: '@event.payload' }, { resetTo: { action: '@event.payload', canvas: 'body' } }] },
+    { event: 'ui:click', ref: 'xray', do: [{ toggle: 'xray' }, { call: 'xray' }] },
+    // An id tapped on the X-rayed screen: the browser says which instance.
+    {
+      message: 'xray-open',
+      do: [{ push: { action: 'xray.document', canvas: 'overlay', with: ['sheet'], input: { instanceId: '@event.payload.instance', sheetTitle: '@event.payload.action' } } }],
+    },
+  ],
 };

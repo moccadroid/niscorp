@@ -221,8 +221,9 @@ const Field: NovaComponent = (props) => h(Input, props);
 
 // The look belongs to a browser; a terminal has one.
 const Look: NovaComponent = () => null;
+const Xray: NovaComponent = () => null;
 
-export const INK_KIT: KitOf<NovaComponent> = { Page, Sheet, Cell, Label, Headline, Text, Figure, Countdown, Code, Sigil, Qr, Rows, Bar, Flow, Columns, Action, Field, Look };
+export const INK_KIT: KitOf<NovaComponent> = { Page, Sheet, Cell, Label, Headline, Text, Figure, Countdown, Code, Sigil, Qr, Rows, Bar, Flow, Columns, Action, Field, Look, Xray };
 
 // The terminal's registry: this kit, assembled once. moss's ink target adds
 // the wire-backed slots (ActionSlot, CanvasSlot) itself.
