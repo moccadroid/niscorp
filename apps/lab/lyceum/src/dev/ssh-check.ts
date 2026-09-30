@@ -111,13 +111,13 @@ const main = async (): Promise<void> => {
   await settled(ada);
   const asked = ada.screen().length;
   ada.press('\r');
-  await waitUntil(() => since(ada, asked).includes('Department'));
+  await waitUntil(() => since(ada, asked).includes('Title'));
   await settled(ada);
   const names = (await runtime.db.query<{ name: string }>('SELECT name FROM members')).rows.map((row) => row.name);
   // The table's own lines: after its header, before the line saying how it was
   // answered — the person's name is on their card strip too, above it.
   const screen = ada.screen();
-  const head = screen.lastIndexOf('Department');
+  const head = screen.lastIndexOf('Title');
   const table = screen.slice(head, head + screen.slice(head).search(/Generated:|Replayed:/));
   check(`an answer's table shows its values — somebody in the room by name (${names.join(', ')})`, head !== -1 && names.some((name) => name !== '' && table.includes(name)));
 

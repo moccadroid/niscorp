@@ -4,10 +4,9 @@
 // (`grounding`), which host tools they get (`tools`), and the action it
 // `applies` to.
 //
-// A declaration applies to whoever HOLDS its action. So the charter builds each
-// person's assistant: `records: { actions: ['records.*'] }` is why a Records
-// member's assistant knows the register, and `speaker: { actions:
-// ['speaker.*', …] }` is why only the controller's can automate. Grounding
+// A declaration applies to everyone who has its action. So the charter builds
+// each person's assistant: `speaker: { actions: ['speaker.*', …] }` is why only
+// the controller's can automate. Grounding
 // reads run as the person, under their policy. Tools are the host's closed set
 // (server/assistant/tools.ts): `open`, `query`, `automate`.
 //
@@ -32,38 +31,6 @@ export const ASSISTANTS: readonly AssistantDeclaration[] = [
     grounding: [{ as: 'Their ID card', fingerprint: 'members/me', context: {}, upfront: true }],
     tools: ['query', 'open'],
     applies: { screen: 'member.card' },
-  },
-  {
-    id: 'records',
-    title: 'Records',
-    context: 'They are in Records: their Register shows everybody in the room.',
-    grounding: [],
-    tools: [],
-    applies: { screen: 'records.register' },
-  },
-  {
-    id: 'forms',
-    title: 'Forms',
-    context: 'They are in Forms: they may change their own record, with forms.rename.',
-    grounding: [],
-    tools: [],
-    applies: { screen: 'forms.rename' },
-  },
-  {
-    id: 'inquiries',
-    title: 'Inquiries',
-    context: "They are in Inquiries: their desk runs the department's stored queries.",
-    grounding: [],
-    tools: [],
-    applies: { screen: 'inquiries.desk' },
-  },
-  {
-    id: 'archive',
-    title: 'Archive',
-    context: 'They are in Archive: their log shows who arrived when, and where they went.',
-    grounding: [],
-    tools: [],
-    applies: { screen: 'archive.log' },
   },
   {
     id: 'controller',

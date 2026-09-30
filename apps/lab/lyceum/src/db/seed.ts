@@ -1,33 +1,18 @@
 import { TALK_DECK } from '@lyceum/app/vex/deck.entries';
 
-// What exists before anybody walks in: the departments, the principals that
-// are not people, and the deck. Everything else is written by the room.
+// What exists before anybody walks in: the principals that are not people,
+// and the deck. Everything else is written by the audience.
 //
 // Run on every boot, against an empty database or a live one, and it treats
 // the two kinds of row differently:
 //
-//   · AUTHORED rows — the departments' words, the slides and their order —
+//   · AUTHORED rows — the slides, their order, their tools and notes —
 //     CONVERGE: whatever this file says is what the database has, the way vex's
 //     seed path converges its entries. Editing the deck here and restarting is
 //     enough; there is no migration to write.
 //   · THE TALK'S STATE — the room, the grants, which slide is on screen — is
 //     left alone. A restart must not reset the talk.
-//
-// Each department_id is also a charter role — assigning a person to a
-// department IS giving them that role — and `assignment-check` asserts the two
-// lists agree.
 import { TALK_ROOM } from '@lyceum/app/vex/room.entries';
-
-type Department = { departmentId: string; name: string; remit: string; mark: string; sigil: string };
-
-// Four departments, four clearances — so four neighbours' phones show four
-// different things.
-export const DEPARTMENTS: readonly Department[] = [
-  { departmentId: 'records', name: 'Records', remit: 'You can read the register: everybody in the room.', mark: 'stripes', sigil: 'triangle' },
-  { departmentId: 'forms', name: 'Forms', remit: 'You can change your own record, and everybody sees it change.', mark: 'dots', sigil: 'circle' },
-  { departmentId: 'inquiries', name: 'Inquiries', remit: 'You can put questions to the records and get answers back.', mark: 'bars', sigil: 'cross' },
-  { departmentId: 'archive', name: 'Archive', remit: 'You can see the history: who arrived when, and where they went.', mark: 'checks', sigil: 'square' },
-];
 
 // The principals that are not people, and the role each wears. Their sessions
 // are minted by whoever runs the talk (dev: /dev/as/<principal>).
@@ -74,13 +59,6 @@ const slideIds = SLIDES.map((slide) => quote(slide.slideId)).join(', ');
 
 export const buildSeedSql = (): string =>
   [
-    // Departments: their words converge. None is ever deleted here — a
-    // department has members, and a department_id is a charter role.
-    ...DEPARTMENTS.map(
-      (department, position) =>
-        `INSERT INTO departments (department_id, name, remit, mark, sigil, position) VALUES (${quote(department.departmentId)}, ${quote(department.name)}, ${quote(department.remit)}, ${quote(department.mark)}, ${quote(department.sigil)}, ${position})
-         ON CONFLICT (department_id) DO UPDATE SET name = EXCLUDED.name, remit = EXCLUDED.remit, mark = EXCLUDED.mark, sigil = EXCLUDED.sigil, position = EXCLUDED.position;`,
-    ),
     ...STAFF.map((staff) => `INSERT INTO grants (principal, role) VALUES (${quote(staff.principal)}, ${quote(staff.role)}) ON CONFLICT DO NOTHING;`),
 
     // Slides: the deck converges to SLIDES. Positions are unique, so a reorder

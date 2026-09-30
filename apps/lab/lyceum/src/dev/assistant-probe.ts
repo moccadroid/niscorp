@@ -20,21 +20,27 @@ process.env['LYCEUM_ISSUER'] = 'fake';
 const RUNS = Number(process.argv[2] ?? 2);
 
 type Want = 'timer' | 'query' | 'open' | 'none';
-type Who = 'waiting' | 'forms' | 'records' | 'speaker';
+type Who = 'waiting' | 'speaker';
 // `saying`: what the REPLY must say — for what only the screen can tell it.
 const PROBES: readonly { who: Who; say: string; want: Want; containing?: string; saying?: string }[] = [
   { who: 'waiting', say: 'How many people are in the room?', want: 'query' },
   { who: 'waiting', say: 'End the talk in 30 minutes', want: 'none' },
-  { who: 'forms', say: 'Change my name to Ada Lovelace', want: 'open', containing: 'Ada Lovelace' },
-  { who: 'forms', say: 'Which department has the most people?', want: 'query' },
+  // RETIRED 2026-09-30 with the departments: Forms' rename (open) and "Which
+  // department has the most people?" (query) — the actions and the table are
+  // gone. Added the same day, before a run, in their place: the question form.
+  { who: 'waiting', say: 'Send the speaker a question: Will the slides be online?', want: 'open', containing: 'Will the slides be online?' },
   // Added 2026-09-28, before the run: an action with nothing to pre-fill.
   { who: 'waiting', say: 'Show me my questions', want: 'open' },
-  { who: 'records', say: 'Change my name to Ada Lovelace', want: 'none' },
-  { who: 'speaker', say: 'End the talk in 30 minutes', want: 'timer', containing: 'slide.end' },
+  // RETIRED 2026-09-30: Records asking for the rename (none). In its place, the
+  // same boundary: the speaker does not have the question form.
+  { who: 'speaker', say: 'Send the speaker a question: Will the slides be online?', want: 'none' },
+  // SPEC CHANGE 2026-09-30 (was slide.end): the deck ends on the census now.
+  { who: 'speaker', say: 'End the talk in 30 minutes', want: 'timer', containing: 'slide.census' },
   { who: 'speaker', say: 'Who is in the room?', want: 'none' },
   // SPEC CHANGE 2026-09-29 (was none — no effect could remind): `notify` can.
   { who: 'speaker', say: 'Remind me to drink water in 10 minutes', want: 'timer' },
-  { who: 'speaker', say: 'What slide is on screen right now?', want: 'none', saying: 'The talk is an application' },
+  // SPEC CHANGE 2026-09-30 (was 'The talk is an application'): the title slide is now 'nisc'.
+  { who: 'speaker', say: 'What slide is on screen right now?', want: 'none', saying: 'nisc' },
 ];
 
 // What the turn left, read off the trees the person sees: a query's result
@@ -51,17 +57,12 @@ const main = async (): Promise<void> => {
   if (address === null || typeof address === 'string') throw new Error('no port');
   const base = `ws://127.0.0.1:${address.port}`;
 
-  const person = async (department: string | null): Promise<Terminal> => {
+  const person = async (): Promise<Terminal> => {
     const door = await connect(base);
     await door.shows('main', 'Step in');
     door.click('main', 'enter');
     const token = await door.session();
-    const hello = await (await connect(base, token)).hello();
     door.close();
-    if (department !== null) {
-      await booted.runtime.db.query('UPDATE members SET department_id = $1 WHERE member_id = $2', [department, hello.principal]);
-      booted.server.invalidateIdentity(hello.principal ?? '');
-    }
     const phone = await connect(base, token);
     await phone.hello();
     await phone.shows('tabs', 'Assistant');
@@ -70,9 +71,7 @@ const main = async (): Promise<void> => {
     return phone;
   };
   const people: Record<Who, { terminal: Terminal; canvas: string }> = {
-    waiting: { terminal: await person(null), canvas: 'body' },
-    forms: { terminal: await person('forms'), canvas: 'body' },
-    records: { terminal: await person('records'), canvas: 'body' },
+    waiting: { terminal: await person(), canvas: 'body' },
     speaker: { terminal: await connect(base, await mintSession(booted.runtime.pool, 'speaker', 3_600_000)), canvas: 'tools' },
   };
   await people.speaker.terminal.hello();

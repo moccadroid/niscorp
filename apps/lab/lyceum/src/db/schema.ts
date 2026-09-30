@@ -240,6 +240,18 @@ export const TURNS_WRITER = /* sql */ `
   ALTER TABLE assistant_turns ADD COLUMN writer_reasoning TEXT;
 `;
 
+// Migration 13: NO DEPARTMENTS. The talk no longer sorts people into
+// departments: who has which action is a grant, given and taken on stage. The
+// department a member was in, when they were put there, and the departments
+// themselves go.
+export const NO_DEPARTMENTS = /* sql */ `
+  ALTER TABLE members DROP COLUMN department_id;
+  ALTER TABLE members DROP COLUMN assigned_at;
+  DROP TABLE departments;
+  COMMENT ON TABLE members IS 'The people in the audience: everybody who has joined, one row each. Their ID card is this row.';
+  COMMENT ON COLUMN members.joined_at IS 'When they joined: arrival time.';
+`;
+
 export const LYCEUM_SEQUENCE: Sequence = {
   id: 'lyceum.app',
   migrations: [
@@ -255,6 +267,7 @@ export const LYCEUM_SEQUENCE: Sequence = {
     { description: 'What the tables mean: comments a query writer reads as descriptions', steps: sqlSteps(TABLE_MEANINGS) },
     { description: 'Turns written wrong, repaired: lists that landed as objects are lists again', steps: sqlSteps(TURNS_REPAIRED) },
     { description: 'What the automation writer answered, and why, on the turn it answered in', steps: sqlSteps(TURNS_WRITER) },
+    { description: 'No departments: a member is a member; who has which action is a grant', steps: sqlSteps(NO_DEPARTMENTS) },
   ],
 };
 

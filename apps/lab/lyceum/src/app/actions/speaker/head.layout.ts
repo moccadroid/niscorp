@@ -5,7 +5,7 @@ export const headLayout: LayoutNode = {
   component: 'Sheet',
   props: { areas: ['room room', 'slide timer'], cols: [3, 1] },
   children: [
-    { component: 'Cell', props: { area: 'room' }, children: [{ component: 'Label', children: 'Controller · {{$.counts.joined}} in the room · {{$.counts.assigned}} assigned' }] },
+    { component: 'Cell', props: { area: 'room' }, children: [{ component: 'Label', children: 'Controller · {{$.counts.joined}} joined' }] },
     {
       component: 'Cell',
       props: { area: 'slide' },

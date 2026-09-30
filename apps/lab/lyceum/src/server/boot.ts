@@ -5,7 +5,6 @@ import { buildLyceum } from '@lyceum/app/app';
 import { lyceumIdentity } from './identity';
 import { lyceumReactions } from './reactions';
 import { doorFunctions } from './functions/door.functions';
-import { assignmentFunctions } from './functions/assignment.functions';
 import { roomFunctions } from './functions/room.functions';
 import { createCensus } from './census';
 import { assistantFunctions } from './functions/assistant.functions';
@@ -89,7 +88,7 @@ export const bootOn = async <R extends LyceumRuntime>(runtime: R, options: BootO
 
   const app = buildLyceum({
     identity: lyceumIdentity,
-    functions: (session) => ({ ...doorFunctions(session, server, issuer), ...assignmentFunctions(session, server), ...roomFunctions(publicUrl, options.sshAddress ?? '', census), ...assistantFunctions(session, { querier, writer: timerWriter, orchestrator, tz, timing }), ...lecternFunctions(server, speakerMail) }),
+    functions: (session) => ({ ...doorFunctions(session, server, issuer), ...roomFunctions(publicUrl, options.sshAddress ?? '', census), ...assistantFunctions(session, { querier, writer: timerWriter, orchestrator, tz, timing }), ...lecternFunctions(server, speakerMail) }),
     reactions: lyceumReactions(server),
   });
   built = await createServer(app, runtime);

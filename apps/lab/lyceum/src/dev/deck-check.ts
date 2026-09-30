@@ -43,11 +43,8 @@ const main = async (): Promise<void> => {
   // tools, in the slide's order — or, with none, that there are none.
   // A cue says its own title.
   const SAYS: Record<string, string> = {
-    'tools.assignment': 'Assign the room',
-    'tools.tally': 'Departments so far',
     'assistant.thread': 'Built from',
     'tools.look': 'The look',
-    'tools.questions': 'Questions from the room',
     ...Object.fromEntries(CUE_TOOLS.map((cue) => [cue.id, cue.title])),
   };
   const toolsAre = (expected: readonly string[]): Promise<boolean> =>

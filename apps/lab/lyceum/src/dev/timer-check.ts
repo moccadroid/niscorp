@@ -24,7 +24,7 @@
 import { serve } from '@hono/node-server';
 import { attachSocket } from '@niscorp/moss/node';
 import { mintSession } from '@niscorp/moss';
-import { memberAssign } from '@lyceum/app/vex/member.entries';
+import { memberIssue } from '@lyceum/app/vex/member.entries';
 import { occurrencesBetween, ReflexSchema } from '@niscorp/tide';
 import { SLIDES } from '@lyceum/db/seed';
 import { boot } from '@lyceum/server/boot';
@@ -157,11 +157,11 @@ const main = async (): Promise<void> => {
 
   // ── 5. the clock can do those, and nothing else ──
   const clock = vexOver(wireAs(first.server, await mintSession(first.runtime.pool, 'clock', 60_000)));
-  const refused = await clock(memberAssign.fingerprint, { memberId: 'anybody', departmentId: 'records', at: new Date().toISOString() }).then(
+  const refused = await clock(memberIssue.fingerprint, { memberId: 'anybody', name: 'Forged', title: 'Forged', quirk: 'Forged' }).then(
     () => false,
     () => true,
   );
-  check("the clock is refused a write it was not granted (a member's department)", refused);
+  check("the clock is refused a write it was not granted (a member's card)", refused);
 
   back.close();
   stage.close();

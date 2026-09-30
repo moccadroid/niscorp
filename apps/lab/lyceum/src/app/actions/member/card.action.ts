@@ -4,18 +4,18 @@ import { memberMe } from '@lyceum/app/vex/member.entries';
 import { TAB_BUTTON, TAB_OPENED } from '@lyceum/app/actions/shared/tab.layouts';
 import { cardLayout, cardStripLayout } from './card.layout';
 
-// Your ID card. Everybody in the room has one, assigned or not; it reads the
-// same row the identity seam does, reactively — when you are assigned, or you
-// change your name, the card changes on its own.
+// Your ID card. Everybody who joined has one; it reads your row reactively —
+// as the model writes your title and the line about you, the card fills in
+// on its own.
 //
 // Three sizes, all of them this one action: in full in the phone's body; one
 // line across the top of the phone (`strip`); a tab (`tab`, shared/tab.layouts).
 export const cardAction: ActionDefinition = {
   id: 'member.card',
-  description: 'The person\'s ID card: their name, job title, the line about them, and their department once assigned. Shows; changes nothing.',
+  description: 'The person\'s ID card: their name, job title and the line about them. Shows; changes nothing.',
   title: 'Your ID card',
   data: {
-    me: { member_id: '', name: '', title: '', quirk: '', department_id: '', department_name: '', department_remit: '', department_mark: '', department_sigil: '' },
+    me: { member_id: '', name: '', title: '', quirk: '' },
     tab: false,
     strip: false,
     tabLabel: 'Card',
@@ -25,7 +25,7 @@ export const cardAction: ActionDefinition = {
   input: z.toJSONSchema(
     z.object({
       tab: z.boolean().optional().describe('Render as a tab on the phone: a button that opens the card in the phone\'s body.'),
-      strip: z.boolean().optional().describe('Render as one line — name and department — across the top of the phone.'),
+      strip: z.boolean().optional().describe('Render as one line — their name — across the top of the phone.'),
       tabInk: z.enum(['paper', 'ink']).optional().describe('The tab\'s ink: `ink` marks the tab whose action is open in the body.'),
     }),
   ),

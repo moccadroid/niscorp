@@ -49,7 +49,7 @@ const liveOrchestrator = (): Orchestrator => {
 };
 
 // The stand-in's routing: a time, or a correction ("I meant …") → automate, "change my name to …" → open the
-// rename, anything about the screen → read it back, anything else → query. Each through the tool the person was given, or
+// a question for the speaker, anything about the screen → read it back, anything else → query. Each through the tool the person was given, or
 // the same one-line refusal the live assistant owes them.
 const fakeOrchestrator = (): Orchestrator => ({
   kind: 'fake',
@@ -84,17 +84,17 @@ const fakeOrchestrator = (): Orchestrator => ({
       }
       return 'Here are your questions.';
     }
-    const rename = /change my name to (.+)$/i.exec(message)?.[1];
-    if (rename !== undefined) {
+    const question = /send the speaker a question: (.+)$/i.exec(message)?.[1];
+    if (question !== undefined) {
       if (tool('open') === undefined) return 'I cannot open anything for you.';
       // A tool call the tool's schema refuses (an action this person does not
       // have) comes back to the live model as an error; the stand-in says so.
       try {
-        await call('open', { action: 'forms.rename', label: `Change your name to ${rename}`, input: { draft: rename } });
+        await call('open', { action: 'questions.send', label: `Your question: ${question}`, input: { draft: question } });
       } catch {
-        return 'Renaming is not one of your actions.';
+        return 'Sending the speaker a question is not one of your actions.';
       }
-      return 'Here is the rename, filled in.';
+      return 'Here is your question, filled in.';
     }
     if (tool('query') === undefined) return 'I cannot query the records for you.';
     await call('query', { intent: message });

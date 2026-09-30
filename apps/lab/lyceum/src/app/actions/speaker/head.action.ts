@@ -14,7 +14,7 @@ export const headAction: ActionDefinition = {
   id: 'speaker.head',
   title: 'Where the talk is',
   data: {
-    counts: { joined: 0, assigned: 0, unassigned: 0 },
+    counts: { joined: 0 },
     current: { slide_id: '', title: '', position: 0, number: 0, count: 0, prev_number: 0, prev_title: '', next_number: 0, next_title: '' },
     timer: { timer_id: '', intent: '', due_at: '' },
   },

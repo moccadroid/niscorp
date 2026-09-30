@@ -16,7 +16,8 @@ import { check, finish } from './harness';
 
 // What migration 1 creates, and what the whole sequence leaves.
 const BASELINE_TABLES = ['departments', 'members', 'slides', 'slide_notes', 'deck', 'grants', 'login_links'];
-const TABLES = [...BASELINE_TABLES, 'slide_tools', 'queries', 'timers', 'assistant_turns', 'room', 'questions'];
+// Migration 13 drops `departments`: the talk sorts nobody into one any more.
+const TABLES = [...BASELINE_TABLES.filter((table) => table !== 'departments'), 'slide_tools', 'queries', 'timers', 'assistant_turns', 'room', 'questions'];
 // What the boot migrates: lyceum's sequence and tide's (db/schema.ts).
 const BOOT_TABLES = [...TABLES, ...TIDE_TABLES];
 const ALL = LYCEUM_SEQUENCE.migrations.map((_, index) => `lyceum.app/${index + 1}`).join();
@@ -49,6 +50,10 @@ const main = async (): Promise<void> => {
   check('lyceum.app/10 is unchanged', meanings !== undefined && (await checksumOf(meanings)) === '6a4d26b4fe3e291e2e581bce088bdd00d30086a7520a72a92ff22b1ab4a7b94b');
   const repaired = LYCEUM_SEQUENCE.migrations[10];
   check('lyceum.app/11 is unchanged', repaired !== undefined && (await checksumOf(repaired)) === 'd0ce221e132468ccc27d16217679c77493d2d3c07aa27100dbac5dd08550bc2c');
+  const writer = LYCEUM_SEQUENCE.migrations[11];
+  check('lyceum.app/12 is unchanged', writer !== undefined && (await checksumOf(writer)) === 'f2245e88771d7549a65bc6c4a591ab3638bc8559a978524bd64cd288158afe3e');
+  const noDepartments = LYCEUM_SEQUENCE.migrations[12];
+  check('lyceum.app/13 is unchanged', noDepartments !== undefined && (await checksumOf(noDepartments)) === '9bd39a3dfd25f295e28f6d86b5f6e27435b1c2208ff23b3e32bd5cfa2a5dcacc');
 
   // ── a fresh database ──
   const fresh = createPglitePool(new PGlite());
@@ -66,8 +71,9 @@ const main = async (): Promise<void> => {
   const live = createPglitePool(db);
   const report = await migrate(live, [LYCEUM_SEQUENCE]);
   check(`a database from before the ledger adopts: every migration runs once and is recorded (${ALL})`, report.applied.map((m) => m.ref).join() === ALL);
-  const members = (await live.query(`SELECT member_id, department_id FROM members`)).rows;
-  check('...and keeps its rows', JSON.stringify(members) === JSON.stringify([{ member_id: 'm_1', department_id: 'archive' }]));
+  const members = (await live.query(`SELECT member_id, name FROM members`)).rows;
+  check('...and keeps its people', JSON.stringify(members) === JSON.stringify([{ member_id: 'm_1', name: 'Ada' }]));
+  check('...and no longer has departments', !(await tablesOf(live)).includes('departments'));
   const tools = (await live.query(`SELECT slide_id, position, tool_id FROM slide_tools ORDER BY slide_id`)).rows;
   check('...and the tool a slide named is now its first tool row', JSON.stringify(tools) === JSON.stringify([{ slide_id: 's_1', position: 0, tool_id: 'tools.assignment' }]));
   check('a second boot of it runs nothing', (await migrate(live, [LYCEUM_SEQUENCE])).applied.length === 0);

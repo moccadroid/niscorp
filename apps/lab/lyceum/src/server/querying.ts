@@ -113,13 +113,9 @@ const fakeKind = (request: string): string => {
 // real generation would be: by the engine, under the caller's policy.
 const FAKE_DSL: Record<string, Query> = {
   number: { from: ['members'], aggregate: { value: { count: '*' } } },
-  counts: { from: ['members', 'departments'], fields: [{ field: 'departments.name', as: 'group' }], aggregate: { count: { count: '*' } }, groupBy: ['departments.name'], sort: [{ field: 'departments.name', dir: 'asc' }] },
-  people: {
-    from: ['members', 'departments'],
-    fields: ['members.name', 'members.title', { field: 'departments.name', as: 'department' }],
-    sort: [{ field: 'members.joined_at', dir: 'asc' }],
-  },
-  list: { from: ['departments'], fields: [{ field: 'departments.name', as: 'label' }, { field: 'departments.remit', as: 'detail' }], sort: [{ field: 'departments.position', dir: 'asc' }] },
+  counts: { from: ['members'], fields: [{ field: 'members.title', as: 'group' }], aggregate: { count: { count: '*' } }, groupBy: ['members.title'], sort: [{ field: 'members.title', dir: 'asc' }] },
+  people: { from: ['members'], fields: ['members.name', 'members.title'], sort: [{ field: 'members.joined_at', dir: 'asc' }] },
+  list: { from: ['members'], fields: [{ field: 'members.name', as: 'label' }, { field: 'members.quirk', as: 'detail' }], sort: [{ field: 'members.joined_at', dir: 'asc' }] },
   forbidden: { from: ['login_links'], fields: ['login_links.principal'] },
 };
 
@@ -136,8 +132,8 @@ const fakeQuerier = (): Querier => ({
   },
   generateDsl: async (request) => {
     const intent = request.intent ?? '';
-    if (/login|sign in|password/i.test(intent)) return FAKE_DSL['forbidden'] ?? FAKE_DSL['list'] ?? { from: ['departments'] };
-    return FAKE_DSL[fakeKind(intent)] ?? { from: ['departments'] };
+    if (/login|sign in|password/i.test(intent)) return FAKE_DSL['forbidden'] ?? FAKE_DSL['list'] ?? { from: ['members'] };
+    return FAKE_DSL[fakeKind(intent)] ?? { from: ['members'] };
   },
   // Vex's own mapper, with a model that is never there: rows that fit their
   // shape get the identity, anything else fails — which the fake's queries,

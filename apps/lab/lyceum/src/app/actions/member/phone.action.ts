@@ -1,19 +1,16 @@
 import type { ActionDefinition } from '@niscorp/nova';
 import { phoneLayout } from './phone.layout';
 
-// THE PHONE — what everybody in the room holds, whatever their department.
+// THE PHONE — what everybody who joined has.
 //
-// The tabs are not authored per department. This lists EVERY candidate — the
-// card, the four departments' tools, Q&A, the assistant — and `reconcile` places each as a
-// tab on the `tabs` canvas; a candidate this shell does not hold is skipped,
-// exactly as an ungranted `initial` candidate is. So the bar is ring 1 made
-// visible: a neighbour in another department has other tabs, because their
-// charter grants other actions, and nothing anywhere asks which department
-// anybody is in. Being assigned rebuilds the shell (identity changed), this
-// mounts again, and the new department's tool arrives as a tab.
+// The tabs are not authored per person. This lists EVERY candidate — the card,
+// Q&A, the assistant — and `reconcile` places each as a tab on the `tabs`
+// canvas; a candidate this shell was not granted is skipped, exactly as an
+// ungranted `initial` candidate is. So the bar is ring 1 made visible: a grant
+// that changes rebuilds the shell, this mounts again, and the bar follows.
 //
 // The list is the bar's ORDER, which is authored. Which actions can be a tab
-// is theirs to say (`tab` in their input); assignment-check holds the two to
+// is theirs to say (`tab` in their input); deck-check and the phone's checks hold the two to
 // each other, so a new tool is not forgotten here.
 export const phoneAction: ActionDefinition = {
   id: 'member.phone',
@@ -22,10 +19,6 @@ export const phoneAction: ActionDefinition = {
     tabs: [
       // The body opens on the card, so its tab starts marked.
       { action: 'member.card', input: { tab: true, tabInk: 'ink' } },
-      { action: 'records.register', input: { tab: true } },
-      { action: 'forms.rename', input: { tab: true } },
-      { action: 'inquiries.desk', input: { tab: true } },
-      { action: 'archive.log', input: { tab: true } },
       { action: 'questions.desk', input: { tab: true } },
       { action: 'assistant.thread', input: { tab: true } },
     ],

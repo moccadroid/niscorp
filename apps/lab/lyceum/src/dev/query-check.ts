@@ -118,7 +118,7 @@ const main = async (): Promise<void> => {
   // has its own branch in the answer layout.
   const branches = JSON.stringify(answerLayout({ kind: '$k', how: '$h', rows: '$r' }));
   for (const { kind } of QUERY_SHAPES) check(`the answer layout has a branch for "${kind}"`, branches.includes(JSON.stringify({ $eq: ['$k', kind] })));
-  await say(ada.phone, 'How many people are in each department?');
+  await say(ada.phone, 'How many people are there per job title?');
   check('a count per group is shown with its own columns', await ada.phone.shows('overlay', '"label":"Group"'));
 
   ada.phone.close();

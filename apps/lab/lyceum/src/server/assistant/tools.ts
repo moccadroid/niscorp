@@ -133,8 +133,8 @@ export const hostTools = (deps: ToolDeps, offered: ReadonlySet<ToolName>): ToolD
         id: 'query',
         name: 'query',
         description:
-          "Query the records with vex — the people in the room, the departments — for what you were not already given. You give the intent; vex picks the shape, replays a stored query that fits or writes a new one, under this person's own clearance. The query and its result open on their screen; you get the rows back.",
-        input: z.object({ intent: z.string().describe('What to find, in plain words, e.g. "the people in the Archive department".') }),
+          "Query the records with vex — the people in the audience — for what you were not already given. You give the intent; vex picks the shape, replays a stored query that fits or writes a new one, under this person's own clearance. The query and its result open on their screen; you get the rows back.",
+        input: z.object({ intent: z.string().describe('What to find, in plain words, e.g. "the people who joined in the last ten minutes".') }),
         execute: async ({ intent }) => {
           try {
             const routed = await routeQuery(deps.session, deps.querier, intent);

@@ -39,7 +39,7 @@ const DECLARATIONS: readonly AssistantDeclaration[] = (() => {
 
 export type Assembled = {
   // The declarations this person's grants select — also shown to them, so the
-  // assembly is visible: "your assistant is built from room, records".
+  // assembly is visible: "your assistant is built from room".
   from: readonly AssistantDeclaration[];
   tools: ReadonlySet<ToolName>;
 };
