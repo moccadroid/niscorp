@@ -1,8 +1,8 @@
 // X-RAY CHECK — giving everybody an action, and taking it back, is rows.
 //
-//   1. before anything is given, a phone's tabs are the usual three;
+//   1. before anything is given, a phone’s bar has no X-ray;
 //   2. the speaker's tool is on the X-ray slide; Give writes a grant per
-//      member, and the X-ray is a tab on every phone — not on the door, which
+//      member, and the X-ray is a button on every phone’s bar — not on the door, which
 //      has no member row to give it to;
 //   3. pressed, the body shows the person's own screen as data: the actions
 //      on it, their canvases, and their data — their own card, nobody else's;
@@ -42,8 +42,8 @@ const main = async (): Promise<void> => {
   await speaker.hello();
 
   // ── 1 ──
-  await ada.shows('tabs', 'Assistant');
-  check('before anything is given, a phone has no X-ray tab', !ada.showsNow('tabs', 'xray.view'));
+  await ada.shows('main', '"label":"Assistant"');
+  check('before anything is given, a phone’s bar has no X-ray', !ada.showsNow('main', '"label":"X-ray"'));
 
   // ── 2 ──
   const at = SLIDES.findIndex((slide) => slide.tools.includes('tools.xray'));
@@ -57,21 +57,21 @@ const main = async (): Promise<void> => {
   await speaker.shows('tools', 'People who have it');
   await new Promise((resolve) => setTimeout(resolve, 300));
   speaker.click('tools', 'give');
-  check('pressing Give: the X-ray is a tab on the first phone', await ada.shows('tabs', 'xray.view'));
-  check('...and on the second', await ben.shows('tabs', 'xray.view'));
+  check('pressing Give: the X-ray is on the first phone’s bar', await ada.shows('main', '"label":"X-ray"'));
+  check('...and on the second', await ben.shows('main', '"label":"X-ray"'));
   check('...and the tool counts both', await speaker.shows('tools', '"label":"People who have it","value":2'));
   const grants = (await runtime.db.query<{ n: number }>("SELECT count(*)::int AS n FROM grants WHERE role = 'xray'")).rows[0]?.n;
   check(`...as one grant row each (${String(grants)})`, grants === 2);
   check('the door has no X-ray: nobody there to give it to', !stranger.showsNow('main', 'X-ray'));
 
   // ── 3 ──
-  ada.clickIn('tabs', 'open', 'X-ray');
+  ada.click('main', 'tab', 'xray.view');
   check('pressed, the body shows the screen as data', await ada.shows('body', 'your screen, as data'));
-  check('...listing the actions on it by name', await ada.shows('body', 'Your ID card · member.card'));
+  check('...listing the actions on it by name', await ada.shows('body', 'Your phone · member.phone'));
   check('...with their data, as JSON', await ada.shows('body', '\\"member_id\\"'));
   const ids = (await runtime.db.query<{ member_id: string }>('SELECT member_id FROM members ORDER BY joined_at, member_id')).rows.map((row) => row.member_id);
   const seen = ada.textOf('body');
-  check('...their own card, not anybody else’s', ids.length === 2 && ids.filter((id) => seen.includes(id)).length === 1);
+  check('...their own row, not anybody else’s', ids.length === 2 && ids.filter((id) => seen.includes(id)).length === 1);
 
   // ── 4 ──
   speaker.click('tools', 'take');
@@ -88,7 +88,7 @@ const main = async (): Promise<void> => {
 // Gone: the tab bar stops showing the X-ray, within a few seconds.
 const waitGone = async (screen: Terminal): Promise<boolean> => {
   for (let tries = 0; tries < 200; tries += 1) {
-    if (!screen.showsNow('tabs', 'xray.view')) return true;
+    if (!screen.showsNow('main', '"label":"X-ray"')) return true;
     await new Promise((resolve) => setTimeout(resolve, 25));
   }
   return false;

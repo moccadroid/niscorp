@@ -11,7 +11,8 @@ import { LYCEUM_KIT } from './grammars';
 
 // The manifest. Artifacts are imported here; the code seams — who a principal
 // is, the server functions, the one signal that is not data (the deck moving
-// on), and the phone's tabs composed from what a person is granted — are
+// on), the phone's bar derived from what a person is granted, and which
+// renderer draws each screen — are
 // handed in by the server, which is the only place code
 // lives (PLAN.md, build rules). The room's reads are reactive; nothing else is
 // announced.
@@ -19,7 +20,7 @@ export type LyceumSeams = {
   identity: NonNullable<NiscApp['identity']>;
   functions: NonNullable<NiscApp['functions']>;
   reactions: NonNullable<NiscApp['reactions']>;
-  seeds: NonNullable<NiscApp['shell']>['seeds'];
+  inputs: NonNullable<NiscApp['shell']>['inputs'];
   onSession: NonNullable<NiscApp['onSession']>;
 };
 
@@ -40,6 +41,6 @@ export const buildLyceum = (seams: LyceumSeams): NiscApp =>
       layout: frameLayout,
       layoutStore: RENDERER_STORE,
       fragments: FRAGMENTS,
-      seeds: seams.seeds,
+      inputs: seams.inputs,
     },
   });

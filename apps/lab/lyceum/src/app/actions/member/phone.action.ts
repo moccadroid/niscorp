@@ -3,20 +3,35 @@ import { memberMe } from '@lyceum/app/vex/member.entries';
 import { phoneLayout } from './phone.layout';
 
 // THE PHONE — what everybody who joined has. Their name across the top, read
-// reactively (it is written by a model while they watch); under it the body
-// and the tabs, two canvases it places. The tabs are a list canvas nobody
-// authors: the
-// manifest's `seeds` put on it every action the person is granted that can
-// render as a tab (server/seeds.ts). A grant that changes rebuilds the shell,
-// and the bar follows.
+// reactively (a model writes it while they watch); the body, a canvas that
+// shows one thing at a time; and the bar, one button per thing they have.
+// Pressed, a button puts that action in the body and becomes the open one.
+//
+// `buttons` is the bar as authored: every action that can be on it, in order,
+// with its word. What a person actually gets is `bar` — the buttons whose
+// action they are granted, laid out — derived from their grants when their
+// shell is built (server/phone.ts). So what the speaker gives on stage, the
+// X-ray, is a button for whoever has the grant, and not there for anyone else.
+export const PHONE_BUTTONS: readonly { action: string; label: string }[] = [
+  { action: 'member.card', label: 'Card' },
+  { action: 'questions.desk', label: 'Q&A' },
+  { action: 'assistant.thread', label: 'Assistant' },
+  { action: 'xray.view', label: 'X-ray' },
+];
+
 export const phoneAction: ActionDefinition = {
   id: 'member.phone',
   title: 'Your phone',
-  data: { me: { member_id: '', name: '', title: '', quirk: '' } },
+  data: {
+    me: { member_id: '', name: '', title: '', quirk: '' },
+    // The body opens on the card (shell/canvases.ts), so the card is open.
+    open: 'member.card',
+    bar: { areas: [], tabs: [] },
+  },
   layout: phoneLayout,
   endpoints: {
     me: { url: '/api/vex', method: 'POST', request: { fingerprint: memberMe.fingerprint, context: {} }, target: 'me' },
   },
   lifecycle: { mount: [{ call: 'me' }] },
-  triggers: [],
+  triggers: [{ event: 'ui:click', ref: 'tab', do: [{ set: 'open', value: '@event.payload' }, { resetTo: { action: '@event.payload', canvas: 'body' } }] }],
 };

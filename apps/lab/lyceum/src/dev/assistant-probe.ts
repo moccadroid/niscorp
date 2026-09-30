@@ -65,8 +65,8 @@ const main = async (): Promise<void> => {
     door.close();
     const phone = await connect(base, token);
     await phone.hello();
-    await phone.shows('tabs', 'Assistant');
-    phone.clickIn('tabs', 'open', 'Assistant');
+    await phone.shows('main', '"label":"Assistant"');
+    phone.click('main', 'tab', 'assistant.thread');
     await phone.shows('body', 'Built from');
     return phone;
   };

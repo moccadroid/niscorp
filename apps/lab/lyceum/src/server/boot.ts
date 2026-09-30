@@ -10,7 +10,7 @@ import { createCensus } from './census';
 import { assistantFunctions } from './functions/assistant.functions';
 import { lecternFunctions } from './functions/lectern.functions';
 import { xrayFunctions } from './functions/xray.functions';
-import { lyceumSeeds } from './seeds';
+import { phoneInputs } from './phone';
 import { followRenderers } from './renderers';
 import { createMailer } from './mail';
 import type { SendMail } from './mail';
@@ -94,7 +94,7 @@ export const bootOn = async <R extends LyceumRuntime>(runtime: R, options: BootO
     identity: lyceumIdentity,
     functions: (session) => ({ ...doorFunctions(session, server, issuer), ...roomFunctions(session, publicUrl, options.sshAddress ?? '', census), ...assistantFunctions(session, { querier, writer: timerWriter, orchestrator, tz, timing }), ...lecternFunctions(server, speakerMail), ...xrayFunctions(session) }),
     reactions: [...lyceumReactions(server), renderers.reaction],
-    seeds: lyceumSeeds,
+    inputs: phoneInputs,
     onSession: renderers.onSession,
   });
   built = await createServer(app, runtime);

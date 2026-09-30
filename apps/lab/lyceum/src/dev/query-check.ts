@@ -46,8 +46,8 @@ const main = async (): Promise<void> => {
     door.close();
     const phone = await connect(base, token);
     const hello = await phone.hello();
-    await phone.shows('tabs', 'Assistant');
-    phone.clickIn('tabs', 'open', 'Assistant');
+    await phone.shows('main', '"label":"Assistant"');
+    phone.click('main', 'tab', 'assistant.thread');
     await phone.shows('body', 'Built from');
     return { phone, memberId: hello.principal ?? '' };
   };
@@ -78,7 +78,7 @@ const main = async (): Promise<void> => {
 
   // ── 1. generated ──
   const ada = await stepIn();
-  check('there is no query tab: vex is not something anybody talks to', !ada.phone.showsNow('tabs', '"label":"Query"'));
+  check('there is no query tab: vex is not something anybody talks to', !ada.phone.showsNow('main', '"label":"Query"'));
   await say(ada.phone, 'How many people are in the room?');
   check('the assistant runs a vex query, and it opens over the screen', await ada.phone.shows('overlay', '"value":"Vex query"'));
   check('…as the query it is: its intent, its shape, its fingerprint', ada.phone.showsNow('overlay', 'How many people are in the room?') && ada.phone.showsNow('overlay', 'Shape · number') && ada.phone.showsNow('overlay', 'Fingerprint'));

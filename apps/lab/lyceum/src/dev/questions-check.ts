@@ -37,8 +37,8 @@ const main = async (): Promise<void> => {
   type Row = { question_id: string; member_id: string; text: string };
   const rows = async (): Promise<Row[]> => (await runtime.db.query<Row>('SELECT question_id, member_id, text FROM questions ORDER BY sent_at')).rows;
   const openQa = async (phone: Terminal): Promise<boolean> => {
-    await phone.shows('tabs', 'Q&A');
-    phone.clickIn('tabs', 'open', 'Q&A');
+    await phone.shows('main', '"label":"Q&A"');
+    phone.click('main', 'tab', 'questions.desk');
     return (await phone.shows('qa-form', 'a question for the speaker')) && (await phone.shows('qa-mine', 'Your questions'));
   };
   const send = async (phone: Terminal, text: string, by: 'button' | 'enter' = 'button'): Promise<void> => {
@@ -58,7 +58,7 @@ const main = async (): Promise<void> => {
 
   // ── 1 ──
   const ada = await stepIn();
-  check('everybody in the room has Q&A, as a tab', await ada.phone.shows('tabs', 'Q&A'));
+  check('everybody in the room has Q&A, as a tab', await ada.phone.shows('main', '"label":"Q&A"'));
   check('…pressed, it places two actions: the form, and their own questions', await openQa(ada.phone));
   await send(ada.phone, 'Is the model on stage the same one on my phone?');
   check('sent, the form says so', await ada.phone.shows('qa-form', 'Sent. The speaker has it.'));

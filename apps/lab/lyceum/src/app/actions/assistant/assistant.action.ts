@@ -1,10 +1,9 @@
 import type { ActionDefinition } from '@niscorp/nova';
 import { turnResolve, turnsMine } from '@lyceum/app/vex/assistant.entries';
-import { TAB_BUTTON, TAB_INPUT, TAB_OPENED } from '@lyceum/app/actions/shared/tab.layouts';
 import { assistantLayout } from './assistant.layout';
 
-// THE ASSISTANT — one action, on every device: a tab on a phone, a tool on the
-// controller. What it is for THIS person is not in here: it is assembled on the
+// THE ASSISTANT — one action, on every device: in a phone's body, a tool on
+// the controller. What it is for THIS person is not in here: it is assembled on the
 // server from the declarations their grants select (app/assistant/assistants.ts)
 // and shown at the top — "built from room · records". A turn is a function (a
 // model's choice); saving an automation it proposed is the person's own vex
@@ -37,10 +36,6 @@ export const assistantAction: ActionDefinition = {
   description: 'The conversation with the assistant.',
   title: 'Your assistant',
   data: {
-    tab: false,
-    tabLabel: 'Assistant',
-    tabInk: 'paper',
-    nextInk: 'paper',
     draft: '',
     intro: { title: 'Assistant', builtFrom: '', tools: '' },
     reply: { turnId: '', text: '', proposals: [], opened: [] },
@@ -51,8 +46,7 @@ export const assistantAction: ActionDefinition = {
     savedTimer: { dueLocal: '' },
     error: '',
   },
-  input: TAB_INPUT,
-  layout: { if: '$.tab', then: TAB_BUTTON, else: assistantLayout },
+  layout: assistantLayout,
   endpoints: {
     intro: { fn: 'assistant.intro', target: 'intro' },
     // A turn is model calls end to end (the answer, a query it writes, a timer
@@ -81,8 +75,6 @@ export const assistantAction: ActionDefinition = {
   },
   lifecycle: { mount: [{ call: 'intro' }, { call: 'history' }] },
   triggers: [
-    { event: 'ui:click', ref: 'open', do: [{ set: 'nextInk', value: 'ink' }, { emit: { channel: 'tab-opened' } }, { resetTo: { action: 'assistant.thread', canvas: 'body' } }] },
-    TAB_OPENED,
     { event: 'ui:click', ref: 'send', do: run },
     { event: 'ui:key', ref: 'draft', key: 'Enter', do: run },
     {

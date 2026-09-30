@@ -39,8 +39,8 @@ const main = async (): Promise<void> => {
     return { phone, memberId: hello.principal ?? '', token };
   };
   const openAssistant = async (phone: Terminal): Promise<boolean> => {
-    await phone.shows('tabs', 'Assistant');
-    phone.clickIn('tabs', 'open', 'Assistant');
+    await phone.shows('main', '"label":"Assistant"');
+    phone.click('main', 'tab', 'assistant.thread');
     return phone.shows('body', 'Built from');
   };
   // Written, then sent — by the button, or by Enter in the field.
