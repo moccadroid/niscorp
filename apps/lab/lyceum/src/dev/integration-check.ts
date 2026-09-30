@@ -81,6 +81,7 @@ const main = async (): Promise<void> => {
   speaker.click('tools', 'broken');
   check('installing the broken bundle is refused', await speaker.shows('tools', '"value":"refused"'));
   check('...by intake, with the path round its loop', await speaker.shows('tools', 'acme-echo —emit (ext.member.acme.ask)→ acme-echo'));
+  check('...and for nothing else: the loop is its only fault', !speaker.showsNow('tools', 'no such action'));
   check('...and no phone has it', !ada.showsNow('body', 'ext.member.acme.ask'));
 
   // ── 3 ──

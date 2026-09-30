@@ -193,6 +193,7 @@ export const ACME_BUNDLE = {
 export const ACME_BROKEN_BUNDLE = {
   ...ACME_BUNDLE,
   actions: {
+    ...ACME_BUNDLE.actions,
     [ask.id]: {
       ...ask,
       triggers: [...(ask.triggers ?? []), { message: 'acme-echo', do: [{ emit: { channel: 'acme-echo' } }] }],
