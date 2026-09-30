@@ -54,6 +54,12 @@ jobs:
       - name: Build showroom
         run: pnpm --filter showroom... run build
 
+      # Acme, lyceum's stand-in third party: its bundle published as static
+      # files beside the showroom (…/niscorp/vendor/bundle and
+      # …/vendor-broken/bundle). lyceum installs it by that URL at the talk.
+      - name: Publish the vendor demo's bundle
+        run: pnpm --filter lyceum-vendor-demo run publish:to ../../showroom/dist
+
       - uses: actions/configure-pages@v5
 
       - uses: actions/upload-pages-artifact@v3

@@ -1,0 +1,18 @@
+{
+  "name": "lyceum-vendor-demo",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "publish:to": "tsx src/publish.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@niscorp/nova": "workspace:^"
+  },
+  "devDependencies": {
+    "@types/node": "^24.10.1",
+    "tsx": "^4.23.1",
+    "typescript": "^6.0.2"
+  }
+}
