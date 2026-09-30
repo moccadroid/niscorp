@@ -56,6 +56,10 @@ const main = async (): Promise<void> => {
   check('lyceum.app/12 is unchanged', writer !== undefined && (await checksumOf(writer)) === 'f2245e88771d7549a65bc6c4a591ab3638bc8559a978524bd64cd288158afe3e');
   const noDepartments = LYCEUM_SEQUENCE.migrations[12];
   check('lyceum.app/13 is unchanged', noDepartments !== undefined && (await checksumOf(noDepartments)) === '9bd39a3dfd25f295e28f6d86b5f6e27435b1c2208ff23b3e32bd5cfa2a5dcacc');
+  const renderers = LYCEUM_SEQUENCE.migrations[13];
+  check('lyceum.app/14 is unchanged', renderers !== undefined && (await checksumOf(renderers)) === 'bd597cc5e2845da3492af3ecf88489bbfd9f2996443c7260992d8e940c51ad1b');
+  const namesAndVerdicts = LYCEUM_SEQUENCE.migrations[14];
+  check('lyceum.app/15 is unchanged', namesAndVerdicts !== undefined && (await checksumOf(namesAndVerdicts)) === '7b6300c3f27de1af34506970b9d435c3b101ed85001f655119600e7d62593448');
 
   // ── a fresh database ──
   const fresh = createPglitePool(new PGlite());

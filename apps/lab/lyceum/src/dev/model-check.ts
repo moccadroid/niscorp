@@ -11,17 +11,25 @@ import { anchorTimer, createTimerWriter, proposable } from '@lyceum/server/timin
 import type { Written } from '@lyceum/server/timing';
 import type { ReflexAnswer } from '@niscorp/tide/agent';
 import type { Known } from '@lyceum/server/querying';
+import { QUERY_SHAPES } from '@lyceum/app/vex/query.shapes';
+import { ALL_NAMES } from '@lyceum/server/names';
 
 // THE MODEL CHECK — do the talk's generative seams hold on the models the talk
 // runs? Not part of `pnpm check`: it calls Groq, costs tokens and is measured,
-// not asserted. `pnpm models [runs]` (default 3). Results: PLAN.md, "Measured".
+// not asserted. `pnpm models [runs]` (default 3). Results: MEASURED.md.
 //
 // This first part measures vex's two reference agents — the query agent and
 // the shape mapper (prism's mapping agent) — against lyceum's own schema and a
-// seeded room, under a MEMBER's policy (members and departments readable,
-// nothing else). Every question is asked with one of the authored shapes the
-// ask will offer. The default is the stage's setting, gpt-oss-120b at `low`;
-// LYCEUM_MODEL / LYCEUM_EFFORT compare another (qwen/qwen3.8-27b, `none`).
+// seeded room, under a MEMBER's policy (members and queries readable,
+// nothing else). Every question is asked with one of the app's own shapes
+// (app/vex/query.shapes.ts). The default is the stage's setting, gpt-oss-120b
+// at `low`; LYCEUM_MODEL / LYCEUM_EFFORT compare another.
+//
+// 2026-09-30, before any run on it: the room is rewritten. The talk has no
+// departments and no ID cards any more — a member is the name they chose — so
+// the seeded room is 40 chosen names and the queries they ran, and every probe
+// that asked about departments or job titles is replaced by one about those.
+// Numbers measured before this date are against the old room (MEASURED.md).
 
 if (existsSync('.env')) process.loadEnvFile('.env');
 if ((process.env['GROQ_API_KEY'] ?? '') === '') throw new Error('model-check: needs GROQ_API_KEY in apps/lab/lyceum/.env');
@@ -30,32 +38,42 @@ const RUNS = Number(process.argv[2] ?? 3);
 const MODEL = process.env['LYCEUM_MODEL'] ?? 'openai/gpt-oss-120b';
 const EFFORT = process.env['LYCEUM_EFFORT'] ?? 'low';
 
-const SHAPES = {
-  list: [{ label: '', value: '', detail: '' }],
-  number: { value: 0 },
-  counts: [{ group: '', count: 0 }],
-  people: [{ name: '', title: '', department: '' }],
-} as const;
-type ShapeName = keyof typeof SHAPES;
+const SHAPES: Record<string, unknown> = Object.fromEntries(QUERY_SHAPES.map((entry) => [entry.kind, entry.shape]));
+type ShapeName = string;
+
+// The room: 40 people by chosen names, in the order they arrived, and the
+// queries they ran — how each was answered cycling replayed, generated,
+// refused. m0 arrived first and ran three; m4 ran none.
+const ROOM = Array.from({ length: 40 }, (_, i) => ({ memberId: `m${i}`, name: ALL_NAMES[(i * 61) % ALL_NAMES.length] ?? 'Quiet Otter' }));
+const nameOf = (memberId: string): string => ROOM.find((member) => member.memberId === memberId)?.name ?? '';
+const RAN: readonly { memberId: string; request: string; shape: string }[] = [
+  { memberId: 'm0', request: 'How many people are here?', shape: 'number' },
+  { memberId: 'm0', request: 'Who arrived first?', shape: 'people' },
+  { memberId: 'm0', request: 'Show me the login links', shape: 'list' },
+  { memberId: 'm1', request: 'How many people are here?', shape: 'number' },
+  { memberId: 'm2', request: 'Who arrived last?', shape: 'people' },
+  { memberId: 'm3', request: 'How many queries were refused?', shape: 'number' },
+  { memberId: 'm5', request: 'Who is here?', shape: 'people' },
+];
 
 // For a question about the querier, the right SHAPE is not enough: the answer
-// must be theirs. The check asks as m0 — Ana Novak, Records, the first of 40.
+// must be theirs. The check asks as m0, the first of 40 to arrive.
 const mentions = (text: string) => (result: unknown): boolean => JSON.stringify(result).includes(text);
-// `as`: another querier than m0 — m4 is Eun-ji Silva, not yet in a department.
+// `as`: another querier than m0 — m4, who ran no queries.
 const ALL_QUESTIONS: readonly { intent: string; shape: ShapeName; refuse?: true; answer?: (result: unknown) => boolean; as?: string }[] = [
   { intent: 'How many people are in the room?', shape: 'number' },
-  { intent: 'How many people are in each department?', shape: 'counts' },
+  { intent: 'How many queries were replayed, generated and refused?', shape: 'counts' },
   { intent: 'Who arrived first?', shape: 'people' },
-  { intent: 'Who is in Records?', shape: 'people' },
-  { intent: 'Which department is the biggest?', shape: 'list' },
-  { intent: 'Everyone whose job title mentions a clerk', shape: 'people' },
-  { intent: 'Who has not been assigned to a department yet?', shape: 'people' },
-  { intent: 'What does each department let you do?', shape: 'list' },
-  { intent: 'The personnel file lines of the people in Forms', shape: 'list' },
-  { intent: 'How many people have not been assigned yet?', shape: 'number' },
-  { intent: "What's my name?", shape: 'people', answer: mentions('Ana Novak') },
-  { intent: 'Which department am I in?', shape: 'list', answer: mentions('Records') },
-  { intent: "What's my name?", shape: 'people', answer: mentions('Eun-ji Silva'), as: 'm4' },
+  { intent: 'Who has run the most queries?', shape: 'people' },
+  { intent: 'What has been asked so far?', shape: 'list' },
+  { intent: 'Everyone whose name is an otter', shape: 'people' },
+  { intent: 'Who has not run a query yet?', shape: 'people' },
+  { intent: 'How many queries has each person run?', shape: 'counts' },
+  { intent: 'Which questions were refused?', shape: 'list' },
+  { intent: 'How many queries were refused?', shape: 'number' },
+  { intent: "What's my name?", shape: 'people', answer: mentions(nameOf('m0')) },
+  { intent: 'How many queries have I run?', shape: 'number', answer: mentions('3') },
+  { intent: "What's my name?", shape: 'people', answer: mentions(nameOf('m4')), as: 'm4' },
   { intent: 'How many people arrived after me?', shape: 'number', answer: mentions('39') },
   { intent: 'Show me the login links', shape: 'list', refuse: true },
   { intent: 'Who can sign in as the speaker?', shape: 'list', refuse: true },
@@ -65,22 +83,16 @@ const only = process.env['LYCEUM_ONLY'];
 const QUESTIONS = only === undefined ? ALL_QUESTIONS : ALL_QUESTIONS.filter((_, i) => String(i) === only);
 
 // A member's reach: the room, and nothing of the machinery.
-const MEMBER_POLICY: ScopePolicy = { default: 'deny', entities: { members: { read: [] }, departments: { read: [] } } };
-
-const FIRST = ['Ana', 'Ben', 'Chiara', 'Dev', 'Eun-ji', 'Farid', 'Greta', 'Hamid', 'Irene', 'Jakob', 'Kofi', 'Lena', 'Mateo', 'Nora', 'Omar', 'Priya', 'Quentin', 'Rosa', 'Sven', 'Tomoko'];
-const LAST = ['Novak', 'Okafor', 'Lindqvist', 'Moreau', 'Silva', 'Kowalski', 'Tanaka', 'Haddad'];
-const TITLES = ['Senior Clerk for Unclear Matters', 'Deputy Keeper of Pending Forms', 'Assistant Registrar of Queues', 'Officer of Provisional Approvals', 'Junior Auditor of Stamps', 'Head Clerk of Shared Drives'];
-const QUIRKS = ['Has never once used the lift.', 'Keeps a spare stamp for emergencies.', 'Signs everything in pencil.', 'Reply-alls on principle.', 'Owns the only working stapler.'];
-const DEPARTMENTS = ['records', 'forms', 'inquiries', 'archive', null];
+const MEMBER_POLICY: ScopePolicy = { default: 'deny', entities: { members: { read: [] }, queries: { read: [] } } };
 
 const quote = (value: string): string => `'${value.replace(/'/g, "''")}'`;
 
+const HOW = ['replayed', 'generated', 'refused'];
 const seedRoom = (): string =>
-  Array.from({ length: 40 }, (_, i) => {
-    const department = DEPARTMENTS[i % DEPARTMENTS.length] ?? null;
-    const name = `${FIRST[i % FIRST.length] ?? 'Ana'} ${LAST[(i * 7) % LAST.length] ?? 'Novak'}`;
-    return `INSERT INTO members (member_id, name, title, quirk, department_id, joined_at, assigned_at) VALUES (${quote(`m${i}`)}, ${quote(name)}, ${quote(TITLES[i % TITLES.length] ?? '')}, ${quote(QUIRKS[i % QUIRKS.length] ?? '')}, ${department === null ? 'NULL' : quote(department)}, now() - interval '${40 - i} minutes', ${department === null ? 'NULL' : 'now()'});`;
-  }).join('\n');
+  [
+    ...ROOM.map((member, i) => `INSERT INTO members (member_id, name, joined_at) VALUES (${quote(member.memberId)}, ${quote(member.name)}, now() - interval '${40 - i} minutes');`),
+    ...RAN.map((query, i) => `INSERT INTO queries (member_id, request, shape, how, run_at) VALUES (${quote(query.memberId)}, ${quote(query.request)}, ${quote(query.shape)}, ${quote(HOW[i % HOW.length] ?? 'generated')}, now() - interval '${20 - i} minutes');`),
+  ].join('\n');
 
 // Does the answer have the shape that was asked for — array vs single, every
 // key present with the kind of value the shape shows?
@@ -105,15 +117,15 @@ const at = (value: unknown, index: number): Record<string, unknown> => {
 const MAPPING_TASKS: readonly { name: string; rows: Record<string, unknown>[]; shape: unknown; expect: (result: unknown) => boolean }[] = [
   {
     name: 'rename columns into a list',
-    rows: [{ name: 'Forms', remit: 'You can change your own record.' }, { name: 'Records', remit: 'You can read the register.' }],
+    rows: [{ request: 'Who is here?', how: 'replayed' }, { request: 'Show me the login links', how: 'refused' }],
     shape: [{ label: '', detail: '' }],
-    expect: (result) => Array.isArray(result) && result.length === 2 && at(result, 0)['label'] === 'Forms' && at(result, 1)['detail'] === 'You can read the register.',
+    expect: (result) => Array.isArray(result) && result.length === 2 && at(result, 0)['label'] === 'Who is here?' && at(result, 1)['detail'] === 'refused',
   },
   {
     name: 'join two columns into one',
-    rows: [{ first: 'Ada', last: 'Lovelace' }],
+    rows: [{ adjective: 'Quiet', animal: 'Otter' }],
     shape: [{ name: '' }],
-    expect: (result) => at(result, 0)['name'] === 'Ada Lovelace',
+    expect: (result) => at(result, 0)['name'] === 'Quiet Otter',
   },
   {
     name: 'a count into a single value',
@@ -123,35 +135,35 @@ const MAPPING_TASKS: readonly { name: string; rows: Record<string, unknown>[]; s
   },
   {
     name: 'a number into a string slot',
-    rows: [{ department: 'Forms', members: 8 }],
+    rows: [{ how: 'replayed', queries: 8 }],
     shape: [{ label: '', value: '', detail: '' }],
-    expect: (result) => at(result, 0)['label'] === 'Forms' && String(at(result, 0)['value']) === '8',
+    expect: (result) => at(result, 0)['label'] === 'replayed' && String(at(result, 0)['value']) === '8',
   },
   {
     name: 'group and count rows',
-    rows: [{ department_id: 'forms' }, { department_id: 'forms' }, { department_id: 'records' }],
+    rows: [{ how: 'refused' }, { how: 'refused' }, { how: 'replayed' }],
     shape: [{ group: '', count: 0 }],
-    expect: (result) => Array.isArray(result) && result.some((item: unknown) => isRecord(item) && item['group'] === 'forms' && item['count'] === 2),
+    expect: (result) => Array.isArray(result) && result.some((item: unknown) => isRecord(item) && item['group'] === 'refused' && item['count'] === 2),
   },
   {
     name: 'a missing field defaults',
-    rows: [{ name: 'Ana Novak', title: 'Senior Clerk' }],
-    shape: [{ name: '', title: '', department: '' }],
-    expect: (result) => at(result, 0)['name'] === 'Ana Novak' && 'department' in at(result, 0),
+    rows: [{ name: 'Quiet Otter', joined_at: '2026-09-30T18:02:00Z' }],
+    shape: [{ name: '', joined_at: '', queries: 0 }],
+    expect: (result) => at(result, 0)['name'] === 'Quiet Otter' && 'queries' in at(result, 0),
   },
   {
     name: 'nest a flat row',
-    rows: [{ name: 'Ana', department_name: 'Forms', department_mark: 'dots' }],
-    shape: [{ name: '', department: { name: '', mark: '' } }],
+    rows: [{ request: 'Who is here?', member_name: 'Quiet Otter', member_joined: '18:02' }],
+    shape: [{ request: '', member: { name: '', joined: '' } }],
     expect: (result) => {
-      const department = at(result, 0)['department'];
-      return isRecord(department) && department['name'] === 'Forms' && department['mark'] === 'dots';
+      const member = at(result, 0)['member'];
+      return isRecord(member) && member['name'] === 'Quiet Otter' && member['joined'] === '18:02';
     },
   },
   {
     name: 'a condition picks the words',
-    rows: [{ name: 'Ana', department_id: null }, { name: 'Ben', department_id: 'forms' }],
-    shape: [{ name: '', status: '' }],
+    rows: [{ request: 'Who is here?', fingerprint: null }, { request: 'How many are here?', fingerprint: 'fp_room' }],
+    shape: [{ request: '', status: '' }],
     expect: (result) => Array.isArray(result) && result.length === 2 && at(result, 0)['status'] !== at(result, 1)['status'],
   },
 ];
@@ -195,33 +207,35 @@ globalThis.fetch = async (input, init) => {
 // to the earlier question that asks for the same thing — and only then — and
 // pick the right shape for a new one? Paraphrases must replay; the same words
 // about a different subject must not.
+// 2026-09-30, before any run on it: rewritten with the room — the probes
+// about departments and job titles are replaced by ones about queries.
 const KNOWN: readonly Known[] = [
   { request: 'How many people are in the room?', fingerprint: 'fp_room', shape: 'number' },
-  { request: 'Who is in Records?', fingerprint: 'fp_records', shape: 'people' },
-  { request: 'How many people are in each department?', fingerprint: 'fp_per_dept', shape: 'counts' },
   { request: 'Who arrived first?', fingerprint: 'fp_first', shape: 'people' },
-  { request: 'What does each department let you do?', fingerprint: 'fp_remits', shape: 'list' },
-  { request: 'How many people have not been assigned yet?', fingerprint: 'fp_waiting', shape: 'number' },
+  { request: 'How many queries were refused?', fingerprint: 'fp_refused', shape: 'number' },
+  { request: 'How many queries has each person run?', fingerprint: 'fp_per_person', shape: 'counts' },
+  { request: 'What has been asked so far?', fingerprint: 'fp_asked', shape: 'list' },
+  { request: 'Who has not run a query yet?', fingerprint: 'fp_quiet', shape: 'people' },
 ];
 const ROUTES: readonly { question: string; replays?: string; shape?: string }[] = [
   { question: 'how many of us are here', replays: 'fp_room' },
   { question: 'What is the headcount right now?', replays: 'fp_room' },
-  { question: 'who works in records', replays: 'fp_records' },
-  { question: 'Members of the Records department', replays: 'fp_records' },
-  { question: 'Department sizes', replays: 'fp_per_dept' },
-  { question: "What is each department's clearance?", replays: 'fp_remits' },
   { question: 'Who was the first to arrive?', replays: 'fp_first' },
-  { question: 'How many are still waiting for a department?', replays: 'fp_waiting' },
+  { question: 'Number of refused queries', replays: 'fp_refused' },
+  { question: 'Queries per person', replays: 'fp_per_person' },
+  { question: 'Everything people have asked', replays: 'fp_asked' },
+  { question: 'Who has not asked anything?', replays: 'fp_quiet' },
+  { question: 'Which people have never run a query?', replays: 'fp_quiet' },
   // the same words about something else — must NOT replay
-  { question: 'Who is in Forms?', shape: 'people' },
   { question: 'Who arrived last?', shape: 'people' },
-  { question: 'How many people are in Archive?', shape: 'number' },
-  { question: 'How many people have a title with Clerk in it?', shape: 'number' },
+  { question: 'How many queries were replayed?', shape: 'number' },
+  { question: 'How many queries have I run?', shape: 'number' },
+  { question: 'Who has run the most queries?', shape: 'people' },
   // new questions — the shape is the test
-  { question: 'How many people per job title?', shape: 'counts' },
-  { question: 'List every department and its mark', shape: 'list' },
-  { question: 'Who has the longest job title?', shape: 'people' },
-  { question: 'How many departments are there?', shape: 'number' },
+  { question: 'How many queries per shape?', shape: 'counts' },
+  { question: 'List every refused request and why', shape: 'list' },
+  { question: 'Whose name is an animal that swims?', shape: 'people' },
+  { question: 'How long ago did the last person arrive?', shape: 'number' },
 ];
 
 const measureRoutes = async (): Promise<void> => {
@@ -295,7 +309,9 @@ const TIMER_PROBES: readonly TimerProbe[] = [
   { intent: 'Show the last slide in 30 minutes', wanted: show('2026-09-27T19:35', 'slide.end') }, // added 2026-09-29, before the run
   { intent: 'Put the register up at eight', wanted: ASK }, // SPEC CHANGE (was 20:00): morning or evening
   { intent: 'Go back to the title slide in 5 minutes', wanted: show('2026-09-27T19:10', 'slide.title') },
-  { intent: 'In 20 minutes, switch to the slide where the room asks questions', wanted: show('2026-09-27T19:25', 'slide.query') },
+  // SPEC CHANGE 2026-09-30: the slide it named (slide.query) was cut; the same
+  // request, about the slide that is there now.
+  { intent: 'In 20 minutes, switch to the slide about asking in words', wanted: show('2026-09-27T19:25', 'slide.words') },
   { intent: 'At quarter to ten, wrap it up', wanted: ASK }, // SPEC CHANGE (was 21:45): morning or evening
   { intent: 'Email me in ten minutes', wanted: REFUSE },
   { intent: 'Remind me to drink water at nine', wanted: ASK }, // SPEC CHANGE (was a refusal): morning or evening

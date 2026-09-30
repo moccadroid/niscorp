@@ -37,7 +37,7 @@ export const sinkLayout: LayoutNode = {
     cell('checks', [{ component: 'Sigil', props: { shape: 'square', size: 'large' } }, label('Checks · square')], { mark: 'checks' }),
     cell('hatch', [text('Not yet — the hatch.')], { mark: 'hatch' }),
     cell('title', [label('Title'), { component: 'Headline', props: { level: 'title' }, children: 'A title' }]),
-    cell('name', [label('Name'), { component: 'Headline', props: { level: 'name' }, children: 'Ada Moreau' }, { component: 'Text', props: { tone: 'muted' }, children: 'Muted text.' }]),
+    cell('name', [label('Name'), { component: 'Headline', props: { level: 'name' }, children: 'Quiet Otter' }, { component: 'Text', props: { tone: 'muted' }, children: 'Muted text.' }]),
     cell('code', [label('sink.layout.ts'), { component: 'Code', props: { text: '$.code', marked: [3] } }], { ink: 'ink' }),
     cell(
       'rows',
@@ -50,7 +50,7 @@ export const sinkLayout: LayoutNode = {
             columns: [
               { label: '', key: 'sigil', kind: 'sigil', w: 0.35 },
               { label: 'Name', key: 'name', w: 2 },
-              { label: 'Department', key: 'department', w: 1.5, missing: 'waiting' },
+              { label: 'Last query', key: 'how', w: 1.5, missing: 'none yet' },
               { label: 'Fingerprint', key: 'fp', kind: 'mono', w: 2 },
             ],
           },

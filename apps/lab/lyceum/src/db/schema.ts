@@ -303,6 +303,16 @@ export const NAMES_AND_VERDICTS = /* sql */ `
   COMMENT ON TABLE question_verdicts IS 'The moderator''s verdict on each question for the speaker: whether it is fit to show, and the text it judged (an edited question is judged again). A question with no verdict has not been checked yet.';
 `;
 
+// Migration 16: WHAT THE QUESTIONS TABLES SAY. Migration 15 described a verdict
+// as re-judged when a question is edited; questions are never edited — a
+// question is judged once, as it was sent. And the room sends them through
+// Acme, an integration, not a form of lyceum's own. The query writer reads
+// these comments as what the tables mean.
+export const QUESTION_MEANINGS = /* sql */ `
+  COMMENT ON TABLE questions IS 'Questions the people in the audience sent the speaker, through the Acme integration. A question is never edited or deleted once sent.';
+  COMMENT ON TABLE question_verdicts IS 'The moderator''s verdict on each question for the speaker: whether it is fit to show, and the text it judged. A question is judged once, as it was sent; one with no verdict has not been checked yet.';
+`;
+
 export const LYCEUM_SEQUENCE: Sequence = {
   id: 'lyceum.app',
   migrations: [
@@ -321,6 +331,7 @@ export const LYCEUM_SEQUENCE: Sequence = {
     { description: 'No departments: a member is a member; who has which action is a grant', steps: sqlSteps(NO_DEPARTMENTS) },
     { description: 'A renderer per surface: phones, stage and controller each drawn by DOM, React or Vue; the room row goes', steps: sqlSteps(RENDERERS) },
     { description: 'A name you choose, and what may be shown: no ID card; names unique; refused names kept; a verdict per question, written by the moderator', steps: sqlSteps(NAMES_AND_VERDICTS) },
+    { description: 'What the questions tables say: sent through Acme, never edited, judged once', steps: sqlSteps(QUESTION_MEANINGS) },
   ],
 };
 

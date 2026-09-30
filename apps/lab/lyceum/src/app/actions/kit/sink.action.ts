@@ -10,12 +10,12 @@ export const sinkAction: ActionDefinition = {
   title: 'Kitchen sink',
   data: {
     rows: [
-      { id: '1', sigil: 'triangle', name: 'Ada Moreau', department: 'Records', fp: 'members/me' },
-      { id: '2', sigil: 'circle', name: 'Ben Okafor', department: 'Forms', fp: 'members/register' },
-      { id: '3', sigil: 'cross', name: 'Cleo Lind', department: 'Inquiries', fp: 'deck/current' },
-      { id: '4', sigil: null, name: 'Dev Rao', department: null, fp: 'members/counts' },
+      { id: '1', sigil: 'triangle', name: 'Quiet Otter', how: 'replayed', fp: 'members/me' },
+      { id: '2', sigil: 'circle', name: 'Brave Heron', how: 'generated', fp: 'members/register' },
+      { id: '3', sigil: 'cross', name: 'Lucky Badger', how: 'refused', fp: 'deck/current' },
+      { id: '4', sigil: null, name: 'Swift Lynx', how: null, fp: 'members/counts' },
     ],
-    code: "{ component: 'Cell',\n  props: { area: 'department',\n           mark: '$.me.department_mark' } }",
+    code: "{ component: 'Headline',\n  props: { level: 'name' },\n  children: '{{$.me.name}}' }",
   },
   layout: sinkLayout,
   triggers: [],
