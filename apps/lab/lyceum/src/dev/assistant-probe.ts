@@ -29,8 +29,9 @@ const PROBES: readonly { who: Who; say: string; want: Want; containing?: string;
   // department has the most people?" (query) — the actions and the table are
   // gone. Added the same day, before a run, in their place: the question form.
   { who: 'waiting', say: 'Send the speaker a question: Will the slides be online?', want: 'open', containing: 'Will the slides be online?' },
-  // Added 2026-09-28, before the run: an action with nothing to pre-fill.
-  { who: 'waiting', say: 'Show me my questions', want: 'open' },
+  // RETIRED 2026-09-30 with questions.mine: "Show me my questions" (open), the
+  // action with nothing to pre-fill. The one left, xray.switch, is given on
+  // stage — neither person here holds it — so it has no replacement.
   // RETIRED 2026-09-30: Records asking for the rename (none). In its place, the
   // same boundary: the speaker does not have the question form.
   { who: 'speaker', say: 'Send the speaker a question: Will the slides be online?', want: 'none' },
