@@ -181,20 +181,23 @@ export const questionLayout: LayoutNode = {
   ],
 };
 
-// 13 · json-render ≈ Nova ∈ nisc. json-render and Nova in one row, both
-// blue; past json-render, Next.js and your code; Nova is one of nisc's
-// packages, each named by what it is.
+// 13 · json-render ≈ Nova ∈ nisc. Two sides, each under its name: Vercel on
+// the left, nisc on the right. json-render and Nova in one row, both blue;
+// under json-render, Next.js and your code; beside and under Nova, nisc's
+// other packages, each named by what it is.
 const part = (area: string, name: string, what: string): LayoutNode => cell(area, [label(what), headline('name', name)], { ink: 'ink', align: 'middle' });
 export const partsLayout: LayoutNode = {
   component: 'Sheet',
   props: {
     size: 'fill',
-    areas: ['head head head head', 'jr nova moss charter', 'rest vex prism tide', 'rest strata signal cortex', 'rest solid solid solid'],
-    cols: [1.6, 1, 1, 1],
-    rows: ['auto', 1, 1, 1, 1],
+    areas: ['head head head', 'vercel nisc nisc', 'jr nova moss', 'rest charter vex', 'rest prism tide', 'rest strata signal', 'rest cortex solid'],
+    cols: [1.2, 1, 1],
+    rows: ['auto', 'auto', 1, 1, 1, 1, 1],
   },
   children: [
     cell('head', [headline('title', '{{$.title}}')]),
+    cell('vercel', [headline('name', 'Vercel')], { ink: 'highlight' }),
+    cell('nisc', [headline('name', 'nisc')], { ink: 'highlight' }),
     cell('jr', [label('UI'), headline('name', 'json-render')], { ink: 'signal', align: 'middle' }),
     cell('nova', [label('UI'), headline('name', 'Nova')], { ink: 'signal', align: 'middle' }),
     cell('rest', [label('Everything else'), headline('name', 'Next.js + your code')], { align: 'middle' }),
@@ -206,6 +209,6 @@ export const partsLayout: LayoutNode = {
     part('strata', 'Strata', 'Migrations'),
     part('signal', 'Signal', 'LLM calls'),
     part('cortex', 'Cortex', 'Agents'),
-    part('solid', 'Solid', 'Streaming structured output'),
+    part('solid', 'Solid', 'Structured streaming'),
   ],
 };
