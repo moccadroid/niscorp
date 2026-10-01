@@ -30,7 +30,16 @@ export const CANVASES: ShellManifest['canvases'] = [
   // A LIST: the middle of the phone — the actions it holds, one under another
   // (member/phone.action.ts reconciles it: the assistant, installed
   // integrations, the X-ray once given).
-  { id: 'body', mode: 'list', actionLayout: { for: '$.instances', as: 'instance', do: { component: 'ActionSlot', props: { instanceId: '$instance.id' } } } },
+  // Empty until the speaker gives something: a phone starts as a name alone.
+  {
+    id: 'body',
+    mode: 'list',
+    actionLayout: {
+      if: '$.active',
+      then: { for: '$.instances', as: 'instance', do: { component: 'ActionSlot', props: { instanceId: '$instance.id' } } },
+      else: { component: 'Sheet', props: { areas: ['none'] }, children: [{ component: 'Cell', props: { area: 'none', mark: 'hatch' }, children: [{ component: 'Text', props: { tone: 'muted' }, children: 'Nothing here yet.' }] }] },
+    },
+  },
   { id: 'head', initial: ['speaker.head'] },
   {
     // A LIST: every tool the slide lists is live at once, stacked in order

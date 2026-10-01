@@ -28,12 +28,11 @@ export const CHARTER: Charter = {
   // Everybody who joined: their phone. Everybody may query the records from
   // words; what the result can reach is still theirs. And send the speaker a
   // question — through Acme, once it is installed.
-  // …and an assistant: the same one everybody has, built for each person from
-  // what these grants select (app/assistant/assistants.ts).
+  // The assistant is a role of its own, below: given during the talk.
   // …and any integration's screens for members (`ext.member.*`): an
   // integration can only land inside this fence, and only once installed and
   // approved (the controller's Integrations tool) — Acme's Q&A among them.
-  member: { actions: ['member.*', 'query.*', 'assistant.*', 'ext.member.*'], data: [...MEMBERS_READ, ...QUERYING, ...QUESTIONING, ...CONVERSING, ...LOOK] },
+  member: { actions: ['member.*', 'query.*', 'ext.member.*'], data: [...MEMBERS_READ, ...QUERYING, ...QUESTIONING, ...CONVERSING, ...LOOK] },
 
   // The speaker's controller and the projector: two principals, two devices.
   // The speaker moves the deck, as themselves; the controller's tools change
@@ -55,6 +54,10 @@ export const CHARTER: Charter = {
   // (vex/grant.entries.ts). The X-ray reads the shell a person already has,
   // and no table.
   xray: { actions: ['xray.*'] },
+
+  // The assistant, on a phone: given during the talk, the same way. (What it
+  // may read and write is the member's already — it acts as them.)
+  assistant: { actions: ['assistant.*'] },
 
   // The button: an action three people are given, and the one write it makes.
   // Nobody else has either — not the action on their screen, not the write in
@@ -99,8 +102,12 @@ export const WEARABLE: readonly (readonly string[])[] = [
   ['public'],
   ['member'],
   ['member', 'xray'],
+  ['member', 'assistant'],
   ['member', 'button'],
+  ['member', 'xray', 'assistant'],
   ['member', 'xray', 'button'],
+  ['member', 'assistant', 'button'],
+  ['member', 'xray', 'assistant', 'button'],
   ['speaker'],
   ['stage'],
   ['kit'],

@@ -15,7 +15,7 @@ import { attachSocket } from '@niscorp/moss/node';
 import { mintSession } from '@niscorp/moss';
 import { SLIDES } from '@lyceum/db/seed';
 import { boot } from '@lyceum/server/boot';
-import { check, connect, finish, waitUntil } from './harness';
+import { check, connect, finish, giveAssistant, waitUntil } from './harness';
 import type { Terminal } from './harness';
 
 // The ActionSlot on `main` whose action is `action`: its instance id, as a
@@ -41,11 +41,15 @@ const main = async (): Promise<void> => {
     door.close();
     const phone = await connect(base, token);
     await phone.hello();
-    await phone.shows('body', 'assistant.thread');
+    await phone.shows('main', '"canvasId":"body"');
     return phone;
   };
   const ada = await join();
   const ben = await join();
+  // The assistant, given: the action the X-ray is tapped on further down.
+  await giveAssistant(server, runtime.pool);
+  await ada.shows('body', 'assistant.thread');
+  await ben.shows('body', 'assistant.thread');
   const stranger = await connect(base);
   await stranger.shows('main', '"ref":"pick"');
   const speaker = await connect(base, await mintSession(runtime.pool, 'speaker', 60_000));

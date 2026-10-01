@@ -19,7 +19,7 @@ import { stripAction } from './actions/stage/strip.action';
 import { sinkAction } from './actions/kit/sink.action';
 import { signinAction } from './actions/lectern/signin.action';
 import { SLIDE_ACTIONS } from './actions/slide/slide.actions';
-import { xrayTool } from './actions/tools/xray.action';
+import { assistantTool, xrayTool } from './actions/tools/give.actions';
 import { xrayDocumentAction } from './actions/xray/document.action';
 import { xraySwitchAction } from './actions/xray/switch.action';
 import { CUE_TOOLS } from './actions/tools/cue.actions';
@@ -43,6 +43,7 @@ export const ACTIONS: Record<string, ActionDefinition> = Object.fromEntries(
     notificationAction,
     lookTool,
     xrayTool,
+    assistantTool,
     xrayDocumentAction,
     xraySwitchAction,
     integrationsTool,

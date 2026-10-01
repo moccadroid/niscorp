@@ -19,7 +19,7 @@ import type { ClientChannel } from 'ssh2';
 import { serve } from '@hono/node-server';
 import { attachSocket } from '@niscorp/moss/node';
 import { boot } from '@lyceum/server/boot';
-import { check, finish, waitUntil } from './harness';
+import { check, finish, giveAssistant, waitUntil } from './harness';
 
 type Visitor = { screen: () => string; press: (keys: string) => void; closed: () => boolean; leave: () => void };
 
@@ -75,7 +75,9 @@ const main = async (): Promise<void> => {
   // ── 2 ──
   const before = (await runtime.db.query('SELECT 1 FROM members')).rows.length;
   ada.press(marker ?? '');
-  check(`typing the number steps in as ${chosen}: their phone, the assistant on its list`, await waitUntil(() => ada.screen().includes('Can: ')));
+  check(`typing the number steps in as ${chosen}: their phone, nothing on its list yet`, await waitUntil(() => ada.screen().includes('Nothing here yet.')));
+  await giveAssistant(server, runtime.pool);
+  check('...given the assistant, it is on their list — the terminal follows', await waitUntil(() => ada.screen().includes('Can: ')));
   check('...a member now, by that name', (await runtime.db.query('SELECT 1 FROM members WHERE name = $1', [chosen])).rows.length === 1);
   check('...a new person in the room', (await runtime.db.query('SELECT 1 FROM members')).rows.length === before + 1);
 

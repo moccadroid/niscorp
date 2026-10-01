@@ -216,8 +216,11 @@ html:has(.page > [data-canvas="strip"]:not(:empty)) { font-size: clamp(16px, cal
 .${ROOT_CLASS} .field {
   --pad-x: clamp(.8rem, calc(1.6 * var(--cq)), 1.8rem);
   --pad-y: clamp(.9rem, calc(1.6 * var(--cq)), 1.8rem);
-  --well: color-mix(in srgb, var(--ink) 6%, var(--paper));
+  --well: #f0f0f0;
   border: 0; outline: 0; width: 100%; color: var(--ink); caret-color: var(--alert);
+  /* iOS paints a field's text with its own fill colour (white in dark mode)
+     and its own chrome unless told otherwise: pin both to the ink. */
+  -webkit-text-fill-color: var(--ink); -webkit-appearance: none; appearance: none; border-radius: 0; opacity: 1; color-scheme: light;
   padding: var(--pad-y) var(--pad-x);
   background:
     linear-gradient(var(--ink), var(--ink)) no-repeat left var(--pad-x) bottom calc(var(--pad-y) * .55) / calc(100% - var(--pad-x) * 2) var(--rule),
@@ -225,7 +228,7 @@ html:has(.page > [data-canvas="strip"]:not(:empty)) { font-size: clamp(16px, cal
   /* never under 16px: a phone zooms the page into a smaller field */
   font: 500 clamp(1.1rem, calc(2.2 * var(--cq)), 2.4rem)/1.2 var(--prose);
 }
-.${ROOT_CLASS} .field::placeholder { color: color-mix(in srgb, var(--ink) 40%, var(--paper)); }
+.${ROOT_CLASS} .field::placeholder { color: #666666; -webkit-text-fill-color: #666666; opacity: 1; }
 .${ROOT_CLASS} .field:focus { --well: var(--highlight); }
 
 /* ── qr: ink on paper whatever the cell's ink, square, as large as its place ── */

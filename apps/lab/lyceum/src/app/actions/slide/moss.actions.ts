@@ -90,7 +90,7 @@ export const charterSlide = still('slide.charter', 'Who gets what: one file.', d
   code: code(
     'member: {',
     "  actions: ['member.*', 'query.*',",
-    "    'assistant.*', 'ext.member.*'],",
+    "    'ext.member.*'],",
     '  data: [...MEMBERS_READ, ...QUERYING,',
     '    ...QUESTIONING, ...CONVERSING, ...LOOK],',
     '},',

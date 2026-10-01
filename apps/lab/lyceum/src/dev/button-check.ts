@@ -33,7 +33,7 @@ const main = async (): Promise<void> => {
     door.close();
     const phone = await connect(base, token);
     await phone.hello();
-    await phone.shows('body', 'assistant.thread');
+    await phone.shows('main', '"canvasId":"body"');
     return { phone, token };
   };
   const people = [await join(), await join(), await join(), await join(), await join()];

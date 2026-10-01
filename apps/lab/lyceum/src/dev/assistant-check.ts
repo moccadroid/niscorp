@@ -18,7 +18,7 @@ import { boot } from '@lyceum/server/boot';
 import { SLIDES } from '@lyceum/db/seed';
 import { OPENABLE_KEYS, offerableActions, prefillOf } from '@lyceum/server/assistant/tools';
 import { assembleFor } from '@lyceum/server/assistant/declarations';
-import { check, connect, finish, waitUntil } from './harness';
+import { check, connect, finish, giveAssistant, waitUntil } from './harness';
 import type { Terminal } from './harness';
 
 const main = async (): Promise<void> => {
@@ -29,7 +29,9 @@ const main = async (): Promise<void> => {
   if (address === null || typeof address === 'string') throw new Error('no port');
   const base = `ws://127.0.0.1:${address.port}`;
 
-  const stepIn = async (): Promise<{ phone: Terminal; memberId: string; token: string }> => {
+  // Somebody joins — and, unless told not to, is given the assistant, as the
+  // speaker gives it during the talk: a phone starts without one.
+  const stepIn = async (given = true): Promise<{ phone: Terminal; memberId: string; token: string }> => {
     const door = await connect(base);
     await door.shows('main', '"ref":"pick"');
     door.click('main', 'pick');
@@ -37,6 +39,8 @@ const main = async (): Promise<void> => {
     door.close();
     const phone = await connect(base, token);
     const hello = await phone.hello();
+    await phone.shows('main', '"canvasId":"body"');
+    if (given) await giveAssistant(server, runtime.pool);
     return { phone, memberId: hello.principal ?? '', token };
   };
   const openAssistant = async (phone: Terminal): Promise<boolean> => {
@@ -54,8 +58,10 @@ const main = async (): Promise<void> => {
   };
 
   // ── 1 + 2. somebody waiting: the room's assistant, no automation ──
-  const waiting = await stepIn();
-  check('everybody who joined has the assistant, on their list', await openAssistant(waiting.phone));
+  const waiting = await stepIn(false);
+  check('a phone starts without the assistant: nothing on its list yet', (await waiting.phone.shows('body', 'Nothing here yet.')) && !waiting.phone.showsNow('body', 'Can: '));
+  await giveAssistant(server, runtime.pool);
+  check('given by the speaker, the assistant is on their list', await openAssistant(waiting.phone));
   check('…with a member\'s tools: it can query, not automate', waiting.phone.showsNow('body', 'Can: query') && !waiting.phone.showsNow('body', 'automate'));
   check('…able to query and open, not to automate', waiting.phone.showsNow('body', 'Can: query · open') && !waiting.phone.showsNow('body', 'automate'));
   await say(waiting.phone, 'body', 'End the talk in 30 minutes');

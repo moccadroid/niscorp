@@ -24,7 +24,7 @@ import { QUERY_SHAPES } from '@lyceum/app/vex/query.shapes';
 import { answerLayout } from '@lyceum/app/actions/shared/answer.layouts';
 import { boot } from '@lyceum/server/boot';
 import { vexOver, wireAs } from '@lyceum/server/vex-over';
-import { check, connect, finish, waitUntil } from './harness';
+import { check, connect, finish, giveAssistant, waitUntil } from './harness';
 import type { Terminal } from './harness';
 
 type Query = { member_id: string; request: string; shape: string; how: string; fingerprint: string | null };
@@ -46,6 +46,9 @@ const main = async (): Promise<void> => {
     door.close();
     const phone = await connect(base, token);
     const hello = await phone.hello();
+    await phone.shows('main', '"canvasId":"body"');
+    // A phone starts without the assistant; the speaker gives it.
+    await giveAssistant(server, runtime.pool);
     await phone.shows('main', '"label":"Assistant"');
     await phone.shows('body', 'Can: ');
     return { phone, memberId: hello.principal ?? '' };

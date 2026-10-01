@@ -2,6 +2,25 @@
 // boot, reading trees as a terminal would. Shared so each check says only
 // what it asserts.
 import { z } from 'zod';
+import { mintSession } from '@niscorp/moss';
+import type { MossServer } from '@niscorp/moss';
+import type { PgPool } from '@niscorp/vex';
+import { assistantGive } from '@lyceum/app/vex/grant.entries';
+import { memberRegister } from '@lyceum/app/vex/member.entries';
+
+// GIVE EVERYBODY WHO HAS JOINED THE ASSISTANT, the way the controller's tool
+// does: the speaker reads who joined and writes a grant row each. A phone
+// starts without one; a check about the assistant gives it first.
+export const giveAssistant = async (server: MossServer, pool: PgPool): Promise<void> => {
+  const token = await mintSession(pool, 'speaker', 60_000);
+  const replay = async (fingerprint: string, context: Record<string, unknown>): Promise<unknown> => {
+    const response = await server.request('/api/vex', { method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` }, body: JSON.stringify({ fingerprint, context }) });
+    const body: unknown = await response.json();
+    if (!response.ok) throw new Error(`${fingerprint}: ${JSON.stringify(body)}`);
+    return typeof body === 'object' && body !== null && 'result' in body ? body.result : body;
+  };
+  await replay(assistantGive.fingerprint, { members: await replay(memberRegister.fingerprint, {}) });
+};
 
 export const results: { label: string; ok: boolean }[] = [];
 export const check = (label: string, ok: boolean): void => {

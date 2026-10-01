@@ -56,7 +56,7 @@ const main = async (): Promise<void> => {
     door.close();
     const phone = await connect(base, token);
     await phone.hello();
-    await phone.shows('body', 'assistant.thread');
+    await phone.shows('main', '"canvasId":"body"');
     return phone;
   };
   const ada = await join();

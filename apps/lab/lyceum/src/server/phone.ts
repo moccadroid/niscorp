@@ -7,7 +7,7 @@ import { attachedTo } from './attached';
 // is built; a grant that changes (the X-ray given) or an integration approved
 // rebuilds the shell, and the list with it. Ring 1 decides; this only reads it.
 //
-//   the assistant            everybody who joined
+//   the assistant            once the speaker gave it
 //   attached to the phone    every integration screen installed, approved and
 //                            attached to `member.phone` (Acme's Q&A)
 //   the button               for the three the speaker gave it to
