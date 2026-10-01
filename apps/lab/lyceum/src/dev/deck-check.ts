@@ -50,6 +50,7 @@ const main = async (): Promise<void> => {
     'tools.look': 'Which renderer draws',
     'tools.xray': 'X-ray — everybody’s own screen',
     'tools.integrations': 'Integrations — somebody else’s screen',
+    'tools.button': 'The button — an action only three people have',
     ...Object.fromEntries(CUE_TOOLS.map((cue) => [cue.id, cue.title])),
   };
   const toolsAre = (expected: readonly string[]): Promise<boolean> =>
@@ -136,12 +137,12 @@ const main = async (): Promise<void> => {
   // A database from an older version of SLIDES: a renamed slide, two swapped,
   // one that is no longer in the deck — and on screen.
   const dataAt = SLIDES.findIndex((slide) => slide.slideId === 'slide.data');
-  const clearanceAt = SLIDES.findIndex((slide) => slide.slideId === 'slide.clearance');
+  const xrayAt = SLIDES.findIndex((slide) => slide.slideId === 'slide.xray');
   await runtime.db.exec(`
     UPDATE slides SET title = 'An old title' WHERE slide_id = 'slide.title';
     UPDATE slides SET position = 100 WHERE slide_id = 'slide.data';
-    UPDATE slides SET position = ${dataAt} WHERE slide_id = 'slide.clearance';
-    UPDATE slides SET position = ${clearanceAt} WHERE slide_id = 'slide.data';
+    UPDATE slides SET position = ${dataAt} WHERE slide_id = 'slide.xray';
+    UPDATE slides SET position = ${xrayAt} WHERE slide_id = 'slide.data';
     INSERT INTO slides (slide_id, position, title) VALUES ('slide.gone', 99, 'Cut from the talk');
     UPDATE deck SET slide_id = 'slide.gone';
   `);

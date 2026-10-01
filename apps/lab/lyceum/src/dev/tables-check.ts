@@ -19,7 +19,7 @@ const BASELINE_TABLES = ['departments', 'members', 'slides', 'slide_notes', 'dec
 // Migration 13 drops `departments`: the talk sorts nobody into one any more.
 // Migration 14 replaces `room` (one look for every screen) with `renderers`.
 // Migration 15 keeps refused names and the moderator's verdicts on questions.
-const TABLES = [...BASELINE_TABLES.filter((table) => table !== 'departments'), 'slide_tools', 'queries', 'timers', 'assistant_turns', 'questions', 'renderers', 'refused_names', 'question_verdicts'];
+const TABLES = [...BASELINE_TABLES.filter((table) => table !== 'departments'), 'slide_tools', 'queries', 'timers', 'assistant_turns', 'questions', 'renderers', 'refused_names', 'question_verdicts', 'presses'];
 // What the boot migrates: lyceum's sequence and tide's (db/schema.ts).
 const BOOT_TABLES = [...TABLES, ...TIDE_TABLES];
 const ALL = LYCEUM_SEQUENCE.migrations.map((_, index) => `lyceum.app/${index + 1}`).join();

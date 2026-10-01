@@ -1,5 +1,5 @@
 import type { MossServer, NiscApp } from '@niscorp/moss';
-import { xrayGive, xrayTake } from '@lyceum/app/vex/grant.entries';
+import { buttonGive, buttonTake, xrayGive, xrayTake } from '@lyceum/app/vex/grant.entries';
 import { STAFF } from '@lyceum/db/seed';
 import type { Moderation } from './moderation';
 
@@ -29,7 +29,7 @@ export const lyceumReactions = (server: () => MossServer, moderation: Moderation
   {
     table: 'grants',
     run: (event) => {
-      if (event.fingerprint !== xrayGive.fingerprint && event.fingerprint !== xrayTake.fingerprint) return;
+      if (![xrayGive.fingerprint, xrayTake.fingerprint, buttonGive.fingerprint, buttonTake.fingerprint].includes(event.fingerprint ?? '')) return;
       const staff = new Set(STAFF.map((principal) => principal.principal));
       for (const shell of server().shells?.list() ?? []) if (!staff.has(shell.principal)) server().invalidateIdentity(shell.principal);
     },

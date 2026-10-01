@@ -124,6 +124,25 @@ export const lyceumTarget = (config: { root: HTMLElement }): Target => {
       api.publish('xray-open', { instance: box.getAttribute('data-instance') ?? '', action: box.getAttribute('data-action') ?? '' });
     };
     root.addEventListener('click', openTag, true);
+    // AN ACTION WITH A SOUND plays it where it is pressed — one listener for
+    // all three renderers, which only mark the button (data-sound).
+    const chime = (event: Event): void => {
+      if (!(event.target instanceof Element) || event.target.closest('[data-sound="chime"]') === null) return;
+      const audio = new AudioContext();
+      const gain = audio.createGain();
+      gain.connect(audio.destination);
+      gain.gain.setValueAtTime(0.25, audio.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, audio.currentTime + 0.6);
+      for (const [hertz, at] of [[880, 0], [1320, 0.14]] as const) {
+        const tone = audio.createOscillator();
+        tone.type = 'triangle';
+        tone.frequency.value = hertz;
+        tone.connect(gain);
+        tone.start(audio.currentTime + at);
+        tone.stop(audio.currentTime + 0.6);
+      }
+    };
+    root.addEventListener('click', chime);
     let drawing: { look: (typeof LOOKS)[number]; mount: ReturnType<Target> } | undefined;
     let slide: string | undefined;
     let arrived = 0;
@@ -155,6 +174,7 @@ export const lyceumTarget = (config: { root: HTMLElement }): Target => {
       destroy: () => {
         drawing?.mount.destroy();
         root.removeEventListener('click', openTag, true);
+        root.removeEventListener('click', chime);
         root.classList.remove(ROOT_CLASS);
         root.removeAttribute('data-look');
         root.removeAttribute('data-xray');

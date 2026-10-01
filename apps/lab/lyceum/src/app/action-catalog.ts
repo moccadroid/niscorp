@@ -23,6 +23,8 @@ import { xrayTool } from './actions/tools/xray.action';
 import { xrayDocumentAction } from './actions/xray/document.action';
 import { xraySwitchAction } from './actions/xray/switch.action';
 import { CUE_TOOLS } from './actions/tools/cue.actions';
+import { buttonTool } from './actions/tools/button.action';
+import { buttonPressAction } from './actions/button/press.action';
 
 // Ring 1: every action lyceum has. Which role is granted which is the
 // charter's business.
@@ -44,6 +46,8 @@ export const ACTIONS: Record<string, ActionDefinition> = Object.fromEntries(
     xrayDocumentAction,
     xraySwitchAction,
     integrationsTool,
+    buttonTool,
+    buttonPressAction,
     assistantAction,
     stageRegisterAction,
     deckAction,

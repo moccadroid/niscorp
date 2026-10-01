@@ -84,5 +84,10 @@ export const LYCEUM_KIT: Sequence = {
       description: 'Cell: align middle — vertically centred, read from the left',
       steps: [],
     },
+    {
+      // A MARKER: a prop added.
+      description: 'Action: sound — a chime it plays where it is pressed',
+      steps: [],
+    },
   ],
 };

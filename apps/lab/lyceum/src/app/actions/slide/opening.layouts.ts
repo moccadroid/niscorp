@@ -101,17 +101,6 @@ export const xrayLayout: LayoutNode = {
   ],
 };
 
-// 10 · Three of you got a button: the claim, and beside it the button three
-// phones just got.
-export const threeLayout: LayoutNode = {
-  component: 'Sheet',
-  props: { size: 'fill', areas: ['head press'], cols: [1.25, 1] },
-  children: [
-    cell('head', [headline('display', '{{$.title}}')], { align: 'middle' }),
-    cell('press', [headline('title', 'Got it?'), headline('display', 'Press it.')], { ink: 'alert', align: 'center' }),
-  ],
-};
-
 // 11 · One screen, three renderers. Each renderer, blue while it draws a
 // screen, and which screens it draws — read off the same rows the controller's
 // switch writes (each row's choices are DOM, React, Vue, in that order). The

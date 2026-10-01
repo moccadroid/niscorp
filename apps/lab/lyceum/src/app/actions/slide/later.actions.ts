@@ -1,20 +1,17 @@
 import type { ActionDefinition } from '@niscorp/nova';
 import {
-  documentLayout,
   endLayout,
   incidentLayout,
-  mossLayout,
   onceLayout,
   pressLayout,
   strataLayout,
   tideLayout,
-  twiceLayout,
   vexLayout,
   wordsLayout,
 } from './later.layouts';
 
-// AFTER THE SAFETY SECTION — the rest of nisc, each part the same move in one
-// more place: Moss and Charter (who gets what, enforced twice), Vex (a query is
+// AFTER MOSS AND CHARTER (./moss.actions.ts) — the rest of nisc, each part the
+// same move in one more place: Vex (a query is
 // a stored document, replayed by name; asked in words, a small model chooses),
 // the assistant (it prepares, you press), Tide (the timer from the start of the
 // talk, as the row it is), Strata (a grammar change is a migration), and the
@@ -31,46 +28,6 @@ const still = (id: string, title: string, layout: ActionDefinition['layout'], da
   data: { title, ...data },
   layout,
   triggers: [],
-});
-
-export const mossSlide = still('slide.moss', 'Your screen runs on the server.', mossLayout, {
-  kicker: 'Moss',
-  from: 'Server',
-  to: 'Your phone',
-  lanes: [
-    { label: 'What to draw', toward: 'to', ink: 'signal' },
-    { label: 'What you pressed', toward: 'from', ink: 'alert' },
-  ],
-});
-
-// Two roles from app/charter/charter.ts, as written.
-export const charterSlide = still('slide.charter', 'Who gets what: one file.', documentLayout, {
-  kicker: 'Charter',
-  file: 'charter.ts',
-  code: code(
-    'member: {',
-    "  actions: ['member.*', 'query.*',",
-    "    'assistant.*', 'ext.member.*'],",
-    '  data: [...MEMBERS_READ, ...QUERYING,',
-    '    ...QUESTIONING, ...CONVERSING, ...LOOK],',
-    '},',
-    '',
-    "clock: { data: ['deck.write.update'] },",
-  ),
-  marked: [8],
-});
-
-// The questions rule from app/vex/behaviors.ts.
-export const twiceSlide = still('slide.twice', 'Enforced twice.', twiceLayout, {
-  shell: 'Only what you’re given.',
-  code: code(
-    'questions: {',
-    '  default: {',
-    "    insert: [{ set: 'member_id', to: 'userId' }],",
-    "    read: [{ match: 'member_id', to: 'userId' }],",
-    '    …',
-  ),
-  marked: [3, 4],
 });
 
 // members/counts from app/vex/member.entries.ts — the strip's joined count.
@@ -128,7 +85,7 @@ export const onceSlide = still('slide.once', 'No agent loop.', onceLayout, {});
 export const strataSlide = still('slide.strata', 'Grammars get migrations.', strataLayout, {
   kicker: 'Strata',
   file: 'strata.lock.json',
-  code: code('{', '  "grammar": {', '    "lyceum.kit": 10,', '    "nisc.nova": 2,', '    "nisc.prism": 1', '  }', '}'),
+  code: code('{', '  "grammar": {', '    "lyceum.kit": 11,', '    "nisc.nova": 2,', '    "nisc.prism": 1', '  }', '}'),
 });
 
 export const endSlide = still('slide.end', 'It’s all in one folder.', endLayout, {
@@ -138,9 +95,6 @@ export const endSlide = still('slide.end', 'It’s all in one folder.', endLayou
 });
 
 export const LATER_SLIDES: readonly ActionDefinition[] = [
-  mossSlide,
-  charterSlide,
-  twiceSlide,
   vexSlide,
   wordsSlide,
   waterSlide,

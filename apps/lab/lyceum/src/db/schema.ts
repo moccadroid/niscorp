@@ -313,6 +313,19 @@ export const QUESTION_MEANINGS = /* sql */ `
   COMMENT ON TABLE question_verdicts IS 'The moderator''s verdict on each question for the speaker: whether it is fit to show, and the text it judged. A question is judged once, as it was sent; one with no verdict has not been checked yet.';
 `;
 
+// Migration 17: PRESSES. The button three people are given writes one row per
+// press — who, stamped by the engine (vex/behaviors.ts) — and the stage shows
+// who pressed. `sound` is what the press played, a closed set held here.
+export const PRESSES = /* sql */ `
+  CREATE TABLE presses (
+    press_id   TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+    member_id  TEXT NOT NULL REFERENCES members (member_id),
+    sound      TEXT NOT NULL CHECK (sound IN ('chime')),
+    pressed_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  );
+  COMMENT ON TABLE presses IS 'Each press of the button a few people in the audience were given: who pressed it, and when.';
+`;
+
 export const LYCEUM_SEQUENCE: Sequence = {
   id: 'lyceum.app',
   migrations: [
@@ -332,6 +345,7 @@ export const LYCEUM_SEQUENCE: Sequence = {
     { description: 'A renderer per surface: phones, stage and controller each drawn by DOM, React or Vue; the room row goes', steps: sqlSteps(RENDERERS) },
     { description: 'A name you choose, and what may be shown: no ID card; names unique; refused names kept; a verdict per question, written by the moderator', steps: sqlSteps(NAMES_AND_VERDICTS) },
     { description: 'What the questions tables say: sent through Acme, never edited, judged once', steps: sqlSteps(QUESTION_MEANINGS) },
+    { description: 'Presses: one row per press of the button a few people are given', steps: sqlSteps(PRESSES) },
   ],
 };
 

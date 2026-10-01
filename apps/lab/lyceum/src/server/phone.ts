@@ -10,12 +10,14 @@ import { attachedTo } from './attached';
 //   the assistant            everybody who joined
 //   attached to the phone    every integration screen installed, approved and
 //                            attached to `member.phone` (Acme's Q&A)
+//   the button               for the three the speaker gave it to
 //   the X-ray                once the speaker gave it
 export const phoneInputs = (pool: PgPool): NonNullable<ShellManifest['inputs']> => async ({ actions }): Promise<Record<string, Record<string, unknown>>> => {
   if (!actions.includes('member.phone')) return {};
   const onThePhone = [
     ...actions.filter((action) => action === 'assistant.thread'),
     ...(await attachedTo(pool, 'member.phone', actions)),
+    ...actions.filter((action) => action === 'button.press'),
     ...actions.filter((action) => action === 'xray.switch'),
   ];
   return { main: { stack: onThePhone.map((action) => ({ action })) } };

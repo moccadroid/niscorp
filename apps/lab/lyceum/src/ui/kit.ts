@@ -369,6 +369,8 @@ export const Action: DomComponent = ({ props }) => {
   setData(node, 'ink', oneOf(props['ink'], INKS));
   setData(node, 'lines', oneOf(props['lines'], ['two'] as const));
   setData(node, 'size', oneOf(props['size'], ['large'] as const));
+  // A sound it plays where it is pressed — the page plays it (./target.ts).
+  setData(node, 'sound', oneOf(props['sound'], ['chime'] as const));
   return node;
 };
 

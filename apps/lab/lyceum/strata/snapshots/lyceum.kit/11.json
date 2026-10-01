@@ -1,0 +1,545 @@
+{
+  "kinds": {
+    "lyceum.kit/props": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "description": "The props each lyceum kit component accepts, by component name",
+      "properties": {
+        "Action": {
+          "additionalProperties": false,
+          "properties": {
+            "area": {
+              "description": "A grid area name from the enclosing Sheet",
+              "type": "string"
+            },
+            "ink": {
+              "enum": [
+                "paper",
+                "ink",
+                "signal",
+                "alert",
+                "live",
+                "highlight"
+              ],
+              "type": "string"
+            },
+            "label": {
+              "type": "string"
+            },
+            "lines": {
+              "const": "two",
+              "type": "string"
+            },
+            "size": {
+              "const": "large",
+              "type": "string"
+            },
+            "sound": {
+              "const": "chime",
+              "type": "string"
+            }
+          },
+          "type": "object"
+        },
+        "Bar": {
+          "additionalProperties": false,
+          "properties": {
+            "segments": {
+              "items": {
+                "additionalProperties": false,
+                "properties": {
+                  "ink": {
+                    "enum": [
+                      "paper",
+                      "ink",
+                      "signal",
+                      "alert",
+                      "live",
+                      "highlight"
+                    ],
+                    "type": "string"
+                  },
+                  "mark": {
+                    "enum": [
+                      "stripes",
+                      "dots",
+                      "bars",
+                      "checks",
+                      "hatch"
+                    ],
+                    "type": "string"
+                  },
+                  "value": {
+                    "type": "number"
+                  }
+                },
+                "required": [
+                  "value"
+                ],
+                "type": "object"
+              },
+              "type": "array"
+            }
+          },
+          "type": "object"
+        },
+        "Cell": {
+          "additionalProperties": false,
+          "properties": {
+            "align": {
+              "enum": [
+                "start",
+                "end",
+                "center",
+                "between",
+                "middle"
+              ],
+              "type": "string"
+            },
+            "area": {
+              "description": "A grid area name from the enclosing Sheet",
+              "type": "string"
+            },
+            "ink": {
+              "enum": [
+                "paper",
+                "ink",
+                "signal",
+                "alert",
+                "live",
+                "highlight"
+              ],
+              "type": "string"
+            },
+            "mark": {
+              "enum": [
+                "stripes",
+                "dots",
+                "bars",
+                "checks",
+                "hatch"
+              ],
+              "type": "string"
+            },
+            "pad": {
+              "const": "none",
+              "type": "string"
+            },
+            "scroll": {
+              "enum": [
+                "y",
+                "end"
+              ],
+              "type": "string"
+            }
+          },
+          "type": "object"
+        },
+        "Code": {
+          "additionalProperties": false,
+          "properties": {
+            "marked": {
+              "items": {
+                "type": "number"
+              },
+              "type": "array"
+            },
+            "text": {
+              "type": "string"
+            }
+          },
+          "type": "object"
+        },
+        "Columns": {
+          "additionalProperties": false,
+          "properties": {
+            "bars": {
+              "items": {
+                "additionalProperties": false,
+                "properties": {
+                  "ink": {
+                    "enum": [
+                      "paper",
+                      "ink",
+                      "signal",
+                      "alert",
+                      "live",
+                      "highlight"
+                    ],
+                    "type": "string"
+                  },
+                  "label": {
+                    "type": "string"
+                  },
+                  "mark": {
+                    "enum": [
+                      "stripes",
+                      "dots",
+                      "bars",
+                      "checks",
+                      "hatch"
+                    ],
+                    "type": "string"
+                  },
+                  "value": {
+                    "type": "number"
+                  }
+                },
+                "required": [
+                  "label",
+                  "value"
+                ],
+                "type": "object"
+              },
+              "type": "array"
+            }
+          },
+          "type": "object"
+        },
+        "Countdown": {
+          "additionalProperties": false,
+          "properties": {
+            "label": {
+              "type": "string"
+            },
+            "to": {
+              "description": "The instant counted down to",
+              "type": "string"
+            }
+          },
+          "type": "object"
+        },
+        "Field": {
+          "additionalProperties": false,
+          "properties": {
+            "area": {
+              "description": "A grid area name from the enclosing Sheet",
+              "type": "string"
+            },
+            "enter": {
+              "const": "clears",
+              "type": "string"
+            },
+            "placeholder": {
+              "type": "string"
+            },
+            "value": {
+              "type": "string"
+            }
+          },
+          "type": "object"
+        },
+        "Figure": {
+          "additionalProperties": false,
+          "properties": {
+            "label": {
+              "type": "string"
+            },
+            "value": {
+              "type": [
+                "string",
+                "number"
+              ]
+            }
+          },
+          "type": "object"
+        },
+        "Flow": {
+          "additionalProperties": false,
+          "properties": {
+            "from": {
+              "description": "What the first end is",
+              "type": "string"
+            },
+            "lanes": {
+              "items": {
+                "additionalProperties": false,
+                "properties": {
+                  "ink": {
+                    "enum": [
+                      "paper",
+                      "ink",
+                      "signal",
+                      "alert",
+                      "live",
+                      "highlight"
+                    ],
+                    "type": "string"
+                  },
+                  "label": {
+                    "type": "string"
+                  },
+                  "toward": {
+                    "enum": [
+                      "to",
+                      "from"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "label",
+                  "toward"
+                ],
+                "type": "object"
+              },
+              "type": "array"
+            },
+            "to": {
+              "description": "What the second end is",
+              "type": "string"
+            }
+          },
+          "type": "object"
+        },
+        "Headline": {
+          "additionalProperties": false,
+          "properties": {
+            "level": {
+              "enum": [
+                "display",
+                "title",
+                "name"
+              ],
+              "type": "string"
+            }
+          },
+          "type": "object"
+        },
+        "Label": {
+          "additionalProperties": false,
+          "properties": {},
+          "type": "object"
+        },
+        "Look": {
+          "additionalProperties": false,
+          "properties": {
+            "look": {
+              "enum": [
+                "dom",
+                "react",
+                "vue"
+              ],
+              "type": "string"
+            }
+          },
+          "type": "object"
+        },
+        "Page": {
+          "additionalProperties": false,
+          "properties": {},
+          "type": "object"
+        },
+        "Qr": {
+          "additionalProperties": false,
+          "properties": {
+            "value": {
+              "type": "string"
+            }
+          },
+          "type": "object"
+        },
+        "Rows": {
+          "additionalProperties": false,
+          "properties": {
+            "clickKey": {
+              "type": "string"
+            },
+            "columns": {
+              "items": {
+                "additionalProperties": false,
+                "properties": {
+                  "key": {
+                    "type": "string"
+                  },
+                  "kind": {
+                    "enum": [
+                      "text",
+                      "mono",
+                      "sigil"
+                    ],
+                    "type": "string"
+                  },
+                  "label": {
+                    "type": "string"
+                  },
+                  "missing": {
+                    "type": "string"
+                  },
+                  "w": {
+                    "type": "number"
+                  }
+                },
+                "required": [
+                  "label",
+                  "key"
+                ],
+                "type": "object"
+              },
+              "type": "array"
+            },
+            "empty": {
+              "type": "string"
+            },
+            "rowKey": {
+              "type": "string"
+            },
+            "rowRef": {
+              "type": "string"
+            },
+            "rows": {
+              "items": {
+                "additionalProperties": {},
+                "propertyNames": {
+                  "type": "string"
+                },
+                "type": "object"
+              },
+              "type": "array"
+            },
+            "selected": {}
+          },
+          "type": "object"
+        },
+        "Sheet": {
+          "additionalProperties": false,
+          "properties": {
+            "areas": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "cols": {
+              "items": {
+                "type": "number"
+              },
+              "type": "array"
+            },
+            "narrow": {
+              "additionalProperties": false,
+              "properties": {
+                "areas": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "cols": {
+                  "items": {
+                    "type": "number"
+                  },
+                  "type": "array"
+                },
+                "rows": {
+                  "items": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "const": "auto",
+                        "type": "string"
+                      }
+                    ]
+                  },
+                  "type": "array"
+                }
+              },
+              "required": [
+                "areas"
+              ],
+              "type": "object"
+            },
+            "rows": {
+              "items": {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "const": "auto",
+                    "type": "string"
+                  }
+                ]
+              },
+              "type": "array"
+            },
+            "size": {
+              "enum": [
+                "fill",
+                "auto"
+              ],
+              "type": "string"
+            }
+          },
+          "type": "object"
+        },
+        "Sigil": {
+          "additionalProperties": false,
+          "properties": {
+            "shape": {
+              "enum": [
+                "triangle",
+                "circle",
+                "square",
+                "cross",
+                "check",
+                "x"
+              ],
+              "type": "string"
+            },
+            "size": {
+              "const": "large",
+              "type": "string"
+            }
+          },
+          "type": "object"
+        },
+        "Text": {
+          "additionalProperties": false,
+          "properties": {
+            "tone": {
+              "const": "muted",
+              "type": "string"
+            }
+          },
+          "type": "object"
+        },
+        "Xray": {
+          "additionalProperties": false,
+          "properties": {
+            "on": {
+              "type": "boolean"
+            }
+          },
+          "type": "object"
+        }
+      },
+      "required": [
+        "Page",
+        "Sheet",
+        "Cell",
+        "Label",
+        "Headline",
+        "Text",
+        "Figure",
+        "Countdown",
+        "Code",
+        "Sigil",
+        "Qr",
+        "Rows",
+        "Bar",
+        "Flow",
+        "Columns",
+        "Action",
+        "Field",
+        "Look",
+        "Xray"
+      ],
+      "type": "object"
+    }
+  },
+  "sequence": "lyceum.kit",
+  "version": 11
+}

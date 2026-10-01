@@ -11,7 +11,6 @@ import {
   originLayout,
   partsLayout,
   questionLayout,
-  threeLayout,
   xrayLayout,
 } from './opening.layouts';
 
@@ -111,8 +110,6 @@ export const actionSlide = still('slide.data', 'An action', actionLayout, {
 
 export const xraySlide = still('slide.xray', 'Your screen, as JSON.', xrayLayout, {});
 
-export const pushSlide = still('slide.clearance', 'Three of you just got a button.', threeLayout, {});
-
 // Which renderer draws which screen, live: the same rows the controller's
 // switch writes, read reactively, so a press lights its column at once.
 export const looksSlide: ActionDefinition = {
@@ -151,7 +148,6 @@ export const OPENING_SLIDES: readonly ActionDefinition[] = [
   novaSlide,
   actionSlide,
   xraySlide,
-  pushSlide,
   looksSlide,
   terminalSlide,
   questionSlide,

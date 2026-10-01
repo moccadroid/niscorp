@@ -384,6 +384,7 @@ const Action: NovaComponent = (props: Props) =>
       ...data('ink', oneOf(props['ink'], INKS)),
       ...data('lines', oneOf(props['lines'], ['two'] as const)),
       ...data('size', oneOf(props['size'], ['large'] as const)),
+      ...data('sound', oneOf(props['sound'], ['chime'] as const)),
     },
     h('span', null, text(props['label']) ?? ''),
   );

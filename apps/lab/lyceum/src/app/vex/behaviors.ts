@@ -44,6 +44,11 @@ export const BEHAVIORS: ScopeBehaviors = {
     default: {},
     stage: { read: [{ match: 'appropriate', to: 'fitToShow' }] },
   },
+  // A press is its presser's: the engine stamps who, and a request cannot press
+  // in anybody else's name.
+  presses: {
+    default: { insert: [{ set: 'member_id', to: 'userId' }] },
+  },
   // A timer is saved by whoever saved it (the speaker): stamped, not sent.
   timers: {
     default: { insert: [{ set: 'saved_by', to: 'userId' }] },

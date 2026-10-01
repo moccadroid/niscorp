@@ -444,6 +444,7 @@ const Action = functional((props, _children, place) =>
       ...data('ink', oneOf(props['ink'], INKS)),
       ...data('lines', oneOf(props['lines'], ['two'] as const)),
       ...data('size', oneOf(props['size'], ['large'] as const)),
+      ...data('sound', oneOf(props['sound'], ['chime'] as const)),
     },
     [h('span', text(props['label']) ?? '')],
   ),

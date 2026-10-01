@@ -54,4 +54,65 @@ export const xrayTake: SeedMutation = {
   },
 };
 
-export const GRANT_ENTRIES: readonly (SeedEntry | SeedMutation)[] = [xrayGiven, xrayGive, xrayTake];
+// ── the button: three people, picked by chance (server/functions/button.functions.ts) ──
+
+// How many people have the button now — the controller's tool shows it.
+export const buttonGiven: SeedEntry = {
+  fingerprint: 'grants/button/count',
+  refresh: 'reactive',
+  intent: 'How many people have been given the button',
+  shape: { count: 0, given: false },
+  dsl: {
+    from: ['grants'],
+    filter: { eq: ['grants.role', 'button'] },
+    aggregate: { count: { count: '*' } },
+  },
+  mapping: {
+    $with: {
+      let: { count: { $get: { from: { $ref: '$.result' }, path: ['count'], fallback: { $const: 0 } } } },
+      value: { count: { $var: 'count' }, given: { $gt: [{ $var: 'count' }, 0] } },
+    },
+  },
+};
+
+// Who has the button — so the next three are picked from the rest, and so
+// taking it back names exactly them. Reactive: the tool's list follows.
+export const buttonHolders: SeedEntry = {
+  fingerprint: 'grants/button/holders',
+  refresh: 'reactive',
+  intent: 'Who has been given the button',
+  shape: [{ principal: '' }],
+  dsl: {
+    from: ['grants'],
+    fields: ['grants.principal'],
+    filter: { eq: ['grants.role', 'button'] },
+    sort: [{ field: 'grants.principal', dir: 'asc' }],
+    limit: 100,
+  },
+};
+
+// Give the button to the people in the list: one row each.
+export const buttonGive: SeedMutation = {
+  fingerprint: 'grants/button/give',
+  intent: 'Give the button to every member in the list',
+  mutation: {
+    op: 'insertEach',
+    table: 'grants',
+    items: { $context: 'members' },
+    values: { principal: { $item: 'member_id' }, role: 'button' },
+    onConflict: { target: ['principal', 'role'] },
+  },
+};
+
+// Take the button back from everybody in the list (their ids).
+export const buttonTake: SeedMutation = {
+  fingerprint: 'grants/button/take',
+  intent: 'Take the button back from every member in the list',
+  mutation: {
+    op: 'delete',
+    table: 'grants',
+    where: { and: [{ eq: ['grants.role', 'button'] }, { in: ['grants.principal', { $context: 'members' }] }] },
+  },
+};
+
+export const GRANT_ENTRIES: readonly (SeedEntry | SeedMutation)[] = [xrayGiven, xrayGive, xrayTake, buttonGiven, buttonHolders, buttonGive, buttonTake];

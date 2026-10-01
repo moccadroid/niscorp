@@ -72,7 +72,7 @@ export const KIT_PROPS = z
       .partial()
       .strict(),
     Columns: z.object({ bars: z.array(z.object({ label, value: z.number(), ink, mark }).partial({ ink: true, mark: true }).strict()) }).partial().strict(),
-    Action: z.object({ area, ink, label, lines: z.literal('two'), size: z.literal('large') }).partial().strict(),
+    Action: z.object({ area, ink, label, lines: z.literal('two'), size: z.literal('large'), sound: z.literal('chime') }).partial().strict(),
     Field: z.object({ area, placeholder: z.string(), value: z.string(), enter: z.literal('clears') }).partial().strict(),
     Look: z.object({ look: z.enum(LOOKS) }).partial().strict(),
     Xray: z.object({ on: z.boolean() }).partial().strict(),

@@ -49,12 +49,17 @@ export const CHARTER: Charter = {
   // for an integration's screen on the projector (`ext.stage.*`): Acme's, on
   // the last slide. It reads no question itself: nothing unjudged or unfit can
   // reach the projector, by the engine, not by which query an action calls.
-  stage: { scoping: 'stage', actions: ['stage.*', 'slide.*', 'ext.stage.*'], data: [...MEMBERS_READ, ...DECK_READS, 'queries.read', 'timers.read', 'question_verdicts.read', ...LOOK] },
+  stage: { scoping: 'stage', actions: ['stage.*', 'slide.*', 'ext.stage.*'], data: [...MEMBERS_READ, ...DECK_READS, 'queries.read', 'timers.read', 'question_verdicts.read', 'presses.read', ...LOOK] },
 
   // Given on stage, taken back the same way: a grant row per member
   // (vex/grant.entries.ts). The X-ray reads the shell a person already has,
   // and no table.
   xray: { actions: ['xray.*'] },
+
+  // The button: an action three people are given, and the one write it makes.
+  // Nobody else has either — not the action on their screen, not the write in
+  // the engine.
+  button: { actions: ['button.*'], data: ['presses.write.insert'] },
 
   // The kit's kitchen sink: every piece of the look on one screen (dev).
   kit: { actions: ['kit.*'] },
@@ -94,6 +99,8 @@ export const WEARABLE: readonly (readonly string[])[] = [
   ['public'],
   ['member'],
   ['member', 'xray'],
+  ['member', 'button'],
+  ['member', 'xray', 'button'],
   ['speaker'],
   ['stage'],
   ['kit'],
