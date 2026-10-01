@@ -205,7 +205,7 @@ export const partsLayout: LayoutNode = {
     part('charter', 'Charter', 'Authorization'),
     part('vex', 'Vex', 'Query engine'),
     part('prism', 'Prism', 'Data transforms'),
-    part('tide', 'Tide', 'Automation'),
+    part('tide', 'Tide', 'Automations'),
     part('strata', 'Strata', 'Migrations'),
     part('signal', 'Signal', 'LLM calls'),
     part('cortex', 'Cortex', 'Agents'),
