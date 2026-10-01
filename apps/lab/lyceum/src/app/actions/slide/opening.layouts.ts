@@ -20,7 +20,7 @@ export const openingTitleLayout: LayoutNode = {
   component: 'Sheet',
   props: { size: 'fill', areas: ['head join'], cols: [1.4, 1] },
   children: [
-    cell('head', [headline('display', '{{$.title}}'), headline('name', '{{$.line}}')], { align: 'end' }),
+    cell('head', [headline('display', '{{$.title}}'), headline('name', '{{$.line}}')], { align: 'center' }),
     cell('join', [
       label('Join'),
       { component: 'Qr', props: { value: '$.address.url' } },
@@ -43,8 +43,8 @@ export const originLayout: LayoutNode = {
   props: { size: 'fill', areas: ['kick', 'not', 'did'], rows: ['auto', 1, 1] },
   children: [
     cell('kick', [label('{{$.kicker}}')]),
-    cell('not', [headline('display', '{{$.not}}')], { align: 'end' }),
-    cell('did', [headline('display', '{{$.did}}')], { ink: 'signal', align: 'end' }),
+    cell('not', [headline('display', '{{$.not}}')], { align: 'center' }),
+    cell('did', [headline('display', '{{$.did}}')], { ink: 'signal', align: 'center' }),
   ],
 };
 
@@ -53,7 +53,7 @@ export const problemLayout: LayoutNode = {
   component: 'Sheet',
   props: { size: 'fill', areas: ['head', 'usual'], rows: [1, 'auto'] },
   children: [
-    cell('head', [headline('display', '{{$.title}}')], { align: 'end' }),
+    cell('head', [headline('display', '{{$.title}}')], { align: 'center' }),
     cell('usual', [label('{{$.usual.label}}'), text('{{$.usual.text}}', true)]),
   ],
 };
@@ -64,7 +64,7 @@ export const answerLayout: LayoutNode = {
   props: { size: 'fill', areas: ['kick', 'head', 'line'], rows: ['auto', 1, 'auto'] },
   children: [
     { if: '$.kicker', then: cell('kick', [label('{{$.kicker}}')], { ink: 'signal' }) },
-    cell('head', [headline('display', '{{$.title}}')], { ink: 'signal', align: 'end' }),
+    cell('head', [headline('display', '{{$.title}}')], { ink: 'signal', align: 'center' }),
     { if: '$.line', then: cell('line', [text('{{$.line}}')], { ink: 'signal' }) },
   ],
 };
@@ -77,8 +77,8 @@ export const novaLayout: LayoutNode = {
   component: 'Sheet',
   props: { size: 'fill', areas: ['name json', 'name check', 'name drawn'], cols: [1, 1.1], rows: ['auto', 'auto', 1] },
   children: [
-    cell('name', [headline('display', '{{$.title}}'), headline('title', '{{$.claim}}')], { ink: 'signal', align: 'end' }),
-    cell('json', [label('1 · A model writes it'), { component: 'Code', props: { text: '$.json' } }], { ink: 'ink', align: 'end' }),
+    cell('name', [headline('display', '{{$.title}}'), headline('title', '{{$.claim}}')], { ink: 'signal', align: 'center' }),
+    cell('json', [label('1 · A model writes it'), { component: 'Code', props: { text: '$.json' } }], { ink: 'ink', align: 'center' }),
     cell('check', [label('2 · A schema checks it'), headline('title', 'Valid')], { ink: 'highlight' }),
     cell('drawn', [
       label('3 · Nova runs it, a renderer draws it'),
@@ -94,7 +94,7 @@ export const actionLayout: LayoutNode = {
   props: { size: 'fill', areas: ['kick code form', 'head code form'], cols: [0.85, 1.5, 0.9], rows: ['auto', 1] },
   children: [
     cell('kick', [label('{{$.kicker}}')]),
-    cell('head', [headline('title', '{{$.title}}')], { align: 'end' }),
+    cell('head', [headline('title', '{{$.title}}')], { align: 'center' }),
     cell('code', [label('{{$.file}}'), { component: 'Code', props: { text: '$.code', marked: '$.marked' } }], { ink: 'ink' }),
     cell('form', [label('Drawn'), sendLayout], { ink: 'signal' }),
   ],
@@ -106,7 +106,7 @@ export const xrayLayout: LayoutNode = {
   component: 'Sheet',
   props: { size: 'fill', areas: ['head xray'], cols: [1.25, 1] },
   children: [
-    cell('head', [headline('display', '{{$.title}}')], { align: 'end' }),
+    cell('head', [headline('display', '{{$.title}}')], { align: 'center' }),
     cell('xray', [label('On your phone'), headline('display', 'X-ray')], { ink: 'signal', align: 'center' }),
   ],
 };
@@ -117,7 +117,7 @@ export const threeLayout: LayoutNode = {
   component: 'Sheet',
   props: { size: 'fill', areas: ['head press'], cols: [1.25, 1] },
   children: [
-    cell('head', [headline('display', '{{$.title}}')], { align: 'end' }),
+    cell('head', [headline('display', '{{$.title}}')], { align: 'center' }),
     cell('press', [label('On three phones'), headline('display', 'Press')], { ink: 'alert', align: 'center' }),
   ],
 };
@@ -128,21 +128,21 @@ export const looksLayout: LayoutNode = {
   props: { size: 'fill', areas: ['head head head head', 'dom react vue term'], rows: ['auto', 1] },
   children: [
     cell('head', [headline('title', '{{$.title}}')]),
-    cell('dom', [headline('title', 'DOM')], { ink: 'signal', align: 'end' }),
-    cell('react', [headline('title', 'React')], { align: 'end' }),
-    cell('vue', [headline('title', 'Vue')], { align: 'end' }),
-    cell('term', [headline('title', 'Terminal'), { if: '$.address.ssh', then: { component: 'Code', props: { text: '$.address.ssh' } } }], { ink: 'ink', align: 'end' }),
+    cell('dom', [headline('title', 'DOM')], { ink: 'signal', align: 'center' }),
+    cell('react', [headline('title', 'React')], { align: 'center' }),
+    cell('vue', [headline('title', 'Vue')], { align: 'center' }),
+    cell('term', [headline('title', 'Terminal'), { if: '$.address.ssh', then: { component: 'Code', props: { text: '$.address.ssh' } } }], { ink: 'ink', align: 'center' }),
   ],
 };
 
 // 12 · The question, and the two projects it is about.
 export const questionLayout: LayoutNode = {
   component: 'Sheet',
-  props: { size: 'fill', areas: ['head head', 'one two'], rows: [1, 'auto'] },
+  props: { size: 'fill', areas: ['head head', 'one two'], rows: [1, 1] },
   children: [
-    cell('head', [headline('display', '{{$.title}}')], { align: 'end' }),
-    cell('one', [label('Vercel'), headline('title', 'json-render')]),
-    cell('two', [label('Google'), headline('title', 'A2UI')]),
+    cell('head', [headline('display', '{{$.title}}')], { align: 'center' }),
+    cell('one', [label('Vercel'), headline('display', 'json-render')], { align: 'center' }),
+    cell('two', [label('Google'), headline('display', 'A2UI')], { ink: 'signal', align: 'center' }),
   ],
 };
 
@@ -152,7 +152,7 @@ export const differenceLayout: LayoutNode = {
   props: { size: 'fill', areas: ['head head', 'theirs ours'], cols: [1, 1.3], rows: ['auto', 1] },
   children: [
     cell('head', [label('{{$.kicker}}'), headline('display', '{{$.title}}')]),
-    cell('theirs', [label('json-render'), headline('title', '{{$.theirs}}')], { align: 'end' }),
-    cell('ours', [label('Nova'), headline('title', '{{$.ours}}'), { if: '$.code', then: { component: 'Code', props: { text: '$.code', marked: '$.marked' } } }], { ink: '$.oursInk', align: 'end' }),
+    cell('theirs', [label('json-render'), headline('title', '{{$.theirs}}')], { align: 'center' }),
+    cell('ours', [label('Nova'), headline('title', '{{$.ours}}'), { if: '$.code', then: { component: 'Code', props: { text: '$.code', marked: '$.marked' } } }], { ink: '$.oursInk', align: 'center' }),
   ],
 };

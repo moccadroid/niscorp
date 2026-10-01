@@ -17,6 +17,19 @@ if (root === null) throw new Error('No root element');
 // `/dev/as/stage` lands on `/?seat=stage`. A phone opens `/` and has the one.
 const seat = new URLSearchParams(window.location.search).get('seat');
 
+// DEV ONLY, for rehearsing: ← and → on the projector or the controller move the
+// deck, through a route the dev server alone has (vite.config.ts,
+// /dev/deck/*). Not in a typing field, so the assistant still gets its arrows.
+if (import.meta.env.DEV && (seat === 'stage' || seat === 'speaker')) {
+  window.addEventListener('keydown', (event) => {
+    const way = event.key === 'ArrowRight' ? 'next' : event.key === 'ArrowLeft' ? 'back' : undefined;
+    const typing = event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement;
+    if (way === undefined || typing) return;
+    event.preventDefault();
+    void fetch(`/dev/deck/${way}`, { method: 'POST' });
+  });
+}
+
 mountTerminal({
   targets: { dom: lyceumTarget({ root }) },
   // The shell is server state keyed by principal; a wedged one is not

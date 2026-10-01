@@ -141,6 +141,9 @@ html:has(.page > [data-canvas="strip"]:not(:empty)) { font-size: clamp(16px, cal
 }
 .${ROOT_CLASS} .cell[data-align="end"] { justify-content: flex-end; }
 .${ROOT_CLASS} .cell[data-align="center"] { justify-content: center; align-items: center; text-align: center; }
+/* Centred is for words. Code reads left to right, and a table spans its cell. */
+.${ROOT_CLASS} .cell[data-align="center"] .code { text-align: left; }
+.${ROOT_CLASS} .cell[data-align="center"] .rows { align-self: stretch; text-align: left; }
 .${ROOT_CLASS} .cell[data-align="between"] { justify-content: space-between; }
 .${ROOT_CLASS} .cell[data-pad="none"] { padding: 0; }
 .${ROOT_CLASS} .cell[data-scroll="y"] { overflow-y: auto; min-height: 0; overscroll-behavior: contain; }

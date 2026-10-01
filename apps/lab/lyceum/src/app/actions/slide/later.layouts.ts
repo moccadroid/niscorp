@@ -21,7 +21,7 @@ export const mossLayout: LayoutNode = {
   props: { size: 'fill', areas: ['kick', 'head', 'flow'], rows: ['auto', 1, 'auto'] },
   children: [
     cell('kick', [label('{{$.kicker}}')]),
-    cell('head', [headline('display', '{{$.title}}')], { align: 'end' }),
+    cell('head', [headline('display', '{{$.title}}')], { align: 'center' }),
     cell(
       'flow',
       [{ component: 'Flow', props: { from: '$.from', to: '$.to', lanes: '$.lanes' } }],
@@ -37,8 +37,8 @@ export const documentLayout: LayoutNode = {
   props: { size: 'fill', areas: ['head head', 'name code'], cols: [1, 1.6], rows: ['auto', 1] },
   children: [
     cell('head', [headline('display', '{{$.title}}')]),
-    cell('name', [headline('title', '{{$.kicker}}')], { ink: 'signal', align: 'end' }),
-    cell('code', [label('{{$.file}}'), code('$.code', '$.marked')], { ink: 'ink', align: 'end' }),
+    cell('name', [headline('title', '{{$.kicker}}')], { ink: 'signal', align: 'center' }),
+    cell('code', [label('{{$.file}}'), code('$.code', '$.marked')], { ink: 'ink', align: 'center' }),
   ],
 };
 
@@ -49,8 +49,8 @@ export const twiceLayout: LayoutNode = {
   props: { size: 'fill', areas: ['head head', 'shell query'], cols: [1, 1.2], rows: ['auto', 1] },
   children: [
     cell('head', [headline('display', '{{$.title}}')]),
-    cell('shell', [label('1 · Your screen'), headline('title', '{{$.shell}}')], { ink: 'alert', align: 'end' }),
-    cell('query', [label('2 · Every query'), headline('title', 'Only your rows.'), code('$.code', '$.marked')], { ink: 'signal', align: 'end' }),
+    cell('shell', [label('1 · Your screen'), headline('title', '{{$.shell}}')], { ink: 'alert', align: 'center' }),
+    cell('query', [label('2 · Every query'), headline('title', 'Only your rows.'), code('$.code', '$.marked')], { ink: 'signal', align: 'center' }),
   ],
 };
 
@@ -61,8 +61,8 @@ export const vexLayout: LayoutNode = {
   props: { size: 'fill', areas: ['head head', 'stored sent'], cols: [1.5, 1], rows: ['auto', 1] },
   children: [
     cell('head', [label('{{$.kicker}}'), headline('display', '{{$.title}}')]),
-    cell('stored', [label('{{$.file}}'), code('$.stored', '$.marked')], { ink: 'ink', align: 'end' }),
-    cell('sent', [label('Sent'), code('$.sent')], { ink: 'highlight', align: 'end' }),
+    cell('stored', [label('{{$.file}}'), code('$.stored', '$.marked')], { ink: 'ink', align: 'center' }),
+    cell('sent', [label('Sent'), code('$.sent')], { ink: 'highlight', align: 'center' }),
   ],
 };
 
@@ -71,14 +71,14 @@ export const wordsLayout: LayoutNode = {
   component: 'Sheet',
   props: { size: 'fill', areas: ['head head head', 'again new cannot'], rows: [1, 1] },
   children: [
-    cell('head', [label('{{$.kicker}}'), headline('display', '{{$.title}}')], { align: 'end' }),
+    cell('head', [label('{{$.kicker}}'), headline('display', '{{$.title}}')], { align: 'center' }),
     {
       for: '$.outcomes',
       as: 'outcome',
       key: 'area',
       do: {
         component: 'Cell',
-        props: { area: '$outcome.area', ink: '$outcome.ink', align: 'end' },
+        props: { area: '$outcome.area', ink: '$outcome.ink', align: 'center' },
         children: [label('{{$outcome.label}}'), headline('title', '{{$outcome.what}}')],
       },
     },
@@ -91,7 +91,7 @@ export const incidentLayout: LayoutNode = {
   props: { size: 'fill', areas: ['kick', 'head'], rows: ['auto', 1] },
   children: [
     cell('kick', [label('{{$.kicker}}')]),
-    cell('head', [headline('display', '{{$.title}}')], { ink: 'alert', align: 'end' }),
+    cell('head', [headline('display', '{{$.title}}')], { ink: 'alert', align: 'center' }),
   ],
 };
 
@@ -101,8 +101,8 @@ export const pressLayout: LayoutNode = {
   props: { size: 'fill', areas: ['head head', 'can cannot'], cols: [1.3, 1], rows: ['auto', 1] },
   children: [
     cell('head', [headline('display', '{{$.title}}')]),
-    cell('can', [label('Assistant'), { for: '$.can', as: 'line', do: headline('title', '{{$line.text}}') }], { align: 'end' }),
-    cell('cannot', [label('Only you'), headline('display', 'Send')], { ink: 'alert', align: 'end' }),
+    cell('can', [label('Assistant'), { for: '$.can', as: 'line', do: headline('title', '{{$line.text}}') }], { align: 'center' }),
+    cell('cannot', [label('Only you'), headline('display', 'Send')], { ink: 'alert', align: 'center' }),
   ],
 };
 
@@ -113,7 +113,7 @@ export const tideLayout: LayoutNode = {
   props: { size: 'fill', areas: ['kick doc', 'head doc', 'left doc'], cols: [1, 1.15], rows: ['auto', 1, 'auto'] },
   children: [
     cell('kick', [label('{{$.kicker}}')]),
-    cell('head', [headline('display', '{{$.title}}')], { align: 'end' }),
+    cell('head', [headline('display', '{{$.title}}')], { align: 'center' }),
     cell('left', [{ component: 'Countdown', props: { label: 'Fires in', to: '$.timer.due_at' } }], { ink: 'live' }),
     cell(
       'doc',
@@ -121,7 +121,7 @@ export const tideLayout: LayoutNode = {
         label('The row'),
         { if: '$.timer.code', then: code('$.timer.code', '$.timer.marked'), else: text('No timer saved yet.') },
       ],
-      { ink: 'ink', align: 'end' },
+      { ink: 'ink', align: 'center' },
     ),
   ],
 };
@@ -133,8 +133,8 @@ export const onceLayout: LayoutNode = {
   props: { size: 'fill', areas: ['head head', 'agent reflex'], cols: [1, 1.2], rows: ['auto', 1] },
   children: [
     cell('head', [headline('display', '{{$.title}}')]),
-    cell('agent', [label('Agent + skill'), headline('title', 'A model, every run.')], { align: 'end' }),
-    cell('reflex', [label('This timer'), headline('title', 'No model.')], { ink: 'live', align: 'end' }),
+    cell('agent', [label('Agent + skill'), headline('title', 'A model, every run.')], { align: 'center' }),
+    cell('reflex', [label('This timer'), headline('title', 'No model.')], { ink: 'live', align: 'center' }),
   ],
 };
 
@@ -145,8 +145,8 @@ export const strataLayout: LayoutNode = {
   props: { size: 'fill', areas: ['kick lock', 'head lock', 'head read'], cols: [1.2, 1], rows: ['auto', 1, 'auto'] },
   children: [
     cell('kick', [label('{{$.kicker}}')]),
-    cell('head', [headline('display', '{{$.title}}')], { align: 'end' }),
-    cell('lock', [label('{{$.file}}'), code('$.code')], { ink: 'ink', align: 'end' }),
+    cell('head', [headline('display', '{{$.title}}')], { align: 'center' }),
+    cell('lock', [label('{{$.file}}'), code('$.code')], { ink: 'ink', align: 'center' }),
     cell('read', [label('Stored documents'), headline('title', 'Upgraded when read.')], { ink: 'signal' }),
   ],
 };
@@ -159,7 +159,7 @@ export const endLayout: LayoutNode = {
   component: 'Sheet',
   props: { size: 'fill', areas: ['head where', 'head ask'], cols: [1.4, 1], rows: [1, 1] },
   children: [
-    cell('head', [headline('display', '{{$.title}}')], { align: 'end' }),
+    cell('head', [headline('display', '{{$.title}}')], { align: 'center' }),
     cell('where', [label('Open source'), { component: 'Qr', props: { value: '$.repo' } }, headline('name', '{{$.repoWords}}'), code('$.folder')], { ink: 'ink' }),
     cell('ask', [label('Questions'), headline('title', 'On your phone, in Acme.'), { component: 'CanvasSlot', props: { canvasId: 'attached' } }], { ink: 'signal', scroll: 'y' }),
   ],
