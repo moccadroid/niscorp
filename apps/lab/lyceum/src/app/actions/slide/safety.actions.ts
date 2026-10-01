@@ -1,13 +1,13 @@
 import type { ActionDefinition } from '@niscorp/nova';
-import { aloneLayout, answerLayout } from './opening.layouts';
-import { installLayout, loopLayout, verdictsLayout } from './safety.layouts';
+import { checkedLayout, installLayout, reviewLayout, runtimeLayout } from './safety.layouts';
 
-// THE SAFETY SECTION — the claim the talk leans on: a schema-valid document
-// cannot leak, cannot crash, cannot run forever; the worst it can be is wrong. We
-// tried to break it with valid data first. What broke is history (the fixes:
-// 0544867, b05592b, fbc6c7b, c2986c2, 62c6566, 0daab2b, b1ea6e6); the limits
-// quoted here are the code's own constants (nova's cause.ts, strata's
-// depth.ts).
+// THE CHECKS SECTION — what a closed grammar buys. A document in one can be
+// checked by a program two ways: its shape, against a schema, and its
+// behaviour, by reading it (a loop is found before it runs — a linter can only
+// guess at that in code). So a model can write these while the app runs: what
+// it writes is checked, and what is wrong goes back to it. And at build time a
+// review's quality half is the checks'; what is left is whether it does the
+// right thing, which is QA's.
 
 const code = (...lines: string[]): string => lines.join('\n');
 
@@ -19,44 +19,15 @@ const still = (id: string, title: string, layout: ActionDefinition['layout'], da
   triggers: [],
 });
 
-export const worstSlide = still('slide.worst', 'What is the worst a model can write?', aloneLayout, {});
-
-export const brokeSlide = still('slide.broke', 'We tried to break it.', verdictsLayout, {
-  kicker: 'Valid documents only',
-  verdicts: [
-    { area: 'leak', ink: 'live', label: 'Leak data', verdict: 'No' },
-    { area: 'crash', ink: 'alert', label: 'Crash it', verdict: '2 bugs' },
-    { area: 'explode', ink: 'alert', label: 'Run forever', verdict: 'Yes' },
-  ],
+// The example has the shape of the trigger the broken bundle on the next slide
+// carries: it sends what it listens for.
+export const checkedSlide = still('slide.checked', 'A closed grammar can be checked.', checkedLayout, {
+  code: code('{', "  message: 'x',", "  do: [{ emit: { channel: 'x' } }],", '}'),
+  marked: [2, 3],
+  found: 'A loop. Found by reading it.',
 });
 
-export const loopSlide = still('slide.loop', 'This froze the server.', loopLayout, {
-  file: 'echo.action.ts (shortened)',
-  code: code(
-    '{',
-    "  id: 'echo',",
-    '  triggers: [',
-    "    { message: 'x',",
-    "      do: [{ emit: { channel: 'x' } }] },",
-    '  ],',
-    '}',
-  ),
-  marked: [4, 5],
-  found: 'Found before it runs.',
-  limits: [
-    { text: '64 hops' },
-    { text: '1,024 per chain' },
-    { text: '256 levels' },
-    { text: 'Timeouts' },
-  ],
-});
-
-export const reviewSlide = still('slide.review', 'Review the result, not the code.', answerLayout, {
-  kicker: '',
-  line: 'Lowdefy saw the same problem. Their answer: make it small enough for a person to read.',
-});
-
-// SOMEBODY ELSE'S SCREEN, installed on stage: the install check's answer, live.
+// SOMEBODY ELSE'S JSON, installed on stage: the install check's answer, live.
 // The speaker installs from the controller (tools.integrations); the server
 // tells this slide when Acme's state changed (integration-changed), and it
 // reads the state again — the same state the controller's tool shows.
@@ -65,9 +36,9 @@ export const installSlide: ActionDefinition = {
   id: 'slide.install',
   title: 'Installing Acme’s Q&A',
   data: {
-    kicker: 'An integration, from GitHub',
+    kicker: 'Another company’s JSON, from GitHub',
     title: 'Installing Acme’s Q&A',
-    vendor: { id: '', url: '', status: '', reasons: [] },
+    vendor: { id: '', url: '', status: '', reasons: [], checks: [], culprit: '' },
   },
   layout: installLayout,
   endpoints: { vendor: { fn: 'integrations.state', target: 'vendor' } },
@@ -75,4 +46,15 @@ export const installSlide: ActionDefinition = {
   triggers: [{ message: 'integration-changed', do: readInstall }],
 };
 
-export const SAFETY_SLIDES: readonly ActionDefinition[] = [worstSlide, brokeSlide, loopSlide, reviewSlide, installSlide];
+export const runtimeSlide = still('slide.runtime', 'A model can write it at runtime.', runtimeLayout, {
+  from: 'Model',
+  to: 'Checks',
+  lanes: [
+    { label: 'What it wrote', toward: 'to', ink: 'signal' },
+    { label: 'What is wrong with it', toward: 'from', ink: 'alert' },
+  ],
+});
+
+export const reviewSlide = still('slide.review', 'Review the result, not the code.', reviewLayout, {});
+
+export const SAFETY_SLIDES: readonly ActionDefinition[] = [checkedSlide, installSlide, runtimeSlide, reviewSlide];

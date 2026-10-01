@@ -10,7 +10,7 @@ import type { ActionDefinition } from '@niscorp/nova';
 export const integrationsTool: ActionDefinition = {
   id: 'tools.integrations',
   title: 'Integrations',
-  data: { vendor: { id: '', url: '', status: '', reasons: [] }, which: 'good', error: '' },
+  data: { vendor: { id: '', url: '', status: '', reasons: [], checks: [], culprit: '' }, which: 'good', error: '' },
   layout: {
     component: 'Sheet',
     props: { areas: ['kick kick', 'url url', 'broken install', 'approve remove', 'status status', 'why why'] },
