@@ -145,7 +145,7 @@ export const strataLayout: LayoutNode = {
   props: { size: 'fill', areas: ['kick lock', 'head lock', 'head read'], cols: [1.2, 1], rows: ['auto', 1, 'auto'] },
   children: [
     cell('kick', [label('{{$.kicker}}')]),
-    cell('head', [headline('display', '{{$.title}}')], { align: 'middle' }),
+    cell('head', [headline('title', '{{$.title}}')], { align: 'middle' }),
     cell('lock', [label('{{$.file}}'), code('$.code')], { ink: 'ink', align: 'middle' }),
     cell('read', [label('Stored documents'), headline('title', 'Upgraded when read.')], { ink: 'signal' }),
   ],
@@ -160,7 +160,7 @@ export const endLayout: LayoutNode = {
   props: { size: 'fill', areas: ['head where', 'head ask'], cols: [1.4, 1], rows: [1, 1] },
   children: [
     cell('head', [headline('display', '{{$.title}}')], { align: 'middle' }),
-    cell('where', [label('Open source'), { component: 'Qr', props: { value: '$.repo' } }, headline('name', '{{$.repoWords}}'), code('$.folder')], { ink: 'ink' }),
+    cell('where', [label('Open source'), { component: 'Qr', props: { value: '$.repo' } }, code('$.repoWords'), code('$.folder')], { ink: 'ink' }),
     cell('ask', [label('Questions'), headline('title', 'On your phone, in Acme.'), { component: 'CanvasSlot', props: { canvasId: 'attached' } }], { ink: 'signal', scroll: 'y' }),
   ],
 };

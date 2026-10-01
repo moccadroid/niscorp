@@ -165,7 +165,7 @@ html:has(.page > [data-canvas="strip"]:not(:empty)) { font-size: clamp(16px, cal
 .${ROOT_CLASS} .label {
   font: 700 clamp(.78rem, calc(1.15 * var(--cq)), 1.2rem)/1.2 var(--display); letter-spacing: .08em; text-transform: uppercase;
 }
-.${ROOT_CLASS} .headline { font-family: var(--display); font-weight: 900; text-transform: uppercase; line-height: .92; overflow-wrap: break-word; hyphens: none; }
+.${ROOT_CLASS} .headline { font-family: var(--display); font-weight: 900; text-transform: uppercase; line-height: .92; overflow-wrap: normal; word-break: normal; hyphens: none; }
 .${ROOT_CLASS} .headline[data-level="display"] { font-size: clamp(2.2rem, calc(7 * var(--cq)), 170px); }
 .${ROOT_CLASS} .headline[data-level="title"]   { font-size: clamp(1.6rem, calc(3.8 * var(--cq)), 96px); }
 .${ROOT_CLASS} .headline[data-level="name"]    { font-size: clamp(1.25rem, calc(1.9 * var(--cq)), 44px); line-height: 1.05; }
@@ -261,7 +261,11 @@ html:has(.page > [data-canvas="strip"]:not(:empty)) { font-size: clamp(16px, cal
 .${ROOT_CLASS} .columns-bar { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; gap: .35em; }
 .${ROOT_CLASS} .columns-value { position: absolute; bottom: 100%; left: 0; padding-bottom: .12em; font: 900 var(--value)/1 var(--display); }
 .${ROOT_CLASS} .columns-track { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; justify-content: flex-end; padding-top: calc(var(--value) * 1.2); border-bottom: var(--rule) solid currentColor; }
-.${ROOT_CLASS} .columns-fill { position: relative; width: 100%; flex: none; background: var(--bg); }
+.${ROOT_CLASS} .columns-fill { position: relative; width: 100%; flex: none; }
+.${ROOT_CLASS} .columns-fill:not([data-mark]) { background: var(--bg); }
+/* A marked bar is what is counted apart: paper, its pattern in ink, an edge so it is still a bar. */
+.${ROOT_CLASS} .columns-fill[data-mark] { --bg: var(--paper); --fg: var(--ink); box-shadow: inset 0 0 0 var(--rule) var(--ink); }
+.${ROOT_CLASS} .columns-fill[data-mark] > .columns-value { background: none; padding: 0 0 .12em; width: auto; }
 
 /* ── a slide arriving: its cells wipe in, one after the next ──
    Only when the slide itself changes — the terminal (./target.ts) marks the

@@ -12,15 +12,22 @@ import { CHECKS } from '@lyceum/dev/suite';
 //
 // `data` is app/: the authored artifacts, each parsing its schema
 // (artifacts-check). The code is counted by the place it lives, the way the
-// talk names them: RENDERERS (ui/ — the component kits), ENDPOINTS (what an
+// talk names them: the RENDERER (ui/ — the kit that draws the app: nova's DOM
+// adapter's), ENDPOINTS (what an
 // action calls: server/functions/, the assistant, and the model calls behind
 // them), SETUP (everything else that boots and serves: the rest of server/,
 // the tables and seed in db/, the terminal entry). The checks (dev/) are
-// counted apart. Counted once per server — boot makes one counter and hands
+// counted apart — and so are the OTHER RENDERERS: the React, Vue, terminal and
+// text kits draw the same screens again, for the talk's demos. An app ships
+// one renderer, so one is what the share is counted against; the others are
+// shown beside it, not hidden. Counted once per server — boot makes one counter and hands
 // it to the room's functions (./boot.ts): the source does not change under a
 // running server.
 
-export type Census = { data: number; renderers: number; endpoints: number; setup: number; code: number; share: number; checks: number; checkLines: number };
+export type Census = { data: number; renderers: number; otherRenderers: number; endpoints: number; setup: number; code: number; share: number; checks: number; checkLines: number };
+
+// The kits that draw the app a second, third… time, for the demos.
+const OTHER_KITS = ['react.kit.ts', 'vue.kit.ts', 'ink.kit.ts', 'text.kit.ts'];
 
 // The model calls an endpoint makes, which live beside the server's setup.
 const ENDPOINT_FILES = ['querying.ts', 'timing.ts', 'moderation.ts', 'decider.ts'];
@@ -53,15 +60,17 @@ const count = async (): Promise<Census> => {
   const [app, ui, server, db, dev] = await Promise.all(['app', 'ui', 'server', 'db', 'dev'].map(filesUnder));
   const inServer = (file: string): string => file.slice(join(SRC, 'server').length + 1).replaceAll('\\', '/');
   const isEndpoint = (file: string): boolean => /^(functions|assistant)\//.test(inServer(file)) || ENDPOINT_FILES.includes(inServer(file));
-  const [data, renderers, endpoints, setup, checkLines] = await Promise.all([
+  const isOtherKit = (file: string): boolean => OTHER_KITS.some((kit) => file.replaceAll('\\', '/').endsWith(`/ui/${kit}`));
+  const [data, renderers, otherRenderers, endpoints, setup, checkLines] = await Promise.all([
     linesOf(app ?? []),
-    linesOf(ui ?? []),
+    linesOf((ui ?? []).filter((file) => !isOtherKit(file))),
+    linesOf((ui ?? []).filter(isOtherKit)),
     linesOf((server ?? []).filter(isEndpoint)),
     linesOf([...(server ?? []).filter((file) => !isEndpoint(file)), ...(db ?? []), join(SRC, 'main.ts')]),
     linesOf(dev ?? []),
   ]);
   const code = renderers + endpoints + setup;
-  return { data, renderers, endpoints, setup, code, share: Math.round((100 * data) / (data + code)), checks: CHECKS.length, checkLines };
+  return { data, renderers, otherRenderers, endpoints, setup, code, share: Math.round((100 * data) / (data + code)), checks: CHECKS.length, checkLines };
 };
 
 // A counter that counts on its first call and answers the same after.

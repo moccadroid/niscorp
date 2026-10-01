@@ -15,10 +15,10 @@ const label = (words: string): LayoutNode => ({ component: 'Label', children: wo
 // stale (server/census.ts).
 export const censusLayout: LayoutNode = {
   component: 'Sheet',
-  props: { size: 'fill', areas: ['kick chart', 'head chart', 'share chart'], cols: [1.1, 1.5], rows: ['auto', 1, 'auto'] },
+  props: { size: 'fill', areas: ['kick chart', 'head chart', 'share chart'], cols: [1, 2.1], rows: ['auto', 1, 'auto'] },
   children: [
     cell('kick', [label('{{$.kicker}}')]),
-    cell('head', [{ component: 'Headline', props: { level: 'display' }, children: '{{$.title}}' }], { align: 'middle' }),
+    cell('head', [{ component: 'Headline', props: { level: 'title' }, children: '{{$.title}}' }], { align: 'middle' }),
     cell(
       'chart',
       [
@@ -28,15 +28,16 @@ export const censusLayout: LayoutNode = {
           props: {
             bars: [
               { label: 'Data', value: '$.census.data', ink: 'live' },
-              { label: 'Renderers', value: '$.census.renderers', ink: 'signal' },
+              { label: 'Renderer', value: '$.census.renderers', ink: 'signal' },
               { label: 'Endpoints', value: '$.census.endpoints', ink: 'signal' },
               { label: 'Setup', value: '$.census.setup', ink: 'signal' },
-              { label: 'Tests', value: '$.census.checkLines', ink: 'ink' },
+              { label: '+4 kits', value: '$.census.otherRenderers', mark: 'hatch' },
+              { label: 'Tests', value: '$.census.checkLines', mark: 'hatch' },
             ],
           },
         },
       ],
     ),
-    cell('share', [{ component: 'Figure', props: { label: '% data (tests aside)', value: '$.census.share' } }], { ink: 'live' }),
+    cell('share', [{ component: 'Figure', props: { label: '% data', value: '$.census.share' } }], { ink: 'live' }),
   ],
 };
