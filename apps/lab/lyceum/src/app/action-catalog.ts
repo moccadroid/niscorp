@@ -10,6 +10,7 @@ import { controlsAction } from './actions/speaker/controls.action';
 import { speakerDeckAction } from './actions/speaker/deck.action';
 import { slidesAction } from './actions/speaker/slides.action';
 import { notificationAction } from './actions/speaker/notification.action';
+import { resetAction } from './actions/speaker/reset.action';
 import { lookTool } from './actions/tools/look.action';
 import { integrationsTool } from './actions/tools/integrations.action';
 import { assistantAction } from './actions/assistant/assistant.action';
@@ -41,6 +42,7 @@ export const ACTIONS: Record<string, ActionDefinition> = Object.fromEntries(
     speakerDeckAction,
     slidesAction,
     notificationAction,
+    resetAction,
     lookTool,
     xrayTool,
     assistantTool,

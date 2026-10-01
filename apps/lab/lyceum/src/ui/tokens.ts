@@ -295,6 +295,23 @@ html:has(.page > [data-canvas="strip"]:not(:empty)) { font-size: clamp(16px, cal
 .${ROOT_CLASS}[data-enter] .page > [data-canvas="main"] > * > .sheet > .cell:nth-child(14) { --i: 13; }
 @keyframes enter { from { clip-path: inset(0 100% 0 0); } to { clip-path: inset(0 0 0 0); } }
 
+/* ── menu: three bars that open a list of things to press ── */
+.${ROOT_CLASS} .menu { position: relative; background: var(--paper); display: flex; }
+.${ROOT_CLASS} .menu-icon {
+  list-style: none; cursor: pointer; flex: 1 1 auto; min-width: max(3.25rem, 48px); min-height: max(2.5rem, 40px);
+  background:
+    linear-gradient(var(--ink), var(--ink)) center calc(50% - 7px) / 22px 3px no-repeat,
+    linear-gradient(var(--ink), var(--ink)) center 50% / 22px 3px no-repeat,
+    linear-gradient(var(--ink), var(--ink)) center calc(50% + 7px) / 22px 3px no-repeat,
+    var(--paper);
+}
+.${ROOT_CLASS} .menu-icon::-webkit-details-marker { display: none; }
+.${ROOT_CLASS} .menu[open] > .menu-icon { background-color: var(--highlight); }
+.${ROOT_CLASS} .menu-items {
+  position: absolute; top: 100%; right: 0; z-index: 20; min-width: 14rem;
+  display: flex; flex-direction: column; gap: var(--rule); background: var(--ink); border: var(--rule) solid var(--ink);
+}
+
 /* ── action: a whole cell you press ── */
 .${ROOT_CLASS} .action {
   background: var(--bg); color: var(--fg); border: 0; cursor: pointer; text-align: left;

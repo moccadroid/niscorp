@@ -76,6 +76,7 @@ export const KIT_PROPS = z
     Field: z.object({ area, placeholder: z.string(), value: z.string(), enter: z.literal('clears') }).partial().strict(),
     Look: z.object({ look: z.enum(LOOKS) }).partial().strict(),
     Xray: z.object({ on: z.boolean() }).partial().strict(),
+    Menu: z.object({ area, label }).partial().strict(),
   })
   .strict()
   .describe('The props each lyceum kit component accepts, by component name');

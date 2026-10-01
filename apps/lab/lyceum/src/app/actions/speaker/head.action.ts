@@ -26,6 +26,8 @@ export const headAction: ActionDefinition = {
   },
   lifecycle: { mount: [{ call: 'counts' }, { call: 'current' }, { call: 'timer' }] },
   triggers: [
+    // The menu's Reset asks first: it opens over the controller (speaker/reset.action.ts).
+    { event: 'ui:click', ref: 'reset', do: [{ push: { action: 'speaker.reset', canvas: 'overlay', with: ['sheet'] } }] },
     {
       message: 'notify',
       do: [{ push: { action: 'speaker.notification', canvas: 'overlay', with: ['sheet'], input: { text: '@event.payload.text', sheetTitle: 'Notification' } } }],

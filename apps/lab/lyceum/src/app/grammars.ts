@@ -89,5 +89,10 @@ export const LYCEUM_KIT: Sequence = {
       description: 'Action: sound — a chime it plays where it is pressed',
       steps: [],
     },
+    {
+      // A MARKER: a component added.
+      description: 'Menu: an icon that opens a list of things to press',
+      steps: [],
+    },
   ],
 };

@@ -491,6 +491,10 @@ const Field: NovaComponent = stateful((props) => {
 const Look = functional(() => h('span', { class: 'look' }));
 const Xray = functional(() => h('span', { class: 'look' }));
 
+const Menu = functional((props, children, place) =>
+  h('details', { ...place(), class: 'menu' }, [h('summary', { class: 'menu-icon', 'aria-label': text(props['label']) ?? 'Menu' }), h('div', { class: 'menu-items' }, children)]),
+);
+
 // THIS KIT, whole — typed against the grammar, like the DOM and React ones.
 export const VUE_KIT: KitOf<NovaComponent> = {
   Page,
@@ -512,6 +516,7 @@ export const VUE_KIT: KitOf<NovaComponent> = {
   Field,
   Look,
   Xray,
+  Menu,
 };
 
 // moss's Vue target, with this kit. As with React (./target.ts), the DOM

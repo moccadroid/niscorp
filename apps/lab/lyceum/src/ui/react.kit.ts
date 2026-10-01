@@ -424,6 +424,9 @@ const Field: NovaComponent = (props: Props) => {
 const Look: NovaComponent = () => h('span', { className: 'look' });
 const Xray: NovaComponent = () => h('span', { className: 'look' });
 
+const Menu: NovaComponent = (props: Props) =>
+  h('details', { ...usePlaced(props), className: 'menu' }, h('summary', { className: 'menu-icon', 'aria-label': text(props['label']) ?? 'Menu' }), h('div', { className: 'menu-items' }, props.children));
+
 // THIS KIT, whole — typed against the grammar, like the DOM one.
 export const REACT_KIT: KitOf<NovaComponent> = {
   Page,
@@ -445,4 +448,5 @@ export const REACT_KIT: KitOf<NovaComponent> = {
   Field,
   Look,
   Xray,
+  Menu,
 };

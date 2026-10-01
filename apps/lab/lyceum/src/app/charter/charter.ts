@@ -19,6 +19,11 @@ const QUESTIONING = ['questions.write.insert', 'questions.read'];
 // The assistant's conversation: each person's own turns (behaviors.ts).
 const CONVERSING = ['assistant_turns.read', 'assistant_turns.write.insert', 'assistant_turns.write.update'];
 
+// The talk, put back to how it starts (vex/reset.entries.ts): what the speaker
+// may delete is what a reset can delete — who joined and what they left
+// behind, the speaker's own timers, the names refused.
+const RESETTING = ['members.write.delete', 'questions.write.delete', 'queries.write.delete', 'presses.write.delete', 'assistant_turns.write.delete', 'timers.write.delete', 'refused_names.read', 'refused_names.write.delete'];
+
 export const CHARTER: Charter = {
   // Anonymous: the door and nothing else — and, once stepping in has made
   // them somebody, the one write that makes them a member: their own row
@@ -42,7 +47,7 @@ export const CHARTER: Charter = {
   // — a member reaches their own. Every other table reads at its default.
   // …and any integration's screen for the speaker (`ext.speaker.*`): Acme's
   // list of every question, on the controller once installed and approved.
-  speaker: { scoping: 'room', actions: ['speaker.*', 'tools.*', 'assistant.*', 'ext.speaker.*'], data: [...MEMBERS_READ, ...DECK_READS, ...LOOK, 'renderers.write.update', 'grants.read', 'grants.write.insert', 'grants.write.delete', 'slide_notes.read', 'slide_tools.read', 'deck.write.update', 'timers.read', 'timers.write.insert', 'questions.read', 'question_verdicts.read', ...CONVERSING] },
+  speaker: { scoping: 'room', actions: ['speaker.*', 'tools.*', 'assistant.*', 'ext.speaker.*'], data: [...MEMBERS_READ, ...DECK_READS, ...LOOK, 'renderers.write.update', 'grants.read', 'grants.write.insert', 'grants.write.delete', 'slide_notes.read', 'slide_tools.read', 'deck.write.update', 'timers.read', 'timers.write.insert', 'questions.read', 'question_verdicts.read', ...CONVERSING, ...RESETTING] },
   // The stage also reads the moderator's verdicts at the `stage` reach —
   // only those that say fit to show, whatever it asks for (vex/behaviors.ts) —
   // for an integration's screen on the projector (`ext.stage.*`): Acme's, on

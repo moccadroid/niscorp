@@ -410,10 +410,22 @@ export const clearsOnEnter = (node: HTMLInputElement, enter: unknown): void => {
 // (./target.ts). Every kit has it, so whichever is painting finds it.
 export const Look: DomComponent = () => el('span', 'look');
 
+// ── Menu — an icon that opens a list of things to press ─────────
+// area, label (what a screen reader calls it). Its children are the entries —
+// Actions, mostly. The browser's own <details> opens and closes it, so no
+// renderer keeps the state.
+export const Menu: DomComponent = ({ props, children }) => {
+  const icon = el('summary', 'menu-icon');
+  icon.setAttribute('aria-label', text(props['label']) ?? 'Menu');
+  const node = el('details', 'menu', [icon, el('div', 'menu-items', children)]);
+  placeIn(node, props['area']);
+  return node;
+};
+
 // ── Xray — whether the screen shows the actions it is made of ───
 // on: boolean. Shows nothing, like Look: the terminal reads it off the frame.
 export const Xray: DomComponent = () => el('span', 'look');
 
 // THIS KIT, whole — typed against the grammar, so a component the grammar
 // names and the kit lacks does not compile.
-export const POSTER_KIT: Kit = { Page, Sheet, Cell, Label, Headline, Text, Figure, Countdown, Code, Sigil, Qr, Rows, Bar, Flow, Columns, Action, Field, Look, Xray };
+export const POSTER_KIT: Kit = { Page, Sheet, Cell, Label, Headline, Text, Figure, Countdown, Code, Sigil, Qr, Rows, Bar, Flow, Columns, Action, Field, Look, Xray, Menu };

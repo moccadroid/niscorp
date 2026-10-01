@@ -222,8 +222,10 @@ const Field: NovaComponent = (props) => h(Input, props);
 // The look belongs to a browser; a terminal has one.
 const Look: NovaComponent = () => null;
 const Xray: NovaComponent = () => null;
+// No dropdown in a terminal: the entries are simply there.
+const Menu: NovaComponent = ({ children }) => h(Box, { flexDirection: 'column' }, children);
 
-export const INK_KIT: KitOf<NovaComponent> = { Page, Sheet, Cell, Label, Headline, Text, Figure, Countdown, Code, Sigil, Qr, Rows, Bar, Flow, Columns, Action, Field, Look, Xray };
+export const INK_KIT: KitOf<NovaComponent> = { Page, Sheet, Cell, Label, Headline, Text, Figure, Countdown, Code, Sigil, Qr, Rows, Bar, Flow, Columns, Action, Field, Look, Xray, Menu };
 
 // The terminal's registry: this kit, assembled once. moss's ink target adds
 // the wire-backed slots (ActionSlot, CanvasSlot) itself.

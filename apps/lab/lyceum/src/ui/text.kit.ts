@@ -74,6 +74,7 @@ export const TEXT_KIT: KitOf<TtyComponent> = {
   },
   Look: () => block(),
   Xray: () => block(),
+  Menu: ({ children }) => block(...lines(children)),
 };
 
 const registry = createComponentRegistry<TtyComponent>();

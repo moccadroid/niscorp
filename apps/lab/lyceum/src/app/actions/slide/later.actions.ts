@@ -85,7 +85,7 @@ export const onceSlide = still('slide.once', 'No agent loop.', onceLayout, {});
 export const strataSlide = still('slide.strata', 'Grammars get migrations.', strataLayout, {
   kicker: 'Strata',
   file: 'strata.lock.json',
-  code: code('{', '  "grammar": {', '    "lyceum.kit": 11,', '    "nisc.nova": 2,', '    "nisc.prism": 1', '  }', '}'),
+  code: code('{', '  "grammar": {', '    "lyceum.kit": 12,', '    "nisc.nova": 2,', '    "nisc.prism": 1', '  }', '}'),
 });
 
 export const endSlide = still('slide.end', 'It’s all in one folder.', endLayout, {

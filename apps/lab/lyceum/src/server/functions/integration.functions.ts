@@ -75,6 +75,12 @@ const culpritOf = async (url: string, reasons: readonly string[]): Promise<strin
   }
 };
 
+// Take Acme out, whoever asks: the operator's own route, in-process. An
+// integration that is not installed is already out.
+export const removeVendor = async (server: MossServer, operatorKey: string): Promise<void> => {
+  await server.request(`/operator/integrations/${VENDOR_ID}`, { method: 'DELETE', headers: { 'content-type': 'application/json', 'x-operator-key': operatorKey } });
+};
+
 export const integrationFunctions = (session: FunctionSession, server: () => MossServer, operatorKey: string, addresses: VendorAddresses): Record<string, FunctionHandler> => {
   const operator = async (path: string, method: string, body?: unknown): Promise<{ ok: boolean; answer: z.infer<typeof AnswerSchema> }> => {
     if (session.principal !== 'speaker') throw new Error('Only the speaker installs integrations.');
