@@ -20,8 +20,8 @@ const still = (id: string, title: string, layout: ActionDefinition['layout'], da
 });
 
 // One example each. The ink is not one the kit has (ui/kit.ts, INKS), so the
-// schema refuses it; the trigger has the shape of the one the broken bundle on
-// the next slide carries.
+// schema refuses it; the trigger has the shape of the one the broken bundle
+// carries, at the end of this section.
 export const checkedSlide = still('slide.checked', 'A closed grammar can be checked.', checkedLayout, {
   schema: {
     code: code('{', "  component: 'Action',", "  props: { ink: 'purple' },", '}'),
@@ -44,7 +44,7 @@ export const installSlide: ActionDefinition = {
   id: 'slide.install',
   title: 'Installing Acme’s Q&A',
   data: {
-    kicker: 'Another company’s JSON, from GitHub',
+    kicker: 'An external plugin, loaded from GitHub',
     title: 'Installing Acme’s Q&A',
     vendor: { id: '', url: '', status: '', reasons: [], checks: [], culprit: '' },
   },
@@ -64,4 +64,4 @@ export const runtimeSlide = still('slide.runtime', 'Generated at runtime.', runt
 
 export const reviewSlide = still('slide.review', 'Review the result, not the code.', reviewLayout, {});
 
-export const SAFETY_SLIDES: readonly ActionDefinition[] = [checkedSlide, installSlide, runtimeSlide, reviewSlide];
+export const SAFETY_SLIDES: readonly ActionDefinition[] = [checkedSlide, runtimeSlide, reviewSlide, installSlide];
