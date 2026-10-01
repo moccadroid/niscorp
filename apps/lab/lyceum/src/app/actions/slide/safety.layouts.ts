@@ -86,7 +86,7 @@ export const reviewLayout: LayoutNode = {
   props: { size: 'fill', areas: ['head head', 'code nisc'], rows: [1, 1] },
   children: [
     cell('head', [headline('display', '{{$.title}}')], { align: 'middle' }),
-    cell('code', [label('An agent writes code'), headline('title', 'Read every line.')], { align: 'middle' }),
-    cell('nisc', [label('An agent writes nisc'), headline('title', 'Validated. Test the result.')], { ink: 'signal', align: 'middle' }),
+    cell('code', [label('An agent writes code'), headline('name', 'Too much to read.'), headline('name', 'Slop ships.')], { align: 'middle' }),
+    cell('nisc', [label('An agent writes nisc'), headline('name', '1 · Validation'), headline('name', '2 · Mechanical checks'), headline('name', '3 · Test the result')], { ink: 'signal', align: 'middle' }),
   ],
 };
