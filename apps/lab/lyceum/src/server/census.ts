@@ -10,8 +10,10 @@ import { CHECKS } from '@lyceum/dev/suite';
 // measure the prose. TypeScript's own scanner decides what is a comment — a
 // `//` inside a string is not one.
 //
-// `data` is app/: the authored artifacts, each parsing its schema
-// (artifacts-check). The code is counted by the place it lives, the way the
+// `data` is app/ — the authored artifacts, each parsing its schema
+// (artifacts-check) — and the three data files that live beside the code that
+// uses them: the deck (db/deck.ts), the words names are made of (db/names.ts),
+// and the kit's props schema (ui/kit.props.ts). The code is counted by the place it lives, the way the
 // talk names them: the RENDERER (ui/ — the kit that draws the app: nova's DOM
 // adapter's), ENDPOINTS (what an
 // action calls: server/functions/, the assistant, and the model calls behind
@@ -25,6 +27,9 @@ import { CHECKS } from '@lyceum/dev/suite';
 // running server.
 
 export type Census = { data: number; renderers: number; otherRenderers: number; endpoints: number; setup: number; code: number; share: number; checks: number; checkLines: number };
+
+// Data that lives outside app/, each a file of data and nothing else.
+const DATA_FILES = ['db/deck.ts', 'db/names.ts', 'ui/kit.props.ts'];
 
 // The kits that draw the app a second, third… time, for the demos.
 const OTHER_KITS = ['react.kit.ts', 'vue.kit.ts', 'ink.kit.ts', 'text.kit.ts'];
@@ -60,13 +65,14 @@ const count = async (): Promise<Census> => {
   const [app, ui, server, db, dev] = await Promise.all(['app', 'ui', 'server', 'db', 'dev'].map(filesUnder));
   const inServer = (file: string): string => file.slice(join(SRC, 'server').length + 1).replaceAll('\\', '/');
   const isEndpoint = (file: string): boolean => /^(functions|assistant)\//.test(inServer(file)) || ENDPOINT_FILES.includes(inServer(file));
+  const isData = (file: string): boolean => DATA_FILES.some((data) => file.replaceAll('\\', '/').endsWith(`/${data}`));
   const isOtherKit = (file: string): boolean => OTHER_KITS.some((kit) => file.replaceAll('\\', '/').endsWith(`/ui/${kit}`));
   const [data, renderers, otherRenderers, endpoints, setup, checkLines] = await Promise.all([
-    linesOf(app ?? []),
-    linesOf((ui ?? []).filter((file) => !isOtherKit(file))),
+    linesOf([...(app ?? []), ...[...(ui ?? []), ...(db ?? [])].filter(isData)]),
+    linesOf((ui ?? []).filter((file) => !isOtherKit(file) && !isData(file))),
     linesOf((ui ?? []).filter(isOtherKit)),
     linesOf((server ?? []).filter(isEndpoint)),
-    linesOf([...(server ?? []).filter((file) => !isEndpoint(file)), ...(db ?? []), join(SRC, 'main.ts')]),
+    linesOf([...(server ?? []).filter((file) => !isEndpoint(file)), ...(db ?? []).filter((file) => !isData(file)), join(SRC, 'main.ts')]),
     linesOf(dev ?? []),
   ]);
   const code = renderers + endpoints + setup;
