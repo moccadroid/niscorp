@@ -100,7 +100,12 @@ const reactRenderer = (root: HTMLElement): Target => {
 
 export const lyceumTarget = (config: { root: HTMLElement }): Target => {
   const { root } = config;
-  const renderers: Record<(typeof LOOKS)[number], Target> = { dom: domRenderer(root), react: reactRenderer(root), vue: vueRenderer(root) };
+  // Each renderer draws into a HOST of its own, made when it is chosen and
+  // thrown away when another is: whatever a framework leaves on the element it
+  // mounted into (Vue's data-v-app, React's container key) goes with it, so the
+  // element a laptop inspects names the renderer drawing now and no other. The
+  // host is display: contents — it adds no box, and the layout is unchanged.
+  const renderers: Record<(typeof LOOKS)[number], (host: HTMLElement) => Target> = { dom: domRenderer, react: reactRenderer, vue: vueRenderer };
   return (api) => {
     dress(root.ownerDocument);
     root.classList.add(ROOT_CLASS);
@@ -139,8 +144,10 @@ export const lyceumTarget = (config: { root: HTMLElement }): Target => {
         return;
       }
       drawing?.mount.destroy();
-      root.replaceChildren();
-      drawing = { look, mount: renderers[look](api) };
+      const host = root.ownerDocument.createElement('div');
+      host.style.display = 'contents';
+      root.replaceChildren(host);
+      drawing = { look, mount: renderers[look](host)(api) };
     };
     paint();
     return {

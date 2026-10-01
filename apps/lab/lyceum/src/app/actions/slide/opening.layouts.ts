@@ -142,7 +142,7 @@ export const looksLayout: LayoutNode = {
                   area: { $get: { from: { $var: 'kind' }, path: ['area'] } },
                   name: { $get: { from: { $var: 'kind' }, path: ['name'] } },
                   ink: { $case: { branches: [{ when: { $gt: [{ $length: { $var: 'using' } }, { $const: 0 }] }, then: { $const: 'signal' } }], else: { $const: 'paper' } } },
-                  screens: { $join: { parts: { $pluck: { over: { $var: 'using' }, key: 'label' } }, sep: ' · ' } },
+                  screens: { $pluck: { over: { $var: 'using' }, key: 'label' } },
                 },
               },
             },
@@ -151,7 +151,7 @@ export const looksLayout: LayoutNode = {
       },
       as: 'kind',
       key: 'area',
-      do: { component: 'Cell', props: { area: '$kind.area', ink: '$kind.ink', align: 'center' }, children: [headline('display', '{{$kind.name}}'), headline('name', '{{$kind.screens}}')] },
+      do: { component: 'Cell', props: { area: '$kind.area', ink: '$kind.ink', align: 'center' }, children: [headline('display', '{{$kind.name}}'), { for: '$kind.screens', as: 'screen', do: headline('name', '{{$screen}}') }] },
     },
   ],
 };
@@ -181,13 +181,28 @@ export const questionLayout: LayoutNode = {
   ],
 };
 
-// 13, 14 · One difference, side by side: theirs on paper, ours in ink.
-export const differenceLayout: LayoutNode = {
+// 13 · json-render and Nova side by side, the same thing; under json-render,
+// everything past the screen is Next.js and your code; under Nova, the rest of
+// nisc, a part each — the parts the talk goes through next.
+const part = (area: string, name: string, what: string): LayoutNode => cell(area, [label(what), headline('title', name)], { ink: 'ink', align: 'middle' });
+export const partsLayout: LayoutNode = {
   component: 'Sheet',
-  props: { size: 'fill', areas: ['head head', 'theirs ours'], cols: [1, 1.3], rows: ['auto', 1] },
+  props: {
+    size: 'fill',
+    areas: ['head head head', 'jr nova nova', 'rest moss charter', 'rest vex prism', 'rest tide strata'],
+    cols: [1.2, 1, 1],
+    rows: ['auto', 'auto', 1, 1, 1],
+  },
   children: [
-    cell('head', [label('{{$.kicker}}'), headline('display', '{{$.title}}')]),
-    cell('theirs', [label('json-render'), headline('title', '{{$.theirs}}')], { align: 'middle' }),
-    cell('ours', [label('Nova'), headline('title', '{{$.ours}}'), { if: '$.code', then: { component: 'Code', props: { text: '$.code', marked: '$.marked' } } }], { ink: '$.oursInk', align: 'middle' }),
+    cell('head', [headline('title', '{{$.title}}')]),
+    cell('jr', [label('Vercel'), headline('title', 'json-render')], { ink: 'signal', align: 'middle' }),
+    cell('nova', [label('nisc'), headline('title', 'Nova')], { ink: 'signal', align: 'middle' }),
+    cell('rest', [label('Everything past the screen'), headline('title', 'Next.js and your code')], { align: 'middle' }),
+    part('moss', 'Moss', 'The server'),
+    part('charter', 'Charter', 'Who gets what'),
+    part('vex', 'Vex', 'Queries'),
+    part('prism', 'Prism', 'Transforms'),
+    part('tide', 'Tide', 'Automations'),
+    part('strata', 'Strata', 'Versions'),
   ],
 };

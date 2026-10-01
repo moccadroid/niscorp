@@ -4,12 +4,12 @@ import {
   actionLayout,
   aloneLayout,
   answerLayout,
-  differenceLayout,
   looksLayout,
   terminalLayout,
   novaLayout,
   openingTitleLayout,
   originLayout,
+  partsLayout,
   questionLayout,
   threeLayout,
   xrayLayout,
@@ -146,32 +146,7 @@ export const terminalSlide: ActionDefinition = {
 
 export const questionSlide = still('slide.compare', 'Isn’t this json-render?', questionLayout, {});
 
-export const behaviourSlide = still('slide.behaviour', 'A button', differenceLayout, {
-  kicker: 'Difference 1',
-  theirs: 'Calls your function.',
-  ours: 'JSON steps.',
-  oursInk: 'ink',
-  code: code(
-    '{',
-    "  event: 'ui:click',",
-    "  ref: 'send_btn',",
-    '  do: [',
-    "    { set: 'error', value: '' },",
-    "    { call: 'post_question', onSuccess: [ … ] },",
-    '  ],',
-    '}',
-  ),
-  marked: [3, 6],
-});
-
-export const stateSlide = still('slide.state', 'State', differenceLayout, {
-  kicker: 'Difference 2',
-  theirs: 'In your app’s store.',
-  ours: 'In the action.',
-  oursInk: 'signal',
-  code: '',
-  marked: [],
-});
+export const partsSlide = still('slide.parts', 'json-render ≈ Nova. Nova is one part of nisc.', partsLayout, {});
 
 export const OPENING_SLIDES: readonly ActionDefinition[] = [
   titleSlide,
@@ -186,6 +161,5 @@ export const OPENING_SLIDES: readonly ActionDefinition[] = [
   looksSlide,
   terminalSlide,
   questionSlide,
-  behaviourSlide,
-  stateSlide,
+  partsSlide,
 ];
