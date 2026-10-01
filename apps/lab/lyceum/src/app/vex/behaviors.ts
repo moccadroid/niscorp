@@ -35,14 +35,14 @@ export const BEHAVIORS: ScopeBehaviors = {
     room: {},
   },
   // A verdict is the moderator's, read by the moderator and the speaker whole.
-  // The projector's reach (`projector`, the stage's — charter.ts) reads only the
+  // The stage's reach (`stage`, the stage's — charter.ts) reads only the
   // verdicts that say fit to show: `fitToShow` is a constant every principal's
   // scope carries (server/identity.ts), so the engine adds `appropriate = true`
   // to every read the stage makes, whatever an action asks for. The stage reads
   // no other table of questions — what it shows is the text the verdict judged.
   question_verdicts: {
     default: {},
-    projector: { read: [{ match: 'appropriate', to: 'fitToShow' }] },
+    stage: { read: [{ match: 'appropriate', to: 'fitToShow' }] },
   },
   // A timer is saved by whoever saved it (the speaker): stamped, not sent.
   timers: {

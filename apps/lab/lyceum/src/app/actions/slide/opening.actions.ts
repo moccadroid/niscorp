@@ -133,20 +133,14 @@ export const looksSlide: ActionDefinition = {
   triggers: [],
 };
 
-// The same app over SSH: the command to type, from the deployment.
-export const terminalSlide: ActionDefinition = {
-  id: 'slide.terminal',
-  title: 'The same app, in a terminal.',
-  data: { title: 'The same app, in a terminal.', address: ADDRESS },
-  layout: terminalLayout,
-  endpoints: { address },
-  lifecycle: { mount: [{ call: 'address' }] },
-  triggers: [],
-};
+// SSH into it: the one command, the deployment's (Railway's TCP proxy).
+export const terminalSlide = still('slide.terminal', 'SSH into it.', terminalLayout, {
+  ssh: 'ssh -p 26466 sakura.proxy.rlwy.net',
+});
 
 export const questionSlide = still('slide.compare', 'Isn’t this json-render?', questionLayout, {});
 
-export const partsSlide = still('slide.parts', 'json-render ≈ Nova. Nova is one part of nisc.', partsLayout, {});
+export const partsSlide = still('slide.parts', 'json-render ≈ Nova ⊂ nisc', partsLayout, {});
 
 export const OPENING_SLIDES: readonly ActionDefinition[] = [
   titleSlide,

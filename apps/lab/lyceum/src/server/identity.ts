@@ -23,7 +23,7 @@ export const lyceumIdentity: NonNullable<NiscApp['identity']> = {
     const grants = GrantRowsSchema.parse((await read(identityGrants.fingerprint, scope)) ?? []);
 
     const roles = [...(member === null ? [] : ['member']), ...grants.map((grant) => grant.role)];
-    // `fitToShow`: what the projector's reach compares a verdict against
+    // `fitToShow`: what the stage's reach compares a verdict against
     // (app/vex/behaviors.ts) — a constant, stamped here so no request can say it.
     return roles.length === 0 ? ANONYMOUS : { roles, scope: { fitToShow: true } };
   },

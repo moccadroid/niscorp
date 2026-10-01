@@ -37,7 +37,7 @@ export const doorLayout: LayoutNode = {
       else: {
         if: '$.error',
         then: { component: 'Cell', props: { area: 'out' }, children: [{ component: 'Text', children: '{{$.error.message}}' }] },
-        else: { component: 'Cell', props: { area: 'out' }, children: [{ component: 'Text', props: { tone: 'muted' }, children: 'The name is how you appear: on the projector, and to the speaker beside your questions.' }] },
+        else: { component: 'Cell', props: { area: 'out' }, children: [{ component: 'Text', props: { tone: 'muted' }, children: 'The name is how you appear: on stage, and to the speaker beside your questions.' }] },
       },
     },
   ],

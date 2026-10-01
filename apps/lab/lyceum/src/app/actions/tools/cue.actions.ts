@@ -36,8 +36,8 @@ export const CUE_TOOLS: readonly ActionDefinition[] = [
   cue(
     'tools.renderers',
     'The terminal',
-    ['The projector goes black and types out the SSH command. The same trees, in a terminal.'],
-    'The switch above draws each surface with DOM, React or Vue. The projector’s terminal view does not exist yet.',
+    ['The stage goes black and types out the SSH command. The same trees, in a terminal.'],
+    'The switch above draws each surface with DOM, React or Vue. The stage’s terminal view does not exist yet.',
   ),
   cue(
     'tools.order',

@@ -108,65 +108,65 @@ export const threeLayout: LayoutNode = {
   props: { size: 'fill', areas: ['head press'], cols: [1.25, 1] },
   children: [
     cell('head', [headline('display', '{{$.title}}')], { align: 'middle' }),
-    cell('press', [label('On three phones'), headline('display', 'Press')], { ink: 'alert', align: 'center' }),
+    cell('press', [headline('title', 'Got it?'), headline('display', 'Press it.')], { ink: 'alert', align: 'center' }),
   ],
 };
 
-// 11 · One set of trees, four things that draw them — the four take the slide.
-export const looksLayout: LayoutNode = {
-  component: 'Sheet',
-  props: { size: 'fill', areas: ['head head head', 'dom react vue'], rows: ['auto', 1] },
-  children: [
-    cell('head', [headline('title', '{{$.title}}')]),
-    {
-      // Each renderer, blue while it draws a screen, and which screens it
-      // draws — read off the same rows the controller's switch writes (each
-      // row's choices are DOM, React, Vue, in that order).
-      for: {
-        $prism: {
-          $map: {
-            over: { $ref: '$.kinds' },
-            as: 'kind',
-            body: {
-              $with: {
-                let: {
-                  using: {
-                    $filter: {
-                      over: { $ref: '$.rows' },
-                      as: 'row',
-                      when: { $get: { from: { $var: 'row' }, path: ['choices', { $get: { from: { $var: 'kind' }, path: ['index'] } }, 'on'], fallback: { $const: false } } },
-                    },
-                  },
-                },
-                value: {
-                  area: { $get: { from: { $var: 'kind' }, path: ['area'] } },
-                  name: { $get: { from: { $var: 'kind' }, path: ['name'] } },
-                  ink: { $case: { branches: [{ when: { $gt: [{ $length: { $var: 'using' } }, { $const: 0 }] }, then: { $const: 'signal' } }], else: { $const: 'paper' } } },
-                  screens: { $pluck: { over: { $var: 'using' }, key: 'label' } },
-                },
+// 11 · One screen, three renderers. Each renderer, blue while it draws a
+// screen, and which screens it draws — read off the same rows the controller's
+// switch writes (each row's choices are DOM, React, Vue, in that order). The
+// names sit in one row and the screens in the row under them, so a name never
+// moves with its list.
+const renderersInUse = {
+  $prism: {
+    $map: {
+      over: { $ref: '$.kinds' },
+      as: 'kind',
+      body: {
+        $with: {
+          let: {
+            using: {
+              $filter: {
+                over: { $ref: '$.rows' },
+                as: 'row',
+                when: { $get: { from: { $var: 'row' }, path: ['choices', { $get: { from: { $var: 'kind' }, path: ['index'] } }, 'on'], fallback: { $const: false } } },
               },
             },
           },
+          value: {
+            area: { $get: { from: { $var: 'kind' }, path: ['area'] } },
+            on: { $join: { parts: [{ $get: { from: { $var: 'kind' }, path: ['area'] } }, { $const: '-on' }] } },
+            name: { $get: { from: { $var: 'kind' }, path: ['name'] } },
+            ink: { $case: { branches: [{ when: { $gt: [{ $length: { $var: 'using' } }, { $const: 0 }] }, then: { $const: 'signal' } }], else: { $const: 'paper' } } },
+            screens: { $pluck: { over: { $var: 'using' }, key: 'label' } },
+          },
         },
       },
+    },
+  },
+};
+export const looksLayout: LayoutNode = {
+  component: 'Sheet',
+  props: { size: 'fill', areas: ['head head head', 'dom react vue', 'dom-on react-on vue-on'], rows: ['auto', 1, 1] },
+  children: [
+    cell('head', [headline('title', '{{$.title}}')]),
+    { for: renderersInUse, as: 'kind', key: 'area', do: { component: 'Cell', props: { area: '$kind.area', ink: '$kind.ink', align: 'end' }, children: [headline('title', '{{$kind.name}}')] } },
+    {
+      for: renderersInUse,
       as: 'kind',
-      key: 'area',
-      do: { component: 'Cell', props: { area: '$kind.area', ink: '$kind.ink', align: 'center' }, children: [headline('display', '{{$kind.name}}'), { for: '$kind.screens', as: 'screen', do: headline('name', '{{$screen}}') }] },
+      key: 'on',
+      do: { component: 'Cell', props: { area: '$kind.on', ink: '$kind.ink' }, children: [{ for: '$kind.screens', as: 'screen', do: headline('name', '{{$screen}}') }] },
     },
   ],
 };
 
-// 12 · The same app in a terminal: the command, big, to type now.
+// 12 · SSH into it: the command, big, to type now.
 export const terminalLayout: LayoutNode = {
   component: 'Sheet',
   props: { size: 'fill', areas: ['head', 'ssh'], rows: ['auto', 1] },
   children: [
     cell('head', [headline('display', '{{$.title}}')]),
-    cell(
-      'ssh',
-      [{ if: '$.address.ssh', then: headline('display', '{{$.address.ssh}}'), else: headline('title', 'No SSH address is set for this server.') }],
-      { ink: 'ink', align: 'center' },
-    ),
+    cell('ssh', [headline('title', '{{$.ssh}}')], { ink: 'ink', align: 'center' }),
   ],
 };
 
@@ -181,28 +181,31 @@ export const questionLayout: LayoutNode = {
   ],
 };
 
-// 13 · json-render and Nova side by side, the same thing; under json-render,
-// everything past the screen is Next.js and your code; under Nova, the rest of
-// nisc, a part each — the parts the talk goes through next.
-const part = (area: string, name: string, what: string): LayoutNode => cell(area, [label(what), headline('title', name)], { ink: 'ink', align: 'middle' });
+// 13 · json-render ≈ Nova ⊂ nisc. json-render and Nova in one row, both
+// blue; past json-render, Next.js and your code; Nova is one of nisc's
+// packages, each named by what it is.
+const part = (area: string, name: string, what: string): LayoutNode => cell(area, [label(what), headline('name', name)], { ink: 'ink', align: 'middle' });
 export const partsLayout: LayoutNode = {
   component: 'Sheet',
   props: {
     size: 'fill',
-    areas: ['head head head', 'jr nova nova', 'rest moss charter', 'rest vex prism', 'rest tide strata'],
-    cols: [1.2, 1, 1],
-    rows: ['auto', 'auto', 1, 1, 1],
+    areas: ['head head head head', 'jr nova moss charter', 'rest vex prism tide', 'rest strata signal cortex', 'rest solid solid solid'],
+    cols: [1.6, 1, 1, 1],
+    rows: ['auto', 1, 1, 1, 1],
   },
   children: [
     cell('head', [headline('title', '{{$.title}}')]),
-    cell('jr', [label('Vercel'), headline('title', 'json-render')], { ink: 'signal', align: 'middle' }),
-    cell('nova', [label('nisc'), headline('title', 'Nova')], { ink: 'signal', align: 'middle' }),
-    cell('rest', [label('Everything past the screen'), headline('title', 'Next.js and your code')], { align: 'middle' }),
-    part('moss', 'Moss', 'The server'),
-    part('charter', 'Charter', 'Who gets what'),
-    part('vex', 'Vex', 'Queries'),
-    part('prism', 'Prism', 'Transforms'),
-    part('tide', 'Tide', 'Automations'),
-    part('strata', 'Strata', 'Versions'),
+    cell('jr', [label('UI'), headline('name', 'json-render')], { ink: 'signal', align: 'middle' }),
+    cell('nova', [label('UI'), headline('name', 'Nova')], { ink: 'signal', align: 'middle' }),
+    cell('rest', [label('Everything else'), headline('name', 'Next.js + your code')], { align: 'middle' }),
+    part('moss', 'Moss', 'App server'),
+    part('charter', 'Charter', 'Authorization'),
+    part('vex', 'Vex', 'Query engine'),
+    part('prism', 'Prism', 'Data transforms'),
+    part('tide', 'Tide', 'Automation'),
+    part('strata', 'Strata', 'Migrations'),
+    part('signal', 'Signal', 'LLM calls'),
+    part('cortex', 'Cortex', 'Agents'),
+    part('solid', 'Solid', 'Streaming structured output'),
   ],
 };

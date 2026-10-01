@@ -26,7 +26,7 @@ export const questionSend: SeedMutation = {
 export const questionsShown: SeedEntry = {
   fingerprint: 'questions/shown',
   refresh: 'reactive',
-  intent: 'Every question the moderator found fit to show on the projector, newest first',
+  intent: 'Every question the moderator found fit to show on stage, newest first',
   shape: [{ question_id: '', text: '' }],
   dsl: {
     from: ['question_verdicts'],

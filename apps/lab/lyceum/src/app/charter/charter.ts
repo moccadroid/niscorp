@@ -44,12 +44,12 @@ export const CHARTER: Charter = {
   // …and any integration's screen for the speaker (`ext.speaker.*`): Acme's
   // list of every question, on the controller once installed and approved.
   speaker: { scoping: 'room', actions: ['speaker.*', 'tools.*', 'assistant.*', 'ext.speaker.*'], data: [...MEMBERS_READ, ...DECK_READS, ...LOOK, 'renderers.write.update', 'grants.read', 'grants.write.insert', 'grants.write.delete', 'slide_notes.read', 'slide_tools.read', 'deck.write.update', 'timers.read', 'timers.write.insert', 'questions.read', 'question_verdicts.read', ...CONVERSING] },
-  // The stage also reads the moderator's verdicts at the `projector` reach —
+  // The stage also reads the moderator's verdicts at the `stage` reach —
   // only those that say fit to show, whatever it asks for (vex/behaviors.ts) —
   // for an integration's screen on the projector (`ext.stage.*`): Acme's, on
   // the last slide. It reads no question itself: nothing unjudged or unfit can
   // reach the projector, by the engine, not by which query an action calls.
-  stage: { scoping: 'projector', actions: ['stage.*', 'slide.*', 'ext.stage.*'], data: [...MEMBERS_READ, ...DECK_READS, 'queries.read', 'timers.read', 'question_verdicts.read', ...LOOK] },
+  stage: { scoping: 'stage', actions: ['stage.*', 'slide.*', 'ext.stage.*'], data: [...MEMBERS_READ, ...DECK_READS, 'queries.read', 'timers.read', 'question_verdicts.read', ...LOOK] },
 
   // Given on stage, taken back the same way: a grant row per member
   // (vex/grant.entries.ts). The X-ray reads the shell a person already has,
