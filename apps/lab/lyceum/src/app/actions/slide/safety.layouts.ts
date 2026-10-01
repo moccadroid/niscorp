@@ -13,16 +13,14 @@ const cell = (area: string, children: LayoutNode[], props: Record<string, unknow
 const label = (words: string): LayoutNode => ({ component: 'Label', children: words });
 const headline = (level: 'display' | 'title' | 'name', words: string): LayoutNode => ({ component: 'Headline', props: { level }, children: words });
 
-// Two kinds of check: the shape, by schema; the behaviour, by reading it — and
-// under the second, the example: a trigger that sends what it listens for.
+// Two checks a program runs, each with one thing it catches: a value the
+// schema does not allow, and a trigger that sends what it listens for.
+const caught = (area: string, name: string, at: string): LayoutNode =>
+  cell(area, [label(name), { component: 'Code', props: { text: `$.${at}.code`, marked: `$.${at}.marked` } }, headline('name', `{{$.${at}.caught}}`)], { ink: 'ink', align: 'middle' });
 export const checkedLayout: LayoutNode = {
   component: 'Sheet',
-  props: { size: 'fill', areas: ['head head', 'schema checks'], cols: [1, 1.4], rows: ['auto', 1] },
-  children: [
-    cell('head', [headline('display', '{{$.title}}')]),
-    cell('schema', [label('Schema'), headline('title', 'The shape')], { align: 'middle' }),
-    cell('checks', [label('Checks'), headline('title', 'The behaviour'), { component: 'Code', props: { text: '$.code', marked: '$.marked' } }, label('{{$.found}}')], { ink: 'ink', align: 'middle' }),
-  ],
+  props: { size: 'fill', areas: ['head head', 'schema loop'], rows: ['auto', 1] },
+  children: [cell('head', [headline('display', '{{$.title}}')]), caught('schema', 'Schema validation', 'schema'), caught('loop', 'Loop detection', 'loop')],
 };
 
 // Somebody else's JSON, installed: on the left what the install check tests,
@@ -71,23 +69,24 @@ export const installLayout: LayoutNode = {
   ],
 };
 
-// A model writing at runtime: what goes to the checks, and what comes back.
+// Generated at runtime: the three steps, in order.
 export const runtimeLayout: LayoutNode = {
   component: 'Sheet',
-  props: { size: 'fill', areas: ['head', 'flow'], rows: [1, 'auto'] },
+  props: { size: 'fill', areas: ['head head head', 'one two three'], rows: ['auto', 1] },
   children: [
-    cell('head', [headline('display', '{{$.title}}')], { align: 'middle' }),
-    cell('flow', [{ component: 'Flow', props: { from: '$.from', to: '$.to', lanes: '$.lanes' } }], { ink: 'signal' }),
+    cell('head', [headline('display', '{{$.title}}')]),
+    { for: '$.steps', as: 'step', key: 'area', do: { component: 'Cell', props: { area: '$step.area', ink: '$step.ink', align: 'middle' }, children: [label('{{$step.n}}'), headline('title', '{{$step.what}}')] } },
   ],
 };
 
-// Build time: what a review was for, and who does each half now.
+// Build time: an agent writing code against an agent writing nisc — what each
+// needs before it ships.
 export const reviewLayout: LayoutNode = {
   component: 'Sheet',
-  props: { size: 'fill', areas: ['head head', 'quality function'], rows: [1, 1] },
+  props: { size: 'fill', areas: ['head head', 'code nisc'], rows: [1, 1] },
   children: [
     cell('head', [headline('display', '{{$.title}}')], { align: 'middle' }),
-    cell('quality', [label('Quality'), headline('display', 'The checks')], { ink: 'signal', align: 'center' }),
-    cell('function', [label('Function'), headline('display', 'QA')], { align: 'center' }),
+    cell('code', [label('An agent writes code'), headline('title', 'Read every line.')], { align: 'middle' }),
+    cell('nisc', [label('An agent writes nisc'), headline('title', 'Validated. Test the result.')], { ink: 'signal', align: 'middle' }),
   ],
 };

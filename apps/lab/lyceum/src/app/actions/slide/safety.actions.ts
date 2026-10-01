@@ -19,12 +19,20 @@ const still = (id: string, title: string, layout: ActionDefinition['layout'], da
   triggers: [],
 });
 
-// The example has the shape of the trigger the broken bundle on the next slide
-// carries: it sends what it listens for.
+// One example each. The ink is not one the kit has (ui/kit.ts, INKS), so the
+// schema refuses it; the trigger has the shape of the one the broken bundle on
+// the next slide carries.
 export const checkedSlide = still('slide.checked', 'A closed grammar can be checked.', checkedLayout, {
-  code: code('{', "  message: 'x',", "  do: [{ emit: { channel: 'x' } }],", '}'),
-  marked: [2, 3],
-  found: 'A loop. Found by reading it.',
+  schema: {
+    code: code('{', "  component: 'Action',", "  props: { ink: 'purple' },", '}'),
+    marked: [3],
+    caught: 'Not a colour this app has.',
+  },
+  loop: {
+    code: code('{', "  message: 'x',", "  do: [{ emit: { channel: 'x' } }],", '}'),
+    marked: [2, 3],
+    caught: 'Sends what it listens for.',
+  },
 });
 
 // SOMEBODY ELSE'S JSON, installed on stage: the install check's answer, live.
@@ -46,12 +54,11 @@ export const installSlide: ActionDefinition = {
   triggers: [{ message: 'integration-changed', do: readInstall }],
 };
 
-export const runtimeSlide = still('slide.runtime', 'A model can write it at runtime.', runtimeLayout, {
-  from: 'Model',
-  to: 'Checks',
-  lanes: [
-    { label: 'What it wrote', toward: 'to', ink: 'signal' },
-    { label: 'What is wrong with it', toward: 'from', ink: 'alert' },
+export const runtimeSlide = still('slide.runtime', 'Generated at runtime.', runtimeLayout, {
+  steps: [
+    { area: 'one', n: '1', what: 'A model writes.', ink: 'paper' },
+    { area: 'two', n: '2', what: 'It’s validated.', ink: 'signal' },
+    { area: 'three', n: '3', what: 'Errors go back.', ink: 'alert' },
   ],
 });
 
