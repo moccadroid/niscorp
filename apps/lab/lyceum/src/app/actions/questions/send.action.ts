@@ -3,15 +3,11 @@ import { z } from 'zod';
 import { questionSend } from '@lyceum/app/vex/question.entries';
 import { sendLayout } from './send.layout';
 
-// A QUESTION FOR THE SPEAKER — the form alone: a line and Send (Enter sends
-// too). A write as the sender, and that is all. Nobody holds it: the room's
-// questions come through Acme. It is the action slide 8 shows as code, and its
-// layout is that slide's preview.
-const send = [
-  { set: 'error', value: '' },
-  { call: 'send', onSuccess: [{ set: 'draft', value: '' }, { set: 'sent', value: true }] },
-];
-
+// A QUESTION FOR THE SPEAKER — the form alone: a line and Send. A write as the
+// sender, and that is all. Nobody is granted it: the room's questions come
+// through Acme. It is the action slide 8 shows as code, and its layout is that
+// slide's preview — so it is written to be read: one trigger, one endpoint, no
+// name used twice.
 export const questionSendAction: ActionDefinition = {
   id: 'questions.send',
   description: 'A form to send the speaker a question; it is sent only when they press Send.',
@@ -24,10 +20,16 @@ export const questionSendAction: ActionDefinition = {
   ),
   layout: sendLayout,
   endpoints: {
-    send: { url: '/api/vex', method: 'POST', request: { fingerprint: questionSend.fingerprint, context: { text: { $ref: '$.draft' } } }, errorTarget: 'error' },
+    post_question: { url: '/api/vex', method: 'POST', request: { fingerprint: questionSend.fingerprint, context: { text: { $ref: '$.draft' } } }, errorTarget: 'error' },
   },
   triggers: [
-    { event: 'ui:click', ref: 'send', do: send },
-    { event: 'ui:key', ref: 'draft', key: 'Enter', do: send },
+    {
+      event: 'ui:click',
+      ref: 'send_btn',
+      do: [
+        { set: 'error', value: '' },
+        { call: 'post_question', onSuccess: [{ set: 'draft', value: '' }, { set: 'sent', value: true }] },
+      ],
+    },
   ],
 };

@@ -18,7 +18,7 @@ export const censusLayout: LayoutNode = {
   props: { size: 'fill', areas: ['kick chart', 'head chart', 'share chart'], cols: [1.1, 1.5], rows: ['auto', 1, 'auto'] },
   children: [
     cell('kick', [label('{{$.kicker}}')]),
-    cell('head', [{ component: 'Headline', props: { level: 'display' }, children: '{{$.title}}' }], { align: 'center' }),
+    cell('head', [{ component: 'Headline', props: { level: 'display' }, children: '{{$.title}}' }], { align: 'middle' }),
     cell(
       'chart',
       [

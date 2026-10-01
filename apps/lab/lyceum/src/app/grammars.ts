@@ -79,5 +79,10 @@ export const LYCEUM_KIT: Sequence = {
       description: 'Sigil: check and x — yes and no, as shapes',
       steps: [],
     },
+    {
+      // A MARKER: a value added to a closed set.
+      description: 'Cell: align middle — vertically centred, read from the left',
+      steps: [],
+    },
   ],
 };

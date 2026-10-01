@@ -22,7 +22,7 @@ export { text } from './kit.shape';
 export const INKS = ['paper', 'ink', 'signal', 'alert', 'live', 'highlight'] as const;
 export const MARKS = ['stripes', 'dots', 'bars', 'checks', 'hatch'] as const;
 export const SIGILS = ['triangle', 'circle', 'square', 'cross', 'check', 'x'] as const;
-export const ALIGNS = ['start', 'end', 'center', 'between'] as const;
+export const ALIGNS = ['start', 'end', 'center', 'between', 'middle'] as const;
 export const LEVELS = ['display', 'title', 'name'] as const;
 // The renderers a screen can be drawn by (./target.ts): nova's DOM adapter with
 // this kit, React with ./react.kit.ts, Vue with ./vue.kit.ts. One look.

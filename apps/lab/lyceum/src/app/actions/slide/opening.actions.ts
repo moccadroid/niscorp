@@ -1,14 +1,15 @@
 import type { ActionDefinition, EndpointConfig } from '@niscorp/nova';
+import { allRenderers } from '@lyceum/app/vex/renderer.entries';
 import {
   actionLayout,
   aloneLayout,
   answerLayout,
   differenceLayout,
   looksLayout,
+  terminalLayout,
   novaLayout,
   openingTitleLayout,
   originLayout,
-  problemLayout,
   questionLayout,
   threeLayout,
   xrayLayout,
@@ -54,9 +55,7 @@ export const originSlide = still('slide.origin', 'GPT-3 could not write a React 
   did: 'It could fill in a JSON schema.',
 });
 
-export const problemSlide = still('slide.problem', 'Models write code faster than anyone can review it.', problemLayout, {
-  usual: { label: 'Lowdefy', text: 'Small enough to review.' },
-});
+export const problemSlide = still('slide.problem', 'Models write code faster than anyone can review it.', aloneLayout, {});
 
 export const answerSlide = still('slide.answer', 'A program checks it. Not a person.', answerLayout, {
   kicker: 'Our answer',
@@ -69,7 +68,7 @@ export const novaSlide = still('slide.nova', 'Nova', novaLayout, {
   json: code(
     '{',
     "  component: 'Action',",
-    "  ref: 'send',",
+    "  ref: 'send_btn',",
     '  props: {',
     "    area: 'go',",
     "    ink: 'alert',",
@@ -79,34 +78,32 @@ export const novaSlide = still('slide.nova', 'Nova', novaLayout, {
   ),
 });
 
-// The Q&A form: its source in the middle, its layout rendered on the right
-// (the same `sendLayout` a phone renders, placed on this slide). The marked
-// lines follow a click: the trigger runs `send`, which calls the endpoint.
+// The Q&A form: its source in the middle (questions/send.action.ts, with what
+// does not matter here elided as …), its layout rendered on the right (the same
+// `sendLayout` a phone renders, placed on this slide). The marked lines follow
+// a click: the data, the layout, the endpoint, the button's trigger, the call.
 export const actionSlide = still('slide.data', 'An action', actionLayout, {
   kicker: 'Nova',
   file: 'send.action.ts',
   code: code(
-    'const send = [',
-    "  { set: 'error', value: '' },",
-    "  { call: 'send', onSuccess: [ … ] },",
-    '];',
-    '',
     'export const questionSendAction = {',
     "  id: 'questions.send',",
     "  data: { draft: '', sent: false, … },",
     '  layout: sendLayout,',
     '  endpoints: {',
-    "    send: { url: '/api/vex', … },",
+    "    post_question: { url: '/api/vex', … },",
     '  },',
-    '  triggers: [',
-    "    { event: 'ui:click', ref: 'send',",
-    '      do: send },',
-    "    { event: 'ui:key', ref: 'draft', key: 'Enter',",
-    '      do: send },',
-    '  ],',
+    '  triggers: [{',
+    "    event: 'ui:click',",
+    "    ref: 'send_btn',",
+    '    do: [',
+    "      { set: 'error', value: '' },",
+    "      { call: 'post_question', onSuccess: [ … ] },",
+    '    ],',
+    '  }],',
     '};',
   ),
-  marked: [3, 8, 9, 11, 14, 15],
+  marked: [3, 4, 6, 10, 13],
   draft: '',
   sent: false,
   error: '',
@@ -116,11 +113,32 @@ export const xraySlide = still('slide.xray', 'Your screen, as JSON.', xrayLayout
 
 export const pushSlide = still('slide.clearance', 'Three of you just got a button.', threeLayout, {});
 
+// Which renderer draws which screen, live: the same rows the controller's
+// switch writes, read reactively, so a press lights its column at once.
 export const looksSlide: ActionDefinition = {
   id: 'slide.looks',
   title: 'One screen, any renderer.',
-  data: { kicker: 'Nova', title: 'One screen, any renderer.', address: ADDRESS },
+  data: {
+    title: 'One screen, any renderer.',
+    kinds: [
+      { area: 'dom', name: 'DOM', index: 0 },
+      { area: 'react', name: 'React', index: 1 },
+      { area: 'vue', name: 'Vue', index: 2 },
+    ],
+    rows: [],
+  },
   layout: looksLayout,
+  endpoints: { rows: { url: '/api/vex', method: 'POST', request: { fingerprint: allRenderers.fingerprint, context: {} }, target: 'rows' } },
+  lifecycle: { mount: [{ call: 'rows' }] },
+  triggers: [],
+};
+
+// The same app over SSH: the command to type, from the deployment.
+export const terminalSlide: ActionDefinition = {
+  id: 'slide.terminal',
+  title: 'The same app, in a terminal.',
+  data: { title: 'The same app, in a terminal.', address: ADDRESS },
+  layout: terminalLayout,
   endpoints: { address },
   lifecycle: { mount: [{ call: 'address' }] },
   triggers: [],
@@ -134,14 +152,16 @@ export const behaviourSlide = still('slide.behaviour', 'A button', differenceLay
   ours: 'JSON steps.',
   oursInk: 'ink',
   code: code(
-    "{ event: 'ui:click', ref: 'send', do: send }",
-    '',
-    'const send = [',
-    "  { set: 'error', value: '' },",
-    "  { call: 'send', onSuccess: [ … ] },",
-    '];',
+    '{',
+    "  event: 'ui:click',",
+    "  ref: 'send_btn',",
+    '  do: [',
+    "    { set: 'error', value: '' },",
+    "    { call: 'post_question', onSuccess: [ … ] },",
+    '  ],',
+    '}',
   ),
-  marked: [1, 5],
+  marked: [3, 6],
 });
 
 export const stateSlide = still('slide.state', 'State', differenceLayout, {
@@ -164,6 +184,7 @@ export const OPENING_SLIDES: readonly ActionDefinition[] = [
   xraySlide,
   pushSlide,
   looksSlide,
+  terminalSlide,
   questionSlide,
   behaviourSlide,
   stateSlide,

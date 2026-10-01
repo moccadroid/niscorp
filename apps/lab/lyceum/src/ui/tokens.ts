@@ -145,6 +145,8 @@ html:has(.page > [data-canvas="strip"]:not(:empty)) { font-size: clamp(16px, cal
 .${ROOT_CLASS} .cell[data-align="center"] .code { text-align: left; }
 .${ROOT_CLASS} .cell[data-align="center"] .rows { align-self: stretch; text-align: left; }
 .${ROOT_CLASS} .cell[data-align="between"] { justify-content: space-between; }
+/* Middle: vertically centred, read from the left — for anything that is not one word. */
+.${ROOT_CLASS} .cell[data-align="middle"] { justify-content: center; }
 .${ROOT_CLASS} .cell[data-pad="none"] { padding: 0; }
 .${ROOT_CLASS} .cell[data-scroll="y"] { overflow-y: auto; min-height: 0; overscroll-behavior: contain; }
 /* held at its end: a reversed column opens scrolled to its last line, and the

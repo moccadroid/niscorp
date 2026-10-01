@@ -6,8 +6,8 @@ export const sendLayout: LayoutNode = {
   props: { areas: ['kick', 'field', 'go', 'out'], rows: ['auto', 'auto', 'auto', 'auto'] },
   children: [
     { component: 'Cell', props: { area: 'kick', ink: 'alert' }, children: [{ component: 'Label', children: 'Q&A · a question for the speaker' }] },
-    { component: 'Field', ref: 'draft', model: '$.draft', props: { area: 'field', value: '$.draft', placeholder: 'Your question', enter: 'clears' } },
-    { component: 'Action', ref: 'send', props: { area: 'go', ink: 'alert', label: 'Send →' } },
+    { component: 'Field', ref: 'draft', model: '$.draft', props: { area: 'field', value: '$.draft', placeholder: 'Your question' } },
+    { component: 'Action', ref: 'send_btn', props: { area: 'go', ink: 'alert', label: 'Send →' } },
     {
       if: '$.error',
       then: { component: 'Cell', props: { area: 'out' }, children: [{ component: 'Text', children: '{{$.error.message}}' }] },

@@ -53,7 +53,7 @@ export const loopSlide = still('slide.loop', 'This froze the server.', loopLayou
 
 export const reviewSlide = still('slide.review', 'Review the result, not the code.', answerLayout, {
   kicker: '',
-  line: '',
+  line: 'Lowdefy saw the same problem. Their answer: make it small enough for a person to read.',
 });
 
 // SOMEBODY ELSE'S SCREEN, installed on stage: the install check's answer, live.
