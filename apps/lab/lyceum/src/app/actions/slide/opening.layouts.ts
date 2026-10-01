@@ -181,7 +181,7 @@ export const questionLayout: LayoutNode = {
   ],
 };
 
-// 13 · json-render ≈ Nova ⊂ nisc. json-render and Nova in one row, both
+// 13 · json-render ≈ Nova ∈ nisc. json-render and Nova in one row, both
 // blue; past json-render, Next.js and your code; Nova is one of nisc's
 // packages, each named by what it is.
 const part = (area: string, name: string, what: string): LayoutNode => cell(area, [label(what), headline('name', name)], { ink: 'ink', align: 'middle' });

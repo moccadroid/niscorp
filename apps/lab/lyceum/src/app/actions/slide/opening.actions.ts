@@ -140,7 +140,7 @@ export const terminalSlide = still('slide.terminal', 'SSH into it.', terminalLay
 
 export const questionSlide = still('slide.compare', 'Isn’t this json-render?', questionLayout, {});
 
-export const partsSlide = still('slide.parts', 'json-render ≈ Nova ⊂ nisc', partsLayout, {});
+export const partsSlide = still('slide.parts', 'json-render ≈ Nova ∈ nisc', partsLayout, {});
 
 export const OPENING_SLIDES: readonly ActionDefinition[] = [
   titleSlide,
