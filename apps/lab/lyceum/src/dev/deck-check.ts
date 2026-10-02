@@ -52,6 +52,7 @@ const main = async (): Promise<void> => {
     'tools.integrations': 'Integrations — somebody else’s screen',
     'tools.button': 'The button — an action only three people have',
     'tools.assistant': 'The assistant — on everybody’s phone',
+    'tools.step': 'This slide, in steps',
     ...Object.fromEntries(CUE_TOOLS.map((cue) => [cue.id, cue.title])),
   };
   const toolsAre = (expected: readonly string[]): Promise<boolean> =>
@@ -160,11 +161,12 @@ const main = async (): Promise<void> => {
   const membersAfter = await runtime.db.query<{ n: number }>('SELECT count(*)::int AS n FROM members');
   check('the room is left alone', membersBefore.rows[0]?.n === 1 && membersAfter.rows[0]?.n === 1);
 
-  // The Strata slide prints this app's strata.lock.json: every version on it is
-  // the one the lock records, so the slide cannot go stale when a grammar moves.
+  // The Strata slide lists this app's own grammar migrations, read from the
+  // sequence itself — so it cannot go stale: as many as the lock says the
+  // source is written at.
   const lock = z.object({ grammar: z.record(z.string(), z.number()) }).parse(JSON.parse(readFileSync(new URL('../../strata.lock.json', import.meta.url), 'utf8')));
-  const printed = String(strataSlide.data?.['code'] ?? '');
-  check('the Strata slide prints the lock as it is', Object.entries(lock.grammar).every(([grammar, version]) => printed.includes(`"${grammar}": ${version}`)));
+  const listed = z.array(z.object({ n: z.number(), what: z.string() })).parse(strataSlide.data?.['migrations'] ?? []);
+  check(`the Strata slide lists every migration of the kit's grammar (${listed.length})`, listed.length > 0 && listed.length === lock.grammar['lyceum.kit']);
 
   stranger.close();
   speaker.close();

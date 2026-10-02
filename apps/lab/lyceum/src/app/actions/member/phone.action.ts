@@ -8,7 +8,7 @@ import { phoneLayout } from './phone.layout';
 //
 // What is on the list is what they hold, in the phone's order, derived when
 // their shell is built (server/phone.ts): the assistant; every integration the
-// speaker installed and approved (`ext.member.*`, Acme's Q&A); the X-ray once
+// speaker installed and approved (`ext.member.*`, the QA Company's Q&A); the X-ray once
 // given. A grant or an install rebuilds the shell, and the list follows — so
 // through the talk, things arrive on everybody's phone as they are given.
 //

@@ -13,14 +13,39 @@ const cell = (area: string, children: LayoutNode[], props: Record<string, unknow
 const label = (words: string): LayoutNode => ({ component: 'Label', children: words });
 const headline = (level: 'display' | 'title' | 'name', words: string): LayoutNode => ({ component: 'Headline', props: { level }, children: words });
 
-// Two checks a program runs, each with one thing it catches: a value the
-// schema does not allow, and a trigger that sends what it listens for.
-const caught = (area: string, name: string, at: string): LayoutNode =>
-  cell(area, [label(name), { component: 'Code', props: { text: `$.${at}.code`, marked: `$.${at}.marked` } }, headline('name', `{{$.${at}.caught}}`)], { ink: 'ink', align: 'middle' });
+// How far the slide has been revealed (the deck's `step`).
+const shown = (step: number): unknown => ({ $prism: { $gte: [{ $ref: '$.step.step' }, step] } });
+
+// Two checks a program runs, each on one document: a value the schema does not
+// allow, and a trigger that sends what it listens for. In steps: the documents;
+// what each check said, in its own words; and what that makes possible.
+const checkedOne = (area: string, name: string, at: string): LayoutNode =>
+  cell(
+    area,
+    [
+      label(name),
+      { component: 'Code', props: { text: `$.${at}.code`, marked: `$.${at}.marked` } },
+      { if: shown(1), then: [label('Refused'), { component: 'Code', props: { text: `$.said.${at}` } }] },
+    ],
+    { ink: 'ink', align: 'middle' },
+  );
 export const checkedLayout: LayoutNode = {
   component: 'Sheet',
-  props: { size: 'fill', areas: ['head head', 'schema loop'], rows: ['auto', 1] },
-  children: [cell('head', [headline('display', '{{$.title}}')]), caught('schema', 'Schema validation', 'schema'), caught('loop', 'Loop detection', 'loop')],
+  props: { size: 'fill', areas: ['head head head head head head', 'schema schema schema loop loop loop', 'one one two two three three'], rows: ['auto', 1, 'auto'] },
+  children: [
+    cell('head', [headline('title', '{{$.title}}')]),
+    checkedOne('schema', 'Schema validation', 'schema'),
+    checkedOne('loop', 'Loop detection', 'loop'),
+    {
+      if: shown(2),
+      then: {
+        for: '$.runtime',
+        as: 'part',
+        key: 'area',
+        do: { component: 'Cell', props: { area: '$part.area', ink: '$part.ink' }, children: [label('At runtime · {{$part.n}}'), headline('name', '{{$part.what}}')] },
+      },
+    },
+  ],
 };
 
 // Somebody else's JSON, installed: on the left what the install check tests,
@@ -66,16 +91,6 @@ export const installLayout: LayoutNode = {
       ],
       { ink: 'signal', align: 'middle' },
     ),
-  ],
-};
-
-// Generated at runtime: the three steps, in order.
-export const runtimeLayout: LayoutNode = {
-  component: 'Sheet',
-  props: { size: 'fill', areas: ['head head head', 'one two three'], rows: ['auto', 1] },
-  children: [
-    cell('head', [headline('display', '{{$.title}}')]),
-    { for: '$.steps', as: 'step', key: 'area', do: { component: 'Cell', props: { area: '$step.area', ink: '$step.ink', align: 'middle' }, children: [label('{{$step.n}}'), headline('title', '{{$step.what}}')] } },
   ],
 };
 

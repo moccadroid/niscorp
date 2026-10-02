@@ -32,11 +32,11 @@ export const CHARTER: Charter = {
 
   // Everybody who joined: their phone. Everybody may query the records from
   // words; what the result can reach is still theirs. And send the speaker a
-  // question — through Acme, once it is installed.
+  // question — through the QA Company, once it is installed.
   // The assistant is a role of its own, below: given during the talk.
   // …and any integration's screens for members (`ext.member.*`): an
   // integration can only land inside this fence, and only once installed and
-  // approved (the controller's Integrations tool) — Acme's Q&A among them.
+  // approved (the controller's Integrations tool) — the QA Company's Q&A among them.
   member: { actions: ['member.*', 'query.*', 'ext.member.*'], data: [...MEMBERS_READ, ...QUERYING, ...QUESTIONING, ...CONVERSING, ...LOOK] },
 
   // The speaker's controller and the projector: two principals, two devices.
@@ -45,12 +45,12 @@ export const CHARTER: Charter = {
   // every slide is an action only the stage is granted.
   // The speaker reaches every question in the room (`room`, vex/behaviors.ts)
   // — a member reaches their own. Every other table reads at its default.
-  // …and any integration's screen for the speaker (`ext.speaker.*`): Acme's
+  // …and any integration's screen for the speaker (`ext.speaker.*`): The QA Company's
   // list of every question, on the controller once installed and approved.
   speaker: { scoping: 'room', actions: ['speaker.*', 'tools.*', 'assistant.*', 'ext.speaker.*'], data: [...MEMBERS_READ, ...DECK_READS, ...LOOK, 'renderers.write.update', 'grants.read', 'grants.write.insert', 'grants.write.delete', 'slide_notes.read', 'slide_tools.read', 'deck.write.update', 'timers.read', 'timers.write.insert', 'questions.read', 'question_verdicts.read', ...CONVERSING, ...RESETTING] },
   // The stage also reads the moderator's verdicts at the `stage` reach —
   // only those that say fit to show, whatever it asks for (vex/behaviors.ts) —
-  // for an integration's screen on the projector (`ext.stage.*`): Acme's, on
+  // for an integration's screen on the projector (`ext.stage.*`): The QA Company's, on
   // the last slide. It reads no question itself: nothing unjudged or unfit can
   // reach the projector, by the engine, not by which query an action calls.
   stage: { scoping: 'stage', actions: ['stage.*', 'slide.*', 'ext.stage.*'], data: [...MEMBERS_READ, ...DECK_READS, 'queries.read', 'timers.read', 'question_verdicts.read', 'presses.read', ...LOOK] },

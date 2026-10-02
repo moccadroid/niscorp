@@ -95,7 +95,7 @@ const main = async (): Promise<void> => {
   const asker = await stepIn();
   await openAssistant(asker.phone);
   await say(asker.phone, 'body', 'Send the speaker a question: Will the slides be online?');
-  // The question form is not a member's until Q&A is installed (Acme, an
+  // The question form is not a member's until Q&A is installed (The QA Company, an
   // integration the speaker installs on stage): until then the assistant has
   // no form to open, and says so rather than inventing one.
   check('a member asking to send a question before Q&A is installed gets no form: there is none to open', (await waitUntil(() => /cannot open anything|not one of your actions/.test(asker.phone.textOf('body')))) && !asker.phone.showsNow('overlay', 'Your question'));

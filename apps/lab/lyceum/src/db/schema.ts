@@ -306,7 +306,7 @@ export const NAMES_AND_VERDICTS = /* sql */ `
 // Migration 16: WHAT THE QUESTIONS TABLES SAY. Migration 15 described a verdict
 // as re-judged when a question is edited; questions are never edited — a
 // question is judged once, as it was sent. And the room sends them through
-// Acme, an integration, not a form of lyceum's own. The query writer reads
+// The QA Company, an integration, not a form of lyceum's own. The query writer reads
 // these comments as what the tables mean.
 export const QUESTION_MEANINGS = /* sql */ `
   COMMENT ON TABLE questions IS 'Questions the people in the audience sent the speaker, through the Acme integration. A question is never edited or deleted once sent.';
@@ -324,6 +324,18 @@ export const PRESSES = /* sql */ `
     pressed_at TIMESTAMPTZ NOT NULL DEFAULT now()
   );
   COMMENT ON TABLE presses IS 'Each press of the button a few people in the audience were given: who pressed it, and when.';
+`;
+
+// The questions table's comment named the integration by an old name; the
+// query writer reads it, so it says what is true now: through an integration.
+const QUESTIONS_THROUGH = /* sql */ `
+  COMMENT ON TABLE questions IS 'Questions the people in the audience sent the speaker, through the Q&A integration. A question is never edited or deleted once sent.';
+`;
+
+// A slide can be shown in steps: the controller advances `step`, the slide on
+// screen reads it and shows more. Moving the deck puts it back to 0.
+const DECK_STEP = `
+  ALTER TABLE deck ADD COLUMN step INTEGER NOT NULL DEFAULT 0;
 `;
 
 export const LYCEUM_SEQUENCE: Sequence = {
@@ -346,6 +358,8 @@ export const LYCEUM_SEQUENCE: Sequence = {
     { description: 'A name you choose, and what may be shown: no ID card; names unique; refused names kept; a verdict per question, written by the moderator', steps: sqlSteps(NAMES_AND_VERDICTS) },
     { description: 'What the questions tables say: sent through Acme, never edited, judged once', steps: sqlSteps(QUESTION_MEANINGS) },
     { description: 'Presses: one row per press of the button a few people are given', steps: sqlSteps(PRESSES) },
+    { description: 'A slide in steps: the deck row says how far the slide on screen has been revealed', steps: sqlSteps(DECK_STEP) },
+    { description: 'The questions table says how questions arrive without naming a vendor', steps: sqlSteps(QUESTIONS_THROUGH) },
   ],
 };
 

@@ -6,7 +6,7 @@ import type { SeedEntry, SeedMutation } from '@niscorp/vex';
 // their OWN questions only; the speaker reads them all (the `room` reach,
 // behaviors.ts). Nobody edits or deletes one. Nothing a person wrote goes up on
 // the projector unread: the stage reads no question, only the verdicts that say
-// fit to show (the `projector` reach). The screens that show these are Acme's —
+// fit to show (the `projector` reach). The screens that show these are the QA Company's —
 // an integration — which calls them by fingerprint like any action does.
 
 export const questionSend: SeedMutation = {

@@ -47,9 +47,9 @@ The working record for the nisc talk that lyceum runs. It holds what we agreed, 
 
 The history order of the packages (Sep 27 outline) still holds as the background logic: nova (GPT-3 JSON) → prism (data-to-data) → signal/cortex → solid (streaming) → vex (intent + shape) → moss (the app server) → charter (policy, because moss needed it) → tide (automation as data) → strata (versions, because everything is data).
 
-## 4. The deck as built (36 slides, 2026-10-02)
+## 4. The deck as built (34 slides, 2026-10-02)
 
-The deck is `src/db/deck.ts` (order, controller tools, notes); the slides are `src/app/actions/slide/`. A read-through of the whole talk, slide by slide, is `TRANSCRIPT.md`. "Live" = the slide reads the app's own state and changes while it is up.
+The deck is `src/db/deck.ts` (order, controller tools, notes); the slides are `src/app/actions/slide/`. A read-through of the whole talk, slide by slide, is `TRANSCRIPT.md`. "Live" = the slide reads the app's own state and changes while it is up. "In steps" = one slide the controller reveals part by part (`tools.step` writes the deck row's `step`; the slide reads it; moving the deck resets it) — where a traditional deck would have three slides.
 
 | # | Slide id | On the stage | On the controller |
 |---|---|---|---|
@@ -60,37 +60,39 @@ The deck is `src/db/deck.ts` (order, controller tools, notes); the slides are `s
 | 5 | `slide.problem` | Models write code faster than anyone can review it. | — |
 | 6 | `slide.answer` | Our answer: A program checks it. Not a person. | — |
 | 7 | `slide.nova` | Nova — The UI as JSON: one button as JSON, checked, drawn | — |
-| 8 | `slide.data` | An action: `send.action.ts` beside its form, drawn | — |
+| 8 | `slide.data` | An action: `send.action.ts` beside its form, drawn. (Lyceum's own old question form, kept only for this slide; nobody has it.) | — |
 | 9 | `slide.xray` | Your screen, as JSON. | give / take the X-ray |
-| 10 | `slide.looks` | One screen, any renderer. DOM / React / Vue, live: which draws which screen | the renderer switch |
+| 10 | `slide.looks` | One screen, any renderer. DOM / React / Vue, live | the renderer switch |
 | 11 | `slide.terminal` | SSH into it. + the command | — |
-| 12 | `slide.compare` | Isn't this json-render? (Vercel json-render, Google A2UI) | — |
-| 13 | `slide.parts` | json-render ≈ Nova ∈ nisc: the package chart, Vercel's side and nisc's | — |
-| 14 | `slide.census` | Is JSON enough for a real app? This app's lines, counted live | — |
-| 15 | `slide.checked` | A closed grammar can be checked. Schema validation / loop detection, one example each | — |
-| 16 | `slide.runtime` | Generated at runtime. A model writes → it's validated → errors go back | — |
-| 17 | `slide.review` | Review the result, not the code. | — |
-| 18 | `slide.install` | Installing Acme's Q&A: the four install checks and the result, live | install broken / install Acme / approve |
-| 19 | `slide.moss` | Moss: Your screen runs on the server. "Type something, then RELOAD" | — |
-| 20 | `slide.wire` | Your phone only draws. Server ↔ phone, animated | — |
-| 21 | `slide.manifest` | The server is a list. `app.ts` | — |
-| 22 | `slide.exists` | It sends you only what you have. | — |
-| 23 | `slide.button` | Some of you have an action now. Who pressed, live | give the button to three / take it back |
-| 24 | `slide.where` | Where do you check permissions? Routes / Components / Rows | — |
-| 25 | `slide.charter` | Who gets what: one file. `charter.ts`: member, button, clock | — |
-| 26 | `slide.twice` | Enforced twice. Your screen / every query + the `questions` rule | — |
-| 27 | `slide.agents` | The same file governs the AI. | — |
-| 28 | `slide.prism` | Prism: Functions are JSON too. The controller's Next button (`console.prism.ts`) beside the same JSON run on the slide, live: position, count, what Next sends | — |
-| 29 | `slide.vex` | Vex: Queries are JSON too. `members/counts` stored, and what a screen sends | — |
-| 30 | `slide.words` | Asked in words. Replayed / Written, stored / Refused | give the assistant; the assistant |
-| 31 | `slide.water` | 18,000 cups of water. (Taco Bell's AI drive-through, 2025) | — |
-| 32 | `slide.press` | It can't press Send. | cue `tools.order` (obsolete — see §10) |
-| 33 | `slide.tide` | Tide: The timer is a row. The saved timer's document and a countdown, live | — |
-| 34 | `slide.once` | No agent loop. | — |
-| 35 | `slide.strata` | Strata: Grammars get migrations. `strata.lock.json` | — |
-| 36 | `slide.end` | It's all in one folder. Repo QR; Acme's fit questions, live | — |
+| 12 | `slide.compare` | Isn't this json-render? | — |
+| 13 | `slide.parts` | json-render ≈ Nova ∈ nisc: the package chart | — |
+| 14 | `slide.census` | Is JSON enough for a real app? Counted live | — |
+| 15 | `slide.checked` | A closed grammar can be checked. IN STEPS: two documents → what the real checks say (`room.checks` runs the kit's schema and nova's loop finder on them) → "at runtime: a model writes, it's checked, errors go back" | the step tool |
+| 16 | `slide.review` | Review the result, not the code. | — |
+| 17 | `slide.install` | Installing someone else's Q&A: the four install checks and the result, live | install broken / install / approve |
+| 18 | `slide.moss` | Moss: Your screen runs on the server. "Type something, then RELOAD" | — |
+| 19 | `slide.wire` | Your phone only draws. Server ↔ phone, animated | — |
+| 20 | `slide.manifest` | The server is a list. `app.ts` | — |
+| 21 | `slide.exists` | It sends you only what you have. | — |
+| 22 | `slide.button` | Some of you have an action now. Who pressed, live | give the button to three / take it back |
+| 23 | `slide.where` | Where do you check permissions? IN STEPS: Routes / Components / Rows → "Here: one file." + `charter.ts` | the step tool |
+| 24 | `slide.twice` | Enforced twice. Your screen / every query + the `questions` rule | — |
+| 25 | `slide.prism` | Prism: Functions are JSON too. The Next button's transform, run live on the slide | — |
+| 26 | `slide.vex` | Vex: Queries are JSON too. `members/counts` stored, what a screen sends, and the answer, live | — |
+| 27 | `slide.words` | Asked in words. Replayed / Written, stored / Refused | give the assistant; the assistant |
+| 28 | `slide.water` | 18,000 cups of water. | — |
+| 29 | `slide.press` | It can't press Send. | cue `tools.order` (obsolete — see §10) |
+| 30 | `slide.agents` | The same file governs the AI. (moved here 2026-10-02: by now the room has an assistant) | — |
+| 31 | `slide.tide` | Tide: The timer is a row. The saved timer's document and a countdown, live | — |
+| 32 | `slide.once` | No agent loop. | — |
+| 33 | `slide.strata` | Strata: Grammars get migrations. This app's own twelve kit migrations (`grammars.ts`), the one that rewrote layouts marked | — |
+| 34 | `slide.end` | It's all in one folder. Repo QR; the Q&A's fit questions, live | — |
 
 Keys: ← / → (and Page Up / Page Down, what a clicker sends) move the deck on the controller, everywhere; on the stage in dev only.
+
+**The Q&A's vendor is "the QA Company"** (was "Acme" until 2026-10-02 — the name means nothing to this audience). Integration id `qa`, actions `ext.<seat>.qa.*`, bundle in `apps/lab/lyceum-vendor-demo`. Older sections of this file still say Acme; they are history. The published bundle on GitHub Pages changes with the next push — until then the deployed app and the published file disagree on the id.
+
+**Signal, Cortex, Solid** are on the package chart for completeness and get one sentence: plumbing for model calls and streaming, nothing new. Solid (streamed, always-valid JSON) is the more interesting of the three.
 
 ## 5. The notes
 

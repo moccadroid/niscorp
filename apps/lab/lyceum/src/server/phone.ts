@@ -9,7 +9,7 @@ import { attachedTo } from './attached';
 //
 //   the assistant            once the speaker gave it
 //   attached to the phone    every integration screen installed, approved and
-//                            attached to `member.phone` (Acme's Q&A)
+//                            attached to `member.phone` (The QA Company's Q&A)
 //   the button               for the three the speaker gave it to
 //   the X-ray                once the speaker gave it
 export const phoneInputs = (pool: PgPool): NonNullable<ShellManifest['inputs']> => async ({ actions }): Promise<Record<string, Record<string, unknown>>> => {

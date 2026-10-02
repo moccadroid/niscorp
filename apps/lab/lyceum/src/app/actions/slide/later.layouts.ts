@@ -78,7 +78,7 @@ export const vexLayout: LayoutNode = {
   children: [
     cell('head', [label('{{$.kicker}}'), headline('display', '{{$.title}}')]),
     cell('stored', [label('{{$.file}}'), code('$.stored', '$.marked')], { ink: 'ink', align: 'middle' }),
-    cell('sent', [label('Sent'), code('$.sent')], { ink: 'highlight', align: 'middle' }),
+    cell('sent', [label('Sent'), code('$.sent'), label('Answered, now'), { component: 'Code', props: { text: '{ joined: {{$.answer.joined}} }' } }], { ink: 'highlight', align: 'middle' }),
   ],
 };
 
@@ -154,29 +154,28 @@ export const onceLayout: LayoutNode = {
   ],
 };
 
-// Strata: the claim, and this source's own record of which grammar versions
-// it is written in.
+// Strata: the claim, and this app's own grammar history — every migration of
+// its components' props, in order, the one that rewrote documents marked.
 export const strataLayout: LayoutNode = {
   component: 'Sheet',
-  props: { size: 'fill', areas: ['kick lock', 'head lock', 'head read'], cols: [1.2, 1], rows: ['auto', 1, 'auto'] },
+  props: { size: 'fill', areas: ['head read', 'list list'], cols: [1.7, 1], rows: ['auto', 1] },
   children: [
-    cell('kick', [label('{{$.kicker}}')]),
-    cell('head', [headline('title', '{{$.title}}')], { align: 'middle' }),
-    cell('lock', [label('{{$.file}}'), code('$.code')], { ink: 'ink', align: 'middle' }),
-    cell('read', [label('Stored documents'), headline('title', 'Upgraded when read.')], { ink: 'signal' }),
+    cell('head', [label('{{$.kicker}}'), headline('title', '{{$.title}}')]),
+    cell('read', [label('Stored documents'), headline('name', 'Upgraded when read.')], { ink: 'signal', align: 'middle' }),
+    cell('list', [label('{{$.file}}'), code('$.code', '$.marked'), label('Marked: rewrote the layouts already written')], { ink: 'ink', align: 'middle' }),
   ],
 };
 
 // The end: where it all is — the public repository, as a code to scan and in
 // words, and the folder this app is in — and where the questions go. Under
 // that, whatever an integration attached to this slide (`attached`, the
-// stage's): Acme's list of the questions found fit to show, once installed.
+// stage's): The QA Company's list of the questions found fit to show, once installed.
 export const endLayout: LayoutNode = {
   component: 'Sheet',
   props: { size: 'fill', areas: ['head where', 'head ask'], cols: [1.4, 1], rows: [1, 1] },
   children: [
     cell('head', [headline('display', '{{$.title}}')], { align: 'middle' }),
     cell('where', [label('Open source'), { component: 'Qr', props: { value: '$.repo' } }, code('$.repoWords'), code('$.folder')], { ink: 'ink' }),
-    cell('ask', [label('Questions'), headline('title', 'On your phone, in Acme.'), { component: 'CanvasSlot', props: { canvasId: 'attached' } }], { ink: 'signal', scroll: 'y' }),
+    cell('ask', [label('Questions'), headline('title', 'On your phone, in the Q&A.'), { component: 'CanvasSlot', props: { canvasId: 'attached' } }], { ink: 'signal', scroll: 'y' }),
   ],
 };

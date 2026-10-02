@@ -25,6 +25,7 @@ import { xrayDocumentAction } from './actions/xray/document.action';
 import { xraySwitchAction } from './actions/xray/switch.action';
 import { CUE_TOOLS } from './actions/tools/cue.actions';
 import { buttonTool } from './actions/tools/button.action';
+import { stepTool } from './actions/tools/step.action';
 import { buttonPressAction } from './actions/button/press.action';
 
 // Ring 1: every action lyceum has. Which role is granted which is the
@@ -50,6 +51,7 @@ export const ACTIONS: Record<string, ActionDefinition> = Object.fromEntries(
     xraySwitchAction,
     integrationsTool,
     buttonTool,
+    stepTool,
     buttonPressAction,
     assistantAction,
     stageRegisterAction,

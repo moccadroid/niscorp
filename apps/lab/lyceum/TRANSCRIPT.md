@@ -1,6 +1,6 @@
 # The talk, as I would say it
 
-A read-through for the deck as it is on 2026-10-02 (36 slides, `src/db/deck.ts`). It is one way to say it, written to check that the story connects — not a script to learn. `[square brackets]` are things you do. Each slide starts with **→ Slide N**, so you can step through the app beside it.
+A read-through for the deck as it is on 2026-10-02 (34 slides, `src/db/deck.ts`). It is one way to say it, written to check that the story connects — not a script to learn. `[square brackets]` are things you do. Each slide starts with **→ Slide N**, so you can step through the app beside it.
 
 Rough length when read aloud with the demos: 40–45 minutes.
 
@@ -68,7 +68,9 @@ A screen in Nova is made of actions. This is a whole one: a form to send me a qu
 
 It has its data — the draft you're typing. It has a layout, which is drawn on the right from this same JSON. It says where data goes: an endpoint called `post_question`. And it says what a tap does: a click on `send_btn` runs two steps, and the second one calls that endpoint.
 
-There is no fetch call and no click handler anywhere. What the button does is written down as data, in a closed list of steps.
+There is no fetch call and no click handler anywhere. What the button does is written down as data. And only a few kinds of step exist: set a value, call an endpoint, send a message, a handful more. That's what I mean by a closed grammar: you can't write anything that isn't on the list.
+
+This particular form isn't on your phone. A Q&A will arrive later, from outside this app.
 
 **→ Slide 9 · Your screen, as JSON.**
 
@@ -116,7 +118,7 @@ Yes. Same direction, and they're good. I take that as a sign the direction is ri
 
 Here's the difference. json-render is the screen as JSON — about what Nova does, with more renderers than we have. Past the screen, you're back in Next.js and your own code.
 
-Nova is one part of nisc. The other parts are the rest of an app: the server, permissions, queries, data transforms, automations, migrations, and the model calls. Each one is the same idea in one more place. The rest of this talk walks through that right-hand column.
+Nova is one part of nisc. The other parts are the rest of an app: the server, permissions, queries, data transforms, automations, migrations, and the model calls. Each one is the same idea in one more place. The bottom three are plumbing for model calls and streaming; they're there so the set is complete, and I won't spend time on them. The rest of this talk walks through the others.
 
 **→ Slide 14 · Is JSON enough for a real app?**
 
@@ -126,71 +128,71 @@ This is this app, counted from its source just now. Green is JSON. Blue is the c
 
 About half of this app is data.
 
-## Part 4 — What checking buys (slides 15–18)
+## Part 4 — What checking buys (slides 15–17)
 
 **→ Slide 15 · A closed grammar can be checked.**
 
 So why bother? Because of what a program can do with a closed grammar.
 
-Left: the simple kind. This button asks for a colour the app doesn't have. Schema validation refuses it.
+Two documents. On the left, a button that asks for a colour this app doesn't have. On the right, a trigger that listens for `x` and sends `x`.
 
-Right: the kind you can't do with code. This trigger listens for `x` and sends `x`. That's an infinite loop — and a program found it by reading the document, before anything ran. For code, a linter can only guess at that.
+[show the next part]
 
-**→ Slide 16 · Generated at runtime.**
+That's what the checks say. I didn't type those lines; this server ran both checks when the slide came up. The left one is plain schema validation. The right one is the kind you can't do with code: it found an infinite loop by reading the document, before anything ran. For code, a linter can only guess at that.
 
-That's what makes this safe: a model can write these documents while the app is running. It writes one. It's validated. If something is wrong, the errors go back to the model and it tries again.
+[show the next part]
 
-You saw that at the start: the timer. You'll see it again with queries.
+And that's what makes the next thing safe. A model can write these documents while the app is running. It writes one, it's checked, and if something is wrong the errors go back and it tries again. You saw that at the start with the timer. You'll see it again with queries.
 
-Validated means it's safe to run. It doesn't mean it's the right thing.
+Checked means it's safe to run. It doesn't mean it's the right thing.
 
-**→ Slide 17 · Review the result, not the code.**
+**→ Slide 16 · Review the result, not the code.**
 
 Which changes what review is. When an agent writes code, there's too much to read, and things ship that nobody looked at.
 
 When an agent writes nisc, validation and the mechanical checks cover what code review was for. What's left is the question only you can answer: does it do what I wanted? That's testing. You look at the result.
 
-**→ Slide 18 · Installing Acme's Q&A**
+**→ Slide 17 · Installing someone else's Q&A**
 
-Let me show you what that lets us do. This app has no Q&A. Acme makes one. It's a JSON file on GitHub. It's not part of this app, and I haven't read it.
+Let me show you what that lets us do. This app has no Q&A. Somebody else makes one — call them the QA Company. It's a JSON file on GitHub. It's not part of this app, and I haven't read it.
 
 [install the broken one]
 
 Refused. One check failed: it has a loop. That's the trigger, from their file.
 
-[install Acme]
+[install the Q&A]
 
 Four checks passed. [approve]
 
-It's on your phones now, and on my controller. Somebody else's screens and behaviour, running inside this app, and nobody reviewed a line. Ask me something — I'll take questions from there at the end.
+It's on your phones now, and on my controller. Somebody else's screens and behaviour, running inside this app, and nobody reviewed a line. Ask me something — I'll take the questions at the end.
 
-## Part 5 — Moss and Charter: who gets what (slides 19–27)
+## Part 5 — Moss and Charter: who gets what (slides 18–24)
 
-**→ Slide 19 · Your screen runs on the server.**
+**→ Slide 18 · Your screen runs on the server.**
 
 I've changed your screens four times now without you doing anything. How?
 
-Type half a question into Acme. Don't send it. Now reload the page.
+Type half a question into the Q&A. Don't send it. Now reload the page.
 
 It's still there. Your screen isn't in your browser. It runs on the server. That server is called Moss.
 
-**→ Slide 20 · Your phone only draws.**
+**→ Slide 19 · Your phone only draws.**
 
 This is everything that crosses the wire. Down: what to draw. Up: what you pressed. Laptops, look at the websocket frames — that's all there is.
 
 That's why swapping the renderer was one row: the renderer was never part of the app.
 
-**→ Slide 21 · The server is a list.**
+**→ Slide 20 · The server is a list.**
 
 And this is the whole server for this app. A list: the permissions, the actions, the queries, the row rules. Moss takes the list and runs it. There is no routing code and no controller code behind this.
 
-**→ Slide 22 · It sends you only what you have.**
+**→ Slide 21 · It sends you only what you have.**
 
 One consequence. A usual server has one app for everyone, and permission checks around it. Moss sends each person their own app. What you don't have isn't hidden. It was never sent.
 
 Let me show you.
 
-**→ Slide 23 · Some of you have an action now.**
+**→ Slide 22 · Some of you have an action now.**
 
 [give it to three people]
 
@@ -202,29 +204,25 @@ Everyone else: look at your phone. It isn't greyed out — it isn't there. Lapto
 
 [take it back]
 
-**→ Slide 24 · Where do you check permissions?**
+**→ Slide 23 · Where do you check permissions?**
 
 How did the server decide that? In most apps, permissions are checked in three places: on routes, in components, and on rows in the database. Three sets of rules, written by different people, that drift apart.
 
-**→ Slide 25 · Who gets what: one file.**
+[show the next part]
 
 Here it's one file, called the charter. A role lists the actions it gets and the data it may touch.
 
 `member` is all of you. `button` is the three of you from a minute ago: one action, and the one write it makes. Who has which role is a row in a table — that's what I changed when I pressed "give".
 
-**→ Slide 26 · Enforced twice.**
+**→ Slide 24 · Enforced twice.**
 
 That one file is enforced in two places. On your screen: you only get what you were given. And in every query: you only get your rows.
 
 Your phone lists your questions. My controller lists everybody's. Same query. The rule on the right is why: the server stamps who you are. There's no field you could put somebody else's id into.
 
-**→ Slide 27 · The same file governs the AI.**
+## Part 6 — Data: Prism and Vex (slides 25–27)
 
-And it's the same file for models. The timer from the start runs as a role called `clock`. Clock can move the slide. That's all it can do — whatever a model wrote into that timer.
-
-## Part 6 — Data: Prism and Vex (slides 28–30)
-
-**→ Slide 28 · Functions are JSON too.**
+**→ Slide 25 · Functions are JSON too.**
 
 Two more things an app needs that are normally code. First: small functions.
 
@@ -236,15 +234,15 @@ It's a closed set of operations. No code strings, anywhere.
 
 And notice the first line: it calls something named `deck/go`.
 
-**→ Slide 29 · Queries are JSON too.**
+**→ Slide 26 · Queries are JSON too.**
 
 That's a stored query. This one is the "joined" number at the top of the screen. It says what it's for, the shape of the answer, and the query.
 
-The screen only ever sends the small yellow thing: a name. No SQL crosses the wire. Your permissions are applied inside the engine, every time. And it's marked reactive: when somebody joins, it answers again on every screen that shows it. Nobody wrote code to announce that.
+The screen only ever sends the small thing on the right: a name. No SQL crosses the wire. Under it is the answer, live. Your permissions are applied inside the engine, every time. And it's marked reactive: when somebody joins, it answers again on every screen that shows it. Nobody wrote code to announce that.
 
 This part is called Vex.
 
-**→ Slide 30 · Asked in words.**
+**→ Slide 27 · Asked in words.**
 
 A query has a sentence saying what it's for. So you can ask for one in words.
 
@@ -254,15 +252,15 @@ A small model only decides one thing: has this been asked before? If yes, the st
 
 So a model writes each query once. After that it's just a query.
 
-## Part 7 — The assistant (slides 31–32)
+## Part 7 — The assistant (slides 28–30)
 
-**→ Slide 31 · 18,000 cups of water.**
+**→ Slide 28 · 18,000 cups of water.**
 
 Last year someone ordered eighteen thousand cups of water at a Taco Bell drive-through run by an AI. The year before, McDonald's ended its AI drive-through test after it put 260 McNuggets on one order.
 
 The model wasn't the problem. It was allowed to act on its own.
 
-**→ Slide 32 · It can't press Send.**
+**→ Slide 29 · It can't press Send.**
 
 Your assistant reads your screen — it's JSON, you saw it in the X-ray. And it can open one of your actions, filled in.
 
@@ -270,34 +268,42 @@ It cannot press anything. There is no way for it to call an endpoint. The only t
 
 You saw that at the very start: the model wrote the timer. I pressed Save.
 
-[demo — to be decided, see the review]
+[demo — undecided, see TALK.md §10]
 
-## Part 8 — Tide and Strata (slides 33–35)
+**→ Slide 30 · The same file governs the AI.**
 
-**→ Slide 33 · The timer is a row.**
+And what the assistant can open is decided by the same file as everything else. It can open your actions, nobody else's.
 
-Back to that timer. This is it, as it's stored: when it fires, what it does, who it runs as. It runs as `clock` — saving stamped that, not the model.
+Same for the timer. It runs as a role called `clock`. Clock can move the slide. That's all it can do — whatever a model wrote into that timer.
+
+## Part 8 — Tide and Strata (slides 31–33)
+
+**→ Slide 31 · The timer is a row.**
+
+So here is that timer. This is it, as it's stored: when it fires, what it does, who it runs as. It runs as `clock` — saving stamped that, not the model.
 
 No model is running right now. It's a row in the database, so a restart doesn't lose it.
 
-**→ Slide 34 · No agent loop.**
+**→ Slide 32 · No agent loop.**
 
 The usual way to do this is an agent with a skill: every time it runs, a model reads the instructions and decides what to do. You pay for tokens on every run, and every run can go differently.
 
 Here a model wrote the automation once. I read it and saved it. Since then, no model.
 
-**→ Slide 35 · Grammars get migrations.**
+**→ Slide 33 · Grammars get migrations.**
 
-Last part. If everything is a document, what happens to all those documents when nisc itself changes?
+Last part. If everything is a document, what happens to all those documents when the grammar changes?
 
-Tables get migrations. Here, grammars do too. Every stored document knows which version it was written in, and it's upgraded when it's read. If I change a grammar without writing the migration, a check refuses the change.
+Tables get migrations. Here, grammars do too. This is the list for this app's own components — twelve changes while I built these slides. Eleven only added something. Number seven renamed a value, so it rewrote every layout that used the old one.
 
-## Part 9 — The end (slide 36)
+Every stored document knows which version it was written in, and it's upgraded when it's read. If I change a grammar without writing the migration, a check refuses the change.
 
-**→ Slide 36 · It's all in one folder.**
+## Part 9 — The end (slide 34)
+
+**→ Slide 34 · It's all in one folder.**
 
 [if the timer put this slide up] That was the timer. It ran as clock, with no model.
 
 Everything you saw tonight is one folder in a public repository. Scan the code.
 
-Your questions are on this slide — the ones Acme's check found fit to show. Let's take them.
+Your questions are on this slide — the ones the check found fit to show. Let's take them.

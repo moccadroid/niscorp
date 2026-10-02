@@ -5,7 +5,7 @@ import { sendLayout } from './send.layout';
 
 // A QUESTION FOR THE SPEAKER — the form alone: a line and Send. A write as the
 // sender, and that is all. Nobody is granted it: the room's questions come
-// through Acme. It is the action slide 8 shows as code, and its layout is that
+// through the QA Company. It is the action slide 8 shows as code, and its layout is that
 // slide's preview — so it is written to be read: one trigger, one endpoint, no
 // name used twice.
 export const questionSendAction: ActionDefinition = {

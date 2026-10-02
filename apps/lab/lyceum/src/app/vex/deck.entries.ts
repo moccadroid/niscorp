@@ -140,6 +140,8 @@ export const deckGo: SeedMutation = {
     table: 'deck',
     set: {
       slide_id: { $lookup: { from: 'slides', field: 'slide_id', where: { eq: ['slides.position', { $context: 'position' }] } } },
+      // A new slide starts unrevealed.
+      step: 0,
     },
     where: { eq: ['deck.deck_id', { $context: 'deck' }] },
   },
@@ -180,9 +182,37 @@ export const deckShow: SeedMutation = {
   mutation: {
     op: 'update',
     table: 'deck',
-    set: { slide_id: { $context: 'slideId' } },
+    set: { slide_id: { $context: 'slideId' }, step: 0 },
     where: { eq: ['deck.deck_id', { $context: 'deck' }] },
   },
 };
 
-export const DECK_ENTRIES: readonly (SeedEntry | SeedMutation)[] = [deckCurrent, slidesAll, slidesDeck, slideNotes, slideTools, deckGo, deckShow];
+// HOW FAR THE SLIDE ON SCREEN HAS BEEN REVEALED. Where a traditional deck has
+// three slides that each add a line, this one has one slide and a number: the
+// controller's step tool writes it, the slide reads it and shows more.
+// Reactive, so the stage follows a press on its own.
+export const deckStep: SeedEntry = {
+  fingerprint: 'deck/step',
+  refresh: 'reactive',
+  intent: 'How far the slide on screen has been revealed: its step, from 0',
+  shape: { step: 0 },
+  dsl: {
+    from: ['deck'],
+    fields: ['deck.step'],
+    filter: { eq: ['deck.deck_id', TALK_DECK] },
+    sort: [{ field: 'deck.deck_id', dir: 'asc' }],
+  },
+};
+
+export const deckStepSet: SeedMutation = {
+  fingerprint: 'deck/step/set',
+  intent: 'Reveal the slide on screen up to a step',
+  mutation: {
+    op: 'update',
+    table: 'deck',
+    set: { step: { $context: 'step' } },
+    where: { eq: ['deck.deck_id', { $context: 'deck' }] },
+  },
+};
+
+export const DECK_ENTRIES: readonly (SeedEntry | SeedMutation)[] = [deckCurrent, slidesAll, slidesDeck, slideNotes, slideTools, deckGo, deckShow, deckStep, deckStepSet];

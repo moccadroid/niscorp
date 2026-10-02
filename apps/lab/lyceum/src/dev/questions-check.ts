@@ -10,7 +10,7 @@
 //   3. nobody else's: a member reads only their own questions and no verdict;
 //      the stage reads no question at all, and asking for EVERY verdict it
 //      gets only the fit ones — the engine's rule, not the query's;
-//   4. the question form is not on a phone until Q&A is installed (Acme, on
+//   4. the question form is not on a phone until Q&A is installed (The QA Company, on
 //      stage — integration-check): a member holds no question action.
 //
 // A question is not edited or taken back: it is judged once, as it was sent.

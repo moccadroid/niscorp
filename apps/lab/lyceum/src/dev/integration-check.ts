@@ -1,15 +1,15 @@
 // INTEGRATION CHECK — somebody else's screen, installed live.
 //
-// Acme (apps/lab/lyceum-vendor-demo) is served here from a local HTTP server —
+// The QA Company (apps/lab/lyceum-vendor-demo) is served here from a local HTTP server —
 // at the talk it is a file on GitHub Pages — and lyceum knows it only by its
 // address (LYCEUM_VENDOR_URL).
 //
-//   1. before anything is installed, no phone has Acme;
+//   1. before anything is installed, no phone has the QA Company;
 //   2. the speaker's Integrations tool is on its slide; installing the BROKEN
 //      bundle is refused by intake, with the path round its loop, and no phone
 //      changes;
-//   3. installing Acme is accepted and held as pending — still on no phone;
-//   4. approved, each of Acme's screens is on the seat it attached to: the
+//   3. installing the QA Company is accepted and held as pending — still on no phone;
+//   4. approved, each of the QA Company's screens is on the seat it attached to: the
 //      ask on every phone's list, drawn from its own layout; every question
 //      on the controller; the fit ones on the last slide;
 //   5. a question asked there lands in lyceum's Q&A as the person who asked;
@@ -24,14 +24,14 @@ import { mintSession } from '@niscorp/moss';
 import { SLIDES } from '@lyceum/db/seed';
 import { questionsShown } from '@lyceum/app/vex/question.entries';
 import { boot } from '@lyceum/server/boot';
-import { ACME_BROKEN_BUNDLE, ACME_BUNDLE } from '../../../lyceum-vendor-demo/src/bundle';
+import { QA_BROKEN_BUNDLE, QA_BUNDLE } from '../../../lyceum-vendor-demo/src/bundle';
 import { check, connect, finish, waitUntil } from './harness';
 import type { Terminal } from './harness';
 
 const main = async (): Promise<void> => {
-  // Acme's host: two static files, nothing else.
+  // The QA Company's host: two static files, nothing else.
   const vendor = createServer((req, res) => {
-    const bundle = req.url === '/vendor/bundle' ? ACME_BUNDLE : req.url === '/vendor-broken/bundle' ? ACME_BROKEN_BUNDLE : undefined;
+    const bundle = req.url === '/vendor/bundle' ? QA_BUNDLE : req.url === '/vendor-broken/bundle' ? QA_BROKEN_BUNDLE : undefined;
     res.writeHead(bundle === undefined ? 404 : 200, { 'content-type': 'application/octet-stream' });
     res.end(bundle === undefined ? '' : JSON.stringify(bundle));
   });
@@ -67,8 +67,8 @@ const main = async (): Promise<void> => {
   await stage.hello();
 
   // ── 1 ──
-  check('before anything is installed, no phone has Acme', !ada.showsNow('body', 'ext.member.acme.ask'));
-  check('...nor the controller, nor the projector', !speaker.showsNow('attached', 'ext.speaker.acme') && !stage.showsNow('attached', 'ext.stage.acme'));
+  check('before anything is installed, no phone has the QA Company', !ada.showsNow('body', 'ext.member.qa.ask'));
+  check('...nor the controller, nor the projector', !speaker.showsNow('attached', 'ext.speaker.qa') && !stage.showsNow('attached', 'ext.stage.qa'));
 
   // ── 2 ──
   const at = SLIDES.findIndex((slide) => slide.tools.includes('tools.integrations'));
@@ -77,42 +77,42 @@ const main = async (): Promise<void> => {
     speaker.click('controls', 'next');
     await speaker.shows('head', `slide ${step + 2} of`);
   }
-  check('...and it is on the controller there, showing where Acme lives', await speaker.shows('tools', '/vendor'));
+  check('...and it is on the controller there, showing where the QA Company lives', await speaker.shows('tools', '/vendor'));
   speaker.click('tools', 'broken');
   check('installing the broken bundle is refused', await speaker.shows('tools', '"value":"refused"'));
-  check('...by intake, with the path round its loop', await speaker.shows('tools', 'acme-echo —emit (ext.member.acme.ask)→ acme-echo'));
+  check('...by intake, with the path round its loop', await speaker.shows('tools', 'qa-echo —emit (ext.member.qa.ask)→ qa-echo'));
   check('...and for nothing else: the loop is its only fault', !speaker.showsNow('tools', 'no such action'));
   check('the stage shows it live: refused', await stage.shows('main', '"Refused"'));
   check('...the loop check failed and the other three passed', (await stage.shows('main', '"check":"No infinite loops","passed":"x"')) && stage.textOf('main').split('"passed":"check"').length === 4);
-  check('...and why: the trigger from Acme’s own file, which sends what it listens for', (await stage.shows('main', 'acme-echo')) && stage.showsNow('main', 'emit'));
-  check('...and no phone has it', !ada.showsNow('body', 'ext.member.acme.ask'));
+  check('...and why: the trigger from the QA Company’s own file, which sends what it listens for', (await stage.shows('main', 'qa-echo')) && stage.showsNow('main', 'emit'));
+  check('...and no phone has it', !ada.showsNow('body', 'ext.member.qa.ask'));
 
   // ── 3 ──
   speaker.click('tools', 'install');
-  check('installing Acme is accepted and pending', await speaker.shows('tools', '"value":"pending"'));
-  check('...and the stage shows it passed: all four checks, the trigger gone', (await stage.shows('main', '"Passed"')) && !stage.showsNow('main', 'acme-echo') && !stage.showsNow('main', '"passed":"x"') && stage.textOf('main').split('"passed":"check"').length === 5);
+  check('installing the QA Company is accepted and pending', await speaker.shows('tools', '"value":"pending"'));
+  check('...and the stage shows it passed: all four checks, the trigger gone', (await stage.shows('main', '"Passed"')) && !stage.showsNow('main', 'qa-echo') && !stage.showsNow('main', '"passed":"x"') && stage.textOf('main').split('"passed":"check"').length === 5);
   await new Promise((resolve) => setTimeout(resolve, 300));
-  check('...and still no phone has it', !ada.showsNow('body', 'ext.member.acme.ask'));
+  check('...and still no phone has it', !ada.showsNow('body', 'ext.member.qa.ask'));
 
   // ── 4 ──
   speaker.click('tools', 'approve');
   check('approved', await speaker.shows('tools', '"value":"approved"'));
-  check('...Acme is on the first phone, on its list', await ada.shows('body', 'ext.member.acme.ask'));
-  check('...drawn from its own layout', ada.showsNow('body', 'Acme · Ask Anything'));
-  check('...and on the second', await ben.shows('body', 'ext.member.acme.ask'));
-  check('...every question on the controller, in its own region', await speaker.shows('attached', 'Acme · Every question'));
-  check('...and the projector holds the fit ones, for the last slide', await stage.shows('attached', 'ext.stage.acme.questions'));
-  check('...a phone has neither: each screen is on its own seat', !ada.showsNow('body', 'ext.speaker.acme') && !ada.showsNow('body', 'ext.stage.acme'));
+  check('...the QA Company is on the first phone, on its list', await ada.shows('body', 'ext.member.qa.ask'));
+  check('...drawn from its own layout', ada.showsNow('body', 'QA Company · Ask Anything'));
+  check('...and on the second', await ben.shows('body', 'ext.member.qa.ask'));
+  check('...every question on the controller, in its own region', await speaker.shows('attached', 'QA Company · Every question'));
+  check('...and the projector holds the fit ones, for the last slide', await stage.shows('attached', 'ext.stage.qa.questions'));
+  check('...a phone has neither: each screen is on its own seat', !ada.showsNow('body', 'ext.speaker.qa') && !ada.showsNow('body', 'ext.stage.qa'));
 
   // ── 5 ──
   ada.type('body', 'question', 'Who wrote this screen?');
   await new Promise((resolve) => setTimeout(resolve, 200));
   ada.click('body', 'ask');
-  check('a question asked in Acme says it went', await ada.shows('body', 'Asked. The speaker has it.'));
+  check('a question asked in the QA Company says it went', await ada.shows('body', 'Asked. The speaker has it.'));
   const asked = await runtime.db.query<{ text: string; member_id: string }>("SELECT text, member_id FROM questions WHERE text = 'Who wrote this screen?'");
   const ids = (await runtime.db.query<{ member_id: string }>('SELECT member_id FROM members ORDER BY joined_at, member_id')).rows.map((row) => row.member_id);
   check('...and it is in lyceum’s Q&A, as the person who asked', asked.rows.length === 1 && asked.rows[0]?.member_id === ids[0]);
-  check('...and on Acme’s own list of their questions', await ada.shows('body', 'Who wrote this screen?'));
+  check('...and on the QA Company’s own list of their questions', await ada.shows('body', 'Who wrote this screen?'));
   // The moderator judges it (fit), and then the projector may show it.
   const stageRead = async (): Promise<string> =>
     (await server.request('/api/vex', { method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${await mintSession(runtime.pool, 'stage', 60_000)}` }, body: JSON.stringify({ fingerprint: questionsShown.fingerprint, context: {} }) })).text();
@@ -135,7 +135,7 @@ const main = async (): Promise<void> => {
     speaker.click('controls', 'next');
     await speaker.shows('head', `slide ${step + 1} of`);
   }
-  check('on the last slide, the projector shows Acme’s list', (await stage.shows('main', '"canvasId":"attached"')) && (await stage.shows('attached', 'Who wrote this screen?')));
+  check('on the last slide, the projector shows the QA Company’s list', (await stage.shows('main', '"canvasId":"attached"')) && (await stage.shows('attached', 'Who wrote this screen?')));
   check('...and never the question not fit to show', !stage.showsNow('attached', 'idiot') && !stage.showsNow('main', 'idiot'));
 
   // ── 6 ──
@@ -145,9 +145,9 @@ const main = async (): Promise<void> => {
     await speaker.shows('head', `slide ${step} of`);
   }
   speaker.click('tools', 'remove');
-  check('removed: Acme is gone from the first phone', await waitUntil(() => !ada.showsNow('body', 'ext.member.acme.ask')));
-  check('...and from the second', await waitUntil(() => !ben.showsNow('body', 'ext.member.acme.ask')));
-  check('...and from the controller and the projector', await waitUntil(() => !speaker.showsNow('attached', 'ext.speaker.acme') && !stage.showsNow('attached', 'ext.stage.acme')));
+  check('removed: The QA Company is gone from the first phone', await waitUntil(() => !ada.showsNow('body', 'ext.member.qa.ask')));
+  check('...and from the second', await waitUntil(() => !ben.showsNow('body', 'ext.member.qa.ask')));
+  check('...and from the controller and the projector', await waitUntil(() => !speaker.showsNow('attached', 'ext.speaker.qa') && !stage.showsNow('attached', 'ext.stage.qa')));
 
   ada.close();
   ben.close();

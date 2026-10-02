@@ -1,19 +1,19 @@
 import type { ActionDefinition } from '@niscorp/nova';
 
-// ACME'S BUNDLE — what a third party ships to lyceum: data, nothing else.
+// THE QA COMPANY'S BUNDLE — what a third party ships to lyceum: data, nothing else.
 //
-// Three actions under Acme's own namespace (`ext.<audience>.<integration>.*`,
+// Three actions under the QA Company's own namespace (`ext.<audience>.<integration>.*`,
 // the only one intake lets it use), one per audience lyceum fences off for
 // integrations — members, the speaker, the stage — written in lyceum's
 // published component vocabulary and drawn by lyceum's kit like everything
 // else. They send and read through lyceum's own queries by fingerprint, so
-// Acme needs no server: a question lands in lyceum's Q&A as the person who
+// The QA Company needs no server: a question lands in lyceum's Q&A as the person who
 // asked, and every read runs under the reader's own policy.
 //
-//   ext.member.acme.ask         the phone: ask, and see what you asked
-//   ext.speaker.acme.questions  the controller: every question, and what the
+//   ext.member.qa.ask         the phone: ask, and see what you asked
+//   ext.speaker.qa.questions  the controller: every question, and what the
 //                               moderator made of it — fit, not fit, not yet
-//   ext.stage.acme.questions    the last slide: the questions fit to show
+//   ext.stage.qa.questions    the last slide: the questions fit to show
 //
 // Where each goes is declared here (`attachments`) and checked at intake
 // against the seats lyceum offers; until the integration is installed and
@@ -25,15 +25,15 @@ const send = [
 ];
 
 export const ask: ActionDefinition = {
-  id: 'ext.member.acme.ask',
-  title: 'Acme · Ask Anything',
-  description: 'Acme Ask Anything: send the speaker a question.',
+  id: 'ext.member.qa.ask',
+  title: 'QA Company · Ask Anything',
+  description: 'QA Company Ask Anything: send the speaker a question.',
   data: { draft: '', sent: false, error: '', mine: [] },
   layout: {
     component: 'Sheet',
     props: { areas: ['kick kick', 'field go', 'out out', 'mine mine'], cols: [2, 1] },
     children: [
-      { component: 'Cell', props: { area: 'kick', ink: 'ink' }, children: [{ component: 'Label', children: 'Acme · Ask Anything' }] },
+      { component: 'Cell', props: { area: 'kick', ink: 'ink' }, children: [{ component: 'Label', children: 'QA Company · Ask Anything' }] },
       { component: 'Field', ref: 'question', model: '$.draft', props: { area: 'field', value: '$.draft', placeholder: 'Ask the speaker anything', enter: 'clears' } },
       { component: 'Action', ref: 'ask', props: { area: 'go', ink: 'alert', label: 'Ask →' } },
       {
@@ -107,15 +107,15 @@ const questionsWithVerdicts = {
 };
 
 export const everyQuestion: ActionDefinition = {
-  id: 'ext.speaker.acme.questions',
-  title: 'Acme · Every question',
-  description: 'Acme Ask Anything, for the speaker: every question the room sent, and whether it is fit to show.',
+  id: 'ext.speaker.qa.questions',
+  title: 'QA Company · Every question',
+  description: 'QA Company Ask Anything, for the speaker: every question the room sent, and whether it is fit to show.',
   data: { questions: [], verdicts: [] },
   layout: {
     component: 'Sheet',
     props: { size: 'fill', areas: ['kick', 'list'], rows: ['auto', 1] },
     children: [
-      { component: 'Cell', props: { area: 'kick', ink: 'ink' }, children: [{ component: 'Label', children: 'Acme · Every question' }] },
+      { component: 'Cell', props: { area: 'kick', ink: 'ink' }, children: [{ component: 'Label', children: 'QA Company · Every question' }] },
       {
         component: 'Cell',
         props: { area: 'list', pad: 'none', scroll: 'y' },
@@ -152,9 +152,9 @@ export const everyQuestion: ActionDefinition = {
 // lyceum's `questions/shown` — only what its moderator found fit, and no names:
 // lyceum's engine gives the projector nothing else to read.
 export const fitQuestions: ActionDefinition = {
-  id: 'ext.stage.acme.questions',
-  title: 'Acme · Questions',
-  description: 'Acme Ask Anything, on the projector: the questions fit to show, newest first.',
+  id: 'ext.stage.qa.questions',
+  title: 'QA Company · Questions',
+  description: 'QA Company Ask Anything, on the projector: the questions fit to show, newest first.',
   data: { questions: [] },
   layout: {
     component: 'Rows',
@@ -172,15 +172,15 @@ export const fitQuestions: ActionDefinition = {
   triggers: [],
 };
 
-export const ACME_BUNDLE = {
-  integration: 'acme',
+export const QA_BUNDLE = {
+  integration: 'qa',
   // The grammars these documents are written in; the host upgrades from here.
   // lyceum.kit 9: the check and the x.
   grammar: { 'nisc.nova': 2, 'nisc.prism': 1, 'lyceum.kit': 9 },
   meta: {
-    title: 'Acme Ask Anything',
+    title: 'QA Company Ask Anything',
     tagline: 'Questions for whoever is on stage.',
-    description: 'A question box from Acme. It sends through the host\'s own Q&A, as you.',
+    description: 'A question box from the QA Company. It sends through the host\'s own Q&A, as you.',
   },
   actions: { [ask.id]: ask, [everyQuestion.id]: everyQuestion, [fitQuestions.id]: fitQuestions },
   // Which of lyceum's seats each screen rides.
@@ -190,13 +190,13 @@ export const ACME_BUNDLE = {
 // THE SAME BUNDLE, BROKEN: a trigger that re-emits its own channel. Valid
 // data — every field parses — and a loop that never ends. Intake refuses it,
 // with the path round the loop.
-export const ACME_BROKEN_BUNDLE = {
-  ...ACME_BUNDLE,
+export const QA_BROKEN_BUNDLE = {
+  ...QA_BUNDLE,
   actions: {
-    ...ACME_BUNDLE.actions,
+    ...QA_BUNDLE.actions,
     [ask.id]: {
       ...ask,
-      triggers: [...(ask.triggers ?? []), { message: 'acme-echo', do: [{ emit: { channel: 'acme-echo' } }] }],
+      triggers: [...(ask.triggers ?? []), { message: 'qa-echo', do: [{ emit: { channel: 'qa-echo' } }] }],
     },
   },
 };

@@ -1,5 +1,7 @@
 import type { ActionDefinition } from '@niscorp/nova';
+import { LYCEUM_KIT } from '@lyceum/app/grammars';
 import { deckCurrent } from '@lyceum/app/vex/deck.entries';
+import { memberCounts } from '@lyceum/app/vex/member.entries';
 import {
   endLayout,
   incidentLayout,
@@ -65,7 +67,16 @@ export const prismSlide: ActionDefinition = {
 };
 
 // members/counts from app/vex/member.entries.ts — the strip's joined count.
-export const vexSlide = still('slide.vex', 'Queries are JSON too.', vexLayout, {
+export const vexSlide: ActionDefinition = {
+  id: 'slide.vex',
+  title: 'Queries are JSON too.',
+  layout: vexLayout,
+  endpoints: { answer: { url: '/api/vex', method: 'POST', request: { fingerprint: memberCounts.fingerprint, context: {} }, target: 'answer' } },
+  lifecycle: { mount: [{ call: 'answer' }] },
+  triggers: [],
+  data: {
+  title: 'Queries are JSON too.',
+  answer: { joined: 0 },
   kicker: 'Vex',
   file: 'Stored',
   stored: code(
@@ -82,7 +93,8 @@ export const vexSlide = still('slide.vex', 'Queries are JSON too.', vexLayout, {
   ),
   marked: [4, 5],
   sent: code('{', "  fingerprint: 'members/counts',", '  context: {},', '}'),
-});
+  },
+};
 
 export const wordsSlide = still('slide.words', 'Asked in words.', wordsLayout, {
   kicker: 'Vex',
@@ -115,11 +127,16 @@ export const tideSlide: ActionDefinition = {
 
 export const onceSlide = still('slide.once', 'No agent loop.', onceLayout, {});
 
-// This app's strata.lock.json, as committed.
+// The migrations of this app's own grammar — its components' props
+// (app/grammars.ts) — as they are written there: every change to what a layout
+// may say, in order. One of them rewrites stored layouts; the rest only add.
 export const strataSlide = still('slide.strata', 'Grammars get migrations.', strataLayout, {
   kicker: 'Strata',
-  file: 'strata.lock.json',
-  code: code('{', '  "grammar": {', '    "lyceum.kit": 12,', '    "nisc.nova": 2,', '    "nisc.prism": 1', '  }', '}'),
+  file: 'grammars.ts — every change to this app’s components, in order',
+  migrations: LYCEUM_KIT.migrations.map((migration, index) => ({ n: index + 1, what: migration.description })),
+  code: LYCEUM_KIT.migrations.map((migration, index) => `${String(index + 1).padStart(2, ' ')}  ${migration.description}`).join('\n'),
+  // The ones that rewrite stored layouts, not only add to what one may say.
+  marked: LYCEUM_KIT.migrations.flatMap((migration, index) => (migration.steps.length > 0 ? [index + 1] : [])),
 });
 
 export const endSlide = still('slide.end', 'It’s all in one folder.', endLayout, {

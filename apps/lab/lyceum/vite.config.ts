@@ -105,6 +105,30 @@ const appServer = (): Plugin => ({
     // and only for a principal the `grants` table names; a member signs in by
     // stepping in, like everybody in the room. The talk's own sign-ins
     // (/speaker, /login, /stage) are mounted above, as the deployment has them.
+    // ─── /dev/vendor/bundle, /dev/vendor-broken/bundle — the Q&A, from source ──
+    //
+    // DEV ONLY: the third party's bundle (apps/lab/lyceum-vendor-demo) as its
+    // source has it now, so a rehearsal installs the Q&A without the network
+    // and before a change to it is published. Point the server at it with
+    // LYCEUM_VENDOR_URL=http://localhost:<port>/dev/vendor (and -broken).
+    viteServer.middlewares.use((req, res, next) => {
+      const which = /^\/dev\/(vendor|vendor-broken)\/bundle$/.exec(req.url ?? '')?.[1];
+      if (which === undefined) {
+        next();
+        return;
+      }
+      void viteServer
+        .ssrLoadModule('../lyceum-vendor-demo/src/bundle.ts')
+        .then((mod) => {
+          res.setHeader('content-type', 'application/json');
+          res.end(JSON.stringify(which === 'vendor' ? mod['QA_BUNDLE'] : mod['QA_BROKEN_BUNDLE']));
+        })
+        .catch(() => {
+          res.statusCode = 500;
+          res.end('the bundle could not be loaded');
+        });
+    });
+
     // ─── /dev/new — a fresh seat: somebody new at the door, in a tab of its own ──
     viteServer.middlewares.use((req, res, next) => {
       if (req.url !== '/dev/new') {

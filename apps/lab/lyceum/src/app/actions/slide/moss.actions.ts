@@ -1,4 +1,5 @@
 import type { ActionDefinition } from '@niscorp/nova';
+import { deckStep } from '@lyceum/app/vex/deck.entries';
 import { pressesRecent } from '@lyceum/app/vex/press.entries';
 import { documentLayout, mossLayout, twiceLayout } from './later.layouts';
 import { buttonLayout, claimLayout, pairLayout, placesLayout } from './moss.layouts';
@@ -73,35 +74,44 @@ export const buttonSlide: ActionDefinition = {
   triggers: [],
 };
 
-export const whereSlide = still('slide.where', 'Where do you check permissions?', placesLayout, {
-  places: [
-    { area: 'one', name: 'Routes', what: 'An address' },
-    { area: 'two', name: 'Components', what: 'A hidden button' },
-    { area: 'three', name: 'Rows', what: 'Row-level security' },
-  ],
-});
-
-// Three roles from app/charter/charter.ts, as written.
-export const charterSlide = still('slide.charter', 'Who gets what: one file.', documentLayout, {
-  kicker: 'Charter',
-  file: 'charter.ts',
-  code: code(
-    'member: {',
-    "  actions: ['member.*', 'query.*',",
-    "    'ext.member.*'],",
-    '  data: [...MEMBERS_READ, ...QUERYING,',
-    '    ...QUESTIONING, ...CONVERSING, ...LOOK],',
-    '},',
-    '',
-    'button: {',
-    "  actions: ['button.*'],",
-    "  data: ['presses.write.insert'],",
-    '},',
-    '',
-    "clock: { data: ['deck.write.update'] },",
-  ),
-  marked: [8, 9, 10, 11],
-});
+// Where permissions are usually checked — three places — and, a step on, the
+// one file they are here: three roles from app/charter/charter.ts, as written.
+export const whereSlide: ActionDefinition = {
+  id: 'slide.where',
+  title: 'Where do you check permissions?',
+  data: {
+    title: 'Where do you check permissions?',
+    places: [
+      { area: 'one', name: 'Routes', what: 'An address' },
+      { area: 'two', name: 'Components', what: 'A hidden button' },
+      { area: 'three', name: 'Rows', what: 'Row-level security' },
+    ],
+    kicker: 'Charter',
+    answer: 'Here: one file.',
+    file: 'charter.ts',
+    code: code(
+      'member: {',
+      "  actions: ['member.*', 'query.*',",
+      "    'ext.member.*'],",
+      '  data: [...MEMBERS_READ, ...QUERYING,',
+      '    ...QUESTIONING, ...CONVERSING, ...LOOK],',
+      '},',
+      '',
+      'button: {',
+      "  actions: ['button.*'],",
+      "  data: ['presses.write.insert'],",
+      '},',
+      '',
+      "clock: { data: ['deck.write.update'] },",
+    ),
+    marked: [8, 9, 10, 11],
+    step: { step: 0 },
+  },
+  layout: placesLayout,
+  endpoints: { step: { url: '/api/vex', method: 'POST', request: { fingerprint: deckStep.fingerprint, context: {} }, target: 'step' } },
+  lifecycle: { mount: [{ call: 'step' }] },
+  triggers: [],
+};
 
 // The questions rule from app/vex/behaviors.ts.
 export const twiceSlide = still('slide.twice', 'Enforced twice.', twiceLayout, {
@@ -122,4 +132,4 @@ export const agentsSlide = still('slide.agents', 'The same file governs the AI.'
   two: { label: 'The timer', line: 'Runs as clock. It can move the slide.' },
 });
 
-export const MOSS_SLIDES: readonly ActionDefinition[] = [mossSlide, wireSlide, manifestSlide, existsSlide, buttonSlide, whereSlide, charterSlide, twiceSlide, agentsSlide];
+export const MOSS_SLIDES: readonly ActionDefinition[] = [mossSlide, wireSlide, manifestSlide, existsSlide, buttonSlide, whereSlide, twiceSlide, agentsSlide];
