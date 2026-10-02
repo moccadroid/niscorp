@@ -1,17 +1,17 @@
 import type { ActionDefinition } from '@niscorp/nova';
 import type { SeedEntry, SeedMutation } from '@niscorp/vex';
-import { memberRegister } from '@lyceum/app/vex/member.entries';
-import { assistantGive, assistantGiven, assistantTake, xrayGive, xrayGiven, xrayTake } from '@lyceum/app/vex/grant.entries';
+import { assistantGive, assistantGiven, assistantTake, EVERYBODY, xrayGive, xrayGiven, xrayTake } from '@lyceum/app/vex/grant.entries';
 
 // A CONTROLLER TOOL THAT GIVES EVERYBODY SOMETHING, or takes it back — the
-// X-ray and the assistant are both this. Giving writes a grant row per member
-// who has joined (vex/grant.entries.ts); their shells are rebuilt and the
-// action is a block on their phone's list. Taking it back deletes the rows.
-// How many have it is a reactive read, so the tool follows.
+// X-ray and the assistant are both this. Giving writes ONE grant row, for
+// `everybody` (vex/grant.entries.ts): every member's shell is rebuilt and the
+// action is a block on their phone's list — and on the phone of whoever joins
+// later, because their roles are read from that same row. Taking it back
+// deletes it. Whether it is given is a reactive read, so the tool follows.
 const giveTool = (tool: { id: string; title: string; kicker: string; give: string; entries: { given: SeedEntry; give: SeedMutation; take: SeedMutation } }): ActionDefinition => ({
   id: tool.id,
   title: tool.title,
-  data: { members: [], has: { count: 0, given: false }, error: '' },
+  data: { has: { count: 0, given: false, state: 'Nobody' }, error: '' },
   layout: {
     component: 'Sheet',
     props: { areas: ['kick kick', 'give take', 'count count'] },
@@ -23,24 +23,18 @@ const giveTool = (tool: { id: string; title: string; kicker: string; give: strin
         component: 'Cell',
         props: { area: 'count' },
         children: [
-          { component: 'Figure', props: { label: 'People who have it', value: '$.has.count' } },
+          { component: 'Figure', props: { label: 'Who has it, late joiners included', value: '$.has.state' } },
           { if: '$.error', then: { component: 'Text', children: '{{$.error.message}}' } },
         ],
       },
     ],
   },
   endpoints: {
-    members: { url: '/api/vex', method: 'POST', request: { fingerprint: memberRegister.fingerprint, context: {} }, target: 'members' },
     given: { url: '/api/vex', method: 'POST', request: { fingerprint: tool.entries.given.fingerprint, context: {} }, target: 'has' },
-    give: { url: '/api/vex', method: 'POST', request: { fingerprint: tool.entries.give.fingerprint, context: { members: { $ref: '$.members' } } }, errorTarget: 'error' },
-    take: {
-      url: '/api/vex',
-      method: 'POST',
-      request: { fingerprint: tool.entries.take.fingerprint, context: { members: { $pluck: { over: { $ref: '$.members' }, key: 'member_id' } } } },
-      errorTarget: 'error',
-    },
+    give: { url: '/api/vex', method: 'POST', request: { fingerprint: tool.entries.give.fingerprint, context: { to: EVERYBODY } }, errorTarget: 'error' },
+    take: { url: '/api/vex', method: 'POST', request: { fingerprint: tool.entries.take.fingerprint, context: { to: EVERYBODY } }, errorTarget: 'error' },
   },
-  lifecycle: { mount: [{ call: 'members' }, { call: 'given' }] },
+  lifecycle: { mount: [{ call: 'given' }] },
   triggers: [
     { event: 'ui:click', ref: 'give', do: [{ set: 'error', value: '' }, { call: 'give' }] },
     { event: 'ui:click', ref: 'take', do: [{ set: 'error', value: '' }, { call: 'take' }] },

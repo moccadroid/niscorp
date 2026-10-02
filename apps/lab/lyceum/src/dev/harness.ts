@@ -5,7 +5,7 @@ import { z } from 'zod';
 import { mintSession } from '@niscorp/moss';
 import type { MossServer } from '@niscorp/moss';
 import type { PgPool } from '@niscorp/vex';
-import { assistantGive } from '@lyceum/app/vex/grant.entries';
+import { assistantGive, EVERYBODY } from '@lyceum/app/vex/grant.entries';
 import { memberRegister } from '@lyceum/app/vex/member.entries';
 
 // GIVE EVERYBODY WHO HAS JOINED THE ASSISTANT, the way the controller's tool
@@ -19,7 +19,7 @@ export const giveAssistant = async (server: MossServer, pool: PgPool): Promise<v
     if (!response.ok) throw new Error(`${fingerprint}: ${JSON.stringify(body)}`);
     return typeof body === 'object' && body !== null && 'result' in body ? body.result : body;
   };
-  await replay(assistantGive.fingerprint, { members: await replay(memberRegister.fingerprint, {}) });
+  await replay(assistantGive.fingerprint, { to: EVERYBODY });
 };
 
 export const results: { label: string; ok: boolean }[] = [];

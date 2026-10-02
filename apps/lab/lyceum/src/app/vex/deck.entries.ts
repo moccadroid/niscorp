@@ -194,13 +194,18 @@ export const deckShow: SeedMutation = {
 export const deckStep: SeedEntry = {
   fingerprint: 'deck/step',
   refresh: 'reactive',
-  intent: 'How far the slide on screen has been revealed: its step, from 0',
-  shape: { step: 0 },
+  intent: 'How far the slide on screen has been revealed: its step, from 0, how many parts it has, and which part is showing',
+  shape: { step: 0, parts: 1, part: 1 },
   dsl: {
-    from: ['deck'],
-    fields: ['deck.step'],
+    from: ['deck', 'slides'],
+    fields: ['deck.step', 'slides.parts'],
     filter: { eq: ['deck.deck_id', TALK_DECK] },
     sort: [{ field: 'deck.deck_id', dir: 'asc' }],
+  },
+  mapping: {
+    step: { $ref: '$.result.step' },
+    parts: { $ref: '$.result.parts' },
+    part: { $add: [{ $ref: '$.result.step' }, 1] },
   },
 };
 

@@ -42,6 +42,9 @@ export const buildSeedSql = (): string =>
     // The ID cards' registry is gone (the moderator took its place): its grant
     // goes from databases seeded before.
     `DELETE FROM grants WHERE principal = 'registry';`,
+    // The X-ray and the assistant are given to `everybody` in one row now
+    // (vex/grant.entries.ts): the rows per person from databases seeded before go.
+    `DELETE FROM grants WHERE role IN ('xray', 'assistant') AND principal <> 'everybody';`,
     ...STAFF.map((staff) => `INSERT INTO grants (principal, role) VALUES (${quote(staff.principal)}, ${quote(staff.role)}) ON CONFLICT DO NOTHING;`),
 
     // Slides: the deck converges to SLIDES. Positions are unique, so a reorder
@@ -50,8 +53,8 @@ export const buildSeedSql = (): string =>
     `UPDATE slides SET position = -1 - position WHERE position >= 0;`,
     ...SLIDES.map(
       (slide, position) =>
-        `INSERT INTO slides (slide_id, position, title) VALUES (${quote(slide.slideId)}, ${position}, ${quote(slide.title)})
-         ON CONFLICT (slide_id) DO UPDATE SET position = EXCLUDED.position, title = EXCLUDED.title;`,
+        `INSERT INTO slides (slide_id, position, title, parts) VALUES (${quote(slide.slideId)}, ${position}, ${quote(slide.title)}, ${slide.parts ?? 1})
+         ON CONFLICT (slide_id) DO UPDATE SET position = EXCLUDED.position, title = EXCLUDED.title, parts = EXCLUDED.parts;`,
     ),
     // The deck row is the talk's state: seeded once, never reset by a restart —
     // unless the slide it names was taken out of the deck, when it goes back to

@@ -67,13 +67,16 @@ const main = async (): Promise<void> => {
     await speaker.shows('head', `slide ${step + 2} of`);
   }
   check('...and it is on the controller there', await speaker.shows('tools', 'Give everybody the X-ray'));
-  // The tool reads who has joined as it mounts; give it that moment.
-  await speaker.shows('tools', 'People who have it');
-  await new Promise((resolve) => setTimeout(resolve, 300));
+  await speaker.shows('tools', '"label":"Who has it, late joiners included","value":"Nobody"');
   speaker.click('tools', 'give');
   check('pressing Give: the X-ray is on the first phone’s list', await ada.shows('body', 'xray.switch'));
   check('...and on the second', await ben.shows('body', 'xray.switch'));
-  check('...and the tool counts both', await speaker.shows('tools', '"label":"People who have it","value":2'));
+  check('...and the tool says everybody has it', await speaker.shows('tools', '"label":"Who has it, late joiners included","value":"Everybody"'));
+  // Somebody who joins AFTER it was given has it too: it was given to
+  // everybody (one row), not to the people in the room at that moment.
+  const late = await join();
+  check('somebody who joins later has the X-ray too', await late.shows('body', 'xray.switch'));
+  check('...and the assistant, given before they came', await late.shows('body', 'assistant.thread'));
   check('the door has no X-ray: nobody there to give it to', !stranger.showsNow('main', 'X-ray'));
 
   // ── 3 ──
@@ -102,9 +105,13 @@ const main = async (): Promise<void> => {
   speaker.click('tools', 'take');
   check('Take it back: the X-ray is gone from the first phone', await waitUntil(() => !ada.showsNow('body', 'xray.switch')));
   check('...and from the second', await waitUntil(() => !ben.showsNow('body', 'xray.switch')));
-  check('...and the tool counts nobody', await speaker.shows('tools', '"label":"People who have it","value":0'));
+  check('...and from the one who joined late', await waitUntil(() => !late.showsNow('body', 'xray.switch')));
+  check('...and the tool says nobody has it', await speaker.shows('tools', '"label":"Who has it, late joiners included","value":"Nobody"'));
+  // Taken back, it is not there for whoever joins next either.
+  const later = await join();
+  check('somebody who joins after it was taken back does not have it', !later.showsNow('body', 'xray.switch'));
 
-  for (const screen of [ada, ben, stranger, speaker]) screen.close();
+  for (const screen of [ada, ben, late, later, stranger, speaker]) screen.close();
   httpServer.close();
   await close();
   finish();

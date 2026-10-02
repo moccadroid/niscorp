@@ -326,6 +326,12 @@ export const PRESSES = /* sql */ `
   COMMENT ON TABLE presses IS 'Each press of the button a few people in the audience were given: who pressed it, and when.';
 `;
 
+// How many parts a slide is shown in: one, unless the deck says more. The
+// step tool stops at the last.
+const SLIDE_PARTS = `
+  ALTER TABLE slides ADD COLUMN parts INTEGER NOT NULL DEFAULT 1;
+`;
+
 // The questions table's comment named the integration by an old name; the
 // query writer reads it, so it says what is true now: through an integration.
 const QUESTIONS_THROUGH = /* sql */ `
@@ -360,6 +366,7 @@ export const LYCEUM_SEQUENCE: Sequence = {
     { description: 'Presses: one row per press of the button a few people are given', steps: sqlSteps(PRESSES) },
     { description: 'A slide in steps: the deck row says how far the slide on screen has been revealed', steps: sqlSteps(DECK_STEP) },
     { description: 'The questions table says how questions arrive without naming a vendor', steps: sqlSteps(QUESTIONS_THROUGH) },
+    { description: 'A slide says how many parts it is shown in', steps: sqlSteps(SLIDE_PARTS) },
   ],
 };
 

@@ -60,10 +60,10 @@ const main = async (): Promise<void> => {
   }
   const staffGrants = await count("SELECT 1 FROM grants WHERE principal IN ('speaker', 'stage', 'kit', 'moderator', 'clock')");
   check(
-    'a talk leaves things behind: two people, a question, two grants, the phones on React, the deck on slide 3',
+    'a talk leaves things behind: two people, a question, the assistant given to everybody, the phones on React, the deck on slide 3',
     (await count('SELECT 1 FROM members')) === 2 &&
       (await count('SELECT 1 FROM questions')) === 1 &&
-      (await count("SELECT 1 FROM grants WHERE role = 'assistant'")) === 2 &&
+      (await count("SELECT 1 FROM grants WHERE role = 'assistant' AND principal = 'everybody'")) === 1 &&
       (await count("SELECT 1 FROM renderers WHERE renderer = 'react'")) === 1 &&
       speaker.showsNow('head', 'slide 3 of'),
   );

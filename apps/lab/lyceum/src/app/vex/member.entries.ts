@@ -25,6 +25,20 @@ export const identityGrants: SeedEntry = {
   },
 };
 
+// What everybody was given (vex/grant.entries.ts): the roles on the one
+// `everybody` row. Read for a member whenever their identity is resolved — so
+// somebody who joins after the X-ray was given has it too.
+export const identityEverybody: SeedEntry = {
+  fingerprint: 'identity/everybody',
+  intent: 'The roles given to everybody in the audience',
+  shape: [{ role: '' }],
+  dsl: {
+    from: ['grants'],
+    fields: ['grants.role'],
+    filter: { eq: ['grants.principal', 'everybody'] },
+  },
+};
+
 // ── the room ──
 //
 // REACTIVE: the room's reads answer again whenever a write lands on a table
@@ -92,6 +106,7 @@ export const nameRefuse: SeedMutation = {
 export const MEMBER_ENTRIES: readonly (SeedEntry | SeedMutation)[] = [
   identityMember,
   identityGrants,
+  identityEverybody,
   memberMe,
   memberRegister,
   memberCounts,

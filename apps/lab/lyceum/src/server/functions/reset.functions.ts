@@ -2,6 +2,7 @@ import { z } from 'zod';
 import type { FunctionSession, MossServer } from '@niscorp/moss';
 import type { FunctionHandler } from '@niscorp/nova';
 import { TALK_DECK, deckGo } from '@lyceum/app/vex/deck.entries';
+import { EVERYBODY } from '@lyceum/app/vex/grant.entries';
 import { memberRegister } from '@lyceum/app/vex/member.entries';
 import { setRenderer } from '@lyceum/app/vex/renderer.entries';
 import { refusedAll, resetGrants, resetMembers, resetPresses, resetQueries, resetQuestions, resetRefused, resetTimers, resetTurns } from '@lyceum/app/vex/reset.entries';
@@ -32,7 +33,8 @@ export const resetFunctions = (session: FunctionSession, server: () => MossServe
     const members = MembersSchema.parse(await vex(memberRegister.fingerprint)).map((member) => member.member_id);
     const people = [...members, 'speaker'];
     for (const each of [resetPresses, resetQuestions, resetQueries, resetTurns]) await vex(each.fingerprint, { people });
-    await vex(resetGrants.fingerprint, { people: members });
+    // …and what everybody was given: the one `everybody` row per role.
+    await vex(resetGrants.fingerprint, { people: [...members, EVERYBODY] });
     await vex(resetMembers.fingerprint, { people: members });
     await vex(resetTimers.fingerprint, { savedBy: 'speaker' });
     await vex(resetRefused.fingerprint, { refused: RefusedSchema.parse(await vex(refusedAll.fingerprint)).map((row) => row.refused_id) });

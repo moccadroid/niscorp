@@ -8,8 +8,8 @@ import type { SeedEntry, SeedMutation } from '@niscorp/vex';
 // of the people they name are rebuilt (server/reactions.ts), and ring 1 does
 // the rest: the action exists on their phone, or it does not.
 //
-// Three things are given this way during the talk — the X-ray, the assistant,
-// the button — and each is the same three entries with its role fixed in
+// The button is given this way, to three people (the X-ray and the assistant
+// go to everybody, further down) — three entries with the role fixed in
 // them: how many have it (reactive, for the controller's tool), give it to the
 // people in a list, take it back from the people in a list. A take names who,
 // so the delete is bounded by what the caller passed (vex's lint asks for it).
@@ -57,12 +57,62 @@ const giving = (role: string, what: string): Giving => ({
   },
 });
 
-const xray = giving('xray', 'the X-ray');
+// GIVEN TO EVERYBODY — the X-ray and the assistant. Not a row per person: a
+// row per person only reaches the people in the room at that moment, and
+// somebody who joins a minute later would never catch up. It is ONE row, for
+// the principal `everybody`, which is nobody's id: the identity seam
+// (server/identity.ts) gives every member the roles that row holds, whenever
+// they joined. Taking it back deletes the one row.
+export const EVERYBODY = 'everybody';
+const givingAll = (role: string, what: string): Giving => ({
+  given: {
+    fingerprint: `grants/${role}/count`,
+    refresh: 'reactive',
+    intent: `Whether everybody has been given ${what}`,
+    shape: { count: 0, given: false, state: '' },
+    dsl: {
+      from: ['grants'],
+      filter: { and: [{ eq: ['grants.role', role] }, { eq: ['grants.principal', EVERYBODY] }] },
+      aggregate: { count: { count: '*' } },
+    },
+    mapping: {
+      $with: {
+        let: { count: { $get: { from: { $ref: '$.result' }, path: ['count'], fallback: { $const: 0 } } } },
+        value: {
+          count: { $var: 'count' },
+          given: { $gt: [{ $var: 'count' }, 0] },
+          state: { $case: { branches: [{ when: { $gt: [{ $var: 'count' }, 0] }, then: { $const: 'Everybody' } }], else: { $const: 'Nobody' } } },
+        },
+      },
+    },
+  },
+  give: {
+    fingerprint: `grants/${role}/give`,
+    intent: `Give ${what} to everybody, whoever joins later included`,
+    mutation: {
+      op: 'insert',
+      table: 'grants',
+      values: { principal: { $context: 'to' }, role },
+      onConflict: { target: ['principal', 'role'] },
+    },
+  },
+  take: {
+    fingerprint: `grants/${role}/take`,
+    intent: `Take ${what} back from everybody`,
+    mutation: {
+      op: 'delete',
+      table: 'grants',
+      where: { and: [{ eq: ['grants.role', role] }, { eq: ['grants.principal', { $context: 'to' }] }] },
+    },
+  },
+});
+
+const xray = givingAll('xray', 'the X-ray');
 export const xrayGiven = xray.given;
 export const xrayGive = xray.give;
 export const xrayTake = xray.take;
 
-const assistant = giving('assistant', 'the assistant');
+const assistant = givingAll('assistant', 'the assistant');
 export const assistantGiven = assistant.given;
 export const assistantGive = assistant.give;
 export const assistantTake = assistant.take;
