@@ -18,7 +18,7 @@ The mental model for the UI: **shells host canvases, canvases host action instan
 
 A canvas holds its instances in one of two modes. `stack` (the default) is a card deck: the top instance is active, the rest suspended, and the canvas renders the top alone — menu → list → detail → form, with Back real. `list` is a tray: every instance stays live and the canvas renders them all through an `actionLayout` that loops `$.instances` into `ActionSlot`s. A list canvas is how a surface gets *composed* rather than drawn — nobody hand-authors a launcher; the actions render themselves.
 
-By default the shell runs on the server: the app is a `defineApp` manifest handed to moss, which builds one durable shell per principal and streams rendered trees to a thin canvas terminal. Client execution — the shell in the browser, built by the app's own factory — is an explicit degrade for offline and zero-backend apps (D1), not a mode menu.
+By default the shell runs on the server: the app is a `defineApp` manifest handed to moss, which builds one durable shell per principal and streams rendered trees to a thin canvas terminal. That shell is **the app** — one per person, the thing that rearranges itself around them. A path can also lead to a **page** (`pages` on the manifest): the same actions on a manifest of its own, drawn for whoever asks and kept by nothing — a welcome, the docs. And the first screen of either can arrive *with* the page request, drawn on the server by the app's own kit and adopted by the terminal (moss DESIGN.md, "The document" and "Pages"). Client execution — the shell in the browser, built by the app's own factory — is an explicit degrade for offline and zero-backend apps (D1), not a mode menu.
 
 ## Decisions are the user's
 
@@ -30,7 +30,7 @@ Collect the answers **before implementation starts**. The build is meant to run 
 - **D2 — Environment.** What the runtime is handed: the database (PGlite for dev and demos, Postgres for real), a cache backend, a session verifier. For a client-degrade app: what serves the endpoints — in-memory fixtures, PGlite, a real backend, mixed.
 - **D3 — Reads.** Vex query endpoints, or plain endpoints with hand-written handlers. *Whether* to use Vex is the decision; *how* is fixed (see "Using Vex").
 - **D4 — Writes.** Vex mutation entries — the closed grammar, authored like reads and replayed as `{ fingerprint, context }` — or plain endpoint handlers. Either way a write is an endpoint; nothing writes inline.
-- **D5 — Routing.** Whether shell state syncs to the address bar.
+- **D5 — Routing.** What a path leads to. Three separate questions: whether the first screen is **drawn on the server** (it then needs the cookie copy of the session token, rule 12 — and a page drawn for a signed-in person may be kept by nothing between the server and their browser); which paths are **pages** rather than the app, and whether those are served live or written out as files (a file is only ever the page as nobody sees it; the build reports which pages can still do something and so want a server beside them); and whether the app's own shell state syncs to the address bar. Consequences to say out loud: a page keeps no shell, so anything on it that can be pressed gets a shell per connection, not per person; and the app's shell is one per person across every tab they have open, so a URL cannot hold a position inside it that two tabs disagree about.
 
 Any other fork not covered by a rule gets one of two treatments. A genuine open choice is surfaced like a decision point. A choice that plainly follows from answers already given — the canvas arrangement implied by the views, one form per entity, delete-with-confirm — is **derived**: recorded in `PLAN.md` for review, not asked. When in doubt, ask.
 
@@ -56,7 +56,7 @@ Pick per need; every piece works standalone. Nova is the only mandatory one for 
 | Package | Use it for | Don't use it for |
 |---|---|---|
 | `nova` | the UI: shells, canvases, actions, layouts, fragments. Renderers are adapters (`/adapters/react`, `/dom`, `/tty`, `/ink`) — the core is surface-blind. `/reflect` inspects a live tree (checks, screen diffs), `/agent` is the layout-authoring surface, `/devtools` the inspector | — |
-| `moss` | the app server: `defineApp` manifest + runtime → data layer, per-principal policy and catalogs, server shells, the socket, and the canvas terminal (`/terminal` plus a per-surface entry: `/terminal/react`, `/dom`, `/tty`, `/ink`) | client-degrade apps — they wire their own shell |
+| `moss` | the app server: `defineApp` manifest + runtime → data layer, per-principal policy and catalogs, server shells, pages, the socket, and the canvas terminal (`/terminal` plus a per-surface entry: `/terminal/react`, `/vue`, `/dom`, `/tty`, `/ink`). Draws a page request's first screen (`renderDocument`, with `/terminal/react/server` and its siblings) and writes pages as files (`exportDocuments`) | client-degrade apps — they wire their own shell. Routing inside the app: there is none, shell state is the truth |
 | `charter` | the policy document: roles → glob selections over the app's universes, resolved per principal, verified at boot | enforcement — the governed target enforces |
 | `prism` | every transform: shaping, formatting, branching | anything a schema or layout expresses directly |
 | `vex` | query and mutation endpoints: `{ fingerprint, context }` → rows or effects (see "Using Vex") | writes outside its closed mutation grammar |
@@ -64,6 +64,7 @@ Pick per need; every piece works standalone. Nova is the only mandatory one for 
 | `signal` | LLM calls | — |
 | `cortex` | agents, tools, orchestration | — |
 | `solid` | streaming structured LLM output into UI | — |
+| `cli` | the `nisc` command: `dev`, `build` (bundle, then say how each path is served — a file, or a server, and why), `export` (the site as a folder; only ever the page as nobody sees it), `start` (the built terminal, pages drawn), `check`. One file, `nisc.config.ts`, says how the app boots and how a screen is drawn | configuration of anything derivable — which paths exist and what each needs is read off the app |
 | `strata` | versions: an app's tables as ledgered sequences; stored and submitted documents stamped and upgraded through grammar sequences; `strata upgrade` for artifacts in source (see Versions) | editing a migration that has run — append one |
 
 ## Rules
@@ -72,8 +73,9 @@ Pick per need; every piece works standalone. Nova is the only mandatory one for 
 
 1. Everything visible is an action (`.action.ts`) + JSON layout (`.layout.ts`) loaded onto a canvas. No React views, no app logic in components.
 2. One component registry, assembled once. Primitives are domain-blind: a component name containing a domain noun (`InvoiceRow`, `DealCard`) is a feature component in disguise — wrong. Repeated structure is a data-driven spec prop on a generic primitive (a `Table`'s `columns`), not a new component. A component never imports the shell, actions, or data code; if it needs domain knowledge to render, compute the field upstream in a transform. **Components are configured, never styled:** a prop says what a thing is (an area, an ink, a level) from a closed set of names; no `style`, `className`, colour or size is accepted from a layout, and an unknown value falls back to the default. The look lives only in the kit's CSS and tokens — a different look is a different stylesheet over the same layouts.
+2a. A kit whose pages are drawn on the server draws the same thing on its first pass in the browser. Nothing that differs between the two — the window's width, a media query, storage, a portal target — may decide a component's first render: read it through `useSyncExternalStore` with a server answer, or in an effect. A `typeof window` guard around a state initialiser is not a fix, it is the bug: it makes the two sides disagree about the same render, and the terminal throws the page's elements away. What a component writes onto `<html>` from an effect (a palette, a scheme) is not in a drawn page until its script runs; the app reads it off the snapshot and hands it to the document (`renderDocument`'s `htmlAttributes`).
 3. Reusable chrome (dialog frame, panel, drawer) is a fragment composed when an action is loaded (`with: [...]`), not a wrapper component. Modality is arrangement — an action loaded onto an overlay canvas with fragment chrome — never a `$.modalOpen` flag inside an action.
-4. Shell state is the truth. Routing (D5), if wired, is a data table mapping paths ↔ actions, synced by an adapter; Nova stays URL-agnostic.
+4. Shell state is the truth. Routing (D5), if wired, is a data table mapping paths ↔ actions, synced by an adapter; Nova stays URL-agnostic. A **page** is not routing inside the app: it is a separate manifest at a path (`pages`), drawn and let go, and a path's parameters seed the canvas the page names — nothing else about a URL reaches an action.
 
 **Data**
 
@@ -90,7 +92,8 @@ Pick per need; every piece works standalone. Nova is the only mandatory one for 
 10a. The `data` universe is the INTROSPECTED database, not your schema file: it holds the engine's own tables too — moss's `integrations` (integration key hashes), `integration_actions`, `moss_generation`, `sessions` (session token hashes, under moss's credential), the `strata_ledger`, the vex cache. A role granted a data wildcard (`*.read`) denies them explicitly (`data: { allow: ['*.read'], deny: [...] }`; denies do not inherit, so every role that grants the wildcard denies). A charter check resolves against the universe boot resolves against — the app's migrations and moss's run on a scratch database, then introspected — or it proves nothing about wildcards.
 11. Per-principal UI is existence or a served variant, never a conditional. An action a principal lacks does not exist in their shell (ring 1); a different shape of the same action is a served variant (ring 2). Layouts and components never branch on roles or capability data. Ring 1 does the deriving: a canvas's `initial` takes a **candidate list** and the first id the principal actually holds mounts — members boot their home, anonymous boots the login, and nobody configures which. An ungranted candidate simply isn't there.
 11a. Per-principal boot has two hooks, and they are twins. `inputs` derives boot **data** — merged over each canvas's static seed, read from action data downstream. `seeds` derives boot **instances** — which actions to push onto which canvases, computed from the session and its own reads over the session's wire, ring-1-filtered like every other mount. A composed surface (a home, an agent's column) is `seeds` plus a `list` canvas; hand-authoring the same arrangement names it twice. Branching chrome on `inputs` is a stopgap where a served variant doesn't exist yet.
-12. Auth is a session token, nothing else — magic link is the default strategy; there are no username/password pairs in a nisc app if it can be avoided. Login is the anonymous principal's application. Session lifecycle is a **capability, not a channel**: login and sign-out are ordinary `fn:` endpoints calling `session.grant(token)` and `session.revoke()`, and the terminal reconnects as the new principal. The server consumes sessions and never mints identity.
+11b. A page is drawn for whoever asks, and what it has for them is ring 1 like everything else: a strip naming the signed-in person is an action a member is granted, on a canvas whose candidates a stranger is granted none of. A page never knows less about a signed-in person than the app does, and never keeps a shell for them. **Who may keep a drawn page follows from who asked, and from nothing else** — drawn for nobody it is the same for everybody and may be cached or written to a file; drawn for somebody it is theirs. No page, route or app declares which; a static build only ever asks for the page as nobody.
+12. Auth is a session token, nothing else — magic link is the default strategy; there are no username/password pairs in a nisc app if it can be avoided. Login is the anonymous principal's application. Session lifecycle is a **capability, not a channel**: login and sign-out are ordinary `fn:` endpoints calling `session.grant(token)` and `session.revoke()`, and the terminal reconnects as the new principal. The server consumes sessions and never mints identity. A page request can carry one credential, a cookie: when pages are drawn on the server the wire keeps a **copy** of the token there (`browserEnv({ cookie: true })`), written and cleared with the stored one, and it is read for one thing only — choosing whose screen to draw. Every other surface still wants the token itself. A sign-in handoff that stores the token stores the copy too, or the page it redirects to is drawn for nobody.
 
 **Schemas**
 
@@ -358,6 +361,8 @@ There is deliberately **no library suffix** (`.vex.ts`, `.charter.ts`): the suff
 src/
   app/                     ARTIFACTS ONLY — pure JSON, each parses its schema
     app.ts                 the defineApp manifest — one import per field
+    pages.ts               pages: what is drawn at a path and kept by nothing (single doc) —
+                           only if the app has any
     action-catalog.ts      ring 1: the action index (actions)
     layout-variants.ts     ring 2: the minted layout-variant index (layouts) — only if
                            the app mints variants; ring-1 existence covers most difference
@@ -375,10 +380,15 @@ src/
   db/                      the environment (D2): schema DDL, seed — NOT artifacts, not in the library
   lib/                     code helpers (date, etc.) — only what has nowhere better to live
   server/                  moss glue (boot + listener), server fns, and the manifest's
-                           non-endpoint session code (onSession observers, the run sink)
+                           non-endpoint session code (onSession observers, the run sink).
+                           When pages are drawn on the server: document.ts (how a screen is
+                           drawn — the kit handed to moss, and what the kit would put on
+                           <html>). No production route: `nisc start` serves the built terminal
   ui/                      the component kit + registry — the only renderer code in the app
   dev/                     headless checks; strata.ts lists the artifacts for `pnpm strata`
   main.tsx                 the terminal entry
+nisc.config.ts             what the app tells the `nisc` command: how it boots, how a screen is
+                           drawn — only if its pages are drawn on the server or built to files
 strata.lock.json           which grammar version the source is written in (rule 20) — committed,
                            moved only by `pnpm strata verify`
 ```
@@ -423,7 +433,7 @@ A `dev/all-checks.ts` runs the suite and is the app's `check` script. It spawns 
 A review pass checks, in order:
 
 1. Typecheck passes; every dev check passes; the manifest boots — moss refuses an incoherent charter, and a boot refusal is a finding, not an environment problem.
-2. No renderer code (JSX, a tty kit) outside `ui/` and the entry point. No `fetch` outside the endpoint layer. No formatting (`Intl`, `toLocaleString`, date libs) outside Prism transforms.
+2. No renderer code (JSX, a tty kit) outside `ui/` and the entry point. `server/document.ts` hands the kit's registry to moss to draw a page with; it imports the kit and contains no renderer code of its own. No `fetch` outside the endpoint layer. No formatting (`Intl`, `toLocaleString`, date libs) outside Prism transforms.
 3. Every action an opener loads with input declares it in the definition's `input`, and the declared fields are a subset of the action's `data` keys.
 4. Every displayer of an entity stays current after a write: its read is `refresh: 'reactive'`, or the write's success path emits a change channel the displayer listens to.
 5. No component name contains a domain noun; no component imports shell, action, or data code.
@@ -431,6 +441,7 @@ A review pass checks, in order:
 6a. Every artifact the manifest carries is pure JSON and parses its schema — a function, a `Date`, an `undefined`, or a class instance in an artifact is a code file masquerading as data. The manifest's declared code fields (`scope`, `functions`, `onSession`, `runs`, and the shell's `inputs` and `seeds` hooks) are the only exceptions; they live outside the artifact tree and are validated by running, not by this check.
 6b. Session code sits in the seam that describes it (rule 7a): no handler registered on `functions` that nothing calls. Tenancy resolves through `scope` and engine-side behaviors, never from a request field.
 6c. No role holding a data wildcard reaches the engine's tables, and the charter check resolves against the universe boot does (rule 10a).
+6d. Where pages are drawn on the server: a check opens the drawn page with the real wire and target and the terminal adopts it with nothing said (rule 2a), at every window width the kit distinguishes; a page drawn for somebody goes out `private, no-store`; and every sign-in handoff sets the cookie copy with the token (rule 12).
 7. Style guide bans (rule 16): `any`, `enum`, classes, default exports, `function` declarations by grep; type assertions and non-null `!` at the lint/typecheck level — grep can't tell negation from assertion. Declared shim exceptions are honored.
 8. Decision points: each of D1–D5 is recorded in the app's `PLAN.md` with its tier — answered, delegated by name, or derived — never assumed silently.
 9. Versions (rules 17–20): `pnpm check:grammars` and `pnpm check:sources` pass; no DDL outside a sequence; no edited migration, snapshot, early-stamp corpus file or hand-moved lock.
