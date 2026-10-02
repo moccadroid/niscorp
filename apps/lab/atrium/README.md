@@ -17,6 +17,8 @@ arrives over HTTP from their own service and is stored as rows.
 ```bash
 pnpm --filter atrium integrations # the integrations service, separate process
 pnpm --filter atrium dev          # app + server in one process, http://localhost:5175
+pnpm --filter atrium build        # bundle the terminal, then how each path is served
+pnpm --filter atrium start        # the built terminal, pages drawn, http://localhost:8787
 pnpm --filter atrium admin        # the administration tool, separate process
 pnpm --filter atrium check        # every check, headless
 ```
@@ -169,6 +171,35 @@ and cut a key. The guest reads which service did not answer and that nothing
 was issued, and the database agrees. Everything else in the app keeps working,
 including every surface that service shipped — those are rows now.
 
+## The page arrives drawn
+
+Open the app and the first screen is already in the page: the server reads the
+caller's shell as it stands, draws it with the same kit the browser holds, and
+writes it into `index.html`. The terminal starts from the snapshot the page
+carries and adopts the elements that are there; the socket then confirms them.
+With no script at all the page is still the screen.
+
+Who is asking comes off a cookie copy of the session token (a page request
+carries nothing else). A page drawn for a signed-in person may be kept by
+nothing; the lock screen, drawn for nobody, is the same for everybody.
+
+`/about` is a **page**, not part of the app: drawn for whoever asks and kept by
+nothing. Signed in, it names you — a strip that is an action you are granted and
+a stranger is not — and still opens no socket, because nothing on it can be
+pressed.
+
+```bash
+pnpm --filter atrium nisc build                         # bundle, then how each path is served
+pnpm --filter atrium nisc export --allow-live           # …and the site as a folder (out/)
+pnpm --filter atrium nisc start                         # the built terminal, pages drawn
+
+pnpm --filter atrium exec tsx src/dev/ssr-check.ts      # the drawn page, adopted
+pnpm --filter atrium exec tsx src/dev/pages-check.ts    # /about
+pnpm --filter atrium exec tsx src/dev/ssr-dev-check.ts  # the same, through vite
+pnpm --filter atrium exec tsx src/dev/site-check.ts     # the same, from a built terminal
+pnpm --filter atrium build && pnpm --filter atrium exec tsx src/dev/browser-probe.ts   # in real Chrome
+```
+
 ## Behind the scenes
 
 `pnpm admin` starts a second application on its own port: the tool we run the
@@ -234,13 +265,15 @@ layout asks any of the four.
 ```
 src/
   app/          artifacts only — pure JSON authored in TS
+    pages.ts    what is drawn at a path and kept by nothing (/about)
     charter/    who may ever hold what
     vex/        every read and write, as prewarmed cache entries
     actions/    the trios: chrome/, domains/<audience>/, surfaces/
     shell/      the frame and the sheet fragment
   db/           schema, seed, and the connector sync (resolve.ts)
   server/       moss glue, the fn seam, the bundle pull and its intake gate,
-                and operator.ts — the key-gated seam our own tool plugs into
+                operator.ts — the key-gated seam our own tool plugs into —
+                and document.ts (how a page is drawn with the kit)
   integrations/ the vendors' service — its own process, its own deploy
   admin/        OUR tool — its own moss app, its own process, its own charter
   ui/           the component kit, the only React in the app

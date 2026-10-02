@@ -15,7 +15,8 @@ import type { Charter } from '@niscorp/charter';
 // the key action is ON their shell is the connector's answer, not this file's.
 // Nothing in a layout ever asks either question.
 export const CHARTER: Charter = {
-  public: ['auth.login'],
+  // `about.page` is the about page's words — everybody's, a stranger's included.
+  public: ['auth.login', 'about.page'],
 
   // ── the guest ────────────────────────────────────────────
   // Everything a guest can ever be shown. Note what is absent and stays absent:
@@ -27,7 +28,9 @@ export const CHARTER: Charter = {
     // ships arrives under it, so the ceiling was written once and a new bundle
     // action needs no charter edit. Whether it is PLACED stays the resolver's
     // answer, per property, per stay state.
-    actions: ['chrome.guest', 'concierge', 'assistant', 'stay.*', 'ext.guest.*'],
+    // `about.*`: the page, and the strip that says who is looking — a signed-in
+    // person's, so a stranger's page has none.
+    actions: ['chrome.guest', 'concierge', 'assistant', 'stay.*', 'ext.guest.*', 'about.*'],
     data: [
       'stays.read',
       'guests.read',
@@ -84,7 +87,7 @@ export const CHARTER: Charter = {
     // `staff.*` is the floor every job stands on: the menu they navigate by and
     // the settings for their own screen. Not per-role, because it is not about
     // the job — it is about the person working it.
-    actions: ['chrome.staff', 'assistant', 'staff.*'],
+    actions: ['chrome.staff', 'assistant', 'staff.*', 'about.*'],
     // The floor includes reading the bundle mirrors — every job sees the spa
     // diary, the call sheet and the ask queue; who may MOVE them is per role.
     //
@@ -183,7 +186,7 @@ export const CHARTER: Charter = {
   // and shipping an integration never requires reading a guest's folio. Chrome
   // is an action grant; the data grants stay exactly this narrow.
   vendor: {
-    actions: ['chrome.staff', 'assistant', 'deploy.*'],
+    actions: ['chrome.staff', 'assistant', 'deploy.*', 'about.*'],
     // The one write that matters is now the capability SWITCH: enabling what a
     // connector offers, then going live. Versions are provenance it reads.
     data: ['connectors.read', 'connectors.write.update', 'connector_capabilities.read', 'connector_capabilities.write.update', 'capabilities.read', 'properties.read', 'property_connectors.read', 'property_slots.read', 'surface_slots.read', 'assistants.read', 'assistant_turns.read', 'assistant_turns.write.insert', 'assistant_runs.write.insert'],

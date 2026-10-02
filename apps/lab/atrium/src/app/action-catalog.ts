@@ -1,5 +1,6 @@
 import type { ActionDefinition } from '@niscorp/nova';
 import { loginAction } from './actions/surfaces/auth/login.action';
+import { aboutPageAction, aboutWhoAction } from './actions/surfaces/about/about.actions';
 import { assistantAction } from './actions/surfaces/assistant/assistant.action';
 import { guestChromeAction } from './actions/chrome/guest.action';
 import { staffChromeAction } from './actions/chrome/staff.action';
@@ -79,6 +80,10 @@ export const CATALOG_DEFINITIONS: Record<string, ActionDefinition> = {
 
   'chrome.guest': guestChromeAction,
   'chrome.staff': staffChromeAction,
+
+  // the about page (app/pages.ts) — drawn at /about, kept by nothing
+  'about.page': aboutPageAction,
+  'about.who': aboutWhoAction,
 
   concierge: withInput(conciergeAction, conciergeInputSchema),
   'stay.overview': withInput(stayOverviewAction, stayOverviewInputSchema),
