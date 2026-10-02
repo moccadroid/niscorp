@@ -4,12 +4,14 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "tsc -b && vite build",
+    "nisc": "nisc",
+    "dev": "nisc dev",
+    "build": "tsc -b && nisc build",
+    "start": "nisc start --port 8791",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "serve": "tsx src/server/serve.ts",
-    "check": "turbo run build --filter=lyra^... && tsx src/dev/all-checks.ts",
+    "check": "turbo run build --filter=lyra^... && nisc check",
     "census": "tsx src/dev/code-census.ts",
     "strata": "tsx src/dev/strata.ts"
   },
@@ -28,6 +30,7 @@
   },
   "devDependencies": {
     "@hono/node-server": "^2.0.4",
+    "@niscorp/cli": "workspace:^",
     "@types/jsdom": "^30.0.0",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",

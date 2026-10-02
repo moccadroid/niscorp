@@ -44,6 +44,24 @@ const ThemeProps = z
   })
   .strict();
 
+// THE SAME PALETTE, AS ATTRIBUTES FOR <html> — for a page drawn where no effect
+// runs (src/server/document.ts). The effect below writes these onto the document
+// once the page's script is up; a server writes them into the markup, so the
+// studio's colours are on the first paint and not the second. One list of known
+// names for both, and a value that could end its own declaration is dropped:
+// here it would be read as CSS, where `setProperty` below takes it as a value.
+export const themeDocumentAttributes = (tokens: Record<string, string> | undefined): Record<string, string> => {
+  if (tokens === undefined) return {};
+  const scheme = tokens['scheme'];
+  const declarations = Object.entries(tokens)
+    .filter(([key, value]) => KNOWN.has(key) && !/[;{}<>]/.test(value))
+    .map(([key, value]) => `--${key}:${value}`);
+  return {
+    ...(scheme !== undefined && SCHEMES.has(scheme) ? { 'data-scheme': scheme } : {}),
+    ...(declarations.length > 0 ? { style: declarations.join(';') } : {}),
+  };
+};
+
 export const Theme: NovaComponent<z.infer<typeof ThemeProps>> = ({ tokens }: z.infer<typeof ThemeProps>) => {
   useEffect(() => {
     if (tokens === undefined) return;

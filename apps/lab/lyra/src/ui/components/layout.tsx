@@ -202,20 +202,46 @@ Sheet.meta = { description: 'A panel over the surface — a bottom sheet on a ph
 
 const WIDE = '(min-width: 860px)';
 
-const useWide = (): boolean => {
-  const [wide, setWide] = React.useState(() => (typeof window === 'undefined' ? false : window.matchMedia(WIDE).matches));
-  React.useEffect(() => {
-    const mq = window.matchMedia(WIDE);
-    const on = (): void => setWide(mq.matches);
-    mq.addEventListener('change', on);
-    on();
-    return () => mq.removeEventListener('change', on);
-  }, []);
-  return wide;
+// THE WINDOW'S WIDTH, AS A STORE — with an answer for a tree that is being
+// drawn where there is no window, and for the first pass over elements a server
+// already drew.
+//
+// This used to be `useState(() => window.matchMedia(…).matches)`, guarded by
+// `typeof window`. The guard made the server answer `false` and a wide browser
+// answer `true` FOR THE SAME FIRST RENDER, which is the one thing adopting
+// server-drawn elements cannot survive: React finds a rail where the page has
+// none and throws the page's elements away. `useSyncExternalStore` is told what
+// the server said, uses it for that first pass, and moves to the window's own
+// answer straight after — so a page drawn narrow becomes wide in place.
+const watchWide = (changed: () => void): (() => void) => {
+  const mq = window.matchMedia(WIDE);
+  mq.addEventListener('change', changed);
+  return () => mq.removeEventListener('change', changed);
 };
+const useWide = (): boolean =>
+  React.useSyncExternalStore(
+    watchWide,
+    () => window.matchMedia(WIDE).matches,
+    () => false,
+  );
 
-const overlay = (node: React.ReactNode): React.ReactNode =>
-  typeof document === 'undefined' ? node : createPortal(node, document.body);
+// Whether this tree is past its first pass over server-drawn elements. Nothing
+// to subscribe to: it is false on a server and during adoption, true after.
+const nothingToWatch = (): (() => void) => () => undefined;
+const useAdopted = (): boolean =>
+  React.useSyncExternalStore(
+    nothingToWatch,
+    () => true,
+    () => false,
+  );
+
+// Anything that means "relative to the window" leaves the tree that is not (see
+// Bar, below) — but only once there is a window to leave it FOR. A server has no
+// `document.body`, and the first pass over its elements must find them where it
+// put them: in place. The portal happens on the render after.
+const Overlay: React.FC<{ children: React.ReactNode }> = ({ children }) => (useAdopted() ? createPortal(children, document.body) : children);
+
+const overlay = (node: React.ReactNode): React.ReactNode => <Overlay>{node}</Overlay>;
 
 const SCRIM: React.CSSProperties = {
   position: 'fixed',

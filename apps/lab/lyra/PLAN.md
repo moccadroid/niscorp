@@ -27,6 +27,8 @@ fork of the codebase and not a setting buried in a preferences screen: it is row
 | D3 | Reads | derived | Vex entries, replay-only, locked. No LLM hooks wired — an unknown fingerprint is a 500, never a silent generate. |
 | D4 | Writes | derived | Vex mutation entries. Every write is a fingerprint replay; nothing writes inline. |
 | D5 | Routing | answered | No address-bar sync. Shell state is the truth. Revisit if staff-to-staff deep links become a real workflow. |
+| D5a | Server-drawn pages | answered | The first screen arrives with the page: the server draws the caller's shell into `index.html` (`server/document.ts`, moss `renderDocument`) and the terminal adopts it. Wired here as the second app after atrium, to prove the mechanism is not atrium-shaped, and kept when asked (2026-10-02; `docs/plans/server-drawn-pages.md`). Consequences: the wire keeps a cookie copy of the session token, read only to draw a page; a signed-in page is `private, no-store`; the studio's palette is written onto `<html>` by the server (`themeDocumentAttributes`). One thing the server cannot know is the window's width, so a wide screen is drawn narrow and becomes wide in place when the script runs — the rail arrives a moment after the page. Fixing that properly is CSS deciding the arrangement instead of `useWide`. |
+| D5b | The `nisc` command | answered | `dev`, `build`, `start` and `check` go through `nisc` (`@niscorp/cli`, `nisc.config.ts`), answered 2026-10-02. `build` bundles the terminal and then draws every path once, so a build now boots the app. `start` (port 8791) is the first route that serves lyra's built terminal, with its pages drawn; `serve` (`server/serve.ts`) stays the app's surfaces alone. |
 
 ## Answered in the interview
 

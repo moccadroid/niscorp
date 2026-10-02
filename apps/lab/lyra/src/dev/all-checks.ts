@@ -52,6 +52,7 @@ const CHECKS = [
   ['language-check', 'one deployment, two languages, nothing shared but the rows'],
   ['phrase-harvest', 'every word this app can say, counted — and a seeded language missing one turns this red'],
   ['render-check', 'the kit draws it: every principal, every screen, every cell a spec names — through the real components, into a real DOM'],
+  ['ssr-check', 'the page a request is answered with is the screen the socket would have streamed, adopted on any window width'],
   ['click-check', 'the other half of every click: what a control emits is what its trigger reads'],
 ] as const;
 
