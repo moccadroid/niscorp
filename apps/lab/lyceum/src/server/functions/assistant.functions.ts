@@ -15,7 +15,7 @@ import type { TimerRequest, TimerWriter, Timing, Written } from '../timing';
 import { answerSchemaOf, isDraft } from '@niscorp/tide/agent';
 import { anchorTimer, DRAFT_HERE, dueOf, localNow, proposable, slideIdsOf } from '../timing';
 import { slidesDeck } from '@lyceum/app/vex/deck.entries';
-import { timerSave } from '@lyceum/app/vex/timer.entries';
+import { timerDelete, timerSave } from '@lyceum/app/vex/timer.entries';
 import { vexOver } from '../vex-over';
 
 // THE ASSISTANT'S FUNCTIONS — for what is not data (PLAN.md, "Vex is never
@@ -154,5 +154,14 @@ export const assistantFunctions = (
     });
     await deps.timing().reload();
     return { dueLocal: due === undefined ? '' : localNow(due, deps.tz, true).slice(11) };
+  },
+  // Deleting a saved timer: the row goes, as this person, and tide unloads it
+  // (the reload reads the rows again). The press is theirs — the assistant
+  // only ever opens the list (app/actions/speaker/timers.action.ts).
+  'timers.delete': async (data) => {
+    const { picked } = z.looseObject({ picked: z.looseObject({ timer_id: z.string().min(1) }) }).parse(data);
+    await vexOver(session.wire)(timerDelete.fingerprint, { timerId: picked.timer_id });
+    await deps.timing().reload();
+    return { deleted: picked.timer_id };
   },
 });

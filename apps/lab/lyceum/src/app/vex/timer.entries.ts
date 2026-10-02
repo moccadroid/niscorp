@@ -50,6 +50,33 @@ export const timerDocument: SeedEntry = {
   },
 };
 
+// Every saved timer, newest first, for the speaker to look through and delete
+// from (actions/speaker/timers.action.ts). Reactive: saved or deleted, the
+// list follows.
+export const timersSaved: SeedEntry = {
+  fingerprint: 'timers/saved',
+  refresh: 'reactive',
+  intent: 'Every saved timer: what it does and when it fires, newest first',
+  shape: [{ timer_id: '', intent: '', due_at: '' }],
+  dsl: {
+    from: ['timers'],
+    fields: ['timers.timer_id', 'timers.intent', 'timers.due_at'],
+    sort: [{ field: 'timers.saved_at', dir: 'desc' }, { field: 'timers.timer_id', dir: 'desc' }],
+    limit: 50,
+  },
+};
+
+// Delete one saved timer, by its id — the speaker's own press.
+export const timerDelete: SeedMutation = {
+  fingerprint: 'timers/delete',
+  intent: 'Delete one saved timer',
+  mutation: {
+    op: 'delete',
+    table: 'timers',
+    where: { eq: ['timers.timer_id', { $context: 'timerId' }] },
+  },
+};
+
 // Save a timer, as the speaker — `saved_by` is stamped by the engine.
 export const timerSave: SeedMutation = {
   fingerprint: 'timers/save',
@@ -66,4 +93,4 @@ export const timerSave: SeedMutation = {
   },
 };
 
-export const TIMER_ENTRIES: readonly (SeedEntry | SeedMutation)[] = [timersAll, timerNext, timerDocument, timerSave];
+export const TIMER_ENTRIES: readonly (SeedEntry | SeedMutation)[] = [timersAll, timerNext, timerDocument, timersSaved, timerSave, timerDelete];

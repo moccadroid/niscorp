@@ -100,6 +100,7 @@ export const assistantAction: ActionDefinition = {
             canvas: 'overlay',
             with: ['sheet'],
             input: {
+              about: '@event.payload.input.about',
               draft: '@event.payload.input.draft',
               intent: '@event.payload.input.intent',
               shape: '@event.payload.input.shape',
