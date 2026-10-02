@@ -28,7 +28,7 @@ export const censusLayout: LayoutNode = {
           props: {
             bars: [
               { label: 'Data', value: '$.census.data', ink: 'live' },
-              { label: 'Renderer', value: '$.census.renderers', ink: 'signal' },
+              { label: 'Kit', value: '$.census.renderers', ink: 'signal' },
               { label: 'Endpoints', value: '$.census.endpoints', ink: 'signal' },
               { label: 'Setup', value: '$.census.setup', ink: 'signal' },
               { label: '+4 kits', value: '$.census.otherRenderers', mark: 'hatch' },

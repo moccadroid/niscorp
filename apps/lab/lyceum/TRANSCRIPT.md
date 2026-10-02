@@ -124,7 +124,7 @@ Nova is one part of nisc. The other parts are the rest of an app: the server, pe
 
 The usual objection: fine for a demo, not for a real app.
 
-This is this app, counted from its source just now. Green is JSON. Blue is the code a nisc app has to ship: one renderer, the endpoints, the setup. The hatched bars are extra: the four other renderers I built for the demo you just saw, and the tests.
+This is this app, counted from its source just now. Green is JSON. Blue is the code a nisc app has to ship: the components and their CSS, the endpoints, the setup. Nova does the rendering; the components are what it draws with. The hatched bars are extra: the four other kits I built for the demo you just saw, and the tests.
 
 About half of this app is data.
 
