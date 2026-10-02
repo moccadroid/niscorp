@@ -1,5 +1,4 @@
 import type { LayoutNode } from '@niscorp/nova';
-import { assistantLayout } from '@lyceum/app/actions/assistant/assistant.layout';
 import { sendLayout } from '@lyceum/app/actions/questions/send.layout';
 
 // THE OPENING'S LAYOUTS. A slide is an anchor: the name of the thing, one
@@ -38,15 +37,47 @@ export const aloneLayout: LayoutNode = {
   children: [cell('head', [headline('display', '{{$.title}}')], { align: 'center' })],
 };
 
-// 3 · The speaker's assistant, mirrored: the claim on the left, and on the
-// right the assistant as it stands on the controller — its own layout, drawn
-// from a copy of its data (server/mirroring.ts).
+// 3 · The speaker's assistant, mirrored (server/mirroring.ts): the same data the
+// controller's assistant has, drawn for a room. Left: what was asked — as it is
+// typed, then as it was sent — and where it stands: thinking, to be read, saved.
+// Right, the whole height: the document that came back. No field and no
+// buttons: the stage only shows.
+const last = (key: string): unknown => ({ $get: { from: { $ref: '$.history' }, path: [{ $sub: [{ $length: { $ref: '$.history' } }, 1] }, key], fallback: { $const: '' } } });
+const drafted = (key: string): unknown => ({ $prism: { $get: { from: { $ref: '$.reply.proposals' }, path: [0, 'timer', key], fallback: { $const: '' } } } });
+const typing = { $prism: { $not: { $eq: [{ $ref: '$.draft' }, { $const: '' }] } } };
+const proposed = { $prism: { $and: [{ $ref: '$.answered' }, { $gt: [{ $length: { $ref: '$.reply.proposals' } }, 0] }] } };
 export const mirrorLayout: LayoutNode = {
   component: 'Sheet',
-  props: { size: 'fill', areas: ['head mirror'], cols: [1, 1.3] },
+  props: { size: 'fill', areas: ['head doc', 'asked doc', 'state doc'], cols: [1, 1.15], rows: [1, 'auto', 'auto'] },
   children: [
     cell('head', [headline('display', '{{$.title}}')], { align: 'middle' }),
-    cell('mirror', [assistantLayout], { pad: 'none' }),
+    cell('asked', [
+      label('Asked, on the controller'),
+      { component: 'Code', props: { text: { $if: typing, $then: '$.draft', $else: { $prism: last('message') } } } },
+    ]),
+    {
+      if: '$.thinking',
+      then: cell('state', [headline('name', 'A model is writing…')], { mark: 'hatch' }),
+      else: {
+        if: proposed,
+        then: cell('state', [label('To read, then save'), { component: 'Code', props: { text: drafted('when') } }], { ink: 'highlight' }),
+        else: { if: { $prism: last('outcome') }, then: cell('state', [label('Saved'), { component: 'Code', props: { text: { $prism: last('outcome') } } }], { ink: 'live' }) },
+      },
+    },
+    cell(
+      'doc',
+      [
+        label('What came back'),
+        // The draft while it waits to be saved; once saved, the document that
+        // was saved (the assistant keeps it as `chosen`) stays up.
+        {
+          if: proposed,
+          then: { component: 'Code', props: { text: drafted('json') } },
+          else: { if: '$.chosen.json', then: { component: 'Code', props: { text: '$.chosen.json' } }, else: text('Nothing yet.', true) },
+        },
+      ],
+      { ink: 'ink', align: 'middle' },
+    ),
   ],
 };
 

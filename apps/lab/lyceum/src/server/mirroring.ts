@@ -31,12 +31,18 @@ export const mirrorAssistant = (server: () => MossServer): AssistantMirror => {
     // to finish building.
     onSession: (session) => {
       if (session.principal !== 'speaker') return;
+      // A shell that failed to build has nothing to mirror, and reading it
+      // throws: the mirror is a convenience and never takes the server down.
       setTimeout(() => {
-        session.shell.onDataChange((change) => {
-          if (session.shell.getRuntime(change.instanceId)?.definition.id !== MIRRORED) return;
-          latest = change.data;
-          server().shells?.deliver('stage', MIRROR_CHANNEL);
-        });
+        try {
+          session.shell.onDataChange((change) => {
+            if (session.shell.getRuntime(change.instanceId)?.definition.id !== MIRRORED) return;
+            latest = change.data;
+            server().shells?.deliver('stage', MIRROR_CHANNEL);
+          });
+        } catch {
+          // No shell: no mirror for this session.
+        }
       }, 0);
     },
     functions: (session) => ({

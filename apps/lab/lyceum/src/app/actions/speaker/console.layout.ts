@@ -21,7 +21,7 @@ export const consoleLayout: LayoutNode = {
   props: {
     size: 'fill',
     areas: ['head head', 'tools notes', 'attached notes', 'controls controls'],
-    rows: ['auto', 2, 1, 'auto'],
+    rows: ['auto', 3, 1, 'auto'],
     narrow: { areas: ['head', 'tools', 'attached', 'controls'], rows: ['auto', 1, 'auto', 'auto'] },
   },
   children: [region('head'), region('tools'), region('notes'), region('attached'), region('controls')],
