@@ -34,27 +34,14 @@ export const pairLayout: LayoutNode = {
   ],
 };
 
-// Where permissions are checked. First the three usual places, side by side,
-// one word each; a step on (the deck's `step`), the one file they are here.
+// Three places, side by side: one word each.
 export const placesLayout: LayoutNode = {
-  if: { $prism: { $gte: [{ $ref: '$.step.step' }, 1] } },
-  then: {
-    component: 'Sheet',
-    props: { size: 'fill', areas: ['head head', 'name code'], cols: [1, 1.6], rows: ['auto', 1] },
-    children: [
-      cell('head', [label('{{$.title}}'), headline('display', '{{$.answer}}')]),
-      cell('name', [headline('title', '{{$.kicker}}')], { ink: 'signal', align: 'center' }),
-      cell('code', [label('{{$.file}}'), { component: 'Code', props: { text: '$.code', marked: '$.marked' } }], { ink: 'ink', align: 'middle' }),
-    ],
-  },
-  else: {
-    component: 'Sheet',
-    props: { size: 'fill', areas: ['head head head', 'one two three'], rows: ['auto', 1] },
-    children: [
-      cell('head', [headline('display', '{{$.title}}')]),
-      { for: '$.places', as: 'place', key: 'area', do: { component: 'Cell', props: { area: '$place.area', align: 'center' }, children: [label('{{$place.what}}'), headline('name', '{{$place.name}}')] } },
-    ],
-  },
+  component: 'Sheet',
+  props: { size: 'fill', areas: ['head head head', 'one two three'], rows: ['auto', 1] },
+  children: [
+    cell('head', [headline('display', '{{$.title}}')]),
+    { for: '$.places', as: 'place', key: 'area', do: { component: 'Cell', props: { area: '$place.area', align: 'center' }, children: [label('{{$place.what}}'), headline('name', '{{$place.name}}')] } },
+  ],
 };
 
 // The button, given to a few: the claim, and beside it who pressed — live.

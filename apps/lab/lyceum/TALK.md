@@ -47,7 +47,7 @@ The working record for the nisc talk that lyceum runs. It holds what we agreed, 
 
 The history order of the packages (Sep 27 outline) still holds as the background logic: nova (GPT-3 JSON) → prism (data-to-data) → signal/cortex → solid (streaming) → vex (intent + shape) → moss (the app server) → charter (policy, because moss needed it) → tide (automation as data) → strata (versions, because everything is data).
 
-## 4. The deck as built (34 slides, 2026-10-02)
+## 4. The deck as built (35 slides, 2026-10-02)
 
 The deck is `src/db/deck.ts` (order, controller tools, notes); the slides are `src/app/actions/slide/`. A read-through of the whole talk, slide by slide, is `TRANSCRIPT.md`. "Live" = the slide reads the app's own state and changes while it is up. "In steps" = one slide the controller reveals part by part (`tools.step` writes the deck row's `step`; the slide reads it; moving the deck resets it) — where a traditional deck would have three slides.
 
@@ -55,7 +55,7 @@ The deck is `src/db/deck.ts` (order, controller tools, notes); the slides are `s
 |---|---|---|---|
 | 1 | `slide.title` | "nisc — Apps as checked JSON." + QR and address | — |
 | 2 | `stage.register` | Everyone who has joined, live | — |
-| 3 | `slide.timer` | "First, a timer." | the assistant (the timer is written and saved here) |
+| 3 | `slide.timer` | "First, a timer." + the speaker's assistant, MIRRORED live from the controller (typing, reply, the drafted timer) — no screen sharing (`server/mirroring.ts`) | the assistant (the timer is written and saved here) |
 | 4 | `slide.origin` | 2020: GPT-3 could not write a React app. / It could fill in a JSON schema. | — |
 | 5 | `slide.problem` | Models write code faster than anyone can review it. | — |
 | 6 | `slide.answer` | Our answer: A program checks it. Not a person. | — |
@@ -72,23 +72,26 @@ The deck is `src/db/deck.ts` (order, controller tools, notes); the slides are `s
 | 17 | `slide.install` | Installing someone else's Q&A: the four install checks and the result, live | install broken / install / approve |
 | 18 | `slide.moss` | Moss: Your screen runs on the server. "Type something, then RELOAD" | — |
 | 19 | `slide.wire` | Your phone only draws. Server ↔ phone, animated | — |
-| 20 | `slide.manifest` | The server is a list. `app.ts` | — |
+| 20 | `slide.manifest` | This is what Moss is given. `app.ts` (NOT "the server is a list" — that was wrong) | — |
 | 21 | `slide.exists` | It sends you only what you have. | — |
-| 22 | `slide.button` | Some of you have an action now. Who pressed, live | give the button to three / take it back |
-| 23 | `slide.where` | Where do you check permissions? IN STEPS: Routes / Components / Rows → "Here: one file." + `charter.ts` | the step tool |
-| 24 | `slide.twice` | Enforced twice. Your screen / every query + the `questions` rule | — |
-| 25 | `slide.prism` | Prism: Functions are JSON too. The Next button's transform, run live on the slide | — |
-| 26 | `slide.vex` | Vex: Queries are JSON too. `members/counts` stored, what a screen sends, and the answer, live | — |
-| 27 | `slide.words` | Asked in words. Replayed / Written, stored / Refused | give the assistant; the assistant |
-| 28 | `slide.water` | 18,000 cups of water. | — |
-| 29 | `slide.press` | It can't press Send. | cue `tools.order` (obsolete — see §10) |
-| 30 | `slide.agents` | The same file governs the AI. (moved here 2026-10-02: by now the room has an assistant) | — |
-| 31 | `slide.tide` | Tide: The timer is a row. The saved timer's document and a countdown, live | — |
-| 32 | `slide.once` | No agent loop. | — |
-| 33 | `slide.strata` | Strata: Grammars get migrations. This app's own twelve kit migrations (`grammars.ts`), the one that rewrote layouts marked | — |
-| 34 | `slide.end` | It's all in one folder. Repo QR; the Q&A's fit questions, live | — |
+| 22 | `slide.button` | Some of you have an action now. Who pressed, live | give the button to a quarter of the room (at least three, connected phones first; press again for another quarter) / take it back |
+| 23 | `slide.where` | Where do you check permissions? Routes / Components / Rows | — |
+| 24 | `slide.charter` | Charter: Who gets what: one file. `charter.ts`, the `actions` lines marked — what Moss reads to build a screen | — |
+| 25 | `slide.prism` | Prism: Data mapping is JSON too. The Next button's mapping before its write, run live on the slide. (Not "functions are JSON": some are; anything complicated is a real function behind an endpoint.) | — |
+| 26 | `slide.vex` | Vex: Queries are JSON too. `members/counts` stored, what a screen sends, the answer live. Said: Vex has been there since slide 8 (`/api/vex`). | — |
+| 27 | `slide.twice` | Enforced twice. The charter's `data` half, now that queries exist: your screen / every query + the `questions` rule | — |
+| 28 | `slide.words` | Asked in words. Replayed / Written, stored / Refused | give the assistant; the assistant |
+| 29 | `slide.water` | 18,000 cups of water. | — |
+| 30 | `slide.press` | It can't press Send. | cue `tools.order` (obsolete — see §10) |
+| 31 | `slide.agents` | The same file governs the AI. | — |
+| 32 | `slide.tide` | Tide: The timer is a row. The saved timer's document and a countdown, live | — |
+| 33 | `slide.once` | No agent loop. | — |
+| 34 | `slide.strata` | Strata: Grammars get migrations. This app's own twelve kit migrations | — |
+| 35 | `slide.end` | It's all in one folder. Repo QR; the Q&A's fit questions, live | — |
 
 Keys: ← / → (and Page Up / Page Down, what a clicker sends) move the deck on the controller, everywhere; on the stage in dev only.
+
+**What the talk gives everybody is one row** (`grants`, principal `everybody`): the X-ray and the assistant reach whoever joins later; taken back, they are gone for whoever joins next. The button is per person.
 
 **The Q&A's vendor is "the QA Company"** (was "Acme" until 2026-10-02 — the name means nothing to this audience). Integration id `qa`, actions `ext.<seat>.qa.*`, bundle in `apps/lab/lyceum-vendor-demo`. Older sections of this file still say Acme; they are history. The published bundle on GitHub Pages changes with the next push — until then the deployed app and the published file disagree on the id.
 

@@ -1,5 +1,4 @@
 import type { ActionDefinition } from '@niscorp/nova';
-import { deckStep } from '@lyceum/app/vex/deck.entries';
 import { pressesRecent } from '@lyceum/app/vex/press.entries';
 import { documentLayout, mossLayout, twiceLayout } from './later.layouts';
 import { buttonLayout, claimLayout, pairLayout, placesLayout } from './moss.layouts';
@@ -37,7 +36,7 @@ export const wireSlide = still('slide.wire', 'Your phone only draws.', mossLayou
 });
 
 // app/app.ts, as written: what this app hands Moss.
-export const manifestSlide = still('slide.manifest', 'The server is a list.', documentLayout, {
+export const manifestSlide = still('slide.manifest', 'This is what Moss is given.', documentLayout, {
   kicker: 'Moss',
   file: 'app.ts',
   code: code(
@@ -74,46 +73,42 @@ export const buttonSlide: ActionDefinition = {
   triggers: [],
 };
 
-// Where permissions are usually checked — three places — and, a step on, the
-// one file they are here: three roles from app/charter/charter.ts, as written.
-export const whereSlide: ActionDefinition = {
-  id: 'slide.where',
-  title: 'Where do you check permissions?',
-  data: {
-    title: 'Where do you check permissions?',
-    places: [
-      { area: 'one', name: 'Routes', what: 'An address' },
-      { area: 'two', name: 'Components', what: 'A hidden button' },
-      { area: 'three', name: 'Rows', what: 'Row-level security' },
-    ],
-    kicker: 'Charter',
-    answer: 'Here: one file.',
-    file: 'charter.ts',
-    code: code(
-      'member: {',
-      "  actions: ['member.*', 'query.*',",
-      "    'ext.member.*'],",
-      '  data: [...MEMBERS_READ, ...QUERYING,',
-      '    ...QUESTIONING, ...CONVERSING, ...LOOK],',
-      '},',
-      '',
-      'button: {',
-      "  actions: ['button.*'],",
-      "  data: ['presses.write.insert'],",
-      '},',
-      '',
-      "clock: { data: ['deck.write.update'] },",
-    ),
-    marked: [8, 9, 10, 11],
-    step: { step: 0 },
-  },
-  layout: placesLayout,
-  endpoints: { step: { url: '/api/vex', method: 'POST', request: { fingerprint: deckStep.fingerprint, context: {} }, target: 'step' } },
-  lifecycle: { mount: [{ call: 'step' }] },
-  triggers: [],
-};
+export const whereSlide = still('slide.where', 'Where do you check permissions?', placesLayout, {
+  places: [
+    { area: 'one', name: 'Routes', what: 'An address' },
+    { area: 'two', name: 'Components', what: 'A hidden button' },
+    { area: 'three', name: 'Rows', what: 'Row-level security' },
+  ],
+});
 
-// The questions rule from app/vex/behaviors.ts.
+// Three roles from app/charter/charter.ts, as written. Marked: the `actions`
+// lines — what Moss reads to decide which actions exist on a person's screen.
+// The `data` lines are the other half, enforced in every query (slide.twice,
+// once queries have been introduced).
+export const charterSlide = still('slide.charter', 'Who gets what: one file.', documentLayout, {
+  kicker: 'Charter',
+  file: 'charter.ts',
+  code: code(
+    'member: {',
+    "  actions: ['member.*', 'query.*',",
+    "    'ext.member.*'],",
+    '  data: [...MEMBERS_READ, ...QUERYING,',
+    '    ...QUESTIONING, ...CONVERSING, ...LOOK],',
+    '},',
+    '',
+    'button: {',
+    "  actions: ['button.*'],",
+    "  data: ['presses.write.insert'],",
+    '},',
+    '',
+    "clock: { data: ['deck.write.update'] },",
+  ),
+  marked: [2, 3, 9],
+});
+
+// The charter's other half, shown once queries have been introduced: the
+// `data` lines are enforced inside every query. The questions rule from
+// app/vex/behaviors.ts.
 export const twiceSlide = still('slide.twice', 'Enforced twice.', twiceLayout, {
   shell: 'Only what you’re given.',
   code: code(
@@ -132,4 +127,4 @@ export const agentsSlide = still('slide.agents', 'The same file governs the AI.'
   two: { label: 'The timer', line: 'Runs as clock. It can move the slide.' },
 });
 
-export const MOSS_SLIDES: readonly ActionDefinition[] = [mossSlide, wireSlide, manifestSlide, existsSlide, buttonSlide, whereSlide, twiceSlide, agentsSlide];
+export const MOSS_SLIDES: readonly ActionDefinition[] = [mossSlide, wireSlide, manifestSlide, existsSlide, buttonSlide, whereSlide, charterSlide, twiceSlide, agentsSlide];

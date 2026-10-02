@@ -55,7 +55,7 @@ const main = async (): Promise<void> => {
     speaker.click('controls', 'next');
     await speaker.shows('head', `slide ${step + 2} of`);
   }
-  check('...and it is on the controller there', await speaker.shows('tools', 'Give it to three people'));
+  check('...and it is on the controller there', await speaker.shows('tools', 'Give it to a quarter of the room'));
   await speaker.shows('tools', 'People who have it');
   await new Promise((resolve) => setTimeout(resolve, 300));
   speaker.click('tools', 'give');

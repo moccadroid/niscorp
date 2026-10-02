@@ -34,16 +34,19 @@ const still = (id: string, title: string, layout: ActionDefinition['layout'], da
   triggers: [],
 });
 
-// The controller's Next button (speaker/console.prism.ts, as written): where
-// the deck goes next, never past the last slide. Beside it, the same config, run by
+// Most of what a server does is map data: reshape it on the way to the
+// database and on the way back. That part is JSON here (Prism) — not every
+// function: anything complicated is a real function behind an endpoint. The
+// example is the controller's Next button (speaker/console.prism.ts, as
+// written): what it sends, worked out from where the deck is, before the write. Beside it, the same config, run by
 // the layout on this slide over the deck as it is now.
 export const prismSlide: ActionDefinition = {
   id: 'slide.prism',
-  title: 'Functions are JSON too.',
+  title: 'Data mapping is JSON too.',
   data: {
     kicker: 'Prism',
-    title: 'Functions are JSON too.',
-    file: 'console.prism.ts — my Next button',
+    title: 'Data mapping is JSON too.',
+    file: 'console.prism.ts — my Next button, before its write',
     code: code(
       "const position = { $ref: '$.current.position' };",
       "const last = { $sub: [{ $ref: '$.current.count' }, 1] };",

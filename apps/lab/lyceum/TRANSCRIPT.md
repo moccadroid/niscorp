@@ -1,6 +1,6 @@
 # The talk, as I would say it
 
-A read-through for the deck as it is on 2026-10-02 (34 slides, `src/db/deck.ts`). It is one way to say it, written to check that the story connects — not a script to learn. `[square brackets]` are things you do. Each slide starts with **→ Slide N**, so you can step through the app beside it.
+A read-through for the deck as it is on 2026-10-02 (35 slides, `src/db/deck.ts`). It is one way to say it, written to check that the story connects — not a script to learn. `[square brackets]` are things you do. Each slide starts with **→ Slide N**, so you can step through the app beside it.
 
 Rough length when read aloud with the demos: 40–45 minutes.
 
@@ -24,13 +24,13 @@ That's you. Every name is a row in a database. If you typed your own name, a mod
 
 **→ Slide 3 · First, a timer.**
 
-One thing before we start. I'd like a timer for this talk.
+One thing before we start. I'd like a timer for this talk. I'll ask my assistant, on my controller — you can watch it up here.
 
-[share the controller screen] [type: "Show the last slide in 40 minutes"]
+[type: "Show the last slide in 40 minutes"]
 
 I asked a model for that. Look at what came back: it did not start a timer. It wrote a small document. It says when it fires and what it does: put the last slide on screen. I can read it. If it's right, I save it.
 
-[press Save, stop sharing]
+[press Save]
 
 It's running now. Keep it in mind — I'll come back to it, and it will end this talk for me.
 
@@ -182,9 +182,9 @@ This is everything that crosses the wire. Down: what to draw. Up: what you press
 
 That's why swapping the renderer was one row: the renderer was never part of the app.
 
-**→ Slide 20 · The server is a list.**
+**→ Slide 20 · This is what Moss is given.**
 
-And this is the whole server for this app. A list: the permissions, the actions, the queries, the row rules. Moss takes the list and runs it. There is no routing code and no controller code behind this.
+And this is everything this app hands to that server: the permissions, the actions, the queries, the row rules — all documents — and a few small pieces of code at the bottom. Moss takes that and runs it. There are no routes and no controllers behind this.
 
 **→ Slide 21 · It sends you only what you have.**
 
@@ -194,11 +194,11 @@ Let me show you.
 
 **→ Slide 22 · Some of you have an action now.**
 
-[give it to three people]
+[give it to a quarter of the room]
 
-Three of you just got a button. Hands up if you have it. Turn your volume up and press it.
+Some of you just got a button. Hands up if you have it. Turn your volume up and press it.
 
-[names appear]
+[names appear — if nobody presses, give it to another quarter]
 
 Everyone else: look at your phone. It isn't greyed out — it isn't there. Laptops: search your websocket frames. It was never sent to you.
 
@@ -208,41 +208,43 @@ Everyone else: look at your phone. It isn't greyed out — it isn't there. Lapto
 
 How did the server decide that? In most apps, permissions are checked in three places: on routes, in components, and on rows in the database. Three sets of rules, written by different people, that drift apart.
 
-[show the next part]
+**→ Slide 24 · Who gets what: one file.**
 
 Here it's one file, called the charter. A role lists the actions it gets and the data it may touch.
 
-`member` is all of you. `button` is the three of you from a minute ago: one action, and the one write it makes. Who has which role is a row in a table — that's what I changed when I pressed "give".
+Look at the marked lines: the actions. `member` is all of you. `button` is those of you who just had it: one action. That's the list Moss reads when it builds your screen. Who has which role is a row in a table — that's what I changed when I pressed "give".
 
-**→ Slide 24 · Enforced twice.**
+The other lines say which data a role may touch. I'll come back to those in a minute, when we have queries.
 
-That one file is enforced in two places. On your screen: you only get what you were given. And in every query: you only get your rows.
+## Part 6 — Data: Prism and Vex (slides 25–28)
 
-Your phone lists your questions. My controller lists everybody's. Same query. The rule on the right is why: the server stamps who you are. There's no field you could put somebody else's id into.
+**→ Slide 25 · Data mapping is JSON too.**
 
-## Part 6 — Data: Prism and Vex (slides 25–27)
+So far: screens, and who gets them. Now the data.
 
-**→ Slide 25 · Functions are JSON too.**
+Most of what a server does is boring: it takes data in one shape and turns it into another, on the way to the database and on the way back. That part is JSON here too. It's called Prism.
 
-Two more things an app needs that are normally code. First: small functions.
+This is my Next button. Before it writes, it works out what to send: the current position plus one, but never past the last slide. On the right is that same JSON, run on this slide, right now. [press Back, then Next] The numbers follow.
 
-This is my Next button. "The next position is the current one plus one, but never past the last slide." That's a function — written as JSON. It's called Prism.
+This is not "every function is JSON". It's a set of common operations, and there will be more. If a button has to do something complicated, it calls a real function — on Moss, or serverless, it doesn't matter.
 
-On the right is that same JSON, run on this slide, right now. [press Back, then Next] The numbers follow.
-
-It's a closed set of operations. No code strings, anywhere.
-
-And notice the first line: it calls something named `deck/go`.
+And notice the first line: it sends this to something named `deck/go`.
 
 **→ Slide 26 · Queries are JSON too.**
 
-That's a stored query. This one is the "joined" number at the top of the screen. It says what it's for, the shape of the answer, and the query.
+That's a stored query, and you've been looking at these for a while. The action on slide 8 posted to `/api/vex`. So did my Next button. This part is called Vex.
 
-The screen only ever sends the small thing on the right: a name. No SQL crosses the wire. Under it is the answer, live. Your permissions are applied inside the engine, every time. And it's marked reactive: when somebody joins, it answers again on every screen that shows it. Nobody wrote code to announce that.
+This one is the "joined" number at the top of the screen. It says what it's for, the shape of the answer, and the query. The screen only ever sends the small thing on the right: a name. No SQL crosses the wire. Under it is the answer, live. It's marked reactive: when somebody joins, it answers again on every screen that shows it. Nobody wrote code to announce that.
 
-This part is called Vex.
+**→ Slide 27 · Enforced twice.**
 
-**→ Slide 27 · Asked in words.**
+Now back to the charter, and its other lines: the data.
+
+That one file is enforced in two places. On your screen: you only get the actions you were given — you saw that with the button. And inside every query: you only get your rows.
+
+Your phone lists your questions. My controller lists everybody's. Same query. The rule on the right is why: the server stamps who you are. There's no field you could put somebody else's id into.
+
+**→ Slide 28 · Asked in words.**
 
 A query has a sentence saying what it's for. So you can ask for one in words.
 
@@ -252,15 +254,15 @@ A small model only decides one thing: has this been asked before? If yes, the st
 
 So a model writes each query once. After that it's just a query.
 
-## Part 7 — The assistant (slides 28–30)
+## Part 7 — The assistant (slides 29–31)
 
-**→ Slide 28 · 18,000 cups of water.**
+**→ Slide 29 · 18,000 cups of water.**
 
 Last year someone ordered eighteen thousand cups of water at a Taco Bell drive-through run by an AI. The year before, McDonald's ended its AI drive-through test after it put 260 McNuggets on one order.
 
 The model wasn't the problem. It was allowed to act on its own.
 
-**→ Slide 29 · It can't press Send.**
+**→ Slide 30 · It can't press Send.**
 
 Your assistant reads your screen — it's JSON, you saw it in the X-ray. And it can open one of your actions, filled in.
 
@@ -270,27 +272,27 @@ You saw that at the very start: the model wrote the timer. I pressed Save.
 
 [demo — undecided, see TALK.md §10]
 
-**→ Slide 30 · The same file governs the AI.**
+**→ Slide 31 · The same file governs the AI.**
 
 And what the assistant can open is decided by the same file as everything else. It can open your actions, nobody else's.
 
 Same for the timer. It runs as a role called `clock`. Clock can move the slide. That's all it can do — whatever a model wrote into that timer.
 
-## Part 8 — Tide and Strata (slides 31–33)
+## Part 8 — Tide and Strata (slides 32–34)
 
-**→ Slide 31 · The timer is a row.**
+**→ Slide 32 · The timer is a row.**
 
 So here is that timer. This is it, as it's stored: when it fires, what it does, who it runs as. It runs as `clock` — saving stamped that, not the model.
 
 No model is running right now. It's a row in the database, so a restart doesn't lose it.
 
-**→ Slide 32 · No agent loop.**
+**→ Slide 33 · No agent loop.**
 
 The usual way to do this is an agent with a skill: every time it runs, a model reads the instructions and decides what to do. You pay for tokens on every run, and every run can go differently.
 
 Here a model wrote the automation once. I read it and saved it. Since then, no model.
 
-**→ Slide 33 · Grammars get migrations.**
+**→ Slide 34 · Grammars get migrations.**
 
 Last part. If everything is a document, what happens to all those documents when the grammar changes?
 
@@ -298,9 +300,9 @@ Tables get migrations. Here, grammars do too. This is the list for this app's ow
 
 Every stored document knows which version it was written in, and it's upgraded when it's read. If I change a grammar without writing the migration, a check refuses the change.
 
-## Part 9 — The end (slide 34)
+## Part 9 — The end (slide 35)
 
-**→ Slide 34 · It's all in one folder.**
+**→ Slide 35 · It's all in one folder.**
 
 [if the timer put this slide up] That was the timer. It ran as clock, with no model.
 

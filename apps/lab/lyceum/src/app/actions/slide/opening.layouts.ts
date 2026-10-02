@@ -1,4 +1,5 @@
 import type { LayoutNode } from '@niscorp/nova';
+import { assistantLayout } from '@lyceum/app/actions/assistant/assistant.layout';
 import { sendLayout } from '@lyceum/app/actions/questions/send.layout';
 
 // THE OPENING'S LAYOUTS. A slide is an anchor: the name of the thing, one
@@ -35,6 +36,18 @@ export const aloneLayout: LayoutNode = {
   component: 'Sheet',
   props: { size: 'fill', areas: ['head'] },
   children: [cell('head', [headline('display', '{{$.title}}')], { align: 'center' })],
+};
+
+// 3 · The speaker's assistant, mirrored: the claim on the left, and on the
+// right the assistant as it stands on the controller — its own layout, drawn
+// from a copy of its data (server/mirroring.ts).
+export const mirrorLayout: LayoutNode = {
+  component: 'Sheet',
+  props: { size: 'fill', areas: ['head mirror'], cols: [1, 1.3] },
+  children: [
+    cell('head', [headline('display', '{{$.title}}')], { align: 'middle' }),
+    cell('mirror', [assistantLayout], { pad: 'none' }),
+  ],
 };
 
 // 4 · Where it started: what did not work, and what did.

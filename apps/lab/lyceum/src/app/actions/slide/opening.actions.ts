@@ -1,10 +1,12 @@
 import type { ActionDefinition, EndpointConfig } from '@niscorp/nova';
+import { assistantAction } from '@lyceum/app/actions/assistant/assistant.action';
 import { allRenderers } from '@lyceum/app/vex/renderer.entries';
 import {
   actionLayout,
   aloneLayout,
   answerLayout,
   looksLayout,
+  mirrorLayout,
   terminalLayout,
   novaLayout,
   openingTitleLayout,
@@ -46,7 +48,20 @@ export const titleSlide: ActionDefinition = {
   triggers: [],
 };
 
-export const timerSlide = still('slide.timer', 'First, a timer.', aloneLayout, {});
+// The timer is asked for on the controller, and the room watches it here: the
+// speaker's assistant, mirrored (server/mirroring.ts). This slide's data is the
+// assistant's own data — copied whenever the server says it changed — drawn
+// with the assistant's own layout. It only shows: nothing on it can be pressed.
+const followAssistant = [{ call: 'mirror', onSuccess: Object.keys(assistantAction.data ?? {}).map((key) => ({ set: key, value: `$.mirror.${key}` })) }];
+export const timerSlide: ActionDefinition = {
+  id: 'slide.timer',
+  title: 'First, a timer.',
+  data: { ...assistantAction.data, title: 'First, a timer.', mirror: {} },
+  layout: mirrorLayout,
+  endpoints: { mirror: { fn: 'assistant.mirror', target: 'mirror' } },
+  lifecycle: { mount: followAssistant },
+  triggers: [{ message: 'assistant-mirror', do: followAssistant }],
+};
 
 export const originSlide = still('slide.origin', 'GPT-3 could not write a React app.', originLayout, {
   kicker: '2020',

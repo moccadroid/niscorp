@@ -50,7 +50,7 @@ const main = async (): Promise<void> => {
     'tools.look': 'Which renderer draws',
     'tools.xray': 'X-ray — everybody’s own screen',
     'tools.integrations': 'Integrations — somebody else’s screen',
-    'tools.button': 'The button — an action only three people have',
+    'tools.button': 'The button — an action only some people have',
     'tools.assistant': 'The assistant — on everybody’s phone',
     'tools.step': 'This slide, in steps',
     ...Object.fromEntries(CUE_TOOLS.map((cue) => [cue.id, cue.title])),

@@ -15,8 +15,8 @@ export const buttonTool: ActionDefinition = {
     component: 'Sheet',
     props: { areas: ['kick kick', 'give take', 'count count'] },
     children: [
-      { component: 'Cell', props: { area: 'kick', ink: 'ink' }, children: [{ component: 'Label', children: 'The button — an action only three people have' }] },
-      { component: 'Action', ref: 'give', props: { area: 'give', ink: { $if: '$.button.given', $then: 'highlight', $else: 'signal' }, label: 'Give it to three people' } },
+      { component: 'Cell', props: { area: 'kick', ink: 'ink' }, children: [{ component: 'Label', children: 'The button — an action only some people have' }] },
+      { component: 'Action', ref: 'give', props: { area: 'give', ink: { $if: '$.button.given', $then: 'highlight', $else: 'signal' }, label: 'Give it to a quarter of the room' } },
       { component: 'Action', ref: 'take', props: { area: 'take', ink: 'paper', label: 'Take it back' } },
       {
         component: 'Cell',

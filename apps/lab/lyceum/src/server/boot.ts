@@ -6,6 +6,7 @@ import { lyceumIdentity } from './identity';
 import { lyceumReactions } from './reactions';
 import { doorFunctions } from './functions/door.functions';
 import { roomFunctions } from './functions/room.functions';
+import { mirrorAssistant } from './mirroring';
 import { createCensus } from './census';
 import { assistantFunctions } from './functions/assistant.functions';
 import { lecternFunctions } from './functions/lectern.functions';
@@ -90,6 +91,8 @@ export const bootOn = async <R extends LyceumRuntime>(runtime: R, options: BootO
     speakerEmail: options.speakerEmail ?? process.env['LYCEUM_SPEAKER_EMAIL'] ?? '',
     send: options.send ?? createMailer(process.env, publicUrl),
   };
+  // The speaker's assistant, mirrored on the stage (./mirroring.ts).
+  const mirror = mirrorAssistant(() => server());
   let timingUp: Timing | undefined;
   const timing = (): Timing => {
     if (timingUp === undefined) throw new Error('lyceum: the timers are not up yet');
@@ -104,11 +107,14 @@ export const bootOn = async <R extends LyceumRuntime>(runtime: R, options: BootO
   const renderers = followRenderers();
   const app = buildLyceum({
     identity: lyceumIdentity,
-    functions: (session) => ({ ...doorFunctions(session, server, moderation), ...roomFunctions(session, publicUrl, options.sshAddress ?? '', census), ...assistantFunctions(session, { querier, writer: timerWriter, orchestrator, tz, timing }), ...lecternFunctions(server, speakerMail), ...xrayFunctions(session), ...buttonFunctions(session), ...resetFunctions(session, server, operatorKey, timing), ...integrationFunctions(session, server, operatorKey, vendor) }),
+    functions: (session) => ({ ...doorFunctions(session, server, moderation), ...roomFunctions(session, publicUrl, options.sshAddress ?? '', census), ...assistantFunctions(session, { querier, writer: timerWriter, orchestrator, tz, timing }), ...lecternFunctions(server, speakerMail), ...xrayFunctions(session), ...buttonFunctions(session, server), ...mirror.functions(session), ...resetFunctions(session, server, operatorKey, timing), ...integrationFunctions(session, server, operatorKey, vendor) }),
     reactions: [...lyceumReactions(server, moderation), renderers.reaction],
     inputs: phoneInputs(runtime.pool),
     seeds: attachedSeeds(runtime.pool),
-    onSession: renderers.onSession,
+    onSession: (session) => {
+      renderers.onSession(session);
+      mirror.onSession(session);
+    },
     components: Object.fromEntries(Object.entries(KIT_PROPS.shape).map(([name, propsSchema]) => [name, { meta: { propsSchema } }])),
   });
   built = await createServer(app, { ...runtime, operatorKey });
