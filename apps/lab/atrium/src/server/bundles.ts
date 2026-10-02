@@ -217,7 +217,7 @@ export const syncIntegrations = async (runtime: NiscRuntime, connectorId?: strin
   // manifest, memos dropped, living shells adopt.
   if (landed) {
     await loadBundles(runtime);
-    await refreshServer();
+    await refreshServer(runtime);
   }
   lastSync.at = Date.now();
   lastSync.reports = reports;
@@ -227,17 +227,19 @@ export const syncIntegrations = async (runtime: NiscRuntime, connectorId?: strin
 // ─── the refresh seam ────────────────────────────────────────
 // boot() registers the whole reload: re-read the bundle rows into the running
 // manifest, then moss's refresh() (re-verify → drop memos → shells adopt).
-// One module-level slot — the same shape as the directory snapshot in
-// users.ts.
-let refreshFn: (() => Promise<void>) | undefined;
+// Keyed by the RUNTIME it refreshes, not held in one module-level slot: a
+// process can boot more than one server (the checks do), and a refresh belongs
+// to the server standing over that database. Weakly held, so a runtime that is
+// dropped takes its refresher with it.
+const refreshers = new WeakMap<NiscRuntime, () => Promise<void>>();
 
-export const registerRefresh = (fn: () => Promise<void>): void => {
-  refreshFn = fn;
+export const registerRefresh = (runtime: NiscRuntime, fn: () => Promise<void>): void => {
+  refreshers.set(runtime, fn);
 };
 
 // Re-load and re-verify the running server. Throws if the new artifact set is
 // incoherent — the caller surfaces that as an ordinary failed call and the old
 // resolution keeps serving.
-export const refreshServer = async (): Promise<void> => {
-  await refreshFn?.();
+export const refreshServer = async (runtime: NiscRuntime): Promise<void> => {
+  await refreshers.get(runtime)?.();
 };

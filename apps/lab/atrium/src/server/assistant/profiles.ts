@@ -1,3 +1,6 @@
+import { MODELS } from '@atrium/app/actions/domains/staff/models';
+import type { ModelChoice } from '@atrium/app/actions/domains/staff/models';
+
 // How much of a person's screen the WATCHER arranges unasked. One row per mode
 // of the `staff.layout_control` column, and the dial binds the watcher alone —
 // the dock is dial-blind (`chatPlacesFor` below): a person who asks is answered
@@ -66,15 +69,9 @@ export const tuningFor = (model: string): ModelTuning => TUNING[model] ?? DEFAUL
 //
 // Empty is the house default: the persona row decides, which is the seam that
 // ships. Everything here is an override on top of it.
-
-export type ModelChoice = { provider: string; model: string; title: string; blurb: string };
-
-export const MODELS: Record<string, ModelChoice> = {
-  '': { provider: '', model: '', title: 'House default', blurb: 'Whatever this assistant is configured to run on.' },
-  'glm-5.2': { provider: 'openrouter', model: 'z-ai/glm-5.2', title: 'GLM 5.2', blurb: 'Through OpenRouter. Slower, and reads a situation better.' },
-  'qwen-27b': { provider: 'groq', model: 'qwen/qwen3.8-27b', title: 'Qwen 3.8 27B', blurb: 'Through Groq. The house model: fast enough to feel ambient.' },
-  'gpt-oss-120b': { provider: 'groq', model: 'openai/gpt-oss-120b', title: 'gpt-oss 120b', blurb: 'Through Groq. Fast enough to feel ambient.' },
-};
+//
+// The table itself is an artifact — the settings picker renders it — so it
+// lives in app/ (actions/domains/staff/models.ts) and is read from there.
 
 // An unknown key reads as the house default rather than throwing: the row can
 // name a model this build no longer ships, and a settings value nobody can spend

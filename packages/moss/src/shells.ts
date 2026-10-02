@@ -483,13 +483,6 @@ export const createShellHost = (ctx: ShellHostContext): ShellHost => {
         },
     };
 
-    // Endpoints first, then the non-endpoints. Both get the same session; only
-    // the first produces handlers. Wrapped for telemetry when a sink is present
-    // — one `fn.call` span per invocation, transparently to the handler.
-    const rawFunctions = ctx.app.functions?.(session) ?? {};
-    const functions = emit === undefined ? rawFunctions : instrumentFunctions(rawFunctions, emit, principal);
-    ctx.app.onSession?.(session);
-
     // THE WORDS THIS SHELL WEARS, resolved before it exists — because they are
     // a property of the shell now, not of the frames it emits. Nova's renderer
     // applies them where a RenderNode is minted, so moss hands the book over
@@ -500,6 +493,23 @@ export const createShellHost = (ctx: ShellHostContext): ShellHost => {
     // catalog and inputs — one path, so a language can never be a release
     // behind the screen it is painting.
     const phrases = (await ctx.app.phrases?.({ principal, identity: who.scope, wire: ctx.wire(token) })) ?? {};
+
+    // NOTHING AWAITS BETWEEN THESE SEAMS AND `built = shell`. Both run before
+    // the shell exists, so app code defers its first touch of `session.shell`
+    // — and the cheapest deferral, a microtask, has to be enough: it is the
+    // only one that lands before the shell's mount calls answer, so it is the
+    // only one an observer (`shell.onEndpoint`) can use without missing them.
+    // The phrases used to be awaited right here, after `onSession`; a
+    // microtask landed inside that await, the getter threw, and an observer
+    // written to the documented contract watched nothing. Every await of this
+    // build belongs above this line or below the shell.
+    //
+    // Endpoints first, then the non-endpoints. Both get the same session; only
+    // the first produces handlers. Wrapped for telemetry when a sink is present
+    // — one `fn.call` span per invocation, transparently to the handler.
+    const rawFunctions = ctx.app.functions?.(session) ?? {};
+    const functions = emit === undefined ? rawFunctions : instrumentFunctions(rawFunctions, emit, principal);
+    ctx.app.onSession?.(session);
 
     // THE FRAME'S LAYOUT STORE, seeded from the manifest so a `{ ref }` in the
     // frame resolves at the FIRST render — before any `setLayout`. A malformed

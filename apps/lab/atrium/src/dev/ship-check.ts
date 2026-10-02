@@ -7,7 +7,7 @@
 // either of them touching anything. No reload, no reconnect, no restart.
 //
 // Run: pnpm --filter atrium exec tsx src/dev/ship-check.ts
-import { login, settle, topData, mounted, tap, tapCard, cardData, openCard, sql, catalogFor, check, report } from './world';
+import { login, settle, topData, mounted, tap, tapCard, cardData, openCard, sql, catalogFor, check, report, runtime } from './world';
 import { refreshServer } from '@atrium/server/bundles';
 import { resolveStatements } from '@atrium/db/resolve';
 
@@ -130,7 +130,7 @@ const main = async (): Promise<void> => {
      VALUES ('guest', 'gs_goodnight', 'ext.guest.opera.goodnight', 'Goodnight', 'A small kindness at the end of the day.', 'moon', 'stay.view', 'in_house', 'goodnight sleep', 'con_opera', 90)`,
   );
   for (const statement of resolveStatements('con_opera')) await sql(statement);
-  await refreshServer();
+  await refreshServer(runtime);
 
   check('after refresh, the charter covers the new id with no charter edit', catalogFor('amara').includes('ext.guest.opera.goodnight'));
   amara.publish('capabilities-changed');

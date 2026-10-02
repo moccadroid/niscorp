@@ -204,7 +204,7 @@ export const requestDecide: SeedMutation = {
 
 // ─── folio adjustment ────────────────────────────────────────
 // Opera owns the bill; our folio_lines is a projection of it. So the void
-// happens THERE first (the action calls /integrations/con_opera/folio/void)
+// happens THERE first (the action calls /connectors/con_opera/folio/void)
 // and this only records the answer on the mirror. The row survives — a folio
 // remembers what was reversed — and every read that shows or totals a stay
 // already filters `voided_at`.

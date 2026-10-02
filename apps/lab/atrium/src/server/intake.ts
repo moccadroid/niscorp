@@ -197,8 +197,8 @@ export const intakeBundle = (raw: unknown, ctx: IntakeContext): { bundle: Pulled
         else if (!ownFingerprints.has(fingerprint) && !ctx.coreFingerprints.has(fingerprint)) errors.push(`action ${id}: endpoint ${name} replays ${fingerprint}, which is neither this bundle's nor core`);
         continue;
       }
-      if (url.startsWith(`/integrations/${ctx.connectorId}/`)) continue;
-      errors.push(`action ${id}: endpoint ${name} reaches ${url === '' ? '(no url)' : url} — allowed: /api/*/vex or /integrations/${ctx.connectorId}/*`);
+      if (url.startsWith(`/connectors/${ctx.connectorId}/`)) continue;
+      errors.push(`action ${id}: endpoint ${name} reaches ${url === '' ? '(no url)' : url} — allowed: /api/*/vex or /connectors/${ctx.connectorId}/*`);
     }
   }
 

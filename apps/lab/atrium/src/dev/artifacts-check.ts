@@ -240,9 +240,9 @@ for (const bundle of BUNDLES) {
 
   refuses(
     'an endpoint aimed at another connector',
-    'reaches /integrations/con_mews/spa/slots',
+    'reaches /connectors/con_mews/spa/slots',
     broken((p) => {
-      ((p.actions['ext.guest.opera.wake'] as { endpoints: Record<string, unknown> }).endpoints['loadTimes'] as { url: string }).url = '/integrations/con_mews/spa/slots';
+      ((p.actions['ext.guest.opera.wake'] as { endpoints: Record<string, unknown> }).endpoints['loadTimes'] as { url: string }).url = '/connectors/con_mews/spa/slots';
     }),
   );
   refuses(

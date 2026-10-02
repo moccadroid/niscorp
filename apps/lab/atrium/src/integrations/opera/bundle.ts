@@ -174,7 +174,7 @@ const upgrades: ActionDefinition = {
   layout: upgradesLayout,
   endpoints: {
     // Live from the connector — Opera knows which rooms are open tonight.
-    loadOffers: { url: '/integrations/con_opera/upgrades', method: 'POST', request: { stay: { $ref: '$.stayId' } }, target: 'offers' },
+    loadOffers: { url: '/connectors/con_opera/upgrades', method: 'POST', request: { stay: { $ref: '$.stayId' } }, target: 'offers' },
     loadRequests: { url: '/api/vex', method: 'POST', request: { fingerprint: 'requests/forStay', context: { stayId: { $ref: '$.stayId' } } }, target: 'requests' },
     ask: {
       url: '/api/vex',
@@ -356,7 +356,7 @@ const upsell: ActionDefinition = {
     upsellLayout,
   ),
   endpoints: {
-    loadOffers: { url: '/integrations/con_opera/upgrades', method: 'POST', request: {}, target: 'offers' },
+    loadOffers: { url: '/connectors/con_opera/upgrades', method: 'POST', request: {}, target: 'offers' },
     charge: {
       url: '/api/vex',
       method: 'POST',
@@ -421,7 +421,7 @@ const folio: ActionDefinition = {
     loadTotal: { url: '/api/vex', method: 'POST', request: { fingerprint: 'folio/total', context: { stayId: { $ref: '$.stayId' } } }, target: 'total' },
     // Opera first. Its reference is what makes the reversal real.
     reverse: {
-      url: '/integrations/con_opera/folio/void',
+      url: '/connectors/con_opera/folio/void',
       method: 'POST',
       request: { line: { $ref: '$.line.line_id' }, reason: { $ref: '$.reason' } },
       target: 'reversal',
@@ -521,7 +521,7 @@ const transfer: ActionDefinition = {
     // answer becomes a row. A service that did not answer leaves nothing behind
     // claiming a car is coming.
     book: {
-      url: '/integrations/con_opera/transfer/book',
+      url: '/connectors/con_opera/transfer/book',
       method: 'POST',
       request: { stay: { $ref: '$.stayId' }, at: { $ref: '$.pickupAt' }, destination: { $ref: '$.chosen.label' }, vehicle: { $ref: '$.chosen.detail' } },
       target: 'booked',
@@ -606,7 +606,7 @@ const bookTransfer: ActionDefinition = {
     },
     loadBooked: { url: '/api/vex', method: 'POST', request: { fingerprint: 'transfers/forStay', context: { stayId: { $ref: '$.stayId' } } }, target: 'transfers' },
     book: {
-      url: '/integrations/con_opera/transfer/book',
+      url: '/connectors/con_opera/transfer/book',
       method: 'POST',
       request: { stay: { $ref: '$.stayId' }, at: { $ref: '$.pickupAt' }, destination: { $ref: '$.chosen.label' }, vehicle: { $ref: '$.chosen.detail' } },
       target: 'booked',

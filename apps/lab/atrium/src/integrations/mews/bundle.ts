@@ -95,13 +95,13 @@ const spaBook: ActionDefinition = {
     // Live availability — the connector's, not ours. If the service is down the
     // guest reads "fully booked" and nothing is claimed.
     loadSlots: {
-      url: '/integrations/con_mews/spa/slots',
+      url: '/connectors/con_mews/spa/slots',
       method: 'POST',
       request: { treatment: { $ref: '$.treatment.label' } },
       target: 'slots',
     },
     book: {
-      url: '/integrations/con_mews/spa/book',
+      url: '/connectors/con_mews/spa/book',
       method: 'POST',
       request: { treatment: { $ref: '$.treatment.label' }, at: { $ref: '$.slot.at' }, stay: { $ref: '$.stayId' } },
       target: 'booked',
@@ -295,8 +295,8 @@ const deskSpaBook: ActionDefinition = {
       request: { fingerprint: 'catalog/requestOptions', context: { propertyId: { $ref: '$.propertyId' }, capabilityId: 'spa.book' } },
       target: 'treatments',
     },
-    loadSlots: { url: '/integrations/con_mews/spa/slots', method: 'POST', request: { treatment: { $ref: '$.treatment.label' } }, target: 'slots' },
-    book: { url: '/integrations/con_mews/spa/book', method: 'POST', request: { treatment: { $ref: '$.treatment.label' }, at: { $ref: '$.slot.at' }, stay: { $ref: '$.stayId' } }, target: 'booked' },
+    loadSlots: { url: '/connectors/con_mews/spa/slots', method: 'POST', request: { treatment: { $ref: '$.treatment.label' } }, target: 'slots' },
+    book: { url: '/connectors/con_mews/spa/book', method: 'POST', request: { treatment: { $ref: '$.treatment.label' }, at: { $ref: '$.slot.at' }, stay: { $ref: '$.stayId' } }, target: 'booked' },
     record: {
       url: '/api/vex',
       method: 'POST',
@@ -437,7 +437,7 @@ const folio: ActionDefinition = {
     loadLines: { url: '/api/vex', method: 'POST', request: { fingerprint: 'folio/forStay', context: { stayId: { $ref: '$.stayId' } } }, target: 'lines' },
     loadTotal: { url: '/api/vex', method: 'POST', request: { fingerprint: 'folio/total', context: { stayId: { $ref: '$.stayId' } } }, target: 'total' },
     reverse: {
-      url: '/integrations/con_mews/folio/void',
+      url: '/connectors/con_mews/folio/void',
       method: 'POST',
       request: { line: { $ref: '$.line.line_id' }, reason: { $ref: '$.reason' } },
       target: 'reversal',
@@ -529,7 +529,7 @@ const transfer: ActionDefinition = {
     },
     loadBooked: { url: '/api/vex', method: 'POST', request: { fingerprint: 'transfers/forStay', context: { stayId: { $ref: '$.stayId' } } }, target: 'transfers' },
     book: {
-      url: '/integrations/con_mews/transfer/book',
+      url: '/connectors/con_mews/transfer/book',
       method: 'POST',
       request: { stay: { $ref: '$.stayId' }, at: { $ref: '$.pickupAt' }, destination: { $ref: '$.chosen.label' }, vehicle: { $ref: '$.chosen.detail' } },
       target: 'booked',
@@ -612,7 +612,7 @@ const bookTransfer: ActionDefinition = {
     },
     loadBooked: { url: '/api/vex', method: 'POST', request: { fingerprint: 'transfers/forStay', context: { stayId: { $ref: '$.stayId' } } }, target: 'transfers' },
     book: {
-      url: '/integrations/con_mews/transfer/book',
+      url: '/connectors/con_mews/transfer/book',
       method: 'POST',
       request: { stay: { $ref: '$.stayId' }, at: { $ref: '$.pickupAt' }, destination: { $ref: '$.chosen.label' }, vehicle: { $ref: '$.chosen.detail' } },
       target: 'booked',

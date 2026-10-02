@@ -203,3 +203,49 @@ describe('sign-out — session.revoke() under moss sessions', () => {
     }
   });
 });
+
+describe('onSession — a microtask is enough to reach the shell', () => {
+  // The documented contract: `onSession` runs before the shell exists, so it
+  // defers. A microtask is the deferral an observer needs — anything later
+  // subscribes after the shell's mount calls have answered. An await between
+  // the seam and the shell (the phrases, once) makes that microtask land
+  // mid-build, where the getter throws.
+  it('holds when the app resolves phrases asynchronously', async () => {
+    const policy: ScopePolicy = { default: 'deny', entities: {} };
+    const catalog = { ids: ['counter'], hash: 'h' };
+    const reached: boolean[] = [];
+    const app = {
+      charter: { public: ['counter'] },
+      actions: { counter: { id: 'counter', data: { n: 0 } } },
+      shell: { canvases: [{ id: 'main', initial: 'counter' }] },
+      phrases: async () => {
+        await new Promise((r) => setTimeout(r, 0));
+        return {};
+      },
+      onSession: (session: FunctionSession) => {
+        queueMicrotask(() => {
+          try {
+            reached.push(session.shell.id !== '');
+          } catch {
+            reached.push(false);
+          }
+        });
+      },
+    } as unknown as NiscApp;
+    const ctx: ShellHostContext = {
+      app,
+      catalogFor: () => catalog,
+      variantsFor: () => new Map(),
+      resolve: async () => ({ roles: ['member'], scope: {}, installed: undefined, catalog, variants: new Map(), policy }),
+      wire: () => async () => ({ ok: true, status: 200, json: async () => ({}), text: async () => '{}' }),
+      runtime: { pool: await freshPool(), session: 'dev-open' } as unknown as ShellHostContext['runtime'],
+    };
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      await createShellHost(ctx).session(mintDevToken('i_mara'), 'i_mara');
+    } finally {
+      spy.mockRestore();
+    }
+    expect(reached).toEqual([true]);
+  });
+});

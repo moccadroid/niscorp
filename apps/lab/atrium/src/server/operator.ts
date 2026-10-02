@@ -477,7 +477,7 @@ const health = async (app: NiscApp, runtime: DevRuntime, shells: ShellHost | und
 // reaches a guest holding their phone without anybody reloading anything.
 const resolveAndRefresh = async (runtime: DevRuntime, connectorId?: string): Promise<void> => {
   for (const statement of resolveStatements(connectorId)) await runtime.pool.query(statement, []);
-  await refreshServer();
+  await refreshServer(runtime);
 };
 
 // ─── mounting ────────────────────────────────────────────────

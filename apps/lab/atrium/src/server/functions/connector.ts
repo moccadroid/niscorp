@@ -93,7 +93,7 @@ export const connectorFunctions = (session: FunctionSession): Record<string, Fun
     const scoped = connectorId === '' ? undefined : connectorId;
     const reports = await syncIntegrations(session.runtime, scoped);
     for (const statement of resolveStatements(scoped)) await session.runtime.pool.query(statement, []);
-    await refreshServer();
+    await refreshServer(session.runtime);
     // The console renders this: what each connector's service said. A refusal
     // is a row here and old rows on disk — never a thrown call, because the
     // switch flip itself succeeded.

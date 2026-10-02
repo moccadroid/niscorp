@@ -69,7 +69,7 @@ export const boot = async (): Promise<{
   const app = buildAtrium(bundles.actions, bundles.entries);
   const server = await createServer(app, runtime);
 
-  registerRefresh(async () => {
+  registerRefresh(runtime, async () => {
     // Re-read the rows into the SAME record the server resolves from — ext.*
     // ids are the bundle namespace, so stale ones leave and new ones arrive —
     // then moss re-verifies, drops its memos and walks the living shells.
@@ -86,11 +86,16 @@ export const boot = async (): Promise<{
   // no charter role grants it. Our administration tool is the only client.
   mountOperator(server, runtime, app);
 
-  // The connector proxy: bundle actions call `/integrations/<connector>/...`
+  // The connector proxy: bundle actions call `/connectors/<connector>/...`
   // and the app forwards to that connector's service_url — the row decides
   // where, the same row the resync reads. Auth rides the normal middleware;
   // anonymous gets nothing.
-  server.all('/integrations/:connector/*', async (c) => {
+  //
+  // NOT under `/integrations/`: moss serves `/integrations/:id/*` itself, for
+  // ITS integrations table, and registers it inside createServer — ahead of
+  // anything mounted here. A connector is a row in OUR table, so that proxy
+  // answered every bundle call 404 and this one was never reached.
+  server.all('/connectors/:connector/*', async (c) => {
     if (c.get('principal') === null) return c.json({ message: 'Sign in first.' }, 401);
     const connectorId = c.req.param('connector');
     const rows = await runtime.pool.query('SELECT service_url FROM connectors WHERE id = $1', [connectorId]);

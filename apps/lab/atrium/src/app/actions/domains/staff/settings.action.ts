@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import type { ActionDefinition, LayoutNode } from '@niscorp/nova';
 import { staffSettings, staffSetLayout, staffSetModel } from '@atrium/app/vex/service.entries';
-import { MODELS } from '@atrium/server/assistant/profiles';
+import { MODELS } from '@atrium/app/actions/domains/staff/models';
 
 // ═══════════════════════════════════════════════════════════
 // ONE PERSON'S SETTINGS — how much of their screen the assistant places, and

@@ -115,7 +115,7 @@ export const spaByTreatment: SeedEntry = {
 
 // ─── voiding a bill item ─────────────────────────────────────
 // Mews owns the bill; our folio_lines is a projection of it. The void happens
-// THERE first (the action calls /integrations/con_mews/folio/void) and this
+// THERE first (the action calls /connectors/con_mews/folio/void) and this
 // only records the answer on the mirror.
 //
 // Its own fingerprint, not Opera's: two connectors implementing one capability
