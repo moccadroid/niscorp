@@ -45,7 +45,8 @@ Around the core sit four subpath areas:
   export subpath. Adapters import only the core public surface; core never
   imports an adapter. See [ADAPTER.md](ADAPTER.md).
 - **`reflect/`** — read-only introspection (`@niscorp/nova/reflect`): layout
-  walks, shell snapshots, the action graph, audit classification. Imports
+  walks, shell snapshots, the action graph, audit classification, and what an
+  action can still do once it has been drawn (`livenessOf`). Imports
   `@action`/`@shell`/`@layout`; pure and framework-free.
 - **`devtools/`** — the shell inspector (`@niscorp/nova/devtools`), built as
   plain ActionDefinitions plus fns over `reflect/`.
@@ -638,10 +639,13 @@ changes and reference inequality after a real data or stack change.
   invocation.
 - Suspense: not used as a loading model. Loading state is explicit data
   on the action. Nova hooks never throw promises.
-- SSR: not enabled — hooks lack a `getServerSnapshot` parameter. Adding
-  SSR is a small per-hook change (each hook's `getSnapshot` already
-  returns a serializable value; only the `subscribe` side needs a
-  no-op for the server path).
+- SSR: not enabled for the shell-backed hooks — they lack a
+  `getServerSnapshot` parameter. Adding it is a small per-hook change (each
+  hook's `getSnapshot` already returns a serializable value; only the
+  `subscribe` side needs a no-op for the server path). It has not been needed:
+  a served tree renders through `RenderTree` over a `RenderApi`, which touches
+  no store, and that is the path a server draws through (moss's
+  `terminal/react/server`).
 - React Server Components: not tested. Hooks are client-only.
 
 ---

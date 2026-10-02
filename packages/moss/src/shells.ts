@@ -1,11 +1,13 @@
 import { createShell, createComponentRegistry, createLayoutStore, CANVAS_SLOT_NAME, ACTION_SLOT_NAME } from '@niscorp/nova';
 import { componentsOf, snapshotShell } from '@niscorp/nova/reflect';
-import type { Shell, CanvasConfig, FetchFn, FunctionHandler, LayoutNode, RenderNode } from '@niscorp/nova';
+import type { ActionDefinition, Shell, CanvasConfig, FetchFn, FunctionHandler, LayoutNode, RenderNode } from '@niscorp/nova';
 import { emitterOf, spanClock } from './telemetry';
 import type { Emit } from './telemetry';
+import { randomBytes } from 'node:crypto';
 import { evaluate } from '@niscorp/prism';
 import type { ScopePolicy } from '@niscorp/vex';
-import type { FunctionSession, NiscApp } from './app';
+import type { FunctionSession, NiscApp, ShellManifest } from './app';
+import type { ShellNeed } from './liveness';
 import type { NiscRuntime } from './runtime';
 import type { Catalog } from './principal';
 import { CLOSE_SIGNED_OUT } from './socket';
@@ -67,6 +69,18 @@ export type ShellPrincipal = {
 
 export type ShellHostContext = {
   app: NiscApp;
+  // WHICH SHELL THIS HOST BUILDS. Default: the app's own (`app.shell`). A PAGE
+  // is the other answer — a manifest of its own, drawn per request.
+  manifest?: ShellManifest;
+  // Whether a principal's shell is KEPT. Default true: the app's shell is one
+  // durable shell per person, the thing that rearranges itself around them. A
+  // page's is not — `false` builds a shell for the length of one read or one
+  // connection, whoever is asking, and runs no `onSession` (session code is the
+  // app's; a page has none).
+  kept?: boolean;
+  // What one definition needs once drawn (./liveness). Absent, every screen is
+  // counted live — a host that cannot ask must not conclude a page is finished.
+  needOf?: (definition: ActionDefinition) => ShellNeed;
   // The one resolution, awaited once per shell build.
   resolve: (principal: string | null) => Promise<ShellPrincipal>;
   // The same derivations keyed by ROLES rather than by principal, for `adopt`.
@@ -183,8 +197,51 @@ export type ShellReport = {
   canvases: { id: string; actions: readonly string[] }[];
 };
 
+// What a terminal would be sent on attach, as one value: the frame and every
+// canvas's current tree. A DOCUMENT is rendered from it (server-side, with the
+// app's kit) and carries it, so the terminal starts from the screen the page
+// already shows instead of from nothing.
+export type ShellSnapshot = {
+  frame: RenderNode[];
+  trees: Record<string, RenderNode[]>;
+  // Set for an anonymous snapshot: the id seed its shell was built under. The
+  // terminal names it on the socket (`?seed=`), the throwaway shell built for
+  // that connection mints the same ids, and the first frames match the page.
+  seed?: string;
+  // False when the wait ran out with something still loading — the snapshot is
+  // then the screen as it stood (its skeletons included), which is still a
+  // screen and still correct.
+  settled: boolean;
+  // WHETHER ANYTHING ON THIS SCREEN CAN STILL HAPPEN (./liveness), asked of the
+  // actions actually mounted for whoever this is. False: the trees are the whole
+  // of it, and a terminal has no reason to open a socket. `why` says what makes
+  // it live, one line per reason; `drawnWith` names the reads whose answers are
+  // already in the trees.
+  live: boolean;
+  why: string[];
+  drawnWith: string[];
+};
+
+// What a session or a snapshot may be given beside who it is for.
+export type ShellOpening = {
+  // Build an ephemeral shell under this id seed (see ShellSnapshot.seed).
+  seed?: string;
+  // Input for canvas seeds, by canvas id — merged over the manifest's own
+  // `inputs`. A page's path parameters arrive here.
+  inputs?: Record<string, Record<string, unknown>>;
+};
+
 export type ShellHost = {
-  session: (token: string | null, principal: string | null) => Promise<ShellSession>;
+  // `options.seed`: build an EPHEMERAL session's shell under this id seed (see
+  // ShellSnapshot). Ignored for a kept shell — it is durable, and the one a
+  // document was rendered from is the one the socket attaches to.
+  session: (token: string | null, principal: string | null, options?: ShellOpening) => Promise<ShellSession>;
+  // The current screen for whoever this is, without attaching anything. A
+  // principal's durable shell is built if it is not standing (the socket would
+  // have built it a moment later) and kept; an anonymous one is built, read and
+  // disposed. Waits for the screen to settle — `seeds` pushed, no instance
+  // still mounting — for at most `waitMs`, then serves what is there.
+  snapshot: (token: string | null, principal: string | null, options?: { waitMs?: number; inputs?: ShellOpening['inputs'] }) => Promise<ShellSnapshot>;
   // Artifacts changed (the app mutated its `actions`, the server dropped its
   // memos): every LIVING durable shell adopts its freshly-resolved granted
   // definitions in place — nova's registerAction adds or replaces, mounted
@@ -258,9 +315,10 @@ export const createShellHost = (ctx: ShellHostContext): ShellHost => {
   // already carries, so no signature grows. `undefined` when unset, which the
   // build and dispatch sites guard on.
   const emit = emitterOf(ctx.runtime.telemetry);
-  const manifest = ctx.app.shell;
+  const manifest = ctx.manifest ?? ctx.app.shell;
   if (manifest === undefined) throw new Error('createShellHost: the app manifest has no `shell`.');
   const shellManifest = manifest;
+  const kept = ctx.kept ?? true;
 
   // Every component NAME the app's layouts mention — nova's registry holds
   // opaque components (generic, unknown), so the server registers name-only
@@ -298,6 +356,10 @@ export const createShellHost = (ctx: ShellHostContext): ShellHost => {
     // built at; and when the last connection left (null while attached)
     since: number;
     idleSince: number | null;
+    // Resolves when the manifest's `seeds` have been pushed (at once when there
+    // are none). A snapshot waits on it: seeds land a tick after the build, and
+    // a document rendered before them would be missing the screen's cards.
+    seeded: Promise<void>;
   };
 
   // The indirection `reset` needs. A session, a socket and the durable map all
@@ -328,13 +390,13 @@ export const createShellHost = (ctx: ShellHostContext): ShellHost => {
   // language. Everything downstream — the delta encoder, the socket, the
   // terminal — is handed a finished frame and never learns a language was
   // involved, exactly as before; there is simply one fewer walk to get there.
-  const frame = (live: Live, canvasId: string): string => {
+  const treeOf = (live: Live, canvasId: string): RenderNode[] => {
     const tree = live.shell.flattenRenderTree(live.shell.getCanvasRenderTree(canvasId));
-    const message: ServerMessage = {
-      type: 'render',
-      canvas: canvasId,
-      tree: hasVisibleContent(tree) ? tree : [],
-    };
+    return hasVisibleContent(tree) ? tree : [];
+  };
+
+  const frame = (live: Live, canvasId: string): string => {
+    const message: ServerMessage = { type: 'render', canvas: canvasId, tree: treeOf(live, canvasId) };
     return JSON.stringify(message);
   };
 
@@ -381,7 +443,7 @@ export const createShellHost = (ctx: ShellHostContext): ShellHost => {
 
   const durable = new Map<string, Cell>(); // principal → the one living shell
 
-  const build = async (token: string | null, principal: string | null, reset = false): Promise<Live> => {
+  const build = async (token: string | null, principal: string | null, reset = false, idSeed?: string, given?: ShellOpening['inputs']): Promise<Live> => {
     const buildClock = emit === undefined ? undefined : spanClock();
     const who = await ctx.resolve(principal);
     const { ids } = who.catalog;
@@ -408,10 +470,9 @@ export const createShellHost = (ctx: ShellHostContext): ShellHost => {
       const action = typeof seed === 'string' ? seed : seed.action;
       const staticInput = typeof seed === 'string' ? {} : (seed.input ?? {});
       const withFragments = typeof seed === 'string' ? undefined : seed.with;
-      const extra = inputs[canvas.id];
       return {
         ...canvas,
-        initial: { action, input: { ...staticInput, ...(extra ?? {}) }, ...(withFragments !== undefined ? { with: withFragments } : {}) },
+        initial: { action, input: { ...staticInput, ...(inputs[canvas.id] ?? {}), ...(given?.[canvas.id] ?? {}) }, ...(withFragments !== undefined ? { with: withFragments } : {}) },
       };
     });
 
@@ -509,7 +570,9 @@ export const createShellHost = (ctx: ShellHostContext): ShellHost => {
     // — one `fn.call` span per invocation, transparently to the handler.
     const rawFunctions = ctx.app.functions?.(session) ?? {};
     const functions = emit === undefined ? rawFunctions : instrumentFunctions(rawFunctions, emit, principal);
-    ctx.app.onSession?.(session);
+    // Session code is the app's: it rides the shell that is kept. A page's shell
+    // lives for one read or one connection and runs none.
+    if (kept) ctx.app.onSession?.(session);
 
     // THE FRAME'S LAYOUT STORE, seeded from the manifest so a `{ ref }` in the
     // frame resolves at the FIRST render — before any `setLayout`. A malformed
@@ -519,10 +582,17 @@ export const createShellHost = (ctx: ShellHostContext): ShellHost => {
     const layoutStore = createLayoutStore();
     for (const [refId, node] of Object.entries(shellManifest.layoutStore ?? {})) layoutStore.set(refId, node);
 
+    // A SEEDED shell mints its instance ids in order under the seed, so two
+    // builds from one seed name their instances alike: the shell a document was
+    // rendered from, and the throwaway one the socket builds a moment later for
+    // the same anonymous visitor. The seed is random per document, so ids stay
+    // unguessable and a stale origin from another shell still names nothing.
+    let minted = 0;
     const shell = createShell({
       registry,
       canvases,
       layoutStore,
+      ...(idSeed === undefined ? {} : { instanceIdFn: () => `act-${idSeed}-${(minted += 1)}` }),
       ...(shellManifest.layout !== undefined ? { canvasLayout: shellManifest.layout } : {}),
       // Ring 1 then ring 2: an ungranted action doesn't exist; a granted one
       // carries the principal's variant layout when they hold one — the swap
@@ -562,7 +632,7 @@ export const createShellHost = (ctx: ShellHostContext): ShellHost => {
 
     // Born idle: a shell exists before anything attaches to it, and a shell
     // nothing ever attaches to is exactly what the sweep should collect.
-    const live: Live = { shell, connections: new Set(), sent: new Map(), deltaReady: new Set(), flushing: false, ended: false, since: Date.now(), idleSince: Date.now() };
+    const live: Live = { shell, connections: new Set(), sent: new Map(), deltaReady: new Set(), flushing: false, ended: false, since: Date.now(), idleSince: Date.now(), seeded: Promise.resolve() };
     liveRef = live;
 
     // Per-principal canvas SEEDING — the instance twin of `inputs`. The app
@@ -573,7 +643,7 @@ export const createShellHost = (ctx: ShellHostContext): ShellHost => {
     // the same progressive path every later push takes.
     const declaredSeeds = shellManifest.seeds?.({ principal, actions: ids, roles: who.roles, wire });
     if (declaredSeeds !== undefined) {
-      void Promise.resolve(declaredSeeds)
+      live.seeded = Promise.resolve(declaredSeeds)
         .then((byCanvas) => {
           if (live.ended) return;
           for (const [canvasId, seeds] of Object.entries(byCanvas ?? {})) {
@@ -789,6 +859,104 @@ export const createShellHost = (ctx: ShellHostContext): ShellHost => {
     reset: () => void rebuild(cell).catch((err: unknown) => console.error('[moss/shells] a reset failed to rebuild', err)),
   });
 
+  // ── the document's read ──
+  // SETTLED: the seeds are in and nothing is still mounting. nova marks an
+  // instance `active` only after its mount hook — the loads and their
+  // onSuccess chains — has been awaited, so no instance `initializing` is the
+  // shell saying its first screen is whole. A mount can push another action,
+  // which starts `initializing` in turn, so the question is asked again on
+  // every state change, and answered true only when it holds a macrotask later.
+  const settle = async (live: Live, waitMs: number): Promise<boolean> => {
+    const mounting = (): boolean =>
+      Object.values(live.shell.getState().canvases).some((canvas) => canvas.stack.some((instance) => instance.status === 'initializing'));
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const deadline = new Promise<boolean>((resolve) => {
+      timer = setTimeout(() => resolve(false), waitMs);
+    });
+    const quiet = (async (): Promise<boolean> => {
+      await live.seeded;
+      for (;;) {
+        if (live.ended) return false;
+        if (!mounting()) {
+          await new Promise<void>((resolve) => setTimeout(resolve, 0));
+          if (!mounting()) return true;
+        }
+        await new Promise<void>((resolve) => {
+          const off = live.shell.onStateChange(() => {
+            off();
+            resolve();
+          });
+          // a change that lands with no notification (see `flush`'s trailing
+          // pass) must not leave this waiting on one
+          setTimeout(() => {
+            off();
+            resolve();
+          }, 10);
+        });
+      }
+    })();
+    const settled = await Promise.race([quiet, deadline]);
+    clearTimeout(timer);
+    return settled;
+  };
+
+  // Read-only: `sent` is not touched, so the connections already attached keep
+  // their baseline and a snapshot can never make a flush skip a frame.
+  const read = (live: Live): Pick<ShellSnapshot, 'frame' | 'trees'> => {
+    let frameTree: RenderNode[] = [];
+    try {
+      frameTree = live.shell.getShellRenderTree();
+    } catch (error) {
+      console.error('[moss/shells] the shell frame failed to render for a snapshot — serving an empty arrangement:', error);
+    }
+    const trees: Record<string, RenderNode[]> = {};
+    for (const canvas of shellManifest.canvases) {
+      try {
+        trees[canvas.id] = treeOf(live, canvas.id);
+      } catch (error) {
+        console.error(`[moss/shells] canvas "${canvas.id}" failed to render for a snapshot — leaving it out:`, error);
+      }
+    }
+    return { frame: frameTree, trees };
+  };
+
+  // Asked of the instances ON SCREEN, not of the catalog: what a screen needs is
+  // a fact about what mounted for this principal, composed definitions included.
+  const needOf = (live: Live, principal: string | null): Pick<ShellSnapshot, 'live' | 'why' | 'drawnWith'> => {
+    const why: string[] = [];
+    const drawnWith: string[] = [];
+    const ask = ctx.needOf;
+    if (ask === undefined) return { live: true, why: ['this host was given no way to ask what its actions need'], drawnWith };
+    // The app's shell IS the thing that stays: whoever is signed in has one.
+    if (kept && principal !== null) why.push('the app’s shell is kept for whoever is signed in');
+    for (const canvas of Object.values(live.shell.getState().canvases)) {
+      for (const instance of canvas.stack) {
+        const definition = live.shell.getRuntime(instance.id)?.definition;
+        if (definition === undefined) continue;
+        const need = ask(definition);
+        for (const reason of need.why) why.push(`${definition.id}: ${reason}`);
+        for (const read of need.drawnWith) drawnWith.push(read);
+      }
+    }
+    return { live: why.length > 0, why, drawnWith };
+  };
+
+  // A document should not wait on a slow integration: past this the page ships
+  // with whatever is still loading drawn as loading.
+  const DEFAULT_SNAPSHOT_WAIT_MS = 300;
+
+  const durableCell = async (token: string | null, principal: string): Promise<Cell> => {
+    const existing = durable.get(principal);
+    if (existing !== undefined) {
+      existing.token = token; // a rebuild should re-authorize as the newest session
+      return existing;
+    }
+    const who = await ctx.resolve(principal);
+    const cell: Cell = { live: await build(token, principal), token, principal, roles: who.roles, installed: who.installed, hash: who.catalog.hash };
+    durable.set(principal, cell);
+    return cell;
+  };
+
   // ── the idle sweep ──
   // A durable shell with nothing attached for `idleMs` is disposed. Safe by
   // the same argument that makes a process restart safe (DESIGN.md § Server
@@ -822,20 +990,30 @@ export const createShellHost = (ctx: ShellHostContext): ShellHost => {
   }
 
   return {
-    session: async (token, principal) => {
-      if (principal === null) {
-        const anon = await ctx.resolve(principal);
-        return sessionOn({ live: await build(token, principal), token, principal, roles: anon.roles, installed: anon.installed, hash: anon.catalog.hash }, true);
+    session: async (token, principal, options) => {
+      if (principal === null || !kept) {
+        const who = await ctx.resolve(principal);
+        return sessionOn({ live: await build(token, principal, false, options?.seed, options?.inputs), token, principal, roles: who.roles, installed: who.installed, hash: who.catalog.hash }, true);
       }
-      const existing = durable.get(principal);
-      if (existing !== undefined) {
-        existing.token = token; // a rebuild should re-authorize as the newest session
-        return sessionOn(existing, false);
+      return sessionOn(await durableCell(token, principal), false);
+    },
+    snapshot: async (token, principal, options) => {
+      const waitMs = options?.waitMs ?? DEFAULT_SNAPSHOT_WAIT_MS;
+      if (principal !== null && kept) {
+        const cell = await durableCell(token, principal);
+        const settled = await settle(cell.live, waitMs);
+        return { ...read(cell.live), settled, ...needOf(cell.live, principal) };
       }
-      const who = await ctx.resolve(principal);
-      const cell: Cell = { live: await build(token, principal), token, principal, roles: who.roles, installed: who.installed, hash: who.catalog.hash };
-      durable.set(principal, cell);
-      return sessionOn(cell, false);
+      // Nobody in particular, or a page: a shell for the length of one read.
+      const seed = randomBytes(9).toString('hex');
+      const live = await build(token, principal, false, seed, options?.inputs);
+      try {
+        const settled = await settle(live, waitMs);
+        return { ...read(live), seed, settled, ...needOf(live, principal) };
+      } finally {
+        live.ended = true;
+        live.shell.dispose();
+      }
     },
     // RE-RESOLVED, not re-read off the cell. Adopting happens because something
     // the derivations were made FROM changed, and the commonest such change is a

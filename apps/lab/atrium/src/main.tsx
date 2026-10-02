@@ -1,4 +1,4 @@
-import { createWire, browserEnv } from '@niscorp/moss/client';
+import { createWire, browserEnv, readDocumentSnapshot } from '@niscorp/moss/client';
 import { mountTerminal } from '@niscorp/moss/terminal';
 import { reactTarget } from '@niscorp/moss/terminal/react';
 import { domTarget } from '@niscorp/moss/terminal/dom';
@@ -17,7 +17,13 @@ import './ui/css/ui.css';
 const root = document.getElementById('root');
 if (root === null) throw new Error('No root element');
 
-const wire = createWire();
+// The page may already show a screen: the server draws it into index.html and
+// leaves the snapshot it drew from beside it (src/server/document.ts). The wire
+// starts from that snapshot, so the first render adopts the elements already
+// there. `cookie` keeps a copy of the session token where a page request can
+// carry it — which is how the server knows whose screen to draw next time.
+const drawn = readDocumentSnapshot();
+const wire = createWire({ env: browserEnv({ cookie: true }), ...(drawn !== undefined ? { initial: drawn } : {}) });
 const terminal = mountTerminal({
   targets: {
     react: reactTarget({ root, registry: buildRegistry(), slotWrapper: atriumSlotWrapper }),

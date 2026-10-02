@@ -21,6 +21,11 @@ const CHECKS = [
   ['watch-check', 'the agent watches the screen: derived attention, and the four brakes on it'],
   ['integrations-check', 'the integrations service is a separate process, and degrades honestly'],
   ['admin-check', 'our own tool, behind the app: nobody else reaches it, and it reads no hotel data'],
+  ['ssr-check', 'the page a request is answered with is the screen the socket would have streamed'],
+  ['pages-check', '/about is a page: drawn for whoever asks, kept by nothing, beside the app'],
+  ['ssr-dev-check', 'the page is drawn in dev too, and stays a vite page'],
+  ['site-check', 'the built terminal, served by the app with its pages drawn'],
+  ['nisc-check', 'the nisc command on this app: build says how each path is served, export writes the site'],
 ] as const;
 
 let failed = 0;

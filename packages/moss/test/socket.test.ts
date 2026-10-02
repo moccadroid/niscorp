@@ -47,6 +47,7 @@ const recordingSession = (): ShellSession & { calls: string[] } => {
 // partial object here would drift silently as the host grows.
 const hostFor = (session: ShellSession): ShellHost => ({
   session: async () => session,
+  snapshot: async () => ({ frame: [], trees: {}, settled: true, live: true, why: [], drawnWith: [] }),
   adopt: () => {},
   list: () => [],
   reset: () => false,

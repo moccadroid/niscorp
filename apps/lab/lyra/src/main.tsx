@@ -1,4 +1,4 @@
-import { createWire } from '@niscorp/moss/client';
+import { browserEnv, createWire, readDocumentSnapshot } from '@niscorp/moss/client';
 import { mountTerminal } from '@niscorp/moss/terminal';
 import { reactTarget } from '@niscorp/moss/terminal/react';
 import { domTarget } from '@niscorp/moss/terminal/dom';
@@ -41,6 +41,14 @@ try {
   /* storage-less or offline — the picker still works */
 }
 
+// The page may already show a screen: the server draws it into index.html and
+// leaves the snapshot it drew from beside it (src/server/document.ts). The wire
+// starts from that snapshot, so the first render adopts the elements already
+// there. `cookie` keeps a copy of the session token where a page request can
+// carry it — which is how the server knows whose screen to draw next time. A
+// token the redeem above just stored is copied the moment the wire loads it.
+const drawn = readDocumentSnapshot();
+
 const terminal = mountTerminal({
   targets: {
     react: reactTarget({ root, registry: buildRegistry(), slotWrapper: lyraSlotWrapper }),
@@ -48,7 +56,7 @@ const terminal = mountTerminal({
   },
   swapKey: 'ctrl+shift+y',
   resetKey: 'ctrl+shift+u',
-  wire: createWire(),
+  wire: createWire({ env: browserEnv({ cookie: true }), ...(drawn !== undefined ? { initial: drawn } : {}) }),
 });
 
 Object.assign(window, { swapTerminal: terminal.swap, resetShell: terminal.reset, backTerminal: terminal.back });

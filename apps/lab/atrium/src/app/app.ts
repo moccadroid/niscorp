@@ -17,6 +17,7 @@ import { assistantFunctions, attachAssistant } from '@atrium/server/assistant';
 import { recordRun } from '@atrium/server/assistant/runs';
 import { registerShellSession } from '@atrium/server/operator';
 import { userById, people, SIBLINGS } from '@atrium/server/users';
+import { PAGES } from './pages';
 
 // ═══════════════════════════════════════════════════════════
 // Atrium, the application, as data.
@@ -95,6 +96,23 @@ export const buildAtrium = (bundleActions: Record<string, ActionDefinition>, bun
     // what it cost — through the caller's own wire, so it is pinned to whoever
     // the run was for.
     runs: recordRun,
+
+    // What is drawn at a path and kept by nothing. The arrangement is data
+    // (./pages.ts); who is looking is derived here, like the shell's own boot
+    // input — a stranger gets none, so the strip has nothing to show and, not
+    // being granted, is not there.
+    pages: {
+      ...PAGES,
+      about: {
+        ...PAGES['about'],
+        path: '/about',
+        canvases: PAGES['about']?.canvases ?? [],
+        inputs: ({ principal }): Record<string, Record<string, unknown>> => {
+          const user = userById(principal);
+          return user === undefined ? {} : { who: { name: people().find((person) => person.id === user.id)?.name ?? user.id } };
+        },
+      },
+    },
 
     shell: {
       // Three canvases for every audience. Which action mounts on `main` is a

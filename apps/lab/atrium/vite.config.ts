@@ -4,6 +4,7 @@ import { getRequestListener } from '@hono/node-server';
 import { attachSocket } from '@niscorp/moss/node';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
+import { readFile } from 'node:fs/promises';
 
 // The app server runs INSIDE vite's dev process — one `pnpm dev`, no proxy, no
 // second terminal. `ssrLoadModule` gives the composition vite's own resolution,
@@ -27,6 +28,8 @@ type BootedServer = {
   // A booted server owns timers — the socket's revalidation pass, the shell
   // host's idle sweep. A hot rebuild has to hand them back.
   shells?: { stop: () => void };
+  // the page a path leads to, if it leads to one (moss's `server.page`)
+  page: (path: string) => unknown;
 };
 
 const appServer = (): Plugin => ({
@@ -108,16 +111,55 @@ const appServer = (): Plugin => ({
           const users = (await viteServer.ssrLoadModule('/src/server/users.ts')) as { mintToken: (u: string) => string | null };
           const token = users.mintToken(who);
           res.setHeader('content-type', 'text/html');
+          // The token goes where the wire keeps it AND into the cookie copy the
+          // page is drawn by (src/server/document.ts) — so the redirect below
+          // already arrives as this person, not as nobody.
           res.end(
             token === null
               ? `<p>no such person: ${who}</p>`
-              : `<script>localStorage.setItem('nisc.token',${JSON.stringify(token)});location.replace('/')</script>`,
+              : `<script>localStorage.setItem('nisc.token',${JSON.stringify(token)});document.cookie='nisc.token='+encodeURIComponent(${JSON.stringify(token)})+'; Path=/; SameSite=Lax';location.replace('/')</script>`,
           );
         })
         .catch(() => {
           res.statusCode = 500;
           res.end('dev login failed');
         });
+    });
+
+    // ─── the page, drawn by the app server ───────────────────
+    //
+    // The same thing a deployment's own route does (src/server/document.ts),
+    // with one step in front of it: index.html goes through vite first, so the
+    // page that is drawn still carries vite's client and React's refresh
+    // preamble — a server-drawn page in dev hot-reloads like any other. The
+    // module is loaded through vite's own resolution, like the boot above, so
+    // the kit it draws with is the kit on disk now.
+    viteServer.middlewares.use((req, res, next) => {
+      const path = (req.url ?? '').split('?')[0] ?? '/';
+      if (req.method !== 'GET') {
+        next();
+        return;
+      }
+      void current
+        .then(async ({ server }) => {
+          // The app's own page, or a path one of the manifest's pages answers.
+          // Everything else (a source file, an asset, vite's own urls) is vite's.
+          if (path !== '/' && path !== '/index.html' && server.page(path) === undefined) {
+            next();
+            return;
+          }
+          const template = await viteServer.transformIndexHtml(req.url ?? '/', await readFile(resolve(here, 'index.html'), 'utf8'));
+          const mod = (await viteServer.ssrLoadModule('/src/server/document.ts')) as {
+            renderPage: (config: { server: BootedServer; template: string; path: string; cookie: string | null }) => Promise<{ html: string; headers: Record<string, string> }>;
+          };
+          const page = await mod.renderPage({ server, template, path: path === '/index.html' ? '/' : path, cookie: req.headers.cookie ?? null });
+          res.statusCode = 200;
+          res.setHeader('content-type', 'text/html; charset=utf-8');
+          for (const [name, value] of Object.entries(page.headers)) res.setHeader(name, value);
+          res.end(page.html);
+        })
+        // Not drawn is not broken: vite serves index.html the way it always did.
+        .catch(() => next());
     });
 
     viteServer.middlewares.use((req, res, next) => {

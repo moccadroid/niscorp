@@ -444,7 +444,7 @@ This is a real React class component (the only class in the package — React 18
 - **Strict mode** — fully supported. The hooks use `useSyncExternalStore` and the render-tree hook caches its snapshot via `useRef`, so dev-mode double-mounting doesn't break anything.
 - **Concurrent rendering** — fully supported. `useSyncExternalStore` is tearing-safe by design.
 - **Suspense** — not used as a loading model. Loading state is explicit data on the action (`{ loading: true }` as a regular field). A consumer can wrap nova components in `<Suspense>` but it never activates because nova never throws promises during render.
-- **SSR** — not enabled yet. `useSyncExternalStore` requires a `getServerSnapshot` parameter for SSR; nova hooks don't currently provide one. Calling nova hooks during server rendering will throw.
+- **SSR** — the shell-backed hooks are not enabled for it: `useSyncExternalStore` requires a `getServerSnapshot` parameter, and nova's hooks don't provide one, so calling them during server rendering throws. Rendering a tree does not need them — `NovaRenderProvider` + `RenderTree` over values (a frame and per-canvas trees) is store-free, and is the path `@niscorp/moss/terminal/react/server` draws through.
 - **React Server Components** — not tested. The hooks are client-only.
 
 ---

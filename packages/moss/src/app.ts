@@ -248,6 +248,26 @@ export type NiscApp = {
   // derivation hook — per-principal boot input (nav flags, user chips),
   // merged over each canvas's static seed. Absent = no server shells.
   shell?: ShellManifest;
+  // PAGES — what is drawn at a path and kept by nothing.
+  //
+  // `shell` above is THE APP: one durable shell per person, the thing that
+  // rearranges itself around whoever holds it. A page is the other kind of
+  // thing a path can lead to — a welcome, the docs, a published talk: a small
+  // manifest of its own (a frame, canvases, what mounts on them), drawn for
+  // whoever asks and then let go. Nothing stands behind it afterwards unless
+  // what mounted can still do something (./liveness), in which case the
+  // terminal gets a shell for as long as its connection lasts.
+  //
+  // It is the SAME machinery with the keeping taken out: the same actions, the
+  // same charter deciding what exists for whom (a member's chip is an action a
+  // member is granted), the same policy on every read. A page drawn for nobody
+  // is the same for everybody, so it may be cached or written to a file; a page
+  // drawn for somebody is theirs and is not. That is decided by who asked,
+  // never by the page.
+  //
+  // `functions` are endpoints and serve a page's actions as they serve the
+  // app's. `onSession` does not run for a page: session code is the app's.
+  pages?: Record<string, PageManifest>;
   // The app's own GRAMMAR sequences (strata): migrations for documents only this
   // app defines the shape of — its component kit's props, say, rewritten on
   // every nova layout node that uses them. Pure data like every artifact here: a
@@ -494,6 +514,16 @@ export type ShellManifest = {
     identity: Record<string, unknown>;
     wire: FetchFn;
   }) => Record<string, Record<string, unknown>> | Promise<Record<string, Record<string, unknown>>>;
+};
+
+// A page: a shell manifest, and the path it is drawn at. `:name` segments are
+// parameters ("/docs/:slug"); every other segment matches itself.
+export type PageManifest = ShellManifest & {
+  path: string;
+  // The canvas whose seed receives the path's parameters as input (merged over
+  // `inputs`, which a page may still derive). Absent: the parameters go nowhere,
+  // which is right for a path that has none.
+  params?: string;
 };
 
 // Identity today, a validation seam tomorrow — and the one name an app

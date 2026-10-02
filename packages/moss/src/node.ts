@@ -1,4 +1,7 @@
+import { readFile } from 'node:fs/promises';
+import { join, relative } from 'node:path';
 import { serve as listen } from '@hono/node-server';
+import { serveStatic } from '@hono/node-server/serve-static';
 import { WebSocketServer } from 'ws';
 import type { IncomingMessage } from 'node:http';
 import type { Duplex } from 'node:stream';
@@ -7,6 +10,8 @@ import type { MossServer } from './server';
 import type { NiscApp } from './app';
 import type { NiscRuntime } from './runtime';
 import type { SocketAccept } from './socket';
+import { renderDocument } from './document';
+import type { DocumentConfig } from './document';
 
 // ═══════════════════════════════════════════════════════════════
 // The Node entry — runtime-specific by design: the transport is a seam, so
@@ -56,6 +61,48 @@ export const attachSocket = (
         }
       });
     });
+  });
+};
+
+// THE BUILT TERMINAL, served by the same process as the app — one origin, so the
+// socket is `/socket` wherever the page came from.
+//
+// `dist` is what the app's bundler wrote: index.html and its assets. Every GET
+// that nothing registered earlier answers is a file from it, or a PAGE:
+// index.html with the caller's screen drawn into it (./document) — the app's own
+// for `/`, one of the manifest's pages for a path that leads to one. index.html
+// itself is never served as a file: it is the template, and goes out drawn.
+//
+// Register the app's own routes FIRST; this is the catch-all. `owned` names the
+// prefixes that are never a page (default: moss's own surfaces) — an unknown
+// path under one is a 404, not a screen.
+export type SiteConfig = Pick<DocumentConfig, 'draw' | 'htmlAttributes' | 'tokenKey' | 'waitMs'> & {
+  dist: string;
+  owned?: RegExp;
+};
+
+const MOSS_PATHS = /^\/(api|catalog|socket|operator|integrations)(\/|$)/;
+
+export const mountSite = (server: MossServer, config: SiteConfig): void => {
+  const { dist, owned = MOSS_PATHS, ...drawing } = config;
+  // serveStatic resolves `root` against the working directory.
+  const root = relative(process.cwd(), dist) || '.';
+  const files = serveStatic({ root });
+  server.use('/*', async (c, next) => {
+    const path = c.req.path;
+    if (owned.test(path) || path === '/' || path === '/index.html' || server.page(path) !== undefined) return next();
+    return files(c, next);
+  });
+  server.get('*', async (c) => {
+    if (owned.test(c.req.path)) return c.notFound();
+    const template = await readFile(join(dist, 'index.html'), 'utf8');
+    const page = await renderDocument({
+      ...drawing,
+      server,
+      template,
+      request: { path: c.req.path === '/index.html' ? '/' : c.req.path, cookie: c.req.header('cookie') ?? null },
+    });
+    return c.html(page.html, 200, page.headers);
   });
 };
 

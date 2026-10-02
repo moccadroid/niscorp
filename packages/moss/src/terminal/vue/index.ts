@@ -1,4 +1,4 @@
-import { createApp, defineComponent, Fragment, h, inject, provide, shallowRef, type Component, type InjectionKey } from 'vue';
+import { createApp, createSSRApp, defineComponent, Fragment, h, inject, provide, shallowRef, type Component, type InjectionKey } from 'vue';
 import { NovaRenderProvider, RenderTree } from '@niscorp/nova/adapters/vue';
 import type { NovaComponent } from '@niscorp/nova/adapters/vue';
 import { ACTION_SLOT_NAME, CANVAS_SLOT_NAME, scopeDispatch } from '@niscorp/nova';
@@ -54,7 +54,7 @@ const noDispatch = (): void => undefined;
 //   cards at once, and a click inside THIS boundary must reach THIS instance's
 //   triggers. Events that already carry an origin keep it (core's
 //   scopeDispatch).
-const registerWireSlots = (registry: ComponentRegistry<NovaComponent>, slotWrapper: TerminalSlotWrapper | undefined): void => {
+export const registerWireSlots = (registry: ComponentRegistry<NovaComponent>, slotWrapper: TerminalSlotWrapper | undefined): void => {
   const CanvasSlot = defineComponent(
     (props: { canvasId?: string }) => {
       const api = inject(TerminalApiKey, undefined);
@@ -106,6 +106,24 @@ const registerWireSlots = (registry: ComponentRegistry<NovaComponent>, slotWrapp
   });
 };
 
+// The frame, as a component: the api provided, the registry bound, the frame's
+// tree drawn. One definition for the browser's target and the server's
+// (./server), so what a server writes is what the browser then adopts.
+export const terminalFrame = (api: TerminalApi, registry: ComponentRegistry<NovaComponent>): Component =>
+  defineComponent(
+    () => {
+      provide(TerminalApiKey, api);
+      return () =>
+        h(
+          NovaRenderProvider,
+          // the frame is chrome — app events flow only from inside a canvas
+          { registry, dispatch: noDispatch, publish: api.publish },
+          { default: () => h(RenderTree, { nodes: api.frame() }) },
+        );
+    },
+    { name: 'MossTerminalFrame' },
+  );
+
 export const vueTarget = (config: VueTargetConfig): Target => {
   const { root, registry, slotWrapper } = config;
   registerWireSlots(registry, slotWrapper);
@@ -127,21 +145,14 @@ export const vueTarget = (config: VueTargetConfig): Target => {
       publish: (channel, payload) => api.publish(channel, payload),
     };
 
-    const Frame = defineComponent(
-      () => {
-        provide(TerminalApiKey, live);
-        return () =>
-          h(
-            NovaRenderProvider,
-            // the frame is chrome — app events flow only from inside a canvas
-            { registry, dispatch: noDispatch, publish: live.publish },
-            { default: () => h(RenderTree, { nodes: live.frame() }) },
-          );
-      },
-      { name: 'MossTerminalFrame' },
-    );
+    const Frame = terminalFrame(live, registry);
 
-    const app = createApp(Frame);
+    // A root that already holds elements was drawn on the server from the
+    // snapshot the wire starts from (./server): adopt them. Only when there is a
+    // frame to adopt them WITH — a wire that did not start from the page's
+    // snapshot has nothing that matches, and the elements are replaced.
+    const adopts = root.firstElementChild !== null && api.frame().length > 0;
+    const app = adopts ? createSSRApp(Frame) : createApp(Frame);
     app.mount(root);
     return {
       update: () => {

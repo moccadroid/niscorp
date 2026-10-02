@@ -16,6 +16,7 @@ import type { Shell } from '@niscorp/nova';
 import { mintDevToken } from '@niscorp/moss';
 import { login, settle, topData, sql, check, report, sessionFor, openFromMenu, server as atriumServer } from './world';
 import { buildAdminServer } from '@atrium/admin/service';
+import { CATALOG_DEFINITIONS } from '@atrium/app/action-catalog';
 import { createSeam } from '@atrium/admin/seam';
 import { ADMIN_PRINCIPAL } from '@atrium/admin/token';
 
@@ -125,7 +126,17 @@ const main = async (): Promise<void> => {
   check('...and not to the desk board', !idsOf(amaraRow).includes('desk.issue.list'));
   check('...nor to our own deployment console', !idsOf(amaraRow).includes('deploy.connectors'));
   check('the vendor resolves to the console', idsOf(vendorRow).includes('deploy.connectors'));
-  check('anonymous resolves to the login page and nothing else', idsOf(anonRow).join(',') === 'auth.login');
+  // What this protects: a stranger holds the DOOR and nothing of the application
+  // behind it. It used to read "the login and nothing else"; `/about` is a page
+  // (app/pages.ts) and its words are everybody's, so a stranger now holds one
+  // more id. The claim is unchanged and is held in two halves — the set is
+  // exactly the door and the page's words, and the page's words give a stranger
+  // nothing to DO: no endpoint to call, no trigger to fire. A grant that could
+  // read a row or press a button would turn this red.
+  const strangers = idsOf(anonRow).sort();
+  check('anonymous resolves to the login page, the about page’s words, and nothing else', strangers.join(',') === 'about.page,auth.login');
+  const aboutWords = CATALOG_DEFINITIONS['about.page'];
+  check('...and those words give a stranger nothing to do: no endpoint, no trigger', aboutWords !== undefined && Object.keys(aboutWords.endpoints ?? {}).length === 0 && (aboutWords.triggers ?? []).length === 0);
   // The bundles are in the resolution, which is the part a frozen catalog gets
   // wrong: the charter's ext.* globs match nothing unless the synced actions
   // are in the universe they resolve against.

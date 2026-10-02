@@ -132,8 +132,13 @@ describe('the wire — connect + snapshot', () => {
     expect(ticks).toBe(2);
   });
 
+  // What this protects is the SHAPE of what goes up the socket. It used to send
+  // on a socket nobody had opened, which no browser allows (a connecting
+  // WebSocket throws on `send`) — so the socket is opened first, and the test
+  // below holds the other half: nothing goes up one that is not.
   it('sends event and publish envelopes on the socket', () => {
     const wire = createWire({ url: URL, env: env() });
+    FakeSocket.last().open();
     wire.dispatch('main', { type: 'ui:click', ref: 'save' } as never);
     wire.publish('refresh');
     wire.publish('sel', { id: 7 });
@@ -142,6 +147,37 @@ describe('the wire — connect + snapshot', () => {
       { type: 'publish', channel: 'refresh' },
       { type: 'publish', channel: 'sel', payload: { id: 7 } },
     ]);
+  });
+
+  // A server-drawn page is on screen before its socket is. A press in that
+  // moment is dropped — not sent, not thrown, and not held for later.
+  it('drops events and publishes while the socket is not open, and does not replay them', () => {
+    const wire = createWire({ url: URL, env: env() });
+    wire.dispatch('main', { type: 'ui:click', ref: 'save' } as never);
+    wire.publish('refresh');
+    expect(FakeSocket.last().envelopes()).toEqual([]);
+    FakeSocket.last().open();
+    expect(FakeSocket.last().envelopes()).toEqual([]);
+    wire.publish('refresh');
+    expect(FakeSocket.last().envelopes()).toEqual([{ type: 'publish', channel: 'refresh' }]);
+  });
+
+  it('starts from the page’s snapshot when it was drawn for who this terminal is, and names its seed once', () => {
+    const drawn = { frame: [{ type: 'text' as const, value: 'page' }], trees: { main: [{ type: 'text' as const, value: 'row' }] }, seed: 'abcdef0123', principal: false };
+    const wire = createWire({ url: URL, env: env(), initial: drawn });
+    expect(wire.snapshot().frame).toEqual(drawn.frame);
+    expect(wire.snapshot().trees.get('main')).toEqual(drawn.trees.main);
+    expect(FakeSocket.last().url).toContain('seed=abcdef0123');
+    // a later connect is not the page's shell
+    FakeSocket.last().serverClose(4403);
+    expect(FakeSocket.last().url).not.toContain('seed=');
+  });
+
+  it('does not start from a page drawn for somebody else', () => {
+    storage.setItem('nisc.token', 'tok');
+    const wire = createWire({ url: URL, env: env(), initial: { frame: [{ type: 'text', value: 'lock screen' }], trees: {}, seed: 'abcdef0123', principal: false } });
+    expect(wire.snapshot().frame).toEqual([]);
+    expect(FakeSocket.last().url).not.toContain('seed=');
   });
 });
 

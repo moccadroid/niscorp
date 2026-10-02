@@ -1,5 +1,5 @@
 import { createElement, type FC } from 'react';
-import { createRoot } from 'react-dom/client';
+import { createRoot, hydrateRoot } from 'react-dom/client';
 import { NovaRenderProvider, RenderTree } from '@niscorp/nova/adapters/react';
 import type { NovaComponent } from '@niscorp/nova/adapters/react';
 import type { ComponentRegistry } from '@niscorp/nova';
@@ -23,7 +23,6 @@ export const reactTarget = (config: { root: HTMLElement; registry: ComponentRegi
   registerWireSlots(registry, { slotWrapper });
 
   return (api) => {
-    const reactRoot = createRoot(root);
     const Frame: FC = () =>
       createElement(
         TerminalApiContext.Provider,
@@ -41,8 +40,16 @@ export const reactTarget = (config: { root: HTMLElement; registry: ComponentRegi
       );
     // The conductor drives re-render: each `update` re-reads api.frame() and
     // the canvas trees, and React reconciles (preserving focus by node key).
+    // A root that already holds elements was rendered on the server from the
+    // snapshot the wire starts from: adopt those elements instead of replacing
+    // them. An empty root is the client-rendered page it always was.
+    // Only when there is a frame to adopt them WITH: a wire that did not start
+    // from the page's snapshot (it was rendered for somebody else) has nothing
+    // that matches, and the elements are replaced as on any other page.
+    const adopts = root.firstElementChild !== null && api.frame().length > 0;
+    const reactRoot = adopts ? hydrateRoot(root, createElement(Frame)) : createRoot(root);
     const render = (): void => reactRoot.render(createElement(Frame));
-    render();
+    if (!adopts) render();
     return { update: render, destroy: () => reactRoot.unmount() };
   };
 };
