@@ -74,9 +74,12 @@ Explicitly out of scope right now:
   default; opt-in reference kits ship at the adapter subpaths
   (`/adapters/react/components`, `/adapters/vue/components`,
   `/adapters/dom/components`, `/adapters/tty/components`, `/adapters/ink`).
-- **No SSR yet.** Nova hooks don't pass a `getServerSnapshot` to
-  `useSyncExternalStore`, so calling them during server rendering throws.
-  See the React compatibility section below.
+- **No SSR through the shell-backed React hooks.** They don't pass a
+  `getServerSnapshot` to `useSyncExternalStore`, so calling them during server
+  rendering throws. A served tree needs none of them: `RenderTree` over a
+  `RenderApi` is a pure function of the tree, and that is the path a server
+  draws through (`@niscorp/moss/terminal/react/server`). See the React
+  compatibility section below.
 - **No wire protocol.** Definitions are in-process objects, not a
   serialization format. The wire lives in moss; nova ships the render
   surface a remote terminal targets (`RenderApi`, flattened trees that
@@ -303,10 +306,13 @@ can perform their own final async work (e.g. telemetry flush).
   hooks never throw promises. This is intentional: actions model their
   async state as data so layouts can bind to it directly, rather than
   unwinding the tree for Suspense to catch.
-- **SSR:** not enabled yet. `useSyncExternalStore` requires a
-  `getServerSnapshot` for SSR; nova hooks don't currently provide one.
-  Adding SSR is a small per-hook change. Until then, calling nova hooks
-  during server rendering throws "no server snapshot available".
+- **SSR:** the shell-backed hooks (`useShell…`, `<NovaShell>`) are not
+  enabled for it — `useSyncExternalStore` requires a `getServerSnapshot`, and
+  they don't provide one. Drawing a tree on a server does not go through them:
+  `NovaRenderProvider` + `RenderTree` over a `RenderApi` (the frame and the
+  per-canvas trees, as values) render with no store at all, on a server and in
+  the browser alike. That is how moss draws a page server-side and how its
+  React target adopts it.
 - **React Server Components:** not tested. The hooks are client-only.
 
 ---
@@ -317,7 +323,9 @@ can perform their own final async work (e.g. telemetry flush).
   and live shells; pure and framework-free. `walkNodes` / `componentsOf` /
   `refsOf` / `loopVarsOf` (layout walks), `snapshotShell` /
   `describeInstance` (running state), `actionGraph` (emit/message wiring),
-  `classifyAudit` / `auditCatalog` (closure-audit triage).
+  `classifyAudit` / `auditCatalog` (closure-audit triage), `livenessOf` (what
+  an action can still do once drawn: gestures, the channels it waits on, every
+  endpoint and whether it is called on open or later).
 - **`@niscorp/nova/devtools`** — a shell inspector built as pure nova:
   `devtoolsActions` (`devtools.dock`, `devtools.inspect` — plain
   ActionDefinitions over generic primitives), `DEVTOOLS_CANVAS`, and

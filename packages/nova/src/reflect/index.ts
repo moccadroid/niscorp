@@ -12,6 +12,7 @@
 //   graph   — the action adjacency (actionGraph)
 //   cycles  — chains that never end, found in the definitions (chainCycles)
 //   audit   — classification over auditAction (classifyAudit, auditCatalog)
+//   liveness — what an action can still do once drawn (livenessOf)
 export { walkNodes, componentsOf, refsOf, loopVarsOf, isRecord } from './walk';
 export { snapshotShell, describeInstance, describeShell } from './shell';
 export type { ShellSnapshot, CanvasRef, InstanceRef, InstanceModel, DescribeShellOptions } from './shell';
@@ -22,3 +23,5 @@ export type { ChainCycle, ChainStep } from './cycles';
 export type { ActionGraph, ActionNode } from './graph';
 export { classifyAudit, auditCatalog } from './audit';
 export type { IssueClass, ClassifiedIssue, CatalogAuditRow } from './audit';
+export { livenessOf } from './liveness';
+export type { ActionLiveness, EndpointUse } from './liveness';
