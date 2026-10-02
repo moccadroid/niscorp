@@ -9,7 +9,7 @@
 //   server.ts     — boot refusal + the HTTP surfaces + the socket accept
 //   node.ts       — the Node listener + ws transport (./node subpath; Bun swaps this, never the app)
 export { defineApp } from './app';
-export type { NiscApp, ShellManifest, FunctionSession, LayoutVariant, RunRecord, RunTurn, RunSink } from './app';
+export type { NiscApp, ShellManifest, PageManifest, FunctionSession, LayoutVariant, RunRecord, RunTurn, RunSink } from './app';
 export { devSession, mintDevToken } from './runtime';
 export type { NiscRuntime, SessionVerifier } from './runtime';
 export { emitterOf, spanClock } from './telemetry';
@@ -39,5 +39,11 @@ export { createIdentityCache, DEFAULT_IDENTITY_MAX, DEFAULT_IDENTITY_IDLE_MS } f
 export { createGeneration, GENERATION_DDL, DEFAULT_GENERATION_POLL_MS } from './generation';
 export type { Generation } from './generation';
 export type { IdentityRecord, IdentityReport, IdentityCache, IdentityCacheContext } from './identity';
-export type { ShellHost, ShellSession, ShellReport } from './shells';
+export type { ShellHost, ShellSession, ShellReport, ShellSnapshot, ShellOpening } from './shells';
+export { tokenFromCookie, embedSnapshot, documentHeaders, renderDocument, exportDocuments, SNAPSHOT_ELEMENT_ID } from './document';
+export type { DocumentConfig, DrawnDocument, ExportedDocument } from './document';
+export { shellNeedOf } from './liveness';
+export type { ShellNeed } from './liveness';
+export { createPageRouter } from './pages';
+export type { PageMatch, PageRouter } from './pages';
 export type { Connection, ServerMessage, ClientMessage, SocketAccept, SocketContext } from './socket';

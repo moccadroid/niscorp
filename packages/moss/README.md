@@ -36,13 +36,54 @@ const app = defineApp({
   behaviors,      // row-level scope semantics; each role's `scoping` picks among them,
                   // one policy per role, merged — a person may hold several
   resources,      // entity subgraphs → /api/<name>/vex
-  shell,          // the canvas manifest (the shell runs on the server)
+  shell,          // the canvas manifest (the shell runs on the server) — the app
+  pages,          // what is drawn at a path and kept by nothing — optional
   functions,      // the in-process fn seam (agents, sign-in) — optional
 });
 
 const server = await serve(app, { pool, db, port: 3000 });
 // boot refusal here (createServer runs inside serve); HTTP + ws in one
 ```
+
+## The first screen can arrive with the page
+
+A page request can be answered with the screen itself: the caller's shell is
+read as it stands (`shells.snapshot`), drawn to a string by the app's own kit
+(`terminal/react/server`, `/vue/server`, `/dom/server`), and written into the
+app's `index.html` beside the snapshot it was drawn from. The browser's terminal
+starts from that snapshot and adopts the elements already there — a first frame
+delivered early, with the socket still the authority.
+
+```typescript
+import { renderDocument } from '@niscorp/moss';
+import { renderSnapshot } from '@niscorp/moss/terminal/react/server';
+
+server.get('*', async (c) => {
+  const page = await renderDocument({
+    server,
+    template: indexHtml,
+    request: { path: c.req.path, cookie: c.req.header('cookie') },
+    draw: (snapshot) => renderSnapshot({ snapshot, registry, slotWrapper }),
+  });
+  return c.html(page.html, 200, page.headers);
+});
+```
+
+```typescript
+// the browser's entry
+const drawn = readDocumentSnapshot();
+createWire({ env: browserEnv({ cookie: true }), ...(drawn ? { initial: drawn } : {}) });
+```
+
+Who may keep the page follows from who asked: drawn for nobody it is the same
+for everybody; drawn for somebody it is `private, no-store`. A page that cannot
+be drawn goes out undrawn.
+
+`pages` are the other thing a path can lead to: a shell manifest drawn for
+whoever asks and then let go — a welcome, the docs. A page with nothing left to
+happen opens no socket, and `exportDocuments` writes pages as files. See
+[DOCS.md § The document](DOCS.md#the-document) and
+[DESIGN.md § Pages](DESIGN.md#pages).
 
 ## The client is a terminal — any terminal
 

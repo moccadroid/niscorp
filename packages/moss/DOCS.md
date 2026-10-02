@@ -25,7 +25,8 @@ type NiscApp = {
   behaviors?: ScopeBehaviors;                          // row-level scope semantics, per table or per profile
   entries?: readonly (SeedEntry | SeedMutation)[];     // the prewarmed API surface
   resources?: Record<string, readonly string[] | { entities: readonly string[] }>;
-  shell?: ShellManifest;                              // the server shell, as data
+  shell?: ShellManifest;                              // the server shell, as data — THE APP
+  pages?: Record<string, PageManifest>;               // what is drawn at a path and kept by nothing
   functions?: (session: FunctionSession) => Record<string, FunctionHandler>;
 };
 ```
@@ -53,6 +54,41 @@ type ShellManifest = {
 
 `inputs` is the app's one per-principal boot-derivation hook (nav flags, user
 chips), merged over each canvas's static seed.
+
+#### `PageManifest` — `app.pages`
+
+```typescript
+type PageManifest = ShellManifest & {
+  path: string;      // "/about", "/docs/:slug" — literal segments and `:name` parameters
+  params?: string;   // the canvas whose seed receives the path's parameters as input
+};
+```
+
+`shell` is **the app**: one durable shell per signed-in person, the thing that
+rearranges itself around them. A **page** is the other thing a path can lead
+to — a welcome, the docs, a published talk. It is a shell manifest of its own
+(a frame, canvases, what mounts on them), drawn for whoever asks and then let
+go. It is the same machinery with the keeping taken out:
+
+- **The same actions and the same charter.** What exists on a page for a given
+  person is ring 1, as everywhere: a strip saying who is signed in is an action
+  a member is granted, on a canvas whose candidate list a stranger holds none
+  of. Nothing in a layout asks who anybody is.
+- **The same policy on every read.** A page's endpoints ride the server's own
+  surfaces as whoever asked — nobody, or the signed-in principal.
+- **No shell is kept.** A page's shell lives for one read (the document) or one
+  connection (a terminal on a page that can still do something). A principal's
+  app shell is neither built nor touched by a page.
+- **`onSession` does not run.** Session code is the app's. `functions` are
+  endpoints and serve a page's actions as they serve the app's.
+
+A path matches a page when both have the same number of segments and every
+literal one is equal; nothing else (no wildcards, no order). Two pages that
+could both answer one path are refused at boot, as is a `params` canvas the page
+does not have. Any path no page answers is the app's.
+
+Whether a page may be kept by a cache, or written to a file, is not a property
+of the page: see [`documentHeaders`](#the-document).
 
 #### `phrases` / `phraseKeys` — the words a shell wears
 
@@ -181,8 +217,159 @@ with `{ socket, shells? }`.
 
 #### `MossServer`
 
-`Hono<Env> & { socket: SocketAccept; shells?: ShellHost }`. It's a Hono app —
-mount it, extend it, or hand it to a listener.
+`Hono<Env> & { socket: SocketAccept; shells?: ShellHost; principalOf; page; … }`.
+It's a Hono app — mount it, extend it, or hand it to a listener.
+
+- `principalOf(token): Promise<string | null>` — the deployment's own session
+  verifier, the one every surface already asks. For an app's route that receives
+  a credential some other way than a Bearer header (a page request carries a
+  cookie). `null` is a refusal.
+- `pages: readonly { name, path }[]` — every page the manifest declares, with
+  the path it is drawn at: what a build walks to know which paths exist besides
+  the app's own.
+- `page(path): { name, host, inputs } | undefined` — the page a path leads to
+  (its name, the `ShellHost` that draws it, the input its path carries), or
+  `undefined` for a path that is the app's. The document route and the socket
+  ask the same question here.
+
+### The document
+
+A page request is answered with the screen the socket would have streamed a
+moment later: the caller's shell is read as it stands, drawn to a string by the
+app's kit, and written into the app's own `index.html` beside the snapshot it
+was drawn from. The browser's terminal starts from that snapshot and adopts the
+elements already there. Nothing about the socket changes; a drawn page is a
+first frame delivered early.
+
+#### `shells.snapshot(token, principal, options?): Promise<ShellSnapshot>`
+
+```typescript
+type ShellSnapshot = {
+  frame: RenderNode[];
+  trees: Record<string, RenderNode[]>;   // by canvas id — what `attach` would send
+  seed?: string;        // an ephemeral shell's id seed (see below)
+  settled: boolean;     // false: the wait ran out and the screen went as it stood
+  live: boolean;        // can anything on this screen still happen
+  why: string[];        // one line per reason it is live
+  drawnWith: string[];  // reads whose answers are already in the trees
+};
+```
+
+The current screen for whoever this is, without attaching anything. Read-only:
+the attached connections' baseline is untouched.
+
+- **A principal's app shell is built if it is not standing, and kept** — the
+  socket would have built it a moment later, and the one the page was drawn from
+  is the one the socket attaches to (same shell, same instance ids).
+- **Nobody's shell, and any page's, is built, read and disposed.** It is built
+  under a random `seed`, and mints its instance ids in order under it
+  (`act-<seed>-<n>`). A terminal names that seed on the socket (`?seed=`); the
+  throwaway shell built for its connection mints the same ids, so its first
+  frames match the page. The seed is random per document: ids stay unguessable,
+  and a stale origin from another shell still names nothing.
+- **It waits for the screen to settle**, for at most `options.waitMs` (default
+  300): the manifest's `seeds` pushed, and no instance still `initializing` —
+  nova marks an instance `active` only after its mount hook has been awaited.
+  Past the wait the screen goes out as it stands (`settled: false`), with
+  whatever is still loading drawn as loading.
+- `options.inputs` — input for canvas seeds, by canvas id, merged over the
+  manifest's `inputs`. A page's path parameters arrive here.
+
+#### `live`, and `shellNeedOf(definition, entries): ShellNeed`
+
+`live` is asked of the instances actually mounted for this principal. A screen
+is live when something on it can still happen:
+
+| Reason | Read off |
+|---|---|
+| a person can act on it | a `ui:` trigger, or a two-way `model` binding |
+| it waits on a channel | a `message:` trigger |
+| a read keeps answering | an endpoint whose entry is `refresh: 'reactive'` |
+| it calls code | a `fn:` endpoint that anything calls — code is not read |
+| it cannot be read | a layout kept in the store; a fingerprint the manifest does not carry |
+
+A read made while the action opened is **finished**: its answer is in the tree
+(and listed in `drawnWith`). The app's own shell is always live for a signed-in
+principal — it is the thing that is kept. nova supplies the facts
+(`livenessOf`, `@niscorp/nova/reflect`); moss composes the verdict, because it
+holds the entries behind each fingerprint.
+
+When `live` is false the trees are the whole of the screen, and the terminal
+opens no socket.
+
+#### `renderDocument(config): Promise<DrawnDocument>`
+
+```typescript
+const page = await renderDocument({
+  server,                                   // the MossServer
+  template,                                 // the app's index.html, as it would go out undrawn
+  request: { path, cookie },                // what the request named and carried
+  draw: (snapshot) => renderSnapshot({ snapshot, registry, slotWrapper }),
+  htmlAttributes: (snapshot) => ({ 'data-accent': … }),   // optional
+});
+// → { html, headers, drawn, principal, page?, live?, why?, drawnWith?, settled? }
+```
+
+- **Which shell**: the page `server.page(path)` names, else the app's.
+- **For whom**: the principal behind the cookie named by the wire's token key
+  (`tokenKey`, default `nisc.token`), or nobody. A cookie that no longer
+  resolves is nobody, and the response takes it back (`Set-Cookie`, `Max-Age=0`).
+  A verifier that *throws* is a fault, not a sign-out: the page goes out
+  undrawn and the cookie stays.
+- **`draw`** is a terminal that draws to a string — the app's kit bound to
+  `renderSnapshot` from `terminal/react/server`, `terminal/vue/server` or
+  `terminal/dom/server`. It may be async.
+- **`htmlAttributes`** is for what a kit would otherwise set on `<html>` from an
+  effect, which never runs on a server: a palette, a colour scheme. Read it off
+  the same node the effect reads it from. Values are escaped.
+- **`template`** must hold the empty root (`root`, default
+  `<div id="root"></div>`). The screen goes inside it, the snapshot element
+  straight after.
+- **Nothing here can fail a page.** A kit component that throws, a shell that
+  will not build: the answer is the template as it is (`drawn: false`), and the
+  terminal paints it the way it did before any of this existed.
+
+The route is the app's own — in production `mountSite` from `@niscorp/moss/node`
+(what `nisc start` mounts), in dev a vite middleware that runs
+`index.html` through `transformIndexHtml` first so the drawn page still carries
+vite's client.
+
+#### `documentHeaders(principal)` — who may keep a page
+
+| Drawn for | `Cache-Control` | `Vary` |
+|---|---|---|
+| nobody | `no-cache` | `Cookie` |
+| somebody | `private, no-store` | `Cookie` |
+
+This is the whole rule, and it is in one place: who may keep a page follows from
+who asked. A page drawn for nobody is the same for everybody; a page drawn for
+somebody is theirs. No page declares which it is.
+
+#### `exportDocuments(config): Promise<ExportedDocument[]>`
+
+The same draw, for nobody, once per path in `config.paths` — what a static host
+serves. There is no credential to pass and no way to pass one: a file is the
+page as nobody in particular sees it, which is the only page that may be kept.
+Each result carries `{ path, html, page?, drawn, live, why, drawnWith, settled }`.
+A page that is `live` is still written, and says why — its file is a true first
+screen and its terminal will look for a socket. Whether that is acceptable (a
+server stands beside the files) or a mistake (there is none) is the build's to
+decide, from the report. Writing the files, and listing a parameterised page's
+paths (`server.executeAs` runs a seeded read as a charter role), are the
+caller's.
+
+#### `embedSnapshot(snapshot, principal, path?)`, `tokenFromCookie(header, tokenKey?)`
+
+The two halves `renderDocument` is made of, for a host that assembles its own
+page. `embedSnapshot` writes the snapshot as a
+`<script type="application/json" id="nisc-snapshot">` element with every `<`
+(and U+2028/2029) escaped: a tree carries what people typed, and nothing in it
+can close the element or open another.
+
+#### `createPageRouter(pages): PageRouter`
+
+`{ match(path): { name, params } | undefined }` — the matching rule above, for a
+tool that needs it without a server.
 
 ### Reacting to writes
 
@@ -307,7 +494,7 @@ the engine instead of waiting for somebody's beat.
 
 ### The socket protocol
 
-- `createSocket(ctx): SocketAccept` — `ctx = { session, catalog, shells?,
+- `createSocket(ctx): SocketAccept` — `ctx = { session, catalog, shells?, page?,
   revalidateMs? }`. One `accept(url, connection)` per connection; `accept.stop()`
   ends revalidation (the timer is unref'd, so a plain process needn't call it).
 - **Identity is asked twice.** At upgrade, and then every `revalidateMs`
@@ -358,6 +545,16 @@ the engine instead of waiting for somebody's beat.
   `protocol`, so a terminal can refuse a server older than it can speak to.
   Bump `PROTOCOL` when a message changes shape; raise `PROTOCOL_MIN` only when
   the server stops speaking an old one.
+- **`?path=`** — the path the terminal is on. A path that leads to a page is
+  served that page's shell, built for this connection alone and seeded with the
+  path's parameters; any other path (and no path) is the app's shell. A
+  signed-in terminal on a page does not build its principal's app shell.
+- **`?seed=`** — the id seed of the page the terminal was drawn from (see
+  [`shells.snapshot`](#the-document)). An ephemeral shell built under it mints
+  the same instance ids as the page's. Ignored for a kept shell, and ignored
+  unless it is 8–40 hex characters.
+- Both are optional and unknown to older servers, which ignore them: `PROTOCOL`
+  is unchanged.
 - A canvas whose layout renders no visible content is served as an empty
   tree (`[]`), so a terminal collapses chrome on `length` alone. An
   `ActionSlot` is a boundary, not content — visibility is decided by what's
@@ -440,22 +637,52 @@ Correctness, which matters more than the saving:
   the runtime's through for you, so only a host running its own listener (a
   vite plugin, a dev check) ever needs it.
 
+- `mountSite(server, { dist, draw, htmlAttributes?, tokenKey?, waitMs?, owned? })`
+  — the built terminal, served by the same process as the app. Every GET that
+  nothing registered earlier answers is a file from `dist`, or a page:
+  `index.html` with the caller's screen drawn into it (`renderDocument`) — the
+  app's own for `/`, one of the manifest's pages for a path that leads to one.
+  `index.html` itself never goes out as a file. Register the app's own routes
+  first; this is the catch-all. `owned` (default: moss's own prefixes) names
+  what is never a page — an unknown path under one is a 404, not a screen.
+
 ## `@niscorp/moss/client`
 
 - `createWire(config?): Wire` — the app end of the socket. `config = { url?,
-  env?, delta? }`. Plain TypeScript, no React, no globals — everything
+  env?, delta?, initial?, path? }`. Plain TypeScript, no React, no globals — everything
   host-shaped comes in as a `WireEnv`. `delta` (default `false`) advertises
   that this terminal can rebuild frame deltas; the snapshot it produces is
   identical either way. See [Wire size](#wire-size).
 - `WireEnv` — the host seam: `{ tokens: { load, save, clear }, socket(url),
   defaultUrl() }`. The socket API is WHATWG-standard in every host (browser,
   Node ≥22, Bun); an env only constructs it.
-- `browserEnv({ tokenKey? }?): WireEnv` — the default host: token in
+- `browserEnv({ tokenKey?, cookie? }?): WireEnv` — the default host: token in
   localStorage (`nisc.token`), url derived from `window.location`, the
-  page's WebSocket.
+  page's WebSocket. `cookie: true` keeps a **copy** of the token in a cookie of
+  the same name (`Path=/; SameSite=Lax`, `Secure` on https), written and
+  cleared with the stored one and levelled with it on every load — so a token
+  put in localStorage by something else (a sign-in handoff page) reaches the
+  cookie on the first load after it. A page request carries cookies and nothing
+  else; this is what lets a server draw the page for whoever is asking. The
+  cookie is only ever read to draw a page — every other surface still wants the
+  token itself — so it adds no way in.
+- `readDocumentSnapshot(doc?): DocumentSnapshot | undefined` — the snapshot a
+  server-drawn page carries (`{ frame, trees, principal, seed?, path?, live? }`),
+  or `undefined` for a page that carries none. Never throws.
+- `initial` — pass what `readDocumentSnapshot()` returned. The wire starts from
+  it instead of from nothing, so the first render matches the page's HTML and
+  the first frames off the socket confirm it. It is used only when it was drawn
+  for who this terminal is — signed in and holding a token, or neither;
+  anything else is somebody else's screen and the wire starts empty. Its `seed`
+  is named on the first connect only. Its `path` is named on every connect
+  (`config.path` overrides it; a page that was not drawn on the server passes
+  `location.pathname` there).
+- **A page with nothing left to happen opens no socket.** When `initial.live`
+  is `false`, the wire does not connect and `status()` is `'static'`. `reset()`,
+  or a token arriving, connects after all.
 - `Wire` — `{ subscribe, snapshot, status, dispatch(canvas, event), publish,
   reset, back, dispose }`. `snapshot()` is `{ frame, trees }`; `status()` is
-  `'connecting' | 'open' | 'closed'` and changes notify subscribers like
+  `'connecting' | 'open' | 'closed' | 'incompatible' | 'static'` and changes notify subscribers like
   snapshot changes do (a renderer must be able to tell a dead socket from an
   empty app). Hand it to a renderer.
 
@@ -477,6 +704,14 @@ wreck. On an open socket it sends `{ type: 'reset' }` and the fresh frame
 arrives on that same socket — same session, same token, nothing signed out. On
 a dead one it reconnects immediately instead of waiting out the backoff, which
 is the same recovery a layer down.
+
+**Nothing is sent on a socket that is not open, and nothing is queued.**
+`dispatch` and `publish` are dropped unless `status()` is `'open'` — the posture
+`back` and `popTo` always had. A server-drawn page is on screen before its
+socket is, so there is a moment in which something can be pressed with nothing
+to send it over; an intention replayed against a screen that may have moved is
+worse than one lost, and a browser socket that is still connecting throws on
+`send`.
 
 `back()` sends `{ type: 'back' }` and nothing else — no location is held here,
 so what comes back is whatever canvases moved, over the same stream every other
@@ -576,6 +811,33 @@ Requires the optional `react`/`react-dom` peers.
   the `ActionSlot` boundary; the terminal twin of nova's client-shell
   SlotWrapper. Served trees carry identity only, so the props are
   `{ canvasId, instanceId, definitionId }` — `definitionId`, not `action`.
+- **Adoption.** A `root` that already holds elements, on a wire that has a
+  frame, was drawn on the server from the snapshot the wire started from: the
+  target adopts those elements (`hydrateRoot`) instead of replacing them. An
+  empty root, or a wire with no frame (the page was drawn for somebody else),
+  is rendered as before.
+
+### `@niscorp/moss/terminal/react/server`
+
+- `renderSnapshot({ snapshot, registry, slotWrapper? }): string` — the React
+  target, drawing to a string: the same registry, the same wire slots and the
+  same tree as the browser's target, so what a server writes is what the browser
+  adopts. Its own entry, so a browser bundle never carries `react-dom/server`.
+
+**What a kit owes a server-drawn page.** The first pass in the browser must
+draw exactly what the server drew, so nothing that differs between the two may
+decide a component's first render:
+
+- The window (its width, a media query, `localStorage`) — read it through
+  `useSyncExternalStore` with a server snapshot, or in an effect, never in a
+  `useState` initialiser guarded by `typeof window`. That guard is the bug: it
+  makes the two sides disagree about the same render.
+- A portal — only after the first pass (the server has no `document.body`).
+- What a component puts on `<html>` from an effect is not in the page until the
+  script runs; give it to `renderDocument`'s `htmlAttributes`.
+
+An app holds this with a check: draw the page, open it in a DOM with the real
+wire and target, and assert React said nothing (atrium's and lyra's `ssr-check`).
 
 ## `@niscorp/moss/terminal/vue`
 
@@ -595,12 +857,33 @@ Requires the optional `vue` peer.
 - `TerminalSlotWrapper` — a Vue component wrapping each action instance at
   the `ActionSlot` boundary, handed `{ canvasId, instanceId, definitionId }`
   as props and the content as its default slot.
+- **Adoption**, as the react target: a root that holds server-drawn elements,
+  on a wire with a frame, is mounted with `createSSRApp` and adopted.
+- `registerWireSlots(registry, slotWrapper?)`, `terminalFrame(api, registry)` —
+  the wire slots and the frame component, shared with the server entry.
+
+### `@niscorp/moss/terminal/vue/server`
+
+- `renderSnapshot({ snapshot, registry, slotWrapper? }): Promise<string>` — the
+  Vue target, drawing to a string through Vue's own server renderer (which is
+  asynchronous, so this is).
 
 ## `@niscorp/moss/terminal/dom`
 
 - `domTarget({ root, registry? }): Target` — nova's DOM adapter plus nova's
   default component kit rendered into `root`, stylesheet injected once per
-  document. Zero framework; pass a registry to restyle.
+  document. Zero framework; pass a registry to restyle. It needs no adoption:
+  nova's DOM adapter rebuilds its root on every render, so its first render
+  replaces server-drawn elements with the same elements in one synchronous step.
+
+### `@niscorp/moss/terminal/dom/server`
+
+- `renderSnapshot({ snapshot, registry?, window }): string` — the DOM target,
+  drawing to a string. A DOM kit builds real elements, so the host hands in a
+  DOM to build them in (`window`: jsdom, happy-dom, linkedom — moss depends on
+  none). A kit's components name `document` as a global, so for the length of
+  one draw — synchronous, start to end — the window's names are lent to the
+  global scope and taken back whatever happens.
 
 ## `@niscorp/moss/terminal/tty`
 

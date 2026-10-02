@@ -48,6 +48,64 @@ export type WireConfig = {
   // changes — the snapshot it renders is identical either way. See DOCS.md
   // § Frame deltas.
   delta?: boolean;
+  // The screen the page already shows — the snapshot a server-rendered
+  // document carries (`readDocumentSnapshot`). The wire starts from it instead
+  // of from nothing, so the first render matches the HTML and the first frames
+  // off the socket confirm it rather than paint it. Absent, or made for
+  // somebody else (see `DocumentSnapshot.principal`): the wire starts empty, as
+  // it always has.
+  initial?: DocumentSnapshot;
+  // The path this terminal is on, named on the socket so the server can tell a
+  // page's terminal from the app's (a page is served a shell of its own, for
+  // this connection alone). Default: the path the page's snapshot was drawn
+  // for; a page that was not drawn on the server passes `location.pathname`.
+  path?: string;
+};
+
+// What a server-rendered document carries beside its HTML.
+export type DocumentSnapshot = {
+  frame: RenderNode[];
+  trees: Record<string, RenderNode[]>;
+  // The id seed an anonymous page's shell was built under; named on the first
+  // connect so the socket's shell mints the same instance ids.
+  seed?: string;
+  // Whether the page was rendered for a signed-in principal. A page rendered
+  // for nobody is not this terminal's screen if it holds a token, and the other
+  // way round — the wire then starts empty rather than from the wrong screen.
+  principal: boolean;
+  // The path it was drawn for.
+  path?: string;
+  // False when nothing on the drawn screen can still happen: the trees are the
+  // whole of it, and the wire opens no socket at all (status `static`). Absent
+  // is live — a page that does not say is not concluded finished.
+  live?: boolean;
+};
+
+// The id of the element a document carries its snapshot in.
+export const SNAPSHOT_ELEMENT_ID = 'nisc-snapshot';
+
+// Read the snapshot out of the page, if it has one. Never throws: a page
+// without one, or with one that does not parse, is a page that was not
+// server-rendered, and the terminal starts the way it always has.
+export const readDocumentSnapshot = (doc: Pick<Document, 'getElementById'> = document): DocumentSnapshot | undefined => {
+  try {
+    const text = doc.getElementById(SNAPSHOT_ELEMENT_ID)?.textContent;
+    if (text === undefined || text === null || text === '') return undefined;
+    const parsed: unknown = JSON.parse(text);
+    if (parsed === null || typeof parsed !== 'object') return undefined;
+    const { frame, trees, seed, principal, path, live } = parsed as Record<string, unknown>;
+    if (!Array.isArray(frame) || trees === null || typeof trees !== 'object' || typeof principal !== 'boolean') return undefined;
+    return {
+      frame: frame as RenderNode[],
+      trees: trees as Record<string, RenderNode[]>,
+      principal,
+      ...(typeof seed === 'string' ? { seed } : {}),
+      ...(typeof path === 'string' ? { path } : {}),
+      ...(typeof live === 'boolean' ? { live } : {}),
+    };
+  } catch {
+    return undefined;
+  }
 };
 
 export type WireSnapshot = {
@@ -66,7 +124,10 @@ export type WireSnapshot = {
 // `incompatible`: this terminal and the server speak protocols the other
 // cannot (see PROTOCOL in ../socket). Terminal state — the wire stops retrying,
 // because every retry would speak the same protocol again.
-export type WireStatus = 'connecting' | 'open' | 'closed' | 'incompatible';
+// `static`: the page was drawn on the server and nothing on it can still
+// happen, so no socket was opened. Not a fault and not a wait — `reset` (or a
+// token arriving) connects after all.
+export type WireStatus = 'connecting' | 'open' | 'closed' | 'incompatible' | 'static';
 
 export type Wire = {
   subscribe: (listener: () => void) => () => void;
@@ -105,13 +166,36 @@ const EMPTY: WireSnapshot = { frame: [], trees: new Map() };
 // The browser host: token in localStorage, url derived from location, the
 // page's WebSocket. The try/catches keep a storage-less context (private
 // mode, sandboxed iframe) alive — the session just lives for this page only.
-export const browserEnv = (config: { tokenKey?: string } = {}): WireEnv => {
+//
+// `cookie: true` keeps a COPY of the token in a cookie of the same name, written
+// and cleared with the stored one. A page request carries cookies and nothing
+// else, so this is what lets a server render the document for whoever is asking.
+// The cookie is only ever read to render a page: every other surface still wants
+// the token itself (the socket's URL, a Bearer header), so it adds no way in.
+export const browserEnv = (config: { tokenKey?: string; cookie?: boolean } = {}): WireEnv => {
   const tokenKey = config.tokenKey ?? 'nisc.token';
+  const mirror = (token: string | null): void => {
+    if (config.cookie !== true) return;
+    try {
+      const secure = window.location.protocol === 'https:' ? '; Secure' : '';
+      document.cookie =
+        token === null
+          ? `${encodeURIComponent(tokenKey)}=; Path=/; Max-Age=0; SameSite=Lax${secure}`
+          : `${encodeURIComponent(tokenKey)}=${encodeURIComponent(token)}; Path=/; SameSite=Lax${secure}`;
+    } catch {
+      /* no document, or cookies refused — the page is simply rendered for nobody */
+    }
+  };
   return {
     tokens: {
       load: () => {
         try {
-          return window.localStorage.getItem(tokenKey);
+          const token = window.localStorage.getItem(tokenKey);
+          // Level the copy with the stored one — a token put there by something
+          // other than this wire (a sign-in handoff page) reaches the cookie on
+          // the first load after it, and a token that is gone takes its copy along.
+          mirror(token);
+          return token;
         } catch {
           return null;
         }
@@ -122,6 +206,7 @@ export const browserEnv = (config: { tokenKey?: string } = {}): WireEnv => {
         } catch {
           /* storage unavailable — the session lives for this page only */
         }
+        mirror(token);
       },
       clear: () => {
         try {
@@ -129,6 +214,7 @@ export const browserEnv = (config: { tokenKey?: string } = {}): WireEnv => {
         } catch {
           /* nothing stored, nothing to clear */
         }
+        mirror(null);
       },
     },
     socket: (url) => new WebSocket(url),
@@ -143,7 +229,15 @@ export const createWire = (config: WireConfig = {}): Wire => {
   const env = config.env ?? browserEnv();
 
   let token = env.tokens.load();
-  let snapshot: WireSnapshot = EMPTY;
+  // The page's own snapshot, when it was rendered for who this terminal is —
+  // signed in and holding a token, or neither. Anything else is somebody else's
+  // screen and is not started from.
+  const initial = config.initial !== undefined && config.initial.principal === (token !== null) ? config.initial : undefined;
+  let snapshot: WireSnapshot = initial === undefined ? EMPTY : { frame: initial.frame, trees: new Map(Object.entries(initial.trees)) };
+  // Named on the FIRST connect only: it belongs to the page's own shell, and a
+  // later connect (a retry, another principal) is not that shell.
+  let seed = initial?.seed;
+  const path = config.path ?? config.initial?.path;
   let status: WireStatus = 'connecting';
   // Set by a protocol mismatch in either direction; ends the reconnect loop.
   let incompatible = false;
@@ -167,7 +261,16 @@ export const createWire = (config: WireConfig = {}): Wire => {
 
   const url = (): string => config.url ?? env.defaultUrl();
 
-  const send = (message: ClientMessage): void => socket?.send(JSON.stringify(message));
+  // Only on an OPEN socket, and never queued — the posture `back` and `popTo`
+  // always had, now everybody's. A page rendered server-side is on screen
+  // before the socket is, so there is a moment in which something can be
+  // pressed with nothing to send it over: that press is dropped, not held. An
+  // intention replayed against a screen that may have moved is worse than one
+  // lost, and a browser socket that is still connecting throws on `send`.
+  const send = (message: ClientMessage): void => {
+    if (socket === null || status !== 'open') return;
+    socket.send(JSON.stringify(message));
+  };
 
   // The last `render` message TEXT per canvas — the base a delta is written
   // against, byte for byte as the server holds it. Only populated when deltas
@@ -183,6 +286,9 @@ export const createWire = (config: WireConfig = {}): Wire => {
     if (token !== null) params.push(`token=${encodeURIComponent(token)}`);
     params.push(`protocol=${PROTOCOL}`);
     if (config.delta === true) params.push('delta=1');
+    if (seed !== undefined) params.push(`seed=${encodeURIComponent(seed)}`);
+    seed = undefined;
+    if (path !== undefined) params.push(`path=${encodeURIComponent(path)}`);
     const ws = env.socket(`${url()}${params.length > 0 ? `?${params.join('&')}` : ''}`);
     socket = ws;
     // A connection that opens is a healthy connection: forget the backoff.
@@ -308,7 +414,10 @@ export const createWire = (config: WireConfig = {}): Wire => {
     connect();
   };
 
-  connect();
+  // A drawn page with nothing left to happen needs no socket. Everything that
+  // would later need one — `reset`, a token arriving — connects by itself.
+  if (initial?.live === false) status = 'static';
+  else connect();
 
   return {
     subscribe: (listener) => {

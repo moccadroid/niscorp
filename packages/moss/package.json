@@ -71,6 +71,16 @@
         "default": "./dist/terminal/react/index.cjs"
       }
     },
+    "./terminal/react/server": {
+      "import": {
+        "types": "./dist/terminal/react/server.d.ts",
+        "default": "./dist/terminal/react/server.js"
+      },
+      "require": {
+        "types": "./dist/terminal/react/server.d.cts",
+        "default": "./dist/terminal/react/server.cjs"
+      }
+    },
     "./terminal/vue": {
       "import": {
         "types": "./dist/terminal/vue/index.d.ts",
@@ -81,6 +91,16 @@
         "default": "./dist/terminal/vue/index.cjs"
       }
     },
+    "./terminal/vue/server": {
+      "import": {
+        "types": "./dist/terminal/vue/server.d.ts",
+        "default": "./dist/terminal/vue/server.js"
+      },
+      "require": {
+        "types": "./dist/terminal/vue/server.d.cts",
+        "default": "./dist/terminal/vue/server.cjs"
+      }
+    },
     "./terminal/dom": {
       "import": {
         "types": "./dist/terminal/dom/index.d.ts",
@@ -89,6 +109,16 @@
       "require": {
         "types": "./dist/terminal/dom/index.d.cts",
         "default": "./dist/terminal/dom/index.cjs"
+      }
+    },
+    "./terminal/dom/server": {
+      "import": {
+        "types": "./dist/terminal/dom/server.d.ts",
+        "default": "./dist/terminal/dom/server.js"
+      },
+      "require": {
+        "types": "./dist/terminal/dom/server.d.cts",
+        "default": "./dist/terminal/dom/server.cjs"
       }
     },
     "./terminal/tty": {

@@ -155,7 +155,10 @@ Operational shape, all falling out of "the message is state, not history":
   away. Dropping renders stays free.
 - **Delivery.** Events are fire-and-forget; the tree is the confirmation. No
   acks, no replay after reconnect — a replayed intention against a changed screen
-  is worse than a lost one, so reconnect simply re-sends the current trees.
+  is worse than a lost one, so reconnect simply re-sends the current trees. The
+  same rule holds before the first connect: nothing is sent on a socket that is
+  not open and nothing is held for when it is. A server-drawn page (below) is on
+  screen before its socket, so a press in that moment is dropped.
 - **Durability.** The projection (once built) is the durable thing; the shell is
   a warm cache rebuilt from definitions + projection. Evicting an idle shell and
   restarting the process are both safe — shells rehydrate on the next connection.
@@ -337,6 +340,128 @@ data update can do. Not built yet: carrying invalidations between processes
 (the fabric would gain an `invalidate-tables` signal; until then each process's
 rows TTL bounds it) and pausing the follows of a shell with nothing attached.
 
+## The document
+
+A page request is the one moment a terminal has nothing: the socket is not up,
+the script may not have run. Moss can answer it with the screen itself, because
+the screen is a value. `attach` already sends a frame and a tree per canvas;
+`shells.snapshot` returns the same thing without attaching anybody, a terminal
+that draws to a string turns it into markup with the app's own kit, and the
+app's own `index.html` goes out with the screen in it and the snapshot beside
+it. The browser's terminal starts from that snapshot and adopts the elements
+already there. **A drawn page is a first frame delivered early**, and nothing
+else: the socket still attaches, still sends current trees, and is still the
+authority. If the two disagree — the shell moved in between, the cookie and the
+stored token are different people — the next frame simply repaints.
+
+What it costs was measured before it was built (atrium, one core, warm):
+drawing a signed-in screen to a string is 0.4–0.7 ms; a whole anonymous document
+— build a shell, read it, draw it — about 0.65 ms, some 1,500 a second. The
+page carries its screen twice (markup and snapshot), 3–5 KB compressed.
+
+Six things had to be true, and each is a small, separate decision:
+
+- **The read does not disturb anybody.** A snapshot renders, and rendering can
+  pick up a change the flush pass has not sent. `attach` handles that by making
+  the newcomer's frame the whole room's; a snapshot handles it by not touching
+  the `sent` baseline at all, so the next flush still finds its change.
+- **It waits for the screen to be whole, but not for long.** `seeds` land a tick
+  after the build, and mounts chain loads. Nova marks an instance `active` only
+  after its mount hook has been awaited, so "the seeds are in and nothing is
+  `initializing`" is the shell saying its first screen is complete — a signal
+  that was always there. The wait is bounded (300 ms by default): a document
+  must not hang on a slow integration, and a skeleton is a legitimate screen.
+- **Who is asking comes off a cookie**, because a page request carries nothing
+  else. The wire keeps a copy of the session token there (`browserEnv`'s
+  `cookie`), and it is read for exactly one thing — choosing whose screen to
+  draw. Every other surface still wants the token itself, so the copy opens no
+  door: a cross-site request that carried it could draw a page it cannot read.
+- **An anonymous page and its socket are two shells that must name their
+  instances alike.** A principal's page is drawn from their durable shell and
+  the socket attaches to that same shell — same ids, nothing to arrange. Nobody
+  has a durable shell: the page is drawn from one throwaway shell and the socket
+  builds another. So the first is built under a random *seed* and mints its ids
+  in order under it; the terminal names the seed on the upgrade; the second
+  mints the same ids. Plain counters would have been simpler and wrong — the
+  origin an event claims is checked against the canvas it names, and that check
+  is only worth anything while a stale id from another shell names nothing.
+- **Who may keep a page follows from who asked.** Drawn for nobody, a page is
+  the same for everybody and may be cached or written to a file; drawn for
+  somebody, it is theirs (`private, no-store`). That is one function
+  (`documentHeaders`), keyed on whether a principal resolved. No page, route or
+  app declares which kind it is, so none can declare it wrong.
+- **Nothing here can fail a page.** A kit component that throws, a shell that
+  will not build, a template without a root: the template goes out as it is and
+  the terminal paints it the way it always did.
+
+The route is the app's, and so are the template and the kit. Moss draws nothing
+itself: `terminal/react/server`, `terminal/vue/server` and `terminal/dom/server`
+are terminals like the others — handed a screen, they draw it — and the same
+shape as lyceum's SSH door, which has drawn served trees inside a server
+process since before this existed.
+
+One thing a kit must hold up its end of: its first pass in the browser has to
+draw what the server drew. Anything that differs between the two — the window's
+width, a portal target, storage — may not decide a component's first render.
+Lyra's kit answered "is the window wide" from `window.matchMedia` in a state
+initialiser, behind a `typeof window` guard; the guard is the bug, because it
+makes the two sides disagree about the same render, and on a wide screen React
+threw the page's elements away. What a component writes onto `<html>` from an
+effect (a palette) is not in the page until the script runs, so the app reads it
+off the snapshot and hands it to the document. Each app holds both with a check.
+
+## Pages
+
+`shell` is the app: one durable shell per person, the thing that rearranges
+itself around whoever holds it. Not everything at a path is that. A welcome, the
+docs, a published talk are read, not worked in, and a person who is signed in is
+still the same person when they open one.
+
+A **page** is a shell manifest and the path it is drawn at
+(`app.pages`). It is drawn by the same machinery with the keeping taken out: a
+shell is built from the page's manifest for whoever asked, read, and disposed.
+Everything else is unchanged, which is the point —
+
+- what exists on it is still ring 1. A strip that names the signed-in person is
+  an action a member is granted, on a canvas whose candidates a stranger is
+  granted none of. Being signed in changes what a page *has*, through the
+  charter, and nothing in a layout asks;
+- its reads still run under the caller's policy;
+- its cacheability is still decided by who asked, in the one place above.
+
+So a signed-in person on `/docs` is themselves — and still has no shell there.
+Their app shell is neither built nor touched.
+
+**Does anything stand behind a page afterwards?** Only if something on it can
+still happen. Every reason a drawn screen is not finished is a declared part of
+an action — a `ui:` trigger, a two-way binding, a channel it waits on, a read
+that keeps answering — so the question is decidable from the definitions
+actually mounted, without running anything. Nova reports those facts
+(`livenessOf`); moss, which holds the entries behind each fingerprint, composes
+the verdict (`shellNeedOf`) and puts it on the snapshot as `live`. A page that
+is not live is served as markup and its terminal opens no socket at all. A page
+that is live gets a shell for as long as its connection lasts — per connection,
+never per person. The one thing counted live without being read is code: a `fn:`
+endpoint that something calls.
+
+`onSession` does not run for a page. That is not an economy: session code is
+arbitrary, and a host that ran it could no longer say what a page can do. It is
+the app's, and the app's shell is always live.
+
+**Pages as files.** `exportDocuments` is the same draw, for nobody, once per
+path. It takes no credential and has no way to be given one, so a file is only
+ever the page as nobody in particular sees it. Each file reports whether it is
+live and which reads its markup was drawn with (frozen at the moment of
+writing). A live page is still written — whether a server stands beside the
+files is the build's to know.
+
+**What a path means, and what it does not.** A path picks between the app and a
+page, and can seed a page's canvas with its parameters. It does not address a
+place *inside* the app: the app's shell is state, one per person, shared by
+every terminal they have open, and a URL that tried to name a position in it
+would be naming something two tabs cannot disagree about. Routing stays where
+the application guide puts it — shell state is the truth.
+
 ## The function seam
 
 The `fn:` escape hatch runs server-side, in-process, next to the durable shell.
@@ -419,6 +544,7 @@ nothing.
 | A framework | An assembly point. The intelligence lives in the artifacts; the server resolves, serves, pushes, enforces. Component count stays single-digit. |
 | A place where policy hides | Every opinion it enforces is a readable artifact: charter, scope policy, assertion. No annotations, no interceptor magic. |
 | A second way to do anything | Reads are vex, writes are vex, compute is functions, UI is actions, permissions are the charter. Moss adds no vocabulary of its own. |
+| A web framework | A page is a shell manifest at a path; a drawn document is a first frame delivered early. No file-system routes, no layouts-of-layouts, no loaders, no middleware, no head management: the template, the route and the kit are the app's. |
 
 ## Deliberately unbuilt
 
@@ -438,7 +564,24 @@ On the record, so nothing reads as finished that isn't:
   the catalog itself streams: serve the graph neighborhood of a principal's
   active actions now, fault the rest in on demand. Level streaming for humans is
   context management for models — one mechanism, two products.
-- **Scale-out** beyond sticky sessions pinned by session id.
+- **Scale-out** beyond sticky sessions pinned by session id. A drawn document
+  adds one requirement to stickiness: the page request and the socket should
+  land on the same process, or a principal's shell is built twice and the page
+  repaints once.
+- **Opening the app at a position.** A path that seeds the *app's* shell (a
+  deep link to a record) is not built. It is not the same thing as a page's
+  parameters: the app's shell is durable and shared across a person's
+  terminals, so an opener has to be idempotent against whatever is already
+  mounted, and decide what a reload means after they have moved on.
+- **Letting a page's connection go.** A terminal that holds a token on a page
+  drawn for nobody (a file, on a static host) connects, and is served a page
+  shell for as long as it stays — even when that page turns out not to be live
+  for them either. Closing such a connection once its frames are sent is unbuilt.
+- **A stricter cookie.** The cookie is a copy of the token, readable by the
+  page's script like the token itself. An `HttpOnly` one — with the socket
+  reading it at the upgrade, the token out of the URL and out of script — needs
+  login to finish over HTTP (a socket message cannot set a cookie) and an Origin
+  check on the upgrade that does not exist today.
 
 ## Boundaries
 

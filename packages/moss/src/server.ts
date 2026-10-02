@@ -7,7 +7,7 @@ import { handleQuery, createPostgresCache } from '@niscorp/vex';
 import { migrate, upgradeStore } from '@niscorp/strata/postgres';
 import { createGrammarUpgrader } from './grammar';
 import { scopeProfiles } from '@niscorp/vex';
-import type { ScopePolicy, WriteEvent, ExecuteRecord } from '@niscorp/vex';
+import type { ScopePolicy, WriteEvent, ExecuteRecord, SeedEntry, SeedMutation } from '@niscorp/vex';
 import { emitterOf } from './telemetry';
 import type { TelemetrySpan } from './telemetry';
 import { wireFabric } from './fabric';
@@ -45,6 +45,9 @@ import { createAssertionSigner, hashIntegrationKey, mintIntegrationKey } from '.
 import { createSocket, DEFAULT_REVALIDATE_MS } from './socket';
 import type { SocketAccept } from './socket';
 import { createShellHost } from './shells';
+import type { ShellHostContext } from './shells';
+import { createPageRouter } from './pages';
+import { shellNeedOf } from './liveness';
 import { createIdentityCache } from './identity';
 import { createGeneration } from './generation';
 import type { Generation } from './generation';
@@ -104,6 +107,19 @@ type Env = { Variables: { principal: string | null; resolved: Resolved } };
 export type MossServer = Hono<Env> & {
   socket: SocketAccept;
   shells?: ShellHost;
+  // WHO A TOKEN IS — the deployment's own verifier, the one every surface here
+  // already asks. For an app's own route that receives a credential some other
+  // way than a Bearer header (a page request carries a cookie): null is a
+  // refusal, exactly as it is everywhere else.
+  principalOf: (token: string) => Promise<string | null>;
+  // THE PAGE A PATH LEADS TO (app.ts § pages) — its name, the host that draws
+  // it, and the input its path carries — or undefined for a path that is the
+  // app's. The document route and the socket ask the same question here, so a
+  // page is drawn and then served by one answer.
+  page: (path: string) => { name: string; host: ShellHost; inputs: Record<string, Record<string, unknown>> } | undefined;
+  // Every page the manifest declares, by name, with the path it is drawn at —
+  // what a build walks to know which paths exist besides the app's own.
+  pages: readonly { name: string; path: string }[];
   // Artifacts changed at runtime (an app that loads actions from rows and just
   // wrote new ones): re-verify coherence, drop every per-principal memo, and
   // have living shells adopt their re-resolved definitions. Throws on an
@@ -1309,9 +1325,14 @@ export const createServer = async (app: NiscApp, runtime: NiscRuntime): Promise<
   // the manifest declares a shell, server shells stand behind it: their
   // endpoint calls ride the server's OWN surfaces with the session's token
   // (same wire, same enforcement — the shell is just another client).
-  const shells = app.shell !== undefined
-    ? createShellHost({
+  //
+  // ONE CONTEXT, for the app's host and for every page's: who a principal is,
+  // the governed wire and the environment are the same wherever a shell is
+  // built. What differs is the manifest it is built from and whether it is kept.
+  const entriesNow = (): ReadonlyMap<string, SeedEntry | SeedMutation> => new Map((app.entries ?? []).map((entry) => [entry.fingerprint, entry]));
+  const shellContext: ShellHostContext = {
         app,
+        needOf: (definition) => shellNeedOf(definition, entriesNow()),
         // ONE resolution per shell build, awaited. This was four synchronous
         // questions, and every one of them was ultimately answered out of a
         // resident map of the population.
@@ -1367,8 +1388,23 @@ export const createServer = async (app: NiscApp, runtime: NiscRuntime): Promise<
             ...(follower === undefined ? {} : { onChange: follower.onChange }),
           };
         },
-      })
-    : undefined;
+  };
+  const shells = app.shell !== undefined ? createShellHost(shellContext) : undefined;
+
+  // PAGES: a host each, built from the page's own manifest and keeping nothing
+  // (app.ts § pages). The router refuses two pages that could answer one path,
+  // here, at boot — like every other incoherence.
+  const pageManifests = app.pages ?? {};
+  const pageRouter = createPageRouter(pageManifests);
+  const pageHosts = new Map(Object.entries(pageManifests).map(([name, manifest]) => [name, createShellHost({ ...shellContext, manifest, kept: false })]));
+  const pageAt = (path: string): { name: string; host: ShellHost; inputs: Record<string, Record<string, unknown>> } | undefined => {
+    const matched = pageRouter.match(path);
+    if (matched === undefined) return undefined;
+    const host = pageHosts.get(matched.name);
+    const manifest = pageManifests[matched.name];
+    if (host === undefined || manifest === undefined) return undefined;
+    return { name: matched.name, host, inputs: manifest.params === undefined ? {} : { [manifest.params]: matched.params } };
+  };
 
   // THE CLUSTER FABRIC. One origin per process, stamped on every signal so a
   // process ignores its own echoes. The three appliers below are LOCAL-ONLY —
@@ -1476,12 +1512,16 @@ export const createServer = async (app: NiscApp, runtime: NiscRuntime): Promise<
     session,
     catalog: async (principal) => catalog(await resolveIdentity(principal)),
     ...(shells !== undefined ? { shells } : {}),
+    page: pageAt,
     ...(runtime.sessionRevalidateMs !== undefined ? { revalidateMs: runtime.sessionRevalidateMs } : {}),
     ...(runtime.telemetry !== undefined ? { telemetry: runtime.telemetry } : {}),
   });
 
   return Object.assign(server, {
     socket,
+    principalOf: async (token: string) => session(token),
+    page: pageAt,
+    pages: Object.entries(pageManifests).map(([name, manifest]) => ({ name, path: manifest.path })),
     ...(shells !== undefined ? { shells } : {}),
     refresh,
     generation: () => generation?.current() ?? -1,
@@ -1493,6 +1533,7 @@ export const createServer = async (app: NiscApp, runtime: NiscRuntime): Promise<
       identities?.stop();
       socket.stop();
       shells?.stop();
+      for (const host of pageHosts.values()) host.stop();
     },
     executeAs,
     callIntegration,

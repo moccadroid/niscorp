@@ -124,6 +124,11 @@ export type SocketContext = {
   // The shell host — when the manifest declares a shell, events route into
   // the session's server shell and render frames flow back.
   shells?: ShellHost;
+  // WHICH HOST A PATH LEADS TO. A terminal on a page names the path it is on
+  // (`?path=`); this answers with that page's host and the input its path
+  // carries, or undefined for a path that is the app's. Absent: every
+  // connection is the app's, as before pages existed.
+  page?: (path: string) => { host: ShellHost; inputs: Record<string, Record<string, unknown>> } | undefined;
   // How often a LIVE connection's credential is re-verified. Default
   // `DEFAULT_REVALIDATE_MS`; `0` or `Infinity` disables it, and a token
   // checked once at upgrade is then trusted for the life of the connection.
@@ -303,7 +308,21 @@ export const createSocket = (ctx: SocketContext): SocketAccept => {
     // this existed does.
     const wantsDelta = params.get('delta') === '1';
 
-    const session = await ctx.shells?.session(token, principal);
+    // An anonymous terminal whose page was rendered server-side names the id
+    // seed that page's shell was built under, so this connection's throwaway
+    // shell mints the same instance ids and its first frames match the page.
+    // Shape-checked, never trusted further: it only ever names ids inside the
+    // caller's own shell.
+    const named = params.get('seed');
+    const seed = named !== null && /^[0-9a-f]{8,40}$/.test(named) ? named : undefined;
+
+    // The path the terminal is on decides which shell it is served: a page's,
+    // built for this connection alone, or the app's.
+    const path = params.get('path');
+    const route = path === null ? undefined : ctx.page?.(path);
+    const host = route?.host ?? ctx.shells;
+
+    const session = await host?.session(token, principal, { ...(seed === undefined ? {} : { seed }), ...(route === undefined ? {} : { inputs: route.inputs }) });
     if (session !== undefined) {
       session.attach(connection, { delta: wantsDelta });
       connection.onClose(() => session.detach(connection));
