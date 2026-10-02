@@ -1,5 +1,7 @@
 node_modules/
 dist/
+# `nisc export` — the site as a folder
+out/
 *.tsbuildinfo
 .turbo/
 .env

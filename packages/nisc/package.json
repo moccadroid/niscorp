@@ -20,6 +20,7 @@
   },
   "dependencies": {
     "@niscorp/charter": "workspace:*",
+    "@niscorp/cli": "workspace:*",
     "@niscorp/cortex": "workspace:*",
     "@niscorp/loom": "workspace:*",
     "@niscorp/moss": "workspace:*",
