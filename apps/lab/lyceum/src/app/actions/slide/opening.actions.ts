@@ -97,7 +97,7 @@ export const actionSlide = still('slide.data', 'An action', actionLayout, {
     "    ref: 'send_btn',",
     '    do: [',
     "      { set: 'error', value: '' },",
-    "      { call: 'post_question', onSuccess: [ … ] },",
+    "      { call: 'post_question', … },",
     '    ],',
     '  }],',
     '};',

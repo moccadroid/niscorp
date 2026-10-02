@@ -28,12 +28,6 @@ const cue = (id: string, title: string, lines: string[], pending: string): Actio
 
 export const CUE_TOOLS: readonly ActionDefinition[] = [
   cue(
-    'tools.renderers',
-    'The terminal',
-    ['The stage goes black and types out the SSH command. The same trees, in a terminal.'],
-    'The switch above draws each surface with DOM, React or Vue. The stage’s terminal view does not exist yet.',
-  ),
-  cue(
     'tools.order',
     'Give everyone the order form',
     ['Everyone gets an order form on their phone: an item, a quantity, Send.', 'Asked for 18,000 cups of water, their assistant opens it filled in. Nobody presses Send.', 'Take it back the same way.'],

@@ -1,9 +1,11 @@
 import type { ActionDefinition } from '@niscorp/nova';
+import { deckCurrent } from '@lyceum/app/vex/deck.entries';
 import {
   endLayout,
   incidentLayout,
   onceLayout,
   pressLayout,
+  prismLayout,
   strataLayout,
   tideLayout,
   vexLayout,
@@ -29,6 +31,38 @@ const still = (id: string, title: string, layout: ActionDefinition['layout'], da
   layout,
   triggers: [],
 });
+
+// The controller's Next button (speaker/console.prism.ts, as written): where
+// the deck goes next, never past the last slide. Beside it, the same config, run by
+// the layout on this slide over the deck as it is now.
+export const prismSlide: ActionDefinition = {
+  id: 'slide.prism',
+  title: 'Functions are JSON too.',
+  data: {
+    kicker: 'Prism',
+    title: 'Functions are JSON too.',
+    file: 'console.prism.ts — my Next button',
+    code: code(
+      "const position = { $ref: '$.current.position' };",
+      "const last = { $sub: [{ $ref: '$.current.count' }, 1] };",
+      '',
+      'export const deckNextPrism = {',
+      '  fingerprint: deckGo.fingerprint,',
+      '  context: {',
+      "    deck: 'talk',",
+      '    position: { $min: { over: [',
+      '      { $add: [position, 1] }, last] } },',
+      '  },',
+      '};',
+    ),
+    marked: [8, 9],
+    current: { slide_id: '', title: '', position: 0, number: 0, count: 0, prev_number: 0, prev_title: '', next_number: 0, next_title: '' },
+  },
+  layout: prismLayout,
+  endpoints: { current: { url: '/api/vex', method: 'POST', request: { fingerprint: deckCurrent.fingerprint, context: {} }, target: 'current' } },
+  lifecycle: { mount: [{ call: 'current' }] },
+  triggers: [],
+};
 
 // members/counts from app/vex/member.entries.ts — the strip's joined count.
 export const vexSlide = still('slide.vex', 'Queries are JSON too.', vexLayout, {
@@ -95,6 +129,7 @@ export const endSlide = still('slide.end', 'It’s all in one folder.', endLayou
 });
 
 export const LATER_SLIDES: readonly ActionDefinition[] = [
+  prismSlide,
   vexSlide,
   wordsSlide,
   waterSlide,

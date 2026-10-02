@@ -17,18 +17,29 @@ if (root === null) throw new Error('No root element');
 // `/dev/as/stage` lands on `/?seat=stage`. A phone opens `/` and has the one.
 const seat = new URLSearchParams(window.location.search).get('seat');
 
-// DEV ONLY, for rehearsing: ← and → on the projector or the controller move the
-// deck, through a route the dev server alone has (vite.config.ts,
-// /dev/deck/*). Not in a typing field, so the assistant still gets its arrows.
-if (import.meta.env.DEV && (seat === 'stage' || seat === 'speaker')) {
-  window.addEventListener('keydown', (event) => {
-    const way = event.key === 'ArrowRight' ? 'next' : event.key === 'ArrowLeft' ? 'back' : undefined;
-    const typing = event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement;
-    if (way === undefined || typing) return;
+// ← and → MOVE THE DECK — and Page Up / Page Down, which is what a presenter's
+// clicker sends. On the controller, everywhere: the key presses the
+// controller's own Back or Next (the screen's `back` / `next` refs, which only
+// the controller has), so it does exactly what a tap does, as the speaker. Not
+// in a typing field, so the assistant still gets its arrows.
+//
+// DEV ONLY, for rehearsing: the same keys on the projector, through a route the
+// dev server alone has (vite.config.ts, /dev/deck/*) — the stage's own
+// principal cannot move the deck, and stays that way.
+const WAYS: Record<string, 'next' | 'back'> = { ArrowRight: 'next', PageDown: 'next', ArrowLeft: 'back', PageUp: 'back' };
+window.addEventListener('keydown', (event) => {
+  const way = WAYS[event.key];
+  const typing = event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement;
+  if (way === undefined || typing || event.metaKey || event.ctrlKey || event.altKey) return;
+  const button = document.querySelector(`[data-ref="${way}"]`);
+  if (button instanceof HTMLElement) {
+    event.preventDefault();
+    button.click();
+  } else if (import.meta.env.DEV && seat === 'stage') {
     event.preventDefault();
     void fetch(`/dev/deck/${way}`, { method: 'POST' });
-  });
-}
+  }
+});
 
 mountTerminal({
   targets: { dom: lyceumTarget({ root }) },

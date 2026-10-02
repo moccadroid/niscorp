@@ -47,72 +47,54 @@ The working record for the nisc talk that lyceum runs. It holds what we agreed, 
 
 The history order of the packages (Sep 27 outline) still holds as the background logic: nova (GPT-3 JSON) → prism (data-to-data) → signal/cortex → solid (streaming) → vex (intent + shape) → moss (the app server) → charter (policy, because moss needed it) → tide (automation as data) → strata (versions, because everything is data).
 
-## 4. The deck as built (30 slides)
+## 4. The deck as built (36 slides, 2026-10-02)
 
-Status: ✅ built and checked · 🟧 slide built, demo not built (hatched cue on the controller) · ✏️ drafted, not yet looked at on the projector.
+The deck is `src/db/deck.ts` (order, controller tools, notes); the slides are `src/app/actions/slide/`. A read-through of the whole talk, slide by slide, is `TRANSCRIPT.md`. "Live" = the slide reads the app's own state and changes while it is up.
 
-| # | Slide id | On screen | Controller tools | Status |
-|---|---|---|---|---|
-| 1 | `slide.title` | "nisc" + one line; join panel: QR, address, SSH command if `LYCEUM_SSH_ADDRESS` is set | assistant | ✅ |
-| 2 | `stage.register` | "Everyone who has joined": live names and model-written titles, QR, joined count | — | ✅ |
-| 3 | `slide.timer` | "First, a timer." — headline only (the controller is shared for this) | assistant | ✅ |
-| 4 | `slide.origin` | 2020: "GPT-3 could not write a React app." / blue: "It could fill in a JSON schema." | — | ✅ |
-| 5 | `slide.problem` | "Models write code faster than anyone can review it." + small: Lowdefy's answer | — | ✅ |
-| 6 | `slide.answer` | full blue: "Our answer — Make it something a program can check." | — | ✅ |
-| 7 | `slide.nova` | blue: "NOVA — The UI is data." Right: 1 the real Send button's JSON (from `send.layout.ts`), 2 "Valid", 3 that node rendered as the real button | — | ✅ |
-| 8 | `slide.data` | "An action": `send.action.ts` source (click → `send` steps → endpoint marked) beside its layout rendered, on blue | — | ✅ |
-| 9 | `slide.xray` | "Your screen is data." + blue "On your phone: X-RAY" | `tools.xray` (give / take back) | ✅ |
-| 10 | `slide.clearance` | "Three of you just got a button." + orange "On three phones: PRESS" | cue `tools.button` | 🟧 |
-| 11 | `slide.looks` | "The server sends data. Your phone draws it." DOM / React / Vue / Terminal | `tools.look` (3×3: phones, stage, controller × DOM, React, Vue) + cue `tools.renderers` | ✅ renderer switch; 🟧 projector terminal view |
-| 12 | `slide.compare` | "Isn't this json-render?" + Vercel · json-render, Google · A2UI | — | ✅ |
-| 13 | `slide.behaviour` | "What a button does": json-render "Calls a function in your app." vs Nova "Is data." + the real trigger | — | ✅ |
-| 14 | `slide.state` | "Where the state lives": "In your app's store." vs "In the action. So it runs anywhere." | — | ✅ |
-| 15 | `slide.census` | "Is JSON enough for a real app?" Chart: Data / Renderers / Endpoints / Setup / Tests (lines of code, comments excluded, counted live by `server/census.ts`) + share (~52–54%) | — | ✅ |
-| 16 | `slide.worst` | "What is the worst a model can write?" | — | ✏️ |
-| 17 | `slide.broke` | "We tried to break it." Leak: Held (green) · Crash: Two holes · Explode: Broke (orange) | — | ✏️ |
-| 18 | `slide.loop` | "Three lines froze the server." The echo action beside: found by reading it; limits: 64 hops / 1,024 per chain, 256 levels, a timeout on every endpoint and query | — | ✏️ |
-| 19 | `slide.review` | full blue: "So — Review the result, not the code." | — | ✏️ |
-| 20 | `slide.moss` | kicker Moss, "Your shell runs on the server." + a blue Flow across the bottom: your shell on the server ↔ your phone, lanes "What to draw" / "What you pressed" | — | 👁 |
-| 21 | `slide.charter` | "Who gets what is one document." across the top; blue "Charter"; two real roles from `charter.ts` (member, clock — clock marked) | — | 👁 |
-| 22 | `slide.twice` | "Checked in two places." orange: 1 · Your shell — Which actions exist. / blue: 2 · Every query — Which rows it reaches. + the real `questions` rule from `behaviors.ts` | — | 👁 |
-| 23 | `slide.vex` | kicker Vex, "A query is a document too." the real `members/counts` entry (intent + shape marked) beside, in yellow, what the strip sends: `{ fingerprint: 'members/counts', context: {} }` | — | 👁 |
-| 24 | `slide.words` | "Asked in words." Asked before: Replayed. No model. (green) · New: Written once, then stored. (blue) · Past your policy: Refused, with why. | assistant | 👁 |
-| 25 | `slide.water` | "18,000 cups of water." on orange; kicker "A drive-through AI took this order, 2025" | — | 👁 |
-| 26 | `slide.press` | "It prepares. You press." The assistant: Reads your screen. Opens an action, filled in. / orange: Only you — Send | cue `tools.order` | 👁 (demo 🟧) |
-| 27 | `slide.tide` | kicker Tide, "The timer from the start is a row." the saved timer's reflex document, LIVE (`room.timer` → `timers/document`, `effect` and `as` marked) + green countdown "Fires in" | — | ✏️ |
-| 28 | `slide.once` | "Automations without an agent loop" An agent with a skill: Reads its instructions again, every run. / green: A reflex: Written once. Runs with no model. | — | ✏️ |
-| 29 | `slide.strata` | kicker Strata, "A grammar change is a migration." + this app's real `strata.lock.json` + blue "A stored document — Upgraded where it is read." | — | ✏️ |
-| 30 | `slide.end` | "It is all in one folder." + `apps/lab/lyceum` + blue "Questions — On your phone, under Q&A." The timer's target. | — | ✏️ |
+| # | Slide id | On the stage | On the controller |
+|---|---|---|---|
+| 1 | `slide.title` | "nisc — Apps as checked JSON." + QR and address | — |
+| 2 | `stage.register` | Everyone who has joined, live | — |
+| 3 | `slide.timer` | "First, a timer." | the assistant (the timer is written and saved here) |
+| 4 | `slide.origin` | 2020: GPT-3 could not write a React app. / It could fill in a JSON schema. | — |
+| 5 | `slide.problem` | Models write code faster than anyone can review it. | — |
+| 6 | `slide.answer` | Our answer: A program checks it. Not a person. | — |
+| 7 | `slide.nova` | Nova — The UI as JSON: one button as JSON, checked, drawn | — |
+| 8 | `slide.data` | An action: `send.action.ts` beside its form, drawn | — |
+| 9 | `slide.xray` | Your screen, as JSON. | give / take the X-ray |
+| 10 | `slide.looks` | One screen, any renderer. DOM / React / Vue, live: which draws which screen | the renderer switch |
+| 11 | `slide.terminal` | SSH into it. + the command | — |
+| 12 | `slide.compare` | Isn't this json-render? (Vercel json-render, Google A2UI) | — |
+| 13 | `slide.parts` | json-render ≈ Nova ∈ nisc: the package chart, Vercel's side and nisc's | — |
+| 14 | `slide.census` | Is JSON enough for a real app? This app's lines, counted live | — |
+| 15 | `slide.checked` | A closed grammar can be checked. Schema validation / loop detection, one example each | — |
+| 16 | `slide.runtime` | Generated at runtime. A model writes → it's validated → errors go back | — |
+| 17 | `slide.review` | Review the result, not the code. | — |
+| 18 | `slide.install` | Installing Acme's Q&A: the four install checks and the result, live | install broken / install Acme / approve |
+| 19 | `slide.moss` | Moss: Your screen runs on the server. "Type something, then RELOAD" | — |
+| 20 | `slide.wire` | Your phone only draws. Server ↔ phone, animated | — |
+| 21 | `slide.manifest` | The server is a list. `app.ts` | — |
+| 22 | `slide.exists` | It sends you only what you have. | — |
+| 23 | `slide.button` | Some of you have an action now. Who pressed, live | give the button to three / take it back |
+| 24 | `slide.where` | Where do you check permissions? Routes / Components / Rows | — |
+| 25 | `slide.charter` | Who gets what: one file. `charter.ts`: member, button, clock | — |
+| 26 | `slide.twice` | Enforced twice. Your screen / every query + the `questions` rule | — |
+| 27 | `slide.agents` | The same file governs the AI. | — |
+| 28 | `slide.prism` | Prism: Functions are JSON too. The controller's Next button (`console.prism.ts`) beside the same JSON run on the slide, live: position, count, what Next sends | — |
+| 29 | `slide.vex` | Vex: Queries are JSON too. `members/counts` stored, and what a screen sends | — |
+| 30 | `slide.words` | Asked in words. Replayed / Written, stored / Refused | give the assistant; the assistant |
+| 31 | `slide.water` | 18,000 cups of water. (Taco Bell's AI drive-through, 2025) | — |
+| 32 | `slide.press` | It can't press Send. | cue `tools.order` (obsolete — see §10) |
+| 33 | `slide.tide` | Tide: The timer is a row. The saved timer's document and a countdown, live | — |
+| 34 | `slide.once` | No agent loop. | — |
+| 35 | `slide.strata` | Strata: Grammars get migrations. `strata.lock.json` | — |
+| 36 | `slide.end` | It's all in one folder. Repo QR; Acme's fit questions, live | — |
 
-👁 = looked at on the projector (1600×900) and fixed until it read right. 27–30 could not be looked at yet: another session was rewriting the kit and the page did not load.
+Keys: ← / → (and Page Up / Page Down, what a clicker sends) move the deck on the controller, everywhere; on the stage in dev only.
 
-The notes for every slide are in `src/db/seed.ts`.
+## 5. The notes
 
-## 5. The notes, in short (full text in `seed.ts`)
-
-- **1 Title (2–3 min while people join):** ask everyone to join; the talk is an app running now on one server; laptops: open the address with devtools open; the SSH command works; a model writes your profile as you join; everything is in one folder, link at the end.
-- **2 Register:** every line is a row; titles written by a model and streamed, valid at every step; wait until most are in.
-- **3 Timer:** share the controller; type "Show the last slide in 30 minutes"; it returns a document, not a timer — read it out; Save; "I'll come back to this at the end."
-- **4–6:** the origin, the problem, our answer — as in §3.
-- **7 Nova:** a screen is made of actions; an action is JSON; a model writes it, a schema checks it, Nova runs it; Nova doesn't draw, a renderer does.
-- **8 An action:** the Q&A form; data (the draft), layout (drawn on this slide from the same JSON), tap Send → trigger runs `send` → which calls the endpoint `send` by name; no fetch, no handler code.
-- **9 X-ray:** give everyone the X-ray; press the big blue button; that's your screen as data; nothing on it is code — you, a program or a model can read all of it; take a minute; take it back.
-- **10 The button:** give it to three people; raise your hand if it's you; volume up, press it; everyone else: it was never sent to you; laptops: search the websocket frames; no code changed — rows changed, shells rebuilt; take it back.
-- **11 Looks:** phones to React (same trees, same stylesheet, the corner says React; laptops: inspect the root element); stage to Vue — two frameworks at once; one row changed on the server; all back to DOM; terminal: the command is on screen — connect.
-- **12–14:** json-render and A2UI are good and point the same way; they describe a view, the host keeps state and code; in Nova behaviour is data and the action keeps its own state — so it runs on a server, one shell per person, and any renderer can draw it.
-- **15 Census:** the usual objection; this app is the slides, projector, controller, phones, SSH, assistant, timers; half of it is data; the code is in three places, each about a third the size of the data; counted live, comments don't count.
-- **16–19 Safety:** see §7.
-- **20 Moss:** everything tonight runs on one server; each of you has a shell there; your phone gets what to draw and sends back what you pressed; that is why only three phones got the button; laptops: the websocket frames.
-- **21 Charter:** one document; roles list actions and data as patterns; member is you; clock is what the timer runs as — it can move the slide, nothing else, whatever a model writes; giving an action is a row.
-- **22 Two places:** the charter enforces nothing, it compiles into two checks; your shell (not hidden, never sent); every query in the engine (stamped from your session; a request has no field for someone else's id); usually three places, three rule sets.
-- **23 Vex:** this query is the joined count; intent, shape, query; the screen sends only its name; reactive — answers again when someone joins; policy applied in the engine; reshaping is Prism, a function as data, stored with it.
-- **24 In words:** ask the assistant; a small model (Jev) only picks: asked before + which shape; replayed, or written under your policy and stored, or refused with why; "a compiler that runs once, not an interpreter that runs every time".
-- **25 Water:** Taco Bell 2025, 18,000 waters; McDonald's/IBM 2024, 260 McNuggets; the model was not the problem — it was allowed to act.
-- **26 Press:** it reads your screen, opens an action filled in, cannot press; [give everyone the order form]; ask for 18,000 waters; you see it, you don't press; a second small model could check it first.
-- **27 Tide:** back to the timer; as stored; runs as clock — saving stamped it, not the model; no model running; survives a restart.
-- **28 Once:** an agent with a skill (OpenClaw) reads its instructions every run, tokens every run, different every run; here a model wrote it once, I read and saved it, it runs with no model.
-- **29 Strata:** what happens to all the documents when nisc changes; grammars have migrations; the check refuses a change without one; documents carry their version, upgraded when read; newer than the reader is refused; the lock moves only after a check.
-- **30 End:** [if the timer put it up] that was the timer, as clock, no model; each part a document a program can check; it is all in one folder; questions under Q&A.
+The notes in `deck.ts` are placeholders — terse cues, to be rewritten once the wording is settled. What to say is in `TRANSCRIPT.md`.
 
 ## 6. Demos: built, not built, and ideas
 
@@ -170,7 +152,8 @@ The notes for every slide are in `src/db/seed.ts`.
 - **`model-check`** still seeds departments; it can't run until its fixture room is rewritten (it's the recorded measurement behind `MEASURED.md` — rewriting changes what the numbers compare against).
 - **`PLAN.md`** is out of date (departments, the old talk table, VPS vs Railway, "open offers a button", starters, kit version).
 - **Slides 16–19** are drafted and committed, but not yet looked at on the projector (18's code is now bottom-left instead of centred line by line). **27–30** likewise.
-- **The order form** (slide 26's demo, cue `tools.order`): an order action given to everyone; the assistant opens it filled in; nobody presses. Not built.
+- **Slide 32's demo.** The order form is dropped (2026-10-02: it makes no sense now that Acme is the Q&A). What the slide has to prove: the assistant cannot call an endpoint; it can only open an action, and a person presses. Candidates: the timer's own Save (already seen at slide 3 — a callback, nothing to build); Acme's question form opened filled in; the three-person button (everyone else's assistant cannot even see it); the controller's "Reset the talk?" opened by the assistant and not confirmed. The cue `tools.order` and slide 32's order-form notes go once one is chosen.
+- **The SSH command** on slide 11 is drawn in the headline face, which is upper case: it reads `SSH -P 26466 …`, and `-P` is not `-p`. It needs a case-preserving face.
 - **Prism** has no slide; say whether it needs one.
 
 ## 11. Learnings from the other threads

@@ -1,4 +1,5 @@
 import type { LayoutNode } from '@niscorp/nova';
+import { deckNextPrism } from '@lyceum/app/actions/speaker/console.prism';
 
 // THE LATER SECTIONS' LAYOUTS — Moss and Charter, Vex, the assistant, Tide,
 // Strata, the close. Each designed for its one claim and its one picture.
@@ -51,6 +52,21 @@ export const twiceLayout: LayoutNode = {
     cell('head', [headline('display', '{{$.title}}')]),
     cell('shell', [label('1 · Your screen'), headline('title', '{{$.shell}}')], { ink: 'alert', align: 'middle' }),
     cell('query', [label('2 · Every query'), headline('title', 'Only your rows.'), code('$.code', '$.marked')], { ink: 'signal', align: 'middle' }),
+  ],
+};
+
+// Prism: a function as JSON — the controller's Next button — and beside it the
+// same JSON (imported, not retyped) run on this slide, live: where the deck is, how long it is, and
+// what Next would send.
+export const prismLayout: LayoutNode = {
+  component: 'Sheet',
+  props: { size: 'fill', areas: ['head head head', 'code at count', 'code sends sends'], cols: [1.9, 0.7, 0.7], rows: ['auto', 1, 1] },
+  children: [
+    cell('head', [label('{{$.kicker}}'), headline('display', '{{$.title}}')]),
+    cell('code', [label('{{$.file}}'), code('$.code', '$.marked')], { ink: 'ink', align: 'middle' }),
+    cell('at', [{ component: 'Figure', props: { label: 'position', value: '$.current.position' } }], { align: 'middle' }),
+    cell('count', [{ component: 'Figure', props: { label: 'count', value: '$.current.count' } }], { align: 'middle' }),
+    cell('sends', [{ component: 'Figure', props: { label: 'Next sends position', value: { $prism: deckNextPrism.context.position } } }], { ink: 'highlight', align: 'middle' }),
   ],
 };
 

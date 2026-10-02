@@ -33,13 +33,8 @@ notes; the controller's tools per slide are rows):
 | The worst a model can write | the question, we tried to break it, three lines froze the server, review the result | Intake refusing a loop, and what the budgets stop. |
 | The rest of nisc | Moss, the charter, checked in two places, Vex, asked in words, 18,000 cups, it prepares / you press, Tide, no agent loop, Strata, the end | Acme installed live: the broken bundle refused, Acme approved and on every phone, questions sent through it and judged before the speaker sees them. Everybody queries the records through their assistant. The timer fires and the deck moves to the last slide on its own. |
 
-**Not built yet** — cues on the controller, drawn hatched, so the deck can be walked
-with every missing beat visible (`src/app/actions/tools/cue.actions.ts`):
-- `tools.button` (slide 10): three people get a button that plays a sound. Needs an
-  action, a grant to give it with, and a place on the phone's list (`server/phone.ts`).
-- `tools.renderers` (slide 11): the projector as a terminal, typing out the SSH command.
-- `tools.order` (slide 26): an order form the assistant fills in and nobody presses.
-  Needs an action, a grant, a place on the list.
+**Not built yet** — one cue on the controller, drawn hatched (`src/app/actions/tools/cue.actions.ts`):
+- `tools.order` (slide 32): obsolete — the order form was dropped; the demo for "It can't press Send." is undecided (TALK.md §10). The button is built; the terminal slide needs nothing on the controller.
 
 ## To build
 
@@ -54,7 +49,7 @@ In order; each lands with its check.
    ~~**The renderers**~~, ~~**The SSH door**~~, ~~**The X-ray**~~, ~~**Names and
    moderation**~~, ~~**Acme**~~ — built (see "What is built"). Not yet: parameterised
    replays (Jev choosing a fingerprint's context values); streaming replies.
-3. **The cues above** — the button, the terminal projector, the order form.
+3. **Slide 32's demo** — what proves the assistant cannot press (TALK.md §10).
 4. **The full-room rehearsal** — 100 headless phones against the deployed shape, every
    phone asking the records and its assistant at once; Groq's per-model token limit is
    shared by every seam.
