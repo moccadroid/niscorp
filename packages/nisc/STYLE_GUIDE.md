@@ -4,6 +4,22 @@ Rules for writing code in this codebase. Short, focused on what matters.
 
 ---
 
+## The packages are live
+
+The `@niscorp` packages are published on npm, and people we have never met may be building on them. That decides what a change may do.
+
+- **A release does not break an app that works on the release before it.** If an app would have to change anything to keep working — an import, a call, a type it relied on, a config field, an artifact, a command or a flag — the change is breaking.
+- **A breaking change is a failure of the design, not a kind of release.** Find the compatible shape first: add beside what is there, keep the old spelling working, make new behaviour something an app opts into. What should go is marked `@deprecated` and stays. A default may get better; where some setup would stop working under the new one, it gets a way to keep the old, and the changeset names that setup.
+- **Nobody breaks a package on their own judgment.** If you believe a break cannot be avoided: stop before writing it. Say so first — at the top of what you report, not in a summary of work done — with the compatible shapes you tried and why each one fails, and wait. It ships only with the maintainer's explicit approval, as the last resort.
+- **Not sure whether it breaks?** That is the same stop: say what would change for an app that exists today, and ask.
+- **Data never breaks; it migrates.** Tables and stored documents move through strata sequences (AGENTS.md 17–20).
+
+Mechanically: every package change carries a changeset, and its bump is `patch`. Below 1.0 a `minor` is the breaking bump, and `pnpm check:changesets` refuses one whose changeset does not carry its approval (`docs/releasing.md`).
+
+This binds the packages. An app is its own to change.
+
+---
+
 ## TypeScript Strictness
 
 - `strict: true` in tsconfig. Always.
@@ -226,5 +242,5 @@ export const createShell = (config: ShellConfig, bus: MessageBus, reg: Registry,
 ## Build
 
 - ESM source, dual ESM/CJS output via tsup.
-- Target ES2022, Node >= 18.18.
+- Target ES2022, Node >= 22.12 (what every package's `engines` says).
 - Minimal dependencies. Every dep must earn its place.

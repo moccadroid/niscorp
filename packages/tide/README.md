@@ -139,7 +139,7 @@ Tide imports no host. Under **moss** the seams are filled with vex (selection un
 
 ## Status
 
-Pre-1.0. The grammar and the store contract are the parts to hold still; everything else may move.
+On npm and live. The version is below 1.0; releases are compatible all the same — what is exported and documented here keeps working from one release to the next, and what should go is deprecated, not removed.
 
 ## License
 

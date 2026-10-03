@@ -239,7 +239,7 @@ pnpm check:packages    # every package packed and installed OUTSIDE the workspac
 pnpm check:create      # each kind of app made with the built create-nisc, installed, typechecked, checked and built
 pnpm check:grammars    # nova's and Prism's schemas vs their snapshots; 157 real documents must upgrade and parse
 pnpm check:sources     # each lab app's source is written at the grammars it runs on (strata.lock.json)
-pnpm check:changesets  # a breaking release breaks everything that depends or peers on it
+pnpm check:changesets  # no release breaks an app: a breaking bump is refused unless its changeset carries its approval
 ```
 
 One package at a time:
@@ -249,7 +249,7 @@ pnpm --filter @niscorp/nova test
 pnpm --filter @niscorp/nova dev      # tsup --watch
 ```
 
-**Versions.** Every package versions on its own line; `@niscorp/nisc` is the release that pins them together. A change to a package ships with a changeset (`pnpm changeset`). Below 1.0 **a minor is breaking**, and a breaking release breaks everything that depends or peers on it — `pnpm check:changesets` says which lines to add. A changeset is not a release: the Release workflow keeps a *release: version packages* pull request open, and merging it publishes — from CI, through npm's trusted publishing, with provenance and no stored token. The whole sequence is [docs/releasing.md](docs/releasing.md).
+**Versions.** Every package versions on its own line; `@niscorp/nisc` is the release that pins them together. A change to a package ships with a changeset (`pnpm changeset`), and its bump is a **patch**: the packages are live on npm, and a release does not break an app that works on the one before it ([STYLE_GUIDE.md](STYLE_GUIDE.md), "The packages are live"). A breaking change is a last resort that needs the maintainer's approval before it is written — below 1.0 it would be a minor — and `pnpm check:changesets` refuses a breaking bump whose changeset does not carry that approval (and, for one that does, says which dependents must move with it). A changeset is not a release: the Release workflow keeps a *release: version packages* pull request open, and merging it publishes — from CI, through npm's trusted publishing, with provenance and no stored token. The whole sequence is [docs/releasing.md](docs/releasing.md).
 
 **Dependencies.** A plain `dependency` is used only inside a package — never in its published types, never authored by the app. What crosses the API, or evaluates an app's artifacts (zod, every nisc→nisc edge), is a required **peer**, so an app has one copy. What only one subpath uses (react for an adapter, `/agent`, `/hono`) is an **optional** peer. zod's floor is 4.2.0. `check:packages` enforces all of it.
 
@@ -271,7 +271,7 @@ niscorp/
 
 ## Status
 
-Nisc is on npm and **pre-1.0**. Everything in the table above is built, tested and in use by the reference apps. Public APIs are not frozen: below 1.0 a breaking change is a minor version, announced in its changeset. The data does not break silently — tables and documents move through [strata](packages/strata) migrations.
+Nisc is on npm, and **live**: build on it. Everything in the table above is built, tested and in use by the reference apps. The version numbers are below 1.0; the promise is not — **a release does not break an app that works on the release before it.** What should go is deprecated and keeps working. If a break ever cannot be avoided it is the last resort: announced as one, in a minor version of its own, with what to change. The data does not break either — tables and documents move through [strata](packages/strata) migrations.
 
 ## Contributing
 

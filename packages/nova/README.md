@@ -3,7 +3,7 @@
 Declarative, framework-agnostic UI runtime for actions composed from JSON
 layouts and effects.
 
-**Status:** `0.x.x` — pre-1.0, breaking changes expected.
+**Status:** on npm and live. The version is below 1.0; releases are compatible all the same — an app that works on one works on the next, and what should go is deprecated, not removed.
 
 ## Install
 

@@ -2,6 +2,8 @@
 
 > **Reading this from `node_modules/@niscorp/nisc/`?** It is the rulebook for the nisc version installed beside it, shipped with it. Where it names a path in the nisc repository, look here instead: `packages/<name>/README.md` and `DESIGN.md` are `node_modules/@niscorp/<name>/`; `/STYLE_GUIDE.md` is beside this file; the lab apps it holds up as examples (`apps/lab/atrium`, `mythos`, …) and `docs/` are at [github.com/moccadroid/niscorp](https://github.com/moccadroid/niscorp). An app made by `npm create nisc` points its own `AGENTS.md` here.
 
+> **Changing nisc itself — a package, not an app built on it?** The `@niscorp` packages are live on npm and may be in use by third parties. No change may break an app that works today, and a breaking change is never yours to decide: it is a last resort that needs the maintainer's explicit approval *before* it is written. Read `/STYLE_GUIDE.md`, "The packages are live", first.
+
 For agents generating or reviewing a nisc application. This file states the application-level rules, and it presumes no app that came before it — but it is not the whole specification. The **grammars** live in the package docs, and they are required reading, not background: a layout node, an `ActionDefinition`, a Prism config, a charter document and a Vex DSL are each defined in their own package's `README.md` and `DESIGN.md`. Read the doc for a package before authoring that package's artifact. This file governs how they compose into an application.
 
 ## The thesis

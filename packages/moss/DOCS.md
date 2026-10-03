@@ -5,8 +5,9 @@ Node listener and the built site), `@niscorp/moss/vite` (the dev plugin),
 `@niscorp/moss/client` and `@niscorp/moss/client/node` (the wire and its Node
 host), `@niscorp/moss/terminal` (the terminal), and the render targets:
 `terminal/react`, `terminal/vue`, `terminal/dom` (each with a `/server` entry
-that draws to a string), `terminal/tty` and `terminal/ink`. API is pre-1.0 and
-moves.
+that draws to a string), `terminal/tty` and `terminal/ink`. The version is below 1.0 and
+the package is live on npm all the same: what is documented here keeps working
+from one release to the next, and what should go is deprecated, not removed.
 
 The nisc packages (`charter`, `nova`, `prism`, `strata`, `tide`, `vex`) and
 `zod` are required peers. `react`/`react-dom`, `vue`, `ink` and `vite` are

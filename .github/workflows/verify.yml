@@ -92,10 +92,13 @@ jobs:
       - name: Check the tide fact door
         run: pnpm check:fact-door
 
-      # Every package change on a PR carries a changeset, and a breaking release
-      # (a major, or a minor below 1.0) is refused until everything that depends
-      # or peers on it is released as breaking too — Changesets alone would ship
-      # those dependents as patches with a moved peer range. Push-to-main skips
+      # Every package change on a PR carries a changeset — and no release breaks
+      # an app: the packages are live on npm. A breaking bump (a major, or a
+      # minor below 1.0) is refused unless its changeset carries the maintainer's
+      # approval (`BREAKING — approved by …`), and an approved one is refused
+      # until everything that depends or peers on it is released as breaking too
+      # — Changesets alone would ship those dependents as patches with a moved
+      # peer range. See scripts/check-changesets.mts. Push-to-main skips
       # this: there is no base to compare against. So does the release workflow's
       # Version Packages PR (branch changeset-release/*): it is what CONSUMES the
       # changesets, so it changes packages and carries none, by design.

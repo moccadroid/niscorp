@@ -156,8 +156,8 @@ export type NiscApp = {
    * @deprecated Never called. Which integrations are live for a principal's
    * tenant is `installed` on the record `identity.resolve` returns; without
    * `identity`, every registered integration is live for everybody. Kept on
-   * the type so a manifest that still names it compiles; removed at the next
-   * breaking release.
+   * the type so a manifest that still names it compiles — and it stays: a
+   * manifest that works is not broken to tidy a type.
    */
   installedIntegrations?: (principal: string | null) => readonly string[] | Promise<readonly string[]>;
   // WHO AN INTEGRATION IS when it acts and nobody is driving.

@@ -14,8 +14,12 @@ was released with, so installing `@niscorp/nisc@0.4.0` installs the set that
 was tested as nisc 0.4.0. Import from the packages themselves
 (`@niscorp/nova`, `@niscorp/moss`, …).
 
-Its version moves whenever any member's does, and it breaks whenever any member
-breaks — `pnpm check:changesets` refuses a release plan that forgets.
+Its version moves whenever any member's does. The packages are live, and a
+release is compatible with the one before it: installing a newer
+`@niscorp/nisc` does not break an app that worked on the older one. A breaking
+release is a last resort that needs the maintainer's approval; if one ever
+ships in a member, this package breaks with it — `pnpm check:changesets`
+refuses a plan that is missing either the approval or this.
 
 ## The rulebook
 

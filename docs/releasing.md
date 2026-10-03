@@ -6,11 +6,24 @@ nothing else. **A push is not a release.**
 
 ## How a release happens
 
-1. **A change carries a changeset.** `pnpm changeset`: pick the packages, pick
-   the bump (below 1.0 a minor is breaking), write the line that becomes the
-   changelog. CI refuses a pull request that changes a package without one, and
-   `pnpm check:changesets` says which dependents must break with a breaking
-   release.
+1. **A change carries a changeset.** `pnpm changeset`: pick the packages, write
+   the line that becomes the changelog — and **the bump is `patch`**. The
+   packages are live: a release may not break an app that works on the one
+   before it (`STYLE_GUIDE.md`, "The packages are live"). CI refuses a pull
+   request that changes a package without a changeset.
+
+   A **breaking** bump — a major, or below 1.0 a `minor` — is a last resort
+   that the maintainer approves *before the change is written*. Its changeset
+   then says so on a line of its own:
+
+   ```
+   BREAKING — approved by <who>, <date>: <what an app must change>
+   ```
+
+   `pnpm check:changesets` refuses a breaking bump without that line. For one
+   that has it, it says which dependents must move with it (every package that
+   depends or peers on a broken one is broken too, and each of their changesets
+   carries the line as well).
 2. **The changeset reaches main.** After Verify passes on that commit, the
    Release workflow opens a pull request, *release: version packages*, or
    updates the one already open: every pending changeset turned into version

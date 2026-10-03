@@ -1,5 +1,16 @@
 # Versioning, migrations and strata
 
+> **Superseded in part (2026-10-03): the packages are live on npm.** D2 below
+> was decided before anything was published, and reads a break as a routine
+> kind of release ("below 1.0 a minor is breaking; a breaking release breaks
+> everything that depends on it"). That is no longer the rule. A release does
+> not break an app that works on the one before it; a breaking change is a last
+> resort that needs the maintainer's approval before it is written, and
+> `pnpm check:changesets` now refuses a breaking bump that does not carry it
+> (`STYLE_GUIDE.md`, "The packages are live"; `docs/releasing.md`). The
+> mechanics — own version lines, `@niscorp/nisc`, changesets, the dependents
+> gate for an approved break — stand. The rest of this file is the record as built.
+
 > **Status (2026-09-26): built — package side and strata S0–S6.** Apache-2.0,
 > consumable manifests, the zod peer + cross-copy check, nisc packages as
 > peers, changesets + `@niscorp/nisc` + the breaking-dependents gate, the moss
@@ -27,7 +38,7 @@ grammar wrote them.
 | # | Decision | Tier |
 |---|---|---|
 | D1 | Every `@niscorp` package versions independently (each is a standalone library — no "external vs platform" split). `@niscorp/nisc` pins the exact compatible set. | answered |
-| D2 | Changesets. Below 1.0 a minor is breaking; a breaking release breaks everything that depends or peers on it. | answered |
+| D2 | Changesets. Below 1.0 a minor is breaking; a breaking release breaks everything that depends or peers on it. **(Superseded 2026-10-03 — see the note at the top: no breaking release without the maintainer's approval.)** | answered |
 | D3 | License: Apache-2.0 everywhere. | answered |
 | D4 | zod is a required peer, **floor 4.2.0**, everywhere. Caller schemas convert through their own copy (`~standard.jsonSchema`). | answered |
 | D5 | nisc packages meet as peers; a plain nisc→nisc dependency needs an allowlisted reason. | answered |
@@ -76,7 +87,7 @@ grammar wrote them.
 
 ```bash
 pnpm changeset                # pick packages, pick the bump, write the changelog line
-pnpm check:changesets         # a breaking release must break its dependents
+pnpm check:changesets         # no unapproved breaking bump; an approved one must break its dependents
 pnpm changeset version        # bump, write CHANGELOG.md files
 ```
 
