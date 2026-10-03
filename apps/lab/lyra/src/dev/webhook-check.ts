@@ -13,12 +13,13 @@
 // against a hash of what was sent.
 //
 // Run: pnpm --filter lyra exec tsx src/dev/webhook-check.ts
+import { OPERATOR_KEY } from './operator-key'; // FIRST — before the world boots; see that file
 import { createHash } from 'node:crypto';
 import { startIntegrations } from '../../../lyra-integrations/src/serve';
-import { ok, report, runtime, server } from './world';
+import { ok, report, server } from './world';
 
-const KEY = 'lab-operator-key';
-runtime.operatorKey = KEY;
+// Set in `./operator-key` BEFORE the world is imported: moss reads it once, at boot.
+const KEY = OPERATOR_KEY;
 
 const PORT = 8797;
 const SECRET = 'lab-hook-secret';

@@ -3,11 +3,34 @@ import { resolveCatalog } from '@niscorp/moss';
 import { componentsOf } from '@niscorp/nova/reflect';
 import { CAST } from '@lyra/db/seed';
 import { AREAS } from '@lyra/app/nav/sections';
-import { anonymous, app, idFor, idsFor, login, ok, report, server, settle, treeOf } from './world';
+import { anonymous, app, idFor, idsFor, login, ok, report, runtime, server, settle, treeOf } from './world';
 
 // ── the boot itself ──
 ok('the manifest boots', server !== undefined);
 ok('the app serves shells', server.shells !== undefined);
+
+// ── and what it does NOT serve: the operator seam ──
+//
+// This world was given no operator key — the state of every check that does not
+// import `./operator-key`, and of a deployment before anybody sets one. Off
+// means ABSENT, not locked: the path answers 404 to the very key that opens it
+// in admin-check's world, and to an empty one, which is the guess that would
+// match an unset key if anything compared before asking whether there was a
+// key to compare against.
+//
+// It lives here because moss reads the key once, at boot, so the world that
+// proves wrong-and-right (admin-check) cannot also be the one that proves off.
+// The first line is the premise, stated so it can fail: run with OPERATOR_KEY
+// exported and this world HAS a seam, and the two below it would be passing
+// about a wrong key instead.
+const knock = async (key: string): Promise<Response> => server.request('/operator/integrations', { headers: { 'x-operator-key': key } });
+ok(
+  'a world given no operator key was built with none',
+  runtime.operatorKey === undefined,
+  runtime.operatorKey === undefined ? 'OPERATOR_KEY is unset, and nothing defaulted it' : 'OPERATOR_KEY is set in this environment — unset it; this check is about the seam being off',
+);
+ok('...so the operator seam is not there, even for the key that would open it', (await knock('lab-operator-key')).status === 404);
+ok('...nor for an empty one', (await knock('')).status === 404, 'unset is not a key that "" matches');
 
 // ── ring 1: existence, per principal ──
 

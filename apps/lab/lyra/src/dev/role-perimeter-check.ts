@@ -19,12 +19,13 @@
 // only a fence if something is on the other side of it.
 //
 // Run: pnpm --filter lyra exec tsx src/dev/role-perimeter-check.ts
+import { OPERATOR_KEY } from './operator-key'; // FIRST — before the world boots; see that file
 import { startIntegrations } from '../../../lyra-integrations/src/serve';
 import { CAST } from '@lyra/db/seed';
-import { login, mintToken, ok, report, runtime, server, settle } from './world';
+import { login, mintToken, ok, report, server, settle } from './world';
 
-const KEY = 'lab-operator-key';
-runtime.operatorKey = KEY;
+// Set in `./operator-key` BEFORE the world is imported: moss reads it once, at boot.
+const KEY = OPERATOR_KEY;
 const PORT = 8798;
 
 // No key and no database, for the reason stripe-check gives: the live path

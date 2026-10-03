@@ -101,19 +101,36 @@ ok(
 // because a consent test outside the read is a test vex cannot invalidate a
 // cache on. Run over the same people, the campaign's question must answer
 // where the automation's drops.
-const CUTOFF = { audience: 'quiet', cutoff: '2026-08-14' };
-const quietPage = (await ask('campaigns/audience-page', CUTOFF)) as { person_id: string; disposition: string; reason_display: string }[];
+//
+// THE WINDOW IS AN OFFSET FROM THE STUDIO'S TODAY, never a date written out.
+// It was a literal day in August, a couple of days back when it was written,
+// against a seed that builds its sessions relative to today, so the calendar
+// walked past it: everybody had attended since, "gone quiet" answered nobody,
+// and the assertion below it went on passing on 0 = 0 - 0. automations-check
+// records the same lesson about the same people.
+//
+// Seven days is inside both of the seed's authored silences (db/seed/bookings):
+// Jonas stopped three weeks back and never opted in, so he is the one the sheet
+// must NAME; Sofia stopped ten days back and did, so she is the one the
+// automation must still FIND. Neither depends on the attendance lottery.
+const SINCE = (await rows<{ d: string }>('SELECT (studio_today($1) - 7)::text AS d', [LUMEN]))[0]?.d ?? '';
+const CUTOFF = { audience: 'quiet', cutoff: SINCE };
+const quietPage = (await ask('campaigns/audience-page', CUTOFF)) as { person_id: string; disposition: string }[];
 const quietAutomation = (await asMachinery('automation/not-seen-since', { cutoff: CUTOFF.cutoff })) as unknown[];
 
+// The disposition IS the why — the entry answers no other column for it. This
+// used to also require a `reason_display` the read has never carried, which
+// held for every row because `undefined` is not the empty string.
 const optedOut = quietPage.filter((p) => p.disposition === 'no_consent');
 ok(
   'the compose sheet names who will not be written to, and why',
-  optedOut.length > 0 && optedOut.every((p) => p.reason_display !== ''),
-  optedOut.map((p) => `${p.person_id}: ${p.reason_display}`).join(', ') || 'nobody was named',
+  optedOut.length > 0,
+  optedOut.map((p) => `${p.person_id}: ${p.disposition}`).join(', ') || 'nobody was named',
 );
 ok(
   '...while the automation over the same people drops them, as it should',
-  Array.isArray(quietAutomation) && quietAutomation.length === quietPage.length - optedOut.length,
+  // Not on an empty answer: nobody and nobody agree about everything.
+  Array.isArray(quietAutomation) && quietAutomation.length > 0 && quietAutomation.length === quietPage.length - optedOut.length,
   `${quietPage.length} answered, ${optedOut.length} unwritable, ${(quietAutomation as unknown[]).length} selected by the automation`,
 );
 ok(
@@ -124,7 +141,7 @@ ok(
 
 // ── 2. the number on the button ──────────────────────────────
 const AUDIENCE = { audience: 'roll/current', audienceDays: 0 };
-const question = { audience: AUDIENCE.audience, cutoff: '2026-08-14' };
+const question = { audience: AUDIENCE.audience, cutoff: SINCE };
 const total = (await ask('campaigns/audience-count', question)) as { total: number };
 const writable = (await ask('campaigns/audience-writable', question)) as { ok: number };
 const page = (await ask('campaigns/audience-page', question)) as { person_id: string; disposition: string }[];
@@ -224,10 +241,10 @@ ok(
   `limit ${String(campaignAudienceResolve.dsl.limit)} — an unauthored limit is 100, silently`,
 );
 
-const firstPage = (await asMachinery('campaigns/audience-resolve', { audience: AUDIENCE.audience, cutoff: '2026-08-14' })) as { person_id: string }[];
+const firstPage = (await asMachinery('campaigns/audience-resolve', { audience: AUDIENCE.audience, cutoff: SINCE })) as { person_id: string }[];
 const seeked = (await asMachinery('campaigns/audience-resolve', {
   audience: AUDIENCE.audience,
-  cutoff: '2026-08-14',
+  cutoff: SINCE,
   after: firstPage[0]?.person_id ?? '',
 })) as { person_id: string }[];
 

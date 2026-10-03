@@ -12,6 +12,7 @@
 // on its own charter rung, which is the same fence Phase 6 proved.
 //
 // Run: pnpm --filter lyra exec tsx src/dev/billing-check.ts
+import { OPERATOR_KEY } from './operator-key'; // FIRST — before the world boots; see that file
 import { createHmac } from 'node:crypto';
 import { serve as listen } from '@hono/node-server';
 import { startIntegrations } from '../../../lyra-integrations/src/serve';
@@ -20,8 +21,8 @@ import { asPrincipal, login, mintToken, ok, report, runtime, server, settle } fr
 import { sweepLeaving } from '../../../lyra-integrations/src/integrations/stripe/leaving';
 import { rememberAccount } from '../../../lyra-integrations/src/integrations/stripe/store';
 
-const KEY = 'lab-operator-key';
-runtime.operatorKey = KEY;
+// Set in `./operator-key` BEFORE the world is imported: moss reads it once, at boot.
+const KEY = OPERATOR_KEY;
 const PORT = 8793;
 const LYRA_PORT = 8792;
 const HOOK_SECRET = 'whsec_lab_billing_check';

@@ -11,14 +11,15 @@
 // grant itself must be worthless as identity, because it travels in a URL.
 //
 // Run: pnpm --filter lyra exec tsx src/dev/frame-check.ts
+import { OPERATOR_KEY } from './operator-key'; // FIRST — before the world boots; see that file
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { startIntegrations } from '../../../lyra-integrations/src/serve';
 import { CAST } from '@lyra/db/seed';
-import { app, login, mintToken, ok, report, runtime, server, settle } from './world';
+import { app, login, mintToken, ok, report, server, settle } from './world';
 
-const KEY = 'lab-operator-key';
-runtime.operatorKey = KEY;
+// Set in `./operator-key` BEFORE the world is imported: moss reads it once, at boot.
+const KEY = OPERATOR_KEY;
 
 const PORT = 8796;
 const verifyKey = (await (await server.request('/api/integrations/verify-key')).json()) as { key: string };

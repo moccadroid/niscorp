@@ -1,4 +1,5 @@
 // Run: pnpm --filter lyra exec tsx src/dev/integrations-check.ts
+import { OPERATOR_KEY } from './operator-key'; // FIRST — before the world boots; see that file
 import { resolveCatalog } from '@niscorp/moss';
 import { harvestDefinitions } from '@niscorp/nova/i18n';
 import type { ActionDefinition } from '@niscorp/nova';
@@ -11,8 +12,8 @@ import { GERMAN } from '@lyra/db/phrases.de';
 import { CAST } from '@lyra/db/seed';
 import { app, idFor, idsFor, login, mintToken, ok, report, runtime, server, servedTo, settle, treeOf } from './world';
 
-const KEY = 'lab-operator-key';
-runtime.operatorKey = KEY;
+// Set in `./operator-key` BEFORE the world is imported: moss reads it once, at boot.
+const KEY = OPERATOR_KEY;
 
 // Its own port, so a suite run cannot kill the instance somebody is looking at.
 const PORT = 8798;

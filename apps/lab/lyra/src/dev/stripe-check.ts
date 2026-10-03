@@ -13,12 +13,13 @@
 // payments are not configured" look identical from a screen until somebody looks.
 //
 // Run: pnpm --filter lyra exec tsx src/dev/stripe-check.ts
+import { OPERATOR_KEY } from './operator-key'; // FIRST — before the world boots; see that file
 import { startIntegrations } from '../../../lyra-integrations/src/serve';
 import { CAST } from '@lyra/db/seed';
 import { login, mintToken, ok, report, runtime, server, settle, treeOf } from './world';
 
-const KEY = 'lab-operator-key';
-runtime.operatorKey = KEY;
+// Set in `./operator-key` BEFORE the world is imported: moss reads it once, at boot.
+const KEY = OPERATOR_KEY;
 const PORT = 8795;
 
 // No key, deliberately — see above. `.env` on a developer's machine has one.
