@@ -100,7 +100,7 @@ type Mount = {
   // holds exactly them (`holdsExactly`), or a canvas's own host. `undefined`
   // when the component put them anywhere else — a change to which nodes it has
   // then asks the component again.
-  host: Node | undefined;
+  host: HTMLElement | undefined;
   cleanups: (() => void)[];
   // a bound field that may not show what the tree says: it was typed in, or the
   // tree's value changed while it was being typed in
@@ -131,7 +131,21 @@ const withoutValue = (props: Record<string, unknown>): Record<string, unknown> =
 
 const sameNodes = (a: Node[], b: Node[]): boolean => a.length === b.length && a.every((node, i) => node === b[i]);
 
-const flat = (kids: Mount[]): Node[] => kids.flatMap((kid) => kid.dom);
+// (Plain indexed loops on purpose: this runs twice for every component on every
+// render, and measured in Chrome it is what a render of a long list spends its
+// time in. `flatMap` is slower once warm; `for…of` is twice as slow while cold,
+// which is when a first draw happens.)
+const flat = (kids: Mount[]): Node[] => {
+  const nodes: Node[] = [];
+  for (let i = 0; i < kids.length; i += 1) {
+    const dom = kids[i]?.dom ?? [];
+    for (let j = 0; j < dom.length; j += 1) {
+      const node = dom[j];
+      if (node !== undefined) nodes.push(node);
+    }
+  }
+  return nodes;
+};
 
 const canvasIdOf = (node: ComponentRenderNode): string => {
   const canvasId = node.props['canvasId'];
@@ -157,6 +171,22 @@ const keyed = <T>(items: readonly T[], nodeOf: (item: T) => RenderNode): [string
     seen.set(key, count + 1);
     return [count === 0 ? key : `${key}#${count}`, item];
   });
+};
+
+// Whether two nodes at the same index would be given the same key by core's
+// `renderNodeKey` — asked without building the key. Siblings mostly stay where
+// they are from one render to the next, and then nothing has to be looked up.
+const samePlace = (a: RenderNode, b: RenderNode): boolean => {
+  if (a.key !== undefined || b.key !== undefined) return a.key === b.key;
+  if (a.type === 'component' && b.type === 'component') return a.ref !== undefined || b.ref !== undefined ? a.ref === b.ref : a.name === b.name;
+  if (a.type === 'error' && b.type === 'error') return a.code === b.code;
+  return a.type === b.type;
+};
+
+const gathered = (nodes: Node[]): DocumentFragment => {
+  const fragment = document.createDocumentFragment();
+  for (const node of nodes) fragment.appendChild(node);
+  return fragment;
 };
 
 // Whether a component's children can be patched where they stand: only when the
@@ -338,7 +368,7 @@ export const createDomView = (
   // Focus is the element's, so it follows the element: `from` held it when the
   // render began, `to` is what was built in its place if it had to be.
   const refocus: { from: Element | null; to: HTMLElement | undefined } = { from: null, to: undefined };
-  // each component element's field state (Mount.field), found from the element
+  // a bound component's field state (Mount.field), found from its element
   const fields = new WeakMap<Node, { stale: boolean }>();
 
   const builderOf = (node: ComponentRenderNode, ctx: Ctx): DomComponent | undefined => ctx.registry.get(node.name)?.component ?? ctx.fallback;
@@ -348,6 +378,7 @@ export const createDomView = (
   // The element is going: whatever its component started stops. Its kids are
   // not touched — they may be living on under the element built in its place.
   const leave = (mount: Mount): void => {
+    if (mount.cleanups.length === 0) return;
     for (const cleanup of mount.cleanups.splice(0)) cleanup();
   };
 
@@ -389,7 +420,7 @@ export const createDomView = (
     el.setAttribute('data-component', node.name);
     if (node.ref !== undefined) el.setAttribute('data-ref', node.ref);
     wireEvents(el, node, ctx.dispatch, field);
-    fields.set(el, field);
+    if (node.model !== undefined) fields.set(el, field);
     if (replaced !== undefined && refocus.from !== null && replaced.dom[0] === refocus.from) refocus.to = el;
     return { node, ctx, dom: [el], kids, host: holdsOnly && holdsExactly(el, flat(kids)) ? el : undefined, cleanups, field };
   };
@@ -420,10 +451,16 @@ export const createDomView = (
 
   // Make `host` hold `after` where it held `before`: what left is taken out,
   // what is new is put in, and a node that already stands where it belongs is
-  // not touched.
-  const place = (host: Node, before: Node[], after: Node[]): void => {
+  // not touched. The writes are as few as they can be: nodes that go in side by
+  // side go in together, and a host none of whose nodes stay is refilled in one.
+  const place = (host: HTMLElement, before: Node[], after: Node[]): void => {
     if (sameNodes(before, after)) return;
     const wanted = new Set(after);
+    if (host.childNodes.length === before.length && !before.some((node) => wanted.has(node))) {
+      host.replaceChildren(gathered(after));
+      writes += 1;
+      return;
+    }
     for (const node of before) {
       if (wanted.has(node) || node.parentNode !== host) continue;
       host.removeChild(node);
@@ -431,21 +468,35 @@ export const createDomView = (
     }
     const stoodAt = new Map(before.map((node, i) => [node, i]));
     const stays = standing(after.map((node) => stoodAt.get(node) ?? -1));
+    // right to left: what goes in between two nodes that stay is gathered, and
+    // put in before the one on its right
     let anchor: Node | null = null;
+    let run: Node[] = [];
+    const putIn = (): void => {
+      const [only] = run;
+      if (only === undefined) return;
+      host.insertBefore(run.length === 1 ? only : gathered(run.reverse()), anchor);
+      writes += 1;
+      run = [];
+    };
     for (let i = after.length - 1; i >= 0; i -= 1) {
       const node = after[i];
       if (node === undefined) continue;
-      if (!stays.has(i)) {
-        host.insertBefore(node, anchor);
-        writes += 1;
-      }
-      anchor = node;
+      if (stays.has(i)) {
+        putIn();
+        anchor = node;
+      } else run.push(node);
     }
+    putIn();
   };
 
   // Siblings are matched by key. A match is patched, a node with no match is
   // built, and what was drawn and has no match any more is let go.
   const reconcile = (olds: Mount[], nexts: readonly RenderNode[], ctx: Ctx): Mount[] => {
+    // the usual case: the same siblings in the same places
+    if (olds.length === nexts.length && olds.every((old, i) => samePlace(old.node, nexts[i] ?? old.node))) {
+      return olds.map((old, i) => patch(old, nexts[i] ?? old.node, ctx));
+    }
     const drawnBy = new Map(keyed(olds, (old) => old.node));
     const kids = keyed(nexts, (next) => next).map(([key, next]) => {
       const old = drawnBy.get(key);
@@ -486,7 +537,7 @@ export const createDomView = (
     if (prev.name !== next.name || !Object.is(slotOf(prev), slotOf(next))) return afresh();
 
     if (next.name === CANVAS_SLOT) {
-      const [host] = old.dom;
+      const host = old.host;
       if (host === undefined) return afresh();
       const canvasId = canvasIdOf(next);
       const before = flat(old.kids);
@@ -519,9 +570,10 @@ export const createDomView = (
       }
     }
 
-    // what the component was handed, child by child
-    const handed = old.kids.map((kid) => kid.dom);
-    const before = handed.flat();
+    // what the component was handed, child by child — asked only of one that
+    // did something of its own with its children
+    const handed = old.host === undefined ? old.kids.map((kid) => kid.dom) : undefined;
+    const before = flat(old.kids);
     const mark = writes;
     const kids = reconcile(old.kids, next.children, old.ctx);
     const after = flat(kids);
@@ -539,7 +591,7 @@ export const createDomView = (
           place(old.host, before, after);
           return kept();
         }
-      } else if (handed.length === kids.length && kids.every((kid, i) => sameNodes(handed[i] ?? [], kid.dom))) {
+      } else if (handed !== undefined && handed.length === kids.length && kids.every((kid, i) => sameNodes(handed[i] ?? [], kid.dom))) {
         // It did something of its own with its children, and it would be handed
         // the same nodes, child for child, so it would draw the same. Whatever
         // changed further down was patched where it stands — which is on the

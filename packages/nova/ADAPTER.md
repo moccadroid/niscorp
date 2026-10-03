@@ -289,6 +289,29 @@ close it; nothing has needed one yet.
   built in its place — a button as much as a field.
 - **Leaving a field sends what debounce was holding**, as obligation 6 says.
 
+### What it costs
+
+Keeping a tree beside the DOM is not free, and the cases where it costs more
+than it saves are the ones in which nothing could be kept. Measured in Chrome
+154 (2026-10-03) on a list of 2,000 rows, each change drawn and laid out,
+against the adapter that drew everything again:
+
+| | drawn again | patched |
+| --- | --- | --- |
+| one row's text changes | 5.0 ms | 0.9 ms |
+| one row is added, or moved | 5.1 ms | 1.4 ms |
+| every row's text changes | 7.2 ms | 4.9 ms |
+| the first draw | 5.6 ms | 6.3 ms |
+| the whole list reversed | 5.1 ms | 5.6 ms |
+| every row's own props change | 5.3 ms | 6.7 ms |
+| every row replaced by a new one | 5.2 ms | 6.8 ms |
+
+So: a first draw costs about a tenth more, and a render that replaces
+everything about a third more. Any render that keeps something costs less, and
+the usual one — a little changed on a large page — a small fraction. What the
+view holds does not grow with use: after 24,000 renders that each replaced a
+whole list it held what it held after 3,000.
+
 ### How it is held to that
 
 `test/adapters/dom-retained.test.ts` asserts identity (`toBe`) and "never taken

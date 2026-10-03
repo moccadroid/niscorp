@@ -228,6 +228,56 @@ describe('dom adapter — a keyed list', () => {
     expect(built).toEqual(['Box']);
   });
 
+  it('reversed: the same nodes, back to front — nothing is built', () => {
+    let ids = ['a', 'b', 'c', 'd', 'e'];
+    const { root, view, built } = stage(() => [slot('main')], () => ({ main: list(ids) }));
+    const before = rows(root);
+    ids = [...ids].reverse();
+    view.render();
+    expect(rows(root)).toEqual([...before].reverse());
+    expect(built).toEqual([]);
+  });
+
+  it('several new rows side by side go in between their neighbours, in order', () => {
+    let ids = ['a', 'e'];
+    const { root, view, built } = stage(() => [slot('main')], () => ({ main: list(ids) }));
+    const [a, e] = rows(root);
+    ids = ['a', 'b', 'c', 'd', 'e', 'f'];
+    const removed = removedDuring(root, view.render);
+    expect(rows(root).map((row) => row.textContent)).toEqual(['a', 'b', 'c', 'd', 'e', 'f']);
+    expect(rows(root)[0]).toBe(a);
+    expect(rows(root)[4]).toBe(e);
+    expect(removed.size).toBe(0);
+    expect(built).toEqual(['Box', 'Box', 'Box', 'Box']);
+  });
+
+  it('every row replaced by another: all new, in order, and the list itself stays', () => {
+    let ids = ['a', 'b', 'c'];
+    const { root, view, built } = stage(() => [slot('main')], () => ({ main: list(ids) }));
+    const holder = one(root, '[data-ref="list"]');
+    const before = rows(root);
+    ids = ['x', 'y', 'z', 'w'];
+    view.render();
+    expect(one(root, '[data-ref="list"]')).toBe(holder);
+    expect(rows(root).map((row) => row.textContent)).toEqual(['x', 'y', 'z', 'w']);
+    expect(rows(root).some((row) => before.includes(row))).toBe(false);
+    expect(built).toEqual(['Box', 'Box', 'Box', 'Box']);
+  });
+
+  it('a node the adapter did not put on a canvas is left where it is', () => {
+    let ids = ['a', 'b'];
+    const { root, view } = stage(
+      () => [slot('main')],
+      () => ({ main: ids.map((id) => keyedAs(id, component('Box', {}, [text(id)]))) }),
+    );
+    const foreign = document.createElement('aside');
+    one(root, '[data-canvas="main"]').append(foreign);
+    ids = ['x', 'y'];
+    view.render();
+    expect(foreign.isConnected).toBe(true);
+    expect([...one(root, '[data-canvas="main"]').querySelectorAll('[data-component="Box"]')].map((el) => el.textContent)).toEqual(['x', 'y']);
+  });
+
   it('siblings that share a ref and carry no key are told apart by order, and both stay', () => {
     let label = 'x';
     const { root, view, dispatched, built } = stage(
