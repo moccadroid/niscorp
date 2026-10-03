@@ -53,6 +53,8 @@ signal.schema(zodSchema)           // typed structured output
 signal.tools([myTool])             // tool calling
 signal.history(messages)           // multi-turn
 signal.retries(3)                  // validation retries
+signal.options({ temperature: 0 }) // sampling / generation options
+signal.apiKey(key)                 // override the env key
 signal.describe()                  // provider, model, capabilities — from the registry
 signal.onRetry(handler)            // retry hook
 signal.onToolCall(handler)         // tool call hook
@@ -114,4 +116,4 @@ API keys are read from environment variables (`GROQ_API_KEY`, `OPENAI_API_KEY`, 
 
 ## License
 
-MIT
+Apache-2.0

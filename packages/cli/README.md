@@ -62,6 +62,7 @@ page in the manifest), and what each one needs once it has been drawn.
 | `dist?` | where the bundler writes the terminal (default `dist`) |
 | `checks?` | the check suite `nisc check` runs (default `src/dev/all-checks.ts`) |
 | `tokenKey?` | the wire's token key, when it is not `nisc.token` |
+| `dev?` | what only `nisc dev` uses: `dev.signIn(server, who)` mints a token for `/dev/as/<who>` (`null`: nobody of that name) |
 
 ### An app with its own shell
 
@@ -120,7 +121,9 @@ is where a screen goes. The adoption check needs a DOM: `jsdom`, installed in
 the app.
 
 The config is TypeScript, loaded with the app's own `tsconfig.json` — path
-aliases included.
+aliases included. `nisc.config.mts`, `.js` and `.mjs` are found too. A config
+that hands over both `boot` and `shell` has not said which it is, and is
+refused.
 
 ## `nisc build`
 
@@ -228,7 +231,8 @@ server. An app with its own shell is a vite app and nothing more.
 
 ## `nisc check`
 
-The app's check suite (`src/dev/all-checks.ts`, or `checks` in the config).
+The app's check suite (`src/dev/all-checks.ts`, or `checks` in the config), run
+with the app's own `tsx`. Its exit code is the suite's.
 
 ## Options
 
@@ -238,7 +242,7 @@ The app's check suite (`src/dev/all-checks.ts`, or `checks` in the config).
 | `--out <dir>` | `export`: where the files go (default `out`) |
 | `--allow-live` | `export`: write even though some path wants a server |
 | `--skip-bundle` | `build`, `export`: the terminal is already built |
-| `--port <n>` | `start`: the port |
+| `--port <n>` | `dev`, `start`: the port (`start`: `$PORT`, then 8787) |
 
 ## License
 

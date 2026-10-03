@@ -2,7 +2,7 @@
 
 Declarative, framework-agnostic UI runtime. JSON layouts, action lifecycles,
 shell orchestration. The core is pure TypeScript with zero framework
-dependencies. Framework adapters (React, plain DOM) consume the
+dependencies. Adapters (React, Vue, plain DOM, TTY, Ink) consume the
 `RenderNode[]` output.
 
 This document describes the package as it actually exists today. Anything
@@ -39,10 +39,10 @@ action, and shell never import from each other transitively except via
 `@layout` / `@action` / `@shell` aliases at well-defined seams (the shell
 wires everything together at construction time).
 
-Around the core sit four subpath areas:
+Around the core sit six subpath areas:
 
-- **`adapters/`** — framework bindings (`react/`, `dom/`), each with its own
-  export subpath. Adapters import only the core public surface; core never
+- **`adapters/`** — framework bindings (`react/`, `vue/`, `dom/`, `tty/`,
+  `ink/`), each with its own export subpath. Adapters import only the core public surface; core never
   imports an adapter. See [ADAPTER.md](ADAPTER.md).
 - **`reflect/`** — read-only introspection (`@niscorp/nova/reflect`): layout
   walks, shell snapshots, the action graph, audit classification, and what an
@@ -52,6 +52,11 @@ Around the core sit four subpath areas:
   plain ActionDefinitions plus fns over `reflect/`.
 - **`agent/`** — cortex agents owned by nova (`@niscorp/nova/agent`);
   importing the subpath is what pulls in the optional cortex peer.
+- **`i18n/`** — the language surface (`@niscorp/nova/i18n`): the phrase-key
+  vocabulary, the harvest, `translateRenderTree`, `fillPhrase`. The swap itself
+  runs in the renderer. See [I18N_DOCS.md](I18N_DOCS.md).
+- **`migrations/`** — nova's grammar as a strata sequence
+  (`@niscorp/nova/migrations`: `NOVA_SEQUENCE`, `NOVA_SCHEMAS`).
 
 ---
 
@@ -73,7 +78,9 @@ NovaError                         (base; carries code + context + cause)
 ├── UnknownActionError            (shell.push of unregistered id)
 ├── UnknownFragmentError          (push `with` names an unregistered fragment)
 ├── ShellDisposedError            (post-dispose call)
-└── LifecycleError                (hook failure; carries hook + cause)
+├── UnknownFunctionError          (`fn` endpoint names an unregistered function)
+├── LifecycleError                (hook failure; carries hook + cause)
+└── MutationError                 (a mutation op that cannot apply)
 ```
 
 Subclasses are added only when there is a real throw site. No dead exports.
@@ -153,6 +160,8 @@ Zod schemas for the layout DSL:
 - `ConditionalNodeSchema` — `{ if, then, else? }`.
 - `LoopNodeSchema` — `{ for, as, key?, do }`.
 - `LayoutRefNodeSchema` — `{ ref }`. Resolves against the layout store.
+- `SlotNodeSchema` — `{ slot }`. Filled at compose time (see "ActionFragment
+  composition").
 - `LayoutNodeSchema` — discriminated union of all of the above plus arrays.
 
 ### Renderer (`layout/renderer.ts`)
@@ -161,10 +170,10 @@ Walks a `LayoutNode` and emits a `RenderNode[]` tree:
 
 ```
 RenderComponentNode  { type: 'component'; name; props; children;
-                       ref?; model?: { ref, path } }
+                       ref?; key?; model?: { ref, path } }
 RenderTextNode       { type: 'text'; value }
 RenderFragmentNode   { type: 'fragment'; children }
-RenderErrorNode      { type: 'error'; message }
+RenderErrorNode      { type: 'error'; code; message; nodeRef?; key? }
 ```
 
 The renderer:
@@ -199,7 +208,8 @@ own component implementations later.
 Split into focused files:
 
 - `effects.ts` — `CallEffect`, `EmitEffect`, navigation effects (`Push`,
-  `Pop`, `Replace`).
+  `Pop`, `Replace`, `PopTo`, `ResetTo`, `RemoveInstance`, `RemoveSelf`,
+  `Reconcile`, `Reload`), and `StepSchema = Mutation | Effect`.
 - `triggers.ts` — `TriggerConfigSchema { event?, message?, ref?, do }`.
 - `endpoints.ts` — `EndpointConfigSchema`: a function call `{ fn, target?,
   errorTarget? }` **or** an HTTP call `{ method, url, headers?, request?,
@@ -213,8 +223,7 @@ Split into focused files:
   data is never transformed.
 - `lifecycle.ts` — `LifecycleConfigSchema { mount?, unmount?, suspend?,
   resume? }`. Each is `Step[]`.
-- `index.ts` — `StepSchema = Mutation | Effect`, `ActionDefinitionSchema`,
-  exports.
+- `index.ts` — `ActionDefinitionSchema`, `ActionFragmentSchema`, exports.
 
 ### Mutations (`action/mutations/`)
 
@@ -225,7 +234,7 @@ the first match. Adding a mutation is a new file, not an edit to a
 giant switch.
 
 Current ops: `set`, `toggle`, `increment`, `decrement`, `push`, `pop`,
-`removeAt`, `clear`, `reset`.
+`removeAt`, `move`, `clear`, `reset`.
 
 Each op has its own Zod schema. The combined `MutationSchema` is the
 union.
@@ -317,7 +326,7 @@ The shell exposes runtimes via `shell.getRuntime(id)` typed as
 ```
 PublicActionRuntime = {
   readonly instance, definition;
-  getData(); render();
+  getData(); setData(next); render();
   onDataChange(handler); onStatusChange(handler);
 }
 ```
@@ -350,7 +359,7 @@ The user's entry point. Splits responsibilities across small files:
 - **`lifecycle-ops.ts`** — `unmountInstance`, `suspendTop`, `resumeTop`
   bookkeeping. Idempotent unmount via an internal `Set`.
 - **`canvas.ts`** — pure stack: `pushInstance`, `popInstance`,
-  `clearStack`, `peek`. No I/O.
+  `replaceTop`, `clearStack`, `peek`. No I/O.
 - **`shell-internals.ts`** — `validateActions` (boundary Zod validation
   on the action map at construction), `snapshotCanvas`,
   `createRuntimeFactory`, and the test escape hatch
@@ -365,17 +374,22 @@ createShell(config: ShellConfig): Shell
 `Shell` exposes:
 
 ```
-push(canvasId, actionId, input?, fragments?): string
+push(canvasId, actionId, input?, fragments?, options?): string
+originOf(instanceId): string | undefined
 pop(canvasId): void
 popTo(canvasId, instanceId): void
+removeInstance(canvasId, instanceId): void
 replace(canvasId, actionId, input?, fragments?): string
 clear(canvasId): void
+back(): boolean
 registerAction(definition): void
 removeAction(actionId): void
 registerFragment(fragment): void
 addCanvas(config): void
 removeCanvas(canvasId): void
 setCanvasLayout(layout): void
+setPhrases(phrases): void
+getPhrases(): Phrasebook | undefined
 setLayout(refId, layout): void
 getCanvasState(canvasId): CanvasState
 getRuntime(instanceId): PublicActionRuntime | undefined
@@ -509,9 +523,13 @@ yet beyond a placeholder:
   across processes. Serving rendered trees over a socket is moss's job;
   nova ships the surface it targets (`RenderApi`, ActionSlot-preserving
   `flattenRenderTree`).
-- **Schema versioning.** Breaking changes in 0.x are unversioned.
-- **LLM tooling / JSON Schema generation / catalog.** Excluded by
-  design — nova is a runtime, not a generator.
+- ~~**Schema versioning.**~~ **Implemented.** The action, fragment and
+  layout grammars are a strata sequence at `@niscorp/nova/migrations`
+  (`NOVA_SEQUENCE`).
+- **LLM tooling / JSON Schema generation / catalog.** Kept out of the core
+  — nova is a runtime, not a generator. What ships is the optional
+  `@niscorp/nova/agent` subpath (`layoutAgent`, `paletteFromRegistry`,
+  `collectInteractive`); catalogs are the host's.
 
 ---
 
@@ -557,6 +575,7 @@ A nova component registered with the React adapter receives:
 - `children?: ReactNode` — populated when the layout node has children
 - `novaModel?: { ref, path }` — populated when the layout node has a
   `model:` binding (so the component can dispatch `ui:model` events)
+- `novaRef?: string` — the layout node's `ref`, when set
 - ...the layout node's `props` spread on top
 
 That's it. Components do not receive a `shell`, an `instanceId`, an
@@ -612,7 +631,7 @@ default, and that the wrapper still mounts for an empty slot so exits can run).
 Both `useRenderTree` and `useCanvas` cache their snapshot via `useRef`
 so `useSyncExternalStore`'s `getSnapshot` returns a stable reference
 when nothing has changed. This is mandatory for tearing-safety in
-React 18 concurrent rendering.
+React's concurrent rendering.
 
 - **`useRenderTree`** caches by **data identity**. The runtime exposes
   the current data object; if the cached data reference is `===` to the
@@ -631,9 +650,9 @@ Both contracts are verified by `test/react/snapshot-stability.test.tsx`,
 which asserts referential equality across re-renders without state
 changes and reference inequality after a real data or stack change.
 
-### React 18+ compatibility
+### React compatibility
 
-- Requires React 18 or later (uses `useSyncExternalStore`).
+- Requires React 19 (the `react` peer is `^19.2.4`; uses `useSyncExternalStore`).
 - Concurrent rendering: tearing-safe by construction.
 - StrictMode: works correctly; snapshot caches survive effect double-
   invocation.

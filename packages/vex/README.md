@@ -7,11 +7,12 @@ The LLM never writes SQL. It fills in a validated JSON DSL; a deterministic pipe
 ## Install
 
 ```bash
-pnpm add @niscorp/vex zod
-# Postgres adapter (optional peer):
-pnpm add pg
-# Only if you wire the bundled LLM agents:
-pnpm add @niscorp/cortex @niscorp/signal @niscorp/prism
+pnpm add @niscorp/vex @niscorp/prism @niscorp/strata zod
+# prism (mappings), strata (the cache table's ledger) and zod are required
+# peers. Add the others for the paths you use:
+pnpm add pg                               # a Postgres pool for the adapter and the cache
+pnpm add hono                             # the Hono adapter (or: express)
+pnpm add @niscorp/cortex @niscorp/signal  # only if you wire the bundled LLM agents
 ```
 
 ## Quick Example
@@ -85,10 +86,12 @@ engine.cache;                     // CacheBackend — the live cache
 
 | Area | Provided |
 |------|----------|
-| Database adapters | PostgreSQL (`createPostgresAdapter`) — pluggable `DatabaseAdapter` interface for others |
+| Database adapters | PostgreSQL (`createPostgresAdapter`) — pluggable `DatabaseAdapter` interface for others. `createPglitePool` (`@niscorp/vex/pglite`) shapes a PGlite database as the pool it takes |
 | Cache backends | In-memory, Postgres (durable), tiered L1/L2 with warm-up |
 | Framework adapters | Hono (`@niscorp/vex/hono`), Express (`@niscorp/vex/express`) — discovery + query endpoints |
-| LLM integration | `generateDsl` / `mapToShape` hooks; reference agents built on `@niscorp/cortex` |
+| LLM integration | `generateDsl` / `mapToShape` hooks; reference agents built on `@niscorp/cortex` (`@niscorp/vex/agent`: `createQueryDsl`, `createShapeMapper`) |
+| Writes | Mutation entries in the same cache — a closed grammar, replay-only by fingerprint, never generated; `lintMutation` checks a statement at seed |
+| Seeding and freshness | `seedCache` turns authored `SeedEntry` / `SeedMutation` rows into protected cache entries; an entry's `refresh` is `'snapshot'` or `'reactive'` |
 | Safety | Server-side scope policies, query analyzer (cartesian/nesting/index checks), parameterized SQL only |
 | Its own table | The Postgres cache's table is a [strata](../strata/README.md) sequence (`cache.sequence`, `nisc.vex.cache`): `cache.init()` applies it through the ledger once, instead of `IF NOT EXISTS` on every boot. Requires a pool with `transaction` (the PGlite pool has one). |
 

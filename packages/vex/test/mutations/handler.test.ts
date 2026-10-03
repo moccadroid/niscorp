@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { handleQuery, handleDiscovery, handleFingerprintPatch } from '../../src/handler.js';
+import { handleQuery, handleDiscovery, handleFingerprintPatch, handleFingerprintDelete } from '../../src/handler.js';
 import { createMemoryCache } from '../../src/cache/memory.js';
 import type { QueryEngine } from '../../src/types.js';
 import type { DatabaseSchema } from '../../src/schemas/database.schema.js';
@@ -115,5 +115,16 @@ describe('fingerprint management covers mutation entries', () => {
     expect(res.status).toBe(200);
     const entry = await engine.cache.get('tasks/setDone');
     expect(entry?.protected).not.toBe(true);
+  });
+
+  it('DELETE refuses a protected mutation entry, like a protected read, until it is unprotected', async () => {
+    const { engine } = await makeWorld();
+    expect((await handleFingerprintDelete({ engine }, 'tasks/list')).status).toBe(409);
+    expect((await handleFingerprintDelete({ engine }, 'tasks/setDone')).status).toBe(409);
+    expect(await engine.cache.get('tasks/setDone')).toBeDefined();
+
+    await handleFingerprintPatch({ engine }, 'tasks/setDone', { protected: false });
+    expect((await handleFingerprintDelete({ engine }, 'tasks/setDone')).status).toBe(200);
+    expect(await engine.cache.get('tasks/setDone')).toBeUndefined();
   });
 });

@@ -159,4 +159,17 @@ describe('shell — suspend/resume lifecycle hooks', () => {
     await tick();
     expect(pings(aId)).toBe(2); // active again → fires
   });
+
+  // suspend() can land while mount() is still inside its hook; mount's last
+  // act must not undo it.
+  it('an instance covered while its mount hook is still running stays suspended', async () => {
+    const A: ActionDefinition = { id: 'A', data: { n: 0 }, lifecycle: { mount: [{ increment: 'n' }] } };
+    const shell = setup({ A });
+
+    shell.push('main', 'A');
+    shell.push('main', 'A');
+    await tick();
+
+    expect(shell.getCanvasState('main').stack.map((i) => i.status)).toEqual(['suspended', 'active']);
+  });
 });

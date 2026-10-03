@@ -8,7 +8,7 @@ Complete reference for `@niscorp/signal`.
 
 ### Stateless Immutable Builder
 
-Signal uses an immutable builder pattern. Every configuration method returns a **new instance** — the original is never modified. `complete()` is the only method that executes.
+Signal uses an immutable builder pattern. Every configuration method returns a **new instance** — the original is never modified. Nothing is sent until an execution method (`complete()`, `stream()`, `step()`, `stepStream()`, `embed()`, `decide()`) is called.
 
 ```typescript
 const base = createSignal('groq').systemPrompt('You are helpful.');
@@ -35,6 +35,9 @@ Each provider has a capability profile that Signal uses to pick the right strate
 - **`nativeTools`** — Can the provider do tool calling natively?
 - **`nativeJsonSchema`** — Can it enforce a JSON Schema on the response?
 - **`nativeJsonMode`** — Can it guarantee JSON output?
+- **`toolsWithStructuredOutput`** — Is `response_format` accepted together with `tools` in one request?
+- **`validatesToolArgs`** — Does the endpoint validate tool-call arguments server-side and reject the request on a mismatch?
+- **`manglesNestedToolArgs`** — Does the model corrupt nested tool-call arguments?
 - **`multimodal`** — Does it accept image content?
 - **`supportsEmbedding`** — Can it convert text to vectors?
 
@@ -50,7 +53,18 @@ You don't need to think about this unless you're overriding defaults.
 const signal = createSignal('groq');
 ```
 
-Reads `GROQ_API_KEY` from environment automatically. Known providers: `'groq'`, `'openai'`, `'openrouter'`, `'anthropic'`, `'google'`.
+Reads `GROQ_API_KEY` from environment automatically. Known providers: `'groq'`, `'openai'`, `'openrouter'`, `'anthropic'`, `'google'`, `'typesafe'`.
+
+| Provider | Env var | Default model |
+|----------|---------|---------------|
+| `'groq'` | `GROQ_API_KEY` | `qwen/qwen3.8-27b` |
+| `'openai'` | `OPENAI_API_KEY` | `gpt-4o` |
+| `'openrouter'` | `OPENROUTER_API_KEY` | `openai/gpt-4o` |
+| `'anthropic'` | `ANTHROPIC_API_KEY` | `claude-sonnet-4-20250514` |
+| `'google'` | `GOOGLE_API_KEY` | `gemini-2.0-flash` |
+| `'typesafe'` | `TYPESAFE_API_KEY` | `jev-latest` |
+
+`'anthropic'` and `'google'` are registry rows whose adapters are not implemented yet: the client builds and `describe()` answers, but every execution method throws `E_PROVIDER_ERROR` (`E_MISSING_API_KEY` first when no key is set; `count()`, which never reaches the adapter, still works). Reach those models through `'openrouter'`.
 
 ### Known Provider with Options
 
@@ -73,7 +87,7 @@ const signal = createSignal({
 });
 ```
 
-Any OpenAI-compatible API works.
+Any OpenAI-compatible API works. A custom provider is outside the registry, so it states what it does itself — `capabilities` (a `Partial<Capabilities>`; unstated fields are `false`) and, optionally, `wire` strategy ids. `adapter` defaults to `'openai-compatible'`.
 
 ---
 
@@ -115,7 +129,7 @@ signal.history(previousMessages)
 ```
 
 ### `.retries(count)`
-Set max validation retries (default: 2). When a response fails Zod validation, Signal feeds the error back to the model and tries again.
+Set max validation retries (default: 2). When a response fails Zod validation, Signal feeds the error back to the model and tries again; once the retries are spent the call fails with `E_VALIDATION_FAILED`.
 ```typescript
 signal.retries(3)
 ```
@@ -127,7 +141,7 @@ signal.apiKey('gsk_...')
 ```
 
 ### `.options(opts)`
-Set LLM options (temperature, maxTokens, etc.). These are rarely needed.
+Set LLM options: `temperature`, `maxTokens`, `topP`, `stopSequences`, `seed`, `signal` (an `AbortSignal`), `reasoningEffort`. Merged over any options already set. These are rarely needed.
 ```typescript
 signal.options({ temperature: 0 })
 ```
@@ -144,10 +158,11 @@ createSignal('groq').describe()
 // { provider: 'groq', model: 'qwen/qwen3.8-27b', kind: 'chat', modelKnown: true, capabilities: {…} }
 ```
 A `reasoningEffort` the model's row does not list is refused when the
-client is built (`SignalError`), not by a provider 400 mid-run.
+client is built (`SignalError`, `E_VALIDATION_FAILED`), not by a provider 400
+mid-run. An unmeasured model is not checked.
 
 ### `.onRetry(handler)`
-Hook called on each validation retry.
+Hook called on each validation failure, including the last one that exhausts the retries.
 ```typescript
 signal.onRetry((error, attempt) => console.log(`Retry ${attempt}:`, error.message))
 ```
@@ -179,9 +194,39 @@ await signal.complete([
 ]);
 ```
 
-### `.stream(input)`
+### `.stream(input, options?)`
 
-Not yet implemented. Will return `AsyncIterable<StreamEvent<T>>`.
+The same run as `complete()`, delivered as it happens. Returns `AsyncIterable<StreamEvent<T>>`; `options.signal` (an `AbortSignal`) aborts it.
+
+```typescript
+for await (const event of signal.stream('Tell me a story')) {
+  if (event.type === 'text') process.stdout.write(event.text);
+  if (event.type === 'done') console.log(event.meta.usage);
+}
+```
+
+```typescript
+type StreamEvent<T> =
+  | { type: 'text'; text: string }
+  | { type: 'tool_start'; name: string; args: unknown }
+  | { type: 'tool_end'; name: string; result: unknown }
+  | { type: 'retry'; reason: string; attempt: number }
+  | { type: 'error'; error: Error; recovered: boolean }
+  | { type: 'done'; response: T; history: Message[]; meta: SignalMeta };
+```
+
+Schema validation happens at the end of the stream; when the retries are spent the stream ends with an `error` event (which `complete()` throws).
+
+### `.step(request)` / `.stepStream(request, options?)`
+
+The low-level primitives `complete()` and `stream()` are built on: one model call, no tool execution, no schema retries. The caller owns the loop. `step()` takes a `StepRequest` (`messages`, `tools`, `toolChoice`, `output`, `responseFormat`, `options`) and returns a `StepResult` (`content`, `toolCalls`, `usage`, `finishReason`, `raw`, and — when the request carried `output.accept` — the routed `outcome` and `wire` report). `stepStream()` yields `text`, `reasoning` and `tool_call_delta` events and a final `done` carrying the `StepResult`.
+
+### `.count(input)`
+
+Rough token count for a string or a message list. A heuristic (about 4 characters per token), not a tokenizer.
+```typescript
+const tokens = await signal.count('How long is this?');
+```
 
 ---
 
@@ -209,8 +254,8 @@ type SignalMeta = {
   retries: number;                  // validation retries that occurred
   toolCalls: ToolCallRecord[];      // tools called, args, results, timing
   provider: {
-    raw: unknown;                   // raw API response for debugging
-    errors: ProviderError[];        // all errors including recovered ones
+    raw: unknown;                   // raw API response for debugging (an array when the run took several calls)
+    errors: ProviderError[];        // currently always empty
   };
 };
 ```
@@ -237,15 +282,15 @@ const { response } = await createSignal('groq')
 
 ### How It Works
 
-1. Zod schema is converted to JSON Schema via `z.toJSONSchema()`
-2. Based on provider capabilities:
-   - `nativeJsonSchema` → sends JSON Schema as `response_format`
-   - `nativeJsonMode` → sends `response_format: json_object` + schema in system prompt
-   - Neither → schema in system prompt only
-3. Response is parsed as JSON
+1. Zod schema is converted to JSON Schema (draft-07)
+2. Based on capabilities:
+   - `nativeJsonSchema` (and, when tools are set, `toolsWithStructuredOutput`) → sends JSON Schema as `response_format`
+   - otherwise `nativeJsonMode` and no tools → sends `response_format: json_object` + schema in a system message
+   - otherwise → schema in a system message only
+3. The response is normalized by the wire layer (JSON extraction and repairs, each counted only if the result passes the schema)
 4. Validated with `schema.safeParse()`
-5. On failure: Zod errors are sent back to the model as a correction message
-6. Retries up to `retries` times (default: 2)
+5. On failure: the evidence is sent back to the model as a correction message
+6. Retries up to `retries` times (default: 2), then fails with `E_VALIDATION_FAILED`
 7. Returns typed, validated result
 
 ---
@@ -271,7 +316,7 @@ const searchTool = defineTool({
 });
 ```
 
-The Zod `input` schema validates the model's arguments before `execute` runs. The return value is stringified and sent back to the model.
+The Zod `input` schema validates the model's arguments before `execute` runs. The return value is stringified and sent back to the model. A call to an unknown tool, arguments that fail the schema, and an `execute` that throws do not fail the run: each goes back to the model as an `error: …` tool result (and is recorded in `meta.toolCalls`).
 
 ### Using Tools
 
@@ -287,17 +332,15 @@ const { response, meta } = await createSignal('groq')
 
 ### How Tool Calling Works
 
-Signal picks a strategy based on provider capabilities:
+Tools use the provider's native `tools` parameter and `tool_calls` response; the model decides when to call them. A provider without `nativeTools` cannot take tools — the call throws `E_PROVIDER_ERROR`. Signal handles the loop:
 
-**Native tools** (OpenAI) — Uses the provider's native `tools` parameter and `tool_calls` response. The model decides when to call tools.
-
-**Unified schema** (Groq, others) — Tool descriptions are injected into the system prompt. The response format includes a discriminator field (`_action: "call" | "respond"`). Signal handles the loop:
-
-1. Model responds with `_action: "call"` + tool name + args
+1. Model responds with tool calls
 2. Signal validates args with Zod, executes the tool
 3. Tool result is sent back to the model
-4. Model responds with `_action: "respond"` + final answer
-5. Final answer is validated against the output schema
+4. Model responds with the final answer
+5. With a schema set, the final answer is validated against it
+
+Where the model cannot combine `response_format` with tools (`toolsWithStructuredOutput: false`, e.g. Groq), the schema rides a system message instead and is validated client-side. A run that is still calling tools after 10 tool turns (plus the retry budget) fails with `E_MAX_ITERATIONS`.
 
 ---
 
@@ -346,6 +389,14 @@ Some models support output truncation. Smaller vectors are faster to store and c
 ```typescript
 const small = await embedder.embed('text', { dimensions: 256 });
 // small: number[256]
+```
+
+### Usage
+
+`embed()` returns vectors only. To read what the call cost, pass `onUsage` — called after a successful call with the provider's usage and the model that resolved:
+
+```typescript
+await embedder.embed('text', { onUsage: (usage, model) => meter(model, usage.totalTokens) });
 ```
 
 ### Similarity
@@ -468,12 +519,10 @@ All errors are `SignalError` instances with a `.code` and optional `.context`:
 | `E_MISSING_API_KEY` | No API key found (env or explicit) |
 | `E_MISSING_MODEL` | No model specified for custom provider |
 | `E_MISSING_SDK` | Provider SDK not installed |
-| `E_VALIDATION_FAILED` | Response failed Zod validation after all retries |
-| `E_MAX_RETRIES` | Retry loop exhausted |
-| `E_PROVIDER_ERROR` | Provider API error (rate limit, server error, etc.) |
-| `E_TOOL_NOT_FOUND` | Model called an unknown tool |
-| `E_TOOL_EXECUTION` | Tool execute() threw |
-| `E_TOOL_VALIDATION` | Tool args failed Zod validation |
+| `E_VALIDATION_FAILED` | Response failed Zod validation after all retries; a `decide()` answer failed its gate; a `reasoningEffort` the model does not take |
+| `E_MAX_ITERATIONS` | The tool loop did not finish within its turn limit |
+| `E_PROVIDER_ERROR` | Provider API error (rate limit, server error, etc.); tools or `embed()` on a provider without support; an adapter that is not implemented |
+| `E_MAX_RETRIES`, `E_TOOL_NOT_FOUND`, `E_TOOL_EXECUTION`, `E_TOOL_VALIDATION` | Declared in `ErrorCode`, not currently thrown — tool failures go back to the model as tool results, and exhausted retries are `E_VALIDATION_FAILED` |
 | `E_VERB_NOT_SUPPORTED` | A chat verb was called on a decision provider |
 
 ```typescript
@@ -494,7 +543,7 @@ try {
 
 Groq is fast and cheap but has quirks:
 
-- **No native tools + structured output together.** Signal uses the unified schema strategy automatically.
+- **No native tools + structured output together.** With tools set, Signal sends no `response_format` there; the schema rides a system message and is validated client-side.
 - **`json_validate_failed` errors.** Groq sometimes returns the model's failed output in the error. Signal extracts and recovers from this.
 - **Model-dependent capabilities.** What each Groq model does (json_schema, nested tool args, reasoning efforts) is its own row in the model registry, measured by the probe.
 - **Tool args are validated server-side.** So `respond` params would enforce nothing on Groq, and `auto` resolves every agent there to `emit`.

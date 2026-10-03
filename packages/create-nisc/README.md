@@ -19,8 +19,17 @@ npm create nisc my-app -- --page --dom     # flags answer the questions
 npm create nisc my-app -- --yes            # the defaults: moss, React
 ```
 
-An option it does not know is an error, never ignored — a typo must not quietly
-make a different app.
+| | |
+|---|---|
+| `dir` | where the app goes (default `my-nisc-app`) |
+| `--moss` / `--page` | the shell on a server (the default), or in the page |
+| `--react` / `--dom` | React draws the screen (the default), or plain DOM |
+| `--yes` | take the defaults for anything not given, and ask nothing |
+| `--help`, `-h` | this list |
+
+With no terminal to ask in, the flags are all there is and the rest takes the
+defaults. An option it does not know is an error, never ignored — a typo must
+not quietly make a different app.
 
 ## What you get
 
@@ -29,15 +38,16 @@ The structure the rulebook describes, and a first screen that works:
 - one action on a canvas, a kit of five primitives with its stylesheet, and an
   entry — the first screen **arrives as markup** (drawn by the server, or
   written at build) and is picked up by the page;
-- `npm run dev`, `build`, `check`, and `start` or `export` — all the `nisc`
-  command; `nisc dev` runs a moss app's server inside vite, so its
+- `npm run dev`, `build`, `check` and `start` — and, with the shell in the
+  page, `export` — all the `nisc` command; `nisc dev` runs a moss app's server inside vite, so its
   `vite.config.ts` holds nothing but the framework's plugin;
 - three checks: the artifacts are pure, schema-valid JSON; the source is at the
   installed grammars (`strata.lock.json`); the welcome screen is served, drawn
   and pressed;
-- every `@niscorp` package pinned to **the release this create-nisc was built
-  and checked against** — not to whatever is newest — and `@niscorp/nisc`
-  itself, which pins that set exactly and carries the rulebook.
+- every `@niscorp` package at **the release this create-nisc was built and
+  checked against** — a caret range from each one's version (such as `^0.2.0`), not
+  whatever is newest — and `@niscorp/nisc` itself, which pins that set
+  exactly and carries the rulebook.
 
 And two documents:
 

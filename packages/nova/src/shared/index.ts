@@ -19,6 +19,7 @@ export {
   UnknownFunctionError,
   ShellDisposedError,
   LifecycleError,
+  MutationError,
 } from './errors';
 export type {
   ErrorCode,

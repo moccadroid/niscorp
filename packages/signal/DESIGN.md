@@ -62,8 +62,7 @@ sides is two changes.
 - **The router owns classification.** A response is `tool_calls`
   (declared tool), `output` (anything whose repaired value passes the
   acceptance gate — exit-tool args and pseudo-tool args included), or
-  `failed` with evidence (+ `attempted` when a parsed candidate existed
-  but failed the gate; + `truncated` when bytes end mid-structure).
+  `failed` with evidence (+ `truncated` when bytes end mid-structure).
   Callers switch on the outcome; they never parse strings.
 - **Rejections are arrivals.** A provider 400 that carries the model's
   attempt is recovered by an error-hook strategy and routed

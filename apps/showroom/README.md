@@ -30,8 +30,14 @@ pnpm --filter @niscorp/nova build
 
 ## Adding a story
 
-1. Create a new file under `src/stories/<kind>/<name>.ts` exporting a `Story` value.
-2. Import + add it to the array in `src/stories.ts`.
+Each package is a module under `src/modules/<package>/`, registered in `src/app.tsx`. For nova:
+
+1. Create `src/modules/nova/stories/<category>/<name>.story.ts` exporting a `story` value (its demo beside it as `<name>.demo.tsx`).
+2. Import + add it to the array in `src/modules/nova/stories.ts`.
 3. The sidebar groups stories by kind and category automatically.
 
-Story kinds: `component`, `layout`, `action`, `shell` (shell is a stub in phase 2).
+Nova's story kinds: `layout`, `action`, `shell`, `i18n` (`src/modules/nova/story-types.ts`). Other modules declare their own kinds in their `index.ts` (`kindOrder`, `kindLabels`).
+
+## Deployment
+
+`.github/workflows/deploy-showroom.yml` builds the showroom and publishes it to GitHub Pages (under `/niscorp/`) after Verify passes on a push to `main`.

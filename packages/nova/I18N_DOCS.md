@@ -38,8 +38,8 @@ child into a text node.
 
 Every tree in the system comes out of `renderLayout` / `renderLayoutFromStore`,
 and there are three callers — the action runtime, the shell, and
-`<Nova.Layout>`. So an **adapter contains no i18n code at all**. React, dom, tty,
-ink and any adapter written later receive words that are already in the reader's
+`<Nova.Layout>`. So an **adapter contains no i18n code at all**. React, vue, dom,
+tty, ink and any adapter written later receive words that are already in the reader's
 language and never learn that a second one exists.
 
 That is deliberate. An adapter renders a `RenderNode`; if i18n changed the
@@ -210,10 +210,10 @@ From `@niscorp/nova/i18n`:
 | `harvestLayout` / `harvestDefinition` / `harvestDefinitions` | Enumerate the phrases an artifact can show |
 | `missingFrom(harvested, book)` | What a language is still missing |
 | `fillPhrase(value)` | Close a counted phrase held as data, outside a render |
-| `translateRenderTree(tree, opts)` | For a tree you did **not** render — a replayed frame, a fixture |
+| `translateRenderTree(tree, { phrases, keys?, onMiss? })` | For a tree you did **not** render — a replayed frame, a fixture. An empty book returns the same tree, patterns unfilled |
 | `DEFAULT_PHRASE_KEYS` | The default prose prop set |
 | `isBinding` / `isPhrase` / `matcherFor` | The primitives the rules are built from |
-| `Phrasebook` / `PhraseKeys` | Types |
+| `Phrasebook` / `PhraseKeys` / `PhraseKeyMatcher` / `TranslateOptions` / `HarvestedPhrase` | Types |
 
 Config fields: `phrases`, `phraseKeys`, `onPhraseMiss` on `ShellConfig`,
 `RenderContext`, `RenderOptions` and `<Nova.Layout>`. Shell methods:

@@ -417,11 +417,15 @@ verifier carries the opinions:
   reported
 - flags re-allows of an ancestor's deny (F1)
 - flags roles referenced in `without` that are also assigned (F2)
-- enforces id conventions (leaves only) and overlay rules (no shadowing)
-- checks `assert` invariants (F6)
-- runs the reachability closure per role (nav targets, channels) and reports
-  dead emits and unreachable grants
-- and above all: **the diff renders in concrete actions, not globs** — "this
+- enforces id conventions (leaves only); overlay rules (no shadowing) are not
+  built — there are no overlays yet (F7)
+- checks `assert` invariants (F6) — not built: `verifyCharter` takes no
+  assertions
+- runs the reachability closure per role through the injected auditor; moss's
+  keeps the push targets that fall outside the role's closure
+- and above all (not built in this package — `perRole` in the report is the
+  concrete per-role sets a diff would be rendered from): **the diff renders in
+  concrete actions, not globs** — "this
   change: intern +`crm.import`, −`confirm-delete`; ray unchanged." A human
   approves *that*. This is only possible because the permissions are closed data
   over closed artifacts.

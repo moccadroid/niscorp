@@ -142,8 +142,11 @@ export const createTide = (config: TideConfig): Tide => {
     // unguarded cycles, unknown run subscriptions. If it loads, it's
     // coherent — the moss tradition, one layer down.
     const graph = buildGraph(parsed, mergedEffects(parsed));
-    if (graph.errors.length > 0)
-      throw new TideError('unguarded_cycle', `tide refused to load:\n  ${graph.errors.join('\n  ')}`, { errors: graph.errors });
+    // Every refusal is listed; the code is the first one's, so a caller
+    // matching on it is told what the load actually tripped over.
+    const refused = graph.refusals[0];
+    if (refused !== undefined)
+      throw new TideError(refused.code, `tide refused to load:\n  ${graph.errors.join('\n  ')}`, { errors: graph.errors, refusals: graph.refusals });
 
     const previously = new Set(loaded.keys());
 

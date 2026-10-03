@@ -32,9 +32,13 @@ verifiable statement of the commit and workflow that built it.
 
 ## The first release — once, by hand
 
-npm only lets a package trust a workflow once the package exists, so 0.1.0 is
-published from a terminal. Every package starts at 0.1.0 with everything in it;
-there are no pending changesets.
+**Done: 2026-10-03.** Every `@niscorp` package went out at 0.1.0 this way, and
+every release since has been the workflow's. What follows is the record, and
+the procedure a new package repeats (below, "A new package").
+
+npm only lets a package trust a workflow once the package exists, so 0.1.0 was
+published from a terminal: every package at 0.1.0 with everything in it, and no
+pending changesets.
 
 You need: an npm account that is an owner (or admin) of the `niscorp`
 organization — that is what publishing `@niscorp/…` takes; two-factor
@@ -54,9 +58,10 @@ to do about it: on `main` with nothing uncommitted; npm new enough; logged in;
 a member of `niscorp` allowed to publish; which packages npm does not have yet.
 Then it builds the packages, runs `check:packages` (what CI runs), publishes
 (`pnpm release` — `changeset publish`, asking for a two-factor code), and makes
-every package trust the Release workflow (`pnpm npm:trust`: `npm trust github
-<package> --file release.yml --repo moccadroid/niscorp --env npm
---allow-publish`). Run it again after a stop: what is already published is
+each package it published trust the Release workflow (`pnpm npm:trust <package>
+…`: `npm trust github <package> --file release.yml --repo moccadroid/niscorp
+--env npm --allow-publish`; with no names, every published package). Run it
+again after a stop: what is already published is
 skipped, and so is a package that already trusts the workflow.
 
 `pnpm release:first --dry-run` runs every check, the build and npm's own dry
@@ -110,7 +115,8 @@ Two things follow:
   which means Changesets does not notice a change to one as a change to
   `create-nisc`. Without the changeset, the fix is merged and never shipped.
 - **It was first published by hand** (`pnpm release:first`), as every new
-  package is, at the version of the `@niscorp/nisc` it carried.
+  package is, at the version of the `@niscorp/nisc` it carried — 0.2.0, on
+  2026-10-03.
 
 ## Not set up
 

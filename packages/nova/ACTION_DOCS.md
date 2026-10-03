@@ -91,6 +91,9 @@ triggers: [
   // Two-way model binding update
   { event: 'ui:model', ref: 'name-input', do: [...] },
 
+  // A key press, filtered by key (and optionally ref)
+  { event: 'ui:key', key: 'Enter', ref: 'search', do: [...] },
+
   // Cross-action message bus subscription
   { message: 'cart-updated', do: [...] },
 ],
@@ -98,16 +101,21 @@ triggers: [
 
 ### Trigger fields
 
-- **`event`** *(optional)* — UI event type. Common values: `ui:click`, `ui:input`, `ui:submit`, `ui:focus`, `ui:blur`, `ui:model`. Custom event names work too.
+- **`event`** *(optional)* — UI event type. The built-in events are `ui:click`, `ui:submit`, `ui:input`, `ui:focus`, `ui:blur`, `ui:model`, `ui:key`, `ui:drop`. Custom event names work too.
 - **`message`** *(optional)* — message bus channel name. Listens via the shell's shared message bus, so this trigger fires from emits in any other action on any other canvas.
 - **`ref`** *(optional)* — filter UI events by component ref. If unset, the trigger fires on every event of that type. Has no effect on message triggers.
+- **`key`** *(optional)* — filter `ui:key` events by the key pressed, e.g. `"ArrowDown"`. Has no effect on message triggers.
 - **`do`** *(required)* — ordered array of steps to run.
 
-A trigger MUST have either `event` or `message`. Setting both is an error.
+A trigger MUST have `event` or `message` — the schema rejects one with neither. If both are set the trigger listens for the event and the `message` is ignored.
+
+Steps can read the thing that fired them as **`@event`**: `@event.payload` is a UI event's payload (the typed text of a `ui:model`, a clicked row's key), or the `payload` of the `emit` that reached a message trigger.
 
 ### When triggers fire
 
-Triggers attach when the action mounts and detach when it unmounts. While the action is **suspended** (another action is pushed on top), triggers stay attached but do **not** fire — a suspended action reacts to nothing until it resumes, and the runtime's abort signal prevents in-flight async work from completing. On resume the `mount` hook re-runs (see [Lifecycle hooks](#lifecycle-hooks)), so the action refreshes its own data instead of reacting while backgrounded.
+Triggers attach when the action mounts and detach when it unmounts. A UI event dispatched from inside an instance's rendered layout carries that instance's id as its `origin` and reaches that instance's triggers only; an event with no `origin` (a programmatic `shell.dispatch`) reaches every instance listening. While the action is **suspended** (another action is pushed on top of it on a `stack` canvas), triggers stay attached but do **not** fire — a suspended action reacts to nothing until it resumes. Suspension does not cancel async work already in flight; only unmounting aborts it. On resume the `mount` hook re-runs (see [Lifecycle hooks](#lifecycle-hooks)), so the action refreshes its own data instead of reacting while backgrounded.
+
+A chain of triggers is bounded: each `emit` reaching a message trigger, each `reload`, and each navigation that mounts an action is one hop, and a chain more than 64 hops deep (or 1024 hops in total from the gesture that started it) stops and reports a `NovaError` with code `RUNAWAY_CHAIN` to `onError`.
 
 A `ui:model` trigger observes the value the event wrote: the runtime applies a `ui:model` to its own model bindings **before** it dispatches the event to triggers, so a trigger's steps read the just-typed value, not the one the field held before the keystroke.
 
@@ -164,7 +172,7 @@ Add or subtract from a number.
 { decrement: 'count', by: 2 }                    // -2
 ```
 
-If the field isn't a number, it's treated as 0.
+If the field isn't a number, it's treated as 0. `by` is a literal number — the schema rejects a template string here.
 
 ### `push` / `pop`
 
@@ -174,6 +182,8 @@ Append to or remove from the end of an array. **Note:** `push` / `pop` here are 
 { push: 'items', value: { name: 'New item' } }
 { pop: 'items' }
 ```
+
+`push` onto a path that doesn't exist yet creates the array. `pop` on something that isn't an array is a no-op.
 
 ### `removeAt`
 
@@ -199,29 +209,29 @@ Reorder an array element from one index to another.
 
 ### `clear`
 
-Empty an array or object, or set a primitive to its zero value.
+Empty an array or object. On anything else (a primitive, a missing path) the key is removed.
 
 ```ts
 { clear: 'items' }                               // → []
 { clear: 'user' }                                // → {}
-{ clear: 'count' }                               // → 0
+{ clear: 'count' }                               // → key removed
 ```
 
 ### `reset`
 
-Reset the entire data store to the action's `data` defaults.
+Reset one data path. `reset` takes a path string — `{ reset: true }` does not parse.
 
 ```ts
-{ reset: true }
+{ reset: 'draft' }
 ```
 
-Use this in a "Cancel" or "Start over" handler.
+Restores the path's initial value: the `data` defaults merged with the input the instance was opened with, as they stood at spawn. A path that had no initial value is set to `undefined`.
 
 ---
 
 ## Effects
 
-Effects can be async and may reach outside the action's data store. There are ten: `call`, `emit`, `reload`, and the navigation effects `push`, `pop`, `replace`, `popTo`, `resetTo`, `removeInstance`, `removeSelf`.
+Effects can be async and may reach outside the action's data store. There are eleven: `call`, `emit`, `reload`, and the navigation effects `push`, `pop`, `replace`, `popTo`, `resetTo`, `removeInstance`, `removeSelf`, `reconcile`.
 
 ### `call`
 
@@ -232,7 +242,6 @@ Invoke a named endpoint. Optional `onSuccess` and `onError` step branches run af
   call: 'fetchUser',
   onSuccess: [
     { set: 'loading', value: false },
-    { set: 'user', from: 'fetchUserResponse' },
   ],
   onError: [
     { set: 'loading', value: false },
@@ -241,9 +250,11 @@ Invoke a named endpoint. Optional `onSuccess` and `onError` step branches run af
 }
 ```
 
+The response is written to the endpoint's `target` before `onSuccess` runs; there is no implicit per-call response slot. If a newer call to the same endpoint has already landed, an older response arriving late does not overwrite `target` (its `onSuccess` still runs).
+
 The `onError` branch has access to a special **`@error`** scope inside templates: `{{@error.message}}`, `{{@error.status}}`, `{{@error.data}}`. Use it to surface error messages in the UI.
 
-If the endpoint name doesn't exist in the action's `endpoints`, the call fails with a synthetic error and `onError` fires.
+If the endpoint name doesn't exist in the action's `endpoints` (or a function endpoint names an unregistered function), the call fails with a synthetic error and `onError` fires. Inside a lifecycle hook, a failed call with no `onError` raises a `LifecycleError`.
 
 ### `emit`
 
@@ -254,7 +265,7 @@ Publish a message on the shell's shared message bus. Other actions (on any canva
 { emit: { channel: 'user-saved', payload: { id: '{{$.user.id}}' } } }
 ```
 
-The `payload` is resolved against the current data — templates and bindings work.
+The `channel` and `payload` are resolved against the current data (and `@event` / `@error`) — templates and bindings work. A listener reads the payload as `@event.payload`. The message is published after the current turn settles, not inside it, so an `emit` followed by a `pop` reaches the action the pop reveals.
 
 ### `push`, `pop`, `replace`
 
@@ -276,7 +287,7 @@ The `pop` effect uses `pop: true` (a literal boolean) to distinguish it from the
 
 `push`, `replace`, and `resetTo` accept an optional `with: [...]` — ids of `ActionFragment`s composed into the action before it is instantiated. Each fragment wraps the action (the action's layout fills the fragment's `{ slot: 'body' }`) and contributes its triggers/data; the action wins on conflict.
 
-`input` values resolve against the current data plus the firing event, so a trigger can pass dynamic data to the action it opens — e.g. `input: { record: '@event.payload' }` or `input: { id: '@event.payload.todo_id' }`.
+`input` values resolve against the current data plus the firing event, so a trigger can pass dynamic data to the action it opens — e.g. `input: { record: '@event.payload' }` or `input: { id: '@event.payload.todo_id' }`. `action` resolves the same way (`action: '{{@event.payload}}'` opens the action a binding names); a literal id passes through unchanged.
 
 ### `popTo`, `resetTo`
 
@@ -291,6 +302,34 @@ Stack-navigation effects.
 ```
 
 `popTo` unmounts everything above the given instance (a no-op if it isn't in the stack) — what a breadcrumb fires. `resetTo` clears the whole stack and pushes one new root — what a screen-level nav fires so drilling into a record doesn't leave a stale stack beneath the new screen.
+
+### `removeInstance`, `removeSelf`
+
+```ts
+{ removeInstance: { instance: '{{@event.payload}}' } }     // remove one instance, anywhere in the stack
+{ removeInstance: { canvas: 'tray', instance: 'act-3' } }
+{ removeSelf: true }                                       // remove the firing instance
+```
+
+`pop` removes the top; `removeInstance` removes a named instance wherever it sits (a no-op if it isn't on the canvas). `removeSelf` is the same aimed at the firing instance — what a card's close button fires on a `mode: 'list'` canvas, without knowing its own id. `instance` (and `popTo`'s) resolves against data and the firing event.
+
+### `reconcile`
+
+```ts
+{ reconcile: { to: '$.tools', action: 'tool_id' } }
+{ reconcile: { to: '$.tools', action: 'tool_id', input: 'tool_input', canvas: 'tools', own: 'canvas', with: ['card-frame'] } }
+```
+
+Makes a canvas hold exactly the actions a list in the action's data names: missing ones are pushed, ones no longer listed are removed, ones already there stay mounted. One instance per action id.
+
+- **`to`** *(required)* — binding to the list, an array of rows. Anything else is an empty list.
+- **`action`** *(required)* — the row field naming the action id to place. Rows without it are skipped; so is a row naming an action the shell doesn't have.
+- **`input`** *(optional)* — the row field holding that action's input object.
+- **`canvas`** *(optional)* — canvas to reconcile; defaults to the current one.
+- **`own`** *(optional)* — what the step may remove or rewrite: `'pushed'` (default) only what this action placed there, `'canvas'` everything on it.
+- **`with`** *(optional)* — fragment ids to compose each placed action with.
+
+When a listed action is already mounted and its row's input changed, the new input is written into the live instance — unless the row's input carries a key (changed or not) that the action declares in its `input` and its `mount` calls read through an endpoint `request`, in which case the instance is re-opened.
 
 ### `reload`
 
@@ -338,6 +377,9 @@ endpoints: {
 - **`response`** *(optional)* — a transform config run by the injected evaluator over the reply **exactly as received** (`$` is the reply — object, array, or scalar; no wrapping) to produce the value stored at `target`. Declaring it without an injected transform is a hard error — never the unshaped reply.
 - **`target`** *(optional)* — data path to write the (possibly transformed) response into on success. If unset, the response is discarded.
 - **`errorTarget`** *(optional)* — data path to write the error info into on failure.
+- **`timeoutMs`** *(optional)* — positive integer: how long to wait for the reply, in ms, before the call fails to `onError` (with `@error.timedOut`). Defaults to the shell's `endpointTimeoutMs`, itself 30000 by default. It bounds the first answer only.
+
+A successful reply must be JSON: a 2xx whose body does not parse fails to `onError` (`the reply is not JSON`). 204 and 205 succeed with no value.
 
 The evaluator is dependency-injected: `ShellConfig.transform` is a `(config, source) => unknown` function nova never interprets — the host wires in Prism's `evaluate` (or anything else). Initial data is never transformed.
 
@@ -351,12 +393,14 @@ endpoints: {
 }
 ```
 
-- **`fn`** *(required)* — key of a function registered in `ShellConfig.functions`. The handler receives `(data, signal)` and its return value is stored at `target`. An unregistered name fails the call.
-- **`target`** / **`errorTarget`** — as above.
+- **`fn`** *(required)* — key of a function registered in `ShellConfig.functions`. The handler receives `(data, signal)` and its return value is stored at `target`. An unregistered name fails the call. The name resolves through the action's data, so `fn: '{{$.saveFn}}'` lets one action pick its handler from data.
+- **`target`** / **`errorTarget`** / **`timeoutMs`** — as above.
 
 ### The fetch implementation
 
-The runtime needs a fetch implementation injected. The shell takes a `fetch?: FetchFn` config option. Default is the global `fetch` if available; otherwise endpoint calls fail.
+The runtime needs a fetch implementation injected. The shell takes a `fetch?: FetchFn` config option. There is no default — nova does not reach for the global `fetch`; with none injected an HTTP endpoint call fails to `onError` (`No fetch implementation provided to action runtime`).
+
+A `FetchResponse` may also carry `onChange(handler)`: a transport that can tell the answer changed later (a reactive read under moss) offers it, and nova applies each later body as it applied the first — `response`, then `target` — with no `onSuccess` and no telemetry, until a newer call to the same endpoint lands or the instance unmounts.
 
 For tests and the showroom, you inject a mock:
 
@@ -396,12 +440,37 @@ lifecycle: {
 
 ### When each fires
 
-- **`mount`** — when the action is pushed onto a canvas (after `data` and `input` are merged, before triggers attach), and **again on every resume**, before the `resume` hook. A suspended action ignores everything while backgrounded, so re-running `mount` is what brings its data current when it is revealed again.
-- **`suspend`** — when another action is pushed on top, this action transitions from `active` → `suspended`. Triggers stay attached but do not fire while suspended.
+- **`mount`** — when the action is pushed onto a canvas (after `data` and `input` are merged and triggers attach; the instance is `initializing` until the hook completes), and **again on every resume**, before the `resume` hook. A suspended action ignores everything while backgrounded, so re-running `mount` is what brings its data current when it is revealed again. A `{ reload: true }` step re-runs it too.
+- **`suspend`** — when another action is pushed on top on a `stack` canvas, this action transitions from `active` → `suspended`. Triggers stay attached but do not fire while suspended. A `mode: 'list'` canvas suspends nothing.
 - **`resume`** — when the action above is popped, this action transitions from `suspended` → `active`. Runs after the re-run of `mount`.
-- **`unmount`** — once, when the action is popped from the canvas (or the shell is disposed). Triggers detach AFTER the unmount steps run.
+- **`unmount`** — once, when the action is popped from the canvas (or the shell is disposed). In-flight steps are aborted and triggers detach BEFORE the unmount steps run; the unmount steps run on a fresh signal, so they can do their own async work.
 
 In **strict mode** (set `strict: true` on the shell), a failure inside a lifecycle hook surfaces on the next shell call as a `LifecycleError`. In **lax mode** (the default), it routes to the shell's `onError` telemetry and the lifecycle continues.
+
+---
+
+## Fragments
+
+An `ActionFragment` is a reusable partial action — chrome plus wired behavior — merged into a concrete action when it is opened with `with: [...]`. It only exists merged; it cannot be pushed on its own. Register fragments on `ShellConfig.fragments` or with `shell.registerFragment`.
+
+```ts
+import type { ActionFragment } from '@niscorp/nova';
+
+const modalFrame: ActionFragment = {
+  kind: 'fragment',                        // required discriminator
+  id: 'modal-frame',                       // required — the id a `with: [...]` names
+  layout: {
+    component: 'Panel',
+    props: { title: 'Confirm', closeRef: 'close' },
+    children: { slot: 'body' },            // the composing action's layout lands here
+  },
+  triggers: [{ event: 'ui:click', ref: 'close', do: [{ pop: true }] }],
+};
+```
+
+Fields: `kind`, `id`, and optional `name`, `description`, `layout`, `data`, `triggers`, `endpoints`, `lifecycle` — the same shapes as on an action. A fragment has no `title` or `input`.
+
+On merge (`composeAction(action, fragments)`): each fragment's layout wraps the layout so far, filling its `{ slot: 'body' }` — the last fragment listed is the outermost; a fragment whose `layout` is a store id replaces the layout instead of wrapping it. `data` and `endpoints` merge with the action winning on a clash (`data` is a shallow merge). Triggers concatenate, fragment first. Lifecycle steps concatenate per hook, fragment first. An unknown fragment id throws `UnknownFragmentError`.
 
 ---
 
@@ -416,12 +485,13 @@ Step values can use bindings — same syntax as layout bindings.
 // Set from another path (copy)
 { set: 'previous', from: 'current' }
 
-// Increment by a value from data
-{ increment: 'total', by: '{{$.delta}}' }   // Wait — `by` is typed as number; templates here would need
-                                             // the bare `{{ expr }}` form to preserve the number type.
+// Set from the firing event
+{ set: 'selectedId', value: '@event.payload.id' }
 ```
 
-Endpoint URL templates, body templates, header templates all resolve against the current data. The `@error` scope is available inside `onError` chains.
+Inside mutations, only these resolve: the `value` of a `set` or `push`, and a string `index` / `from` / `to` on `removeAt` / `move`. `set … from` takes a plain data path, not a binding. `increment` / `decrement` take a literal `by`.
+
+Endpoint URL templates and header value templates resolve against the current data; a request body is built by the `request` transform. The `@error` scope is available inside `onError` chains, and `@event` inside a trigger's steps.
 
 ---
 
@@ -440,7 +510,9 @@ Fields available on `@error`:
 - `message: string`
 - `status: number` (HTTP status, or 0 for network/function errors)
 - `data: unknown` (the response body if any)
-- `aborted?: boolean` (true if the call was aborted by an unmount)
+- `timedOut?: boolean` (true if no reply arrived within the endpoint's wait)
+
+A call aborted by an unmount is silent: `onError` does not run, `errorTarget` is not written, and nothing is reported to telemetry.
 
 ---
 
@@ -476,9 +548,14 @@ Action-time errors all extend `NovaError`:
 
 - **`LifecycleError`** — a step inside a lifecycle hook failed
 - **`UnknownActionError`** — `shell.push(canvas, 'name')` where `'name'` isn't in `actions`
+- **`UnknownFragmentError`** — a `with: [...]` names a fragment the shell doesn't have
+- **`UnknownFunctionError`** — a `call` to a function endpoint whose `fn` isn't registered, with no `onError` branch, in strict mode
 - **`DefinitionValidationError`** — an action definition fails Zod validation at shell init
+- **`MutationError`** — in strict mode, `push`, `pop`, `removeAt`, `move` or `clear` aimed at a path that is missing or of the wrong type. It is reported to `onError`, and the batch of mutations it was in is not applied. In lax mode the op is a no-op
 
-In strict mode all of these throw. In lax mode they route through the shell's `onError` callback.
+A runaway trigger chain is reported as a plain `NovaError` with code `RUNAWAY_CHAIN`.
+
+`DefinitionValidationError` always throws, from `createShell` / `registerAction`. `UnknownActionError` and `UnknownFragmentError` always throw from a direct `shell.push` / `shell.replace`; raised by a navigation step inside a trigger they route to `onError`. Lifecycle failures route to `onError`, and in strict mode also surface on the next shell call.
 
 ---
 
@@ -488,7 +565,7 @@ Action definitions are validated against `ActionDefinitionSchema` when you pass 
 
 ### `auditAction` — static wiring audit
 
-A definition can parse, mount, and render politely while being broken at click time. `auditAction(def, { catalog? })` cross-references the definition against itself: layout bindings ↔ `data` defaults, layout refs ↔ triggers (dead chrome and phantom triggers both), `call` steps ↔ endpoint names, endpoint targets ↔ `data`, mutation paths ↔ `data`, and — when a `catalog` of `{ id, input }` entries is given — push/replace/resetTo targets and their seeded input keys. Returns `{ ok, issues: string[] }` with precise messages.
+A definition can parse, mount, and render politely while being broken at click time. `auditAction(def, { catalog? })` cross-references the definition against itself: layout bindings ↔ `data` defaults, layout refs ↔ triggers (dead chrome and phantom triggers both), `call` steps ↔ endpoint names, endpoint targets ↔ `data`, mutation paths ↔ `data`, and — when a `catalog` of `{ id, input }` entries is given — push/replace/resetTo targets and their seeded input keys. When a `channels` list is given, every `message:` listen and every `emit` must name a known channel (or one the definition itself emits / listens on); `collectChannels(def)` returns a definition's `{ emits, listens }` to build that list from. Returns `{ ok, issues: string[] }` with precise messages.
 
 Scope: SELF-CONTAINED definitions with inline layouts (generated actions above all). Hand-authored actions that receive triggers from fragments or bind stored layouts should audit the COMPOSED definition, or skip.
 
@@ -514,7 +591,20 @@ type TriggerConfig = {
   event?: string;       // OR message
   message?: string;
   ref?: string;
+  key?: string;         // filters ui:key events
   do: Step[];
+};
+
+type ActionFragment = {
+  kind: 'fragment';
+  id: string;
+  name?: string;
+  description?: string;
+  layout?: LayoutNode | string;            // chrome; { slot: 'body' } takes the action's layout
+  data?: Record<string, unknown>;
+  triggers?: TriggerConfig[];
+  endpoints?: Record<string, EndpointConfig>;
+  lifecycle?: LifecycleConfig;
 };
 
 type Step = Mutation | Effect;
@@ -530,7 +620,7 @@ type Step = Mutation | Effect;
 { removeAt: string, index: number | string }
 { move: string, from: number | string, to: number | string }
 { clear: string }
-{ reset: true }
+{ reset: string }
 
 // Effects
 { call: string, onSuccess?: Step[], onError?: Step[] }
@@ -542,11 +632,12 @@ type Step = Mutation | Effect;
 { resetTo: { action: string, canvas?: string, input?: object, with?: string[] } }
 { removeInstance: { canvas?: string, instance: string } }
 { removeSelf: true }
+{ reconcile: { to: string, action: string, input?: string, canvas?: string, own?: 'pushed' | 'canvas', with?: string[] } }
 { reload: true }
 
 // Endpoints (EndpointConfig = HTTP | Function)
-{ url: string, method: string, headers?: object, request?: unknown, response?: unknown, target?: string, errorTarget?: string }
-{ fn: string, target?: string, errorTarget?: string }
+{ url: string, method: string, headers?: object, request?: unknown, response?: unknown, target?: string, errorTarget?: string, timeoutMs?: number }
+{ fn: string, target?: string, errorTarget?: string, timeoutMs?: number }
 ```
 
 For wiring actions onto a canvas via the shell, see `SHELL_DOCS.md`. For the layout language actions render through, see `LAYOUT_DOCS.md`.

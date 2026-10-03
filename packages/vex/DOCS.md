@@ -86,15 +86,15 @@ fingerprint accepts without failing a request first.
 ## Installation
 
 ```bash
-pnpm add @niscorp/vex zod
+pnpm add @niscorp/vex @niscorp/prism @niscorp/strata zod
 ```
 
-`zod` is the only required peer. Add the others for the paths you use:
+`@niscorp/prism` (mappings), `@niscorp/strata` (the cache table's ledger) and `zod` are required peers. Add the others for the paths you use:
 
 ```bash
 pnpm add pg                                       # Postgres adapter + Postgres cache
 pnpm add hono            # or: express            # framework adapter
-pnpm add @niscorp/cortex @niscorp/signal @niscorp/prism  # reference LLM agents
+pnpm add @niscorp/cortex @niscorp/signal          # reference LLM agents
 ```
 
 For semantic (vector) search you need a Postgres with `pgvector` (the dev setup
@@ -124,9 +124,11 @@ indexes, and caches the result plus a schema fingerprint. The engine throws
 `execution_error` ("schema not loaded") if you call `compile`/`execute`/`test`
 before introspecting.
 
-With no `generateDsl` hook, `execute` serves only requests whose shape is
-already cached (and otherwise throws `agent_failed`). `compile` and `test` work
-fully because you pass them a DSL directly.
+With no `generateDsl` hook, `execute` serves only requests that replay a
+cached fingerprint — a seeded entry or a named slot. An unknown fingerprint sent
+alone throws `cache_miss`; a request that would need generation throws
+`agent_failed`. `compile` and `test` work fully because you pass them a DSL
+directly.
 
 ### With LLM-backed generation and mapping
 
@@ -154,9 +156,11 @@ type QueryEngineConfig = {
   scope?: ScopePolicy;                      // server-side access control
   cache?: CacheBackend;                     // default: createMemoryCache()
   onEvent?: VexEventHandler;                // pipeline event stream
-  generateDsl?: (request, schema) => Promise<Query>;
+  generateDsl?: (request, schema, caller) => Promise<Query>;
   mapToShape?: (rows, shape) => Promise<{ ir: CompiledIr; transformed: JsonValue }>;
   embed?: (text, dimensions?) => Promise<number[]>;  // text→vector for semantic filters
+  behaviors?: ScopeBehaviors;               // which columns a scope key is bound to (see below)
+  rows?: LiveRowsConfig;                    // the rows cache behind `refresh: 'reactive'`
   config?: {
     maxNestingDepth?: number;               // default: 2
     defaultLimit?: number;                   // default: 100
@@ -166,11 +170,26 @@ type QueryEngineConfig = {
     rejectUnindexedFilters?: boolean;        // default: false
     entities?: string[];                     // whitelist for introspection
     unsatisfiableTtlMs?: number;             // negative-cache TTL, default 300_000 (5 min)
+    statementTimeoutMs?: number;             // how long one read may run, default 10_000 (0: unbounded)
+    maxPresenceVariants?: number;            // optional-key combinations per entry before a warning, default 32
   };
 };
 ```
 
 - `config.entities`, when set, restricts `introspect()` to those tables.
+- `config.statementTimeoutMs` is enforced by the database (`statement_timeout`),
+  set up at `introspect()`. A database that cannot enforce it (PGlite) runs
+  reads unbounded and the engine warns each time `introspect()` runs.
+- `config.maxPresenceVariants` is not a limit on what runs: past it, a response
+  carries a warning that the entry has compiled that many distinct
+  optional-key combinations.
+- **`behaviors`** is the same `ScopeBehaviors` document the host's policies are
+  compiled from (see [Grants and behaviors](#grants-and-behaviors)). The engine
+  reads it for one thing: which columns a scope key is bound to, so a generation
+  can be told who its caller is (`GenerationCaller.bindings`). `introspect()`
+  throws `execution_error` if a rule names a column the database does not have.
+- **`rows`** sizes the reactive rows cache — see
+  [Reactive reads](#reactive-reads-refresh).
 - `defaultLimit` is applied when a DSL omits `limit`; `maxLimit` clamps any
   larger value.
 - **`embed`** turns text into a vector for `semantic` filters, at parameter-
@@ -186,6 +205,9 @@ type ExecuteOptions = {
   scope?: ScopeValues;        // { [key]: value } for $scope references
   entities?: string[];        // restrict generation to this entity subset for this call
   locked?: boolean;           // replay-only: unknown/changed fingerprints throw `locked` instead of generating
+  scopePolicy?: ScopePolicy;  // per-request policy; overrides the engine's configured one for this call
+  signal?: AbortSignal;       // with onChange: follow a `refresh: 'reactive'` entry until it aborts
+  onChange?: (response: QueryResponse) => void;  // every later answer that differs from the last
 };
 ```
 
@@ -271,7 +293,7 @@ type QueryResponse = {
       intent?: string;        // the stored intent (descriptive only)
     };
     context: Record<string, {                      // the resolved parameter contract
-      type?: 'string' | 'number' | 'boolean' | 'string[]' | 'number[]';
+      type?: 'string' | 'number' | 'boolean' | 'string[]' | 'number[]' | 'json';
       kind: 'context' | 'scope' | 'semantic';
       optional?: true;                    // supplying it switches a condition on
       absent?: true;                      // optional, and not supplied this run (so: no type)
@@ -285,9 +307,10 @@ type QueryResponse = {
 ```
 
 If the compiled query needs context/scope values the caller did not provide,
-`execute` returns a **valid** response with an empty `result` and
+`execute` returns a **valid** response with an empty `result` (`[]`) and
 `meta.missingContext` listing the missing keys — it does not throw. Retry with
-the values filled in. `meta.context` always describes the full parameter
+the values filled in. (A missing **scope** value is different: it throws
+`missing_scope`.) `meta.context` always describes the full parameter
 contract so a caller knows what to provide.
 
 ---
@@ -298,11 +321,13 @@ contract so a caller knows what to provide.
 type QueryEngine = {
   introspect: () => Promise<DatabaseSchema>;
   execute: (request: QueryRequest, options?: ExecuteOptions) => Promise<QueryResponse>;
-  compile: (dsl: Query, scope?: ScopeValues) => CompiledQuery;
+  compile: (dsl: Query) => CompiledQuery;
   test: (dsl: Query, scope?: ScopeValues) => Promise<TestResult>;
   getDslSchema: () => object;
   getSchema: () => DatabaseSchema | undefined;
   cache: CacheBackend;
+  invalidate: (tables: readonly string[]) => void;
+  rows: { stats: () => LiveRowsStats; stop: () => void };
 };
 ```
 
@@ -312,15 +337,24 @@ type QueryEngine = {
 - **`compile(dsl)`** — run the deterministic pipeline (clamp limit →
   discover → scope → resolve → analyze → adapter compile) and return the
   `CompiledQuery` (`{ sql, paramSlots, contextContract }`). No execution, no
-  LLM. Throws `invalid_dsl` if the analyzer finds errors.
+  LLM. Throws `invalid_dsl` if the analyzer finds errors. Every `optional`
+  condition is kept, so this is the widest form of the query.
 - **`test(dsl, scope?)`** — compile with `limit` forced to 5, build synthetic
   context values, execute, and return `{ rows, warnings, errors }`. Errors are
   caught and returned in `errors` rather than thrown. Useful for validating a
-  hand-written DSL against real data.
+  hand-written DSL against real data. Scope is never synthetic: a query whose
+  policy binds `$scope` values needs them passed, or the missing-scope refusal
+  comes back in `errors`.
 - **`getDslSchema()`** — the DSL as a JSON Schema (draft-7). This is what you
   feed an LLM so it learns the DSL.
 - **`getSchema()`** — the last introspected `DatabaseSchema`, or `undefined`.
 - **`cache`** — the live `CacheBackend` for inspection or manual eviction.
+- **`invalidate(tables)`** — these tables were written: every reactive read
+  over any of them is refetched (once per burst). The vex handler calls it after
+  every committed mutation; a host calls it for writes vex did not make.
+- **`rows`** — the reactive rows cache: `stats()` (entries, bytes, follows,
+  followers, hits, misses, evictions, oversized, refreshes) and `stop()` (clears
+  its timers, for a host that outlives the engine).
 
 ---
 
@@ -486,8 +520,9 @@ Grouped, with a renamed field:
 }
 ```
 
-Functions: `count` (field path or `"*"`); `sum` / `avg` / `min` / `max` (a field
-path or a compute expression).
+Functions: `count` (field path or `"*"`); `countDistinct` (a field path —
+`COUNT(DISTINCT field)`); `sum` / `avg` / `min` / `max` (a field path or a
+compute expression).
 
 ### Subqueries
 
@@ -569,7 +604,9 @@ type ScopeEntityRule =
       delete?: ScopeMatch[];                  // specific: just DELETE (match only — nothing to set)
     };
 
-type ScopeMatch = { match: string; to: string };  // row.<match> = scope[to]
+type ScopeMatch =
+  | { match: string; to: string }                 // row.<match> = scope[to]
+  | { match: string; in: string };                // row.<match> = ANY(scope[in]) — filters only, never pins an INSERT
 type ScopeSet   = { set:   string; to: string };   // INSERT/UPDATE row.<set> := scope[to]
 ```
 
@@ -609,8 +646,12 @@ Behavior:
   where binding it would stamp NULL. A missing `$context` value is different: it
   is the caller's, and a read surfaces it via `meta.missingContext`
   (empty-but-valid).
-- `match` is equality today; an `op` for `in` / multi-valued boundaries is additive
-  when a real one appears.
+- `match` is equality (`to`) or set membership (`in`, compiled to
+  `col = ANY($n)`). The set form only filters — a read, or the rows an
+  UPDATE/DELETE may touch: an empty set matches no row, an absent one is refused
+  with `missing_scope` like any other scope value, and a set-valued rule that
+  would have to pin an INSERT is refused (`scope_denied`) — a write's subject
+  must be a single value.
 
 The policy applies whenever one is configured; the values fill it. Omitting
 the values means nobody, never everybody.
@@ -725,7 +766,8 @@ same principal under that profile:
 
 Grants are unchanged — the union of every role the caller holds — so this can
 only narrow rows, never widen phases. A caller with no verb for the table is
-still refused.
+still refused. A mutation entry takes `reach` the same way (`SeedMutation.reach`),
+and the write is compiled at that profile whoever asks.
 
 The host supplies `policyForReach(reach)` (hono: `getPolicyForReach(c, reach)`),
 because vex holds neither grants nor behaviors. **It fails closed both ways:** an
@@ -893,10 +935,12 @@ mutationEffect(def);                  // [{ op: 'update', table: 'tasks', column
 
 ### Authoring lint
 
-`lintMutation(def)` flags an `update`/`delete` whose WHERE binds no
-`$context` — such a write is not caller-bounded (its only row limit is the
-scope policy). Run it in your seed path so an unkeyed write never ships:
-loud at boot, never at runtime.
+`lintMutation(def)` returns a list of issues (empty when clean). It flags an
+`update`/`delete` whose WHERE binds no `$context` — such a write is not
+caller-bounded (its only row limit is the scope policy) — and any statement
+containing an `optional` condition. `seedCache` runs it on every mutation entry
+and throws on an issue, so an unkeyed write never ships: loud at boot, never at
+runtime.
 
 ### The write observer
 
@@ -953,14 +997,16 @@ everything:
   `fingerprint_protected` instead of being replaced.
 
 Concurrent identical generations collapse to one (single-flight, keyed by the
-request hash).
+request hash and the active policy — two callers who can see different tables
+are not asking the same thing).
 
 ### Lifetime and protection
 
-- Every replay stamps `lastUsedAt`; `sweepCache(cache, { maxIdleMs })` evicts
-  entries idle past the limit, skipping protected ones. Alive = used.
-- `protected: true` is written only by a seed path or an explicit
-  `handleFingerprintPatch` — never by a runtime query.
+- A replay stamps `lastUsedAt` (at most once a minute per entry);
+  `sweepCache(cache, { maxIdleMs })` evicts entries idle past the limit,
+  skipping protected ones, and returns how many it evicted. Alive = used.
+- `protected: true` is written only by the seed path (`seedCache`) or an
+  explicit `handleFingerprintPatch` — never by a runtime query.
 - `ExecuteOptions.locked` (and `VexHandlerConfig.locked`) makes an engine call
   or endpoint replay-only: asking it to generate throws `locked`.
 
@@ -968,7 +1014,7 @@ request hash).
 
 - **Request hash** — intent + normalized shape + the *names* of context keys
   (values excluded). Stored with named slots (the match/replace test) and the
-  key of the **negative cache**: a `cannotSatisfy` result is cached with a TTL
+  key (with the active policy) of the **negative cache**: a `cannotSatisfy` result is cached with a TTL
   (`config.unsatisfiableTtlMs`, default 5 min) so an impossible request isn't
   re-run until it expires.
 - Every entry stores a **schema fingerprint**. After a schema change it no
@@ -1005,6 +1051,11 @@ const l2 = createPostgresCache({
 await l2.init();           // applies l2.sequence through strata's ledger — once, recorded
 ```
 
+`init()` runs a strata migration, so the pool must expose `transaction` — the
+PGlite pool has one; a bare `pg.Pool` needs a wrapper that checks a client out
+per transaction (see `PgPool`). A host that migrates several owners in one run
+collects `l2.sequence` (`nisc.vex.cache`) instead of calling `init()`.
+
 **Tiered** — L1 (memory) + L2 (durable), read-through/write-through. Reads hit
 L1; on an L1 miss it promotes a validated L2 entry into L1. Writes go to L1
 synchronously and L2 fire-and-forget.
@@ -1026,6 +1077,90 @@ demand; `partial` preloads only the listed fingerprints and lazy-fills the
 rest. The tiered cache is single-instance: separate processes keep separate
 L1s.
 
+### Seeding
+
+`seedCache(cache, entries)` turns authored entries into **protected** cache
+rows — the API surface of a locked endpoint. Call it at boot, after
+`cache.init()`.
+
+```typescript
+import { seedCache } from '@niscorp/vex';
+import type { SeedEntry, SeedMutation } from '@niscorp/vex';
+
+const ordersRecent: SeedEntry = {
+  fingerprint: 'orders/recent',
+  intent: 'A customer\'s orders, newest first',
+  shape: [{ order_id: '', total: 0, created_at: '' }],
+  dsl: {
+    from: ['orders'],
+    fields: [{ field: 'orders.id', as: 'order_id' }, 'orders.total', 'orders.created_at'],
+    filter: { eq: ['orders.customer_id', { $context: 'customerId' }] },
+    sort: [{ field: 'orders.created_at', dir: 'desc' }],
+  },
+  // mapping?: uncompiled Prism over { result, context, scope }; omitted = identity
+  // reach?:   the scope profile this read must be served at
+  // refresh?: 'snapshot' (default) | 'reactive'
+};
+
+const taskSetDone: SeedMutation = {
+  fingerprint: 'tasks/setDone',
+  mutation: { op: 'update', table: 'tasks', set: { done: { $context: 'done' } },
+              where: { eq: ['tasks.id', { $context: 'id' }] } },
+};
+
+await seedCache(engine.cache, [ordersRecent, taskSetDone]);
+```
+
+- A read's `mapping` is compiled to Prism IR here; with none, the identity
+  (`{ $ref: '$.result' }`) is stored, so a replay never falls through to
+  `mapToShape`.
+- A mutation is linted (`lintMutation`); a failing statement throws.
+- It is idempotent against a durable cache: a stored row that already matches
+  its authored definition is left alone; anything else at that fingerprint
+  converges to the authored definition, protected.
+
+`@niscorp/vex/pglite` exports `createPglitePool(db, parsers?)`, which shapes a
+PGlite database as the `PgPool` the Postgres adapter and cache take (with
+`transaction`), and `RAW_DATE_PARSERS`, which returns `DATE`/`TIMESTAMPTZ`
+columns as raw strings. Pass the parsers to the adapter's pool; give the
+Postgres cache a pool without them — it reads its own timestamp columns as
+`Date`s.
+
+### Reactive reads (`refresh`)
+
+An entry's `refresh` says when its answer is refreshed: `'snapshot'` (the
+default) answers when asked; `'reactive'` answers again whenever a write lands
+on a table the query reads, for as long as somebody follows it. The mode is
+authored on a seeded entry — never generated (`REFRESH_MODES`, `isRefresh`,
+type `Refresh`).
+
+- **Following.** Pass `{ signal, onChange }` in `ExecuteOptions`: the returned
+  promise is the first answer; every later answer that differs goes to
+  `onChange` until `signal` aborts. Over HTTP there is no callback, so
+  `handleQuery(config, body, scope, live?)` takes an in-process `VexLive`
+  (`{ signal, onChange }`), and the hono adapter reads one from the request's
+  env under `VEX_LIVE_ENV` (the third argument of `app.request`).
+- **Invalidation.** The handler calls
+  `engine.invalidate(tablesChangedBy(writes, schema))` after every committed
+  mutation; for a delete, `tablesChangedBy` adds every table that references a
+  deleted one. Writes vex never sees are the host's to announce with
+  `engine.invalidate`.
+- **The rows cache** is per engine, in process memory, sized by
+  `QueryEngineConfig.rows`:
+
+```typescript
+type LiveRowsConfig = {
+  ttlMs?: number;          // how long stored rows are trusted; default 60_000
+  maxEntries?: number;     // default 5_000
+  maxBytes?: number;       // JSON length of stored results; default 64 MiB
+  maxEntryBytes?: number;  // largest single result stored; default maxBytes / 10
+  debounceMs?: number;     // burst window before followed reads refetch; default 10
+};
+```
+
+A reactive entry should `sort`, and reads time from `$scope`, never context.
+Design: [DESIGN.md](./DESIGN.md) **Reactive reads**.
+
 ---
 
 ## Wiring the LLM agents
@@ -1034,37 +1169,45 @@ The engine consumes two hooks. Both are optional; supply them to answer
 free-form requests.
 
 ```typescript
-type GenerateDsl = (request: QueryRequest, schema: DatabaseSchema) => Promise<Query>;
+type GenerateDsl = (request: QueryRequest, schema: DatabaseSchema, caller: GenerationCaller) => Promise<Query>;
 type MapToShape  = (rows: Row[], shape: unknown) =>
-  Promise<{ ir: CompiledIr; transformed: unknown[] }>;
+  Promise<{ ir: CompiledIr; transformed: JsonValue }>;
+
+type GenerationCaller = {
+  read: (dsl: Query) => Promise<{ rows: Row[]; sql: string; warnings: string[] }>;
+  bindings: ScopeBinding[];   // { entity, field, key } — columns bound to scope keys the caller carries
+};
 ```
 
 - `generateDsl` runs on a cache miss; it must return a DSL that passes
   `QuerySchema`. To signal an impossible request, throw
   `new VexError('unsatisfiable', reason)` — the runtime negative-caches it.
-- `mapToShape` runs when the requested shape differs from the raw rows; it
-  returns a compiled Prism `ir` (cached for reuse) plus the transformed rows.
+- `mapToShape` runs when a shape is in play (the request's, or the stored one on
+  a fingerprint-only replay) and the entry has no stored mapping; it returns a
+  compiled Prism `ir` plus the mapped result. The `ir` is stored with the entry
+  only on a miss — a replayed entry that has none calls the hook every time.
+  Without the hook the raw rows are returned.
 
 You can implement these however you like. Vex also ships a **reference
 implementation** built on `@niscorp/cortex` and `@niscorp/prism`, exported from
-the `@niscorp/vex/agent` subpath (`@niscorp/cortex`, `@niscorp/signal`, and
-`@niscorp/prism` become required peers only if you import it):
+the `@niscorp/vex/agent` subpath (`@niscorp/cortex` is an optional peer, needed
+only if you import it; the model client comes from `@niscorp/signal`):
 
 ```typescript
 import { createQueryDsl, createShapeMapper } from '@niscorp/vex/agent';
 import { createSignal } from '@niscorp/signal';
 
-const schema = await engine.introspect();
-const queryJsonSchema = engine.getDslSchema();
-
 const llm = createSignal('openrouter', { apiKey, model: 'qwen/qwen3.8-27b' });
 
-const generateDsl = createQueryDsl({ llm, queryJsonSchema });
+const generateDsl = createQueryDsl({ llm, queryJsonSchema: bare.getDslSchema() });
 const mapToShape  = createShapeMapper(llm);
 
 const engine = createQueryEngine({ adapter, generateDsl, mapToShape, cache });
 await engine.introspect();
 ```
+
+(`bare` is any engine — `getDslSchema()` needs no introspection, so
+`createQueryEngine({ adapter })` is enough to read it from.)
 
 - `createQueryDsl(config)` builds the `generateDsl` hook by running
   `vexQueryDslAgent`. It is built from a model and the DSL spec only — who it
@@ -1074,8 +1217,12 @@ await engine.introspect();
   engine's own pipeline under the caller's policy and scope values (`$context`
   binds NULL). That capability is the tools' only way to the database.
 - `createShapeMapper(llm)` builds the `mapToShape` hook by running Prism's
-  `mappingAgent`. The `@niscorp/vex/agent` subpath also exports `vexQueryDslAgent`
-  itself plus `createQueryTools` for customizing the tool set.
+  `mappingAgent`. When the rows already are the shape (`rowsFitShape` — a flat
+  shape whose keys and value kinds the first row matches exactly) it stores the
+  identity mapping and makes no model call. The `@niscorp/vex/agent` subpath
+  also exports `vexQueryDslAgent` itself, `createQueryTools` for customizing the
+  tool set, and `describeCaller`, which turns `caller.bindings` into the
+  context line the agent reads.
 
 The reference query agent (`vexQueryDslAgent`, id `vex.query`) is a Cortex
 agent whose envelope payload is a `QuerySchema` query, with six tools:
@@ -1086,10 +1233,10 @@ agent whose envelope payload is a `QuerySchema` query, with six tools:
 | `getSampleRows` | `{ entity, limit? }` | See real rows (default 5) |
 | `getDistinctValues` | `{ entity, field, limit? }` | Field cardinality (default 20) |
 | `describeField` | `{ entity, field }` | type, nullable, cardinality, null count, min/max |
-| `testQuery` | `{ dsl }` | Validate + compile + execute with synthetic params (LIMIT 5) |
+| `testQuery` | the draft query itself (not wrapped) | Validate + compile + execute with synthetic params (LIMIT 5) |
 | `cannotSatisfy` | `{ reason }` | Declare the request impossible (`createQueryDsl` aborts the run and throws `unsatisfiable`) |
 
-Bounds: `stepCount(20)` + `outputRetries(3)` stop conditions on the agent. Every
+Bounds: `stepCount(20)`, `outputRetries(3)` and `repeatedCalls(2)` stop conditions on the agent. Every
 data-touching tool is a DSL run through `caller.read` — there is no SQL in the
 tool set — so a sample row, a distinct value and a statistic are all things the
 caller could have read. (If you build your own generator,
@@ -1130,6 +1277,16 @@ app.route('/api/orders/vex', vex({
 }));
 ```
 
+The rest of `VexHonoConfig`, all optional:
+
+| Option | Purpose |
+|--------|---------|
+| `locked` | Replay-only endpoint: no generation, no fingerprint management |
+| `getPolicy(c)` | Per-request `ScopePolicy`; governs reads, mutation replay and discovery on this endpoint |
+| `getPolicyForReach(c, reach)` | The same principal's policy at a reach an entry demands |
+| `mutations` | `{ client, policy?, onWrite? }` — enables mutation replay; `policy` is the fallback when `getPolicy` is absent |
+| `onExecute` | The execution observer (see [Events](#events)) |
+
 ### Express
 
 ```typescript
@@ -1146,29 +1303,41 @@ app.all('/api/orders/vex', vex({
 }));
 ```
 
+`VexExpressConfig` also takes `locked` and `mutations`
+(`{ client, policy, onWrite? }`). It has no per-request policy hook. Any method
+other than `GET`/`POST`/`PATCH`/`DELETE` answers 405.
+
 ### The endpoints
 
 - **`GET`** → discovery JSON: `vex` protocol version, description, the filtered
   entities (fields, relations, row counts), the request body contract (the
   three fingerprint postures), the protection summary (`protection:
   "all"|"some"|"none"`, `locked`), the fingerprint overview (`[{ fingerprint,
-  kind, protected, schemaFresh, intent, context, shape|effect, lastUsedAt }]`
-  — `context` is the derived, typed input signature; `effect` summarizes a
-  write), and the full DSL JSON Schema. A client or agent can read this to
-  learn how to call the resource — and exactly what each fingerprint takes.
+  kind, protected, schemaFresh, intent, createdAt, lastUsedAt, context,
+  shape|effect }]` — `context` is the derived, typed input signature; `effect`
+  summarizes a write), and the full DSL JSON Schema. A client or agent can read
+  this to learn how to call the resource — and exactly what each fingerprint
+  takes. Under a per-request policy, entities and entries the policy cannot
+  touch are not listed.
 - **`POST`** → runs a query OR replays a write, one body shape. A
   `fingerprint` naming a `kind: 'mutation'` entry dispatches to the write
   pipeline (when `mutations` is configured); anything else is the read path
   (fingerprint replay, generation, or named slot); scope comes from
   `getScope`. Returns `{ status, body }` mapped to the HTTP response —
   unknown fingerprint → 404 `cache_miss`, protected mismatch → 409
-  `fingerprint_protected`, locked → 403, a write with missing context → 400
+  `fingerprint_protected`, a write with missing context → 400
   `missing_context` with the full derived signature in `details.expected`,
-  other `VexError`s → 400 with `{ error, message, details }`, unexpected
-  errors → 500.
+  other `VexError`s (including `locked` and `scope_denied`) → 400 with
+  `{ error, message, details }`. A reach the host cannot serve for this
+  principal → 403 `scope_denied`. 500s are the host's faults: `missing_scope`
+  (key names stay in the log), an entry demanding a reach with no
+  `policyForReach`, a mutation fingerprint on a handler with no `mutations`
+  configured, and unexpected errors.
 - **`PATCH`** with `{ fingerprint, protected }` → flip the protection bit.
-  **`DELETE`** with `{ fingerprint }` → evict (unprotected only). Fingerprints
-  ride the body — names contain `/`.
+  **`DELETE`** with `{ fingerprint }` → evict (a protected entry, read or mutation,
+  is refused with 409 `fingerprint_protected`). Both are refused with 403 `locked` on a
+  locked endpoint and answer 404 `cache_miss` for an unknown fingerprint.
+  Fingerprints ride the body — names contain `/`.
 
 Under the hood all of these call the framework-agnostic `handleDiscovery` /
 `handleQuery` / `handleFingerprintPatch` / `handleFingerprintDelete` from
@@ -1195,6 +1364,8 @@ const onEvent = (e: VexEvent) => {
     case 'query.mapped': /* mappingMs */ break;
     case 'query.done':   /* totalMs */ break;
     case 'query.error':  /* code, message */ break;
+    case 'rows.evict':   /* reason: 'capacity' | 'oversized', bytes */ break;
+    case 'rows.error':   /* message — a reactive refetch failed; the last good answer stands */ break;
     // llm.request / llm.response — only if you emit them from your LLM wrapper
   }
 };
@@ -1204,7 +1375,29 @@ const engine = createQueryEngine({ adapter, onEvent });
 
 The `llm.request`/`llm.response` variants exist for callers that wrap their LLM
 client to record a transcript (the dev server does this to write a full debug
-log); the engine itself emits the `query.*` events.
+log); the engine itself emits the `query.*` and `rows.*` events.
+
+### The execution observer
+
+`onExecute` (handler config; the hono adapter passes it through) fires once per
+`handleQuery`, read or write, after the outcome is known:
+
+```typescript
+type ExecuteRecord = {
+  kind: 'query' | 'mutation';
+  status: 'ok' | 'error' | 'refused';   // 200 | anything else | 403
+  fingerprint?: string;
+  reach?: string;
+  cacheHit?: boolean;                   // reads
+  rows?: number;                        // returned (reads) or written (mutations)
+  startUnixNano: number;
+  endUnixNano: number;
+  scope: ScopeValues;
+};
+```
+
+With no observer the record is not built. A listener that throws is logged and
+contained.
 
 ---
 
@@ -1236,8 +1429,10 @@ try {
 | `scope_denied` | An entity is denied by the scope policy (`VexScopeError`) |
 | `missing_context` | A required context value was absent. Reads surface it softly via `meta.missingContext`; a WRITE hard-400s with the full derived signature in `details.expected` |
 | `execution_error` | Schema not loaded, or a database/runtime failure |
-| `agent_failed` | No `generateDsl` hook and no cached DSL for the shape |
-| `cache_miss` | Cache mode `only` and nothing cached |
+| `agent_failed` | Generation was needed and there is no `generateDsl` hook, or the reference agent's run failed |
+| `cache_miss` | A fingerprint was sent alone and nothing is stored under it |
+| `fingerprint_protected` | A protected entry was asked to change: a named-slot request that no longer matches its stored one |
+| `locked` | A replay-only call (`locked: true`) would have needed generation |
 | `unsatisfiable` | The agent declared the request impossible (negative-cached) |
 
 ---

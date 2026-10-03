@@ -32,6 +32,8 @@ export type GraphReport = {
   // when a loud word is wanted.
   blind: readonly { reflexId: string; effect: string }[];
   errors: readonly string[];
+  // The same refusals as `errors`, each with the code it is refused under.
+  refusals: readonly { code: 'unknown_reflex' | 'unknown_effect' | 'unguarded_cycle'; message: string }[];
   warnings: readonly string[];
 };
 
@@ -44,7 +46,7 @@ const isGuarded = (reflex: Reflex): boolean => reflex.select !== undefined || re
 
 export const buildGraph = (reflexes: readonly Reflex[], effects: EffectRegistry): GraphReport => {
   const edges: Edge[] = [];
-  const errors: string[] = [];
+  const refusals: { code: 'unknown_reflex' | 'unknown_effect' | 'unguarded_cycle'; message: string }[] = [];
   const warnings: string[] = [];
   const blind: { reflexId: string; effect: string }[] = [];
 
@@ -62,14 +64,14 @@ export const buildGraph = (reflexes: readonly Reflex[], effects: EffectRegistry)
       const existing = runWatchers.get(fact.run) ?? [];
       runWatchers.set(fact.run, [...existing, reflex.id]);
       if (fact.run === reflex.id) warnings.push(`${reflex.id} subscribes to its own run — a drain loop; make sure it narrows`);
-      if (!byId.has(fact.run)) errors.push(`${reflex.id} watches the run of unknown reflex "${fact.run}"`);
+      if (!byId.has(fact.run)) refusals.push({ code: 'unknown_reflex', message: `${reflex.id} watches the run of unknown reflex "${fact.run}"` });
     }
   }
 
   for (const reflex of reflexes) {
     const handler = effects[reflex.effect.name];
     if (handler === undefined) {
-      errors.push(`${reflex.id} names effect "${reflex.effect.name}", which is not registered`);
+      refusals.push({ code: 'unknown_effect', message: `${reflex.id} names effect "${reflex.effect.name}", which is not registered` });
       continue;
     }
     if (handler.writes === undefined) {
@@ -93,11 +95,12 @@ export const buildGraph = (reflexes: readonly Reflex[], effects: EffectRegistry)
 
   for (const cycle of cycles)
     if (!cycle.guarded)
-      errors.push(
-        `unguarded cycle: ${cycle.reflexIds.join(' → ')} → ${cycle.reflexIds[0]} — no selection and no \`when\` anywhere on the loop, so it diverges by construction`,
-      );
+      refusals.push({
+        code: 'unguarded_cycle',
+        message: `unguarded cycle: ${cycle.reflexIds.join(' → ')} → ${cycle.reflexIds[0]} — no selection and no \`when\` anywhere on the loop, so it diverges by construction`,
+      });
 
-  return { edges, cycles, blind, errors, warnings };
+  return { edges, cycles, blind, errors: refusals.map((refusal) => refusal.message), refusals, warnings };
 };
 
 // Tarjan's SCC. Components of size > 1 are cycles; a size-1 component is

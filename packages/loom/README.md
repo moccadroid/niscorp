@@ -18,8 +18,10 @@ pnpm add @niscorp/loom @niscorp/nova zod
 
 `@niscorp/nova` is required. The React surface (`@niscorp/loom/react`) also needs
 `react`. Domain plugins each need their own library — `@niscorp/vex` for the Vex
-plugin, `@niscorp/prism` for the Prism plugin. All three are optional: a consumer
-that only uses the compiler installs none of them.
+plugin, `@niscorp/prism` for the Prism plugin. All three are optional peers of Loom: a consumer that only
+uses the compiler needs none of them for Loom itself. (Nova has required peers
+of its own — `@niscorp/prism` and `@niscorp/strata` — which pnpm installs with
+it.)
 
 ## Two ways to use Loom
 
@@ -75,13 +77,16 @@ import { prism } from '@niscorp/loom/plugins/prism/react';
 - To switch to a different artifact, give the element a new React `key`.
 
 A **plugin** wires one domain into the editor. It contributes the schemas to edit
-(its *documents*), optional custom field widgets, and usually a preview. The two
+(its *documents*), optional custom field widgets, and usually a preview. The three
 reference plugins:
 
 - `prism({ input })` — edit a [Prism](../prism) transform config; the preview
   applies it to `input` and shows the output.
 - `vex({ run, db })` — edit a [Vex](../vex) query; the preview runs it with `run`
   and shows the rows. Pass `db` to get column-aware field pickers.
+- `nova({ manifest })` — edit a [Nova](../nova) layout built from the
+  components the manifest lists (each `{ name, props, container?, render }`,
+  `props` a Zod schema); the preview renders the layout with them.
 
 ## Entry points
 
@@ -98,4 +103,4 @@ reference plugins:
 
 ## License
 
-MIT
+Apache-2.0

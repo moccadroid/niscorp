@@ -188,6 +188,7 @@ lock for a source that has never had one.
 |---|---|
 | `@niscorp/strata/upgrade` | Pure: `planSourceUpgrade`, `verifySourceUpgrade`, `renderReport`, `changedStrings`. |
 | `@niscorp/strata/node` | `runSourceUpgrade(options, argv)` — the lock, the work directory, the report, "look in" hints from the source. |
+
 See [DESIGN.md](./DESIGN.md) and [the plan](../../docs/plans/versioning.md).
 
 ## License

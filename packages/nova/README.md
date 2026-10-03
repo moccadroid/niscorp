@@ -5,6 +5,17 @@ layouts and effects.
 
 **Status:** `0.x.x` — pre-1.0, breaking changes expected.
 
+## Install
+
+```bash
+pnpm add @niscorp/nova @niscorp/prism @niscorp/strata zod
+```
+
+`@niscorp/prism`, `@niscorp/strata` and `zod` are required peers. Everything
+else is optional and installed per surface: `react` for `/adapters/react`
+and `/adapters/ink`, `vue` for `/adapters/vue`, `ink` and `ink-text-input` for
+`/adapters/ink`, `@niscorp/cortex` for `/agent`. Node `>=22.12`.
+
 ## One tree, five renderers
 
 Nova core renders layouts to plain `RenderNode[]` — no framework, no DOM,
@@ -67,7 +78,9 @@ What makes it different from "just another UI library":
 
 Explicitly out of scope right now:
 
-- **No LLM features.** No prompt scaffolding, no plan generation.
+- **No LLM features in the core.** No prompt scaffolding, no plan generation.
+  The one agent nova ships — the layout agent — is opt-in at `/agent` (see
+  below).
 - **No JSON Schema generation / catalog.** Use `z.toJSONSchema()` on
   the exported Zod schemas if you need JSON Schema externally.
 - **No mandatory components.** The component registry is empty by
@@ -202,14 +215,16 @@ ships in a DB row and can be referenced rather than inlined.
 
 The orchestrator. `createShell(config)` validates every action
 definition at construction (boundary Zod validation) and returns a
-`Shell` with `push`, `pop`, `popTo`, `replace`, `clear`,
-`registerAction`, `registerFragment`, `addCanvas`, `removeCanvas`,
-`setCanvasLayout`, `setLayout`, `getCanvasState`, `getRuntime`,
-`getState`, `getShellRenderTree`, `getCanvasRenderTree`,
-`flattenRenderTree`, `dispatch`, `publish`, `onStateChange`,
-`onDataChange`, `dispose`. Canvases are `CanvasConfig`s (`{ id,
-actionLayout?, initial? }`) — a canvas can pre-seed its stack and
-declare how its instances are arranged. The shell maintains a stack per
+`Shell` with `push`, `pop`, `popTo`, `removeInstance`, `replace`, `clear`,
+`back`, `originOf`, `registerAction`, `removeAction`, `registerFragment`,
+`addCanvas`, `removeCanvas`, `setCanvasLayout`, `setLayout`, `setPhrases`,
+`getPhrases`, `getCanvasState`, `getRuntime`, `getState`,
+`getShellRenderTree`, `getCanvasRenderTree`, `flattenRenderTree`,
+`dispatch`, `publish`, `onStateChange`, `onDataChange`, `onEndpoint`,
+`onCanvasChange`, `dispose`. Canvases are `CanvasConfig`s (`{ id, mode?,
+actionLayout?, initial? }`) — a canvas can pre-seed its stack, declare how
+its instances are arranged, and hold them as a `stack` (default: the top is
+active, the rest suspended) or a `list` (every instance stays live). The shell maintains a stack per
 canvas, drives lifecycle hooks via the runtime, composes any `with`
 fragments into the action at push/replace time, and routes navigation
 effects emitted from action steps back into shell calls.
@@ -254,8 +269,11 @@ NovaError
 ├── LayoutRefNotFoundError
 ├── DefinitionValidationError
 ├── UnknownActionError
+├── UnknownFragmentError
+├── UnknownFunctionError
 ├── ShellDisposedError
-└── LifecycleError
+├── LifecycleError
+└── MutationError
 ```
 
 All carry a stable `code` (`ErrorCodes.*`), an optional `context`, and
@@ -291,7 +309,7 @@ can perform their own final async work (e.g. telemetry flush).
 
 ## React compatibility
 
-- **React 18+ required.** The adapter uses `useSyncExternalStore`.
+- **React 19 required** (peer `react ^19.2.4`). The adapter uses `useSyncExternalStore`.
 - **Concurrent rendering:** fully supported. `useSyncExternalStore` is
   tearing-safe by design — the snapshot getters in `useRenderTree` and
   `useCanvas` return referentially-stable values when the underlying data
@@ -342,6 +360,24 @@ can perform their own final async work (e.g. telemetry flush).
 
 ---
 
+## Agent and i18n
+
+- **`@niscorp/nova/agent`** — the layout-authoring surface: `layoutAgent`
+  (a `@niscorp/cortex` agent definition — intent + component palette + data
+  example in, a `LayoutNode` out, validated against `LayoutNodeSchema`),
+  `paletteFromRegistry` (the palette, read off a component registry's
+  `meta`), and `collectInteractive` (a layout's refs, models and bound data
+  keys, derived by walking the tree). Needs the optional peer
+  `@niscorp/cortex`.
+- **`@niscorp/nova/i18n`** — nova is language-blind: a host hands the shell a
+  phrasebook (`phrases` on `ShellConfig`, `shell.setPhrases` at runtime) and
+  nova swaps prose at render. The subpath holds the pieces around that:
+  `translateRenderTree`, `fillPhrase`, and the harvest (`harvestLayout`,
+  `harvestDefinition`, `harvestDefinitions`, `missingFrom`) that lists the
+  phrases a dictionary must cover. See [I18N_DOCS.md](I18N_DOCS.md).
+
+---
+
 ## The grammar and its versions
 
 nova's documents — actions, fragments, layouts — are a grammar with a version,
@@ -372,11 +408,7 @@ pnpm test        # vitest run
 pnpm typecheck   # tsc --noEmit
 ```
 
-The `tsconfig.json` carries an `ignoreDeprecations` workaround for
-`tsup`'s DTS bundler injecting `baseUrl`. This is intentional and
-expected.
-
----
-
-## Future work
+The repo's root `tsconfig.json`, which this package's `tsconfig.json`
+extends, carries an `ignoreDeprecations` workaround for `tsup`'s DTS bundler
+injecting `baseUrl`. This is intentional and expected.
 

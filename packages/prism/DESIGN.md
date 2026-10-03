@@ -30,7 +30,7 @@ Input Config (JSON)
 
 ### Four Layers
 
-**Schema** — Every op is a Zod schema with `.strict()` and `.describe()`. The top-level `NodeSchema` is a recursive union of ~50 op schemas plus primitives, arrays, and plain objects. Schemas are the source of truth for validation and JSON Schema generation (for LLM consumption).
+**Schema** — Every op is a Zod schema with `.strict()` and `.describe()`. The top-level `NodeSchema` is a recursive union of ~70 op schemas plus primitives, arrays, and plain objects. Schemas are the source of truth for validation and JSON Schema generation (for LLM consumption).
 
 **Sugar** — Convenience ops (`$sum`, `$avg`, `$pluck`, etc.) are rewritten to core ops in a single recursive pass before evaluation or compilation. This means the evaluator and compiler only need to handle core ops. Sugar rewriters receive a `recurse` function to transform their sub-expressions.
 
@@ -44,8 +44,9 @@ Input Config (JSON)
 
 ```typescript
 type EvalContext = {
-  source: JsonObject;                  // Root source data (immutable)
+  source: JsonValue;                   // Root source data (immutable)
   vars: Record<string, JsonValue>;     // Scoped variables (immutable)
+  budget?: Budget;                     // What this evaluation may still cost (engine/budget.ts)
 };
 ```
 
@@ -68,7 +69,7 @@ The evaluator uses a linear if-chain with type guards:
 ```typescript
 if (isRefNode(obj)) return opRef(obj, context, evaluateNode);
 if (isMapNode(obj)) return opMap(obj, context, evaluateNode);
-// ... ~50 more
+// ... ~60 more
 ```
 
 A Map-based dispatch would be shorter but loses type narrowing — each guard narrows the node to its specific type, so the handler receives a correctly typed argument without casts.
@@ -102,14 +103,14 @@ type CompiledIr = {
   meta: {
     name?: string;
     createdAt: string;
-    fingerprint: string;                // SHA256 of desugared config
-    stats: { nodeCount, opCount, maxDepth };
+    fingerprint: string;                // SHA256 of the desugared, optimized core
+    stats: { nodeCount, opCount, maxDepth, optimizations };
   };
   tables: {
     paths: string[];                    // JSONPaths for cache priming
     strings: string[];                  // String literals
   };
-  core: Config;                         // Desugared config
+  core: unknown;                        // Desugared, optimized config
 };
 ```
 
@@ -132,6 +133,8 @@ All errors are `PrismError` instances with a `.code` string and optional `.conte
 | `E_DATE_INVALID` | Unparseable date value |
 | `E_VAR_NOT_FOUND` | `$var` references undefined variable |
 | `E_NODE_SHAPE` | Unrecognized node structure |
+| `E_ASSERT` | A config's own `$assert` refused its input |
+| `E_BUDGET` | An evaluation went past its budget (`engine/budget.ts`) |
 
 ---
 
@@ -148,6 +151,7 @@ src/
 │   ├── node.schema.ts             # NodeSchema (recursive union of all ops)
 │   ├── config.schema.ts           # ConfigSchema
 │   ├── guards.ts                  # Type guards (isRefNode, isMapNode, etc.)
+│   ├── profiles.ts                # Named op subsets for documentation (MAPPING_OPS)
 │   └── ops/                       # One schema file per category
 │       ├── core.schema.ts
 │       ├── array.schema.ts
@@ -158,10 +162,14 @@ src/
 │       ├── structure.schema.ts
 │       ├── object.schema.ts
 │       ├── time.schema.ts
+│       ├── intl.schema.ts
+│       ├── transform.schema.ts
 │       └── sugar.schema.ts
 ├── engine/
 │   ├── evaluate.ts                # Dispatcher + evaluate / evaluateSafe
 │   ├── compile.ts                 # Config → CompiledIr
+│   ├── optimize.ts                # Compile-time passes (ref segments, handlers, constant folding)
+│   ├── budget.ts                  # Limits: steps, string length, result size
 │   ├── execute.ts                 # CompiledIr + source → result
 │   ├── validate.ts                # Config validation
 │   └── documentation.ts           # JSON Schema generation
@@ -174,21 +182,31 @@ src/
 │   ├── logic.ops.ts
 │   ├── structure.ops.ts
 │   ├── object.ops.ts
-│   └── time.ops.ts
+│   ├── time.ops.ts
+│   ├── intl.ops.ts
+│   └── transform.ops.ts
 ├── sugar/
 │   ├── desugar.ts                 # Recursive desugaring pass
 │   └── rewriters.ts               # Sugar → core rewrite functions
+├── agent/                         # @niscorp/prism/agent
+│   ├── index.ts
+│   └── mapping-agent.ts           # mappingAgent (Cortex agent definition)
+├── migrations/
+│   └── index.ts                   # @niscorp/prism/migrations — PRISM_SEQUENCE, prismTransform
 └── utils/
     ├── jsonpath.ts                # JSONPath parser + cache
-    └── compare.ts                 # Deep equality, ordered comparison
+    ├── compare.ts                 # Deep equality, ordered comparison
+    └── issues.ts                  # Zod issues → the branch the config meant
 ```
 
 ---
 
 ## Dependencies
 
-- `zod` (peer, ^4.0.0) — Schema validation, JSON Schema generation via `z.toJSONSchema()`
-- `dayjs` (^1.11.0) — Date operations (`$date`, `$dateAdd`, `$dateDiff`)
+- `zod` (peer, ^4.2.0) — Schema validation, JSON Schema generation via `z.toJSONSchema()`
+- `@niscorp/strata` (peer) — the depth guard on configs, and the sequence type behind `@niscorp/prism/migrations`
+- `@niscorp/cortex`, `@niscorp/signal` (optional peers) — only for `@niscorp/prism/agent`
+- `dayjs` (^1.11.20) — Date operations (`$date`, `$dateAdd`, `$dateDiff`)
 
 The locale-aware family (`$localeDate`, `$localeMoney`, `$localeNumber`) adds
 **no** dependency: it delegates to the platform's `Intl`. That is why dayjs

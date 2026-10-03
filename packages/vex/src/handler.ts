@@ -621,7 +621,7 @@ export const handleFingerprintDelete = async (
   if (entry === undefined) {
     return { status: 404, body: { error: 'cache_miss', message: `Unknown fingerprint "${fingerprint}"` } };
   }
-  if (entry.kind === 'ok' && entry.protected === true) {
+  if ((entry.kind === 'ok' || entry.kind === 'mutation') && entry.protected === true) {
     return { status: 409, body: { error: 'fingerprint_protected', message: `"${fingerprint}" is protected — unprotect it first.` } };
   }
   await config.engine.cache.delete(fingerprint);

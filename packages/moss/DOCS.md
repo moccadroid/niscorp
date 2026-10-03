@@ -1,9 +1,17 @@
 # Moss — API Reference
 
-Seven entry points: `@niscorp/moss` (the server), `@niscorp/moss/node` (the Node
-listener), `@niscorp/moss/client` (the wire), `@niscorp/moss/terminal` (the
-terminal), `@niscorp/moss/terminal/react`, `@niscorp/moss/terminal/vue` and
-`@niscorp/moss/terminal/dom` (the render targets). API is pre-1.0 and moves.
+Fourteen entry points: `@niscorp/moss` (the server), `@niscorp/moss/node` (the
+Node listener and the built site), `@niscorp/moss/vite` (the dev plugin),
+`@niscorp/moss/client` and `@niscorp/moss/client/node` (the wire and its Node
+host), `@niscorp/moss/terminal` (the terminal), and the render targets:
+`terminal/react`, `terminal/vue`, `terminal/dom` (each with a `/server` entry
+that draws to a string), `terminal/tty` and `terminal/ink`. API is pre-1.0 and
+moves.
+
+The nisc packages (`charter`, `nova`, `prism`, `strata`, `tide`, `vex`) and
+`zod` are required peers. `react`/`react-dom`, `vue`, `ink` and `vite` are
+optional peers, needed only by the entry that names them. `hono`,
+`@hono/node-server` and `ws` are moss's own dependencies.
 
 ## `@niscorp/moss`
 
@@ -19,7 +27,8 @@ besides its artifacts.
 ```typescript
 type NiscApp = {
   charter: Charter;                                   // resolved per principal
-  assignments: Record<string, readonly string[]>;     // principal → roles
+  assignments?: Record<string, readonly string[]>;    // principal → roles (authored; or `identity`)
+  wearable?: readonly (readonly string[])[];          // the role combinations one principal may wear
   actions: Record<string, ActionDefinition>;          // the app's actions
   layouts?: Record<string, LayoutVariant>;            // ring 2: variant id → { action, layout }
   behaviors?: ScopeBehaviors;                          // row-level scope semantics, per table or per profile
@@ -27,16 +36,67 @@ type NiscApp = {
   resources?: Record<string, readonly string[] | { entities: readonly string[] }>;
   shell?: ShellManifest;                              // the server shell, as data — THE APP
   pages?: Record<string, PageManifest>;               // what is drawn at a path and kept by nothing
+  grammars?: readonly Sequence[];                     // the app's own strata grammar sequences
+  // the code seams
+  scope?: (principal: string | null, identity?: IdentityRecord) => Record<string, unknown>;
+  identity?: { as?: string; resolve: (principal, read) => Promise<IdentityRecord> };
+  phrases?: (session) => Phrasebook | undefined | Promise<Phrasebook | undefined>;
+  phraseKeys?: PhraseKeys;
   functions?: (session: FunctionSession) => Record<string, FunctionHandler>;
+  onSession?: (session: FunctionSession) => void;
+  runs?: RunSink;
+  reactions?: readonly { table; op?; run }[];         // see "Reacting to writes"
+  facts?: { tide; identity; chain? };                 // see "Reacting to writes"
+  // integrations (see "Integrations")
+  installedIntegrations?: (principal: string | null) => readonly string[] | Promise<readonly string[]>; // deprecated, never called
+  integrationActor?: (integration: string, actsFor: string) => string | null | Promise<string | null>;
+  attachable?: Record<string, Record<string, string>>;
+  menuSlots?: readonly string[];
+  assistantTools?: readonly string[];
+  publishChecks?: readonly string[];
+  editorRegions?: readonly string[];
+  placementNames?: Readonly<Record<string, string>>;
+  storePress?: StorePress;
 };
 ```
 
-Every field is an artifact (authored data) except `functions`, which is the code
-escape hatch. Absent `shell`, the app serves data only (no server shells). Absent
-`functions`, `fn:` endpoints fail loudly.
+Every field is an artifact (authored data) except the code seams — `scope`,
+`identity`, `phrases`, `functions`, `onSession`, `runs`, a reaction's `run`,
+`facts`, and the integration hooks. Absent `shell`, the app serves data only
+(no server shells). Absent `functions`, `fn:` endpoints fail loudly.
+
+- `assignments` is optional: an app that declares `identity` answers roles per
+  principal and never builds the map. `wearable` declares the role
+  combinations the boot gates check; absent, they are derived from
+  `assignments` (`wearableOf`).
+- `scope(principal, identity?)` — what a principal is beyond its id (a tenant,
+  an org). Moss always injects `{ userId }`; this contributes the rest, merged
+  server-side and asked per request, so a value derived from the clock is
+  never held for a session. Synchronous.
+- `identity.resolve(principal, read)` — who a principal is, resolved once per
+  session and cached by moss (bounded by `runtime.identityMax` /
+  `identityIdleMs`, re-resolved every `sessionRevalidateMs`). Returns an
+  `IdentityRecord`: `{ roles, scope, installed?, tag? }`. `read(fingerprint,
+  scope)` executes a seeded entry through moss's engine, replay-only, under
+  the policy of the charter role `identity.as` names (it throws when `as` is
+  unset). Moss never reads inside the record's `scope`. Absent, `assignments`
+  and `scope` answer, and every registered integration is live for everybody.
+- `onSession(session)` — called once per living app shell, for session code
+  that is not an endpoint (an observer, a roster). It runs before the shell
+  finishes building, so it must not touch `session.shell` synchronously. Its
+  return value is ignored. It does not run for a page.
+- `runs: (record: RunRecord, session: FunctionSession) => void` — where model
+  runs go. Fed by `session.recordRun`; no default sink, unset means
+  unrecorded. A `RunRecord` carries `at`, `principal`, `shellId`, `agentId`,
+  `agentPath`, `label`, `provider`, `model`, the token counts, `reported`,
+  `steps`, `elapsedMs`, `outcome`, and optionally `turns: RunTurn[]` (the whole
+  exchange; a tool call and its result are two turns) and `response`.
+- `grammars` — strata sequences for documents only this app defines the shape
+  of (its kit's component props). See "Documents are read in this code's
+  grammars" below.
 
 A `LayoutVariant` is `{ action: string; layout: LayoutNode }` — ring 2: the
-charter's `layouts` section selects who holds which variant id, and moss
+charter's `layouts` section selects who is granted which variant id, and moss
 substitutes the granted variant's layout onto the definition at shell build. The
 base is the floor; variants enrich upward as grants.
 
@@ -46,14 +106,22 @@ base is the floor; variants enrich upward as grants.
 type ShellManifest = {
   canvases: ShellCanvas[];        // a canvas's `initial` may be a CANDIDATE list
   layout?: LayoutNode;            // the frame — CanvasSlot markers, served verbatim
+  layoutStore?: Record<string, LayoutNode>;   // what a `{ ref: id }` in the frame resolves to at boot
   fragments?: Record<string, ActionFragment>;
-  inputs?: (session: { principal, actions, roles }) => Record<string, Record<string, unknown>>;
+  inputs?: (session: { principal, actions, roles, identity, wire }) =>
+    Record<string, Record<string, unknown>> | Promise<…>;
+  seeds?: (session: { principal, actions, roles, wire }) =>
+    Record<string, CanvasSeed[]> | Promise<…>;
   components?: Record<string, { meta?: { description?; propsSchema? } }>;
 };
 ```
 
-`inputs` is the app's one per-principal boot-derivation hook (nav flags, user
-chips), merged over each canvas's static seed.
+Two per-principal boot hooks, both of which may be async and are handed the
+session's governed `wire`. `inputs` derives boot **data** (nav flags, user
+chips), merged over each canvas's static seed. `seeds` derives boot
+**instances**: by canvas id, the actions to push, in order, ring-1-filtered
+like every other mount — a seed the principal is not granted does not mount.
+A `CanvasSeed` is an action id or `{ action, input?, with? }`.
 
 #### `PageManifest` — `app.pages`
 
@@ -72,8 +140,8 @@ go. It is the same machinery with the keeping taken out:
 
 - **The same actions and the same charter.** What exists on a page for a given
   person is ring 1, as everywhere: a strip saying who is signed in is an action
-  a member is granted, on a canvas whose candidate list a stranger holds none
-  of. Nothing in a layout asks who anybody is.
+  a member is granted, on a canvas whose candidate list a stranger is granted
+  none of. Nothing in a layout asks who anybody is.
 - **The same policy on every read.** A page's endpoints ride the server's own
   surfaces as whoever asked — nobody, or the signed-in principal.
 - **No shell is kept.** A page's shell lives for one read (the document) or one
@@ -100,13 +168,15 @@ out. Nothing downstream (the socket, the delta encoder, the terminal) learns a
 language exists.
 
 ```typescript
-phrases?: (principal: string | null) => Phrasebook | undefined;  // source phrase → translation
+phrases?: (session: { principal: string | null; identity: Record<string, unknown>; wire: FetchFn }) =>
+  Phrasebook | undefined | Promise<Phrasebook | undefined>;      // source phrase → translation
 phraseKeys?: PhraseKeys;                                         // which keys carry prose
 ```
 
 - Per **principal**, because a shell is per principal. Resolved once when the
   shell is built, so changing somebody's language is a `reset`/rebuild — exactly
-  like changing their catalog.
+  like changing their catalog. May be async; it is handed the session's wire
+  and the scope half of the resolved identity, so a book can be read from rows.
 - Returning `undefined` or `{}` is the **source language** and costs nothing: the
   pass returns the same tree object and the frame serializes to the bytes it
   always did.
@@ -127,13 +197,20 @@ type FunctionSession = {
   shell: Shell;                    // the session's living, durable shell (a getter — a reset replaces it)
   principal: string | null;
   roles: readonly string[];
+  identity: Record<string, unknown>;  // the scope half of the resolved identity
+  actions: readonly string[];      // the session's granted action ids, installs filtered
   wire: FetchFn;                   // the server's own surfaces, as this session
   runtime: NiscRuntime;
   policy: ScopePolicy;             // the caller's compiled scope policy
   grant: (token: string) => void;  // session GRANT (login): send it down, reconnect
-  revoke: () => void;              // session REVOKE (sign-out): close 4403, evict
+  revoke: () => Promise<void>;     // session REVOKE (sign-out): close 4403, evict
+  recordRun: (run: Omit<RunRecord, 'at' | 'principal' | 'shellId'>) => void;
 };
 ```
+
+`revoke` settles when the credential is gone: under `session: 'sessions'` it
+deletes every session the principal has (`revokeAllFor`). `recordRun` is a
+no-op when the manifest declares no `runs` sink.
 
 ### The environment
 
@@ -145,12 +222,23 @@ type NiscRuntime = {
   db: MutationClient;              // writes
   cache?: CacheBackend;            // defaults to vex's postgres cache on `pool`
   session: SessionVerifier | 'sessions' | 'dev-open';  // REQUIRED — no default
+  migrations?: 'apply' | 'verify'; // the boot's ledgered run; default 'apply'
   shellIdleMs?: number;            // idle shell eviction; default 30 min, `0` disables
+  endpointTimeoutMs?: number;      // a server shell's endpoint call; default nova's, 30s
   sessionRevalidateMs?: number;    // live-socket re-verify; default 60s, `0` disables
+  identityMax?: number;            // resident identity records; default 10,000
+  identityIdleMs?: number;         // drop an unread identity record; default 30 min, `0` disables
   shellFrameDelta?: boolean;       // send changed canvases as deltas; default off
   socketCompression?: boolean | Record<string, unknown>;  // permessage-deflate; default on
+  operatorKey?: string;            // enables `/operator/*`; absent, every route there is 404
+  operatorGate?: (c: Context, next: Next) => Response | void | Promise<Response | void>;
+  fabric?: Fabric;                 // cross-process invalidations and nudges; default off
+  telemetry?: Telemetry;           // one span sink; default off
+  signingSeed?: string;            // dev only: a stable assertion signing keypair
 };
 ```
+
+`SessionVerifier` is `(token: string) => string | null | Promise<string | null>`.
 
 `session` is required, deliberately — authentication is the one door that must
 not default open, and it used to. Three answers: `'sessions'` uses moss's own
@@ -168,6 +256,8 @@ the row (one token, or every token a principal holds). The app mints at its
 own door after its own identity check and hands the token to the terminal;
 its table (`SESSIONS_SEQUENCE`) rides `createServer` boot automatically under
 `'sessions'`. Expired rows are swept on every mint — no timer to run.
+`sessionVerifierOf(runtime)` resolves the three-way `session` choice to a
+`SessionVerifier`, and throws when the field is unset.
 
 **Tables go through a ledger.** moss creates no table on its own: its tables are
 [strata](../strata/README.md) sequences — `MOSS_SEQUENCE` (integrations, their
@@ -212,12 +302,35 @@ harness wants and a deployment must opt into out loud.
 Stands up the data layer, **refuses to boot** on an incoherent charter
 (`verifyCharter` + nova's closure audit), memoizes per-principal policy,
 catalogs, and ring-2 variant bindings, mounts the vex surfaces and `/catalog`, and — when the manifest
-declares a shell — the shell host behind the socket. Returns a Hono app extended
-with `{ socket, shells? }`.
+declares a shell — the shell host behind the socket. Also refused at boot: an
+entry whose `reach` names no profile the behaviors declare, and two pages that
+could answer one path. Returns a Hono app extended with the `MossServer`
+members below.
+
+What the server answers over HTTP:
+
+| Path | What |
+|---|---|
+| `GET /catalog` | `{ principal, actions, hash }` — the application, resolved for the caller |
+| `/api/vex` | the vex surface over the full schema: locked (replay-only), scoped per principal |
+| `/api/<resource>/vex` | the same, over one of `app.resources`' entity subgraphs |
+| `/api/integrations/*` | `GET contract` (`?id=`, `?format=md`), `GET verify-key`, `POST frame` (mint a frame grant) |
+| `/integrations/:id/*` | the proxy to an approved integration, as the signed-in caller; plus `frame/:token` (and `frame/:token/:call`) and `hook/*`, which take no session |
+| `/operator/integrations` | list, register (`POST`), `:id/approve`, `:id/probe`, `DELETE :id` — keyed by `x-operator-key` |
+
+The socket is not a Hono route: `server.socket` is fed by the runtime's
+transport (`/socket` under `serve` and `attachSocket`). Every request is
+identified once, from `Authorization: Bearer <token>`: a session token goes
+through the `session` verifier (`401` when it does not resolve); a token with
+the `ik_` prefix is an integration key, resolved with `x-nisc-acts-for`
+through `app.integrationActor` (`401` unknown key, `403` no actor); no header
+is the anonymous principal. There is no `/fns` surface.
 
 #### `MossServer`
 
-`Hono<Env> & { socket: SocketAccept; shells?: ShellHost; principalOf; page; … }`.
+`Hono<Env> & { socket: SocketAccept; shells?: ShellHost; principalOf; page; pages;
+refresh; invalidateIdentity; invalidateTenant; identity; executeAs;
+callIntegration; nudge; generation; close; identities? }`.
 It's a Hono app — mount it, extend it, or hand it to a listener.
 
 - `principalOf(token): Promise<string | null>` — the deployment's own session
@@ -231,6 +344,39 @@ It's a Hono app — mount it, extend it, or hand it to a listener.
   (its name, the `ShellHost` that draws it, the input its path carries), or
   `undefined` for a path that is the app's. The document route and the socket
   ask the same question here.
+- `refresh(): void` — artifacts changed at runtime (actions loaded from rows):
+  re-run the boot gates, drop every per-principal memo and identity record,
+  and have living shells adopt their re-resolved definitions in place. Throws
+  on an incoherent charter or variant set, and the old resolution keeps
+  serving. It also moves the generation pointer, so every other process on the
+  same database does the same within one poll.
+- `generation(): number` — the generation this process last observed (`-1`
+  before the first read).
+- `invalidateIdentity(principal): boolean` — forget one principal's identity
+  record and reset their shell (a role change). `false` = no record was held.
+- `invalidateTenant(tag): number` — forget every identity record wearing the
+  tag the app put on it (`IdentityRecord.tag`); answers how many. Forgets, does
+  not reset shells.
+- `identity(principal): Promise<IdentityRecord>` — the resolved record for one
+  principal, through the same cache the request path uses.
+- `identities?: { list(): IdentityReport[]; meter() }` — the resident identity
+  roster (`{ principal, since, lastSeen }`) and what the cache costs
+  (`{ size, max, resolved, evicted, expired }`). Present only when the app
+  declares `identity`.
+- `executeAs(role, fingerprint, context, scope?): Promise<unknown>` — execute a
+  seeded entry as a declared charter role, for surfaces with no principal by
+  nature. In-process only, replay-only, policy compiled from that role, scope
+  values supplied by server code.
+- `callIntegration(id, path, { principal, method?, body?, scope? }):
+  Promise<Response>` — call an installed integration when nobody is driving;
+  throws unless it is approved and installed for the principal's tenant.
+- `nudge(principal, channel): void` — publish, payload-less, onto one
+  principal's living shell, in whichever process holds it (local `deliver`,
+  then the fabric).
+- `close(): void` — stop every timer the server started (the generation poll,
+  the identity sweep, socket revalidation, the shell idle sweeps). For a host
+  that retires a server in-process; every timer is unref'd, so a process that
+  boots once needs none of it.
 
 ### The document
 
@@ -447,7 +593,76 @@ Tide reads no clocks and paces nothing; this is the thing that does.
   before its own wake ran. It is how work is *recovered*, never how it moves.
 
 Hand `app.facts.tide` the **driver**, not bare tide, so a minted fact wakes
-the engine instead of waiting for somebody's beat.
+the engine instead of waiting for somebody's beat. The driver is `{ ingest,
+fire, wake, stop }`; `stop()` resolves once nothing it started still touches
+the store. `config.now` replaces the clock; `janitorMs` defaults to 5 minutes;
+absent `retention`, nothing is swept.
+
+#### `createTideStore(pool, options?)` / `TIDE_SEQUENCE`
+
+The Postgres store tide runs on, as a strata sequence (`TIDE_SEQUENCE`, tables
+`TIDE_TABLES`). Returns a tide `TideStore` plus `ready: Promise<void>`.
+`mintWrites` is the bridge the fact lane uses.
+
+### Integrations
+
+A separate service registered with the deployment, whose actions join the
+manifest once an operator approves them. The HTTP surfaces are listed under
+[`createServer`](#createserverapp-runtime-promisemossserver); the operator seam
+exists only when `runtime.operatorKey` is set.
+
+- Manifest hooks: `installedIntegrations(principal)` (deprecated and never called — the
+  install list moss filters by is `IdentityRecord.installed`; absent = all), `integrationActor(integration,
+  actsFor)` (the principal a keyed call acts as; `null` refuses), `attachable`
+  and `menuSlots` (where an integration's actions may appear), `assistantTools`,
+  `publishChecks`, `editorRegions` (the names a bundle's declarations may use),
+  `placementNames`, `storePress` (where a bundle's listing images land).
+- `runIntake(payload, ctx): IntakeResult` — validate a bundle:
+  `{ ok: true, bundle } | { ok: false, reasons }`.
+- `initIntegrations(pool)`, `MOSS_SEQUENCE`, `listIntegrations(pool)`,
+  `loadIntegrationActions(pool, upgrader?)`, `integrationByKey(pool, key)`,
+  `listAttachments(pool, hostAction)`, `listPlacements(pool)` — the stored rows.
+- `integrationOfAction(id)`, `filterInstalled(ids, installed)` — which
+  integration an action id belongs to, and the catalog filter.
+- `buildContract(app, integrationId)`, `contractAsMarkdown(contract,
+  fingerprints)` — what `/api/integrations/contract` serves.
+  `describePlacements(bundle, names?)` — the placement sentence stored with an
+  integration's row at registration.
+- `copyPress`, `callIntegrationWith` — the press copy at intake and the
+  machinery behind `server.callIntegration`.
+- `createAssertionSigner(seed?)`, `verifyAssertion(token, verifyKey, now?)` —
+  the ed25519 assertion the proxy signs and an integration verifies.
+  `mintIntegrationKey()` (`ik_…`) and `hashIntegrationKey(key)` — the
+  integration's own credential, stored hashed.
+
+### Many processes
+
+- `runtime.fabric: Fabric` — `{ publish(message), subscribe(apply) }`, the
+  host's transport (Postgres `LISTEN/NOTIFY` is the expected one). It carries
+  three signals to the other processes: `invalidate-identity`,
+  `invalidate-tenant` and `nudge` — what `server.invalidateIdentity`,
+  `invalidateTenant` and `nudge` publish after applying locally. Best-effort:
+  each targets state that heals on its own clock. Unset, every path behaves as
+  in one process. `wireFabric(fabric, origin, apply)` is the wiring, exported
+  for hosts that are not moss's server.
+- `createGeneration(pool, { onMoved, everyMs? }): Generation` — the persistent
+  pointer `server.refresh()` moves (`moss_generation`, part of
+  `MOSS_SEQUENCE`). Each process polls it (`DEFAULT_GENERATION_POLL_MS`, 60s;
+  the server polls on `sessionRevalidateMs`) and drops its derivations when it
+  moves.
+- `createIdentityCache(ctx): IdentityCache` — the cache behind `app.identity`:
+  `{ get, invalidate, invalidateAll, invalidateTag, list, meter, stop }`.
+  Defaults `DEFAULT_IDENTITY_MAX` and `DEFAULT_IDENTITY_IDLE_MS`.
+
+### Telemetry
+
+`runtime.telemetry: { emit(span) }` — one sink, off by default. A
+`TelemetrySpan` is `{ name, startUnixNano, endUnixNano, status: 'ok' | 'error' |
+'refused', attributes, traceId?, spanId?, parentSpanId? }`. Moss emits one per
+vex execution, fn call, integration call, shell build, and socket upgrade and
+close. `emitterOf(telemetry)` wraps a sink so a throwing one costs the caller
+nothing (`undefined` when there is none); `spanClock()` stamps a start and
+measures the end.
 
 ### Resolution (exposed for tools)
 
@@ -455,7 +670,7 @@ the engine instead of waiting for somebody's beat.
   unassigned wears `['public']`.
 - `resolvePolicy(app, grants, principal): ScopePolicy` — the compiled vex policy
   this principal reads and writes under. **One policy per role, merged** — a
-  person may hold several (an instructor who also trains here), and reach belongs
+  person may wear several (an instructor who also trains here), and reach belongs
   to the role rather than to the person. The merge is a union: broadest wins.
 - `resolvePolicyAtReach(app, grants, principal, reach): ScopePolicy` — the same
   principal's grants recompiled under a named profile, for entries that declare
@@ -465,15 +680,31 @@ the engine instead of waiting for somebody's beat.
   sorted, with a content-hash version token (equal hash, equal application).
 - `resolveVariants(app, principal): ReadonlyMap<string, LayoutNode>` — action id →
   the granted variant's layout (ring 2; empty map = every action serves its base).
+- `resolveCatalogForRoles(app, roles, installed)`, `resolveVariantsForRoles(app,
+  roles)`, `resolvePolicyForRoles(app, grants, roles)` — the same resolutions,
+  given roles rather than a principal, for a caller that already resolved who
+  somebody is (the `identity` seam). `resolveRoles`, `resolveCatalog` and the
+  other principal-taking forms read `assignments` only.
+- `wearableOf(app): readonly (readonly string[])[]` — the role combinations the
+  app can produce: `app.wearable`, else derived from `assignments`, deduplicated.
+- `memoKeyOf(app, principal): string` — the key the per-principal memos depend
+  on (roles + installed set), from `assignments` with no install list.
 - `verifyVariants(app): string[]` — the ring-2 boot gate: every variant reshapes a
-  shipped action, and no wearable role combination holds two variants of one
-  action. Non-empty = refuse to boot.
+  shipped action, and no wearable role combination is granted two variants of
+  one action. Non-empty = refuse to boot.
 - `createDataLayer(runtime, entries?): Promise<DataLayer>` — `{ engine, schema,
   grants }`, stood up from what's present.
 - `createShellHost(ctx): ShellHost` — the durable per-principal shell host.
   `ctx.idleMs` bounds how long a shell may sit unattached (default
   `DEFAULT_IDLE_MS`, 30 minutes; `0` disables the sweep).
-- `ShellHost` — `{ session, adopt, list, reset, stop }`.
+- `ShellHost` — `{ session, snapshot, adopt, deliver, list, reset, stop }`.
+  - `session(token, principal, options?)` — `options = { seed?, inputs? }`
+    (`ShellOpening`); `snapshot` is described under [The document](#the-document).
+  - `adopt()` — every living durable shell re-registers its freshly resolved
+    granted definitions in place (what `server.refresh()` calls).
+  - `deliver(principal, channel, payload?): boolean` — publish into one
+    principal's living durable shell. `false` = they have no living shell;
+    nothing is built.
   - `list(): ShellReport[]` — every durable shell alive right now:
     `{ principal, connections, since, idleSince, canvases }`. moss owns the map,
     so moss enumerates it; an app keeping its own note beside it can only drift.
@@ -483,7 +714,7 @@ the engine instead of waiting for somebody's beat.
   - `stop()` — stop the idle sweep (the timer is unref'd, so a plain process
     needn't call it).
 - `ShellSession` — what `ShellHost.session(token, principal)` returns:
-  `{ shell, attach, detach, resync, dispatch, publish, back, reset }`. The living nova `Shell`,
+  `{ shell, attach, detach, resync, dispatch, publish, back, popTo, reset }`. The living nova `Shell`,
   for in-process hosts (dev checks, embedded tools) that drive it directly;
   remote clients ride `attach`/`dispatch`. `shell` is a **getter** — `reset`
   replaces the shell under a session already held, so a snapshot of the field
@@ -495,7 +726,7 @@ the engine instead of waiting for somebody's beat.
 ### The socket protocol
 
 - `createSocket(ctx): SocketAccept` — `ctx = { session, catalog, shells?, page?,
-  revalidateMs? }`. One `accept(url, connection)` per connection; `accept.stop()`
+  revalidateMs?, telemetry? }`. One `accept(url, connection)` per connection; `accept.stop()`
   ends revalidation (the timer is unref'd, so a plain process needn't call it).
 - **Identity is asked twice.** At upgrade, and then every `revalidateMs`
   (default `DEFAULT_REVALIDATE_MS`, 60s; `0` disables) for as long as the
@@ -513,7 +744,7 @@ the engine instead of waiting for somebody's beat.
     interface whose every load silently fails.
 - `Connection` — the transport seam: `{ send, close, onMessage, onClose }`.
 - `ServerMessage` — `hello | catalog | frame | render | render-delta | session | error`.
-- `ClientMessage` — `event | publish | resync | reset | back`.
+- `ClientMessage` — `event | publish | resync | reset | back | popTo`.
 - `render-delta` is only ever sent to a connection that advertised `?delta=1`
   on the upgrade, and only when the server is configured for it. Everything
   else is served whole frames, unchanged. See [Wire size](#wire-size).
@@ -534,8 +765,17 @@ the engine instead of waiting for somebody's beat.
   by whatever canvases moved. Protocol-level, so a browser's back button, a
   TUI's Escape and an app's own control are one message on one wire, and an app
   authors nothing to receive it.
+- `popTo` names a canvas and an instance already on its stack
+  (`{ type: 'popTo', canvas, instance }`): unmount everything above it, in one
+  step — a breadcrumb's jump, which several `back`s would race.
 - `CLOSE_INVALID_TOKEN = 4401`, `CLOSE_SIGNED_OUT = 4403`,
-  `CLOSE_PROTOCOL_MISMATCH = 4426`.
+  `CLOSE_SHELL_FAILED = 4500`, `CLOSE_PROTOCOL_MISMATCH = 4426`. `4500` means
+  the server could not open a session for this connection (commonly a
+  definition failing validation): a `session_failed` error frame naming the
+  failing definitions, then the close. The refusal is that terminal's alone,
+  and reconnecting later is reasonable.
+- `error` codes: `invalid_token`, `session_failed`, `client_too_old`,
+  `server_too_old`, `no_shell` (the app serves no shell), `invalid_message`.
 - **Protocol version.** `PROTOCOL` is the wire protocol this server speaks and
   `PROTOCOL_MIN` the oldest it still serves. A terminal names its protocol on
   the upgrade (`?protocol=N`, beside the token); one that names none speaks `1`,
@@ -544,7 +784,9 @@ the engine instead of waiting for somebody's beat.
   (`client_too_old` or `server_too_old`) and a `4426` close. `hello` carries
   `protocol`, so a terminal can refuse a server older than it can speak to.
   Bump `PROTOCOL` when a message changes shape; raise `PROTOCOL_MIN` only when
-  the server stops speaking an old one.
+  the server stops speaking an old one. Both are `1` today. `PROTOCOL`,
+  `PROTOCOL_MIN` and `CLOSE_PROTOCOL_MISMATCH` are defined in `src/socket.ts`
+  and are not re-exported from the package root.
 - **`?path=`** — the path the terminal is on. A path that leads to a page is
   served that page's shell, built for this connection alone and seeded with the
   path's parameters; any other path (and no path) is the app's shell. A
@@ -592,7 +834,7 @@ copy runs from the old frame plus literal inserts, checksummed.
 
 ```typescript
 // server
-const server = await serve(app, { pool, db, shellFrameDelta: true });
+const server = await serve(app, { pool, db, session: 'sessions', shellFrameDelta: true });
 
 // terminal — both ends have to want it
 const wire = createWire({ delta: true });
@@ -645,6 +887,30 @@ Correctness, which matters more than the saving:
   `index.html` itself never goes out as a file. Register the app's own routes
   first; this is the catch-all. `owned` (default: moss's own prefixes) names
   what is never a page — an unknown path under one is a 404, not a screen.
+- `MOSS_PATHS` — the prefixes the app server answers itself:
+  `/^\/(api|catalog|socket|operator|integrations)(\/|$)/`. The default `owned`
+  here and in the dev plugin.
+
+## `@niscorp/moss/vite`
+
+Requires the optional `vite` peer.
+
+- `mossDev(options): Plugin` — the app server inside vite's dev process
+  (serve only): no proxy and no second process. The socket is attached once to
+  vite's own http server; `/` and any path a page answers go out as
+  `index.html` through `transformIndexHtml` with the screen drawn in
+  (`renderDocument`); `MOSS_PATHS` go to the app server; the rest is vite's.
+  An edit under a watched path re-boots the whole app and reloads the page;
+  the outgoing server answers until the new one is up, and a failed re-boot
+  keeps it.
+  - `options.app(load): Promise<DevApp>` — stand the app up. `load` is vite's
+    `ssrLoadModule`. `DevApp = { server, close?, draw?, htmlAttributes?,
+    tokenKey?, signIn? }`; absent `draw`, pages go out undrawn.
+  - `signIn(who)` enables `/dev/as/<who>`: it stores the returned token (and
+    its cookie copy) and goes to `/`. `null` is nobody of that name.
+  - `watch?: RegExp` (default: `src/app`, `src/server`, `src/db`, `src/ui` and
+    the nisc config), `index?` (default `index.html`), `owned?` (default
+    `MOSS_PATHS`), `label?` (default `moss`).
 
 ## `@niscorp/moss/client`
 
@@ -668,7 +934,8 @@ Correctness, which matters more than the saving:
   token itself — so it adds no way in.
 - `readDocumentSnapshot(doc?): DocumentSnapshot | undefined` — the snapshot a
   server-drawn page carries (`{ frame, trees, principal, seed?, path?, live? }`),
-  or `undefined` for a page that carries none. Never throws.
+  or `undefined` for a page that carries none. Never throws. `principal` is a
+  boolean — whether the page was drawn for somebody — never who.
 - `initial` — pass what `readDocumentSnapshot()` returned. The wire starts from
   it instead of from nothing, so the first render matches the page's HTML and
   the first frames off the socket confirm it. It is used only when it was drawn
@@ -681,7 +948,7 @@ Correctness, which matters more than the saving:
   is `false`, the wire does not connect and `status()` is `'static'`. `reset()`,
   or a token arriving, connects after all.
 - `Wire` — `{ subscribe, snapshot, status, dispatch(canvas, event), publish,
-  reset, back, dispose }`. `snapshot()` is `{ frame, trees }`; `status()` is
+  reset, back, popTo(canvas, instance), dispose }`. `snapshot()` is `{ frame, trees }`; `status()` is
   `'connecting' | 'open' | 'closed' | 'incompatible' | 'static'` and changes notify subscribers like
   snapshot changes do (a renderer must be able to tell a dead socket from an
   empty app). Hand it to a renderer.
@@ -859,7 +1126,7 @@ Requires the optional `vue` peer.
   as props and the content as its default slot.
 - **Adoption**, as the react target: a root that holds server-drawn elements,
   on a wire with a frame, is mounted with `createSSRApp` and adopted.
-- `registerWireSlots(registry, slotWrapper?)`, `terminalFrame(api, registry)` —
+- `registerWireSlots(registry, slotWrapper)`, `terminalFrame(api, registry)` —
   the wire slots and the frame component, shared with the server entry.
 
 ### `@niscorp/moss/terminal/vue/server`
@@ -870,9 +1137,10 @@ Requires the optional `vue` peer.
 
 ## `@niscorp/moss/terminal/dom`
 
-- `domTarget({ root, registry? }): Target` — nova's DOM adapter plus nova's
-  default component kit rendered into `root`, stylesheet injected once per
-  document. Zero framework; pass a registry to restyle. It needs no adoption:
+- `domTarget({ root, registry? }): Target` — nova's DOM adapter rendered into
+  `root`. Omit `registry` for nova's default component kit, with its
+  stylesheet injected once per document and its class on the root; pass your
+  own and nothing is injected — the look is the app's. Zero framework. It needs no adoption:
   the first render of nova's DOM adapter replaces server-drawn elements with
   the same elements in one synchronous step. Every render after it patches: an
   element whose part of the tree did not change is the same node, so a wire

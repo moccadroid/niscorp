@@ -10,7 +10,7 @@ Every nisc package answers one question: vex answers *what*, nova *how it looks*
 pnpm add @niscorp/tide zod
 ```
 
-`zod` is the only peer dependency. Storage, selection, transformation, effects and identity are seams the host fills.
+`zod` is the only required peer; `@niscorp/cortex` is an optional one, used only by `@niscorp/tide/agent`. Storage, selection, transformation, effects and identity are seams the host fills.
 
 ## Quick example
 
@@ -143,4 +143,4 @@ Pre-1.0. The grammar and the store contract are the parts to hold still; everyth
 
 ## License
 
-MIT
+Apache-2.0
