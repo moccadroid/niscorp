@@ -11,15 +11,18 @@ import type { NiscMossProject, NiscProject, NiscShellProject } from './project';
 import { defaultPaths, fileOf, routeTable } from './routes';
 import { shellRouteTable, shellSite, surveyShell } from './shell-site';
 import type { ShellRouteReport } from './shell-site';
+import { siteHandler } from './site';
+import { writeStylesheetIntoPage } from './stylesheet';
 
 // ═══════════════════════════════════════════════════════════════
 // What `nisc` does. Each command is the app's own machinery, run in order:
 //
 //   dev     the app's own vite, with the app server inside it when it has one
-//   build   bundle the terminal, then draw every path once and say how each is
-//           served — a file, or a server
+//   build   bundle the terminal and write its stylesheet into its page, then
+//           draw every path once and say how each is served — a file, or a server
 //   export  build, then write every path as a file: the whole site as a folder
-//   start   serve the built terminal from the app's own process, pages drawn
+//   start   serve the built terminal from the app's own process, pages drawn —
+//           compressed, and with what a browser may keep said (./site)
 //   check   the app's check suite
 //
 // Nothing here knows an app. How it boots and how a screen is drawn come from
@@ -65,9 +68,28 @@ const toolOf = (root: string, name: string, bin: string): string => {
 
 const distOf = (root: string, project: NiscProject): string => resolve(root, project.dist ?? 'dist');
 
-const bundle = (options: CommandOptions): void => {
+// The app's own vite, and then the one thing done to what it wrote: the page's
+// stylesheet goes into the page (./stylesheet). A terminal that is already built
+// (`skipBundle`) is taken as it is.
+const bundle = (options: CommandOptions, project: NiscProject): void => {
   const result = spawnSync(process.execPath, [toolOf(options.root, 'vite', 'vite'), 'build'], { cwd: options.root, stdio: 'inherit' });
   if (result.status !== 0) throw new Error('nisc: the bundler failed — nothing was drawn.');
+  if (project.stylesheet === 'file') return;
+  const print = say(options);
+  const { inPage, left } = writeStylesheetIntoPage(distOf(options.root, project));
+  if (inPage.length + left.length > 0) print('');
+  for (const sheet of inPage) print(`nisc: ${sheet.href} is in the page (${(sheet.bytes / 1024).toFixed(1)} kB) — one response paints it`);
+  for (const sheet of left) print(`nisc: ${sheet.href} stays a file — ${sheet.why}`);
+  if (inPage.length > 0) print("      A Content-Security-Policy that forbids inline styles would refuse it: `stylesheet: 'file'` in nisc.config.ts keeps it a file.");
+};
+
+// `start` tells browsers to keep what is under /assets/ for a year — right for
+// what the bundler writes there, named by its content. The bundler also copies
+// the app's public/ as it is, so a file of the app's own under public/assets/
+// would be kept just as long, under a name that says nothing about its content.
+const warnOfOwnAssets = (options: CommandOptions): void => {
+  if (!existsSync(join(options.root, 'public', 'assets'))) return;
+  say(options)('nisc: public/assets/ holds files of your own. `nisc start` has browsers keep everything under /assets/ for a year, so a change to one of them will not be seen under the same name — keep them elsewhere in public/.');
 };
 
 // Stand the app up, draw every path once for nobody, let the app go.
@@ -110,7 +132,8 @@ const buildShell = async (options: CommandOptions, project: NiscShellProject): P
 
 export const build = async (options: CommandOptions): Promise<BuildResult> => {
   const project = await loadProject(options.root);
-  if (options.skipBundle !== true) bundle(options);
+  if (options.skipBundle !== true) bundle(options, project);
+  warnOfOwnAssets(options);
   if (isShellProject(project)) return buildShell(options, project);
   const routes = await survey(options, project);
   say(options)('');
@@ -177,12 +200,12 @@ export const start = async (options: CommandOptions): Promise<{ url: string; clo
   if (isShellProject(project)) {
     // no server shell, no socket: each path's first answer is its screen, drawn
     // from a boot of the app's own, and the page's shell takes it from there
-    const httpServer = serve({ fetch: shellSite(project, dist), port });
+    const httpServer = serve({ fetch: siteHandler(shellSite(project, dist)), port });
     const url = await listening(httpServer, options);
     say(options)(`nisc: serving ${url} — the built app, each path’s first screen drawn; the shell is the page’s own`);
     return { url, close: async () => void httpServer.close() };
   }
-  const { attachSocket, mountSite } = await import('@niscorp/moss/node');
+  const { attachSocket, mountSite, MOSS_PATHS } = await import('@niscorp/moss/node');
   const booted = await project.boot();
   await project.routes?.(booted.server);
   mountSite(booted.server, {
@@ -191,7 +214,8 @@ export const start = async (options: CommandOptions): Promise<{ url: string; clo
     ...(project.htmlAttributes !== undefined ? { htmlAttributes: project.htmlAttributes } : {}),
     ...(project.tokenKey !== undefined ? { tokenKey: project.tokenKey } : {}),
   });
-  const httpServer = serve({ fetch: booted.server.fetch, port });
+  // what the app server answers itself is its own to say; the rest is the site
+  const httpServer = serve({ fetch: siteHandler(booted.server.fetch, { except: MOSS_PATHS }), port });
   attachSocket(httpServer, booted.server.socket);
   const url = await listening(httpServer, options);
   say(options)(`nisc: serving ${url} — the built terminal, its pages drawn; the socket at /socket`);

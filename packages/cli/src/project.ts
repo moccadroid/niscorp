@@ -34,6 +34,11 @@ import type { Shell } from '@niscorp/nova';
 type Common = {
   // Where the bundler writes the terminal (default `dist`), relative to the root.
   dist?: string;
+  // Where the built page's stylesheet goes. `page` (the default): written into
+  // index.html as a <style>, so the first response paints the screen. `file`:
+  // left as the bundler linked it — what a Content-Security-Policy that forbids
+  // inline styles needs.
+  stylesheet?: 'page' | 'file';
   // The app's check suite, for `nisc check` (default `src/dev/all-checks.ts`).
   checks?: string;
 };

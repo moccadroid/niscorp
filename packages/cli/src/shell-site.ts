@@ -226,6 +226,9 @@ export const shellRouteTable = (routes: readonly ShellRouteReport[]): string => 
 // everything else in the built folder is a file. No checks here — a build made
 // them; a screen that will not draw goes out as the template, and the page's
 // own boot paints it as it did before any of this existed.
+//
+// What a browser may keep of all this, and how it travels, is not said here:
+// `start` puts that around this handler (./site), as it does around moss's.
 
 const TYPES: Record<string, string> = {
   '.html': 'text/html; charset=utf-8',
@@ -253,8 +256,13 @@ export const shellSite = (project: NiscShellProject, dist: string): ((request: R
     const path = decodeURIComponent(new URL(request.url).pathname);
     if (path !== '/' && path !== '/index.html') {
       const file = resolve(base, `.${path}`);
-      if ((file === base || file.startsWith(base + sep)) && existsSync(file) && statSync(file).isFile()) {
-        return new Response(readFileSync(file), { headers: { 'content-type': TYPES[extname(file)] ?? 'application/octet-stream' } });
+      const stats = file === base || file.startsWith(base + sep) ? statSync(file, { throwIfNoEntry: false }) : undefined;
+      if (stats?.isFile() === true) {
+        // How big it is and when it last changed — what `start` needs to say
+        // what a browser may keep, and to answer "has it changed?" (./site).
+        return new Response(readFileSync(file), {
+          headers: { 'content-type': TYPES[extname(file)] ?? 'application/octet-stream', 'content-length': String(stats.size), 'last-modified': stats.mtime.toUTCString() },
+        });
       }
       // a name with an extension that is not there is a missing file, not a page
       if (extname(path) !== '') return new Response('not found', { status: 404 });

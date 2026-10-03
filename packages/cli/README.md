@@ -60,6 +60,7 @@ page in the manifest), and what each one needs once it has been drawn.
 | `paths?` | the paths to build. Default: `/` and every page whose path has no parameter. A page like `/docs/:slug` has as many paths as there are rows — list them here (`server.executeAs` runs a seeded read as a charter role) |
 | `routes?` | routes of the app's own that `nisc start` registers before the site (a sign-in handoff, a webhook) |
 | `dist?` | where the bundler writes the terminal (default `dist`) |
+| `stylesheet?` | where the built page's stylesheet goes: `'page'` (the default — written into `index.html`, see `nisc build`) or `'file'` (left as the bundler linked it) |
 | `checks?` | the check suite `nisc check` runs (default `src/dev/all-checks.ts`) |
 | `tokenKey?` | the wire's token key, when it is not `nisc.token` |
 | `dev?` | what only `nisc dev` uses: `dev.signIn(server, who)` mints a token for `/dev/as/<who>` (`null`: nobody of that name) |
@@ -114,7 +115,7 @@ at all — nova's DOM adapter, `renderToString` from
 | `htmlAttributes?` | what the kit would put on `<html>` from an effect |
 | `paths?` | the paths to build (default `/`) — an app that maps paths to actions lists its own |
 | `waitMs?` | how long a build waits for a screen to be whole (default 5000) |
-| `dist?`, `checks?` | as above |
+| `dist?`, `stylesheet?`, `checks?` | as above |
 
 The built `index.html` must hold the empty root, `<div id="root"></div>` — that
 is where a screen goes. The adoption check needs a DOM: `jsdom`, installed in
@@ -126,6 +127,28 @@ that hands over both `boot` and `shell` has not said which it is, and is
 refused.
 
 ## `nisc build`
+
+**Either kind: the stylesheet goes in the page.** A drawn page arrives as
+markup, and a browser paints none of it until it has the stylesheet — as a file
+of its own, a second round trip before the first paint. So once the app's vite
+has bundled, the `index.html` it wrote has each stylesheet it links written
+into it as a `<style>`, and one response paints the page. It is done once, to
+the file in `dist/`, so `build`, `export`, `start` and moss's document all hand
+out the same head. The stylesheet's own file stays in `dist/`.
+
+```
+nisc: /assets/index-DALMMv7I.css is in the page (0.7 kB) — one response paints it
+```
+
+A link is left as it is, and the build says why, when moving the stylesheet
+could change what it means: the link says more than where the file is (a
+`media`, a `title`), the file is not in `dist/` (another origin, a vite `base`),
+or the stylesheet names another file relative to itself (`url(font.woff2)`,
+`@import`). Vite writes those as absolute paths, which survive.
+
+`stylesheet: 'file'` in the config turns it off — what an app needs when its
+host sends a `Content-Security-Policy` that forbids inline styles. With
+`--skip-bundle` the page is taken as it is: whoever built it finished it.
 
 **An app with its own shell.** Bundles the app, then for every path boots it,
 draws it, and checks what it drew:
@@ -197,6 +220,11 @@ will stand beside the files — the socket at `/socket` on the same origin —
 `--allow-live` writes the site anyway: each such file is a true first screen,
 and its terminal connects.
 
+A folder carries no headers, so what a browser may keep of it is the host's to
+say. What `nisc start` says is the rule to give it: everything under `/assets/`
+kept for a year (`public, max-age=31536000, immutable`), everything else asked
+about each time (`no-cache`).
+
 ## `nisc start`
 
 **An app with its own shell:** serves the built folder, and answers each path
@@ -207,7 +235,30 @@ as the app answers now, not as it answered at build. No shell is kept.
 every page **drawn for whoever is asking** — the app's own screen at `/`, a
 manifest page at its path. A signed-in person gets their screen in the markup
 (`private, no-store`); nobody gets the page as nobody sees it. `--port <n>`, or
-`$PORT`, default 8787.
+`$PORT`, default 8787. A name with an extension that is neither a file in
+`dist/` nor a page is a missing file, answered 404 — never a screen.
+
+**Either kind**, around the app's handler:
+
+- **What a browser may keep.** What the bundler wrote under `/assets/` is named
+  by its content: `public, max-age=31536000, immutable` — kept for a year, not
+  asked about again. Every other file is `no-cache`: asked about each time, and
+  answered `304` when it has not changed. An answer that already says for
+  itself is left alone — a drawn document does (`no-cache` for nobody,
+  `private, no-store` for somebody).
+- **How it travels.** Text a browser reads — the document, scripts,
+  stylesheets, JSON, SVG, wasm — goes out compressed, brotli or gzip by what
+  was asked for (`Vary: Accept-Encoding`), a piece at a time: an answer that
+  streams still streams. Fonts and images are already compressed and are left
+  alone, and so is an event stream.
+
+Neither touches the app server's own paths (`/api`, `/catalog`, `/socket`,
+`/operator`, `/integrations`): what those answer is theirs to say.
+
+The bundler copies the app's `public/` into `dist/` as it is. A file of the
+app's own under `public/assets/` would be kept for a year under a name that
+says nothing about its content — `nisc build` says so when it finds one. Keep
+such files elsewhere in `public/`.
 
 ## `nisc dev`
 
@@ -241,7 +292,7 @@ with the app's own `tsx`. Its exit code is the suite's.
 | `--root <dir>` | the app's root (default: the current directory) |
 | `--out <dir>` | `export`: where the files go (default `out`) |
 | `--allow-live` | `export`: write even though some path wants a server |
-| `--skip-bundle` | `build`, `export`: the terminal is already built |
+| `--skip-bundle` | `build`, `export`: the terminal is already built — it is neither bundled nor has its stylesheet written into its page |
 | `--port <n>` | `dev`, `start`: the port (`start`: `$PORT`, then 8787) |
 
 ## License

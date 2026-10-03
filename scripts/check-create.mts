@@ -15,13 +15,17 @@
 //   the rulebook its AGENTS.md names is installed
 //   it typechecks
 //   its checks pass (`nisc check`)
-//   it builds (`nisc build`) — and, with its own shell, exports its first
-//   screen as a file with the app's name in it
+//   it builds (`nisc build`) — the page it built holds its stylesheet — and,
+//   with its own shell, exports its first screen as a file with the app's name
+//   in it
+//   `nisc start` serves what it built: the drawn page and its script
+//   compressed, the script kept, a file that is not there a 404
 //
 // Run after `pnpm build`: `pnpm check:create`. Exits non-zero on any failure.
 
-import { execFileSync, execSync } from 'node:child_process';
+import { execFileSync, execSync, spawn } from 'node:child_process';
 import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 
@@ -53,6 +57,55 @@ const step = (label: string, run: () => void): boolean => {
   } catch (error) {
     results.push({ label, ok: false, detail: said(error) });
     return false;
+  }
+};
+
+const stepAsync = async (label: string, run: () => Promise<void>): Promise<boolean> => {
+  try {
+    await run();
+    results.push({ label, ok: true });
+    return true;
+  } catch (error) {
+    results.push({ label, ok: false, detail: said(error) });
+    return false;
+  }
+};
+
+const pause = (ms: number): Promise<void> => new Promise((done) => setTimeout(done, ms));
+const freePort = (): Promise<number> =>
+  new Promise((done, fail) => {
+    const probe = createServer();
+    probe.once('error', fail);
+    probe.listen(0, () => {
+      const address = probe.address();
+      const port = address !== null && typeof address === 'object' ? address.port : 0;
+      probe.close(() => done(port));
+    });
+  });
+
+// `nisc start` on the app as made — its own installed command, listening for
+// real on a port of its own, asked the way a browser asks, and stopped.
+const whileServed = async (dir: string, ask: (base: string) => Promise<void>): Promise<void> => {
+  const port = await freePort();
+  const base = `http://127.0.0.1:${port}`;
+  const child = spawn(process.execPath, [join(dir, 'node_modules', '@niscorp', 'cli', 'bin', 'nisc.js'), 'start', '--port', String(port)], { cwd: dir, stdio: ['ignore', 'pipe', 'pipe'] });
+  let log = '';
+  child.stdout.on('data', (chunk: Buffer) => (log += chunk.toString()));
+  child.stderr.on('data', (chunk: Buffer) => (log += chunk.toString()));
+  try {
+    const deadline = Date.now() + 60_000;
+    for (;;) {
+      try {
+        if ((await fetch(`${base}/`)).ok) break;
+      } catch {
+        // not up yet
+      }
+      if (Date.now() > deadline) throw new Error(`nisc start did not come up:\n${log}`);
+      await pause(200);
+    }
+    await ask(base);
+  } finally {
+    child.kill('SIGTERM');
   }
 };
 
@@ -119,7 +172,31 @@ try {
     });
     step(`${kind.name}: typechecks`, () => void pnpm(['run', 'typecheck'], dir));
     step(`${kind.name}: its checks pass`, () => void pnpm(['run', 'check'], dir));
-    step(`${kind.name}: builds`, () => void pnpm(['run', 'build'], dir));
+    const built = step(`${kind.name}: builds`, () => void pnpm(['run', 'build'], dir));
+    if (!built) continue;
+    step(`${kind.name}: the page it built holds its stylesheet`, () => {
+      const html = readFileSync(join(dir, 'dist', 'index.html'), 'utf8');
+      if (!html.includes('<style>')) throw new Error('dist/index.html has no <style>');
+      if (/<link[^>]*rel="stylesheet"/.test(html)) throw new Error('dist/index.html still links a stylesheet as a file');
+    });
+    await stepAsync(`${kind.name}: \`nisc start\` serves what it built — compressed, the script kept, a missing file a 404`, () =>
+      whileServed(dir, async (base) => {
+        const browser = { 'accept-encoding': 'br' };
+        const page = await fetch(`${base}/`, { headers: browser });
+        const html = await page.text();
+        if (page.headers.get('content-encoding') !== 'br') throw new Error(`the page was not compressed (content-encoding: ${page.headers.get('content-encoding')})`);
+        if (!html.includes('<style>') || html.includes('<div id="root"></div>')) throw new Error('the page is not the built page with its screen drawn');
+        const script = /src="(\/assets\/[^"]+\.js)"/.exec(html)?.[1];
+        if (script === undefined) throw new Error('the page names no script under /assets/');
+        const asset = await fetch(`${base}${script}`, { headers: browser });
+        await asset.arrayBuffer();
+        if (asset.headers.get('cache-control') !== 'public, max-age=31536000, immutable') throw new Error(`${script} is not kept (cache-control: ${asset.headers.get('cache-control')})`);
+        if (asset.headers.get('content-encoding') !== 'br') throw new Error(`${script} was not compressed`);
+        const missing = await fetch(`${base}/assets/index-GONE0000.js`, { headers: browser });
+        await missing.arrayBuffer();
+        if (missing.status !== 404) throw new Error(`a file that is not there was answered ${missing.status} ${missing.headers.get('content-type')}`);
+      }),
+    );
     if (kind.ownShell) {
       step(`${kind.name}: exports its first screen as a file`, () => {
         pnpm(['run', 'export', '--', '--skip-bundle'], dir);

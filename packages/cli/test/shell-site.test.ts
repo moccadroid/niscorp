@@ -111,6 +111,15 @@ describe('nisc start — an app with its own shell', () => {
     // nothing above the built folder is reachable
     expect((await site(new Request('http://localhost/..%2Fnisc.config.ts'))).status).toBe(404);
   });
+
+  it('a built file says how big it is and when it last changed — what `start` keeps and compresses by', async () => {
+    const file = await site(new Request('http://localhost/assets/app.js'));
+    expect(file.headers.get('content-type')).toBe('text/javascript; charset=utf-8');
+    expect(file.headers.get('content-length')).toBe(String((await file.arrayBuffer()).byteLength));
+    expect(Number.isNaN(Date.parse(file.headers.get('last-modified') ?? ''))).toBe(false);
+    // what may be kept is not this handler's to say (../src/site)
+    expect(file.headers.has('cache-control')).toBe(false);
+  });
 });
 
 describe('placeScreen', () => {
