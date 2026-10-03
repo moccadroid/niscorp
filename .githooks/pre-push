@@ -1,5 +1,0 @@
-#!/bin/sh
-# Nothing reaches the remote that the Verify workflow would reject: the same
-# steps, in the same order, run here first (.github/workflows/verify.yml).
-# Installed by `pnpm install` (the root `prepare` script sets core.hooksPath).
-exec pnpm verify
