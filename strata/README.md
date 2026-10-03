@@ -13,10 +13,14 @@ changed that older readers were never told about.
   addition needs only an empty marker — strict readers at the old version must
   still refuse the newer documents. A rename or removal needs the steps that
   rewrite old documents. Then `pnpm strata:snapshot` records the new version.
-- **A recorded snapshot is history. Never edit one.**
+- **A recorded snapshot is history. Never edit one.** The one exception is not
+  an edit: when the grammar did not change but what records it did (the
+  validator describing the same schema differently), `pnpm strata:snapshot
+  --rebaseline` re-records the current version — only while the corpus passes,
+  and in a commit that changes nothing else.
 
-**`corpus/<app>/<stamp>.json`** — every action and fragment each lab app
-ships, captured with the grammar stamp it was written at (`pnpm
+**`corpus/<app>/<stamp>.json`** — every action and fragment five lab apps
+ship (atrium, encore, lyceum, lyra, relay), captured with the grammar stamp it was written at (`pnpm
 strata:corpus`, after `pnpm build`). The gate upgrades every one to the
 current grammars and parses it with the current strict schemas: the snapshot
 says something moved, the corpus says whether real documents survive it.

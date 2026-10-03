@@ -16,11 +16,11 @@ A Prism config is a JSON structure that describes a transformation. It can be:
 
 ### Source Data
 
-Every evaluation takes a `source` object — the data the transformation reads from via `$ref`.
+Every evaluation takes a `source` — the data the transformation reads from via `$ref`. `evaluate` accepts any JSON value (object, array, or scalar); `"$"` is the whole of it.
 
 ### Bindings and Variables
 
-`$ref` reads from source. `$var` reads from scoped variables created by `$with`, `$map`, `$filter`, `$reduce`, and `$sortBy`.
+`$ref` reads from source. `$var` reads from scoped variables created by `$with`, `$map`, `$filter`, `$reduce`, `$sortBy`, `$keyBy`, `$groupBy`, `$update`, and `$walk`.
 
 ### Optional Fields
 
@@ -87,7 +87,7 @@ Navigates into a value using an array of path segments. Segments can be strings 
 { "$get": { "from": { "$ref": "$.data" }, "path": ["missing"], "fallback": { "$const": "N/A" } } }
 ```
 
-Without `fallback`, throws `E_MISSING_PATH`. With `fallback`, returns the fallback value instead.
+Without `fallback`, throws `E_MISSING_PATH` when the path is missing, and `E_TYPE` when a key is asked of a non-object or an index of a non-array. With `fallback`, returns the fallback value in either case.
 
 Dynamic segments:
 ```json
@@ -281,6 +281,14 @@ Numbers → `"42"`, null → `"null"`, objects → JSON string.
 }
 ```
 Replaces `{{key}}` placeholders with values from the evaluated object. Missing keys become empty strings.
+
+### `$fill` — Fill a counted phrase
+```json
+{ "$fill": { "$ref": "$.progress" } }
+```
+Source: `{ "progress": { "phrase": "{n} of {total}", "slots": { "n": 1, "total": 12 } } }` → `"1 of 12"`
+
+Takes a node that evaluates to a pattern value `{ phrase, slots }` and replaces each `{name}` hole with its slot, in the source language. A slot that is itself a pattern is filled recursively; a hole with no slot (or a null one) is left as written. Anything that is not a pattern passes through unchanged.
 
 ### `$trim`
 ```json
@@ -545,7 +553,7 @@ removal. Changes to the grammar are strata migrations on `nisc.prism`
 
 ## Time Operations
 
-Powered by [dayjs](https://day.js.org/). Date values can be ISO 8601 strings or Unix timestamps (milliseconds).
+Powered by [dayjs](https://day.js.org/). Date values can be ISO 8601 strings or Unix timestamps (milliseconds). A date-only string (`YYYY-MM-DD`) is parsed and computed in UTC, so the calendar day survives the round trip.
 
 ### `$date` — Format a date
 ```json
@@ -564,7 +572,7 @@ reads: for that, use `$localeDate` below.
 { "$dateAdd": { "date": { "$ref": "$.startDate" }, "amount": 30, "unit": "day" } }
 { "$dateAdd": { "date": { "$ref": "$.now" }, "amount": -1, "unit": "hour" } }
 ```
-Returns ISO 8601 string. Units: `year`, `month`, `day`, `hour`, `minute`, `second`.
+Returns ISO 8601 string — or, when the input is a date-only string (`"2026-06-01"`), a date-only string (`"2026-07-01"`). Units: `year`, `month`, `day`, `hour`, `minute`, `second`.
 
 ### `$dateDiff` — Date difference
 ```json
@@ -583,6 +591,9 @@ CLDR rather than from a table in this package.
 `locale` is required on all three. There is no default, deliberately: a default
 renders something plausible for everybody it is wrong for, and the only way to
 discover it is a reader in Vienna being shown American dates.
+
+All three take an optional `fallback` (default `""`), returned when `value` is
+null or an empty string — before `locale` is even looked at.
 
 ### `$localeMoney` — an amount as money
 ```json
@@ -650,7 +661,7 @@ Desugars to `$reduce` + `$add`. Empty array → `0`.
 ```json
 { "$avg": { "over": { "$ref": "$.scores" } } }
 ```
-Desugars to `$div($sum, $count)`.
+Desugars to `$div($sum, $count)`. Empty array → `E_DIVISION_BY_ZERO`.
 
 ### `$count` — Count elements
 ```json
@@ -707,7 +718,7 @@ const ir = await compile(config, { name: 'user-transform', version: '1.0.0' });
 // ir contains:
 // - Desugared config (sugar ops already resolved)
 // - SHA256 fingerprint (for cache invalidation)
-// - Stats (node count, op frequency, max depth)
+// - Stats (node count, op frequency, max depth, optimizations applied)
 // - Tables (all JSONPaths and string literals for cache priming)
 
 const result1 = execute(ir, source1); // No validation, no desugaring
@@ -715,6 +726,19 @@ const result2 = execute(ir, source2); // 2-5x faster than evaluate()
 ```
 
 The IR is JSON-serializable — store it in a database, cache in Redis, send over a wire.
+
+## Limits
+
+`evaluate`, `evaluateSafe` and `execute` take an optional third argument, a
+`Partial<Limits>`, merged over `DEFAULT_LIMITS`:
+
+| Limit | Default | Counts |
+|-------|---------|--------|
+| `maxSteps` | `1_000_000` | Nodes evaluated in one evaluation |
+| `maxStringLength` | `1_000_000` | Characters in any one string a node produces |
+| `maxValues` | `1_000_000` | Values (scalars, array items, object fields) in a `$reduce` accumulator, a `$with` binding, or the result |
+
+Past any of them the evaluation throws `E_BUDGET`.
 
 ## Error Codes
 
@@ -727,5 +751,7 @@ The IR is JSON-serializable — store it in a database, cache in Redis, send ove
 | `E_DATE_INVALID` | Invalid date value |
 | `E_VAR_NOT_FOUND` | `$var` references undefined variable |
 | `E_NODE_SHAPE` | Unrecognized node structure |
+| `E_ASSERT` | A config's own `$assert` refused its input |
+| `E_BUDGET` | Evaluation went past a limit (see Limits) |
 
 All errors are instances of `PrismError` with `.code` and optional `.context`.

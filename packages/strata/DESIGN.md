@@ -204,5 +204,8 @@ whose result fails the current schema stops the plan: no edit could pass.
 
 ## Open
 
-npm publishing (every package ships its first version with this in it);
-lyceum and midas capture their own corpus and keep their own locks.
+midas captures its own corpus and keeps its own lock, on its own schedule.
+Closed since this was written: npm publishing ran on 2026-10-03 (every package
+shipped its first version with this in it), and lyceum adopted — its tables are
+the `lyceum.app` sequence, its source has a lock, its documents are in the
+corpus.

@@ -27,8 +27,9 @@ execute.
    LLM code. Natural-language→DSL and rows→shape are two optional function
    hooks (`generateDsl`, `mapToShape`). With them, Vex answers free-form
    requests. Without them, it is a deterministic DSL compiler + executor + cache
-   that still serves any already-cached shape. Cortex/Signal/Prism are optional
-   peer dependencies, not hard ones.
+   that still serves any already-cached shape. Cortex (and Signal behind it) is
+   an optional peer dependency, not a hard one; Prism is required, because a
+   stored mapping is Prism IR and the engine executes it.
 3. **Shape-only caching.** The positive cache key is a hash of the request's
    *shape* with all values replaced by type tokens. Two requests with the same
    structure but different values share a cache entry. Intent is deliberately
@@ -53,13 +54,14 @@ execute.
 
 ```
                        ┌──────────────────────────────────────┐
-   QueryRequest        │  { intent?, shape, context }          │
-   + ExecuteOptions    │  options: { scope?, cache?, entities?} │
+   QueryRequest        │  { fingerprint?, intent?, shape?,     │
+                       │    context }                          │
+   + ExecuteOptions    │  options: { scope?, entities?, locked?}│
                        └────────────────┬─────────────────────┘
                                         ↓
                        ┌──────────────────────────────────────┐
                        │  Validate (Zod) + hash                │
-                       │  shapeHash (positive key)             │
+                       │  fingerprint (positive key)           │
                        │  requestHash (negative key / single-  │
                        │  flight)                              │
                        └────────────────┬─────────────────────┘
@@ -68,7 +70,8 @@ execute.
                        │  Cache read                           │
                        │  positive HIT → cached DSL (+ Prism IR)│
                        │  negative HIT → throw unsatisfiable   │
-                       │  miss + mode 'only' → throw cache_miss │
+                       │  fingerprint alone, unknown → throw   │
+                       │  cache_miss                           │
                        └────────────────┬─────────────────────┘
                             miss ↓                 ↑ hit (skip generation)
                        ┌──────────────────────────────────────┐
@@ -127,7 +130,8 @@ A constrained JSON structure (`schemas/`) that can only express safe, valid
 queries. Top level (`QuerySchema`):
 
 - `from` — array of entity names or `{ as, query }` subqueries (min 1).
-- `fields` — array of `entity.field` paths (min 1; **required** — no `SELECT *`).
+- `fields` — array of `entity.field` paths or `{ field, as }` (no `SELECT *`;
+  optional when `aggregate` is present — a query needs at least one of the two).
 - `filter` — a recursive `FilterSchema` union.
 - `compute` — record of `alias → ComputeExpression` (arithmetic, `concat`,
   `coalesce`, `case`).
@@ -217,12 +221,14 @@ Identity is the **fingerprint** (see Cache v2 below). The supporting hashes:
   a mismatch means the cached DSL may reference changed columns, so the entry is
   treated as a miss and evicted. Stable across restarts so warm-up entries
   aren't wrongly discarded.
-- **Entry kinds.** A discriminated union: `ok` (DSL + optional Prism IR) and
+- **Entry kinds.** A discriminated union: `ok` (DSL + optional Prism IR),
+  `mutation` (a dev-authored write — see Mutations) and
   `unsatisfiable` (a TTL'd negative result — a request the agent declared
   impossible, so it isn't re-run until the TTL lapses or the schema changes).
 - **Backends.** In-memory (`createMemoryCache`), durable Postgres
   (`createPostgresCache`, jsonb table, server-side TTL, `protected`/
-  `last_used_at`/`request_hash` columns with idempotent ALTER migrations,
+  `last_used_at`/`request_hash` columns; the table is a strata sequence,
+  `nisc.vex.cache`, applied once through the ledger by `init()`;
   validate-on-write and evict-on-read), and tiered (`createTieredCache`, L1 +
   L2 read-through/write-through with `full`/`lazy`/`partial` warm-up). Every
   backend implements the same `CacheBackend` contract; `init`/`entries` are
@@ -520,9 +526,10 @@ exported from the `@niscorp/vex/agent` subpath — `createQueryDsl` (fills
 
 - The **query agent** (`vexQueryDslAgent`, id `vex.query`) is a structured-output
   Cortex agent over `QuerySchema` with six tools — `getSchema`, `getSampleRows`,
-  `getDistinctValues`, `describeField`, `testQuery`, `cannotSatisfy` — and two
-  rules: a tool-call limiter (nudge at 8, abort at 10) and an unsatisfiable
-  abort. Context producers inject the live schema and the DSL JSON Schema so the
+  `getDistinctValues`, `describeField`, `testQuery`, `cannotSatisfy` — and three
+  stop conditions (`stepCount(20)`, `outputRetries(3)`, `repeatedCalls(2)`);
+  `createQueryDsl` aborts the run when `cannotSatisfy` is called. Context
+  producers inject the live schema, the caller line and the DSL JSON Schema so the
   static instructions stay stable. Every data-touching tool is a DSL run through
   `caller.read`; the tool set holds no adapter and no SQL.
   `createQueryDsl` wraps it into the `generateDsl` hook.
@@ -533,9 +540,10 @@ exported from the `@niscorp/vex/agent` subpath — `createQueryDsl` (fills
   that envelope (the identity, with no model call, when the rows already fit).
 
 > The reference agents are a separate concern from the deterministic core: they
-> live behind the `@niscorp/vex/agent` subpath, so `@niscorp/cortex`,
-> `@niscorp/signal`, and `@niscorp/prism` are pulled in only when you import it.
-> The engine itself depends on none of them — provide your own
+> live behind the `@niscorp/vex/agent` subpath, so `@niscorp/cortex` (and
+> `@niscorp/signal` behind it) is pulled in only when you import it.
+> The engine itself depends on neither — it needs `@niscorp/prism` only to
+> execute a stored mapping. Provide your own
 > `generateDsl`/`mapToShape`, or use the reference factories.
 
 ### HTTP layer (optional)
@@ -549,8 +557,9 @@ few lines:
   `handleQuery` parses a body, runs `engine.execute`, and maps `VexError`s to
   HTTP status codes.
 - `@niscorp/vex/hono` and `@niscorp/vex/express` wrap that handler: `GET`
-  returns discovery, `POST` runs a query, scope is resolved per-request via a
-  `getScope` callback, and the `cache` query param selects the cache mode.
+  returns discovery, `POST` runs a query or replays a write, `PATCH`/`DELETE`
+  manage fingerprints, and scope is resolved per-request via a `getScope`
+  callback.
 
 ### Events
 
@@ -571,6 +580,7 @@ src/
   errors.ts                      VexError (code + details)
   events.ts                      VexEvent union, VexEventHandler
   handler.ts                     Framework-agnostic discovery + query handlers
+  guide.ts                       vexGuide — the agent-facing contract text
 
   schemas/
     query.schema.ts              QuerySchema (top-level DSL) + Source, SortEntry
@@ -578,20 +588,23 @@ src/
     compute.schema.ts            ComputeExpressionSchema
     aggregate.schema.ts          AggregateExpressionSchema
     value.schema.ts              FieldOrValue, ContextRef ($context), ScopeRef ($scope)
+    identifier.schema.ts         the name grammar: field paths and identifiers
     database.schema.ts           DatabaseSchema, EntitySchema, FieldSchema, ...
     request.schema.ts            QueryRequestSchema, QueryResponse, error codes
     index.ts                     Barrel
 
   scope/
     discover.ts                  discoverEntities(dsl)
-    apply.ts                     applyScope(dsl, entities, policy), VexScopeError
-    scope.types.ts               ScopePolicy, ScopeEntityRule, ScopeFilterRule
+    apply.ts                     checkScope, scopeResolved, applyScope, VexScopeError
+    grants.ts                    createScopePolicy, mergeScopePolicies, scopeGrants, scopeProfiles, scopeBindings
+    scope.types.ts               ScopePolicy, ScopeEntityRule, ScopeMatch, ScopeSet
 
   engine/
     runtime.ts                   createQueryEngine — orchestration + cache + single-flight
     resolver.ts                  resolve(dsl, schema) → ResolvedQuery
     analyzer.ts                  analyze(resolved, config) → { warnings, errors }
     executor.ts                  executeQuery, buildContextContract, findMissingContext
+    optional.ts                  pruneOptional, presenceOf — optional conditions
     live.ts                      createLiveRows — the rows cache and follows behind refresh: 'reactive'
     engine.types.ts             ResolvedQuery and friends, AnalysisConfig, TestResult
 
@@ -602,35 +615,37 @@ src/
       introspect.ts              schema discovery from pg_catalog
       compile.ts                 ResolvedQuery → parameterized SQL
       operators.ts               per-operator SQL generation
+      statement-timeout.ts       how a read's time limit is enforced
+    pglite/index.ts              createPglitePool (@niscorp/vex/pglite)
     hono/index.ts                vex() Hono app (@niscorp/vex/hono)
     express/index.ts             vex() Express handler (@niscorp/vex/express)
     index.ts                     adapter barrel
 
   mutations/
     schema.ts                    MutationSchema (closed grammar), MutationDefinitionSchema
-    engine.ts                    executeMutation — desugar/scope/validate/compile/execute
+    engine.ts                    executeWrites, executeMutation — desugar/scope/validate/compile/execute
     signature.ts                 collectMutationContext, collectQueryContext, mutationEffect, lintMutation
     index.ts                     Barrel
 
   cache/
     cache.types.ts               CacheBackend, CacheEntry (ok | mutation | unsatisfiable)
-    hash.ts                      computeShapeHash, computeRequestHash, computeSchemaFingerprint
+    hash.ts                      normalizeShape, computeRequestHash, computeSchemaFingerprint, mintFingerprint
     memory.ts                    createMemoryCache (L1)
     postgres.ts                  createPostgresCache (L2, durable)
     tiered.ts                    createTieredCache (L1 + L2, warm-up)
     validate.ts                  validateEntry
-    util.ts                      isEntryFresh, fireAndForget
+    seed.ts                      seedCache, SeedEntry, SeedMutation
+    util.ts                      isEntryFresh, fireAndForget, sweepCache
     index.ts                     Barrel
 
   agent/                         Reference Cortex agents (exported via ./agent)
     query.agent.ts               defineAgent: vexQueryDslAgent (vex.query → Query)
     tools.ts                     the six query tools
-    rules.ts                     tool-limit + unsatisfiable rules
-    producers.ts                 schema + DSL-spec context producers
     index.ts                     createQueryDsl, createShapeMapper, vexQueryDslAgent
 
   utils/
     context.ts                   buildValidationContext, resolveParams
+    canonical.ts                 canonical JSON text + hash
 
 scripts/                         Dev-only: docker, seed, dev server, fixtures
 ```
@@ -645,11 +660,13 @@ scripts/                         Dev-only: docker, seed, dev server, fixtures
 | `pg` | peer (optional) | Postgres adapter and Postgres cache backend |
 | `hono` | peer (optional) | Hono framework adapter |
 | `express` | peer (optional) | Express framework adapter |
-| `@niscorp/cortex` | peer (optional) | Reference query agent (`defineAgent`/`defineTool`/`defineRule`, standalone runtime) |
-| `@niscorp/signal` | peer (optional) | LLM calls + embeddings, via Cortex |
-| `@niscorp/prism` | peer (optional) | Result mapping (`mappingAgent`, IR compile/execute) |
+| `@niscorp/cortex` | peer (optional) | Reference query agent (`defineAgent`/`defineTool`, standalone runtime) |
+| `@niscorp/signal` | via Cortex (its peer) | LLM calls + embeddings |
+| `@niscorp/prism` | peer (required) | Result mapping (IR compile/execute; `mappingAgent` for the reference mapper) |
+| `@niscorp/strata` | peer (required) | The Postgres cache table's sequence and ledger; request depth guard |
 
-Only `zod` is mandatory. Everything else is pulled in only by the path you use.
+`zod`, `@niscorp/prism` and `@niscorp/strata` are mandatory. Everything else is
+pulled in only by the path you use.
 
 ---
 
@@ -681,7 +698,7 @@ Only `zod` is mandatory. Everything else is pulled in only by the path you use.
 
 2. **The LLM is injected, not embedded.** Making `generateDsl`/`mapToShape`
    plain hooks keeps the engine deterministic and testable without a model,
-   lets the heavy Cortex/Signal/Prism stack stay optional, and lets a consumer
+   lets the heavy Cortex/Signal stack stay optional, and lets a consumer
    swap in their own generator. The bundled Cortex agents are a reference, not a
    requirement.
 
@@ -776,8 +793,8 @@ Only `zod` is mandatory. Everything else is pulled in only by the path you use.
    request possible.
 
 6. **Single-flight on the default path.** A burst of identical cache misses
-   collapses to one generation; the rest await it. `refresh`/`bypass` opt out,
-   since they explicitly mean "don't share cache state."
+   collapses to one generation; the rest await it. (The `refresh`/`bypass`
+   cache modes that opted out died with v1 — see *Cache v2*.)
 
 7. **Adapters own compilation.** The DSL and agent loop are database-agnostic;
    only SQL generation is not. Keeping the entire compile step inside the

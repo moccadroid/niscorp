@@ -60,6 +60,14 @@ type ShellConfig = {
   fetch?: FetchFn;                       // fetch implementation for endpoint calls
   transform?: TransformFn;               // evaluator for endpoint `request`/`response` configs (Prism etc.)
   functions?: Record<string, FunctionHandler>;  // handlers for `{ fn: '<name>' }` endpoints
+  endpointTimeoutMs?: number;            // how long an endpoint call waits for its reply before it
+                                         // fails to `onError` (default 30000); an endpoint's own
+                                         // `timeoutMs` wins
+
+  // Language (see I18N_DOCS.md)
+  phrases?: Phrasebook;                  // the book every tree this shell renders is translated through
+  phraseKeys?: PhraseKeys;               // which prop keys carry prose
+  onPhraseMiss?: (phrase: string, where: string) => void;  // a phrase with no entry in the book
 
   // Telemetry / observability
   telemetry?: ShellTelemetry;            // onStateChange, onDataChange, onEndpoint callbacks
@@ -86,10 +94,14 @@ The canvases the shell hosts. A canvas is a stack of action instances; the topmo
 ```ts
 type CanvasConfig = {
   id: string;                            // arbitrary name, by purpose
+  mode?: 'stack' | 'list';               // 'stack' (default): only the top is active, the rest suspended.
+                                         // 'list': every instance stays live — author an `actionLayout`
+                                         // that loops `$.instances`
   actionLayout?: LayoutNode | string;    // how this canvas arranges its instances; when omitted,
                                          // only the top-of-stack (card-deck) action renders.
                                          // Scope available to resolvables: { instances, active, count }
-  initial?: CanvasInitialSeed | CanvasInitialSeed[];  // pre-populate the stack on shell creation
+  initial?: CanvasInitialSeed | CanvasInitialSeed[];  // pre-populate the stack on shell creation;
+                                         // a list is pushed left to right
 };
 
 // A seed is an action id, or an object with input and fragment composition —
@@ -104,6 +116,12 @@ canvases: [{ id: 'main', initial: 'home' }, { id: 'modal' }]     // app + overla
 ```
 
 The shell tracks each canvas independently — pushing on `main` doesn't affect `modal`.
+
+On a `mode: 'list'` canvas a push adds an instance without suspending the others, and `removeInstance` / `removeSelf` resume nothing; `pop` and `popTo` behave as on a stack — the instance they expose re-runs its `mount` and `resume` hooks. An instance closes itself with a `{ removeSelf: true }` step and re-reads itself with `{ reload: true }`. `addCanvas` applies `mode` the same way; a canvas removed and re-added under the same id takes the mode it is re-added with.
+
+Each entry of the `instances` scope an `actionLayout` sees is the `ActionInstance` (`id`, `definitionId`, `canvasId`, `status`, `data`) plus `title` — the action's `title` resolved against the instance's data, falling back to its `name`, then its id.
+
+In nova itself every `initial` seed is pushed, and one naming an unknown action throws `UnknownActionError`. Under moss the same field is read as a candidate list: the first seed the principal is granted is the one that mounts (see moss's docs).
 
 ### `actions`
 
@@ -121,7 +139,15 @@ Reusable partial actions (`ActionFragment`s), keyed by id, referenceable from a 
 
 ### `fetch`, `transform`, and `functions`
 
-These are dependency injection points. HTTP endpoint calls use `fetch`. Endpoint `request`/`response` configs run through `transform` — an opaque `(config, source) => unknown` evaluator nova never interprets (the host typically wires Prism's `evaluate`); declaring a `request`/`response` without one is a hard error. `{ fn: '<name>' }` endpoints resolve their handler from `functions`. Default `fetch` is the global `fetch` if available; there is no default `transform` or `functions`.
+These are dependency injection points. HTTP endpoint calls use `fetch`. Endpoint `request`/`response` configs run through `transform` — an opaque `(config, source) => unknown` evaluator nova never interprets (the host typically wires Prism's `evaluate`); declaring a `request`/`response` without one is a hard error. `{ fn: '<name>' }` endpoints resolve their handler from `functions`. There is no default for any of the three: nova does not reach for the global `fetch`, and an HTTP endpoint called with none injected fails to `onError`.
+
+### `endpointTimeoutMs`
+
+How long an endpoint call waits for its reply before it fails to `onError` — default 30000. An endpoint's own `timeoutMs` wins over it. It bounds the first answer only.
+
+### `phrases`, `phraseKeys`, `onPhraseMiss`
+
+The shell's language: the book every tree it renders is translated through, which prop keys carry prose, and a hook for phrases the book lacks. All absent means no i18n, at no cost. `shell.setPhrases` swaps the book live. See `I18N_DOCS.md`.
 
 ### `telemetry`
 
@@ -158,9 +184,11 @@ type Shell = {
   readonly layoutStore: LayoutStore;
 
   // Canvas operations
-  push: (canvasId: string, actionId: string, input?: object, fragments?: string[]) => string;
+  push: (canvasId: string, actionId: string, input?: object, fragments?: string[], options?: PushOptions) => string;
+  originOf: (instanceId: string) => string | undefined;   // the `origin` an instance was pushed with
   pop: (canvasId: string) => void;
   popTo: (canvasId: string, instanceId: string) => void;
+  removeInstance: (canvasId: string, instanceId: string) => void;
   replace: (canvasId: string, actionId: string, input?: object, fragments?: string[]) => string;
   clear: (canvasId: string) => void;
   back: () => boolean;                     // undo the last navigation, anywhere on the shell
@@ -175,6 +203,10 @@ type Shell = {
   removeCanvas: (canvasId: string) => void;
   setCanvasLayout: (layout: LayoutNode | string) => void;
   setLayout: (refId: string, layout: LayoutNode) => void;   // hot-swap a LayoutRef target
+
+  // Language
+  setPhrases: (phrases: Phrasebook | undefined) => void;
+  getPhrases: () => Phrasebook | undefined;
 
   // State queries
   getCanvasState: (canvasId: string) => CanvasState;
@@ -203,16 +235,30 @@ type Shell = {
 
 ### Canvas operations
 
-#### `push(canvasId, actionId, input?, fragments?)`
+#### `push(canvasId, actionId, input?, fragments?, options?)`
 
-Mount a fresh instance of an action on top of a canvas. Suspends the previous top (its `suspend` lifecycle hook fires). Returns the new instance id.
+Mount a fresh instance of an action on top of a canvas. On a `stack` canvas it suspends the previous top (its `suspend` lifecycle hook fires). Returns the new instance id.
 
 ```ts
 const instanceId = shell.push('main', 'editor', { fileId: 'f_42' });
 shell.push('overlay', 'confirm', { id: 'u_42' }, ['modal-frame']);   // composed with a fragment
 ```
 
-The optional `input` is merged into the action's `data` before mount. The optional `fragments` names `ActionFragment`s to compose the action with before instantiation — same as a push effect's `with: [...]`.
+The optional `input` is merged into the action's `data` before mount. The optional `fragments` names `ActionFragment`s to compose the action with before instantiation — same as a push effect's `with: [...]`. An unknown action id throws `UnknownActionError`; an unknown fragment id throws `UnknownFragmentError`.
+
+The optional `options` is a `PushOptions`:
+
+```ts
+type PushOptions = {
+  origin?: string;     // who is placing this — read back with shell.originOf(instanceId)
+  history?: boolean;   // default true; false keeps the push out of the navigation journal,
+                       // so `back` cannot undo it
+};
+```
+
+#### `originOf(instanceId)`
+
+The `origin` an instance was pushed with, or `undefined` — for anything pushed without one, seeded by `initial`, or already unmounted. It is how a caller that places instances (a server-driven layout, an agent) asks whether one is still its own before closing it.
 
 #### `pop(canvasId)`
 
@@ -230,6 +276,14 @@ Pop a canvas down to a given instance — everything above it unmounts, in stack
 
 ```ts
 shell.popTo('main', instanceId);
+```
+
+#### `removeInstance(canvasId, instanceId)`
+
+Remove one instance anywhere in a canvas's stack, not just the top. On a list canvas this is a card closing; on a stack, removing the top resumes the one beneath. A no-op if the instance isn't on the canvas.
+
+```ts
+shell.removeInstance('tray', instanceId);
 ```
 
 #### `replace(canvasId, actionId, input?, fragments?)`
@@ -260,8 +314,9 @@ shell.back();
 ```
 
 The shell keeps a **navigation journal**: before every `push`, `replace`,
-`clear` and `resetTo`, it writes down the canvas that is about to change. One
-entry is one position somebody can be returned to; `back` restores the newest.
+`clear` and `resetTo` — and every `reconcile` that moved something — it writes
+down the canvas that is about to change. One entry is one position somebody can
+be returned to; `back` restores the newest.
 
 - **Global and ordered.** One journal across every canvas, each entry naming the
   one canvas it describes — so back walks a person's own moves in the order they
@@ -301,6 +356,33 @@ shell.setLayout('region-a', layout);     // swap what a LayoutRef placeholder re
 ```
 
 `setLayout` is the hot-swap hook for dynamic region layouts: a canvasLayout embeds `{ ref: id }` placeholders, and this replaces what one resolves to — the frame/chrome stays intact.
+
+### Language
+
+```ts
+shell.setPhrases(book);                  // replace the book; reaches instances already mounted
+shell.setPhrases(undefined);             // back to the source language
+shell.getPhrases();                      // the book in force, or undefined
+```
+
+`setPhrases` fires a state change, so mounted adapters re-render; stacks and instance data are untouched. See `I18N_DOCS.md`.
+
+### `reconcileCanvas(shell, canvasId, desired, options)`
+
+The declarative verb beside the imperative ones: make a canvas hold exactly a desired list. It is what the `reconcile` step runs (see `ACTION_DOCS.md`), exported for a host that produces a whole desired state itself.
+
+```ts
+import { reconcileCanvas } from '@niscorp/nova';
+
+const { changed, notes } = reconcileCanvas(
+  shell,
+  'tools',
+  [{ actionId: 'notes' }, { actionId: 'timer', input: { minutes: 5 }, with: ['card-frame'] }],
+  { origin: 'agent', own: 'pushed' },
+);
+```
+
+`origin` (required) is stamped on everything the call pushes. `own: 'pushed'` (default) moves only instances carrying that origin; `own: 'canvas'` moves everything on the canvas. One instance per action id. An optional `definitionOf(actionId)` enables the re-aim rule: when a live instance's input changed and that input carries a key the action declares in its `input` and its mount-time load reads through an endpoint `request`, the instance is re-opened instead of written into.
 
 ### Render-tree access
 
@@ -366,9 +448,12 @@ Send a UI event into the shell. Triggers with a matching `event:` (and optional 
 
 ```ts
 shell.dispatch({ type: 'ui:click', ref: 'save' });
-shell.dispatch({ type: 'ui:input', ref: 'name', value: 'Ada' });
+shell.dispatch({ type: 'ui:input', ref: 'name', payload: 'Ada' });
 shell.dispatch({ type: 'ui:model', ref: 'name', payload: 'Ada' });
+shell.dispatch({ type: 'ui:key', ref: 'search', key: 'Enter' });
 ```
+
+A `NovaEvent` is `{ type, ref?, payload?, origin? }` — `type` one of `ui:click`, `ui:submit`, `ui:input`, `ui:focus`, `ui:blur`, `ui:model`, `ui:key` (which also carries `key`), `ui:drop`. `origin` is an instance id: an event carrying one reaches that instance's triggers only; one without it reaches every instance listening. Adapters stamp it at the instance boundary.
 
 This is how the React adapter's components push events into the shell when buttons get clicked, inputs change, etc. You normally don't call it directly from app code — components do.
 
@@ -381,7 +466,25 @@ shell.publish('cart-updated', { itemCount: 3 });
 shell.publish('user-logged-out');
 ```
 
-Use it to coordinate between actions that don't otherwise know about each other.
+Use it to coordinate between actions that don't otherwise know about each other. A listening trigger reads the payload as `@event.payload`.
+
+#### The `nova:navigated:<canvasId>` channel
+
+The shell itself publishes one message per canvas whenever that canvas's **active** instance changes — whatever caused it (a push, `back`, a host's call). Chrome that follows a canvas (a sidebar highlight, a breadcrumb) listens to it instead of to the click that sent somebody there.
+
+```ts
+import { navigatedChannel } from '@niscorp/nova';
+
+navigatedChannel('main');                // → 'nova:navigated:main'
+// payload: { canvas: 'main', action?: string, instance?: string }
+// `action` / `instance` are absent when the canvas went empty
+
+triggers: [
+  { message: 'nova:navigated:main', do: [{ set: 'current', value: '@event.payload.action' }] },
+]
+```
+
+Announcements are deferred and coalesced: a burst (a `resetTo` is a clear and a push) says once where the canvas ended.
 
 ### Telemetry subscriptions
 
@@ -441,6 +544,8 @@ const stop = subscribe(() => redraw());        // once per burst of changes
 
 const whole = await shellSettled(shell, { waitMs: 300 });  // true: nothing is still mounting
 ```
+
+`api.dispatch` stamps an event that names no `origin` with the canvas's active instance; `api.publish(channel, payload?)` is `shell.publish`. `shellSettled` also takes `stopped?: () => boolean` — once it answers `true` the wait ends with `false`.
 
 `shellView` is what lets an adapter written against `RenderApi` (the DOM and TTY adapters, a moss terminal) draw a shell that lives beside it. `shellSettled` resolves `true` once no instance is `initializing` — every mount hook, and what it chained to, has been awaited — and `false` if `waitMs` (default 300) runs out first. It is the moment to draw a shell to markup, and the moment for the page's own shell to adopt it.
 
@@ -515,7 +620,7 @@ Each action instance lives in one of four states:
 
 - **`initializing`** — between `push()` and the moment the mount lifecycle hook completes.
 - **`active`** — the topmost instance on a canvas. Triggers attached, render reflects current data.
-- **`suspended`** — another action is on top. Triggers stay attached but do not fire (a suspended action reacts to nothing), and the runtime's abort signal prevents in-flight async work from completing during this state.
+- **`suspended`** — another action is on top (on a `stack` canvas; a `list` canvas suspends nothing). Triggers stay attached but do not fire (a suspended action reacts to nothing). Async work already in flight is not cancelled — only unmounting aborts it.
 - **`unmounted`** — terminal. The runtime is disposed; `getRuntime` returns `undefined`.
 
 Lifecycle hooks fire on each transition: `mount` (init→active), `suspend` (active→suspended), `mount` again then `resume` (suspended→active — the re-run of `mount` refreshes the data a backgrounded action ignored), `unmount` (any→unmounted).
@@ -524,7 +629,7 @@ Lifecycle hooks fire on each transition: `mount` (init→active), `suspend` (act
 
 ## ID generation
 
-Every shell has a unique id and assigns ids to action instances. By default both use `crypto.randomUUID()` if available, falling back to a Math.random-based scheme. For deterministic tests, inject your own:
+Every shell has a unique id and assigns ids to action instances. By default both use `crypto.randomUUID()` if available, falling back to a Math.random-based scheme, prefixed `shell-` and `act-`. For deterministic tests, inject your own:
 
 ```ts
 import { createIdFactory } from '@niscorp/nova';
@@ -546,8 +651,9 @@ createShell({
 The shell can produce these:
 
 - **`UnknownActionError`** — `shell.push(canvas, 'foo')` where `'foo'` isn't in `actions`
-- **`ShellDisposedError`** — any operation after `dispose()`
-- **`DefinitionValidationError`** — at shell construction, if any action in `actions` fails schema validation
+- **`UnknownFragmentError`** — a `fragments` / `with: [...]` id that isn't registered
+- **`ShellDisposedError`** — `push`, `replace`, and the registration / canvas / layout / phrase setters after `dispose()` (`pop`, `popTo`, `removeInstance`, `clear`, `removeCanvas` and `back` are no-ops instead)
+- **`DefinitionValidationError`** — at shell construction, if any action in `actions` fails schema validation; also from `registerAction` / `registerFragment`
 - **`LifecycleError`** — a lifecycle hook step threw (in strict mode propagates, in lax mode routes via `onError`)
 
 Plus all action-level errors (from `ACTION_DOCS.md`) and layout-level errors (from `LAYOUT_DOCS.md`) bubble up through the shell's error pipeline.
@@ -558,7 +664,7 @@ Plus all action-level errors (from `ACTION_DOCS.md`) and layout-level errors (fr
 
 ```ts
 const shell = createShell({
-  canvases: CanvasConfig[],                // { id, actionLayout?, initial? }
+  canvases: CanvasConfig[],                // { id, mode?, actionLayout?, initial? }
   actions: Record<string, ActionDefinition>,
   canvasLayout?: LayoutNode | string,
   registry?: ComponentRegistry,            // built fresh when omitted
@@ -568,17 +674,26 @@ const shell = createShell({
   fetch?: FetchFn,
   transform?: TransformFn,
   functions?: Record<string, FunctionHandler>,
+  endpointTimeoutMs?: number,              // default 30000
+  phrases?: Phrasebook,
+  phraseKeys?: PhraseKeys,
+  onPhraseMiss?: (phrase, where) => void,
   telemetry?: { onStateChange?, onDataChange?, onEndpoint? },
   strict?: boolean,
   onError?: (error) => void,
+  historyDepth?: number,                   // default 50; 0 = off
+  shellIdFn?, instanceIdFn?, eventBus?, messageBus?,
 });
 
 // Canvas ops
-shell.push(canvasId, actionId, input?, fragments?);    // → instanceId
+shell.push(canvasId, actionId, input?, fragments?, options?);  // → instanceId; options: { origin?, history? }
+shell.originOf(instanceId);                            // → string | undefined
 shell.pop(canvasId);
 shell.popTo(canvasId, instanceId);
+shell.removeInstance(canvasId, instanceId);
 shell.replace(canvasId, actionId, input?, fragments?); // → instanceId
 shell.clear(canvasId);
+shell.back();                                          // → boolean
 
 // Runtime registration / canvas mutation
 shell.registerAction(definition);
@@ -588,6 +703,10 @@ shell.addCanvas(config);
 shell.removeCanvas(canvasId);
 shell.setCanvasLayout(layout);
 shell.setLayout(refId, layout);
+
+// Language
+shell.setPhrases(phrases);                 // undefined → the source language
+shell.getPhrases();                        // → Phrasebook | undefined
 
 // State
 shell.getCanvasState(canvasId);            // → CanvasState
@@ -607,6 +726,7 @@ shell.publish(channel, payload?);
 shell.onStateChange(handler);              // → Unsubscribe
 shell.onDataChange(handler);               // → Unsubscribe
 shell.onEndpoint(handler);                 // → Unsubscribe
+shell.onCanvasChange(canvasId, handler);   // → Unsubscribe
 
 // Teardown
 shell.dispose();

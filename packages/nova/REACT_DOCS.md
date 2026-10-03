@@ -10,7 +10,7 @@ This guide is for **using** nova in React. For nova's framework-agnostic core, s
 
 ```bash
 pnpm add @niscorp/nova
-# React + react-dom are peer deps; you almost certainly already have them.
+# `react` (^19.2.4) is an optional peer; a browser app brings `react-dom` itself.
 ```
 
 `@niscorp/nova/adapters/react` is the same package, accessed via the subpath export. No separate install.
@@ -96,12 +96,13 @@ Use this when you have a `Shell`. The provider wires the shell's dispatch/publis
 
 Props:
 - **`shell`** — a `Shell` instance
-- **`registry`** — the component registry. Same instance you passed to `createShell`.
+- **`registry?`** — the component registry. Defaults to `shell.registry`; pass one only to render the shell against a different component set.
+- **`slotWrapper?`** — see "The `slotWrapper` seam" below.
 - **`children`** — the React subtree that uses nova hooks.
 
 ### `<NovaRenderProvider>` — render-only mode
 
-Use this when you want to render a layout without a shell — for previews, tests, or the showroom. You supply the dispatch and publish functions yourself (or pass no-ops).
+Use this when you want to render a layout without a shell — for previews, tests, or the showroom. You supply the dispatch and publish functions yourself; both default to no-ops.
 
 ```tsx
 <NovaRenderProvider
@@ -115,8 +116,9 @@ Use this when you want to render a layout without a shell — for previews, test
 
 Props:
 - **`registry`** — the component registry
-- **`dispatch`** — function to receive events from components
-- **`publish`** — function to receive message bus publishes from components
+- **`dispatch?`** — function to receive events from components (default: no-op)
+- **`publish?`** — function to receive message bus publishes from components (default: no-op)
+- **`slotWrapper?`** — see "The `slotWrapper` seam" below.
 - **`fallback?`** — renderer for unregistered component names; omit for
   strict `COMPONENT_NOT_FOUND` markers
 - **`textWrapper?`** / **`errorMarker?`** — host-specific leaf renderers.
@@ -126,6 +128,20 @@ Props:
 - **`children`** — the React subtree
 
 This is what the showroom uses for layout-only stories that don't need a shell.
+
+### `<Nova.Layout>` / `<Nova.Shell>` / `<Nova.Canvas>` — mountable surfaces
+
+Three components that hide the registry/provider/render-tree wiring. Each is also exported by its flat name (`NovaLayout`, `NovaShell`, `NovaCanvas`).
+
+```tsx
+<Nova.Layout layout={layout} data={data} />   // one layout, no shell
+<Nova.Shell shell={shell} />                  // the shell's whole frame
+<Nova.Canvas id="main" />                     // one canvas, inside a shell provider
+```
+
+- **`<Nova.Layout>`** — `layout` (a `LayoutNode` or a layout-store id), `data?`, `components?` (registered after the builtins), `registry?` / `store?` (pre-built; with `registry`, `components` and `builtins` are ignored), `builtins?` (default `true`), `strict?`, `onError?`, and the i18n fields `phrases?` / `phraseKeys?` / `onPhraseMiss?` (see `I18N_DOCS.md`). Renders through a `NovaRenderProvider` with no-op dispatch.
+- **`<Nova.Shell>`** — `shell`, `registry?` (default `shell.registry`), `slotWrapper?`, `builtins?` (default `true`: registers the default component set on the registry if `CanvasSlot` is missing). Renders the shell's canvasLayout.
+- **`<Nova.Canvas>`** — `id`, plus optional `shell`, `registry?`, `builtins?`. With `shell` it provides its own `NovaShellProvider`; without, it must sit inside one. Renders that canvas's actionLayout.
 
 ---
 
@@ -179,7 +195,7 @@ if (status === 'initializing') return <Spinner />;
 
 ### `useRenderTree(instanceId)`
 
-Returns the live `RenderNode[]` for an action instance. Re-computes whenever the instance's data changes. **The result is referentially stable** when the data hasn't changed — important for React's `useSyncExternalStore` and for downstream memoization.
+Returns the live `RenderNode[]` for an action instance. Re-computes whenever the instance's data (or the shell's phrasebook) changes. **The result is referentially stable** when neither has changed — important for React's `useSyncExternalStore` and for downstream memoization.
 
 ```tsx
 const tree = useRenderTree(activeId);
@@ -230,13 +246,15 @@ const tree = useRenderTree(activeId);
 return <RenderTree nodes={tree} />;
 ```
 
+An unregistered component name renders the provider's `fallback` when one was given, otherwise an error marker with code `COMPONENT_NOT_FOUND`. `<RenderNodeView node={...} />` is the single-node form `RenderTree` maps over.
+
 That's the entire React-side rendering pipeline. Everything else is the components themselves.
 
 ---
 
 ## Writing your own component
 
-A component for the React adapter is a React function component typed as `NovaComponent<P>`:
+A component for the React adapter is a React component typed as `NovaComponent<P>`:
 
 ```tsx
 import type { NovaComponent } from '@niscorp/nova/adapters/react';
@@ -430,17 +448,20 @@ For React-level errors (a buggy component throwing during render), use `<NovaErr
 ```tsx
 import { NovaErrorBoundary } from '@niscorp/nova/adapters/react';
 
-<NovaErrorBoundary fallback={<div>Something broke.</div>}>
+<NovaErrorBoundary fallback={(error) => <div>Something broke: {error.message}</div>}>
   <CanvasView canvasId="main" />
 </NovaErrorBoundary>
 ```
 
-This is a real React class component (the only class in the package — React 18 still requires class boundaries).
+`fallback` is a function of the caught error; omitted, the boundary renders the error's message in a `<div data-nova-error-boundary role="alert">`. `onError(error, info)` reports the catch.
+
+This is a real React class component (the only class in the package outside the error classes in `shared/errors.ts` — React still requires a class for an error boundary).
 
 ---
 
-## React 18+ compatibility
+## React compatibility
 
+- **Version** — React 19 (`react` peer `^19.2.4`).
 - **Strict mode** — fully supported. The hooks use `useSyncExternalStore` and the render-tree hook caches its snapshot via `useRef`, so dev-mode double-mounting doesn't break anything.
 - **Concurrent rendering** — fully supported. `useSyncExternalStore` is tearing-safe by design.
 - **Suspense** — not used as a loading model. Loading state is explicit data on the action (`{ loading: true }` as a regular field). A consumer can wrap nova components in `<Suspense>` but it never activates because nova never throws promises during render.
@@ -516,10 +537,14 @@ const SomeReactComponent = () => {
 ## Quick reference
 
 ```tsx
-// Providers (all accept an optional slotWrapper)
-<NovaShellProvider shell registry slotWrapper?>...</NovaShellProvider>
-<NovaRenderProvider registry dispatch publish slotWrapper? fallback? textWrapper? errorMarker?>...</NovaRenderProvider>
-<Nova.Shell shell slotWrapper? />
+// Providers
+<NovaShellProvider shell registry? slotWrapper?>...</NovaShellProvider>
+<NovaRenderProvider registry dispatch? publish? slotWrapper? fallback? textWrapper? errorMarker?>...</NovaRenderProvider>
+
+// Mountable surfaces
+<Nova.Layout layout data? components? registry? store? builtins? strict? onError? phrases? phraseKeys? onPhraseMiss? />
+<Nova.Shell shell registry? slotWrapper? builtins? />
+<Nova.Canvas id shell? registry? builtins? />
 
 // Hooks
 useShell()                    // → Shell (throws outside provider)
@@ -537,6 +562,7 @@ useSlotWrapper()              // → SlotWrapper | undefined
 
 // Render
 <RenderTree nodes={...} />
+<RenderNodeView node={...} />
 
 // Slot wrapper (animation, gates, logging, error boundaries)
 type SlotWrapper = FC<{
@@ -548,15 +574,25 @@ type SlotWrapper = FC<{
 
 // Errors
 <ErrorMarker code message />
-<NovaErrorBoundary fallback>...</NovaErrorBoundary>
+<NovaErrorBoundary fallback? onError?>...</NovaErrorBoundary>   // fallback: (error) => ReactNode
 
 // Component contract
-type NovaComponent<P> = React.FC<NovaComponentProps & P> & { meta?: ComponentMeta };
+type NovaComponent<P> = React.ComponentType<NovaComponentProps & P> & { meta?: ComponentMeta };
 type NovaComponentProps = {
   children?: ReactNode;
   novaRef?: string;
   novaModel?: { ref: string; path: string };
 };
 ```
+
+## The Vue adapter
+
+`@niscorp/nova/adapters/vue` (peer `vue` ^3.5, optional) is the same surface in Vue 3 render functions — no SFC compiler. The names match this guide: `NovaRenderProvider`, `NovaShellProvider`, `NovaShell`, `NovaCanvas`, `RenderTree`, `RenderNodeView`, `ErrorMarker`, `NovaErrorBoundary`, and every hook above as a composable. The differences:
+
+- The shell-backed composables return a `Readonly<Ref<…>>` and take a ref or getter for their id (`useCanvas(() => props.id)`).
+- The render context travels by provide/inject (`NovaRenderKey`, `NovaShellKey`); children reach a component as its default slot.
+- There is no `Nova` namespace and no `NovaLayout`; `NovaRenderProvider` takes `fallback` but not `textWrapper` / `errorMarker`.
+- `NovaErrorBoundary`'s `onError` receives Vue's info string.
+- The kit is `registerNovaVueComponents(registry)` from `@niscorp/nova/adapters/vue/components`: the same nine names over the same props schemas.
 
 For the layout language registered components consume, see `LAYOUT_DOCS.md`. For the action machinery the shell drives, see `ACTION_DOCS.md` and `SHELL_DOCS.md`.

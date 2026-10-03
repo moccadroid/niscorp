@@ -80,6 +80,9 @@ The most common one. References a component by name; the registry supplies the i
 - **`children`** *(optional)* — a single `LayoutNode` or an array of them. Components decide how to render their children slot.
 - **`ref`** *(optional)* — a stable identifier. Used by triggers (`event: 'ui:click', ref: 'header-stack'`) and as the model binding key. If unset, the renderer auto-generates one for model-bound components.
 - **`model`** *(optional)* — two-way binding path. See [Two-way binding](#two-way-binding).
+- **`events`** *(optional)* — a record of event name → configuration. The schema accepts it; the renderer does not read it and it does not reach the `RenderNode`. Interaction is `ref` + an action trigger.
+
+The node is strict: any other key fails `LayoutNodeSchema`.
 
 ### Resolved render output
 
@@ -95,6 +98,8 @@ A component node renders to a `RenderNode` of type `'component'`:
   model: { ref: 'header-stack', path: 'draftValue' },  // if model was set
 }
 ```
+
+When `model` is set and the node has no explicit `value` prop, the renderer also adds `props.value` — the model path's current value.
 
 The framework adapter (React) reads this and instantiates the React component with these props.
 
@@ -114,16 +119,16 @@ Render one of two branches based on a condition.
 
 ### Fields
 
-- **`if`** *(required)* — a binding evaluated for truthiness. Strings are bindings, primitives are themselves, objects can be `{$if}` directives. Truthiness rules: `null`, `undefined`, `false`, `0`, `''`, `[]`, `{}` are all falsy. Everything else is truthy.
+- **`if`** *(required)* — a binding evaluated for truthiness. Strings are bindings, primitives are themselves, objects can be `{$if}` directives. Truthiness rules: `null`, `undefined`, `false`, `0`, `''`, `[]` are all falsy. Everything else is truthy — including an empty object `{}`.
 - **`then`** *(required)* — `LayoutNode` rendered when the condition is truthy.
-- **`else`** *(optional)* — `LayoutNode` rendered when the condition is falsy. If absent, an empty fragment is rendered.
+- **`else`** *(optional)* — `LayoutNode` rendered when the condition is falsy. If absent, nothing is rendered.
 
 ### Conditionals inside other places
 
 There are **two kinds of conditional** in nova:
 
 1. **Conditional NODE** (this one) — appears in the layout tree as a sibling of components. Swaps whole subtrees.
-2. **`{$if}` directive** — appears inside a value position (e.g. a prop value, a string content). See [Bindings — directives](#directives).
+2. **`{$if}` directive** — appears inside a value position (e.g. a prop value, a string content). See [Bindings — directives](#3-directives).
 
 Use the node form when you're swapping whole UI sections. Use the directive form when you're picking a value for a single field.
 
@@ -152,12 +157,12 @@ Iterate an array and render the body once per item.
 
 - **`for`** *(required)* — a binding that resolves to an array. If it doesn't resolve to an array, the loop renders nothing (graceful empty).
 - **`as`** *(required)* — the variable name used for the current item inside `do`. References as `$<name>` (no dot).
-- **`key`** *(optional)* — a path on each item used for stable React keys when an adapter consumes the output. Currently informational; the React adapter falls back to index-based keys.
+- **`key`** *(optional)* — a path on each item (e.g. `'id'`) used for stable identity. The renderer stamps each item's output with `key`: the value at that path, or the index when `key` is omitted. Adapters key by it, so looped rows can share a `ref` without colliding.
 - **`do`** *(required)* — the `LayoutNode` rendered once per item, with the loop variable in scope.
 
-### The `index` variable
+### The `index` and `items` variables
 
-Inside the loop body, the variable `index` is automatically bound to the current iteration index (0-based). Reference it as `$index`:
+Inside the loop body, the variable `index` is automatically bound to the current iteration index (0-based), and `items` to the array being iterated (`$items`) — so a control inside the loop can address the whole list. Both names are reserved: with an `as` of `'index'` or `'items'` the loop's own value wins and the item is unreachable. Reference the index as `$index`:
 
 ```ts
 {
@@ -305,7 +310,22 @@ Inside a value position (a prop value, a children string, etc.), you can use the
 }
 ```
 
-Truthiness rules are the same as conditional nodes.
+Truthiness rules are the same as conditional nodes. Without `$else`, a falsy `$if` resolves to `undefined`.
+
+Four more directives resolve in the same positions:
+
+```ts
+{ $eq: ['$.status', 'open'] }              // → true when both resolved operands are strictly equal
+{ $exists: '$.record.id' }                 // → true when the operand resolves to anything but undefined
+{ $at: ['$.results', '$.cursor'] }         // → the array element at a (dynamic) index
+{ $at: ['$.results', '$.cursor', 'id'] }   // → one field of that element
+{ $prism: <prism node> }                   // → the node evaluated by Prism against the innermost scope:
+                                           //   the root data, or inside a loop the loop's own scope
+                                           //   ({ <as>, index, items } — the root is not reachable there);
+                                           //   undefined when it fails to evaluate
+```
+
+They compose: `{ $if: { $eq: ['$.tab', 'all'] }, $then: 'primary', $else: 'ghost' }`.
 
 **Why both `if` (node) and `$if` (directive)?** Different layers. The node form swaps whole UI subtrees. The directive form picks a single value. The node form lives in the layout tree; the directive form lives in the value space.
 
@@ -313,13 +333,13 @@ Truthiness rules are the same as conditional nodes.
 
 - Numbers, booleans, nulls — pass through unchanged
 - Plain strings without `$` or `{{}}` — pass through unchanged
-- Objects without `$if` — walked recursively, each value resolved
+- Objects without a directive key (`$if`, `$eq`, `$exists`, `$at`, `$prism`) — walked recursively, each value resolved
 
 ---
 
 ## Two-way binding
 
-Set `model: '<path>'` on a component to wire it for two-way data binding. The renderer resolves the path against the current scope chain (so loop variables work) and emits a `model: { ref, path }` field on the rendered node. The React adapter installs an event listener that writes back to the data store when the component dispatches a `ui:model` event.
+Set `model: '<path>'` on a component to wire it for two-way data binding. The renderer resolves the path against the current scope chain (so loop variables work) and emits a `model: { ref, path }` field on the rendered node. The action runtime writes the event's `payload` back to that path when the component dispatches a `ui:model` event with that `ref` — before any `ui:model` trigger runs.
 
 ```ts
 {
@@ -355,10 +375,15 @@ Type into the second input → `data.items[1].value` updates → re-render shows
 {
   store: LayoutStore,            // for resolving LayoutRefs
   registry: ComponentRegistry,   // to validate component names
-  strict: boolean,               // throw on errors vs return error nodes (default false)
-  onError: (error: NovaError) => void,  // telemetry for non-strict errors
+  strict?: boolean,              // throw on errors vs return error nodes (default false)
+  onError?: (error: NovaError) => void,  // telemetry for non-strict errors
+  phrases?: Phrasebook,          // i18n: source phrase → the reader's words (see I18N_DOCS.md)
+  phraseKeys?: PhraseKeys,       // i18n: which prop keys carry prose
+  onPhraseMiss?: (phrase: string, where: string) => void,  // i18n: a phrase with no entry in the book
 }
 ```
+
+`render({ layout, data?, store, registry, ... })` is the object-form alias of `renderLayout` — same options, named, with `data` optional.
 
 When `strict: false` (the default), errors during rendering are caught at each subtree boundary, surfaced via `onError`, and replaced with an error `RenderNode`. Sibling subtrees keep rendering. When `strict: true`, errors propagate.
 
@@ -391,7 +416,9 @@ type RenderNode =
   | { type: 'error'; code: string; message: string; nodeRef?: string };
 ```
 
-This is the contract between the renderer and any framework adapter. The React adapter walks this tree and instantiates the registered React components. A future Vue adapter would do the same with Vue components.
+Every variant may also carry `key?: string` — the identity key the renderer stamps on a loop item's output (see [Loop nodes](#loop-nodes)), distinct from `ref`.
+
+This is the contract between the renderer and any framework adapter. The React adapter walks this tree and instantiates the registered React components. The Vue, DOM, TTY and Ink adapters (`@niscorp/nova/adapters/*`) do the same on their own surfaces.
 
 ---
 
@@ -420,8 +447,15 @@ registry.registerAll({
   Input,
   Button,
   Box,
+  MyButton: { component: myButtonComponent, meta: { description: 'A clickable button.' } },
 });
+
+registry.get('MyButton');                // → { component, meta } | undefined
+registry.has('MyButton');                // → boolean
+registry.list();                         // → array of registered names
 ```
+
+Meta is `{ description?, propsSchema?, events? }` — `events` maps an event name to `{ description?, payloadType? }`.
 
 ### `registerAll` and static meta
 
@@ -453,8 +487,9 @@ const store = createLayoutStore();
 
 store.set('user-card', { component: 'Box', children: [...] });
 store.get('user-card');                  // → the stored layout, or undefined
-store.has('user-card');                  // → boolean
+store.delete('user-card');               // remove it
 store.list();                            // → array of stored ids
+store.resolveReferences(layout);         // → the layout with every { ref } it can resolve inlined
 ```
 
 `set` validates the layout against `LayoutNodeSchema` and throws `DefinitionValidationError` if it doesn't parse. So you can't accidentally store an invalid layout.
@@ -478,7 +513,7 @@ In **strict mode** (`strict: true` on the render context) these throw. In **lax 
 
 ```ts
 // Component
-{ component: string, props?: object, children?: LayoutNode | LayoutNode[], ref?: string, model?: string }
+{ component: string, props?: object, children?: LayoutNode | LayoutNode[], ref?: string, model?: string, events?: object }
 
 // Conditional (node form)
 { if: Resolvable, then: LayoutNode, else?: LayoutNode }
@@ -500,6 +535,12 @@ In **strict mode** (`strict: true` on the render context) these throw. In **lax 
 
 // Conditional (directive form, used in value positions)
 { $if: Resolvable, $then: any, $else?: any }
+
+// Other value directives
+{ $eq: [Resolvable, Resolvable] }
+{ $exists: Resolvable }
+{ $at: [Resolvable, Resolvable, field?] }
+{ $prism: PrismNode }
 ```
 
 For actions that drive data into the layout, see `ACTION_DOCS.md`. For wiring layouts into a React app, see `REACT_DOCS.md`.

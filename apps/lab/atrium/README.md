@@ -216,7 +216,7 @@ OPERATOR_KEY=some-long-secret
 
 The service prints a link. Open it once and a pill appears bottom left, over
 whoever you are signed in as — a second wire in the page, to a different server,
-under a different token — and it stays until `?admin=off`. Five panes, each
+under a different token — and it stays until `?admin=off`. Nine panes, each
 named for the artifact it shows:
 
 | | |
@@ -229,6 +229,7 @@ named for the artifact it shows:
 | **Capabilities** | Connector offers, property enablement, and the discovery pull with its refusal reasons. |
 | **Shells** | Living server shells — who holds one, how many terminals are attached to it, the stack on each of its canvases, and the process behind them. Carries the one control here that lands on a person: **restart this shell**. |
 | **Timeline** | Every endpoint the living shells called — which action, how long, whether it worked. Names and timings only; no payload of any kind is kept. |
+| **Agent runs** | Every model run: the whole exchange, the tools it called, what it cost. |
 
 Try it with Theo signed in: Surface → The Lumen → switch off *Check in online*.
 The database is correct immediately — his shell is merely stale until it reads

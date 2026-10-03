@@ -49,7 +49,7 @@ JSON-parsing of streams (solid), no event-bus substrate, no
 declarative rules DSL, no plan interpreter (§14), no conversation
 persistence (callers own history).
 
-**Peers:** `@niscorp/signal`, `@niscorp/solid`, `zod`.
+**Peers:** `@niscorp/signal`, `zod`. **Dependency:** `@niscorp/solid`.
 
 ---
 
@@ -218,8 +218,8 @@ a content-only message.
 single-sourced from the same schema Zod validates against, so docs
 and validation cannot drift. When `respond` resolves to loose or
 permissive params (or strategy is `emit`), cortex injects
-`OUTPUT SCHEMA:\n…` as the
-last system chunk automatically. Agents that hand-author a full DSL
+`OUTPUT SCHEMA …` as a
+system chunk automatically (placement: §5). Agents that hand-author a full DSL
 guide (the architect pattern) disable it with `output.doc: 'off'` or
 replace it with a string.
 
@@ -232,7 +232,7 @@ prefix   = assemble(context fns, input)          — once, at run start
 messages = [...prefix]                           — append-only from here on
 
 step:
-  stopWhen checks (steps, tokens, duration, outputRetries)
+  stopWhen checks (steps, tokens, duration, outputRetries, repeatedCalls)
   prepareStep hook → activeTools mask, toolChoice, injected messages, llm swap
   signal.stepStream({ messages, tools, responseFormat? })
     → model-delta events (text + reasoning channels)
@@ -274,8 +274,12 @@ Bounds are `stopWhen` predicates — one vocabulary instead of v1's
 maxToolIterations / maxTicks / maxDurationMs / budget tangle:
 
 ```ts
-stopWhen: [stepCount(20), tokens(100_000), duration('5m'), outputRetries(3)]
+stopWhen: [stepCount(20), tokens(100_000), duration('5m'), outputRetries(3), repeatedCalls(3)]
 ```
+
+`repeatedCalls(n)` ends a run whose model keeps sending the same tool
+call and getting the same answer — every further step would cost a
+full prompt and change nothing.
 
 Defaults: `stepCount(20)`, `outputRetries(3)`. No default duration or
 token cap — v1's 60-second default was overridden at every call site,
@@ -326,14 +330,19 @@ that is how knowledge drifts.
   agent's own — an app attaches shared knowledge to ANY agent without
   editing its definition.
 - **Tools bring their own guides.** `defineTool({ guide })` carries
-  the tool's usage knowledge (a string or a deferred `() => string`,
+  the tool's usage knowledge (a string, a `string[]` of lines, or a
+  deferred function returning either,
   e.g. composing a library's exported guide). The run assembles one
   TOOL GUIDES section from the ACTIVE tools — add a tool and its
   guide arrives, change it and every agent updates, remove it and the
   guide leaves. Instructions never describe tools.
-- Prefix order: instructions → agent producers → run producers →
-  tool guides → schema doc → finish protocol → input. The finish
-  protocol is ONE cortex-owned chunk stating how the run ends under
+- Prefix order: instructions → tool guides → schema doc → finish
+  protocol → agent producers → run producers → input. The three
+  middle blocks are fixed for the life of an agent, so they sit ahead
+  of the producers, which are not — a provider's prefix cache stops at
+  the first byte that changed. The finish
+  protocol is ONE chunk — authored by signal's transport, injected by
+  cortex verbatim — stating how the run ends under
   the RESOLVED transport (call `respond` / emit the envelope / reply
   under grammar) — agents never author finish lines; they cannot know
   which transport resolution picked.
@@ -348,7 +357,7 @@ that is how knowledge drifts.
 - Compaction (summarize-when-near-limit) is a future single hook on
   the transcript (§15), not a v1 pipeline.
 
-**Preview survives, better.** `agent.preview(input, { deps })`
+**Preview survives, better.** `await agent.preview(input, { deps })`
 returns the exact assembled messages, the resolved tool list
 (including `respond` and its actual params), the resolved strategy,
 and a token estimate — no model call. Anything you can't explain in
@@ -372,10 +381,10 @@ type ToolGate<TDeps> = (call: ToolCallInfo, ctx: RunCtx<TDeps>) =>
 type ToolResultHook<TDeps> = (obs: ToolObservation, ctx: RunCtx<TDeps>) =>
   { result?: unknown } | void | Promise<…>;   // replace / redact / truncate
 
-type PrepareStep<TDeps> = (s: StepInfo<TDeps>) =>
-  { activeTools?: string[]; toolChoice?: ToolChoice; inject?: Message[]; llm?: SignalClient } | void;
+type PrepareStep<TDeps> = (s: PrepareStepInfo<TDeps>) =>
+  { activeTools?: string[]; toolChoice?: ToolChoice; inject?: Message[]; llm?: SignalClient } | void | Promise<…>;
 
-type StopCondition = (s: RunProgress) => boolean;
+type StopCondition = (s: RunProgress) => StopVerdict;   // { stop: StopReason; message } | null
 ```
 
 - **Gates run before execution.** A deny reaches the model as a tool
@@ -438,7 +447,7 @@ const result = await run.result;
 | `model-delta` | `{ text, channel: 'text' \| 'reasoning' }` | provider reasoning tokens land here |
 | `tool-start` | `{ call }` | before gates + execution — drives live UIs |
 | `tool-end` | `{ observation }` | typed union incl. denials; no casting |
-| `approval-required` | `{ id, toolId, args, reason }` | run suspends |
+| `approval-required` | `{ approval: { id, toolId, callId, args, reason } }` | run suspends |
 | `output-delta` | `{ text }` | raw envelope JSON fragments |
 | `output-partial` | `{ output }` | solid-parsed partial envelope |
 | `retry` | `{ kind: 'output' \| 'termination' \| 'provider', attempt, issues }` | consumers reset partial state; `issues` carries the evidence (Zod issues, the rejected attempt, or the stray text) |
@@ -503,10 +512,12 @@ Same two principles as v1, smaller taxonomy:
 ```ts
 type CortexError = {
   code: 'model_call_failed' | 'output_invalid' | 'stopped' | 'aborted' | 'unknown';
-  stop?: 'steps' | 'tokens' | 'duration' | 'output_retries' | 'custom';   // when code === 'stopped'
+  stop?: StopReason;   // when code === 'stopped':
+                       // 'steps' | 'tokens' | 'duration' | 'output_retries' | 'repeated_calls' | 'custom'
   message: string;
   runId: string;
   agentPath: ReadonlyArray<string>;
+  lastOutput?: unknown;   // the last invalid output when the run died on output retries
   cause?: unknown;
 };
 ```
@@ -519,7 +530,7 @@ principle as every other tool denial.
 
 ## 10. Streaming
 
-Always on (§4). Solid is a peer dependency and powers
+Always on (§4). Solid is a dependency and powers
 `output-partial`: `respond` arg deltas (or content deltas under
 `native`/`emit`) stream through solid's partial parser into
 progressively-typed envelopes — a chat `response` string streams
@@ -538,36 +549,43 @@ defineTool(config): ToolDefinition                     // v1 shape, kept
 schemaDoc(schema, opts?): string
 
 // execution
-agent.run(input, { deps, llm?, tools?, gates?, onToolResult?, onEvent?, signal? }): RunHandle<TData>
+agent.run(input, { deps, llm?, tools?, producers?, gates?, onToolResult?, onEvent?, signal? }): RunHandle<TData>
 //   tools: per-run tools whose execute closes over per-invocation
 //   dependencies (vex builds its query tools around the caller's
 //   adapter + schema); appended to the agent's static tools.
-agent.preview(input, { deps }): ResolvedPreview
+agent.preview(input, { deps }): Promise<ResolvedPreview>
 resumeRun(agent, snapshot, opts): RunHandle<TData>
 
 // RunHandle
 run.events: AsyncIterable<CortexEvent>
+run.onEvent(listener): Unsubscribe
 run.result: Promise<RunResult<TData>>
 run.approve(id, { args? }) / run.deny(id, reason?)
 run.snapshot(): RunSnapshot
 run.abort(reason?)
 
 // composition
-createManifold({ llm, gates?, onRun? }): Manifold
-manifold.register / run / asTool / preview
+createManifold({ llm?, gates?, onRun? }): Manifold
+manifold.register / run / asTool / preview / agent / tool / agents / tools
+asTool(agent, { id?, description?, llm?, timeoutMs?, deps, select? }): ToolDefinition
+
+// gates
+policyGate(policy): ToolGate
 
 // stop conditions
-stepCount(n), tokens(n), duration(ms | '5m'), outputRetries(n)
+stepCount(n), tokens(n), duration(ms | '5m'), outputRetries(n), repeatedCalls(n)
+DEFAULT_STOP_CONDITIONS   // [stepCount(20), outputRetries(3)]
 ```
 
 `defineAgent` config:
 
 ```ts
 {
-  id, description,
-  llm?,                       // per-agent binding; manifold/run option is fallback
+  id, description?,
+  llm?,                       // per-agent binding; run option overrides it, manifold is the fallback
+  transport?: 'stream' | 'step',   // default 'stream'; 'step' makes non-streaming calls (no deltas, no partials)
   instructions,               // string | (ctx) => string — sugar for the first producer
-  context?: Producer<TDeps>[],   // compose shared sets by spreading: [...appProducers(), …]
+  context?: (ContextEntry | Producer<TDeps>)[],   // compose shared sets by spreading: [...appProducers(), …]
   tools?: ToolDefinition[],   // definitions, not id strings; each may carry its own `guide`
   output?: {
     schema?: ZodType<TData>,          // omitted → pure chat agent (data: undefined)
@@ -584,6 +602,9 @@ stepCount(n), tokens(n), duration(ms | '5m'), outputRetries(n)
 ---
 
 ## 12. Signal changes this design requires
+
+Items 1–3 are built; the text below is the requirement as it was
+written. The tokenizer in item 4 has not landed.
 
 1. **`stepStream` emits `tool-call-delta`** — `{ index, id?, name?,
    argsText }` fragments as function args stream. The SSE chunks
@@ -657,20 +678,20 @@ src/
 ├── types.ts                      # shared core types
 │
 ├── schemas/
-│   ├── envelope.schema.ts        # Envelope<TData> factory
-│   ├── agent-config.schema.ts
+│   ├── index.ts
+│   ├── envelope.schema.ts        # envelope wire / accept schemas, validateEnvelope
 │   └── tool-config.schema.ts
 │
 ├── agent/
 │   ├── define-agent.ts
-│   ├── run.ts                    # RunHandle, resumeRun
+│   ├── run.ts                    # RunHandle, resumeRun, prefix assembly
 │   └── preview.ts
 │
 ├── loop/
 │   ├── loop.ts                   # the loop (§4) — all three transports
-│   ├── strategy-resolve.ts       # auto resolution + strict-compat walk
-│   ├── respond-tool.ts           # synthetic respond descriptor + corrections
 │   └── partials.ts               # solid partial-output tracking
+│                                 # (auto resolution, the strict-compat walk, the respond
+│                                 #  descriptor and corrections are signal's: src/transport/)
 │
 ├── context/
 │   ├── assemble.ts
@@ -679,15 +700,17 @@ src/
 ├── gates/
 │   ├── types.ts
 │   ├── policy.ts                 # sugar → built-in gate
-│   └── approval.ts               # suspend / approve / deny / snapshot
+│   ├── stop.ts                   # stop conditions + defaults
+│   └── approval.ts               # suspend / approve / deny
 │
 ├── events/
 │   ├── types.ts                  # CortexEvent vocabulary
-│   └── stream.ts                 # per-run emitter + forwarding
+│   └── channel.ts                # per-run emitter + forwarding
 │
 ├── manifold/
 │   ├── manifold.ts
-│   └── as-tool.ts
+│   ├── as-tool.ts
+│   └── types.ts                  # erased agent shapes
 │
 ├── tool/define-tool.ts
 ├── errors/cortex.errors.ts

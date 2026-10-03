@@ -70,9 +70,12 @@ register through `ctx.register`.
 
 Kit (`/adapters/tty/components`): `defaultRegistry()` with `Box, Row,
 Stack, Grid, Text, Button, Input, Select, Textarea, Checkbox, Switch,
-Table, Badge, Panel, JsonTree, ActionSlot`, plus `fallback` (unknown names
+Table, Badge, Panel, JsonTree, ActionSlot` (`Select` is `Input`, `Switch`
+is `Checkbox`; the components are also exported by name), plus `fallback`
+(unknown names
 render their children; childless ones surface `label`/`title` + `count`)
-and the line helpers (`stack`, `inline`, `pad`, `truncate`, …).
+and the helpers (`stack`, `inline`, `inlineText`, `pad`, `truncate`,
+`indent`, `str`, `num`, `bool`, `iconGlyph`).
 
 ---
 
@@ -101,8 +104,9 @@ An Ink component kit for the React adapter's walker — ESM-only, `ink` and
 
 ### Interaction conventions
 
-Tab/Shift+Tab cycle ink's focus ring; Enter (or Space) activates; a
-focused Input holds a local draft, honours `debounce`, submits `ui:key
+Tab/Shift+Tab cycle ink's focus ring; Enter activates (Space too on a
+Checkbox and on a Panel's header buttons; `useActionable` answers Enter
+only); a focused Input holds a local draft, honours `debounce`, submits `ui:key
 Enter`, and forwards ↑/↓ to the server as `ui:key ArrowDown/ArrowUp` (a
 served palette moves its own highlight). Typed-digit handling is the
 host's job — the kit only displays markers and adopts their focus ids.
@@ -110,15 +114,17 @@ host's job — the kit only displays markers and adopts their focus ids.
 ### Exports
 
 `defaultRegistry()` — `Box, Row, Stack, Grid, Text, Button, Input, Select,
-Textarea, Checkbox, Switch, Table, Badge, Panel, JsonTree, ActionSlot`;
+Textarea, Checkbox, Switch, Table, Badge, Panel, JsonTree, ActionSlot`
+(`Select` and `Textarea` are `Input`, `Switch` is `Checkbox`; the
+components are also exported by name);
 `fallback` (ref'd unknowns are focusable and click on Enter); `TextWrap`,
 `ErrorMarker`; `useActionable(novaRef, value)` — the full interactive
 convention (marker + focus + Enter-click) for an app's own components;
 `useMarker`, `Mark`, `markerFocusId`, `CanvasMarkersContext`,
-`FrameControlsContext`.
+`FrameControlsContext`; types `MarkerResolve`, `InkFrameControls`.
 
 Layout mapping: Grid honours `weights` (flex ratios) and `columns`
 (wrapping tracks); Row honours `justify`/`align`; containers honour
 `border` (incl. sided `'r'`/`'l'`/`'t'`/`'b'`), `padding`, `w`/`width`
 (px→cells at ~8px/cell, percent passthrough), `grow`. What has no
-terminal analog (bg, radius, drag) is absent, never faked.
+terminal analog (bg, radius, glow) is absent, never faked.
