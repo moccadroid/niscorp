@@ -96,25 +96,15 @@ In the GitHub repository:
 
 ## create-nisc
 
-`create-nisc` (`npm create nisc`) is such a package, and order matters for it:
-it asks npm for the set `@niscorp/nisc` was released with and pins a new app to
-it, so it goes out **after** the release that carries what its templates need
-(moss's dev plugin, `nisc dev` hosting it, strata as nova's and Prism's
-required peer). Merge the version pull request, let the Release workflow
-publish, then drop `"private": true` from `packages/create-nisc/package.json`,
-commit, and run `pnpm release:first`.
-- **Half a release.** `changeset publish` skips what is already on npm, so
-  re-running the workflow (*Actions → Release → Run workflow*) publishes the
-  rest.
-- **The version pull request shows no checks.** GitHub runs no workflows for a
-  pull request opened by the workflow's own token. Its contents are versions and
-  changelogs; Verify runs on the commit that merging it makes, and the release
-  waits for that.
+`create-nisc` (`npm create nisc`) asks npm for the set `@niscorp/nisc` was
+released with and pins a new app to it. So it is only as good as the latest
+`@niscorp/nisc`: a change its templates depend on (a new subpath, a fixed peer)
+has to be released before, or with, the `create-nisc` that needs it. It was
+first published by hand, after nisc 0.2.0 — the release that carried moss's dev
+plugin and strata as nova's and Prism's required peer — and is released by the
+workflow like every other package since.
 
 ## Not set up
 
-- **`create-nisc`.** `npm create nisc` needs a package of that name. Claim it
-  before somebody else does — even as a placeholder — when `nisc create` is
-  built.
 - **Pre-releases.** Changesets' `pre` mode and snapshot releases (`next`,
   `canary` dist-tags) are not wired.
