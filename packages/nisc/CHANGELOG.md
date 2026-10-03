@@ -1,5 +1,28 @@
 # @niscorp/nisc
 
+## 0.2.2
+
+### Patch Changes
+
+- Updated dependencies [b67a125]
+- Updated dependencies [633d0d1]
+- Updated dependencies [45d6731]
+- Updated dependencies [633d0d1]
+- Updated dependencies [45d6731]
+- Updated dependencies [45d6731]
+- Updated dependencies [45d6731]
+  - @niscorp/charter@0.1.1
+  - @niscorp/cli@0.2.1
+  - @niscorp/cortex@0.1.1
+  - @niscorp/loom@0.1.1
+  - @niscorp/prism@0.1.2
+  - @niscorp/signal@0.1.1
+  - @niscorp/strata@0.1.1
+  - @niscorp/moss@0.2.2
+  - @niscorp/nova@0.1.2
+  - @niscorp/tide@0.1.1
+  - @niscorp/vex@0.1.1
+
 ## 0.2.1
 
 ### Patch Changes

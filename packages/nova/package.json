@@ -1,6 +1,6 @@
 {
   "name": "@niscorp/nova",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Declarative UI framework for AI agents \u2014 JSON layouts, shell orchestration, React",
   "license": "Apache-2.0",
   "repository": {
