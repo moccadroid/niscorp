@@ -95,9 +95,6 @@
     },
     "@niscorp/signal": {
       "optional": true
-    },
-    "@niscorp/strata": {
-      "optional": true
     }
   },
   "devDependencies": {

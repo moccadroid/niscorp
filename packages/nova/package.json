@@ -218,9 +218,7 @@
     "@niscorp/cortex": {
       "optional": true
     },
-    "@niscorp/strata": {
-      "optional": true
-    },
+
     "ink": {
       "optional": true
     },

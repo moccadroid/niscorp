@@ -7,9 +7,15 @@
 // declaring it only as a devDependency, and solid pointed CJS types at a file
 // the build never emits; both were green here and broken for anyone else.
 //
-// Three passes, all against the packed tarball rather than the source tree:
+// Four passes, against what is built and packed rather than the source tree:
 //   1. publint — the manifest is well-formed (files exist, conditions ordered)
 //   2. attw    — every export resolves to matching types under node16 ESM + CJS
+//   2b. loads  — what each built entry imports at load time, followed through
+//                its chunks: nothing undeclared, and nothing the package calls
+//                an OPTIONAL peer from its main entry. prism and nova imported
+//                strata from their cores while calling it optional; the smoke
+//                pass installs every tarball together, so strata was always
+//                there, and an app with nova alone crashed on import.
 //   3. smoke   — the tarballs install into a scratch project outside the
 //                workspace, and every export is imported (ESM) and required
 //                (CJS, where the export map offers it)
@@ -19,7 +25,8 @@
 import { execFileSync, execSync } from 'node:child_process';
 import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { builtinModules } from 'node:module';
+import { dirname, join, resolve } from 'node:path';
 
 const root = resolve(import.meta.dirname, '..');
 
@@ -49,10 +56,15 @@ const ESM_ONLY: Readonly<Record<string, readonly string[]>> = {
   '@niscorp/moss': ['./terminal/ink'],
 };
 
+// Whole packages that are ESM-only: create-nisc runs as `npm create nisc` and
+// nothing requires it. attw judges them by its esm-only profile.
+const ESM_ONLY_PACKAGES: ReadonlySet<string> = new Set(['create-nisc']);
+
 type Manifest = {
   name: string;
   exports: Record<string, { import?: unknown; require?: unknown }>;
   peerDependencies: Record<string, string>;
+  optionalPeers: ReadonlySet<string>;
   dependencies: readonly string[];
 };
 
@@ -72,7 +84,9 @@ const readManifest = (dir: string): Manifest => {
   const peerDependencies: Record<string, string> = {};
   for (const [name, range] of Object.entries(peers)) if (typeof range === 'string') peerDependencies[name] = range;
   const dependencies = isRecord(raw['dependencies']) ? Object.keys(raw['dependencies']) : [];
-  return { name: raw['name'], exports, peerDependencies, dependencies };
+  const meta = isRecord(raw['peerDependenciesMeta']) ? raw['peerDependenciesMeta'] : {};
+  const optionalPeers = new Set(Object.entries(meta).flatMap(([name, entry]) => (isRecord(entry) && entry['optional'] === true ? [name] : [])));
+  return { name: raw['name'], exports, peerDependencies, optionalPeers, dependencies };
 };
 
 // zod is a peer of every package that touches it: schemas cross from the app
@@ -145,9 +159,59 @@ for (const { dir, manifest } of packages) {
   if (Object.keys(manifest.exports).length === 0) continue;
   run(
     `attw ${manifest.name}`,
-    tool('@arethetypeswrong/cli', 'attw', ['--pack', '.', '--profile', 'node16', ...(exclude.length > 0 ? ['--exclude-entrypoints', ...exclude] : [])]),
+    tool('@arethetypeswrong/cli', 'attw', ['--pack', '.', '--profile', ESM_ONLY_PACKAGES.has(manifest.name) ? 'esm-only' : 'node16', ...(exclude.length > 0 ? ['--exclude-entrypoints', ...exclude] : [])]),
     dir,
   );
+}
+
+// ── 2b: what each entry loads ───────────────────────────────────────
+//
+// Static imports only: an `import()` of an optional peer is how a feature that
+// needs it loads it, on demand. Relative imports are followed into the chunks
+// they name; a bare one is a package, and the package must be declared — a
+// dependency, a peer, or the package itself — and, from the main entry, not
+// an optional peer.
+const BUILTIN = new Set(builtinModules.flatMap((name) => [name, `node:${name}`]));
+const STATIC_IMPORT = /(?:^|[;\s}])(?:import|export)\s*(?:[\w*{}\s,$]*?\s*from\s*)?["']([^"']+)["']/g;
+const packageOf = (specifier: string): string => specifier.split('/').slice(0, specifier.startsWith('@') ? 2 : 1).join('/');
+const entryFile = (entry: unknown): string | undefined =>
+  typeof entry === 'string' ? entry : isRecord(entry) ? entryFile(entry['default']) : undefined;
+
+const loadsOf = (file: string, seen = new Set<string>()): Set<string> => {
+  const bare = new Set<string>();
+  if (seen.has(file)) return bare;
+  seen.add(file);
+  const source = readFileSync(file, 'utf8');
+  for (const match of source.matchAll(STATIC_IMPORT)) {
+    const specifier = match[1] ?? '';
+    if (specifier.startsWith('.')) for (const inner of loadsOf(resolve(dirname(file), specifier), seen)) bare.add(inner);
+    else if (!BUILTIN.has(specifier)) bare.add(packageOf(specifier));
+  }
+  return bare;
+};
+
+for (const { dir, manifest } of packages) {
+  const declared = new Set([manifest.name, ...manifest.dependencies, ...Object.keys(manifest.peerDependencies)]);
+  for (const [key, entry] of Object.entries(manifest.exports)) {
+    const file = entryFile(entry.import);
+    if (file === undefined) continue;
+    const loads = [...loadsOf(join(dir, file))].sort();
+    const undeclared = loads.filter((name) => !declared.has(name));
+    const optional = key === '.' ? loads.filter((name) => manifest.optionalPeers.has(name)) : [];
+    const ok = undeclared.length === 0 && optional.length === 0;
+    results.push({
+      label: `${manifest.name}${key === '.' ? '' : key.slice(1)} loads only what it declares`,
+      ok,
+      ...(ok
+        ? {}
+        : {
+            detail: [
+              ...(undeclared.length > 0 ? [`imported but not declared: ${undeclared.join(', ')}`] : []),
+              ...(optional.length > 0 ? [`the main entry imports what the manifest calls an optional peer: ${optional.join(', ')} — make it a required peer, or load it with import() where it is needed`] : []),
+            ].join('; '),
+          }),
+    });
+  }
 }
 
 // ── 3: install the tarballs outside the workspace and load every export ──
