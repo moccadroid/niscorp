@@ -1,5 +1,5 @@
 import { readFile } from 'node:fs/promises';
-import { join, relative } from 'node:path';
+import { extname, join, relative } from 'node:path';
 import { serve as listen } from '@hono/node-server';
 import { serveStatic } from '@hono/node-server/serve-static';
 import { WebSocketServer } from 'ws';
@@ -73,6 +73,11 @@ export const attachSocket = (
 // for `/`, one of the manifest's pages for a path that leads to one. index.html
 // itself is never served as a file: it is the template, and goes out drawn.
 //
+// A name with an extension that is neither a file in `dist` nor a page of the
+// manifest is a MISSING FILE, and is answered 404 — not with a screen. A browser
+// holding a page from before a deploy asks for that page's script by its old
+// name; what it needs back is "gone", not a document that is not a script.
+//
 // Register the app's own routes FIRST; this is the catch-all. `owned` names the
 // prefixes that are never a page (default: moss's own surfaces) — an unknown
 // path under one is a 404, not a screen.
@@ -96,6 +101,8 @@ export const mountSite = (server: MossServer, config: SiteConfig): void => {
   });
   server.get('*', async (c) => {
     if (owned.test(c.req.path)) return c.notFound();
+    // the static server above found no such file, and no page is at this path
+    if (extname(c.req.path) !== '' && c.req.path !== '/index.html' && server.page(c.req.path) === undefined) return c.notFound();
     const template = await readFile(join(dist, 'index.html'), 'utf8');
     const page = await renderDocument({
       ...drawing,

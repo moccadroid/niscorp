@@ -886,7 +886,15 @@ Correctness, which matters more than the saving:
   app's own for `/`, one of the manifest's pages for a path that leads to one.
   `index.html` itself never goes out as a file. Register the app's own routes
   first; this is the catch-all. `owned` (default: moss's own prefixes) names
-  what is never a page — an unknown path under one is a 404, not a screen.
+  what is never a page — an unknown path under one is a 404, not a screen. So is
+  a **missing file**: a name with an extension that is neither a file in `dist`
+  nor a page of the manifest is answered 404 (a browser holding a page from
+  before a deploy asks for its script by the old name, and needs "gone" back,
+  not a document). A page's own path may have a dot in it (`/docs/v1.2`).
+  What a browser may keep of these files, and compressing what goes out, is not
+  said here: `nisc start` puts both around the whole server (`@niscorp/cli`,
+  "`nisc start`"). A host running its own listener over `mountSite` says them
+  itself.
 - `MOSS_PATHS` — the prefixes the app server answers itself:
   `/^\/(api|catalog|socket|operator|integrations)(\/|$)/`. The default `owned`
   here and in the dev plugin.
