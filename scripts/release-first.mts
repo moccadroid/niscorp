@@ -129,10 +129,12 @@ if (missing.length > 0) {
   else fail('publishing stopped part way', 'run `pnpm release:first` again — what is already on npm is skipped');
 }
 
-// 6. From now on, the Release workflow publishes.
+// 6. From now on, the Release workflow publishes. Only what this run published
+// is asked about — or, when it published nothing (a re-run after a stop),
+// everything, with what is already set skipped.
 console.log('\n— trusting the Release workflow —');
-if (run('node', ['scripts/trust-publishers.mts'], true).ok) pass('every package trusts the Release workflow');
-else fail('some packages do not trust the workflow yet', 'run `pnpm release:first` again — what is set is skipped');
+if (run('node', ['scripts/trust-publishers.mts', ...missing.map((pkg) => pkg.name)], true).ok) pass('what was published trusts the Release workflow');
+else fail('some packages do not trust the workflow yet', 'run `pnpm npm:trust` — what is set is skipped');
 
 console.log(`
 [pass] the first release is out.

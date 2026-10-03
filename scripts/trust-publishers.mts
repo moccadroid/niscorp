@@ -12,7 +12,10 @@
 // on the @niscorp scope, and two-factor authentication on that account; npm
 // asks for a code as it goes.
 //
-// `pnpm npm:trust`. Exits non-zero if any package was not set.
+// `pnpm npm:trust` — every published package; `pnpm npm:trust <name> …` — only
+// those (what `release:first` passes: the packages it has just published, so
+// the ones already set are not asked about again). Exits non-zero if any
+// package was not set.
 
 import { spawnSync } from 'node:child_process';
 import { readdirSync, readFileSync } from 'node:fs';
@@ -37,13 +40,21 @@ if (major < 11 || (major === 11 && minor < 15)) {
 }
 
 // Every package this repository publishes: not private, under packages/.
-const published = readdirSync(join(root, 'packages'), { withFileTypes: true })
+const everyPackage = readdirSync(join(root, 'packages'), { withFileTypes: true })
   .filter((entry) => entry.isDirectory())
   .flatMap((entry): string[] => {
     const manifest: unknown = JSON.parse(readFileSync(join(root, 'packages', entry.name, 'package.json'), 'utf8'));
     return isRecord(manifest) && typeof manifest['name'] === 'string' && manifest['private'] !== true ? [manifest['name']] : [];
   })
   .sort();
+
+const asked = process.argv.slice(2);
+const strangers = asked.filter((name) => !everyPackage.includes(name));
+if (strangers.length > 0) {
+  console.log(`[fail] not a package this repository publishes: ${strangers.join(', ')}`);
+  process.exit(1);
+}
+const published = asked.length > 0 ? asked : everyPackage;
 
 // What npm already has for a package: its trusted publishers, as JSON.
 const trusts = (name: string): string => {
@@ -73,4 +84,4 @@ if (failures > 0) {
   console.log(`[fail] ${failures} of ${published.length} packages are not set — the lines above say which, and npm said why`);
   process.exit(1);
 }
-console.log(`[pass] all ${published.length} packages trust the Release workflow`);
+console.log(`[pass] ${published.length === 1 ? published[0] : `all ${published.length} packages`} trust${published.length === 1 ? 's' : ''} the Release workflow`);
