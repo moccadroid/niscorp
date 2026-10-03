@@ -80,6 +80,16 @@ LLMs are structurally bad at unbounded code and structurally excellent at constr
 
 ## Quick start
 
+A new app:
+
+```bash
+npm create nisc
+```
+
+Three questions — where it goes, where its shell runs (moss, or the page), what draws the screen (React, or plain DOM) — then an app with the right structure, a first screen that is drawn as markup and picked up by the page, a check, its `PLAN.md` (what was decided, what is still open) and an `AGENTS.md` pointing at the rulebook its installed nisc carries. `npm run dev`, `npm run build`, `npm run check`.
+
+Working on nisc itself:
+
 ```bash
 git clone https://github.com/moccadroid/niscorp.git
 cd niscorp
@@ -147,6 +157,12 @@ evaluates an app's artifacts (zod, react, every nisc→nisc edge), is a required
 `/hono`) is an **optional** peer. zod's floor is 4.2.0: from there a schema
 converts itself (`~standard.jsonSchema`), whichever copy made it.
 `check:packages` enforces all of it.
+
+**The rulebook.** [AGENTS.md](AGENTS.md) and [STYLE_GUIDE.md](STYLE_GUIDE.md)
+at the root are links to `packages/nisc/`, where they live because they ship:
+every app made by `npm create nisc` reads them from its installed
+`@niscorp/nisc`. Changing a rule is therefore a change to that package — it
+takes a changeset like any other, and reaches apps as a release.
 
 **Tables and grammars.** No package runs DDL outside a
 [strata](packages/strata) sequence, and changing a schema behind a document kind

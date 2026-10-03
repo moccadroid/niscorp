@@ -88,7 +88,21 @@ In the GitHub repository:
   first publish), or the workflow file or the environment was renamed: the
   trust names both.
 - **A new package.** Its first version is published by hand like the first
-  release, then `pnpm npm:trust`, then tokens disallowed.
+  release, then `pnpm npm:trust`, then tokens disallowed. Until then it is
+  `"private": true`, or the Release workflow would try to publish it and fail —
+  it cannot, the package does not exist yet. To publish it: release whatever it
+  depends on first, then in one commit drop `"private"`, and run
+  `pnpm release:first` (it publishes what npm lacks and sets the trust).
+
+## create-nisc
+
+`create-nisc` (`npm create nisc`) is such a package, and order matters for it:
+it asks npm for the set `@niscorp/nisc` was released with and pins a new app to
+it, so it goes out **after** the release that carries what its templates need
+(moss's dev plugin, `nisc dev` hosting it, strata as nova's and Prism's
+required peer). Merge the version pull request, let the Release workflow
+publish, then drop `"private": true` from `packages/create-nisc/package.json`,
+commit, and run `pnpm release:first`.
 - **Half a release.** `changeset publish` skips what is already on npm, so
   re-running the workflow (*Actions → Release → Run workflow*) publishes the
   rest.

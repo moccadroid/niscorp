@@ -1,0 +1,55 @@
+{
+  "name": "create-nisc",
+  "version": "0.1.0",
+  "private": true,
+  "description": "npm create nisc — a new nisc application: a few questions, then an app with the right structure, its rulebook, and a first screen that works.",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/moccadroid/niscorp.git",
+    "directory": "packages/create-nisc"
+  },
+  "type": "module",
+  "sideEffects": false,
+  "bin": {
+    "create-nisc": "./bin/create-nisc.js"
+  },
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      }
+    }
+  },
+  "files": [
+    "bin",
+    "dist",
+    "templates",
+    "!templates/*/node_modules",
+    "!templates/*/dist",
+    "!templates/*/out",
+    "*.md",
+    "LICENSE"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": ">=22.12"
+  },
+  "scripts": {
+    "build": "tsup",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit -p tsconfig.test.json"
+  },
+  "dependencies": {
+    "@clack/prompts": "^1.8.1"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.4",
+    "tsup": "^8.5.1",
+    "typescript": "^6.0.2",
+    "vitest": "^4.1.2"
+  }
+}

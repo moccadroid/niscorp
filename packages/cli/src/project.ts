@@ -57,6 +57,13 @@ export type NiscMossProject = Common & {
   // Routes of the app's own that a served site needs before the catch-all — a
   // sign-in handoff, a webhook. `nisc start` registers them first.
   routes?: (server: MossServer) => void | Promise<void>;
+  // What only `nisc dev` uses.
+  dev?: {
+    // A signed-in URL in development: `/dev/as/<who>` stores the token this
+    // mints and goes to `/`. `null` is nobody of that name. It exists in the
+    // dev server and nowhere else.
+    signIn?: (server: MossServer, who: string) => string | null | Promise<string | null>;
+  };
 };
 
 export type NiscShellProject = Common & {
@@ -96,17 +103,21 @@ const has = (value: object, key: string): boolean => typeof Reflect.get(value, k
 
 export const isShellProject = (project: NiscProject): project is NiscShellProject => 'shell' in project;
 
-const isProject = (value: unknown): value is NiscProject => {
+export const isProject = (value: unknown): value is NiscProject => {
   if (value === null || typeof value !== 'object' || !has(value, 'draw')) return false;
   const [moss, own] = [has(value, 'boot'), has(value, 'shell')];
   // one or the other — a config that hands over both has not said which it is
   return moss !== own && (moss || has(value, 'adopt'));
 };
 
+// The config's file name, if the app has one.
+export const configFileOf = (root: string): string | undefined => CONFIG_NAMES.find((name) => existsSync(join(root, name)));
+
 // Load the app's config through tsx, so it is TypeScript with the app's own
 // tsconfig (its path aliases included) — the way the app's checks already run.
 export const loadProject = async (root: string): Promise<NiscProject> => {
-  const file = CONFIG_NAMES.map((name) => join(root, name)).find((candidate) => existsSync(candidate));
+  const name = configFileOf(root);
+  const file = name === undefined ? undefined : join(root, name);
   if (file === undefined) {
     throw new Error(`nisc: no nisc.config.ts in ${root}. It exports \`project\`: how the app boots, and how one of its screens is drawn.`);
   }

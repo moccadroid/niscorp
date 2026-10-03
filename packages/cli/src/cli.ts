@@ -8,7 +8,7 @@ import type { CommandOptions } from './commands';
 
 const USAGE = `nisc — the command for a nisc application
 
-  nisc dev                 the app's dev server
+  nisc dev                 the app's dev server — its vite, with the app server inside
   nisc build               bundle the app, draw every path, and check what was drawn
   nisc export              build, then write every path as a file (the site as a folder)
   nisc start               serve the built app, each path's first screen drawn
@@ -17,7 +17,7 @@ const USAGE = `nisc — the command for a nisc application
   --root <dir>             the app's root (default: here) — where nisc.config.ts is
   --out <dir>              export: where the files go (default: out)
   --allow-live             export: write even though some path wants a server behind it
-  --port <n>               start: the port (default: $PORT, then 8787)
+  --port <n>               dev, start: the port (start: $PORT, then 8787)
   --skip-bundle            build, export: the terminal is already built
 
 An app says in nisc.config.ts how it boots and how one of its screens is drawn.
@@ -42,14 +42,8 @@ const main = async (): Promise<number> => {
     skipBundle: args.includes('--skip-bundle'),
   };
 
-  if (command === 'dev') return dev(options);
-  if (command === 'check') return check(options);
-  if (command === 'build') {
-    return (await build(options)).ok ? 0 : 1;
-  }
-  if (command === 'export') return (await exportSite(options)).written ? 0 : 1;
-  if (command === 'start') {
-    const served = await start(options);
+  if (command === 'dev' || command === 'start') {
+    const served = command === 'dev' ? await dev(options) : await start(options);
     const stop = (): void => {
       void served.close().finally(() => process.exit(0));
     };
@@ -58,6 +52,11 @@ const main = async (): Promise<number> => {
     // stays up until it is told to stop
     return new Promise<number>(() => undefined);
   }
+  if (command === 'check') return check(options);
+  if (command === 'build') {
+    return (await build(options)).ok ? 0 : 1;
+  }
+  if (command === 'export') return (await exportSite(options)).written ? 0 : 1;
   console.log(USAGE);
   return command === undefined || command === 'help' || command === '--help' ? 0 : 1;
 };

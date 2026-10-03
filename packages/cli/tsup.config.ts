@@ -5,7 +5,7 @@ import { defineConfig } from 'tsup';
 // ships both module formats like every other package. The command is ESM only:
 // it loads the app's TypeScript through tsx's ESM loader, and nothing requires it.
 // Its launcher is bin/nisc.js, a committed file, so the bin links on a fresh install.
-const EXTERNAL = ['@niscorp/moss', '@niscorp/moss/node', '@niscorp/nova', '@niscorp/nova/reflect', '@hono/node-server', 'tsx/esm/api'];
+const EXTERNAL = ['@niscorp/moss', '@niscorp/moss/node', '@niscorp/moss/vite', 'vite', '@niscorp/nova', '@niscorp/nova/reflect', '@hono/node-server', 'tsx/esm/api'];
 
 export default defineConfig([
   {

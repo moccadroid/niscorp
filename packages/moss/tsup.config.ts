@@ -19,6 +19,7 @@ const EXTERNAL = [
   '@niscorp/nova/adapters/tty/components',
   '@niscorp/nova/adapters/ink',
   '@niscorp/nova/reflect',
+  'vite',
 ];
 
 export default defineConfig([
@@ -36,6 +37,7 @@ export default defineConfig([
       'terminal/dom/index': 'src/terminal/dom/index.ts',
       'terminal/dom/server': 'src/terminal/dom/server.ts',
       'terminal/tty/index': 'src/terminal/tty/index.ts',
+      vite: 'src/vite.ts',
     },
     format: ['esm', 'cjs'],
     dts: true,

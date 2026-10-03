@@ -81,7 +81,8 @@ export type SiteConfig = Pick<DocumentConfig, 'draw' | 'htmlAttributes' | 'token
   owned?: RegExp;
 };
 
-const MOSS_PATHS = /^\/(api|catalog|socket|operator|integrations)(\/|$)/;
+// The paths the app server answers itself; everything else is the site's.
+export const MOSS_PATHS = /^\/(api|catalog|socket|operator|integrations)(\/|$)/;
 
 export const mountSite = (server: MossServer, config: SiteConfig): void => {
   const { dist, owned = MOSS_PATHS, ...drawing } = config;

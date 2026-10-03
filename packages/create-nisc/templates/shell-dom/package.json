@@ -1,0 +1,28 @@
+{
+  "name": "nisc-template-shell-dom",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "nisc dev",
+    "build": "tsc --noEmit && nisc build",
+    "export": "nisc export",
+    "start": "nisc start",
+    "check": "nisc check",
+    "test": "nisc check",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@niscorp/nova": "workspace:^",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@niscorp/cli": "workspace:^",
+    "@types/jsdom": "^30.0.0",
+    "@types/node": "^26.6.4",
+    "jsdom": "^25.0.1",
+    "tsx": "^4.23.1",
+    "typescript": "^6.0.2",
+    "vite": "^7.1.12"
+  }
+}

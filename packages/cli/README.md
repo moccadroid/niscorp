@@ -6,6 +6,9 @@
 pnpm add -D @niscorp/cli
 ```
 
+A new app starts with `npm create nisc`, which writes the `nisc.config.ts`
+described below.
+
 ```bash
 nisc dev       # the app's dev server
 nisc build     # bundle the app, draw every path, and check what was drawn
@@ -203,10 +206,29 @@ manifest page at its path. A signed-in person gets their screen in the markup
 (`private, no-store`); nobody gets the page as nobody sees it. `--port <n>`, or
 `$PORT`, default 8787.
 
-## `nisc dev`, `nisc check`
+## `nisc dev`
 
-Hand over to tools the app already has: its vite config (which hosts the app
-server, so pages are drawn in dev too), and its check suite.
+The app's own vite, started from here (`--port <n>`). For an app behind moss
+the app server runs inside it — moss's dev plugin (`@niscorp/moss/vite`), fed
+from `nisc.config.ts`, so the dev server boots and draws exactly what `build`
+and `start` do:
+
+- `/`, and every page's path, is answered with its first screen drawn — and is
+  still a vite page (its client, the framework's refresh preamble);
+- moss's own paths (`/api`, `/catalog`, the socket, …) go to the app server,
+  everything else to vite;
+- an edit under `src/app`, `src/server`, `src/db`, `src/ui` or to the config
+  re-boots the app (a fresh database, fresh shells) and reloads the page — the
+  old server answers until the new one is up;
+- `dev.signIn(server, who)` in the config, if the app gives one, makes
+  `/dev/as/<who>` a signed-in URL — in the dev server and nowhere else.
+
+The app's `vite.config.ts` holds its framework's plugin and nothing about the
+server. An app with its own shell is a vite app and nothing more.
+
+## `nisc check`
+
+The app's check suite (`src/dev/all-checks.ts`, or `checks` in the config).
 
 ## Options
 

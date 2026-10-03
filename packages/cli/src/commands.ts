@@ -5,6 +5,7 @@ import type { AddressInfo } from 'node:net';
 import { dirname, join, resolve } from 'node:path';
 import { serve } from '@hono/node-server';
 import type { ExportedDocument } from '@niscorp/moss';
+import { devServer } from './dev';
 import { isShellProject, loadProject } from './project';
 import type { NiscMossProject, NiscProject, NiscShellProject } from './project';
 import { defaultPaths, fileOf, routeTable } from './routes';
@@ -14,7 +15,7 @@ import type { ShellRouteReport } from './shell-site';
 // ═══════════════════════════════════════════════════════════════
 // What `nisc` does. Each command is the app's own machinery, run in order:
 //
-//   dev     the app's dev server (its vite config, which hosts the app server)
+//   dev     the app's own vite, with the app server inside it when it has one
 //   build   bundle the terminal, then draw every path once and say how each is
 //           served — a file, or a server
 //   export  build, then write every path as a file: the whole site as a folder
@@ -210,7 +211,8 @@ const handOver = (options: CommandOptions, tool: string, args: readonly string[]
     child.once('exit', (code) => done(code ?? 1));
   });
 
-export const dev = (options: CommandOptions): Promise<number> => handOver(options, toolOf(options.root, 'vite', 'vite'), []);
+export const dev = (options: CommandOptions): Promise<{ url: string; close: () => Promise<void> }> =>
+  devServer({ root: options.root, ...(options.port !== undefined ? { port: options.port } : {}) });
 
 export const check = async (options: CommandOptions): Promise<number> => {
   const project = await loadProject(options.root);
