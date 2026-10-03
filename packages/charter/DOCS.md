@@ -121,7 +121,8 @@ Every id in `ids` selected by any pattern in `patterns`.
 
 Resolve one role in one section against `universe`. Applies the algebra
 (`extends` ∪ `allow` − `deny` − `without`). `memo` and `visiting` are internal
-accumulators for recursion and cycle detection; callers pass neither.
+accumulators for recursion and cycle detection; callers pass neither. (`memo` is
+keyed by role name alone, so one is never shared across sections or universes.)
 
 Throws `CharterError` on an unknown role reference or a role cycle.
 
@@ -135,6 +136,12 @@ at login.
 resolvePrincipal(charter, actionIds, ['sales', 'dev'], 'actions'); // granted actions
 resolvePrincipal(charter, verbLeaves, ['sales', 'dev'], 'data');   // granted table.verb caps
 ```
+
+### `resolveScoping(charter, role): string | undefined`
+
+The `scoping` name one role declares, or `undefined` — for a role that declares
+none, a bare-array role, and a role the charter does not define (it does not
+throw). Not composed by `extends`; see [`scoping`](#scoping--how-far-a-role-reaches).
 
 ### `normalizeRole(def, section): { allow, deny, extends, without }`
 
@@ -151,18 +158,20 @@ catches these and reports them as `resolution` errors rather than throwing.
 
 ## Verification
 
-### `verifyCharter(charter, universes, assignments?, closure?): VerifyReport`
+### `verifyCharter(charter, universes, wearable?, closure?): VerifyReport`
 
-Run every coherence check against both universes. Call at boot/CI; refuse to
-serve if `report.errors` is non-empty.
+Run every coherence check, per section, against that section's universe. Call
+at boot/CI; refuse to serve if `report.errors` is non-empty.
 
 - `universes: { actions: readonly string[]; data: readonly string[]; layouts?: readonly string[] }`
   — the id sets each section resolves against, handed in by the composer. The
   `layouts` universe is optional: absent, the section is inert (a charter's
   `layouts` keys resolve against nothing and are not verified); handed in, its
   dead-deny/dead-allow/orphan/leaves-only checks run like any other section.
-- `assignments?: Record<string, readonly string[]>` — `principal → roles`, used
-  by the `subtractive-assigned` check.
+- `wearable?: readonly (readonly string[])[]` — the role combinations a principal
+  may wear, one entry per combination (not one per person). Defaults to `[]`.
+  Read only by the `subtractive-assigned` check. A composer that has an
+  assignment map (`principal → roles`) passes `Object.values(map)`.
 - `closure?: ClosureAuditor` — the injected per-role cross-action audit.
 
 ### `ClosureAuditor`
@@ -173,9 +182,10 @@ type ClosureAuditor = (grantedIds: readonly string[], layoutIds?: readonly strin
 
 Given a role's resolved action ids (and, when the app governs layouts, its
 granted variant ids), return the cross-action wiring problems inside that
-closure. Supplied by the consumer that owns actions (Nova exports
-`auditClosure(definitions)`; moss wraps it and substitutes granted variants so
-the audit sees each role's effective definitions).
+closure. Supplied by the consumer that owns actions (moss exports
+`auditClosure(definitions, variants?)`, built on Nova's `auditAction`; it
+substitutes granted variants so the audit sees each role's effective
+definitions). Absent, every role's `issues` is empty.
 
 ### `VerifyReport`
 
@@ -183,7 +193,7 @@ the audit sees each role's effective definitions).
 type VerifyReport = {
   errors: VerifyIssue[];       // refuse to boot if non-empty
   warnings: VerifyIssue[];     // deploy, but review
-  perRole: RoleClosure[];      // resolved actions + data + closure issues, per role
+  perRole: RoleClosure[];      // resolved actions + data + layouts (sorted) + closure issues, per role
 };
 
 type VerifyIssue = { level: 'error' | 'warning'; rule: string; detail: string };
@@ -195,13 +205,13 @@ type RoleClosure = { role: string; actions: string[]; data: string[]; layouts: s
 | rule | level | meaning |
 |---|---|---|
 | `resolution` | error | a cycle or unknown-role reference (per section) |
-| `leaves-only` | error | an id is a namespace of another id — namespaces are never actions |
+| `leaves-only` | error | an id is a namespace of another id — namespaces are never actions (checked in the `actions` universe, and in `layouts` when handed in; not in `data`) |
 | `ambiguous-selection` | error | a role has both top-level `allow`/`deny` and an explicit `actions:` |
 | `dead-deny` | error | a deny glob matches nothing — silent means unprotected |
 | `dead-allow` | warning | an allow glob matches nothing — noise |
-| `orphan` | warning | an action granted by no role — deployed but unreachable |
+| `orphan` | warning | an action (or, when `layouts` is handed in, a layout variant) granted by no role — deployed but unreachable. An ungranted `data` id is not reported |
 | `re-allow` | warning | a role re-allows an id an ancestor denied |
-| `subtractive-assigned` | warning | a role used in `without` is also assigned to a principal |
+| `subtractive-assigned` | warning | a role used in `without` also appears in a `wearable` combination |
 | *(closure)* | via `RoleClosure.issues` | cross-action wiring problems from the injected auditor |
 
 ---
@@ -210,13 +220,16 @@ type RoleClosure = { role: string; actions: string[]; data: string[]; layouts: s
 
 ```typescript
 import { resolvePrincipal, verifyCharter } from '@niscorp/charter';
+import { auditClosure } from '@niscorp/moss';
+import { createScopePolicy, scopeGrants } from '@niscorp/vex';
 
 // 1. Boot: derive the universes from the governed targets, refuse incoherence.
 const universes = {
   actions: Object.keys(app.actions),        // the shell's dialect
-  data: scopeGrants(schema.tables),          // vex's dialect
+  data: scopeGrants(tableNames),             // vex's dialect — `table.verb` leaves
 };
-const report = verifyCharter(app.charter, universes, app.assignments, auditClosure(app.actions));
+const wearable = Object.values(app.assignments);   // the role combinations in use
+const report = verifyCharter(app.charter, universes, wearable, auditClosure(app.actions));
 if (report.errors.length > 0) {
   throw new Error(report.errors.map((e) => `${e.rule}: ${e.detail}`).join('\n'));
 }

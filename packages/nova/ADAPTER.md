@@ -15,8 +15,8 @@ line-terminal adapter (`@niscorp/nova/adapters/tty`, `createTtyView` — a
 pure render to `{ text, interactives }`; the host maps commands onto the
 numbered interactives), and the full-screen terminal kit
 (`@niscorp/nova/adapters/ink` — an Ink component vocabulary riding the React
-adapter's walker; Tab cycles focus, Enter activates). A Svelte adapter is
-a sibling folder, built the same way.
+adapter's walker; Tab cycles focus, Enter activates). A Svelte adapter
+would be a sibling folder, built the same way.
 
 A react-shaped host that is not the DOM threads three optional seams through
 `NovaRenderProvider`: `fallback` (unregistered names render their children
@@ -125,9 +125,12 @@ against registry schemas — that checks output against an authoring contract.
 Ship the primitive vocabulary — Stack, Text, Input, Button, Box at minimum,
 plus the introspection primitives Panel and JsonTree (nova's devtools compose
 against them) — with static `meta` (description + props schema) so registries
-and agent tooling can introspect them. The DOM kit additionally ships Row,
-Grid, Checkbox, Textarea, and Table, with Select and Switch as aliases of
-Input and Checkbox.
+and agent tooling can introspect them. The React and Vue kits ship exactly
+that set plus the two slots (`registerNovaReactComponents`,
+`registerNovaVueComponents`). The DOM kit additionally ships Row, Grid,
+Checkbox, Textarea, and Table, with Select and Switch as aliases of Input and
+Checkbox; the TTY and Ink kits ship the DOM kit's names plus Badge (each a
+`defaultRegistry()`).
 
 ### 5. SlotWrapper persistence
 
@@ -148,13 +151,13 @@ or bound inputs drop keystrokes the moment the shell is remote:
 
 - **Preserve the in-progress value of a focused input.** While a `model`-bound
   input is focused, its local editing value is authoritative; an incoming tree
-  must not overwrite it. Release to the server value on blur. The React `Input`
-  holds a local `draft` (`null` = not editing, server wins); the DOM adapter
+  must not overwrite it. Release to the server value on blur. The React, Vue
+  and Ink `Input`s hold a local `draft` (`null` = not editing, server wins); the DOM adapter
   captures the focused element's value + caret and restores them across its full
   rebuild (`captureFocus`/`restoreFocus`). Same rule, framework-shaped mechanism.
 - **Honour the `debounce` prop on a `model`-bound node.** `props.debounce`
   (milliseconds, default 0) coalesces `ui:model` dispatches; flush any pending
-  value on blur. Both reference adapters implement it — omitting it silently
+  value on blur. The React, Vue, DOM and Ink adapters implement it — omitting it silently
   makes a served `debounce` a no-op in your terminal, so the same layout behaves
   differently across renderers.
 

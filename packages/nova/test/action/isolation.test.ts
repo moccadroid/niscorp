@@ -106,4 +106,20 @@ describe('reset — snapshot isolation', () => {
     runtime.applyMutations([{ reset: 'form.fields' }]);
     expect(runtime.getData()).toMatchObject({ form: { fields: { email: 'a@b.c' } } });
   });
+
+  // A step is how an app reaches `reset` — the same snapshot has to be there.
+  it('reset as a step restores the default, from a trigger and from a lifecycle hook', async () => {
+    const def: ActionDefinition = {
+      id: 'a',
+      data: { count: 0, form: { email: 'a@b.c' } },
+      lifecycle: { mount: [{ set: 'form.email', value: 'typed' }, { reset: 'form.email' }] },
+    };
+    const runtime = createActionRuntime(baseConfig(def));
+    await runtime.mount();
+    expect(runtime.getData()).toMatchObject({ form: { email: 'a@b.c' } });
+
+    await runtime.executeSteps([{ set: 'count', value: 5 }]);
+    await runtime.executeSteps([{ reset: 'count' }]);
+    expect(runtime.getData()['count']).toBe(0);
+  });
 });

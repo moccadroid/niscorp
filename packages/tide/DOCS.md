@@ -7,15 +7,22 @@ Every symbol the package exports, and what it promises. See [DESIGN.md](./DESIGN
 - [createTide](#createtide)
 - [The reflex](#the-reflex)
 - [Triggers](#triggers)
+- [Drafts](#drafts)
 - [Policy](#policy)
 - [Templates and `$`](#templates-and-)
 - [The fact](#the-fact)
 - [Verbs](#verbs)
 - [The ledger](#the-ledger)
+- [Events](#events)
 - [The seams](#the-seams)
 - [The store contract](#the-store-contract)
 - [Occurrence math](#occurrence-math)
+- [The reflex agent](#the-reflex-agent)
 - [Errors](#errors)
+
+Three entry points: `@niscorp/tide` (everything below unless it says otherwise),
+`@niscorp/tide/agent` and `@niscorp/tide/testing`. `zod` is the one required
+peer; `@niscorp/cortex` is an optional peer that only `/agent` imports.
 
 ---
 
@@ -32,7 +39,9 @@ type TideConfig = {
   select?: SelectFn;                     // required only if a reflex has a selection
   effects?: EffectRegistry | ((as: string | undefined) => EffectRegistry);
   actor?: (as: string | undefined) => unknown;   // default: the `as` string itself
-  maxChainDepth?: number;                // default 24
+  maxChainDepth?: number;                // default 24 — a fact deeper than this is parked
+  maxChainFacts?: number;                // default 10 000 — facts one chain may mint beneath its root; the rest are parked
+  storeUnwatchedWrites?: boolean;        // default true — false drops a write fact no loaded reflex could watch
   maxFanOut?: number;                    // default 10 000
   leaseMs?: number;                      // default 300 000 — how long a claim is good for
   onEvent?: (event: TideEvent) => void;
@@ -48,6 +57,12 @@ ingested it, a handler emitted it or a run settled — and every one it refuses 
 its `dedupeKey`, as `fact.deduped`. All three paths go through one door in the
 engine, and a fact written inside a transaction is announced only once that
 transaction commits, so an event always describes a row that exists.
+
+`storeUnwatchedWrites: false` is for a host whose ledger is not its audit log.
+`ingest` then returns `undefined`, stores nothing and announces nothing for a
+`write` fact whose entity (and op) no loaded reflex's trigger names. It asks
+only that — it ignores `enabled`, arming and `as` — and it drops nothing while
+no reflexes are loaded. Signal and manual facts are always stored.
 
 `leaseMs` is the recovery story for a process that dies between the effect and
 the record. A task still `claimed` past its lease is claimable again; the
@@ -65,7 +80,7 @@ type Reflex = {
   as?: string;                // opaque identity; the host resolves it
   params?: Record<string, unknown>;      // authored knobs, visible as $.params
   select?: {
-    query: unknown;           // opaque — handed to the `select` seam verbatim
+    query: unknown;           // opaque — a template: evaluated by `transform`, the result handed to the `select` seam
     mode: 'each' | 'batch';   // default 'each'
     unitKey?: string;         // required for 'each' — the idempotency grain
   };
@@ -76,12 +91,21 @@ type Reflex = {
 };
 ```
 
-`ReflexSchema` parses it; `ReflexInput` is the input type (defaults not yet applied).
+`ReflexSchema` parses it; `ReflexInput` is the input type (defaults not yet
+applied — `policy`, `enabled` and `select.mode` may be omitted). The parts are
+exported too: `SelectionSchema`, `EffectRefSchema`, `TriggerSchema` and its
+members (`ClockTriggerSchema`, `ClockRecurringSchema`, `ClockOnceSchema`,
+`WriteTriggerSchema`, `SignalTriggerSchema`, `RunTriggerSchema`,
+`ManualTriggerSchema`), `ClockUnitSchema`, `OpSchema`, `WEEKDAYS`,
+`PolicySchema`, `RetrySchema`, `FactInputSchema` and `FactKindSchema`, with the
+types `Selection`, `EffectRef`, `Trigger`, `Clock`, `ClockRecurring`,
+`ClockOnce`, `Op`, `Weekday`, `Policy`, `Retry`, `FactInput` and `FactKind`.
 
 **Load refuses**, in one pass: a reflex that does not parse, a duplicate id, an
 unregistered effect, `when` on a non-fact trigger, `each` mode with no
 `unitKey`, a run subscription to a reflex that is not
-loaded, and an **unguarded cycle**.
+loaded, and an **unguarded cycle** — a loop on which no reflex has a `select`
+or a `when`.
 
 **`enabled` is the host's.** Tide reads it off the reflex it is handed and
 holds no copy. To pause an automation, write your own row and `load` again.
@@ -138,6 +162,40 @@ for the same reason: coming back is not the same as never having left.
 sees its own write; an external source with no write choke point enters through
 an importer that ingests write facts at the door. A poll could only re-discover
 what was already pushed, one interval late — see `DESIGN.md`.
+
+---
+
+## Drafts
+
+A draft is a reflex as it is written, before it is saved: `id`, `intent`, `on`
+and `effect` — nothing that is the host's (`as`, `policy`, `enabled`). It is the
+shape the [reflex agent](#the-reflex-agent) answers with.
+
+```typescript
+draftSchemaOf(choice?: DraftChoice): z.ZodType<ReflexDraft>
+type DraftChoice = {
+  triggers?: readonly DraftTrigger[];   // 'clock' | 'timer' | 'write' | 'signal' | 'run' | 'manual' — default: all six
+  fields?: readonly DraftField[];       // 'params' | 'select' | 'when' — default: none
+};
+ReflexDraftSchema                       // draftSchemaOf() — every trigger kind, no extra fields
+DRAFT_TRIGGERS                          // trigger kind → its schema
+TimerSchema, TimerTriggerSchema         // { hours?, minutes?, seconds? } — non-negative integers, > 0 in total
+```
+
+`draftSchemaOf` throws a plain `Error` on an empty `triggers` list. The draft
+schemas keep the reflex's own rules: `when` on a non-fact trigger and `each`
+with no `unitKey` are refused.
+
+```typescript
+anchorDraft(draft: ReflexDraft, anchor: { at: number; tz: string }): Reflex
+timerMs(timer: Timer): number
+```
+
+`anchorDraft` turns a draft into a stored reflex at the moment it is saved. A
+`timer` becomes a one-shot clock at `anchor.at` plus its length, rounded **up**
+to the whole second, as a local date-time in `anchor.tz`; any other trigger
+passes through. The result is parsed by `ReflexSchema`, so defaults are applied
+and a bad draft throws. The host adds `as` afterwards.
 
 ---
 
@@ -263,7 +321,9 @@ including turning one off.
 ingest(fact: FactInput, options?: { as?: string; cause?: string; depth?: number }): Promise<Fact | undefined>
 ```
 One write. Undefined means a `dedupeKey` collision — a refusal, not an error,
-announced as `fact.deduped` so a repeat is never mistaken for silence.
+announced as `fact.deduped` so a repeat is never mistaken for silence — or,
+under `storeUnwatchedWrites: false`, a write nothing watches, dropped silently.
+A fact that does not parse throws `invalid_fact`.
 Matching happens in `advance`, against whatever is loaded when the fact comes
 due, which is what lets a delayed fact meet the reflexes of the day it fires.
 
@@ -297,16 +357,43 @@ claims per pass. A chain advances one hop per call, so the driver drains to quie
 then sleeps until `nextDue`.
 
 ```typescript
+type AdvanceReport = {
+  now: number;
+  materialized: number; skippedOccurrences: number;
+  factsMatched: number; runsCreated: number; tasksCreated: number;
+  executed: number; succeeded: number; failed: number; retrying: number; reclaimed: number;
+  runsSettled: number; parked: number;
+};
+```
+
+```typescript
+nextDue(now: number): Promise<number | undefined>
+```
+The next instant at which `advance` can make progress: an undelivered fact's
+`notBefore ?? at`, a pending run's `dueAt`, a waiting task's backoff, a claimed
+task's lease lapse, a loaded clock's next occurrence. `undefined` means nothing
+is scheduled — sleep until an `ingest`. The timer is the driver's; tide still
+reads no clock.
+
+```typescript
+reflexes(): readonly Reflex[]
+```
+What is loaded now, as parsed.
+
+```typescript
 fire(reflexId, { now, input?, by? }): Promise<Fact | undefined>
 ```
-Sugar over `ingest`: mints a `manual` fact aimed at one reflex. Works on a
-**disarmed** reflex — arming gates triggers, not people.
+Sugar over `ingest`: mints a `manual` fact aimed at one reflex, with `input` as
+its `payload` and `by` (default `'operator'`) recorded. Works on a
+**disarmed** reflex — arming gates triggers, not people. Throws
+`unknown_reflex` when the reflex is not loaded.
 
 ```typescript
 retry(taskId, now): Promise<boolean>
 ```
 Reopens a `failed` task **and rewinds its run** from `settled` back to `fanned`,
-in one transaction, so the next `advance` actually claims it. The run keeps
+in one transaction, so the next `advance` actually claims it. `false` when the
+task does not exist or is not `failed`. The run keeps
 `drained`, so re-settling does not announce a second time: the digest that
 already went out saying twelve failed is not sent again.
 
@@ -319,7 +406,7 @@ rows by name, each unit's resolved input, and whatever the handler's `preview`
 hook renders.
 
 ```typescript
-graph(): GraphReport      // edges, cycles, blind, errors, warnings
+graph(): GraphReport      // { edges: { from, to, via }[], cycles, blind, errors, warnings } over what is loaded
 sweep(now, retention): Promise<number>   // { facts?, runs?, tasks? } horizons in ms
 ```
 
@@ -335,21 +422,23 @@ tide.ledger.runs(filter?)      // { reflexId?, limit? } — newest first
 tide.ledger.run(id)
 tide.ledger.tasks(filter?)     // { runId?, reflexId?, state?, limit? }
 tide.ledger.task(id)
-tide.ledger.facts(filter?)
+tide.ledger.facts(filter?)     // { reflexId?, limit? } — newest first; `reflexId` keeps run and manual facts naming that reflex
 tide.ledger.fact(id)
-tide.ledger.causeChain(factId)     // walks `cause` upward
-tide.ledger.releaseParked(factId)  // let a chain-ceilinged fact through, once
+tide.ledger.causeChain(factId)     // walks `cause` upward — the fact first, then its ancestors
+tide.ledger.releaseParked(factId)  // let a parked fact through, once; false if it is not parked
 ```
 
-- **fact** — everything that arrived, with its depth, delivery and any park.
+- **fact** — everything that arrived: the `FactInput` plus `id`, the `as` it
+  was minted under, `depth`, `deliveredAt`, any `parked` reason and `released`
+  override, the `root` of its chain and (on a root) its `descendants` count.
 - **run** — one activation: cause, version hash, the identity it ran `as`, what
   the selection returned, the counts, the outcome.
 - **task** — one unit of effect work: unit key, pinned `env`, attempt count,
   lease, last error, `output`.
 
 States: a task moves `pending → claimed → done | retrying | failed`; a run moves
-`pending → fanned → settled`, or lands on `skipped` (overlap, catch-up, or a
-malformed reflex, always with a `note`).
+`pending → fanned → settled`, or lands on `skipped` (overlap, catch-up, a
+refused fan-out, or a reflex no longer loaded — always with a `note`).
 
 `limit` means **the most recent N**, in every store. The two stores used to
 answer opposite ends of the same list under the same filter.
@@ -371,6 +460,27 @@ restore would then re-charge the invoice.
 
 ---
 
+## Events
+
+`onEvent` receives a `TideEvent`. Events are not rows — they are what a host
+logs at whatever grain it wants.
+
+| `type` | Carries | When |
+|---|---|---|
+| `run.created` | `run` | a run opened |
+| `run.settled` | `run` | its last task settled, or it fanned out to no tasks — once per run, not again after a `retry` |
+| `run.skipped` | `reflexId`, `reason` | overlap, or a fan-out tide refused |
+| `run.deferred` | `reflexId`, `runId`, `reason` | a fan-out failed in a host seam; retried next `advance` |
+| `task.done` / `task.failed` | `task` | an attempt recorded a terminal outcome |
+| `task.retrying` | `task`, `nextAt` | an attempt threw or timed out with retries left |
+| `task.reclaimed` | `task` | a lapsed lease was taken back |
+| `fact.ingested` | `fact` | a fact was stored — ingested, emitted, or a settled run's |
+| `fact.deduped` | `fact` | a fact was refused on its `dedupeKey` |
+| `fact.parked` | `fact`, `reason` | the matcher parked it at `maxChainDepth`. A fact parked on arrival by `maxChainFacts` is announced as `fact.ingested`, with `parked` set |
+| `fact.unmatched` | `fact`, `reflexId`, `reason` | a `when` said no, or threw |
+
+---
+
 ## The seams
 
 | Seam | Contract |
@@ -385,10 +495,16 @@ restore would then re-charge the invoice.
 type TideCtx = {
   reflexId: string; runId: string; taskId: string;
   taskKey: string;   // the downstream idempotency key — pass it to the provider
-  attempt: number; now: number; actor: unknown;
-  emit: (fact) => void;   // buffered; commits with a SUCCESSFUL attempt only
+  attempt: number;
+  depth: number;     // how deep in a cause chain this task sits — a bridge forwards it to `ingest`
+  now: number; actor: unknown;
+  emit: (fact: Omit<FactInput, 'cause'>) => void;   // buffered; commits with a SUCCESSFUL attempt only
 };
 ```
+
+`select` receives `SelectCtx` — `{ reflexId, now, actor, env }`, where `env` is
+`$`. An effect's optional `preview(input, ctx)` receives `PreviewCtx` —
+`{ reflexId, unit, now, actor }`.
 
 **The calling convention is the retry classification.** Return = done, however
 unhappy the outcome (a card decline is a domain outcome: record it as a row and
@@ -434,6 +550,16 @@ of one operation and diverged three ways.
 - **`transact`** is required. Fan-out committing with its run's transition, and
   an attempt recording with the facts it emitted, are transactions rather than
   conventions.
+- **`query`** and **`remove`** take `{ table, where?, order?, limit? }` and
+  `{ table, where? }`. A `where` value is a literal (equality) or a
+  `Comparison` — `eq`, `ne`, `lt`, `lte`, `gt`, `gte`, `in`, `notIn`, `isNull`,
+  listed in the exported `COMPARISON_OPS`. There is no OR. Removing a run
+  removes its tasks.
+
+`PRIMARY_KEY` is exported beside `UNIQUE_BY`: the column `cas` addresses a row
+by — `id` for `fact`, `run` and `task`, `reflexId` for `state`. The spec types
+(`ClaimSpec`, `QuerySpec`, `RemoveSpec`, `Where`, `Comparison`, `Order`,
+`Mutation`, `UniqueKey`, `TableName`, `TideTables`) are exported with them.
 
 ```typescript
 import { createMemoryStore } from '@niscorp/tide';
@@ -444,9 +570,10 @@ import { STORE_CONTRACT } from '@niscorp/tide/testing';
 run against. It also exposes `snapshot()` for assertions — deliberately outside
 `TideStore`, so the engine cannot reach around its own contract.
 
-`STORE_CONTRACT` is the executable definition of everything above: a list of
-`{ name, run(store) }` checks that throw, with no test framework, so any runner
-can drive them.
+`STORE_CONTRACT` is the executable definition of everything above: a
+`readonly StoreCheck[]` — `{ name: string; run: (store: TideStore) => Promise<void> }`
+— of checks that throw, with no test framework, so any runner can drive them.
+Each check wants a fresh, empty store.
 
 ```typescript
 for (const check of STORE_CONTRACT) it(check.name, () => check.run(makeStore()));
@@ -474,6 +601,54 @@ daysInMonth(year, month): number
 versionOf(reflex): string      // the content hash, excluding `enabled`
 ```
 
+`occurrenceKey` takes a recurring clock. `anchorDraft` and `timerMs` are under
+[Drafts](#drafts).
+
+---
+
+## The reflex agent
+
+`@niscorp/tide/agent` — needs `@niscorp/cortex`, the optional peer. Given what
+somebody wants automated and the effects the host offers, it answers with one
+of three things: a reflex draft, a question back, or a refusal. It schedules
+nothing; the host shows the answer, and saves a draft with `anchorDraft` and
+`load`.
+
+```typescript
+createReflexAgent(config: { effects: readonly OfferedEffect[] } & DraftChoice): AgentDefinition<ReflexAnswer>
+
+type OfferedEffect = { name: string; description: string; input: ZodType };
+type ReflexAgentInput = { intent: string; now: string; tz: string };   // now: local "YYYY-MM-DDTHH:MM" in tz
+type ReflexAnswer = ReflexDraft | ReflexQuestion | ReflexRefusal;
+type ReflexQuestion = { question: string };
+type ReflexRefusal = { refused: string };
+```
+
+`triggers` and `fields` narrow what a draft may use, as in `draftSchemaOf`. A
+draft naming an effect that is not offered, or an input that effect's schema
+refuses, is sent back to the model to correct within the same run.
+
+```typescript
+const agent = createReflexAgent({ effects, triggers: ['clock', 'timer'] });
+const result = await agent.run({ intent, now, tz }, { llm }).result;
+if (result.ok && isDraft(result.output.data)) {
+  // …shown to the person; when they save it:
+  await tide.load([{ ...anchorDraft(result.output.data, { at: Date.now(), tz }), as: owner }], { at: Date.now() });
+}
+```
+
+- `isDraft(answer)` — narrows a `ReflexAnswer` to a draft.
+- `answerSchemaOf(choice?)` — the answer schema for what the caller offers;
+  `ReflexAnswerSchema` is `answerSchemaOf()`.
+- `ReflexAgentInputSchema`, `ReflexQuestionSchema`, `ReflexRefusalSchema` — the
+  input and the two non-draft answers.
+- `effectProblem(effects, draft): string | undefined` — what is wrong with a
+  draft's effect, as a sentence, or nothing. The check the agent runs.
+- `reflexConversation({ now, tz, earlier, latest }): Message[]` — the
+  conversation so far as chat turns: each earlier `{ request, answer, reasoning? }`
+  and the person's `latest` words. Pass it to `run` in place of a single input
+  when a question is answered or a draft corrected.
+
 ---
 
 ## Errors
@@ -482,14 +657,19 @@ versionOf(reflex): string      // the content hash, excluding `enabled`
 
 | Code | Raised when |
 |---|---|
-| `invalid_reflex` | a reflex failed `ReflexSchema` |
-| `invalid_fact` | a fact failed `FactInputSchema`, or a handler emitted one that did |
+| `invalid_reflex` | a reflex failed `ReflexSchema` — including `when` on a non-fact trigger and `each` with no `unitKey` |
+| `invalid_fact` | a fact failed `FactInputSchema`, or a handler emitted one that did, or emitted a kind other than `write` / `signal` |
 | `duplicate_reflex` | two reflexes share an id |
-| `unknown_reflex` | `fire`/`preview` named a reflex that is not loaded |
-| `unknown_effect` | a reflex names an unregistered effect |
-| `unguarded_cycle` | load found a loop with no guard anywhere on it |
+| `unknown_reflex` | `fire`/`preview` named a reflex that is not loaded, or `load` found a reflex watching the run of one that is not there |
+| `unguarded_cycle` | `load` found a loop on which no reflex has a `select` or a `when` |
+| `unknown_effect` | `load` found a reflex naming an effect that is not registered |
+| `no_transform` | in `TideErrorCode`; not raised — `transform` is a required config field |
 | `duplicate_unit` | a selection's `unitKey` was not unique, or `maxFanOut` was exceeded |
 | `store` | a selection exists but no `select` seam is wired |
+
+`load` checks the whole graph in one pass. When it refuses, `details.errors`
+lists every reason and `details.refusals` gives each with its own code; the
+error's `code` is the first one's.
 
 Runtime failures are **not** exceptions: a handler that throws becomes a
 recorded attempt, a `when` that throws becomes a recorded non-match, and an `advance`

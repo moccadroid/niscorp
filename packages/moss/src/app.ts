@@ -86,8 +86,8 @@ export type NiscApp = {
   // carries. Merged OVER the record's own scope values.
   scope?: (principal: string | null, identity?: IdentityRecord) => Record<string, unknown>;
   // WHO A PRINCIPAL IS, resolved ONCE per session instead of asked in pieces
-  // per request — the seam that replaces `scope` + `assignments` +
-  // `installedIntegrations` with a single async answer.
+  // per request — one async answer for roles, scope and the install list
+  // (`installed`: which integrations are live for this principal's tenant).
   //
   // The three seams around this one are synchronous, and that is not a detail:
   // a hook that cannot await has exactly one implementation available to it
@@ -152,20 +152,13 @@ export type NiscApp = {
   // convention (`status_display`) declares it once here. Absent = nova's
   // default prop set and no suffix rule.
   phraseKeys?: PhraseKeys;
-  // WHICH INTEGRATIONS ARE LIVE FOR THIS PRINCIPAL'S TENANT.
-  //
-  // The charter grants `ext.desk.*` once, to every desk in the deployment. In a
-  // single-tenant app that is the whole answer. In a multi-tenant one it is a
-  // leak: one studio installing an integration would put it on every studio's front
-  // desk, and nothing would say so.
-  //
-  // Moss cannot decide this — it does not know what a tenant is, deliberately,
-  // for the same reason `scope` exists. So the app answers, with a list of
-  // integration ids, and moss drops every `ext.*` action outside it.
-  //
-  // Absent = every registered integration is live for everybody, which is right
-  // for an app with one tenant and wrong the moment there are two.
-  // May be async, like every other per-principal seam here now.
+  /**
+   * @deprecated Never called. Which integrations are live for a principal's
+   * tenant is `installed` on the record `identity.resolve` returns; without
+   * `identity`, every registered integration is live for everybody. Kept on
+   * the type so a manifest that still names it compiles; removed at the next
+   * breaking release.
+   */
   installedIntegrations?: (principal: string | null) => readonly string[] | Promise<readonly string[]>;
   // WHO AN INTEGRATION IS when it acts and nobody is driving.
   //

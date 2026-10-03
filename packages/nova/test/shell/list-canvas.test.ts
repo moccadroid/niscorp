@@ -186,4 +186,30 @@ describe('shell — the reload effect', () => {
     await tick();
     expect(shell.getRuntime(a)?.getData()['n']).toBe(1);
   });
+
+  it('a list canvas added later is a list too, and forgets it when removed', async () => {
+    const shell = createShell({
+      canvases: [{ id: 'main' }],
+      registry: createPermissiveRegistry(),
+      layoutStore: createLayoutStore(),
+      actions: { A: { id: 'A' }, B: { id: 'B' } },
+    });
+    const statuses = (canvasId: string): string[] => shell.getCanvasState(canvasId).stack.map((i) => i.status);
+
+    shell.addCanvas({ id: 'tray', mode: 'list' });
+    shell.push('tray', 'A');
+    await tick();
+    shell.push('tray', 'B');
+    await tick();
+    expect(statuses('tray')).toEqual(['active', 'active']);
+
+    // The same id, re-added without a mode, is a stack again.
+    shell.removeCanvas('tray');
+    shell.addCanvas({ id: 'tray' });
+    shell.push('tray', 'A');
+    await tick();
+    shell.push('tray', 'B');
+    await tick();
+    expect(statuses('tray')).toEqual(['suspended', 'active']);
+  });
 });

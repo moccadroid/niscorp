@@ -245,7 +245,7 @@ Three kinds (and two more fact flavours). Structured on purpose — a reflex is 
 ```
 
 Any reflex — whatever its trigger — may additionally be fired by hand through
-`fire(reflexId, input?)`, **including a disarmed one**: arming gates *triggers*, not
+`fire(reflexId, { now, input?, by? })`, **including a disarmed one**: arming gates *triggers*, not
 people, and testing before arming is half of what `fire` is for; the ledger records
 `manual:<who>` either way. A `manual` trigger just means *only* by hand. And `fire`
 is sugar over `ingest`: it mints a `manual` fact aimed at one reflex — `at` supplied
@@ -635,10 +635,13 @@ on purpose: a drip campaign is a reflex whose delayed fact fires itself; "retry 
 decline in 3 days" loops through `notBefore`; a drain loop subscribes to its own run.
 All converge because every loop passes through a **guard**: a selection that re-checks
 reality, a `when`, or a `notBefore` delay. Static analysis cannot tell a convergent
-cycle from a divergent one, so it does not pretend to:
+cycle from a divergent one, so it does not pretend to — and it sees only what a reflex
+declares: `notBefore` is a property of an emitted fact, not of a reflex, so load
+cannot count it:
 
-- An **unguarded** cycle — every hop unconditional, no selection, no `when`, no
-  `notBefore` anywhere on the loop — is refused at load: it diverges by construction.
+- An **unguarded** cycle — every hop unconditional, no selection and no `when`
+  anywhere on the loop — is refused at load: it diverges by construction. A loop
+  paced only by `notBefore` is refused with it; give one hop a `when` or a selection.
 - A **guarded** cycle is legal and reported as a finding, so the author sees the loop
   they built.
 - The runtime backstop is nearly free because causality already exists: a fact whose
@@ -730,7 +733,8 @@ Plus the driver-facing edges, contracts rather than injections: **`ingest(fact)`
 in, **`advance({ now, limit })`** to run one committed increment, and
 **`nextDue(now)`** so the driver knows when next to wake.
 
-Dependencies: **`zod`**. Nothing else — the same bar charter clears.
+Dependencies: **`zod`**. Nothing else — the same bar charter clears. (The
+`/agent` entry imports `@niscorp/cortex`, an optional peer; the engine never does.)
 
 ### The store contract
 
@@ -850,13 +854,13 @@ theirs to keep. `ctx.emit` is how a chain continues without a write choke point.
 ```
 src/
   index.ts                 Public API barrel — createTide, schemas, the store contract
-  testing.ts               STORE_CONTRACT — the executable definition of a store
+  testing.ts               STORE_CONTRACT — the executable definition of a store (the ./testing entry)
   tide.ts                  createTide: load, ingest, advance, nextDue, fire, retry, preview, ledger, sweep
   types.ts                 ledger rows, seam types, TideStore, UNIQUE_BY, reports
   errors.ts                TideError (code + details)
 
   schemas/
-    reflex.schema.ts       ReflexSchema — trigger, select, effect, policy, enabled
+    reflex.schema.ts       ReflexSchema — trigger, select, effect, policy, enabled; the draft schemas and the timer
     trigger.schema.ts      clock | fact | manual, with narrowing helpers
     fact.schema.ts         FactInputSchema — the public intake contract, union enforced
     policy.schema.ts       retry, backoff, overlap, order, catchUp, lateMs
@@ -867,6 +871,8 @@ src/
     due.ts                 nextDue — the instant the driver should wake for
     runtime.ts             EngineDeps, the `$` environment, isTruthy, versionOf
     occurrence.ts          calendar math, local-field keys, clamping, DST edges
+    anchor.ts              anchorDraft — a saved draft's timer becomes a one-shot clock
+    facts.ts               admitFact / announceFact — the one door into the fact table
     materialize.ts         clock → runs (catch-up, watermark)
     match.ts               fact × reflex, `when`, and openRun — the one place a run is born
     fanout.ts              selection → transactional unit-task commit; refuse vs defer
@@ -877,6 +883,10 @@ src/
   store/
     memory.ts              createMemoryStore — the reference implementation + snapshot()
 
+  agent/
+    reflex-agent.ts        createReflexAgent — the ./agent entry; the only file that imports cortex
+    index.ts
+
 test/
   occurrence.test.ts       DST both directions, clamping, key stability
   engine.test.ts           the execution semantics, end to end on a fake clock
@@ -884,6 +894,9 @@ test/
   load.test.ts             the load gate: validation, cycles, versioning
   preview.test.ts          dry run writes nothing and shows everything
   store.test.ts            STORE_CONTRACT × every store
+  anchor.test.ts           a draft's timer, anchored when it is saved
+  agent.test.ts            the reflex agent — its answer schemas, effect check and conversation turns
+  support.ts               shared fixtures
 ```
 
 `materialize.ts` is split out of `advance.ts` because the clock is where the engine

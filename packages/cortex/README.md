@@ -264,7 +264,7 @@ conditions return:
 ```ts
 type CortexError = {
   code: 'model_call_failed' | 'output_invalid' | 'stopped' | 'aborted' | 'unknown';
-  stop?: 'steps' | 'tokens' | 'duration' | 'output_retries' | 'custom';
+  stop?: 'steps' | 'tokens' | 'duration' | 'output_retries' | 'repeated_calls' | 'custom';
   message: string;
   runId: string;
   agentPath: ReadonlyArray<string>;
@@ -281,7 +281,7 @@ them and decides; the run fails only on structural conditions.
 ```bash
 pnpm build        # tsup ESM + CJS + DTS
 pnpm test         # vitest run — scripted SignalClient stub, no network
-pnpm typecheck    # tsc on src
+pnpm typecheck    # tsc on src + test
 ```
 
 ---

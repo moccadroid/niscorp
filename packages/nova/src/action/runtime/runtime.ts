@@ -171,6 +171,7 @@ export const createActionRuntime = (config: ActionRuntimeConfig): ActionRuntime 
       : { onEndpoint: (event) => config.onEndpoint!({ ...event, instanceId: instance.id, canvasId: instance.canvasId }) }),
     calls,
     extras: {},
+    initial: initialSnapshot,
     strict,
     onError,
     signal,
@@ -281,7 +282,9 @@ export const createActionRuntime = (config: ActionRuntimeConfig): ActionRuntime 
     } else {
       await runLifecycleHook('mount', definition, () => buildContext(abortController.signal, cause));
     }
-    setStatus('active');
+    // Only if nothing moved it meanwhile: an instance covered (or removed)
+    // while its mount hook was still running stays suspended (or unmounted).
+    if (instance.status === 'initializing') setStatus('active');
   };
 
   const unmount = async (): Promise<void> => {

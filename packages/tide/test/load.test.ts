@@ -31,7 +31,9 @@ describe('validation', () => {
   });
 
   it('refuses an effect nothing registered', async () => {
-    await expect(build([manual('a', { effect: { name: 'ghost' } })])).rejects.toThrow(/not registered/);
+    const load = build([manual('a', { effect: { name: 'ghost' } })]);
+    await expect(load).rejects.toThrow(/not registered/);
+    await expect(load).rejects.toSatisfy((error) => isTideError(error) && error.code === 'unknown_effect');
   });
 
   it('refuses `when` on a clock trigger — a clock condition belongs in the selection', async () => {
@@ -45,7 +47,9 @@ describe('validation', () => {
   });
 
   it('refuses a firing subscription to a reflex that is not there', async () => {
-    await expect(build([manual('a', { on: { fact: { run: 'nobody' } } })])).rejects.toThrow(/unknown reflex/);
+    const load = build([manual('a', { on: { fact: { run: 'nobody' } } })]);
+    await expect(load).rejects.toThrow(/unknown reflex/);
+    await expect(load).rejects.toSatisfy((error) => isTideError(error) && error.code === 'unknown_reflex');
   });
 });
 

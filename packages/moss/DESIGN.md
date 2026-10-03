@@ -144,7 +144,8 @@ canvas's tree), `render-delta` (the same tree, against the last one — opt-in,
 see below), `session` (a login grant), `error`. **Up:** `event` (a
 canvas-tagged `NovaEvent`), `publish` (a channel message), `resync` (this
 connection's copy of a canvas drifted; send whole frames), `back` (undo the
-last navigation).
+last navigation), `popTo` (jump to an instance already on a canvas's stack),
+`reset` (below).
 
 Operational shape, all falling out of "the message is state, not history":
 
@@ -303,8 +304,9 @@ the shell for the life of the process.
 The shell is built from the manifest: canvases and fragments are data; a canvas's
 `initial` may be a candidate list, and the first action the principal holds
 mounts — so login is the anonymous principal's application (the charter's
-`public` grant) by derivation, not a special case. `inputs(session)` is the app's
-one per-principal boot hook. Endpoint calls ride the server's own HTTP surfaces
+`public` grant) by derivation, not a special case. `inputs(session)` and
+`seeds(session)` are the app's per-principal boot hooks — boot data and boot
+instances. Endpoint calls ride the server's own HTTP surfaces
 with the session's token — the server shell is just another principal-bound
 client, enforcement included.
 
@@ -564,7 +566,11 @@ On the record, so nothing reads as finished that isn't:
   the catalog itself streams: serve the graph neighborhood of a principal's
   active actions now, fault the rest in on demand. Level streaming for humans is
   context management for models — one mechanism, two products.
-- **Scale-out** beyond sticky sessions pinned by session id. A drawn document
+- **Scale-out** beyond sticky sessions pinned by session id. What crosses
+  processes today is invalidation only: `refresh` moves a generation pointer
+  every process polls (`src/generation.ts`), and an optional fabric
+  (`runtime.fabric`, `src/fabric.ts`) carries identity invalidations and nudges.
+  A shell is still resident in one process. A drawn document
   adds one requirement to stickiness: the page request and the socket should
   land on the same process, or a principal's shell is built twice and the page
   repaints once.

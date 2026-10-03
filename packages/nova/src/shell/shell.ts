@@ -597,6 +597,7 @@ export const createShell = (config: ShellConfig): Shell => {
     if (canvases.has(cfg.id)) return;
     canvases.set(cfg.id, createCanvas(cfg.id));
     if (cfg.actionLayout !== undefined) actionLayouts.set(cfg.id, cfg.actionLayout);
+    if (cfg.mode === 'list') listCanvases.add(cfg.id);
     canvasOrder.push(cfg.id);
     seedCanvas(cfg);
     fireState();
@@ -614,6 +615,7 @@ export const createShell = (config: ShellConfig): Shell => {
     // position its predecessor last announced.
     announced.delete(canvasId);
     actionLayouts.delete(canvasId);
+    listCanvases.delete(canvasId);
     const index = canvasOrder.indexOf(canvasId);
     if (index >= 0) canvasOrder.splice(index, 1);
     fireState();

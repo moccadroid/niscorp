@@ -4,22 +4,26 @@ The nisc application server. A principal logs in, a charter resolves, and what a
 
 Moss does not host code and guard it. It serves *existence*: a resolved catalog **is** the application. The warehouse kiosk granted two actions is not a locked-down app; it is a two-action app. There is nothing else to render, invoke, or attack.
 
-> Early stages. The data/policy plane, the socket, per-principal server shells, ring-2 served layout variants, the in-process function seam, and the canvas terminal (the wire plus swappable render targets) are built and tested — except the terminal's render targets, which have no tests yet. The fn *host* (`/fns`), the artifact library, the projection model, and scale-out are specified and pending. See [DESIGN.md](DESIGN.md) for the thesis and the unbuilt ladder.
+> On npm, and still early. The data/policy plane, the socket, per-principal server shells, ring-2 served layout variants, the in-process function seam, server-drawn documents and pages, and the canvas terminal (the wire plus swappable render targets) are built and tested — except the ink render target, which has no tests yet. The fn *host* (`/fns`), the artifact library, the projection model, and scale-out are specified and pending. See [DESIGN.md](DESIGN.md) for the thesis and the unbuilt ladder.
 
 ## Install
 
 ```bash
-pnpm add @niscorp/moss zod
-# everything moss composes (charter, vex, nova, prism, hono, the Node
-# listener) comes with it as regular dependencies. The one optional peer
-# pair is React, needed only for the ./terminal/react render target:
-pnpm add react react-dom
-# (or Vue, needed only for the ./terminal/vue render target: pnpm add vue)
+pnpm add @niscorp/moss @niscorp/charter @niscorp/nova @niscorp/prism @niscorp/strata @niscorp/tide @niscorp/vex zod
+# the nisc packages moss composes and zod are required peers — the app owns
+# the one copy of each. hono, the Node listener and ws come with moss as
+# regular dependencies. The optional peers, each needed by one subpath only:
+pnpm add react react-dom   # ./terminal/react (and its /server)
+pnpm add vue               # ./terminal/vue (and its /server)
+pnpm add ink react         # ./terminal/ink
+pnpm add -D vite           # ./vite
 ```
+
+Node ≥ 22.12.
 
 ## The shape
 
-An app hands moss its **artifacts** (`defineApp`) and an **environment** (`NiscRuntime` — a database, optionally a cache and a session verifier). Everything mechanical is derived: the data layer from the schema, per-principal policy and catalogs from the charter, the server shells from the manifest. The server refuses to boot on an incoherent charter.
+An app hands moss its **artifacts** (`defineApp`) and an **environment** (`NiscRuntime` — a database and how a session token is verified, optionally a cache). Everything mechanical is derived: the data layer from the schema, per-principal policy and catalogs from the charter, the server shells from the manifest. The server refuses to boot on an incoherent charter.
 
 ```typescript
 import { defineApp } from '@niscorp/moss';
@@ -41,7 +45,9 @@ const app = defineApp({
   functions,      // the in-process fn seam (agents, sign-in) — optional
 });
 
-const server = await serve(app, { pool, db, port: 3000 });
+const server = await serve(app, { pool, db, session: 'sessions', port: 3000 });
+// `session` is required: 'sessions' (moss's stored credential), 'dev-open'
+// (every well-formed token trusted — harnesses), or the app's own verifier.
 // boot refusal here (createServer runs inside serve); HTTP + ws in one
 ```
 
@@ -125,7 +131,7 @@ never in moss core.
 ## Subpaths
 
 - **`@niscorp/moss`** — the server: `defineApp`, `createServer`, the resolution and shell-host internals, the socket protocol types.
-- **`@niscorp/moss/node`** — the Node listener: `serve` + `attachSocket` (raw `ws`). Bun swaps this file, never the app.
+- **`@niscorp/moss/node`** — the Node listener: `serve` + `attachSocket` (raw `ws`), and `mountSite(server, { dist, draw })` — the built terminal served by the same process, every page drawn. Bun swaps this file, never the app.
 - **`@niscorp/moss/vite`** — `mossDev({ app })`: the app server inside vite's dev process — loaded through vite (an edit re-boots it), the socket attached once, pages drawn, moss's paths answered, a dev-only `/dev/as/<who>`. `nisc dev` adds it for an app behind moss; `vite` is an optional peer.
 - **`@niscorp/moss/client`** — the wire: `createWire()`, the app end of the socket. Plain TypeScript, zero React, zero globals — the host comes in as a `WireEnv` (default: `browserEnv()`, localStorage + location).
 - **`@niscorp/moss/client/node`** — the Node host env: `nodeEnv({ url, tokenFile? })` runs the same wire on a plain Node (or Bun) process — token in a file, the runtime's WHATWG WebSocket.
@@ -133,6 +139,7 @@ never in moss core.
 - **`@niscorp/moss/terminal/react`** — the React render target: `reactTarget({ root, registry, slotWrapper? })` binds the app's component registry to the wire via nova's React adapter.
 - **`@niscorp/moss/terminal/vue`** — the Vue render target: `vueTarget({ root, registry, slotWrapper? })` binds the app's Vue component registry to the wire via nova's Vue adapter; updates re-render reactively, never remount.
 - **`@niscorp/moss/terminal/dom`** — the plain-DOM render target: `domTarget({ root })` renders with nova's DOM adapter and default kit. Zero framework.
+- **`@niscorp/moss/terminal/react/server`**, **`/vue/server`**, **`/dom/server`** — `renderSnapshot(...)`: a shell snapshot drawn to a string by the same kit, for `renderDocument`'s `draw`.
 - **`@niscorp/moss/terminal/tty`** — the line-terminal render target: `ttyTarget({ input, output })` runs the app as a REPL in a real terminal — served frames print as text with numbered markers, typing acts on them (numbers tap, words fill), and the same events ride the wire. Zero framework, zero DOM.
 - **`@niscorp/moss/terminal/ink`** — the full-screen terminal render target: `inkTarget()` runs the app as a TUI — nova's Ink kit on the React adapter's walker. Same `[n]` addressing as the REPL (typed digits click/flip/focus), plus Tab/arrows and live typing. ESM-only, like ink.
 
@@ -144,10 +151,12 @@ never in moss core.
 
 ## Tables and documents, versioned
 
-moss creates no table on its own: its tables (`MOSS_SEQUENCE`,
-`SESSIONS_SEQUENCE`, `TIDE_SEQUENCE`) and the vex cache's go through one
-[strata](../strata/README.md) ledger run at boot — once, recorded, refused if
-the ledger was edited or written by newer code. `migrations: 'verify'` on the
+moss creates no table on its own: its tables (`MOSS_SEQUENCE`, plus
+`SESSIONS_SEQUENCE` when the runtime's `session` is `'sessions'`) and the vex
+cache's go through one [strata](../strata/README.md) ledger run at boot — once,
+recorded, refused if the ledger was edited or written by newer code. The tide
+store's tables (`TIDE_SEQUENCE`) go through the same ledger when
+`createTideStore(pool)` is called. `migrations: 'verify'` on the
 runtime refuses to boot with anything pending. Stored integration actions carry
 a grammar stamp and are upgraded at boot, at intake and on read — through
 nova's and Prism's grammars plus the app's own (`NiscApp.grammars`); a bundle or

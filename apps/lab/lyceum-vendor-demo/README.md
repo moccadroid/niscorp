@@ -3,7 +3,9 @@
 Somebody else's integration, for lyceum's talk. It stands in for a third party
 ("The QA Company") shipping UI into an app it does not own.
 
-It is not part of lyceum. Nothing in lyceum imports it. It is published as a
+It is not part of lyceum. Nothing lyceum runs imports it — only its
+`integration-check`, which serves this bundle from a local server to stand in
+for the other domain. It is published as a
 static file on GitHub Pages — `https://moccadroid.github.io/niscorp/vendor/bundle`
 — and lyceum learns of it the way it would learn of any integration: the
 speaker installs it from the controller, moss fetches that URL, intake checks

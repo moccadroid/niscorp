@@ -7,8 +7,12 @@ Transformations are JSON objects — no code strings, no `eval`, no security ris
 ## Install
 
 ```bash
-pnpm add @niscorp/prism zod
+pnpm add @niscorp/prism @niscorp/strata zod
 ```
+
+`@niscorp/strata` and `zod` are required peers. `@niscorp/cortex` and
+`@niscorp/signal` are optional — only the mapping agent at
+`@niscorp/prism/agent` (`mappingAgent`) needs them.
 
 ## Quick Example
 
@@ -46,12 +50,12 @@ const result = evaluate(
 
 ```typescript
 // One-shot evaluation
-evaluate(config, source) → JsonValue
-evaluateSafe(config, source) → { ok: true, data } | { ok: false, error }
+evaluate(config, source, limits?) → JsonValue
+evaluateSafe(config, source, limits?) → { ok: true, data } | { ok: false, error }
 
 // Compile once, execute many (2-5x faster for repeated configs)
 compile(config, options?) → Promise<CompiledIr>
-execute(ir, source) → JsonValue
+execute(ir, source, limits?) → JsonValue
 
 // Validation
 validate(config) → { ok: true, data } | { ok: false, issues }
