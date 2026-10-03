@@ -77,6 +77,19 @@ try {
     tarballs[manifest['name']] = `file:${out.trim().split('\n').at(-1) ?? ''}`;
   }
 
+  // What create-nisc itself ships: the templates as source, and nothing a
+  // machine left in them — installed packages, build output, a runner's logs.
+  step('create-nisc: its package holds the templates and nothing built or local', () => {
+    const out = pnpm(['pack', '--pack-destination', scratch], join(packagesDir, 'create-nisc'));
+    const tarball = out.trim().split('\n').at(-1) ?? '';
+    const entries = execFileSync('tar', ['-tzf', tarball], { encoding: 'utf8' }).trim().split('\n');
+    const stray = entries.filter((entry) => /^package\/templates\/[^/]+\/(node_modules|dist|out|\.turbo)\//.test(entry));
+    if (stray.length > 0) throw new Error(`in the tarball, and should not be:\n${stray.slice(0, 12).join('\n')}`);
+    for (const template of ['moss-react', 'moss-dom', 'shell-react', 'shell-dom']) {
+      if (!entries.includes(`package/templates/${template}/package.json`)) throw new Error(`the ${template} template is not in the tarball`);
+    }
+  });
+
   for (const kind of KINDS) {
     const dir = join(scratch, kind.name);
     const made = step(`${kind.name}: created`, () => {
