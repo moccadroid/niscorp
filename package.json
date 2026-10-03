@@ -19,6 +19,8 @@
     "check:packages": "node scripts/check-packages.mts",
     "check:changesets": "node scripts/check-changesets.mts",
     "changeset": "changeset",
+    "release": "changeset publish",
+    "npm:trust": "node scripts/trust-publishers.mts",
     "check:grammars": "node scripts/check-grammars.mts",
     "strata:snapshot": "node scripts/check-grammars.mts --write",
     "strata:corpus": "node scripts/capture-corpus.mts",

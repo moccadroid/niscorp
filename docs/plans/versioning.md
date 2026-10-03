@@ -11,7 +11,7 @@
 > the grammar gate with a 131-document corpus (S4); `strata upgrade` for app
 > source with a committed lock, rehearsed on relay with a real rename and
 > enforced by `pnpm check:sources` (S5); rules 17–20 in AGENTS.md (S6).
-> **Open:** npm publishing (a future step, not scheduled); midas adopts on its
+> **Open:** npm publishing (set up, first release not yet run — docs/releasing.md); midas adopts on its
 > own (corpus, lock). lyceum adopted: its tables are `lyceum.app`, its source
 > has a lock, its 26 documents are in the corpus (157).
 
@@ -305,8 +305,13 @@ $ pnpm strata verify
 
 ## 6. Open
 
-- **npm publishing** — a deliberate future step. Before it: drop the pending
-  changesets so every package's first release is 0.1.0 with all of this in it.
+- **npm publishing** — set up 2026-10-03, not yet run. The pending changesets
+  were dropped and cortex reset from an early hand-set 0.2.0, so every
+  package's first release is 0.1.0 with all of this in it. The first release is
+  published by hand (npm lets a package trust a workflow only once it exists);
+  from then on `.github/workflows/release.yml` publishes through trusted
+  publishing — a version pull request, merged. Runbook:
+  [docs/releasing.md](../releasing.md).
 - **midas** adopts on its own schedule (D11): its runner becomes strata's
   `midas.app` sequence, its three `zod ^4.0.0` declarations move to `^4.2.0`,
   it keeps a `strata.lock.json` and captures its own corpus, and bumping its

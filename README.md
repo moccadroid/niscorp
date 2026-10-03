@@ -134,8 +134,11 @@ pnpm --filter @niscorp/nova dev      # tsup --watch
 release that pins them together. A change to a package ships with a changeset
 (`pnpm changeset`). Below 1.0 **a minor is breaking**, and a breaking release
 breaks everything that depends or peers on it — `pnpm check:changesets` says
-which lines to add. Nothing is on npm yet; the first release will be a
-deliberate step.
+which lines to add. A changeset is not a release: the Release workflow keeps
+a *release: version packages* pull request open, and merging it publishes —
+from CI, through npm's trusted publishing, with provenance and no stored token.
+The whole sequence, the first release included, is
+[docs/releasing.md](docs/releasing.md).
 
 **Dependencies.** A plain `dependency` is used only inside a package — never in
 its published types, never authored by the app. What crosses the API, or

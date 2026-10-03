@@ -1,0 +1,94 @@
+name: Release
+
+# Publishes the @niscorp packages to npm. A push does NOT publish.
+#
+#   1. A push to main that carries changesets (.changeset/*.md) makes this open —
+#      or update — one pull request, "Version Packages": the version bumps and
+#      the CHANGELOG entries those changesets describe. Nothing is published.
+#   2. Merging that pull request is the release. The push it makes carries the
+#      new versions and no changesets, so this run publishes every package
+#      whose version is not on npm yet, tags it, and makes a GitHub release.
+#   3. A push with neither does nothing.
+#
+# Like the showroom deploy, it runs only after Verify passed on the same commit
+# — a red main is never published — and only once the repository variable
+# NPM_RELEASE is `on` (Settings → Secrets and variables → Actions → Variables):
+# until the first release has been published by hand and every package trusts
+# this workflow, there is nothing it could publish. docs/releasing.md has the
+# whole sequence.
+#
+# No npm token exists anywhere. npm's trusted publishing: GitHub vouches for
+# this workflow, in the `npm` environment, in this repository, and npm accepts
+# that instead of a secret — and attaches provenance (a verifiable "built from
+# this commit") to every release. Each package names this file as its trusted
+# publisher (`pnpm npm:trust`), so renaming it, or the environment, breaks
+# publishing until the packages are told.
+on:
+  workflow_run:
+    workflows: [Verify]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+# One release at a time, and never cut short: a half-published set is worse
+# than a late one.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    if: >-
+      vars.NPM_RELEASE == 'on' &&
+      (github.event_name == 'workflow_dispatch' ||
+       (github.event.workflow_run.conclusion == 'success' &&
+        github.event.workflow_run.event == 'push'))
+    runs-on: ubuntu-latest
+    # The environment npm's trusted publisher is bound to. Add required
+    # reviewers to it in Settings → Environments for a human gate on publish.
+    environment: npm
+    permissions:
+      contents: write # the version branch, tags, GitHub releases
+      pull-requests: write # the Version Packages pull request
+      id-token: write # trusted publishing: GitHub's word to npm
+    steps:
+      # The commit Verify checked — not whatever main is by the time this runs.
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+          fetch-depth: 0
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.0
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: pnpm
+          registry-url: https://registry.npmjs.org
+
+      # Trusted publishing needs npm 11.5.1 or later; pnpm hands the actual
+      # publish to whichever npm is on the path.
+      - name: npm with trusted publishing
+        run: npm install --global npm@^11.5.1
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # Only what is published. Verify already built and tested everything on
+      # this commit; this builds the packages again because nothing carries
+      # over between workflows.
+      - name: Build packages
+        run: pnpm turbo build --filter="./packages/*"
+
+      - name: Version pull request, or publish
+        uses: changesets/action@v2
+        with:
+          version-script: pnpm changeset version
+          publish-script: pnpm release
+          commit-message: 'release: version packages'
+          pr-title: 'release: version packages'
+          create-github-releases: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
