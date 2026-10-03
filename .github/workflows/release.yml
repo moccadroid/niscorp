@@ -21,8 +21,8 @@ name: Release
 # this workflow, in the `npm` environment, in this repository, and npm accepts
 # that instead of a secret — and attaches provenance (a verifiable "built from
 # this commit") to every release. Each package names this file as its trusted
-# publisher (`pnpm npm:trust`), so renaming it, or the environment, breaks
-# publishing until the packages are told.
+# publisher (`pnpm npm:trust`, by file name), so renaming it, or the
+# environment, breaks publishing until the packages are told.
 on:
   workflow_run:
     workflows: [Verify]

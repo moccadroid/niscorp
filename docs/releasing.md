@@ -36,47 +36,38 @@ npm only lets a package trust a workflow once the package exists, so 0.1.0 is
 published from a terminal. Every package starts at 0.1.0 with everything in it;
 there are no pending changesets.
 
-You need: publish rights on the `niscorp` npm organization, two-factor
-authentication on that account, and npm 11.15 or later (for `npm trust`).
-
-```bash
-npm install --global npm@latest
-```
+You need: an npm account that is an owner (or admin) of the `niscorp`
+organization — that is what publishing `@niscorp/…` takes; two-factor
+authentication on it; and npm 11.15 or later (for `npm trust`). npm 12 does not
+run on Node 25; `npm install --global npm@11` does.
 
 ```bash
 npm login
 ```
 
 ```bash
-pnpm install && pnpm turbo build --filter="./packages/*"
+pnpm release:first
 ```
 
-```bash
-pnpm release
-```
+It checks, in order, and stops at the first thing that is not right with what
+to do about it: on `main` with nothing uncommitted; npm new enough; logged in;
+a member of `niscorp` allowed to publish; which packages npm does not have yet.
+Then it builds the packages, runs `check:packages` (what CI runs), publishes
+(`pnpm release` — `changeset publish`, asking for a two-factor code), and makes
+every package trust the Release workflow (`pnpm npm:trust`: `npm trust github
+<package> --file release.yml --repo moccadroid/niscorp --env npm
+--allow-publish`). Run it again after a stop: what is already published is
+skipped, and so is a package that already trusts the workflow.
 
-`pnpm release` is `changeset publish`: it publishes each package whose version
-is not on npm yet — all thirteen, the first time — asking for a two-factor code
-as it goes, and tags each one locally. If it stops halfway (a code timed out,
-the network), run it again: what is already published is skipped.
+`pnpm release:first --dry-run` runs every check, the build and npm's own dry
+run, and publishes nothing.
 
-```bash
-git push origin --tags
-```
+Then, when you like:
 
-Then tell every package to trust the Release workflow:
-
-```bash
-pnpm npm:trust
-```
-
-It runs `npm trust github <package> --file .github/workflows/release.yml --repo
-moccadroid/niscorp --env npm --allow-publish` for each published package and
-prints one `[pass]`/`[fail]` line per package.
-
-Then, for each package on npmjs.com → *Settings* → *Publishing access*:
-**Require two-factor authentication and disallow tokens.** From then on the
-only way to publish is the workflow.
+- push the tags the publish made: `git push origin --tags`;
+- on npmjs.com, for each package, *Settings* → *Publishing access*: **Require
+  two-factor authentication and disallow tokens** — from then on the only way
+  to publish is the workflow.
 
 ## Turning the workflow on
 

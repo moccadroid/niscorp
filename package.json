@@ -20,6 +20,7 @@
     "check:changesets": "node scripts/check-changesets.mts",
     "changeset": "changeset",
     "release": "changeset publish",
+    "release:first": "node scripts/release-first.mts",
     "npm:trust": "node scripts/trust-publishers.mts",
     "check:grammars": "node scripts/check-grammars.mts",
     "strata:snapshot": "node scripts/check-grammars.mts --write",

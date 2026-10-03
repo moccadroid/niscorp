@@ -1,11 +1,12 @@
 // Tell npm that every published @niscorp package is published by the Release
-// workflow, and by nothing else.
+// workflow.
 //
 // npm's trusted publishing replaces a stored token: GitHub vouches for one
 // workflow file, in one environment, in one repository, and npm accepts that
 // for the packages that name it. It can only be set on a package that already
-// exists on npm — so this runs ONCE, after the first release was published by
-// hand (docs/releasing.md), and again for any package added later.
+// exists on npm — so this runs after the first release was published by hand
+// (`pnpm release:first` runs it), and again for any package added later. A
+// package that already trusts the workflow is left alone.
 //
 // Needs npm 11.15.0 or later (`npm trust`), an npm login with publish rights
 // on the @niscorp scope, and two-factor authentication on that account; npm
@@ -18,7 +19,9 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
 const REPOSITORY = 'moccadroid/niscorp';
-const WORKFLOW = '.github/workflows/release.yml';
+// npm takes the file's NAME — "must be just a file not a path" — and reads it
+// under .github/workflows/.
+const WORKFLOW = 'release.yml';
 const ENVIRONMENT = 'npm';
 const root = resolve(import.meta.dirname, '..');
 
@@ -29,7 +32,7 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 const npmVersion = spawnSync('npm', ['--version'], { encoding: 'utf8' }).stdout.trim();
 const [major = 0, minor = 0] = npmVersion.split('.').map(Number);
 if (major < 11 || (major === 11 && minor < 15)) {
-  console.log(`[fail] npm ${npmVersion} has no \`npm trust\` — it needs 11.15.0 or later: npm install --global npm@latest`);
+  console.log(`[fail] npm ${npmVersion} has no \`npm trust\` — it needs 11.15.0 or later: npm install --global npm@11`);
   process.exit(1);
 }
 
@@ -42,8 +45,19 @@ const published = readdirSync(join(root, 'packages'), { withFileTypes: true })
   })
   .sort();
 
+// What npm already has for a package: its trusted publishers, as JSON.
+const trusts = (name: string): string => {
+  const listed = spawnSync('npm', ['trust', 'list', name, '--json'], { encoding: 'utf8' });
+  return listed.status === 0 ? listed.stdout : '';
+};
+
 let failures = 0;
 for (const name of published) {
+  const listed = trusts(name);
+  if (listed.includes(REPOSITORY) && listed.includes(WORKFLOW)) {
+    console.log(`[pass] ${name} already trusts ${REPOSITORY} · ${WORKFLOW}`);
+    continue;
+  }
   const result = spawnSync('npm', ['trust', 'github', name, '--file', WORKFLOW, '--repo', REPOSITORY, '--env', ENVIRONMENT, '--allow-publish', '--yes'], {
     stdio: 'inherit',
   });
@@ -59,4 +73,4 @@ if (failures > 0) {
   console.log(`[fail] ${failures} of ${published.length} packages are not set — the lines above say which, and npm said why`);
   process.exit(1);
 }
-console.log(`[pass] all ${published.length} packages trust the Release workflow — now disallow tokens on each (docs/releasing.md)`);
+console.log(`[pass] all ${published.length} packages trust the Release workflow`);
