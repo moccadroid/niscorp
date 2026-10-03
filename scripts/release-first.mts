@@ -56,9 +56,15 @@ console.log(dry ? '— the first release, rehearsed: nothing is published —\n'
 const branch = run('git', ['rev-parse', '--abbrev-ref', 'HEAD']).out;
 if (branch === 'main') pass('on main');
 else fail(`on "${branch}", not main`, 'git switch main');
-const dirty = run('git', ['status', '--porcelain']).out;
-if (dirty === '') pass('nothing uncommitted');
-else fail('there are uncommitted changes — they would be published without being committed', 'commit or stash them first');
+// A change to a committed file anywhere can reach a package (its source, the
+// build config, the lockfile), and so can a new file inside one. A new file
+// elsewhere — a local editor or agent setting — cannot: a package publishes
+// its own folder.
+const dirty = run('git', ['status', '--porcelain'])
+  .out.split('\n')
+  .filter((line) => line.trim() !== '' && (!line.startsWith('??') || line.slice(3).startsWith('packages/')));
+if (dirty.length === 0) pass('nothing uncommitted that could be published');
+else fail(`uncommitted changes would be published without being committed:\n         ${dirty.join('\n         ')}`, 'commit them, or set them aside, first');
 
 // 2. npm, and who it is logged in as.
 const npmVersion = run('npm', ['--version']).out;
