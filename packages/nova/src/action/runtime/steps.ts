@@ -73,6 +73,9 @@ export type StepContext = {
   onEndpoint?: (event: EndpointEventInit) => void;
   calls?: EndpointCalls;
   extras: ExtraScopes;
+  // The action's data as it was built at spawn — what `reset` restores a path
+  // to. Absent in a bare step context: there is then nothing to restore from.
+  initial?: Record<string, unknown>;
   strict: boolean;
   onError: OnErrorHandler;
   signal: AbortSignal;
@@ -310,7 +313,9 @@ export const executeSteps = async (steps: Step[], ctx: StepContext): Promise<voi
     // any other) scope lives in ctx.extras.
     const chain = createScopeChain(ctx.dataStore.get());
     const resolved = resolveMutationValues(list, chain, ctx.extras);
-    ctx.dataStore.update((curr) => applyMutations(curr, resolved));
+    ctx.dataStore.update((curr) =>
+      applyMutations(curr, resolved, { ...(ctx.initial === undefined ? {} : { initial: ctx.initial }), strict: ctx.strict }),
+    );
   };
 
   for (const step of steps) {

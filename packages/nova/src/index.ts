@@ -28,6 +28,7 @@ export {
   UnknownFunctionError,
   ShellDisposedError,
   LifecycleError,
+  MutationError,
   createIdFactory,
   scopeDispatch,
 } from './shared';
