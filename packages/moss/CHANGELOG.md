@@ -1,5 +1,12 @@
 # @niscorp/moss
 
+## 0.2.3
+
+### Patch Changes
+
+- 48da7db: `mountSite` answers a missing file with 404. A name with an extension that is neither a file in `dist` nor a page of the manifest used to fall through to the catch-all and come back as the drawn page with a 200 — so a browser holding a page from before a deploy asked for its old script and was handed a document. A page whose own path has a dot in it (`/docs/v1.2`) is still that page.
+- 80e1ee8: Documentation: the packages are live, and releases are compatible. `STYLE_GUIDE.md` gains "The packages are live" — a release does not break an app that works on the one before it; what should go is deprecated and stays; a breaking change is a last resort that needs the maintainer's approval before it is written — and `AGENTS.md` points every agent changing nisc itself to it. The status lines that said "pre-1.0, breaking changes expected" (nova), "API is pre-1.0 and moves" (moss) and "everything else may move" (tide) now say the same. moss's deprecated `installedIntegrations` is no longer described as scheduled for removal: it stays on the type. The style guide's Node floor is corrected to 22.12, what every package's `engines` already says. No code changes.
+
 ## 0.2.2
 
 ### Patch Changes
