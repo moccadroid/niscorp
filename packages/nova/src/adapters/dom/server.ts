@@ -17,9 +17,14 @@ import type { DomComponent } from './index';
 // to interleave with another — the window's own names are lent to the global
 // scope, and taken back whatever happens.
 //
-// The browser needs no twin of this to pick the page up: the adapter rebuilds
-// its root on every render, so its first render replaces these elements with
-// the same elements, in one step (`mountShell`).
+// The browser needs no twin of this to pick the page up: a view's FIRST render
+// replaces whatever its root holds, so these elements are replaced with the
+// same elements, in one step (`mountShell`). Only the first — from then on the
+// view keeps what did not change.
+//
+// A draw ends with the view destroyed, so whatever a component started while
+// it was built (a timer, through its `onRemove`) is stopped here rather than
+// left running in a process that only wanted the markup.
 // ═══════════════════════════════════════════════════════════
 
 // What a DOM kit and the adapter itself name as globals.
@@ -33,8 +38,11 @@ export const renderToString = (registry: ComponentRegistry<DomComponent>, api: R
       if (value !== undefined) Object.defineProperty(globalThis, name, { value, configurable: true, writable: true });
     }
     const root = document.createElement('div');
-    createDomView(root, registry, api, options.fallback !== undefined ? { fallback: options.fallback } : {}).render();
-    return root.innerHTML;
+    const view = createDomView(root, registry, api, options.fallback !== undefined ? { fallback: options.fallback } : {});
+    view.render();
+    const markup = root.innerHTML;
+    view.destroy();
+    return markup;
   } finally {
     for (const [name, descriptor] of before) {
       if (descriptor === undefined) Reflect.deleteProperty(globalThis, name);

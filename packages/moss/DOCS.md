@@ -873,8 +873,12 @@ Requires the optional `vue` peer.
 - `domTarget({ root, registry? }): Target` — nova's DOM adapter plus nova's
   default component kit rendered into `root`, stylesheet injected once per
   document. Zero framework; pass a registry to restyle. It needs no adoption:
-  nova's DOM adapter rebuilds its root on every render, so its first render
-  replaces server-drawn elements with the same elements in one synchronous step.
+  the first render of nova's DOM adapter replaces server-drawn elements with
+  the same elements in one synchronous step. Every render after it patches: an
+  element whose part of the tree did not change is the same node, so a wire
+  update costs what changed and nothing on the page loses its focus, scroll or
+  animation to it (nova's ADAPTER.md, "The DOM adapter keeps what did not
+  change").
 
 ### `@niscorp/moss/terminal/dom/server`
 

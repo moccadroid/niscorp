@@ -149,8 +149,10 @@ html:has(.page > [data-canvas="strip"]:not(:empty)) { font-size: clamp(16px, cal
 .${ROOT_CLASS} .cell[data-align="middle"] { justify-content: center; }
 .${ROOT_CLASS} .cell[data-pad="none"] { padding: 0; }
 .${ROOT_CLASS} .cell[data-scroll="y"] { overflow-y: auto; min-height: 0; overscroll-behavior: contain; }
-/* held at its end: a reversed column opens scrolled to its last line, and the
-   screen is rebuilt on every update, so it stays there */
+/* held at its end: a reversed column opens scrolled to its last line, and
+   stays there as lines arrive — its end is where it scrolls FROM. The cell is
+   kept across updates (nova's DOM adapter patches the page), so somebody who
+   scrolled back is left where they scrolled to. */
 .${ROOT_CLASS} .cell[data-scroll="end"] { overflow-y: auto; min-height: 0; overscroll-behavior: contain; flex-direction: column-reverse; }
 
 /* ── marks: the houses' patterns, and the hatch of "not yet" ── */

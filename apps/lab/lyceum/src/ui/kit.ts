@@ -63,7 +63,7 @@ export const Page: DomComponent = ({ children }) => el('div', 'page', children);
 //        tall as its content (a strip).
 // narrow: { areas, rows?, cols? } — the arrangement on a phone-width screen,
 //        in the same words. A cell whose area it leaves out is not shown there.
-export const Sheet: DomComponent = ({ props, children }) => {
+export const Sheet: DomComponent = ({ props, children, dependsOnChildren }) => {
   const node = el('div', 'sheet', children);
   const size = oneOf(props['size'], ['fill', 'auto'] as const) ?? 'auto';
   setData(node, 'size', size);
@@ -72,11 +72,20 @@ export const Sheet: DomComponent = ({ props, children }) => {
     if (key.startsWith('--')) node.style.setProperty(key, value);
     else Reflect.set(node.style, key, value);
   }
+  // A sheet with a narrow arrangement MARKS its cells: the ones that
+  // arrangement leaves out. So it is not a component that only holds its
+  // children, and says so — it is asked again when its cells change, and handed
+  // the cells that stayed as it left them. The mark is therefore put on AND
+  // taken off: a cell marked for one arrangement must not stay marked under the
+  // next, or under none.
   if (narrow !== undefined) {
     node.setAttribute('data-narrow', '');
-    for (const child of children) {
-      if (child instanceof HTMLElement && child.style.gridArea !== '' && !narrow.names.has(child.style.gridArea.split(' ')[0] ?? '')) child.setAttribute('data-narrow-hidden', '');
-    }
+    dependsOnChildren();
+  }
+  for (const child of children) {
+    if (!(child instanceof HTMLElement)) continue;
+    const area = child.style.gridArea.split(' ')[0] ?? '';
+    child.toggleAttribute('data-narrow-hidden', narrow !== undefined && area !== '' && !narrow.names.has(area));
   }
   return node;
 };
@@ -305,9 +314,12 @@ export const Bar: DomComponent = ({ props }) => {
 // ── Flow — two ends, and what passes between them ─────────────────
 // from, to: what each end is. lanes: [{ label, toward: 'to' | 'from', ink? }] —
 // one lane per kind of message, its dots running toward the end it names. The
-// dots never stop. The page is rebuilt on every update, so each lane starts
-// where the wall clock says it is, not at its beginning: an update does not
-// make the dots jump back.
+// dots never stop. Each lane starts where the wall clock says it is, not at its
+// beginning, so a flow that is built again (its own props changed, or the sheet
+// around it was asked again and moved it) does not make the dots jump back.
+// (nova's DOM adapter used to draw the whole page again on every update, which
+// is what this was first written for; it keeps what did not change now, and
+// this covers the times a flow still is built or moved.)
 const TOWARDS = ['to', 'from'] as const;
 
 export const Flow: DomComponent = ({ props }) => {
@@ -414,10 +426,23 @@ export const Look: DomComponent = () => el('span', 'look');
 // area, label (what a screen reader calls it). Its children are the entries —
 // Actions, mostly. The browser's own <details> opens and closes it, so no
 // renderer keeps the state.
+//
+// An entry that is pressed closes the menu. That used to happen by itself: the
+// adapter drew the whole page again on every update, and a <details> drawn
+// again is a closed one. The element stays now, so the menu says it. Caught on
+// the way down, because an entry's own press does not let the click travel up.
 export const Menu: DomComponent = ({ props, children }) => {
   const icon = el('summary', 'menu-icon');
   icon.setAttribute('aria-label', text(props['label']) ?? 'Menu');
-  const node = el('details', 'menu', [icon, el('div', 'menu-items', children)]);
+  const items = el('div', 'menu-items', children);
+  const node = el('details', 'menu', [icon, items]);
+  node.addEventListener(
+    'click',
+    (event) => {
+      if (event.target instanceof Node && items.contains(event.target)) node.removeAttribute('open');
+    },
+    true,
+  );
   placeIn(node, props['area']);
   return node;
 };

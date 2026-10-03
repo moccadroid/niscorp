@@ -1,0 +1,9 @@
+---
+'@niscorp/nova': patch
+---
+
+The DOM adapter (`@niscorp/nova/adapters/dom`) keeps what did not change. `createDomView` used to empty its root and build the whole screen again on every render; it now keeps the tree it drew beside the DOM that tree produced and patches the page, so an element whose part of the tree is the same as before is the same DOM node, never taken off the page. Focus, scroll, a selection, an open `<details>`, a running animation and a timer a component started are kept, and one changed string costs one text node. A change in one instance or on one canvas leaves the others alone; keyed lists move their elements; a different instance in the same place is still all new. The first render still replaces markup drawn ahead of time, and now gives somebody already typing in it their words, caret and focus back by where the field sits rather than by its `ref`.
+
+Fixed with it: typing in the second of two instances that share a `ref` moved focus (and the next keystroke) to the first; a bound field with no `ref` of its own lost focus after one keystroke; a pressed button lost focus to `<body>`; `debounce` did not coalesce across a render, and a pending value was not sent on blur.
+
+A DOM kit keeps working unchanged if its components are functions of their props and children. `DomComponentContext` gains two things: `onRemove(cleanup)`, run once when the element leaves the page for good, and `dependsOnChildren()`, for a component that marks or counts the children it holds. What a kit should check is in ADAPTER.md, "The DOM adapter keeps what did not change": a component is no longer called because something else on the page changed, children are patched in place only under an element that holds exactly them, and data that changes often should arrive as children rather than as a prop.

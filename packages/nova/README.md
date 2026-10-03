@@ -315,7 +315,10 @@ can perform their own final async work (e.g. telemetry flush).
   renders with no store at all; that is how moss draws a page server-side and
   how its React target adopts it. `shellView(shell)` reads a local shell as
   that same `RenderApi`, which is how the DOM adapter draws one
-  (`mountShell`, and `renderToString` from `/adapters/dom/server`).
+  (`mountShell`, and `renderToString` from `/adapters/dom/server`). The DOM
+  adapter replaces drawn markup on its first render and patches from then on:
+  what did not change keeps its element (ADAPTER.md, "The DOM adapter keeps
+  what did not change" — a DOM kit's contract is there).
 - **React Server Components:** not tested. The hooks are client-only.
 
 ---

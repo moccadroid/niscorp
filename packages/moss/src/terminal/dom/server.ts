@@ -10,9 +10,10 @@ import type { ComponentRegistry, RenderNode } from '@niscorp/nova';
 // jsdom, happy-dom, linkedom — neither package depends on one), and its names
 // are lent to the global scope for the length of one synchronous draw.
 //
-// The browser's target (./index) needs no twin of React's adoption: nova's DOM
-// adapter rebuilds its root on every render, so its first render replaces the
-// server's elements with the same elements in one step.
+// The browser's target (./index) needs no twin of React's adoption: the first
+// render of nova's DOM adapter replaces the server's elements with the same
+// elements in one step. (Only the first: after it, the adapter keeps what did
+// not change.)
 // ═══════════════════════════════════════════════════════════
 
 export type RenderSnapshotConfig = {

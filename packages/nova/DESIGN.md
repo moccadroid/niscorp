@@ -676,8 +676,12 @@ wire weight.
 
 `src/adapters/dom/` (`@niscorp/nova/adapters/dom`) renders a served tree to
 vanilla DOM against a `RenderApi`: events wired by convention (`ref` →
-`ui:click`, `model` → `ui:model`/`ui:key`), `debounce` honoured, focus and
-caret captured/restored across full rebuilds (ADAPTER.md §6). Its components
+`ui:click`, `model` → `ui:model`/`ui:key`), `debounce` honoured. It keeps the
+tree it drew beside the DOM that tree produced and patches the page: an
+element whose part of the tree did not change is the same node, never taken
+off the page, so focus, scroll and a running animation are kept, and a field
+being typed in is not replaced (ADAPTER.md, "The DOM adapter keeps what did
+not change"). Its components
 kit (`/adapters/dom/components`: `defaultRegistry`, `fallback`,
 `DEFAULT_CSS`, `ROOT_CLASS`) is the batteries-included reference set. It
 exists as the proof that a terminal needs no framework — and as the adapter
