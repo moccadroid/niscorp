@@ -13,6 +13,7 @@ const EXTERNAL = [
   '@niscorp/nova/adapters/react',
   '@niscorp/nova/adapters/vue',
   '@niscorp/nova/adapters/dom',
+  '@niscorp/nova/adapters/dom/server',
   '@niscorp/nova/adapters/dom/components',
   '@niscorp/nova/adapters/tty',
   '@niscorp/nova/adapters/tty/components',

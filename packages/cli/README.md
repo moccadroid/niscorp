@@ -8,26 +8,34 @@ pnpm add -D @niscorp/cli
 
 ```bash
 nisc dev       # the app's dev server
-nisc build     # bundle the terminal, then say how each path is served
+nisc build     # bundle the app, draw every path, and check what was drawn
 nisc export    # build, then write every path as a file — the site as a folder
-nisc start     # serve the built terminal from the app's own process, pages drawn
+nisc start     # serve the built app, each path's first screen drawn
 nisc check     # the app's check suite
 ```
 
+An app is one of two things, and the command runs both. **Behind moss**, the
+shell lives on the server and the page is a terminal. **With its own shell**,
+the shell lives in the page and there is no server at all. Either way the first
+thing a browser — or a crawler — receives for a path is that path's screen, as
+markup.
+
 ## What an app writes
 
-One file at its root, `nisc.config.ts`, exporting `project` — the two things
-only the app knows:
+One file at its root, `nisc.config.ts`, exporting `project` — what only the app
+knows. Which of the two it is follows from what it hands over.
+
+### An app behind moss
 
 ```typescript
-import type { NiscProject } from '@niscorp/cli';
+import type { NiscMossProject } from '@niscorp/cli';
 import { renderSnapshot } from '@niscorp/moss/terminal/react/server';
 import { boot } from './src/server/boot';
 import { buildRegistry } from './src/ui/registry';
 
 const registry = buildRegistry();
 
-export const project: NiscProject = {
+export const project: NiscMossProject = {
   // how it stands up — the same boot its dev server and its checks run
   boot: async () => {
     const { server } = await boot();
@@ -52,12 +60,97 @@ page in the manifest), and what each one needs once it has been drawn.
 | `checks?` | the check suite `nisc check` runs (default `src/dev/all-checks.ts`) |
 | `tokenKey?` | the wire's token key, when it is not `nisc.token` |
 
+### An app with its own shell
+
+No moss, and none installed. The config hands over the app's own boot — **the
+same one its browser entry runs** — and the two ends of a drawn screen:
+
+```typescript
+import { createElement } from 'react';
+import { renderToString } from 'react-dom/server';
+import type { NiscShellProject } from '@niscorp/cli';
+import { boot } from './src/boot';
+import { Screen, adopt } from './src/ui/screen';
+
+export const project: NiscShellProject = {
+  // one fresh shell per call, for one path — and nothing else is handed in
+  shell: async ({ path }) => {
+    const app = await boot();
+    return { shell: app.shell, close: () => app.db.close() };
+  },
+  // draw it to markup, where there is no browser
+  draw: (shell) => renderToString(createElement(Screen, { shell })),
+  // pick the markup up — the call the browser entry makes (hydrateRoot)
+  adopt,
+};
+```
+
+The browser entry does the same two things in the page — boot, then adopt:
+
+```tsx
+const app = await getApp();
+if (root.hasChildNodes()) {
+  await shellSettled(app.shell);      // reach the screen the file holds
+  adopt(root, app.shell);             // hydrateRoot(root, <Screen shell={shell} />)
+} else {
+  createRoot(root).render(<Screen shell={app.shell} />);   // dev: nothing was drawn
+}
+```
+
+`draw` and `adopt` are the adapter's: `react-dom/server` + `hydrateRoot`,
+`vue/server-renderer` + `createSSRApp().mount`, or — no framework in the page
+at all — nova's DOM adapter, `renderToString` from
+`@niscorp/nova/adapters/dom/server` + `mountShell`.
+
+| Field | |
+|---|---|
+| `shell` | one fresh copy of the app's shell for `{ path }`: `{ shell, close? }`. Called several times per path — it must not memoize |
+| `draw` | the shell, drawn to a string |
+| `adopt` | `(root, shell)` — the page picking the markup up |
+| `htmlAttributes?` | what the kit would put on `<html>` from an effect |
+| `paths?` | the paths to build (default `/`) — an app that maps paths to actions lists its own |
+| `waitMs?` | how long a build waits for a screen to be whole (default 5000) |
+| `dist?`, `checks?` | as above |
+
+The built `index.html` must hold the empty root, `<div id="root"></div>` — that
+is where a screen goes. The adoption check needs a DOM: `jsdom`, installed in
+the app.
+
 The config is TypeScript, loaded with the app's own `tsconfig.json` — path
 aliases included.
 
 ## `nisc build`
 
-Bundles the terminal (the app's own vite), stands the app up, draws every path
+**An app with its own shell.** Bundles the app, then for every path boots it,
+draws it, and checks what it drew:
+
+```
+  Route  First screen
+○ /      drawn · whole · same twice · adopted   (todo-list, topbar)
+         opened with todo-list.loadTodos (/api/query), topbar.loadStats (/api/query) — in the file as answered at build
+         can still call todo-list.completeTodo (/api/todos/{{$.toggleId}}/done), todo-list.loadTodos (/api/query)
+         waits on todos-changed
+```
+
+| Check | Fails the build when |
+|---|---|
+| **drawn** | the boot threw, or the screen drew to nothing |
+| **whole** | something was still loading when `waitMs` ran out — a file that says "loading" is not the page |
+| **same twice** | a second boot drew different markup (it says where they part) — the page's boot would not match the file |
+| **adopted** | inside a DOM, a third boot ran the app's own `adopt` over the markup and the adapter complained: a hydration error, or a rebuilt root that is not what it was handed |
+
+And one that holds by construction: `shell` is handed a path and nothing else,
+so a file is only ever the screen **as nobody in particular sees it**.
+
+What cannot be failed is reported, read off the actions on the first screen:
+which endpoints it **opened with** (their answers are in the file as they were
+at build — if one answers differently in the page, the page's shell draws that
+part again), which it **can still call**, and which channels it **waits on**.
+All of those keep working: the shell is in the page.
+
+Exit code 1 if any check did not hold.
+
+**An app behind moss.** Bundles the terminal (the app's own vite), stands the app up, draws every path
 once **for nobody**, and prints how each one is served:
 
 ```
@@ -88,7 +181,11 @@ bundle, and one `index.html` per path — `/` at the top, `/about` at
 A file is **only ever the page as nobody sees it**. No credential reaches a
 build, so there is nothing to leak into one.
 
-If any path wants a server behind it, **nothing is written** and the command
+For an app with its own shell that is the whole deployment: the folder goes on
+any static host, each path answers with its screen, and the bundle's shell
+picks it up. If a check did not hold, **nothing is written**.
+
+For an app behind moss: if any path wants a server behind it, **nothing is written** and the command
 says which paths and why (exit code 1). A folder cannot be a server. When one
 will stand beside the files — the socket at `/socket` on the same origin —
 `--allow-live` writes the site anyway: each such file is a true first screen,
@@ -96,7 +193,11 @@ and its terminal connects.
 
 ## `nisc start`
 
-Serves the built terminal from the app's own process: files from `dist/`, and
+**An app with its own shell:** serves the built folder, and answers each path
+with its first screen drawn from a fresh boot — per request, so the screen is
+as the app answers now, not as it answered at build. No shell is kept.
+
+**An app behind moss:** serves the built terminal from the app's own process: files from `dist/`, and
 every page **drawn for whoever is asking** — the app's own screen at `/`, a
 manifest page at its path. A signed-in person gets their screen in the markup
 (`private, no-store`); nobody gets the page as nobody sees it. `--port <n>`, or

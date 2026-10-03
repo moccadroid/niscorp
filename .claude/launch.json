@@ -138,6 +138,38 @@
         "--no-open"
       ],
       "port": 5198
+    },
+    {
+      "name": "mythos-export",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": [
+        "--filter",
+        "@lab/mythos",
+        "exec",
+        "vite",
+        "preview",
+        "--outDir",
+        "out",
+        "--port",
+        "4317",
+        "--strictPort",
+        "--no-open"
+      ],
+      "port": 4317
+    },
+    {
+      "name": "mythos-start",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": [
+        "--filter",
+        "@lab/mythos",
+        "exec",
+        "nisc",
+        "start",
+        "--port",
+        "4318"
+      ],
+      "port": 4318
     }
   ]
 }

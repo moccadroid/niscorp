@@ -16,7 +16,10 @@ import { createAppShell } from './nova/shell/create-shell';
 // comparisons anywhere downstream.
 //
 // Memoized behind the single accessor `getApp` (AGENTS,
-// "Using Vex": one engine, one accessor).
+// "Using Vex": one engine, one accessor). `boot` itself is
+// exported for what needs a FRESH app each time: a build
+// draws the first screen from one, and checks it against
+// another (nisc.config.ts).
 // ───────────────────────────────────────────────────────────
 
 export type App = {
@@ -27,7 +30,7 @@ export type App = {
   today: string;
 };
 
-const boot = async (): Promise<App> => {
+export const boot = async (): Promise<App> => {
   const db = new PGlite();
   await db.exec(SCHEMA_SQL);
   await db.exec(SEED_SQL);

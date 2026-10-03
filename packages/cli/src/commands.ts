@@ -4,12 +4,12 @@ import { createRequire } from 'node:module';
 import type { AddressInfo } from 'node:net';
 import { dirname, join, resolve } from 'node:path';
 import { serve } from '@hono/node-server';
-import { exportDocuments } from '@niscorp/moss';
 import type { ExportedDocument } from '@niscorp/moss';
-import { attachSocket, mountSite } from '@niscorp/moss/node';
-import { loadProject } from './project';
-import type { NiscProject } from './project';
+import { isShellProject, loadProject } from './project';
+import type { NiscMossProject, NiscProject, NiscShellProject } from './project';
 import { defaultPaths, fileOf, routeTable } from './routes';
+import { shellRouteTable, shellSite, surveyShell } from './shell-site';
+import type { ShellRouteReport } from './shell-site';
 
 // ═══════════════════════════════════════════════════════════════
 // What `nisc` does. Each command is the app's own machinery, run in order:
@@ -22,8 +22,11 @@ import { defaultPaths, fileOf, routeTable } from './routes';
 //   check   the app's check suite
 //
 // Nothing here knows an app. How it boots and how a screen is drawn come from
-// its nisc.config.ts; which paths exist and what each needs come from the
-// booted server (moss: `server.pages`, `exportDocuments`).
+// its nisc.config.ts. An app behind moss hands over its server, and which paths
+// exist and what each needs come from that (`server.pages`, `exportDocuments`).
+// An app with its own shell hands over its boot, and every path is drawn from
+// that and checked (./shell-site). Moss is loaded only for the first kind — an
+// app without it does not have it installed.
 // ═══════════════════════════════════════════════════════════════
 
 export type CommandOptions = {
@@ -67,15 +70,21 @@ const bundle = (options: CommandOptions): void => {
 };
 
 // Stand the app up, draw every path once for nobody, let the app go.
-const survey = async (options: CommandOptions, project: NiscProject): Promise<ExportedDocument[]> => {
+const templateOf = (options: CommandOptions, project: NiscProject): string => {
   const template = join(distOf(options.root, project), 'index.html');
   if (!existsSync(template)) throw new Error(`nisc: no built terminal at ${template} — run \`nisc build\`.`);
+  return readFileSync(template, 'utf8');
+};
+
+const survey = async (options: CommandOptions, project: NiscMossProject): Promise<ExportedDocument[]> => {
+  const template = templateOf(options, project);
+  const { exportDocuments } = await import('@niscorp/moss');
   const booted = await project.boot();
   try {
     const paths = project.paths === undefined ? defaultPaths(booted.server.pages) : await project.paths(booted.server);
     return await exportDocuments({
       server: booted.server,
-      template: readFileSync(template, 'utf8'),
+      template,
       draw: project.draw,
       ...(project.htmlAttributes !== undefined ? { htmlAttributes: project.htmlAttributes } : {}),
       ...(project.tokenKey !== undefined ? { tokenKey: project.tokenKey } : {}),
@@ -86,29 +95,29 @@ const survey = async (options: CommandOptions, project: NiscProject): Promise<Ex
   }
 };
 
-export const build = async (options: CommandOptions): Promise<ExportedDocument[]> => {
+// What a build found, either way round: every path, and whether the build holds.
+export type BuildResult =
+  | { kind: 'moss'; ok: boolean; routes: ExportedDocument[] }
+  | { kind: 'shell'; ok: boolean; routes: ShellRouteReport[] };
+
+const buildShell = async (options: CommandOptions, project: NiscShellProject): Promise<BuildResult> => {
+  const routes = await surveyShell(options.root, project, templateOf(options, project));
+  say(options)('');
+  say(options)(shellRouteTable(routes));
+  return { kind: 'shell', ok: routes.every((route) => route.problems.length === 0), routes };
+};
+
+export const build = async (options: CommandOptions): Promise<BuildResult> => {
   const project = await loadProject(options.root);
   if (options.skipBundle !== true) bundle(options);
+  if (isShellProject(project)) return buildShell(options, project);
   const routes = await survey(options, project);
   say(options)('');
   say(options)(routeTable(routes));
-  return routes;
+  return { kind: 'moss', ok: routes.every((route) => route.drawn), routes };
 };
 
-// The whole site as a folder. A path that wants a server behind it is not
-// something a folder can be — so unless the caller says a server will stand
-// beside the files (`allowLive`), nothing is written and the table says why.
-export const exportSite = async (options: CommandOptions): Promise<{ written: boolean; routes: ExportedDocument[]; out: string }> => {
-  const project = await loadProject(options.root);
-  const routes = await build(options);
-  const out = resolve(options.root, options.out ?? 'out');
-  const live = routes.filter((route) => route.live || !route.drawn);
-  if (live.length > 0 && options.allowLive !== true) {
-    say(options)('');
-    say(options)(`nisc: ${live.length} of ${routes.length} paths cannot be a file alone (${live.map((route) => route.path).join(', ')}).`);
-    say(options)('      Nothing was written. With a server beside the files they still work: `nisc export --allow-live`.');
-    return { written: false, routes, out };
-  }
+const write = (options: CommandOptions, project: NiscProject, out: string, routes: readonly { path: string; html: string }[]): void => {
   rmSync(out, { recursive: true, force: true });
   cpSync(distOf(options.root, project), out, { recursive: true });
   for (const route of routes) {
@@ -118,13 +127,61 @@ export const exportSite = async (options: CommandOptions): Promise<{ written: bo
   }
   say(options)('');
   say(options)(`nisc: ${routes.length} paths written to ${out}`);
-  return { written: true, routes, out };
+};
+
+// The whole site as a folder. A path that wants a server behind it is not
+// something a folder can be — so unless the caller says a server will stand
+// beside the files (`allowLive`), nothing is written and the table says why.
+//
+// An app with its own shell has no such path: the shell is in the page, so a
+// folder is all of it. What stops ITS files is a check that did not hold.
+export const exportSite = async (options: CommandOptions): Promise<{ written: boolean; result: BuildResult; out: string }> => {
+  const project = await loadProject(options.root);
+  const result = await build(options);
+  const out = resolve(options.root, options.out ?? 'out');
+  if (result.kind === 'shell') {
+    if (!result.ok) {
+      const failed = result.routes.filter((route) => route.problems.length > 0);
+      say(options)('');
+      say(options)(`nisc: ${failed.length} of ${result.routes.length} paths did not hold (${failed.map((route) => route.path).join(', ')}). Nothing was written.`);
+      return { written: false, result, out };
+    }
+    write(options, project, out, result.routes);
+    return { written: true, result, out };
+  }
+  const routes = result.routes;
+  const live = routes.filter((route) => route.live || !route.drawn);
+  if (live.length > 0 && options.allowLive !== true) {
+    say(options)('');
+    say(options)(`nisc: ${live.length} of ${routes.length} paths cannot be a file alone (${live.map((route) => route.path).join(', ')}).`);
+    say(options)('      Nothing was written. With a server beside the files they still work: `nisc export --allow-live`.');
+    return { written: false, result, out };
+  }
+  write(options, project, out, routes);
+  return { written: true, result, out };
+};
+
+const listening = async (httpServer: ReturnType<typeof serve>, options: CommandOptions): Promise<string> => {
+  await new Promise<void>((up) => httpServer.once('listening', () => up()));
+  const address = httpServer.address();
+  const port = address !== null && typeof address === 'object' ? (address satisfies AddressInfo).port : options.port;
+  return `http://localhost:${port}`;
 };
 
 export const start = async (options: CommandOptions): Promise<{ url: string; close: () => Promise<void> }> => {
   const project = await loadProject(options.root);
   const dist = distOf(options.root, project);
   if (!existsSync(join(dist, 'index.html'))) throw new Error(`nisc: no built terminal in ${dist} — run \`nisc build\`.`);
+  const port = options.port ?? Number(process.env['PORT'] ?? 8787);
+  if (isShellProject(project)) {
+    // no server shell, no socket: each path's first answer is its screen, drawn
+    // from a boot of the app's own, and the page's shell takes it from there
+    const httpServer = serve({ fetch: shellSite(project, dist), port });
+    const url = await listening(httpServer, options);
+    say(options)(`nisc: serving ${url} — the built app, each path’s first screen drawn; the shell is the page’s own`);
+    return { url, close: async () => void httpServer.close() };
+  }
+  const { attachSocket, mountSite } = await import('@niscorp/moss/node');
   const booted = await project.boot();
   await project.routes?.(booted.server);
   mountSite(booted.server, {
@@ -133,12 +190,9 @@ export const start = async (options: CommandOptions): Promise<{ url: string; clo
     ...(project.htmlAttributes !== undefined ? { htmlAttributes: project.htmlAttributes } : {}),
     ...(project.tokenKey !== undefined ? { tokenKey: project.tokenKey } : {}),
   });
-  const httpServer = serve({ fetch: booted.server.fetch, port: options.port ?? Number(process.env['PORT'] ?? 8787) });
+  const httpServer = serve({ fetch: booted.server.fetch, port });
   attachSocket(httpServer, booted.server.socket);
-  await new Promise<void>((listening) => httpServer.once('listening', () => listening()));
-  const address = httpServer.address();
-  const port = address !== null && typeof address === 'object' ? (address satisfies AddressInfo).port : options.port;
-  const url = `http://localhost:${port}`;
+  const url = await listening(httpServer, options);
   say(options)(`nisc: serving ${url} — the built terminal, its pages drawn; the socket at /socket`);
   return {
     url,

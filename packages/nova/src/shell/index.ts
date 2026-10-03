@@ -25,6 +25,8 @@ export type {
 } from './types';
 
 export { createShell } from './shell';
+export { shellView, shellSettled, canvasTreeOf, hasVisibleContent, DEFAULT_SETTLE_WAIT_MS } from './view';
+export type { ShellView } from './view';
 export { DEFAULT_HISTORY_DEPTH } from './journal';
 export type { HistoryEntry, HistoryFrame } from './journal';
 export { navigatedChannel } from './navigation';

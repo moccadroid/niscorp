@@ -11,6 +11,7 @@ export default defineConfig([
       'adapters/vue/index': 'src/adapters/vue/index.ts',
       'adapters/vue/components/index': 'src/adapters/vue/components/index.ts',
       'adapters/dom/index': 'src/adapters/dom/index.ts',
+      'adapters/dom/server': 'src/adapters/dom/server.ts',
       'adapters/dom/components/index': 'src/adapters/dom/components/index.ts',
       'adapters/tty/index': 'src/adapters/tty/index.ts',
       'adapters/tty/components/index': 'src/adapters/tty/components/index.ts',

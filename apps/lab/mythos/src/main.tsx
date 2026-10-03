@@ -1,48 +1,32 @@
 import { createRoot } from 'react-dom/client';
-import { NovaShellProvider, RenderTree, useCanvas, useRenderTree } from '@niscorp/nova/adapters/react';
+import { shellSettled } from '@niscorp/nova';
 import { getApp } from './boot';
+import { Screen, adopt } from './ui/screen';
 import './ui/styles.css';
 
-// The React entry — the only JSX outside src/ui. Shell construction and
-// canvas framing only: chrome on top, main below, overlay as a modal
-// backdrop whenever its canvas has an active instance.
+// The React entry. Shell construction, then one of two things:
+//
+//   the screen ARRIVED DRAWN (`nisc export` wrote it into the root) — the page's
+//   own shell reaches that same screen, and picks the elements up as they are;
+//
+//   the root is empty (dev) — the screen is rendered from nothing.
+//
+// Either way the shell is this page's own from here on.
 
-const ActiveCanvas = ({ canvasId }: { canvasId: string }): React.JSX.Element => {
-  const canvas = useCanvas(canvasId);
-  const tree = useRenderTree(canvas.active?.id ?? '');
-  return <RenderTree nodes={tree} />;
-};
-
-const Frame = (): React.JSX.Element => {
-  const overlay = useCanvas('overlay');
-  return (
-    <div className="app-frame">
-      <ActiveCanvas canvasId="chrome" />
-      <main>
-        <ActiveCanvas canvasId="main" />
-      </main>
-      {overlay.active !== undefined ? (
-        <div className="backdrop">
-          <div className="modal-slot">
-            <ActiveCanvas canvasId="overlay" />
-          </div>
-        </div>
-      ) : null}
-    </div>
-  );
-};
+// A drawn screen stays on the page while the shell boots; this is how long the
+// boot may take before the screen is picked up as it stands.
+const BOOT_WAIT_MS = 10_000;
 
 const mount = async (): Promise<void> => {
   const app = await getApp();
   const rootElement = document.getElementById('root');
   if (rootElement === null) throw new Error('missing #root element');
-  createRoot(rootElement).render(
-    // No registry prop: the provider falls back to shell.registry, the same
-    // instance assembled in createAppShell.
-    <NovaShellProvider shell={app.shell}>
-      <Frame />
-    </NovaShellProvider>,
-  );
+  if (rootElement.hasChildNodes()) {
+    await shellSettled(app.shell, { waitMs: BOOT_WAIT_MS });
+    adopt(rootElement, app.shell);
+    return;
+  }
+  createRoot(rootElement).render(<Screen shell={app.shell} />);
 };
 
 void mount();

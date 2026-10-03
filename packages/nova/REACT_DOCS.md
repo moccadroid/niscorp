@@ -444,8 +444,26 @@ This is a real React class component (the only class in the package — React 18
 - **Strict mode** — fully supported. The hooks use `useSyncExternalStore` and the render-tree hook caches its snapshot via `useRef`, so dev-mode double-mounting doesn't break anything.
 - **Concurrent rendering** — fully supported. `useSyncExternalStore` is tearing-safe by design.
 - **Suspense** — not used as a loading model. Loading state is explicit data on the action (`{ loading: true }` as a regular field). A consumer can wrap nova components in `<Suspense>` but it never activates because nova never throws promises during render.
-- **SSR** — the shell-backed hooks are not enabled for it: `useSyncExternalStore` requires a `getServerSnapshot` parameter, and nova's hooks don't provide one, so calling them during server rendering throws. Rendering a tree does not need them — `NovaRenderProvider` + `RenderTree` over values (a frame and per-canvas trees) is store-free, and is the path `@niscorp/moss/terminal/react/server` draws through.
+- **SSR** — supported. The shell-backed hooks and `<NovaShell>` draw under `react-dom/server` (each hook hands `useSyncExternalStore` the shell's own value as its server snapshot), and `hydrateRoot` adopts that markup over a second boot of the same shell. Draw the WHOLE first screen on both sides: `await shellSettled(shell)` before `renderToString`, and again in the page before `hydrateRoot` — see below. A served tree needs no hooks at all — `NovaRenderProvider` + `RenderTree` over values (a frame and per-canvas trees) is store-free, and is the path `@niscorp/moss/terminal/react/server` draws through.
 - **React Server Components** — not tested. The hooks are client-only.
+
+### A shell drawn ahead of time
+
+An app whose shell lives in the page can still arrive as markup. The same boot runs twice — once where there is no browser, once in the page:
+
+```tsx
+// at build (or per request) — no browser
+const shell = boot();
+await shellSettled(shell);                       // the first screen is whole
+const html = renderToString(<NovaShell shell={shell} />);
+
+// in the page — #root already holds `html`
+const shell = boot();
+await shellSettled(shell);                       // reach the same screen first
+hydrateRoot(root, <NovaShell shell={shell} />);  // the same elements, now alive
+```
+
+Three things make the two draws agree, and a build should check all of them (`nisc build` does): the boot is deterministic (pass `instanceIdFn` if an instance id reaches the markup; no `Math.random()`, no wall clock in a transform), the screen is settled on both sides, and whatever the mount hooks read answers the same in the page as it did at build. A read that answers differently — a date that has moved on — is drawn again by the page's shell, and React says so in the console.
 
 ---
 

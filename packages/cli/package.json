@@ -45,7 +45,13 @@
     "typecheck": "tsc --noEmit -p tsconfig.test.json"
   },
   "peerDependencies": {
-    "@niscorp/moss": "workspace:^"
+    "@niscorp/moss": "workspace:^",
+    "@niscorp/nova": "workspace:^"
+  },
+  "peerDependenciesMeta": {
+    "@niscorp/moss": {
+      "optional": true
+    }
   },
   "dependencies": {
     "@hono/node-server": "^2.0.4",
@@ -53,7 +59,10 @@
   },
   "devDependencies": {
     "@niscorp/moss": "workspace:^",
+    "@niscorp/nova": "workspace:^",
+    "@types/jsdom": "^30.0.0",
     "@types/node": "^26.6.4",
+    "jsdom": "^25.0.1",
     "tsup": "^8.5.1",
     "typescript": "^6.0.2",
     "vitest": "^4.1.2"

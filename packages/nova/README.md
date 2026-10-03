@@ -74,12 +74,12 @@ Explicitly out of scope right now:
   default; opt-in reference kits ship at the adapter subpaths
   (`/adapters/react/components`, `/adapters/vue/components`,
   `/adapters/dom/components`, `/adapters/tty/components`, `/adapters/ink`).
-- **No SSR through the shell-backed React hooks.** They don't pass a
-  `getServerSnapshot` to `useSyncExternalStore`, so calling them during server
-  rendering throws. A served tree needs none of them: `RenderTree` over a
-  `RenderApi` is a pure function of the tree, and that is the path a server
-  draws through (`@niscorp/moss/terminal/react/server`). See the React
-  compatibility section below.
+- **No page around the screen.** Nova draws a shell to markup where there is
+  no browser (the React hooks, Vue's server renderer, the DOM adapter's
+  `renderToString`) and picks that markup up in the page — but the document,
+  the paths and the checks a build makes are a host's (`@niscorp/cli`'s `nisc
+  export`, or moss for a served shell). See the React compatibility section
+  below.
 - **No wire protocol.** Definitions are in-process objects, not a
   serialization format. The wire lives in moss; nova ships the render
   surface a remote terminal targets (`RenderApi`, flattened trees that
@@ -306,13 +306,16 @@ can perform their own final async work (e.g. telemetry flush).
   hooks never throw promises. This is intentional: actions model their
   async state as data so layouts can bind to it directly, rather than
   unwinding the tree for Suspense to catch.
-- **SSR:** the shell-backed hooks (`useShell…`, `<NovaShell>`) are not
-  enabled for it — `useSyncExternalStore` requires a `getServerSnapshot`, and
-  they don't provide one. Drawing a tree on a server does not go through them:
-  `NovaRenderProvider` + `RenderTree` over a `RenderApi` (the frame and the
-  per-canvas trees, as values) render with no store at all, on a server and in
-  the browser alike. That is how moss draws a page server-side and how its
-  React target adopts it.
+- **SSR:** supported both ways a screen can be held. A shell that lives with
+  its adapter — `<NovaShell>` and the shell-backed hooks — draws under
+  `renderToString` (each hook's server snapshot is the shell's own value) and
+  is adopted by `hydrateRoot` over a second boot of the same shell: await
+  `shellSettled(shell)` before either, so both draw the whole first screen. A
+  served screen — `NovaRenderProvider` + `RenderTree` over a `RenderApi` —
+  renders with no store at all; that is how moss draws a page server-side and
+  how its React target adopts it. `shellView(shell)` reads a local shell as
+  that same `RenderApi`, which is how the DOM adapter draws one
+  (`mountShell`, and `renderToString` from `/adapters/dom/server`).
 - **React Server Components:** not tested. The hooks are client-only.
 
 ---
@@ -374,4 +377,3 @@ expected.
 
 ## Future work
 
-- SSR support for the React adapter (`getServerSnapshot` on each hook)

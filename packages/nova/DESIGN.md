@@ -639,13 +639,17 @@ changes and reference inequality after a real data or stack change.
   invocation.
 - Suspense: not used as a loading model. Loading state is explicit data
   on the action. Nova hooks never throw promises.
-- SSR: not enabled for the shell-backed hooks — they lack a
-  `getServerSnapshot` parameter. Adding it is a small per-hook change (each
-  hook's `getSnapshot` already returns a serializable value; only the
-  `subscribe` side needs a no-op for the server path). It has not been needed:
-  a served tree renders through `RenderTree` over a `RenderApi`, which touches
-  no store, and that is the path a server draws through (moss's
-  `terminal/react/server`).
+- SSR: the shell-backed hooks draw where there is no browser. Each passes its
+  own `getSnapshot` as `useSyncExternalStore`'s server snapshot — a shell is
+  the same object on a server, at a build, and in the page, so the value it
+  holds is the value to draw. That is what lets an app with its OWN shell (no
+  server holding one) be drawn ahead of time: its boot runs at build,
+  `shellSettled` waits for the first screen to be whole, `renderToString` draws
+  it through these hooks, and the page's boot adopts the markup with
+  `hydrateRoot`. A SERVED tree needs none of this — it renders through
+  `RenderTree` over a `RenderApi`, which touches no store (moss's
+  `terminal/react/server`). `shellView(shell)` is the bridge between the two:
+  a local shell, read as a `RenderApi`.
 - React Server Components: not tested. Hooks are client-only.
 
 ---

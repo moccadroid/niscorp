@@ -9,9 +9,9 @@ import type { CommandOptions } from './commands';
 const USAGE = `nisc — the command for a nisc application
 
   nisc dev                 the app's dev server
-  nisc build               bundle the terminal, then say how each path is served
+  nisc build               bundle the app, draw every path, and check what was drawn
   nisc export              build, then write every path as a file (the site as a folder)
-  nisc start               serve the built terminal from the app's own process, pages drawn
+  nisc start               serve the built app, each path's first screen drawn
   nisc check               the app's check suite
 
   --root <dir>             the app's root (default: here) — where nisc.config.ts is
@@ -20,8 +20,10 @@ const USAGE = `nisc — the command for a nisc application
   --port <n>               start: the port (default: $PORT, then 8787)
   --skip-bundle            build, export: the terminal is already built
 
-An app says two things in nisc.config.ts — how it boots and how one of its
-screens is drawn. Which paths exist and what each one needs is read off the app.`;
+An app says in nisc.config.ts how it boots and how one of its screens is drawn.
+Behind moss (boot + draw): which paths exist and what each needs is read off the
+server. With its own shell (shell + draw + adopt): every path is drawn from the
+app's own boot, and a file is written only if the page's boot picks it up clean.`;
 
 const valueAfter = (args: readonly string[], flag: string): string | undefined => {
   const at = args.indexOf(flag);
@@ -43,8 +45,7 @@ const main = async (): Promise<number> => {
   if (command === 'dev') return dev(options);
   if (command === 'check') return check(options);
   if (command === 'build') {
-    const routes = await build(options);
-    return routes.every((route) => route.drawn) ? 0 : 1;
+    return (await build(options)).ok ? 0 : 1;
   }
   if (command === 'export') return (await exportSite(options)).written ? 0 : 1;
   if (command === 'start') {

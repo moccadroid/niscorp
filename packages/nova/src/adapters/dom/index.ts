@@ -1,6 +1,7 @@
 import type { ComponentRegistry, RenderNode } from '@layout/types';
 import type { NovaEvent } from '@shared/event-bus/schemas';
-import type { RenderApi } from '@shell';
+import { shellView } from '@shell';
+import type { RenderApi, Shell } from '@shell';
 
 // ═══════════════════════════════════════════════════════════
 // @niscorp/nova/adapters/dom — a vanilla-DOM adapter, the platform sibling of
@@ -197,4 +198,33 @@ export const createDomView = (
     if (focus !== undefined) restoreFocus(root, focus);
   };
   return { render, destroy: () => root.replaceChildren() };
+};
+
+// A SHELL THAT LIVES IN THIS PAGE, drawn into `root` and kept current: the
+// shell's own view (`shellView`), this adapter over it, and a re-render on every
+// change. The whole of a browser entry for an app whose shell runs in the
+// browser:
+//
+//   mountShell(root, registry, await boot());
+//
+// A `root` that already holds the same screen as markup — drawn ahead of time
+// by `renderToString` (./server) from the same boot — is picked up by the first
+// render: the adapter rebuilds its root, so those elements are replaced with the
+// same elements in one step, and nothing can disagree with them.
+export const mountShell = (
+  root: HTMLElement,
+  registry: ComponentRegistry<DomComponent>,
+  shell: Shell,
+  options: { fallback?: DomComponent } = {},
+): { destroy: () => void } => {
+  const view = shellView(shell);
+  const dom = createDomView(root, registry, view.api, options);
+  dom.render();
+  const stop = view.subscribe(dom.render);
+  return {
+    destroy: () => {
+      stop();
+      dom.destroy();
+    },
+  };
 };

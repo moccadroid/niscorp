@@ -426,6 +426,24 @@ useEffect(() => {
 
 Always dispose shells you create — they hold references to runtimes which hold references to event listeners.
 
+### `shellView(shell)` and `shellSettled(shell)`
+
+Two helpers beside the shell, for anything that draws one.
+
+```ts
+import { shellView, shellSettled } from '@niscorp/nova';
+
+const { api, subscribe } = shellView(shell);   // the shell, as a RenderApi
+api.frame();                                   // the shell layout's tree
+api.canvasTree('main');                        // one canvas — [] when nothing visible is mounted
+api.dispatch('main', { type: 'ui:click', ref: 'save' });   // to the canvas's active instance
+const stop = subscribe(() => redraw());        // once per burst of changes
+
+const whole = await shellSettled(shell, { waitMs: 300 });  // true: nothing is still mounting
+```
+
+`shellView` is what lets an adapter written against `RenderApi` (the DOM and TTY adapters, a moss terminal) draw a shell that lives beside it. `shellSettled` resolves `true` once no instance is `initializing` — every mount hook, and what it chained to, has been awaited — and `false` if `waitMs` (default 300) runs out first. It is the moment to draw a shell to markup, and the moment for the page's own shell to adopt it.
+
 ---
 
 ## Multi-canvas patterns

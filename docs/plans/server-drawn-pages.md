@@ -5,6 +5,8 @@ needs-a-shell verdict, pages as files (`exportDocuments`), server-side
 React, Vue and DOM targets, and the `nisc` command (`@niscorp/cli`: `dev`,
 `build`, `export`, `start`, `check`) — in moss and nova, with atrium and lyra
 wired.
+**Added 2026-10-03:** an app with its OWN shell — no moss — drawn ahead of time
+and adopted by its page (§8). Mythos is wired.
 **Not built:** opening the app at a position (deep links), a stricter cookie,
 offline, the other apps.
 
@@ -158,7 +160,17 @@ Kept because each one is a trap somebody will walk into again.
   do not. Separate work, outside moss.
 - **Islands.** One screen with some canvases served and others local — moss's
   design doc calls them authority islands. The piece that would make it
-  possible, reading a local shell as a `RenderApi`, is not written.
+  possible, reading a local shell as a `RenderApi`, now exists (nova's
+  `shellView`, §8); composing the two on one screen is not built.
+- **A moss app whose public pages run their own shell.** `nisc.config.ts` is one
+  kind or the other. An app that is behind moss for its members and wants its
+  public paths taken over by a shell in the page — not just drawn — is the
+  mixed case, and it is not built or tested.
+- **Carrying the build's answers.** A drawn screen holds what its reads
+  answered at build; the page's boot asks again. Where the two differ the page
+  draws that part again (React says so in the console). Mythos formats due
+  dates against today, so its file is exact on the day it was built. Handing
+  the page the build's answers so adoption is always exact is not built.
 - **The other apps.** Relay, encore, lyra-admin and lyceum are not wired.
   Lyceum's default renderer is its DOM kit, so its server would draw with
   `terminal/dom/server` and a DOM library, or with its React kit.
@@ -200,3 +212,58 @@ the same pages adopted and live, over a real socket.
 6. Record it in the app's `PLAN.md` (D5), with the consequences.
 7. `nisc.config.ts` at the root — `boot` and the same `draw` — and the command
    builds, exports and serves it.
+
+## 8. An app with its own shell (2026-10-03)
+
+**What was wrong.** Everything above draws a shell that moss holds. The first
+site built on it showed the gap: an exported page was a picture. Nothing in the
+browser could take it over, because the only thing that could was a terminal
+looking for a socket. The request had been for what every app before moss
+already was — mythos, fable: a nova shell in the page, with its own endpoints —
+arriving as markup for a crawler and then running as itself. Several rounds of
+design tried to get there through moss (shell images, recorded reads, a page
+cache). All of them were the wrong end: nova does not care where its shell
+lives, and an endpoint is a contract, not a server.
+
+**What it is.** The app's own boot runs twice. At build, where there is no
+browser: boot, wait until nothing is still mounting, draw to markup with the
+adapter's string renderer. In the page: boot, wait the same way, adopt the
+markup. From there the app is what it always was.
+
+**What it took.**
+
+- nova: the seven shell-backed React hooks pass a server snapshot (they threw
+  under `renderToString`); `shellView(shell)` reads a local shell as a
+  `RenderApi`; `shellSettled(shell)` is the "first screen is whole" signal moss
+  had privately; `mountShell` and `adapters/dom/server` for the DOM adapter.
+  Vue needed nothing. Moss now uses nova's copies.
+- cli: `nisc.config.ts` may hand over `shell` + `draw` + `adopt` instead of a
+  moss server. `build` checks every path — drawn, whole, same twice, adopted —
+  and fails on any; `export` writes the folder; `start` draws per request.
+  The adoption check is a process of its own with a DOM in it (jsdom, the
+  app's), because an adapter decides what it is running in when it is imported.
+- mythos: `nisc.config.ts`, `ui/screen.tsx` (the frame, shared by build, page
+  and dev), and an entry that adopts when the root arrived drawn.
+
+**What was measured.** Mythos (React, PGlite, vex, all in the page): one path,
+all four checks hold, 26 KB of markup in `out/index.html`. With one word of the
+drawn markup changed on purpose the build fails with React's own hydration
+error. The DOM-adapter path is the cli's test fixture (no framework, no moss):
+each check is seen to hold, and to fail when the fixture is broken that way.
+
+**In a real browser** (2026-10-03, the exported folder on a static host): with
+the script removed the page is whole — 26 KB, every todo, styled. With it, every
+delivered element was tagged at 196ms, before any script ran; React took over
+at 5.6s (PGlite's boot) and kept all 185 of them, markup unchanged, console
+silent. Completing a todo went through the page's own shell into the database
+in the page, and the counters and the garden followed. `nisc start` answered
+the same screen per request, adopted the same way.
+
+The first run in the browser failed, and the build's checks had passed it:
+vite's production build rewrites `globalThis.process.env` to `{}`, PGlite
+reads that as "in Node" and touches `process` — a ReferenceError at boot, so
+the drawn page never came alive. Mythos had only ever run under `vite dev`.
+Fixed in mythos's `vite.config.ts`. **The gap it shows:** "adopted" proves the
+markup matches the app's own boot, run in Node — not that the BUNDLE boots in a
+browser. Closing it means `nisc build` opening the exported folder in a
+headless browser; not built.

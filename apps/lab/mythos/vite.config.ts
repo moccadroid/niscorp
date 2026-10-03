@@ -19,6 +19,15 @@ export default defineConfig({
       crypto: resolve(here, 'src/lib/node-crypto-shim.ts'),
     },
   },
+  define: {
+    // A production build rewrites `globalThis.process.env` to `{}` (vite's
+    // define plugin, build only). PGlite reads exactly that as "am I in Node?"
+    // and, told yes, writes `process.exitCode` — a ReferenceError in a browser,
+    // so the bundle never booted (dev serves PGlite unrewritten, which is why it
+    // only ever failed built). Nothing else in the bundle reads it; in a page
+    // the true answer is that there is no process.
+    'globalThis.process.env': 'undefined',
+  },
   server: {
     port: 5176,
     open: true,

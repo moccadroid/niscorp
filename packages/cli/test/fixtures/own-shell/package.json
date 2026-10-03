@@ -1,0 +1,5 @@
+{
+  "name": "nisc-fixture-own-shell",
+  "private": true,
+  "type": "module"
+}

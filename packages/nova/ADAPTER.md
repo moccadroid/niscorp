@@ -80,6 +80,23 @@ handed core's `RenderApi` instead — `frame()`, `canvasTree(canvasId)`,
 when its host says so. The DOM adapter's `createDomView` consumes exactly
 this shape.
 
+A LOCAL shell is read as that same shape by core's `shellView(shell)` —
+`{ api, subscribe }`: the shell's own trees as they stand, its own dispatch
+(an event that names no origin goes to the canvas's active instance), and one
+coalesced call per burst of changes. So an adapter written against `RenderApi`
+draws a shell beside it with no second code path — the DOM adapter's
+`mountShell(root, registry, shell)` is `createDomView` over a `shellView` —
+and an empty canvas is `[]` either way (`canvasTreeOf`).
+
+**Drawing to a string.** An adapter that can draw where there is no browser
+lets a shell arrive as markup: React and Vue through their own server
+renderers, the DOM adapter through `renderToString(registry, api, { window })`
+(`@niscorp/nova/adapters/dom/server` — the host hands in a DOM; nova depends
+on none). Await `shellSettled(shell)` first: an instance is `initializing`
+until its mount hook has been awaited, so that is the moment the first screen
+is whole. Adapters that adopt in place (React, Vue) hydrate over the markup; one
+that rebuilds its root (DOM) replaces it with the same elements in one step.
+
 ### 4. Structural slots and the component vocabulary
 
 Register two structural components under the core names `CANVAS_SLOT_NAME`

@@ -71,6 +71,16 @@
         "default": "./dist/adapters/dom/index.cjs"
       }
     },
+    "./adapters/dom/server": {
+      "import": {
+        "types": "./dist/adapters/dom/server.d.ts",
+        "default": "./dist/adapters/dom/server.js"
+      },
+      "require": {
+        "types": "./dist/adapters/dom/server.d.cts",
+        "default": "./dist/adapters/dom/server.cjs"
+      }
+    },
     "./adapters/dom/components": {
       "import": {
         "types": "./dist/adapters/dom/components/index.d.ts",

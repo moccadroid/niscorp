@@ -1,4 +1,4 @@
-import { createShell, createComponentRegistry, createLayoutStore, CANVAS_SLOT_NAME, ACTION_SLOT_NAME } from '@niscorp/nova';
+import { createShell, createComponentRegistry, createLayoutStore, canvasTreeOf, shellSettled, CANVAS_SLOT_NAME, ACTION_SLOT_NAME } from '@niscorp/nova';
 import { componentsOf, snapshotShell } from '@niscorp/nova/reflect';
 import type { ActionDefinition, Shell, CanvasConfig, FetchFn, FunctionHandler, LayoutNode, RenderNode } from '@niscorp/nova';
 import { emitterOf, spanClock } from './telemetry';
@@ -371,18 +371,9 @@ export const createShellHost = (ctx: ShellHostContext): ShellHost => {
   // arrived with rather than the one they first appeared with.
   type Cell = { live: Live; token: string | null; principal: string | null; roles: readonly string[]; installed: readonly string[] | undefined; hash: string };
 
-  // No visible content = empty tree over the wire. A canvas whose layout
-  // renders to nothing but empty text / empty wrappers (the collapsed aside
-  // rail) is sent as [] — so a terminal can collapse chrome on `length`
-  // alone, knowing nothing about node shapes. An ActionSlot marker is a
-  // BOUNDARY, not content — visibility is decided by what's inside it.
-  const hasVisibleContent = (nodes: RenderNode[]): boolean =>
-    nodes.some((node) => {
-      if (node.type === 'text') return node.value !== '';
-      if (node.type === 'fragment') return hasVisibleContent(node.children);
-      if (node.type === 'component' && node.name === 'ActionSlot') return hasVisibleContent(node.children);
-      return true;
-    });
+  // No visible content = empty tree over the wire, so a terminal collapses chrome
+  // on `length` alone. The rule is nova's (`canvasTreeOf`): a canvas is handed to
+  // an adapter the same way whether it is served from here or lives beside it.
 
   // Flatten, then serialize. No language step here any more: the shell was
   // built with its book, and nova applies it where a RenderNode is minted, so
@@ -390,10 +381,7 @@ export const createShellHost = (ctx: ShellHostContext): ShellHost => {
   // language. Everything downstream — the delta encoder, the socket, the
   // terminal — is handed a finished frame and never learns a language was
   // involved, exactly as before; there is simply one fewer walk to get there.
-  const treeOf = (live: Live, canvasId: string): RenderNode[] => {
-    const tree = live.shell.flattenRenderTree(live.shell.getCanvasRenderTree(canvasId));
-    return hasVisibleContent(tree) ? tree : [];
-  };
+  const treeOf = (live: Live, canvasId: string): RenderNode[] => canvasTreeOf(live.shell, canvasId);
 
   const frame = (live: Live, canvasId: string): string => {
     const message: ServerMessage = { type: 'render', canvas: canvasId, tree: treeOf(live, canvasId) };
@@ -867,35 +855,16 @@ export const createShellHost = (ctx: ShellHostContext): ShellHost => {
   // which starts `initializing` in turn, so the question is asked again on
   // every state change, and answered true only when it holds a macrotask later.
   const settle = async (live: Live, waitMs: number): Promise<boolean> => {
-    const mounting = (): boolean =>
-      Object.values(live.shell.getState().canvases).some((canvas) => canvas.stack.some((instance) => instance.status === 'initializing'));
+    const started = Date.now();
     let timer: ReturnType<typeof setTimeout> | undefined;
     const deadline = new Promise<boolean>((resolve) => {
       timer = setTimeout(() => resolve(false), waitMs);
     });
-    const quiet = (async (): Promise<boolean> => {
-      await live.seeded;
-      for (;;) {
-        if (live.ended) return false;
-        if (!mounting()) {
-          await new Promise<void>((resolve) => setTimeout(resolve, 0));
-          if (!mounting()) return true;
-        }
-        await new Promise<void>((resolve) => {
-          const off = live.shell.onStateChange(() => {
-            off();
-            resolve();
-          });
-          // a change that lands with no notification (see `flush`'s trailing
-          // pass) must not leave this waiting on one
-          setTimeout(() => {
-            off();
-            resolve();
-          }, 10);
-        });
-      }
-    })();
-    const settled = await Promise.race([quiet, deadline]);
+    // The seeds are moss's (the manifest's `seeds` hook); the rest of the
+    // question — is anything still mounting — is nova's, asked with what is left
+    // of the wait.
+    const whole = live.seeded.then(() => shellSettled(live.shell, { waitMs: Math.max(0, waitMs - (Date.now() - started)), stopped: () => live.ended }));
+    const settled = await Promise.race([whole, deadline]);
     clearTimeout(timer);
     return settled;
   };
