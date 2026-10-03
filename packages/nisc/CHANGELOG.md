@@ -1,5 +1,12 @@
 # @niscorp/nisc
 
+## 0.2.1
+
+### Patch Changes
+
+- Updated dependencies [2548e43]
+  - @niscorp/moss@0.2.1
+
 ## 0.2.0
 
 ### Minor Changes
