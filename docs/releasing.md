@@ -96,13 +96,21 @@ In the GitHub repository:
 
 ## create-nisc
 
-`create-nisc` (`npm create nisc`) asks npm for the set `@niscorp/nisc` was
-released with and pins a new app to it. So it is only as good as the latest
-`@niscorp/nisc`: a change its templates depend on (a new subpath, a fixed peer)
-has to be released before, or with, the `create-nisc` that needs it. It was
-first published by hand, after nisc 0.2.0 — the release that carried moss's dev
-plugin and strata as nova's and Prism's required peer — and is released by the
-workflow like every other package since.
+`create-nisc` (`npm create nisc`) pins a new app to the nisc release its
+templates were checked against: the versions are written into it when it is
+built (`packages/create-nisc/tsup.config.ts`), never looked up. So it has to be
+released whenever that set moves — and it is: `create-nisc` and `@niscorp/nisc`
+are a **fixed** pair in `.changeset/config.json`, one version, bumped together,
+and `@niscorp/nisc` moves whenever any member does.
+
+Two things follow:
+
+- **A template change needs a changeset naming `create-nisc`.** The templates
+  are private workspace packages of their own (so CI can build and check them),
+  which means Changesets does not notice a change to one as a change to
+  `create-nisc`. Without the changeset, the fix is merged and never shipped.
+- **It was first published by hand** (`pnpm release:first`), as every new
+  package is, at the version of the `@niscorp/nisc` it carried.
 
 ## Not set up
 

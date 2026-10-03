@@ -4,7 +4,7 @@
   "commit": false,
   "access": "public",
   "baseBranch": "main",
-  "fixed": [],
+  "fixed": [["@niscorp/nisc", "create-nisc"]],
   "linked": [],
   "updateInternalDependencies": "patch",
   "ignore": [],

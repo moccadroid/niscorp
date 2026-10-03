@@ -3,6 +3,9 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
+  "engines": {
+    "node": ">=22.12"
+  },
   "scripts": {
     "dev": "nisc dev",
     "build": "tsc --noEmit && nisc build",
@@ -10,14 +13,18 @@
     "start": "nisc start",
     "check": "nisc check",
     "test": "nisc check",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "strata": "tsx src/dev/strata.ts"
   },
   "dependencies": {
     "@niscorp/nova": "workspace:^",
+    "@niscorp/prism": "workspace:^",
+    "@niscorp/strata": "workspace:^",
     "zod": "^4.6.5"
   },
   "devDependencies": {
     "@niscorp/cli": "workspace:^",
+    "@niscorp/nisc": "workspace:^",
     "@types/jsdom": "^30.0.0",
     "@types/node": "^26.6.4",
     "jsdom": "^25.0.1",

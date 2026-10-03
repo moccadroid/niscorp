@@ -23,17 +23,21 @@ const layoutOf = (facts: Facts): string =>
     ? `src/app/        ARTIFACTS ONLY — the manifest (app.ts), the charter, the actions, the shell
 src/server/     the environment (runtime.ts), the boot, how a screen is drawn (document.ts)
 src/ui/         the kit — the only renderer code, with ${facts.ui === 'react' ? 'src/main.tsx' : 'src/main.ts'}, the terminal entry
-src/dev/        the checks (\`npm run check\`)
-nisc.config.ts  how the app boots and how a screen is drawn, for the \`nisc\` command`
+src/dev/        the checks (\`npm run check\`) — a new feature adds its own
+nisc.config.ts  how the app boots and how a screen is drawn, for the \`nisc\` command
+strata.lock.json  the grammar versions the source is written at (rule 20) — moved only
+                by \`npm run strata verify\`, never by hand`
     : `src/app/        ARTIFACTS ONLY — the actions and the shell's canvases
 src/boot.ts     the shell factory: the artifacts plus everything environmental
 src/ui/         the kit and the screen — the only renderer code, with ${facts.ui === 'react' ? 'src/main.tsx' : 'src/main.ts'}, the entry
-src/dev/        the checks (\`npm run check\`)
-nisc.config.ts  how the app boots and how its screen is drawn and picked up, for the \`nisc\` command`;
+src/dev/        the checks (\`npm run check\`) — a new feature adds its own
+nisc.config.ts  how the app boots and how its screen is drawn and picked up, for the \`nisc\` command
+strata.lock.json  the grammar versions the source is written at (rule 20) — moved only
+                by \`npm run strata verify\`, never by hand`;
 
 export const agentsDoc = (facts: Facts): string => `# ${facts.name}
 
-A nisc application. **The rules it is built by are \`node_modules/@niscorp/nisc/AGENTS.md\`** — read all of it before changing anything here (install first: \`npm install\`). It is the rulebook for the nisc version this app has installed, and \`STYLE_GUIDE.md\` sits beside it. The grammars it names — a layout node, an \`ActionDefinition\`, a Prism config, a charter, a Vex DSL — are in each package's own \`README.md\` and \`DESIGN.md\`, under \`node_modules/@niscorp/<name>/\`.
+A nisc application. **The rules it is built by are \`node_modules/@niscorp/nisc/AGENTS.md\`** — read all of it before changing anything here (it is there once the app's dependencies are installed). It is the rulebook for the nisc version this app has installed, and \`STYLE_GUIDE.md\` sits beside it. The grammars it names — a layout node, an \`ActionDefinition\`, a Prism config, a charter, a Vex DSL — are in each package's own \`README.md\` and \`DESIGN.md\`, under \`node_modules/@niscorp/<name>/\`.
 
 What is particular to this app:
 
@@ -45,12 +49,12 @@ What is particular to this app:
 ${layoutOf(facts)}
 \`\`\`
 
-- **How it runs:** \`npm run dev\`, \`npm run build\`, \`npm run check\`${facts.posture === 'page' ? ', `npm run export`' : ', `npm start`'} — all of them the \`nisc\` command.
+- **How it runs:** \`npm run dev\`, \`npm run build\`, \`npm run check\`${facts.posture === 'page' ? ', `npm run export`' : ', `npm start`'} — all of them the \`nisc\` command — and \`npm run strata status\` for the grammars.
 `;
 
 const d1 = (posture: Posture): string =>
   posture === 'moss'
-    ? `| D1 Posture | answered | **A moss server app.** The shell runs on the server, one per person; the browser is a canvas terminal over a socket. The charter is enforced there, and data never leaves the server except as the screens a principal is granted. |`
+    ? `| D1 Posture | answered | **A moss server app.** The shell runs on the server, one per person; the browser is a canvas terminal over a socket. The charter is enforced there: a principal reaches only the actions and the data it is granted. |`
     : `| D1 Posture | answered | **Its own shell, in the page — no server.** The shell, its actions and its endpoints run in the browser. Consequence, said plainly: **the charter is not enforcement here.** Whatever data and policy the page has, its user has; nothing in this posture is a security boundary. An app that needs one needs a server — moss. |`;
 
 const d2 = (posture: Posture): string =>
@@ -94,7 +98,7 @@ ${d5(facts.posture)}
 ## Order of work
 
 1. **The interview** — every open item above, answered or delegated by name. ← here
-2. **Scaffold** — done: ${facts.posture === 'moss' ? 'manifest, runtime and terminal' : 'the shell factory and the entry'}, one action rendering, a check.
+2. **Scaffold** — done: ${facts.posture === 'moss' ? 'manifest, runtime and terminal' : 'the shell factory and the entry'}, one action rendering, and its checks (the artifacts, the grammar lock, the welcome screen).
 3. **Kit** — the primitives, against a kitchen-sink action; lock the look before any feature.
 4. **Data layer** — per D2/D3: schema, seed, entries; one read end to end.
 5. **Actions** — domain by domain: list → detail → form.
@@ -102,11 +106,6 @@ ${d5(facts.posture)}
 7. **Checks and polish** — a check per feature in \`src/dev/\`; empty states and transitions last.
 `;
 
-export const gitignore = `node_modules/
-dist/
-out/
-*.tsbuildinfo
-.env
-.env.*
-!.env.example
-`;
+// What a nisc app keeps out of git. Lines, so an existing .gitignore can be
+// given only the ones it lacks.
+export const gitignoreLines = ['node_modules/', 'dist/', 'out/', '.strata/', '*.tsbuildinfo', '.env', '.env.*', '!.env.example'];

@@ -845,6 +845,9 @@ importers:
       '@niscorp/cli':
         specifier: workspace:^
         version: link:../../../cli
+      '@niscorp/nisc':
+        specifier: workspace:^
+        version: link:../../../nisc
       '@types/jsdom':
         specifier: ^30.0.0
         version: 30.0.0
@@ -900,6 +903,9 @@ importers:
       '@niscorp/cli':
         specifier: workspace:^
         version: link:../../../cli
+      '@niscorp/nisc':
+        specifier: workspace:^
+        version: link:../../../nisc
       '@types/node':
         specifier: ^26.6.4
         version: 26.6.4
@@ -927,6 +933,12 @@ importers:
       '@niscorp/nova':
         specifier: workspace:^
         version: link:../../../nova
+      '@niscorp/prism':
+        specifier: workspace:^
+        version: link:../../../prism
+      '@niscorp/strata':
+        specifier: workspace:^
+        version: link:../../../strata
       zod:
         specifier: ^4.6.5
         version: 4.6.5
@@ -934,6 +946,9 @@ importers:
       '@niscorp/cli':
         specifier: workspace:^
         version: link:../../../cli
+      '@niscorp/nisc':
+        specifier: workspace:^
+        version: link:../../../nisc
       '@types/jsdom':
         specifier: ^30.0.0
         version: 30.0.0
@@ -958,6 +973,12 @@ importers:
       '@niscorp/nova':
         specifier: workspace:^
         version: link:../../../nova
+      '@niscorp/prism':
+        specifier: workspace:^
+        version: link:../../../prism
+      '@niscorp/strata':
+        specifier: workspace:^
+        version: link:../../../strata
       react:
         specifier: ^19.2.4
         version: 19.2.4
@@ -971,6 +992,9 @@ importers:
       '@niscorp/cli':
         specifier: workspace:^
         version: link:../../../cli
+      '@niscorp/nisc':
+        specifier: workspace:^
+        version: link:../../../nisc
       '@types/jsdom':
         specifier: ^30.0.0
         version: 30.0.0

@@ -12,6 +12,7 @@ import { reactTarget } from '../src/terminal/react';
 import { renderSnapshot as drawReact } from '../src/terminal/react/server';
 import { vueTarget } from '../src/terminal/vue';
 import { renderSnapshot as drawVue } from '../src/terminal/vue/server';
+import type { DomComponent } from '@niscorp/nova/adapters/dom';
 import { domTarget } from '../src/terminal/dom';
 import { renderSnapshot as drawDom } from '../src/terminal/dom/server';
 import type { TerminalApi, TerminalMount } from '../src/terminal';
@@ -150,5 +151,21 @@ describe('terminal/dom/server', () => {
     const { root, parsed } = page(drawDom({ snapshot, window }));
     mounts.push(domTarget({ root })(apiOf()));
     expect(root.innerHTML).toBe(parsed);
+  });
+
+  it('the reference kit brings its stylesheet and its class on the root', () => {
+    document.head.querySelectorAll('style[data-nova-dom]').forEach((style) => style.remove());
+    const { root } = page('');
+    mounts.push(domTarget({ root })(apiOf()));
+    expect(root.className).not.toBe('');
+  });
+
+  it('an app’s own kit brings its own look: no stylesheet injected, no class on the root', () => {
+    const before = document.head.querySelectorAll('style[data-nova-dom]').length;
+    const { root } = page('');
+    const registry = createComponentRegistry<DomComponent>();
+    mounts.push(domTarget({ root, registry })(apiOf()));
+    expect(root.className).toBe('');
+    expect(document.head.querySelectorAll('style[data-nova-dom]').length).toBe(before);
   });
 });

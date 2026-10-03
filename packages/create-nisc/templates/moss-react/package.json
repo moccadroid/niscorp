@@ -3,13 +3,17 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
+  "engines": {
+    "node": ">=22.12"
+  },
   "scripts": {
     "dev": "nisc dev",
     "build": "tsc --noEmit && nisc build",
     "start": "nisc start",
     "check": "nisc check",
     "test": "nisc check",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "strata": "tsx src/dev/strata.ts"
   },
   "dependencies": {
     "@electric-sql/pglite": "^0.5.1",
@@ -26,6 +30,7 @@
   },
   "devDependencies": {
     "@niscorp/cli": "workspace:^",
+    "@niscorp/nisc": "workspace:^",
     "@types/node": "^26.6.4",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",

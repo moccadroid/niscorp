@@ -64,6 +64,15 @@ jobs:
       - name: Check packages
         run: pnpm check:packages
 
+      # `npm create nisc`, end to end: each kind of app made by the built
+      # create-nisc, in a folder outside the workspace, installed from the packed
+      # tarballs under pnpm's strict resolution, then typechecked, checked and
+      # built. The templates pass inside the workspace by being linked to the
+      # packages next door; this is what a new app actually gets. See
+      # scripts/check-create.mts.
+      - name: Check created apps
+        run: pnpm check:create
+
       # The grammar gate (strata). A change to nova's or Prism's schemas without
       # a migration fails here, with the diff and what to append; and every real
       # document captured from the lab apps (strata/corpus) must still upgrade to

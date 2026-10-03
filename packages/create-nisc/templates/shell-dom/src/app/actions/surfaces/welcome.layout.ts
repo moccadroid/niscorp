@@ -9,13 +9,13 @@ export const welcomeLayout: LayoutNode = {
     {
       component: 'Text',
       props: { tone: 'muted' },
-      children: 'A nisc app with its own shell, drawn with plain DOM — no server. This screen is an action on a canvas; the page arrived drawn (`nisc export` wrote it), and the shell in this page picked it up.',
+      children: 'A nisc app with its own shell, drawn with plain DOM — no server. This screen is an action on a canvas; the page arrived drawn (nisc export wrote it), and the shell in this page picked it up.',
     },
     {
       component: 'Row',
       children: [
         { component: 'Button', ref: 'press', props: { label: 'Press' } },
-        { component: 'Text', children: 'Pressed {{$.presses}} times' },
+        { component: 'Text', children: 'Presses: {{$.presses}}' },
       ],
     },
     {

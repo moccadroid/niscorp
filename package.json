@@ -16,6 +16,7 @@
     "lint": "eslint \"apps/lab/lyra/src/**/*.ts\" \"packages/moss/src/**/*.ts\" \"packages/charter/src/**/*.ts\"",
     "format": "prettier --write \"**/*.{ts,tsx,json,md}\"",
     "check:packages": "node scripts/check-packages.mts",
+    "check:create": "node scripts/check-create.mts",
     "check:changesets": "node scripts/check-changesets.mts",
     "changeset": "changeset",
     "release": "changeset publish",
@@ -26,7 +27,7 @@
     "strata:corpus": "node scripts/capture-corpus.mts",
     "check:sources": "node scripts/check-sources.mts",
     "check:fact-door": "node scripts/check-fact-door.mts",
-    "verify": "pnpm build && pnpm check:packages && pnpm check:grammars && pnpm check:sources && pnpm check:fact-door && pnpm typecheck && pnpm test"
+    "verify": "pnpm build && pnpm check:packages && pnpm check:create && pnpm check:grammars && pnpm check:sources && pnpm check:fact-door && pnpm typecheck && pnpm test"
   },
   "devDependencies": {
     "@arethetypeswrong/cli": "^0.18.5",
