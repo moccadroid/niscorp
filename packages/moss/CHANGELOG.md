@@ -1,5 +1,12 @@
 # @niscorp/moss
 
+## 0.2.2
+
+### Patch Changes
+
+- 633d0d1: Docs: `domTarget` no longer redraws the page on every wire update — with a nova that keeps what did not change, an update costs what changed and nothing on the page loses its focus, scroll or animation to it. No change to moss's own code.
+- 45d6731: `installedIntegrations` on the manifest is marked deprecated: the server never called it. Which integrations are live for a principal's tenant is `installed` on the record `identity.resolve` returns.
+
 ## 0.2.1
 
 ### Patch Changes

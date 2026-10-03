@@ -1,6 +1,6 @@
 {
   "name": "@niscorp/vex",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Declarative query synthesis — intent to SQL with caching and scope policies",
   "license": "Apache-2.0",
   "repository": {

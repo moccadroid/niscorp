@@ -1,6 +1,6 @@
 {
   "name": "@niscorp/charter",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "A universe-blind policy engine — roles resolve glob selections over opaque string universes; the verifier refuses incoherence. Zero dependencies.",
   "license": "Apache-2.0",
   "repository": {
