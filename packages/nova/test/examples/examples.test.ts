@@ -63,8 +63,8 @@ describe('the examples', () => {
     }
   });
 
-  it('each names only the plain components and nova’s own slots', () => {
-    for (const example of NOVA_EXAMPLES) {
+  it('each that a host puts on its stage names only the plain components and nova’s own slots', () => {
+    for (const example of NOVA_EXAMPLES.filter((one) => one.stage !== false)) {
       const drawn = [...actionsOf(example).map((action) => action.layout), example.shell?.canvasLayout, ...(example.shell?.canvases ?? []).map((canvas) => canvas.actionLayout), ...Object.values(example.fragments ?? {}).map((fragment) => fragment.layout), ...Object.values(example.layouts ?? {})];
       for (const name of componentsOf(drawn)) expect(PLAIN, `${example.id}: ${name}`).toContain(name);
     }

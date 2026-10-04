@@ -222,4 +222,63 @@ export const SHELL_EXAMPLES: readonly NovaExample[] = [
     presses: [{ ref: 'cover' }, { ref: 'back' }],
     expected: { says: ['mount', 'suspend', 'mount', 'resume', 'Open another on top'], stacks: { 'hooks.main': ['hooks.first'] } },
   },
+  {
+    id: 'dashboard',
+    group: 'shells',
+    title: 'Dashboard',
+    description: 'A frame of three canvases. One press on the bar does two things on two other canvases: it replaces what the middle one shows, and it adds a line to a list canvas that keeps them all.',
+    shell: {
+      canvases: [
+        { id: 'dashboard.bar', initial: 'dashboard.tabs' },
+        { id: 'dashboard.middle', initial: 'dashboard.sales' },
+        {
+          id: 'dashboard.log',
+          mode: 'list',
+          actionLayout: { component: 'Stack', children: [{ for: '$.instances', as: 'instance', key: 'id', do: { component: 'ActionSlot', props: { instanceId: '$instance.id' } } }] },
+        },
+      ],
+      canvasLayout: {
+        component: 'Stack',
+        children: [
+          { component: 'CanvasSlot', props: { canvasId: 'dashboard.bar' } },
+          { component: 'CanvasSlot', props: { canvasId: 'dashboard.middle' } },
+          { component: 'CanvasSlot', props: { canvasId: 'dashboard.log' } },
+        ],
+      },
+      actions: {
+        'dashboard.tabs': {
+          id: 'dashboard.tabs',
+          layout: {
+            component: 'Stack',
+            children: [
+              { component: 'Button', ref: 'sales', children: 'Sales' },
+              { component: 'Button', ref: 'seats', children: 'Seats' },
+            ],
+          },
+          triggers: [
+            {
+              event: 'ui:click',
+              ref: 'sales',
+              do: [{ replace: { action: 'dashboard.sales', canvas: 'dashboard.middle' } }, { push: { action: 'dashboard.line', canvas: 'dashboard.log', input: { text: 'Looked at sales' } } }],
+            },
+            {
+              event: 'ui:click',
+              ref: 'seats',
+              do: [{ replace: { action: 'dashboard.seats', canvas: 'dashboard.middle' } }, { push: { action: 'dashboard.line', canvas: 'dashboard.log', input: { text: 'Looked at seats' } } }],
+            },
+          ],
+        },
+        'dashboard.sales': { id: 'dashboard.sales', layout: { component: 'Text', children: 'Sold tonight: 212' } },
+        'dashboard.seats': { id: 'dashboard.seats', layout: { component: 'Text', children: 'Free tonight: 38' } },
+        'dashboard.line': {
+          id: 'dashboard.line',
+          data: { text: '' },
+          input: { type: 'object', properties: { text: { type: 'string', description: 'What the line says.' } } },
+          layout: { component: 'Text', children: '$.text' },
+        },
+      },
+    },
+    presses: [{ ref: 'seats' }, { ref: 'sales' }],
+    expected: { says: ['Sales', 'Seats', 'Sold tonight: 212', 'Looked at seats', 'Looked at sales'], stacks: { 'dashboard.bar': ['dashboard.tabs'], 'dashboard.middle': ['dashboard.sales'], 'dashboard.log': ['dashboard.line', 'dashboard.line'] } },
+  },
 ];

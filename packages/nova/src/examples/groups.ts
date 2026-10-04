@@ -36,4 +36,9 @@ export const NOVA_EXAMPLE_GROUPS: readonly NovaExampleGroupInfo[] = [
     title: 'Shells',
     description: 'Canvases, what stands on them, and how actions move between them and speak to each other.',
   },
+  {
+    id: 'i18n',
+    title: 'i18n',
+    description: 'Words in the reader’s language: a book keyed on the words as they are written, and rules for which strings are words at all.',
+  },
 ];

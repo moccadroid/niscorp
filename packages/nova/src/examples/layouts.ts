@@ -20,7 +20,7 @@ export const LAYOUT_EXAMPLES: readonly NovaExample[] = [
       },
     },
     presses: [],
-    expected: { data: { member: { name: 'Ada', city: 'London' } }, says: ['Ada', 'London'] },
+    expected: { says: ['Ada', 'London'], data: { member: { name: 'Ada', city: 'London' } } },
   },
   {
     id: 'templates',
@@ -39,7 +39,7 @@ export const LAYOUT_EXAMPLES: readonly NovaExample[] = [
       },
     },
     presses: [],
-    expected: { data: { name: 'Ada', count: 3 }, says: ['Hello, Ada.', '3 new messages'] },
+    expected: { says: ['Hello, Ada.', '3 new messages'], data: { name: 'Ada', count: 3 } },
   },
   {
     id: 'conditional',
@@ -59,7 +59,7 @@ export const LAYOUT_EXAMPLES: readonly NovaExample[] = [
       },
     },
     presses: [],
-    expected: { data: { signedIn: true, basket: [] }, says: ['Welcome back.', 'Your basket is empty.'] },
+    expected: { says: ['Welcome back.', 'Your basket is empty.'], data: { signedIn: true, basket: [] } },
   },
   {
     id: 'missing-paths',
@@ -79,7 +79,7 @@ export const LAYOUT_EXAMPLES: readonly NovaExample[] = [
       },
     },
     presses: [],
-    expected: { data: { member: { name: 'Ada' } }, says: ['Ada', 'Known as .'] },
+    expected: { says: ['Ada', 'Known as .'], data: { member: { name: 'Ada' } } },
   },
   {
     id: 'loop',
@@ -101,7 +101,7 @@ export const LAYOUT_EXAMPLES: readonly NovaExample[] = [
       },
     },
     presses: [],
-    expected: { data: { members: [{ id: 'm1', name: 'Ada' }, { id: 'm2', name: 'Grace' }, { id: 'm3', name: 'Linus' }] }, says: ['Ada', 'Grace', 'Linus'] },
+    expected: { says: ['Ada', 'Grace', 'Linus'], data: { members: [{ id: 'm1', name: 'Ada' }, { id: 'm2', name: 'Grace' }, { id: 'm3', name: 'Linus' }] } },
   },
   {
     id: 'loop-index',
@@ -117,7 +117,7 @@ export const LAYOUT_EXAMPLES: readonly NovaExample[] = [
       },
     },
     presses: [],
-    expected: { data: { steps: ['Book', 'Pay', 'Go'] }, says: ['0: Book', '1: Pay', '2: Go'] },
+    expected: { says: ['0: Book', '1: Pay', '2: Go'], data: { steps: ['Book', 'Pay', 'Go'] } },
   },
   {
     id: 'nested-loops',
@@ -138,7 +138,7 @@ export const LAYOUT_EXAMPLES: readonly NovaExample[] = [
       },
     },
     presses: [],
-    expected: { data: { rows: [{ name: 'A', seats: [1, 2] }, { name: 'B', seats: [1, 2, 3] }] }, says: ['A1', 'A2', 'B1', 'B2', 'B3'] },
+    expected: { says: ['A1', 'A2', 'B1', 'B2', 'B3'], data: { rows: [{ name: 'A', seats: [1, 2] }, { name: 'B', seats: [1, 2, 3] }] } },
   },
   {
     id: 'directives',
@@ -157,6 +157,6 @@ export const LAYOUT_EXAMPLES: readonly NovaExample[] = [
       },
     },
     presses: [],
-    expected: { data: { tab: 'members', seats: 2 }, says: ['Showing members', '2 seats'] },
+    expected: { says: ['Showing members', '2 seats'], data: { tab: 'members', seats: 2 } },
   },
 ];

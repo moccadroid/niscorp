@@ -47,7 +47,7 @@ export const ENDPOINT_EXAMPLES: readonly NovaExample[] = [
       triggers: [{ event: 'ui:click', ref: 'load', do: [{ set: 'state', value: 'asking' }, { call: 'member', onSuccess: [{ set: 'state', value: 'answered' }] }] }],
     },
     presses: [{ ref: 'load' }],
-    expected: { says: ['State: answered', 'Ada has a season pass.', 'Look the member up'], data: { id: 'm1', state: 'answered', member: { name: 'Ada', pass: 'season' } } },
+    expected: { says: ['State: answered', 'Ada has a season pass.', 'Look the member up'], data: { id: 'm1', state: 'answered', member: { name: 'Ada', pass: 'season' } }, asked: [{ method: 'GET', url: '/examples/http-endpoint/members/m1' }] },
   },
   {
     id: 'endpoint-error',
@@ -85,6 +85,63 @@ export const ENDPOINT_EXAMPLES: readonly NovaExample[] = [
       ],
     },
     presses: [{ ref: 'book' }],
-    expected: { says: ['409: That seat has just been taken.', 'Book seat C4'], data: { booked: false, problem: 'That seat has just been taken.', status: 409 } },
+    expected: { says: ['409: That seat has just been taken.', 'Book seat C4'], data: { booked: false, problem: 'That seat has just been taken.', status: 409 }, asked: [{ method: 'POST', url: '/examples/endpoint-error/bookings' }] },
+  },
+  {
+    id: 'endpoint-request',
+    group: 'endpoints',
+    title: 'Request and headers',
+    description: 'What is sent is declared on the endpoint. A header is a template over the action’s data, and `request` is a transform that builds the body from that data, so nothing but what it names leaves the action. `response` is a transform over what comes back, before it is written to `target`.',
+    fetches: { 'POST /examples/endpoint-request/bookings': { status: 200, body: { id: 'B-2041', seats: 2 } } },
+    action: {
+      id: 'endpoint-request',
+      data: { token: 'box-office', member: 'm1', seats: ['C4', 'C5'], note: 'not for the server', booking: '' },
+      layout: {
+        component: 'Stack',
+        children: [
+          { if: '$.booking', then: { component: 'Text', children: 'Booked as {{$.booking}}.' } },
+          { component: 'Button', ref: 'book', children: 'Book both seats' },
+        ],
+      },
+      endpoints: {
+        book: {
+          url: '/examples/endpoint-request/bookings',
+          method: 'POST',
+          headers: { authorization: 'Bearer {{$.token}}' },
+          request: { member: { $ref: '$.member' }, seats: { $length: { $ref: '$.seats' } } },
+          response: { $ref: '$.id' },
+          target: 'booking',
+        },
+      },
+      triggers: [{ event: 'ui:click', ref: 'book', do: [{ call: 'book' }] }],
+    },
+    presses: [{ ref: 'book' }],
+    expected: { says: ['Booked as B-2041.', 'Book both seats'], data: { token: 'box-office', member: 'm1', seats: ['C4', 'C5'], note: 'not for the server', booking: 'B-2041' }, asked: [{ method: 'POST', url: '/examples/endpoint-request/bookings', headers: { authorization: 'Bearer box-office' }, body: { member: 'm1', seats: 2 } }] },
+  },
+  {
+    id: 'endpoint-chain',
+    group: 'endpoints',
+    title: 'One call after another',
+    description: 'A URL and a function in the same action. `onSuccess` of the first call makes the second, which by then finds the first one’s answer in the data. To the steps a call is a call: where it goes is the endpoint’s business.',
+    fetches: { 'GET /examples/endpoint-chain/members/m1': { status: 200, body: { name: 'Ada', seats: ['C4', 'C5'] } } },
+    replies: { 'endpoint-chain.price': { total: 76 } },
+    action: {
+      id: 'endpoint-chain',
+      data: { member: { name: '', seats: [] }, price: { total: 0 } },
+      layout: {
+        component: 'Stack',
+        children: [
+          { if: '$.member.name', then: { component: 'Text', children: '{{$.member.name}} owes {{$.price.total}}.' } },
+          { component: 'Button', ref: 'load', children: 'Work out what is owed' },
+        ],
+      },
+      endpoints: {
+        member: { url: '/examples/endpoint-chain/members/m1', method: 'GET', target: 'member' },
+        price: { fn: 'endpoint-chain.price', target: 'price' },
+      },
+      triggers: [{ event: 'ui:click', ref: 'load', do: [{ call: 'member', onSuccess: [{ call: 'price' }] }] }],
+    },
+    presses: [{ ref: 'load' }],
+    expected: { says: ['Ada owes 76.', 'Work out what is owed'], data: { member: { name: 'Ada', seats: ['C4', 'C5'] }, price: { total: 76 } }, asked: [{ method: 'GET', url: '/examples/endpoint-chain/members/m1' }] },
   },
 ];

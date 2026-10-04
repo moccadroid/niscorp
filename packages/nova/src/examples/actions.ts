@@ -25,7 +25,7 @@ export const ACTION_EXAMPLES: readonly NovaExample[] = [
       ],
     },
     presses: [{ ref: 'more' }, { ref: 'more' }, { ref: 'fewer' }],
-    expected: { data: { count: 1 }, says: ['Count: 1', 'One more', 'One fewer'] },
+    expected: { says: ['Count: 1', 'One more', 'One fewer'], data: { count: 1 } },
   },
   {
     id: 'toggle',
@@ -45,7 +45,7 @@ export const ACTION_EXAMPLES: readonly NovaExample[] = [
       triggers: [{ event: 'ui:click', ref: 'flip', do: [{ toggle: 'open' }] }],
     },
     presses: [{ ref: 'flip' }],
-    expected: { data: { open: true }, says: ['Details', 'Doors open half an hour before.'] },
+    expected: { says: ['Details', 'Doors open half an hour before.'], data: { open: true } },
   },
   {
     id: 'list',
@@ -69,7 +69,7 @@ export const ACTION_EXAMPLES: readonly NovaExample[] = [
       ],
     },
     presses: [{ ref: 'add' }, { ref: 'first' }],
-    expected: { data: { guests: ['Grace', 'Linus'] }, says: ['Grace', 'Linus', 'Add Linus', 'Remove the first'] },
+    expected: { says: ['Grace', 'Linus', 'Add Linus', 'Remove the first'], data: { guests: ['Grace', 'Linus'] } },
   },
   {
     id: 'input-model',
@@ -88,7 +88,7 @@ export const ACTION_EXAMPLES: readonly NovaExample[] = [
       },
     },
     presses: [{ ref: 'name', type: 'ui:model', payload: 'Ada' }],
-    expected: { data: { name: 'Ada' }, says: ['Hello, Ada.'] },
+    expected: { says: ['Your name', 'Hello, Ada.'], data: { name: 'Ada' } },
   },
   {
     id: 'lifecycle',
@@ -102,7 +102,7 @@ export const ACTION_EXAMPLES: readonly NovaExample[] = [
       lifecycle: { mount: [{ set: 'status', value: 'on its canvas' }] },
     },
     presses: [],
-    expected: { data: { status: 'on its canvas' }, says: ['This action is on its canvas.'] },
+    expected: { says: ['This action is on its canvas.'], data: { status: 'on its canvas' } },
   },
   {
     id: 'reset',
@@ -126,6 +126,6 @@ export const ACTION_EXAMPLES: readonly NovaExample[] = [
       ],
     },
     presses: [{ ref: 'change' }, { ref: 'back' }],
-    expected: { data: { greeting: 'Dear Ada' }, says: ['Dear Ada', 'Say hello', 'As it was'] },
+    expected: { says: ['Dear Ada', 'Say hello', 'As it was'], data: { greeting: 'Dear Ada' } },
   },
 ];

@@ -455,7 +455,7 @@ one, and checks every captured lab-app document still upgrades and parses.
 
 ## Examples
 
-`@niscorp/nova/examples` exports the reference as data. `NOVA_EXAMPLES` is a list of small apps, each with what is done to it and what it must then say; `NOVA_EXAMPLE_GROUPS` names the groups they come in (layouts, actions, endpoints, composition, shells), in reading order.
+`@niscorp/nova/examples` exports the reference as data. `NOVA_EXAMPLES` is a list of small apps, each with what is done to it and what it must then say; `NOVA_EXAMPLE_GROUPS` names the groups they come in (layouts, actions, endpoints, composition, shells, i18n), in reading order.
 
 ```ts
 import { NOVA_EXAMPLES } from '@niscorp/nova/examples';
@@ -466,9 +466,9 @@ const counter = NOVA_EXAMPLES.find((example) => example.id === 'counter');
 // counter.expected: { data: { count: 1 }, says: ['Count: 1', 'One more', 'One fewer'] }
 ```
 
-An example is one action alone on a canvas (`action`) or a small shell (`shell`: canvases, actions, and how the canvases are arranged). Beside either stand what it needs from its host: `fragments`, stored `layouts`, and what its endpoints are answered (`replies` for `fn:`, `fetches` for a URL). Every id an example brings begins with the example's own, so a host can hold all of them in one shell.
+An example is one action alone on a canvas (`action`) or a small shell (`shell`: canvases, actions, and how the canvases are arranged). Beside either stand what it needs from its host: `fragments`, stored `layouts`, a phrase book (`phrases`, `phraseKeys`), and what its endpoints are answered (`replies` for `fn:`, `fetches` for a URL). Every id an example brings begins with the example's own, so a host can hold all of them in one shell.
 
-The examples name only the plain components every kit has (`Stack`, `Text`, `Button`, `Input`) and nova's two slots, with no prop about looks. The package's tests run each one, so what they say is what this version does. i18n is not in it yet.
+The examples name only the plain components every kit has (`Stack`, `Text`, `Button`, `Input`) and nova's two slots, with no prop about looks. One that says `stage: false` (the ones on i18n) cannot simply be mounted beside a host's own screens, and is shown as what it comes to. The package's tests run each one, so what they say is what this version does.
 
 ## Building / dev
 
