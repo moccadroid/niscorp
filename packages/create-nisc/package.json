@@ -1,6 +1,6 @@
 {
   "name": "create-nisc",
-  "version": "0.2.3",
+  "version": "0.2.4",
   "description": "npm create nisc — a new nisc application: a few questions, then an app with the right structure, its rulebook, and a first screen that works.",
   "license": "Apache-2.0",
   "repository": {
