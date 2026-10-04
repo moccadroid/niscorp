@@ -453,6 +453,21 @@ one, and checks every captured lab-app document still upgrades and parses.
 
 ---
 
+## Examples
+
+`@niscorp/nova/examples` exports the reference as data. `NOVA_EXAMPLES` is a list of `{ id, group, title, description, action, presses, expected }`: an action, what is done to it, and what it must then hold and say. An example of the layout grammar is an action with no triggers. `NOVA_EXAMPLE_GROUPS` names the groups, in reading order.
+
+```ts
+import { NOVA_EXAMPLES } from '@niscorp/nova/examples';
+
+const counter = NOVA_EXAMPLES.find((example) => example.id === 'counter');
+// counter.action is an ActionDefinition: mount it in a shell and draw it with your own kit
+// counter.presses: [{ ref: 'more' }, { ref: 'more' }, { ref: 'fewer' }]
+// counter.expected: { data: { count: 1 }, says: ['Count: 1', 'One more', 'One fewer'] }
+```
+
+The examples name only the plain components every kit has (`Stack`, `Text`, `Button`, `Input`) and no prop about looks. The package's tests run each one, so what they say is what this version does. Fragments, shells of several canvases and i18n are not in it yet.
+
 ## Building / dev
 
 ```bash

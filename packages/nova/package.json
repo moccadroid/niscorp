@@ -177,6 +177,16 @@
         "default": "./dist/migrations/index.cjs"
       }
     },
+    "./examples": {
+      "import": {
+        "types": "./dist/examples/index.d.ts",
+        "default": "./dist/examples/index.js"
+      },
+      "require": {
+        "types": "./dist/examples/index.d.cts",
+        "default": "./dist/examples/index.cjs"
+      }
+    },
     "./package.json": "./package.json"
   },
   "files": [

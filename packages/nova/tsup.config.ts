@@ -21,6 +21,7 @@ export default defineConfig([
       'document/index': 'src/document/index.ts',
       'devtools/index': 'src/devtools/index.ts',
       'migrations/index': 'src/migrations/index.ts',
+      'examples/index': 'src/examples/index.ts',
     },
     format: ['esm', 'cjs'],
     dts: true,
