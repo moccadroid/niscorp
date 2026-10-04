@@ -48,7 +48,8 @@
         "types": "./dist/examples/index.d.cts",
         "default": "./dist/examples/index.cjs"
       }
-    }
+    },
+    "./package.json": "./package.json"
   },
   "publishConfig": {
     "access": "public"

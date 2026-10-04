@@ -90,7 +90,8 @@
         "types": "./dist/plugins/prism/react/index.d.cts",
         "default": "./dist/plugins/prism/react/index.cjs"
       }
-    }
+    },
+    "./package.json": "./package.json"
   },
   "files": [
     "dist",

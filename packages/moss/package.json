@@ -146,7 +146,8 @@
         "types": "./dist/terminal/ink/index.d.ts",
         "default": "./dist/terminal/ink/index.js"
       }
-    }
+    },
+    "./package.json": "./package.json"
   },
   "files": [
     "dist",

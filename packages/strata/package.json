@@ -60,7 +60,8 @@
         "types": "./dist/node/index.d.cts",
         "default": "./dist/node/index.cjs"
       }
-    }
+    },
+    "./package.json": "./package.json"
   },
   "files": [
     "dist",

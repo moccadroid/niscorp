@@ -269,6 +269,22 @@ try {
       }
     }
 
+    // ── 3b: an app can ask a package which version it is ──────────────
+    // Every package exports its package.json. Whatever shows a package at work
+    // (a documentation site, a bug report, an agent) says the version that is
+    // installed by reading it here, not by guessing from a range.
+    for (const { manifest } of packages) {
+      const specifier = `${manifest.name}/package.json`;
+      run(
+        `read ${specifier}`,
+        nodeRun(['--input-type=module', '-e', `
+          const { default: manifest } = await import(${JSON.stringify(specifier)}, { with: { type: 'json' } });
+          if (manifest.name !== ${JSON.stringify(manifest.name)} || typeof manifest.version !== 'string') throw new Error('not the manifest of ${manifest.name}');
+        `]),
+        scratch,
+      );
+    }
+
     // ── 4: a schema from ANOTHER zod copy keeps its descriptions ──────
     // Every place nisc turns a caller's schema into JSON Schema (signal's
     // wire, cortex's prompt docs, nova's layout palette) must convert it

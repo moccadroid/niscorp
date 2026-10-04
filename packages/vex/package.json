@@ -60,7 +60,8 @@
         "types": "./dist/adapters/pglite/index.d.cts",
         "default": "./dist/adapters/pglite/index.cjs"
       }
-    }
+    },
+    "./package.json": "./package.json"
   },
   "files": [
     "dist",

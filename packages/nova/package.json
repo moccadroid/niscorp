@@ -176,7 +176,8 @@
         "types": "./dist/migrations/index.d.cts",
         "default": "./dist/migrations/index.cjs"
       }
-    }
+    },
+    "./package.json": "./package.json"
   },
   "files": [
     "dist",
