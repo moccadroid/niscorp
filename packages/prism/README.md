@@ -65,6 +65,29 @@ getNodeJsonSchema(target?) → object
 getConfigJsonSchema(target?) → object
 ```
 
+## Examples
+
+`@niscorp/prism/examples` is the reference as data: one example for each
+operator, named by the operator — a config, the source it is given, and what
+comes out — then a few configs of several operators working together.
+
+```typescript
+import { evaluate } from '@niscorp/prism';
+import { PRISM_EXAMPLES, PRISM_EXAMPLE_GROUPS } from '@niscorp/prism/examples';
+
+const map = PRISM_EXAMPLES.find((example) => example.op === '$map');
+// → { id: 'map', group: 'arrays', title: '$map', description, op: '$map', source, config, expected }
+evaluate(map.config, map.source); // → map.expected
+
+// PRISM_EXAMPLE_GROUPS → [{ id: 'arrays', title: 'Arrays', description }, …]
+// the groups the reference puts the operators in, in the same order
+```
+
+They are tested with the package (`test/examples.test.ts`): each one evaluates to
+its `expected`, and every operator in `OP_KEYS` has exactly one example of its
+own. So whatever shows them — a documentation page, an agent reading
+`node_modules` — is showing what the installed version does.
+
 ## Profiles
 
 `getProfileJsonSchema(ops, target?)` is the config JSON Schema documenting only

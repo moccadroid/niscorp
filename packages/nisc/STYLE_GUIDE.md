@@ -114,6 +114,17 @@ This binds packages only. An app's prompt may be about its app — being fitted 
 
 ---
 
+## Examples
+
+A package's examples (`@niscorp/<package>/examples`) are its reference, as data: a document, what it is given, and what must come out. They ship with the package, and whatever shows them — nisc.dev, an agent reading `node_modules` — runs them with the version it has installed. That is what keeps a reference from falling behind the code: there is no second copy to forget.
+
+- **A change to what a package does changes its examples in the same commit.** A new operator, component or field gets an example. A changed result changes that example's `expected`. The package's own tests hold both — every example answers what it says, and nothing in the grammar is left without one (prism: `test/examples.test.ts`).
+- **`expected` is what the engine answers, read by a person.** Record it from a run, then read it. When a test goes red because an answer moved, find out why it moved before touching `expected` — the example may be the thing that is right.
+- **An example is general**, as a prompt is ("Package prompts serve every app"): no app's names, data or domain.
+- **Examples are data.** No function, no import of the engine: `{ id, group, title, description, … }` and the documents themselves. Whoever shows one supplies the code that runs it.
+
+---
+
 ## Unused Parameters
 
 Underscore prefix. Simple.

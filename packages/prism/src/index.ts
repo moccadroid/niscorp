@@ -19,7 +19,7 @@ export { getConfigJsonSchema, getNodeJsonSchema, getProfileJsonSchema } from './
 export type { JsonSchemaTarget } from './engine/documentation';
 
 // Schemas
-export { NodeSchema } from './schemas/node.schema';
+export { NodeSchema, OP_KEYS } from './schemas/node.schema';
 export { ConfigSchema } from './schemas/config.schema';
 export type { Config } from './schemas/config.schema';
 export { MAPPING_OPS } from './schemas/profiles';
