@@ -4,14 +4,14 @@ import { flushPromises, mount } from '@vue/test-utils';
 import { createSSRApp, h } from 'vue';
 import { renderToString } from 'vue/server-renderer';
 import type { ActionDefinition } from '@action';
-import { HEAD_NAME } from '@layout';
+import { HEAD_NAME, HEAD_TITLE_NAME } from '@layout';
 import { createShell } from '@shell';
 import type { Shell } from '@shell';
 import { NovaShell } from '../../src/adapters/vue';
 
 // ═══════════════════════════════════════════════════════════
-// A head node under the Vue adapter: nothing is drawn for it, and the tab's
-// title follows it for as long as the shell lives in the page.
+// A head under the Vue adapter: nothing is drawn for it or what it holds, and
+// the page's <head> follows it for as long as the shell lives in the page.
 // ═══════════════════════════════════════════════════════════
 
 const article: ActionDefinition = {
@@ -20,7 +20,7 @@ const article: ActionDefinition = {
   layout: {
     component: 'Stack',
     children: [
-      { component: HEAD_NAME, props: { title: '$.title' } },
+      { component: HEAD_NAME, children: [{ component: HEAD_TITLE_NAME, children: '$.title' }] },
       { component: 'Text', children: '$.title' },
       { component: 'Button', ref: 'rename', props: { label: 'rename' } },
       { component: 'Button', ref: 'leave', props: { label: 'leave' } },
@@ -43,7 +43,7 @@ const settle = async (): Promise<void> => {
 };
 
 beforeEach(() => {
-  document.title = 'The site';
+  document.head.innerHTML = '<title>The site</title>';
 });
 
 describe('a head node, under the Vue adapter', () => {

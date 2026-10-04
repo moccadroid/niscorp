@@ -88,8 +88,20 @@ export const OPTIONAL_FIELDS_KEY = '__optional';
 // Plain object helpers
 // ════════════════════��══════════════════════════════════════
 
-// Any key but an op's name — the template branch's key schema.
-const NOT_AN_OP_KEY = new RegExp(`^(?!(?:${OP_KEYS.map((k) => k.replace(/\$/g, '\\$')).join('|')})$)`);
+// A `$` name is an op's. The template branch's key schema refuses every key
+// that starts with one — the evaluator's own rule (guards.ts, `isPlainObject`),
+// so the two agree on what a template is. It used to refuse only the names of ops
+// that exist: `{ $fetch: … }` validated as a template, was stored, and was
+// refused every time it ran (E_NODE_SHAPE). It also means a new op never takes
+// a key a stored template was using.
+const TEMPLATE_KEY = /^(?!\$)/;
+
+const isOpKey = (key: unknown): boolean => OP_KEYS.some((op) => op === key);
+
+const templateKeyRefusal = (key: unknown): string =>
+  isOpKey(key)
+    ? 'An op name cannot be a plain object key. Use the op itself.'
+    : 'Not a Prism op. A key that starts with "$" names an op; data with such a key goes in $const.';
 
 const hasValidOptionalMeta = (obj: Record<string, unknown>): boolean => {
   const meta = obj[OPTIONAL_FIELDS_KEY];
@@ -140,14 +152,14 @@ export const NodeSchema: z.ZodType<unknown> = z.lazy(
       JsonPrimitiveSchema,
       // Arrays of nodes
       z.array(z.lazy(() => NodeSchema)),
-      // Plain objects (no op keys, recursive values)
-      // An op's name is not a template key. Said in the KEY schema, not a
+      // Plain objects (no `$` keys, recursive values)
+      // A `$` key is not a template key. Said in the KEY schema, not a
       // refinement: a refinement leaves this branch structurally matched, and
       // zod then reports its complaint instead of the union's — so a typo inside
       // a real op (`{ $get: { pathh } }`) read as "plain object must not contain
       // $ op keys" at the root. As a key pattern it is also plain JSON Schema
       // (`propertyNames`), which the grammar snapshot and agent prompts read.
-      z.record(z.string().regex(NOT_AN_OP_KEY, { message: 'An op name cannot be a plain object key. Use the op itself.' }), z.lazy(() => NodeSchema))
+      z.record(z.string().regex(TEMPLATE_KEY, { error: (issue) => templateKeyRefusal(issue.input) }), z.lazy(() => NodeSchema))
         .refine((o) => hasValidOptionalMeta(o), { message: '__optional must be an array of non-empty field name strings.' }),
     ]).describe('A Prism node: an op, a plain JSON value, an array of nodes, or a plain object template.'),
 );

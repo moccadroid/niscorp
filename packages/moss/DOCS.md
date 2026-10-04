@@ -470,19 +470,21 @@ const page = await renderDocument({
 - **`htmlAttributes`** is for what a kit would otherwise set on `<html>` from an
   effect, which never runs on a server: a palette, a colour scheme. Read it off
   the same node the effect reads it from. Values are escaped.
-- **The page's head is its screen's own.** What a screen says about itself is
-  a node in a layout — nova's `nova:head`, with `title`, `description`,
-  `image`, `kind` and `structured` bound to the action's data. It is in the
-  snapshot's trees like everything else on the screen, so it is read off them
-  and written into the template's `<head>`: what it says takes the place of
-  the tag that said the same thing, and the rest of the head is left as the
-  template has it. `head` in the result is what was read (`{ head, action? }`);
-  absent, the page went out with the template's. In the browser the terminal
-  keeps the tab's title on the same node as the screen moves.
-- **`site`** is the address the site is served at. A layout never holds its
-  own page's address: with `site`, every path's document says its own
-  canonical address (`<link rel="canonical">`, `og:url`) and a picture a head
-  names is given a whole one. Without it the template's is left as it is.
+- **The page's `<head>` is its screen's own.** It is a node in a layout —
+  nova's `nova:head`, whose children (`nova:title`, `nova:meta`, `nova:link`,
+  `nova:script`) are the elements a head holds, their props the elements'
+  attributes. It is in the snapshot's trees like everything else on the screen,
+  so the elements are read off them and written into the template's `<head>`:
+  one takes the place of the tag that said the same thing, anything else is
+  added, and the rest of the head is left as the template has it. `head` in the
+  result is what was read (`{ elements, actions, refused }`); absent, the
+  screen has no head and the page went out with the template's. What a head may
+  not hold — something that runs, or styles — is left out and logged. In the
+  browser the terminal keeps the page's head on the same node as the screen
+  moves, and the template's own tags come back when it stops saying them.
+- **`site`** is the address the site is served at. With it, every path's
+  document says its own canonical address (`<link rel="canonical">`, `og:url`).
+  Without it the template's is left as it is.
 - **`template`** must hold the empty root (`root`, default
   `<div id="root"></div>`). The screen goes inside it, the snapshot element
   straight after.

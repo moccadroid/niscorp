@@ -125,36 +125,49 @@ the app.
 
 ### The head of each page
 
-Either kind. A page's title, its description and the card shown where a link
-to it is pasted are things its **screen says about itself** — so they are a
-node in a layout, bound to the action's data like everything else on the
-screen. Nova's `nova:head` draws nothing:
+Either kind. A page's `<head>` is a node in a layout — nova's `nova:head` —
+and its children are the elements a head holds, bound to the action's data
+like everything else on the screen:
 
 ```typescript
-{ component: 'nova:head', props: { title: '$.page.title', description: '$.page.lead', image: '$.page.cover', kind: 'article' } }
+{ component: 'nova:head', children: [
+  { component: 'nova:title', children: '{{$.page.title}} · the site' },
+  { component: 'nova:meta', props: { name: 'description', content: '$.page.lead' } },
+  { component: 'nova:meta', props: { property: 'og:image', content: '$.page.card' } },
+  { component: 'nova:link', props: { rel: 'alternate', type: 'application/rss+xml', href: '/feed.xml' } },
+  { component: 'nova:script', props: { type: 'application/ld+json', data: '$.page.about' } },
+]}
 ```
 
-`build`, `export` and `start` read it off the screen they drew and write it
-into the built `index.html`'s `<head>`: what it says takes the place of the tag
-that said the same thing (the `<title>`, the description, `og:title`,
-`og:description`, `og:type`, `og:image`, a JSON-LD script for `structured`),
-and a tag the page does not have yet is added. Everything it does not speak of
-is left as `index.html` has it — the icon, the viewport, `og:site_name`. A
-path whose screen has no head node goes out with `index.html`'s own, and a
-build of an app that has one somewhere says which is which. Nothing is
-registered and no code is written: the app names no tag.
+A child's props are that element's attributes, written as given — any `name`,
+`property` or `rel`; nova keeps no list. Nothing in a head is drawn on the
+screen, nothing is registered, and no code is written.
 
-With more than one on the screen (a dialog opened over a page) the last one
-speaks, whole. In the page the tab's title follows the same node as the screen
-moves, and goes back to `index.html`'s when the screen has none.
+`build`, `export` and `start` read the elements off the screen they drew and
+write them into the built `index.html`'s `<head>`. An element takes the place
+of the tag that said the same thing — the `<title>`, a `<meta>` of that name or
+property, the canonical address — where that tag stood; anything else is added
+after what is there. Everything the screen does not speak of is left as
+`index.html` has it. A path whose screen has no head goes out with
+`index.html`'s own, and a build of an app that has one somewhere says which is
+which.
 
-**Where a page lives is not its screen's to say.** A layout never holds its own
-address. `site` in the config is the address the site is served at; with it,
-every path's document says its own canonical address (`<link rel="canonical">`
-and `og:url`), and a picture a head names is given a whole address. Without
-it, `index.html`'s canonical tag goes out in every file as it is — which, for
-every path but one, names another page. A build with more than one path says
-so.
+Two things in a written file are for the page itself, which goes on living
+after the file is read: what the screen said is marked (`data-nova-head`), and
+a tag that gave up its place is kept, inert, in a `<template data-nova-own>`.
+When the screen moves on to one that no longer says it, the document's own
+comes back.
+
+**What a head may not hold fails the build.** A layout is data: a script a
+browser would run, a stylesheet, `http-equiv`, a handler attribute are refused,
+and the path is not written. Those go in `index.html` — the app's own file,
+which holds anything — or in the kit component that needs them.
+
+**Where a page lives.** `site` in the config is the address the site is served
+at. With it, every path's document says its own canonical address
+(`<link rel="canonical">` and `og:url`), head or no head. Without it,
+`index.html`'s canonical tag goes out in every file as it is — which, for every
+path but one, names another page. A build with more than one path says so.
 
 An app with no head node and no `site` is built exactly as it was before
 either existed.

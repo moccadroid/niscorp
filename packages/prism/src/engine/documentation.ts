@@ -20,8 +20,8 @@ export const getConfigJsonSchema = (target: JsonSchemaTarget = 'draft-2020-12'):
 // recursive definition whose `anyOf` holds one alternative per op, and every
 // child position refers back to it — so dropping an op's alternative there
 // drops it everywhere. Everything that is not an op (primitives, arrays, the
-// plain-object template, whose key pattern still names EVERY op, since a
-// plain object may never use one as a key) is kept as it is. Definitions only
+// plain-object template, whose key pattern refuses every `$` key — so an op
+// left out of the profile is still not a template key) is kept as it is. Definitions only
 // the dropped ops used are removed. Documentation only: validation is always
 // the full ConfigSchema (schemas/profiles.ts).
 //

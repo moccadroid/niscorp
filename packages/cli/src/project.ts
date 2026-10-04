@@ -42,9 +42,8 @@ type Common = {
   // The app's check suite, for `nisc check` (default `src/dev/all-checks.ts`).
   checks?: string;
   // The address the site is served at ("https://example.com"). With it, every
-  // path's document says its own canonical address, and a picture a screen's
-  // head names is given a whole one. Without it, where a document lives is left
-  // as index.html says — for every path alike.
+  // path's document says its own canonical address. Without it, where a
+  // document lives is left as index.html says — for every path alike.
   site?: string;
 };
 

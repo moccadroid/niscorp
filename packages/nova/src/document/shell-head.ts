@@ -1,10 +1,10 @@
 import { headOf, shellView } from '../shell';
 import type { Shell } from '../shell';
-import { createTitleKeeper } from './title';
-import type { TitleKeeper } from './title';
+import { createHeadKeeper } from './head-keeper';
+import type { HeadKeeper } from './head-keeper';
 
 // ═══════════════════════════════════════════════════════════
-// The tab's title, for an adapter that draws a shell living in its own page
+// The page's head, for an adapter that draws a shell living in its own page
 // through a framework (react, vue).
 //
 // Such an adapter reads the shell's trees through its own subscriptions, so
@@ -14,27 +14,27 @@ import type { TitleKeeper } from './title';
 // `leave`), and the shell is only read between the two.
 // ═══════════════════════════════════════════════════════════
 
-export type ShellTitle = {
+export type ShellHead = {
   enter: () => void;
   leave: () => void;
   // follow the shell's changes; returns the stop
   watch: () => () => void;
 };
 
-export const createShellTitle = (shell: Shell): ShellTitle => {
+export const createShellHead = (shell: Shell): ShellHead => {
   const view = shellView(shell);
   let present = 0;
-  let keep: TitleKeeper | undefined;
+  let keep: HeadKeeper | undefined;
   let queued = false;
   // once a turn, however many heads came and went in it
   const read = (): void => {
-    // nothing to name where a screen is drawn to a string
+    // nothing to keep where a screen is drawn to a string
     if (queued || typeof document === 'undefined') return;
     queued = true;
     queueMicrotask(() => {
       queued = false;
-      keep ??= createTitleKeeper(document);
-      keep(present > 0 ? headOf(view.api)?.head : undefined);
+      keep ??= createHeadKeeper(document);
+      keep(present > 0 ? headOf(view.api)?.elements : undefined);
     });
   };
   return {

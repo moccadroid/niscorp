@@ -1,30 +1,43 @@
-import type { Head } from '../layout/head';
+import { headKeyOf } from '../layout/head';
+import type { HeadElement } from '../layout/head';
 
 // ═══════════════════════════════════════════════════════════
 // A screen's head, written into an HTML document.
 //
 // The document is the app's own `index.html` with a screen already drawn into
-// it. What a head says takes the place of the tag that says the same thing —
-// the one <title>, the description, the preview tags — and a tag the document
-// does not have yet is added before </head>. Everything else in the head is
-// left exactly as it was: the icon, the viewport, the stylesheet.
+// it. Its <head> is what holds on every page; the screen's head elements are
+// what this page says. An element that says the same thing as a tag the
+// document already has — its <title>, a <meta> of that name or property, its
+// canonical address — takes that tag's place, where it stood. Anything else is
+// added after what is there. Everything the screen does not speak of is left
+// exactly as it was: the icon, the viewport, the stylesheet.
 //
-// WHERE the document lives is not the screen's to say. Its address is the site
-// plus the path it was drawn at, and both are known to whoever writes the
-// file: with a `site`, every path is given its own canonical address, whether
-// or not its screen has a head.
+// TWO THINGS ARE KEPT FOR THE PAGE ITSELF, which goes on living after the file
+// is read (./head-keeper). What was written is marked (`data-nova-head`), so
+// the page can tell the screen's elements from the document's own. And a tag
+// that gave up its place is kept, inert, in a <template data-nova-own>: when
+// the screen moves on to one that no longer says it, the document's own comes
+// back.
 //
-// With no head and no site, the document comes back untouched.
+// WHERE the document lives is known to whoever writes the file: the site plus
+// the path it was drawn at. With a `site`, every path is given its own
+// canonical address, whether or not its screen has a head. That address is the
+// document's own for this path — unmarked, and it stays when the screen moves
+// on. A screen that says a canonical address itself is taken at its word.
+//
+// With nothing to write, the document comes back untouched.
 // ═══════════════════════════════════════════════════════════
 
 export type HeadPlace = {
   // The address the site is served at ("https://example.com"). With it, each
-  // path's canonical address is written and a preview picture's address is
-  // made whole.
+  // path's canonical address is written.
   site?: string;
   // The path this document was drawn at.
   path?: string;
 };
+
+export const HEAD_MARK = 'data-nova-head';
+export const OWN_MARK = 'data-nova-own';
 
 const escapeAttribute = (value: string): string => value.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
 const escapeText = (value: string): string => value.replace(/&/g, '&amp;').replace(/</g, '&lt;');
@@ -33,24 +46,21 @@ const escapeText = (value: string): string => value.replace(/&/g, '&amp;').repla
 // written as escapes too (named by code: the characters themselves would end
 // a line here as well).
 const LINE_ENDS = [0x2028, 0x2029];
-const escapeScript = (value: unknown): string =>
-  LINE_ENDS.reduce(
-    (text, code) => text.split(String.fromCharCode(code)).join(`\\u${code.toString(16)}`),
-    JSON.stringify(value).replace(/</g, '\\u003c'),
-  );
+const escapeScript = (json: string): string =>
+  LINE_ENDS.reduce((text, code) => text.split(String.fromCharCode(code)).join(`\\u${code.toString(16)}`), json.replace(/</g, '\\u003c'));
 
 // What stands in a head, read a tag at a time: comments and the bodies of
-// scripts and styles are passed over whole, so a tag written inside one is not
-// mistaken for a tag.
+// scripts, styles and templates are passed over whole, so a tag written inside
+// one is not mistaken for a tag.
 const ATTRIBUTES = `((?:[^>"']|"[^"]*"|'[^']*')*)`;
-const ELEMENTS = new RegExp(`<!--[\\s\\S]*?-->|<(script|style|title)\\b${ATTRIBUTES}>([\\s\\S]*?)<\\/\\1\\s*>|<(meta|link)\\b${ATTRIBUTES}>`, 'gi');
+const TAGS = new RegExp(`<!--[\\s\\S]*?-->|<(script|style|title|template)\\b${ATTRIBUTES}>([\\s\\S]*?)<\\/\\1\\s*>|<(meta|link)\\b${ATTRIBUTES}>`, 'gi');
 const ATTRIBUTE = /([^\s"'=<>/]+)(?:\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'=<>`]+)))?/g;
 
-type Element = { start: number; end: number; name: string; attributes: Record<string, string>; text: string };
+type Tag = { start: number; end: number; name: string; attributes: Record<string, string>; inner: string; text: string };
 
-const attributesOf = (written: string): Record<string, string> => {
+const attributesOf = (source: string): Record<string, string> => {
   const attributes: Record<string, string> = {};
-  for (const match of written.matchAll(ATTRIBUTE)) {
+  for (const match of source.matchAll(ATTRIBUTE)) {
     const name = match[1]?.toLowerCase();
     if (name === undefined || name in attributes) continue;
     attributes[name] = match[2] ?? match[3] ?? match[4] ?? '';
@@ -58,115 +68,100 @@ const attributesOf = (written: string): Record<string, string> => {
   return attributes;
 };
 
-const elementsOf = (section: string): Element[] => {
-  const elements: Element[] = [];
-  for (const match of section.matchAll(ELEMENTS)) {
+const tagsOf = (section: string): Tag[] => {
+  const tags: Tag[] = [];
+  for (const match of section.matchAll(TAGS)) {
     const name = (match[1] ?? match[4])?.toLowerCase();
     if (name === undefined) continue;
-    elements.push({ start: match.index, end: match.index + match[0].length, name, attributes: attributesOf(match[2] ?? match[5] ?? ''), text: match[3] ?? '' });
+    tags.push({ start: match.index, end: match.index + match[0].length, name, attributes: attributesOf(match[2] ?? match[5] ?? ''), inner: match[3] ?? '', text: match[0] });
   }
-  return elements;
+  return tags;
 };
 
-const says = (element: Element, attribute: string, value: string): boolean => element.attributes[attribute]?.trim().toLowerCase() === value;
+// What a tag in the document says, in the same terms as an element.
+const keyOfTag = (tag: Tag): string | undefined =>
+  tag.name === 'title' || tag.name === 'meta' || tag.name === 'link' ? headKeyOf({ tag: tag.name, attributes: tag.attributes }) : undefined;
 
-const isAbsolute = (address: string): boolean => /^[a-z][a-z0-9+.-]*:/i.test(address) || address.startsWith('//');
+// An element, as the tag it is written as.
+const markupOf = (element: HeadElement, marked: boolean): string => {
+  const written = Object.entries(element.attributes).map(([name, value]) => (value === '' ? ` ${name}` : ` ${name}="${escapeAttribute(value)}"`));
+  const attributes = [...written, ...(marked ? [` ${HEAD_MARK}`] : [])].join('');
+  if (element.tag === 'title') return `<title${attributes}>${escapeText(element.text ?? '')}</title>`;
+  if (element.tag === 'script') return `<script${attributes}>${escapeScript(element.text ?? '')}</script>`;
+  return `<${element.tag}${attributes}>`;
+};
 
-const addressOf = (place: HeadPlace): string | undefined => {
-  if (place.site === undefined || place.path === undefined) return undefined;
+// Where the document lives, as elements: what a `site` and a path say.
+const addressOf = (place: HeadPlace): HeadElement[] => {
+  if (place.site === undefined || place.path === undefined) return [];
   const path = place.path.split(/[?#]/)[0] ?? '';
-  return `${place.site.replace(/\/+$/, '')}${path.startsWith('/') ? path : `/${path}`}`;
+  const address = `${place.site.replace(/\/+$/, '')}${path.startsWith('/') ? path : `/${path}`}`;
+  return [
+    { tag: 'link', attributes: { rel: 'canonical', href: address } },
+    { tag: 'meta', attributes: { property: 'og:url', content: address } },
+  ];
 };
 
-// A picture's address as somebody outside the site can fetch it.
-const wholeAddress = (address: string, base: string | undefined): string => {
-  if (base === undefined || isAbsolute(address)) return address;
-  try {
-    return new URL(address, base).href;
-  } catch {
-    return address;
-  }
-};
+const changed = (text: string, changes: readonly { start: number; end: number; text: string }[]): string =>
+  [...changes].sort((a, b) => b.start - a.start).reduce((at, change) => `${at.slice(0, change.start)}${change.text}${at.slice(change.end)}`, text);
 
-// One thing a document says: which tag says it, and the tag as it should stand.
-type Saying = { is: (element: Element) => boolean; tag: (was: Element | undefined) => string };
+// A head that was written before, put back as the document had it: what the
+// last screen said is taken out, and what the document gave up for it is given
+// back. A head never written comes back as it is.
+const restored = (section: string): string =>
+  changed(
+    section,
+    tagsOf(section).flatMap((tag) => {
+      if (tag.name === 'template' && OWN_MARK in tag.attributes) return [{ start: tag.start, end: tag.end, text: tag.inner }];
+      return HEAD_MARK in tag.attributes ? [{ start: tag.start, end: tag.end, text: '' }] : [];
+    }),
+  );
 
-const meta = (attribute: 'name' | 'property', key: string, content: string): Saying => ({
-  is: (element) => element.name === 'meta' && says(element, attribute, key),
-  tag: () => `<meta ${attribute}="${key}" content="${escapeAttribute(content)}">`,
-});
-
-const sayingsOf = (head: Head, place: HeadPlace): Saying[] => {
-  const address = addressOf(place);
-  const sayings: Saying[] = [];
-  if (head.title !== undefined) {
-    const title = head.title;
-    sayings.push({
-      is: (element) => element.name === 'title',
-      // The document's own title is kept beside the screen's, so a page that
-      // moves on to a screen with no head can say its own again.
-      tag: (was) => {
-        const own = was === undefined ? undefined : (was.attributes['data-own'] ?? was.text.trim().replace(/"/g, '&quot;'));
-        return `<title${own === undefined || own === escapeText(title) ? '' : ` data-own="${own}"`}>${escapeText(title)}</title>`;
-      },
-    });
-  }
-  if (head.description !== undefined) sayings.push(meta('name', 'description', head.description));
-  if (address !== undefined) {
-    sayings.push({
-      is: (element) => element.name === 'link' && (element.attributes['rel'] ?? '').toLowerCase().split(/\s+/).includes('canonical'),
-      tag: () => `<link rel="canonical" href="${escapeAttribute(address)}">`,
-    });
-    sayings.push(meta('property', 'og:url', address));
-  }
-  if (head.kind !== undefined) sayings.push(meta('property', 'og:type', head.kind));
-  if (head.title !== undefined) sayings.push(meta('property', 'og:title', head.title));
-  if (head.description !== undefined) sayings.push(meta('property', 'og:description', head.description));
-  if (head.image !== undefined) sayings.push(meta('property', 'og:image', wholeAddress(head.image, address)));
-  return sayings;
-};
-
-export const placeHead = (html: string, head: Head | undefined, place: HeadPlace = {}): string => {
-  const said = head ?? {};
-  const sayings = sayingsOf(said, place);
-  if (sayings.length === 0 && said.structured === undefined) return html;
-
-  const opening = /<head\b[^>]*>/i.exec(html);
-  if (opening === null) return html;
-  const from = opening.index + opening[0].length;
-  const closing = html.slice(from).search(/<\/head\s*>/i);
-  if (closing < 0) return html;
-  const section = html.slice(from, from + closing);
-  const elements = elementsOf(section);
-
+// Elements, written into a head. `screen`: they are what a screen says — each
+// is marked, and a tag that gives up its place is kept for the page. Otherwise
+// they are the document's own from here on, and what they replace is gone.
+const write = (section: string, elements: readonly HeadElement[], screen: boolean): string => {
+  if (elements.length === 0) return section;
+  const tags = tagsOf(section);
   const changes: { start: number; end: number; text: string }[] = [];
   const added: string[] = [];
-  for (const saying of sayings) {
-    const [first, ...others] = elements.filter(saying.is);
+  const own: string[] = [];
+  for (const element of elements) {
+    const key = headKeyOf(element);
+    const [first, ...others] = key === undefined ? [] : tags.filter((tag) => keyOfTag(tag) === key);
     if (first === undefined) {
-      added.push(saying.tag(undefined));
+      added.push(markupOf(element, screen));
       continue;
     }
-    changes.push({ start: first.start, end: first.end, text: saying.tag(first) });
+    changes.push({ start: first.start, end: first.end, text: markupOf(element, screen) });
+    own.push(first.text);
     // said twice, the second would still say the old thing
-    for (const other of others) changes.push({ start: other.start, end: other.end, text: '' });
+    for (const other of others) {
+      changes.push({ start: other.start, end: other.end, text: '' });
+      own.push(other.text);
+    }
   }
-  if (said.structured !== undefined) {
-    const script = `<script type="application/ld+json">${escapeScript(said.structured)}</script>`;
-    const was = elements.find((element) => element.name === 'script' && says(element, 'type', 'application/ld+json'));
-    if (was === undefined) added.push(script);
-    else changes.push({ start: was.start, end: was.end, text: script });
-  }
+  if (screen && own.length > 0) added.push(`<template ${OWN_MARK}>${own.join('')}</template>`);
 
-  let written = section;
-  for (const change of [...changes].sort((a, b) => b.start - a.start)) {
-    written = `${written.slice(0, change.start)}${change.text}${written.slice(change.end)}`;
-  }
+  const written = changed(section, changes);
   // What is added goes after the last thing in the head, a line each, indented
   // as that last thing is — or straight on, in a head written on one line.
   const tail = /\s*$/.exec(written)?.[0] ?? '';
   const body = written.slice(0, written.length - tail.length);
   const indent = /(?:^|\n)([ \t]*)\S[^\n]*$/.exec(body)?.[1] ?? '';
   const lead = tail.includes('\n') ? `\n${indent}` : '';
-  return `${html.slice(0, from)}${body}${added.map((tag) => `${lead}${tag}`).join('')}${tail}${html.slice(from + closing)}`;
+  return `${body}${added.map((tag) => `${lead}${tag}`).join('')}${tail}`;
+};
+
+export const placeHead = (html: string, elements: readonly HeadElement[] | undefined, place: HeadPlace = {}): string => {
+  const opening = /<head\b[^>]*>/i.exec(html);
+  if (opening === null) return html;
+  const from = opening.index + opening[0].length;
+  const closing = html.slice(from).search(/<\/head\s*>/i);
+  if (closing < 0) return html;
+  // Where the document lives is the document's own, for this path: written
+  // first and unmarked, so a screen that says an address of its own takes its
+  // place — and gives it back.
+  const located = write(restored(html.slice(from, from + closing)), addressOf(place), false);
+  return `${html.slice(0, from)}${write(located, elements ?? [], true)}${html.slice(from + closing)}`;
 };

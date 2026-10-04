@@ -114,7 +114,7 @@ const renderNode = (node: RenderNode, ctx: Ctx): TtyBlock => {
   if (node.type === 'error') return errorBlock(node.code, node.message);
 
   // component
-  // a head is something the screen says, not something it shows
+  // a head is the document's, not the screen's: nothing is drawn for it or for what it holds
   if (isHeadNode(node)) return { lines: [] };
   if (node.name === CANVAS_SLOT) {
     const canvasId = typeof node.props['canvasId'] === 'string' ? (node.props['canvasId'] as string) : '';

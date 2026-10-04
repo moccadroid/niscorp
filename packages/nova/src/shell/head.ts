@@ -1,5 +1,5 @@
-import { HEAD_NAME } from '../layout/head';
-import type { Head } from '../layout/head';
+import { HEAD_LINK_NAME, HEAD_META_NAME, HEAD_NAME, HEAD_SCRIPT_NAME, HEAD_TITLE_NAME, headKeyOf } from '../layout/head';
+import type { HeadElement } from '../layout/head';
 import type { RenderNode } from '../layout';
 import type { RenderApi } from './types';
 import { ACTION_SLOT_NAME, CANVAS_SLOT_NAME } from './slot-names';
@@ -8,56 +8,135 @@ import { ACTION_SLOT_NAME, CANVAS_SLOT_NAME } from './slot-names';
 // The head a screen has, read off its render tree.
 //
 // The frame is walked in the order it is drawn, into each canvas where its
-// slot stands and into each instance on it. A screen can hold more than one
-// head node — a dialog opened over a page — and then THE LAST ONE SPEAKS, whole:
-// two heads are two things, and a title from one beside a description from the
-// other describes neither.
+// slot stands and into each instance on it, and every `nova:head` it meets
+// gives its elements in turn. A screen can hold more than one head — the
+// shell's chrome says what holds on every screen, an action says its own, a
+// dialog opens over a page. An element that says the same thing as an earlier
+// one (the title, a <meta> of that name) takes its place; anything else stands
+// beside what came before.
 //
-// A node that says nothing (its bindings are not answered yet) is still the
-// one that speaks: the document keeps what it had rather than borrow from a
-// screen underneath.
+// What a head may not hold is refused here, once, for every writer: the
+// element is left out and the reason is given. See ../layout/head.
 // ═══════════════════════════════════════════════════════════
 
 export type ScreenHead = {
-  head: Head;
-  // the action whose instance the node stands in; absent for a node in the
-  // frame or in a canvas's own layout
-  action?: string;
+  // what the document's head is to hold, in the order the screen said it
+  elements: HeadElement[];
+  // the actions whose instances said any of it (none: only the shell's chrome did)
+  actions: string[];
+  // what a head held that it may not — left out, each with why
+  refused: string[];
 };
 
-type Found = { props: Record<string, unknown>; action: string | undefined };
+type ComponentNode = Extract<RenderNode, { type: 'component' }>;
+type Read = { element: HeadElement } | { refused: string } | undefined;
 
-const said = (value: unknown): string | undefined => (typeof value === 'string' && value.trim() !== '' ? value : undefined);
+const ATTRIBUTE_NAME = /^[A-Za-z][A-Za-z0-9:._-]*$/;
+// a data block: a type no browser runs
+const DATA_TYPE = /^application\/([a-z0-9.-]+\+)?json$/i;
 
-const isObject = (value: unknown): value is Record<string, unknown> => value !== null && typeof value === 'object' && !Array.isArray(value);
-
-const structuredOf = (value: unknown): Head['structured'] => {
-  if (isObject(value)) return value;
-  if (Array.isArray(value) && value.length > 0 && value.every(isObject)) return value;
-  return undefined;
+// A prop, as the attribute it is written as — or nothing, when it says nothing.
+const written = (value: unknown): string | undefined => {
+  if (typeof value === 'string') return value.trim() === '' ? undefined : value;
+  if (typeof value === 'number') return String(value);
+  return value === true ? '' : undefined;
 };
 
-// A prop that is not one of the names, or holds something other than what its
-// name takes, is left out — the document keeps what it had there.
-const headFrom = (props: Record<string, unknown>): Head => {
-  const [title, description, image] = [said(props['title']), said(props['description']), said(props['image'])];
-  const kind = props['kind'] === 'website' || props['kind'] === 'article' ? props['kind'] : undefined;
-  const structured = structuredOf(props['structured']);
-  return {
-    ...(title !== undefined ? { title } : {}),
-    ...(description !== undefined ? { description } : {}),
-    ...(image !== undefined ? { image } : {}),
-    ...(kind !== undefined ? { kind } : {}),
-    ...(structured !== undefined ? { structured } : {}),
-  };
+// An element's attributes, from its props — or why it may not be written.
+const attributesOf = (what: string, props: Record<string, unknown>, skip: readonly string[] = []): { attributes: Record<string, string> } | { refused: string } => {
+  const attributes: Record<string, string> = {};
+  for (const [name, value] of Object.entries(props)) {
+    if (skip.includes(name)) continue;
+    if (!ATTRIBUTE_NAME.test(name)) return { refused: `${what}: "${name}" is not an attribute’s name` };
+    if (/^on/i.test(name)) return { refused: `${what}: \`${name}\` is a handler, and a layout does not run` };
+    const text = written(value);
+    if (text !== undefined) attributes[name] = text;
+  }
+  return { attributes };
+};
+
+const has = (attributes: Record<string, string>, name: string): boolean => Object.keys(attributes).some((key) => key.toLowerCase() === name);
+const valueOf = (attributes: Record<string, string>, name: string): string => Object.entries(attributes).find(([key]) => key.toLowerCase() === name)?.[1] ?? '';
+
+const textOf = (nodes: readonly RenderNode[]): string =>
+  nodes.map((node) => (node.type === 'text' ? node.value : node.type === 'fragment' ? textOf(node.children) : '')).join('');
+
+const titleOf = (node: ComponentNode): Read => {
+  const text = textOf(node.children).trim();
+  return text === '' ? undefined : { element: { tag: 'title', attributes: {}, text } };
+};
+
+const metaOf = (node: ComponentNode): Read => {
+  const read = attributesOf(HEAD_META_NAME, node.props);
+  if ('refused' in read) return read;
+  if (has(read.attributes, 'http-equiv')) return { refused: `${HEAD_META_NAME}: \`http-equiv\` instructs the browser, and a layout does not` };
+  // nothing to say yet: its value is not answered
+  return has(read.attributes, 'content') ? { element: { tag: 'meta', attributes: read.attributes } } : undefined;
+};
+
+const linkOf = (node: ComponentNode): Read => {
+  const read = attributesOf(HEAD_LINK_NAME, node.props);
+  if ('refused' in read) return read;
+  if (valueOf(read.attributes, 'rel').toLowerCase().split(/\s+/).includes('stylesheet')) return { refused: `${HEAD_LINK_NAME}: a stylesheet styles the page, and a layout does not` };
+  return has(read.attributes, 'href') ? { element: { tag: 'link', attributes: read.attributes } } : undefined;
+};
+
+const scriptOf = (node: ComponentNode): Read => {
+  const read = attributesOf(HEAD_SCRIPT_NAME, node.props, ['data']);
+  if ('refused' in read) return read;
+  if (has(read.attributes, 'src')) return { refused: `${HEAD_SCRIPT_NAME}: a script with a \`src\` runs, and a layout does not` };
+  const type = valueOf(read.attributes, 'type');
+  if (!DATA_TYPE.test(type)) return { refused: `${HEAD_SCRIPT_NAME}: only a data block may be written (a JSON \`type\`), and "${type}" is not one` };
+  const data = node.props['data'];
+  if (data === undefined || data === null || data === '') return undefined;
+  return { element: { tag: 'script', attributes: read.attributes, text: JSON.stringify(data) } };
+};
+
+const READERS: Record<string, (node: ComponentNode) => Read> = {
+  [HEAD_TITLE_NAME]: titleOf,
+  [HEAD_META_NAME]: metaOf,
+  [HEAD_LINK_NAME]: linkOf,
+  [HEAD_SCRIPT_NAME]: scriptOf,
 };
 
 export const isHeadNode = (node: RenderNode): boolean => node.type === 'component' && node.name === HEAD_NAME;
 
 export const headOf = (api: Pick<RenderApi, 'frame' | 'canvasTree'>): ScreenHead | undefined => {
-  const found: Found[] = [];
+  let heads = 0;
+  const said: { element: HeadElement; action: string | undefined }[] = [];
+  const refused: string[] = [];
   // a canvas whose own tree names it again would never end
   const open = new Set<string>();
+
+  const hold = (nodes: readonly RenderNode[], action: string | undefined): void => {
+    for (const node of nodes) {
+      if (node.type === 'fragment') {
+        hold(node.children, action);
+        continue;
+      }
+      if (node.type === 'error') {
+        refused.push(`${HEAD_NAME}: ${node.message}`);
+        continue;
+      }
+      // text between a head's elements is nothing
+      if (node.type !== 'component') continue;
+      const read = READERS[node.name];
+      if (read === undefined) {
+        refused.push(`${HEAD_NAME}: "${node.name}" is not something a head holds`);
+        continue;
+      }
+      const found = read(node);
+      if (found === undefined) continue;
+      if ('refused' in found) {
+        refused.push(found.refused);
+        continue;
+      }
+      const key = headKeyOf(found.element);
+      const earlier = key === undefined ? -1 : said.findIndex((other) => headKeyOf(other.element) === key);
+      if (earlier >= 0) said.splice(earlier, 1);
+      said.push({ element: found.element, action });
+    }
+  };
 
   const walk = (nodes: readonly RenderNode[], action: string | undefined): void => {
     for (const node of nodes) {
@@ -67,7 +146,8 @@ export const headOf = (api: Pick<RenderApi, 'frame' | 'canvasTree'>): ScreenHead
       }
       if (node.type !== 'component') continue;
       if (node.name === HEAD_NAME) {
-        found.push({ props: node.props, action });
+        heads += 1;
+        hold(node.children, action);
         continue;
       }
       if (node.name === CANVAS_SLOT_NAME) {
@@ -84,7 +164,7 @@ export const headOf = (api: Pick<RenderApi, 'frame' | 'canvasTree'>): ScreenHead
   };
 
   walk(api.frame(), undefined);
-  const last = found[found.length - 1];
-  if (last === undefined) return undefined;
-  return { head: headFrom(last.props), ...(last.action !== undefined ? { action: last.action } : {}) };
+  if (heads === 0) return undefined;
+  const actions = [...new Set(said.flatMap((one) => (one.action === undefined ? [] : [one.action])))];
+  return { elements: said.map((one) => one.element), actions, refused };
 };

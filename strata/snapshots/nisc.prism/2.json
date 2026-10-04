@@ -1,0 +1,2159 @@
+{
+  "kinds": {
+    "nisc.prism/config": {
+      "$defs": {
+        "__schema0": {
+          "anyOf": [
+            {
+              "additionalProperties": false,
+              "description": "Read a value from the source data by static JSONPath. Use $ref for source access, $var for variables, $get for navigating into variables or dynamic paths.",
+              "properties": {
+                "$ref": {
+                  "description": "JSONPath from the source root: \"$\" is the whole source; \"$.user.name\", \"$.items[0].sku\" reach into it. Only reads from source data, not variables. For variables use $var, for navigating into variables use $get.",
+                  "pattern": "^\\$(\\..*)?$",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "$ref"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "description": "Return a literal JSON value unchanged.",
+              "properties": {
+                "$const": {
+                  "$ref": "#/$defs/__schema1",
+                  "description": "Any JSON value to return as-is."
+                }
+              },
+              "required": [
+                "$const"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "description": "Read a scoped variable by name. Variables are created by $with (let bindings), $map/$filter/$reduce/$sortBy (loop element). Returns the whole variable — use $get to navigate into it.",
+              "properties": {
+                "$var": {
+                  "description": "Variable name bound by $with, $map, $filter, $reduce, or $sortBy.",
+                  "minLength": 1,
+                  "type": "string"
+                }
+              },
+              "required": [
+                "$var"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "description": "Navigate into a value by path. Use to access fields on variables: {$get: {from: {$var: \"item\"}, path: [\"name\"]}}. Also supports dynamic path segments (nodes as segments) and fallback values. Prefer $ref for simple source access.",
+              "properties": {
+                "$get": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "fallback": {
+                      "$ref": "#/$defs/__schema0",
+                      "description": "Fallback value when path is missing."
+                    },
+                    "from": {
+                      "$ref": "#/$defs/__schema0",
+                      "description": "Source value to navigate into."
+                    },
+                    "path": {
+                      "description": "Path segments: string keys, numeric indices, or node expressions.",
+                      "items": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "number"
+                          },
+                          {
+                            "$ref": "#/$defs/__schema0"
+                          }
+                        ]
+                      },
+                      "minItems": 1,
+                      "type": "array"
+                    }
+                  },
+                  "required": [
+                    "from",
+                    "path"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "$get"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "description": "Bind variables in a scoped block: { $with: { let: { x: ... }, value: ... } }",
+              "properties": {
+                "$with": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "let": {
+                      "additionalProperties": {
+                        "$ref": "#/$defs/__schema0"
+                      },
+                      "description": "Variable bindings: name → expression evaluated in current scope.",
+                      "propertyNames": {
+                        "type": "string"
+                      },
+                      "type": "object"
+                    },
+                    "value": {
+                      "$ref": "#/$defs/__schema0",
+                      "description": "Expression evaluated with the declared variables in scope."
+                    }
+                  },
+                  "required": [
+                    "let",
+                    "value"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "$with"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "description": "Map over an array, transforming each element.",
+              "properties": {
+                "$map": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "as": {
+                      "description": "Variable name for the current element.",
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "body": {
+                      "$ref": "#/$defs/__schema0",
+                      "description": "Expression evaluated for each element."
+                    },
+                    "over": {
+                      "$ref": "#/$defs/__schema0",
+                      "description": "Array to iterate over."
+                    }
+                  },
+                  "required": [
+                    "over",
+                    "as",
+                    "body"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "$map"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "description": "Filter an array, keeping elements where condition is truthy.",
+              "properties": {
+                "$filter": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "as": {
+                      "description": "Variable name for the current element.",
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "over": {
+                      "$ref": "#/$defs/__schema0",
+                      "description": "Array to filter."
+                    },
+                    "when": {
+                      "$ref": "#/$defs/__schema0",
+                      "description": "Condition — keeps element when truthy."
+                    }
+                  },
+                  "required": [
+                    "over",
+                    "as",
+                    "when"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "$filter"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "description": "Reduce an array to a single value using an accumulator.",
+              "properties": {
+                "$reduce": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "acc": {
+                      "default": "acc",
+                      "description": "Accumulator variable name. Default: \"acc\".",
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "as": {
+                      "description": "Variable name for the current element.",
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "body": {
+                      "$ref": "#/$defs/__schema0",
+                      "description": "Expression evaluated for each element with both element and accumulator in scope."
+                    },
+                    "init": {
+                      "$ref": "#/$defs/__schema0",
+                      "description": "Initial accumulator value."
+                    },
+                    "over": {
+                      "$ref": "#/$defs/__schema0",
+                      "description": "Array to reduce."
+                    }
+                  },
+                  "required": [
+                    "over",
+                    "as",
+                    "init",
+                    "body"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "$reduce"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "description": "Slice an array or string by start/end indices.",
+              "properties": {
+                "$slice": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "end": {
+                      "description": "End index (exclusive). Default: length.",
+                      "maximum": 9007199254740991,
+                      "minimum": -9007199254740991,
+                      "type": "integer"
+                    },
+                    "from": {
+                      "$ref": "#/$defs/__schema0",
+                      "description": "Array or string to slice."
+                    },
+                    "start": {
+                      "description": "Start index (inclusive). Default: 0.",
+                      "maximum": 9007199254740991,
+                      "minimum": -9007199254740991,
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "from"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "$slice"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "description": "Flatten a nested array by one level.",
+              "properties": {
+                "$flatten": {
+                  "$ref": "#/$defs/__schema0",
+                  "description": "Array of arrays to flatten one level."
+                }
+              },
+              "required": [
+                "$flatten"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "description": "Remove duplicate values from an array (compared by JSON.stringify).",
+              "properties": {
+                "$unique": {
+                  "$ref": "#/$defs/__schema0",
+                  "description": "Array to deduplicate."
+                }
+              },
+              "required": [
+                "$unique"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "description": "Sort an array by a computed key.",
+              "properties": {
+                "$sortBy": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "as": {
+                      "description": "Variable name for the current element.",
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "by": {
+                      "$ref": "#/$defs/__schema0",
+                      "description": "Expression to compute the sort key."
+                    },
+                    "dir": {
+                      "default": "asc",
+                      "description": "Sort direction. Default: \"asc\".",
+                      "enum": [
+                        "asc",
+                        "desc"
+                      ],
+                      "type": "string"
+                    },
+                    "over": {
+                      "$ref": "#/$defs/__schema0",
+                      "description": "Array to sort."
+                    }
+                  },
+                  "required": [
+                    "over",
+                    "as",
+                    "by"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "$sortBy"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "description": "Add two numbers.",
+              "properties": {
+                "$add": {
+                  "description": "Two numeric operands to add.",
+                  "items": false,
+                  "maxItems": 2,
+                  "minItems": 2,
+                  "prefixItems": [
+                    {
+                      "$ref": "#/$defs/__schema0"
+                    },
+                    {
+                      "$ref": "#/$defs/__schema0"
+                    }
+                  ],
+                  "type": "array"
+                }
+              },
+              "required": [
+                "$add"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "description": "Subtract second number from first.",
+              "properties": {
+                "$sub": {
+                  "description": "Two numeric operands to subtract (a - b).",
+                  "items": false,
+                  "maxItems": 2,
+                  "minItems": 2,
+                  "prefixItems": [
+                    {
+                      "$ref": "#/$defs/__schema0"
+                    },
+                    {
+                      "$ref": "#/$defs/__schema0"
+                    }
+                  ],
+                  "type": "array"
+                }
+              },
+              "required": [
+                "$sub"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "description": "Multiply two numbers.",
+              "properties": {
+                "$mul": {
+                  "description": "Two numeric operands to multiply.",
+                  "items": false,
+                  "maxItems": 2,
+                  "minItems": 2,
+                  "prefixItems": [
+                    {
+                      "$ref": "#/$defs/__schema0"
+                    },
+                    {
+                      "$ref": "#/$defs/__schema0"
+                    }
+                  ],
+                  "type": "array"
+                }
+              },
+              "required": [
+                "$mul"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "description": "Divide first number by second. Throws E_DIVISION_BY_ZERO if divisor is 0.",
+              "properties": {
+                "$div": {
+                  "description": "Two numeric operands to divide (a / b). Throws on division by zero.",
+                  "items": false,
+                  "maxItems": 2,
+                  "minItems": 2,
+                  "prefixItems": [
+                    {
+                      "$ref": "#/$defs/__schema0"
+                    },
+                    {
+                      "$ref": "#/$defs/__schema0"
+                    }
+                  ],
+                  "type": "array"
+                }
+              },
+              "required": [
+                "$div"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "description": "Round a number to N decimal places.",
+              "properties": {
+                "$round": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "digits": {
+                      "default": 0,
+                      "description": "Decimal places. Default: 0.",
+                      "maximum": 9007199254740991,
+                      "minimum": 0,
+                      "type": "integer"
+                    },
+                    "value": {
+                      "$ref": "#/$defs/__schema0",
+                      "description": "Numeric value to round."
+                    }
+                  },
+                  "required": [
+                    "value"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "$round"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "description": "Fill a counted phrase: `{ phrase: \"{n} of {total}\", slots: { n: 1, total: 12 } }` → \"1 of 12\".",
+              "properties": {
+                "$fill": {
+                  "$ref": "#/$defs/__schema0",
+                  "description": "A pattern value `{ phrase, slots }` — filled with its own slots, source language. Non-patterns pass through."
+                }
+              },
+              "required": [
+                "$fill"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "description": "Concatenate values into a string with an optional separator.",
+              "properties": {
+                "$join": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "parts": {
+                      "$ref": "#/$defs/__schema0",
+                      "description": "Values to concatenate (coerced to string): a literal list of nodes, or any node that evaluates to an array — a mapped list, a $var."
+                    },
+                    "sep": {
+                      "default": "",
+                      "description": "Separator between parts. Default: \"\".",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "parts"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "$join"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "description": "Convert a value to its string representation.",
+              "properties": {
+                "$toString": {
+                  "$ref": "#/$defs/__schema0",
+                  "description": "Value to stringify via String()."
+                }
+              },
+              "required": [
+                "$toString"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "description": "Replace {{key}} placeholders in a template with values from an object.",
+              "properties": {
+                "$interpolate": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "template": {
+                      "description": "Template with {{key}} placeholders.",
+                      "type": "string"
+                    },
+                    "values": {
+                      "$ref": "#/$defs/__schema0",
+                      "description": "Object whose keys replace {{key}} placeholders."
+                    }
+                  },
+                  "required": [
+                    "template",
+                    "values"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "$interpolate"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "description": "Trim leading and trailing whitespace from a string.",
+              "properties": {
+                "$trim": {
+                  "$ref": "#/$defs/__schema0",
+                  "description": "String to trim whitespace from."
+                }
+              },
+              "required": [
+                "$trim"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "description": "Convert a string to lowercase.",
+              "properties": {
+                "$lower": {
+                  "$ref": "#/$defs/__schema0",
+                  "description": "String to lowercase."
+                }
+              },
+              "required": [
+                "$lower"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "description": "Convert a string to uppercase.",
+              "properties": {
+                "$upper": {
+                  "$ref": "#/$defs/__schema0",
+                  "description": "String to uppercase."
+                }
+              },
+              "required": [
+                "$upper"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "description": "Split a string into an array by separator.",
+              "properties": {
+                "$split": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "sep": {
+                      "description": "Separator to split on.",
+                      "type": "string"
+                    },
+                    "value": {
+                      "$ref": "#/$defs/__schema0",
+                      "description": "String to split."
+                    }
+                  },
+                  "required": [
+                    "value",
+                    "sep"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "$split"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "description": "Replace the first occurrence of a substring.",
+              "properties": {
+                "$replace": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "replacement": {
+                      "description": "Replacement string.",
+                      "type": "string"
+                    },
+                    "search": {
+                      "description": "Substring to find.",
+                      "type": "string"
+                    },
+                    "value": {
+                      "$ref": "#/$defs/__schema0",
+                      "description": "String to search in."
+                    }
+                  },
+                  "required": [
+                    "value",
+                    "search",
+                    "replacement"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "$replace"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "description": "Deep equality comparison (JSON.stringify-based). Returns true or false.",
+              "properties": {
+                "$eq": {
+                  "description": "Two values to compare for deep equality.",
+                  "items": false,
+                  "maxItems": 2,
+                  "minItems": 2,
+                  "prefixItems": [
+                    {
+                      "$ref": "#/$defs/__schema0"
+                    },
+                    {
+                      "$ref": "#/$defs/__schema0"
+                    }
+                  ],
+                  "type": "array"
+                }
+              },
+              "required": [
+                "$eq"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "description": "Deep inequality comparison. Returns true or false.",
+              "properties": {
+                "$neq": {
+                  "description": "Two values to compare for inequality.",
+                  "items": false,
+                  "maxItems": 2,
+                  "minItems": 2,
+                  "prefixItems": [
+                    {
+                      "$ref": "#/$defs/__schema0"
+                    },
+                    {
+                      "$ref": "#/$defs/__schema0"
+                    }
+                  ],
+                  "type": "array"
+                }
+              },
+              "required": [
+                "$neq"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "description": "Greater than comparison for numbers or strings.",
+              "properties": {
+                "$gt": {
+                  "description": "Two values: returns true if first > second (numbers or strings).",
+                  "items": false,
+                  "maxItems": 2,
+                  "minItems": 2,
+                  "prefixItems": [
+                    {
+                      "$ref": "#/$defs/__schema0"
+                    },
+                    {
+                      "$ref": "#/$defs/__schema0"
+                    }
+                  ],
+                  "type": "array"
+                }
+              },
+              "required": [
+                "$gt"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "description": "Greater than or equal comparison.",
+              "properties": {
+                "$gte": {
+                  "description": "Two values: returns true if first >= second.",
+                  "items": false,
+                  "maxItems": 2,
+                  "minItems": 2,
+                  "prefixItems": [
+                    {
+                      "$ref": "#/$defs/__schema0"
+                    },
+                    {
+                      "$ref": "#/$defs/__schema0"
+                    }
+                  ],
+                  "type": "array"
+                }
+              },
+              "required": [
+                "$gte"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "description": "Less than comparison.",
+              "properties": {
+                "$lt": {
+                  "description": "Two values: returns true if first < second.",
+                  "items": false,
+                  "maxItems": 2,
+                  "minItems": 2,
+                  "prefixItems": [
+                    {
+                      "$ref": "#/$defs/__schema0"
+                    },
+                    {
+                      "$ref": "#/$defs/__schema0"
+                    }
+                  ],
+                  "type": "array"
+                }
+              },
+              "required": [
+                "$lt"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "description": "Less than or equal comparison.",
+              "properties": {
+                "$lte": {
+                  "description": "Two values: returns true if first <= second.",
+                  "items": false,
+                  "maxItems": 2,
+                  "minItems": 2,
+                  "prefixItems": [
+                    {
+                      "$ref": "#/$defs/__schema0"
+                    },
+                    {
+                      "$ref": "#/$defs/__schema0"
+                    }
+                  ],
+                  "type": "array"
+                }
+              },
+              "required": [
+                "$lte"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "description": "Returns true if value is null, empty string, empty array, or empty object.",
+              "properties": {
+                "$empty": {
+                  "$ref": "#/$defs/__schema0",
+                  "description": "Value to check for emptiness (null, \"\", [], {})."
+                }
+              },
+              "required": [
+                "$empty"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "description": "Returns true if string starts with prefix.",
+              "properties": {
+                "$startsWith": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "prefix": {
+                      "$ref": "#/$defs/__schema0",
+                      "description": "Expected prefix."
+                    },
+                    "value": {
+                      "$ref": "#/$defs/__schema0",
+                      "description": "String to check."
+                    }
+                  },
+                  "required": [
+                    "value",
+                    "prefix"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "$startsWith"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "description": "Returns true if string ends with suffix.",
+              "properties": {
+                "$endsWith": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "suffix": {
+                      "$ref": "#/$defs/__schema0",
+                      "description": "Expected suffix."
+                    },
+                    "value": {
+                      "$ref": "#/$defs/__schema0",
+                      "description": "String to check."
+                    }
+                  },
+                  "required": [
+                    "value",
+                    "suffix"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "$endsWith"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "description": "Returns true if string contains the search substring.",
+              "properties": {
+                "$contains": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "search": {
+                      "$ref": "#/$defs/__schema0",
+                      "description": "Substring to find."
+                    },
+                    "value": {
+                      "$ref": "#/$defs/__schema0",
+                      "description": "String to search in."
+                    }
+                  },
+                  "required": [
+                    "value",
+                    "search"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "$contains"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "description": "Boolean negation of a truthy/falsy value.",
+              "properties": {
+                "$not": {
+                  "$ref": "#/$defs/__schema0",
+                  "description": "Value to negate (truthy → false, falsy → true)."
+                }
+              },
+              "required": [
+                "$not"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "description": "Short-circuit logical AND.",
+              "properties": {
+                "$and": {
+                  "description": "Values to AND. Short-circuits: returns last truthy or first falsy.",
+                  "items": {
+                    "$ref": "#/$defs/__schema0"
+                  },
+                  "minItems": 1,
+                  "type": "array"
+                }
+              },
+              "required": [
+                "$and"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "description": "Short-circuit logical OR.",
+              "properties": {
+                "$or": {
+                  "description": "Values to OR. Short-circuits: returns first truthy or last falsy.",
+                  "items": {
+                    "$ref": "#/$defs/__schema0"
+                  },
+                  "minItems": 1,
+                  "type": "array"
+                }
+              },
+              "required": [
+                "$or"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "description": "Shallow merge multiple objects. Later values overwrite earlier ones.",
+              "properties": {
+                "$merge": {
+                  "description": "Objects to shallow-merge (left to right, later wins).",
+                  "items": {
+                    "$ref": "#/$defs/__schema0"
+                  },
+                  "minItems": 1,
+                  "type": "array"
+                }
+              },
+              "required": [
+                "$merge"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "description": "Return the first non-null, non-undefined value.",
+              "properties": {
+                "$coalesce": {
+                  "description": "Values to try in order. Returns first non-null/non-undefined.",
+                  "items": {
+                    "$ref": "#/$defs/__schema0"
+                  },
+                  "minItems": 1,
+                  "type": "array"
+                }
+              },
+              "required": [
+                "$coalesce"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "description": "Conditional branching: evaluates branches in order, returns first match or else.",
+              "properties": {
+                "$case": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "branches": {
+                      "description": "Ordered list of when/then branches.",
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "then": {
+                            "$ref": "#/$defs/__schema0",
+                            "description": "Value to return if condition is truthy."
+                          },
+                          "when": {
+                            "$ref": "#/$defs/__schema0",
+                            "description": "Condition to evaluate."
+                          }
+                        },
+                        "required": [
+                          "when",
+                          "then"
+                        ],
+                        "type": "object"
+                      },
+                      "minItems": 1,
+                      "type": "array"
+                    },
+                    "else": {
+                      "$ref": "#/$defs/__schema0",
+                      "description": "Fallback value if no branch matches. Default: null."
+                    }
+                  },
+                  "required": [
+                    "branches"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "$case"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "description": "Convert an object to an array of [key, value] pairs.",
+              "properties": {
+                "$entriesOf": {
+                  "$ref": "#/$defs/__schema0",
+                  "description": "Object to convert to [key, value][] entries."
+                }
+              },
+              "required": [
+                "$entriesOf"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "description": "Convert an array to an object keyed by a computed value. Last element wins on key collision.",
+              "properties": {
+                "$keyBy": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "as": {
+                      "description": "Variable name for the current element.",
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "key": {
+                      "$ref": "#/$defs/__schema0",
+                      "description": "Expression to compute the key (last wins on collision)."
+                    },
+                    "over": {
+                      "$ref": "#/$defs/__schema0",
+                      "description": "Array to group."
+                    }
+                  },
+                  "required": [
+                    "over",
+                    "as",
+                    "key"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "$keyBy"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "description": "Group array elements into an object of arrays by computed key.",
+              "properties": {
+                "$groupBy": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "as": {
+                      "description": "Variable name for the current element.",
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "key": {
+                      "$ref": "#/$defs/__schema0",
+                      "description": "Expression to compute the group key."
+                    },
+                    "over": {
+                      "$ref": "#/$defs/__schema0",
+                      "description": "Array to group."
+                    }
+                  },
+                  "required": [
+                    "over",
+                    "as",
+                    "key"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "$groupBy"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "description": "Return the keys of an object as a string array.",
+              "properties": {
+                "$keys": {
+                  "$ref": "#/$defs/__schema0",
+                  "description": "Object to extract keys from."
+                }
+              },
+              "required": [
+                "$keys"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "description": "Return the values of an object as an array.",
+              "properties": {
+                "$values": {
+                  "$ref": "#/$defs/__schema0",
+                  "description": "Object to extract values from."
+                }
+              },
+              "required": [
+                "$values"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "description": "Convert [key, value][] entries into an object.",
+              "properties": {
+                "$fromEntries": {
+                  "$ref": "#/$defs/__schema0",
+                  "description": "Array of [key, value] pairs to convert to an object."
+                }
+              },
+              "required": [
+                "$fromEntries"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "description": "Pick specific keys from an object, discarding the rest.",
+              "properties": {
+                "$pick": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "from": {
+                      "$ref": "#/$defs/__schema0",
+                      "description": "Source object."
+                    },
+                    "keys": {
+                      "description": "Keys to keep.",
+                      "items": {
+                        "type": "string"
+                      },
+                      "minItems": 1,
+                      "type": "array"
+                    }
+                  },
+                  "required": [
+                    "from",
+                    "keys"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "$pick"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "description": "Remove specific keys from an object, keeping the rest.",
+              "properties": {
+                "$omit": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "from": {
+                      "$ref": "#/$defs/__schema0",
+                      "description": "Source object."
+                    },
+                    "keys": {
+                      "description": "Keys to remove.",
+                      "items": {
+                        "type": "string"
+                      },
+                      "minItems": 1,
+                      "type": "array"
+                    }
+                  },
+                  "required": [
+                    "from",
+                    "keys"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "$omit"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "description": "Returns the type as a string: \"string\", \"number\", \"boolean\", \"null\", \"array\", or \"object\".",
+              "properties": {
+                "$type": {
+                  "$ref": "#/$defs/__schema0",
+                  "description": "Value to get the type of."
+                }
+              },
+              "required": [
+                "$type"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "description": "Return the length of an array or string.",
+              "properties": {
+                "$length": {
+                  "$ref": "#/$defs/__schema0",
+                  "description": "Array or string to measure."
+                }
+              },
+              "required": [
+                "$length"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "description": "Format a date value.",
+              "properties": {
+                "$date": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "format": {
+                      "description": "Output format string (dayjs format). Default: ISO 8601.",
+                      "type": "string"
+                    },
+                    "utc": {
+                      "default": false,
+                      "description": "Format in UTC. Default: false.",
+                      "type": "boolean"
+                    },
+                    "value": {
+                      "$ref": "#/$defs/__schema0",
+                      "description": "Date value (ISO string or timestamp)."
+                    }
+                  },
+                  "required": [
+                    "value"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "$date"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "description": "Add a duration to a date. Returns ISO string.",
+              "properties": {
+                "$dateAdd": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "amount": {
+                      "description": "Amount to add (can be negative).",
+                      "type": "number"
+                    },
+                    "date": {
+                      "$ref": "#/$defs/__schema0",
+                      "description": "Base date (ISO string or timestamp)."
+                    },
+                    "unit": {
+                      "description": "Time unit for date arithmetic.",
+                      "enum": [
+                        "year",
+                        "month",
+                        "day",
+                        "hour",
+                        "minute",
+                        "second"
+                      ],
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "date",
+                    "amount",
+                    "unit"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "$dateAdd"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "description": "Calculate difference between two dates. Returns a number.",
+              "properties": {
+                "$dateDiff": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "from": {
+                      "$ref": "#/$defs/__schema0",
+                      "description": "Start date."
+                    },
+                    "to": {
+                      "$ref": "#/$defs/__schema0",
+                      "description": "End date."
+                    },
+                    "unit": {
+                      "description": "Time unit for date arithmetic.",
+                      "enum": [
+                        "year",
+                        "month",
+                        "day",
+                        "hour",
+                        "minute",
+                        "second"
+                      ],
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "from",
+                    "to",
+                    "unit"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "$dateDiff"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "description": "Format a date for a human reading in a given locale (Intl.DateTimeFormat).",
+              "properties": {
+                "$localeDate": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "fallback": {
+                      "$ref": "#/$defs/__schema0",
+                      "description": "Rendered when the value is null/undefined/empty. Default: \"\"."
+                    },
+                    "locale": {
+                      "$ref": "#/$defs/__schema0",
+                      "description": "BCP-47 locale tag (\"de-AT\", \"en-GB\"). Required — a default renders plausible nonsense for everybody it is wrong for."
+                    },
+                    "options": {
+                      "additionalProperties": false,
+                      "description": "Defaults to { dateStyle: \"medium\" }.",
+                      "properties": {
+                        "dateStyle": {
+                          "description": "Whole-date preset. Mutually exclusive with the field-by-field options below.",
+                          "enum": [
+                            "full",
+                            "long",
+                            "medium",
+                            "short"
+                          ],
+                          "type": "string"
+                        },
+                        "day": {
+                          "enum": [
+                            "numeric",
+                            "2-digit"
+                          ],
+                          "type": "string"
+                        },
+                        "hour": {
+                          "enum": [
+                            "numeric",
+                            "2-digit"
+                          ],
+                          "type": "string"
+                        },
+                        "hour12": {
+                          "description": "Force 12/24-hour. Omit to take the locale's own convention — which is the point of asking for a locale.",
+                          "type": "boolean"
+                        },
+                        "minute": {
+                          "enum": [
+                            "numeric",
+                            "2-digit"
+                          ],
+                          "type": "string"
+                        },
+                        "month": {
+                          "enum": [
+                            "numeric",
+                            "2-digit",
+                            "long",
+                            "short",
+                            "narrow"
+                          ],
+                          "type": "string"
+                        },
+                        "second": {
+                          "enum": [
+                            "numeric",
+                            "2-digit"
+                          ],
+                          "type": "string"
+                        },
+                        "timeStyle": {
+                          "description": "Whole-time preset. Mutually exclusive with the field-by-field options below.",
+                          "enum": [
+                            "full",
+                            "long",
+                            "medium",
+                            "short"
+                          ],
+                          "type": "string"
+                        },
+                        "timeZone": {
+                          "description": "IANA zone. Omit and a DATE-only value (\"2026-03-14\") is read as UTC, which is what stops it rendering as the 13th west of Greenwich.",
+                          "type": "string"
+                        },
+                        "weekday": {
+                          "enum": [
+                            "long",
+                            "short",
+                            "narrow"
+                          ],
+                          "type": "string"
+                        },
+                        "year": {
+                          "enum": [
+                            "numeric",
+                            "2-digit"
+                          ],
+                          "type": "string"
+                        }
+                      },
+                      "type": "object"
+                    },
+                    "value": {
+                      "$ref": "#/$defs/__schema0",
+                      "description": "ISO string, DATE-only string, or epoch milliseconds."
+                    }
+                  },
+                  "required": [
+                    "value",
+                    "locale"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "$localeDate"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "description": "Format an amount as money in a given locale (Intl.NumberFormat, style currency).",
+              "properties": {
+                "$localeMoney": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "currency": {
+                      "$ref": "#/$defs/__schema0",
+                      "description": "ISO-4217 code — \"EUR\", \"CHF\". Required: an amount without one is a number, not money."
+                    },
+                    "digits": {
+                      "description": "Fraction digits. Default: the currency's own (2 for EUR, 0 for JPY).",
+                      "maximum": 20,
+                      "minimum": 0,
+                      "type": "integer"
+                    },
+                    "fallback": {
+                      "$ref": "#/$defs/__schema0",
+                      "description": "Rendered when the value is null/undefined/empty. Default: \"\"."
+                    },
+                    "locale": {
+                      "$ref": "#/$defs/__schema0",
+                      "description": "BCP-47 locale tag (\"de-AT\", \"en-GB\"). Required — a default renders plausible nonsense for everybody it is wrong for."
+                    },
+                    "minorUnits": {
+                      "description": "Value is in the currency's minor unit. Default true. The divisor comes from the CURRENCY, not a hardcoded 100 — JPY has no minor unit and dividing it would be a hundredfold error.",
+                      "type": "boolean"
+                    },
+                    "value": {
+                      "$ref": "#/$defs/__schema0",
+                      "description": "The amount. Minor units (cents) unless `minorUnits` is false."
+                    }
+                  },
+                  "required": [
+                    "value",
+                    "currency",
+                    "locale"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "$localeMoney"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "description": "Format a number in a given locale (Intl.NumberFormat).",
+              "properties": {
+                "$localeNumber": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "compact": {
+                      "description": "Short form — \"1.2K\", \"1,2 Tsd.\". For a headline figure, never for money owed.",
+                      "type": "boolean"
+                    },
+                    "digits": {
+                      "description": "Maximum fraction digits. Default: the locale's own.",
+                      "maximum": 20,
+                      "minimum": 0,
+                      "type": "integer"
+                    },
+                    "fallback": {
+                      "$ref": "#/$defs/__schema0",
+                      "description": "Rendered when the value is null/undefined/empty. Default: \"\"."
+                    },
+                    "locale": {
+                      "$ref": "#/$defs/__schema0",
+                      "description": "BCP-47 locale tag (\"de-AT\", \"en-GB\"). Required — a default renders plausible nonsense for everybody it is wrong for."
+                    },
+                    "minDigits": {
+                      "description": "Minimum fraction digits — for a column that should not ragged-edge.",
+                      "maximum": 20,
+                      "minimum": 0,
+                      "type": "integer"
+                    },
+                    "style": {
+                      "description": "Default \"decimal\". \"percent\" multiplies by 100 — pass 0.42, not 42.",
+                      "enum": [
+                        "decimal",
+                        "percent"
+                      ],
+                      "type": "string"
+                    },
+                    "value": {
+                      "$ref": "#/$defs/__schema0",
+                      "description": "The number to format."
+                    }
+                  },
+                  "required": [
+                    "value",
+                    "locale"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "$localeNumber"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "description": "Sugar: sum all elements in an array. Desugars to $reduce + $add.",
+              "properties": {
+                "$sum": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "over": {
+                      "$ref": "#/$defs/__schema0",
+                      "description": "Array of numbers to sum."
+                    }
+                  },
+                  "required": [
+                    "over"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "$sum"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "description": "Sugar: average all elements in an array. Desugars to $div($sum, $count).",
+              "properties": {
+                "$avg": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "over": {
+                      "$ref": "#/$defs/__schema0",
+                      "description": "Array of numbers to average."
+                    }
+                  },
+                  "required": [
+                    "over"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "$avg"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "description": "Sugar: count elements in an array. Desugars to $reduce.",
+              "properties": {
+                "$count": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "over": {
+                      "$ref": "#/$defs/__schema0",
+                      "description": "Array to count elements of."
+                    }
+                  },
+                  "required": [
+                    "over"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "$count"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "description": "Sugar: find minimum value in an array. Desugars to $reduce + $lt.",
+              "properties": {
+                "$min": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "over": {
+                      "$ref": "#/$defs/__schema0",
+                      "description": "Array of numbers to find minimum."
+                    }
+                  },
+                  "required": [
+                    "over"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "$min"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "description": "Sugar: find maximum value in an array. Desugars to $reduce + $gt.",
+              "properties": {
+                "$max": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "over": {
+                      "$ref": "#/$defs/__schema0",
+                      "description": "Array of numbers to find maximum."
+                    }
+                  },
+                  "required": [
+                    "over"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "$max"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "description": "Sugar: extract a single field from each element. Desugars to $map + $get.",
+              "properties": {
+                "$pluck": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "key": {
+                      "description": "Key to extract from each object.",
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "over": {
+                      "$ref": "#/$defs/__schema0",
+                      "description": "Array of objects to extract from."
+                    }
+                  },
+                  "required": [
+                    "over",
+                    "key"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "$pluck"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "description": "Sugar: take first N elements. Desugars to $slice.",
+              "properties": {
+                "$take": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "count": {
+                      "description": "Number of elements to take from the start.",
+                      "maximum": 9007199254740991,
+                      "minimum": 0,
+                      "type": "integer"
+                    },
+                    "from": {
+                      "$ref": "#/$defs/__schema0",
+                      "description": "Array to take from."
+                    }
+                  },
+                  "required": [
+                    "from",
+                    "count"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "$take"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "description": "Sugar: skip first N elements. Desugars to $slice.",
+              "properties": {
+                "$drop": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "count": {
+                      "description": "Number of elements to skip from the start.",
+                      "maximum": 9007199254740991,
+                      "minimum": 0,
+                      "type": "integer"
+                    },
+                    "from": {
+                      "$ref": "#/$defs/__schema0",
+                      "description": "Array to drop from."
+                    }
+                  },
+                  "required": [
+                    "from",
+                    "count"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "$drop"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "description": "Sugar: filter array by string containment. Desugars to $filter + $contains.",
+              "properties": {
+                "$match": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "as": {
+                      "description": "Variable name for the current element.",
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "over": {
+                      "$ref": "#/$defs/__schema0",
+                      "description": "Array to search within."
+                    },
+                    "search": {
+                      "$ref": "#/$defs/__schema0",
+                      "description": "String to search for (uses $contains)."
+                    }
+                  },
+                  "required": [
+                    "over",
+                    "as",
+                    "search"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "$match"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "description": "Sugar: map then flatten one level. Desugars to $map + $flatten.",
+              "properties": {
+                "$flatMap": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "as": {
+                      "description": "Variable name for the current element.",
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "body": {
+                      "$ref": "#/$defs/__schema0",
+                      "description": "Expression that returns an array for each element."
+                    },
+                    "over": {
+                      "$ref": "#/$defs/__schema0",
+                      "description": "Array to flat-map over."
+                    }
+                  },
+                  "required": [
+                    "over",
+                    "as",
+                    "body"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "$flatMap"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "description": "True when the whole path exists — a key present with a null value counts; a missing one does not.",
+              "properties": {
+                "$has": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "from": {
+                      "$ref": "#/$defs/__schema0",
+                      "description": "The value to look into."
+                    },
+                    "path": {
+                      "description": "Literal path segments: object keys (strings) and array indexes (numbers).",
+                      "items": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "maximum": 9007199254740991,
+                            "minimum": 0,
+                            "type": "integer"
+                          }
+                        ]
+                      },
+                      "minItems": 1,
+                      "type": "array"
+                    }
+                  },
+                  "required": [
+                    "from",
+                    "path"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "$has"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "description": "The object with keys renamed IN PLACE — each renamed key keeps its position. If a new name is already a key of the object, that entry is replaced by the renamed one.",
+              "properties": {
+                "$renameKeys": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "from": {
+                      "$ref": "#/$defs/__schema0",
+                      "description": "The object whose keys to rename."
+                    },
+                    "map": {
+                      "additionalProperties": {
+                        "type": "string"
+                      },
+                      "description": "Old key → new key. Keys not listed, and listed keys that are absent, are left alone.",
+                      "propertyNames": {
+                        "type": "string"
+                      },
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "from",
+                    "map"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "$renameKeys"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "description": "A copy of `from` with the value at `path` replaced and everything else identical. Missing objects along a string path are created; an index that does not exist is an error.",
+              "properties": {
+                "$update": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "as": {
+                      "description": "The variable name the current value is bound to (default \"current\").",
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "from": {
+                      "$ref": "#/$defs/__schema0",
+                      "description": "The value to copy with one path changed."
+                    },
+                    "path": {
+                      "description": "Literal path segments: object keys (strings) and array indexes (numbers).",
+                      "items": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "maximum": 9007199254740991,
+                            "minimum": 0,
+                            "type": "integer"
+                          }
+                        ]
+                      },
+                      "minItems": 1,
+                      "type": "array"
+                    },
+                    "value": {
+                      "$ref": "#/$defs/__schema0",
+                      "description": "The new value at `path`. The value currently there (null when absent) is bound as `$var` `as`."
+                    }
+                  },
+                  "required": [
+                    "from",
+                    "path",
+                    "value"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "$update"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "description": "Fail with `message` (E_ASSERT) unless `when` is truthy; otherwise evaluate to `value`. How a migration refuses a shape it cannot handle.",
+              "properties": {
+                "$assert": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "message": {
+                      "description": "What went wrong, for a person — the whole error text.",
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "value": {
+                      "$ref": "#/$defs/__schema0",
+                      "description": "Returned when `when` holds."
+                    },
+                    "when": {
+                      "$ref": "#/$defs/__schema0",
+                      "description": "Must be truthy."
+                    }
+                  },
+                  "required": [
+                    "when",
+                    "message",
+                    "value"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "$assert"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "description": "Rewrite every node of a tree — objects, arrays and leaves, at any depth — by rules. Structural: it always terminates, and a replacement is never walked again at its own level.",
+              "properties": {
+                "$walk": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "as": {
+                      "description": "The variable each visited node is bound to.",
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "order": {
+                      "description": "post (default): a node's children are rewritten first, and its rules see the rewritten children. pre: rules see the node as it was, then the walk descends into whatever they returned.",
+                      "enum": [
+                        "post",
+                        "pre"
+                      ],
+                      "type": "string"
+                    },
+                    "over": {
+                      "$ref": "#/$defs/__schema0",
+                      "description": "The tree to rewrite — any JSON value."
+                    },
+                    "rules": {
+                      "description": "Tried in order at every node. No rule matches: the node is kept.",
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "then": {
+                            "$ref": "#/$defs/__schema0",
+                            "description": "The node's replacement."
+                          },
+                          "when": {
+                            "$ref": "#/$defs/__schema0",
+                            "description": "Evaluated with the node bound to `as`; the first truthy rule wins."
+                          }
+                        },
+                        "required": [
+                          "when",
+                          "then"
+                        ],
+                        "type": "object"
+                      },
+                      "minItems": 1,
+                      "type": "array"
+                    }
+                  },
+                  "required": [
+                    "over",
+                    "as",
+                    "rules"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "$walk"
+              ],
+              "type": "object"
+            },
+            {
+              "description": "JSON primitive: string | number | boolean | null",
+              "type": [
+                "string",
+                "number",
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "items": {
+                "$ref": "#/$defs/__schema0"
+              },
+              "type": "array"
+            },
+            {
+              "additionalProperties": {
+                "$ref": "#/$defs/__schema0"
+              },
+              "propertyNames": {
+                "pattern": "^(?!\\$)",
+                "type": "string"
+              },
+              "type": "object"
+            }
+          ],
+          "description": "A Prism node: an op, a plain JSON value, an array of nodes, or a plain object template."
+        },
+        "__schema1": {
+          "anyOf": [
+            {
+              "description": "JSON primitive: string | number | boolean | null",
+              "type": [
+                "string",
+                "number",
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "items": {
+                "$ref": "#/$defs/__schema1",
+                "description": "Any JSON value: primitive, array, or object"
+              },
+              "type": "array"
+            },
+            {
+              "additionalProperties": {
+                "$ref": "#/$defs/__schema1",
+                "description": "Any JSON value: primitive, array, or object"
+              },
+              "propertyNames": {
+                "type": "string"
+              },
+              "type": "object"
+            }
+          ]
+        }
+      },
+      "$ref": "#/$defs/__schema0",
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "description": "A Prism config: the top-level transformation definition. Can be any valid node."
+    }
+  },
+  "sequence": "nisc.prism",
+  "version": 2
+}

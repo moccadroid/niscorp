@@ -27,7 +27,7 @@ import { execFileSync, execSync, spawn } from 'node:child_process';
 import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { basename, dirname, join, resolve } from 'node:path';
 
 const root = resolve(import.meta.dirname, '..');
 const packagesDir = join(root, 'packages');
@@ -135,7 +135,9 @@ try {
   step('create-nisc: its package holds the templates and nothing built or local', () => {
     const out = pnpm(['pack', '--pack-destination', scratch], join(packagesDir, 'create-nisc'));
     const tarball = out.trim().split('\n').at(-1) ?? '';
-    const entries = execFileSync('tar', ['-tzf', tarball], { encoding: 'utf8' }).trim().split('\n');
+    // By name, from its own folder: GNU tar (Git Bash) reads `C:\…` as a remote
+    // host. And Windows' tar ends its lines CRLF.
+    const entries = execFileSync('tar', ['-tzf', basename(tarball)], { cwd: dirname(tarball), encoding: 'utf8' }).trim().split(/\r?\n/);
     const stray = entries.filter((entry) => /^package\/templates\/[^/]+\/(node_modules|dist|out|\.turbo)\//.test(entry));
     if (stray.length > 0) throw new Error(`in the tarball, and should not be:\n${stray.slice(0, 12).join('\n')}`);
     for (const template of ['moss-react', 'moss-dom', 'shell-react', 'shell-dom']) {

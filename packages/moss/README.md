@@ -85,11 +85,11 @@ Who may keep the page follows from who asked: drawn for nobody it is the same
 for everybody; drawn for somebody it is `private, no-store`. A page that cannot
 be drawn goes out undrawn.
 
-The page's `<head>` is its screen's own: a `nova:head` node in a layout — a
-title, a description, a preview picture, bound to the action's data — is read
-off the snapshot and written into the template, and the terminal keeps the
-tab's title on it as the screen moves. With `site`, every path says its own
-canonical address.
+The page's `<head>` is a node in a layout too — nova's `nova:head`, holding
+the elements a head holds, bound to the action's data. It is read off the
+snapshot and written into the template, and the terminal keeps the page's head
+on it as the screen moves. With `site`, every path says its own canonical
+address.
 
 `pages` are the other thing a path can lead to: a shell manifest drawn for
 whoever asks and then let go — a welcome, the docs. A page with nothing left to

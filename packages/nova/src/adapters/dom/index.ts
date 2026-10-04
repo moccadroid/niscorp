@@ -3,7 +3,7 @@ import type { ComponentRegistry, RenderNode } from '@layout/types';
 import type { NovaEvent } from '@shared/event-bus/schemas';
 import { headOf, isHeadNode, shellView } from '@shell';
 import type { RenderApi, Shell } from '@shell';
-import { createTitleKeeper } from '../../document/title';
+import { createHeadKeeper } from '../../document/head-keeper';
 
 // ═══════════════════════════════════════════════════════════
 // @niscorp/nova/adapters/dom — a vanilla-DOM adapter, the platform sibling of
@@ -447,7 +447,7 @@ export const createDomView = (
       host.append(...flat(kids));
       return { node, ctx: canvasCtx, dom: [host], kids, host, cleanups: [], field: { stale: false } };
     }
-    // A head is something the screen says, not something it shows: no element.
+    // A head is the document's, not the screen's: no element, for it or for what it holds.
     if (isHeadNode(node)) return { node, ctx, dom: [], kids: [], host: undefined, cleanups: [], field: { stale: false } };
     if (builderOf(node, ctx) === undefined) return leaf(node, ctx, errorEl('COMPONENT_NOT_FOUND', node.name));
     return assemble(node, ctx, node.children.map((child) => build(child, ctx)));
@@ -677,8 +677,8 @@ export const mountShell = (
   options: { fallback?: DomComponent } = {},
 ): { destroy: () => void } => {
   const view = shellView(shell);
-  // ONE READING OF THE SHELL PER RENDER. The view draws from it and the tab's
-  // title is read off the same trees, so keeping the title costs a walk over
+  // ONE READING OF THE SHELL PER RENDER. The view draws from it and the page's
+  // head is read off the same trees, so keeping the head costs a walk over
   // what was just drawn and never a second render of the shell.
   let read: { frame?: RenderNode[]; trees: Map<string, RenderNode[]> } = { trees: new Map() };
   const api: DomRenderApi = {
@@ -693,12 +693,12 @@ export const mountShell = (
     },
   };
   const dom = createDomView(root, registry, api, options);
-  const keepTitle = createTitleKeeper(root.ownerDocument);
+  const keepHead = createHeadKeeper(root.ownerDocument);
   const render = (): void => {
     read = { trees: new Map() };
     dom.render();
-    // a root that is not on a page has no tab to name
-    if (root.isConnected) keepTitle(headOf(api)?.head);
+    // a root that is not on a page has no head to keep
+    if (root.isConnected) keepHead(headOf(api)?.elements);
   };
   render();
   const stop = view.subscribe(render);

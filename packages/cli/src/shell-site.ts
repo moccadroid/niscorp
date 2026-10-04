@@ -36,12 +36,13 @@ import type { NiscShellProject } from './project';
 // answers are in the markup as they were at build), what it can still call, and
 // what it waits on.
 //
-// THE HEAD OF EACH FILE IS ITS SCREEN'S OWN. What a screen says about itself —
-// a head node in a layout (nova's `nova:head`) — is read off the same shell the
-// markup was drawn from and written into the template's <head>; a path whose
-// screen has none goes out with the template's. Where a file lives is not the
-// screen's to say: with a `site` in the config, each path is given its own
-// canonical address.
+// THE HEAD OF EACH FILE IS ITS SCREEN'S OWN. A page's <head> is a node in a
+// layout (nova's `nova:head`, holding the elements a head holds). It is read
+// off the same shell the markup was drawn from and written into the template's
+// <head>; a path whose screen has none goes out with the template's. A head
+// that holds what it may not — something that runs, or styles — FAILS the
+// build like any other check. With a `site` in the config, each path is given
+// its own canonical address.
 // ═══════════════════════════════════════════════════════════════
 
 const DEFAULT_BUILD_WAIT_MS = 5000;
@@ -62,8 +63,8 @@ export type ShellRouteReport = {
   callsLater: readonly string[];
   // channels the first screen waits on
   listens: readonly string[];
-  // the head the first screen had, and the action it stood in — absent when
-  // the file's head is the template's own
+  // what the first screen's head held, and the actions that said it — absent
+  // when the screen has no head and the file's is the template's own
   head?: ScreenHead;
 };
 
@@ -109,7 +110,7 @@ type Drawn = { screen: string; whole: boolean; attributes: Record<string, string
 // A drawn screen as the document it goes out in: the screen in the root, and
 // what it says about itself in the head.
 const documentOf = (project: NiscShellProject, template: string, path: string, drawn: Drawn): string =>
-  placeHead(placeScreen(template, drawn.screen, drawn.attributes), drawn.head?.head, { ...(project.site !== undefined ? { site: project.site } : {}), path });
+  placeHead(placeScreen(template, drawn.screen, drawn.attributes), drawn.head?.elements, { ...(project.site !== undefined ? { site: project.site } : {}), path });
 
 // One boot, one draw, and the app let go again.
 const drawOnce = async (project: NiscShellProject, path: string): Promise<Drawn> => {
@@ -179,6 +180,7 @@ export const surveyShell = async (root: string, project: NiscShellProject, templ
       drawn = await drawOnce(project, path);
       if (drawn.screen.trim() === '') problems.push('drawn: it drew to nothing');
       if (!drawn.whole) problems.push(`whole: it was still loading after ${project.waitMs ?? DEFAULT_BUILD_WAIT_MS}ms`);
+      for (const why of drawn.head?.refused ?? []) problems.push(`head: ${why}`);
       const again = await drawOnce(project, path);
       if (again.screen !== drawn.screen) problems.push(`same twice: a second boot drew different markup${differenceOf(drawn.screen, again.screen)}`);
       const [head, headAgain] = [JSON.stringify(drawn.head ?? null), JSON.stringify(again.head ?? null)];
@@ -223,9 +225,10 @@ export const shellRouteTable = (routes: readonly ShellRouteReport[]): string => 
   const indent = ' '.repeat(width + 2);
   // Said only by an app that has a head somewhere: then a path without one is
   // going out under the template's, and that may not be what was meant.
-  const headed = routes.some((route) => route.head !== undefined);
+  const says = (route: ShellRouteReport): boolean => (route.head?.elements.length ?? 0) > 0;
+  const headed = routes.some(says);
   const headNote = (route: ShellRouteReport): string =>
-    route.head === undefined ? 'head: the template’s own' : `head: its own, said by ${route.head.action ?? 'the shell’s chrome'}`;
+    says(route) ? `head: its own, said by ${route.head?.actions.join(', ') || 'the shell’s chrome'}` : 'head: the template’s own';
   for (const route of routes) {
     const ok = route.problems.length === 0;
     const notes = ok

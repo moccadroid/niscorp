@@ -106,8 +106,19 @@ describe.each(CASES)('the mapping profile ($name)', ({ target, wrapped, full: fu
   it('keeps every alternative that is not an op, the plain-object key pattern included', () => {
     expect(otherAlternatives(profile)).toEqual(otherAlternatives(full));
     // The template branch still refuses EVERY op name as a key, documented or
-    // not — wherever the draft can say so: draft-4 has no `propertyNames`.
-    const refusesOps = (schema: Json): boolean => otherAlternatives(schema).some((alternative) => alternative.includes('walk'));
+    // not — wherever the draft can say so: draft-4 has no `propertyNames`. Held
+    // to what the pattern does, not to how it is spelled: every op name fails
+    // it, a plain key passes.
+    const templateKeyPatterns = (schema: Json): RegExp[] =>
+      alternativesOf(schema).flatMap((alternative) => {
+        const names = isObject(alternative) ? alternative['propertyNames'] : undefined;
+        const pattern = isObject(names) ? names['pattern'] : undefined;
+        return typeof pattern === 'string' ? [new RegExp(pattern)] : [];
+      });
+    const refusesOps = (schema: Json): boolean => {
+      const patterns = templateKeyPatterns(schema);
+      return patterns.length > 0 && patterns.every((pattern) => OP_KEYS.every((op) => !pattern.test(op)) && pattern.test('name'));
+    };
     expect(refusesOps(profile)).toBe(refusesOps(full));
     expect(refusesOps(full)).toBe(target !== 'draft-4');
   });

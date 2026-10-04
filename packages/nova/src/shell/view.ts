@@ -32,7 +32,7 @@ export type ShellView = {
 // empty text and empty wrappers is handed to an adapter as `[]`, so an adapter
 // collapses the chrome around it on `length` alone, knowing nothing about node
 // shapes. An ActionSlot marker is a boundary, not content — what is inside it
-// decides — and a head is something the screen says, not something it shows.
+// decides — and a head is the document's, not something the screen shows.
 // One rule for a canvas that is served and one that is local, so a frame looks
 // the same over both.
 export const hasVisibleContent = (nodes: readonly RenderNode[]): boolean =>

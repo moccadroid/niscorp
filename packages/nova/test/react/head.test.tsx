@@ -4,7 +4,7 @@ import { Children, act, type ReactNode } from 'react';
 import { createRoot, hydrateRoot } from 'react-dom/client';
 import { renderToString } from 'react-dom/server';
 import type { ActionDefinition } from '@action';
-import { createComponentRegistry, HEAD_NAME } from '@layout';
+import { createComponentRegistry, HEAD_NAME, HEAD_TITLE_NAME } from '@layout';
 import { createShell, shellSettled } from '@shell';
 import type { Shell } from '@shell';
 import type { NovaComponent } from '@react';
@@ -12,8 +12,8 @@ import { NovaShell } from '@react';
 import { registerNovaReactComponents } from '../../src/adapters/react/components';
 
 // ═══════════════════════════════════════════════════════════
-// A head node under the React adapter: nothing is drawn for it, and the tab's
-// title follows it for as long as the shell lives in the page.
+// A head under the React adapter: nothing is drawn for it or what it holds, and
+// the page's <head> follows it for as long as the shell lives in the page.
 // ═══════════════════════════════════════════════════════════
 
 Reflect.set(globalThis, 'IS_REACT_ACT_ENVIRONMENT', true);
@@ -33,7 +33,7 @@ const article: ActionDefinition = {
   layout: {
     component: 'Cells',
     children: [
-      { component: HEAD_NAME, props: { title: '$.title' } },
+      { component: HEAD_NAME, children: [{ component: HEAD_TITLE_NAME, children: '$.title' }] },
       { component: 'Text', children: '$.title' },
       { component: 'Button', ref: 'rename', props: { label: 'rename' } },
       { component: 'Button', ref: 'leave', props: { label: 'leave' } },
@@ -69,7 +69,7 @@ const press = async (root: HTMLElement, label: string): Promise<void> => {
 };
 
 beforeEach(() => {
-  document.title = 'The site';
+  document.head.innerHTML = '<title>The site</title>';
 });
 
 afterEach(() => {

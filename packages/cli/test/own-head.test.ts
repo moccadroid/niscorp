@@ -9,10 +9,10 @@ import { project } from './fixtures/own-head/nisc.config';
 
 // ═══════════════════════════════════════════════════════════════
 // A head per path. An app with its own shell and more than one page
-// (fixtures/own-head): the list at `/` says nothing about itself, and each
-// article says what it is in its layout. Through the command as it is
-// installed, each path's file goes out with its screen's own head — and a path
-// whose screen has none, with the template's.
+// (fixtures/own-head): the list at `/` has no head of its own, and each article
+// has one in its layout. Through the command as it is installed, each path's
+// file goes out with its screen's own head — and a path whose screen has none,
+// with the template's.
 // ═══════════════════════════════════════════════════════════════
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -49,34 +49,46 @@ describe('nisc build — a head per path', () => {
     expect(out).not.toContain('drew different markup');
     expect(code).toBe(1);
   }, SLOW);
+
+  it('fails a head that holds something that would run', () => {
+    const { code, out } = nisc(['build'], 'runs');
+    expect(out).toContain('head: nova:script: only a data block may be written (a JSON `type`), and "text/javascript" is not one');
+    expect(code).toBe(1);
+  }, SLOW);
 });
 
 describe('nisc export — a head per path', () => {
   const out = join(scratch, 'site');
 
-  it('writes each article with its own title, description, address and preview tags, escaped', () => {
+  it('writes each article with the elements its head holds, escaped, where the template’s stood', () => {
     expect(nisc(['export', '--out', out]).code).toBe(0);
     const head = headOf(readFileSync(join(out, 'articles', 'types', 'index.html'), 'utf8'));
-    expect(head).toContain('<title data-own="The site">Types &amp; &lt;tags></title>');
-    expect(head).toContain('<meta name="description" content="What a &quot;type&quot; can promise.">');
-    expect(head).toContain('<link rel="canonical" href="https://example.com/articles/types/">');
-    expect(head).toContain('<meta property="og:url" content="https://example.com/articles/types/">');
-    expect(head).toContain('<meta property="og:type" content="article">');
-    expect(head).toContain('<meta property="og:title" content="Types &amp; &lt;tags>">');
-    expect(head).toContain('<meta property="og:image" content="https://example.com/covers/article.png">');
-    expect(head).toContain('<script type="application/ld+json">{"@type":"Article","headline":"Types & \\u003ctags>"}</script>');
-    // nothing of the front page's is left in it
-    expect(head).not.toContain('Everything on the site.');
-    expect(head).not.toContain('href="https://example.com/"');
+    expect(head).toContain('<title data-nova-head>Types &amp; &lt;tags> · The site</title>');
+    expect(head).toContain('<meta name="description" content="What a &quot;type&quot; can promise." data-nova-head>');
+    expect(head).toContain('<meta property="og:type" content="article" data-nova-head>');
+    expect(head).toContain('<meta property="og:title" content="Types &amp; &lt;tags>" data-nova-head>');
+    expect(head).toContain('<meta property="og:image" content="https://example.com/articles/types/og.png" data-nova-head>');
+    // a tag nova was never taught: it is written because the layout said it
+    expect(head).toContain('<meta property="og:image:alt" content="Types &amp; &lt;tags>" data-nova-head>');
+    expect(head).toContain('<link rel="alternate" type="application/rss+xml" href="/feed.xml" data-nova-head>');
+    expect(head).toContain(
+      '<script type="application/ld+json" data-nova-head>{"@context":"https://schema.org","@type":"Article","headline":"Types & \\u003ctags>","image":"https://example.com/articles/types/og.png"}</script>',
+    );
+    // what the template said in those places is kept for the page, inert, and says nothing here
+    expect(head).toContain('<template data-nova-own><title>The site</title><meta name="description" content="Everything on the site." /></template>');
+    expect(head.split('<template')[0]).not.toContain('Everything on the site.');
     // and what the head did not speak of is as index.html has it
     expect(head).toContain('<link rel="icon" href="/favicon.svg" />');
     expect(head).toContain('<meta property="og:site_name" content="The site" />');
   }, SLOW);
 
-  it('each path has its own — no two files say the same address', () => {
-    const loops = headOf(readFileSync(join(out, 'articles', 'loops', 'index.html'), 'utf8'));
-    expect(loops).toContain('<title data-own="The site">Loops</title>');
+  it('each path says its own address — no two files say the same one', () => {
+    const [types, loops] = ['types', 'loops'].map((slug) => headOf(readFileSync(join(out, 'articles', slug, 'index.html'), 'utf8')));
+    expect(types).toContain('<link rel="canonical" href="https://example.com/articles/types/">');
+    expect(types).toContain('<meta property="og:url" content="https://example.com/articles/types/">');
     expect(loops).toContain('<link rel="canonical" href="https://example.com/articles/loops/">');
+    expect(loops).toContain('<title data-nova-head>Loops · The site</title>');
+    expect(loops).not.toContain('href="https://example.com/"');
   });
 
   it('a path whose screen has no head goes out with the template’s, at its own address', () => {
@@ -84,7 +96,7 @@ describe('nisc export — a head per path', () => {
     expect(head).toContain('<title>The site</title>');
     expect(head).toContain('<meta name="description" content="Everything on the site." />');
     expect(head).toContain('<link rel="canonical" href="https://example.com/">');
-    expect(head).not.toContain('og:title');
+    expect(head).not.toContain('data-nova-');
   });
 });
 

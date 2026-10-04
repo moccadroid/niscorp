@@ -22,7 +22,7 @@ const renderNode = (ctx: NovaRenderContextValue, node: RenderNode): VNode => {
   if (node.type === 'fragment') return h(RenderTree, { nodes: node.children });
   if (node.type === 'error') return h(ErrorMarker, { code: node.code, message: node.message });
 
-  // a head is something the screen says, not something it shows
+  // a head is the document's, not the screen's: nothing is drawn for it or for what it holds
   if (isHeadNode(node)) return h(HeadMark);
 
   // node.type === 'component' — an unknown name never throws

@@ -82,6 +82,8 @@ Objects without `$`-prefixed keys are output templates. Each value is recursivel
 
 This enables partial results from incomplete source data without try/catch wrapping every field.
 
+The schema and the evaluator hold one rule: a `$` name is an op's. The template branch's key pattern refuses every key that starts with `$`, which is exactly the evaluator's test for a plain object — so a `$` key that is not an op is `E_SCHEMA`, with the key's path, and not a config that validates, is stored, and fails each time it runs. Until `nisc.prism` 2 the pattern refused only the names of ops that existed, and each new op took a name away from templates; reserving the prefix means adding an op narrows nothing. Data that has `$` keys is a `$const` payload.
+
 ---
 
 ## JSONPath Subset
@@ -132,7 +134,7 @@ All errors are `PrismError` instances with a `.code` string and optional `.conte
 | `E_DIVISION_BY_ZERO` | `$div` with divisor 0 |
 | `E_DATE_INVALID` | Unparseable date value |
 | `E_VAR_NOT_FOUND` | `$var` references undefined variable |
-| `E_NODE_SHAPE` | Unrecognized node structure |
+| `E_NODE_SHAPE` | A node no op answers to, in a tree that skipped the schema (an IR given to `execute`) |
 | `E_ASSERT` | A config's own `$assert` refused its input |
 | `E_BUDGET` | An evaluation went past its budget (`engine/budget.ts`) |
 

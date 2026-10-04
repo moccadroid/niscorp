@@ -2,7 +2,7 @@ import { defineComponent, h, provide } from 'vue';
 import type { ComponentRegistry } from '@layout';
 import type { Shell } from '@shell';
 import { NovaRenderKey, NovaShellKey, type NovaRenderContextValue, type NovaShellSource, type SlotWrapper } from './context';
-import { provideShellTitle } from './head';
+import { provideShellHead } from './head';
 import type { NovaComponent, NovaDispatch, NovaPublish } from './types';
 
 const noopDispatch: NovaDispatch = () => {};
@@ -71,7 +71,7 @@ export const NovaShellProvider = defineComponent(
       },
     };
     provide(NovaShellKey, source);
-    provideShellTitle(() => props.shell);
+    provideShellHead(() => props.shell);
     const dispatch: NovaDispatch = (event) => props.shell.dispatch(event);
     const publish: NovaPublish = (channel, payload) => props.shell.publish(channel, payload);
     return () =>

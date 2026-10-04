@@ -30,7 +30,7 @@ export const RenderNodeView: FC<RenderNodeViewProps> = ({ node }) => {
   }
 
   // node.type === 'component'
-  // a head is something the screen says, not something it shows
+  // a head is the document's, not the screen's: nothing is drawn for it or for what it holds
   if (isHeadNode(node)) return <HeadMark />;
   const entry = ctx.registry.get(node.name);
   const Component = entry !== undefined ? entry.component : ctx.fallback;

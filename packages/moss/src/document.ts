@@ -19,9 +19,10 @@ import type { MossServer } from './server';
 // Moss holds no opinion about the page around the screen: the template is the
 // app's file, the kit is the app's, and so is the route this is called from.
 //
-// What the screen says about itself — a head node in a layout (nova's
-// `nova:head`) — is in the snapshot's trees like everything else on it, and is
-// written into the template's <head> as the screen is written into its root.
+// The page's <head> is a node in a layout too (nova's `nova:head`, holding the
+// elements a head holds), so it is in the snapshot's trees like everything
+// else on the screen, and is written into the template's <head> as the screen
+// is written into its root.
 //
 // TWO RULES LIVE HERE, each in one place:
 //
@@ -97,9 +98,8 @@ export type DocumentConfig = {
   // Names are the app's and are written as given; values are escaped.
   htmlAttributes?: (snapshot: ShellSnapshot) => Record<string, string>;
   // The address the site is served at ("https://example.com"). With it, every
-  // path's document says its own canonical address, and a head's picture is
-  // given a whole one. Without it, where a document lives is left as the
-  // template says.
+  // path's document says its own canonical address. Without it, where a
+  // document lives is left as the template says.
   site?: string;
   // The wire's token key (and so the cookie's name). Default `nisc.token`.
   tokenKey?: string;
@@ -117,8 +117,8 @@ export type DrawnDocument = {
   principal: string | null;
   // the page the path led to, when it led to one
   page?: string;
-  // the head the screen had, and the action it stood in — absent when the
-  // document's head is the template's own
+  // what the screen's head held, and the actions that said it — absent when
+  // the screen has no head and the document's is the template's own
   head?: ScreenHead;
   // the snapshot's own account of itself (see ShellSnapshot) — present when drawn
   live?: boolean;
@@ -158,7 +158,9 @@ export const renderDocument = async (config: DocumentConfig): Promise<DrawnDocum
       .replace(root, () => `${root.replace('></div>', () => `>${screen}</div>`)}${embedSnapshot(snapshot, principal, request.path)}`)
       .replace(/<html([^>]*)>/, (whole, existing: string) => (attributes === '' ? whole : `<html${existing}${attributes}>`));
     const head = headOf({ frame: () => snapshot.frame, canvasTree: (id) => snapshot.trees[id] ?? [] });
-    const html = placeHead(placed, head?.head, { ...(config.site !== undefined ? { site: config.site } : {}), path: request.path });
+    // what a head may not hold was left out: say so, where somebody can see it
+    for (const why of head?.refused ?? []) console.error(`[moss/document] "${request.path}" — ${why}`);
+    const html = placeHead(placed, head?.elements, { ...(config.site !== undefined ? { site: config.site } : {}), path: request.path });
 
     return {
       html,
