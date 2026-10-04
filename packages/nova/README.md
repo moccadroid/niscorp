@@ -455,7 +455,7 @@ one, and checks every captured lab-app document still upgrades and parses.
 
 ## Examples
 
-`@niscorp/nova/examples` exports the reference as data. `NOVA_EXAMPLES` is a list of `{ id, group, title, description, action, presses, expected }`: an action, what is done to it, and what it must then hold and say. An example of the layout grammar is an action with no triggers. `NOVA_EXAMPLE_GROUPS` names the groups, in reading order.
+`@niscorp/nova/examples` exports the reference as data. `NOVA_EXAMPLES` is a list of small apps, each with what is done to it and what it must then say; `NOVA_EXAMPLE_GROUPS` names the groups they come in (layouts, actions, endpoints, composition, shells), in reading order.
 
 ```ts
 import { NOVA_EXAMPLES } from '@niscorp/nova/examples';
@@ -466,7 +466,9 @@ const counter = NOVA_EXAMPLES.find((example) => example.id === 'counter');
 // counter.expected: { data: { count: 1 }, says: ['Count: 1', 'One more', 'One fewer'] }
 ```
 
-The examples name only the plain components every kit has (`Stack`, `Text`, `Button`, `Input`) and no prop about looks. The package's tests run each one, so what they say is what this version does. Fragments, shells of several canvases and i18n are not in it yet.
+An example is one action alone on a canvas (`action`) or a small shell (`shell`: canvases, actions, and how the canvases are arranged). Beside either stand what it needs from its host: `fragments`, stored `layouts`, and what its endpoints are answered (`replies` for `fn:`, `fetches` for a URL). Every id an example brings begins with the example's own, so a host can hold all of them in one shell.
+
+The examples name only the plain components every kit has (`Stack`, `Text`, `Button`, `Input`) and nova's two slots, with no prop about looks. The package's tests run each one, so what they say is what this version does. i18n is not in it yet.
 
 ## Building / dev
 
