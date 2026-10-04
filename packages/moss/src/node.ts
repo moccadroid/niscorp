@@ -81,7 +81,7 @@ export const attachSocket = (
 // Register the app's own routes FIRST; this is the catch-all. `owned` names the
 // prefixes that are never a page (default: moss's own surfaces) — an unknown
 // path under one is a 404, not a screen.
-export type SiteConfig = Pick<DocumentConfig, 'draw' | 'htmlAttributes' | 'tokenKey' | 'waitMs'> & {
+export type SiteConfig = Pick<DocumentConfig, 'draw' | 'htmlAttributes' | 'site' | 'tokenKey' | 'waitMs'> & {
   dist: string;
   owned?: RegExp;
 };

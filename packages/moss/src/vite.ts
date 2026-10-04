@@ -39,6 +39,7 @@ export type DevApp = {
   // undrawn, and the terminal paints them as it always did.
   draw?: DocumentConfig['draw'];
   htmlAttributes?: DocumentConfig['htmlAttributes'];
+  site?: DocumentConfig['site'];
   tokenKey?: string;
   // A dev-only signed-in URL: `/dev/as/<who>` stores the token this returns —
   // where the wire keeps it and in the cookie copy a page is drawn by — and
@@ -180,6 +181,7 @@ export const mossDev = (options: MossDevOptions): Plugin => ({
             request: { path: path === '/index.html' ? '/' : path, cookie: req.headers.cookie ?? null },
             draw: app.draw,
             ...(app.htmlAttributes !== undefined ? { htmlAttributes: app.htmlAttributes } : {}),
+            ...(app.site !== undefined ? { site: app.site } : {}),
             ...(app.tokenKey !== undefined ? { tokenKey: app.tokenKey } : {}),
           });
           res.statusCode = 200;

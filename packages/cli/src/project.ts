@@ -41,6 +41,11 @@ type Common = {
   stylesheet?: 'page' | 'file';
   // The app's check suite, for `nisc check` (default `src/dev/all-checks.ts`).
   checks?: string;
+  // The address the site is served at ("https://example.com"). With it, every
+  // path's document says its own canonical address, and a picture a screen's
+  // head names is given a whole one. Without it, where a document lives is left
+  // as index.html says — for every path alike.
+  site?: string;
 };
 
 export type NiscMossProject = Common & {
@@ -115,6 +120,16 @@ export const isProject = (value: unknown): value is NiscProject => {
   return moss !== own && (moss || has(value, 'adopt'));
 };
 
+// An address a document can be said to live at: http or https, and whole.
+const isSite = (value: unknown): boolean => {
+  if (typeof value !== 'string') return false;
+  try {
+    return ['http:', 'https:'].includes(new URL(value).protocol);
+  } catch {
+    return false;
+  }
+};
+
 // The config's file name, if the app has one.
 export const configFileOf = (root: string): string | undefined => CONFIG_NAMES.find((name) => existsSync(join(root, name)));
 
@@ -134,6 +149,9 @@ export const loadProject = async (root: string): Promise<NiscProject> => {
     throw new Error(
       `nisc: ${file} does not export a \`project\` the command can run. It hands over EITHER \`boot\` + \`draw\` (an app behind moss) OR \`shell\` + \`draw\` + \`adopt\` (an app with its own shell).`,
     );
+  }
+  if (project.site !== undefined && !isSite(project.site)) {
+    throw new Error(`nisc: ${file} gives \`site\` as ${JSON.stringify(project.site)} — it is the address the site is served at, whole: "https://example.com".`);
   }
   return project;
 };

@@ -3,6 +3,7 @@ import { createWire } from '../client';
 import type { Wire } from '../client';
 import { onHotkey } from './hotkey';
 import { trapBack } from './history';
+import { followTitle } from './title';
 
 // ═══════════════════════════════════════════════════════════════
 // @niscorp/moss/terminal — the terminal, owned by the protocol that defines
@@ -45,9 +46,11 @@ export const createTerminal = (config: { target: Target; wire: Wire }): { destro
   };
   const mount = target(api);
   const unsubscribe = wire.subscribe(mount.update);
+  const stopTitle = followTitle(api, wire.subscribe);
   return {
     destroy: () => {
       unsubscribe();
+      stopTitle();
       mount.destroy();
     },
   };

@@ -16,6 +16,9 @@ export type RouteReport = {
   // reads whose answers are in the markup as they were when it was drawn
   drawnWith: readonly string[];
   settled: boolean;
+  // the head the screen had, and the action it stood in — absent when the
+  // document's head is the template's own
+  head?: { action?: string };
 };
 
 // `/`, and every page whose path names no parameter. A parameterised page has
@@ -42,6 +45,9 @@ const pad = (text: string, width: number): string => text + ' '.repeat(Math.max(
 // The table. One row per path: whether a file is the whole of it, or a server
 // has to stand behind it — and, in the build's own words, why.
 export const routeTable = (routes: readonly RouteReport[]): string => {
+  // Said only by an app that has a head somewhere: then a path without one is
+  // going out under the template's, and that may not be what was meant.
+  const headed = routes.some((route) => route.head !== undefined);
   const rows = routes.map((route) => {
     const mark = !route.drawn ? '✗' : route.live ? '●' : '○';
     const what = route.page === undefined ? 'the app' : `page ${route.page}`;
@@ -51,7 +57,8 @@ export const routeTable = (routes: readonly RouteReport[]): string => {
       ...(route.drawn && !route.settled ? ['it was still loading when the wait ran out — drawn with what it had'] : []),
       ...(route.drawnWith.length > 0 ? [`drawn with ${route.drawnWith.join(', ')} — as it answered at build`] : []),
     ];
-    return { mark, path: route.path, what, served, notes };
+    const head = headed && route.drawn ? [route.head === undefined ? 'head: the template’s own' : `head: its own, said by ${route.head.action ?? 'the shell’s chrome'}`] : [];
+    return { mark, path: route.path, what, served, notes, head };
   });
   const widths = {
     path: Math.max(5, ...rows.map((row) => row.path.length)),
@@ -61,7 +68,7 @@ export const routeTable = (routes: readonly RouteReport[]): string => {
   const lines = [`  ${pad('Route', widths.path + 2)}${pad('What', widths.what + 2)}${pad('Served as', widths.served + 2)}Because`];
   for (const row of rows) {
     const head = `${row.mark} ${pad(row.path, widths.path + 2)}${pad(row.what, widths.what + 2)}${pad(row.served, widths.served + 2)}`;
-    const [first, ...rest] = row.notes.length > 0 ? row.notes : ['nothing on it can still happen'];
+    const [first, ...rest] = [...(row.notes.length > 0 ? row.notes : ['nothing on it can still happen']), ...row.head];
     lines.push(`${head}${first ?? ''}`);
     for (const note of rest) lines.push(`${' '.repeat(head.length)}${note}`);
   }

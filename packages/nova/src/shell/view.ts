@@ -1,5 +1,6 @@
 import type { RenderNode } from '../layout';
 import type { RenderApi, Shell } from './types';
+import { isHeadNode } from './head';
 import { ACTION_SLOT_NAME } from './slot-names';
 
 // ═══════════════════════════════════════════════════════════
@@ -31,13 +32,15 @@ export type ShellView = {
 // empty text and empty wrappers is handed to an adapter as `[]`, so an adapter
 // collapses the chrome around it on `length` alone, knowing nothing about node
 // shapes. An ActionSlot marker is a boundary, not content — what is inside it
-// decides. One rule for a canvas that is served and one that is local, so a
-// frame looks the same over both.
+// decides — and a head is something the screen says, not something it shows.
+// One rule for a canvas that is served and one that is local, so a frame looks
+// the same over both.
 export const hasVisibleContent = (nodes: readonly RenderNode[]): boolean =>
   nodes.some((node) => {
     if (node.type === 'text') return node.value !== '';
     if (node.type === 'fragment') return hasVisibleContent(node.children);
     if (node.type === 'component' && node.name === ACTION_SLOT_NAME) return hasVisibleContent(node.children);
+    if (isHeadNode(node)) return false;
     return true;
   });
 

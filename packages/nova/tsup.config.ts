@@ -18,6 +18,7 @@ export default defineConfig([
       'agent/index': 'src/agent/index.ts',
       'i18n/index': 'src/i18n/index.ts',
       'reflect/index': 'src/reflect/index.ts',
+      'document/index': 'src/document/index.ts',
       'devtools/index': 'src/devtools/index.ts',
       'migrations/index': 'src/migrations/index.ts',
     },

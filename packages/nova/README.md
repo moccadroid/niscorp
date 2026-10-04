@@ -229,6 +229,34 @@ canvas, drives lifecycle hooks via the runtime, composes any `with`
 fragments into the action at push/replace time, and routes navigation
 effects emitted from action steps back into shell calls.
 
+### The head
+
+What a screen says about itself — its title, a sentence describing it, the
+picture shown where a link to it is previewed — is a node in a layout, bound
+to the action's data like any other:
+
+```typescript
+{ component: 'nova:head', props: { title: '$.page.title', description: '$.page.lead', image: '$.page.cover', kind: 'article' } }
+```
+
+`nova:head` (`HEAD_NAME`) **draws nothing**: no adapter builds an element for
+it, no registry has to hold it, and a component is never handed one as a
+child. It rides in the render tree, so it reaches every place a screen does —
+a shell in the page, a snapshot a server drew, the trees on a wire.
+`headOf(api)` reads it off any of them (`{ head, action? }`); with more than
+one on the screen the last one speaks, whole.
+
+Its props are a closed set (`HeadPropsSchema`): `title`, `description`,
+`image`, `kind` (`website` | `article`) and `structured` (JSON-LD). They
+say what the screen *is*; how that is spelled in tags is the writer's. There is
+no prop for the page's own address — a layout never holds one.
+
+`@niscorp/nova/document` is the surface that has a `<head>`: `placeHead`
+writes a head into an HTML document being drawn to a string (what
+`@niscorp/cli` and moss's `renderDocument` call), and in the page the DOM,
+React and Vue adapters keep the tab's title on it. To offer the node to a
+layout agent, register the name with `HEAD_META` so the palette lists it.
+
 ---
 
 ## Authoring

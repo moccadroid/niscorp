@@ -5,6 +5,9 @@ import type { LayoutNode } from '@niscorp/nova';
 export const welcomeLayout: LayoutNode = {
   component: 'Page',
   children: [
+    // What this screen says it is. It draws nothing: `nisc export` writes it
+    // into the file's <head>, and in the page the tab's title follows it.
+    { component: 'nova:head', props: { title: '{{$.name}}', description: 'A nisc app with its own shell.' } },
     { component: 'Heading', children: '{{$.name}}' },
     {
       component: 'Text',

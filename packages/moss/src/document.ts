@@ -1,3 +1,5 @@
+import { headOf, placeHead } from '@niscorp/nova/document';
+import type { ScreenHead } from '@niscorp/nova/document';
 import type { ShellSnapshot } from './shells';
 import type { MossServer } from './server';
 
@@ -16,6 +18,10 @@ import type { MossServer } from './server';
 //
 // Moss holds no opinion about the page around the screen: the template is the
 // app's file, the kit is the app's, and so is the route this is called from.
+//
+// What the screen says about itself — a head node in a layout (nova's
+// `nova:head`) — is in the snapshot's trees like everything else on it, and is
+// written into the template's <head> as the screen is written into its root.
 //
 // TWO RULES LIVE HERE, each in one place:
 //
@@ -90,6 +96,11 @@ export type DocumentConfig = {
   // otherwise set from an effect that never runs here (a palette, a scheme).
   // Names are the app's and are written as given; values are escaped.
   htmlAttributes?: (snapshot: ShellSnapshot) => Record<string, string>;
+  // The address the site is served at ("https://example.com"). With it, every
+  // path's document says its own canonical address, and a head's picture is
+  // given a whole one. Without it, where a document lives is left as the
+  // template says.
+  site?: string;
   // The wire's token key (and so the cookie's name). Default `nisc.token`.
   tokenKey?: string;
   // How long the screen may take to settle before it is drawn as it stands.
@@ -106,6 +117,9 @@ export type DrawnDocument = {
   principal: string | null;
   // the page the path led to, when it led to one
   page?: string;
+  // the head the screen had, and the action it stood in — absent when the
+  // document's head is the template's own
+  head?: ScreenHead;
   // the snapshot's own account of itself (see ShellSnapshot) — present when drawn
   live?: boolean;
   why?: string[];
@@ -139,13 +153,16 @@ export const renderDocument = async (config: DocumentConfig): Promise<DrawnDocum
     const attributes = Object.entries(config.htmlAttributes?.(snapshot) ?? {})
       .map(([name, value]) => ` ${name}="${escapeAttribute(value)}"`)
       .join('');
-    const html = template
+    const placed = template
       // functions, both, so nothing in the screen is read as a replacement pattern
       .replace(root, () => `${root.replace('></div>', () => `>${screen}</div>`)}${embedSnapshot(snapshot, principal, request.path)}`)
       .replace(/<html([^>]*)>/, (whole, existing: string) => (attributes === '' ? whole : `<html${existing}${attributes}>`));
+    const head = headOf({ frame: () => snapshot.frame, canvasTree: (id) => snapshot.trees[id] ?? [] });
+    const html = placeHead(placed, head?.head, { ...(config.site !== undefined ? { site: config.site } : {}), path: request.path });
 
     return {
       html,
+      ...(head !== undefined ? { head } : {}),
       headers: {
         ...documentHeaders(principal),
         ...(token !== null && principal === null ? { 'set-cookie': `${encodeURIComponent(tokenKey)}=; Path=/; Max-Age=0; SameSite=Lax` } : {}),
@@ -179,6 +196,7 @@ export type ExportedDocument = {
   path: string;
   html: string;
   page?: string;
+  head?: ScreenHead;
   drawn: boolean;
   live: boolean;
   why: string[];
@@ -196,6 +214,7 @@ export const exportDocuments = async (config: Omit<DocumentConfig, 'request'> & 
       path,
       html: page.html,
       ...(page.page !== undefined ? { page: page.page } : {}),
+      ...(page.head !== undefined ? { head: page.head } : {}),
       drawn: page.drawn,
       // undrawn is not concluded finished
       live: page.live ?? true,

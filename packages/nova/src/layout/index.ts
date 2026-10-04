@@ -68,3 +68,9 @@ export { createLayoutStore } from './store';
 
 // Registry
 export { createComponentRegistry } from './registry';
+
+// The head: a node that says what the screen is, and draws nothing
+export { HEAD_NAME } from './head';
+export type { Head } from './head';
+export { HEAD_META, HeadPropsSchema } from './head.schema';
+export type { HeadProps } from './head.schema';

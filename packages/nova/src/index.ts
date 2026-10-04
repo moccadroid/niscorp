@@ -176,6 +176,14 @@ export { getPath } from './shared';
 export { createShell, shellView, shellSettled, canvasTreeOf, hasVisibleContent, DEFAULT_SETTLE_WAIT_MS, CANVAS_SLOT_NAME, ACTION_SLOT_NAME, reconcileCanvas, DEFAULT_HISTORY_DEPTH, navigatedChannel } from './shell';
 export type { ShellView } from './shell';
 
+// The head: what a screen says it is, as a node in its layout (`nova:head`),
+// and the reader that finds it in a render tree — a live shell's or a served
+// one's. Writing it into an HTML document is @niscorp/nova/document.
+export { HEAD_NAME, HEAD_META, HeadPropsSchema } from './layout';
+export type { Head, HeadProps } from './layout';
+export { headOf, isHeadNode } from './shell';
+export type { ScreenHead } from './shell';
+
 export type {
   CanvasConfig,
   CanvasInitialSeed,

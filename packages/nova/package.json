@@ -147,6 +147,16 @@
         "default": "./dist/reflect/index.cjs"
       }
     },
+    "./document": {
+      "import": {
+        "types": "./dist/document/index.d.ts",
+        "default": "./dist/document/index.js"
+      },
+      "require": {
+        "types": "./dist/document/index.d.cts",
+        "default": "./dist/document/index.cjs"
+      }
+    },
     "./devtools": {
       "import": {
         "types": "./dist/devtools/index.d.ts",

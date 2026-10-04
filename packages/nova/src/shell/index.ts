@@ -32,5 +32,7 @@ export type { HistoryEntry, HistoryFrame } from './journal';
 export { navigatedChannel } from './navigation';
 export type { NavigatedMessage } from './navigation';
 export { CANVAS_SLOT_NAME, ACTION_SLOT_NAME } from './slot-names';
+export { headOf, isHeadNode } from './head';
+export type { ScreenHead } from './head';
 export { reconcileCanvas } from './reconcile';
 export type { Desired, ReconcileOptions, ReconcileResult } from './reconcile';

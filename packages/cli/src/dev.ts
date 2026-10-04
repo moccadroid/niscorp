@@ -56,6 +56,7 @@ const mossPlugin = async (configFile: string): Promise<unknown> => {
         ...(booted.close !== undefined ? { close: booted.close } : {}),
         draw: project.draw,
         ...(project.htmlAttributes !== undefined ? { htmlAttributes: project.htmlAttributes } : {}),
+        ...(project.site !== undefined ? { site: project.site } : {}),
         ...(project.tokenKey !== undefined ? { tokenKey: project.tokenKey } : {}),
         ...(signIn !== undefined ? { signIn: (who: string) => signIn(booted.server, who) } : {}),
       };

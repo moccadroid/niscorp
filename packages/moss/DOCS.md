@@ -453,8 +453,9 @@ const page = await renderDocument({
   request: { path, cookie },                // what the request named and carried
   draw: (snapshot) => renderSnapshot({ snapshot, registry, slotWrapper }),
   htmlAttributes: (snapshot) => ({ 'data-accent': … }),   // optional
+  site: 'https://example.com',                            // optional
 });
-// → { html, headers, drawn, principal, page?, live?, why?, drawnWith?, settled? }
+// → { html, headers, drawn, principal, page?, head?, live?, why?, drawnWith?, settled? }
 ```
 
 - **Which shell**: the page `server.page(path)` names, else the app's.
@@ -469,6 +470,19 @@ const page = await renderDocument({
 - **`htmlAttributes`** is for what a kit would otherwise set on `<html>` from an
   effect, which never runs on a server: a palette, a colour scheme. Read it off
   the same node the effect reads it from. Values are escaped.
+- **The page's head is its screen's own.** What a screen says about itself is
+  a node in a layout — nova's `nova:head`, with `title`, `description`,
+  `image`, `kind` and `structured` bound to the action's data. It is in the
+  snapshot's trees like everything else on the screen, so it is read off them
+  and written into the template's `<head>`: what it says takes the place of
+  the tag that said the same thing, and the rest of the head is left as the
+  template has it. `head` in the result is what was read (`{ head, action? }`);
+  absent, the page went out with the template's. In the browser the terminal
+  keeps the tab's title on the same node as the screen moves.
+- **`site`** is the address the site is served at. A layout never holds its
+  own page's address: with `site`, every path's document says its own
+  canonical address (`<link rel="canonical">`, `og:url`) and a picture a head
+  names is given a whole one. Without it the template's is left as it is.
 - **`template`** must hold the empty root (`root`, default
   `<div id="root"></div>`). The screen goes inside it, the snapshot element
   straight after.
@@ -880,7 +894,7 @@ Correctness, which matters more than the saving:
   the runtime's through for you, so only a host running its own listener (a
   vite plugin, a dev check) ever needs it.
 
-- `mountSite(server, { dist, draw, htmlAttributes?, tokenKey?, waitMs?, owned? })`
+- `mountSite(server, { dist, draw, htmlAttributes?, site?, tokenKey?, waitMs?, owned? })`
   — the built terminal, served by the same process as the app. Every GET that
   nothing registered earlier answers is a file from `dist`, or a page:
   `index.html` with the caller's screen drawn into it (`renderDocument`) — the
@@ -914,7 +928,7 @@ Requires the optional `vite` peer.
   keeps it.
   - `options.app(load): Promise<DevApp>` — stand the app up. `load` is vite's
     `ssrLoadModule`. `DevApp = { server, close?, draw?, htmlAttributes?,
-    tokenKey?, signIn? }`; absent `draw`, pages go out undrawn.
+    site?, tokenKey?, signIn? }`; absent `draw`, pages go out undrawn.
   - `signIn(who)` enables `/dev/as/<who>`: it stores the returned token (and
     its cookie copy) and goes to `/`. `null` is nobody of that name.
   - `watch?: RegExp` (default: `src/app`, `src/server`, `src/db`, `src/ui` and

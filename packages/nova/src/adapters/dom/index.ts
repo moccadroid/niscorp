@@ -1,8 +1,9 @@
 import { renderNodeKey } from '@layout/adapter';
 import type { ComponentRegistry, RenderNode } from '@layout/types';
 import type { NovaEvent } from '@shared/event-bus/schemas';
-import { shellView } from '@shell';
+import { headOf, isHeadNode, shellView } from '@shell';
 import type { RenderApi, Shell } from '@shell';
+import { createTitleKeeper } from '../../document/title';
 
 // ═══════════════════════════════════════════════════════════
 // @niscorp/nova/adapters/dom — a vanilla-DOM adapter, the platform sibling of
@@ -397,7 +398,8 @@ export const createDomView = (
       for (const kid of kids) drop(kid);
       return leaf(node, ctx, errorEl('COMPONENT_NOT_FOUND', node.name));
     }
-    const children = kids.map((kid): Node => {
+    // a head among them draws nothing, so the component is not handed one
+    const children = kids.filter((kid) => !isHeadNode(kid.node)).map((kid): Node => {
       const [only] = kid.dom;
       if (kid.node.type !== 'fragment' && only !== undefined) return only;
       const fragment = document.createDocumentFragment();
@@ -445,6 +447,8 @@ export const createDomView = (
       host.append(...flat(kids));
       return { node, ctx: canvasCtx, dom: [host], kids, host, cleanups: [], field: { stale: false } };
     }
+    // A head is something the screen says, not something it shows: no element.
+    if (isHeadNode(node)) return { node, ctx, dom: [], kids: [], host: undefined, cleanups: [], field: { stale: false } };
     if (builderOf(node, ctx) === undefined) return leaf(node, ctx, errorEl('COMPONENT_NOT_FOUND', node.name));
     return assemble(node, ctx, node.children.map((child) => build(child, ctx)));
   };
@@ -535,6 +539,11 @@ export const createDomView = (
     // place: nothing of the old one is kept. Its listeners dispatch as the old
     // instance; kept, a press would reach an instance that is no longer here.
     if (prev.name !== next.name || !Object.is(slotOf(prev), slotOf(next))) return afresh();
+
+    if (isHeadNode(next)) {
+      old.node = next;
+      return old;
+    }
 
     if (next.name === CANVAS_SLOT) {
       const host = old.host;
@@ -668,9 +677,31 @@ export const mountShell = (
   options: { fallback?: DomComponent } = {},
 ): { destroy: () => void } => {
   const view = shellView(shell);
-  const dom = createDomView(root, registry, view.api, options);
-  dom.render();
-  const stop = view.subscribe(dom.render);
+  // ONE READING OF THE SHELL PER RENDER. The view draws from it and the tab's
+  // title is read off the same trees, so keeping the title costs a walk over
+  // what was just drawn and never a second render of the shell.
+  let read: { frame?: RenderNode[]; trees: Map<string, RenderNode[]> } = { trees: new Map() };
+  const api: DomRenderApi = {
+    ...view.api,
+    frame: () => (read.frame ??= view.api.frame()),
+    canvasTree: (canvasId) => {
+      const held = read.trees.get(canvasId);
+      if (held !== undefined) return held;
+      const tree = view.api.canvasTree(canvasId);
+      read.trees.set(canvasId, tree);
+      return tree;
+    },
+  };
+  const dom = createDomView(root, registry, api, options);
+  const keepTitle = createTitleKeeper(root.ownerDocument);
+  const render = (): void => {
+    read = { trees: new Map() };
+    dom.render();
+    // a root that is not on a page has no tab to name
+    if (root.isConnected) keepTitle(headOf(api)?.head);
+  };
+  render();
+  const stop = view.subscribe(render);
   return {
     destroy: () => {
       stop();

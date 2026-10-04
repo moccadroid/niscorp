@@ -92,8 +92,18 @@ const warnOfOwnAssets = (options: CommandOptions): void => {
   say(options)('nisc: public/assets/ holds files of your own. `nisc start` has browsers keep everything under /assets/ for a year, so a change to one of them will not be seen under the same name — keep them elsewhere in public/.');
 };
 
+// index.html says where the page lives, once — and every path is written from
+// it. With more than one path and no `site`, each file would name that one
+// address as its own, which tells a search engine they are all copies of it.
+const warnOfOneAddress = (options: CommandOptions, project: NiscProject, template: string, paths: number): void => {
+  if (project.site !== undefined || paths < 2 || !/<link\b[^>]*\brel\s*=\s*["']?canonical\b/i.test(template)) return;
+  say(options)('');
+  say(options)(`nisc: index.html names one canonical address and this app has ${paths} paths — every file would say it lives there.`);
+  say(options)('      `site: "https://…"` in nisc.config.ts gives each path its own.');
+};
+
 // Stand the app up, draw every path once for nobody, let the app go.
-const templateOf = (options: CommandOptions, project: NiscProject): string => {
+const templateOf =(options: CommandOptions, project: NiscProject): string => {
   const template = join(distOf(options.root, project), 'index.html');
   if (!existsSync(template)) throw new Error(`nisc: no built terminal at ${template} — run \`nisc build\`.`);
   return readFileSync(template, 'utf8');
@@ -110,6 +120,7 @@ const survey = async (options: CommandOptions, project: NiscMossProject): Promis
       template,
       draw: project.draw,
       ...(project.htmlAttributes !== undefined ? { htmlAttributes: project.htmlAttributes } : {}),
+      ...(project.site !== undefined ? { site: project.site } : {}),
       ...(project.tokenKey !== undefined ? { tokenKey: project.tokenKey } : {}),
       paths,
     });
@@ -124,9 +135,11 @@ export type BuildResult =
   | { kind: 'shell'; ok: boolean; routes: ShellRouteReport[] };
 
 const buildShell = async (options: CommandOptions, project: NiscShellProject): Promise<BuildResult> => {
-  const routes = await surveyShell(options.root, project, templateOf(options, project));
+  const template = templateOf(options, project);
+  const routes = await surveyShell(options.root, project, template);
   say(options)('');
   say(options)(shellRouteTable(routes));
+  warnOfOneAddress(options, project, template, routes.length);
   return { kind: 'shell', ok: routes.every((route) => route.problems.length === 0), routes };
 };
 
@@ -138,6 +151,7 @@ export const build = async (options: CommandOptions): Promise<BuildResult> => {
   const routes = await survey(options, project);
   say(options)('');
   say(options)(routeTable(routes));
+  warnOfOneAddress(options, project, templateOf(options, project), routes.length);
   return { kind: 'moss', ok: routes.every((route) => route.drawn), routes };
 };
 
@@ -212,6 +226,7 @@ export const start = async (options: CommandOptions): Promise<{ url: string; clo
     dist,
     draw: project.draw,
     ...(project.htmlAttributes !== undefined ? { htmlAttributes: project.htmlAttributes } : {}),
+    ...(project.site !== undefined ? { site: project.site } : {}),
     ...(project.tokenKey !== undefined ? { tokenKey: project.tokenKey } : {}),
   });
   // what the app server answers itself is its own to say; the rest is the site

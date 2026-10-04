@@ -3,8 +3,10 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync 
 import { tmpdir } from 'node:os';
 import { dirname, extname, join, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { shellSettled } from '@niscorp/nova';
+import { shellSettled, shellView } from '@niscorp/nova';
 import type { Shell } from '@niscorp/nova';
+import { headOf, placeHead } from '@niscorp/nova/document';
+import type { ScreenHead } from '@niscorp/nova/document';
 import { livenessOf } from '@niscorp/nova/reflect';
 import type { NiscShellProject } from './project';
 
@@ -21,8 +23,9 @@ import type { NiscShellProject } from './project';
 //
 //   drawn         the app booted and its screen drew to markup that is not empty
 //   whole         nothing was still loading when it was drawn
-//   same twice    a second boot draws the same markup, byte for byte — or the
-//                 page's own boot would not match what the file says
+//   same twice    a second boot draws the same markup, byte for byte, and says
+//                 the same head — or the page's own boot would not match what
+//                 the file says
 //   adopted       inside a DOM, a third boot picks the markup up and the
 //                 adapter complains about nothing
 //
@@ -32,6 +35,13 @@ import type { NiscShellProject } from './project';
 // What a build cannot fail on, it reports: what the screen opened with (those
 // answers are in the markup as they were at build), what it can still call, and
 // what it waits on.
+//
+// THE HEAD OF EACH FILE IS ITS SCREEN'S OWN. What a screen says about itself —
+// a head node in a layout (nova's `nova:head`) — is read off the same shell the
+// markup was drawn from and written into the template's <head>; a path whose
+// screen has none goes out with the template's. Where a file lives is not the
+// screen's to say: with a `site` in the config, each path is given its own
+// canonical address.
 // ═══════════════════════════════════════════════════════════════
 
 const DEFAULT_BUILD_WAIT_MS = 5000;
@@ -52,6 +62,9 @@ export type ShellRouteReport = {
   callsLater: readonly string[];
   // channels the first screen waits on
   listens: readonly string[];
+  // the head the first screen had, and the action it stood in — absent when
+  // the file's head is the template's own
+  head?: ScreenHead;
 };
 
 const escapeAttribute = (value: string): string => value.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
@@ -91,7 +104,12 @@ const factsOf = (shell: Shell): Pick<ShellRouteReport, 'actions' | 'opensWith' |
   return { actions: sorted(actions), opensWith: sorted(opensWith), callsLater: sorted(callsLater), listens: sorted(listens) };
 };
 
-type Drawn = { screen: string; whole: boolean; attributes: Record<string, string>; facts: ReturnType<typeof factsOf> };
+type Drawn = { screen: string; whole: boolean; attributes: Record<string, string>; head: ScreenHead | undefined; facts: ReturnType<typeof factsOf> };
+
+// A drawn screen as the document it goes out in: the screen in the root, and
+// what it says about itself in the head.
+const documentOf = (project: NiscShellProject, template: string, path: string, drawn: Drawn): string =>
+  placeHead(placeScreen(template, drawn.screen, drawn.attributes), drawn.head?.head, { ...(project.site !== undefined ? { site: project.site } : {}), path });
 
 // One boot, one draw, and the app let go again.
 const drawOnce = async (project: NiscShellProject, path: string): Promise<Drawn> => {
@@ -99,7 +117,7 @@ const drawOnce = async (project: NiscShellProject, path: string): Promise<Drawn>
   try {
     const whole = await shellSettled(booted.shell, { waitMs: project.waitMs ?? DEFAULT_BUILD_WAIT_MS });
     const screen = await project.draw(booted.shell);
-    return { screen, whole, attributes: project.htmlAttributes?.(booted.shell) ?? {}, facts: factsOf(booted.shell) };
+    return { screen, whole, attributes: project.htmlAttributes?.(booted.shell) ?? {}, head: headOf(shellView(booted.shell).api), facts: factsOf(booted.shell) };
   } finally {
     await booted.close?.();
   }
@@ -163,6 +181,8 @@ export const surveyShell = async (root: string, project: NiscShellProject, templ
       if (!drawn.whole) problems.push(`whole: it was still loading after ${project.waitMs ?? DEFAULT_BUILD_WAIT_MS}ms`);
       const again = await drawOnce(project, path);
       if (again.screen !== drawn.screen) problems.push(`same twice: a second boot drew different markup${differenceOf(drawn.screen, again.screen)}`);
+      const [head, headAgain] = [JSON.stringify(drawn.head ?? null), JSON.stringify(again.head ?? null)];
+      if (headAgain !== head) problems.push(`same twice: a second boot said a different head${differenceOf(head, headAgain)}`);
     } catch (error) {
       problems.push(`drawn: ${said(error)}`);
     }
@@ -179,9 +199,10 @@ export const surveyShell = async (root: string, project: NiscShellProject, templ
     const problems = [...route.problems, ...complaints.map((complaint) => `adopted: ${complaint}`)];
     return {
       path: route.path,
-      html: route.drawn === undefined ? template : placeScreen(template, route.drawn.screen, route.drawn.attributes),
+      html: route.drawn === undefined ? template : documentOf(project, template, route.path, route.drawn),
       problems,
       ...(route.drawn?.facts ?? none),
+      ...(route.drawn?.head !== undefined ? { head: route.drawn.head } : {}),
     };
   });
 };
@@ -200,6 +221,11 @@ export const shellRouteTable = (routes: readonly ShellRouteReport[]): string => 
   const width = Math.max(5, ...routes.map((route) => route.path.length)) + 2;
   const lines = [`  ${pad('Route', width)}First screen`];
   const indent = ' '.repeat(width + 2);
+  // Said only by an app that has a head somewhere: then a path without one is
+  // going out under the template's, and that may not be what was meant.
+  const headed = routes.some((route) => route.head !== undefined);
+  const headNote = (route: ShellRouteReport): string =>
+    route.head === undefined ? 'head: the template’s own' : `head: its own, said by ${route.head.action ?? 'the shell’s chrome'}`;
   for (const route of routes) {
     const ok = route.problems.length === 0;
     const notes = ok
@@ -208,6 +234,7 @@ export const shellRouteTable = (routes: readonly ShellRouteReport[]): string => 
           ...(route.opensWith.length > 0 ? [`opened with ${route.opensWith.join(', ')} — in the file as answered at build`] : []),
           ...(route.callsLater.length > 0 ? [`can still call ${route.callsLater.join(', ')}`] : []),
           ...(route.listens.length > 0 ? [`waits on ${route.listens.join(', ')}`] : []),
+          ...(headed ? [headNote(route)] : []),
         ]
       : route.problems;
     const [head, ...rest] = notes;
@@ -270,8 +297,8 @@ export const shellSite = (project: NiscShellProject, dist: string): ((request: R
     const template = readFileSync(join(base, 'index.html'), 'utf8');
     const headers = { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-cache' };
     try {
-      const drawn = await drawOnce(project, path === '/index.html' ? '/' : path);
-      return new Response(placeScreen(template, drawn.screen, drawn.attributes), { headers });
+      const at = path === '/index.html' ? '/' : path;
+      return new Response(documentOf(project, template, at, await drawOnce(project, at)), { headers });
     } catch (error) {
       console.error(`[nisc] "${path}" could not be drawn — serving it undrawn:`, error);
       return new Response(template, { headers });

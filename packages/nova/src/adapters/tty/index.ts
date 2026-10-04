@@ -1,4 +1,5 @@
 import type { ComponentRegistry, RenderNode } from '@layout/types';
+import { isHeadNode } from '@shell';
 import type { RenderApi } from '@shell';
 
 // ═══════════════════════════════════════════════════════════
@@ -113,6 +114,8 @@ const renderNode = (node: RenderNode, ctx: Ctx): TtyBlock => {
   if (node.type === 'error') return errorBlock(node.code, node.message);
 
   // component
+  // a head is something the screen says, not something it shows
+  if (isHeadNode(node)) return { lines: [] };
   if (node.name === CANVAS_SLOT) {
     const canvasId = typeof node.props['canvasId'] === 'string' ? (node.props['canvasId'] as string) : '';
     if (canvasId === '') return { lines: [] };
@@ -132,7 +135,7 @@ const renderNode = (node: RenderNode, ctx: Ctx): TtyBlock => {
   // An ActionSlot is an instance boundary: what is inside it belongs to it.
   const instanceId = node.name === ACTION_SLOT ? node.props['instanceId'] : undefined;
   const inner: Ctx = typeof instanceId === 'string' && instanceId !== '' ? { ...ctx, origin: instanceId } : ctx;
-  const children = node.children.map((child) => renderNode(child, inner));
+  const children = node.children.filter((child) => !isHeadNode(child)).map((child) => renderNode(child, inner));
   const register: TtyComponentContext['register'] = (item) => {
     const interactive: TtyInteractive = { index: ctx.out.length + 1, canvas: ctx.canvas, ...(ctx.origin !== undefined ? { origin: ctx.origin } : {}), ...item };
     ctx.out.push(interactive);

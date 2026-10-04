@@ -7,6 +7,7 @@ import {
   type NovaRenderContextValue,
   type SlotWrapper,
 } from './context';
+import { ShellTitleProvider } from './head';
 import type { NovaComponent, NovaDispatch, NovaPublish } from './types';
 
 const noopDispatch: NovaDispatch = () => {};
@@ -89,7 +90,7 @@ export const NovaShellProvider: FC<NovaShellProviderProps> = ({
         publish={publish}
         slotWrapper={slotWrapper}
       >
-        {children}
+        <ShellTitleProvider shell={shell}>{children}</ShellTitleProvider>
       </NovaRenderProvider>
     </NovaShellContext.Provider>
   );

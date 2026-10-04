@@ -18,6 +18,18 @@ import { readDocumentSnapshot } from '../src/client';
 const words: ActionDefinition = { id: 'words', data: { title: 'Hello', slug: '' }, layout: { component: 'Text', children: '$.title' } };
 const counter: ActionDefinition = { id: 'counter', data: { n: 0 }, layout: { component: 'Button', ref: 'bump', children: '$.n' }, triggers: [{ event: 'ui:click', ref: 'bump', do: [{ increment: 'n' }] }] };
 const chip: ActionDefinition = { id: 'chip', data: { name: '' }, layout: { component: 'Text', children: '$.name' } };
+// a screen that says what it is: a head node, bound to what its path named
+const post: ActionDefinition = {
+  id: 'post',
+  data: { slug: '', title: 'A post' },
+  layout: {
+    component: 'Stack',
+    children: [
+      { component: 'nova:head', props: { title: '{{$.title}}: {{$.slug}}', description: 'About <{{$.slug}}>.', kind: 'article' } },
+      { component: 'Text', children: '$.title' },
+    ],
+  },
+};
 
 const policy: ScopePolicy = { default: 'deny', entities: {} };
 const docs: PageManifest = {
@@ -26,7 +38,8 @@ const docs: PageManifest = {
   canvases: [{ id: 'main', initial: 'words' }, { id: 'who', initial: 'chip' }],
   inputs: ({ principal }): Record<string, Record<string, unknown>> => (principal === null ? {} : { who: { name: 'Max' } }),
 };
-const app = { charter: {}, assignments: {}, actions: { words, counter, chip }, shell: { canvases: [{ id: 'main', initial: 'counter' }] }, pages: { docs } } as unknown as NiscApp;
+const posts: PageManifest = { path: '/posts/:slug', params: 'main', canvases: [{ id: 'main', initial: 'post' }] };
+const app = { charter: {}, assignments: {}, actions: { words, counter, chip, post }, shell: { canvases: [{ id: 'main', initial: 'counter' }] }, pages: { docs, posts } } as unknown as NiscApp;
 
 // The parts of a server a document asks for, stood up the way createServer
 // stands them up: one context, the app's host and each page's.
@@ -35,20 +48,23 @@ const serverOf = (): MossServer => {
     app,
     catalogFor: () => ({ ids: [], hash: 'h' }),
     variantsFor: () => new Map(),
-    resolve: async (principal) => ({ roles: [principal === null ? 'public' : 'member'], scope: {}, installed: undefined, catalog: { ids: principal === null ? ['words', 'counter'] : ['words', 'counter', 'chip'], hash: 'h' }, variants: new Map(), policy }),
+    resolve: async (principal) => ({ roles: [principal === null ? 'public' : 'member'], scope: {}, installed: undefined, catalog: { ids: principal === null ? ['words', 'counter', 'post'] : ['words', 'counter', 'chip', 'post'], hash: 'h' }, variants: new Map(), policy }),
     wire: () => async () => ({ ok: true, status: 200, json: async () => ({}), text: async () => '{}' }),
     runtime: {} as ShellHostContext['runtime'],
     needOf: (definition) => shellNeedOf(definition, new Map()),
   };
   const shells = createShellHost(context);
-  const pageHost = createShellHost({ ...context, manifest: docs, kept: false });
-  const router = createPageRouter({ docs });
+  const hosts = new Map([
+    ['docs', createShellHost({ ...context, manifest: docs, kept: false })],
+    ['posts', createShellHost({ ...context, manifest: posts, kept: false })],
+  ]);
+  const router = createPageRouter({ docs, posts });
   return {
     shells,
     principalOf: async (token: string) => (token === 'good' ? 'usr_max' : null),
     page: (path: string) => {
       const matched = router.match(path);
-      return matched === undefined ? undefined : { name: matched.name, host: pageHost, inputs: { main: matched.params } };
+      return matched === undefined ? undefined : { name: matched.name, host: hosts.get(matched.name), inputs: { main: matched.params } };
     },
   } as unknown as MossServer;
 };
@@ -166,6 +182,49 @@ describe('renderDocument', () => {
   it('a template with no empty root is left alone', async () => {
     const page = await renderDocument({ server: serverOf(), template: '<html><body></body></html>', request: { path: '/' }, draw });
     expect(page.drawn).toBe(false);
+  });
+});
+
+describe('renderDocument — the head a screen has', () => {
+  const HEADED = TEMPLATE.replace('<head></head>', '<head><title>The site</title><link rel="canonical" href="https://example.com/"></head>');
+
+  it('what the screen says about itself is written into the template’s head, escaped', async () => {
+    const page = await renderDocument({ server: serverOf(), template: HEADED, request: { path: '/posts/intro' }, draw });
+    expect(page.head).toEqual({ head: { title: 'A post: intro', description: 'About <intro>.', kind: 'article' }, action: 'post' });
+    const head = page.html.slice(0, page.html.indexOf('</head>'));
+    expect(head).toContain('<title data-own="The site">A post: intro</title>');
+    expect(head).toContain('<meta name="description" content="About &lt;intro>.">');
+    expect(head).toContain('<meta property="og:type" content="article">');
+    // where the document lives is not the screen's to say, and nobody said
+    expect(head).toContain('<link rel="canonical" href="https://example.com/">');
+    // the screen is where it always was, and the terminal starts from the same trees
+    expect(page.html).toContain('<div id="root"><main>A post</main></div>');
+    expect(JSON.stringify(parsed(page.html)?.trees)).toContain('nova:head');
+  });
+
+  it('with a site, each path says its own address — a screen with a head and one without', async () => {
+    const site = 'https://example.com';
+    const [post, home] = await Promise.all([
+      renderDocument({ server: serverOf(), template: HEADED, request: { path: '/posts/intro' }, draw, site }),
+      renderDocument({ server: serverOf(), template: HEADED, request: { path: '/' }, draw, site }),
+    ]);
+    expect(post.html).toContain('<link rel="canonical" href="https://example.com/posts/intro">');
+    expect(post.html).toContain('<meta property="og:url" content="https://example.com/posts/intro">');
+    // no head on the app's screen: the template's title, at its own address
+    expect(home.head).toBeUndefined();
+    expect(home.html).toContain('<title>The site</title>');
+    expect(home.html).toContain('<link rel="canonical" href="https://example.com/">');
+  });
+
+  it('a screen with no head, and no site: the document is what it was before there were heads', async () => {
+    const page = await renderDocument({ server: serverOf(), template: HEADED, request: { path: '/' }, draw });
+    expect(page.html.slice(0, page.html.indexOf('</head>'))).toBe(HEADED.slice(0, HEADED.indexOf('</head>')));
+  });
+
+  it('a file written for a path carries the head it was written with', async () => {
+    const [file] = await exportDocuments({ server: serverOf(), template: HEADED, draw, paths: ['/posts/intro'] });
+    expect(file?.head?.action).toBe('post');
+    expect(file?.html).toContain('<title data-own="The site">A post: intro</title>');
   });
 });
 
