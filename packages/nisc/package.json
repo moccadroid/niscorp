@@ -1,6 +1,6 @@
 {
   "name": "@niscorp/nisc",
-  "version": "0.2.3",
+  "version": "0.2.4",
   "description": "The nisc platform as one known-compatible set: every @niscorp package, each pinned to the exact version it was released with.",
   "license": "Apache-2.0",
   "repository": {
