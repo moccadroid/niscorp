@@ -298,7 +298,7 @@ export const OPERATORS: readonly PrismExample[] = [
     group: 'strings',
     title: '$interpolate',
     description:
-      'Fills the `{{key}}` placeholders of a template with the matching values. The template and each value may be an expression.',
+      'Fills the `{{key}}` placeholders of a template with the matching values. The template is written out; `values` is an object of expressions, or one expression that gives an object.',
     op: '$interpolate',
     source: { user: { first: 'Ada', last: 'Lovelace' }, count: 3 },
     config: {
