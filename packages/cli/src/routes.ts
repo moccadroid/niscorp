@@ -16,9 +16,9 @@ export type RouteReport = {
   // reads whose answers are in the markup as they were when it was drawn
   drawnWith: readonly string[];
   settled: boolean;
-  // the head the screen had, and the action it stood in — absent when the
-  // document's head is the template's own
-  head?: { action?: string };
+  // what the screen's head held, and the actions that said it — absent when
+  // the screen has no head and the document's is the template's own
+  head?: { elements: readonly unknown[]; actions: readonly string[] };
 };
 
 // `/`, and every page whose path names no parameter. A parameterised page has
@@ -47,7 +47,8 @@ const pad = (text: string, width: number): string => text + ' '.repeat(Math.max(
 export const routeTable = (routes: readonly RouteReport[]): string => {
   // Said only by an app that has a head somewhere: then a path without one is
   // going out under the template's, and that may not be what was meant.
-  const headed = routes.some((route) => route.head !== undefined);
+  const says = (route: RouteReport): boolean => (route.head?.elements.length ?? 0) > 0;
+  const headed = routes.some(says);
   const rows = routes.map((route) => {
     const mark = !route.drawn ? '✗' : route.live ? '●' : '○';
     const what = route.page === undefined ? 'the app' : `page ${route.page}`;
@@ -57,7 +58,7 @@ export const routeTable = (routes: readonly RouteReport[]): string => {
       ...(route.drawn && !route.settled ? ['it was still loading when the wait ran out — drawn with what it had'] : []),
       ...(route.drawnWith.length > 0 ? [`drawn with ${route.drawnWith.join(', ')} — as it answered at build`] : []),
     ];
-    const head = headed && route.drawn ? [route.head === undefined ? 'head: the template’s own' : `head: its own, said by ${route.head.action ?? 'the shell’s chrome'}`] : [];
+    const head = headed && route.drawn ? [says(route) ? `head: its own, said by ${route.head?.actions.join(', ') || 'the shell’s chrome'}` : 'head: the template’s own'] : [];
     return { mark, path: route.path, what, served, notes, head };
   });
   const widths = {

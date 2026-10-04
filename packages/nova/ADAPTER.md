@@ -44,12 +44,12 @@ Map `RenderNode[]` to framework elements:
   adapter renders a `<span data-nova-error>`; match that convention).
 - `component` → look the name up in the registry; unknown names render an
   error marker with code `COMPONENT_NOT_FOUND`, never throw.
-- a head (`isHeadNode(node)`, the component named `HEAD_NAME`) → **nothing**.
-  It is something the screen says, not something it shows: it is never looked
-  up in the registry, and never handed to its parent component as a child (a
-  kit that gives every child a cell would give it an empty one). An adapter
-  for a surface with a title of its own keeps that title on `headOf(api)` and
-  gives it back when the screen has no head.
+- a head (`isHeadNode(node)`, the component named `HEAD_NAME`) → **nothing**,
+  and nothing for its children. It is the document's, not the screen's: it is
+  never looked up in the registry, and never handed to its parent component as
+  a child (a kit that gives every child a cell would give it an empty one). An
+  adapter for a surface with a head of its own keeps that head on
+  `headOf(api)` — in a page, `createHeadKeeper` from `@niscorp/nova/document`.
 
 Inject framework props from the node using the core constants:
 `node.model` → `NOVA_MODEL_PROP` (`{ ref, path }`), `node.ref` →

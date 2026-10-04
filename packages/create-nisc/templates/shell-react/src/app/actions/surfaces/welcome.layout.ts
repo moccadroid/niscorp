@@ -5,9 +5,16 @@ import type { LayoutNode } from '@niscorp/nova';
 export const welcomeLayout: LayoutNode = {
   component: 'Page',
   children: [
-    // What this screen says it is. It draws nothing: `nisc export` writes it
-    // into the file's <head>, and in the page the tab's title follows it.
-    { component: 'nova:head', props: { title: '{{$.name}}', description: 'A nisc app with its own shell.' } },
+    // This page's <head>. It draws nothing on the screen: `nisc export` writes
+    // what it holds into the file's <head>, and in the page the head follows it.
+    // A child's props are the element's attributes — any <meta>, any <link>.
+    {
+      component: 'nova:head',
+      children: [
+        { component: 'nova:title', children: '{{$.name}}' },
+        { component: 'nova:meta', props: { name: 'description', content: 'A nisc app with its own shell.' } },
+      ],
+    },
     { component: 'Heading', children: '{{$.name}}' },
     {
       component: 'Text',

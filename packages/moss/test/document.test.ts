@@ -18,14 +18,21 @@ import { readDocumentSnapshot } from '../src/client';
 const words: ActionDefinition = { id: 'words', data: { title: 'Hello', slug: '' }, layout: { component: 'Text', children: '$.title' } };
 const counter: ActionDefinition = { id: 'counter', data: { n: 0 }, layout: { component: 'Button', ref: 'bump', children: '$.n' }, triggers: [{ event: 'ui:click', ref: 'bump', do: [{ increment: 'n' }] }] };
 const chip: ActionDefinition = { id: 'chip', data: { name: '' }, layout: { component: 'Text', children: '$.name' } };
-// a screen that says what it is: a head node, bound to what its path named
+// a screen with a head of its own, bound to what its path named
 const post: ActionDefinition = {
   id: 'post',
   data: { slug: '', title: 'A post' },
   layout: {
     component: 'Stack',
     children: [
-      { component: 'nova:head', props: { title: '{{$.title}}: {{$.slug}}', description: 'About <{{$.slug}}>.', kind: 'article' } },
+      {
+        component: 'nova:head',
+        children: [
+          { component: 'nova:title', children: '{{$.title}}: {{$.slug}}' },
+          { component: 'nova:meta', props: { name: 'description', content: 'About <{{$.slug}}>.' } },
+          { component: 'nova:meta', props: { property: 'og:type', content: 'article' } },
+        ],
+      },
       { component: 'Text', children: '$.title' },
     ],
   },
@@ -188,17 +195,28 @@ describe('renderDocument', () => {
 describe('renderDocument — the head a screen has', () => {
   const HEADED = TEMPLATE.replace('<head></head>', '<head><title>The site</title><link rel="canonical" href="https://example.com/"></head>');
 
-  it('what the screen says about itself is written into the template’s head, escaped', async () => {
+  it('the elements the screen’s head holds are written into the template’s head, escaped', async () => {
     const page = await renderDocument({ server: serverOf(), template: HEADED, request: { path: '/posts/intro' }, draw });
-    expect(page.head).toEqual({ head: { title: 'A post: intro', description: 'About <intro>.', kind: 'article' }, action: 'post' });
+    expect(page.head).toEqual({
+      elements: [
+        { tag: 'title', attributes: {}, text: 'A post: intro' },
+        { tag: 'meta', attributes: { name: 'description', content: 'About <intro>.' } },
+        { tag: 'meta', attributes: { property: 'og:type', content: 'article' } },
+      ],
+      actions: ['post'],
+      refused: [],
+    });
     const head = page.html.slice(0, page.html.indexOf('</head>'));
-    expect(head).toContain('<title data-own="The site">A post: intro</title>');
-    expect(head).toContain('<meta name="description" content="About &lt;intro>.">');
-    expect(head).toContain('<meta property="og:type" content="article">');
-    // where the document lives is not the screen's to say, and nobody said
+    // the title takes the template's place, which is kept for the page to give back
+    expect(head).toContain('<title data-nova-head>A post: intro</title>');
+    expect(head).toContain('<template data-nova-own><title>The site</title></template>');
+    expect(head).toContain('<meta name="description" content="About &lt;intro>." data-nova-head>');
+    expect(head).toContain('<meta property="og:type" content="article" data-nova-head>');
+    // nobody said where the document lives: the template's stays
     expect(head).toContain('<link rel="canonical" href="https://example.com/">');
     // the screen is where it always was, and the terminal starts from the same trees
-    expect(page.html).toContain('<div id="root"><main>A post</main></div>');
+    // (this test's drawer prints every text in the trees, the title's included — a kit draws nothing for a head)
+    expect(page.html).toContain('A post</main></div><script type="application/json" id="nisc-snapshot">');
     expect(JSON.stringify(parsed(page.html)?.trees)).toContain('nova:head');
   });
 
@@ -223,8 +241,8 @@ describe('renderDocument — the head a screen has', () => {
 
   it('a file written for a path carries the head it was written with', async () => {
     const [file] = await exportDocuments({ server: serverOf(), template: HEADED, draw, paths: ['/posts/intro'] });
-    expect(file?.head?.action).toBe('post');
-    expect(file?.html).toContain('<title data-own="The site">A post: intro</title>');
+    expect(file?.head?.actions).toEqual(['post']);
+    expect(file?.html).toContain('<title data-nova-head>A post: intro</title>');
   });
 });
 

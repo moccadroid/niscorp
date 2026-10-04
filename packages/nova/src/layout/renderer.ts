@@ -18,7 +18,7 @@ import {
   isLoopNode,
   isSlotNode,
 } from './guards';
-import { HEAD_NAME } from './head';
+import { HEAD_NAMES } from './head';
 import type { ComponentNode, LayoutNode } from './schemas';
 import type {
   DataStoreView,
@@ -200,8 +200,9 @@ const renderComponent = (
   chain: ScopeChain,
   ctx: InternalRenderContext,
 ): RenderNode => {
-  // The head draws nothing, so no kit has anything to register for it.
-  if (node.component !== HEAD_NAME && !ctx.registry.has(node.component)) {
+  // A head and what it holds are drawn by nobody, so no kit has anything to
+  // register for them.
+  if (!HEAD_NAMES.includes(node.component) && !ctx.registry.has(node.component)) {
     throw new ComponentNotFoundError(
       `Component not found in registry: ${node.component}`,
       { name: node.component },

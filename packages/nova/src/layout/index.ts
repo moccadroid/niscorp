@@ -69,8 +69,9 @@ export { createLayoutStore } from './store';
 // Registry
 export { createComponentRegistry } from './registry';
 
-// The head: a node that says what the screen is, and draws nothing
-export { HEAD_NAME } from './head';
-export type { Head } from './head';
-export { HEAD_META, HeadPropsSchema } from './head.schema';
-export type { HeadProps } from './head.schema';
+// The head: the document's <head> as a node, and the elements it holds — none
+// of them drawn on the screen
+export { HEAD_NAME, HEAD_TITLE_NAME, HEAD_META_NAME, HEAD_LINK_NAME, HEAD_SCRIPT_NAME, HEAD_NAMES, headKeyOf } from './head';
+export type { HeadElement } from './head';
+export { HEAD_META, HeadPropsSchema, HeadTitlePropsSchema, HeadMetaPropsSchema, HeadLinkPropsSchema, HeadScriptPropsSchema } from './head.schema';
+export type { HeadMetaProps, HeadLinkProps, HeadScriptProps } from './head.schema';

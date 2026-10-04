@@ -362,14 +362,14 @@ drawing a signed-in screen to a string is 0.4–0.7 ms; a whole anonymous docume
 page carries its screen twice (markup and snapshot), 3–5 KB compressed.
 
 **The head of the page is part of the screen.** A title, a description and a
-preview card are facts about what the screen shows, so they are a node in a
-layout (nova's `nova:head`) and ride in the same trees as everything else:
-`renderDocument` reads the node off the snapshot and writes it into the
-template's `<head>`, and the terminal reads it off the wire to keep the tab's
-title. Nothing was added to the snapshot, the wire or the manifest for it. The
-one thing a head cannot say is where the page lives — a layout never holds its
-own address — so the canonical address is the `site` plus the path the
-document was drawn at, both of which the writer already holds.
+preview card are facts about what the screen shows, so the page's `<head>` is a
+node in a layout (nova's `nova:head`, holding the elements a head holds) and
+rides in the same trees as everything else: `renderDocument` reads the
+elements off the snapshot and writes them into the template's `<head>`, and the
+terminal reads them off the wire to keep the page's head. Nothing was added to
+the snapshot, the wire or the manifest for it. Where the page lives is known to
+the writer without being told: the `site` plus the path the document was drawn
+at.
 
 Six things had to be true, and each is a small, separate decision:
 

@@ -1,30 +1,31 @@
 import { defineComponent, inject, onMounted, provide, shallowRef, watch, type InjectionKey, type ShallowRef } from 'vue';
 import type { Shell } from '@shell';
-import { createShellTitle, type ShellTitle } from '../../document/shell-title';
+import { createShellHead, type ShellHead } from '../../document/shell-head';
 
 // ═══════════════════════════════════════════════════════════
 // A head node (`nova:head`), in Vue — the twin of the React adapter's.
 //
-// It draws nothing. Where the shell lives in this page it says that it is on
-// the screen, so the tab's title is read off the shell only while there is a
-// head to read (document/shell-title). Under a served screen there is no shell
-// here and nothing to say to: the terminal keeps the title off the wire.
+// It draws nothing, and neither does anything it holds. Where the shell lives
+// in this page it says that it is on the screen, so the page's head is read
+// off the shell only while there is one to read (document/shell-head). Under a
+// served screen there is no shell here and nothing to say to: the terminal
+// keeps the head off the wire.
 //
 // Everything here starts in `onMounted`, which does not run where a screen is
 // drawn to a string — so none of it touches a document that is not a browser's.
 // ═══════════════════════════════════════════════════════════
 
 // `Symbol.for`, as the adapter's other keys are (./context).
-const ShellTitleKey: InjectionKey<ShallowRef<ShellTitle>> = Symbol.for('@niscorp/nova/adapters/vue:title');
+const ShellHeadKey: InjectionKey<ShallowRef<ShellHead>> = Symbol.for('@niscorp/nova/adapters/vue:head');
 
 export const HeadMark = defineComponent(
   () => {
-    const title = inject(ShellTitleKey, undefined);
+    const head = inject(ShellHeadKey, undefined);
     onMounted(() => {
-      if (title === undefined) return;
-      // a swapped shell has another title: leave the one, enter the other
+      if (head === undefined) return;
+      // a swapped shell has another head: leave the one, enter the other
       watch(
-        title,
+        head,
         (current, _previous, onCleanup) => {
           current.enter();
           onCleanup(current.leave);
@@ -37,21 +38,21 @@ export const HeadMark = defineComponent(
   { name: 'NovaHeadMark' },
 );
 
-// Called in a provider's setup: every head below it reports to this shell's
-// title, and the shell is watched for as long as the provider stands.
-export const provideShellTitle = (shell: () => Shell): void => {
+// Called in a provider's setup: every head below it reports to this shell's,
+// and the shell is watched for as long as the provider stands.
+export const provideShellHead = (shell: () => Shell): void => {
   let held = shell();
-  const title = shallowRef(createShellTitle(held));
-  provide(ShellTitleKey, title);
+  const head = shallowRef(createShellHead(held));
+  provide(ShellHeadKey, head);
   onMounted(() => {
     watch(
       shell,
       (next, _previous, onCleanup) => {
         if (next !== held) {
           held = next;
-          title.value = createShellTitle(next);
+          head.value = createShellHead(next);
         }
-        onCleanup(title.value.watch());
+        onCleanup(head.value.watch());
       },
       { immediate: true },
     );

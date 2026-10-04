@@ -231,31 +231,56 @@ effects emitted from action steps back into shell calls.
 
 ### The head
 
-What a screen says about itself — its title, a sentence describing it, the
-picture shown where a link to it is previewed — is a node in a layout, bound
-to the action's data like any other:
+`nova:head` is the document's `<head>`, as a node in a layout. Its children
+are the elements a head holds, named as HTML names them, and bound to the
+action's data like anything else in the layout:
 
 ```typescript
-{ component: 'nova:head', props: { title: '$.page.title', description: '$.page.lead', image: '$.page.cover', kind: 'article' } }
+{ component: 'nova:head', children: [
+  { component: 'nova:title', children: '{{$.page.title}} · the site' },
+  { component: 'nova:meta', props: { name: 'description', content: '$.page.lead' } },
+  { component: 'nova:meta', props: { property: 'og:image:alt', content: '$.page.title' } },
+  { component: 'nova:link', props: { rel: 'alternate', hreflang: 'de', href: '$.page.german' } },
+  { component: 'nova:script', props: { type: 'application/ld+json', data: '$.page.about' } },
+]}
 ```
 
-`nova:head` (`HEAD_NAME`) **draws nothing**: no adapter builds an element for
-it, no registry has to hold it, and a component is never handed one as a
-child. It rides in the render tree, so it reaches every place a screen does —
-a shell in the page, a snapshot a server drew, the trees on a wire.
-`headOf(api)` reads it off any of them (`{ head, action? }`); with more than
-one on the screen the last one speaks, whole.
+**A child's props are that element's attributes, written as given.** Nova
+keeps no list of them: any `name`, `property` or `rel` there is — or will be —
+can be said without nova learning it. `nova:title`'s text is its children;
+`nova:script` takes a `type` and its `data` (any JSON). Loops and conditions
+work in a head as they do anywhere in a layout.
 
-Its props are a closed set (`HeadPropsSchema`): `title`, `description`,
-`image`, `kind` (`website` | `article`) and `structured` (JSON-LD). They
-say what the screen *is*; how that is spelled in tags is the writer's. There is
-no prop for the page's own address — a layout never holds one.
+**Nothing in it is drawn on the screen.** No adapter builds an element for a
+head or for what it holds, no registry has to have the names, and a component
+is never handed a head as a child. It rides in the render tree, so it reaches
+every place a screen does — a shell in the page, a snapshot a server drew, the
+trees on a wire — and `headOf(api)` reads it off any of them:
+`{ elements, actions, refused }`.
 
-`@niscorp/nova/document` is the surface that has a `<head>`: `placeHead`
-writes a head into an HTML document being drawn to a string (what
-`@niscorp/cli` and moss's `renderDocument` call), and in the page the DOM,
-React and Vue adapters keep the tab's title on it. To offer the node to a
-layout agent, register the name with `HEAD_META` so the palette lists it.
+A screen can hold more than one head: the shell's chrome says what holds on
+every screen, an action says its own, a dialog opens over a page. They are
+read in the order the screen is drawn, and an element that says the same thing
+as an earlier one — the title, a `<meta>` of that name or property, the
+canonical address — takes its place. Anything else stands beside its like. An
+element whose value is not answered yet (no `content`, no `href`, no text) is
+left out.
+
+**What a head does not hold is what runs or styles**: a script a browser would
+execute (`nova:script` is a data block — a JSON `type`, never a `src`), a
+stylesheet, `http-equiv`, a handler attribute. A layout is data, and data that
+reaches every page must not be able to run. Such an element is left out and
+named in `refused`. Those belong in the app's own `index.html`, which holds
+anything, or in the kit component that needs them.
+
+`@niscorp/nova/document` is the surface that has a `<head>`. `placeHead`
+writes the elements into an HTML document being drawn to a string (what
+`@niscorp/cli` and moss's `renderDocument` call): an element takes the place
+of the tag that said the same thing, and anything else is added. In the page,
+the DOM, React and Vue adapters keep `document.head` on the screen
+(`createHeadKeeper`): its elements go in, the document's own tags give way to
+them and come back when the screen stops saying them. To offer the names to a
+layout agent, register them with `HEAD_META` so the palette lists them.
 
 ---
 
