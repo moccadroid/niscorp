@@ -14,6 +14,8 @@ A Prism config is a JSON structure that describes a transformation. It can be:
 - A **plain object** (`{ name: { $ref: "$.user.name" } }`) — each value evaluated recursively
 - An **array** (`[{ $const: 1 }, { $ref: "$.x" }]`) — each element evaluated
 
+A key that starts with `$` is an op's name. A plain object has none: `{ "$fetch": … }` is not a config, because Prism has no `$fetch` — `validate` refuses it with the key's path (`card.$fetch`), and `evaluate` and `compile` fail with `E_SCHEMA` before anything runs. Data that has such keys goes in `$const`, which returns its value untouched; `$fromEntries` builds one from computed values.
+
 ### Source Data
 
 Every evaluation takes a `source` — the data the transformation reads from via `$ref`. `evaluate` accepts any JSON value (object, array, or scalar); `"$"` is the whole of it.
@@ -744,14 +746,16 @@ Past any of them the evaluation throws `E_BUDGET`.
 
 | Code | Meaning |
 |------|---------|
-| `E_SCHEMA` | Config failed Zod validation |
+| `E_SCHEMA` | Config failed Zod validation — a malformed op, or a `$` key that is not an op |
 | `E_MISSING_PATH` | `$ref` or `$get` path doesn't exist (and no fallback) |
 | `E_TYPE` | Wrong type for operation (e.g. `$map.over` is not an array) |
 | `E_DIVISION_BY_ZERO` | `$div` with divisor 0 |
 | `E_DATE_INVALID` | Invalid date value |
 | `E_VAR_NOT_FOUND` | `$var` references undefined variable |
-| `E_NODE_SHAPE` | Unrecognized node structure |
+| `E_NODE_SHAPE` | A node no op answers to, in a tree that never went through the schema |
 | `E_ASSERT` | A config's own `$assert` refused its input |
 | `E_BUDGET` | Evaluation went past a limit (see Limits) |
 
 All errors are instances of `PrismError` with `.code` and optional `.context`.
+
+**Valid, and what it does not promise.** `validate`, `evaluate` and `compile` hold a config to the same schema, so a config that validates has no node the evaluator cannot dispatch: every object in it is an op Prism has or a plain object with no `$` key. It can still fail on the data it is given — a missing path, a wrong type, a budget. `E_NODE_SHAPE` is what is left for a tree the schema never saw: an IR handed to `execute`, which does not validate.

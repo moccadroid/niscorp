@@ -225,7 +225,9 @@ const evaluateUnbudgeted = (node: unknown, context: EvalContext): JsonValue => {
     return result;
   }
 
-  // Unknown node shape
+  // Unknown node shape — a `$` key no op answers to. The schema refuses these
+  // (E_SCHEMA), so this is reached only by a tree that never went through it:
+  // an IR handed to execute(), or a node evaluated directly.
   const unknownKeys = Object.keys(obj).filter((k) => k.startsWith('$'));
   throw new PrismError('Unsupported node shape', ErrorCode.NODE_SHAPE, {
     details: { keys: unknownKeys, preview: JSON.stringify(obj).slice(0, 100) },

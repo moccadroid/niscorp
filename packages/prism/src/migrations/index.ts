@@ -32,6 +32,17 @@ export const PRISM_SEQUENCE: Sequence = {
         'that evaluates to an array; an op name is not a template key',
       steps: [],
     },
+    {
+      // A MARKER for a NARROWING, and a breaking release (approved): a `$` key
+      // that is not an op was accepted as a template key and refused when it
+      // was evaluated (E_NODE_SHAPE). No step rewrites one — it never evaluated
+      // to anything, so there is nothing to rewrite it to. Checked against the
+      // corpus: no captured config uses one. What it can break is a config
+      // that kept such a key where evaluation never reached it.
+      description:
+        'A template key never starts with "$": a `$` name that is not an op is refused by the schema, where it was refused only once evaluated',
+      steps: [],
+    },
   ],
 };
 
