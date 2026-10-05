@@ -254,6 +254,46 @@ describe('trust mode', () => {
     expect(stream.current().count as unknown).toBe('three');
     expect(errors).toHaveLength(0);
   });
+
+  // With no validation nothing skips a string that opens outside any container,
+  // so the parser reaches its write with nowhere to put it. write() never throws.
+  it('does not throw on a quoted word before the reply, and still reads the reply', () => {
+    const stream = createStream({ schema: Schema, initial: INITIAL, mode: 'trust' });
+
+    expect(() => stream.write('Here is the "best" option:\n')).not.toThrow();
+    expect(stream.current()).toEqual(INITIAL);
+
+    stream.write('{"name":"ok","count":7}');
+    expect(stream.current().name).toBe('ok');
+    expect(stream.current().count).toBe(7);
+  });
+
+  it('does not throw on a quoted word after the reply', () => {
+    const stream = createStream({ schema: Schema, initial: INITIAL, mode: 'trust' });
+    stream.write('{"name":"ok","count":7,"active":false,"tags":[],"meta":{"id":"x"}}');
+
+    expect(() => stream.write('\nThat is the "best" I found.')).not.toThrow();
+    expect(stream.current().name).toBe('ok');
+  });
+});
+
+// ───────────────────────────────────────────────────────────
+// a root that is not a container — write() never throws
+// ───────────────────────────────────────────────────────────
+
+describe('a string root', () => {
+  // A string root passes the kind check in every mode, and there is no
+  // container to write it into. Nothing arrives — as for a number or boolean
+  // root — and nothing is thrown.
+  it.each(['trust', 'recover', 'strict'] as const)('write() does not throw in %s mode', (mode) => {
+    const errors: StreamError[] = [];
+    const stream = createStream({ schema: z.string(), initial: 'start', mode });
+    stream.onError((e) => errors.push(e));
+
+    expect(() => stream.write('"hello"')).not.toThrow();
+    expect(stream.current()).toBe('start');
+    expect(errors).toHaveLength(0);
+  });
 });
 
 // ───────────────────────────────────────────────────────────

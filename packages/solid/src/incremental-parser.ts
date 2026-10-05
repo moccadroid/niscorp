@@ -116,6 +116,10 @@ export const createIncrementalParser = (
   };
 
   const setValue = (value: unknown): void => {
+    // No container is open: a string that begins outside the reply (a quoted
+    // word in the text around it, where nothing validates), or a root that is
+    // not a container. There is nowhere to write it, and write() never throws.
+    if (containerStack.length === 0) return;
     const container = topContainer();
     let existing: unknown;
     if (topContainerType() === 'object') {
