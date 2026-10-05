@@ -1,5 +1,39 @@
 # @niscorp/moss
 
+## 0.3.2
+
+### Patch Changes
+
+- a7d4de4: `server.charterReport()` — the charter report the server was verified by.
+
+  `createServer` runs `verifyCharter` at boot and again on every `refresh`, refuses on the report's `errors`, and read nothing else of it. The rest was computed and dropped: the `warnings` (an action no role grants, an `allow` that matches nothing) and each role's closure `issues`. A host that wanted them had to run `verifyCharter` itself, over a data universe it built by hand.
+
+  `charterReport()` returns that report: boot's, then that of each `refresh` that passed. A refresh that is refused leaves the one the server is still serving on. Nothing is printed, and boot refuses exactly what it refused before.
+
+  ```ts
+  const server = await createServer(app, runtime);
+  for (const warning of server.charterReport().warnings)
+    console.warn(`${warning.rule}: ${warning.detail}`);
+  ```
+
+  DOCS.md says one thing about what it holds: a push whose target is a binding (`@event.payload`, `$.target`) is listed among a role's `issues` as "not in the catalog", though it is resolved when the step runs.
+
+  **What to change:** nothing.
+
+- f70d461: DOCS and DESIGN say what boot refuses. `createServer` refuses on `verifyCharter`'s errors. The closure audit's findings are filed under each role's `issues` in the report and are neither refused nor printed: a role granted an action that pushes one it is not granted boots, and the press does nothing. Two source comments now say the same. No code changed.
+
+  **What to change:** nothing.
+
+- a7d4de4: The docs say a charter defines a role named `public`. A request with no session, and a signed-in principal with no assignment, resolve to that role, and the name is fixed. A charter without it still boots and nothing is said; those requests then fail with `Unknown role "public"` (a 500, a socket closed `4500`, a page served undrawn). `public: []` grants nothing. README, DOCS and DESIGN now say so, and a test holds it. No code changed.
+
+  **What to change:** nothing, for a charter that has the role. One that names its visitor role something else adds `public` beside it.
+
+- 979b3e3: `src/principal.ts` is text again. One separator in `wearableOf` was written as a raw NUL byte where the same file writes the escape `'\0'` two functions down, so git treated the whole file as binary: its diffs showed `Bin`, and a text search (`git grep -I`) skipped the file that defines `wearableOf`, `resolveFor` and `verifyCharter`.
+
+  The byte is now the escape. The string it produces is the same one, and the built package is the same code: every built file is identical apart from the names of two chunks, which are hashes that take the embedded source text in.
+
+  **What to change:** nothing.
+
 ## 0.3.1
 
 ### Patch Changes

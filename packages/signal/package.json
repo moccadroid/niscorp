@@ -1,6 +1,6 @@
 {
   "name": "@niscorp/signal",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "Universal LLM abstraction — stateless, immutable, provider-agnostic",
   "license": "Apache-2.0",
   "type": "module",

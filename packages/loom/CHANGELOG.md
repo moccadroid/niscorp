@@ -1,5 +1,43 @@
 # @niscorp/loom
 
+## 0.2.2
+
+### Patch Changes
+
+- d5c9d58: README and DESIGN say what `_errors` and `validations` hold, and what the built-in select displays. They hold the messages a form shows, not the verdict on a document:
+  - They are written after a change. A new document, or a stored one just opened, has an empty `validations` until its first edit.
+  - A problem with no path is written nowhere: a `.refine()` on the whole object leaves `_errors` empty while the schema refuses the document. Given a `path`, its message lands at that field.
+  - A message on a container is dropped when a field inside it has one too.
+  - A field inside a list item or a recursive template binds no error slot: its message is in the tree and is not drawn at the field.
+
+  To decide whether a document may be kept, parse it: `schema.safeParse(editor.documents.<name>)`.
+
+  An enum with no `.default()` starts with no value in the document, and the built-in select displays its first option all the same; a `.default()` starts the two agreeing. The doc comment on `validations` says what it is, and tests hold each of these. No code changed.
+
+  **What to change:** nothing. A host that enables Save when `validations` is empty is not asking whether the document is valid.
+
+- fa3f038: README and DESIGN say what a form guarantees. It gives every field the schema describes a control; it does not validate, so a new document and a document mid-edit can fail the schema: parse it before you keep it. Edits go to the Nova runtime's data, not to the `action.data` that `toNova` returned. A new document starts from each field's empty value (`''`, `0`, `false`, `[]`, the schema's default where it has one, `null` for a kind Loom does not model; a required enum with no default is left out), and `toNova`'s `empty` and `includeOptional` options change that. A self-reference that is not inside an array, and every kind Loom does not model, gets a raw JSON box. No code changed.
+
+  **What to change:** nothing.
+
+- 659b81e: A document whose root is a list, a string, a number, a boolean or a tuple opens with its seed.
+
+  `createLoomEditor.open` passed a document's seed on only when it was an object. A seed its schema accepts but that is not one — `['stalls', 'circle']` for `z.array(z.string())`, `42` for `z.number()`, a string for a union with a string branch — was dropped, and the default opened in its place. `<LoomEditor>` reports its documents on mount, so a host that saves on change wrote that default over the stored document before any edit. The Prism plugin reached it too: a config that is a literal or a list of nodes (`7`, `[{ $ref: '$.a' }, …]`) opened as `{ "$ref": "" }`.
+
+  Such a seed is now what the editor opens with, reports, and draws.
+
+  Nothing else moves. A seed the schema refuses for one of these documents still opens the default, as before; an object document, and what it does with a seed that is or is not an object, is untouched; and no exported type changed — `CompileOptions.value` is as it was.
+
+  **What to change:** nothing.
+
+- 3029c34: The kit's select writes the chosen option's own value, so an enum whose values are numbers can be set.
+
+  `LoomSelect` wrote the `<select>`'s text. For `z.enum({ stalls: 1, circle: 2 })` the options are offered as `"1"` and `"2"`, and choosing one wrote the string `"2"` — which the schema refuses (`Invalid option: expected one of 1|2`), so a document that was valid became invalid by picking a listed option, and no choice in the list could make it valid again.
+
+  It now writes the value of the option that was chosen: `2`. An enum of strings is written exactly as before, an enum of digit strings (`z.enum(['1', '2'])`) stays strings, and a mixed one (`{ a: 'x', b: 2 }`) writes each as it is.
+
+  **What to change:** nothing.
+
 ## 0.2.1
 
 ### Patch Changes
