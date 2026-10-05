@@ -411,7 +411,12 @@ preview(reflexId, { now, fact? }): Promise<PreviewReport>
 Runs the real pipeline against real data and stubs exactly one function, the
 effect executor. Writes nothing. Returns the occurrence or fact, the selected
 rows by name, each unit's resolved input, and whatever the handler's `preview`
-hook renders.
+hook renders. For a clock reflex the occurrence is the most recent one at or
+before `now` (for a one-shot, its one date, even when that is still ahead),
+whether or not the reflex was armed then or is enabled now, so an `advance` at
+the same `now` may create no run. `fired` is `false`, with a `reason`, when
+`when` does not match the `fact` passed in or the fan-out fails (the selection
+throws, a unit key repeats); `true` does not say a run is due.
 
 ```typescript
 graph(): GraphReport      // { edges: { from, to, via }[], cycles, blind, errors, warnings } over what is loaded
