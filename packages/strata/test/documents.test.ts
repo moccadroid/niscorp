@@ -205,6 +205,23 @@ describe('upgrade — refusals', () => {
     await expect(migrate(pool, [nova(), prism()])).rejects.toMatchObject({ code: 'WRONG_OWNER' });
   });
 
+  // strata reads a sequence as a grammar when it declares `documents` or has a
+  // document step. A kit with nothing but markers declares neither, so it reads
+  // as owning tables — and a refusal whose only advice is `migrate` would put
+  // the kit's markers in a database's ledger. It has to say what makes a grammar.
+  it('a markers-only sequence without `documents` is refused, and the refusal says to declare them', async () => {
+    const kit: Sequence = { id: 'acme.kit', migrations: [{ description: 'Button may carry an icon', steps: [] }] };
+    const error = await createUpgrader([nova(), prism(), kit], { transform }).catch((e: unknown) => e);
+    expect(error).toMatchObject({ code: 'WRONG_OWNER', details: ['acme.kit'] });
+    expect(String(error)).toContain('declare its `documents`');
+  });
+
+  it('the same sequence declaring `documents` is a grammar, markers and all', async () => {
+    const kit: Sequence = { id: 'acme.kit', documents: {}, migrations: [{ description: 'Button may carry an icon', steps: [] }] };
+    const upgrader = await createUpgrader([nova(), prism(), kit], { transform });
+    expect(upgrader.stamp).toEqual({ 'nisc.nova': 0, 'nisc.prism': 0, 'acme.kit': 1 });
+  });
+
   it('one sequence cannot own both', async () => {
     const mixed: Sequence = { id: 'acme.both', documents: { thing: {} }, migrations: [{ description: 'x', steps: [{ kind: 'sql', sql: 'SELECT 1' }] }] };
     await expect(prepare([mixed])).rejects.toMatchObject({ code: 'INVALID_SEQUENCE' });

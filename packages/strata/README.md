@@ -115,8 +115,11 @@ export const NOVA_SEQUENCE = {
 };
 
 // An app's kit: Button's `label` prop is now `text` — one flat node at a time.
+// `documents` is what says this sequence is a grammar; the kit has no kinds of
+// its own (it rewrites nova's layouts), so it declares none.
 export const kit = {
   id: 'acme.kit',
+  documents: {},
   migrations: [{ description: 'Button: label → text', steps: [{ kind: 'document', at: 'nisc.nova/layout', transform: renameLabelPrismConfig }] }],
 };
 
@@ -129,6 +132,12 @@ const { document, stamp, applied } = upgrader.upgrade(storedAction, { kind: 'nis
   are never recorded in a ledger: documents travel (an add-on built on older
   code submits older documents), so their version travels with them. One
   sequence owns tables or documents, never both.
+- **A grammar declares `documents`**, from its first release — `{}` if it has
+  no kinds of its own. That is how strata tells the two owners apart: a sequence
+  is a grammar when it declares `documents` or has a document step, and anything
+  else owns tables. A kit with no migrations yet, or with only empty markers,
+  and no `documents` therefore reads as owning tables, and `createUpgrader`
+  refuses it (`WRONG_OWNER`). Declare `documents`; do not hand it to `migrate`.
 - **The walker does the recursion.** Embedding paths use `key`, `*` (every
   value of a record) and `[]` (every item of an array) — kept apart because
   nova's `children` is a lone node or an array. Every document of a step's kind

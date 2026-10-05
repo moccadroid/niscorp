@@ -102,9 +102,13 @@ export const createUpgrader = async (sequences: readonly Sequence[], options: { 
   const prepared = await prepare(sequences);
   const tables = prepared.filter((s) => !s.grammar);
   if (tables.length > 0) {
+    // A sequence is read as a grammar by what it declares (plan.ts). One with
+    // nothing but markers and no `documents` reads as owning tables, so the
+    // refusal says how a grammar says it is one — `migrate` alone would send a
+    // kit's markers to a database's ledger.
     throw new StrataError(
       'WRONG_OWNER',
-      'Documents are upgraded by grammar sequences; these own tables and belong to a database\'s ledger (`migrate`).',
+      'Documents are upgraded by grammar sequences; these own tables and belong to a database\'s ledger (`migrate`). If one of them is a grammar, declare its `documents` — a sequence with no `documents` and no document step is read as owning tables.',
       tables.map((s) => s.id),
     );
   }
