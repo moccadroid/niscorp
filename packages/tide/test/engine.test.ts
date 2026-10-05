@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { createMemoryStore, createTide } from '../src/index';
-import type { EffectRegistry, ReflexInput, Row, Tide, TideConfig } from '../src/index';
+import type { EffectRegistry, ReflexInput, Row, Tide, TideConfig, TransformFn } from '../src/index';
 import { testTransform, utc } from './support';
 
 // The execution semantics, exercised. Every test drives the clock by hand:
@@ -323,6 +323,25 @@ describe('facts', () => {
     const report = await tide.advance({ now: T0 });
     expect(report.factsMatched).toBe(1);
     expect(calls[0]?.input).toEqual({ invoice: 'inv_1' });
+  });
+
+  // What a template is handed is plain data. A fact the host ingested carries
+  // no `as` and no `cause`, and neither is a key holding `undefined`: a
+  // transform that takes plain JSON refuses a source where one is.
+  it('a fact reaches the transform with no key holding undefined', async () => {
+    const sources: Row[] = [];
+    const watched: TransformFn = (config, source) => {
+      sources.push(source);
+      return testTransform(config, source);
+    };
+    const { tide } = await harness([onWrite], { mail: noop }, { transform: watched });
+    await tide.ingest({ kind: 'write', entity: 'payments', op: 'insert', row: { invoice_id: 'inv_1' }, at: T0 });
+    await tide.advance({ now: T0 });
+
+    const holdsUndefined = (value: unknown): boolean =>
+      value !== null && typeof value === 'object' && Object.values(value).some((inner) => inner === undefined || holdsUndefined(inner));
+    expect(sources.length).toBeGreaterThan(0);
+    expect(sources.some(holdsUndefined)).toBe(false);
   });
 
   // A HOST WHOSE LEDGER IS NOT ITS AUDIT LOG. Minting one fact per committed

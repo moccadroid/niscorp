@@ -1,4 +1,4 @@
-import { describe, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { createMemoryStore } from '../src/index';
 import { STORE_CONTRACT } from '../src/testing';
 import type { TideStore } from '../src/index';
@@ -21,3 +21,18 @@ for (const store of STORES)
   describe(`the store contract — ${store.name}`, () => {
     for (const check of STORE_CONTRACT) it(check.name, async () => check.run(store.make()));
   });
+
+// What the memory store holds itself to beside the contract: a row it hands
+// back has no key for a value that was never given. That is what a row read
+// back from a database is (moss's store), and what `undefined` already means
+// in a `cas`. It is not a check in STORE_CONTRACT, because one there would
+// hold every host's own store to it.
+describe('the memory store', () => {
+  it('a value that was never given is not a key on the row', async () => {
+    const store = createMemoryStore();
+    const stored = await store.appendIfAbsent('fact', { kind: 'signal', name: 'ping', at: 1, depth: 0, cause: undefined, as: undefined });
+    expect(Object.keys(stored ?? {}).sort()).toEqual(['at', 'depth', 'id', 'kind', 'name']);
+    const [read] = await store.query({ table: 'fact' });
+    expect(Object.keys(read ?? {}).sort()).toEqual(['at', 'depth', 'id', 'kind', 'name']);
+  });
+});

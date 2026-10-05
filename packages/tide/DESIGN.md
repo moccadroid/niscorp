@@ -825,7 +825,7 @@ destructuring it produced a transaction that failed inside the library.
 ```ts
 const tide = createTide({
   store: createMemoryStore(),                                   // or your own, held to STORE_CONTRACT
-  transform: (config, source) => evaluate(config, source),      // prism, or your own
+  transform: prismTransform,                                    // prism, or your own
   select: async function* (q) { yield* (await pg.query(q.sql, q.params)).rows; },
   effects: {
     'mail.send':    { run: (input) => mailer.send(input) },

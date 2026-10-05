@@ -143,10 +143,17 @@ export const createMemoryStore = (): MemoryStore => {
     }
 
     sequence += 1;
+    // A value that was never given is not a key on the row — what `undefined`
+    // already means in a `cas` (see `applied`), and what a row read back from
+    // a database is. A fact stored with `as: undefined` used to keep the key
+    // here and lose it there, so a transform that looks at which keys a fact
+    // has saw two different facts, and one that takes plain JSON refused this
+    // one.
+    const given: Row = Object.fromEntries(Object.entries(candidate).filter(([, value]) => value !== undefined));
     // An id is minted only where the primary key IS `id`. `state` is keyed by
     // the reflex it belongs to, and giving it a second identity would invent
     // a way for one reflex to have two states.
-    const row = (PRIMARY_KEY[table] === 'id' ? { ...candidate, id: candidate.id ?? `${ID_PREFIX[table]}_${sequence}` } : { ...candidate }) as TideTables[T];
+    const row = (PRIMARY_KEY[table] === 'id' ? { ...given, id: given.id ?? `${ID_PREFIX[table]}_${sequence}` } : given) as TideTables[T];
     tables[table].set(keyOf(table, row), row);
     return row;
   };

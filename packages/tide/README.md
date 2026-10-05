@@ -8,24 +8,26 @@ Every nisc package answers one question: vex answers *what*, nova *how it looks*
 
 ```bash
 pnpm add @niscorp/tide zod
+# The quick example fills the transform seam with Prism:
+pnpm add @niscorp/prism @niscorp/strata
 ```
 
-`zod` is the only required peer; `@niscorp/cortex` is an optional one, used only by `@niscorp/tide/agent`. Storage, selection, transformation, effects and identity are seams the host fills.
+`zod` is the only required peer; `@niscorp/cortex` is an optional one, used only by `@niscorp/tide/agent`. Storage, selection, transformation, effects and identity are seams the host fills — the example below fills transformation with Prism, which has `@niscorp/strata` as a peer of its own.
 
 ## Quick example
 
 ```typescript
 import { createTide, createMemoryStore } from '@niscorp/tide';
-import { evaluate } from '@niscorp/prism';
+import { prismTransform } from '@niscorp/prism';
 
 const tide = createTide({
   store: createMemoryStore(),
-  transform: (config, source) => evaluate(config, source),
+  transform: prismTransform,
   select: async (query) => db.rows(query),
   effects: {
     'mail.send': {
       run: (input) => mailer.send(input),
-      preview: (input) => ({ channel: 'email', to: input.to }),
+      preview: (input) => ({ channel: 'email', input }),
     },
   },
 });
