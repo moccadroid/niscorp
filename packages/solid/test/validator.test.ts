@@ -107,6 +107,30 @@ describe('recover mode — kind violations', () => {
     expect(errors[0]?.path).toBe('tags.1');
   });
 
+  // What the README says of a rejected element: the position keeps what the
+  // list held there. INITIAL holds one tag, so position 1 held nothing — it is
+  // left `undefined` between its neighbours, and the value fails the schema.
+  it('a rejected element with nothing before it at its position leaves undefined there', () => {
+    const stream = createStream({ schema: Schema, initial: INITIAL });
+    stream.write('{"tags":["a",42,"c"]}');
+
+    const tags: readonly unknown[] = stream.current().tags;
+    expect(tags).toHaveLength(3);
+    expect(1 in tags).toBe(true);
+    expect(tags[1]).toBeUndefined();
+    expect(Schema.safeParse(stream.current()).success).toBe(false);
+  });
+
+  it('a rejected element keeps the value the list held at its position; in last place it leaves the list short', () => {
+    const held = createStream({ schema: Schema, initial: { ...INITIAL, tags: ['x', 'y', 'z'] } });
+    held.write('{"tags":["a",42,"c"]}');
+    expect(held.current().tags).toEqual(['a', 'y', 'c']);
+
+    const last = createStream({ schema: Schema, initial: { ...INITIAL, tags: [] } });
+    last.write('{"tags":["a",42]}');
+    expect(last.current().tags).toEqual(['a']);
+  });
+
   it('skips a bad nested object, preserves prior nested value', () => {
     const errors: StreamError[] = [];
     const stream = createStream({ schema: Schema, initial: INITIAL });

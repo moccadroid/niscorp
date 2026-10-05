@@ -96,6 +96,8 @@ createStream({ schema, initial, mode: 'trust' })
 | `strict` | Enter a terminal failed state on first violation. `current()` freezes, further writes are no-ops, `final()` rejects. |
 | `trust` | No validation. Escape hatch for debugging or for producers you fully control. Discouraged. |
 
+In a list, the prior value is whatever the list held at that position. Where it held nothing there, a rejected element that is followed by an accepted one leaves `undefined` at its position: `{"seats":["C4",5,"C6"]}` against `z.array(z.string())` with an empty initial list gives `['C4', undefined, 'C6']`, which the schema itself refuses. `onError` names the position (`seats.1`), and `constraints: 'finalize'` reports the list again when it closes. A rejected element in last place leaves the list one short instead.
+
 ### Constraint validation
 
 Kind checks catch the structural foot-guns (map-over-a-string, add-to-a-string). For constraint checks — `.min`, `.max`, `.regex`, `.email`, `.int`, `.refine` — opt into `constraints: 'finalize'`:
