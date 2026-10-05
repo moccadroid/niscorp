@@ -22,7 +22,7 @@ The streamed JSON is not the state. The state is a valid object that exists from
 const stream = createStream({ schema, initial });
 ```
 
-`initial` is validated against the Zod schema at construction. Every `current()` call returns a valid object — before, during, and after streaming. The incoming JSON progressively overwrites fields in this object as they're parsed.
+`initial` is validated against the Zod schema at construction. Every `current()` call returns an object — before, during, and after streaming — and a value of the wrong JSON kind is never written into it (see "The always-valid invariant" for where that check applies). The incoming JSON progressively overwrites fields in this object as they're parsed; an object the reply creates (a list row, an object where `initial` has `null` or nothing, a record entry) starts empty and fills in key by key.
 
 This means consumers can render and act on the state immediately. There is no "waiting for valid JSON" phase.
 
@@ -210,7 +210,7 @@ Scaling ratio (20KB/1KB ms/KB): **1.4x** — effectively linear.
 
 ## The always-valid invariant
 
-Solid's central promise: whatever `current()` returns is structurally valid against the schema. Not "will be valid eventually" — valid right now, and after every write. This holds regardless of what the LLM sends.
+Solid's central promise: outside `trust` mode, where the schema states a value's JSON kind, a value of another kind is never written into what `current()` returns. Not "will be right eventually" — right now, and after every write, regardless of what the LLM sends. It is a promise about kinds, not completeness: an object the reply creates fills in key by key (see Consequences).
 
 ### The problem it solves
 
@@ -234,16 +234,19 @@ With `constraints: 'finalize'`, the validator runs `subSchema.safeParse(currentV
 
 ### Modes
 
-Three modes govern what happens on a violation:
+Three modes govern what happens on a kind violation:
 
 - **`trust`** — no validation. Today's pre-invariant behavior. Included as a debug escape hatch; discouraged in production.
 - **`recover`** (default) — the bad value is skipped, the prior valid value stays in place, an error is emitted via `onError`, and the stream continues. One hallucinated field doesn't tank the rest of the response.
 - **`strict`** — the bad value is skipped, an error is emitted once, the stream enters a terminal failed state. `current()` freezes at the last valid snapshot, further writes are no-ops, `final()` rejects. For when rendering wrong is worse than rendering nothing.
 
+A constraint violation (phase 2) is found after the value has been written, so it is never skipped: in `recover` the value stays in `current()` and `final()` and the error is emitted; in `strict` the stream fails the same way, frozen with the violating value in it. `trust` runs neither phase.
+
 ### Consequences
 
-- `current()` is always shape-valid (in `recover` and `strict`).
-- `current()` is *not* always constraint-valid mid-stream — that's what `select(path).final()` and `constraints: 'finalize'` are for.
+- A value of the wrong JSON kind is never written into `current()` (in `recover` and `strict`, for the schema kinds the walker checks — see Sub-schema walking), and every field `initial` holds keeps a value.
+- An object the reply creates starts empty and fills in key by key. Until it closes, `current()` can lack keys the schema requires, and no error is raised for that; a complete reply that never sends a required key of such an object leaves `final()` without it (reported only under `constraints: 'finalize'`).
+- `current()` is *not* always constraint-valid, mid-stream or at the end. `constraints: 'finalize'` reports a violation when the field closes; it does not take the value back.
 - No throwing from `write()`. All error surfaces go through `onError` + `final()` rejection. Signal adapters and other producer loops can write without try/catch.
 - Selected streams see only errors at-or-below their path. `select('widget').onError(...)` ignores errors on sibling fields.
 

@@ -11,7 +11,7 @@ Solid takes a different approach:
 - **Incremental parser** — processes only new characters. No re-scanning.
 - **Structural sharing** — snapshots reuse unchanged subtree references. No deep cloning.
 - **Reference equality** — change detection is `===`, not deep comparison. O(1).
-- **Always-valid invariant** — the parser kind-checks every value against the schema at the moment its type is known. `current()` is guaranteed structurally valid, whatever the LLM sends.
+- **Always-valid invariant** — the parser kind-checks every value against the schema at the moment its type is known, so a value of the wrong JSON kind is never written into `current()`, whatever the LLM sends. (`trust` mode switches the check off, and a field whose schema is `z.lazy`, an intersection or a pipe is not kind-checked.)
 
 The result: linear scaling, 44x faster than naive repair+parse on a 10 KB payload, a clean subscription API that tells you exactly when each subtree finalizes, and a structural contract that holds even when the model hallucinates the wrong type for a field.
 
@@ -82,7 +82,7 @@ const result = await stream.final();
 
 ## Validation modes
 
-Every stream enforces the structural invariant: whatever `current()` returns conforms to the schema shape. When the LLM sends a value whose JSON kind doesn't match (a string where a number was expected, an array where an object lives, a field not in the schema), solid reacts based on `mode`:
+Every stream outside `trust` mode enforces the structural invariant: where the kind check applies, a value of the wrong JSON kind is not written into `current()`. When the LLM sends a value whose JSON kind doesn't match (a string where a number was expected, an array where an object lives, a field not in the schema), solid reacts based on `mode`:
 
 ```typescript
 createStream({ schema, initial, mode: 'recover' })   // default
@@ -104,13 +104,13 @@ Kind checks catch the structural foot-guns (map-over-a-string, add-to-a-string).
 createStream({ schema, initial, constraints: 'finalize' })
 ```
 
-This runs the sub-schema `safeParse` at the exact moment each field closes in the stream, so partial strings never trip constraints they'll eventually satisfy. Violations emit `onError` with `phase: 'finalize'`.
+This runs the sub-schema `safeParse` at the exact moment each field closes in the stream, so partial strings never trip constraints they'll eventually satisfy. Violations emit `onError` with `phase: 'finalize'`. A violation is reported, not undone: the value stays in `current()` and `final()`. In `strict` mode it also fails the stream, which stays frozen with that value in it.
 
 ## How it works
 
-1. **Base object** — validated against your Zod schema at construction. This is the starting state. Every field has a value from the start.
+1. **Base object** — validated against your Zod schema at construction. This is the starting state. Every field it holds has a value from the start. An object the reply creates (a list row, an object where the base has `null` or nothing, a record entry) has no base: it starts empty and gets its keys as they arrive.
 
-2. **Incremental parsing** — each `write(chunk)` feeds characters into a state machine that tracks JSON structure, extracts values, and emits structural events. No `JSON.parse`, no buffer re-scanning.
+2. **Incremental parsing** — each `write(chunk)` feeds characters into a state machine that tracks JSON structure, extracts values, and emits structural events. No `JSON.parse`, no buffer re-scanning. What is written should be the JSON value and nothing else. A code fence around it is ignored, and so is text with no double quote, bracket or brace in it. A `"` in text before the JSON is read as a string where the root belongs: an `onError` (`[solid] <root>: expected object, got string`) in `recover`, a failed stream in `strict`. A bracket or brace in text before the JSON is read as the root itself: the stream ends there, on the initial value or, in `strict`, sometimes as a failure.
 
 3. **Value-open validation** — the moment the parser detects a value's JSON kind (`{`, `[`, `"`, digit, `t`/`f`/`n`), it checks it against the schema. If the kind doesn't match (string where number expected, array where object lives), the parser enters **skip-mode** — consuming the entire bad subtree without writing, dirtying, or emitting anything. The prior valid value stays in place.
 
