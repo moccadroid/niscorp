@@ -8,6 +8,9 @@ hand cortex the client) and `zod` (you hand it the schemas).
 
 ```bash
 pnpm add @niscorp/cortex @niscorp/signal zod
+# Signal loads the provider's SDK when a model is called. For Groq, OpenAI,
+# OpenRouter or any OpenAI-compatible API (the quick example runs on Groq):
+pnpm add openai
 ```
 
 For the *why* behind the architecture — the envelope, output
@@ -43,6 +46,7 @@ const llm = createSignal('groq'); // qwen/qwen3.8-27b — the registry default
 
 const result = await calcAgent.run('What is (2 + 3) * 7 - 6?', { llm }).result;
 if (result.ok) console.log(result.output.data.answer); // 29
+else console.error(result.error.message); // a run that fails returns its reason; it does not throw
 ```
 
 ---
