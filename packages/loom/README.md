@@ -87,6 +87,18 @@ import { prism } from '@niscorp/loom/plugins/prism/react';
 - `onChange` fires with the live document values on every edit.
 - To switch to a different artifact, give the element a new React `key`.
 
+Two things the built-in kit draws are worth knowing before you rely on them:
+
+- **Messages follow edits.** The inline messages and the Validations pane show
+  what the schema said after the last edit. They are empty until the first one,
+  a problem with no field path (a `.refine()` on the whole object, without a
+  `path`) is shown nowhere, and a problem in a list row shows in the Validations
+  pane only. They are not the verdict on a document; the schema is
+  ([DESIGN.md](./DESIGN.md), "Validation").
+- **A select has no row for "none".** An enum with no `.default()` starts with no
+  value in the document, and the select displays its first option all the same.
+  Give the enum a `.default()` and the two start out agreeing.
+
 A **plugin** wires one domain into the editor. It contributes the schemas to edit
 (its *documents*), optional custom field widgets, and usually a preview. The three
 reference plugins:

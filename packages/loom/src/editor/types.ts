@@ -41,7 +41,11 @@ export type LoomEditor = {
   readonly plugin: LoomPlugin | undefined;
   /** The live document values, keyed by document name. */
   readonly documents: Record<string, unknown>;
-  /** Validation problems per document: `{ [document]: errorTree }`. */
+  /**
+   * The messages each form shows, per document: `{ [document]: errorTree }`.
+   * Written after an edit, so empty at open, and a problem with no path is not
+   * in it. Not the verdict on a document: for that, parse it with its schema.
+   */
   readonly validations: Record<string, unknown>;
   on: (event: LoomEvent, handler: () => void) => () => void;
   dispose: () => void;

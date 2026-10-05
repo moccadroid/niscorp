@@ -155,9 +155,30 @@ records which role a field uses.
 
 Loom validates with the same schema it compiled from — there is no second source
 of truth. `attachValidation` runs the schema's `safeParse` (refinements and all)
-over the live document and writes any problems into a reserved `_errors` slot in
-the data; each field binds its own error slot, so messages show inline. The
-`_errors` slot is stripped from the document Loom reports out.
+over the live document and writes the problems into a reserved `_errors` slot in
+the data, as a tree shaped like the document: a problem at `venue.hall` is the
+string at `_errors.venue.hall`. The `_errors` slot is stripped from the document
+Loom reports out.
+
+That tree, which `editor.validations` publishes per document, holds the messages
+a form shows. It is not the verdict on the document:
+
+- It is written after a change, not before one. A new document, or a stored one
+  just opened, has no `_errors` and an empty `validations` until its first edit,
+  whatever the schema would say of it.
+- A problem with no path has no place in the tree and is written nowhere. A
+  `.refine()` on the whole object leaves `_errors` empty while the schema refuses
+  the document; give the refine a `path` and its message lands at that field.
+- One slot holds one thing: a message on a container (`guests`) is dropped when
+  a field inside it has one too.
+
+To decide whether a document may be kept, ask the schema:
+`schema.safeParse(editor.documents.<name>)`.
+
+A field at an absolute path (`$.venue.hall`) binds its own error slot, so its
+message shows inline. A field inside a list item, or inside a recursive template,
+binds none: its message is in the tree (`_errors.guests.1.name`) and is not drawn
+at the field.
 
 ## The editor host
 
