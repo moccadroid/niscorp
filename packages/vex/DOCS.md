@@ -371,7 +371,7 @@ type Query = {
   compute?: Record<string, ComputeExpression>;     // alias → expression
   aggregate?: Record<string, AggregateExpression>; // alias → function
   groupBy?: string[];
-  sort?: { field: string; dir?: 'asc' | 'desc' }[];
+  sort?: { field: string; dir: 'asc' | 'desc' }[]; // in hand-written JSON `dir` may be left out: it reads as 'asc'
   limit?: number;
   distinct?: boolean;
 };
@@ -550,7 +550,11 @@ single read (use an object shape so Vex maps that single row).
 ```
 
 (Limitation: subquery SQL params are embedded verbatim, so at most one bound
-`$context`/`$scope` param across all subqueries is supported today.)
+`$context`/`$scope` param across all subqueries is supported today. A policy
+row rule counts: it binds a `$scope` param in every subquery over a table it
+scopes, so the example above compiles but throws at execute (`08P01`, a
+parameter-count mismatch) once two of its tables are row-scoped. Under such a
+policy, read each count on its own.)
 
 ### Semantic search
 

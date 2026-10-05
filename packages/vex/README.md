@@ -45,7 +45,8 @@ const again = await engine.execute({ fingerprint: fp, context: { customerId: 'cu
 Generating needs an LLM-backed `generateDsl` hook — see
 [DOCS.md](./DOCS.md#wiring-the-llm-agents). Without one, the engine still serves
 any request that **replays a fingerprint** (a named slot or a seeded read), and
-the `compile`/`test` APIs work fully offline.
+the `compile`/`test` APIs work with no model: both need the introspected
+schema, and `test` runs the query against the database.
 
 ## The production shape
 
