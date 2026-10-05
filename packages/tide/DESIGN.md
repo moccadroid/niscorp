@@ -468,6 +468,12 @@ The requirements doc calls this "the part that must not be hand-waved." In order
   failed, and re-settling must not send it again — and it is answered by `drained`, a
   flag on the run recording that its settlement has been announced. The run rewinds;
   the announcement does not repeat.
+- **`retry()` takes its task off the count whatever the run is doing, and ⟲ it did
+  not.** The decrement rode on the rewind, and the rewind expects a `settled` run: the
+  second of two retries, or a retry pressed while the run was still going, reopened its
+  task and left `failed` one too high. The run then reached its total a task early — it
+  settled, and announced counts that were false, with work still out. The count now
+  comes down unconditionally; only the rewind waits for `settled`.
 - **Attempts are fenced.** A timeout marks the attempt failed and schedules a retry —
   but the timed-out effect may still be running. Each claim mints a token; recording a
   result requires the token to still be current, so a zombie completion is discarded

@@ -215,6 +215,70 @@ describe('recovery on postgres', () => {
     expect((await tide.ledger.facts()).filter((fact) => fact.kind === 'run')).toHaveLength(1);
   });
 
+  // Six units, a task each, and a gateway that is down for some of them.
+  const texts = (policy: ReflexInput['policy']): ReflexInput => ({
+    id: 'reminders.send',
+    intent: 'Text each member, failing terminally on the first attempt.',
+    on: { manual: {} },
+    select: { query: { table: 'members' }, mode: 'each', unitKey: 'id' },
+    effect: { name: 'text' },
+    policy,
+  });
+  const members = (): Row[] => ['a', 'b', 'c', 'd', 'e', 'f'].map((id) => ({ id }));
+  const gateway = (down: readonly string[]): { out: Set<string>; effects: EffectRegistry } => {
+    const out = new Set(down);
+    return {
+      out,
+      effects: {
+        text: {
+          run: (_input, ctx) => {
+            if (out.has(ctx.taskKey.split(':').at(-1) ?? '')) throw new Error('the gateway timed out');
+            return { sent: true };
+          },
+        },
+      },
+    };
+  };
+  const countsOf = async (tide: Tide): Promise<{ state?: string; done?: number; failed?: number }> => {
+    const [run] = await tide.ledger.runs({ reflexId: 'reminders.send' });
+    return { state: run?.state, done: run?.done, failed: run?.failed };
+  };
+
+  it('two failed tasks retried before either runs again both come off the count', async () => {
+    const { out, effects } = gateway(['b', 'e']);
+    const { tide } = await harness([texts({ retry: { max: 0, backoff: 'fixed', baseMs: 1 }, overlap: 'allow' })], effects, { select: members });
+    await tide.fire('reminders.send', { now: T0 });
+    await tide.advance({ now: T0 });
+    expect(await countsOf(tide)).toEqual({ state: 'settled', done: 4, failed: 2 });
+
+    out.clear();
+    for (const failed of await tide.ledger.tasks({ state: 'failed' })) expect(await tide.retry(failed.id, T0 + 10)).toBe(true);
+    expect(await countsOf(tide)).toEqual({ state: 'fanned', done: 4, failed: 0 });
+
+    await tide.advance({ now: T0 + 10 });
+    expect(await countsOf(tide)).toEqual({ state: 'settled', done: 6, failed: 0 });
+  });
+
+  it('a task retried while its run is still going does not settle the run a task early', async () => {
+    // One task per tick (`order: 'serial'`), so the run is unsettled when the
+    // first failure is retried.
+    const { out, effects } = gateway(['a']);
+    const { tide } = await harness([texts({ retry: { max: 0, backoff: 'fixed', baseMs: 1 }, overlap: 'allow', order: 'serial' })], effects, { select: members });
+    await tide.fire('reminders.send', { now: T0 });
+    await tide.advance({ now: T0 });
+
+    out.clear();
+    const [failed] = await tide.ledger.tasks({ state: 'failed' });
+    expect(await tide.retry(failed?.id ?? '', T0 + 10)).toBe(true);
+    for (let n = 0; n < 5; n += 1) await tide.advance({ now: T0 + 10 });
+    expect(await countsOf(tide)).toEqual({ state: 'fanned', done: 5, failed: 0 });
+    expect((await tide.ledger.facts()).filter((fact) => fact.kind === 'run')).toHaveLength(0);
+
+    await tide.advance({ now: T0 + 10 });
+    const settlements = (await tide.ledger.facts()).flatMap((fact) => (fact.kind === 'run' ? [fact.stats] : []));
+    expect(settlements).toEqual([{ total: 6, done: 6, failed: 0 }]);
+  });
+
   it('takes back a lease a dead process was holding', async () => {
     const { tide, calls, pool } = await harness(
       [{ ...reflex, policy: { retry: { max: 3, backoff: 'fixed', baseMs: 1 }, overlap: 'allow' } }],

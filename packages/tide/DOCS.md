@@ -398,8 +398,10 @@ its `payload` and `by` (default `'operator'`) recorded. Works on a
 retry(taskId, now): Promise<boolean>
 ```
 Reopens a `failed` task **and rewinds its run** from `settled` back to `fanned`,
-in one transaction, so the next `advance` actually claims it. `false` when the
-task does not exist or is not `failed`. The run keeps
+in one transaction, so the next `advance` actually claims it. The task comes off
+the run's `failed` count whether or not the run had settled, so retrying several
+tasks at once, or one while the run is still going, leaves the counts true.
+`false` when the task does not exist or is not `failed`. The run keeps
 `drained`, so re-settling does not announce a second time: the digest that
 already went out saying twelve failed is not sent again.
 

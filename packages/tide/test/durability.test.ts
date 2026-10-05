@@ -107,6 +107,90 @@ describe('the recovery verb', () => {
     expect(settlements).toHaveLength(1);
   });
 
+  // Six units, a task each, and a gateway that is down for some of them.
+  const texts = (policy: ReflexInput['policy']): ReflexInput => ({
+    id: 'reminders.send',
+    intent: 'Text each member, and fail terminally on the first attempt.',
+    on: { manual: {} },
+    select: { query: { table: 'members' }, mode: 'each', unitKey: 'id' },
+    effect: { name: 'text' },
+    policy,
+  });
+  const members: SelectFn = () => ['a', 'b', 'c', 'd', 'e', 'f'].map((id) => ({ id }));
+  const gateway = (down: readonly string[]) => {
+    const out = new Set(down);
+    const effects: EffectRegistry = {
+      text: {
+        run: (_input, ctx) => {
+          // the unit is the last part of the task key
+          if (out.has(ctx.taskKey.split(':').at(-1) ?? '')) throw new Error('the gateway timed out');
+          return { sent: true };
+        },
+      },
+    };
+    return { out, effects };
+  };
+  const countsOf = async (tide: Tide): Promise<{ state?: string; done?: number; failed?: number }> => {
+    const [run] = await tide.ledger.runs({ reflexId: 'reminders.send' });
+    return { state: run?.state, done: run?.done, failed: run?.failed };
+  };
+
+  it('two failed tasks retried before either runs again both come off the count', async () => {
+    // The defect: the count came down only with the rewind, and the rewind
+    // expects a settled run. The first retry rewound it; the second reopened
+    // its task and left `failed` at 1 — six done, "1 failed of 6".
+    const { out, effects } = gateway(['b', 'e']);
+    const { tide } = await harness([texts({ retry: { max: 0, backoff: 'fixed', baseMs: 1 }, overlap: 'allow' })], effects, { select: members });
+    await tide.fire('reminders.send', { now: T0 });
+    await tide.advance({ now: T0 });
+    expect(await countsOf(tide)).toEqual({ state: 'settled', done: 4, failed: 2 });
+
+    out.clear();
+    for (const failed of await tide.ledger.tasks({ state: 'failed' })) expect(await tide.retry(failed.id, T0 + 10)).toBe(true);
+    expect(await countsOf(tide)).toEqual({ state: 'fanned', done: 4, failed: 0 });
+
+    await tide.advance({ now: T0 + 10 });
+    expect(await countsOf(tide)).toEqual({ state: 'settled', done: 6, failed: 0 });
+  });
+
+  it('...and one of them failing again is counted once', async () => {
+    const { out, effects } = gateway(['b', 'e']);
+    const { tide } = await harness([texts({ retry: { max: 0, backoff: 'fixed', baseMs: 1 }, overlap: 'allow' })], effects, { select: members });
+    await tide.fire('reminders.send', { now: T0 });
+    await tide.advance({ now: T0 });
+
+    out.delete('b');
+    for (const failed of await tide.ledger.tasks({ state: 'failed' })) await tide.retry(failed.id, T0 + 10);
+    await tide.advance({ now: T0 + 10 });
+    expect(await countsOf(tide)).toEqual({ state: 'settled', done: 5, failed: 1 });
+  });
+
+  it('a task retried while its run is still going does not settle the run a task early', async () => {
+    // `order: 'serial'` lands one task per tick, so the run is unsettled when
+    // the first failure is retried. Its count stayed up, the run reached its
+    // total with a task still pending, and the settlement went out saying
+    // "5 done, 1 failed" about a night on which six were sent and none failed.
+    const { out, effects } = gateway(['a']);
+    const { tide } = await harness([texts({ retry: { max: 0, backoff: 'fixed', baseMs: 1 }, overlap: 'allow', order: 'serial' })], effects, { select: members });
+    await tide.fire('reminders.send', { now: T0 });
+    await tide.advance({ now: T0 });
+    expect(await countsOf(tide)).toEqual({ state: 'fanned', done: 0, failed: 1 });
+
+    out.clear();
+    const [failed] = await tide.ledger.tasks({ state: 'failed' });
+    expect(await tide.retry(failed?.id ?? '', T0 + 10)).toBe(true);
+    expect(await countsOf(tide)).toEqual({ state: 'fanned', done: 0, failed: 0 });
+
+    for (let n = 0; n < 5; n += 1) await tide.advance({ now: T0 + 10 });
+    // five landed, one still to go: not settled, and nothing announced
+    expect(await countsOf(tide)).toEqual({ state: 'fanned', done: 5, failed: 0 });
+    expect((await tide.ledger.facts()).filter((fact) => fact.kind === 'run')).toHaveLength(0);
+
+    await tide.advance({ now: T0 + 10 });
+    const settlements = (await tide.ledger.facts()).flatMap((fact) => (fact.kind === 'run' ? [fact.stats] : []));
+    expect(settlements).toEqual([{ total: 6, done: 6, failed: 0 }]);
+  });
+
   it('releasing a parked fact actually releases it', async () => {
     // Clearing `parked` without recording the override was a ping-pong: the
     // matcher re-parked on the next tick, because the depth that parked it

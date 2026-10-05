@@ -321,6 +321,13 @@ const record = async (deps: EngineDeps, task: Task, token: string, settlement: S
 // The old objection was real: a digest already went out saying twelve failed,
 // and re-settling must not send it again. That is what `drained` answers. The
 // run rewinds; the announcement does not repeat.
+//
+// THE COUNT COMES DOWN WHATEVER STATE THE RUN IS IN. It used to come down only
+// as part of the rewind, which expects a `settled` run — so the second of two
+// retries (the first had already rewound it), or a retry pressed while the
+// run was still going, reopened its task and left `failed` one too high. A
+// run counting a failure it no longer had then reached its total one task
+// early: it settled, and announced itself, with work still out.
 export const reopenTask = async (deps: EngineDeps, taskId: string, now: number): Promise<boolean> =>
   deps.store.transact(async (tx) => {
     const [task] = await tx.query({ table: 'task', where: { id: taskId }, limit: 1 });
@@ -334,7 +341,8 @@ export const reopenTask = async (deps: EngineDeps, taskId: string, now: number):
     );
     if (!reopened) return false;
 
-    await tx.cas('run', task.runId, { state: 'settled' }, { state: 'fanned', failed: { inc: -1 }, settledAt: undefined });
+    await tx.cas('run', task.runId, {}, { failed: { inc: -1 } });
+    await tx.cas('run', task.runId, { state: 'settled' }, { state: 'fanned', settledAt: undefined });
     return true;
   });
 
