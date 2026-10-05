@@ -4,8 +4,10 @@ Loom builds editing UIs from schemas. Give it a [Zod](https://zod.dev) schema
 and it produces a form that views, creates, and edits JSON matching that schema.
 The form is built from the schema's structure — nested objects become nested
 sections, arrays get add and remove controls, unions become a type picker plus
-the fields for the chosen type — so editing the form always produces valid data.
-There is no hand-written form code and no raw text box.
+the fields for the chosen type — so the form has a control for every field the
+schema describes. It does not validate for you: a new document, and a document
+mid-edit, can fail the schema, so parse it before you keep it. There is no
+hand-written form code; a shape Loom does not model gets a raw JSON box.
 
 The forms render on [Nova](../nova), this stack's layout engine. Loom compiles a
 schema into a Nova layout; Nova draws it and routes each edit back into the data.
@@ -42,10 +44,19 @@ const schema = z.object({
 });
 
 const { action, layouts } = toNova(parse(schema));
-// `action.data` is the document being edited; hand `action` and `layouts`
-// to a Nova runtime to render the form. Every edit writes `action.data`
-// in place, and the data stays valid against `schema`.
+// `action.data` is the document the form starts from; hand `action` and
+// `layouts` to a Nova runtime to render the form. Edits go to the runtime's
+// copy (`shell.getRuntime(id).getData()`), not to `action.data`, and the
+// document can fail `schema` at any point: parse it before you keep it.
 ```
+
+A new document starts from each field's empty value: `''`, `0`, `false`, `[]`,
+the schema's default where it has one, and `null` for a kind Loom does not
+model. A required enum with no default is left out. These can fail the schema
+(`''` is not an email, `0` is not `min(1)`, `null` is not a record), and
+optional fields get them too. `toNova(model, { empty, includeOptional })`
+changes both: `empty` supplies a kind's starting value, `includeOptional: false`
+leaves optional fields out.
 
 This half is headless — no React, no DOM. Use it when you have your own Nova host
 or only need the compiled output.

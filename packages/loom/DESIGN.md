@@ -52,8 +52,10 @@ described independently of how it is rendered.
 Each field becomes a control bound to a path in the document by a *binding
 expression*: `$.name` at the root, `$item` inside an array loop. Binding is how
 Nova connects a control to a slot in the data — when the control changes, Nova
-writes that slot. So editing the form mutates the document in place, and because
-the document was shaped from the schema, it stays valid.
+writes that slot in the runtime's data (the `action.data` that `toNova` returned
+is the starting document and is not written). The document is shaped from the
+schema but not checked against it: an empty value can fail a constraint, and a
+control can write a value the schema refuses.
 
 `toNova` is the only part of Loom that speaks Nova. Everything Nova-specific
 lives here.
@@ -126,9 +128,16 @@ not, so Loom follows the document, not the schema.
 `parse` stops when it re-enters a type it is already inside and marks the
 back-edge with a `self` node, yielding a finite model from an infinite schema.
 `toNova` emits the recursive shape once as a named layout template authored
-against `$item`; the `self` reference points back to that template, and Nova
-resolves it per render against the live data. The form is therefore exactly as
-deep as the document, and growing or shrinking it is an ordinary list write.
+against `$item`; a `self` reference inside an array points back to that
+template, and Nova resolves it per render against the live data. The form is
+therefore exactly as deep as the document, and growing or shrinking it is an
+ordinary list write.
+
+This covers recursion through a list. A self-reference that is not inside an
+array (`next: z.lazy(() => Stop).optional()`) has no list write to grow by: it
+compiles to `loom:raw`, a raw JSON box, as does every kind outside the model
+(records, literals, dates, transforms, intersections, a union no pattern tells
+apart).
 
 ### Custom widgets
 
