@@ -254,11 +254,13 @@ type SignalMeta = {
   retries: number;                  // validation retries that occurred
   toolCalls: ToolCallRecord[];      // tools called, args, results, timing
   provider: {
-    raw: unknown;                   // raw API response for debugging (an array when the run took several calls)
+    raw: unknown;                   // null: these calls read the reply as a stream, which leaves no body to keep (an array, one entry per call, when the run took several)
     errors: ProviderError[];        // currently always empty
   };
 };
 ```
+
+`step()` returns the provider's response body as its `raw`. Where a provider rejected a call and Signal recovered the attempt from the rejection, that call's `raw` is the provider's error.
 
 ---
 
@@ -420,7 +422,7 @@ const similarity = cosine(a, b);
 
 ### Provider Support
 
-Only providers with `supportsEmbedding: true` can embed. Currently: **OpenAI** (`text-embedding-3-small`, `text-embedding-3-large`). Calling `embed()` on a provider without support throws `E_PROVIDER_ERROR`.
+`embed()` does not check `supportsEmbedding`: the flag is what `describe()` reports, and the request goes to the provider's embeddings endpoint either way. Of the known providers only **OpenAI** is marked as having one (`text-embedding-3-small`, `text-embedding-3-large`). An endpoint that refuses the request surfaces as `E_PROVIDER_ERROR` (`Embedding error: …`, the provider's own error under `context.raw`). A decision provider and the two adapters that are not implemented fail before any request is made.
 
 Use a separate Signal client for embedding — embedding models are different from chat models:
 
@@ -521,7 +523,7 @@ All errors are `SignalError` instances with a `.code` and optional `.context`:
 | `E_MISSING_SDK` | Provider SDK not installed |
 | `E_VALIDATION_FAILED` | Response failed Zod validation after all retries; a `decide()` answer failed its gate; a `reasoningEffort` the model does not take |
 | `E_MAX_ITERATIONS` | The tool loop did not finish within its turn limit |
-| `E_PROVIDER_ERROR` | Provider API error (rate limit, server error, etc.); tools or `embed()` on a provider without support; an adapter that is not implemented |
+| `E_PROVIDER_ERROR` | Provider API error (rate limit, server error, a refused `embed()`, etc.); tools on a provider without `nativeTools`; an adapter that is not implemented |
 | `E_MAX_RETRIES`, `E_TOOL_NOT_FOUND`, `E_TOOL_EXECUTION`, `E_TOOL_VALIDATION` | Declared in `ErrorCode`, not currently thrown — tool failures go back to the model as tool results, and exhausted retries are `E_VALIDATION_FAILED` |
 | `E_VERB_NOT_SUPPORTED` | A chat verb was called on a decision provider |
 
