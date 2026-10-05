@@ -302,3 +302,40 @@ describe('LoomForm — pixels and round-trip', () => {
     expect(screen.getByTestId('alt-text')).toBeDefined();
   });
 });
+
+// A <select> speaks strings; an enum's values need not be strings.
+describe('LoomForm — an enum', () => {
+  it('writes the number an option stands for, which the schema accepts', () => {
+    const schema = z.object({ level: z.enum({ stalls: 1, circle: 2 }) });
+    const onChange = vi.fn();
+    render(<LoomForm schema={schema} options={{ value: { level: 1 } }} onChange={onChange} />);
+    const select = screen.getByRole('combobox');
+    expect(select).toHaveProperty('value', '1');
+
+    fireEvent.change(select, { target: { value: '2' } });
+
+    expect(onChange).toHaveBeenLastCalledWith({ level: 2 });
+    expect(schema.safeParse(onChange.mock.lastCall?.[0]).success).toBe(true);
+    expect(select).toHaveProperty('value', '2');
+  });
+
+  it('writes a string enum as its string, as before', () => {
+    const schema = z.object({ house: z.enum(['main', 'studio']) });
+    const onChange = vi.fn();
+    render(<LoomForm schema={schema} options={{ value: { house: 'main' } }} onChange={onChange} />);
+
+    fireEvent.change(screen.getByRole('combobox'), { target: { value: 'studio' } });
+
+    expect(onChange).toHaveBeenLastCalledWith({ house: 'studio' });
+  });
+
+  it('keeps a string enum whose values are digits a string', () => {
+    const schema = z.object({ row: z.enum(['1', '2']) });
+    const onChange = vi.fn();
+    render(<LoomForm schema={schema} options={{ value: { row: '1' } }} onChange={onChange} />);
+
+    fireEvent.change(screen.getByRole('combobox'), { target: { value: '2' } });
+
+    expect(onChange).toHaveBeenLastCalledWith({ row: '2' });
+  });
+});

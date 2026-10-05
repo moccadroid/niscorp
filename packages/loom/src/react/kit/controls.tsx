@@ -58,8 +58,15 @@ export const LoomSelect: NovaComponent<{
   options?: { value: unknown; label: string }[];
 }> = ({ value, options, novaModel }) => {
   const set = useModelWrite(novaModel);
+  // A <select> speaks strings: an option is offered as its text and the choice
+  // comes back as that text. What is written is the option's OWN value — an
+  // enum's values may be numbers, and its schema refuses "2" where it means 2.
+  const choose = (text: string): void => {
+    const chosen = (options ?? []).find((option) => String(option.value) === text);
+    set(chosen === undefined ? text : chosen.value);
+  };
   return (
-    <select value={String(value ?? '')} onChange={(event) => set(event.target.value)} style={inputStyle}>
+    <select value={String(value ?? '')} onChange={(event) => choose(event.target.value)} style={inputStyle}>
       {(options ?? []).map((option) => (
         <option key={String(option.value)} value={String(option.value)}>
           {option.label}
