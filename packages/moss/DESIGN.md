@@ -107,7 +107,10 @@ The organizing principle: an app hands over **artifacts** and an
   live in the terminal.
 - **Coherence is refused, not documented.** `createServer` runs `verifyCharter`
   (with nova's closure audit injected over effective definitions) and
-  `verifyVariants`, and throws on errors. If it boots, it's coherent.
+  `verifyVariants`, and throws on errors. The closure audit's findings are not
+  errors: they are filed under each role's `issues` in the report, and boot
+  neither refuses on them nor prints them. If it boots, the charter and the
+  variants are coherent; a push to an ungranted action can still be in it.
 
 The test of the principle: moss adds no new vocabulary. Reads are vex, writes are
 vex, compute is functions, UI is actions, permissions are the charter. The server

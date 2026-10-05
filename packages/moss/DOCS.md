@@ -301,12 +301,14 @@ harness wants and a deployment must opt into out loud.
 #### `createServer(app, runtime): Promise<MossServer>`
 
 Stands up the data layer, **refuses to boot** on an incoherent charter
-(`verifyCharter` + nova's closure audit), memoizes per-principal policy,
+(`verifyCharter`'s errors), memoizes per-principal policy,
 catalogs, and ring-2 variant bindings, mounts the vex surfaces and `/catalog`, and — when the manifest
 declares a shell — the shell host behind the socket. Also refused at boot: an
 entry whose `reach` names no profile the behaviors declare, and two pages that
-could answer one path. Returns a Hono app extended with the `MossServer`
-members below.
+could answer one path. A broken closure is not among them: the closure audit's
+findings land in the report's `perRole[].issues`, which boot does not read. A
+role granted an action that pushes one it is not granted boots, and the press
+does nothing. Returns a Hono app extended with the `MossServer` members below.
 
 What the server answers over HTTP:
 

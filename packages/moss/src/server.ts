@@ -283,7 +283,8 @@ export const createServer = async (app: NiscApp, runtime: NiscRuntime): Promise<
 
   // ── Refuse to start incoherent — the charter engine verifies,
   // nova audits each role's closure (over effective definitions: granted
-  // variants substituted).
+  // variants substituted). Only the report's errors refuse: closure
+  // findings sit under perRole[].issues and are not read here.
   const report = verifyCharter(
     app.charter,
     { actions: Object.keys(app.actions), data: data.grants, layouts: Object.keys(app.layouts ?? {}) },

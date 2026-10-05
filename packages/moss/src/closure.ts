@@ -8,7 +8,9 @@ import type { LayoutVariant } from './app';
 // containing ONLY that set, and the issues kept are the CROSS-ACTION ones
 // (a push target outside the closure). A definition-level wart (a loose
 // bind, a dead ref) is not a closure break — the audit's other findings
-// stay with the definition tooling, not the boot refusal.
+// stay with the definition tooling. What this returns lands in the charter
+// report's `perRole[].issues`; boot refuses on the report's `errors` only,
+// so a closure break does not stop a boot.
 //
 // The role's granted variant ids ride in as the auditor's second argument
 // (the charter verifier passes them): substituted before auditing, so the
