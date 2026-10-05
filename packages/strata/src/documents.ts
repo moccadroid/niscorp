@@ -32,6 +32,8 @@ export type Transform = (config: unknown, source: unknown) => unknown;
 
 export type UpgradeResult = {
   document: Record<string, unknown>;
+  // What to store with the document: current on every grammar the upgrader was
+  // given, and the document's entries for any other grammar kept as they were.
   stamp: Stamp;
   // What ran, in order — empty when the document was already current.
   applied: readonly string[];
@@ -120,6 +122,17 @@ export const createUpgrader = async (sequences: readonly Sequence[], options: { 
 
   const stamp: Stamp = Object.fromEntries(grammars.map((s) => [s.id, s.migrations.length]));
 
+  // The stamp a document carries once this code has read it: this code's
+  // position on every grammar it was given and — as they were — the document's
+  // own entries for grammars it was not. Those record code this reader lacks (a
+  // kit it does not have); dropping them would let code that does have the
+  // grammar run its migrations over the document a second time.
+  const ownIds = new Set(grammars.map((s) => s.id));
+  const stampAfter = (given: Stamp | null | undefined): Stamp => {
+    const others = Object.entries(given ?? {}).filter(([id]) => !ownIds.has(id));
+    return others.length === 0 ? stamp : { ...stamp, ...Object.fromEntries(others) };
+  };
+
   const locate = (document: unknown, kind: string): Location[] => {
     if (!kinds.has(kind)) throw new StrataError('UNKNOWN_KIND', `No sequence declares the document kind "${kind}".`, [...kinds.keys()]);
     const found: Location[] = [];
@@ -151,7 +164,7 @@ export const createUpgrader = async (sequences: readonly Sequence[], options: { 
   const upgrade = (document: unknown, { kind, stamp: given }: { kind: string; stamp?: Stamp | null }): UpgradeResult => {
     if (!isRecord(document)) throw new StrataError('STEP_FAILED', `A ${kind} document must be a JSON object.`);
     if (!kinds.has(kind)) throw new StrataError('UNKNOWN_KIND', `No sequence declares the document kind "${kind}".`, [...kinds.keys()]);
-    if (!behind(given)) return { document, stamp, applied: [] };
+    if (!behind(given)) return { document, stamp: stampAfter(given), applied: [] };
 
     // What this document has seen: everything up to its stamp, per sequence.
     // A sequence it has never heard of starts at 0 — a document written before
@@ -199,7 +212,7 @@ export const createUpgrader = async (sequences: readonly Sequence[], options: { 
       for (const step of migration.steps) if (step.kind === 'document') runStep(migration, step.at, step.transform);
       applied.push(migration.ref);
     }
-    return { document: current, stamp, applied };
+    return { document: current, stamp: stampAfter(given), applied };
   };
 
   return { stamp, upgrade, locate, behind };

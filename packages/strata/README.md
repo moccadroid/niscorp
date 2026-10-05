@@ -138,7 +138,9 @@ const { document, stamp, applied } = upgrader.upgrade(storedAction, { kind: 'nis
   Under moss it is Prism's `evaluate`; a migration runs exactly like an endpoint.
   The source is `{ document, path }`.
 - **No stamp** (`{}`, `null`) reads as the start of every grammar. **Ahead of
-  the code** on any grammar is refused, `TOO_NEW`: the reader upgrades first.
+  the code** on any grammar the code was given is refused, `TOO_NEW`: the reader
+  upgrades first. A stamp entry for a grammar the code was not given is neither
+  ahead nor behind: it is kept on the stamp as it was, for code that has it.
 
 | | |
 |---|---|

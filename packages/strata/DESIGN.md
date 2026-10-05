@@ -114,9 +114,13 @@ migration runs through the engine that runs endpoints, with the same guarantee
 that no code executes. That is what makes a third party's migration safe to run.
 
 **Refuse ahead, upgrade behind.** Strict grammars make every addition break
-older readers, so a document ahead of the code on any grammar is `TOO_NEW` — at
-boot a refusal to start, at intake "the host must be updated first", on a read
-path the one action left out with a sentence. The reader upgrades first.
+older readers, so a document ahead of the code on any grammar the code was given
+is `TOO_NEW` — at boot a refusal to start, at intake "the host must be updated
+first", on a read path the one action left out with a sentence. The reader
+upgrades first. A stamp entry for a grammar the code was not given says nothing
+to it — the code cannot be ahead of or behind what it does not have — and an
+upgrade keeps the entry as it was: it is the document's record for code that
+does have that grammar, which would otherwise run its migrations a second time.
 
 **Not every table of documents is a store.** `vex_cache` holds DSL and compiled
 Prism IR, but its protected rows are re-seeded from source on every boot and its

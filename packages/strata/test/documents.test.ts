@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { createUpgrader, prepare, type Sequence, type Transform } from '../src';
+import { createUpgrader, prepare, type Sequence, type Stamp, type Transform } from '../src';
 import { migrate } from '../src/postgres';
 
 // A grammar shaped like nova's: an action holds a layout and endpoint configs;
@@ -91,6 +91,35 @@ describe('upgrade — a document catches up to the code', () => {
     const result = upgrader.upgrade(action, { kind: 'nisc.nova/action', stamp: { 'nisc.nova': 1 } });
     expect(result.applied).toEqual([]);
     expect(result.document).toBe(action);
+  });
+
+  // A stamp can name a grammar this code was not given — a kit the reader does not
+  // have. That entry is the document's own record of it: an upgrade that drops it
+  // lets code that does have the grammar run its migrations a second time.
+  it('keeps the stamp entries of grammars it was not given', async () => {
+    const upgrader = await createUpgrader([nova([{ description: 'rename', steps: [renameLabel] }]), prism()], { transform });
+
+    const behind = upgrader.upgrade(action, { kind: 'nisc.nova/action', stamp: { 'nisc.nova': 0, 'acme.kit': 3 } });
+    expect(behind.applied).toEqual(['nisc.nova/1']);
+    expect(behind.stamp).toEqual({ 'nisc.nova': 1, 'nisc.prism': 0, 'acme.kit': 3 });
+
+    const current = upgrader.upgrade(action, { kind: 'nisc.nova/action', stamp: { 'nisc.nova': 1, 'acme.kit': 3 } });
+    expect(current.applied).toEqual([]);
+    expect(current.stamp).toEqual({ 'nisc.nova': 1, 'nisc.prism': 0, 'acme.kit': 3 });
+  });
+
+  it('hands back its own stamp when the document names no grammar but its own', async () => {
+    const upgrader = await createUpgrader([nova([{ description: 'rename', steps: [renameLabel] }]), prism()], { transform });
+    expect(upgrader.stamp).toEqual({ 'nisc.nova': 1, 'nisc.prism': 0 });
+    const stamps: readonly (Stamp | null)[] = [{ 'nisc.nova': 0 }, { 'nisc.nova': 1, 'nisc.prism': 0 }, {}, null];
+    for (const stamp of stamps) {
+      expect(upgrader.upgrade(action, { kind: 'nisc.nova/action', stamp }).stamp).toBe(upgrader.stamp);
+    }
+  });
+
+  it('a grammar it was not given is never ahead of it, and never makes a document behind', async () => {
+    const upgrader = await createUpgrader([nova([{ description: 'rename', steps: [renameLabel] }]), prism()], { transform });
+    expect(upgrader.behind({ 'nisc.nova': 1, 'nisc.prism': 0, 'acme.kit': 99 })).toBe(false);
   });
 
   it('no stamp means "before the grammar had migrations" — everything runs', async () => {

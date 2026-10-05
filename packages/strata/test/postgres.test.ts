@@ -232,6 +232,33 @@ describe('upgradeStore — rows that hold documents', () => {
     expect(await upgradeStore(db, store, upgrader)).toEqual({ total: 3, upgraded: 2, applied: { 'acme.forms/1': 2 } });
   });
 
+  // Two deployments over one table, one of them without a grammar the other has.
+  it('a row keeps its stamp entry for a grammar the upgrader was not given — its migration is not run twice', async () => {
+    const pool = freshPool();
+    await pool.query(`CREATE TABLE forms (id text PRIMARY KEY, definition jsonb NOT NULL, grammar jsonb NOT NULL DEFAULT '{}'::jsonb)`);
+    // Written by code that had both grammars: prices already in cents (acme.prices 1), the title not yet renamed.
+    await pool.query(`INSERT INTO forms (id, definition, grammar) VALUES ('a', '{"title":"Seats","price":1200}', '{"acme.forms":0,"acme.prices":1}')`);
+    const prices: Sequence = {
+      id: 'acme.prices',
+      documents: {},
+      migrations: [
+        {
+          description: 'price: whole units → cents',
+          steps: [{ kind: 'document', at: 'acme.forms/form', transform: ({ document }: { document: Record<string, unknown> }) => ({ ...document, price: Number(document['price']) * 100 }) }],
+        },
+      ],
+    };
+    const row = async () => (await pool.query('SELECT definition, grammar FROM forms')).rows[0];
+
+    const formsOnly = await createUpgrader([grammar([renameTitle])], { transform });
+    expect(await upgradeStore(pool, store, formsOnly)).toEqual({ total: 1, upgraded: 1, applied: { 'acme.forms/1': 1 } });
+    expect(await row()).toEqual({ definition: { heading: 'Seats', price: 1200 }, grammar: { 'acme.forms': 1, 'acme.prices': 1 } });
+
+    const both = await createUpgrader([grammar([renameTitle]), prices], { transform });
+    expect(await upgradeStore(pool, store, both)).toEqual({ total: 1, upgraded: 0, applied: {} });
+    expect(await row()).toEqual({ definition: { heading: 'Seats', price: 1200 }, grammar: { 'acme.forms': 1, 'acme.prices': 1 } });
+  });
+
   it('a row written by newer code refuses the whole pass — nothing is rewritten', async () => {
     const pool = await withForms();
     await pool.query(`INSERT INTO forms (id, definition, grammar) VALUES ('z', '{"heading":"From the future"}', '{"acme.forms":7}')`);
