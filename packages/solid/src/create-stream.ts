@@ -21,6 +21,7 @@ export const createStream = <T>(options: CreateStreamOptions<T>): Stream<T> => {
   let isDestroyed = false;
   let isFailed = false;
   let failureError: Error | null = null;
+  let hasNotifiedFinal = false;
 
   // ─── Listeners ───
   const listeners = new Set<Listener<T>>();
@@ -104,6 +105,9 @@ export const createStream = <T>(options: CreateStreamOptions<T>): Stream<T> => {
     for (const sub of finalizeSubscribers) {
       sub();
     }
+    // Set last: a selection made while the listeners above run is still told
+    // by this loop, in the order it always was.
+    hasNotifiedFinal = true;
   };
 
   // ─── Write pipeline ───
@@ -231,6 +235,7 @@ export const createStream = <T>(options: CreateStreamOptions<T>): Stream<T> => {
       getRootValue: () => currentValue,
       isTerminal: () => isClosed || isDestroyed,
       isPathFinal: () => tracker.isFinal(path),
+      hasRootFinalized: () => hasNotifiedFinal,
       onRootChange: (listener) => {
         changeSubscribers.add(listener);
         return () => { changeSubscribers.delete(listener); };

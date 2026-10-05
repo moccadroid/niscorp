@@ -353,6 +353,124 @@ describe('createStream — select()', () => {
 });
 
 // ═══════════════════════════════════════════════════════════
+// A selection's onFinal, added late
+// ═══════════════════════════════════════════════════════════
+//
+// A selection learns that the root ended from the root. One first made AFTER
+// that was never told — so its onFinal listener waited for a call that could
+// no longer come.
+
+describe('createStream — select().onFinal() added late', () => {
+  const REPLY = '{"widget":{"type":"card","title":"Hi"},"response":"ok","reasoning":"because","meta":{}}';
+
+  it('is called at once when the reply has already ended', () => {
+    const stream = createStream({ schema: ResponseSchema, initial: INITIAL });
+    stream.write(REPLY);
+
+    const listener = vi.fn();
+    stream.select('widget').onFinal(listener);
+
+    expect(listener).toHaveBeenCalledTimes(1);
+    expect(listener).toHaveBeenCalledWith({ type: 'card', title: 'Hi' });
+  });
+
+  it('is called at once when the stream was closed before the reply ended', () => {
+    const stream = createStream({ schema: ResponseSchema, initial: INITIAL });
+    stream.write('{"widget":{"type":"card","title":"Hi"},"response":"o');
+    stream.close();
+
+    const listener = vi.fn();
+    stream.select<string>('response').onFinal(listener);
+
+    expect(listener).toHaveBeenCalledTimes(1);
+    expect(listener).toHaveBeenCalledWith('o');
+  });
+
+  it('calls every late listener, each once, and nothing calls them again', () => {
+    const stream = createStream({ schema: ResponseSchema, initial: INITIAL });
+    stream.write(REPLY);
+
+    const first = vi.fn();
+    const second = vi.fn();
+    const widget = stream.select('widget');
+    widget.onFinal(first);
+    widget.onFinal(second);
+    stream.close();
+
+    expect(first).toHaveBeenCalledTimes(1);
+    expect(second).toHaveBeenCalledTimes(1);
+  });
+
+  it('resolves final() with the same value it hands the listener', async () => {
+    const stream = createStream({ schema: ResponseSchema, initial: INITIAL });
+    stream.write(REPLY);
+
+    const widget = stream.select('widget');
+    const listener = vi.fn();
+    widget.onFinal(listener);
+
+    await expect(widget.final()).resolves.toEqual({ type: 'card', title: 'Hi' });
+    expect(listener).toHaveBeenCalledTimes(1);
+  });
+
+  it('is called once, by the reply going on, when its part has finished and the reply has not', () => {
+    const stream = createStream({ schema: ResponseSchema, initial: INITIAL });
+    stream.write('{"widget":{"type":"card","title":"Hi"},"response":"o');
+
+    const listener = vi.fn();
+    stream.select('widget').onFinal(listener);
+    stream.write('k","reasoning":"because","meta":{}}');
+
+    expect(listener).toHaveBeenCalledTimes(1);
+    expect(listener).toHaveBeenCalledWith({ type: 'card', title: 'Hi' });
+  });
+
+  it('is called once when it is added from inside the root onFinal listener', () => {
+    const stream = createStream({ schema: ResponseSchema, initial: INITIAL });
+    const listener = vi.fn();
+    const order: string[] = [];
+    stream.onFinal(() => {
+      stream.select('widget').onFinal(listener);
+      order.push(listener.mock.calls.length === 0 ? 'registered before it ran' : 'ran while registering');
+    });
+
+    stream.write(REPLY);
+
+    expect(listener).toHaveBeenCalledTimes(1);
+    // The reply is ending around this listener; the selection is told the usual
+    // way, after it — not from inside its own registration.
+    expect(order).toEqual(['registered before it ran']);
+  });
+
+  it('is not called after a strict failure, as the root is not', () => {
+    const stream = createStream({ schema: ResponseSchema, initial: INITIAL, mode: 'strict' });
+    stream.final().catch(() => {});
+    stream.write('{"widget":"not an object"');
+
+    const rootListener = vi.fn();
+    const listener = vi.fn();
+    stream.onFinal(rootListener);
+    stream.select('widget').onFinal(listener);
+
+    expect(rootListener).not.toHaveBeenCalled();
+    expect(listener).not.toHaveBeenCalled();
+  });
+
+  it('is not called on a destroyed stream', () => {
+    const stream = createStream({ schema: ResponseSchema, initial: INITIAL });
+    stream.write(REPLY);
+    const widget = stream.select('widget');
+    stream.destroy();
+
+    const listener = vi.fn();
+    widget.onFinal(listener);
+    stream.select('widget').onFinal(listener);
+
+    expect(listener).not.toHaveBeenCalled();
+  });
+});
+
+// ═══════════════════════════════════════════════════════════
 // Subtree finalization
 // ═══════════════════════════════════════════════════════════
 

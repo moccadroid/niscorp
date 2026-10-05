@@ -88,6 +88,9 @@ export type SelectedStreamDeps = {
   getRootValue: () => unknown;
   isTerminal: () => boolean;
   isPathFinal: () => boolean;
+  // The root has told its finalize subscribers, and will not tell them again:
+  // a selection made after this hears of the end from nobody.
+  hasRootFinalized: () => boolean;
   onRootChange: (listener: () => void) => () => void;
   onRootFinalize: (listener: () => void) => () => void;
   onRootError: (listener: (error: StreamError) => void) => () => void;

@@ -110,6 +110,10 @@ export const createSelectedStream = <P>(deps: SelectedStreamDeps): Stream<P> => 
 
   const onFinal = (listener: Listener<P>): (() => void) => {
     if (isDestroyed) return () => {};
+    // A selection first made after the reply ended missed the root's word that
+    // it had, and nothing will say it again: settle here, as final() does, or
+    // this listener is never called.
+    if (!finalState.resolved && deps.hasRootFinalized()) resolveFinal(project());
     if (finalState.resolved) {
       listener(finalState.value);
       return () => {};
