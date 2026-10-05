@@ -523,6 +523,21 @@ export const createIncrementalParser = (
     return { changed: true, value };
   };
 
+  // A dirty child with no dirty children of its own is a value the parser has
+  // just written. A primitive is handed over as it is. A container is one the
+  // parser has only now opened and will go on writing into, so the snapshot
+  // takes a copy of it — or a value a consumer kept would gain keys under them.
+  // It is empty in every ordinary case, so the copy is one allocation; it goes
+  // deep because an empty-string key is never marked dirty, and a container
+  // reached only through one would otherwise still be the parser's own.
+  const detachValue = (value: unknown): unknown => {
+    if (Array.isArray(value)) return value.map(detachValue);
+    if (typeof value === 'object' && value !== null) {
+      return Object.fromEntries(Object.entries(value).map(([key, child]) => [key, detachValue(child)]));
+    }
+    return value;
+  };
+
   const shareStructure = (source: unknown, previous: unknown, path: string): unknown => {
     const dirtyKeys = dirtyParents.get(path);
 
@@ -538,7 +553,7 @@ export const createIncrementalParser = (
           const childPath = path === '' ? key : `${path}.${key}`;
           result[i] = dirtyParents.has(childPath)
             ? shareStructure(source[i], prevArr[i], childPath)
-            : source[i];
+            : detachValue(source[i]);
         } else {
           result[i] = i < prevArr.length ? prevArr[i] : source[i];
         }
@@ -557,7 +572,7 @@ export const createIncrementalParser = (
           const childPath = path === '' ? key : `${path}.${key}`;
           result[key] = dirtyParents.has(childPath)
             ? shareStructure(sObj[key], pObj[key], childPath)
-            : sObj[key];
+            : detachValue(sObj[key]);
         } else {
           result[key] = key in pObj ? pObj[key] : sObj[key];
         }

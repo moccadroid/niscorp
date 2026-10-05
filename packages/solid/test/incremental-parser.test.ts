@@ -221,6 +221,61 @@ describe('incremental parser — structural sharing', () => {
     const snap = parser.snapshot(base);
     expect(snap.changed).toBe(false);
   });
+
+  // A snapshot is what a consumer keeps. A container the parser has only just
+  // opened is still the one it writes into — a snapshot must hold a copy of it.
+  it('a snapshot taken right after a row opens does not gain the row later', () => {
+    const initial = { rows: [] as { seat: string; price: number }[] };
+    const parser = createIncrementalParser(initial);
+
+    parser.write('{"rows":[{');
+    const held = parser.snapshot(initial);
+    if (!held.changed) throw new Error('expected change');
+    expect(held.value).toEqual({ rows: [{}] });
+
+    parser.write('"seat":"C4","price":3800}');
+    const next = parser.snapshot(held.value);
+    if (!next.changed) throw new Error('expected change');
+
+    expect(held.value).toEqual({ rows: [{}] });
+    expect(next.value).toEqual({ rows: [{ seat: 'C4', price: 3800 }] });
+  });
+
+  it('a snapshot taken right after a list opens does not gain its items later', () => {
+    const initial = { seats: null as string[] | null, tags: [] as string[][] };
+    const parser = createIncrementalParser(initial);
+
+    parser.write('{"seats":[');
+    const first = parser.snapshot(initial);
+    if (!first.changed) throw new Error('expected change');
+    parser.write('"C4","C5"],"tags":[[');
+    const second = parser.snapshot(first.value);
+    if (!second.changed) throw new Error('expected change');
+    parser.write('"a","b"]]}');
+    const third = parser.snapshot(second.value);
+    if (!third.changed) throw new Error('expected change');
+
+    expect(first.value).toEqual({ seats: [], tags: [] });
+    expect(second.value).toEqual({ seats: ['C4', 'C5'], tags: [[]] });
+    expect(third.value).toEqual({ seats: ['C4', 'C5'], tags: [['a', 'b']] });
+    // The copy costs no sharing: what did not change is still the same reference.
+    expect(third.value.seats).toBe(second.value.seats);
+  });
+
+  it('a container that stays empty keeps its reference across snapshots', () => {
+    const initial = { rows: [] as Record<string, unknown>[], note: '' };
+    const parser = createIncrementalParser(initial);
+
+    parser.write('{"rows":[{}');
+    const first = parser.snapshot(initial);
+    if (!first.changed) throw new Error('expected change');
+    parser.write('],"note":"x"}');
+    const second = parser.snapshot(first.value);
+    if (!second.changed) throw new Error('expected change');
+
+    expect(second.value.rows).toBe(first.value.rows);
+    expect(second.value.rows[0]).toBe(first.value.rows[0]);
+  });
 });
 
 // ═══════════════════════════════════════════════════════════
