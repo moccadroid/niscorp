@@ -356,6 +356,13 @@ on `(reflexId, cause)`, task claims are exactly-once through the store contract,
 non-monotonic `now` (clock skew between hosts) merely delays work — it cannot
 duplicate it.
 
+**⟲ A run's last landings raced on one read.** Recording an attempt read the run,
+decided "complete" from what it read, and then wrote the count. Two landings in the
+same moment each read the run before the other's count was in: neither settled it, and
+it stayed `fanned` with every task done — no run fact, and an `overlap: 'skip'` reflex
+that never started again. The count is now written first and the run read after it, and
+the run is settled by a `cas` from `fanned`, so it settles once.
+
 **⟲ There was a poll trigger, and there was a beat.** Polls existed for hosts with no
 write choke point: run a selection on an interval, diff a cursor, mint write facts for
 the delta. In this stack the DAL is the choke point — every application write becomes

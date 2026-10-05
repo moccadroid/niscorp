@@ -895,3 +895,61 @@ describe('the fence holds across engines', () => {
     expect(afterB?.output).toBe('from b');
   });
 });
+
+describe('the last tasks of a run landing at once', () => {
+  // Two engines over one store again, each landing one of a run's last two
+  // tasks in the same moment. Each used to read the run before the other's
+  // count was in: both found it one short, neither settled it, and the run
+  // stayed `fanned` with every task done.
+  const reflexOf = (overlap: 'allow' | 'skip'): ReflexInput => ({
+    id: 'reminders.send',
+    intent: 'Text each member.',
+    on: { manual: {} },
+    select: { query: { table: 'members' }, mode: 'each', unitKey: 'id' },
+    effect: { name: 'text' },
+    policy: { overlap },
+  });
+  const pair = async (overlap: 'allow' | 'skip'): Promise<{ a: Tide; b: Tide }> => {
+    const store = createMemoryStore();
+    const engine = async (): Promise<Tide> => {
+      const tide = createTide({
+        store,
+        transform: testTransform,
+        select: () => ['a', 'b', 'c', 'd', 'e', 'f'].map((id) => ({ id })),
+        effects: { text: { run: () => ({ sent: true }) } },
+      });
+      await tide.load([reflexOf(overlap)], { at: T0 });
+      return tide;
+    };
+    return { a: await engine(), b: await engine() };
+  };
+  const landTheLastTwoAtOnce = async ({ a, b }: { a: Tide; b: Tide }): Promise<void> => {
+    await a.fire('reminders.send', { now: T0 });
+    await a.advance({ now: T0, limit: 4 });
+    await Promise.all([a.advance({ now: T0, limit: 1 }), b.advance({ now: T0, limit: 1 })]);
+    await a.advance({ now: T0 });
+  };
+
+  it('settles the run, and announces it once', async () => {
+    const engines = await pair('allow');
+    await landTheLastTwoAtOnce(engines);
+
+    const [run] = await engines.a.ledger.runs({ reflexId: 'reminders.send' });
+    expect({ state: run?.state, done: run?.done, failed: run?.failed }).toEqual({ state: 'settled', done: 6, failed: 0 });
+    const settlements = (await engines.a.ledger.facts()).flatMap((fact) => (fact.kind === 'run' ? [fact.stats] : []));
+    expect(settlements).toEqual([{ total: 6, done: 6, failed: 0 }]);
+  });
+
+  it('so a reflex that skips while its last run is unsettled starts again', async () => {
+    // What the stuck run cost: `overlap: 'skip'` saw an unsettled run for
+    // ever, and every later firing was recorded as skipped.
+    const engines = await pair('skip');
+    await landTheLastTwoAtOnce(engines);
+
+    await engines.a.fire('reminders.send', { now: T0 + DAY });
+    await engines.a.advance({ now: T0 + DAY });
+    const runs = await engines.a.ledger.runs({ reflexId: 'reminders.send' });
+    expect(runs.map((run) => run.state)).toEqual(['settled', 'settled']);
+    expect(runs.map((run) => run.done)).toEqual([6, 6]);
+  });
+});

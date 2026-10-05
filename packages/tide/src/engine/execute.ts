@@ -290,23 +290,24 @@ const record = async (deps: EngineDeps, task: Task, token: string, settlement: S
     for (const emit of settlement.emits) admissions.push(await admitFact(tx, emit, deps.maxChainFacts));
 
     if (settles) {
+      // COUNTED FIRST, READ SECOND. Reading the run and then writing the count
+      // let two landings each read it before the other's count was in: both
+      // found it short of its total, neither settled it, and the run stayed
+      // `fanned` with every task done — no run fact, and an `overlap: 'skip'`
+      // reflex that never started again. The increment is the store's own
+      // arithmetic, so the read after it sees every count that has landed; in
+      // SQL it also holds the row until this transaction ends.
+      await tx.cas(
+        'run',
+        task.runId,
+        {},
+        { done: { inc: settlement.state === 'done' ? 1 : 0 }, failed: { inc: settlement.state === 'failed' ? 1 : 0 } },
+      );
       const [run] = await tx.query({ table: 'run', where: { id: task.runId }, limit: 1 });
-      if (run !== undefined) {
-        const done = run.done + (settlement.state === 'done' ? 1 : 0);
-        const failed = run.failed + (settlement.state === 'failed' ? 1 : 0);
-        const complete = done + failed >= run.total && run.settledAt === undefined;
-        await tx.cas(
-          'run',
-          run.id,
-          {},
-          {
-            done: { inc: settlement.state === 'done' ? 1 : 0 },
-            failed: { inc: settlement.state === 'failed' ? 1 : 0 },
-            state: complete ? 'settled' : run.state,
-            settledAt: complete ? settlement.at : run.settledAt,
-          },
-        );
-      }
+      // Settled from `fanned` only, so two landings that both find the run
+      // complete settle it once.
+      if (run !== undefined && run.done + run.failed >= run.total && run.settledAt === undefined)
+        await tx.cas('run', run.id, { state: 'fanned' }, { state: 'settled', settledAt: settlement.at });
     }
     return admissions;
   });
