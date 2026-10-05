@@ -103,12 +103,8 @@ Explicitly out of scope right now:
 ## Quick example
 
 ```ts
-import {
-  createShell,
-  createComponentRegistry,
-  createLayoutStore,
-  type ActionDefinition,
-} from '@niscorp/nova';
+import { createShell, createLayoutStore, type ActionDefinition } from '@niscorp/nova';
+import { defaultRegistry } from '@niscorp/nova/adapters/tty/components';
 
 const counter: ActionDefinition = {
   id: 'counter',
@@ -123,27 +119,57 @@ const counter: ActionDefinition = {
   layout: {
     component: 'Box',
     children: [
-      { component: 'Text', props: { value: '{{$.count}}' } },
-      { component: 'Button', ref: 'inc', props: { label: '+1' } },
+      { component: 'Text', children: 'Count: {{$.count}}' },
+      { component: 'Button', ref: 'inc', children: '+1' },
     ],
   },
 };
 
 const shell = createShell({
   canvases: [{ id: 'main' }],
-  registry: createComponentRegistry(),
+  registry: defaultRegistry(),
   layoutStore: createLayoutStore(),
   actions: { counter },
 });
 
 const id = shell.push('main', 'counter');
 const runtime = shell.getRuntime(id);
-console.log(runtime?.render());
-// → RenderNode[] tree describing the Box / Text / Button
+shell.dispatch({ type: 'ui:click', ref: 'inc' });
+console.dir(runtime?.render(), { depth: null });
 ```
 
-There is no React in that example. A framework adapter would consume
-the same `RenderNode[]` and produce real elements.
+It prints the `RenderNode[]` tree, after the press:
+
+```
+[
+  {
+    type: 'component',
+    name: 'Box',
+    props: {},
+    children: [
+      {
+        type: 'component',
+        name: 'Text',
+        props: {},
+        children: [ { type: 'text', value: 'Count: 1' } ]
+      },
+      {
+        type: 'component',
+        name: 'Button',
+        props: {},
+        children: [ { type: 'text', value: '+1' } ],
+        ref: 'inc'
+      }
+    ]
+  }
+]
+```
+
+There is no React in that example, and no browser. The registry is empty
+until a kit is registered, and a layout that names a component it does not
+hold renders an error node (`COMPONENT_NOT_FOUND`) in its place;
+`defaultRegistry()` is the terminal kit. A framework adapter would consume the
+same `RenderNode[]` and produce real elements.
 
 ---
 
