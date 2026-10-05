@@ -4,6 +4,8 @@
 
 // Evaluation
 export { evaluate, evaluateSafe } from './engine/evaluate';
+// …in the shape a host's transform seam takes: `(config, source) => unknown`
+export { prismTransform } from './engine/transform';
 
 // Compilation
 export { compile } from './engine/compile';

@@ -1,7 +1,5 @@
 import type { Sequence } from '@niscorp/strata';
-import { ConfigSchema, type Config } from '../schemas/config.schema';
-import { evaluate } from '../engine/evaluate';
-import type { JsonValue } from '../types';
+import { ConfigSchema } from '../schemas/config.schema';
 
 // ═══════════════════════════════════════════════════════════════
 // Prism's grammar, as a strata sequence — @niscorp/prism/migrations.
@@ -49,28 +47,10 @@ export const PRISM_SEQUENCE: Sequence = {
 // ── the evaluator a migration runs through ──────────────────────
 //
 // strata runs a document step through an INJECTED transform, nova's socket
-// shape `(config, source) => unknown`. This is Prism's, for every host: the
-// config is parsed once at the boundary (rule 13; the same object comes back
-// for every node it rewrites) and the source must be plain JSON.
-
-
-const isJsonValue = (value: unknown): value is JsonValue => {
-  if (value === null || typeof value === 'string' || typeof value === 'boolean') return true;
-  if (typeof value === 'number') return Number.isFinite(value);
-  if (Array.isArray(value)) return value.every(isJsonValue);
-  if (typeof value === 'object') return Object.values(value).every(isJsonValue);
-  return false;
-};
-
-const parsedConfigs = new WeakMap<object, Config>();
-
-export const prismTransform = (config: unknown, source: unknown): unknown => {
-  if (!isJsonValue(source)) throw new Error('A document to migrate must be plain JSON.');
-  const cached = typeof config === 'object' && config !== null ? parsedConfigs.get(config) : undefined;
-  const parsed = cached ?? ConfigSchema.parse(config);
-  if (cached === undefined && typeof config === 'object' && config !== null) parsedConfigs.set(config, parsed);
-  return evaluate(parsed, source);
-};
+// shape `(config, source) => unknown`. Prism in that shape is one function for
+// every host (engine/transform.ts) and the main entry exports it too; it is
+// kept here because this is where a migration's host has always found it.
+export { prismTransform } from '../engine/transform';
 
 // ── the schemas behind the kinds ────────────────────────────────
 //

@@ -53,6 +53,9 @@ const result = evaluate(
 evaluate(config, source, limits?) → JsonValue
 evaluateSafe(config, source, limits?) → { ok: true, data } | { ok: false, error }
 
+// The same, in the shape a host's transform seam takes
+prismTransform(config: unknown, source: unknown) → unknown
+
 // Compile once, execute many (2-5x faster for repeated configs)
 compile(config, options?) → Promise<CompiledIr>
 execute(ir, source, limits?) → JsonValue
@@ -64,6 +67,26 @@ validate(config) → { ok: true, data } | { ok: false, issues }
 getNodeJsonSchema(target?) → object
 getConfigJsonSchema(target?) → object
 ```
+
+## As a host's transform
+
+nova's shell, tide's engine and strata's upgrader each run a config through a
+transform they are handed, `(config, source) => unknown`, and know nothing of
+Prism. `prismTransform` is Prism in that shape:
+
+```typescript
+import { prismTransform } from '@niscorp/prism';
+
+createTide({ store, transform: prismTransform, effects });   // @niscorp/tide
+createUpgrader(grammars, { transform: prismTransform });     // @niscorp/strata
+```
+
+Both sides arrive untyped, so both are checked: the config is parsed against
+`ConfigSchema` (once for each config object), and the source must be plain JSON
+— a source holding `undefined`, a function or a non-finite number is refused.
+`evaluate` is typed for a `JsonValue` and checks no source, which is why it
+cannot be handed to a seam as it is. A host that adds values of its own to the
+source first (the app's "today", the session's principal) wraps it.
 
 ## Examples
 
@@ -105,9 +128,9 @@ rules) — see [DOCS.md § Transform Operations](./DOCS.md#transform-operations)
 They are what strata's document migrations are written in.
 
 **`@niscorp/prism/migrations`** publishes Prism's own grammar — `PRISM_SEQUENCE`
-(`nisc.prism`, kind `nisc.prism/config`), `PRISM_SCHEMAS` — and
-`prismTransform`, the evaluator a migration runs through (strata injects it;
-the config is parsed once, the source must be plain JSON).
+(`nisc.prism`, kind `nisc.prism/config`), `PRISM_SCHEMAS` — and exports
+`prismTransform` as well, the evaluator a migration runs through (strata injects
+it): the same function as the main entry's.
 
 **The op set only ever grows.** Configs are stored — endpoint requests, vex
 mappings, migrations — and a migration cannot be migrated by the language it is

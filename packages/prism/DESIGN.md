@@ -169,6 +169,7 @@ src/
 │       └── sugar.schema.ts
 ├── engine/
 │   ├── evaluate.ts                # Dispatcher + evaluate / evaluateSafe
+│   ├── transform.ts               # prismTransform — Prism in the shape a host's transform seam takes
 │   ├── compile.ts                 # Config → CompiledIr
 │   ├── optimize.ts                # Compile-time passes (ref segments, handlers, constant folding)
 │   ├── budget.ts                  # Limits: steps, string length, result size
@@ -194,7 +195,7 @@ src/
 │   ├── index.ts
 │   └── mapping-agent.ts           # mappingAgent (Cortex agent definition)
 ├── migrations/
-│   └── index.ts                   # @niscorp/prism/migrations — PRISM_SEQUENCE, prismTransform
+│   └── index.ts                   # @niscorp/prism/migrations — PRISM_SEQUENCE, and prismTransform again
 └── utils/
     ├── jsonpath.ts                # JSONPath parser + cache
     ├── compare.ts                 # Deep equality, ordered comparison

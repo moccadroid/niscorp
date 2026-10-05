@@ -729,6 +729,35 @@ const result2 = execute(ir, source2); // 2-5x faster than evaluate()
 
 The IR is JSON-serializable — store it in a database, cache in Redis, send over a wire.
 
+## As a host's transform
+
+```typescript
+prismTransform(config: unknown, source: unknown): unknown
+```
+
+Prism in the shape a host's transform seam takes. nova's shell (`transform`),
+tide's engine (`transform`) and strata's upgrader (`{ transform }`) each run a
+config through a function they are handed and know nothing of Prism; this is the
+function to hand them.
+
+```typescript
+import { prismTransform } from '@niscorp/prism';
+
+const tide = createTide({ store, transform: prismTransform, effects });
+```
+
+- **The config** is parsed against `ConfigSchema` where it comes in — once for
+  each config object, so a config a host keeps and passes again is not parsed
+  again.
+- **The source** must be plain JSON: `null`, strings, booleans, finite numbers,
+  and arrays and objects of those. One that holds `undefined`, a function or a
+  non-finite number is refused — `The source of a transform must be plain JSON.`
+- **The result** is what `evaluate` answers.
+
+`evaluate` itself is typed for a `JsonValue` source and checks none, so it does
+not fit a seam that hands over `unknown`. `@niscorp/prism/migrations` exports the
+same function.
+
 ## Limits
 
 `evaluate`, `evaluateSafe` and `execute` take an optional third argument, a
