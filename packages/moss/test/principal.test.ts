@@ -52,6 +52,16 @@ describe('principal — per-principal resolution', () => {
     expect(resolveCatalog(app, null).ids).toEqual(['auth.login']);
   });
 
+  // The role name is fixed. A charter that calls its visitor role something
+  // else still resolves nobody to `public`, and there is nothing there.
+  it('a charter with no public role has nothing for anonymous to resolve to', () => {
+    const without: NiscApp = { ...app, charter: { guest: ['auth.login'] } };
+    expect(resolveRoles(without, null)).toEqual(['public']);
+    expect(() => resolveCatalog(without, null)).toThrow('Unknown role "public"');
+    expect(() => resolveCatalog(without, 'nobody')).toThrow('Unknown role "public"');
+    expect(resolveCatalog({ ...without, charter: { public: [], guest: ['auth.login'] } }, null).ids).toEqual([]);
+  });
+
   it('the compiled policy carries the resolved data grants (default-deny elsewhere)', () => {
     const policy = resolvePolicy(app, grants, 'usr_1');
     expect(policy.default).toBe('deny');

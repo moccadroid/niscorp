@@ -12,6 +12,7 @@ import { emitterOf } from './telemetry';
 import type { TelemetrySpan } from './telemetry';
 import { wireFabric } from './fabric';
 import { verifyCharter } from '@niscorp/charter';
+import type { VerifyReport } from '@niscorp/charter';
 import { auditClosure } from './closure';
 import type { NiscApp } from './app';
 import type { NiscRuntime } from './runtime';
@@ -125,6 +126,14 @@ export type MossServer = Hono<Env> & {
   // have living shells adopt their re-resolved definitions. Throws on an
   // incoherent charter/variant set — a bad publish refuses, exactly like boot.
   refresh: () => void;
+  // THE REPORT THIS SERVER WAS VERIFIED BY — `verifyCharter`'s, from boot, then
+  // from each `refresh` that passed. Boot and refresh read its `errors` and
+  // nothing else, so the rest was computed and dropped: the warnings (an action
+  // no role grants, an allow that matches nothing) and each role's closure
+  // issues. Nothing here prints them; a host that wants them reads them — over
+  // the universes boot resolved against, which it cannot rebuild without the
+  // database. `errors` is always empty: a report with one never got this far.
+  charterReport: () => VerifyReport;
   // ONE PERSON'S identity, forgotten — for a change that concerns them and
   // nobody else (their role moved, their tenant installed an integration). `false` if
   // they were not held, which is an answer rather than an error. `refresh()`
@@ -294,6 +303,8 @@ export const createServer = async (app: NiscApp, runtime: NiscRuntime): Promise<
   if (report.errors.length > 0) {
     throw new Error(`Charter is incoherent — refusing to serve:\n${report.errors.map((e) => `  ${e.rule}: ${e.detail}`).join('\n')}`);
   }
+  // Kept for `charterReport()`; a refresh that passes replaces it.
+  let verifiedReport: VerifyReport = report;
   // CHAINS THAT NEVER END, said at boot. A trigger that re-emits its own
   // channel (or a mount that reloads itself, …) is valid data; nova stops it
   // at its budget when it runs, and this names it before anybody opens it.
@@ -1465,6 +1476,7 @@ export const createServer = async (app: NiscApp, runtime: NiscRuntime): Promise<
     if (nextVariantErrors.length > 0) {
       throw new Error(`Refresh refused — layout variants incoherent:\n${nextVariantErrors.map((e) => `  ${e}`).join('\n')}`);
     }
+    verifiedReport = nextReport;
     // IDENTITY GOES WITH THEM. `refresh` exists because something the
     // resolutions were derived FROM changed — an approval, a role, an artifact.
     // Dropping the compiled policies while keeping the records they were
@@ -1525,6 +1537,7 @@ export const createServer = async (app: NiscApp, runtime: NiscRuntime): Promise<
     pages: Object.entries(pageManifests).map(([name, manifest]) => ({ name, path: manifest.path })),
     ...(shells !== undefined ? { shells } : {}),
     refresh,
+    charterReport: () => verifiedReport,
     generation: () => generation?.current() ?? -1,
     // Every timer this server owns, stopped once. Absent pieces (an app with no
     // identity seam, no shells) simply have nothing to stop — the `?.` is the

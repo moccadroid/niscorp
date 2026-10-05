@@ -332,7 +332,7 @@ is the anonymous principal. There is no `/fns` surface.
 #### `MossServer`
 
 `Hono<Env> & { socket: SocketAccept; shells?: ShellHost; principalOf; page; pages;
-refresh; invalidateIdentity; invalidateTenant; identity; executeAs;
+refresh; charterReport; invalidateIdentity; invalidateTenant; identity; executeAs;
 callIntegration; nudge; generation; close; identities? }`.
 It's a Hono app — mount it, extend it, or hand it to a listener.
 
@@ -353,6 +353,15 @@ It's a Hono app — mount it, extend it, or hand it to a listener.
   on an incoherent charter or variant set, and the old resolution keeps
   serving. It also moves the generation pointer, so every other process on the
   same database does the same within one poll.
+- `charterReport(): VerifyReport` — the report `verifyCharter` gave this server:
+  boot's, then that of each `refresh` that passed. `{ errors, warnings,
+  perRole }`, over the universes boot resolved against. Boot and `refresh` read
+  `errors` alone and print nothing of the rest, so this is where a host reads
+  it, to draw, log or hold a deploy on: `warnings` (an action no role grants, an
+  `allow` that matches nothing) and each role's closure `issues`. `errors` is
+  always empty here. A push whose target is a binding (`@event.payload`,
+  `$.target`) is listed among the `issues` as "not in the catalog", though it is
+  resolved when the step runs; a `{{…}}` target is not listed.
 - `generation(): number` — the generation this process last observed (`-1`
   before the first read).
 - `invalidateIdentity(principal): boolean` — forget one principal's identity
@@ -686,7 +695,11 @@ measures the end.
 ### Resolution (exposed for tools)
 
 - `resolveRoles(app, principal): readonly string[]` — assignment rows; anonymous/
-  unassigned wears `['public']`.
+  unassigned wears `['public']`. The name is fixed, and the charter has to
+  define it (`public: []` grants nothing). Where it does not, the server still
+  boots and nothing is said; then every request with no session, and every
+  signed-in principal with no assignment, fails with `Unknown role "public"` —
+  a 500, a socket closed `4500`, a page served undrawn.
 - `resolvePolicy(app, grants, principal): ScopePolicy` — the compiled vex policy
   this principal reads and writes under. **One policy per role, merged** — a
   person may wear several (an instructor who also trains here), and reach belongs

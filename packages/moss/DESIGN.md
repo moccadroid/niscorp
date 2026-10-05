@@ -307,7 +307,10 @@ the shell for the life of the process.
 The shell is built from the manifest: canvases and fragments are data; a canvas's
 `initial` may be a candidate list, and the first action the principal holds
 mounts — so login is the anonymous principal's application (the charter's
-`public` grant) by derivation, not a special case. `inputs(session)` and
+`public` grant) by derivation, not a special case. The role name is fixed and
+the charter has to define it, as `public: []` if it grants nothing: boot does
+not check that it is there, and a request that resolves to a missing `public`
+fails. `inputs(session)` and
 `seeds(session)` are the app's per-principal boot hooks — boot data and boot
 instances. Endpoint calls ride the server's own HTTP surfaces
 with the session's token — the server shell is just another principal-bound

@@ -51,6 +51,11 @@ const server = await serve(app, { pool, db, session: 'sessions', port: 3000 });
 // boot refusal here (createServer runs inside serve); HTTP + ws in one
 ```
 
+The charter defines a role named `public`. It is what a request with no session
+resolves to, and a signed-in principal with no assignment. `public: []` grants
+nothing. A charter without the role still boots, and those requests then fail
+with `Unknown role "public"`.
+
 ## The first screen can arrive with the page
 
 A page request can be answered with the screen itself: the caller's shell is
