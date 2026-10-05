@@ -195,6 +195,37 @@ describe('a decision provider has decide() and nothing else', () => {
     for (const error of failures) expect(error.code).toBe(ErrorCode.VERB_NOT_SUPPORTED);
     expect(provider.seen).toEqual([]);
   });
+
+  // complete() and stream() run through stepStream; the refusal names the verb
+  // the caller used, not the one underneath it.
+  it('names the verb that was called, in the message and in context.verb', async () => {
+    const provider = await fakeProvider({ body: { answers: ANSWERS } });
+    const signal = decider(provider.baseUrl);
+    const read = async (events: AsyncIterable<unknown>): Promise<void> => {
+      for await (const event of events) void event;
+    };
+    const messages = [{ role: 'user' as const, content: 'hello' }];
+    const failures = {
+      complete: await rejection(signal.complete('hello')),
+      stream: await rejection(read(signal.stream('hello'))),
+      step: await rejection(signal.step({ messages })),
+      stepStream: await rejection(read(signal.stepStream({ messages }))),
+      embed: await rejection(signal.embed('hello')),
+    };
+    for (const [verb, error] of Object.entries(failures)) {
+      expect(error.code, verb).toBe(ErrorCode.VERB_NOT_SUPPORTED);
+      expect(error.context, verb).toMatchObject({ verb });
+      expect(error.message, verb).toBe(`${verb}() is not available on a decision provider — it answers decide() and generates no text`);
+    }
+    expect(provider.seen).toEqual([]);
+  });
+
+  it('stream() fails when it is read, not when it is called', async () => {
+    const provider = await fakeProvider({ body: { answers: ANSWERS } });
+    const events = decider(provider.baseUrl).stream('hello');
+    const first = events[Symbol.asyncIterator]().next();
+    expect((await rejection(first)).code).toBe(ErrorCode.VERB_NOT_SUPPORTED);
+  });
 });
 
 describe('decide() emulated on a chat provider', () => {

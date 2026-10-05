@@ -378,9 +378,12 @@ const createSignalFromConfig = <T = string>(config: SignalConfig): Signal<T> => 
     return { ...result, outcome: routed.outcome, wire: routed.wire };
   };
 
-  const stepStream = (request: StepRequest, streamOptions?: StreamOptions): AsyncIterable<StepStreamEvent> => {
+  // `verb` is the door the caller came through. complete() and stream() run on
+  // this core too, and a refusal has to name the verb that was called — not the
+  // one underneath it.
+  const stepStreamAs = (verb: string) => (request: StepRequest, streamOptions?: StreamOptions): AsyncIterable<StepStreamEvent> => {
     const run = async function* (): AsyncGenerator<StepStreamEvent> {
-      const adapter = await getChatAdapter('stepStream');
+      const adapter = await getChatAdapter(verb);
       const resolved = resolveProvider(config);
       const declared = new Set((request.tools ?? []).map((tool) => tool.name));
       // The client's own options are the floor here too — step() merges them and
@@ -430,6 +433,7 @@ const createSignalFromConfig = <T = string>(config: SignalConfig): Signal<T> => 
     };
     return run();
   };
+  const stepStream = stepStreamAs('stepStream');
 
   // ─── decide — beside the execution core, not through it ────
   // A decision provider answers the questions itself and the gate checks the
@@ -540,7 +544,7 @@ const createSignalFromConfig = <T = string>(config: SignalConfig): Signal<T> => 
           onRetry: config.onRetry,
           onToolCall: config.onToolCall,
         },
-        { stepStream, model: resolveProvider(config).model, capabilities: resolveCapabilities(config) },
+        { stepStream: stepStreamAs('complete'), model: resolveProvider(config).model, capabilities: resolveCapabilities(config) },
       ),
 
     stream: (input, streamOptions) =>
@@ -555,7 +559,7 @@ const createSignalFromConfig = <T = string>(config: SignalConfig): Signal<T> => 
           onRetry: config.onRetry,
           onToolCall: config.onToolCall,
         },
-        { stepStream, model: resolveProvider(config).model, capabilities: resolveCapabilities(config) },
+        { stepStream: stepStreamAs('stream'), model: resolveProvider(config).model, capabilities: resolveCapabilities(config) },
       ),
 
     // ─── Low-level primitives — the execution core itself ────
