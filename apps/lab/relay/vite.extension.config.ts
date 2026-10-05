@@ -18,9 +18,6 @@ export default defineConfig({
   resolve: {
     alias: {
       '@relay': resolve(here, 'src'),
-      // same shim as the app build — see vite.config.ts
-      'node:crypto': resolve(here, 'node-crypto-shim.ts'),
-      crypto: resolve(here, 'node-crypto-shim.ts'),
     },
   },
   server: {

@@ -11,12 +11,6 @@ export default defineConfig({
   resolve: {
     alias: {
       '@mythos': resolve(here, 'src'),
-      // @niscorp/vex's cache hashing imports createHash from `node:crypto` — a
-      // Node builtin absent in the browser (its bundled dist normalizes the
-      // specifier to bare `crypto`). Point both at a tiny @noble/hashes-backed
-      // shim whose SHA-256 is byte-identical.
-      'node:crypto': resolve(here, 'src/lib/node-crypto-shim.ts'),
-      crypto: resolve(here, 'src/lib/node-crypto-shim.ts'),
     },
   },
   define: {

@@ -22,7 +22,6 @@
     "@niscorp/strata": "workspace:^",
     "@niscorp/tide": "workspace:*",
     "@niscorp/vex": "workspace:^",
-    "@noble/hashes": "^2.2.0",
     "openai": "^6.33.0",
     "prismjs": "^1.30.0",
     "react": "^19.2.4",

@@ -28,7 +28,6 @@
     "@niscorp/signal": "workspace:^",
     "@niscorp/strata": "workspace:^",
     "@niscorp/vex": "workspace:^",
-    "@noble/hashes": "^2.2.0",
     "ink": "^7.1.1",
     "lucide-react": "^1.18.0",
     "openai": "^6.33.0",
