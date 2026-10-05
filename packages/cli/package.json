@@ -1,6 +1,6 @@
 {
   "name": "@niscorp/cli",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "nisc — the command for a nisc application: dev, build, export, start. One config file says how the app boots and how its pages are drawn; the command does the rest.",
   "license": "Apache-2.0",
   "repository": {
